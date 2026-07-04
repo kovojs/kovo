@@ -590,12 +590,12 @@ export const COMMANDS_MANIFEST = [
       {
         flag: 'provision',
         description:
-          'Apply pending migrations, roles, RLS policies, grants, and the schema fingerprint. External Postgres uses KOVO_ADMIN_DATABASE_URL unless --admin-database-url is supplied.',
+          'Apply pending migrations, roles, RLS policies, and grants, then re-check live Postgres posture. External Postgres uses KOVO_ADMIN_DATABASE_URL unless --admin-database-url is supplied.',
       },
       {
         flag: 'migrate',
         description:
-          'Apply reviewed SQL migrations transactionally, then reassert derived RLS policies, grants, and the schema fingerprint.',
+          'Apply reviewed SQL migrations transactionally, then reassert derived RLS policies, grants, and live posture.',
       },
       {
         flag: 'generate',
@@ -605,7 +605,7 @@ export const COMMANDS_MANIFEST = [
       {
         flag: 'check',
         description:
-          'Verify the existing database has the expected schema fingerprint, forced RLS, policies, and secret-column grants.',
+          'Verify the existing database has the expected live Postgres posture: forced RLS, policies, grants, and least-privilege runtime access.',
       },
       { flag: '--schema <module>', description: 'Schema module path (default: src/schema.ts).' },
       {
@@ -619,7 +619,8 @@ export const COMMANDS_MANIFEST = [
       },
       {
         flag: '--database-url <url>',
-        description: 'Least-privilege runtime/check URL. Defaults to KOVO_DATABASE_URL for check.',
+        description:
+          'Least-privilege runtime/check URL. Defaults to KOVO_RUNTIME_DATABASE_URL, then KOVO_DATABASE_URL.',
       },
       {
         flag: '--admin-database-url <url>',
@@ -637,7 +638,7 @@ export const COMMANDS_MANIFEST = [
       'kovo db provision --schema src/schema.ts',
       'kovo db generate --migrations migrations',
       'kovo db migrate --migrations migrations',
-      'KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision',
+      'KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_RUNTIME_DATABASE_URL=postgres://app@db/app kovo db provision',
       'KOVO_DATABASE_URL=postgres://app@db/app kovo db check',
       'kovo db check --driver pglite --data-dir .kovo/pglite',
     ],

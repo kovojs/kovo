@@ -12,8 +12,8 @@ many-to-many membership table needs a custom Postgres predicate.
 
 ## Model the membership table
 
-Start with the join table. It is reference data for authorization, not a row the current principal
-owns directly:
+Start with the join table. Membership is tenant data, not global reference data. Model the row with
+an explicit owner or custom policy so a user can only read the memberships they are allowed to see:
 
 ```ts
 import { kovo } from '@kovojs/drizzle';
@@ -26,12 +26,13 @@ export const teamMemberships = pgTable(
     teamId: text('team_id').notNull(),
     userId: text('user_id').notNull(),
   },
-  kovo({ domain: 'team-membership', key: 'id', reference: true }),
+  kovo({ domain: 'team-membership', key: 'id', owner: 'userId' }),
 );
 ```
 
-`reference: true` keeps the table in the authorization census without pretending one member owns
-the membership fact. Your app still decides who may create and revoke memberships.
+Use `owner: 'userId'` when each user may see and manage their own membership rows. If admins manage
+membership for other users, put an `authzPolicy` on this table instead. Do not use `reference: true`
+for membership graphs; `reference` is for immutable global lookup rows with no tenant data.
 
 ## Add the document policy
 
@@ -49,7 +50,7 @@ export const teamMemberships = pgTable(
     teamId: text('team_id').notNull(),
     userId: text('user_id').notNull(),
   },
-  kovo({ domain: 'team-membership', key: 'id', reference: true }),
+  kovo({ domain: 'team-membership', key: 'id', owner: 'userId' }),
 );
 
 export const teamDocuments = pgTable(
@@ -82,7 +83,8 @@ Run provision with an admin connection. Run check with the same least-privilege 
 uses at request time:
 
 ```sh
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_DATABASE_URL=postgres://app@db/app \
+  kovo db provision
 KOVO_DATABASE_URL=postgres://app@db/app kovo db check
 ```
 
@@ -99,7 +101,8 @@ CREATE POLICY kovo_authz_policy ON "team_documents"
 ```
 
 You do not write that policy by hand. `kovo db provision` creates or reasserts it, and `kovo db
-check` fails non-zero when the table is missing forced RLS, the policy, or the schema fingerprint.
+check` fails non-zero when the table is missing forced RLS, the policy, or a reachable object falls
+outside the safe closure audit.
 
 ## Check member and non-member behavior
 
@@ -160,7 +163,7 @@ second condition, put that condition in the predicate and test it with member an
   owner-via, and authz-policy tables.
 - `KV414` is the authorization census family that requires request-reachable tables to declare an
   ownership, custom authz, public, or reference posture.
-- Postgres posture checks report missing forced RLS, missing `kovo_authz_policy`, or schema
-  fingerprint drift through the database check output.
+- Postgres posture checks report missing forced RLS, missing `kovo_authz_policy`, or unsafe
+  reachable objects through the database check output.
 
 </details>

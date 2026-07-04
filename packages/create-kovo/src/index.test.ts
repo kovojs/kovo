@@ -252,8 +252,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).not.toContain('appDbReady');
     expect(files.get('src/db.ts')).not.toContain('export function appDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export const appDb = appDatabase.db');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('type KovoPostgresAppRuntimeDb,');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "import { createPostgresAppRuntimeDb, declareSecretReadCapability } from '@kovojs/server'",
+      'type KovoPostgresAppRuntimeOptions,',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "import * as schema from '../schema.js'",
@@ -262,7 +263,19 @@ describe('create-kovo starter (metadata)', () => {
       "import type { AppDb, AppReadonlyDb } from '../db.js'",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const appDatabase = createPostgresAppRuntimeDb({\n  schema,\n  seedSql: SEED_CONTACTS,\n});',
+      'export const appRuntimeDbOptions = {\n  schema,\n  seedSql: SEED_CONTACTS,\n} satisfies KovoPostgresAppRuntimeOptions;',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'let appDatabase: KovoPostgresAppRuntimeDb | undefined;',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'function getAppDatabase(): KovoPostgresAppRuntimeDb {',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'function lazyAppDatabaseValue<T extends object>(load: () => T): T {',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'export const appRuntimeDbReady: Promise<void> = lazyPromise(() => getAppDatabase().ready);',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('SCHEMA_TABLES');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('getTableConfig');
@@ -285,14 +298,9 @@ describe('create-kovo starter (metadata)', () => {
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',
+      'export const appRuntimeReadonlyDb: AppReadonlyDb = lazyAppDatabaseValue(',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export const appRuntimeAuthDb: AppDb = appDatabase.systemDb({',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export const appRuntimeDbReady: Promise<void> = appDatabase.ready',
-    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('getAppDatabase().systemDb({');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function appRuntimeDbProvider(request?: unknown): AppDb',
     );
@@ -320,6 +328,10 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeAuthDb,');
     expect(files.get('src/auth.ts')).not.toContain('database: drizzleAdapter(appDb,');
+    expect(files.get('README.md')).toContain('### Deploying to Postgres');
+    expect(files.get('README.md')).toContain('kovo db generate');
+    expect(files.get('README.md')).toContain('KOVO_RUNTIME_DATABASE_URL');
+    expect(files.get('README.md')).toContain('KOVO_ADMIN_DATABASE_URL');
   });
 
   it('classifies Better Auth credential columns as secret in scaffolded schema', () => {
@@ -979,6 +991,19 @@ describe('create-kovo starter (metadata)', () => {
 
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
         'KOVO_CSRF_SECRET=replace-with-a-deployed-secret',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'KOVO_DATABASE_URL=postgres://app_runtime@db.example.com:5432/your_app',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'KOVO_RUNTIME_DATABASE_URL=postgres://app_runtime@db.example.com:5432/your_app',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'KOVO_ADMIN_DATABASE_URL=postgres://app_admin@db.example.com:5432/your_app',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain('KOVO_DB_DRIVER=');
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'KOVO_DATA_DIR=.kovo/pglite',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
         'KOVO_DEMO_PASSWORD=replace-with-a-local-demo-password',

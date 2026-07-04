@@ -596,7 +596,8 @@ export interface UnregisteredSinkFact {
  * @internal A held dangerous *capability* surfaced by `kovo explain --capabilities` (SPEC §6.6,
  * audit-only). One row per declared escape: a `publishToClient` secret-emit escape (KV437), an
  * egress `allowInternal` private-network entry, a confidentiality `trustedReveal`, an audited
- * `crossOwnerRead`, or a `serverValue`/`unsafeCookie`/`accept.unverified` escape. The renderer collects these from the
+ * `crossOwnerRead`, a vetted public database relation, or a
+ * `serverValue`/`unsafeCookie`/`accept.unverified` escape. The renderer collects these from the
  * merged slice facts so a reviewer can diff the app's entire dangerous-capability surface in one
  * audited table. Audit-only: surfacing informs review; it enforces nothing.
  */
@@ -607,6 +608,7 @@ export interface CapabilityExplain {
     | 'crossOwnerRead'
     | 'egressAllowInternal'
     | 'publishToClient'
+    | 'publicRelation'
     | 'serverValue'
     | 'trustedReveal'
     | 'unsafeCookie';

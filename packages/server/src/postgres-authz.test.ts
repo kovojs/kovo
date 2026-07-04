@@ -62,10 +62,10 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
         'u2',
         'forged',
       ]),
-    ).rejects.toThrow(/row-level security|violates/i);
+    ).rejects.toThrow(/KV433: Postgres RLS rejected a write to table orders/);
     await expect(
       u1.query('update orders set user_id = $1 where id = $2', ['u2', 'o1']),
-    ).rejects.toThrow(/row-level security|violates/i);
+    ).rejects.toThrow(/KV433: Postgres RLS rejected a write to table orders/);
 
     await expect(
       rowsOf(
@@ -102,10 +102,10 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
           'forged child',
         ]),
       ),
-    ).rejects.toThrow(/row-level security|violates/i);
+    ).rejects.toThrow(/KV433: Postgres RLS rejected a write to table order_items/);
     await expect(
       rowsOf(u1.query('update order_items set order_id = $1 where id = $2', ['o2', 'i1'])),
-    ).rejects.toThrow(/row-level security|violates/i);
+    ).rejects.toThrow(/KV433: Postgres RLS rejected a write to table order_items/);
   });
 
   it('binds the principal before role assumption and prevents SQL text from widening it', async () => {

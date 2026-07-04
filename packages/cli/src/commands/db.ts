@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -38,6 +38,11 @@ interface KovoDbOptions {
   readerRole?: string;
   schemaPath: string;
   writerRole?: string;
+}
+
+interface LoadedDbConfig {
+  runtimeOptions?: KovoPostgresAppRuntimeOptions;
+  schema: Record<string, unknown>;
 }
 
 type DbArgParseResult = { ok: true; options: KovoDbOptions } | { message: string; ok: false };
@@ -89,11 +94,11 @@ export function parseDbArgs(args: readonly string[]): DbArgParseResult {
 
 export async function runDbCommand(options: KovoDbOptions): Promise<CliCommandResult> {
   try {
-    const schema = await loadSchemaModule(options.schemaPath);
+    const dbConfig = await loadDbConfig(options.schemaPath);
     if (options.action === 'generate') {
-      return dbGenerateCommandResult(await runDbGenerate({ ...options, schema }));
+      return dbGenerateCommandResult(await runDbGenerate({ ...options, dbConfig }));
     }
-    const report = await runDbAction({ ...options, schema });
+    const report = await runDbAction({ ...options, dbConfig });
     return dbCommandResult(options.action, report);
   } catch (error) {
     return {
@@ -127,11 +132,14 @@ function parsePostgresRuntimeDriver(value: string): KovoPostgresRuntimeDriver | 
 }
 
 async function loadSchemaModule(schemaPath: string): Promise<Record<string, unknown>> {
-  const resolvedPath = resolve(schemaPath);
+  return schemaExports(await loadModuleExports(resolve(schemaPath)));
+}
+
+async function loadModuleExports(resolvedPath: string): Promise<Record<string, unknown>> {
   const loaded = schemaModuleNeedsVite(resolvedPath)
     ? await loadSchemaModuleWithVite(resolvedPath)
     : ((await import(pathToFileURL(resolvedPath).href)) as Record<string, unknown>);
-  return schemaExports(loaded);
+  return loaded;
 }
 
 async function loadSchemaModuleWithVite(schemaPath: string): Promise<Record<string, unknown>> {
@@ -162,6 +170,53 @@ function schemaExports(loaded: Record<string, unknown>): Record<string, unknown>
   return schema;
 }
 
+async function loadDbConfig(schemaPath: string): Promise<LoadedDbConfig> {
+  const resolvedSchemaPath = resolve(schemaPath);
+  const runtimeModulePath = await resolveRuntimeOptionsModulePath(resolvedSchemaPath);
+  if (runtimeModulePath !== undefined) {
+    const loaded = await loadModuleExports(runtimeModulePath);
+    const runtimeOptions = appRuntimeOptionsExport(loaded);
+    if (runtimeOptions !== undefined) {
+      return { runtimeOptions, schema: schemaFromRuntimeOptions(runtimeOptions) };
+    }
+  }
+  return { schema: await loadSchemaModule(resolvedSchemaPath) };
+}
+
+function schemaFromRuntimeOptions(options: KovoPostgresAppRuntimeOptions): Record<string, unknown> {
+  return schemaExports(options.schema);
+}
+
+function appRuntimeOptionsExport(
+  loaded: Record<string, unknown>,
+): KovoPostgresAppRuntimeOptions | undefined {
+  const direct = loaded.appRuntimeDbOptions;
+  if (isPostgresRuntimeOptions(direct)) return direct;
+  const defaultExport = loaded.default;
+  if (isRecord(defaultExport) && isPostgresRuntimeOptions(defaultExport.appRuntimeDbOptions)) {
+    return defaultExport.appRuntimeDbOptions;
+  }
+  return undefined;
+}
+
+function isPostgresRuntimeOptions(value: unknown): value is KovoPostgresAppRuntimeOptions {
+  return isRecord(value) && isRecord(value.schema);
+}
+
+async function resolveRuntimeOptionsModulePath(schemaPath: string): Promise<string | undefined> {
+  const extension = extname(schemaPath);
+  const candidates =
+    extension === '' ? ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'] : [extension];
+  for (const candidate of candidates) {
+    const filePath = resolve(dirname(schemaPath), '_kovo', `app-runtime-db${candidate}`);
+    try {
+      await access(filePath);
+      return filePath;
+    } catch {}
+  }
+  return undefined;
+}
+
 function schemaModuleNeedsVite(schemaPath: string): boolean {
   return ['.ts', '.tsx', '.jsx'].includes(extname(schemaPath));
 }
@@ -180,7 +235,7 @@ function viteSsrModuleId(filePath: string, root: string): string {
 }
 
 async function runDbProvision(
-  options: KovoDbOptions & { schema: Record<string, unknown> },
+  options: KovoDbOptions & { dbConfig: LoadedDbConfig },
 ): Promise<DbRunReport> {
   const migrations = await loadMigrationFiles(options.migrationsDir ?? 'migrations');
   if (shouldProvisionEmbeddedPglite(options)) {
@@ -204,31 +259,39 @@ async function runDbProvision(
     };
   }
 
-  const databaseUrl = nonEmptyValue(
-    options.adminDatabaseUrl ?? process.env.KOVO_ADMIN_DATABASE_URL,
-  );
-  if (databaseUrl === undefined || databaseUrl === '') {
+  const adminDatabaseUrl = resolveAdminDatabaseUrl(options);
+  if (adminDatabaseUrl === undefined) {
     throw new Error(
       'kovo db provision requires KOVO_ADMIN_DATABASE_URL, --admin-database-url, or --driver pglite.',
     );
   }
   if (migrations.length > 0) {
+    const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
     const migrated = await migratePostgresAppDb({
-      ...runtimeOptions(options, { databaseUrl, driver: 'node-postgres' }),
+      ...runtimeOptions(options, { databaseUrl: adminDatabaseUrl, driver: 'node-postgres' }),
       migrations,
+      ...(runtimeDatabaseUrl === undefined ? {} : { runtimeDatabaseUrl }),
     });
     return { migrations: migrated, posture: migrated.posture };
   }
+  const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
+  const provisionOptions: KovoPostgresAppRuntimeOptions & {
+    databaseUrl: string;
+    runtimeDatabaseUrl?: string;
+  } = {
+    ...runtimeOptions(options, { driver: 'node-postgres' }),
+    databaseUrl: adminDatabaseUrl,
+  };
+  if (runtimeDatabaseUrl !== undefined) {
+    provisionOptions.runtimeDatabaseUrl = runtimeDatabaseUrl;
+  }
   return {
-    posture: await provisionPostgresAppDb({
-      ...runtimeOptions(options, { driver: 'node-postgres' }),
-      databaseUrl,
-    }),
+    posture: await provisionPostgresAppDb(provisionOptions),
   };
 }
 
 async function runDbMigrate(
-  options: KovoDbOptions & { schema: Record<string, unknown> },
+  options: KovoDbOptions & { dbConfig: LoadedDbConfig },
 ): Promise<DbRunReport> {
   const migrations = await loadMigrationFiles(options.migrationsDir ?? 'migrations');
   if (shouldMigrateEmbeddedPglite(options)) {
@@ -239,23 +302,23 @@ async function runDbMigrate(
     return { migrations: migrated, posture: migrated.posture };
   }
 
-  const databaseUrl = nonEmptyValue(
-    options.adminDatabaseUrl ?? process.env.KOVO_ADMIN_DATABASE_URL,
-  );
-  if (databaseUrl === undefined || databaseUrl === '') {
+  const databaseUrl = resolveAdminDatabaseUrl(options);
+  if (databaseUrl === undefined) {
     throw new Error(
       'kovo db migrate requires KOVO_ADMIN_DATABASE_URL, --admin-database-url, or --driver pglite.',
     );
   }
+  const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
   const migrated = await migratePostgresAppDb({
     ...runtimeOptions(options, { databaseUrl, driver: 'node-postgres' }),
     migrations,
+    ...(runtimeDatabaseUrl === undefined ? {} : { runtimeDatabaseUrl }),
   });
   return { migrations: migrated, posture: migrated.posture };
 }
 
 async function runDbGenerate(
-  options: KovoDbOptions & { schema: Record<string, unknown> },
+  options: KovoDbOptions & { dbConfig: LoadedDbConfig },
 ): Promise<DbGenerateReport> {
   const migrationsDir = options.migrationsDir ?? 'migrations';
   const plan = await planPostgresAppDbMigration(
@@ -267,14 +330,14 @@ async function runDbGenerate(
 }
 
 async function runDbCheck(
-  options: KovoDbOptions & { schema: Record<string, unknown> },
+  options: KovoDbOptions & { dbConfig: LoadedDbConfig },
 ): Promise<DbRunReport> {
   const overrides = shouldCheckEmbeddedPglite(options) ? ({ driver: 'pglite' } as const) : {};
   return { posture: await checkPostgresAppDbPosture(runtimeOptions(options, overrides)) };
 }
 
 async function runDbAction(
-  options: KovoDbOptions & { schema: Record<string, unknown> },
+  options: KovoDbOptions & { dbConfig: LoadedDbConfig },
 ): Promise<DbRunReport> {
   if (options.action === 'check') return await runDbCheck(options);
   if (options.action === 'migrate') return await runDbMigrate(options);
@@ -305,18 +368,44 @@ async function loadMigrationFiles(migrationsDir: string): Promise<KovoPostgresMi
 }
 
 function runtimeOptions(
-  options: KovoDbOptions & { schema: Record<string, unknown> },
+  options: KovoDbOptions & { dbConfig: LoadedDbConfig },
   overrides: Partial<KovoPostgresAppRuntimeOptions> = {},
 ): KovoPostgresAppRuntimeOptions {
-  return {
-    schema: options.schema,
-    ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
-    ...(options.databaseUrl === undefined ? {} : { databaseUrl: options.databaseUrl }),
-    ...(options.driver === undefined ? {} : { driver: options.driver }),
-    ...(options.readerRole === undefined ? {} : { readerRole: options.readerRole }),
-    ...(options.writerRole === undefined ? {} : { writerRole: options.writerRole }),
-    ...overrides,
+  const runtimeOptions = options.dbConfig.runtimeOptions;
+  const result: KovoPostgresAppRuntimeOptions = {
+    ...(runtimeOptions ?? { schema: options.dbConfig.schema }),
+    schema: options.dbConfig.schema,
   };
+  const databaseUrl = resolveRuntimeDatabaseUrl(options);
+  if (options.dataDir !== undefined) result.dataDir = options.dataDir;
+  if (databaseUrl !== undefined) result.databaseUrl = databaseUrl;
+  if (options.driver !== undefined) result.driver = options.driver;
+  if (options.readerRole !== undefined) result.readerRole = options.readerRole;
+  if (options.writerRole !== undefined) result.writerRole = options.writerRole;
+  applyRuntimeOptionOverrides(result, overrides);
+  return result;
+}
+
+function applyRuntimeOptionOverrides(
+  result: KovoPostgresAppRuntimeOptions,
+  overrides: Partial<KovoPostgresAppRuntimeOptions>,
+): void {
+  if (overrides.schema !== undefined) result.schema = overrides.schema;
+  if (overrides.dataDir !== undefined) result.dataDir = overrides.dataDir;
+  if (overrides.databaseUrl !== undefined) result.databaseUrl = overrides.databaseUrl;
+  if (overrides.driver !== undefined) result.driver = overrides.driver;
+  if (overrides.provisionOnBoot !== undefined) result.provisionOnBoot = overrides.provisionOnBoot;
+  if (overrides.postureCheckOnBoot !== undefined)
+    result.postureCheckOnBoot = overrides.postureCheckOnBoot;
+  if (overrides.principalFromRequest !== undefined)
+    result.principalFromRequest = overrides.principalFromRequest;
+  if (overrides.readerRole !== undefined) result.readerRole = overrides.readerRole;
+  if (overrides.adminRole !== undefined) result.adminRole = overrides.adminRole;
+  if (overrides.crossOwnerReadTables !== undefined)
+    result.crossOwnerReadTables = overrides.crossOwnerReadTables;
+  if (overrides.publicRelations !== undefined) result.publicRelations = overrides.publicRelations;
+  if (overrides.seedSql !== undefined) result.seedSql = overrides.seedSql;
+  if (overrides.writerRole !== undefined) result.writerRole = overrides.writerRole;
 }
 
 function shouldProvisionEmbeddedPglite(options: KovoDbOptions): boolean {
@@ -325,8 +414,9 @@ function shouldProvisionEmbeddedPglite(options: KovoDbOptions): boolean {
   if (driver === 'pg' || driver === 'node-postgres') return false;
   return (
     nonEmptyValue(options.adminDatabaseUrl) === undefined &&
-    nonEmptyValue(options.databaseUrl) === undefined &&
+    resolveRuntimeDatabaseUrl(options) === undefined &&
     nonEmptyValue(process.env.KOVO_ADMIN_DATABASE_URL) === undefined &&
+    nonEmptyValue(process.env.KOVO_RUNTIME_DATABASE_URL) === undefined &&
     nonEmptyValue(process.env.KOVO_DATABASE_URL) === undefined
   );
 }
@@ -335,10 +425,7 @@ function shouldCheckEmbeddedPglite(options: KovoDbOptions): boolean {
   const driver = options.driver ?? process.env.KOVO_DB_DRIVER;
   if (driver === 'pglite') return true;
   if (driver === 'pg' || driver === 'node-postgres') return false;
-  return (
-    nonEmptyValue(options.databaseUrl) === undefined &&
-    nonEmptyValue(process.env.KOVO_DATABASE_URL) === undefined
-  );
+  return resolveRuntimeDatabaseUrl(options) === undefined;
 }
 
 function shouldMigrateEmbeddedPglite(options: KovoDbOptions): boolean {
@@ -349,17 +436,24 @@ function generateDriverOptions(options: KovoDbOptions): Partial<KovoPostgresAppR
   const driver = options.driver ?? process.env.KOVO_DB_DRIVER;
   if (driver === 'pglite' || shouldCheckEmbeddedPglite(options)) return { driver: 'pglite' };
   const databaseUrl = nonEmptyValue(
-    options.adminDatabaseUrl ??
-      process.env.KOVO_ADMIN_DATABASE_URL ??
-      options.databaseUrl ??
-      process.env.KOVO_DATABASE_URL,
+    resolveAdminDatabaseUrl(options) ?? resolveRuntimeDatabaseUrl(options),
   );
   if (databaseUrl === undefined) {
     throw new Error(
-      'kovo db generate requires KOVO_ADMIN_DATABASE_URL, KOVO_DATABASE_URL, --admin-database-url, --database-url, or --driver pglite.',
+      'kovo db generate requires KOVO_ADMIN_DATABASE_URL, KOVO_RUNTIME_DATABASE_URL, KOVO_DATABASE_URL, --admin-database-url, --database-url, or --driver pglite.',
     );
   }
   return { databaseUrl, driver: 'node-postgres' };
+}
+
+function resolveAdminDatabaseUrl(options: KovoDbOptions): string | undefined {
+  return nonEmptyValue(options.adminDatabaseUrl ?? process.env.KOVO_ADMIN_DATABASE_URL);
+}
+
+function resolveRuntimeDatabaseUrl(options: KovoDbOptions): string | undefined {
+  return nonEmptyValue(
+    options.databaseUrl ?? process.env.KOVO_RUNTIME_DATABASE_URL ?? process.env.KOVO_DATABASE_URL,
+  );
 }
 
 function nonEmptyValue(value: string | undefined): string | undefined {
@@ -402,7 +496,6 @@ function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandR
         dbOutputVersion,
         `ACTION ${action}`,
         `DRIVER ${posture.driver}`,
-        `FINGERPRINT ${posture.fingerprint}`,
         `STATUS ${posture.ok ? 'ok' : 'failed'}`,
         ...migrationLines,
         ...posture.issues.map(

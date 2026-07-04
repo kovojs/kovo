@@ -519,6 +519,7 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createDeclaredWriteDb).toBe(dataApi.createDeclaredWriteDb);
     expect(publicApi.createPostgresReadonlyClient).toBe(dataApi.createPostgresReadonlyClient);
     expect(publicApi.createPostgresScopedClient).toBe(dataApi.createPostgresScopedClient);
+    expect(publicApi.declarePublicRelation).toBe(dataApi.declarePublicRelation);
     expect(publicApi.declarePublicRead).toBe(dataApi.declarePublicRead);
     expect(publicApi.drainPostgresRlsSilentDenyDiagnostics).toBe(
       dataApi.drainPostgresRlsSilentDenyDiagnostics,

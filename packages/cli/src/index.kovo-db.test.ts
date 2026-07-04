@@ -43,6 +43,54 @@ describe('kovo db', () => {
     expect(check.stdout).toContain('STATUS ok\nSUMMARY issues=0\n');
   });
 
+  it('prefers scaffolded app runtime options when the sibling runtime module exports them', async () => {
+    const { dataDir, schemaPath } = writeDbCommandFixture('runtime-options');
+    const runtimeModulePath = join(dirname(schemaPath), '_kovo', 'app-runtime-db.ts');
+    mkdirSync(dirname(runtimeModulePath), { recursive: true });
+    writeFileSync(
+      runtimeModulePath,
+      [
+        "import type { KovoPostgresAppRuntimeOptions } from '@kovojs/server';",
+        "import * as schema from '../schema.js';",
+        '',
+        'export const appRuntimeDbOptions = {',
+        '  schema,',
+        "  seedSql: \"INSERT INTO kovo_cli_db_notes (id, \\\"ownerId\\\", title) VALUES ('seeded-note', 'seed-user', 'Seeded from runtime options') ON CONFLICT (id) DO NOTHING;\",",
+        '} satisfies KovoPostgresAppRuntimeOptions;',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const provision = await captureWrites(() =>
+      mainAsync(['db', 'provision', '--schema', schemaPath, '--data-dir', dataDir]),
+    );
+
+    expect(provision.result).toBe(0);
+    expect(provision.stderr).toBe('');
+
+    const { PGlite } = (await import(
+      fileURLToPath(new URL('../../server/node_modules/@electric-sql/pglite', import.meta.url))
+    )) as typeof import('@electric-sql/pglite');
+    const db = new PGlite(dataDir);
+    try {
+      const seeded = await db.query<{
+        id: string;
+        ownerId: string;
+        title: string;
+      }>('select id, "ownerId", title from kovo_cli_db_notes where id = $1', ['seeded-note']);
+      expect(seeded.rows).toEqual([
+        {
+          id: 'seeded-note',
+          ownerId: 'seed-user',
+          title: 'Seeded from runtime options',
+        },
+      ]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('fails closed when check sees an unprovisioned database', async () => {
     const { dataDir, schemaPath } = writeDbCommandFixture('empty');
 
@@ -63,7 +111,7 @@ describe('kovo db', () => {
     expect(check.stdout).toBe('');
     expect(check.stderr).toContain('kovo-db/v1\nACTION check\nDRIVER pglite\n');
     expect(check.stderr).toContain('STATUS failed\n');
-    expect(check.stderr).toContain('ISSUE code=KV433_SCHEMA_FINGERPRINT');
+    expect(check.stderr).toContain('ISSUE code=KV433_SCHEMA_TABLE');
   });
 
   it('applies reviewed SQL migrations before reasserting Postgres posture', async () => {
@@ -281,6 +329,10 @@ describe('kovo db', () => {
     mkdirSync(dataDir, { recursive: true });
     mkdirSync(migrationsDir, { recursive: true });
     mkdirSync(join(root, 'node_modules', '@kovojs'), { recursive: true });
+    symlinkSync(
+      fileURLToPath(new URL('../../server', import.meta.url)),
+      join(root, 'node_modules', '@kovojs', 'server'),
+    );
     symlinkSync(
       fileURLToPath(new URL('../node_modules/@kovojs/drizzle', import.meta.url)),
       join(root, 'node_modules', '@kovojs', 'drizzle'),

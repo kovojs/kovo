@@ -1132,6 +1132,12 @@ export const save = mutation('cart/save', {
             site: 'app/admin.ts:12',
             target: 'public.orders',
           },
+          {
+            justification: 'aggregate totals contain no tenant identifiers',
+            kind: 'publicRelation',
+            site: 'src/_kovo/app-runtime-db.ts:14',
+            target: 'public.kovo_order_totals_mv',
+          },
         ],
         // An audit-grade reveal folds into the table as a trustedReveal capability.
         revealed: [
@@ -1162,10 +1168,11 @@ export const save = mutation('cart/save', {
       CAPABILITIES
       CAPABILITY kind=crossOwnerRead site=app/admin.ts:12 module=- target=public.orders justification="admin support export across owners"
       CAPABILITY kind=egressAllowInternal site=app/server.ts:14 module=- target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
+      CAPABILITY kind=publicRelation site=src/_kovo/app-runtime-db.ts:14 module=- target=public.kovo_order_totals_mv justification="aggregate totals contain no tenant identifiers"
       CAPABILITY kind=publishToClient site=app/checkout.tsx:9 module=./checkout-config target=stripeClient justification="Stripe SDK is a client-safe published handle"
       CAPABILITY kind=serverValue site=app/admin.ts:3 module=- target=export.email justification="admin export reveals masked emails"
       CAPABILITY kind=trustedReveal site=app/support.ts:7 module=- target=supportUser.email justification="masked email for support tooling"
-      SUMMARY total=5
+      SUMMARY total=6
       "
     `);
   });

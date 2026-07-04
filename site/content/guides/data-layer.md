@@ -276,14 +276,22 @@ Kovo applies reviewed SQL migrations from a `migrations/` directory:
 
 ```sh
 kovo db generate --migrations migrations
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db migrate
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_DATABASE_URL=postgres://app@db/app \
+  kovo db provision --migrations migrations
+KOVO_DATABASE_URL=postgres://app@db/app kovo db check
 ```
 
 The runtime database is still ordinary Drizzle. `kovo db generate` handles conservative additive
 table/column changes and writes a matching `.down.sql` file for review. Renames, destructive
 changes, and data backfills stay hand-authored or managed by your migration service. The important
-part is operational: run migrations before the new app version receives requests, and keep the
-Drizzle schema source in lockstep with the database objects those migrations create.
+part is operational: apply migrations and provision the derived RLS/grants before the new app
+version receives requests, then check with the same least-privilege URL the app will use at runtime.
+Keep the Drizzle schema source in lockstep with the database objects those migrations create.
+
+The closure audit asks Postgres which relations the app roles can actually reach. A reachable base
+table must be RLS-protected by Kovo metadata. A reporting view or materialized view that is
+deliberately public must be listed in `publicRelations` with `declarePublicRelation(...)`; otherwise
+boot and `kovo db check` fail closed.
 
 Treat schema changes like deploys, not like request-time work. Add nullable or defaulted columns
 before code reads them, backfill separately when needed, then tighten constraints in a later deploy.
