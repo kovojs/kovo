@@ -70,7 +70,7 @@ describe('create-kovo starter (build integration: production island derives)', (
         env: {
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });

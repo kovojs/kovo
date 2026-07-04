@@ -116,7 +116,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });
@@ -193,7 +193,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });
@@ -327,7 +327,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });
@@ -447,7 +447,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });
@@ -578,7 +578,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         env: {
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });
@@ -706,7 +706,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           env: {
             ...withRepoBinOnPath(),
             HOST: '127.0.0.1',
-            NODE_ENV: 'production',
+            NODE_ENV: 'test',
             PORT: String(port),
           },
         });
@@ -743,7 +743,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         env: {
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });

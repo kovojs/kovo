@@ -81,7 +81,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
         env: {
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });
