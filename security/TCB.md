@@ -56,6 +56,14 @@ they are not claimed as the verified TCB.
       "lineBudget": 130
     },
     {
+      "id": "server.postgres-runtime.reachable-view-audit",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "auditPostgresReachableView",
+      "kind": "postgres-view-capability-closure-audit",
+      "classification": "tcb",
+      "lineBudget": 60
+    },
+    {
       "id": "server.postgres-runtime.request-scoped-db",
       "file": "packages/server/src/postgres-runtime.ts",
       "name": "createRuntimeClient",

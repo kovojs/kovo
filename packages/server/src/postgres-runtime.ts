@@ -927,38 +927,14 @@ async function auditPostgresReachableClosure(
       continue;
     }
     if (relation.relkind === 'v') {
-      const dependencies = await postgresViewDependencies(client, relation.schema, relation.table);
-      const protectedDependencies = dependencies.filter((dependency) =>
-        protectedTableNames.has(dependency.table_name),
+      issues.push(
+        ...(await auditPostgresReachableView(
+          client,
+          relation,
+          protectedTableNames,
+          allowlistedTables,
+        )),
       );
-      if (!postgresViewIsSecurityInvoker(relation)) {
-        issues.push({
-          code: 'KV433_REACHABLE_VIEW',
-          detail:
-            protectedDependencies.length > 0
-              ? `reachable non-security_invoker view ${relation.table} over owner table ${protectedDependencies[0]?.table_name}`
-              : `reachable non-security_invoker view ${relation.schema}.${relation.table} cannot be proven RLS-safe`,
-        });
-        continue;
-      }
-      if (dependencies.length === 0) {
-        issues.push({
-          code: 'KV433_REACHABLE_VIEW',
-          detail: `reachable security_invoker view ${relation.schema}.${relation.table} has no provable base-table dependency set`,
-        });
-        continue;
-      }
-      for (const dependency of dependencies) {
-        if (
-          !allowlistedTables.has(dependency.table_name) &&
-          !(await postgresBaseTableHasProtectedPosture(client, dependency))
-        ) {
-          issues.push({
-            code: 'KV433_REACHABLE_VIEW',
-            detail: `reachable security_invoker view ${relation.table} depends on unproven table ${dependency.table_name}`,
-          });
-        }
-      }
       continue;
     }
     if (relation.relkind === 'm') {
@@ -987,6 +963,48 @@ async function auditPostgresReachableClosure(
       code: 'KV433_REACHABLE_OBJECT',
       detail: `${relation.schema}.${relation.table} is reachable by an app role with unsupported relkind ${relation.relkind}`,
     });
+  }
+  return issues;
+}
+
+async function auditPostgresReachableView(
+  client: RuntimeSqlClient,
+  relation: PostgresReachableRelation,
+  protectedTableNames: ReadonlySet<string>,
+  allowlistedTables: ReadonlySet<string>,
+): Promise<KovoPostgresPostureIssue[]> {
+  const issues: KovoPostgresPostureIssue[] = [];
+  const dependencies = await postgresViewDependencies(client, relation.schema, relation.table);
+  const protectedDependencies = dependencies.filter((dependency) =>
+    protectedTableNames.has(dependency.table_name),
+  );
+  if (!postgresViewIsSecurityInvoker(relation)) {
+    issues.push({
+      code: 'KV433_REACHABLE_VIEW',
+      detail:
+        protectedDependencies.length > 0
+          ? `reachable non-security_invoker view ${relation.table} over owner table ${protectedDependencies[0]?.table_name}`
+          : `reachable non-security_invoker view ${relation.schema}.${relation.table} cannot be proven RLS-safe`,
+    });
+    return issues;
+  }
+  if (dependencies.length === 0) {
+    issues.push({
+      code: 'KV433_REACHABLE_VIEW',
+      detail: `reachable security_invoker view ${relation.schema}.${relation.table} has no provable base-table dependency set`,
+    });
+    return issues;
+  }
+  for (const dependency of dependencies) {
+    if (
+      !allowlistedTables.has(dependency.table_name) &&
+      !(await postgresBaseTableHasProtectedPosture(client, dependency))
+    ) {
+      issues.push({
+        code: 'KV433_REACHABLE_VIEW',
+        detail: `reachable security_invoker view ${relation.table} depends on unproven table ${dependency.table_name}`,
+      });
+    }
   }
   return issues;
 }
