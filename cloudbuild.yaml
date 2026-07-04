@@ -40,7 +40,7 @@ substitutions:
   _MAX_INSTANCES: '10'
   _SESSION_AFFINITY: 'true' # best-effort routing back to the instance holding the visitor demo DB
   _MAX_SESSIONS: '40'
-  _WARM_SESSIONS: '10'
+  _WARM_SESSIONS: '0'
   _IDLE_MS: '1200000' # 20 min idle TTL per session
   _COMMERCE_CSRF_SECRET_NAME: 'commerce-csrf-secret'
   _COMMERCE_AUTH_CSRF_SECRET_NAME: 'commerce-auth-csrf-secret'

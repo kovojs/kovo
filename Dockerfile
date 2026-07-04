@@ -63,7 +63,7 @@ ENV EXAMPLE=commerce
 # fallbacks.
 # Memory guardrails for the per-session PGlite instances (override per service).
 ENV KOVO_DEMO_MAX_SESSIONS=40
-ENV KOVO_DEMO_WARM_SESSIONS=10
+ENV KOVO_DEMO_WARM_SESSIONS=0
 ENV KOVO_DEMO_IDLE_MS=1200000
 
 EXPOSE 8080
