@@ -527,16 +527,36 @@ composition. This is the SPEC §1.3 promise ("generated apps fail TypeScript sta
 wiring is wrong") applied to the most common wiring there is. No `Record<string, unknown>` escape
 hatch survives this phase.
 
-- [ ] **Design the props-derivation contract.** `Component<Definition>`'s call signature must be
-      derived from the definition, and the derivation has a real discrimination to settle: for
-      plain server components the first render parameter *is* the props object
-      (`packages/ui/src/button.tsx:164` — `render(props: ButtonProps)`), while for queries/state
-      components the render signature is `(queries, state, slots)`
-      (`core/src/index.ts:208-256` overloads). Decide and document (SPEC §4.1/§6.2) how a
-      definition declares its props type — options: infer from first render param when neither
-      `queries` nor `state` is declared; or add an explicit `props` type channel to the definition
-      and type the existing `props?: Record<string, unknown>` metadata field properly while at it.
-      The chosen shape must also type the compiler-injected `style`/`styles` override channel and
+- [ ] **Codify the decided props-derivation contract (decided 2026-07-03: infer-from-render with
+      framework-checked channel consistency)** in SPEC §4.1/§6.2. The runtime contract is already
+      uniform and stays unchanged: render's first parameter is **one merged bag** — query results
+      ∪ call-site props (`examples/crm/src/components/deal-detail.tsx:133` has both, with
+      `props: { dealId: String }` metadata; `packages/ui/src/button.tsx:164` is the props-only
+      case; `examples/commerce/src/components/cart-badge.tsx:45` the queries-only case; state is
+      positional param 2, slots param 3). Today the props type is stated in up to three unlinked
+      places (render annotation, `props:` constructor metadata, `.args()` mapper `Props`); the
+      render annotation becomes the single source of truth and the other two are checked against
+      it. Rejected alternatives, for the record: explicit `component<Props>({...})` generic (TS
+      has no partial type-argument inference — it would force a curried call shape), and merging
+      the type channel into the `props:` metadata field (constructor maps can only carry the
+      JSON-serializable subset; `ButtonProps`'s union literals, style objects, and `children` are
+      composition-time values that never cross the wire). Sub-contracts:
+      - [ ] Call signature = bag type minus `keyof Definition['queries']`, with exact-key
+            (excess-property) checking; expose it as a named `ComponentProps<Definition>` alias so
+            errors read legibly instead of as raw `Omit<...>` failures. A prop name colliding with
+            a query key is a compile error + new KV diagnostic (ambiguous in the merged bag).
+      - [ ] Unannotated render ⇒ props = `{}`: call sites accept nothing (default-deny, Prime
+            Principle posture); annotating the bag is the fix. Supply the bag's query-result keys
+            contextually from the `Query<Key, Result>` handles so authors stop hand-annotating
+            result types the framework already knows (retires a small declare-once violation).
+      - [ ] Constrain `.args(mapper)` — `QueryArgsBinding`/`Query.args` at
+            `core/src/index.ts:296-345` — so the mapper's `Props` must be assignable from the
+            component's derived call-site props: mappers narrow, never invent.
+      - [ ] Type the `props:` metadata field as a constructor map whose derived type
+            (`{ dealId: String }` → `{ dealId: string }`) must be assignable to the matching keys
+            of the call-site props — it remains the serializable-subset declaration for
+            live-target renderers, but can no longer contradict the annotation.
+      The contract must also type the compiler-injected `style`/`styles` override channel and
       `kovo-key`.
 - [ ] **Implement `Component<Definition>` call-signature inference in core** — replace
       `(props?: Record<string, unknown>): any` (`core/src/index.ts:168-172`). Exact-key checking
