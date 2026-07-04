@@ -96,8 +96,9 @@ replace necessary-condition proxies with the engine's FINEST-granularity effecti
 
 ### DEC-D — Security opt-outs carry justification, never bare booleans (fixes P4)
 
-- [ ] **D1 — Replace `postureCheckOnBoot: false` (a bare boolean disabling the sole runtime authorization backstop) with a justification-carrying discriminated shape (`postureCheck: { onBoot: false, justification: '…' }`), surfaced in `kovo explain`.** Matches the CLAUDE.md type-security convention (`csrf: false` + justification).
+- [x] **D1 — Replace `postureCheckOnBoot: false` (a bare boolean disabling the sole runtime authorization backstop) with a justification-carrying discriminated shape (`postureCheck: { onBoot: false, justification: '…' }`), surfaced in `kovo explain`.** Matches the CLAUDE.md type-security convention (`csrf: false` + justification).
   - Acceptance: disabling the boot audit requires a written justification; `kovo explain --capabilities` lists it; a bare boolean no longer type-checks.
+  - Evidence: focused Postgres runtime/API tests passed after `postureCheckOnBoot` became a compile-time miss, empty justifications throw, and `drainPostgresPostureCheckOptOutFacts()` records the opt-out fact through the internal audit-facts surface; `pnpm run check:api-surface` passed.
 
 ### DEC-E — Secret box channel consistency (fixes P6)
 
