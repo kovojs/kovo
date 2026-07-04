@@ -13,11 +13,11 @@ strictly TABLE-level and returns `false` for a column-only grant. The audit asks
 GRANULARITY (table, not column), a LITERAL grantee predicate (not effective privilege), and a RESTRICTED schema scope
 (routines only in app schemas). Each gap is a cross-owner/secret fail-open on a GREEN `checkPostgresAppDbPosture`:
 
-| Audit query | Granularity/predicate | Misses (→ fail-open) |
-| --- | --- | --- |
-| `has_table_privilege(role, oid, 'SELECT')` (`:793`) | TABLE-level | column-only grants (B1); sequences (B4) |
-| KV435 `column_privileges … grantee = $readerRole` (`:735`) | LITERAL grantee | `GRANT … TO PUBLIC`/writer/membership (B2) |
-| routine scan `WHERE nspname IN (app schemas)` (`:989`) | app schemas only | cross-schema SECURITY DEFINER functions (B3) |
+| Audit query                                                | Granularity/predicate | Misses (→ fail-open)                         |
+| ---------------------------------------------------------- | --------------------- | -------------------------------------------- |
+| `has_table_privilege(role, oid, 'SELECT')` (`:793`)        | TABLE-level           | column-only grants (B1); sequences (B4)      |
+| KV435 `column_privileges … grantee = $readerRole` (`:735`) | LITERAL grantee       | `GRANT … TO PUBLIC`/writer/membership (B2)   |
+| routine scan `WHERE nspname IN (app schemas)` (`:989`)     | app schemas only      | cross-schema SECURITY DEFINER functions (B3) |
 
 The arc's meta-bug, one granularity deeper: the engine oracle is complete ONLY if you ask it at the finest granularity
 (per-column, `has_column_privilege`/`aclexplode` over `pg_attribute`), across ALL schemas, over ALL object types
