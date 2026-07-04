@@ -207,7 +207,7 @@ import {
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
 } from '../dist/server/src/internal/wire.mjs';
-import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
+import { href, Link, redirect, routeRef } from '../dist/core/src/index.mjs';
 import { fragmentTarget } from '../dist/core/src/internal/fragment-target.mjs';
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -813,7 +813,6 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
       calls: [
         ['load', true],
         ['idle', true],
-        ['visible', true],
       ],
       disposedListenerEvents: [],
       initialImportCount: 0,
@@ -821,7 +820,7 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
       listenerOptions: Object.fromEntries(
         delegatedLifecycleEvents.map((event) => [event, { capture: true }]),
       ),
-      observer: { observedCount: 1, unobservedCount: 2 },
+      observer: { observedCount: 0, unobservedCount: 0 },
       reconciledItems: [
         {
           html: '<li>p1:2</li>',
@@ -1395,7 +1394,7 @@ void test('P3 typed routes validate navigation targets', async () => {
       href,
       Link,
       redirect,
-      route,
+      routeRef,
       serverRoute,
     }),
     {

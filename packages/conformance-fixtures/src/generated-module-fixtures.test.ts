@@ -662,7 +662,7 @@ export function renderSource() {
         href: () => '/products/p%201?max=10',
         Link: () => ({ href: '/products/p1' }),
         redirect: () => ({ location: '/products/p1', status: 303 }),
-        route: (path) => ({ path }),
+        routeRef: (path) => ({ path }),
         serverRoute: (path, routeOptions) => ({ load: () => routeOptions.load(), path }),
       }),
     ).resolves.toEqual({

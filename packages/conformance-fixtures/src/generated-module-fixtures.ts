@@ -823,12 +823,12 @@ export const ProductLinks = component({
 `;
 
 const typedRouteRegistryConsumerSource = `
-import { href, Link, redirect, route } from '@kovojs/core';
+import { href, Link, redirect, routeRef } from '@kovojs/core';
 
 href('/cart', {});
 href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } });
 redirect('/products/:id', { params: { id: 'p1' } });
-route('/products/:id');
+routeRef('/products/:id');
 Link('/cart', {});
 Link('/products/:id', { params: { id: 'p1' } });
 
@@ -855,7 +855,7 @@ export async function generatedTypedRouteNavigationBehaviorFact(options: {
   href(path: string, options?: unknown): string;
   Link(path: string, options?: unknown): { href?: string };
   redirect(path: string, options?: unknown): { location?: string; status?: number };
-  route(path: string): { path?: string };
+  routeRef(path: string): { path?: string };
   serverRoute(path: string, options: { load(): unknown }): { load?: unknown; path?: string };
 }): Promise<GeneratedTypedRouteNavigationBehaviorFact> {
   const fileName = 'components/product-links.tsx';
@@ -881,7 +881,7 @@ export async function generatedTypedRouteNavigationBehaviorFact(options: {
       href: options.href('/products/:id', { params: { id: 'p 1' }, search: { max: 10 } }),
       link: options.Link('/products/:id', { params: { id: 'p1' } }),
       redirect: options.redirect('/products/:id', { params: { id: 'p1' } }),
-      route: options.route('/products/:id'),
+      route: options.routeRef('/products/:id'),
       serverRoute: {
         loadType: typeof declaredRoute.load,
         ...(declaredRoute.path === undefined ? {} : { path: declaredRoute.path }),
