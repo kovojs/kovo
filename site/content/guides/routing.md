@@ -84,11 +84,14 @@ import { metaFromQuery, route, s } from '@kovojs/server';
 
 export const productRoute = route('/products/:id', {
   params: s.object({ id: s.string() }),
-  meta: metaFromQuery(productQuery, (product) => ({
-    title: `${product.name} · Kovo Shop`,
-    description: product.summary,
-    image: product.imageUrl,
-  })),
+  meta: metaFromQuery(productQuery, (value) => {
+    const product = value as { imageUrl: string; name: string; summary: string };
+    return {
+      title: `${product.name} · Kovo Shop`,
+      description: product.summary,
+      image: product.imageUrl,
+    };
+  }),
   page: ProductPage,
 });
 ```
@@ -208,7 +211,7 @@ codes stay part of the typed surface rather than hand-constructed responses:
 ```tsx
 export const dealDetailRoute = route('/deals/:id', {
   params: s.object({ id: s.string() }),
-  page({ params }, req) {
+  page({ params }, req: { db: any }) {
     const deal = loadDeal(req.db, params.id);
     if (!deal) return notFound(); // → app 404 shell, status 404
     return <DealDetailRegion deal={deal} />;
@@ -230,7 +233,7 @@ refines `req.session` identically — so `req.session.user` is non-null inside t
 export const productRoute = route('/products/:id', {
   params: s.object({ id: s.string() }),
   guard: authed(),
-  page({ params }, req) {
+  page({ params }, req: { session: { user: { id: string } } }) {
     // req.session.user is non-null here, refined by the guard
     return <ProductPage id={params.id} owner={req.session.user.id} />;
   },

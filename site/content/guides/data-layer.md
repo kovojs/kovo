@@ -38,17 +38,29 @@ Query loaders receive a managed read handle:
 import { publicAccess, query, s } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
-export const cartSummary = query({
+const cartSummaryDefinition = {
   access: publicAccess('cart badge is visible to anonymous shoppers'),
-  load: (_input, { db }) =>
-    db.select({ productId: cartItems.productId, quantity: cartItems.quantity }).from(cartItems),
-});
+  output: s.object({ count: s.number() }),
+  load: async (_input, context?: { db?: any }): Promise<{ count: number }> => {
+    const rows = (await context?.db.select({ quantity: cartItems.quantity }).from(cartItems)) ?? [];
+    return { count: rows.reduce((total, row) => total + row.quantity, 0) };
+  },
+};
 
-export const productDetail = query({
+export const cartSummary = query(cartSummaryDefinition);
+
+const productDetailDefinition = {
   args: s.object({ id: s.string() }),
   guard: productCanBeViewed,
-  load: (input, { db }) => db.select().from(products).where(eq(products.id, input.id)),
-});
+  output: s.array(s.object({ id: s.string(), name: s.string() })),
+  load: async (input, context?: { db?: any }): Promise<{ id: string; name: string }[]> =>
+    context?.db
+      .select({ id: products.id, name: products.name })
+      .from(products)
+      .where(eq(products.id, input.id)) ?? [],
+};
+
+export const productDetail = query(productDetailDefinition);
 ```
 
 The loader's `FROM` and `JOIN` clauses are the read declaration. A raw projection needs a declared
@@ -109,12 +121,12 @@ Every request-reachable surface needs access posture:
 ```ts
 export const adminProducts = query({
   guard: guards.role('admin'),
-  load: (_input, { db }) => db.select().from(products),
+  load: (_input, context: { db: any }) => context.db.select().from(products),
 });
 
 export const publicProducts = query({
   access: publicAccess('catalog is public'),
-  load: (_input, { db }) => db.select().from(products),
+  load: (_input, context: { db: any }) => context.db.select().from(products),
 });
 ```
 

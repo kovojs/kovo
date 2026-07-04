@@ -69,7 +69,7 @@ orders = pgTable(
 
 const orderHistory = query({
   guard: guards.authed(),
-  load: (_input, { db }) => db.select().from(orders), // returns only the caller's orders
+  load: (_input, context: { db: any }) => context.db.select().from(orders), // returns only the caller's orders
 });
 ```
 

@@ -23,10 +23,12 @@ A query is a source-named read. You say what it loads and which parts of your da
 import { query } from '@kovojs/server';
 import { cart } from './domains.js';
 
-export const cartQuery = query({
-  load: (_input) => loadCart(db), // returns e.g. { count: 3 }
+const cartQueryDefinition = {
+  load: (_input): { count: number } => loadCart(db), // returns e.g. { count: 3 }
   reads: [cart], // this query depends on the "cart" domain
-});
+};
+
+export const cartQuery = query(cartQueryDefinition);
 ```
 
 That `reads: [cart]` is the important part. It's not a tag you have to remember to update — it's the

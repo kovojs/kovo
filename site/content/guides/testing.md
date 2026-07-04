@@ -17,13 +17,13 @@ browser.
 `@kovojs/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
 
 ```ts
-import { createKovoTestHarness, type KovoTestTouchGraph } from '@kovojs/test/harness';
+import { createKovoTestHarness } from '@kovojs/test/harness';
 
 const harness = createKovoTestHarness({
   db: createCommerceDb(),
   pages: { '/cart': renderCartPage },
   request: { session: { id: 's1', user: { id: 'u1' } } },
-  touchGraph: commerceTouchGraph as unknown as KovoTestTouchGraph,
+  touchGraph: commerceTouchGraph,
   verification: {
     domainByTable: { cart_items: 'cart', orders: 'order', products: 'product' },
   },
@@ -46,10 +46,10 @@ const page = await harness.page('/cart');
 expect(page.fragment('cart-badge')).toContain('data-bind="cart.count"');
 ```
 
-This is the commerce reference app's own test shape. Notice what `exec` returns beyond the handler's
-value: the **change records** (`{domain, keys, input}`) and the **rerun query list**. Invalidation
-behavior is part of every mutation assertion, so you don't need a separate integration suite for it.
-The `kovoTest` wrapper packages the same thing as named cases:
+This is the app-level harness shape to use when you want function-level mutation tests. Notice what
+`exec` returns beyond the handler's value: the **change records** (`{domain, keys, input}`) and the
+**rerun query list**. Invalidation behavior is part of every mutation assertion, so you don't need a
+separate integration suite for it. The `kovoTest` wrapper packages the same thing as named cases:
 
 ```ts
 import { kovoTest } from '@kovojs/test/test-case';
@@ -151,8 +151,8 @@ exists to kill, so those are errors.
 
 ## Property-test optimistic transforms
 
-For every hand-written transform, assert that the prediction is contained in eventual truth over
-generated states — the commuting diagram as a test:
+For every hand-written transform, assert that the prediction deep-equals eventual truth over generated
+states — the commuting diagram as a test:
 
 ```ts
 import { propertyTest } from '@kovojs/test/assertions';

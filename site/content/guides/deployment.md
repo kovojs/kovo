@@ -172,7 +172,10 @@ const app = createApp({
   queries,
   // Runs once before route/query/mutation guards; return null for anonymous.
   sessionProvider,
-  csrf: { secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET! },
+  csrf: {
+    secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
+    sessionId: (request: AppRequest) => request.session?.id,
+  },
 });
 
 const handler = toNodeHandler(createRequestHandler(app), { earlyHints: true });

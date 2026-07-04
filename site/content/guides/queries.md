@@ -15,13 +15,18 @@ components that depend on the query after a matching write commits.
 Load through `context.db`. That handle is the framework-managed read handle for loaders.
 
 ```ts
-import { publicAccess, query } from '@kovojs/server';
+import { publicAccess, query, s } from '@kovojs/server';
 
-export const cartSummary = query({
+const cartSummaryDefinition = {
   access: publicAccess('cart badge is visible to anonymous shoppers'),
-  load: (input, { db }) =>
-    db.select({ productId: cartItems.productId, quantity: cartItems.quantity }).from(cartItems),
-});
+  output: s.object({ count: s.number() }),
+  load: async (_input, context?: { db?: any }): Promise<{ count: number }> => {
+    const rows = (await context?.db.select({ quantity: cartItems.quantity }).from(cartItems)) ?? [];
+    return { count: rows.reduce((total, row) => total + row.quantity, 0) };
+  },
+};
+
+export const cartSummary = query(cartSummaryDefinition);
 ```
 
 Every request-reachable query needs an access decision. A guard counts. A public query uses

@@ -12,18 +12,16 @@ your app.
 
 ```tsx
 import { component } from '@kovojs/core';
-import { parseComponentXml, renderRegistry, renderTree, s } from '@kovojs/server';
+import { renderRegistry, s } from '@kovojs/server';
 
 const Callout = component({
-  render: ({ tone = 'info' }, _state, { children }) => <aside data-tone={tone}>{children}</aside>,
+  render: ({ tone = 'info' }, _state, slots: { children?: any }) => (
+    <aside data-tone={tone}>{slots.children}</aside>
+  ),
 });
-const registry = renderRegistry({
+export const registry = renderRegistry({
   'kovo-callout': { component: Callout, props: s.object({ tone: s.string().optional() }) },
 });
-export const html = await renderTree(
-  registry,
-  parseComponentXml('Check <kovo-callout tone="warn">stock</kovo-callout>.'),
-);
 ```
 
 The registry is the boundary. A tag that is not in `renderRegistry(...)` can never dispatch to a
