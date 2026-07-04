@@ -8,8 +8,6 @@ import { currentJsxFrameworkContext } from './jsx-context.js';
 import {
   isSigningKeyRing,
   signingKeyRingFromSecret,
-  type SigningKeyRing,
-  type SigningKeyRingOptions,
   type SigningSecret,
 } from './keyring.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
@@ -31,24 +29,13 @@ export interface CsrfAnonymousCookieOptions {
   secure?: boolean;
 }
 
-/** CSRF HMAC secret. Object form supports one previous key during deploy rotation. */
-export type CsrfSecret =
-  | string
-  | Uint8Array
-  | SigningKeyRing
-  | SigningKeyRingOptions
-  | {
-      current: string;
-      previous?: string;
-    };
-
 /** CSRF config: a `secret`, a session extractor, and optional anonymous form binding. */
 export interface CsrfOptions<Request> {
   /** Configure or disable the anonymous CSRF cookie used when `sessionId` returns undefined. */
   anonymousCookie?: CsrfAnonymousCookieOptions | false;
   /** Form field name used as the default signing audience when no narrower sink audience is supplied. */
   field?: string;
-  secret: CsrfSecret;
+  secret: SigningSecret;
   sessionId: (request: Request) => string | undefined;
   /**
    * Allowlist of cross-origin origins permitted to make unsafe-verb requests (SPEC §6.6/§9.1). Each
@@ -58,9 +45,6 @@ export interface CsrfOptions<Request> {
    */
   trustedOrigins?: readonly string[];
 }
-
-/** `CsrfOptions` plus the optional form `field` name to validate against. */
-export type CsrfValidationOptions<Request> = CsrfOptions<Request>;
 
 /** A minted CSRF token plus the anonymous binding cookie the response must set, when needed. */
 export interface MintedCsrfToken {
@@ -227,7 +211,7 @@ export function mintCsrfField<Request>(
 
 /** @internal Render the framework-owned CSRF field for compiler-emitted mutation forms. */
 export function renderMutationCsrfField<Request>(definition: {
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   key: string;
 }): string {
   if (definition.csrf === false) return '';
@@ -327,7 +311,7 @@ export function verifyCsrfRequestOriginFloor<Request>(
 export function validateCsrfToken<Request>(
   rawInput: unknown,
   request: Request,
-  options: CsrfValidationOptions<Request>,
+  options: CsrfOptions<Request>,
   context: { audience?: string } = {},
 ): boolean {
   // SPEC §6.6/§9.1: run the fail-closed header floor BEFORE the synchronizer-token check so an
@@ -345,7 +329,7 @@ export function validateCsrfToken<Request>(
   if (!submittedMac) return false;
 
   return (
-    signingKeyRingFromCsrfSecret(options.secret).verify({
+    signingKeyRingFromSecret(options.secret).verify({
       audience: csrfAudience(options, context.audience),
       payload: binding.value,
       purpose: csrfPurpose(binding.value),
@@ -361,9 +345,9 @@ function revealCsrfInput(input: unknown): unknown {
 }
 
 export function mutationCsrfOptions<Request>(
-  definition: { csrf?: CsrfValidationOptions<Request> | false | undefined },
-  defaultOptions?: CsrfValidationOptions<Request> | false,
-): CsrfValidationOptions<Request> | false | undefined {
+  definition: { csrf?: CsrfOptions<Request> | false | undefined },
+  defaultOptions?: CsrfOptions<Request> | false,
+): CsrfOptions<Request> | false | undefined {
   if (definition.csrf === false) return false;
   return definition.csrf ?? defaultOptions;
 }
@@ -437,7 +421,7 @@ function resolveCsrfBinding<Request>(
   // binding round-trips, falling back to the bare name for the dev/no-Secure case and for cookies
   // minted before the floor existed.
   const existing = readAnonymousCsrfCookie(request, name);
-  if (isUsableAnonymousCsrfSecret(existing)) return { value: `anonymous:${existing}` };
+  if (isUsableAnonymousSigningSecret(existing)) return { value: `anonymous:${existing}` };
   if (!mintOptions.mintAnonymous) return undefined;
 
   const cookie = buildAnonymousCsrfCookieOptions(request, cookieOptions);
@@ -487,7 +471,7 @@ function readCookieValue(request: unknown, name: string): string | undefined {
   return typeof revealed === 'string' ? revealed : undefined;
 }
 
-function isUsableAnonymousCsrfSecret(value: string | undefined): value is string {
+function isUsableAnonymousSigningSecret(value: string | undefined): value is string {
   return value !== undefined && /^[A-Za-z0-9_-]{32,}$/.test(value);
 }
 
@@ -498,9 +482,9 @@ function requestIsHttps(request: unknown): boolean {
 const CSRF_MASKED_TOKEN_VERSION = 'v1';
 const CSRF_MAC_BYTES = 32;
 
-function createCsrfToken(binding: string, secret: CsrfSecret, audience: string): string {
+function createCsrfToken(binding: string, secret: SigningSecret, audience: string): string {
   const mac = Buffer.from(
-    signingKeyRingFromCsrfSecret(secret).sign({
+    signingKeyRingFromSecret(secret).sign({
       audience,
       payload: binding,
       purpose: csrfPurpose(binding),
@@ -556,33 +540,17 @@ function xorBuffers(left: Buffer, right: Buffer): Buffer {
 }
 
 /** @internal Return the active CSRF/framework signing key for new tokens and non-CSRF attestations. */
-export function currentCsrfSecret(secret: CsrfSecret): string {
+export function currentSigningSecret(secret: SigningSecret): string {
   if (typeof secret === 'string') return secret;
   if (secret instanceof Uint8Array) return Buffer.from(secret).toString('base64url');
   if (isSigningKeyRing(secret)) {
-    throw new Error('currentCsrfSecret cannot expose raw material from a SigningKeyRing');
+    throw new Error('currentSigningSecret cannot expose raw material from a SigningKeyRing');
   }
-  if ('keys' in secret) {
-    const current = secret.keys.find((key) => key.state === 'active');
-    if (current === undefined) throw new Error('csrf secret keyring requires an active key');
-    return typeof current.secret === 'string'
-      ? current.secret
-      : Buffer.from(current.secret).toString('base64url');
-  }
-  return secret.current;
-}
-
-export function signingKeyRingFromCsrfSecret(secret: CsrfSecret) {
-  if (typeof secret === 'object' && !(secret instanceof Uint8Array) && 'current' in secret) {
-    const keys = [
-      { id: 'current', secret: secret.current, state: 'active' as const },
-      ...(secret.previous === undefined
-        ? []
-        : [{ id: 'previous', secret: secret.previous, state: 'previous' as const }]),
-    ];
-    return signingKeyRingFromSecret({ keys });
-  }
-  return signingKeyRingFromSecret(secret as SigningSecret);
+  const current = secret.keys.find((key) => key.state === 'active');
+  if (current === undefined) throw new Error('SigningSecret key ring options must include an active key');
+  return typeof current.secret === 'string'
+    ? current.secret
+    : Buffer.from(current.secret).toString('base64url');
 }
 
 function csrfPurpose(binding: string): string {

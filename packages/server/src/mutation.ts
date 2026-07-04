@@ -1,4 +1,4 @@
-import { isUntrusted, revealUntrusted } from '@kovojs/core';
+import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import {
   forwardSetCookie,
@@ -10,7 +10,7 @@ import {
   mutationCsrfOptions,
   validateCsrfToken,
   verifyCsrfRequestOriginFloor,
-  type CsrfValidationOptions,
+  type CsrfOptions,
 } from './csrf.js';
 import { invalidate, mutationRegistryChangeRecords, type ChangeRecord } from './change-record.js';
 import {
@@ -24,7 +24,6 @@ import {
   type ResolvedGuardFailure,
 } from './guards.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
-import type { JsonSerializable } from './json-boundary.js';
 import { appendResponseHeader, type ResponseHeaders } from './response.js';
 import {
   mutationWireRequestFromHeaders,
@@ -153,13 +152,13 @@ type InternalRunMutationOptions<Request, Input = unknown> = RunMutationOptions<R
 
 type MutationResponseDeliveryMode<Request, Value> =
   | {
-      csrf: CsrfValidationOptions<Request> | false | undefined;
+      csrf: CsrfOptions<Request> | false | undefined;
       kind: 'enhanced-fragment';
       mutationKey: string;
       request: MutationWireRequest<Request>;
     }
   | {
-      csrf: CsrfValidationOptions<Request> | false | undefined;
+      csrf: CsrfOptions<Request> | false | undefined;
       kind: 'no-js-prg';
       mutationKey: string;
       request: NoJsMutationRequest<Request, Value>;
@@ -451,13 +450,13 @@ async function runMutationWithTrackedInput<
   const context = {
     fail<const Code extends Extract<keyof Errors, string>>(
       code: Code,
-      payload: JsonSerializable<InferSchema<Errors[Code]>>,
-    ): MutationFail<Code, JsonSerializable<InferSchema<Errors[Code]>>> {
+      payload: InferSchema<Errors[Code]> & JsonValue,
+    ): MutationFail<Code, InferSchema<Errors[Code]> & JsonValue> {
       return {
         error: { code, payload },
         ok: false,
         status: 422,
-      } as MutationFail<Code, JsonSerializable<InferSchema<Errors[Code]>>>;
+      } as MutationFail<Code, InferSchema<Errors[Code]> & JsonValue>;
     },
     invalidate(domain, options) {
       const record = invalidate(domain, options);
@@ -966,7 +965,7 @@ async function parseMutationInput<InputSchema extends Schema<unknown>>(
 }
 
 function runMutationOptions<Request>(
-  csrf: CsrfValidationOptions<Request> | false | undefined,
+  csrf: CsrfOptions<Request> | false | undefined,
   lifecycle?: RequestLifecycleOptions<Request> & { taskScheduler?: TaskScheduler },
 ): RunMutationOptions<Request> {
   return {
@@ -992,7 +991,7 @@ async function staleSessionEnhancedCsrfReauthResponse<
   GuardedRequest extends Request = Request,
 >(
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-  csrf: CsrfValidationOptions<Request> | false | undefined,
+  csrf: CsrfOptions<Request> | false | undefined,
   request: MutationWireRequest<Request>,
 ): Promise<BufferedMutationWireResponse | undefined> {
   const lifecycleRequest = await staleSessionCsrfLifecycleRequest(definition, csrf, request);
@@ -1017,7 +1016,7 @@ async function staleSessionNoJsCsrfReauthResponse<
   GuardedRequest extends Request = Request,
 >(
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-  csrf: CsrfValidationOptions<Request> | false | undefined,
+  csrf: CsrfOptions<Request> | false | undefined,
   request: NoJsMutationRequest<Request, Value>,
 ): Promise<NoJsMutationResponse | undefined> {
   const lifecycleRequest = await staleSessionCsrfLifecycleRequest(definition, csrf, request);
@@ -1042,7 +1041,7 @@ async function staleSessionCsrfLifecycleRequest<
   GuardedRequest extends Request = Request,
 >(
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-  csrf: CsrfValidationOptions<Request> | false | undefined,
+  csrf: CsrfOptions<Request> | false | undefined,
   request: MutationWireRequest<Request> | NoJsMutationRequest<Request, Value>,
 ): Promise<Request | undefined> {
   if (csrf === undefined || csrf === false) return undefined;

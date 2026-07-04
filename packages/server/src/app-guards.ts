@@ -316,11 +316,11 @@ function isOptionalFunction(value: unknown): boolean {
 function isOptionalCsrfOptions(value: unknown): boolean {
   return (
     value === undefined ||
-    (isRecord(value) && isCsrfSecret(value.secret) && typeof value.sessionId === 'function')
+    (isRecord(value) && isSigningSecret(value.secret) && typeof value.sessionId === 'function')
   );
 }
 
-function isCsrfSecret(value: unknown): boolean {
+function isSigningSecret(value: unknown): boolean {
   return (
     typeof value === 'string' ||
     value instanceof Uint8Array ||

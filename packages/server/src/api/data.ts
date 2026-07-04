@@ -11,14 +11,12 @@ export { csrfField, csrfToken, mintCsrfField, mintCsrfToken } from '../csrf.js';
 export type {
   CsrfAnonymousCookieOptions,
   CsrfOptions,
-  CsrfSecret,
-  CsrfValidationOptions,
   MintedCsrfField,
   MintedCsrfToken,
 } from '../csrf.js';
+export type { SigningSecret } from '../keyring.js';
 export { domain } from '../domain.js';
 export type { Domain } from '../domain.js';
-export type { JsonSerializable } from '../json-boundary.js';
 export { errorBoundary, queue, stream } from '../mutation.js';
 import { mutation as mutationImplementation } from '../mutation.js';
 import { query as queryImplementation } from '../query.js';

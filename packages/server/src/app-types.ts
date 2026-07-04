@@ -1,7 +1,7 @@
 import type { DiagnosticCode, DiagnosticSeverity, Redirect } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { EgressOptions } from './egress.js';
-import type { CsrfValidationOptions } from './csrf.js';
+import type { CsrfOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { Schema } from './schema.js';
 import type { DocumentCspConfig } from './csp.js';
@@ -239,7 +239,7 @@ export interface CreateAppOptions<
    * provisions a fresh in-memory registry.
    */
   clientModules?: VersionedClientModuleRegistry;
-  csrf?: CsrfValidationOptions<AppRequest>;
+  csrf?: CsrfOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions | DocumentDeclaration;
   /**
@@ -311,7 +311,7 @@ export interface KovoApp<
   _AppRequest = any,
 > {
   clientModules: VersionedClientModuleRegistry;
-  csrf?: CsrfValidationOptions<any>;
+  csrf?: CsrfOptions<any>;
   db?: DbProvider<any, any, any>;
   diagnostics: readonly AppDiagnostic[];
   document: AppDocumentOptions;
@@ -362,7 +362,7 @@ export interface AppMutationResponseContext {
  * succeeds or fails (SPEC §9.5).
  */
 export interface AppMutationResponseOptions {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragmentRenderers?: readonly FragmentRenderer[];

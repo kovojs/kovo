@@ -26,7 +26,7 @@ import {
 import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
-import type { CsrfValidationOptions } from './csrf.js';
+import type { CsrfOptions } from './csrf.js';
 import type { AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
@@ -525,7 +525,7 @@ export function notFound(): NotFound {
 }
 
 export interface RouteJsxContextOptions<Request> {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfOptions<Request>;
   deferredRegions?: DeferredRegionCollector;
   maxListItems?: number;
   mutationFailure?: {

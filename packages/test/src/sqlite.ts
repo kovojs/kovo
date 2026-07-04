@@ -62,16 +62,11 @@ export interface SqliteTestDbOptions {
 export interface SqliteTestDb {
   close(): void;
   exec(statement: SqliteStatementInput): void;
-  insert(table: string): { values(value: Record<string, unknown>): void };
   query<Row extends Record<string, unknown> = Record<string, unknown>>(
     statement: SqliteStatementInput,
     params?: readonly unknown[],
   ): Row[];
   read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string): Row[];
-  sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-    statement: SqliteStatementInput,
-    params?: readonly unknown[],
-  ): Row[];
   sqlite: SqliteNativeHandle;
   write(table: string, value: Record<string, unknown>): void;
 }
@@ -114,13 +109,6 @@ export function createSqliteTestDb(options: SqliteTestDbOptions = {}): SqliteTes
     exec(statement) {
       sqlite.exec(sqliteStatementText(statement));
     },
-    insert(table) {
-      return {
-        values(value) {
-          insertSqliteRow(sqlite, table, value);
-        },
-      };
-    },
     query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: SqliteStatementInput,
       params: readonly unknown[] = [],
@@ -130,13 +118,6 @@ export function createSqliteTestDb(options: SqliteTestDbOptions = {}): SqliteTes
     },
     read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string): Row[] {
       return sqlite.prepare<Row>(`select * from ${quoteSqlIdentifier(table)}`).all();
-    },
-    sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: SqliteStatementInput,
-      params: readonly unknown[] = [],
-    ): Row[] {
-      const carrier = sqliteStatement(statement, params);
-      return sqlite.prepare<Row>(carrier.text).all(...carrier.values);
     },
     sqlite,
     write(table, value) {
@@ -340,14 +321,6 @@ function declaredWriteSqliteTestDbFromHandle(
     exec(statement) {
       sqlite.exec(sqliteStatementText(statement));
     },
-    insert(table) {
-      return {
-        values(value) {
-          assertDeclaredWriteTableAllowed(table, policy, 'sqlite');
-          insertSqliteRow(sqlite, table, value);
-        },
-      };
-    },
     query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: SqliteStatementInput,
       params: readonly unknown[] = [],
@@ -357,13 +330,6 @@ function declaredWriteSqliteTestDbFromHandle(
     },
     read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string): Row[] {
       return sqlite.prepare<Row>(`select * from ${quoteSqlIdentifier(table)}`).all();
-    },
-    sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: SqliteStatementInput,
-      params: readonly unknown[] = [],
-    ): Row[] {
-      const carrier = sqliteStatement(statement, params);
-      return sqlite.prepare<Row>(carrier.text).all(...carrier.values);
     },
     sqlite,
     write(table, value) {
@@ -381,13 +347,6 @@ function sqliteTestDbFromHandle(sqlite: SqliteNativeHandle): ReadonlySqliteTestD
     exec(statement) {
       sqlite.exec(sqliteStatementText(statement));
     },
-    insert(table) {
-      return {
-        values(value) {
-          insertSqliteRow(sqlite, table, value);
-        },
-      };
-    },
     query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: SqliteStatementInput,
       params: readonly unknown[] = [],
@@ -397,13 +356,6 @@ function sqliteTestDbFromHandle(sqlite: SqliteNativeHandle): ReadonlySqliteTestD
     },
     read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string): Row[] {
       return sqlite.prepare<Row>(`select * from ${quoteSqlIdentifier(table)}`).all();
-    },
-    sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: SqliteStatementInput,
-      params: readonly unknown[] = [],
-    ): Row[] {
-      const carrier = sqliteStatement(statement, params);
-      return sqlite.prepare<Row>(carrier.text).all(...carrier.values);
     },
     sqlite,
     write(table, value) {

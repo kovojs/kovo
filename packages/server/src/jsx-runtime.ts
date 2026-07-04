@@ -26,7 +26,7 @@ import { componentMutationFailureSlots } from './component-render.js';
 import {
   renderMutationCsrfField,
   renderMutationIdemField,
-  type CsrfValidationOptions,
+  type CsrfOptions,
 } from './csrf.js';
 import {
   escapeAttribute,
@@ -417,7 +417,7 @@ function renderFormCsrfContent(props: JsxProps): string {
 
 function isMutationDefinitionLike(
   value: unknown,
-): value is { csrf?: CsrfValidationOptions<unknown> | false; key: string } {
+): value is { csrf?: CsrfOptions<unknown> | false; key: string } {
   return (
     typeof value === 'object' &&
     value !== null &&

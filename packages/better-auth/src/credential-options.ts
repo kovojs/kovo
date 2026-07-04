@@ -1,4 +1,4 @@
-import type { AccessDecision, CsrfValidationOptions, Guard } from '@kovojs/server';
+import type { AccessDecision, CsrfOptions, Guard } from '@kovojs/server';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
 
 import type { BetterAuthRequestLike } from './internal/contracts.js';
@@ -14,7 +14,7 @@ export interface BetterAuthCredentialMutationOptions<
   GuardedRequest extends Request,
 > {
   access?: AccessDecision;
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   defaultRedirectTo?: string;
   guard?: Guard<Request, GuardedRequest>;
   key?: Key;
