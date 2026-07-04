@@ -423,7 +423,7 @@ describe('@kovojs/ui styled package foundation', () => {
       .map(readSource)
       .join('\n');
     expect(sources).toContain('/** @jsxImportSource @kovojs/server */');
-    expect(sources).toContain("import { component } from '@kovojs/core';");
+    expect(sources).toContain("import { component, type ComponentChild } from '@kovojs/core';");
     expect(sources).toContain("from '@kovojs/headless-ui/");
     expect(sources).not.toContain('kovo-c=');
     expect(sources).not.toContain('data-bind');

@@ -102,6 +102,9 @@ export type ComponentRenderResult =
 /** Escaped text/message content used by explicit text-oriented helpers. */
 export type ComponentTextResult = ComponentRenderResult | string;
 
+/** Render-time child/slot composition value, including escaped text nodes (SPEC §4.5). */
+export type ComponentChild = ComponentRenderResult | string;
+
 interface FrameworkRenderedHtml {
   readonly html: string;
   [Symbol.toPrimitive](): string;
@@ -130,7 +133,7 @@ type ComponentDefinitionMutations<Definition> = Definition extends { mutations: 
   : NoComponentMutations;
 
 interface ComponentRenderSlotValues {
-  children?: unknown;
+  children?: ComponentChild;
   [slot: string]: unknown;
 }
 
@@ -146,6 +149,8 @@ export type ComponentRenderSlots<
 
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
 export interface ComponentDefinitionInput {
+  /** Declared clock inputs for time-dependent rendered positions and derives (SPEC §4.8/§4.9). */
+  clocks?: Record<string, unknown>;
   /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
   disableServerRefresh?: boolean;
   /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
@@ -164,9 +169,145 @@ export interface ComponentDefinitionInput {
   render: (...args: never[]) => ComponentRenderResult;
 }
 
+/** Function type used by component type helpers for callable render slots and definitions. */
+export type AnyFunction = (...args: any[]) => any;
+/** Type-level predicate used by component prop inference to default-deny `any` render input. */
+export type IsAny<T> = 0 extends 1 & T ? true : false;
+/** First render-parameter input bag before query result keys are removed (SPEC §4.1/§6.2). */
+export type ComponentRenderInput<Definition> = Definition extends {
+  render: (input: infer Input, ...args: any[]) => any;
+}
+  ? IsAny<Input> extends true
+    ? Record<never, never>
+    : unknown extends Input
+      ? Record<never, never>
+      : Input extends object
+        ? Input
+        : Record<never, never>
+  : Record<never, never>;
+
+/** Query result property names supplied by the runtime rather than component call sites. */
+export type ComponentQueryKeys<Definition> = Definition extends { queries: infer Queries }
+  ? Extract<keyof Queries, string>
+  : never;
+
+/** Framework-level attributes accepted by component call sites in addition to rendered props. */
+export interface ComponentCallSiteAttributes {
+  [attribute: `aria-${string}`]: unknown;
+  [attribute: `data-${string}`]: unknown;
+  [attribute: `on${string}`]: unknown;
+  checked?: unknown;
+  class?: string;
+  className?: string;
+  disabled?: unknown;
+  form?: unknown;
+  hidden?: unknown;
+  id?: unknown;
+  'kovo-key'?: number | string;
+  key?: number | string;
+  name?: unknown;
+  required?: unknown;
+  role?: unknown;
+  style?: unknown;
+  styles?: unknown;
+  tabIndex?: unknown;
+  value?: unknown;
+}
+
+/**
+ * Props accepted when calling or rendering a Kovo component descriptor. Per SPEC §4.1/§6.2,
+ * the render function's first parameter is the source of truth, and query result keys are
+ * supplied by the runtime rather than by call sites.
+ */
+export type ComponentProps<Definition> = Omit<
+  ComponentRenderInput<Definition>,
+  ComponentQueryKeys<Definition>
+> &
+  ComponentCallSiteAttributes;
+
+/** Props consumed by a component query `args` binding. */
+export type ComponentQueryBindingProps<Binding> =
+  Binding extends QueryArgsBinding<string, unknown, infer Props, unknown> ? Props : never;
+
+/** Query binding consistency check against render-derived call-site props. */
+export type CheckedComponentQueryBindings<Definition> = Definition extends {
+  queries: infer Queries;
+}
+  ? {
+      [Key in keyof Queries]: ComponentQueryBindingProps<Queries[Key]> extends never
+        ? Queries[Key]
+        : ComponentQueryBindingProps<Queries[Key]> extends ComponentProps<Definition>
+          ? Queries[Key]
+          : never;
+    }
+  : unknown;
+
+/** Constructor values accepted in component `props` metadata. */
+export type ComponentPropMetadataValue =
+  | ArrayConstructor
+  | BooleanConstructor
+  | NumberConstructor
+  | ObjectConstructor
+  | StringConstructor;
+
+/** Runtime value type represented by a component `props` metadata constructor. */
+export type ComponentPropMetadataType<Value> = Value extends StringConstructor
+  ? string
+  : Value extends NumberConstructor
+    ? number
+    : Value extends BooleanConstructor
+      ? boolean
+      : Value extends ArrayConstructor
+        ? readonly JsonValue[]
+        : Value extends ObjectConstructor
+          ? Record<string, JsonValue>
+          : never;
+
+/** Props metadata consistency check against render-derived call-site props. */
+export type CheckedComponentPropsMetadata<Definition> = Definition extends { props: infer Metadata }
+  ? {
+      [Key in keyof Metadata]: Key extends keyof ComponentProps<Definition>
+        ? Metadata[Key] extends ComponentPropMetadataValue
+          ? ComponentPropMetadataType<Metadata[Key]> extends ComponentProps<Definition>[Key]
+            ? Metadata[Key]
+            : never
+          : never
+        : never;
+    }
+  : unknown;
+
+/** Definition-level consistency checks for query args and serializable props metadata. */
+export type CheckedComponentDefinition<Definition extends ComponentDefinitionInput> = Definition &
+  (Definition extends { queries: unknown }
+    ? { queries: CheckedComponentQueryBindings<Definition> }
+    : unknown) &
+  (Definition extends { props: unknown }
+    ? { props: CheckedComponentPropsMetadata<Definition> }
+    : unknown);
+
+/** Required keys of an object type, preserving `exactOptionalPropertyTypes` semantics. */
+export type RequiredKeys<T extends object> = {
+  [Key in keyof T]-?: {} extends Pick<T, Key> ? never : Key;
+}[keyof T];
+
+/** Exact object helper used to reject excess component call-site properties. */
+export type ExactProps<Shape extends object, Input extends Shape> = Input &
+  Record<Exclude<keyof Input, keyof Shape>, never>;
+
+/** Tuple form for component calls: props are optional only when no render-derived prop is required. */
+export type ComponentCallArgs<
+  Definition extends ComponentDefinitionInput,
+  Props extends ComponentProps<Definition>,
+> =
+  RequiredKeys<ComponentProps<Definition>> extends never
+    ? [props?: ExactProps<ComponentProps<Definition>, Props>]
+    : [props: ExactProps<ComponentProps<Definition>, Props>];
+
 /** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
 export interface Component<Definition extends ComponentDefinitionInput> {
-  (props?: Record<string, unknown>): any;
+  <const Props extends ComponentProps<Definition>>(
+    ...args: ComponentCallArgs<Definition, Props>
+  ): any;
   definition: Definition;
   name?: string;
 }
@@ -213,7 +354,7 @@ export function component<
     render: (...args: any[]) => ComponentRenderResult;
   },
 >(
-  definition: Definition &
+  definition: CheckedComponentDefinition<Definition> &
     (State extends Serializable<State> ? { state: () => State } : { state: () => never }) & {
       render: (
         queries: any,
@@ -229,7 +370,7 @@ export function component<
     state?: undefined;
   },
 >(
-  definition: Definition & {
+  definition: CheckedComponentDefinition<Definition> & {
     render: (
       queries: any,
       state: any,
@@ -259,6 +400,7 @@ export function component(
 }
 
 const COMPONENT_DEFINITION_KEYS = new Set([
+  'clocks',
   'css',
   'disableServerRefresh',
   'errorBoundary',
@@ -292,7 +434,12 @@ export function ErrorBoundary(props: ErrorBoundaryProps): ComponentRenderResult 
 }
 
 /** A typed component query binding with args derived from serializable component props. */
-export interface QueryArgsBinding<Key extends string, Result, Props, Args> {
+export interface QueryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args,
+> {
   args: (props: Props) => Args;
   key: Key;
   refresh<PropsSpec extends QueryRefreshSpec<Result>>(

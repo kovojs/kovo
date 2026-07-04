@@ -1,6 +1,7 @@
 import {
   isUntrusted,
   revealUntrusted,
+  type ComponentChild,
   type JsonValue,
   type Redirect,
   type RouteSearchValue,
@@ -116,7 +117,7 @@ export interface LayoutRenderSlots<
   Regions extends LayoutRegionResults = LayoutRegionResults,
 > {
   /** The child layout or route page output this layout wraps. */
-  children: unknown;
+  children: ComponentChild;
   /** Named route-level sibling regions rendered before layout composition (SPEC §4.5/§8). */
   regions: Regions;
   /** The request after configured app lifecycle providers have run. */
@@ -749,7 +750,7 @@ async function renderLayoutChain<Request>(
     try {
       const queries = await loadLayoutQueries(layoutDeclaration, request, maxListItems);
       value = await layoutDeclaration.render(queries, undefined, {
-        children: value,
+        children: value as ComponentChild,
         regions,
         request,
       });

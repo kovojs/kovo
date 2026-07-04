@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   dialogCloseAttributes,
   dialogContentAttributes,
@@ -48,7 +48,7 @@ export interface DrawerStyleOverrides {
  * const props: DrawerProps = { contentId: 'content-id', title: 'Title', children: 'Content' };
  */
 export interface DrawerProps {
-  children?: string;
+  children?: ComponentChild;
   closeLabel?: string;
   contentId: string;
   description?: string;
@@ -81,7 +81,7 @@ export interface DrawerStateProps {
  * const props: DrawerRootProps = { children: 'Content' };
  */
 export interface DrawerRootProps extends DrawerStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
 }
 
@@ -93,7 +93,7 @@ export interface DrawerRootProps extends DrawerStateProps {
  * const props: DrawerTriggerProps = { contentId: 'content-id', children: 'Content' };
  */
 export interface DrawerTriggerProps extends DrawerStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId: string;
   id?: string;
 }
@@ -106,7 +106,7 @@ export interface DrawerTriggerProps extends DrawerStateProps {
  * const props: DrawerContentProps = { contentId: 'content-id', titleId: 'title-id', children: 'Content' };
  */
 export interface DrawerContentProps extends DrawerStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId: string;
   descriptionId?: string;
   side?: DrawerSide;
@@ -121,7 +121,7 @@ export interface DrawerContentProps extends DrawerStateProps {
  * const props: DrawerPartProps = { children: 'Content' };
  */
 export interface DrawerPartProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: DrawerStyleOverrides;
 }
@@ -134,7 +134,7 @@ export interface DrawerPartProps {
  * const props: DrawerCloseProps = { contentId: 'content-id', children: 'Content' };
  */
 export interface DrawerCloseProps extends DrawerStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId: string;
   id?: string;
 }

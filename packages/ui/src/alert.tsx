@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -21,7 +21,7 @@ export type AlertVariant = 'info' | 'success' | 'warning' | 'danger';
  * const props: AlertProps = { children: 'Content' };
  */
 export interface AlertProps {
-  children?: string;
+  children?: ComponentChild;
   role?: 'alert' | 'status';
   style?: style.StyleInput;
   title?: string;

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   selectContentAttributes,
   selectHiddenInputAttributes,
@@ -61,7 +61,7 @@ export interface SelectStateProps {
  * const props: SelectProps = { children: 'Content' };
  */
 export interface SelectProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SelectStyleOverrides;
 }
@@ -74,8 +74,8 @@ export interface SelectProps extends SelectStateProps {
  * const props: SelectTriggerProps = { children: 'Content' };
  */
 export interface SelectTriggerProps extends SelectStateProps {
-  'aria-activedescendant'?: string;
-  children?: string;
+  'aria-activedescendant'?: string | undefined;
+  children?: ComponentChild;
   descriptionId?: string;
   errorId?: string;
   id?: string;
@@ -103,7 +103,7 @@ export interface SelectHiddenInputProps extends SelectStateProps {
  * const props: SelectContentProps = { children: 'Content' };
  */
 export interface SelectContentProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   label?: string;
   labelledBy?: string;
@@ -118,7 +118,7 @@ export interface SelectContentProps extends SelectStateProps {
  * const props: SelectItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface SelectItemProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
@@ -134,7 +134,7 @@ export interface SelectItemProps extends SelectStateProps {
  * const props: SelectValueProps = { children: 'Content' };
  */
 export interface SelectValueProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SelectStyleOverrides;
 }

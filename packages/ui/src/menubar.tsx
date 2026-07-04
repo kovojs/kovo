@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   menubarGroupAttributes,
   menubarItemAttributes,
@@ -55,7 +55,7 @@ export interface MenubarStateProps {
  * const props: MenubarProps = { children: 'Content' };
  */
 export interface MenubarProps extends MenubarStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   id?: string;
   label?: string;
@@ -71,7 +71,7 @@ export interface MenubarProps extends MenubarStateProps {
  * const props: MenubarItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface MenubarItemProps extends MenubarStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   itemDisabled?: boolean;
@@ -89,7 +89,7 @@ export interface MenubarItemProps extends MenubarStateProps {
  * const props: MenubarSubmenuProps = { value: 'value', children: 'Content' };
  */
 export interface MenubarSubmenuProps extends MenubarStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: MenubarStyleOverrides;
@@ -104,7 +104,7 @@ export interface MenubarSubmenuProps extends MenubarStateProps {
  * const props: MenubarGroupProps = { children: 'Content' };
  */
 export interface MenubarGroupProps extends MenubarStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: MenubarStyleOverrides;

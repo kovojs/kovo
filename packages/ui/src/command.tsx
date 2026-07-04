@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   commandCloseAttributes,
   commandDialogAttributes,
@@ -67,7 +67,7 @@ export interface CommandStateProps {
  * const props: CommandProps = { children: 'Content' };
  */
 export interface CommandProps extends CommandStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: CommandStyleOverrides;
 }
@@ -80,7 +80,7 @@ export interface CommandProps extends CommandStateProps {
  * const props: CommandTriggerProps = { children: 'Content' };
  */
 export interface CommandTriggerProps extends CommandStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   labelledBy?: string;
@@ -95,7 +95,7 @@ export interface CommandTriggerProps extends CommandStateProps {
  * const props: CommandDialogProps = { children: 'Content' };
  */
 export interface CommandDialogProps extends CommandStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   descriptionId?: string;
   styles?: CommandStyleOverrides;
@@ -110,7 +110,7 @@ export interface CommandDialogProps extends CommandStateProps {
  * const props: CommandCloseProps = { children: 'Content' };
  */
 export interface CommandCloseProps extends CommandStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   styles?: CommandStyleOverrides;
 }
@@ -139,7 +139,7 @@ export interface CommandInputProps extends CommandStateProps {
  * const props: CommandListboxProps = { children: 'Content' };
  */
 export interface CommandListboxProps extends CommandStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: CommandStyleOverrides;
@@ -153,7 +153,7 @@ export interface CommandListboxProps extends CommandStateProps {
  * const props: CommandItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface CommandItemProps extends CommandStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
@@ -170,7 +170,7 @@ export interface CommandItemProps extends CommandStateProps {
  * const props: CommandEmptyProps = { children: 'Content' };
  */
 export interface CommandEmptyProps extends CommandStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: CommandStyleOverrides;
 }

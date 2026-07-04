@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   popoverContentAttributes,
   popoverRootAttributes,
@@ -44,7 +44,7 @@ export interface PopoverStateProps {
  * const props: PopoverProps = { children: 'Content' };
  */
 export interface PopoverProps extends PopoverStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: PopoverStyleOverrides;
 }
@@ -57,7 +57,7 @@ export interface PopoverProps extends PopoverStateProps {
  * const props: PopoverTriggerProps = { children: 'Content' };
  */
 export interface PopoverTriggerProps extends PopoverStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: PopoverStyleOverrides;
@@ -71,7 +71,7 @@ export interface PopoverTriggerProps extends PopoverStateProps {
  * const props: PopoverContentProps = { children: 'Content' };
  */
 export interface PopoverContentProps extends PopoverStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   styles?: PopoverStyleOverrides;
 }

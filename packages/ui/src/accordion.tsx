@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   accordionContentAttributes,
   accordionHeaderAttributes,
@@ -54,7 +54,7 @@ export interface AccordionStateProps {
  * const props: AccordionProps = { children: 'Content' };
  */
 export interface AccordionProps extends AccordionStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: AccordionStyleOverrides;
 }
@@ -67,7 +67,7 @@ export interface AccordionProps extends AccordionStateProps {
  * const props: AccordionItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface AccordionItemProps extends AccordionStateProps {
-  children?: string;
+  children?: ComponentChild;
   itemDisabled?: boolean;
   itemValue: string;
   styles?: AccordionStyleOverrides;

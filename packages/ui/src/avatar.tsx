@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   avatarFallbackAttributes,
   avatarImageAttributes,
@@ -45,7 +45,7 @@ export interface AvatarStateProps {
  * const props: AvatarProps = { children: 'Content' };
  */
 export interface AvatarProps extends AvatarStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   label?: string;
   styles?: AvatarStyleOverrides;
@@ -76,7 +76,7 @@ export interface AvatarImageProps extends AvatarStateProps {
  * const props: AvatarFallbackProps = { children: 'Content' };
  */
 export interface AvatarFallbackProps extends AvatarStateProps {
-  children?: string;
+  children?: ComponentChild;
   delayMs?: number;
   styles?: AvatarStyleOverrides;
 }

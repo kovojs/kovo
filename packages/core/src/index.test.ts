@@ -186,13 +186,99 @@ describe('core authoring APIs', () => {
     expect(assertRemovedFragmentTargetOption).toBeTypeOf('function');
   });
 
+  it('derives component call-site props from the annotated render input', () => {
+    const product = query<'product', { name: string }>('product');
+    const ProductCard = component({
+      props: { productId: String },
+      queries: {
+        product: product.args((props: { productId: string }) => ({ id: props.productId })),
+      },
+      render: ({
+        product,
+        productId,
+        selected = false,
+      }: {
+        product: { name: string };
+        productId: string;
+        selected?: boolean;
+      }) => ({ product, productId, selected }),
+    });
+
+    ProductCard({ productId: 'p1' });
+    ProductCard({ productId: 'p1', selected: true, 'kovo-key': 'p1', style: {} });
+
+    // @ts-expect-error SPEC §4.1/§6.2: query result keys are server-owned, not call-site props.
+    ProductCard({ product: { name: 'Desk' }, productId: 'p1' });
+    // @ts-expect-error SPEC §4.1/§6.2: required render-derived props must be supplied.
+    ProductCard();
+    // @ts-expect-error SPEC §4.1/§6.2: component call-site props are exact.
+    ProductCard({ productId: 'p1', productID: 'typo' });
+    // @ts-expect-error SPEC §4.1/§6.2: render annotations own prop value types.
+    ProductCard({ productId: 1 });
+
+    const Unannotated = component({
+      render: () => null,
+    });
+    Unannotated();
+    Unannotated({ style: {}, 'kovo-key': 'stable' });
+    // @ts-expect-error SPEC §4.1/§6.2: unannotated render input exports no ordinary props.
+    Unannotated({ label: 'hidden' });
+  });
+
+  it('checks query args and props metadata against render-derived props', () => {
+    const product = query<'product', { name: string }>('product');
+
+    component({
+      props: { productId: String, count: Number },
+      queries: {
+        product: product.args((props: { productId: string }) => ({ id: props.productId })),
+      },
+      render: ({
+        count,
+        product,
+        productId,
+      }: {
+        count: number;
+        product: { name: string };
+        productId: string;
+      }) => ({ count, product, productId }),
+    });
+
+    component({
+      queries: {
+        // @ts-expect-error SPEC §4.1/§6.2: query args cannot invent props absent from render input.
+        product: product.args((props: { invented: string }) => ({ id: props.invented })),
+      },
+      render: ({ productId }: { product: { name: string }; productId: string }) => ({
+        productId,
+      }),
+    });
+
+    component({
+      // @ts-expect-error SPEC §4.1/§6.2: props metadata keys must exist on call-site props.
+      props: { invented: String },
+      render: ({ productId }: { productId: string }) => ({ productId }),
+    });
+
+    component({
+      // @ts-expect-error SPEC §4.1/§6.2: props metadata constructors must match call-site prop types.
+      props: { productId: Number },
+      render: ({ productId }: { productId: string }) => ({ productId }),
+    });
+  });
+
   it('rejects unknown component definition fields and preserves isomorphic', () => {
     const IsomorphicCounter = component({
       isomorphic: true,
       render: () => null,
     });
+    const Clocked = component({
+      clocks: { ago: { every: '30s' } },
+      render: () => null,
+    });
 
     expect(IsomorphicCounter.definition.isomorphic).toBe(true);
+    expect(Clocked.definition.clocks).toEqual({ ago: { every: '30s' } });
     expect(() =>
       component({
         disableServerRefres: true,

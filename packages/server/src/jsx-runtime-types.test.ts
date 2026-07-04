@@ -35,6 +35,7 @@ describe('server JSX runtime types', () => {
         `
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
+import { component, query } from '@kovojs/core';
 import type { TrustedUrl } from '@kovojs/browser';
 import type { JsxChild } from '@kovojs/server/jsx-runtime';
 
@@ -45,6 +46,29 @@ const Panel = ({ title, children }: PanelProps) => (
   </section>
 );
 const TextOnly = ({ children }: { children: string }) => <span>{children}</span>;
+const product = query<'product', { name: string }>('product');
+const ProductCard = component({
+  props: { productId: String },
+  queries: {
+    product: product.args((props: { productId: string }) => ({ id: props.productId })),
+  },
+  render: ({
+    children,
+    product,
+    productId,
+    selected = false,
+  }: {
+    children?: JsxChild;
+    product: { name: string };
+    productId: string;
+    selected?: boolean;
+  }) => (
+    <article data-product-id={productId} data-selected={selected}>
+      <strong>{product.name}</strong>
+      {children}
+    </article>
+  ),
+});
 
 const ok = (
   <Panel title="Cart">
@@ -77,9 +101,23 @@ const streaming = (
   </form>
 );
 const uploadInput = <input type="file" accept="application/pdf" name="receipt" />;
+const kovoComponentOk = (
+  <ProductCard productId="p1" selected style={{ color: 'red' }} kovo-key="p1">
+    <span>Nested</span>
+  </ProductCard>
+);
+const plainFunctionComponentOk = <Panel title="Still plain"><span>Child</span></Panel>;
 
 // @ts-expect-error SPEC §4.1: component props must be enforced at JSX call sites.
 const missingRequiredProp = <Panel />;
+// @ts-expect-error SPEC §4.1/§6.2: descriptor component props must be enforced at JSX call sites.
+const descriptorMissingRequiredProp = <ProductCard />;
+// @ts-expect-error SPEC §4.1/§6.2: descriptor component prop names are exact.
+const descriptorWrongPropName = <ProductCard productID="p1" />;
+// @ts-expect-error SPEC §4.1/§6.2: descriptor component prop values follow render annotations.
+const descriptorWrongValue = <ProductCard productId={1} />;
+// @ts-expect-error SPEC §4.1/§6.2: descriptor component query keys are not call-site props.
+const descriptorQueryProp = <ProductCard productId="p1" product={{ name: 'Desk' }} />;
 
 // @ts-expect-error SPEC §4.1: declared component children are enforced at JSX call sites.
 const badChild = <TextOnly>{{ notRenderable: true }}</TextOnly>;
@@ -105,7 +143,13 @@ void trustedFormAction;
 void trustedPoster;
 void streaming;
 void uploadInput;
+void kovoComponentOk;
+void plainFunctionComponentOk;
 void missingRequiredProp;
+void descriptorMissingRequiredProp;
+void descriptorWrongPropName;
+void descriptorWrongValue;
+void descriptorQueryProp;
 void badChild;
 void badAttribute;
 void badAria;

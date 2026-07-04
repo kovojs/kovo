@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   autocompleteInputAttributes,
   autocompleteListAttributes,
@@ -60,7 +60,7 @@ export interface AutocompleteStateProps {
  * const props: AutocompleteProps = { children: 'Content' };
  */
 export interface AutocompleteProps extends AutocompleteStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: AutocompleteStyleOverrides;
 }
@@ -89,7 +89,7 @@ export interface AutocompleteInputProps extends AutocompleteStateProps {
  * const props: AutocompleteListProps = { children: 'Content' };
  */
 export interface AutocompleteListProps extends AutocompleteStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: AutocompleteStyleOverrides;
@@ -103,7 +103,7 @@ export interface AutocompleteListProps extends AutocompleteStateProps {
  * const props: AutocompleteOptionProps = { itemValue: 'item', children: 'Content' };
  */
 export interface AutocompleteOptionProps extends AutocompleteStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;

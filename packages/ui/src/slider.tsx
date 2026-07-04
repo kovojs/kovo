@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   sliderInputAttributes,
   sliderRangeAttributes,
@@ -56,7 +56,7 @@ export interface SliderStateProps {
  * const props: SliderProps = { children: 'Content' };
  */
 export interface SliderProps extends SliderStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SliderStyleOverrides;
 }
@@ -87,7 +87,7 @@ export interface SliderInputProps extends SliderStateProps {
  * const props: SliderPartProps = { children: 'Content' };
  */
 export interface SliderPartProps extends SliderStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SliderStyleOverrides;
 }

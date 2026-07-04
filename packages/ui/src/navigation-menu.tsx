@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   navigationMenuContentAttributes,
   navigationMenuIndicatorAttributes,
@@ -62,7 +62,7 @@ export interface NavigationMenuStateProps {
  * const props: NavigationMenuProps = { children: 'Content' };
  */
 export interface NavigationMenuProps extends NavigationMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   id?: string;
   label?: string;
@@ -78,7 +78,7 @@ export interface NavigationMenuProps extends NavigationMenuStateProps {
  * const props: NavigationMenuListProps = { children: 'Content' };
  */
 export interface NavigationMenuListProps extends NavigationMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: NavigationMenuStyleOverrides;
@@ -92,7 +92,7 @@ export interface NavigationMenuListProps extends NavigationMenuStateProps {
  * const props: NavigationMenuItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface NavigationMenuItemProps extends NavigationMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
@@ -119,7 +119,7 @@ export interface NavigationMenuTriggerProps extends NavigationMenuItemProps {
  * const props: NavigationMenuContentProps = { value: 'value', children: 'Content' };
  */
 export interface NavigationMenuContentProps extends NavigationMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: NavigationMenuStyleOverrides;
@@ -146,7 +146,7 @@ export interface NavigationMenuLinkProps extends NavigationMenuItemProps {
  * const props: NavigationMenuPartProps = { children: 'Content' };
  */
 export interface NavigationMenuPartProps extends NavigationMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: NavigationMenuStyleOverrides;
 }

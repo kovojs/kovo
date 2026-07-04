@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
@@ -31,7 +31,7 @@ export type ButtonSize = 'sm' | 'md';
  * const props: ButtonProps = { children: 'Content' };
  */
 export interface ButtonProps {
-  children?: string;
+  children?: ComponentChild;
   disabled?: boolean;
   form?: string;
   name?: string;

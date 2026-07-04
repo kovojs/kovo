@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
@@ -29,7 +29,7 @@ export interface ProgressStyleOverrides {
  * const props: ProgressProps = { children: 'Content' };
  */
 export interface ProgressProps {
-  children?: string;
+  children?: ComponentChild;
   max?: number;
   style?: style.StyleInput;
   styles?: ProgressStyleOverrides;

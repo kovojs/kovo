@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import { checkboxRootAttributes, type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
 import * as style from '@kovojs/style';
 
@@ -30,7 +30,7 @@ export interface CheckboxStyleOverrides {
 export interface CheckboxProps {
   describedBy?: string;
   checked?: CheckboxCheckedState;
-  children?: string;
+  children?: ComponentChild;
   disabled?: boolean;
   form?: string;
   id?: string;
