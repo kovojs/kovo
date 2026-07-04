@@ -684,7 +684,7 @@ hatch survives this phase.
       and `examples/gallery/src/interactive/*.tsx`; verified by
       `pnpm exec tsc -p examples/gallery/tsconfig.json --noEmit --pretty false` and
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.compile.test.ts packages/icons/src/icons.test.ts site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
-- [ ] **Icons**: verify the 1,740 generated icon components type-check under the new signature and
+- [x] **Icons**: verify the 1,740 generated icon components type-check under the new signature and
       **benchmark `tsc`** before/after across the monorepo and a scaffolded app; if inference cost
       is material, precompute each icon's call signature in the generator output instead of
       deriving it generically.
@@ -694,9 +694,12 @@ hatch survives this phase.
       plus all generated icon sources and records current monorepo/scaffold timings; verified by
       `node scripts/measure-api-audit-icon-tsc.mjs` (icon typecheck exit 0; broader `tsc` exits
       recorded as current baseline data).
-  - [ ] Capture before/after monorepo plus scaffolded-app `tsc` timings before closing the full icon
+  - [x] Capture before/after monorepo plus scaffolded-app `tsc` timings before closing the full icon
         benchmark item.
-    - Gap: current-only timing harness exists; no true pre-change baseline was recovered.
+    - Evidence: `node scripts/measure-api-audit-icon-tsc.mjs --baseline-root /Users/mini/kovo-main-verify-20260703-225123`
+      compared parent `5b8d3c1` with current: icon `tsc` exit 0 in both (2193ms baseline,
+      2458ms current); monorepo/starter timings and unrelated non-zero exits were recorded in the
+      JSON report.
 - [x] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
       agree with the chosen props channel; type-level enforcement remains defense-in-depth per the
       honesty boundary (SPEC §6.6) — the compiler's validation stays authoritative.
@@ -704,9 +707,12 @@ hatch survives this phase.
     `packages/server/src/live-target-renderer.ts`, and `packages/core/src/index.ts`; verified by
     `packages/compiler/src/stamps.test.ts`, `packages/compiler/src/query-coverage.test.ts`, and
     `packages/core/src/index.test.ts`.
-- [ ] **Fix the guide samples this invalidates or vindicates**: accessibility.md `<Select
+- [x] **Fix the guide samples this invalidates or vindicates**: accessibility.md `<Select
 labelledBy>` (broken composition the old signature hid), components.md Button
       `'secondary'` variant sample, plus any sample the sweep breaks.
+  - Evidence: `site/content/guides/accessibility.md`, `site/content/guides/components.md`, and
+    `site/scripts/code-snippets-check.mjs`; verified by `pnpm run check:docs-snippets` and
+    `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
 
 ### Phase 5 — docs truth and drift-proofing (after Phase 4, so the gate has teeth)
 
@@ -733,9 +739,14 @@ labelledBy>` (broken composition the old signature hid), components.md Button
         the affected guides.
     - Evidence: `site/content/guides/deployment.md` and `site/content/guides/kovo-explain.md`;
       verified by `pnpm run check:docs-snippets`.
-- [ ] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
+- [x] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
       `--experimental-sqlite`, cli no-args list, `ExplainKind` prose) and replace the mechanical
       `{} as SelectState` placeholder examples in headless-ui/ui JSDoc with real ones.
+  - Evidence: `packages/server/src/route.ts`, `packages/cli/src/{graph-args,graph-output}.ts`,
+    `packages/create-kovo/src/index.ts`, `packages/headless-ui/src/primitives/*.ts`, and
+    generated metadata in `public-packages.json`/`api-surface-baseline.json`; verified by
+    `pnpm exec vitest --run site/scripts/api-ref.test.mjs scripts/api-surface-gate.test.mjs site/scripts/cli-ref.test.mjs site/scripts/create-kovo-ref.test.mjs --config ./vite.config.ts`
+    and `pnpm run check:api-surface`.
   - [x] Replace the mechanical Select placeholder examples in headless-ui/ui JSDoc with concrete
         examples and guard them in the API-ref test.
     - Evidence: `packages/headless-ui/src/primitives/select.ts`, `packages/ui/src/select.tsx`, and
