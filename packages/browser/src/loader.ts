@@ -16,6 +16,7 @@ import type {
 } from './loader-lifecycle.js';
 import { installLoaderQueryRuntime } from './loader-query.js';
 import type { InstalledLoaderQueryRuntime } from './loader-query.js';
+import type { EnhancedMutationFetch, UploadProgress } from './mutation-fetch.js';
 import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
@@ -25,22 +26,52 @@ import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 
 /**
- * Enhanced-mutation wiring for `installKovoLoader`: the same options as
- * {@link EnhancedMutationLoaderOptions}, but with the `root` typed as the opaque
- * {@link BrowserKovoRoot} from `createBrowserKovoRoot` so an app entry does not
- * hand-build the low-level morph/target objects (SPEC §9.1).
+ * App-facing enhanced-mutation wiring for `installKovoLoader`.
+ *
+ * The compiler-owned query plans and other mutation DI seams live on
+ * {@link KovoGeneratedEnhancedMutationOptions}, exported from
+ * `@kovojs/browser/generated` per SPEC §5.2 and §9.1.
  */
-export type BrowserEnhancedMutationOptions = Omit<EnhancedMutationLoaderOptions, 'root'> & {
+export interface BrowserEnhancedMutationOptions {
+  fetch: EnhancedMutationFetch;
+  onError?: (error: unknown, form: unknown) => void;
+  onUploadProgress?: (progress: UploadProgress, form: unknown) => void;
   root: BrowserKovoRoot;
+  store: QueryStore;
+}
+
+/**
+ * @generated Compiler/runtime enhanced-mutation ABI for generated bootstraps
+ * (SPEC §5.2, §9.1). App entries should use {@link BrowserEnhancedMutationOptions}.
+ */
+export type KovoGeneratedEnhancedMutationOptions = Omit<EnhancedMutationLoaderOptions, 'root'> & {
+  root: BrowserKovoRoot & EnhancedMutationLoaderOptions['root'];
 };
 
 /**
- * Options for `installKovoLoader`: the root, module importer, query store/plans, and lifecycle hooks.
+ * Options for `installKovoLoader`: the app-facing root, module importer, query
+ * store, and enhanced-mutation essentials.
  */
 export interface KovoLoaderOptions {
   allowedClientModuleUrls?: readonly string[];
-  discardPendingOptimism?: () => readonly string[] | void;
   enhancedMutations?: BrowserEnhancedMutationOptions;
+  events?: readonly string[];
+  importModule: (url: string) => Promise<Record<string, unknown>>;
+  onError?: (error: unknown, context: unknown) => void;
+  queryStore?: QueryStore;
+  root: EventTarget & ParentNode;
+}
+
+/**
+ * @generated Full generated/runtime loader ABI. Compiler-emitted bootstraps may
+ * pass update plans, query-apply interpositions, lifecycle observers, and typed
+ * read refetch hooks through `@kovojs/browser/generated`; those DI seams are not
+ * part of the app-authored `@kovojs/browser/client` option surface.
+ */
+export interface KovoGeneratedLoaderOptions {
+  allowedClientModuleUrls?: readonly string[];
+  discardPendingOptimism?: () => readonly string[] | void;
+  enhancedMutations?: KovoGeneratedEnhancedMutationOptions;
   events?: readonly string[];
   focusTarget?: LoaderLifecycleTarget;
   importModule: ImportHandlerModule;
@@ -65,6 +96,12 @@ export interface KovoLoaderOptions {
 export interface KovoLoader {
   dispose(): void;
   events: readonly string[];
+}
+
+/**
+ * @generated Running loader handle with generated/runtime integration hooks.
+ */
+export interface KovoGeneratedLoader extends KovoLoader {
   /** K4 / SPEC §4.7: the loader's island signal scope for passing to applyDeferredStreamResponseToRuntime. */
   islandSignalScope: IslandSignalScope;
 }
@@ -106,6 +143,17 @@ export const defaultDelegatedEvents = [
  * @returns A `KovoLoader` handle.
  */
 export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
+  return installGeneratedKovoLoader(options as KovoGeneratedLoaderOptions);
+}
+
+/**
+ * @generated Install the Kovo loader with compiler/runtime ABI options. Exported
+ * from `@kovojs/browser/generated` as `installKovoLoader` for emitted bootstraps
+ * (SPEC §5.2, §9.1).
+ */
+export function installGeneratedKovoLoader(
+  options: KovoGeneratedLoaderOptions,
+): KovoGeneratedLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
   const importModule =

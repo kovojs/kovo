@@ -54,8 +54,8 @@ export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOp
   );
   const runtimeImport =
     runtimeValueImports.length > 0
-      ? `import { ${runtimeValueImports.join(', ')}, type OptimisticFor } from '@kovojs/browser';`
-      : `import type { OptimisticFor } from '@kovojs/browser';`;
+      ? `import { ${runtimeValueImports.join(', ')}, type OptimisticFor } from '@kovojs/browser/generated';`
+      : `import type { OptimisticFor } from '@kovojs/browser/generated';`;
 
   const transforms = [
     ...sorted.map((entry) => `${propertyKey(entry.query)}: ${lowerTransform(entry.program)},`),
