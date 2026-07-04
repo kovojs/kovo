@@ -36,26 +36,33 @@ shell owns the outer document template, loader, query scripts, and error shells.
 Use `parent` when a route segment adds chrome inside a broader shell:
 
 ```tsx
-export const AccountLayout = layout({
-  parent: AppShell,
-  guard: guards.authed(),
-  queries: { viewer: viewerQuery },
-  render: ({ viewer }, _state, { children }) => (
-    <section>
-      <h1>{viewer.name}</h1>
-      {children}
-    </section>
-  ),
-});
+export default createApp({
+  routes: ({ layout, route }) => {
+    const AccountLayout = layout({
+      parent: AppShell,
+      guard: guards.authed(),
+      queries: { viewer: viewerQuery },
+      render: ({ viewer }, _state, { children }) => (
+        <section>
+          <h1>{viewer.name}</h1>
+          {children}
+        </section>
+      ),
+    });
 
-export const settingsRoute = route('/account/settings', {
-  layout: AccountLayout,
-  page: () => <SettingsPage />,
+    return [
+      route('/account/settings', {
+        layout: AccountLayout,
+        page: () => <SettingsPage />,
+      }),
+    ];
+  },
 });
 ```
 
-Layouts may declare `queries`, `guard`, stylesheets, and per-segment boundaries. Guards refine the
-request before the layout renders, just like route and mutation guards. Layout queries are normal
+Use the `createApp()` route authoring context when a layout guard depends on the app's request
+shape. Layouts may declare `queries`, `guard`, stylesheets, and per-segment boundaries. Guards refine
+the request before the layout renders, just like route and mutation guards. Layout queries are normal
 queries: they appear in `kovo explain page`, carry update plans, and observe the same cache and guard
 rules as page queries.
 
@@ -92,7 +99,14 @@ Use route-level `regions` when a layout needs sibling areas such as a docs page 
 The layout decides placement; the route decides what each named region renders.
 
 ```tsx
-const DocsLayout = layout({
+import type { RoutePageResult } from '@kovojs/server';
+
+type DocsRegions = Readonly<{
+  page: RoutePageResult;
+  sidebar: RoutePageResult;
+}>;
+
+const DocsLayout = layout<unknown, {}, RoutePageResult, DocsRegions>({
   render: (_queries, _state, { regions }) => (
     <DocsShell page={regions.page} sidebar={regions.sidebar} />
   ),

@@ -47,6 +47,32 @@ Because there is no runtime typed-read surface for exported pages, prefer static
 whose client truth is document-local. A page that needs prior-token `/_q/` recovery after deploy is a
 server page, not a pure static page.
 
+## Run the exporter
+
+Use the CLI when you want a checked output directory from an app entry:
+
+```sh
+kovo export ./src/app.ts --out dist/static --origin https://example.com
+```
+
+If you own the build script, call `exportStaticApp` directly:
+
+```ts
+import { exportStaticApp, type StaticExportOptions } from '@kovojs/server';
+import app from './app.js';
+
+const options: StaticExportOptions = {
+  outDir: new URL('../dist/static/', import.meta.url),
+  origin: 'https://example.com',
+  onNonExportable: 'error',
+};
+
+await exportStaticApp(app, options);
+```
+
+Set `onNonExportable: 'skip'` only when the deploy intentionally mixes exported pages with server
+routes. The skipped paths are still review evidence; do not hide them in a generic site script.
+
 ## Checks to run
 
 The site export path exercises the same route data as the Kovo app:

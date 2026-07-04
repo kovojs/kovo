@@ -84,7 +84,6 @@ import { metaFromQuery, route, s } from '@kovojs/server';
 
 export const productRoute = route('/products/:id', {
   params: s.object({ id: s.string() }),
-  queries: { product: productQuery.args(({ params }) => ({ id: params.id })) },
   meta: metaFromQuery(productQuery, (product) => ({
     title: `${product.name} · Kovo Shop`,
     description: product.summary,
@@ -230,7 +229,7 @@ refines `req.session` identically — so `req.session.user` is non-null inside t
 ```tsx
 export const productRoute = route('/products/:id', {
   params: s.object({ id: s.string() }),
-  guard: authed, // same combinators as mutations (§10.3)
+  guard: authed(),
   page({ params }, req) {
     // req.session.user is non-null here, refined by the guard
     return <ProductPage id={params.id} owner={req.session.user.id} />;
@@ -321,7 +320,7 @@ credentialed prerender is safe:
 
 ```tsx
 export const accountOverviewRoute = route('/account', {
-  guard: authed,
+  guard: authed(),
   prefetch: 'moderate',
   prefetchJustification: 'Read-only account chrome; no analytics or write effects during render.',
   page: AccountOverviewPage,

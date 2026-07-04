@@ -130,12 +130,12 @@ knob; prod picks full or delta per response.
 Delta frames are scoped by the committed change record, not by a server-side memory of the client:
 
 ```html
-<kovo-query name="cart" delta settlement="cart-submit-01">
+<kovo-query name="cart" delta settles="cart-submit-01">
   {"items":{"upsert":[{"id":"p1","qty":3}],"removedKeys":["p2"]}}
 </kovo-query>
 ```
 
-The settlement set names the idempotency tokens whose committed effects are already reflected in
+The `settles` set names the idempotency tokens whose committed effects are already reflected in
 the arriving server truth. The client drops matching optimistic transforms before re-applying any
 still-pending predictions, so confirmed writes are not counted twice.
 

@@ -477,6 +477,7 @@ declare global {
   var betterAuthSession: any;
   var betterAuthSignInEmailMutation: any;
   var betterAuthSignOutMutation: any;
+  var betterAuthSignUpEmailMutation: any;
   var broadcastCartUpdate: any;
   var cart: any;
   var cartDomain: any;
@@ -677,6 +678,9 @@ export const PGlite: any;
 export const assertMutationError: any;
 export const betterAuth: any;
 export const betterAuthSession: any;
+export const betterAuthSignInEmailMutation: any;
+export const betterAuthSignOutMutation: any;
+export const betterAuthSignUpEmailMutation: any;
 export const betterSqlite3: any;
 export const buildBundle: any;
 export const createDevtoolApp: any;

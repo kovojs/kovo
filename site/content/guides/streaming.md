@@ -112,17 +112,14 @@ before-or-with guarantee is the contract you can depend on.
 ## Stylesheets for late fragments
 
 A deferred fragment may use StyleX atoms or document CSS the shell never referenced. Fragment chunks
-declare their stylesheets, and the links ride inside the fragment — present before the content
-paints, deduped by `href` within the response:
+declare their stylesheets, and the links ride inside the framework-emitted fragment — present before
+the content paints, deduped by `href` within the response:
 
-```ts
-fragments: [
-  {
-    target: 'product-grid',
-    html: renderProductGrid(productGrid),
-    stylesheets: ['/assets/site.css'],
-  },
-];
+```html
+<kovo-fragment target="product-grid">
+  <link rel="stylesheet" href="/assets/site.css" />
+  <section kovo-c="product-grid">...</section>
+</kovo-fragment>
 ```
 
 The same Kovo stylesheet contract applies as everywhere: StyleX rules are extracted from source at
@@ -131,8 +128,8 @@ needs. See [styling with StyleX](/guides/styling/).
 
 ## The client side
 
-On a server-rendered stream the loader handles this. The runtime primitive it uses is exported, and
-the starter's `client.ts` wires it for programmatic use:
+On a server-rendered stream the inline loader handles this. The lower-level client primitive is
+exported from `@kovojs/browser/client` for custom shells, and it is still marked experimental:
 
 ```ts
 import { createQueryStore, installKovoLoader } from '@kovojs/browser/client';

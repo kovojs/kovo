@@ -47,28 +47,27 @@ import { domain, s, webhook } from '@kovojs/server';
 
 const order = domain('order');
 
-async function applyStripeEvent(tx: unknown, event: { id: string; type: string }) {
-  void tx;
-  void event;
-}
-
 export const stripeWebhook = webhook('/hooks/stripe', {
   verify: hmacSignature({
+    encoding: 'hex',
     header: 'stripe-signature',
-    payload: 'raw-body',
-    tolerance: '5m',
+    payload: (request) => request.payload,
+    secret: process.env.STRIPE_WEBHOOK_SECRET!,
+    tolerance: { seconds: 5 * 60 },
   }),
-  input: s
-    .object({
-      id: s.string(),
-      type: s.string(),
-    })
-    .passthrough(),
+  input: s.object({
+    id: s.string(),
+    type: s.string(),
+  }),
   idempotency: (event) => event.id,
+  replayStore: stripeWebhookReplayStore,
   writes: [order],
-  async handler(event, { recordChange, tx }) {
-    await applyStripeEvent(tx, event);
-    recordChange(order, { keys: [event.id] });
+  async handler(event, context) {
+    await context
+      .declareSystemWrite('Stripe webhook applies provider-confirmed order events')
+      .runMutation(applyStripeOrderEvent, event);
+
+    context.recordChange(order, { keys: [event.id] });
   },
 });
 ```
@@ -77,9 +76,10 @@ The path is explicit because it is the provider-facing address. The webhook regi
 derived from `stripeWebhook` and its module path, so replay and audit names follow the source instead
 of duplicating a string.
 
-Replace `applyStripeEvent(tx, event)` with your transaction-backed write helper. If you do not need
-a transaction wrapper, ignore `tx` and still call `recordChange()` for every domain the webhook
-changes.
+Replace `applyStripeOrderEvent` with your app mutation or write helper. A webhook that can write
+Kovo-owned data must declare both `idempotency` and `replayStore`, then choose an explicit
+`actAs(...)` or `declareSystemWrite(...)` posture before composing through mutations or managed DB
+work.
 
 The lifecycle is fixed: capture raw bytes, verify, parse/coerce a loose input schema, reserve replay
 by provider event id, run the handler with `tx`, commit, emit every `recordChange()` as the unified
@@ -103,13 +103,12 @@ That is a cookie-sink error. `Set-Cookie` must use the typed cookie builder, whi
 percent-encodes values, and serializes attributes structurally.
 
 ```ts
-ctx.cookies.set('download_token', token, {
-  httpOnly: true,
-  path: '/',
-  sameSite: 'lax',
-  secure: true,
+return new Response(bytes, {
+  headers: {
+    'Cache-Control': 'private, no-store',
+    'Content-Type': 'application/pdf',
+  },
 });
-ctx.headers.setCacheControl({ private: true, noStore: true });
 ```
 
 ## Send CSRF tokens to raw endpoints

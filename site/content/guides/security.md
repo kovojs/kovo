@@ -69,10 +69,9 @@ failure paths.
    `trustedAssign(...)`, never from request input.
 7. **Leave CSRF on**; justify every `csrf: false` and confirm it in `kovo explain --endpoints`.
 8. **Use capability URLs for downloads**: mint with `ctx.signUrl(...)`, serve through
-   `createStorageDownloadEndpoint`, and review `kovo explain --capabilities`.
+   `createStorageDownloadEndpoint`, and review the download endpoint in `kovo explain --endpoints`.
 9. **Run the security review modes in CI** next to `kovo check`: `--unguarded`, `--unscoped`,
-   `--endpoints`, `--revealed`, `--trust`, `--access`, `--capabilities`, `--cookies`, and
-   `--sources-sinks`.
+   `--endpoints`, `--revealed`, `--trust`, `--access`, `--cookies`, and `--sources-sinks`.
 10. **Review every escape hatch** in the source/sink table before merging raw protocol code.
 
 ## Type your session
@@ -149,8 +148,9 @@ Then scope every read and write of that table to the session, not to client inpu
 ```ts
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
 export const orderHistoryQuery = query({
-  guard: authed,
-  load: (db, _args, req) => db.select().from(orders).where(eq(orders.userId, req.session.user.id)),
+  guard: authed(),
+  load: (_args, context) =>
+    context.db.select().from(orders).where(eq(orders.userId, context.request.session.user.id)),
   reads: [order],
 });
 ```
@@ -187,7 +187,10 @@ You render the field with `csrfField`, though enhanced forms emit it for you:
 ```ts
 import { csrfField } from '@kovojs/server';
 
-const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name="csrf" value="…">
+const csrf = csrfField(request, {
+  ...commerceCsrf,
+  mutation: addToCart,
+}); // → <input type="hidden" name="csrf" value="…">
 ```
 
 CSRF stays on for server-rendered mutation endpoints. The only opt-out is `csrf: false` on an
@@ -220,7 +223,6 @@ kovo explain --endpoints graph.json   # machine ingress: auth scheme + CSRF post
 kovo explain --revealed graph.json    # confidential fields intentionally revealed
 kovo explain --trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
 kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
-kovo explain --capabilities graph.json # held dangerous capabilities and capability URLs
 kovo explain --cookies graph.json     # cookie posture and downgrade findings
 kovo explain --sources-sinks          # source/sink inventory
 ```
@@ -284,11 +286,14 @@ Lists the explicit access decision for each query, mutation, route/page, endpoin
 missing row is a build-blocking access gap; add a guard chain, `publicAccess("reason")`, or verified
 machine auth rather than relying on default reachability.
 
-### `--capabilities` — held dangerous powers
+### Capability-style powers
 
-Lists tool capabilities, audit-grade `trustedReveal` rows, and capability URL mints. This is where a
-reviewer sees "this code can email a customer," "this action can read a secret," or "this route can
-mint a signed storage URL" in one table.
+Review capability-style powers through the concrete surfaces that create them today:
+`--revealed` for audit-grade `trustedReveal(...)`, `--trust` for trusted sink escapes,
+`--endpoints` for signed download endpoints, and `--sources-sinks` for the raw capability APIs. A
+dedicated `--capabilities` mode exists for held dangerous powers, but capability URL mint coverage is
+still tightening. Do not treat a clean `--capabilities` table as proof that no signed URL can be
+created.
 
 ## Read across owners in an admin tool
 
@@ -313,8 +318,8 @@ export const adminOrders = query({
 `crossOwnerRead` is the capability name. The `role: 'admin'` declaration is the runtime role posture
 that must match a passed `guards.role('admin')` request guard and the generated Postgres
 `kovo_admin_scope` policy. Kovo records the reason and principal for review, and
-`kovo explain --capabilities` lists the capability row. Reading as one other user remains
-`ctx.actAs(id)` in `endpoint({ db: true })`.
+The admin role posture is visible through the access and source/sink review modes. Reading as one
+other user remains `ctx.actAs(id)` in `endpoint({ db: true })`.
 
 ## Keep confidential data off the wire
 
@@ -435,10 +440,10 @@ export const invoiceRoute = route('/account/invoice', {
 });
 ```
 
-`signUrl(...)` uses `signCapability` under the hood. The download endpoint verifies the method,
-key, expiry, and scope before any storage read. A leaked URL is still a bearer credential, so keep the
-expiry short and prefer one-time URLs for sensitive exports. Every mint appears in
-`kovo explain --capabilities`.
+`signUrl(...)` uses `signCapability` under the hood. The download endpoint verifies the method, key,
+expiry, and scope before any storage read. A leaked URL is still a bearer credential, so keep the
+expiry short and prefer one-time URLs for sensitive exports. Review the declared download endpoint in
+`kovo explain --endpoints` and the signing call in `kovo explain --sources-sinks`.
 
 ## Source/sink boundaries
 

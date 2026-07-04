@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   checkAuthoredDocStyle,
+  checkAuthoredCodeSnippets,
   collectCodeSnippets,
   extractCodeSnippets,
 } from './code-snippets-check.mjs';
@@ -72,6 +73,39 @@ describe('authored code snippet extractor', () => {
       expect(snippets.map((snippet) => snippet.id)).toEqual(['a__L1', 'b__L1']);
     } finally {
       await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('typechecks extracted snippets in a scratch project', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-code-snippets-'));
+    await mkdir(path.join(process.cwd(), 'site/gen'), { recursive: true });
+    const outDir = await mkdtemp(path.join(process.cwd(), 'site/gen/code-snippets-test-'));
+    try {
+      await writeFile(
+        path.join(root, 'page.md'),
+        [
+          '# Page',
+          '',
+          'A cart page should show the useful path first.',
+          '',
+          '```tsx',
+          "import { route } from '@kovojs/server';",
+          '',
+          "export const cartRoute = route('/cart', {",
+          '  page: () => <CartPage />,',
+          '});',
+          '```',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(checkAuthoredCodeSnippets({ dir: root, outDir })).resolves.toMatchObject({
+        ok: true,
+        snippets: [{ id: 'page__L5', lang: 'tsx', sourcePath: 'page.md', startLine: 5 }],
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outDir, { force: true, recursive: true });
     }
   });
 
