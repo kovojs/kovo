@@ -515,19 +515,31 @@ conservative half-step left as the end state.
       drift-proof is the real fix.
   - Evidence: `packages/drizzle/src/derive-codegen.test.ts` typechecks/executes the emitted
     `now`+`tempId` module; covered by the 78-test focused command above.
-- [ ] **Resolve the `clocks` core↔compiler contradiction**: add `clocks` to
+- [x] **Resolve the `clocks` core↔compiler contradiction**: add `clocks` to
       `COMPONENT_DEFINITION_KEYS` + a SPEC section, or delete the compiler path
       (`compiler/src/validate/temporal.ts`) and the islands.md section — one owner, not two truths.
+  - Evidence: `packages/core/src/index.ts`, `packages/core/src/index.test.ts`, and
+    `spec/04-component-model.md`; verified by the integrated 302-test focused command covering
+    `packages/core/src/index.test.ts`, `packages/compiler/src/stamps.test.ts`, and
+    `packages/compiler/src/query-coverage.test.ts`.
 
 ### Phase 2 — data-layer reconciliation
 
-- [ ] **Remove `write`/`WriteDefinition` and `tag`/`Tag` from the `@kovojs/server` root** (inert;
+- [x] **Remove `write`/`WriteDefinition` and `tag`/`Tag` from the `@kovojs/server` root** (inert;
       zero consumers) and record the SPEC §10.3 divergence as an explicit open design decision —
       if the domain-write mechanism lands later, `write()` returns _with_ its enforcement in the
       same change.
-- [ ] **Rewrite queries.md / mutations.md / data-layer.md to the enforced model**: analyzed Drizzle
+  - Evidence: `packages/server/src/index.ts`, `packages/server/src/api/data.ts`,
+    `packages/server/src/domain.ts`, `packages/server/src/mutation/definition.ts`, and
+    `spec/10-data-plane.md`; verified by `pnpm run check:api-surface` and the integrated
+    `packages/compiler/src/vite.test.ts` / `packages/drizzle/src/index.recognizer-alias-bugz3.test.ts`
+    focused run.
+- [x] **Rewrite queries.md / mutations.md / data-layer.md to the enforced model**: analyzed Drizzle
       writes + registry-declared touches (what commerce does), `context.db`/`Reader` loader
       handles, `access` posture on every request-reachable sample, correct KV330 severity.
+  - Evidence: `site/content/guides/queries.md`, `site/content/guides/mutations.md`, and
+    `site/content/guides/data-layer.md`; verified by
+    `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
 
 ### Phase 3 — surface removals and ABI reclassification
 
@@ -564,7 +576,7 @@ composition. This is the SPEC §1.3 promise ("generated apps fail TypeScript sta
 wiring is wrong") applied to the most common wiring there is. No `Record<string, unknown>` escape
 hatch survives this phase.
 
-- [ ] **Codify the decided props-derivation contract (decided 2026-07-03: infer-from-render with
+- [x] **Codify the decided props-derivation contract (decided 2026-07-03: infer-from-render with
       framework-checked channel consistency)** in SPEC §4.1/§6.2. The runtime contract is already
       uniform and stays unchanged: render's first parameter is **one merged bag** — query results
       ∪ call-site props (`examples/crm/src/components/deal-detail.tsx:133` has both, with
@@ -578,38 +590,54 @@ hatch survives this phase.
       the type channel into the `props:` metadata field (constructor maps can only carry the
       JSON-serializable subset; `ButtonProps`'s union literals, style objects, and `children` are
       composition-time values that never cross the wire). The sub-contracts below are part of this
-      decision and remain open until implemented and verified.
-- [ ] **Component call signature contract**: call signature = bag type minus
+      decision and stay tracked until each is implemented and verified.
+  - Evidence: `spec/04-component-model.md`, `spec/06-type-system.md`, and
+    `packages/core/src/index.test.ts`; verified by the integrated 302-test focused command.
+- [x] **Component call signature contract**: call signature = bag type minus
       `keyof Definition['queries']`, with exact-key (excess-property) checking; expose it as a
       named `ComponentProps<Definition>` alias so errors read legibly instead of as raw `Omit<...>`
       failures. A prop name colliding with a query key is a compile error + new KV diagnostic
       (ambiguous in the merged bag). The contract must also type the compiler-injected
       `style`/`styles` override channel and `kovo-key`.
-- [ ] **Default-deny unannotated render contract**: unannotated render ⇒ props = `{}` so call
+  - Evidence: `ComponentProps`, `ExactProps`, and `ComponentCallArgs` in
+    `packages/core/src/index.ts`; verified by `packages/core/src/index.test.ts`.
+- [x] **Default-deny unannotated render contract**: unannotated render ⇒ props = `{}` so call
       sites accept nothing; annotating the bag is the fix. Supply the bag's query-result keys
       contextually from the `Query<Key, Result>` handles so authors stop hand-annotating result
       types the framework already knows.
-- [ ] **Query args mapper contract**: constrain `.args(mapper)` — `QueryArgsBinding`/`Query.args`
+  - Evidence: `packages/core/src/index.ts` unannotated-render typing and negative cases in
+    `packages/core/src/index.test.ts`.
+- [x] **Query args mapper contract**: constrain `.args(mapper)` — `QueryArgsBinding`/`Query.args`
       at `core/src/index.ts:296-345` — so the mapper's `Props` must be assignable from the
       component's derived call-site props: mappers narrow, never invent.
-- [ ] **Serializable `props:` metadata consistency contract**: type the `props:` metadata field as
+  - Evidence: `ComponentQueryBindingProps` / mapper constraints in `packages/core/src/index.ts`;
+    verified by `packages/core/src/index.test.ts`.
+- [x] **Serializable `props:` metadata consistency contract**: type the `props:` metadata field as
       a constructor map whose derived type (`{ dealId: String }` → `{ dealId: string }`) must be
       assignable to the matching keys of the call-site props. It remains the serializable-subset
       declaration for live-target renderers, but can no longer contradict the annotation.
-- [ ] **Implement `Component<Definition>` call-signature inference in core** — replace
+  - Evidence: `CheckedComponentPropsMetadata` in `packages/core/src/index.ts`; verified by
+    `packages/core/src/index.test.ts`.
+- [x] **Implement `Component<Definition>` call-signature inference in core** — replace
       `(props?: Record<string, unknown>): any` (`core/src/index.ts:168-172`). Exact-key checking
       (excess-property errors) is required, not just known-key widening.
-- [ ] **Wire the JSX side**: `JSX.ElementType`/`KovoJsxComponent` in
+  - Evidence: `Component<Definition>` call signature in `packages/core/src/index.ts`; verified by
+    `packages/core/src/index.test.ts` and `packages/core/src/component-state-types.test.ts`.
+- [x] **Wire the JSX side**: `JSX.ElementType`/`KovoJsxComponent` in
       `packages/server/src/jsx-runtime.ts:870-921` must resolve per-descriptor props (not
       `JsxComponent<any>`), preserving intrinsic-element and plain-function-component behavior.
       Extend `jsx-runtime-types.test.ts` with descriptor-component cases: wrong prop name, wrong
       value type, missing required prop, excess property, `children` JSX nesting — all asserted as
       type errors (the test currently proves enforcement only for plain function components).
-- [ ] **`children` sweep across `@kovojs/ui`**: fix the 126 `children?: string` declarations (and
+  - Evidence: `KovoJsxComponentProps` / `LibraryManagedAttributes` in
+    `packages/server/src/jsx-runtime.ts`; verified by `packages/server/src/jsx-runtime-types.test.ts`.
+- [x] **`children` sweep across `@kovojs/ui`**: fix the 126 `children?: string` declarations (and
       `Card`'s `children?: unknown`) to the real composition type (`ComponentRenderResult`) on
       every container part that nests JSX; string-only stays only where the contract is genuinely
       text-only. Fix prop placement errors the new checking surfaces (e.g. `labelledBy` belongs on
       `SelectTrigger`, not `Select`).
+  - Evidence: `packages/ui/src/**/*.tsx` use `ComponentChild`; `rg -n "children\\?: (string|unknown)" packages/ui/src -S`
+    returned no matches; verified by `packages/ui/src/index.markup.test.tsx`.
 - [ ] **Sweep all call sites the checking breaks**: `packages/ui` internal composition, `site/`,
       `examples/*` (commerce, gallery, crm, stackoverflow, devtool, reference), `create-kovo`
       templates, tutorial steps. Every break is a latent bug being surfaced — fix the call site,
@@ -618,9 +646,13 @@ hatch survives this phase.
       **benchmark `tsc`** before/after across the monorepo and a scaffolded app; if inference cost
       is material, precompute each icon's call signature in the generator output instead of
       deriving it generically.
-- [ ] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
+- [x] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
       agree with the chosen props channel; type-level enforcement remains defense-in-depth per the
       honesty boundary (SPEC §6.6) — the compiler's validation stays authoritative.
+  - Evidence: `packages/server/src/component-root-stamps.ts`,
+    `packages/server/src/live-target-renderer.ts`, and `packages/core/src/index.ts`; verified by
+    `packages/compiler/src/stamps.test.ts`, `packages/compiler/src/query-coverage.test.ts`, and
+    `packages/core/src/index.test.ts`.
 - [ ] **Fix the guide samples this invalidates or vindicates**: accessibility.md `<Select
 labelledBy>` (broken composition the old signature hid), components.md Button
       `'secondary'` variant sample, plus any sample the sweep breaks.
