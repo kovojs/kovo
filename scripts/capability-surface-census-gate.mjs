@@ -57,6 +57,7 @@ const sqliteRuntime = readRepoFile(
 const postgresAuth = readRepoFile('packages/create-kovo/templates/src/auth.ts');
 const sqliteAuth = readRepoFile('packages/create-kovo/templates/src/auth.sqlite.ts');
 const soundSubset = readRepoFile('packages/create-kovo/templates/scripts/check-sound-subset.mjs');
+const sqlSafeHandle = readRepoFile('packages/server/src/sql-safe-handle.ts');
 
 rejectPattern(
   postgresRuntime,
@@ -112,6 +113,21 @@ requirePattern(
   soundSubset,
   /\['src\/auth\.sqlite\.ts',\s+new Set\(\['createAuthAdapter'\]\)\]/u,
   'sound-subset allowlist must restrict src/auth.sqlite.ts to createAuthAdapter',
+);
+requirePattern(
+  sqlSafeHandle,
+  /const\s+snapshot\s*=\s*enforceManagedSql\(statement,\s*mode,\s*writePolicy\);[\s\S]{0,180}?value\.call\(target,\s*snapshot,\s*\.\.\.args\)/u,
+  'managed SQL direct execution must pass the frozen snapshot to the driver',
+);
+requirePattern(
+  sqlSafeHandle,
+  /const\s+snapshot\s*=\s*enforceManagedSql\(statement,\s*mode,\s*writePolicy\);[\s\S]{0,240}?value\.call\(target,\s*snapshot,\s*\.\.\.args\)/u,
+  'managed SQL prepare execution must pass the frozen snapshot to the driver',
+);
+rejectPattern(
+  sqlSafeHandle,
+  /value\.call\(target,\s*statement,\s*\.\.\.args\)/u,
+  'managed SQL execution must not pass the original mutable statement to the driver',
 );
 
 if (violations.length > 0) {

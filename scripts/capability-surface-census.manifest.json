@@ -58,8 +58,8 @@
       "mint": "packages/core/src/internal/sql-safety.ts",
       "publicStatus": "framework-owned-artifact",
       "allowedConsumers": ["managed DB read/write execution chokes"],
-      "buildDiagnostic": "DEC-B tests cover carrier identity and snapshot behavior",
-      "evidence": "plans/fundamental-fixes-followup-11.md DEC-B verification bundle"
+      "buildDiagnostic": "scripts/capability-surface-census-gate.mjs rejects managed wrappers that pass the original statement",
+      "evidence": "pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/managed-db.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts --config ./vite.config.ts"
     },
     {
       "id": "postgres-role-topology",
