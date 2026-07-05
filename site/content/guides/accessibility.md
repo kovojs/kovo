@@ -125,6 +125,7 @@ rather than writing a test that would pass without proving anything:
 
 ## Next
 
+- [Composing primitives](/guides/composing-primitives/) - the merge rules behind the headless attributes you build on.
 - [Components & copy-in UI](/guides/components/) - where those primitive families come from.
 - For your own app-level audit recipe: render the route or flow in a real browser, drive it to each
   meaningful end-state, and run axe there. Kovo's proving command is

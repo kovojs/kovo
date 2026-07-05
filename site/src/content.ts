@@ -157,6 +157,7 @@ const GUIDE_GROUPS = [
     slugs: [
       'data-layer',
       'queries',
+      'pagination',
       'caching',
       'mutations',
       'file-uploads-storage',
@@ -172,12 +173,18 @@ const GUIDE_GROUPS = [
   },
   {
     key: 'ui',
-    slugs: ['components', 'styling', 'islands', 'accessibility'],
+    slugs: ['components', 'composing-primitives', 'styling', 'islands', 'accessibility'],
     title: 'UI',
   },
   {
     key: 'security-auth',
-    slugs: ['security', 'error-handling', 'auth-better-auth'],
+    slugs: [
+      'security',
+      'confidential-values',
+      'outbound-requests-egress',
+      'error-handling',
+      'auth-better-auth',
+    ],
     title: 'Security & Auth',
   },
   {

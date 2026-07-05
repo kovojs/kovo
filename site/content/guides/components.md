@@ -268,6 +268,7 @@ component is a starting point and future changes should live in your app.
 
 ## Next
 
+- [Composing primitives](/guides/composing-primitives/) - merge headless behavior into your own elements without guessing at the attribute rules.
 - [Styling with StyleX](/guides/styling/) — typed component styles, plain document CSS, and the
   stylesheet contract.
 - [Accessibility](/guides/accessibility/) — the behavior `@kovojs/headless-ui` bakes into every
