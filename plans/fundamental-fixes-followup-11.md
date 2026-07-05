@@ -68,12 +68,13 @@ to embedded PGlite when an external URL is present.
     generated public raw system DB export; `src/auth.ts` cannot import a DB value from `_kovo`; Better Auth sign-in/out
     still work in dev, test, and production artifact.
 
-- [ ] **A2 — Make system DB capabilities non-structural and non-readable by default.** `systemDb(...)` returns a
+- [x] **A2 — Make system DB capabilities non-structural and non-readable by default.** `systemDb(...)` returns a
       module-private capability or narrowed facade, not `KovoPostgresRuntimeDb`. Where a system path genuinely needs reads,
       those reads pass through the same secret-boxing/confidentiality boundary as readonly reads, or through a named
       `declareSecretReadCapability(...)` reason surfaced in `kovo explain --capabilities`.
   - Acceptance: a system/auth capability cannot be assigned to `AppDb`; a read of `session.token` / `account.password`
     through any public system facade either throws `KV435`/returns boxed `Secret` or requires an audited capability row.
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/create-kovo/src/index.test.ts packages/drizzle/src/static-analysis-context.test.ts --config ./vite.config.ts` passed; `postgres-runtime.test.ts` includes a `@ts-expect-error` assignment from `KovoPostgresSystemDb` to `KovoPostgresRuntimeDb`, and `pnpm run check:api-surface` plus `pnpm run check:capability-surface-census` passed.
 
 - [ ] **A3 — Move the `_kovo/app-runtime-db` import ban from a contributor script into production build/static analysis,
       and make allowlists operation-specific.** `src/auth.ts` may import the auth adapter factory, not raw runtime DB
