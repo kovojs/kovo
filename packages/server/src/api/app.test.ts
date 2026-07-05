@@ -539,6 +539,9 @@ describe('server app-shell public API barrels', () => {
       verifyPassword: passwordApi.verifyPassword,
       createMemoryVersionedClientModuleRegistry:
         internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
+      // SPEC §10.3/§11.2: generated auth adapters consume opaque framework-owned system DB
+      // capabilities through this public helper; raw system DB handles stay unexported.
+      usePostgresSystemDb: postgresRuntimeApi.usePostgresSystemDb,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
