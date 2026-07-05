@@ -101,12 +101,13 @@ to embedded PGlite when an external URL is present.
     tests cover `.text`, `.sql`, `.values`, and Drizzle/Kovo SQL object paths.
   - Evidence: `pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/managed-db.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts --config ./vite.config.ts` covered accessor rejection, proxy snapshotting, frozen snapshots, PGlite, and SQLite execution.
 
-- [ ] **B3 — Enroll statement snapshotting in the security census and mutation gates.** Add a "statement identity"
+- [x] **B3 — Enroll statement snapshotting in the security census and mutation gates.** Add a "statement identity"
       axis to the managed-SQL matrix: plain object, getter object, proxy, Drizzle SQL, Kovo `sql`, `trustedSql`, unknown
       method carrier, transaction/webhook/task carrier. Deleting snapshotting or passing the original object to the driver
       must turn the gate red.
   - Acceptance: a mutant that changes driver execution back to the original object is killed; the census has no open
     managed-SQL carrier rows.
+  - Evidence: `pnpm run check:capability-surface-census` rejects managed SQL wrappers that pass `statement` instead of `snapshot`, and `pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/managed-db.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts --config ./vite.config.ts` passed.
 
 ### DEC-C — Role adoption is a verified topology manifest (fixes `codex-pg-1` B1-B3)
 
@@ -191,9 +192,10 @@ to embedded PGlite when an external URL is present.
   - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts --config ./vite.config.ts -t "blocks request-authored runtime DB imports"` injects `dogfoodReadAuthToken` and proves `kovo build` fails with KV414.
 - [ ] **DEC-A:** Better Auth sign-in/sign-out still pass in fresh Postgres starter dev, production artifact, and
       external-Postgres provisioned artifact without exporting `appRuntimeAuthDb`.
-- [ ] **DEC-B:** getter/proxy separated SQL carrier cannot execute a different statement than the one validated;
+- [x] **DEC-B:** getter/proxy separated SQL carrier cannot execute a different statement than the one validated;
       existing plain `{ text, values }`, Drizzle SQL, Kovo `sql`, and `trustedSql` still work.
-- [ ] **DEC-B:** mutation testing kills a change that passes the original mutable carrier to the driver.
+- [x] **DEC-B:** mutation testing kills a change that passes the original mutable carrier to the driver.
+  - Evidence: `pnpm run check:capability-surface-census` rejects original-statement driver calls, and the DEC-B focused Vitest command above passed.
 - [ ] **DEC-C:** adopted reader/writer/admin/system roles on a `NOCREATEROLE` external database provision/check/boot
       successfully when memberships are correct, and fail with named diagnostics when any membership is missing.
 - [ ] **DEC-C:** `KOVO_ADMIN_DATABASE_URL`-only `kovo db check` no longer reports embedded PGlite posture silently.
