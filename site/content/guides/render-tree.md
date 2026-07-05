@@ -15,8 +15,8 @@ import { component } from '@kovojs/core';
 import { renderRegistry, s } from '@kovojs/server';
 
 const Callout = component({
-  render: ({ tone = 'info' }, _state, slots: { children?: any }) => (
-    <aside data-tone={tone}>{slots.children}</aside>
+  render: ({ tone = 'info' }, _state, slots: { children?: string }) => (
+    <aside data-tone={tone}>{slots.children ?? ''}</aside>
   ),
 });
 export const registry = renderRegistry({
@@ -111,6 +111,22 @@ still needs an explicit `trustedHtml(...)` call so the trust decision stays visi
 `unknownTag: 'text'` drops an unknown wrapper and keeps its children. Use `unknownTag: 'drop'` when
 unknown tags should remove the whole subtree.
 
+## Run it
+
+Start with one small XML string and inspect the exact emitted HTML:
+
+```tsx
+const body = '<kovo-callout tone="info">Ships today</kovo-callout>';
+```
+
+Rendered through the registry above, the output should be the real sink bytes:
+
+```html
+<aside data-tone="info">Ships today</aside>
+```
+
+That is the useful proof moment here: one authored tag in, one reviewed HTML shape out.
+
 ## Know the failure posture
 
 Render trees fail soft during rendering:
@@ -138,5 +154,7 @@ Registry-bounded dynamic rendering, the closed registry boundary, server-side on
 well-formed XML parsing, unknown-tag posture, attribute validation, and text escaping are specified
 by SPEC §4.10. Component composition and server-rendered child posture come from SPEC §4.5. Output
 safety and trusted HTML boundaries come from SPEC §4.8. Schema validation follows SPEC §6.3.
+
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
 
 </details>

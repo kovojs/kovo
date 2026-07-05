@@ -51,6 +51,7 @@ and sends query values, fragments, or both:
 ```http
 HTTP/1.1 200 OK
 Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
+Kovo-Build: mutation-response-test-build
 Kovo-Changes: [{"domain":"cart","keys":["cart"]}]
 Kovo-Idem: cart-submit-01
 ```
@@ -71,6 +72,18 @@ plan across bindings, named derives, and stamps.
 `<kovo-fragment>` morphs the target DOM. Focus, selection, scroll position, CSS transitions, and
 user-agent state survive where the morph algorithm can preserve them. `mode="append"` is the
 explicit append vocabulary for list pagination and streams.
+
+## Run it
+
+Submit one enhanced mutation with the network panel open. The request should carry the stamped target
+headers, and the response should be readable as text:
+
+1. `Kovo-Targets` and `Kovo-Live-Targets` show what the browser said was visible.
+2. The body comes back as `<kovo-query>` and `<kovo-fragment>` frames in the order the loader will
+   apply them.
+
+If you want the raw bytes, repeat the same submit with "Copy response" or with an HTTP client against
+the same mutation endpoint.
 
 ## Typed reads
 
@@ -127,13 +140,21 @@ Development responses favor full values because they are easiest to read. Produc
 smaller frame when the compiler and runtime can prove it is equivalent. There is no per-call-site
 knob; prod picks full or delta per response.
 
-Delta frames are scoped by the committed change record, not by a server-side memory of the client:
+Delta frames are scoped by the committed change record, not by a server-side memory of the client.
+This is the real envelope shape from the committed wire tests:
 
 ```html
-<kovo-query name="cart" delta>
-  {"items":{"upsert":[{"id":"p1","qty":3}],"removedKeys":["p2"]}}
+<kovo-query name="cart" key="cart:c1" version="7" settles="idem_update_p0" delta>
+  {"set":{"count":3},"lists":{"items":{"key":"productId","upsert":[{"productId":"p0","qty":2}]}}}
 </kovo-query>
 ```
+
+The attributes matter when you are reading a trace:
+
+- `key` names the concrete query instance.
+- `version` is the query value version when the response carries one.
+- `settles` names the optimistic tokens this truth chunk commits.
+- `Kovo-Build` on the HTTP response carries the render-plan/build token used for skew checks.
 
 The client treats arriving server truth as authoritative for the committed mutation response. It
 drops the matching optimistic prediction before re-applying any still-pending predictions, so
@@ -145,8 +166,9 @@ Deep-merge semantics are fixed:
 - Non-keyed scalar fields present in the delta replace the base field.
 - Non-keyed object fields present in the delta replace the whole object subtree.
 - Keyed collections merge by `kovo-key`: touched rows are upserted by identity, and rows are
-  deleted only when their key appears in the removed-key list.
-- The removed-key list is the only deletion primitive. There is no field tombstone vocabulary.
+  deleted only when their key appears in `lists.<path>.remove`.
+- `set` replaces top-level non-collection fields, `lists` carries keyed collection edits, and there
+  is no field tombstone vocabulary.
 
 A collection is delta-eligible only when its `kovo-key` maps to domains and explicit keys in the
 change record. Otherwise the response ships the whole value or a full fragment.
@@ -181,5 +203,7 @@ validation, full-vs-delta selection, and `kovo explain` reconstruction:
 SPEC §9.1.1. BroadcastChannel, refetch, and live transport vocabulary: SPEC §9.3. Typed reads,
 guarded read cache posture, and canonical query instance keys: SPEC §9.4. Build-skew recovery:
 SPEC §14.
+
+API reference: [@kovojs/browser](/api/browser/), [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
 
 </details>

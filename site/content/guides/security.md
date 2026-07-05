@@ -146,9 +146,11 @@ export const orders = pgTable(
 Then scope every read and write of that table to the session, not to client input:
 
 ```ts
+import { guards, query } from '@kovojs/server';
+
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
 export const orderHistoryQuery = query({
-  guard: authed(),
+  guard: guards.authed(),
   load: (_args, context: { db?: any; request: CommerceRequest }) => {
     const userId = context?.request.session.user.id;
     return context?.db?.select().from(orders).where(eq(orders.userId, userId)) ?? [];
@@ -218,6 +220,19 @@ revoked authorization does not get an old private response.
 Security review's first questions are answerable from the committed `graph.json` without executing a
 browser. Each review mode prints a stable, diffable table you can run in CI.
 
+## Run it
+
+Hit one guarded route logged out, then run one graph review mode:
+
+```sh
+curl -i http://localhost:3000/account
+kovo explain --unguarded dist/.kovo/graph.json
+```
+
+The route should redirect or render the configured unauthorized shell before private data appears.
+The review command should either print `SUMMARY total=0` or name the reachable mutation, route, or
+query you need to guard.
+
 ```sh
 kovo explain --unguarded graph.json   # reachable without an authed guard
 kovo explain --unscoped graph.json    # owner-annotated rows not provably session-scoped (IDOR)
@@ -252,7 +267,7 @@ can't trace to `req.session` — data that should be scoped to its owner but pro
 ```txt
 kovo-explain/v1
 UNSCOPED
-UNSCOPED query:orderHistory order via user_id  key predicate not traceable to session
+UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21
 SUMMARY total=1
 ```
 
@@ -269,8 +284,11 @@ scheme (`session+guard`, `verifier:<scheme>`, `custom:<name>`, or `none:<justifi
 ```txt
 kovo-explain/v1
 ENDPOINTS
-webhook:stripe POST /hooks/stripe prefix verifier:stripe-signature exempt:webhook order
-SUMMARY total=1
+ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=- rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
+ENDPOINT echo surface=endpoint method=POST path=/api/echo-json mount=exact auth=public:public echo endpoint is CSRF checked csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
+SUMMARY total=4
 ```
 
 This answers "what can reach this app, and what can it touch?" — the report is snapshot-locked with
@@ -487,6 +505,8 @@ content.
 
 ## Next
 
+- [Confidential values](/guides/confidential-values/) - mark secrets, redactions, and untrusted input before they reach the wire.
+- [Outbound requests & egress](/guides/outbound-requests-egress/) - tighten third-party HTTP destinations instead of letting them drift open.
 - [Mutations & forms](/guides/mutations/) — the guarded request lifecycle and the 422 path.
 - [Endpoints & webhooks](/guides/endpoints-webhooks/) — machine ingress and CSRF exemptions.
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — the review modes as CI assertions.
@@ -505,5 +525,7 @@ annotation and `exempt`: SPEC §10.1. The verification surface and `--endpoints`
 audit: SPEC §11.4. Confidential data and `trustedReveal`: SPEC §6.6, KV435. Governed write
 provenance and mass-assignment: SPEC §10.3, KV438. Capability URLs for storage downloads:
 SPEC §6.6. Typed mutation error path: SPEC §9.2.
+
+API reference: [@kovojs/core](/api/core/), [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).
 
 </details>

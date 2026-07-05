@@ -110,6 +110,18 @@ The framework proves `Select` emits a correct listbox contract; only you can kno
 _delivery speed_, sits under a _Shipping_ heading, and that the heading order around it is `h2 →
 h3` rather than `h2 → h4`.
 
+## Run it
+
+The framework proof moment is a real browser axe run, not a static claim:
+
+```sh
+pnpm --filter @kovojs/example-gallery run test:browser
+```
+
+That suite drives primitives into their open, expanded, checked, selected, and error end-states,
+then runs axe against the live DOM. For app code, use the same shape on the routes and flows you
+author.
+
 ## Know the documented exclusions
 
 A few states cannot be represented as an axe-stable DOM, and the suite documents each exclusion
@@ -125,9 +137,12 @@ rather than writing a test that would pass without proving anything:
 
 ## Next
 
+- [Composing primitives](/guides/composing-primitives/) - the merge rules behind the headless attributes you build on.
 - [Components & copy-in UI](/guides/components/) - where those primitive families come from.
-- [Testing](/guides/testing/) - add app-level browser checks for your own labels, headings, and
-  flows.
+- For your own app-level audit recipe: render the route or flow in a real browser, drive it to each
+  meaningful end-state, and run axe there. Kovo's proving command is
+  `pnpm --filter @kovojs/example-gallery run test:browser`; use the same shape for your app's own
+  labels, headings, and task flows.
 
 <details>
 <summary>Spec & diagnostics</summary>
@@ -135,9 +150,14 @@ rather than writing a test that would pass without proving anything:
 The accessibility conformance contract — that every claimed primitive family is axe-clean across its
 interactive state tiers (open/expanded/checked/selected/pressed/complete/error end-states), with
 documented exclusions only where a state cannot be represented in an axe-stable DOM — is enforced by
-`rules/accessibility-conformance.md`. The proving suite is the gallery browser axe suite
-(`examples/gallery/src/interactive-gallery.axe.browser.test.ts`), which runs axe-core in Chromium at each
-primitive's terminal awaited state and on the static styled fixtures. Run it with
+`rules/accessibility-conformance.md`. The proving suites are
+`examples/gallery/src/interactive-gallery.axe.browser.test.ts`,
+`examples/gallery/src/interactive-gallery.interactions-a.browser.test.ts`, and
+`examples/gallery/src/interactive-gallery.interactions-b.browser.test.ts`, which together run
+axe-core in Chromium over the static fixtures and the primitive families' terminal interactive
+states. Run them with
 `pnpm --filter @kovojs/example-gallery run test:browser`.
+
+API reference: [@kovojs/server](/api/server/), [@kovojs/ui](/api/ui/).
 
 </details>

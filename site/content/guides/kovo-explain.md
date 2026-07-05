@@ -34,9 +34,9 @@ the output is stable and diffable, so CI can still assert product rules directly
 
 ## Read the output
 
-All output below is generated from the commerce reference app's committed graph. Every format starts
-with a version line (`kovo-explain/v1`), and the formats are snapshot-locked so your scripts and CI
-assertions don't rot.
+The output blocks below are generated from fixture graphs by the docs gate with the real CLI. Every
+format starts with a version line (`kovo-explain/v1`), and the formats are snapshot-locked so your
+scripts and CI assertions don't rot.
 
 **A query** — what it reads, who consumes it, what refreshes it:
 
@@ -63,17 +63,18 @@ kovo explain mutation cart/add --optimistic graph.json
 ```txt
 kovo-explain/v1
 MUTATION cart/add
-guards: authed,rateLimit:session
+guards: authed
 session: commerceSession
-input-fields: productId,quantity
-writes: cart,product,order
-invalidates: cart,product,order
-manual-invalidates: -
-updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHistory,page:/cart; productGrid->component:ProductGrid,page:/cart
+enctype: multipart/form-data
+input-fields: productId,quantity,receipt
+file-fields: receipt
+writes: cart,product
+invalidates: cart
+manual-invalidates: product
+updates: cart->component:CartBadge,page:/cart; recommendations->component:Recommendations
 OPTIMISTIC cart hand-written
-OPTIMISTIC productGrid await-fragment
-OPTIMISTIC orderHistory await-fragment
-OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0
+OPTIMISTIC recommendations await-fragment
+OPTIMISTIC-SUMMARY total=2 derived=0 hand-written=1 await-fragment=1 UNHANDLED=0 PUNTED=0
 ```
 
 The `updates:` line answers "what updates when this button is clicked," mechanically, without reading
@@ -271,5 +272,7 @@ diffs: SPEC §11.1. Optimistic exhaustiveness is **KV310** (SPEC §10.6); update
 Capability review through the shipped source/sink and ingress surfaces: SPEC §6.6. The wire
 vocabulary behind Network-panel debugging: SPEC §9.1. Debugging downward into plainer artifacts:
 SPEC §1.
+
+API reference: [@kovojs/test](/api/test/), [@kovojs/cli](/api/cli/).
 
 </details>

@@ -154,7 +154,16 @@ const GUIDE_GROUPS = [
   },
   {
     key: 'data-mutations',
-    slugs: ['data-layer', 'queries', 'mutations', 'endpoints-webhooks'],
+    slugs: [
+      'data-layer',
+      'queries',
+      'pagination',
+      'caching',
+      'mutations',
+      'file-uploads-storage',
+      'database-lifecycle',
+      'endpoints-webhooks',
+    ],
     title: 'Data & Mutations',
   },
   {
@@ -164,13 +173,24 @@ const GUIDE_GROUPS = [
   },
   {
     key: 'ui',
-    slugs: ['components', 'styling', 'islands', 'accessibility'],
+    slugs: ['components', 'composing-primitives', 'styling', 'islands', 'accessibility'],
     title: 'UI',
   },
   {
     key: 'security-auth',
-    slugs: ['security', 'auth-better-auth'],
+    slugs: [
+      'security',
+      'confidential-values',
+      'outbound-requests-egress',
+      'error-handling',
+      'auth-better-auth',
+    ],
     title: 'Security & Auth',
+  },
+  {
+    key: 'ops',
+    slugs: ['background-tasks', 'configuration-environment'],
+    title: 'Operations',
   },
   {
     key: 'testing-tooling',

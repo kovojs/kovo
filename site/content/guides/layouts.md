@@ -13,6 +13,7 @@ into it explicitly.
 ## Declare a layout
 
 ```tsx
+// Source: examples/crm/src/app-shell.ts
 export const AppShell = layout({
   render: (_queries, _state, { children }) => (
     <main class="app-shell">
@@ -22,10 +23,7 @@ export const AppShell = layout({
   ),
 });
 
-export const dealsRoute = route('/deals', {
-  layout: AppShell,
-  page: () => <DealsPage />,
-});
+export const dealsRoute = route('/deals', { layout: AppShell, page: () => <DealsPage /> });
 ```
 
 The route still renders a full document. The layout is page chrome inside that document; the request
@@ -36,6 +34,7 @@ shell owns the outer document template, loader, query scripts, and error shells.
 Use `parent` when a route segment adds chrome inside a broader shell:
 
 ```tsx
+// Source: examples/crm/src/app-shell.ts
 export default createApp({
   routes: ({ layout, route }) => {
     const AccountLayout = layout({
@@ -66,12 +65,24 @@ the request before the layout renders, just like route and mutation guards. Layo
 queries: they appear in `kovo explain page`, carry update plans, and observe the same cache and guard
 rules as page queries.
 
+## Run it
+
+Build the app, then ask the CLI for the resolved chain:
+
+```sh
+kovo build ./src/app.ts
+kovo explain page /account/settings --layouts dist/.kovo/graph.json
+```
+
+If you want the CLI's path-discovery rules, see [Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
+
 ## Render segment failures
 
 Use `boundaries` when a route segment needs its own 404, 403, or error body instead of the app-level
 shell:
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 const AccountLayout = layout({
   boundaries: {
     unauthorized: ({ status }) => <AccountDenied status={status} />,
@@ -99,6 +110,7 @@ Use route-level `regions` when a layout needs sibling areas such as a docs page 
 The layout decides placement; the route decides what each named region renders.
 
 ```tsx
+// Source: site/src/docs-app.tsx
 import type { RoutePageResult } from '@kovojs/server';
 
 type DocsRegions = Readonly<{
@@ -142,8 +154,24 @@ Use the layouts mode when a route's chrome gets hard to reason about:
 kovo explain page /account/settings --layouts graph.json
 ```
 
-The output lists the resolved layout chain, guards, queries, boundaries, stylesheets, and the route
-leaf. That makes changes to shared chrome reviewable in CI instead of discovered by clicking around.
+The output is narrower than that today: it prints the resolved layout chain, each layout's queries,
+the navigation segments, and the route leaf. For example:
+
+```txt
+kovo-explain/v1
+PAGE /admin
+prefetch: false
+modulepreloads: -
+stylesheets: -
+queries: -
+layouts: AppLayout
+layout: AppLayout queries=viewer
+navigation-segments: layout:AppLayout,page:/admin
+segment: layout id=layout:AppLayout name=AppLayout queries=viewer components=-
+segment: page id=page:/admin name=page queries=- components=-
+```
+
+That still makes shared chrome reviewable in CI instead of discovered by clicking around.
 
 ## Next
 
@@ -158,5 +186,7 @@ First-class layouts, route-level regions, nesting with `parent`, layout `queries
 boundaries, stylesheets, and `kovo explain page --layouts`: SPEC §4.5 and §6.4. Documents are owned
 by the request shell: SPEC §9.5. Navigation is full-document first; layout persistence is not an
 app-authored v1 contract: SPEC §8. KV420 stateful-island boundary: SPEC §4.5 and §9.1.
+
+API reference: [@kovojs/server](/api/server/).
 
 </details>

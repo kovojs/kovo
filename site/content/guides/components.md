@@ -268,6 +268,7 @@ component is a starting point and future changes should live in your app.
 
 ## Next
 
+- [Composing primitives](/guides/composing-primitives/) - merge headless behavior into your own elements without guessing at the attribute rules.
 - [Styling with StyleX](/guides/styling/) — typed component styles, plain document CSS, and the
   stylesheet contract.
 - [Accessibility](/guides/accessibility/) — the behavior `@kovojs/headless-ui` bakes into every
@@ -281,5 +282,7 @@ Component model and `component()`: SPEC §5. The styled components are emitted a
 lowered by the compiler (SPEC §5.2); hand-authored lowered IR is KV235. The public package boundary
 for `@kovojs/ui`, `@kovojs/headless-ui`, and `@kovojs/style` is recorded in
 `plans/api-export-cleanup.md` and the repo `STABILITY.md`.
+
+API reference: [@kovojs/core](/api/core/), [@kovojs/headless-ui](/api/headless-ui/), [@kovojs/icons](/api/icons/), [@kovojs/server](/api/server/), [@kovojs/style](/api/style/), [@kovojs/ui](/api/ui/).
 
 </details>

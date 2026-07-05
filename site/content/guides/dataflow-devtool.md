@@ -25,7 +25,8 @@ pnpm --filter @kovojs/example-stackoverflow test -- src/interactive-app.test.ts
 ```
 
 For a visual devtool host, pass the graph object or a build-produced graph file into
-`buildBundle()`.
+`buildBundle()`. The CLI writes that file at `dist/.kovo/graph.json`; the discovery rules are in
+[Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
 
 ## Mount it under a repo dev server
 
@@ -45,7 +46,7 @@ the host example you are testing. The exact package script is repo-local; it is 
 `create-kovo`.
 
 ```sh
-KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool dev
+KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool run dev
 ```
 
 ## Build a bundle directly in repo tooling
@@ -60,7 +61,7 @@ import { createDevtoolApp } from '@kovojs/devtool/app';
 const bundle = buildBundle({
   app: 'my-app',
   label: 'My App',
-  graph: JSON.parse(readFileSync('./graph.json', 'utf8')),
+  graph: JSON.parse(readFileSync('./dist/.kovo/graph.json', 'utf8')),
   srcRoot: './src',
 });
 
@@ -76,7 +77,7 @@ cards, lanes, source previews, and edges from that input.
 Run the MCP server over the same graph:
 
 ```sh
-kovo-devtool mcp --graph ./graph.json --src ./src --label "My App"
+kovo-devtool mcp --graph ./dist/.kovo/graph.json --src ./src --label "My App"
 ```
 
 `kovo_explain({ query, app?, limit? })` resolves exact node names when possible, then falls back to
@@ -106,5 +107,7 @@ graph emission. The devtool should explain the graph you built, not patch around
 
 The graph/explain artifact contract and stable `kovo-explain/v1` text shape: SPEC §11.4. Machine-
 auditable generation and authorable outputs: SPEC §1.3, Constitution #3.
+
+API reference: [@kovojs/server](/api/server/).
 
 </details>

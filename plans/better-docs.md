@@ -28,8 +28,8 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
 
 ## P0 — Wrong or build-breaking content (readers fail today)
 
-- [ ] ✅ **Fix the canonical mutation example in `mutations.md` and `data-layer.md` — both teach
-  the KV330 error case as the happy path.**
+- [x] ✅ **Fix the canonical mutation example in `mutations.md` and `data-layer.md` — both teach
+      the KV330 error case as the happy path.**
   - Current: both guides show `await request.db.insert(cartItems).values(...)` /
     `request.db.update(products)...` directly inside the mutation `handler`
     (data-layer.md:79-86; mutations.md first and third examples), and mutations.md asserts
@@ -46,7 +46,7 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     ```tsx
     import { mutation, s } from '@kovojs/server';
     import { db as writeCartRow } from './cart-writes'; // writes live in the domain layer
-    import { cart } from './model';                     // export const cart = domain('cart')
+    import { cart } from './model'; // export const cart = domain('cart')
 
     export const addToCart = mutation({
       input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
@@ -66,10 +66,15 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     `kovo compile`). Replace the "most calls are extracted" sentence with the true contract
     (derive the exact scope — reads-allowed/writes-extracted — from `direct-db.test.ts` and
     SPEC §10.3 before wording it).
+
   - Same fix in data-layer.md, whose "Write with analyzable Drizzle calls" section must show the
     helper-extraction shape and name KV330 as the failure mode, with a `Handle failure` block
     showing the diagnostic.
-- [ ] ✅ **Fix `data-layer.md` `touches: [cart]` — `cart` is never created; introduce `domain()`.**
+  - Evidence: `site/content/guides/mutations.md` and `site/content/guides/data-layer.md` route
+    writes through named helpers and show KV330 failure text; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/example-commerce exec kovo check`.
+
+- [x] ✅ **Fix `data-layer.md` `touches: [cart]` — `cart` is never created; introduce `domain()`.**
   - `registry.touches` takes `Domain` values (`packages/server/src/mutation.ts:682` maps
     `domain.key`), created with `domain()` from `@kovojs/server`. Verified signature
     (`packages/server/src/domain.ts:26-30`): `domain()` derives a stable name from the exported
@@ -87,8 +92,12 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     and one sentence distinguishing these source-level `Domain` values from the string
     annotations in `kovo({ ... })` table tags (the guide currently conflates them). Also mention
     `tag()` (row-scoped invalidation, same file) with a pointer, not a full treatment.
-- [ ] **Rewrite `auth-better-auth.md` (lowest score, 4/10).** Three independent breakages plus a
-  missing arc; treat as a page rewrite, not spot fixes.
+
+  - Evidence: `site/content/guides/data-layer.md` declares `cart`/`product` with `domain()` and
+    distinguishes Domain values from Drizzle table tags; `pnpm run check:docs-snippets`.
+
+- [x] **Rewrite `auth-better-auth.md` (lowest score, 4/10).** Three independent breakages plus a
+      missing arc; treat as a page rewrite, not spot fixes.
   - Broken guard example: the "Guard pages and mutations" snippet is
     `route('/', { page(_context, request) { if (!request.session) return redirect('/login', {}); ... } })`
     — no `access`, no `guard`. Kovo routes are default-deny; this fails the build with KV436.
@@ -99,12 +108,13 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     import { betterAuthAuthed } from '@kovojs/better-auth';
 
     export const accountRoute = route('/account', {
-      guard: betterAuthAuthed(),   // unauthenticated → login redirect, typed session after
+      guard: betterAuthAuthed(), // unauthenticated → login redirect, typed session after
       page(context, request) {
         return <AccountPage email={request.session.user.email} />;
       },
     });
     ```
+
   - Stale database wiring: the files table says `src/db.ts` is "the Drizzle database passed to
     both app queries and Better Auth", and step 1 shows `drizzleAdapter(appDb, ...)`. The current
     scaffold's `src/db.ts` exports a read-only surface (`readonlyAppDb`); Better Auth receives a
@@ -124,8 +134,13 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     `Clear-Site-Data`); configuring the `betterAuth()` instance itself (`baseURL`, shared secret,
     `advanced.disableCSRFCheck` and why Kovo's CSRF makes that safe); rolling-session refresh
     header forwarding. Fix the spec pointer (session typing is not §6.6 — locate the right §).
-- [ ] **Fix broken/unrunnable commands (each: quote → replacement, then run the replacement
-  end-to-end before publishing):**
+  - Evidence: `site/content/guides/auth-better-auth.md` rewrites the guard, DB wiring,
+    `appSession` typing, Run it, failure, mount, role, sign-out, config, and rolling-session
+    sections; `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`.
+
+- [x] **Fix broken/unrunnable commands (each: quote → replacement, then run the replacement
+      end-to-end before publishing):**
   - `dataflow-devtool.md:48` — `KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool dev`:
     no `dev` script exists (`examples/devtool/package.json` has only `check`/`test`). Either add
     a `dev` script to the example (preferred — the guide's flow then works as written) or
@@ -134,8 +149,8 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
   - `deployment.md:196,282,301` — `vp build` is not the production build and `vp run kovo-check`
     is not a scaffold script. ✅ The scaffold's real scripts
     (`packages/create-kovo/templates/package.json:5-14`): `build:prod` = `kovo build
-    ./src/app.tsx`, `check` = `node scripts/check-parallel.mjs`, `start` = `NODE_ENV=production
-    node dist/server/server.mjs`. Rewrite the Dockerfile comment, pre-deploy gates block, and
+./src/app.tsx`, `check` = `node scripts/check-parallel.mjs`, `start` = `NODE_ENV=production
+node dist/server/server.mjs`. Rewrite the Dockerfile comment, pre-deploy gates block, and
     checklist around `pnpm run build:prod` / `pnpm run check` / `pnpm run start`, and say what
     each actually runs.
   - `static-export.md:78-84` — "Checks to run" lists `pnpm --filter @kovojs/site run build`,
@@ -157,36 +172,42 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     (clone → `pnpm install` → scaffold/copy a workspace member → `pnpm run dev`), verified by
     actually executing it in a clean checkout; keep the npm form as the post-v1 path, clearly
     ordered.
-- [ ] **Replace fabricated/stale CLI sample output with real captured output.** Rule for all
-  three: run the real command against the commerce example's committed graph and paste bytes;
-  never hand-compose output blocks.
+  - Evidence: docs replacements landed in `dataflow-devtool.md`, `deployment.md`,
+    `static-export.md`, `queries.md`, `installation.md`, and `quickstart.md`; `examples/devtool`
+    has a `dev` script; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`; `pnpm --filter @kovojs/example-devtool run check`.
+- [x] **Replace fabricated/stale CLI sample output with real captured output.** Rule for all
+      three: run the real CLI against fixture graphs and paste bytes; never hand-compose output
+      blocks. The repo has no committed commerce graph, so the old commerce-graph claim was
+      removed instead of preserved as fiction.
   - `endpoints-webhooks.md:150-157` — the `kovo explain --endpoints` block shows invented
     positional rows (`endpoint:oauth/callback GET /auth/callback exact none:... exempt:... -`).
     Real format is key=value rows (`ENDPOINT <name> surface=endpoint ...` per
     `packages/cli/src/graph-explain-format.ts`). Capture and paste, then update the surrounding
     prose that narrates columns.
   - `security.md:255` — same disease: `UNSCOPED query:orderHistory order via user_id key
-    predicate not traceable to session` vs the real `UNSCOPED QUERY <name> domain=<d> ...`
+predicate not traceable to session` vs the real `UNSCOPED QUERY <name> domain=<d> ...`
     format. Recapture both the `--unscoped` and `--endpoints` blocks.
   - `kovo-explain.md:76` — `OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2
-    UNHANDLED=0` omits the `derived=` and `PUNTED=` fields the CLI always emits
+UNHANDLED=0` omits the `derived=` and `PUNTED=` fields the CLI always emits
     (`graph-explain-format.ts:1019-1027`), so the guide's flagship copy-paste CI grep fails
     against real output. Recapture the sample and fix the CI recipe to match (assert on
     `UNHANDLED=0` with a pattern tolerant of field order/additions, and say why).
-  - Durable fix: generate these output blocks at site build time from the committed commerce
-    graph (a small `site/scripts/` step that runs `kovo explain` and injects the blocks, or a
-    test that diffs the docs blocks against fresh output) so they cannot drift again. The
-    kovo-explain review also found the "generated from the commerce app's committed graph" claim
-    is currently hand-maintained fiction — this makes it true.
-- [ ] **Fix spec-contradicting claims** (each: what the page says → what is normatively true →
-  the replacement passage):
+  - Durable fix: `site/scripts/explain-output-check.mjs` runs the real `kovo explain` CLI against
+    fixture graphs and `pnpm run check:docs-snippets` fails if the documented output blocks drift.
+  - Evidence: `site/content/guides/endpoints-webhooks.md`, `site/content/guides/security.md`,
+    and `site/content/guides/kovo-explain.md` contain the checked output blocks;
+    `node site/scripts/explain-output-check.mjs`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Fix spec-contradicting claims** (each: what the page says → what is normatively true →
+      the replacement passage):
   - `compiler-internals.md:72-76` + frontmatter description ("how to eject a component"): says
     any component's emitted files can be checked in, the `.tsx` deleted, "nothing else in the
     toolchain knows the difference." SPEC §5.2 rule 7 (`spec/05-compiler.md:30`) forbids
     hand-authored lowered IR (KV235), and `// @kovojs-ir` is a load-bearing provenance gate —
     `isCompilerIrArtifact` (`packages/compiler/src/validate/authoring-surface.ts:206-208`)
     rejects app-authored files carrying it. Replace the ejection section with the real contract:
-    emitted IR is an inspectable *artifact* (read it, diff it, verify it) but never an ownership
+    emitted IR is an inspectable _artifact_ (read it, diff it, verify it) but never an ownership
     path; delete the "eject" promise from the description. Also fix line 68's "informational,
     not load-bearing" claim about the marker comment — invert it and show the rejection.
   - `optimistic.md:45-48` — says queued submissions "each wait for the previous to settle before
@@ -210,7 +231,7 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     (`clocks: { ago: { every: '30s' } }` plus the `now.*` inputs — derive exact spelling from
     core's types and an existing test/fixture) and cross-link the fuller treatment planned in P4.
   - `streaming.md:27-35` — the first `<Defer>` example never defers. ✅ `RegionPriority =
-    'after-paint' | 'critical' | 'visible'` and the default is `'critical'`, which renders
+'after-paint' | 'critical' | 'visible'` and the default is `'critical'`, which renders
     inline (`packages/server/src/deferred-region.ts:16,163-171`). Fix the smallest example to
     pass `priority="after-paint"`, then add a short "Pick a priority" subsection: `critical`
     renders in the shell (the default — say so loudly), `after-paint` streams after the shell,
@@ -219,7 +240,7 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     `<kovo-query name="cart" delta>{"items":{"upsert":[...],"removedKeys":["p2"]}}</kovo-query>`
     shows an envelope that does not exist. Real shape
     (`packages/core/src/query-delta.ts:36-41`): `{set?, lists: {<path>: {key, upsert?, remove?,
-    prepend?}}}` — collections nest under `lists`, keyed by path, with `key`/`remove` (not
+prepend?}}}` — collections nest under `lists`, keyed by path, with `key`/`remove` (not
     `removedKeys`). Capture a real delta frame from a running example and paste it; also add the
     frame attributes every real response carries (`key`/`version`/`settles`, the `Kovo-Build`
     header) since the page's stated job is reading a trace.
@@ -240,21 +261,25 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     (`interactive-gallery.axe.browser.test.ts`) carries a fraction of the tier claims — most
     `expectNoAxeViolations` assertions live in `interactive-gallery.interactions-a/b.browser.test.ts`.
     Fix both: cite all three suites (the run command `pnpm --filter @kovojs/example-gallery run
-    test:browser` is already correct), and repoint the closer at a real self-serve audit recipe
+test:browser` is already correct), and repoint the closer at a real self-serve audit recipe
     (see P4 accessibility). `rules/accessibility-conformance.md:31-33` carries the same stale
     citation — fix it in the same commit.
   - `layouts.md` — claims `kovo explain page --layouts` output "lists the resolved layout chain,
     guards, queries, boundaries, stylesheets, and the route leaf." The actual page branch prints
     the chain, per-layout queries, and the leaf — no guards, no boundaries. Trim the claim to
     the real output (paste it), or extend the CLI first and keep the prose.
+  - Evidence: fixed the cited guide/rule files plus stale `getting-started/mental-model.md`
+    loader/ejection wording; `rg -n "8KB|8 KB|structuredClone|removedKeys|db\\.sql|guard: authed\\(|you can eject|nothing else in the toolchain knows|emitted form.*authorable" site/content rules`
+    returns no stale matches; `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`.
 
 ## P1 — Systemic quality passes across existing guides
 
-- [ ] **Copy-paste-runnable samples policy, applied guide by guide.** Adopt one rule and enforce
-  it everywhere: every fenced TS/TSX block either (a) compiles standalone — all imports present,
-  every identifier defined in the block or a prior block on the same page — or (b) opens with a
-  provenance comment naming its source file (`// examples/commerce/src/domain.ts`) and elides
-  only lines marked with `// …`. No `any`-typed contexts anywhere (the framework bans them).
+- [x] **Copy-paste-runnable samples policy, applied guide by guide.** Adopt one rule and enforce
+      it everywhere: every fenced TS/TSX block either (a) compiles standalone — all imports present,
+      every identifier defined in the block or a prior block on the same page — or (b) opens with a
+      provenance comment naming its source file (`// examples/commerce/src/domain.ts`) and elides
+      only lines marked with `// …`. No `any`-typed contexts anywhere (the framework bans them).
   - Worked example of the class of fix (queries.md): replace
     `load: async (_input, context?: { db?: any })` with the real contract —
     `QueryLoadContext<Request, Db>` whose `db` is `Reader<Db>` (write verbs removed at the type
@@ -272,13 +297,18 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
   - Acceptance: the site's compile-checked-fences gate passes with the policy tightened to
     typecheck (not just parse) if that's not already the case — investigate why non-compiling
     samples currently pass it.
-- [ ] **Add a "Run it" proof moment to every guide missing one** (flagged on 15+ pages). The bar
-  (`rules/docs-style.md:93-95`): a command, a View Source, or a click, plus what the reader sees
-  change. Concrete recipe per page:
+  - Evidence: `site/scripts/code-snippets-check.mjs` enforces standalone vs provenance snippets,
+    explicit-`any` rejection on the strict docs surface, and reference-app symbol provenance;
+    `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site test -- code-snippets-check.test.mjs`;
+    `pnpm --filter @kovojs/site run build`.
+- [x] **Add a "Run it" proof moment to every guide missing one** (flagged on 15+ pages). The bar
+      (`rules/docs-style.md:93-95`): a command, a View Source, or a click, plus what the reader sees
+      change. Concrete recipe per page:
   - mutations: submit the form with JavaScript disabled, watch the full-page POST work; then
     re-enable and show the fetch + fragment response in the network tab.
   - queries: View Source on the rendered page, point at the `<script type="application/json"
-    kovo-query>` hydration frame and the `kovo-deps`/`kovo-query` stamps.
+kovo-query>` hydration frame and the `kovo-deps`/`kovo-query` stamps.
   - routing: scaffold the route, `curl -i` it, show the 200 and the 308 trailing-slash redirect
     the guide describes.
   - islands: View Source showing the served `on:*` attribute and `kovo-state` stamps; click and
@@ -296,10 +326,13 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
   - render-tree: one authored XML string in, the exact emitted HTML out.
   - styling: the extracted `.css` file for the page's running example, found in the build output.
   - layouts, data-layer, request-shell, accessibility: per their P0/P4 entries.
-- [ ] **Add "Handle failure" sections per the guide skeleton.** Content spec per page:
+  - Evidence: named `Run it` sections landed across the cited guides, including
+    `site/content/guides/security.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Add "Handle failure" sections per the guide skeleton.** Content spec per page:
   - mutations: the typed 422 (`context.fail`) rendered with `<FormError>`/`<FieldError>` from
     `@kovojs/core`; success redirect (`defaultRedirectTo`, typed `redirect('/path/:id',
-    { params })`) for POST-redirect-GET.
+{ params })`) for POST-redirect-GET.
   - streaming: `<Defer timeoutMs>` (default 30s) and the `state="error"` placeholder
     re-emission — show what the user sees.
   - queries: what a failing loader renders; the KV410/KV411 diagnostics with recourse
@@ -312,24 +345,38 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
   - postgres-authz-policy: `KV433_AUTHZ_POLICY_UNSUPPORTED` at provision time — the feature's
     main failure mode, currently absent.
   - auth-better-auth: `INVALID_CREDENTIALS` → form error binding (see P0 rewrite).
-- [ ] **Document graph.json provenance once; link it everywhere it's assumed.** Canonical
-  paragraph to write (verify paths against `packages/cli/src/commands/build-export.ts:333,513`
-  and the discovery order in the check/explain command source):
+  - Evidence: `site/content/guides/endpoints-webhooks.md`,
+    `site/content/guides/mutations.md`, `site/content/guides/queries.md`,
+    `site/content/guides/static-export.md`, `site/content/guides/streaming.md`,
+    `site/content/guides/live-queries.md`, `site/content/guides/postgres-authz-policy.md`,
+    and `site/content/guides/auth-better-auth.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Document graph.json provenance once; link it everywhere it's assumed.** Canonical
+      paragraph to write (verify paths against `packages/cli/src/commands/build-export.ts:333,513`
+      and the discovery order in the check/explain command source):
   > Every `kovo check` and `kovo explain` invocation reads an extracted graph artifact.
   > `kovo build` writes it to `dist/.kovo/graph.json`. With no path argument the CLI looks for
-  > `graph.json`, then `.kovo/graph.json`, then `dist/.kovo/graph.json`, working up from the
-  > current directory — a bare `kovo check` in a fresh clone passes vacuously because there is
-  > no graph yet. Build first, or pass the path explicitly.
-  Link/inline it in: cli.md (its absence makes bare `kovo check` look like a no-op full check),
-  kovo-explain.md (every command takes `graph.json` and the page never says where it comes
-  from — flagged HIGH), dataflow-devtool.md (same, plus `buildBundle({ graph })` needs a real
-  path), testing.md (where the committed touch graph comes from).
-- [ ] ✅ **Cross-link the generated API reference.** It exists (`site/scripts/api-ref.mjs` renders
-  `/api/<slug>/`, nav-linked at `site/src/document-template.tsx:139`) but no guide points into
-  it. Minimum links: cli.md → `/api/cli/` ("full flag reference"); every guide's collapsed
-  details → its package's `/api/` page; components.md → the ui/headless-ui pages. While there,
-  add the one-sentence note that `--help`/`-h` works on every `kovo` command
-  (`packages/cli/src/commands-manifest.ts:864`) — currently undocumented.
+  > `graph.json`, then `.kovo/graph.json`, then `dist/.kovo/graph.json` in the current working
+  > directory — a bare `kovo check` in a fresh clone passes vacuously because there is no graph
+  > yet. Build first, run the command from the app root, or pass the path explicitly.
+  > Link/inline it in: cli.md (its absence makes bare `kovo check` look like a no-op full check),
+  > kovo-explain.md (every command takes `graph.json` and the page never says where it comes
+  > from — flagged HIGH), dataflow-devtool.md (same, plus `buildBundle({ graph })` needs a real
+  > path), testing.md (where the committed touch graph comes from).
+  - Evidence: `site/content/guides/cli.md` documents current `graph-input.ts` discovery order;
+    `site/content/guides/dataflow-devtool.md`, `site/content/guides/testing.md`, and
+    `site/content/guides/compiler-internals.md` link/use `dist/.kovo/graph.json`;
+    `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run check:links`.
+- [x] ✅ **Cross-link the generated API reference.** It exists (`site/scripts/api-ref.mjs` renders
+      `/api/<slug>/`, nav-linked at `site/src/document-template.tsx:139`) but no guide points into
+      it. Minimum links: cli.md → `/api/cli/` ("full flag reference"); every guide's collapsed
+      details → its package's `/api/` page; components.md → the ui/headless-ui pages. While there,
+      add the one-sentence note that `--help`/`-h` works on every `kovo` command
+      (`packages/cli/src/commands-manifest.ts:864`) — currently undocumented.
+  - Evidence: guide details include generated `/api/<slug>/` links; `site/content/guides/cli.md`
+    links `/api/cli/` and documents `--help`/`-h`; `site/content/guides/components.md` links
+    `/api/ui/`, `/api/headless-ui/`, and `/api/style/`; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`.
 
 ## P2 — Missing guides (coverage gaps), ranked
 
@@ -337,11 +384,11 @@ Each entry is a full outline an implementer can write from. All follow the guide
 "Sections" lists the verb-headed H2s in order. Verify every named export against the package
 index before writing (evidence lines given).
 
-- [ ] **File uploads & blob storage** — `tutorial/04-mutations.md:87` already promises "the
-  mutations guide covers guards, file uploads, and response headers"; none exists anywhere.
-  Exports: `createFileSystemStorage`/`createMemoryStorage`/`createS3CompatibleStorage`
-  (`packages/core/src/index.ts`, re-exported from server), `s.file()`, storage download
-  endpoint shown once in security.md's checklist (`createStorageDownloadEndpoint`).
+- [x] **File uploads & blob storage** — `tutorial/04-mutations.md:87` already promises "the
+      mutations guide covers guards, file uploads, and response headers"; none exists anywhere.
+      Exports: `createFileSystemStorage`/`createMemoryStorage`/`createS3CompatibleStorage`
+      (`packages/core/src/index.ts`, re-exported from server), `s.file()`, storage download
+      endpoint shown once in security.md's checklist (`createStorageDownloadEndpoint`).
   - Frontmatter: title "File uploads & storage"; description "Accept a file from a form, store
     it, and serve it back with a scoped download URL."
   - Sections: **Accept a file** (add `s.file()` to a mutation input; the compiler derives
@@ -353,12 +400,14 @@ index before writing (evidence lines given).
     is wrong for user content) → **Limit it** (size/type validation on the schema; interaction
     with request-shell body limits) → **Handle failure** (validation failure → field error;
     storage errors) → Next: mutations, security (capability URLs).
-- [ ] **Background tasks & scheduling** — SPEC §9.6 fully shipped, zero site coverage, flagged
-  by 4 of 6 sweeps. Exports: `task` (`packages/server/src/index.ts:270`; `task.ts`,
-  `task-runner.ts`), `request.schedule()`/`request.cancel()`, `TaskScheduleOptions` with
-  debounce/throttle keys, `TaskCronCatchUp`, `createDurableTaskStatus`,
-  `createDurableTaskSqlExecutor`; CLI: `kovo explain task <target>`, `kovo explain --tasks`
-  (`packages/cli/src/commands-manifest.ts:29,33,494-496`).
+  - Evidence: `site/content/guides/file-uploads-storage.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Background tasks & scheduling** — SPEC §9.6 fully shipped, zero site coverage, flagged
+      by 4 of 6 sweeps. Exports: `task` (`packages/server/src/index.ts:270`; `task.ts`,
+      `task-runner.ts`), `request.schedule()`/`request.cancel()`, `TaskScheduleOptions` with
+      debounce/throttle keys, `TaskCronCatchUp`, `createDurableTaskStatus`,
+      `createDurableTaskSqlExecutor`; CLI: `kovo explain task <target>`, `kovo explain --tasks`
+      (`packages/cli/src/commands-manifest.ts:29,33,494-496`).
   - Frontmatter: title "Background tasks"; description "Send the email after the order commits —
     durable, retried, and visible in the graph."
   - Sections: **Define a task** (`task({ input, handler })` — smallest: send-welcome-email) →
@@ -370,42 +419,48 @@ index before writing (evidence lines given).
     deploy presets; `createDurableTaskSqlExecutor`/`createDurableTaskStatus` for status) →
     **Inspect it** (`kovo explain task <key>`, `--tasks` — real output) → **Handle failure**
     (retries, cancellation via `request.cancel()`) → Next: deployment, endpoints-webhooks.
-- [ ] **Configuration & environment reference** — no page enumerates any of the 25+ `KOVO_*`
-  vars or the boot-validation contract. Source of truth: `packages/server/src/env.ts`
-  (`validateAppEnv`, `resolveBootMode`, `committedSecretWaiver`,
-  `FRAMEWORK_SECRET_MIN_ENTROPY_BITS`); grep `KOVO_` across packages for the full inventory.
-  Reference-mode page (density fine per docs-style), but still opens with the smallest use:
+  - Evidence: `site/content/guides/background-tasks.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Configuration & environment reference** — no page enumerates any of the 25+ `KOVO_*`
+      vars or the boot-validation contract. Source of truth: `packages/server/src/env.ts`
+      (`validateAppEnv`, `resolveBootMode`, `committedSecretWaiver`,
+      `FRAMEWORK_SECRET_MIN_ENTROPY_BITS`); grep `KOVO_` across packages for the full inventory.
+      Reference-mode page (density fine per docs-style), but still opens with the smallest use:
   - Sections: **Validate your env at boot** (`createApp({ env: s.object({...}) })` — typed
-    access, and the payoff: production boot *refuses* with a typed `CreateAppBootError` instead
+    access, and the payoff: production boot _refuses_ with a typed `CreateAppBootError` instead
     of failing at first request) → **Boot modes** (dev vs production posture differences) →
     **Secret rules** (entropy floor, committed-secret detection and the waiver escape hatch) →
     **Variable reference** (generated or hand-maintained table: name, consumer package, default,
     effect — database URLs/roles/driver, CSRF secret, data dir, CSP report endpoint, deploy
     knobs, `KOVO_EXPERIMENTAL_SQLITE`, `KOVO_DEVTOOL_BASE`, …). Strongly consider generating the
     table from source the way `/api/` is generated, so it can't drift.
-- [ ] **Database lifecycle: create, migrate, seed** — all four data-backed examples hand-roll
-  the same bootstrap; today's only coverage is a cli.md subsection. Sources:
-  `packages/cli/src/commands/db.ts` (`check|generate|migrate|provision`,
-  `KOVO_ADMIN_DATABASE_URL`, `generatedMigrationSequence`, `--reader-role`/`--writer-role`
-  defaults `kovo_reader`/`kovo_writer`, `--database-url` precedence incl.
-  `KOVO_RUNTIME_DATABASE_URL`); seeding patterns in `examples/commerce/src/db.ts`
-  (`SCHEMA_DDL` + `SEED_PRODUCTS`), `examples/crm/src/db.ts` + `demo-data.ts`.
+  - Evidence: `site/content/guides/configuration-environment.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Database lifecycle: create, migrate, seed** — all four data-backed examples hand-roll
+      the same bootstrap; today's only coverage is a cli.md subsection. Sources:
+      `packages/cli/src/commands/db.ts` (`check|generate|migrate|provision`,
+      `KOVO_ADMIN_DATABASE_URL`, `generatedMigrationSequence`, `--reader-role`/`--writer-role`
+      defaults `kovo_reader`/`kovo_writer`, `--database-url` precedence incl.
+      `KOVO_RUNTIME_DATABASE_URL`); seeding patterns in `examples/commerce/src/db.ts`
+      (`SCHEMA_DDL` + `SEED_PRODUCTS`), `examples/crm/src/db.ts` + `demo-data.ts`.
   - Sections: **Start with PGlite** (the zero-setup dev default; where the data dir lives) →
     **Define the schema** (Drizzle tables + `kovo({...})` classification, linking data-layer) →
     **Seed dev data** (the exec-DDL + insert pattern from the examples, generalized) →
     **Generate and run migrations** (`kovo db generate` → migration sequence → `kovo db
-    migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role setup, admin URL
+migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role setup, admin URL
     handling, reader/writer role adoption and why two roles exist — link
     postgres-authz-policy) → **Check the posture** (`kovo db check`, real output) → **Handle
     failure** (provision failures, KV433 family) → Next: postgres-authz-policy, deployment.
-- [ ] **Error handling** — one page unifying the story currently fragmented across four guides
-  (layouts "Render segment failures", request-shell "Documents and error shells", mutations
-  typed failures, routing `notFound()`), plus the pieces documented nowhere:
-  `<ErrorBoundary fallback={...}>` from `@kovojs/core` (used at
-  `examples/commerce/src/app.tsx:89-91`, zero site mentions), `errorBoundary()` fragment wrapper
-  (`packages/server/src/mutation/`), `createApp({ onError })` `ServerErrorHandler`
-  (`app-types.ts:279`), and the failure wire postures beyond 422: 401 with `Kovo-Reauth`
-  directive, 403 unauthorized code, 500 `RENDER_ERROR` (SPEC §9.2, `spec/09-wire-protocol.md:97-115`).
+  - Evidence: `site/content/guides/database-lifecycle.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Error handling** — one page unifying the story currently fragmented across four guides
+      (layouts "Render segment failures", request-shell "Documents and error shells", mutations
+      typed failures, routing `notFound()`), plus the pieces documented nowhere:
+      `<ErrorBoundary fallback={...}>` from `@kovojs/core` (used at
+      `examples/commerce/src/app.tsx:89-91`, zero site mentions), `errorBoundary()` fragment wrapper
+      (`packages/server/src/mutation/`), `createApp({ onError })` `ServerErrorHandler`
+      (`app-types.ts:279`), and the failure wire postures beyond 422: 401 with `Kovo-Reauth`
+      directive, 403 unauthorized code, 500 `RENDER_ERROR` (SPEC §9.2, `spec/09-wire-protocol.md:97-115`).
   - Sections: **Wrap a region** (ErrorBoundary around a query-backed region; commerce's
     ProductGridError as the running example) → **Run it** (make the loader throw, see the
     fallback) → **Handle mutation failures** (recap typed 422 → link mutations; then the 401
@@ -415,12 +470,14 @@ index before writing (evidence lines given).
     (`ErrorShellRenderer`, a minimal custom 404; the default's no-internals guarantee) →
     **Observe errors in production** (`createApp({ onError })`; link observability when it
     exists) → Next. Existing guides then link here instead of re-explaining.
-- [ ] **Caching** — the first question a Next.js-trained evaluator asks; Kovo has a distinctive
-  normative answer and no page. Sources: SPEC §9 caching contract
-  (`spec/09-wire-protocol.md:~87,~145`), typed `cacheControl` allowlist (KV415),
-  `spec/07-navigation.md:34` (bfcache posture), `QueryReadConfig.read.cacheControl`
-  (`packages/server/src/query.ts:47-50`), immutable `/c/__v/<version>` module URLs + deploy
-  retention.
+  - Evidence: `site/content/guides/error-handling.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Caching** — the first question a Next.js-trained evaluator asks; Kovo has a distinctive
+      normative answer and no page. Sources: SPEC §9 caching contract
+      (`spec/09-wire-protocol.md:~87,~145`), typed `cacheControl` allowlist (KV415),
+      `spec/07-navigation.md:34` (bfcache posture), `QueryReadConfig.read.cacheControl`
+      (`packages/server/src/query.ts:47-50`), immutable `/c/__v/<version>` module URLs + deploy
+      retention.
   - Sections: **What's cached by default** (the honest defaults: session-dependent documents
     forced `no-store`; `/_q` reads pinned `private,no-store` + `Vary: Cookie`; immutable hashed
     `/c/` modules) → **Cache a public read** (`read: { cacheControl }` on a query — the typed
@@ -428,38 +485,46 @@ index before writing (evidence lines given).
     headers before/after) → **Navigation & bfcache** (what back/forward restores) → **Deploys**
     (old `/c/__v/` versions retained so long-lived documents keep working; the retention knob) →
     **Handle failure** (KV415 diagnostic) → collapsed details: SPEC §§.
-- [ ] **Pagination** (recipe or a queries.md major section) — commerce ships the complete
-  first-class pattern, no guide teaches it: cursor query (`after`/`limit`/`nextCursor`,
-  `examples/commerce/src/queries.ts` productGridQuery), keyed items (`kovo-key={item.id}`),
-  `data-page-cursor` threading, and per-key `delta: [{ domain: order.key, key: 'id', path:
-  'items' }]` declarations so one new row ships as a delta instead of a full list. Walk the
-  commerce implementation end-to-end with provenance comments; show the wire (a `lists` delta
-  frame) as the payoff.
-- [ ] **Confidential values** — core to the framework pitch ("secrets can't reach the browser");
-  only the drizzle column tag appears (conceptually) in why-kovo.md. Exports
-  (`packages/core/src/index.ts`): `secret`, `redacted`, `untrusted`, `revealSecret`,
-  `revealRedacted`, `revealUntrusted`, `trustedReveal`, `publishToClient`, `declareOffWire`,
-  plus `encryptAtRest` and key rings.
+  - Evidence: `site/content/guides/caching.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Pagination** (recipe or a queries.md major section) — commerce ships the complete
+      first-class pattern, no guide teaches it: cursor query (`after`/`limit`/`nextCursor`,
+      `examples/commerce/src/queries.ts` productGridQuery), keyed items (`kovo-key={item.id}`),
+      `data-page-cursor` threading, and per-key `delta: [{ domain: order.key, key: 'id', path:
+'items' }]` declarations so one new row ships as a delta instead of a full list. Walk the
+      commerce implementation end-to-end with provenance comments; show the wire (a `lists` delta
+      frame) as the payoff.
+  - Evidence: `site/content/guides/pagination.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Confidential values** — core to the framework pitch ("secrets can't reach the browser");
+      only the drizzle column tag appears (conceptually) in why-kovo.md. Exports
+      (`packages/core/src/index.ts`): `secret`, `redacted`, `untrusted`, `revealSecret`,
+      `revealRedacted`, `revealUntrusted`, `trustedReveal`, `publishToClient`, `declareOffWire`,
+      plus `encryptAtRest` and key rings.
   - Sections: **Mark a value** (wrap an API key with `secret()`; show the compile/serialization
-    failure when it heads for the wire — the payoff *is* the error) → **Reveal it at the sink**
+    failure when it heads for the wire — the payoff _is_ the error) → **Reveal it at the sink**
     (`revealSecret` at the point of use; why reveal is explicit) → **Classify user input**
     (`untrusted()` and where the framework forces handling) → **Column-level secrets** (the
     drizzle `kovo({ secret: [...] })` tag — connect to data-layer) → **Encrypt at rest**
     (`encryptAtRest`, key rings) → **Handle failure** (the off-wire diagnostics) → collapsed
     spec pointers.
-- [ ] **Outbound requests & egress** — anyone calling Stripe/OpenAI/email hits the fail-closed
-  egress floor immediately; today one prose mention in security.md. Exports:
-  `EgressBlockedError`, `EgressConfigError`, `EgressOptions`, `PrivateAddressClass`
-  (`packages/server/src/index.ts:70-71`, `packages/server/src/egress.ts`).
+  - Evidence: `site/content/guides/confidential-values.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Outbound requests & egress** — anyone calling Stripe/OpenAI/email hits the fail-closed
+      egress floor immediately; today one prose mention in security.md. Exports:
+      `EgressBlockedError`, `EgressConfigError`, `EgressOptions`, `PrivateAddressClass`
+      (`packages/server/src/index.ts:70-71`, `packages/server/src/egress.ts`).
   - Sections: **Call a third-party API** (`ctx.fetch` from a handler; the smallest allowlist
     config naming `api.stripe.com`) → **Run it** (and the before-state: the exact
     `EgressBlockedError` you get with no allowlist — lead with this, it's what readers will hit
     first) → **Scope the allowlist** (per-host patterns, `PrivateAddressClass`/SSRF posture —
     why private ranges are blocked even when allowlisted) → **Handle failure**
     (`EgressBlockedError` vs `EgressConfigError`) → Next: security, endpoints-webhooks.
-- [ ] **Composing primitives** — accessibility.md tells authors to build on headless primitives;
-  nothing teaches how. Source: SPEC §4.6 (`spec/04-component-model.md:237-279`) with its
-  normative merge-rule table; implemented in `packages/compiler/src/attribute-merge*`.
+  - Evidence: `site/content/guides/outbound-requests-egress.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Composing primitives** — accessibility.md tells authors to build on headless primitives;
+      nothing teaches how. Source: SPEC §4.6 (`spec/04-component-model.md:237-279`) with its
+      normative merge-rule table; implemented in `packages/compiler/src/attribute-merge*`.
   - Sections: **Attach behavior to your element** (the attrs-function child spelling — one
     primitive, one custom trigger) → **Use asChild** (the sugar form and when it's identical) →
     **Behavior attributes** (`kovo-tooltip`-style attach-by-attribute) → **What merging does**
@@ -467,8 +532,10 @@ index before writing (evidence lines given).
     ARIA/role conflicts fail the build with their KV codes — reproduce the table from SPEC §4.6,
     cite it as the authority) → **Handle failure** (the conflict diagnostics) → Next:
     components, accessibility.
-- [ ] **Medium-priority new-guide backlog** (promote to its own checkbox with an outline when
-  picked up):
+  - Evidence: `site/content/guides/composing-primitives.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Medium-priority new-guide backlog triaged as future candidates.** Promote any one of these
+      to its own checkbox with an outline when it is picked up:
   - Roll-your-own credential auth: `hashPassword`/`verifyPassword`/`verifyCredential`/
     `isArgon2idPasswordDigest`/`PASSWORD_ARGON2ID_DEFAULTS` (server index) + `session()`
     provider without Better Auth — the "email+password without a dependency" path.
@@ -493,6 +560,8 @@ index before writing (evidence lines given).
     styles); zero site coverage of the tool authors use all day.
   - `kovo-key` runtime identity: SPEC §13.2 — when the compiler derives it, when authors must
     supply it, morph-vs-clobber consequences.
+  - Evidence: retained here as non-active P4 candidates rather than guide-completion claims; no
+    medium-priority candidate was promoted in this batch.
 
 ## P3 — Agent-reader infrastructure
 
@@ -500,29 +569,43 @@ The agent layer is unusually complete (llms.txt index, 2.17MB llms-full.txt corp
 appended, per-page .md mirrors at `<route>.md`, `kovo update-docs` app-local mirror,
 compile-checked fences, link-check gate). Remaining gaps are ergonomics:
 
-- [ ] Advertise each page's .md mirror from its HTML: add `<link rel="alternate"
-  type="text/markdown" href="<route>.md">` to the head in `site/src/document-template.tsx` and a
-  visible "View as Markdown" link near the title/footer. Today an agent on
-  `/guides/routing/` must fetch and parse all of `/llms.txt` to discover the mirror convention.
-  Match the exact mirror path emitted by `site/scripts/llms.mjs` / `site/src/aux.ts`.
-- [ ] Emit context-budget-sized llms tiers from `site/scripts/llms.mjs`: e.g. `llms-guides.txt`
-  (guides + getting-started + tutorial, no SPEC) and `llms-api.txt`; list the tiers with byte
-  sizes in `llms.txt`. Today the only options are the 17KB index and the 2.17MB everything-file
-  (~550K tokens — bigger than most agent contexts, and it embeds the 286KB SPEC).
-- [ ] Add `_headers` entries for the agent files: content-type `text/markdown; charset=utf-8`
-  (or text/plain for .txt), `X-Content-Type-Options: nosniff`, and a cache policy for
-  `/llms*.txt`, `/spec.md`, and the `/**/*.md` mirrors. Currently safe only because
-  `serve-static.mjs` hardcodes the type; any `_headers`-honoring host serves them untyped.
-- [ ] Add `robots.txt` (with a `Sitemap:` line and a comment pointing at `/llms.txt` and
-  `/llms-full.txt`) and `sitemap.xml`, emitted from `site/src/aux.ts` alongside the existing
-  artifacts. Discovery currently rests on one footer link plus community convention.
-- [ ] Stamp llms artifacts with a version line (`Version: @kovojs <ver> (<commit>)`) passed into
-  the build — `llms.mjs` is deliberately deterministic, so thread the value in as an input
-  rather than reading git at emit time. Lets an agent tell whether its cached corpus matches the
-  installed framework.
-- [ ] Snippet provenance for reference-app symbols (same rule as P1 item 1; the agent sweep hit
-  it independently: testing.md/routing.md snippets lean on undefined commerce symbols with no
-  file pointer, forcing exactly the guessing the mirrors otherwise eliminate).
+- [x] Advertise each page's .md mirror from its HTML: add `<link rel="alternate"
+type="text/markdown" href="<route>.md">` to the head in `site/src/document-template.tsx` and a
+      visible "View as Markdown" link near the title/footer. Today an agent on
+      `/guides/routing/` must fetch and parse all of `/llms.txt` to discover the mirror convention.
+      Match the exact mirror path emitted by `site/scripts/llms.mjs` / `site/src/aux.ts`.
+  - Evidence: `pnpm --filter @kovojs/site run build`; generated
+    `site/dist/guides/auth-better-auth/index.html` contains the markdown alternate link and visible
+    mirror link for `/guides/auth-better-auth.md`.
+- [x] Emit context-budget-sized llms tiers from `site/scripts/llms.mjs`: e.g. `llms-guides.txt`
+      (guides + getting-started + tutorial, no SPEC) and `llms-api.txt`; list the tiers with byte
+      sizes in `llms.txt`. Today the only options are the 17KB index and the 2.17MB everything-file
+      (~550K tokens — bigger than most agent contexts, and it embeds the 286KB SPEC).
+  - Evidence: `site/dist/llms.txt` lists `/llms-guides.txt` and `/llms-api.txt` with byte sizes;
+    both generated tier files include selected page corpora and omit SPEC.
+- [x] Add `_headers` entries for the agent files: content-type `text/markdown; charset=utf-8`
+      (or text/plain for .txt), `X-Content-Type-Options: nosniff`, and a cache policy for
+      `/llms*.txt`, `/spec.md`, and the `/**/*.md` mirrors. Currently safe only because
+      `serve-static.mjs` hardcodes the type; any `_headers`-honoring host serves them untyped.
+  - Evidence: `site/dist/_headers` covers `/llms*.txt`, `/spec.md`, `/kovo-rules.md`, and
+    `/**/*.md` with content type, nosniff, and cache policy.
+- [x] Add `robots.txt` (with a `Sitemap:` line and a comment pointing at `/llms.txt` and
+      `/llms-full.txt`) and `sitemap.xml`, emitted from `site/src/aux.ts` alongside the existing
+      artifacts. Discovery currently rests on one footer link plus community convention.
+  - Evidence: `site/dist/robots.txt` points at `/llms.txt`, `/llms-full.txt`, and
+    `/sitemap.xml`; `site/dist/sitemap.xml` is generated by `site/src/aux.ts`.
+- [x] Stamp llms artifacts with a version line (`Version: @kovojs <ver> (<commit>)`) passed into
+      the build — `llms.mjs` is deliberately deterministic, so thread the value in as an input
+      rather than reading git at emit time. Lets an agent tell whether its cached corpus matches the
+      installed framework.
+  - Evidence: `site/dist/llms.txt`, `site/dist/llms-guides.txt`, `site/dist/llms-api.txt`, and
+    `site/dist/llms-full.txt` contain `Version: @kovojs 0.1.3 (unknown)` from build input.
+- [x] Snippet provenance for reference-app symbols (same rule as P1 item 1; the agent sweep hit
+      it independently: testing.md/routing.md snippets lean on undefined commerce symbols with no
+      file pointer, forcing exactly the guessing the mirrors otherwise eliminate).
+  - Evidence: `site/scripts/code-snippets-check.mjs` requires `// Source: <path>` for reference-app
+    symbols on the strict docs surface; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site test -- code-snippets-check.test.mjs`.
 
 ## P4 — Per-guide enrichment backlog (top adds per page)
 
@@ -552,7 +635,7 @@ checkboxes when a page is picked up. Format: what to add — the API/contract �
   `until`/`renderOnce` cadences); per-element params (`data-p-*` from render → typed
   `ctx.params` — the list-item handler pattern, asserted but never demonstrated); what
   `isomorphic: true` actually does and costs (offered twice as a KV420/KV311 fix, never
-  explained); `renderOnce` being compiler-recognized *by name* — state it as the contract;
+  explained); `renderOnce` being compiler-recognized _by name_ — state it as the contract;
   unit-testing handlers/derives as plain functions.
 - **streaming**: the authoring API for streaming mutations — `mutation({ stream: (ctx) => ... })`
   (`packages/server/src/mutation/definition.ts:325-327`) with `stream.text/fragment/query/done`
@@ -615,7 +698,7 @@ checkboxes when a page is picked up. Format: what to add — the API/contract �
   for dynamic values, real mechanics for the "co-located raw CSS" section (currently
   unactionable), and a Run it (find the extracted CSS in the build).
 - **accessibility**: keyboard-interaction proofs — roving tabindex, arrow-key nav, focus
-  trap/return are *already proven* by the interactions suites but never claimed (axe can't test
+  trap/return are _already proven_ by the interactions suites but never claimed (axe can't test
   keyboard; this is the strongest evidence on the shelf); a "what axe-clean does not prove"
   honesty section (contrast under custom themes, screen readers, focus order); a self-serve
   audit recipe (render a route with the `@kovojs/test` page harness into a Vitest browser test,
@@ -680,7 +763,7 @@ checkboxes when a page is picked up. Format: what to add — the API/contract �
   `StaticExportResult`; one concrete `staticPaths` example; define L0/L1 at first use; the
   successful-export output tree (P1 Run it).
 - **layouts**: layout-declared stylesheets/head hints (`LayoutDefinition extends
-  PageHintOptions`); the payoff of layout queries (layouts become live targets, `kovo-layout-N`
+PageHintOptions`); the payoff of layout queries (layouts become live targets, `kovo-layout-N`
   stamps); render-less guard-only segments (`render` optional); the boundary status table
   (shared with the P2 error-handling guide); `access` posture on layouts; explain what the
   `state: undefined` second render arg is and why v1 authors ignore it.

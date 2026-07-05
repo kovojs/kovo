@@ -73,19 +73,40 @@ await exportStaticApp(app, options);
 Set `onNonExportable: 'skip'` only when the deploy intentionally mixes exported pages with server
 routes. The skipped paths are still review evidence; do not hide them in a generic site script.
 
-## Checks to run
+## Run it
 
-The site export path exercises the same route data as the Kovo app:
+Export one app, then inspect the output tree and the exporter report:
 
 ```sh
-pnpm --filter @kovojs/site run build
-pnpm --filter @kovojs/site run check:links
-pnpm --filter @kovojs/site run smoke:navigation
+kovo export ./src/app.tsx --out dist/static --origin https://example.com
+ls -R dist/static
 ```
 
-For app projects, pair static export with the graph checks from [Testing with @kovojs/test](/guides/testing/)
-and [Reading kovo check & kovo explain](/guides/kovo-explain/). If a route cannot be replayed
-faithfully, keep it on the server path.
+You should see HTML files, static assets, and immutable `/c/__v/` modules only for the routes the
+exporter proved safe to replay.
+
+## Checks to run
+
+For an app project, run the exporter itself in CI:
+
+```sh
+kovo export ./src/app.tsx --origin https://example.com
+```
+
+That command is the exportability gate. It exits non-zero when a route cannot be replayed faithfully
+or when earlier app diagnostics already block the build. Add your own link checker only after the
+export succeeds. Any third-party HTML link checker is fine; Kovo does not ship one for app projects.
+
+## Handle failure
+
+The main export failure is the one you should surface verbatim in CI:
+
+```txt
+ERROR KV229 Route "/account" is not exportable because it depends on request-time auth or session state.
+```
+
+If the build intentionally mixes exported pages with server routes, rerun with
+`--skip-non-exportable` and review the skipped-path report as part of the deploy.
 
 ## Next
 
@@ -99,5 +120,7 @@ faithfully, keep it on the server path.
 Static export through the request shell, L0/L1 limits, guarded/session-dependent route constraints,
 param path enumeration, and KV229: SPEC §9.5. Prior immutable module retention and KV417:
 SPEC §14. The MPA degradation contract: SPEC §8.
+
+API reference: [@kovojs/server](/api/server/).
 
 </details>

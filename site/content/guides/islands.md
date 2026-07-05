@@ -160,12 +160,30 @@ the ladder: extract a derive, lower to a CSS/attribute toggle, make the componen
 fragment target, or mark `isomorphic: true` (lint-gated escape hatch for logic beyond paths/derives/
 keyed lists).
 
+## Run it
+
+Render the page, then inspect both source and the live DOM:
+
+1. Use View Source to confirm the server sent `on:*` handler refs and a `kovo-state` stamp.
+2. Click the toggle and watch the same element flip in the Elements panel without a full re-render.
+
+That is the whole L1 contract: stamped HTML first, then a small handler module on first touch.
+
 ## Handle time-dependent UI
 
 Relative time, countdowns, and expiring badges need a cadence. Do not call `Date.now()` or
-`new Date()` inside a derive. Component-level clock declarations are not a shipped app-authoring
-option yet, so use query refresh for server truth and keep purely presentational ticking inside a
-small client handler.
+`new Date()` inside a derive. Component definitions accept a `clocks` field for named `now.*`
+inputs, so declare the cadence once and let the compiler thread that time source into derives:
+
+```tsx
+export const RelativeTimestamp = component({
+  clocks: { ago: { every: '30s' } },
+  render: ({ now }) => <time>{formatRelative(now.ago)}</time>,
+});
+```
+
+Use query refresh when the value itself is server truth; use `clocks` when the rendered position is
+time-dependent but local presentation can tick from the declared cadence.
 
 For time-dependent query data, put the cadence on the query binding so Kovo knows when to ask the
 server for fresh truth:
@@ -292,15 +310,18 @@ inside another component's server-refreshable target. Use one of the explicit fi
 This is why the mutations guide says fragments preserve browser state but not nested island-local
 state. The boundary keeps fragment responses fully describable by the server.
 
-## The loader and the 8KB budget
+## The loader and the 10,500-byte budget
 
-One inline script — capped at **8KB gzip** — is the entire always-loaded path. It does event
-delegation (capture phase) for all `on:*` events and triggers, resolves `url#export` and `import()`s
-the handler module on first touch, owns each island's `AbortSignal`, runs the update plan on
-state/query change, hydrates `<kovo-query>` data, and applies morphs. Nothing else lives in the
-always-loaded path; handler and derive modules are fetched lazily, per island, on first interaction.
-Enhanced navigation code counts against the same 8KB budget — it is not allowed to grow it without
-explicit SPEC evidence.
+The always-loaded bootstrap is capped at **10,500 gzip bytes**. That inline bootstrap owns the
+first-touch capture path: it catches eligible clicks/submits, safely queues or falls back while the
+runtime loads, promotes deferred styles, and imports the versioned deferred runtime module.
+
+The deferred runtime module is outside that first-paint byte cap. It owns the heavier work:
+delegation for the full `on:*` surface, trigger wiring, query hydration/refetch, mutation response
+application, morphing, and enhanced navigation.
+
+Handler modules and derives are still fetched lazily, per island, on first interaction. The
+compiler derives the exact module URL and exported symbol name from the component and event site.
 
 ## Next
 
@@ -312,15 +333,18 @@ explicit SPEC evidence.
 <summary>Spec & diagnostics</summary>
 
 Component anatomy, `state` / `JsonValue`, and the query-vs-local-state split: SPEC §4.1. Handler
-lowering and capture channels: SPEC §4.3. The 8KB loader: SPEC §4.4. Execution triggers
+lowering and capture channels: SPEC §4.3. The 10,500-byte bootstrap plus deferred runtime split:
+SPEC §4.4 and §8. Execution triggers
 (`on:visible`/`on:idle`/`on:load`): SPEC §4.7. The update plan (bindings, derives, stamps): SPEC §4.8.
 Update coverage exhaustiveness: SPEC §4.9. The Interaction Ladder and cross-island coordination order:
 SPEC §7. Server-refreshable fragment targets and KV420: SPEC §4.5 and §9.1. Server fact in local
 state is **KV301**; unserializable closure capture is **KV201**;
 hand-written stamp disagreement is **KV222**, redundant stamp is **KV223**; `on:load` without
 justification is **KV211**; an uncovered query/state-dependent position is **KV311**. Time-dependent
-rendered positions and derives require
-query `.refresh({ every | at | until })`, or an app-local `renderOnce` helper: SPEC §4.8 and §4.9;
-missing cadence is **KV312**, and raw clock reads in derives are **KV315**.
+rendered positions and derives require declared `clocks`, query `.refresh({ every | at | until })`,
+or an app-local `renderOnce` helper: SPEC §4.1, §4.8, and §4.9; missing cadence is **KV312**, and
+raw clock reads in derives are **KV315**.
+
+API reference: [@kovojs/browser](/api/browser/), [@kovojs/core](/api/core/).
 
 </details>

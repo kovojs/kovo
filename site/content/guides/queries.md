@@ -15,12 +15,13 @@ components that depend on the query after a matching write commits.
 Load through `context.db`. That handle is the framework-managed read handle for loaders.
 
 ```ts
+// Source: examples/commerce/src/queries.ts
 import { publicAccess, query, s } from '@kovojs/server';
 
 const cartSummaryDefinition = {
   access: publicAccess('cart badge is visible to anonymous shoppers'),
   output: s.object({ count: s.number() }),
-  load: async (_input, context?: { db?: any }): Promise<{ count: number }> => {
+  load: async (_input, context): Promise<{ count: number }> => {
     const rows = (await context?.db.select({ quantity: cartItems.quantity }).from(cartItems)) ?? [];
     return { count: rows.reduce((total, row) => total + row.quantity, 0) };
   },
@@ -56,38 +57,52 @@ The rendered page carries the query value and the dependency stamp:
 
 The stamp is what lets a mutation response target the right fragments without a client cache.
 
+## Run it
+
+Load the page, then use View Source instead of the Elements panel. You should see both the stamped
+HTML and the serialized query payload the server sent for first paint:
+
+```html
+<span kovo-deps="cartSummary">Cart: <span data-bind="cart.count">2</span></span>
+<script type="application/json" kovo-query="cartSummary">
+  { "count": 2 }
+</script>
+```
+
+That pairing is the proof moment: the visible text and the hydration frame came from the same query.
+
 ## Let writes refresh it
 
 On the Drizzle path, invalidation comes from the SQL that actually runs:
 
 ```ts
+// Source: examples/commerce/src/domain.ts
+const commitAddToCartRows = async (_db: unknown, _input: unknown) => {};
+
 export const addToCart = mutation({
   access: publicAccess('demo cart mutation'),
   csrf: cartCsrf,
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
+  registry: { touches: [cart, product] },
   async handler(input, request) {
-    await request.db.insert(cartItems).values({
-      productId: input.productId,
-      quantity: input.quantity,
-    });
-    await request.db
-      .update(products)
-      .set({ stock: sql`${products.stock} - ${input.quantity}` })
-      .where(eq(products.id, input.productId));
+    await commitAddToCartRows(request.db, input);
     return { ok: true };
   },
 });
 ```
 
-The analyzer sees writes to `cartItems` and `products`. It maps those tables through the schema's
-`kovo({ domain })` annotations, intersects them with visible query read sets, and reruns the stale
-queries after the transaction commits.
+The write still goes through a named helper. `kovo check` reads those helper writes, maps the tables
+through the schema's `kovo({ domain })` annotations, intersects them with visible query read sets,
+and reruns the stale queries after the transaction commits.
 
 ## Declare opaque writes
 
 If the analyzer cannot see the tables, declare the mutation registry facts explicitly:
 
 ```ts
+// Source: examples/commerce/src/domain.ts
+const mergeCartRows = async (_db: unknown, _cartId: string) => {};
+
 export const mergeCart = mutation({
   access: publicAccess('demo cart merge mutation'),
   csrf: cartCsrf,
@@ -97,28 +112,49 @@ export const mergeCart = mutation({
     touches: [cart],
   },
   async handler(input, request) {
-    await request.db.execute(sql`/* merge CTE for ${input.cartId} */`);
+    await mergeCartRows(request.db, input.cartId);
     return { ok: true };
   },
 });
 ```
 
-`tables` is the raw-SQL table allowlist. `touches` is the domain set to invalidate if the write is
-opaque.
+`tables` is the helper's raw-SQL table allowlist. `touches` is the domain set to invalidate if the
+write is opaque.
 
 ## Check the graph
 
-Run the data-plane check before you ship:
+Run the graph check before you ship:
 
 ```sh
-vp check
+kovo check
 ```
 
-The check fails if a loader reads an exempt table, if an opaque projection omits `reads`, or if a
-mutation write cannot be matched to static Drizzle analysis or declared registry facts.
+That is the command that reports the data-plane graph verdict for opaque reads, exempt-table reads,
+and opaque writes. Keep `vp check` in CI for type/lint wiring, but use `kovo check` when you want
+the graph result itself.
+
+## Handle failure
+
+There are two common failure classes on this surface:
+
+- A loader that can fail at runtime should render a deliberate error state in the component that owns
+  it, not an empty value that looks like success.
+- A loader whose dataflow facts are missing fails under `kovo check` before deploy.
+
+Those diagnostics are the ones you fix first:
+
+```txt
+ERROR KV410 productQuery Opaque projection requires an output schema.
+ERROR KV411 auditLogQuery Query reads from exempt table "audit_log".
+```
+
+Add `output` when the query shape is not inferable, and add `reads` only when the SQL path is
+opaque enough that the analyzer cannot see the read set directly.
 
 ## Next
 
+- [Pagination](/guides/pagination/) - keep one held list instance and append only the new rows.
+- [Caching](/guides/caching/) — make a public typed read cacheable and verify the headers.
 - [Data layer](/guides/data-layer/) — annotate tables and understand Drizzle extraction.
 - [Mutations & forms](/guides/mutations/) — post forms and return fresh fragments.
 
@@ -127,7 +163,9 @@ mutation write cannot be matched to static Drizzle analysis or declared registry
 
 Queries: SPEC §10.2 and §9.4. Access decisions: SPEC §10.2 default-deny access decisions and KV436.
 Opaque reads: KV410. Exempt table reads: KV411. Opaque writes: SPEC §10.3 and KV406. Direct
-write-capable DB access in app-authored request code is tracked by KV330 where the static data-plane
-gate owns that boundary.
+mutation-handler writes are tracked by KV330: "Direct db access in a mutation handler; route through
+domain."
+
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
 
 </details>

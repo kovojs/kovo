@@ -16,6 +16,7 @@ A `route()` couples a literal path, optional param/search schemas, per-route con
 function. From the CRM reference app's parameterized detail route:
 
 ```tsx
+// Source: examples/crm/src/app.tsx
 import { route, s } from '@kovojs/server';
 
 export const dealDetailRoute = route('/deals/:id', {
@@ -33,6 +34,7 @@ export const dealDetailRoute = route('/deals/:id', {
 Singleton routes look the same without the param schema. From the commerce app:
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 export const commerceHomeRoute = route('/', {
   meta: { description: 'Browse products and checkout.', title: 'Kovo Commerce' },
   layout: CommerceCartLayout,
@@ -46,6 +48,7 @@ export const commerceHomeRoute = route('/', {
 Routes are registered on the closed `createApp()` aggregate the request shell owns:
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 const app = createApp({
   routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
   mutations: [addToCart, commerceSignIn, commerceSignOut],
@@ -137,6 +140,7 @@ redirect (declaring a `search` schema is the typed form; reading `context.search
 here, is what you do when a param is loosely shaped):
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 export const commerceLoginRoute = route('/login', {
   page(context) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
@@ -155,6 +159,18 @@ const f = form.get('/products');
 </f.Form>;
 // ✗ compile error: a field name not in the route's search schema
 ```
+
+## Run it
+
+Scaffold one route, then hit both canonical and non-canonical URLs:
+
+```sh
+curl -i http://localhost:3000/products
+curl -i http://localhost:3000/products/
+```
+
+The first response is the page itself. The second shows the trailing-slash normalization the route
+table owns: a `308` redirect to the canonical path before the page code runs.
 
 ## Typed links and `href()`
 
@@ -209,9 +225,10 @@ Returning `notFound()` from `page` renders the app's 404 shell with the correct 
 codes stay part of the typed surface rather than hand-constructed responses:
 
 ```tsx
+// Source: examples/crm/src/app.tsx
 export const dealDetailRoute = route('/deals/:id', {
   params: s.object({ id: s.string() }),
-  page({ params }, req: { db: any }) {
+  page({ params }, req) {
     const deal = loadDeal(req.db, params.id);
     if (!deal) return notFound(); // → app 404 shell, status 404
     return <DealDetailRegion deal={deal} />;
@@ -230,9 +247,11 @@ routes with params, guards, route validation, and the audits applied. See
 refines `req.session` identically — so `req.session.user` is non-null inside the page under `authed`:
 
 ```tsx
+import { guards, route, s } from '@kovojs/server';
+
 export const productRoute = route('/products/:id', {
   params: s.object({ id: s.string() }),
-  guard: authed(),
+  guard: guards.authed(),
   page({ params }, req: { session: { user: { id: string } } }) {
     // req.session.user is non-null here, refined by the guard
     return <ProductPage id={params.id} owner={req.session.user.id} />;
@@ -240,18 +259,18 @@ export const productRoute = route('/products/:id', {
 });
 ```
 
-The reference app guards routes with the same combinators it uses on mutations — `authed<Req>()` for
-"signed in" and `role<Req>('admin')` for authorization:
+The reference app guards routes with the same combinators it uses on mutations — `guards.authed()`
+for "signed in" and `guards.role('admin')` for authorization:
 
 ```tsx
 export const accountRoute = route('/account', {
-  guard: authed<ReferenceRequest>(),
+  guard: guards.authed(),
   page(_in, req) {
     /* req.session.user typed */
   },
 });
 export const adminRoute = route('/admin', {
-  guard: role<ReferenceRequest>('admin'),
+  guard: guards.role('admin'),
   page(_in, req) {
     /* … */
   },
@@ -323,7 +342,7 @@ credentialed prerender is safe:
 
 ```tsx
 export const accountOverviewRoute = route('/account', {
-  guard: authed(),
+  guard: guards.authed(),
   prefetch: 'moderate',
   prefetchJustification: 'Read-only account chrome; no analytics or write effects during render.',
   page: AccountOverviewPage,
@@ -334,9 +353,11 @@ Without that justification, `vp check` reports KV419.
 
 </details>
 
-All three count against the inline loader's 8KB gzip budget and must not break bfcache (no `unload`
-handlers). Navigation partials are not a v1 protocol: enhanced navigation uses the full target
-document as its oracle, and app TSX never authors navigation segment stamps or persistence policy.
+Only bootstrap code that ships in the always-loaded inline path counts against the 10,500-byte gzip
+budget; the deferred runtime implementation of navigation is intentionally outside that cap. None of
+it may break bfcache (no `unload` handlers). Navigation partials are not a v1 protocol: enhanced
+navigation uses the full target document as its oracle, and app TSX never authors navigation segment
+stamps or persistence policy.
 
 ## Next
 
@@ -358,5 +379,7 @@ matching, and static export: SPEC §9.5. OG image URL-sink checking for `meta.im
 route is **KV220**; an ambiguous or duplicate route path is **KV228**; a route that cannot be
 statically exported as L0/L1 is **KV229**; a duplicate static view-transition name is **KV239**;
 unguarded credentialed prerender with `prefetch: 'moderate'` is **KV419**.
+
+API reference: [@kovojs/server](/api/server/).
 
 </details>

@@ -12,11 +12,32 @@ system and the graph checks, so your tests concentrate on what's left: handler l
 rendered HTML, and whether the invalidation graph is honest. `@kovojs/test` runs all of that without a
 browser.
 
+## Run it
+
+Run the suite that matches the question you are asking:
+
+```sh
+vp test
+pnpm test -- src/cart.mutation.test.ts
+```
+
+For a graph-backed assertion, build first so the CLI has an artifact to read, then point at it
+explicitly or rely on discovery:
+
+```sh
+kovo build ./src/app.ts
+kovo explain mutation cart/add --optimistic dist/.kovo/graph.json
+```
+
+The graph artifact rules are the same ones the CLI guide documents in
+[Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
+
 ## Run mutations as functions
 
 `@kovojs/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
 
 ```ts
+// Source: examples/commerce/src/app-test-helpers.ts
 import { createKovoTestHarness } from '@kovojs/test/harness';
 
 const harness = createKovoTestHarness({
@@ -52,6 +73,7 @@ This is the app-level harness shape to use when you want function-level mutation
 separate integration suite for it. The `kovoTest` wrapper packages the same thing as named cases:
 
 ```ts
+// Source: examples/commerce/src/app.add-to-cart.test.ts
 import { kovoTest } from '@kovojs/test/test-case';
 import { it } from 'vitest';
 
@@ -93,7 +115,7 @@ await db.exec(`create table cart_items (product_id text, qty int, unit_price int
 await db.write('cart_items', { product_id: 'p1', qty: 2, unit_price: 1499 });
 
 const rows = await db.read('cart_items');
-const totals = await db.sql(`select sum(qty * unit_price) as total from cart_items`);
+const totals = await db.query(`select sum(qty * unit_price) as total from cart_items`);
 
 await db.close();
 ```
@@ -113,8 +135,17 @@ and enforces the invariant that makes the invalidation story honest:
 > is a CI failure.
 
 You turn it on by giving the harness the committed touch graph and the table→domain mapping (the
-`touchGraph` and `verification` options above). Every `exec` is then touch-checked: a write to a
-table whose domain the static graph doesn't list for that mutation fails the test. After a run:
+`touchGraph` and `verification` options above). By default the verifier checks observed writes
+against the whole touch graph; when you need mutation-specific coverage in a shared harness, pass the
+matching `touchGraphKey` on `exec`. Then a write to a domain outside that scoped entry fails the
+test. After a run:
+
+In app repos, that touch graph normally comes from a prior `kovo build` at `dist/.kovo/graph.json`,
+copied into the test fixture shape your harness expects.
+
+```ts
+await harness.exec(addToCart, { productId: 'p1', quantity: 2 }, { touchGraphKey: 'cart.addItem' });
+```
 
 ```ts
 expect(harness.verificationDiagnostics()).toEqual([]);
@@ -206,5 +237,7 @@ SPEC §6.3. The `observed ⊆ static ∪ declared` invariant and read-side shape
 The KV402–KV410 verification family: SPEC §11.3; manual touches at an opaque write are **KV406**; a
 query reading an `exempt` table is **KV411** (SPEC §10.1); `exempt` tables and the read/write rules:
 SPEC §10.1.
+
+API reference: [@kovojs/test](/api/test/).
 
 </details>

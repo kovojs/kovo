@@ -79,6 +79,19 @@ The generated route IR, live-target registry, and client-module registry are bui
 by the compiler integration. Do not point app config into `src/generated/*`; the authored app entry
 is ordinary TSX/TS.
 
+## Run it
+
+Start the app and hit one route from each dispatch tier:
+
+```sh
+curl -i http://localhost:3000/_q/cart
+curl -i http://localhost:3000/c/__v/dev/cart-badge.client.js
+curl -i http://localhost:3000/cart
+```
+
+The point is to see the shell's fixed dispatch order in real responses: typed reads under `/_q/`,
+immutable client modules under `/c/__v/`, then the route table for document requests.
+
 ## Dispatch order
 
 Dispatch is fixed and printable:
@@ -142,6 +155,7 @@ objects inside route/query/mutation logic.
 
 ## Next
 
+- [Error handling](/guides/error-handling/) — decide which failures stay local and which change the whole shell.
 - [Deployment](/guides/deployment/) — serving the shell and retaining prior artifacts.
 - [Endpoints & webhooks](/guides/endpoints-webhooks/) — raw machine ingress in the dispatch table.
 - [Security & authorization](/guides/security/) — guards and audits over the shell surfaces.
@@ -154,5 +168,7 @@ objects inside route/query/mutation logic.
 dispatch order, no middleware chain, document assembly, error shells, static export through the
 handler, and pre-dispatch 413/429 limits: SPEC §9.5. Mutation lifecycle after pre-dispatch:
 SPEC §10.3. Endpoint audit enrollment for the coarse limiter: SPEC §11.4.
+
+API reference: [@kovojs/server](/api/server/).
 
 </details>

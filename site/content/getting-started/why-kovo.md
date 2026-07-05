@@ -59,6 +59,7 @@ Orders are owned by `userId`, so this loader is already scoped to the caller. Th
 in the query, and it doesn't need one:
 
 ```ts
+// Source: examples/commerce/src/queries.ts
 orders = pgTable(
   'orders',
   {
@@ -69,7 +70,7 @@ orders = pgTable(
 
 const orderHistory = query({
   guard: guards.authed(),
-  load: (_input, context: { db: any }) => context.db.select().from(orders), // returns only the caller's orders
+  load: (_input, context) => context.db.select().from(orders), // returns only the caller's orders
 });
 ```
 
