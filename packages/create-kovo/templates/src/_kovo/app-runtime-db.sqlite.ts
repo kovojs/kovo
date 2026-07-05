@@ -12,6 +12,7 @@ import {
   declareSecretReadCapability,
   type KovoSqliteAppRuntimeDb,
 } from '@kovojs/server';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { getTableConfig } from 'drizzle-orm/sqlite-core';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
@@ -109,6 +110,14 @@ const appDatabase = createAppRuntimeDb();
 /** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */
 export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb;
 export const appRuntimeDbReady: Promise<void> = appDatabase.ready;
+
+/**
+ * Framework-owned auth adapter factory. The SQLite DB value remains module-private to the
+ * generated runtime module, matching the Postgres auth wiring capability boundary.
+ */
+export function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
+  return drizzleAdapter(appDatabase.db, { provider: 'sqlite', schema: schema.authSchema });
+}
 
 /** Framework construction/auth adapter hook; do not import this into endpoint/webhook/task code. */
 export function appRuntimeDbProvider(request?: unknown): AppDb {

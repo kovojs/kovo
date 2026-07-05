@@ -306,6 +306,10 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('getAppDatabase().systemDb({');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'export function createAuthAdapter(): ReturnType<typeof drizzleAdapter>',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('export const appRuntimeAuthDb');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function appRuntimeDbProvider(request?: unknown): AppDb',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('__kovoStarterAppDatabase');
@@ -326,11 +330,13 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/app.test.ts')).not.toContain('createAppDb');
     expect(files.get('src/app.test.ts')).toContain('{ db: readonlyAppDb, request: {} }');
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
-    expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("provider: 'pg'");
     expect(files.get('src/auth.ts')).toContain(
-      "import { appRuntimeAuthDb } from './_kovo/app-runtime-db.js'",
+      "import { createAuthAdapter } from './_kovo/app-runtime-db.js'",
     );
-    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeAuthDb,');
+    expect(files.get('src/auth.ts')).toContain('database: createAuthAdapter(),');
+    expect(files.get('src/auth.ts')).not.toContain('appRuntimeAuthDb');
+    expect(files.get('src/auth.ts')).not.toContain('drizzleAdapter(');
     expect(files.get('src/auth.ts')).not.toContain('database: drizzleAdapter(appDb,');
     expect(files.get('README.md')).toContain('### Deploying to Postgres');
     expect(files.get('README.md')).toContain('kovo db generate');
@@ -401,6 +407,9 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
       'FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES',
+    );
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      "['src/auth.ts', new Set(['createAuthAdapter'])]",
     );
     expect(files.get('scripts/check-sound-subset.mjs')).toContain('SECURITY_SURFACE_FILES');
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
@@ -498,6 +507,21 @@ describe('create-kovo starter (metadata)', () => {
           stdio: 'pipe',
         }),
       ).not.toThrow();
+
+      writeFileSync(
+        join(root, 'src/auth.ts'),
+        readFileSync(join(root, 'src/auth.ts'), 'utf8').replace(
+          "import { createAuthAdapter } from './_kovo/app-runtime-db.js';",
+          "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
+        ),
+        'utf8',
+      );
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(/auth\.ts:.*bans non-type imports of src\/_kovo\/app-runtime-db/);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -889,11 +913,13 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/schema.ts')).not.toContain("text('createdAt')");
     expect(files.get('src/schema.ts')).not.toContain("text('expiresAt')");
     expect(files.get('src/schema.ts')).not.toContain('timestamp(');
-    expect(files.get('src/auth.ts')).toContain("provider: 'sqlite'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("provider: 'sqlite'");
     expect(files.get('src/auth.ts')).toContain(
-      "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js'",
+      "import { createAuthAdapter } from './_kovo/app-runtime-db.js'",
     );
-    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeDbProvider(),');
+    expect(files.get('src/auth.ts')).toContain('database: createAuthAdapter(),');
+    expect(files.get('src/auth.ts')).not.toContain('appRuntimeDbProvider()');
+    expect(files.get('src/auth.ts')).not.toContain('drizzleAdapter(');
     expect(files.get('src/auth.ts')).not.toContain('database: drizzleAdapter(appDb,');
     expect(files.get('README.md')).toContain('opt-in SQLite dialect');
     expect(files.get('README.md')).toContain('single-principal local-development');
@@ -1127,7 +1153,12 @@ describe('create-kovo starter (CLI)', () => {
     try {
       expect(main([root, '--sqlite', '--experimental-sqlite'])).toBe(0);
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
-      expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain("provider: 'sqlite'");
+      expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain(
+        'database: createAuthAdapter(),',
+      );
+      expect(readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8')).toContain(
+        "provider: 'sqlite'",
+      );
     } finally {
       stdout.mockRestore();
       rmSync(parent, { force: true, recursive: true });
@@ -1144,7 +1175,12 @@ describe('create-kovo starter (CLI)', () => {
       process.env.KOVO_EXPERIMENTAL_SQLITE = '1';
       expect(main([root, '--dialect=sqlite'])).toBe(0);
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
-      expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain("provider: 'sqlite'");
+      expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain(
+        'database: createAuthAdapter(),',
+      );
+      expect(readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8')).toContain(
+        "provider: 'sqlite'",
+      );
     } finally {
       if (previousOptIn === undefined) {
         delete process.env.KOVO_EXPERIMENTAL_SQLITE;

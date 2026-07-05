@@ -22,12 +22,12 @@ const SECURITY_SURFACE_FILES = new Set([
 ]);
 const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
   'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
-const RUNTIME_DB_IMPORT_ALLOWLIST = new Set([
-  'src/app.tsx',
-  'src/auth.ts',
-  'src/auth.sqlite.ts',
-  'src/db.ts',
-  'src/db.sqlite.ts',
+const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
+  ['src/app.tsx', new Set(['appRuntimeDbProvider', 'appRuntimeDbReady'])],
+  ['src/auth.ts', new Set(['createAuthAdapter'])],
+  ['src/auth.sqlite.ts', new Set(['createAuthAdapter'])],
+  ['src/db.ts', new Set(['appRuntimeReadonlyDb'])],
+  ['src/db.sqlite.ts', new Set(['appRuntimeReadonlyDb'])],
 ]);
 const RUNTIME_DB_IMPORT_MESSAGE =
   'SPEC.md §6.6 sound subset bans non-type imports of src/_kovo/app-runtime-db outside framework-owned starter files';
@@ -216,14 +216,13 @@ function reportTrustSinkCalleeIfNeeded(ts, call, sourceFile, relativeFile, bindi
 }
 
 function reportRuntimeDbImportIfNeeded(ts, node, sourceFile, relativeFile) {
-  if (runtimeDbImportsAllowed(relativeFile)) return;
-
   if (ts.isImportDeclaration(node)) {
     const specifier = stringLiteralText(ts, node.moduleSpecifier);
     if (
       specifier &&
       isRuntimeDbModuleSpecifier(relativeFile, specifier) &&
-      !isTypeOnlyImportDeclaration(ts, node)
+      !isTypeOnlyImportDeclaration(ts, node) &&
+      !isAllowedRuntimeDbImport(ts, node, relativeFile)
     ) {
       reportTypeScriptFinding(
         sourceFile,
@@ -555,8 +554,18 @@ function reportTypeScriptFinding(sourceFile, relativeFile, node, message) {
   findings.push(`${relativeFile}:${line + 1}: ${message}`);
 }
 
-function runtimeDbImportsAllowed(relativeFile) {
-  return RUNTIME_DB_IMPORT_ALLOWLIST.has(toPosixPath(relativeFile));
+function isAllowedRuntimeDbImport(ts, node, relativeFile) {
+  const allowed = RUNTIME_DB_IMPORT_ALLOWLIST.get(toPosixPath(relativeFile));
+  if (allowed === undefined) return false;
+  const clause = node.importClause;
+  if (!clause || clause.name) return false;
+  const bindings = clause.namedBindings;
+  if (!bindings || !ts.isNamedImports(bindings)) return false;
+  return bindings.elements.every((element) => {
+    if (element.isTypeOnly) return true;
+    const imported = element.propertyName?.text ?? element.name.text;
+    return allowed.has(imported);
+  });
 }
 
 function frameworkGeneratedSoundSubsetExempt(relativeFile) {
@@ -608,23 +617,40 @@ function analyzeWithScanner(source, relativeFile) {
 }
 
 function scanRuntimeDbImports(source, relativeFile) {
-  if (runtimeDbImportsAllowed(relativeFile)) return;
-
   const importPatterns = [
-    /^\s*import\s+(?!type\b)(?:[^'";]*?\s+from\s*)?['"]([^'"]+)['"]/gmsu,
-    /^\s*export\s+(?!type\b)[^'";]*?\s+from\s*['"]([^'"]+)['"]/gmsu,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
+    { kind: 'import', pattern: /^\s*import\s+(?!type\b)([^'";]*?\s+from\s*)?['"]([^'"]+)['"]/gmsu },
+    { kind: 'export', pattern: /^\s*export\s+(?!type\b)[^'";]*?\s+from\s*['"]([^'"]+)['"]/gmsu },
+    { kind: 'dynamic', pattern: /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu },
   ];
 
-  for (const pattern of importPatterns) {
+  for (const { kind, pattern } of importPatterns) {
     for (const match of source.matchAll(pattern)) {
-      const specifier = match[1];
+      const specifier = kind === 'import' ? match[2] : match[1];
       if (!specifier || !isRuntimeDbModuleSpecifier(relativeFile, specifier)) continue;
+      if (kind === 'import' && isAllowedRuntimeDbImportByScanner(match[1] ?? '', relativeFile)) {
+        continue;
+      }
       findings.push(
         `${relativeFile}:${lineNumberAt(source, match.index ?? 0)}: ${RUNTIME_DB_IMPORT_MESSAGE}`,
       );
     }
   }
+}
+
+function isAllowedRuntimeDbImportByScanner(importClause, relativeFile) {
+  const allowed = RUNTIME_DB_IMPORT_ALLOWLIST.get(toPosixPath(relativeFile));
+  if (allowed === undefined) return false;
+  const named = /^\s*\{\s*([^}]+?)\s*\}\s+from\s*$/su.exec(importClause);
+  if (!named) return false;
+  return named[1]
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .every((part) => {
+      if (part.startsWith('type ')) return true;
+      const imported = part.split(/\s+as\s+/u)[0]?.trim();
+      return imported !== undefined && allowed.has(imported);
+    });
 }
 
 function lineNumberAt(source, offset) {

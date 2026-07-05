@@ -4,6 +4,7 @@ import {
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresAppRuntimeOptions,
 } from '@kovojs/server';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import * as schema from '../schema.js';
 import type { AppDb, AppReadonlyDb } from '../db.js';
@@ -74,14 +75,21 @@ function lazyPromise<T>(load: () => Promise<T>): Promise<T> {
   } as Promise<T>;
 }
 
-/** Framework-owned auth adapter DB. RLS-subject system posture, not a raw superuser handle. */
-export const appRuntimeAuthDb: AppDb = lazyAppDatabaseValue(() =>
-  getAppDatabase().systemDb({
+function authAdapterDb(): AppDb {
+  return getAppDatabase().systemDb({
     operation: 'write',
     reason: 'Better Auth adapter manages session tables before an app session exists',
     surface: 'src/auth.ts',
-  }),
-);
+  });
+}
+
+/**
+ * Framework-owned auth adapter factory. The system DB remains module-private so auth code
+ * receives only Better Auth's narrowed adapter capability, never a raw AppDb value.
+ */
+export function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
+  return drizzleAdapter(authAdapterDb(), { provider: 'pg', schema: schema.authSchema });
+}
 
 /** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */
 export const appRuntimeReadonlyDb: AppReadonlyDb = lazyAppDatabaseValue(
