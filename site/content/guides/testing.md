@@ -12,6 +12,26 @@ system and the graph checks, so your tests concentrate on what's left: handler l
 rendered HTML, and whether the invalidation graph is honest. `@kovojs/test` runs all of that without a
 browser.
 
+## Run it
+
+Run the suite that matches the question you are asking:
+
+```sh
+vp test
+pnpm test -- src/cart.mutation.test.ts
+```
+
+For a graph-backed assertion, build first so the CLI has an artifact to read, then point at it
+explicitly or rely on discovery:
+
+```sh
+kovo build ./src/app.ts
+kovo explain mutation cart/add --optimistic dist/.kovo/graph.json
+```
+
+The graph artifact rules are the same ones the CLI guide documents in
+[Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
+
 ## Run mutations as functions
 
 `@kovojs/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
@@ -117,6 +137,9 @@ You turn it on by giving the harness the committed touch graph and the table→d
 against the whole touch graph; when you need mutation-specific coverage in a shared harness, pass the
 matching `touchGraphKey` on `exec`. Then a write to a domain outside that scoped entry fails the
 test. After a run:
+
+In app repos, that touch graph normally comes from a prior `kovo build` at `dist/.kovo/graph.json`,
+copied into the test fixture shape your harness expects.
 
 ```ts
 await harness.exec(addToCart, { productId: 'p1', quantity: 2 }, { touchGraphKey: 'cart.addItem' });

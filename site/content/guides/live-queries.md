@@ -65,6 +65,29 @@ status, presence, queues, dashboards, and collaborative review.
 Until that ships, make correctness depend on mutation responses, BroadcastChannel, and
 refetch-on-focus. Treat live transport as a freshness improvement, not the only path to server truth.
 
+## Run it
+
+Use two tabs on the same origin:
+
+1. Submit a mutation in tab A and watch the returned `<kovo-query>` or `<kovo-fragment>` truth apply
+   there immediately.
+2. Keep tab B open on the same page and watch the same-principal rebroadcast update it.
+3. Make tab B stale, switch away, then focus it again and watch the loader refetch over `/_q/`.
+
+That proves the shipped freshness story without any SSE transport.
+
+## Handle failure
+
+The failure posture is deliberate:
+
+- If a delta cannot apply or the build token does not match, the client falls back to a full refetch
+  over `/_q/` instead of merging unsafe state.
+- If the principal changes, the BroadcastChannel message is dropped and the old tab stops receiving
+  same-user updates.
+
+The user-visible result should always be one of two things: fresh server truth, or a refetch on the
+next safe path.
+
 ## Next
 
 - [Queries & invalidation](/guides/queries/) — instance keys, typed reads, and cache posture.

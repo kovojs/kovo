@@ -66,6 +66,17 @@ the request before the layout renders, just like route and mutation guards. Layo
 queries: they appear in `kovo explain page`, carry update plans, and observe the same cache and guard
 rules as page queries.
 
+## Run it
+
+Build the app, then ask the CLI for the resolved chain:
+
+```sh
+kovo build ./src/app.ts
+kovo explain page /account/settings --layouts dist/.kovo/graph.json
+```
+
+If you want the CLI's path-discovery rules, see [Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
+
 ## Render segment failures
 
 Use `boundaries` when a route segment needs its own 404, 403, or error body instead of the app-level

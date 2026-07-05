@@ -84,6 +84,12 @@ With the transform in place, the same command reports clean coverage:
 `OPTIMISTIC-SUMMARY ... UNHANDLED=0`, with one `OPTIMISTIC` line per invalidated query. The full
 annotated artifact lives in [reading kovo check & kovo explain](/guides/kovo-explain/#read-the-output).
 
+## Run it
+
+Open two tabs on the same page. Submit the mutation in tab A under throttled network conditions.
+You should see the optimistic state land immediately in A, then settle to server truth when the
+response arrives. Tab B stays unchanged until it gets real server truth from its own freshness path.
+
 A forgotten optimistic update is a visible, suppressible diagnostic with the suppression recorded in
 source. The same check runs one hop further down: every query-dependent DOM position needs a
 declared update status too.

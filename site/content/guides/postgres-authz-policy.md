@@ -141,6 +141,18 @@ ERROR: new row violates row-level security policy for table "team_documents"
 That failure is the point of the custom predicate path. The app can still run guards and typed
 mutation errors for a better user experience, but the database is the last line of defense.
 
+## Run it
+
+Provision once, then check with the app credential and a member/non-member seed:
+
+```sh
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_DATABASE_URL=postgres://app@db/app kovo db provision
+KOVO_DATABASE_URL=postgres://app@db/app kovo db check
+```
+
+Then run the two reads above. The member sees the row. The non-member gets zero rows, and a cross-team
+write fails at the RLS boundary.
+
 ## Know the boundary
 
 Kovo guarantees this table is enrolled in the authorization census, provisioned with forced RLS, and
@@ -149,6 +161,17 @@ covered by a present `kovo_authz_policy`. It also checks that posture before the
 Kovo does not prove that your predicate expresses the right business rule. If the predicate says
 "team members may edit archived documents," Kovo enforces that rule. If archived documents need a
 second condition, put that condition in the predicate and test it with member and non-member cases.
+
+## Handle failure
+
+The failure mode to show explicitly is the provision-time unsupported posture:
+
+```txt
+KV433_AUTHZ_POLICY_UNSUPPORTED team_documents authzPolicy must stay inside the supported SQL subset.
+```
+
+If you hit that, simplify the predicate to the supported shape or move the business rule into a
+reviewed database object the policy can reference directly.
 
 ## Next
 

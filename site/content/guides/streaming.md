@@ -88,6 +88,18 @@ The vocabulary is the mutation response's — `<kovo-query>` then `<kovo-fragmen
 render instead of after a POST. It reads top to bottom in view-source, like everything else on the
 wire.
 
+## Run it
+
+Use `curl -N` against a route with `priority="after-paint"`:
+
+```sh
+curl -N http://localhost:3000/products
+```
+
+You should see the shell and `<kovo-defer ... state="pending">` frame first, then the later
+`<kovo-query>` and `<kovo-fragment target="product-grid">` chunk. Change the boundary to
+`priority="critical"` and that split disappears because the region renders inline with the shell.
+
 ## Pick a priority
 
 `priority` controls whether a region renders in the shell or streams later:
@@ -239,6 +251,32 @@ The stream is one HTML response, so the no-JS story degrades the way the rest of
 the document still arrives and completes, and the fallback content is what a non-JS visitor keeps for
 deferred regions. Keep fallbacks honest — a meaningful placeholder or summary, not an empty box — for
 the same reason the no-JS form path stays a real form.
+
+## Handle failure
+
+Two failure cases should be obvious to the reader:
+
+- If the deferred work runs too long, put a real timeout on the boundary so the fallback can switch
+  to an error state instead of hanging forever.
+- If a late render fails, the placeholder should re-emit as `state="error"` with copy that tells the
+  user what failed and what they can retry.
+
+For example:
+
+```tsx
+import { Defer } from '@kovojs/server';
+
+<Defer
+  target="product-grid"
+  timeoutMs={30_000}
+  fallback={<section aria-busy="true">Loading products...</section>}
+  errorFallback={<section>Could not load products right now.</section>}
+  render={() => <ProductGrid />}
+/>;
+```
+
+The user-facing rule is simple: a partial stream may stay partial briefly, but it must resolve to
+server truth or to a visible failure state.
 
 ## Next
 

@@ -60,6 +60,16 @@ The served HTML is still a real form:
 No JavaScript path gets a different server contract. Enhancement only changes how the response is
 applied.
 
+## Run it
+
+Submit the form once with JavaScript disabled, then again with enhancement turned back on:
+
+1. Disable JavaScript in devtools and post the form. The browser does a full-page `POST` to
+   `/_m/cart/add-to-cart`, then lands on the redirected page with the updated cart.
+2. Re-enable JavaScript and submit again. In the network panel you now see the same mutation route
+   return a fragment response with fresh `<kovo-query>` or `<kovo-fragment>` frames instead of a full
+   document reload.
+
 ## Return typed failures
 
 Expected failures belong in the mutation contract:
@@ -144,7 +154,14 @@ declared `touches` domains conservatively.
 
 ## Handle failure
 
-If you write directly in the handler body, `kovo check` reports the real diagnostic:
+Two failures matter on the first pass:
+
+- Validation and business-rule failures should stay typed and visible in the form. Return
+  `context.fail(...)`, then bind the result with `<FormError>` or `<FieldError>` from `@kovojs/core`.
+- A successful no-JS submit should still take the POST-redirect-GET path. Return a typed
+  `redirect('/cart/:id', { params })`, or set `defaultRedirectTo` when the destination is fixed.
+
+If you write directly in the handler body, `kovo check` reports the graph diagnostic instead:
 
 ```txt
 ERROR KV330 cart.mutation.ts:12 Direct db access in a mutation handler; route through domain. handler addToCart receives db.

@@ -73,6 +73,18 @@ plan across bindings, named derives, and stamps.
 user-agent state survive where the morph algorithm can preserve them. `mode="append"` is the
 explicit append vocabulary for list pagination and streams.
 
+## Run it
+
+Submit one enhanced mutation with the network panel open. The request should carry the stamped target
+headers, and the response should be readable as text:
+
+1. `Kovo-Targets` and `Kovo-Live-Targets` show what the browser said was visible.
+2. The body comes back as `<kovo-query>` and `<kovo-fragment>` frames in the order the loader will
+   apply them.
+
+If you want the raw bytes, repeat the same submit with "Copy response" or with an HTTP client against
+the same mutation endpoint.
+
 ## Typed reads
 
 Every query instance is also addressable as a GET. The loader uses this endpoint for focus

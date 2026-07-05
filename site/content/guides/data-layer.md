@@ -120,6 +120,18 @@ export async function commitAddToCartRows(
 }
 ```
 
+## Run it
+
+Make one table annotation change, then one helper-write change, and run the graph gate:
+
+```sh
+vp check
+kovo check
+```
+
+The useful proof here is not a page click. It is the graph verdict changing when the read/write facts
+change: annotated tables and named helpers keep the invalidation map explainable.
+
 ## Declare opaque writes
 
 If the write hides its table set, declare the registry facts on the mutation:
