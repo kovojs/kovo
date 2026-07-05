@@ -151,12 +151,13 @@ to embedded PGlite when an external URL is present.
     branded/narrowed facade and a proof row.
   - Evidence: `pnpm run check:capability-surface-census` validates `scripts/capability-surface-census.manifest.json` rows and rejects generated raw auth/system DB exports.
 
-- [ ] **D2 — Capability use is explainable.** Any privileged facade use (`system`, auth adapter, cross-owner read,
+- [x] **D2 — Capability use is explainable.** Any privileged facade use (`system`, auth adapter, cross-owner read,
       secret read, trusted SQL, role topology opt-out) emits a capability fact. Absence from explain is a bug unless the
       capability is wholly module-private framework code with no app-authored call site.
   - Acceptance: `kovo explain --capabilities` prints auth adapter/system DB posture without exposing the handle, managed
     SQL trust sites, and external role topology; the dogfood secret endpoint would either fail build or print an
     unacceptable raw system capability row.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts --config ./vite.config.ts -t "held dangerous-capability"` passed with `authAdapterDb`, `systemDb`, `managedSqlStatement`, and `postgresRoleTopology` capability rows.
 
 ### DEC-E — SPEC and docs name the real boundaries
 
