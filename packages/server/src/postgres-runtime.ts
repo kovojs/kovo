@@ -42,7 +42,11 @@ const DEFAULT_SYSTEM_ROLE = 'kovo_system';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
-const FRAMEWORK_INTERNAL_REACHABLE_TABLES = new Set(['_kovo_jobs', '_kovo_task_cron_occurrences']);
+const FRAMEWORK_INTERNAL_REACHABLE_TABLES = new Set([
+  '_kovo_jobs',
+  '_kovo_task_cron_occurrences',
+  SCHEMA_STATE_TABLE,
+]);
 const POSTGRES_REACHABLE_RELATIONS_SQL = [
   'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
   'existing_roles AS (',
@@ -189,10 +193,6 @@ interface RuntimeSqlClient extends RuntimeTransactionClient {
 interface ResolvedPostgresRuntimeConfig {
   adminRole: string;
   adminDatabaseUrl?: string;
-  createReaderRole: boolean;
-  createAdminRole: boolean;
-  createSystemRole: boolean;
-  createWriterRole: boolean;
   crossOwnerReadTables: ReadonlySet<string>;
   dataDir: string;
   databaseUrl?: string;
@@ -203,11 +203,38 @@ interface ResolvedPostgresRuntimeConfig {
   provisionOnBoot: boolean;
   publicRelations: ReadonlyMap<string, KovoPostgresPublicRelationDeclaration>;
   readerRole: string;
+  roleTopology: PostgresRoleTopology;
   schema: Record<string, unknown>;
   seedSql: readonly string[];
   systemDatabaseUrl?: string;
   systemRole: string;
   writerRole: string;
+}
+
+type PostgresRolePurpose = 'admin' | 'reader' | 'system' | 'writer';
+type PostgresRoleManagement = 'adopt' | 'create';
+type PostgresMembershipEdgeOwner = 'dba' | 'kovo';
+
+interface PostgresRoleTopologyRole {
+  management: PostgresRoleManagement;
+  name: string;
+  purpose: PostgresRolePurpose;
+}
+
+interface PostgresRoleMembershipEdge {
+  memberRole: string;
+  owner: PostgresMembershipEdgeOwner;
+  role: string;
+}
+
+interface PostgresRoleTopology {
+  membershipEdges: readonly PostgresRoleMembershipEdge[];
+  roles: {
+    admin: PostgresRoleTopologyRole;
+    reader: PostgresRoleTopologyRole;
+    system: PostgresRoleTopologyRole;
+    writer: PostgresRoleTopologyRole;
+  };
 }
 
 interface PostgresRuntimeConfigInput extends KovoPostgresAppRuntimeOptions {
@@ -304,6 +331,11 @@ export interface KovoPostgresAppRuntimeOptions {
    * `kovo_admin`; only used when `crossOwnerReadTables` is non-empty.
    */
   adminRole?: string;
+  /**
+   * Role used by audited system work. Defaults to `KOVO_DB_SYSTEM_ROLE` or `kovo_system`.
+   * Supplying this option adopts a pre-created role instead of creating Kovo's default.
+   */
+  systemRole?: string;
   /** Physical owner/authz table names that should receive the per-table `kovo_admin_scope` policy. */
   crossOwnerReadTables?: readonly string[];
   /**
@@ -434,6 +466,35 @@ export interface KovoPostgresPostureReport {
   driver: KovoPostgresResolvedRuntimeDriver;
   ok: boolean;
   issues: readonly KovoPostgresPostureIssue[];
+  roleTopology: {
+    adminRole: {
+      management: 'adopt' | 'create';
+      name: string;
+      purpose: 'admin' | 'reader' | 'system' | 'writer';
+    };
+    membershipEdges: readonly {
+      memberRole: string;
+      owner: 'dba' | 'kovo';
+      role: string;
+      status: 'expected' | 'granted' | 'missing' | 'verified';
+    }[];
+    readerRole: {
+      management: 'adopt' | 'create';
+      name: string;
+      purpose: 'admin' | 'reader' | 'system' | 'writer';
+    };
+    runtimeLogin?: string;
+    systemRole: {
+      management: 'adopt' | 'create';
+      name: string;
+      purpose: 'admin' | 'reader' | 'system' | 'writer';
+    };
+    writerRole: {
+      management: 'adopt' | 'create';
+      name: string;
+      purpose: 'admin' | 'reader' | 'system' | 'writer';
+    };
+  };
 }
 
 /**
@@ -516,9 +577,11 @@ export async function provisionPostgresAppDb(
       schemaDdl: schemaDdl(schemaTables),
       schemaTables,
     });
+    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(options.runtimeDatabaseUrl);
     return await checkRuntimeDbPosture(client.sql, {
       config,
       metadata,
+      ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
       schemaTables,
     });
   } finally {
@@ -552,9 +615,11 @@ export async function migratePostgresAppDb(
       schemaDdl: schemaDdl(schemaTables),
       schemaTables,
     });
+    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(options.runtimeDatabaseUrl);
     const posture = await checkRuntimeDbPosture(client.sql, {
       config,
       metadata,
+      ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
       schemaTables,
     });
     return { ...migrations, posture };
@@ -610,6 +675,7 @@ export async function checkPostgresAppDbPosture(
           driver: config.driver,
           issues: [leastPrivilegeIssue],
           ok: false,
+          roleTopology: postgresRoleTopologyReport(config.roleTopology),
         };
       }
     }
@@ -682,11 +748,12 @@ async function provisionRuntimeDb(
     applied: [],
     skipped: [],
   };
+  const roleTopology = postgresRoleTopologyWithRuntimeLogin(
+    input.config.roleTopology,
+    input.runtimeLoginRole,
+  );
   await client.transaction(async (tx) => {
-    if (input.config.createAdminRole) await ensurePostgresRole(tx, input.config.adminRole);
-    if (input.config.createReaderRole) await ensurePostgresRole(tx, input.config.readerRole);
-    if (input.config.createSystemRole) await ensurePostgresRole(tx, input.config.systemRole);
-    if (input.config.createWriterRole) await ensurePostgresRole(tx, input.config.writerRole);
+    await ensurePostgresRoleTopology(tx, roleTopology);
     if (input.applySchemaDdl) await tx.exec(input.schemaDdl);
     migrationReport = await applyPostgresMigrations(tx, input.migrations);
     if (!input.applySchemaDdl) await assertPostgresSchemaTablesExist(tx, input.schemaTables);
@@ -712,7 +779,7 @@ async function provisionRuntimeDb(
       input.config,
     );
     await ensurePostgresSchemaStateTable(tx);
-    await grantPostgresRuntimeLoginRole(tx, input.config, input.runtimeLoginRole);
+    await grantPostgresRuntimeLoginRole(tx, roleTopology);
     for (const statement of input.config.seedSql) await tx.exec(statement);
   });
   return migrationReport;
@@ -723,10 +790,24 @@ async function checkRuntimeDbPosture(
   input: {
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
+    runtimeLoginRole?: string;
     schemaTables: readonly PgTable[];
   },
 ): Promise<KovoPostgresPostureReport> {
   const issues: KovoPostgresPostureIssue[] = [];
+  const runtimeLoginRole =
+    input.config.driver === 'node-postgres'
+      ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
+      : input.runtimeLoginRole;
+  if (input.config.driver === 'node-postgres') {
+    issues.push(
+      ...(await postgresRuntimeMembershipIssues(
+        client,
+        input.config.roleTopology,
+        runtimeLoginRole,
+      )),
+    );
+  }
 
   for (const relation of await missingPostgresSchemaTables(client, input.schemaTables)) {
     issues.push({
@@ -882,6 +963,10 @@ async function checkRuntimeDbPosture(
     driver: input.config.driver,
     issues,
     ok: issues.length === 0,
+    roleTopology: postgresRoleTopologyReport(
+      input.config.roleTopology,
+      runtimeLoginRole === undefined ? {} : { runtimeLogin: runtimeLoginRole },
+    ),
   };
 }
 
@@ -1717,7 +1802,22 @@ function resolvePostgresRuntimeConfig(
   const systemDatabaseUrl = options.systemDatabaseUrl ?? process.env.KOVO_DB_SYSTEM_URL;
   const envAdminRole = nonEmptyEnv('KOVO_DB_ADMIN_ROLE');
   const envReaderRole = nonEmptyEnv('KOVO_DB_READER_ROLE');
+  const envSystemRole = nonEmptyEnv('KOVO_DB_SYSTEM_ROLE');
   const envWriterRole = nonEmptyEnv('KOVO_DB_WRITER_ROLE');
+  const adminRole = options.adminRole ?? envAdminRole ?? DEFAULT_ADMIN_ROLE;
+  const readerRole = options.readerRole ?? envReaderRole ?? DEFAULT_READER_ROLE;
+  const systemRole = options.systemRole ?? envSystemRole ?? DEFAULT_SYSTEM_ROLE;
+  const writerRole = options.writerRole ?? envWriterRole ?? DEFAULT_WRITER_ROLE;
+  const roleTopology = resolvePostgresRoleTopology({
+    adminRole,
+    adminRoleAdopted: options.adminRole !== undefined || envAdminRole !== undefined,
+    readerRole,
+    readerRoleAdopted: options.readerRole !== undefined || envReaderRole !== undefined,
+    systemRole,
+    systemRoleAdopted: options.systemRole !== undefined || envSystemRole !== undefined,
+    writerRole,
+    writerRoleAdopted: options.writerRole !== undefined || envWriterRole !== undefined,
+  });
   const crossOwnerReadTables = normalizeStringSet(options.crossOwnerReadTables);
   const publicRelations = normalizePublicRelationDeclarations(options.publicRelations);
   const postureCheck = resolvePostgresPostureCheck(
@@ -1725,12 +1825,8 @@ function resolvePostgresRuntimeConfig(
     driver === 'node-postgres' && options.provisionOnBoot !== true,
   );
   const config: ResolvedPostgresRuntimeConfig = {
-    adminRole: options.adminRole ?? envAdminRole ?? DEFAULT_ADMIN_ROLE,
+    adminRole,
     ...(adminDatabaseUrl === undefined ? {} : { adminDatabaseUrl }),
-    createAdminRole: options.adminRole !== undefined || envAdminRole === undefined,
-    createReaderRole: options.readerRole !== undefined || envReaderRole === undefined,
-    createSystemRole: true,
-    createWriterRole: options.writerRole !== undefined || envWriterRole === undefined,
     crossOwnerReadTables,
     dataDir: options.dataDir ?? process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR,
     driver,
@@ -1739,12 +1835,13 @@ function resolvePostgresRuntimeConfig(
     principalFromRequest: options.principalFromRequest ?? principalFromRequest,
     provisionOnBoot: options.provisionOnBoot ?? driver === 'pglite',
     publicRelations,
-    readerRole: options.readerRole ?? envReaderRole ?? DEFAULT_READER_ROLE,
+    readerRole,
+    roleTopology,
     schema: options.schema,
     seedSql: normalizeSeedSql(options.seedSql),
     ...(systemDatabaseUrl === undefined ? {} : { systemDatabaseUrl }),
-    systemRole: DEFAULT_SYSTEM_ROLE,
-    writerRole: options.writerRole ?? envWriterRole ?? DEFAULT_WRITER_ROLE,
+    systemRole,
+    writerRole,
   };
   if (databaseUrl !== undefined) return { ...config, databaseUrl };
   return config;
@@ -2158,6 +2255,180 @@ async function ensurePostgresRole(client: RuntimeTransactionClient, role: string
   if (result.rows.length === 0) await client.exec(`CREATE ROLE ${quoteIdent(role)}`);
 }
 
+function resolvePostgresRoleTopology(input: {
+  adminRole: string;
+  adminRoleAdopted: boolean;
+  readerRole: string;
+  readerRoleAdopted: boolean;
+  systemRole: string;
+  systemRoleAdopted: boolean;
+  writerRole: string;
+  writerRoleAdopted: boolean;
+}): PostgresRoleTopology {
+  const roles = {
+    admin: postgresTopologyRole('admin', input.adminRole, input.adminRoleAdopted),
+    reader: postgresTopologyRole('reader', input.readerRole, input.readerRoleAdopted),
+    system: postgresTopologyRole('system', input.systemRole, input.systemRoleAdopted),
+    writer: postgresTopologyRole('writer', input.writerRole, input.writerRoleAdopted),
+  };
+  return {
+    roles,
+    membershipEdges: [],
+  };
+}
+
+function postgresTopologyRole(
+  purpose: PostgresRolePurpose,
+  name: string,
+  adopted: boolean,
+): PostgresRoleTopologyRole {
+  return {
+    management: adopted ? 'adopt' : 'create',
+    name,
+    purpose,
+  };
+}
+
+function postgresRoleTopologyWithRuntimeLogin(
+  topology: PostgresRoleTopology,
+  runtimeLoginRole: string | undefined,
+): PostgresRoleTopology {
+  if (runtimeLoginRole === undefined || runtimeLoginRole === '') return topology;
+  return {
+    ...topology,
+    membershipEdges: postgresRuntimeMembershipEdges(topology, runtimeLoginRole),
+  };
+}
+
+function postgresRuntimeMembershipEdges(
+  topology: PostgresRoleTopology,
+  runtimeLoginRole: string,
+): readonly PostgresRoleMembershipEdge[] {
+  return [topology.roles.reader.name, topology.roles.writer.name]
+    .filter((role) => role !== runtimeLoginRole)
+    .map((role) => ({
+      memberRole: runtimeLoginRole,
+      owner: 'kovo' as const,
+      role,
+    }));
+}
+
+async function preflightPostgresRoleTopology(
+  client: RuntimeTransactionClient,
+  topology: PostgresRoleTopology,
+): Promise<void> {
+  const adoptedRoles = Object.values(topology.roles).filter((role) => role.management === 'adopt');
+  if (adoptedRoles.length === 0) return;
+  const existing = await existingPostgresRoles(
+    client,
+    adoptedRoles.map((role) => role.name),
+  );
+  const missing = adoptedRoles.filter((role) => !existing.has(role.name));
+  if (missing.length === 0) return;
+  throw new Error(
+    [
+      'KV433_ROLE_TOPOLOGY: adopted Postgres roles must exist before provisioning (SPEC §10.3).',
+      `missing: ${missing.map((role) => `${role.purpose}Role=${role.name}`).join(', ')}`,
+      'Set KOVO_DB_READER_ROLE, KOVO_DB_WRITER_ROLE, KOVO_DB_ADMIN_ROLE, and KOVO_DB_SYSTEM_ROLE to pre-created roles, or allow Kovo to create its default roles.',
+    ].join(' '),
+  );
+}
+
+async function ensurePostgresRoleTopology(
+  client: RuntimeTransactionClient,
+  topology: PostgresRoleTopology,
+): Promise<void> {
+  await preflightPostgresRoleTopology(client, topology);
+  for (const role of Object.values(topology.roles)) {
+    if (role.management === 'create') await ensurePostgresRole(client, role.name);
+  }
+}
+
+async function existingPostgresRoles(
+  client: RuntimeTransactionClient,
+  roles: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (roles.length === 0) return new Set();
+  const result = await client.query<{ rolname: string }>(
+    'SELECT rolname FROM pg_roles WHERE rolname = ANY($1::text[])',
+    [roles],
+  );
+  return new Set(result.rows.map((row) => row.rolname));
+}
+
+async function postgresRuntimeMembershipIssues(
+  client: RuntimeTransactionClient,
+  topology: PostgresRoleTopology,
+  runtimeLoginRole: string | undefined,
+): Promise<KovoPostgresPostureIssue[]> {
+  const issues: KovoPostgresPostureIssue[] = [];
+  const rows = await safeQuery<{ can_reader: boolean; can_writer: boolean; runtime_login: string }>(
+    client,
+    [
+      'SELECT COALESCE($3::text, current_user) AS runtime_login,',
+      "(SELECT pg_has_role(COALESCE($3::text, current_user), reader.oid, 'USAGE') FROM pg_roles reader WHERE reader.rolname = $1) AS can_reader,",
+      "(SELECT pg_has_role(COALESCE($3::text, current_user), writer.oid, 'USAGE') FROM pg_roles writer WHERE writer.rolname = $2) AS can_writer",
+    ].join(' '),
+    [topology.roles.reader.name, topology.roles.writer.name, runtimeLoginRole ?? null],
+  );
+  const row = rows?.rows[0];
+  if (row === undefined) {
+    return [
+      {
+        code: 'KV433_ROLE_TOPOLOGY',
+        detail: 'could not verify runtime membership edges for reader/writer roles',
+      },
+    ];
+  }
+  for (const [purpose, role, ok] of [
+    ['reader', topology.roles.reader.name, row.can_reader],
+    ['writer', topology.roles.writer.name, row.can_writer],
+  ] as const) {
+    if (role === row.runtime_login || ok === true) continue;
+    issues.push({
+      code: 'KV433_ROLE_TOPOLOGY',
+      detail: `runtime login ${row.runtime_login} is missing membership in ${purpose}Role=${role}; grant ${quoteIdent(role)} to ${quoteIdent(row.runtime_login)} or run kovo db provision with a privileged admin URL`,
+    });
+  }
+  return issues;
+}
+
+async function currentPostgresLogin(client: RuntimeTransactionClient): Promise<string | undefined> {
+  const result = await safeQuery<{ runtime_login: string }>(
+    client,
+    'SELECT current_user AS runtime_login',
+  );
+  return result?.rows[0]?.runtime_login;
+}
+
+function postgresRoleTopologyReport(
+  topology: PostgresRoleTopology,
+  input: {
+    edgeStatuses?: ReadonlyMap<
+      string,
+      KovoPostgresPostureReport['roleTopology']['membershipEdges'][number]['status']
+    >;
+    runtimeLogin?: string;
+  } = {},
+): KovoPostgresPostureReport['roleTopology'] {
+  const withRuntime = postgresRoleTopologyWithRuntimeLogin(topology, input.runtimeLogin);
+  return {
+    adminRole: withRuntime.roles.admin,
+    membershipEdges: withRuntime.membershipEdges.map((edge) => ({
+      ...edge,
+      status: input.edgeStatuses?.get(postgresMembershipEdgeKey(edge)) ?? 'expected',
+    })),
+    readerRole: withRuntime.roles.reader,
+    ...(input.runtimeLogin === undefined ? {} : { runtimeLogin: input.runtimeLogin }),
+    systemRole: withRuntime.roles.system,
+    writerRole: withRuntime.roles.writer,
+  };
+}
+
+function postgresMembershipEdgeKey(edge: PostgresRoleMembershipEdge): string {
+  return `${edge.memberRole}->${edge.role}`;
+}
+
 async function assertPostgresSchemaTablesExist(
   client: RuntimeTransactionClient,
   tables: readonly PgTable[],
@@ -2204,16 +2475,15 @@ async function ensurePostgresSchemaStateTable(client: RuntimeTransactionClient):
 
 async function grantPostgresRuntimeLoginRole(
   client: RuntimeTransactionClient,
-  config: ResolvedPostgresRuntimeConfig,
-  runtimeLoginRole: string | undefined,
+  topology: PostgresRoleTopology,
 ): Promise<void> {
+  for (const edge of topology.membershipEdges) {
+    if (edge.owner !== 'kovo') continue;
+    if (await postgresRoleMembershipExists(client, edge)) continue;
+    await client.exec(`GRANT ${quoteIdent(edge.role)} TO ${quoteIdent(edge.memberRole)}`);
+  }
+  const runtimeLoginRole = topology.membershipEdges[0]?.memberRole;
   if (runtimeLoginRole === undefined || runtimeLoginRole === '') return;
-  if (config.createReaderRole && config.readerRole !== runtimeLoginRole) {
-    await client.exec(`GRANT ${quoteIdent(config.readerRole)} TO ${quoteIdent(runtimeLoginRole)}`);
-  }
-  if (config.createWriterRole && config.writerRole !== runtimeLoginRole) {
-    await client.exec(`GRANT ${quoteIdent(config.writerRole)} TO ${quoteIdent(runtimeLoginRole)}`);
-  }
   await client.exec(
     `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)} TO ${quoteIdent(runtimeLoginRole)}`,
   );
@@ -2222,6 +2492,17 @@ async function grantPostgresRuntimeLoginRole(
       runtimeLoginRole,
     )}`,
   );
+}
+
+async function postgresRoleMembershipExists(
+  client: RuntimeTransactionClient,
+  edge: PostgresRoleMembershipEdge,
+): Promise<boolean> {
+  const result = await client.query<{ has_membership: boolean }>(
+    "SELECT pg_has_role($1::text, $2::text, 'USAGE') AS has_membership",
+    [edge.memberRole, edge.role],
+  );
+  return result.rows[0]?.has_membership === true;
 }
 
 function runtimeLoginRoleFromDatabaseUrl(databaseUrl: string | undefined): string | undefined {

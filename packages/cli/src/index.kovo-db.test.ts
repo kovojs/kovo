@@ -31,7 +31,9 @@ describe('kovo db', () => {
     expect(provision.result).toBe(0);
     expect(provision.stderr).toBe('');
     expect(provision.stdout).toContain('kovo-db/v1\nACTION provision\nDRIVER pglite\n');
-    expect(provision.stdout).toContain('STATUS ok\nSUMMARY issues=0\n');
+    expect(provision.stdout).toContain('TARGET source=pglite\nSTATUS ok\n');
+    expect(provision.stdout).toContain('ROLE readerRole="kovo_reader" management=create\n');
+    expect(provision.stdout).toContain('SUMMARY issues=0\n');
 
     const check = await captureWrites(() =>
       mainAsync(['db', 'check', '--schema', schemaPath, '--data-dir', dataDir]),
@@ -40,7 +42,8 @@ describe('kovo db', () => {
     expect(check.result).toBe(0);
     expect(check.stderr).toBe('');
     expect(check.stdout).toContain('kovo-db/v1\nACTION check\nDRIVER pglite\n');
-    expect(check.stdout).toContain('STATUS ok\nSUMMARY issues=0\n');
+    expect(check.stdout).toContain('TARGET source=pglite\nSTATUS ok\n');
+    expect(check.stdout).toContain('SUMMARY issues=0\n');
   });
 
   it('prefers scaffolded app runtime options when the sibling runtime module exports them', async () => {
@@ -114,6 +117,28 @@ describe('kovo db', () => {
     expect(check.stderr).toContain('ISSUE code=KV433_SCHEMA_TABLE');
   });
 
+  it('treats an admin URL as an external db check target instead of falling back to PGlite', async () => {
+    const { schemaPath } = writeDbCommandFixture('admin-url-check');
+    const previousAdminUrl = process.env.KOVO_ADMIN_DATABASE_URL;
+    const previousDatabaseUrl = process.env.KOVO_DATABASE_URL;
+    const previousRuntimeUrl = process.env.KOVO_RUNTIME_DATABASE_URL;
+    delete process.env.KOVO_DATABASE_URL;
+    delete process.env.KOVO_RUNTIME_DATABASE_URL;
+    process.env.KOVO_ADMIN_DATABASE_URL = 'postgres://bad@127.0.0.1:1/nope';
+    try {
+      const check = await captureWrites(() => mainAsync(['db', 'check', '--schema', schemaPath]));
+
+      expect(check.result).toBe(1);
+      expect(check.stdout).toBe('');
+      expect(check.stderr).not.toContain('DRIVER pglite');
+      expect(check.stderr).toMatch(/ECONNREFUSED|connect/);
+    } finally {
+      restoreEnv('KOVO_ADMIN_DATABASE_URL', previousAdminUrl);
+      restoreEnv('KOVO_DATABASE_URL', previousDatabaseUrl);
+      restoreEnv('KOVO_RUNTIME_DATABASE_URL', previousRuntimeUrl);
+    }
+  });
+
   it('applies reviewed SQL migrations before reasserting Postgres posture', async () => {
     const { dataDir, migrationsDir, schemaPath } = writeDbCommandFixture('migrated');
     writeFileSync(
@@ -148,8 +173,9 @@ describe('kovo db', () => {
     expect(migrate.stderr).toBe('');
     expect(migrate.stdout).toContain('kovo-db/v1\nACTION migrate\nDRIVER pglite\n');
     expect(migrate.stdout).toContain('MIGRATION status=applied id="001_create_notes.sql"\n');
+    expect(migrate.stdout).toContain('STATUS ok\n');
     expect(migrate.stdout).toContain(
-      'STATUS ok\nMIGRATION status=applied id="001_create_notes.sql"\nSUMMARY migrationsApplied=1 migrationsSkipped=0 issues=0\n',
+      'MIGRATION status=applied id="001_create_notes.sql"\nSUMMARY migrationsApplied=1 migrationsSkipped=0 issues=0\n',
     );
 
     const rerun = await captureWrites(() =>
@@ -364,6 +390,11 @@ describe('kovo db', () => {
     return { dataDir, migrationsDir, schemaPath };
   }
 });
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 async function captureWrites(run: () => Promise<number>): Promise<{
   result: number;

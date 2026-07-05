@@ -26,6 +26,7 @@ import {
 import { dbOutputVersion, stableValue, type CliCommandResult } from '../shared.js';
 
 type KovoDbAction = 'check' | 'generate' | 'migrate' | 'provision';
+type KovoDbTargetSource = 'admin' | 'explicit-driver' | 'pglite' | 'runtime';
 let generatedMigrationSequence = 0;
 
 interface KovoDbOptions {
@@ -244,7 +245,7 @@ async function runDbProvision(
         ...runtimeOptions(options, { driver: 'pglite' }),
         migrations,
       });
-      return { migrations: migrated, posture: migrated.posture };
+      return { migrations: migrated, posture: migrated.posture, targetSource: 'pglite' };
     }
     const runtime = createPostgresAppRuntimeDb(
       runtimeOptions(options, { driver: 'pglite', provisionOnBoot: true }),
@@ -256,6 +257,7 @@ async function runDbProvision(
     }
     return {
       posture: await checkPostgresAppDbPosture(runtimeOptions(options, { driver: 'pglite' })),
+      targetSource: 'pglite',
     };
   }
 
@@ -272,7 +274,7 @@ async function runDbProvision(
       migrations,
       ...(runtimeDatabaseUrl === undefined ? {} : { runtimeDatabaseUrl }),
     });
-    return { migrations: migrated, posture: migrated.posture };
+    return { migrations: migrated, posture: migrated.posture, targetSource: 'admin' };
   }
   const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
   const provisionOptions: KovoPostgresAppRuntimeOptions & {
@@ -287,6 +289,7 @@ async function runDbProvision(
   }
   return {
     posture: await provisionPostgresAppDb(provisionOptions),
+    targetSource: 'admin',
   };
 }
 
@@ -299,7 +302,7 @@ async function runDbMigrate(
       ...runtimeOptions(options, { driver: 'pglite' }),
       migrations,
     });
-    return { migrations: migrated, posture: migrated.posture };
+    return { migrations: migrated, posture: migrated.posture, targetSource: 'pglite' };
   }
 
   const databaseUrl = resolveAdminDatabaseUrl(options);
@@ -314,7 +317,7 @@ async function runDbMigrate(
     migrations,
     ...(runtimeDatabaseUrl === undefined ? {} : { runtimeDatabaseUrl }),
   });
-  return { migrations: migrated, posture: migrated.posture };
+  return { migrations: migrated, posture: migrated.posture, targetSource: 'admin' };
 }
 
 async function runDbGenerate(
@@ -332,8 +335,11 @@ async function runDbGenerate(
 async function runDbCheck(
   options: KovoDbOptions & { dbConfig: LoadedDbConfig },
 ): Promise<DbRunReport> {
-  const overrides = shouldCheckEmbeddedPglite(options) ? ({ driver: 'pglite' } as const) : {};
-  return { posture: await checkPostgresAppDbPosture(runtimeOptions(options, overrides)) };
+  const target = checkTargetOptions(options);
+  return {
+    posture: await checkPostgresAppDbPosture(runtimeOptions(options, target.overrides)),
+    targetSource: target.source,
+  };
 }
 
 async function runDbAction(
@@ -400,6 +406,7 @@ function applyRuntimeOptionOverrides(
     result.principalFromRequest = overrides.principalFromRequest;
   if (overrides.readerRole !== undefined) result.readerRole = overrides.readerRole;
   if (overrides.adminRole !== undefined) result.adminRole = overrides.adminRole;
+  if (overrides.systemRole !== undefined) result.systemRole = overrides.systemRole;
   if (overrides.crossOwnerReadTables !== undefined)
     result.crossOwnerReadTables = overrides.crossOwnerReadTables;
   if (overrides.publicRelations !== undefined) result.publicRelations = overrides.publicRelations;
@@ -424,11 +431,49 @@ function shouldCheckEmbeddedPglite(options: KovoDbOptions): boolean {
   const driver = options.driver ?? process.env.KOVO_DB_DRIVER;
   if (driver === 'pglite') return true;
   if (driver === 'pg' || driver === 'node-postgres') return false;
-  return resolveRuntimeDatabaseUrl(options) === undefined;
+  return (
+    resolveRuntimeDatabaseUrl(options) === undefined &&
+    resolveAdminDatabaseUrl(options) === undefined
+  );
 }
 
 function shouldMigrateEmbeddedPglite(options: KovoDbOptions): boolean {
   return shouldCheckEmbeddedPglite(options);
+}
+
+function checkTargetOptions(options: KovoDbOptions): {
+  overrides: Partial<KovoPostgresAppRuntimeOptions>;
+  source: KovoDbTargetSource;
+} {
+  const driver = options.driver ?? process.env.KOVO_DB_DRIVER;
+  if (driver === 'pglite') return { overrides: { driver: 'pglite' }, source: 'explicit-driver' };
+  const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
+  if (driver === 'pg' || driver === 'node-postgres') {
+    const databaseUrl = runtimeDatabaseUrl ?? resolveAdminDatabaseUrl(options);
+    if (databaseUrl === undefined) {
+      throw new Error(
+        'kovo db check with external Postgres requires KOVO_DATABASE_URL, KOVO_RUNTIME_DATABASE_URL, KOVO_ADMIN_DATABASE_URL, --database-url, or --admin-database-url.',
+      );
+    }
+    return {
+      overrides: { databaseUrl, driver: 'node-postgres' },
+      source: runtimeDatabaseUrl === undefined ? 'admin' : 'runtime',
+    };
+  }
+  if (runtimeDatabaseUrl !== undefined) {
+    return {
+      overrides: { databaseUrl: runtimeDatabaseUrl, driver: 'node-postgres' },
+      source: 'runtime',
+    };
+  }
+  const adminDatabaseUrl = resolveAdminDatabaseUrl(options);
+  if (adminDatabaseUrl !== undefined) {
+    return {
+      overrides: { databaseUrl: adminDatabaseUrl, driver: 'node-postgres' },
+      source: 'admin',
+    };
+  }
+  return { overrides: { driver: 'pglite' }, source: 'pglite' };
 }
 
 function generateDriverOptions(options: KovoDbOptions): Partial<KovoPostgresAppRuntimeOptions> {
@@ -462,6 +507,7 @@ function nonEmptyValue(value: string | undefined): string | undefined {
 interface DbRunReport {
   migrations?: KovoPostgresMigrationRunReport;
   posture: KovoPostgresPostureReport;
+  targetSource: KovoDbTargetSource;
 }
 
 interface GeneratedMigrationFiles {
@@ -477,6 +523,7 @@ interface DbGenerateReport {
 function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandResult {
   const migrations = report.migrations;
   const posture = report.posture;
+  const topology = posture.roleTopology;
   const migrationLines =
     migrations === undefined
       ? []
@@ -495,7 +542,19 @@ function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandR
         dbOutputVersion,
         `ACTION ${action}`,
         `DRIVER ${posture.driver}`,
+        `TARGET source=${report.targetSource}`,
         `STATUS ${posture.ok ? 'ok' : 'failed'}`,
+        `ROLE readerRole=${stableValue(topology.readerRole.name)} management=${topology.readerRole.management}`,
+        `ROLE writerRole=${stableValue(topology.writerRole.name)} management=${topology.writerRole.management}`,
+        `ROLE adminRole=${stableValue(topology.adminRole.name)} management=${topology.adminRole.management}`,
+        `ROLE systemRole=${stableValue(topology.systemRole.name)} management=${topology.systemRole.management}`,
+        ...(topology.runtimeLogin === undefined
+          ? []
+          : [`ROLE runtimeLogin=${stableValue(topology.runtimeLogin)}`]),
+        ...topology.membershipEdges.map(
+          (edge) =>
+            `MEMBERSHIP member=${stableValue(edge.memberRole)} role=${stableValue(edge.role)} owner=${edge.owner} status=${edge.status}`,
+        ),
         ...migrationLines,
         ...posture.issues.map(
           (issue) => `ISSUE code=${issue.code} detail=${stableValue(issue.detail)}`,

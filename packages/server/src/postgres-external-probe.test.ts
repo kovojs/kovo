@@ -119,6 +119,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     const adoptedAdmin = `${probeRun}_adopt_admin`;
     const adoptedRuntime = `${probeRun}_adopt_runtime`;
     const adoptedReader = `${probeRun}_reader`;
+    const adoptedSystem = `${probeRun}_system`;
     const adoptedWriter = `${probeRun}_writer`;
     const staleRuntimeRole = `${probeRun}_stale_runtime`;
 
@@ -141,6 +142,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
         `CREATE ROLE ${quoteIdent(adoptedRuntime)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
       );
       await admin.query(`CREATE ROLE ${quoteIdent(adoptedReader)} NOBYPASSRLS`);
+      await admin.query(`CREATE ROLE ${quoteIdent(adoptedSystem)} NOBYPASSRLS`);
       await admin.query(`CREATE ROLE ${quoteIdent(adoptedWriter)} NOBYPASSRLS`);
       await admin.query(`GRANT ${quoteIdent(adoptedReader)} TO ${quoteIdent(adoptedRuntime)}`);
       await admin.query(`GRANT ${quoteIdent(adoptedWriter)} TO ${quoteIdent(adoptedRuntime)}`);
@@ -233,7 +235,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     await expectRawRuntimeReconnectHarmless(defaultRuntimeUrl);
     await expectPooledScopeDoesNotLeak(defaultRuntimeUrl, 'kovo_writer');
     await expectSecretColumnsDenied(defaultRuntimeUrl, 'kovo_reader', 'kovo_admin');
-    await expectCrossOwnerRead(defaultRuntimeUrl);
+    await withPool(cluster.url(defaultDb, 'postgres'), async (superPool) => {
+      await superPool.query(`GRANT kovo_admin TO ${quoteIdent(defaultAdmin)} WITH SET TRUE`);
+    });
+    await expectCrossOwnerRead(defaultRuntimeUrl, defaultAdminUrl);
     await expectSchemaEvolutionWithData(defaultAdminUrl, defaultRuntimeUrl);
     await expectUnexpectedCatalogPrivilegesRefuse(
       defaultRuntimeUrl,
@@ -244,21 +249,24 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       cluster.url(adoptedDb, adoptedAdmin),
       `CREATE ROLE ${quoteIdent(`${probeRun}_blocked_adopted_role`)}`,
     );
-    await withAdoptedRoleEnv({ reader: adoptedReader, writer: adoptedWriter }, async () => {
-      const adoptedReport = await provisionPostgresAppDb({
-        databaseUrl: cluster.url(adoptedDb, adoptedAdmin),
-        migrations: [createNotesMigration],
-        runtimeDatabaseUrl: cluster.url(adoptedDb, adoptedRuntime),
-        schema,
-      });
-      expect(adoptedReport.ok).toBe(true);
-      expect(adoptedReport.issues).toEqual([]);
-      await expectOwnerIsolation(cluster.url(adoptedDb, adoptedRuntime), {
-        readerRole: adoptedReader,
-        writerRole: adoptedWriter,
-      });
-      await expectPooledScopeDoesNotLeak(cluster.url(adoptedDb, adoptedRuntime), adoptedWriter);
-    });
+    await withAdoptedRoleEnv(
+      { admin: adoptedAdmin, reader: adoptedReader, system: adoptedSystem, writer: adoptedWriter },
+      async () => {
+        const adoptedReport = await provisionPostgresAppDb({
+          databaseUrl: cluster.url(adoptedDb, adoptedAdmin),
+          migrations: [createNotesMigration],
+          runtimeDatabaseUrl: cluster.url(adoptedDb, adoptedRuntime),
+          schema,
+        });
+        expect(adoptedReport.ok).toBe(true);
+        expect(adoptedReport.issues).toEqual([]);
+        await expectOwnerIsolation(cluster.url(adoptedDb, adoptedRuntime), {
+          readerRole: adoptedReader,
+          writerRole: adoptedWriter,
+        });
+        await expectPooledScopeDoesNotLeak(cluster.url(adoptedDb, adoptedRuntime), adoptedWriter);
+      },
+    );
 
     await withPool(cluster.url(staleDb, 'postgres'), async (superPool) => {
       await superPool.query(createNotesMigration.sql);
@@ -333,7 +341,6 @@ async function expectRawRuntimeReconnectHarmless(databaseUrl: string): Promise<v
 
 async function expectLeastPrivilegeRuntimeFailure(databaseUrl: string): Promise<void> {
   const runtime = createPostgresAppRuntimeDb({
-    crossOwnerReadTables: ['kovo_ext_probe_notes'],
     databaseUrl,
     schema,
   });
@@ -373,7 +380,6 @@ async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: strin
   expect(evolved.posture.issues).toEqual([]);
 
   const runtime = createPostgresAppRuntimeDb({
-    crossOwnerReadTables: ['kovo_ext_probe_notes'],
     databaseUrl: runtimeUrl,
     schema: evolvedSchema,
   });
@@ -453,9 +459,10 @@ async function expectUnexpectedCatalogPrivilegesRefuse(
   expect(unexpectedDetails).toContain('large_object');
 }
 
-async function expectCrossOwnerRead(databaseUrl: string): Promise<void> {
+async function expectCrossOwnerRead(databaseUrl: string, adminDatabaseUrl: string): Promise<void> {
   drainCrossOwnerReadAuditFacts();
   const runtime = createPostgresAppRuntimeDb({
+    adminDatabaseUrl,
     crossOwnerReadTables: ['kovo_ext_probe_notes'],
     databaseUrl,
     schema,
@@ -743,17 +750,23 @@ function availablePort(): Promise<number> {
 }
 
 async function withAdoptedRoleEnv<Result>(
-  roles: { reader: string; writer: string },
+  roles: { admin?: string; reader: string; system?: string; writer: string },
   callback: () => Promise<Result>,
 ): Promise<Result> {
+  const previousAdmin = process.env.KOVO_DB_ADMIN_ROLE;
   const previousReader = process.env.KOVO_DB_READER_ROLE;
+  const previousSystem = process.env.KOVO_DB_SYSTEM_ROLE;
   const previousWriter = process.env.KOVO_DB_WRITER_ROLE;
+  if (roles.admin !== undefined) process.env.KOVO_DB_ADMIN_ROLE = roles.admin;
   process.env.KOVO_DB_READER_ROLE = roles.reader;
+  if (roles.system !== undefined) process.env.KOVO_DB_SYSTEM_ROLE = roles.system;
   process.env.KOVO_DB_WRITER_ROLE = roles.writer;
   try {
     return await callback();
   } finally {
+    restoreEnv('KOVO_DB_ADMIN_ROLE', previousAdmin);
     restoreEnv('KOVO_DB_READER_ROLE', previousReader);
+    restoreEnv('KOVO_DB_SYSTEM_ROLE', previousSystem);
     restoreEnv('KOVO_DB_WRITER_ROLE', previousWriter);
   }
 }

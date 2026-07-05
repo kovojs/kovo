@@ -1310,6 +1310,81 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('grants runtime membership for adopted reader and writer roles', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-membership-'));
+    roots.push(dataDir);
+    await execPglite(dataDir, 'CREATE ROLE "provider_reader"; CREATE ROLE "provider_writer";');
+
+    await withPostgresRoleEnv(
+      { reader: 'provider_reader', writer: 'provider_writer' },
+      async () => {
+        const report = await migratePostgresAppDb({
+          dataDir,
+          driver: 'pglite',
+          migrations: [
+            {
+              id: '001_runtime_login_schema',
+              sql: ['CREATE ROLE provider_runtime_login LOGIN', runtimeSchemaMigrationSql].join(
+                '; ',
+              ),
+            },
+          ],
+          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+          schema,
+        });
+        expect(report.posture.ok).toBe(true);
+
+        const memberships = await queryPglite<{ can_reader: boolean; can_writer: boolean }>(
+          dataDir,
+          [
+            'SELECT',
+            "pg_has_role('provider_runtime_login', 'provider_reader', 'USAGE') AS can_reader,",
+            "pg_has_role('provider_runtime_login', 'provider_writer', 'USAGE') AS can_writer",
+          ].join(' '),
+        );
+        expect(memberships.rows[0]).toEqual({ can_reader: true, can_writer: true });
+      },
+    );
+  });
+
+  it('preflights adopted admin and system roles before applying DDL', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-admin-system-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE "provider_reader"',
+        'CREATE ROLE "provider_writer"',
+        'CREATE ROLE "provider_admin"',
+      ].join('; '),
+    );
+
+    await withPostgresRoleEnv(
+      {
+        admin: 'provider_admin',
+        reader: 'provider_reader',
+        system: 'missing_provider_system',
+        writer: 'provider_writer',
+      },
+      async () => {
+        await expect(
+          migratePostgresAppDb({
+            dataDir,
+            driver: 'pglite',
+            migrations: [{ id: '001_create_notes', sql: runtimeSchemaMigrationSql }],
+            schema,
+          }),
+        ).rejects.toThrow(/KV433_ROLE_TOPOLOGY[\s\S]*systemRole=missing_provider_system/);
+
+        const leakedObjects = await queryPglite<{ relname: string }>(
+          dataDir,
+          "SELECT relname FROM pg_class WHERE relname = 'kovo_runtime_notes'",
+        );
+        expect(leakedObjects.rows).toEqual([]);
+      },
+    );
+  });
+
   it('fails closed instead of creating missing provider-adopted roles', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-roles-missing-'));
     roots.push(dataDir);
@@ -1778,17 +1853,23 @@ async function usingPgliteRole(
 }
 
 async function withPostgresRoleEnv<Result>(
-  roles: { reader: string; writer: string },
+  roles: { admin?: string; reader: string; system?: string; writer: string },
   callback: () => Promise<Result>,
 ): Promise<Result> {
+  const previousAdmin = process.env.KOVO_DB_ADMIN_ROLE;
   const previousReader = process.env.KOVO_DB_READER_ROLE;
+  const previousSystem = process.env.KOVO_DB_SYSTEM_ROLE;
   const previousWriter = process.env.KOVO_DB_WRITER_ROLE;
+  if (roles.admin !== undefined) process.env.KOVO_DB_ADMIN_ROLE = roles.admin;
   process.env.KOVO_DB_READER_ROLE = roles.reader;
+  if (roles.system !== undefined) process.env.KOVO_DB_SYSTEM_ROLE = roles.system;
   process.env.KOVO_DB_WRITER_ROLE = roles.writer;
   try {
     return await callback();
   } finally {
+    restoreEnv('KOVO_DB_ADMIN_ROLE', previousAdmin);
     restoreEnv('KOVO_DB_READER_ROLE', previousReader);
+    restoreEnv('KOVO_DB_SYSTEM_ROLE', previousSystem);
     restoreEnv('KOVO_DB_WRITER_ROLE', previousWriter);
   }
 }
