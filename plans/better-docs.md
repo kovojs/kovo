@@ -478,14 +478,16 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     **Handle failure** (KV415 diagnostic) → collapsed details: SPEC §§.
   - Evidence: `site/content/guides/caching.md`; `pnpm run check:docs-snippets`;
     `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
-- [ ] **Pagination** (recipe or a queries.md major section) — commerce ships the complete
+- [x] **Pagination** (recipe or a queries.md major section) — commerce ships the complete
       first-class pattern, no guide teaches it: cursor query (`after`/`limit`/`nextCursor`,
       `examples/commerce/src/queries.ts` productGridQuery), keyed items (`kovo-key={item.id}`),
       `data-page-cursor` threading, and per-key `delta: [{ domain: order.key, key: 'id', path:
 'items' }]` declarations so one new row ships as a delta instead of a full list. Walk the
       commerce implementation end-to-end with provenance comments; show the wire (a `lists` delta
       frame) as the payoff.
-- [ ] **Confidential values** — core to the framework pitch ("secrets can't reach the browser");
+  - Evidence: `site/content/guides/pagination.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Confidential values** — core to the framework pitch ("secrets can't reach the browser");
       only the drizzle column tag appears (conceptually) in why-kovo.md. Exports
       (`packages/core/src/index.ts`): `secret`, `redacted`, `untrusted`, `revealSecret`,
       `revealRedacted`, `revealUntrusted`, `trustedReveal`, `publishToClient`, `declareOffWire`,
@@ -497,7 +499,9 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     drizzle `kovo({ secret: [...] })` tag — connect to data-layer) → **Encrypt at rest**
     (`encryptAtRest`, key rings) → **Handle failure** (the off-wire diagnostics) → collapsed
     spec pointers.
-- [ ] **Outbound requests & egress** — anyone calling Stripe/OpenAI/email hits the fail-closed
+  - Evidence: `site/content/guides/confidential-values.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Outbound requests & egress** — anyone calling Stripe/OpenAI/email hits the fail-closed
       egress floor immediately; today one prose mention in security.md. Exports:
       `EgressBlockedError`, `EgressConfigError`, `EgressOptions`, `PrivateAddressClass`
       (`packages/server/src/index.ts:70-71`, `packages/server/src/egress.ts`).
@@ -507,7 +511,9 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     first) → **Scope the allowlist** (per-host patterns, `PrivateAddressClass`/SSRF posture —
     why private ranges are blocked even when allowlisted) → **Handle failure**
     (`EgressBlockedError` vs `EgressConfigError`) → Next: security, endpoints-webhooks.
-- [ ] **Composing primitives** — accessibility.md tells authors to build on headless primitives;
+  - Evidence: `site/content/guides/outbound-requests-egress.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Composing primitives** — accessibility.md tells authors to build on headless primitives;
       nothing teaches how. Source: SPEC §4.6 (`spec/04-component-model.md:237-279`) with its
       normative merge-rule table; implemented in `packages/compiler/src/attribute-merge*`.
   - Sections: **Attach behavior to your element** (the attrs-function child spelling — one
@@ -517,6 +523,8 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     ARIA/role conflicts fail the build with their KV codes — reproduce the table from SPEC §4.6,
     cite it as the authority) → **Handle failure** (the conflict diagnostics) → Next:
     components, accessibility.
+  - Evidence: `site/content/guides/composing-primitives.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
 - [ ] **Medium-priority new-guide backlog** (promote to its own checkbox with an outline when
       picked up):
   - Roll-your-own credential auth: `hashPassword`/`verifyPassword`/`verifyCredential`/
