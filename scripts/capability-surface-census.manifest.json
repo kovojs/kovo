@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "rows": [
+    {
+      "id": "generated-postgres-auth-adapter",
+      "kind": "auth-adapter-db",
+      "authority": "Postgres system DB used only to construct Better Auth's Drizzle adapter",
+      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#createAuthAdapter",
+      "publicStatus": "narrowed-factory",
+      "allowedConsumers": ["packages/create-kovo/templates/src/auth.ts"],
+      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits createAuthAdapter from src/auth.ts",
+      "evidence": "vp exec pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts"
+    },
+    {
+      "id": "generated-sqlite-auth-adapter",
+      "kind": "auth-adapter-db",
+      "authority": "SQLite app DB used only to construct Better Auth's Drizzle adapter",
+      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#createAuthAdapter",
+      "publicStatus": "narrowed-factory",
+      "allowedConsumers": ["packages/create-kovo/templates/src/auth.sqlite.ts"],
+      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits createAuthAdapter from src/auth.sqlite.ts",
+      "evidence": "vp exec pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts"
+    },
+    {
+      "id": "generated-postgres-readonly-db",
+      "kind": "readonly-db",
+      "authority": "Postgres request-independent read facade exported for app reads",
+      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeReadonlyDb",
+      "publicStatus": "reader-facade",
+      "allowedConsumers": ["packages/create-kovo/templates/src/db.ts"],
+      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits appRuntimeReadonlyDb from src/db.ts",
+      "evidence": "packages/create-kovo/src/index.test.ts asserts readonlyAppDb wiring"
+    },
+    {
+      "id": "generated-postgres-request-db-provider",
+      "kind": "request-db-provider",
+      "authority": "Postgres request-scoped DB provider consumed by createApp construction",
+      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeDbProvider",
+      "publicStatus": "framework-construction-factory",
+      "allowedConsumers": ["packages/create-kovo/templates/src/app.tsx"],
+      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits appRuntimeDbProvider from src/app.tsx",
+      "evidence": "packages/create-kovo/src/index.test.ts rejects auth.ts importing appRuntimeDbProvider"
+    },
+    {
+      "id": "server-system-db-capability",
+      "kind": "system-db",
+      "authority": "KovoPostgresAppRuntimeDb.systemDb mints system-principal DB access for framework construction paths",
+      "mint": "packages/server/src/postgres-runtime.ts#systemDb",
+      "publicStatus": "runtime-method",
+      "allowedConsumers": ["generated createAuthAdapter and internal framework system paths"],
+      "buildDiagnostic": "scripts/capability-surface-census-gate.mjs rejects generated raw system DB exports",
+      "evidence": "scripts/capability-surface-census-gate.mjs scans generated templates for raw systemDb exports"
+    },
+    {
+      "id": "managed-sql-statement-identity",
+      "kind": "managed-sql-statement",
+      "authority": "Managed SQL statement value passed to DB drivers after validation",
+      "mint": "packages/core/src/internal/sql-safety.ts",
+      "publicStatus": "framework-owned-artifact",
+      "allowedConsumers": ["managed DB read/write execution chokes"],
+      "buildDiagnostic": "DEC-B tests cover carrier identity and snapshot behavior",
+      "evidence": "plans/fundamental-fixes-followup-11.md DEC-B verification bundle"
+    },
+    {
+      "id": "postgres-role-topology",
+      "kind": "role-topology",
+      "authority": "Resolved Postgres reader/writer/admin/system roles and runtime membership edges",
+      "mint": "packages/server/src/postgres-runtime.ts#resolvePostgresRuntimeConfig",
+      "publicStatus": "deployment-manifest",
+      "allowedConsumers": ["kovo db provision", "kovo db check", "runtime boot posture check"],
+      "buildDiagnostic": "DEC-C tests cover external target resolution and role adoption diagnostics",
+      "evidence": "plans/fundamental-fixes-followup-11.md DEC-C verification bundle"
+    },
+    {
+      "id": "storage-download-signer",
+      "kind": "storage-signer",
+      "authority": "Framework-owned storage download capability signer/verifier",
+      "mint": "packages/server/src/capability-route.ts#createStorageDownloadEndpoint",
+      "publicStatus": "narrowed-endpoint-factory",
+      "allowedConsumers": ["apps configuring storage download endpoints"],
+      "buildDiagnostic": "existing capability route tests and sink-policy gates",
+      "evidence": "pnpm run check:sink-policy"
+    },
+    {
+      "id": "webhook-transaction-db",
+      "kind": "webhook-transaction-db",
+      "authority": "Webhook transaction/request DB facade",
+      "mint": "packages/server/src/app.ts",
+      "publicStatus": "framework-threaded-request-facade",
+      "allowedConsumers": ["webhook handlers through request context"],
+      "buildDiagnostic": "existing webhook verifier and managed DB gates",
+      "evidence": "pnpm run check:security-gate-mutations"
+    },
+    {
+      "id": "principal-posture",
+      "kind": "principal-posture",
+      "authority": "Request principal posture used to scope DB reads and writes",
+      "mint": "packages/server/src/principal-posture.ts",
+      "publicStatus": "framework-owned-request-fact",
+      "allowedConsumers": ["request-scoped DB construction and diagnostics"],
+      "buildDiagnostic": "existing principal ingress and guard tests",
+      "evidence": "pnpm run check:fail-closed-classifiers"
+    }
+  ]
+}
