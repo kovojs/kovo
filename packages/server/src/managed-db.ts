@@ -220,6 +220,7 @@ export interface RawReadDeclaration {
 /** Framework-owned rawRead enforcement options for a managed read handle. */
 export interface RawReadPolicyOptions {
   dialectLabel: string;
+  executeSql?: (statement: { params: readonly unknown[]; text: string }) => unknown;
   executeMethod?: 'all' | 'execute' | 'query' | 'values';
   normalizeTableName: (table: string) => string;
   ownerTables?: readonly string[];
@@ -252,6 +253,7 @@ export interface CrossOwnerReadAuditFact {
 export interface CrossOwnerReadPolicyOptions {
   adminClient?: object;
   dialectLabel: string;
+  executeSql?: (statement: { params: readonly unknown[]; text: string }) => unknown;
   executeMethod?: 'all' | 'execute' | 'query' | 'values';
   hasRole?: (role: CrossOwnerReadDeclaration['role']) => boolean;
   normalizeTableName: (table: string) => string;
@@ -878,7 +880,12 @@ function isDeclaredWriteDirectSqlMethod(
 function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCarrier | undefined {
   if (typeof value === 'string') return { params, text: value };
   const snapshot = snapshotManagedSqlStatement(value);
-  if (snapshot.ok) return { params: snapshot.statement.values, text: snapshot.statement.text };
+  if (snapshot.ok) {
+    return {
+      params: snapshot.statement.values,
+      text: sqlTextFromValue(value) ?? snapshot.statement.text,
+    };
+  }
   const toSQL = (value as { toSQL?: unknown }).toSQL;
   if (typeof toSQL === 'function') {
     try {
@@ -1037,11 +1044,11 @@ function scopedPostgresTransactionClient(
               'KV433: Postgres scoped transaction client requires a callable query method (SPEC §10.3/§11.2).',
             );
           }
-          return Reflect.apply(queryMethod, target, [
-            snapshot.text,
-            [...snapshot.values],
-            queryOptions,
-          ]);
+          return Reflect.apply(
+            queryMethod,
+            target,
+            postgresQueryExecutionArgs(snapshot, queryOptions),
+          );
         };
       }
       if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
@@ -1065,12 +1072,12 @@ function scopedPostgresQuery(
     await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
     try {
-      return (await queryMethod(snapshot.text, [...snapshot.values], queryOptions)) as unknown;
+      return (await queryMethod(...postgresQueryExecutionArgs(snapshot, queryOptions))) as unknown;
     } catch (error) {
       throw translatedPostgresWriteDenial(error, snapshot);
     }
   }).then(async (result) => {
-    await maybeReportPostgresRlsSilentDeny(options, snapshot, result);
+    await maybeReportPostgresRlsSilentDeny(options, snapshot.diagnosticQuery ?? snapshot, result);
     return result;
   });
 }
@@ -1110,7 +1117,7 @@ function postgresQueryText(query: unknown): string | undefined {
 function postgresQuerySnapshot(
   query: unknown,
   params: readonly unknown[] | undefined,
-): { text: string; values: readonly unknown[] } {
+): PostgresQuerySnapshot {
   if (typeof query === 'string') return { text: query, values: params ?? [] };
   const snapshot = snapshotManagedSqlStatement(query, 'postgres');
   if (snapshot.ok) return snapshot.statement;
@@ -1121,18 +1128,53 @@ function postgresQuerySnapshot(
   );
 }
 
+type PostgresQuerySnapshot = {
+  diagnosticQuery?: unknown;
+  driverQuery?: unknown;
+  text: string;
+  values: readonly unknown[];
+};
+
 function plainPostgresQueryConfigSnapshot(
   query: unknown,
   params: readonly unknown[] | undefined,
-): { text: string; values: readonly unknown[] } | undefined {
+): PostgresQuerySnapshot | undefined {
   if (!isRecord(query)) return undefined;
   const text = dataPropertyValue(query, 'text') ?? dataPropertyValue(query, 'sql');
   if (typeof text !== 'string') return undefined;
   const values = dataPropertyValue(query, 'values');
-  return Object.freeze({
+  const snapshot = Object.freeze({
     text,
     values: Object.freeze(Array.isArray(values) ? [...values] : [...(params ?? [])]),
   });
+  return {
+    diagnosticQuery: query,
+    ...snapshot,
+    driverQuery: postgresDriverQueryConfig(query, snapshot),
+  };
+}
+
+function postgresDriverQueryConfig(
+  query: Record<PropertyKey, unknown>,
+  snapshot: { text: string; values: readonly unknown[] },
+): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(query))) {
+    if (!('value' in descriptor)) continue;
+    config[key] = descriptor.value;
+  }
+  delete config.sql;
+  config.text = snapshot.text;
+  config.values = [...snapshot.values];
+  return config;
+}
+
+function postgresQueryExecutionArgs(
+  snapshot: PostgresQuerySnapshot,
+  queryOptions: unknown,
+): [unknown, unknown[] | undefined, unknown] {
+  if (snapshot.driverQuery !== undefined) return [snapshot.driverQuery, undefined, queryOptions];
+  return [snapshot.text, [...snapshot.values], queryOptions];
 }
 
 function dataPropertyValue(
@@ -1375,8 +1417,8 @@ function resolvePostgresRlsDiagnosticTable(
 ): string | undefined {
   if (typeof diagnostics.tableName === 'string') return diagnostics.tableName;
   if (typeof diagnostics.tableName === 'function') return diagnostics.tableName(query);
-  if (typeof query !== 'string') return undefined;
-  return simpleSingleTableSelectName(query);
+  const text = postgresQueryText(query);
+  return text === undefined ? undefined : simpleSingleTableSelectName(text);
 }
 
 function simpleSingleTableSelectName(query: string): string | undefined {
@@ -1523,6 +1565,9 @@ function rawReadCapability(
       );
     }
     assertRawReadObservedTablesAllowed(carrier.text, declaration, policy);
+    if (policy.executeSql !== undefined) {
+      return policy.executeSql(carrier) as Promise<Row[]> | Row[];
+    }
     const method = rawReadExecutionMethod(target, policy);
     return method.call(target, statement) as Promise<Row[]> | Row[];
   };
@@ -1560,6 +1605,9 @@ function crossOwnerReadCapability(
     }
     assertCrossOwnerReadAllowed(observed, normalized, policy);
     recordCrossOwnerReadAuditFact(normalized, observed, policy);
+    if (policy.executeSql !== undefined) {
+      return policy.executeSql(carrier) as Promise<Row[]> | Row[];
+    }
     const method = rawReadExecutionMethod(policy.adminClient, policy);
     return method.call(policy.adminClient, statement) as Promise<Row[]> | Row[];
   };

@@ -265,6 +265,11 @@ interface CreatedRuntimeClient {
     roleSetting?: string,
   ): KovoPostgresRuntimeDb;
   drizzleRequestDb(principal: string | undefined, roleSetting?: string): KovoPostgresRuntimeDb;
+  readonlySql(
+    principal: string | undefined,
+    role: string | false,
+    roleSetting?: string,
+  ): RuntimeSqlClient;
   sql: RuntimeSqlClient;
   label: string;
 }
@@ -1523,6 +1528,11 @@ function createPgliteRuntimeClient(
         relations,
       }),
     label: 'PGlite',
+    readonlySql: (principal, role, roleSetting) =>
+      createPostgresReadonlyClient(
+        client,
+        postgresReadonlyClientOptions(config, principal, role, roleSetting, client),
+      ),
     sql: client,
   };
 }
@@ -1597,6 +1607,15 @@ function createNodePostgresRuntimeClient(
         relations,
       }),
     label: 'Postgres',
+    readonlySql: (principal, role, roleSetting) =>
+      createPostgresReadonlyClient(
+        nodePostgresScopedRuntimeClient(config, transactionalClient, {
+          adminClient: adminTransactionalClient,
+          roleSetting,
+          systemClient: systemTransactionalClient,
+        }),
+        postgresReadonlyClientOptions(config, principal, role, roleSetting),
+      ),
     sql: transactionalClient,
   };
 }
@@ -1669,16 +1688,24 @@ function createRequestScopedReadonlyDb(
 ): Reader<KovoPostgresRuntimeDb> {
   const readDb = client.drizzleReadonlyDb(scope.principal, config.readerRole, scope.roleSetting);
   const privilegedReadDb = client.drizzleReadonlyDb(scope.principal, false, scope.roleSetting);
+  const readSql = client.readonlySql(scope.principal, config.readerRole, scope.roleSetting);
+  const privilegedReadSql = client.readonlySql(scope.principal, false, scope.roleSetting);
   const adminReadDb =
     config.crossOwnerReadTables.size === 0
       ? undefined
       : client.drizzleReadonlyDb(scope.principal, config.readerRole, 'admin');
+  const adminReadSql =
+    config.crossOwnerReadTables.size === 0
+      ? undefined
+      : client.readonlySql(scope.principal, config.readerRole, 'admin');
   const crossOwnerRead =
-    adminReadDb === undefined
+    adminReadDb === undefined || adminReadSql === undefined
       ? undefined
       : {
           adminClient: adminReadDb as object,
           dialectLabel: client.label,
+          executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
+            (await adminReadSql.query(statement.text, [...statement.params])).rows,
           hasRole: (role: 'admin') => requestPassedRoleGuard(request, role),
           normalizeTableName: normalizePolicyTable,
           ownerTables: [...config.crossOwnerReadTables],
@@ -1686,12 +1713,21 @@ function createRequestScopedReadonlyDb(
         };
   const rawRead = {
     dialectLabel: client.label,
+    executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
+      (await readSql.query(statement.text, [...statement.params])).rows,
+    normalizeTableName: normalizePolicyTable,
+    ownerTables: postgresOwnerScopedTableNames(metadata),
+  };
+  const privilegedRawRead = {
+    dialectLabel: client.label,
+    executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
+      (await privilegedReadSql.query(statement.text, [...statement.params])).rows,
     normalizeTableName: normalizePolicyTable,
     ownerTables: postgresOwnerScopedTableNames(metadata),
   };
   const readOptions = crossOwnerRead === undefined ? { rawRead } : { crossOwnerRead, rawRead };
   return createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
-    privilegedDb: readonlyDb(privilegedReadDb, { rawRead }),
+    privilegedDb: readonlyDb(privilegedReadDb, { rawRead: privilegedRawRead }),
     rawSecretTableRead: 'engine',
   });
 }
