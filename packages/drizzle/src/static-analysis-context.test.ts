@@ -73,6 +73,93 @@ describe('@kovojs/drizzle static analysis context', () => {
     ).toEqual([{ operation: 'db', site: 'src/app-runtime-db.ts:2' }]);
   });
 
+  it('does not surface generated auth adapter construction as app touch graph work', () => {
+    const providerSource = [
+      'function authAdapterDb(): AppDb {',
+      '  return getAppDatabase().systemDb({ operation: "write" });',
+      '}',
+      'export function createAuthAdapter() {',
+      '  return drizzleAdapter(authAdapterDb(), { provider: "pg", schema: authSchema });',
+      '}',
+    ].join('\n');
+    const authAdapterDb: ExtractedFunction = {
+      bodyStart: providerSource.indexOf('{', providerSource.indexOf('authAdapterDb')) + 1,
+      key: 'authAdapterDb',
+      localCalls: [],
+      name: 'authAdapterDb',
+      readCalls: [],
+      receiverNames: [],
+      receiverParameters: [],
+      unresolvedCalls: [
+        {
+          index:
+            providerSource.indexOf('getAppDatabase().systemDb') -
+            (providerSource.indexOf('{', providerSource.indexOf('authAdapterDb')) + 1),
+          name: 'systemDb',
+        },
+      ],
+      writeCalls: [],
+    };
+    const createAuthAdapter: ExtractedFunction = {
+      bodyStart: providerSource.indexOf('{', providerSource.indexOf('createAuthAdapter')) + 1,
+      key: 'createAuthAdapter',
+      localCalls: [],
+      name: 'createAuthAdapter',
+      readCalls: [],
+      receiverNames: [],
+      receiverParameters: [],
+      unresolvedCalls: [
+        {
+          index:
+            providerSource.indexOf('drizzleAdapter') -
+            (providerSource.indexOf('{', providerSource.indexOf('createAuthAdapter')) + 1),
+          name: 'drizzleAdapter',
+        },
+      ],
+      writeCalls: [],
+    };
+
+    expect(
+      directSummaryForFunction(
+        authAdapterDb,
+        { fileName: 'src/_kovo/app-runtime-db.ts', source: providerSource },
+        new Map(),
+        new Set(),
+      ),
+    ).toEqual({ reads: [], unresolved: [], writes: [] });
+    expect(
+      directSummaryForFunction(
+        createAuthAdapter,
+        { fileName: 'src/_kovo/app-runtime-db.ts', source: providerSource },
+        new Map(),
+        new Set(),
+      ),
+    ).toEqual({ reads: [], unresolved: [], writes: [] });
+
+    expect(
+      directSummaryForFunction(
+        authAdapterDb,
+        { fileName: 'src/auth.ts', source: providerSource },
+        new Map(),
+        new Set(),
+      ).unresolved,
+    ).toEqual([{ operation: 'systemDb', site: 'src/auth.ts:2' }]);
+    expect(
+      directSummaryForFunction(
+        {
+          ...createAuthAdapter,
+          unresolvedCalls: [...createAuthAdapter.unresolvedCalls, { index: 0, name: 'execute' }],
+        },
+        { fileName: 'src/_kovo/app-runtime-db.ts', source: providerSource },
+        new Map(),
+        new Set(),
+      ).unresolved,
+    ).toEqual([
+      { operation: 'drizzleAdapter', site: 'src/_kovo/app-runtime-db.ts:5' },
+      { operation: 'execute', site: 'src/_kovo/app-runtime-db.ts:4' },
+    ]);
+  });
+
   it('reports KV435 when a mutation handler returns secret-classified query results to the wire', () => {
     const facts = extractStaticBuildAnalysisFactsFromProject({
       files: [

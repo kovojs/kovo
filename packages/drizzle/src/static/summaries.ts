@@ -2546,7 +2546,7 @@ function objectLiteralStaticPathInputPath(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   unresolvedIdentifiers: ReadonlySet<string>,
 ): FunctionTouchSummary {
-  if (isGeneratedAppRuntimeDbProvider(fn, file)) {
+  if (isGeneratedAppRuntimeFrameworkFunction(fn, file)) {
     return { reads: [], unresolved: [], writes: [] };
   }
 
@@ -2652,13 +2652,39 @@ function objectLiteralStaticPathInputPath(
   return { reads, unresolved, writes };
 }
 
-function isGeneratedAppRuntimeDbProvider(fn: ExtractedFunction, file: SourceFileInput): boolean {
+function isGeneratedAppRuntimeFrameworkFunction(
+  fn: ExtractedFunction,
+  file: SourceFileInput,
+): boolean {
+  if (!/(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?\.ts$/.test(file.fileName)) {
+    return false;
+  }
+
   // SPEC §10.3/§11.1: generated `_kovo` runtime DB providers are framework handle factories,
   // not app-authored read/write helpers. Call sites outside this generated file remain visible.
-  return (
-    fn.name === 'appRuntimeDbProvider' &&
-    /(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?\.ts$/.test(file.fileName)
-  );
+  if (fn.name === 'appRuntimeDbProvider') return true;
+
+  // SPEC §10.3: generated Better Auth wiring may construct a system DB only inside the private
+  // auth adapter factory path; app-authored files and other `_kovo` functions still fail closed.
+  if (fn.name === 'authAdapterDb') {
+    return (
+      fn.readCalls.length === 0 &&
+      fn.writeCalls.length === 0 &&
+      fn.unresolvedCalls.length === 1 &&
+      fn.unresolvedCalls[0]?.name === 'systemDb'
+    );
+  }
+
+  if (fn.name === 'createAuthAdapter') {
+    return (
+      fn.readCalls.length === 0 &&
+      fn.writeCalls.length === 0 &&
+      fn.unresolvedCalls.length === 1 &&
+      fn.unresolvedCalls[0]?.name === 'drizzleAdapter'
+    );
+  }
+
+  return false;
 }
 
 /** @internal */ export function materializedViewRefreshFactsForFunction(
