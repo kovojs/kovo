@@ -1405,35 +1405,47 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     postgresRelationSchemaFromModule(config.schema),
     {},
   ) as AnyRelations;
-  if (config.driver === 'pglite') {
-    const client = new PGlite(config.dataDir);
-    return {
-      close: () => client.close(),
-      drizzleInternalDb: (capability) => {
-        assertInternalPostgresRuntimeDbCapability(capability);
-        return drizzlePglite({ client, relations });
-      },
-      drizzleReadonlyDb: (principal, role, roleSetting) =>
-        drizzlePglite({
-          client: createPostgresReadonlyClient(
-            client,
-            postgresReadonlyClientOptions(config, principal, role, roleSetting, client),
-          ),
-          relations,
-        }),
-      drizzleRequestDb: (principal, roleSetting) =>
-        drizzlePglite({
-          client: createPostgresScopedClient(
-            client,
-            postgresScopedClientOptions(config, principal, roleSetting),
-          ),
-          relations,
-        }),
-      label: 'PGlite',
-      sql: client,
-    };
-  }
+  return config.driver === 'pglite'
+    ? createPgliteRuntimeClient(config, relations)
+    : createNodePostgresRuntimeClient(config, relations);
+}
 
+function createPgliteRuntimeClient(
+  config: ResolvedPostgresRuntimeConfig,
+  relations: AnyRelations,
+): CreatedRuntimeClient {
+  const client = new PGlite(config.dataDir);
+  return {
+    close: () => client.close(),
+    drizzleInternalDb: (capability) => {
+      assertInternalPostgresRuntimeDbCapability(capability);
+      return drizzlePglite({ client, relations });
+    },
+    drizzleReadonlyDb: (principal, role, roleSetting) =>
+      drizzlePglite({
+        client: createPostgresReadonlyClient(
+          client,
+          postgresReadonlyClientOptions(config, principal, role, roleSetting, client),
+        ),
+        relations,
+      }),
+    drizzleRequestDb: (principal, roleSetting) =>
+      drizzlePglite({
+        client: createPostgresScopedClient(
+          client,
+          postgresScopedClientOptions(config, principal, roleSetting),
+        ),
+        relations,
+      }),
+    label: 'PGlite',
+    sql: client,
+  };
+}
+
+function createNodePostgresRuntimeClient(
+  config: ResolvedPostgresRuntimeConfig,
+  relations: AnyRelations,
+): CreatedRuntimeClient {
   const unregisterDatabaseEgressUrl = registerEgressDatabaseUrl(config.databaseUrl);
   const unregisterAdminDatabaseEgressUrl =
     config.adminDatabaseUrl === undefined

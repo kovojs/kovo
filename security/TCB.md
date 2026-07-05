@@ -67,7 +67,23 @@ they are not claimed as the verified TCB.
       "id": "server.postgres-runtime.request-scoped-db",
       "file": "packages/server/src/postgres-runtime.ts",
       "name": "createRuntimeClient",
+      "kind": "postgres-runtime-client-dispatch",
+      "classification": "tcb",
+      "lineBudget": 10
+    },
+    {
+      "id": "server.postgres-runtime.pglite-request-scoped-db",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "createPgliteRuntimeClient",
       "kind": "pglite-least-privilege-runtime-path",
+      "classification": "tcb",
+      "lineBudget": 40
+    },
+    {
+      "id": "server.postgres-runtime.node-request-scoped-db",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "createNodePostgresRuntimeClient",
+      "kind": "node-postgres-least-privilege-runtime-path",
       "classification": "tcb",
       "lineBudget": 80
     },
