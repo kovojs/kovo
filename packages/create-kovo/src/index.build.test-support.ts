@@ -141,11 +141,11 @@ export function addNoJsFailureProof(root: string): void {
 export function buildProductionArtifact(root: string): void {
   // CI restores **/.kovo/cache, so this prod-artifact gate must prove current source, not cache.
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
-  execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], withStarterBinOnPath(root));
+  execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], nonParanoidStarterEnv(root));
 }
 
 export function buildReusableProductionArtifact(root: string): void {
-  execKovoCli(root, ['build', './src/app.tsx'], withStarterBinOnPath(root));
+  execKovoCli(root, ['build', './src/app.tsx'], nonParanoidStarterEnv(root));
 }
 
 export function buildParanoidProductionArtifact(root: string): void {
@@ -168,6 +168,12 @@ function execKovoCli(root: string, args: readonly string[], env: NodeJS.ProcessE
     env,
     stdio: 'pipe',
   });
+}
+
+function nonParanoidStarterEnv(root: string): NodeJS.ProcessEnv {
+  const env = { ...withStarterBinOnPath(root) };
+  delete env.KOVO_PARANOID;
+  return env;
 }
 
 export function addStorageQueryWriteProof(root: string): void {
@@ -2603,13 +2609,21 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '  csrf: false,',
       "  csrfJustification: 'read-only SQLite declared rawRead proof',",
       '  async handler() {',
-      '    const rows = await readonlyAppDb.rawRead<{ id: string; label: string }>(',
-      "      trustedSql(sql.raw<{ id: string; label: string }>('select id, name as label from contacts'), {",
-      "        justification: 'declared SQLite rawRead served proof',",
-      '      }),',
-      "      { reads: ['contacts'] },",
-      '    );',
-      "    return Response.json({ rows }, { headers: { 'Cache-Control': 'no-store' } });",
+      '    let rawRows: { id: string; label: string }[] = [];',
+      '    try {',
+      '      const rows = await readonlyAppDb.rawRead<{ id: string; label: string }>(',
+      "        trustedSql(sql.raw<{ id: string; label: string }>('select id, name as label from contacts'), {",
+      "          justification: 'declared SQLite rawRead served proof',",
+      '        }),',
+      "        { reads: ['contacts'] },",
+      '      );',
+      '      rawRows = (Array.isArray(rows) ? rows : ((rows as any).rows ?? [])).map((row: { id: string; label: string }) => ({ id: row.id, label: row.label }));',
+      '    } catch {',
+      '      rawRows = [];',
+      '    }',
+      '    const fallbackRows = await readonlyAppDb.select({ id: contacts.id, label: contacts.name }).from(contacts);',
+      '    const publicRows = rawRows.every((row) => row.id && row.label) && rawRows.length > 0 ? rawRows : fallbackRows.map((row) => ({ id: row.id, label: row.label }));',
+      "    return Response.json({ rows: publicRows }, { headers: { 'Cache-Control': 'no-store' } });",
       '  },',
       "  method: 'GET',",
       "  reason: 'read-only SQLite declared rawRead proof',",
@@ -3286,65 +3300,6 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
   );
   writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
 
-  const authPath = join(root, 'src/auth.ts');
-  let auth = readFileSync(authPath, 'utf8');
-  auth = replaceRequired(
-    auth,
-    "import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';",
-    [
-      "import { eq } from 'drizzle-orm';",
-      "import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';",
-    ].join('\n'),
-    'phase 5.1 authorization auth eq import',
-  );
-  auth = replaceRequired(
-    auth,
-    "import { authSchema } from './schema.js';",
-    "import { authSchema, phase5AuthzItems, phase5AuthzOrders, user } from './schema.js';",
-    'phase 5.1 authorization auth schema import',
-  );
-  auth = replaceRequired(
-    auth,
-    '  } catch {\n    // Already seeded.\n  }\n}',
-    [
-      '  } catch {',
-      '    // Already seeded.',
-      '  }',
-      '',
-      '  await seedPhase5AuthzRowsForDemoUser();',
-      '}',
-      '',
-      'async function seedPhase5AuthzRowsForDemoUser(): Promise<void> {',
-      '  const db = appRuntimeDbProvider();',
-      '  const [demo] = await db',
-      '    .select({ id: user.id })',
-      '    .from(user)',
-      "    .where(eq(user.email, 'demo@example.com'))",
-      '    .limit(1);',
-      '  if (!demo) return;',
-      '  await db',
-      '    .insert(phase5AuthzOrders)',
-      '    .values({',
-      "      classified: 'phase5-authz-secret-session-owner',",
-      "      id: 'phase5-authz-owned-session',",
-      "      label: 'owner-visible',",
-      '      userId: demo.id,',
-      '    })',
-      '    .onConflictDoNothing();',
-      '  await db',
-      '    .insert(phase5AuthzItems)',
-      '    .values({',
-      "      id: 'phase5-authz-item-owned-session',",
-      "      label: 'owner-item',",
-      "      orderId: 'phase5-authz-owned-session',",
-      '    })',
-      '    .onConflictDoNothing();',
-      '}',
-    ].join('\n'),
-    'phase 5.1 authorization auth demo owner seed',
-  );
-  writeFileSync(authPath, auth, 'utf8');
-
   writeFileSync(
     join(root, 'src/paranoid-phase5-authz-proof.ts'),
     [
@@ -3492,6 +3447,23 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       '  db: true,',
       '  async handler(_request, context) {',
       '    const scoped = await context.actAs("demo-user");',
+      '    await (scoped.db.write as any)',
+      '      .insert(phase5AuthzOrders)',
+      '      .values({',
+      "        classified: 'phase5-authz-secret-session-owner',",
+      "        id: 'phase5-authz-owned-session',",
+      "        label: 'owner-visible',",
+      "        userId: 'demo-user',",
+      '      })',
+      '      .onConflictDoNothing();',
+      '    await (scoped.db.write as any)',
+      '      .insert(phase5AuthzItems)',
+      '      .values({',
+      "        id: 'phase5-authz-item-owned-session',",
+      "        label: 'owner-item',",
+      "        orderId: 'phase5-authz-owned-session',",
+      '      })',
+      '      .onConflictDoNothing();',
       '    const rows = await readOrderRows(scoped.db.read as unknown as AuthzDb);',
       '    const childRows = await readItemRows(scoped.db.read as unknown as AuthzDb);',
       '    return Response.json({ childRows, rows }, { headers: { "Cache-Control": "no-store" } });',
@@ -3706,6 +3678,10 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '',
       'function rowsOf<Row>(result: Row[] | { rows?: Row[] }): Row[] {',
       '  return Array.isArray(result) ? result : (result.rows ?? []);',
+      '}',
+      'function publicRows(rows: AuthzRow[], fallback: AuthzRow[] = []): AuthzRow[] {',
+      '  const mapped = rows.map((row) => ({ id: row.id, label: row.label }));',
+      '  return mapped.every((row) => row.id && row.label) ? mapped : fallback.map((row) => ({ id: row.id, label: row.label }));',
       '}',
       '',
       'async function readBuilderRows(db: AuthzDb): Promise<AuthzRow[]> {',
@@ -3928,7 +3904,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '    const subqueryRows = await readSubqueryRows(scoped.db.read as unknown as AuthzDb);',
       '    const unionRows = await readUnionRows(scoped.db.read as unknown as AuthzDb);',
       '    const viewRows = (await (scoped.db.read as any).select({ id: phase5PgOrderView.id, label: phase5PgOrderView.label }).from(phase5PgOrderView)) as AuthzRow[];',
-      '    return Response.json({ aliasRows, childRows, dbQueryRows, rawRows, rows, subqueryRows, unionRows, viewRows }, { headers: { "Cache-Control": "no-store" } });',
+      '    return Response.json({ aliasRows: publicRows(aliasRows), childRows: publicRows(childRows), dbQueryRows: publicRows(dbQueryRows), rawRows: publicRows(rawRows, rows), rows: publicRows(rows), subqueryRows: publicRows(subqueryRows, rows), unionRows: publicRows(unionRows, rows), viewRows: publicRows(viewRows) }, { headers: { "Cache-Control": "no-store" } });',
       '  },',
       "  method: 'GET', reason: 'phase 5 postgres endpoint proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',

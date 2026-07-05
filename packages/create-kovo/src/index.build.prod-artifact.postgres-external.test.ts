@@ -74,6 +74,7 @@ describeIfPostgres(
         await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
         const adminUrl = cluster.url(database, adminRole);
         const runtimeUrl = cluster.url(database, runtimeRole);
+        const systemUrl = cluster.url(database, 'kovo_system');
 
         const provisionOutput = execKovo(root, [
           'db',
@@ -84,6 +85,8 @@ describeIfPostgres(
           'migrations',
           '--admin-database-url',
           adminUrl,
+          '--database-url',
+          runtimeUrl,
         ]);
         expect(provisionOutput).toContain('STATUS ok');
         await grantRuntimeDataRoles(cluster.url(database, 'postgres'), runtimeRole);
@@ -111,6 +114,7 @@ describeIfPostgres(
             BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
+            KOVO_DB_SYSTEM_URL: systemUrl,
             KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL: `127.0.0.1:${cluster.port}`,
             NODE_ENV: 'production',
             PORT: String(port),
@@ -447,6 +451,7 @@ async function createExternalDatabase(
     await pool.query(
       `CREATE ROLE ${quoteIdent(names.runtimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
     );
+    await pool.query('CREATE ROLE kovo_system LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS');
     await pool.query(
       `CREATE DATABASE ${quoteIdent(names.database)} OWNER ${quoteIdent(names.adminRole)}`,
     );

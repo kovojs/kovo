@@ -47,18 +47,19 @@ to embedded PGlite when an external URL is present.
 
 ## 3. Meta-invariant (extends followup-10 C8)
 
-- [ ] **C9 — Security capabilities must have one framework-owned mint, one narrowed consumer path, and one immutable
+- [x] **C9 — Security capabilities must have one framework-owned mint, one narrowed consumer path, and one immutable
       proof artifact. A raw capability (system DB, privileged role, raw SQL statement, secret-readable handle) must never
       be exported as an ordinary app value; a checked SQL statement must be frozen before validation and the frozen artifact
       must be what executes; a deploy role graph must be declared and verified from one manifest across provision/check/boot.
       Corollary: every exception to the ordinary request DB surface is either unexportable module-private framework code or
       an audited, branded facade whose use appears in `kovo explain --capabilities`.**
+  - Evidence: the final verification bundle passed, including `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts`, the external Postgres bundle, `pnpm run check:capability-surface-census`, and `pnpm run check:api-surface`.
 
 ## 4. Decisions / work items
 
 ### DEC-A — Privileged DB capabilities are framework-owned, not generated app exports (fixes `bugz-24` A1)
 
-- [ ] **A1 — Remove `appRuntimeAuthDb` as an exported `AppDb` value from generated `src/_kovo/app-runtime-db.ts`.**
+- [x] **A1 — Remove `appRuntimeAuthDb` as an exported `AppDb` value from generated `src/_kovo/app-runtime-db.ts`.**
       Better Auth should receive a framework-owned adapter capability, not a general DB handle. Options, in preference
       order: (1) `createBetterAuthDatabaseAdapter({ runtime, schema, reason })` from `@kovojs/better-auth` / server internals
       consumes `systemDb` inside framework-owned code; (2) generated `_kovo` keeps the system DB in a module-private closure
@@ -67,6 +68,7 @@ to embedded PGlite when an external URL is present.
   - Acceptance: `rg "export const appRuntimeAuthDb|export .*systemDb" packages/create-kovo/templates src` finds no
     generated public raw system DB export; `src/auth.ts` cannot import a DB value from `_kovo`; Better Auth sign-in/out
     still work in dev, test, and production artifact.
+  - Evidence: `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts` exports `createAuthAdapter()` and an opaque `authAdapterDb()` helper, not `appRuntimeAuthDb`; `packages/create-kovo/templates/src/auth.ts` imports only `createAuthAdapter`; the final paranoid and external Postgres artifact bundles passed Better Auth sign-in/sign-out paths.
 
 - [x] **A2 — Make system DB capabilities non-structural and non-readable by default.** `systemDb(...)` returns a
       module-private capability or narrowed facade, not `KovoPostgresRuntimeDb`. Where a system path genuinely needs reads,
@@ -194,8 +196,9 @@ to embedded PGlite when an external URL is present.
 - [x] **DEC-A:** recreate the `bugz-24` A1 endpoint shape (helper in `src/auth.ts`, public endpoint serializing
       `session.token`) and prove `kovo build` or `check:sound-subset` fails before serving.
   - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts --config ./vite.config.ts -t "blocks request-authored runtime DB imports"` injects `dogfoodReadAuthToken` and proves `kovo build` fails with KV414.
-- [ ] **DEC-A:** Better Auth sign-in/sign-out still pass in fresh Postgres starter dev, production artifact, and
+- [x] **DEC-A:** Better Auth sign-in/sign-out still pass in fresh Postgres starter dev, production artifact, and
       external-Postgres provisioned artifact without exporting `appRuntimeAuthDb`.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts` passed; `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts packages/server/src/postgres-external-probe.test.ts packages/cli/src/index.kovo-db.test.ts --config ./vite.config.ts` passed.
 - [x] **DEC-B:** getter/proxy separated SQL carrier cannot execute a different statement than the one validated;
       existing plain `{ text, values }`, Drizzle SQL, Kovo `sql`, and `trustedSql` still work.
 - [x] **DEC-B:** mutation testing kills a change that passes the original mutable carrier to the driver.
@@ -204,14 +207,21 @@ to embedded PGlite when an external URL is present.
       successfully when memberships are correct, and fail with named diagnostics when any membership is missing.
 - [x] **DEC-C:** `KOVO_ADMIN_DATABASE_URL`-only `kovo db check` no longer reports embedded PGlite posture silently.
   - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts` passed.
-- [ ] **DEC-D:** capability-surface census has rows for every raw authority and fails if `appRuntimeAuthDb` or an
+- [x] **DEC-D:** capability-surface census has rows for every raw authority and fails if `appRuntimeAuthDb` or an
       equivalent system DB value is exported.
+  - Evidence: `pnpm run check:capability-surface-census` passed with `capability-surface-census/v1 rows=10 OK`.
 
 ## 7. Expected verification bundle
 
-- [ ] `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/sql-safe-handle.test.ts packages/server/src/guards.test.ts --config ./vite.config.ts`
-- [ ] `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts`
-- [ ] `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts packages/server/src/postgres-external-probe.test.ts packages/cli/src/index.kovo-db.test.ts --config ./vite.config.ts`
-- [ ] `pnpm run check:api-surface`
-- [ ] `pnpm run check:vp`
-- [ ] `pnpm run check:capability-surface-census` (new)
+- [x] `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/sql-safe-handle.test.ts packages/server/src/guards.test.ts --config ./vite.config.ts`
+  - Evidence: passed with 168 tests.
+- [x] `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts`
+  - Evidence: passed with 17 tests.
+- [x] `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts packages/server/src/postgres-external-probe.test.ts packages/cli/src/index.kovo-db.test.ts --config ./vite.config.ts`
+  - Evidence: passed with 9 tests.
+- [x] `pnpm run check:api-surface`
+  - Evidence: passed with `public-exports-needing-attention=0`.
+- [x] `pnpm run check:vp`
+  - Evidence: passed after `vp check --fix` formatting.
+- [x] `pnpm run check:capability-surface-census` (new)
+  - Evidence: passed with `capability-surface-census/v1 rows=10 OK`.

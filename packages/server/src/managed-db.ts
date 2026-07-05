@@ -1187,6 +1187,13 @@ function dataPropertyValue(
 }
 
 const APP_POSTGRES_ALLOWED_COMMANDS = new Set(['delete', 'insert', 'select', 'update', 'with']);
+const APP_POSTGRES_TRANSACTION_COMMANDS = new Set([
+  'begin',
+  'commit',
+  'release',
+  'rollback',
+  'savepoint',
+]);
 
 function assertAppPostgresTextAllowed(text: string): void {
   const shape = scanAppPostgresStatementShape(text);
@@ -1278,6 +1285,9 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
   if (statementHasToken) statementCount += 1;
   if (statementCount !== 1) return { ok: false, reason: 'expected exactly one SQL statement' };
   const command = /^\s*([A-Za-z]+)/u.exec(cleaned)?.[1]?.toLowerCase();
+  if (command !== undefined && APP_POSTGRES_TRANSACTION_COMMANDS.has(command)) {
+    return appPostgresTransactionControlShape(cleaned, command);
+  }
   if (command === undefined || !APP_POSTGRES_ALLOWED_COMMANDS.has(command)) {
     return { ok: false, reason: 'statement command is not in the app SQL allowlist' };
   }
@@ -1285,6 +1295,22 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
     return { ok: false, reason: 'app SQL cannot change framework transaction settings' };
   }
   return { command, ok: true };
+}
+
+function appPostgresTransactionControlShape(
+  cleaned: string,
+  command: string,
+): AppPostgresStatementShape {
+  const patterns: Record<string, RegExp> = {
+    begin: /^\s*begin(?:\s+(?:work|transaction))?\s*$/iu,
+    commit: /^\s*commit(?:\s+(?:work|transaction))?\s*$/iu,
+    release: /^\s*release(?:\s+savepoint)?\s+[A-Za-z_][A-Za-z0-9_$]*\s*$/iu,
+    rollback:
+      /^\s*rollback(?:\s+(?:work|transaction))?(?:\s+to(?:\s+savepoint)?\s+[A-Za-z_][A-Za-z0-9_$]*)?\s*$/iu,
+    savepoint: /^\s*savepoint\s+[A-Za-z_][A-Za-z0-9_$]*\s*$/iu,
+  };
+  if (patterns[command]?.test(cleaned) === true) return { command, ok: true };
+  return { ok: false, reason: 'unsupported transaction control statement' };
 }
 
 function scopedPostgresExec(options: PostgresScopedClientOptions, query: string): Promise<unknown> {

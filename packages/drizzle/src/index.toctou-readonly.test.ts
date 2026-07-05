@@ -288,6 +288,33 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     ]);
   });
 
+  it('flags a query() loader that reaches a storage write', () => {
+    const result = reach(
+      [
+        QHEAD,
+        'declare function createMemoryStorage(): { put(key: string, body: string): Promise<void> };',
+        'const storageWriteProbe = createMemoryStorage();',
+        'export const storagePutWriteQuery = query({',
+        '  async load() {',
+        '    await storageWriteProbe.put("receipts/query-write-proof.txt", "bad");',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'storageWriteProbe', provenance: 'storage-receiver' },
+        operation: 'put',
+        operationKind: 'put',
+        operationProvenance: 'property-access',
+        query: 'q/storage-put-write-query',
+        site: 'q.ts:9',
+        table: 'storageWriteProbe',
+      },
+    ]);
+  });
+
   it('flags a legacy query.elevated loader that reaches a Drizzle write', () => {
     const result = reach(
       `${QHEAD}export const dashboard = query.elevated("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.delete(logs).where(eq(logs.id, "x")); return { ok: true }; } });`,

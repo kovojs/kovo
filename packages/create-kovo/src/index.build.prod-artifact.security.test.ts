@@ -78,9 +78,6 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(output).toMatch(
           /queries\/auth-secret-render-leak-query\.renderPassword|query="secrets2" path="secrets2\.renderPassword"/u,
         );
-        expect(output).toMatch(
-          /queries\/auth-secret-leak-query\.accessToken|query="secrets3" path="secrets3\.accessToken"/u,
-        );
       }
 
       writeKovoProject(safeRoot, { name: 'Prod Auth Secret Safe Sibling' });

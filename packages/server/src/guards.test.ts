@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import {
+  isManagedSqlStatement,
   stampParameterizedSql,
   stampRawSqlChunk,
   stampStaticSql,
   stampTrustedSql,
+  type ManagedSqlStatement,
 } from '@kovojs/core/internal/sql-safety';
 import { csrfToken } from './csrf.js';
 import {
@@ -25,6 +27,13 @@ import { query, runQuery } from './query.js';
 import { route, runRoutePage } from './route.js';
 import { s, type Schema } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
+
+function expectManagedSqlStatement(value: unknown, text: string): ManagedSqlStatement {
+  expect(isManagedSqlStatement(value)).toBe(true);
+  const statement = value as ManagedSqlStatement;
+  expect(statement.text).toBe(text);
+  return statement;
+}
 
 describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
   it('keeps a same-origin, single-leading-slash path (with query/hash)', () => {
@@ -158,12 +167,17 @@ describe('server guard and session primitives', () => {
     expect(() => request.db.execute("select * from products where id = 'p1'")).toThrow(/KV422/);
     expect(calls).toEqual([]);
 
-    const parameterized = stampParameterizedSql({});
+    const parameterized = stampParameterizedSql({
+      text: 'select * from products where id = $1',
+      values: ['p1'],
+    });
     expect(request.db.execute(parameterized)).toBe('ok');
     expect(
       request.db.execute({ text: 'select * from products where id = $1', values: ['p1'] }),
     ).toBe('ok');
     expect(calls).toHaveLength(2);
+    expectManagedSqlStatement(calls[0], 'select * from products where id = $1');
+    expectManagedSqlStatement(calls[1], 'select * from products where id = $1');
   });
 
   it('requires trustedSql around raw SQL chunks on managed handles', async () => {
@@ -185,8 +199,16 @@ describe('server guard and session primitives', () => {
 
     expect(() => request.db.client.execute(raw)).toThrow(/trustedSql/);
     expect(calls).toEqual([]);
-    expect(request.db.client.execute(stampTrustedSql(raw, 'audited migration clause'))).toBe('ok');
-    expect(calls).toEqual([raw]);
+    expect(
+      request.db.client.execute(
+        stampTrustedSql(
+          { text: 'select * from products where id = $1', values: ['p1'] },
+          'audited migration clause',
+        ),
+      ),
+    ).toBe('ok');
+    expect(calls).toHaveLength(1);
+    expectManagedSqlStatement(calls[0], 'select * from products where id = $1');
   });
 
   it('guards blessed nested adapter handles without silently passing unknown SQL shapes', async () => {
@@ -234,7 +256,11 @@ describe('server guard and session primitives', () => {
     expect(
       request.db.pglite.query({ text: 'select * from products where id = $1', values: ['p1'] }),
     ).toBe('pglite-ok');
-    expect(request.db.sqlite.exec(stampParameterizedSql({}))).toBe('sqlite-ok');
+    expect(
+      request.db.sqlite.exec(
+        stampParameterizedSql({ sql: 'select * from products where id = ?', args: ['p1'] }),
+      ),
+    ).toBe('sqlite-ok');
     expect(
       request.db.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] }),
     ).toBe('client-ok');
@@ -244,6 +270,9 @@ describe('server guard and session primitives', () => {
         .get(),
     ).toThrow(/raw driver escape db\.\$client|KV422/);
     expect(calls).toHaveLength(3);
+    expectManagedSqlStatement(calls[0]?.[1], 'select * from products where id = $1');
+    expectManagedSqlStatement(calls[1]?.[1], 'select * from products where id = ?');
+    expectManagedSqlStatement(calls[2]?.[1], 'select * from products where id = ?');
   });
 
   it('rejects attacker-shaped SQL text and still allows static prepared statement values', async () => {
@@ -345,14 +374,24 @@ describe('server guard and session primitives', () => {
     );
     expect(calls).toEqual([]);
 
-    expect(request.db.query(stampParameterizedSql({}))).toEqual([]);
+    expect(
+      request.db.query(stampParameterizedSql({ text: 'select * from products', values: [] })),
+    ).toEqual([]);
     expect(
       request.db.execute({ text: 'select * from products where status = $1', values: [status] }),
     ).toBe('execute-ok');
     expect(
-      request.db.exec(stampTrustedSql(stampRawSqlChunk({}), 'audited static report clause')),
+      request.db.exec(
+        stampTrustedSql(
+          { text: 'select * from products where id = $1', values: [ids[0]] },
+          'audited static report clause',
+        ),
+      ),
     ).toBe('exec-ok');
     expect(calls).toHaveLength(3);
+    expectManagedSqlStatement(calls[0], 'select * from products');
+    expectManagedSqlStatement(calls[1], 'select * from products where status = $1');
+    expectManagedSqlStatement(calls[2], 'select * from products where id = $1');
   });
 
   it('enforces the managed SQL guard by default in production (SPEC §10.2 fail-closed floor)', async () => {

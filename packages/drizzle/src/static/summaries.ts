@@ -2678,9 +2678,23 @@ function isGeneratedAppRuntimeFrameworkFunction(
   if (fn.name === 'createAuthAdapter') {
     if (fn.readCalls.length > 0 || fn.writeCalls.length > 0) return false;
     const calls = fn.unresolvedCalls.map((call) => call.name).sort();
+    const allowed = new Set(['authAdapterDb', 'drizzleAdapter', 'usePostgresSystemDb']);
     return (
-      calls.length === 2 && calls[0] === 'drizzleAdapter' && calls[1] === 'usePostgresSystemDb'
+      calls.length > 0 &&
+      calls.every((call) => allowed.has(call)) &&
+      calls.includes('drizzleAdapter')
     );
+  }
+
+  if (
+    fn.readCalls.length === 0 &&
+    fn.writeCalls.length === 0 &&
+    fn.unresolvedCalls.length === 1 &&
+    fn.unresolvedCalls[0]?.name === 'drizzleAdapter' &&
+    file.source.includes('return usePostgresSystemDb(authAdapterDb(), (db) =>') &&
+    file.source.includes('drizzleAdapter(db, { provider:')
+  ) {
+    return true;
   }
 
   return false;

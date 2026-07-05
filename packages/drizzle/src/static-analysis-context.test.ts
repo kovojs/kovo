@@ -113,6 +113,12 @@ describe('@kovojs/drizzle static analysis context', () => {
       unresolvedCalls: [
         {
           index:
+            providerSource.indexOf('authAdapterDb()') -
+            (providerSource.indexOf('{', providerSource.indexOf('createAuthAdapter')) + 1),
+          name: 'authAdapterDb',
+        },
+        {
+          index:
             providerSource.indexOf('usePostgresSystemDb') -
             (providerSource.indexOf('{', providerSource.indexOf('createAuthAdapter')) + 1),
           name: 'usePostgresSystemDb',
@@ -121,6 +127,22 @@ describe('@kovojs/drizzle static analysis context', () => {
           index:
             providerSource.indexOf('drizzleAdapter') -
             (providerSource.indexOf('{', providerSource.indexOf('createAuthAdapter')) + 1),
+          name: 'drizzleAdapter',
+        },
+      ],
+      writeCalls: [],
+    };
+    const createAuthAdapterCallback: ExtractedFunction = {
+      bodyStart: providerSource.indexOf('=>') + 2,
+      key: 'createAuthAdapter.callback',
+      localCalls: [],
+      name: 'createAuthAdapter.callback',
+      readCalls: [],
+      receiverNames: [],
+      receiverParameters: [],
+      unresolvedCalls: [
+        {
+          index: providerSource.indexOf('drizzleAdapter') - (providerSource.indexOf('=>') + 2),
           name: 'drizzleAdapter',
         },
       ],
@@ -138,6 +160,14 @@ describe('@kovojs/drizzle static analysis context', () => {
     expect(
       directSummaryForFunction(
         createAuthAdapter,
+        { fileName: 'src/_kovo/app-runtime-db.ts', source: providerSource },
+        new Map(),
+        new Set(),
+      ),
+    ).toEqual({ reads: [], unresolved: [], writes: [] });
+    expect(
+      directSummaryForFunction(
+        createAuthAdapterCallback,
         { fileName: 'src/_kovo/app-runtime-db.ts', source: providerSource },
         new Map(),
         new Set(),
@@ -163,6 +193,7 @@ describe('@kovojs/drizzle static analysis context', () => {
         new Set(),
       ).unresolved,
     ).toEqual([
+      { operation: 'authAdapterDb', site: 'src/_kovo/app-runtime-db.ts:1' },
       { operation: 'usePostgresSystemDb', site: 'src/_kovo/app-runtime-db.ts:5' },
       { operation: 'drizzleAdapter', site: 'src/_kovo/app-runtime-db.ts:6' },
       { operation: 'execute', site: 'src/_kovo/app-runtime-db.ts:4' },
