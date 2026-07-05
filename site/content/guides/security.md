@@ -505,6 +505,8 @@ content.
 
 ## Next
 
+- [Confidential values](/guides/confidential-values/) - mark secrets, redactions, and untrusted input before they reach the wire.
+- [Outbound requests & egress](/guides/outbound-requests-egress/) - tighten third-party HTTP destinations instead of letting them drift open.
 - [Mutations & forms](/guides/mutations/) — the guarded request lifecycle and the 422 path.
 - [Endpoints & webhooks](/guides/endpoints-webhooks/) — machine ingress and CSRF exemptions.
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — the review modes as CI assertions.

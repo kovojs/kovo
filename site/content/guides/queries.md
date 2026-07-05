@@ -150,6 +150,7 @@ opaque enough that the analyzer cannot see the read set directly.
 
 ## Next
 
+- [Pagination](/guides/pagination/) - keep one held list instance and append only the new rows.
 - [Caching](/guides/caching/) — make a public typed read cacheable and verify the headers.
 - [Data layer](/guides/data-layer/) — annotate tables and understand Drizzle extraction.
 - [Mutations & forms](/guides/mutations/) — post forms and return fresh fragments.
