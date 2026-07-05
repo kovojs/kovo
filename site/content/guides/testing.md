@@ -17,6 +17,7 @@ browser.
 `@kovojs/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
 
 ```ts
+// Source: examples/commerce/src/app-test-helpers.ts
 import { createKovoTestHarness } from '@kovojs/test/harness';
 
 const harness = createKovoTestHarness({
@@ -52,6 +53,7 @@ This is the app-level harness shape to use when you want function-level mutation
 separate integration suite for it. The `kovoTest` wrapper packages the same thing as named cases:
 
 ```ts
+// Source: examples/commerce/src/app.add-to-cart.test.ts
 import { kovoTest } from '@kovojs/test/test-case';
 import { it } from 'vitest';
 

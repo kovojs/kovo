@@ -79,9 +79,9 @@ For document-level shells, configure them once on the app:
 ```ts
 import { createApp } from '@kovojs/server';
 
-declare const ErrorShell: any;
-declare const ForbiddenShell: any;
-declare const NotFoundShell: any;
+const ErrorShell = () => 'Server error';
+const ForbiddenShell = () => 'Forbidden';
+const NotFoundShell = () => 'Not found';
 
 export default createApp({
   errorShells: { forbidden: ForbiddenShell, notFound: NotFoundShell, serverError: ErrorShell },

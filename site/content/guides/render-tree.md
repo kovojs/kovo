@@ -15,8 +15,8 @@ import { component } from '@kovojs/core';
 import { renderRegistry, s } from '@kovojs/server';
 
 const Callout = component({
-  render: ({ tone = 'info' }, _state, slots: { children?: any }) => (
-    <aside data-tone={tone}>{slots.children}</aside>
+  render: ({ tone = 'info' }, _state, slots: { children?: string }) => (
+    <aside data-tone={tone}>{slots.children ?? ''}</aside>
   ),
 });
 export const registry = renderRegistry({

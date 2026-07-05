@@ -52,13 +52,14 @@ optimization.
 Query loaders receive a managed read handle:
 
 ```ts
+// Source: examples/commerce/src/queries.ts
 import { publicAccess, query, s } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
 const cartSummaryDefinition = {
   access: publicAccess('cart badge is visible to anonymous shoppers'),
   output: s.object({ count: s.number() }),
-  load: async (_input, context?: { db?: any }): Promise<{ count: number }> => {
+  load: async (_input, context): Promise<{ count: number }> => {
     const rows = (await context?.db.select({ quantity: cartItems.quantity }).from(cartItems)) ?? [];
     return { count: rows.reduce((total, row) => total + row.quantity, 0) };
   },
@@ -88,6 +89,7 @@ output schema and `reads` set.
 The mutation handler may do reads, but the writes themselves belong in a named domain-layer helper:
 
 ```ts
+// Source: examples/commerce/src/domain.ts
 const commitAddToCartRows = async (_db: unknown, _input: unknown) => {};
 
 export const addToCart = mutation({
@@ -109,6 +111,7 @@ The helper owns the Drizzle write calls. The table annotations map those tables 
 `product`, so visible queries reading either domain rerun after commit.
 
 ```ts
+// Source: examples/commerce/src/domain.ts
 export async function commitAddToCartRows(
   db: { insert(table: unknown): { values(value: unknown): Promise<void> } },
   input: { productId: string; quantity: number },
@@ -125,6 +128,7 @@ export async function commitAddToCartRows(
 If the write hides its table set, declare the registry facts on the mutation:
 
 ```ts
+// Source: examples/commerce/src/domain.ts
 const mergeCartRows = async (_db: unknown, _cartId: string) => {};
 
 export const mergeCart = mutation({
@@ -161,14 +165,15 @@ move writes into a named helper, and reserve `registry.tables` for the truly opa
 Every request-reachable surface needs access posture:
 
 ```ts
+// Source: examples/commerce/src/queries.ts
 export const adminProducts = query({
   guard: guards.role('admin'),
-  load: (_input, context: { db: any }) => context.db.select().from(products),
+  load: (_input, context) => context.db.select().from(products),
 });
 
 export const publicProducts = query({
   access: publicAccess('catalog is public'),
-  load: (_input, context: { db: any }) => context.db.select().from(products),
+  load: (_input, context) => context.db.select().from(products),
 });
 ```
 

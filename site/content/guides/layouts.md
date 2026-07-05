@@ -13,6 +13,7 @@ into it explicitly.
 ## Declare a layout
 
 ```tsx
+// Source: examples/crm/src/app-shell.ts
 export const AppShell = layout({
   render: (_queries, _state, { children }) => (
     <main class="app-shell">
@@ -22,10 +23,7 @@ export const AppShell = layout({
   ),
 });
 
-export const dealsRoute = route('/deals', {
-  layout: AppShell,
-  page: () => <DealsPage />,
-});
+export const dealsRoute = route('/deals', { layout: AppShell, page: () => <DealsPage /> });
 ```
 
 The route still renders a full document. The layout is page chrome inside that document; the request
@@ -36,6 +34,7 @@ shell owns the outer document template, loader, query scripts, and error shells.
 Use `parent` when a route segment adds chrome inside a broader shell:
 
 ```tsx
+// Source: examples/crm/src/app-shell.ts
 export default createApp({
   routes: ({ layout, route }) => {
     const AccountLayout = layout({
@@ -72,6 +71,7 @@ Use `boundaries` when a route segment needs its own 404, 403, or error body inst
 shell:
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 const AccountLayout = layout({
   boundaries: {
     unauthorized: ({ status }) => <AccountDenied status={status} />,
@@ -99,6 +99,7 @@ Use route-level `regions` when a layout needs sibling areas such as a docs page 
 The layout decides placement; the route decides what each named region renders.
 
 ```tsx
+// Source: site/src/docs-app.tsx
 import type { RoutePageResult } from '@kovojs/server';
 
 type DocsRegions = Readonly<{
