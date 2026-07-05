@@ -1133,10 +1133,34 @@ export const save = mutation('cart/save', {
             target: 'public.orders',
           },
           {
+            justification: 'Better Auth adapter owns session table writes before app session',
+            kind: 'authAdapterDb',
+            site: 'src/_kovo/app-runtime-db.ts:90',
+            target: 'src/auth.ts',
+          },
+          {
+            justification: 'managed SQL carrier is frozen before validation and execution',
+            kind: 'managedSqlStatement',
+            site: 'packages/server/src/sql-safe-handle.ts',
+            target: 'postgres,sqlite',
+          },
+          {
+            justification: 'external Postgres roles verified by db provision/check/boot',
+            kind: 'postgresRoleTopology',
+            site: 'kovo db check',
+            target: 'reader,writer,admin,system',
+          },
+          {
             justification: 'aggregate totals contain no tenant identifiers',
             kind: 'publicRelation',
             site: 'src/_kovo/app-runtime-db.ts:14',
             target: 'public.kovo_order_totals_mv',
+          },
+          {
+            justification: 'framework-owned system DB capability remains opaque',
+            kind: 'systemDb',
+            site: 'src/_kovo/app-runtime-db.ts:79',
+            target: 'auth-adapter',
           },
         ],
         // An audit-grade reveal folds into the table as a trustedReveal capability.
@@ -1166,13 +1190,17 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       CAPABILITIES
+      CAPABILITY kind=authAdapterDb site=src/_kovo/app-runtime-db.ts:90 module=- target=src/auth.ts justification="Better Auth adapter owns session table writes before app session"
       CAPABILITY kind=crossOwnerRead site=app/admin.ts:12 module=- target=public.orders justification="admin support export across owners"
       CAPABILITY kind=egressAllowInternal site=app/server.ts:14 module=- target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
+      CAPABILITY kind=managedSqlStatement site=packages/server/src/sql-safe-handle.ts module=- target=postgres,sqlite justification="managed SQL carrier is frozen before validation and execution"
+      CAPABILITY kind=postgresRoleTopology site=kovo db check module=- target=reader,writer,admin,system justification="external Postgres roles verified by db provision/check/boot"
       CAPABILITY kind=publicRelation site=src/_kovo/app-runtime-db.ts:14 module=- target=public.kovo_order_totals_mv justification="aggregate totals contain no tenant identifiers"
       CAPABILITY kind=publishToClient site=app/checkout.tsx:9 module=./checkout-config target=stripeClient justification="Stripe SDK is a client-safe published handle"
       CAPABILITY kind=serverValue site=app/admin.ts:3 module=- target=export.email justification="admin export reveals masked emails"
+      CAPABILITY kind=systemDb site=src/_kovo/app-runtime-db.ts:79 module=- target=auth-adapter justification="framework-owned system DB capability remains opaque"
       CAPABILITY kind=trustedReveal site=app/support.ts:7 module=- target=supportUser.email justification="masked email for support tooling"
-      SUMMARY total=6
+      SUMMARY total=10
       "
     `);
   });
