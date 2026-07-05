@@ -280,6 +280,12 @@ export function snapshotManagedSqlStatement(
   const queryChunks = dataPropertyValue(record, 'queryChunks');
 
   if (isTrustedSql(statement) || isParameterizedSql(statement) || isStaticSql(statement)) {
+    if (!isTrustedSql(statement) && sqlSafetyMetadata(statement).containsRawChunk) {
+      return {
+        message: 'sql.raw(...) chunks require trustedSql(..., { justification }).',
+        ok: false,
+      };
+    }
     if (textSnapshot.ok) {
       return managedSqlSnapshot(
         textSnapshot.value,
@@ -556,7 +562,7 @@ function isSqlParameterNameStart(char: string | undefined): boolean {
 }
 
 function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): void {
-  stamp(value, sqlSafetyMetadataBrand, metadata);
+  stamp(value, sqlSafetyMetadataBrand, { ...sqlSafetyMetadata(value), ...metadata });
 }
 
 function blessSql(sink: SqlBlessedSink, value: object): void {

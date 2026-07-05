@@ -8,6 +8,7 @@ import {
   isSqlHandleProperty,
   snapshotManagedSqlStatement,
   stampParameterizedSql,
+  stampRawSqlChunk,
   stampSqlIdentifier,
   stampSqlKeyword,
   stampStaticSql,
@@ -148,6 +149,17 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     expect(validateManagedSqlStatement(stampTrustedSql({}, 'audited report clause')).ok).toBe(true);
     expect(validateManagedSqlStatement(stampSqlIdentifier({})).ok).toBe(true);
     expect(validateManagedSqlStatement(stampSqlKeyword({})).ok).toBe(true);
+  });
+
+  it('preserves raw SQL chunk metadata across later SQL brands', () => {
+    const raw = {};
+    stampRawSqlChunk(raw);
+    stampStaticSql(raw);
+
+    expect(validateManagedSqlStatement(raw)).toMatchObject({ ok: false });
+    expect(validateManagedSqlStatement(stampTrustedSql(raw, 'audited report clause'))).toEqual({
+      ok: true,
+    });
   });
 
   it('snapshots branded queryChunks into immutable executable statement text', () => {
