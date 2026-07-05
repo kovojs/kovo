@@ -1754,6 +1754,26 @@ describe('sink-policy gate', () => {
 
     expect(
       sqlSafetyInvariantFindings(
+        'packages/server/src/sql-safe-handle.ts',
+        `
+          function assertManagedSqlStatement(statement: unknown): ManagedSqlStatement {
+            const snapshot = snapshotManagedSqlStatement(statement, writePolicy?.dialect);
+            if (snapshot.ok) {
+              assertSqlWriteTablesAllowed(snapshot.statement, writePolicy);
+              return snapshot.statement;
+            }
+            const validation = validateManagedSqlStatement(statement);
+            if (validation.ok) {
+              throw new Error('validated SQL could not be snapshotted');
+            }
+            throw new Error(validation.message);
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlSafetyInvariantFindings(
         'packages/drizzle/src/static.ts',
         `
           diagnostics.push(

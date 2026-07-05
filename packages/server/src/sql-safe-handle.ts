@@ -77,6 +77,8 @@ const WRITE_SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
   'update',
   'with',
 ]);
+const SQL_SNAPSHOT_FAILURE_MESSAGE =
+  'KV422: managed SQL statement was validated but could not be snapshotted for execution (SPEC §10.2/§10.3).';
 const frameworkManagedDbRawTargets = new WeakMap<object, object>();
 const managedSqlExecutionPolicies = new WeakSet<object>();
 
@@ -713,11 +715,7 @@ export const enforceManagedSql = securityClassifier(
       return snapshot.statement;
     }
     const validation = validateManagedSqlStatement(statement);
-    if (validation.ok) {
-      throw new Error(
-        'KV422: managed SQL statement was validated but could not be snapshotted for execution (SPEC §10.2/§10.3).',
-      );
-    }
+    if (validation.ok) throw new Error(SQL_SNAPSHOT_FAILURE_MESSAGE);
     throw new Error(validation.message);
   },
 );

@@ -1589,18 +1589,10 @@ function createNodePostgresRuntimeClient(
       : registerEgressDatabaseUrl(config.systemDatabaseUrl);
   const pool = new Pool({ connectionString: config.databaseUrl } satisfies PoolConfig);
   const transactionalClient = new NodePostgresRuntimeClient(pool);
-  const adminTransactionalClient =
-    config.adminDatabaseUrl === undefined
-      ? undefined
-      : new NodePostgresRuntimeClient(
-          new Pool({ connectionString: config.adminDatabaseUrl } satisfies PoolConfig),
-        );
-  const systemTransactionalClient =
-    config.systemDatabaseUrl === undefined
-      ? undefined
-      : new NodePostgresRuntimeClient(
-          new Pool({ connectionString: config.systemDatabaseUrl } satisfies PoolConfig),
-        );
+  const adminTransactionalClient = createOptionalNodePostgresRuntimeClient(config.adminDatabaseUrl);
+  const systemTransactionalClient = createOptionalNodePostgresRuntimeClient(
+    config.systemDatabaseUrl,
+  );
   return {
     close: async () => {
       try {
@@ -1655,6 +1647,16 @@ function createNodePostgresRuntimeClient(
       ),
     sql: transactionalClient,
   };
+}
+
+function createOptionalNodePostgresRuntimeClient(
+  databaseUrl: string | undefined,
+): NodePostgresRuntimeClient | undefined {
+  return databaseUrl === undefined
+    ? undefined
+    : new NodePostgresRuntimeClient(
+        new Pool({ connectionString: databaseUrl } satisfies PoolConfig),
+      );
 }
 
 function nodePostgresScopedRuntimeClient(

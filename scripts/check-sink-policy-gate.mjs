@@ -569,6 +569,9 @@ export function sqlSafetyInvariantFindings(filePath, text) {
       ) ||
       /\bif\s*\(\s*validation\s*\.\s*ok\s*\)\s*return\s+assert[A-Za-z0-9_]*\s*\([^;]*\)\s*;[\s\S]{0,160}\bthrow\s+new\s+Error\s*\(\s*validation\s*\.\s*message\s*\)/.test(
         source,
+      ) ||
+      /\bconst\s+snapshot\s*=\s*snapshotManagedSqlStatement\s*\(\s*statement\s*,[\s\S]{0,120}\bif\s*\(\s*snapshot\s*\.\s*ok\s*\)\s*\{[\s\S]{0,240}\breturn\s+snapshot\s*\.\s*statement\s*;[\s\S]{0,240}\bconst\s+validation\s*=\s*validateManagedSqlStatement\s*\(\s*statement\s*\)\s*;[\s\S]{0,240}\bthrow\s+new\s+Error\s*\(\s*validation\s*\.\s*message\s*\)/.test(
+        source,
       );
     if (!returnsOnValidThenThrows) {
       findings.push(`${filePath}: managed DB handle must throw on failed SQL validation`);
