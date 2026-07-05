@@ -297,7 +297,7 @@ test:browser` is already correct), and repoint the closer at a real self-serve a
   - Acceptance: the site's compile-checked-fences gate passes with the policy tightened to
     typecheck (not just parse) if that's not already the case — investigate why non-compiling
     samples currently pass it.
-- [ ] **Add a "Run it" proof moment to every guide missing one** (flagged on 15+ pages). The bar
+- [x] **Add a "Run it" proof moment to every guide missing one** (flagged on 15+ pages). The bar
       (`rules/docs-style.md:93-95`): a command, a View Source, or a click, plus what the reader sees
       change. Concrete recipe per page:
   - mutations: submit the form with JavaScript disabled, watch the full-page POST work; then
@@ -321,7 +321,10 @@ kovo-query>` hydration frame and the `kovo-deps`/`kovo-query` stamps.
   - render-tree: one authored XML string in, the exact emitted HTML out.
   - styling: the extracted `.css` file for the page's running example, found in the build output.
   - layouts, data-layer, request-shell, accessibility: per their P0/P4 entries.
-- [ ] **Add "Handle failure" sections per the guide skeleton.** Content spec per page:
+  - Evidence: named `Run it` sections landed across the cited guides, including
+    `site/content/guides/security.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Add "Handle failure" sections per the guide skeleton.** Content spec per page:
   - mutations: the typed 422 (`context.fail`) rendered with `<FormError>`/`<FieldError>` from
     `@kovojs/core`; success redirect (`defaultRedirectTo`, typed `redirect('/path/:id',
 { params })`) for POST-redirect-GET.
@@ -337,18 +340,28 @@ kovo-query>` hydration frame and the `kovo-deps`/`kovo-query` stamps.
   - postgres-authz-policy: `KV433_AUTHZ_POLICY_UNSUPPORTED` at provision time — the feature's
     main failure mode, currently absent.
   - auth-better-auth: `INVALID_CREDENTIALS` → form error binding (see P0 rewrite).
-- [ ] **Document graph.json provenance once; link it everywhere it's assumed.** Canonical
+  - Evidence: `site/content/guides/endpoints-webhooks.md`,
+    `site/content/guides/mutations.md`, `site/content/guides/queries.md`,
+    `site/content/guides/static-export.md`, `site/content/guides/streaming.md`,
+    `site/content/guides/live-queries.md`, `site/content/guides/postgres-authz-policy.md`,
+    and `site/content/guides/auth-better-auth.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Document graph.json provenance once; link it everywhere it's assumed.** Canonical
       paragraph to write (verify paths against `packages/cli/src/commands/build-export.ts:333,513`
       and the discovery order in the check/explain command source):
   > Every `kovo check` and `kovo explain` invocation reads an extracted graph artifact.
   > `kovo build` writes it to `dist/.kovo/graph.json`. With no path argument the CLI looks for
-  > `graph.json`, then `.kovo/graph.json`, then `dist/.kovo/graph.json`, working up from the
-  > current directory — a bare `kovo check` in a fresh clone passes vacuously because there is
-  > no graph yet. Build first, or pass the path explicitly.
+  > `graph.json`, then `.kovo/graph.json`, then `dist/.kovo/graph.json` in the current working
+  > directory — a bare `kovo check` in a fresh clone passes vacuously because there is no graph
+  > yet. Build first, run the command from the app root, or pass the path explicitly.
   > Link/inline it in: cli.md (its absence makes bare `kovo check` look like a no-op full check),
   > kovo-explain.md (every command takes `graph.json` and the page never says where it comes
   > from — flagged HIGH), dataflow-devtool.md (same, plus `buildBundle({ graph })` needs a real
   > path), testing.md (where the committed touch graph comes from).
+  - Evidence: `site/content/guides/cli.md` documents current `graph-input.ts` discovery order;
+    `site/content/guides/dataflow-devtool.md`, `site/content/guides/testing.md`, and
+    `site/content/guides/compiler-internals.md` link/use `dist/.kovo/graph.json`;
+    `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run check:links`.
 - [ ] ✅ **Cross-link the generated API reference.** It exists (`site/scripts/api-ref.mjs` renders
       `/api/<slug>/`, nav-linked at `site/src/document-template.tsx:139`) but no guide points into
       it. Minimum links: cli.md → `/api/cli/` ("full flag reference"); every guide's collapsed

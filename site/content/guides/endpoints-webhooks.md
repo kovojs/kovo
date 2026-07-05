@@ -162,6 +162,21 @@ posture, response headers, file fields, dynamic-route posture, and the write-to-
 one exists. A `csrf: false` mutation appears here too, and the CSRF/session gate guarantees that it
 does not read ambient session authority.
 
+## Handle failure
+
+Keep provider and machine failures explicit:
+
+- Verifier failures return the fixed unauthorized/bad-request response for that verifier before the
+  handler runs.
+- `context.fail(code, payload, { status, retryAfter })` is the expected provider-facing failure path
+  when the request is valid but the event cannot be accepted.
+- Handler throws roll back the transaction and do not publish `recordChange()` output.
+- Replay conflicts reuse the stored response for the same provider event id instead of running the
+  handler twice.
+
+That posture keeps "bad signature", "valid but rejected event", and "operational failure" separate
+in logs and provider retries.
+
 ## Next
 
 - [Security & authorization](/guides/security/) — CSRF, guards, and audit posture.

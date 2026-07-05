@@ -220,6 +220,19 @@ revoked authorization does not get an old private response.
 Security review's first questions are answerable from the committed `graph.json` without executing a
 browser. Each review mode prints a stable, diffable table you can run in CI.
 
+## Run it
+
+Hit one guarded route logged out, then run one graph review mode:
+
+```sh
+curl -i http://localhost:3000/account
+kovo explain --unguarded dist/.kovo/graph.json
+```
+
+The route should redirect or render the configured unauthorized shell before private data appears.
+The review command should either print `SUMMARY total=0` or name the reachable mutation, route, or
+query you need to guard.
+
 ```sh
 kovo explain --unguarded graph.json   # reachable without an authed guard
 kovo explain --unscoped graph.json    # owner-annotated rows not provably session-scoped (IDOR)
