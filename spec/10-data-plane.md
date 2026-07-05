@@ -185,6 +185,26 @@ statement surface may set it on a per-request scrubbed connection before executi
 `set_config` revoke, routine inventory, or source-level wrapper audit is defense-in-depth: no
 authorization code may rest on that revoke alone.
 
+**Capability ownership is framework-owned, not comment-owned.** System/auth DB handles, privileged
+role assumptions, raw driver clients, and secret-readable handles MUST have exactly one framework
+mint site and MUST cross app-authored or public-package boundaries only as a narrowed, branded
+facade with an audited consumer path. Generated app source MUST NOT export a raw system DB,
+`AppDb`, provision/admin client, or equivalent ordinary value that app modules can import and route
+around the managed read/write chokes. Better Auth and other framework integration code may consume a
+module-private or opaque adapter capability, but request-authored code only receives request-scoped
+read/write facades whose SQL methods are governed by the source/sink, statement-identity, guard, and
+secret-read boundaries in this section and §11.2. Any public use of such a privileged facade MUST
+appear in `kovo explain --capabilities` with its reason and consumer surface.
+
+**External Postgres role topology is a manifest, not environment inference.** The runtime config
+MUST resolve reader, writer, admin, and system roles into one topology that records whether Kovo
+creates or adopts each role, the runtime login, and required runtime-login membership edges. The
+same topology facts drive provision, posture check, production boot, and `kovo db` output. Adopting
+pre-created roles does not relax verification: provision/check/boot MUST verify required role
+existence and runtime membership edges, fail before partial DDL when a required adopted role is
+missing, and refuse configurations where the ordinary runtime login can assume privileged
+admin/system roles outside framework-owned scoped clients.
+
 The closure audit is side-effect-inclusive. Attached code is reachable when the app role can reach
 it by direct `EXECUTE`, DML trigger, rewrite rule, `CHECK`/domain constraint function,
 default/generated expression function, or index/predicate expression function. Each such attached

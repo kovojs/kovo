@@ -161,17 +161,19 @@ to embedded PGlite when an external URL is present.
 
 ### DEC-E — SPEC and docs name the real boundaries
 
-- [ ] **E1 — SPEC §10.3 / §11.2 state three boundaries explicitly: capability ownership, immutable statement identity,
+- [x] **E1 — SPEC §10.3 / §11.2 state three boundaries explicitly: capability ownership, immutable statement identity,
       and role-topology verification.** The `set_config`/RLS engine boundary from followup-10 remains; this followup adds
       that system/auth DB handles are not public app capabilities, and that runtime SQL validation proves the exact bytes
       sent to the driver.
   - Acceptance: SPEC says a checked statement artifact, not the original JS object, is the runtime verification unit;
     generated runtime DB docs no longer rely on comments as boundaries.
+  - Evidence: `spec/10-data-plane.md` now names framework-owned capability mint/consumer and role-topology manifest requirements; `spec/11-verification.md` states that managed SQL verification validates and executes the same immutable statement artifact; `vp check --fix` completed.
 
-- [ ] **E2 — Update the external Postgres docs to match the topology manifest.** Docs should say which roles must
+- [x] **E2 — Update the external Postgres docs to match the topology manifest.** Docs should say which roles must
       exist, who grants runtime membership, how admin/system adoption works, and what `db check` targets.
   - Acceptance: the `site/content/guides/cli.md` role-adoption section no longer promises memberships that the code
     does not verify; examples show `kovo db check` with external target selection.
+  - Evidence: `site/content/guides/cli.md` documents runtime/admin target selection, the four topology roles, runtime membership output, adopted-role env vars including `KOVO_DB_SYSTEM_ROLE`, and the runtime membership grant path; `vp check --fix` completed.
 
 ## 5. Resolved design decisions (initial)
 

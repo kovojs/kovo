@@ -339,9 +339,9 @@ export const adminOrders = query(adminOrdersDefinition);
 
 `crossOwnerRead` is the capability name. The `role: 'admin'` declaration is the runtime role posture
 that must match a passed `guards.role('admin')` request guard and the generated Postgres
-`kovo_admin_scope` policy. Kovo records the reason and principal for review, and
-The admin role posture is visible through the access and source/sink review modes. Reading as one
-other user remains `ctx.actAs(id)` in `endpoint({ db: true })`.
+`kovo_admin_scope` policy. Kovo records the reason and principal for review. The admin role posture
+is visible through the access and source/sink review modes. Reading as one other user remains
+`ctx.actAs(id)` in `endpoint({ db: true })`.
 
 ## Keep confidential data off the wire
 
