@@ -5,6 +5,7 @@ import {
   type KovoDeclaredWriteDbCapable,
   type KovoReadonlyDbCapable,
 } from '@kovojs/server/internal/execution';
+import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
 
 /** SQL statement object accepted by `PgliteTestDb` helpers. */
 export interface PgliteStatementCarrier {
@@ -388,6 +389,9 @@ function pgliteStatement(
   params: readonly unknown[],
 ): { text: string; values: readonly unknown[] } {
   if (typeof statement === 'string') return { text: statement, values: params };
+  const snapshot = snapshotManagedSqlStatement(statement, 'postgres');
+  if (snapshot.ok) return snapshot.statement;
+  if (snapshot.message !== undefined) throw new Error(`KV422: ${snapshot.message}`);
   const text = statement.text ?? statement.sql;
   if (typeof text === 'string') return { text, values: statement.values ?? params };
   const chunkText = sqlTextFromQueryChunks(statement.queryChunks);

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { describe, expect, it } from 'vitest';
 import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
-import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import {
   KovoReadonlyHandleError,
   createAuthorizationCensusDb,
@@ -718,7 +718,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       { reads: ['products'] },
     );
 
-    expect(rows).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(rows).toMatchObject({ text: 'select id from products where id = ?' });
     expect(log).toEqual(['all']);
   });
 
@@ -753,7 +753,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     await expect(
       reader.rawRead(statement, { actAs: 'user-1', reads: ['orders'] }),
     ).resolves.toMatchObject({
-      sql: 'select id from orders where id = ?',
+      text: 'select id from orders where id = ?',
     });
     expect(log).toEqual(['all']);
   });
@@ -786,7 +786,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
         reads: ['orders'],
       }),
     ).resolves.toMatchObject({
-      sql: 'select id, status from orders where published = 1',
+      text: 'select id, status from orders where published = 1',
     });
 
     expect(drainPublicReadAuditFacts()).toEqual([
@@ -831,7 +831,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
         },
       ),
     ).resolves.toMatchObject({
-      sql: 'select id from orders where published = true',
+      text: 'select id from orders where published = true',
     });
 
     expect(drainPublicReadAuditFacts()).toEqual([
@@ -1274,7 +1274,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
         { reads: ['products'] },
       ),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    ).resolves.toMatchObject({ text: 'select id from products where id = ?' });
 
     expect(log).toEqual(['readonly-target-created', 'query']);
   });
@@ -1534,7 +1534,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     await expect(
       handle.all({ sql: 'select id from products where id = ?', values: ['p1'] }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    ).resolves.toMatchObject({ text: 'select id from products where id = ?' });
     expect(() =>
       handle.all(
         stampTrustedSql(
@@ -1733,6 +1733,127 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       .values();
     expect(log).toContain('insert:products');
     expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV422/);
+  });
+
+  it('passes a frozen ManagedSqlStatement snapshot to drivers instead of the mutable carrier', () => {
+    const carrier = {
+      text: 'select id from products where id = $1',
+      values: ['p1'],
+    };
+    let observed: unknown;
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          carrier.text = 'delete from products where id = $1';
+          observed = statement;
+          return statement;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    ) as unknown as { query(statement: unknown): unknown };
+
+    expect(handle.query(carrier)).toMatchObject({
+      text: 'select id from products where id = $1',
+      values: ['p1'],
+    });
+    expect(observed).not.toBe(carrier);
+    expect(isManagedSqlStatement(observed)).toBe(true);
+    expect(Object.isFrozen(observed)).toBe(true);
+    expect(carrier.text).toBe('delete from products where id = $1');
+  });
+
+  it('fails closed on getter-backed separated carriers before driver execution', () => {
+    const log: string[] = [];
+    let reads = 0;
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          log.push(String((statement as { text?: unknown }).text));
+          return statement;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    ) as unknown as { query(statement: unknown): unknown };
+
+    expect(() =>
+      handle.query({
+        get text() {
+          reads += 1;
+          return reads === 1
+            ? 'select id from products where id = $1'
+            : 'delete from users where id = $1';
+        },
+        values: ['p1'],
+      }),
+    ).toThrow(/accessor\/proxy .*\.text/);
+    expect(reads).toBe(0);
+    expect(log).toEqual([]);
+  });
+
+  it('executes the first proxy snapshot instead of rereading proxy SQL at the driver', () => {
+    const log: string[] = [];
+    let textDescriptorReads = 0;
+    const carrier = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor(_target, prop) {
+          if (prop === 'text') {
+            textDescriptorReads += 1;
+            return {
+              configurable: true,
+              enumerable: true,
+              value:
+                textDescriptorReads === 1
+                  ? 'select id from products where id = $1'
+                  : 'delete from users where id = $1',
+              writable: true,
+            };
+          }
+          if (prop === 'values') {
+            return {
+              configurable: true,
+              enumerable: true,
+              value: ['p1'],
+              writable: true,
+            };
+          }
+          return undefined;
+        },
+      },
+    );
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          log.push((statement as { text: string }).text);
+          return statement;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    ) as unknown as { query(statement: unknown): unknown };
+
+    expect(handle.query(carrier)).toMatchObject({
+      text: 'select id from products where id = $1',
+      values: ['p1'],
+    });
+    expect(log).toEqual(['select id from products where id = $1']);
   });
 
   it('write mode enforces the raw-SQL table allowlist before execution', async () => {
@@ -2584,7 +2705,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     await expect(
       handle.get({ sql: 'select id from products where id = ?', values: ['p1'] }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    ).resolves.toMatchObject({ text: 'select id from products where id = ?' });
     await expect(
       handle.run(
         stampTrustedSql(
@@ -2592,7 +2713,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
           'audited SQLite product update',
         ),
       ),
-    ).resolves.toMatchObject({ sql: 'update products set name = ? where id = ?' });
+    ).resolves.toMatchObject({ text: 'update products set name = ? where id = ?' });
     await expect(
       handle.run(
         stampTrustedSql(
@@ -2600,7 +2721,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
           'audited SQLite main-schema product update',
         ),
       ),
-    ).resolves.toMatchObject({ sql: 'update main.products set name = ? where id = ?' });
+    ).resolves.toMatchObject({ text: 'update main.products set name = ? where id = ?' });
     expect(() =>
       handle.values(
         stampTrustedSql(
@@ -2777,7 +2898,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         { mode: 'read' },
         { sql: 'select id from products where id = ?', values: ['p1'] },
       ),
-    ).toMatchObject({ sql: 'select id from products where id = ?' });
+    ).toMatchObject({ text: 'select id from products where id = ?' });
     expect(log).toEqual(['futureStatement:{"mode":"read"}']);
 
     expect(() =>
@@ -2921,7 +3042,10 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       expect(runtimeSqlMatrixStatementExecutionLog(log, sink)).toEqual([]);
       log.splice(0);
 
-      await expect(Promise.resolve(execute(read))).resolves.toMatchObject(read);
+      await expect(Promise.resolve(execute(read))).resolves.toMatchObject({
+        text: 'text' in read ? read.text : read.sql,
+        values: read.values,
+      });
       const successfulExecutionLog = runtimeSqlMatrixStatementExecutionLog(log, sink);
       expect(successfulExecutionLog.length).toBeGreaterThan(0);
 

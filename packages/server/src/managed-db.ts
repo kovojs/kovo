@@ -21,6 +21,7 @@ import {
   wrapManagedDbForSqlSafety,
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
+import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
@@ -876,6 +877,8 @@ function isDeclaredWriteDirectSqlMethod(
 
 function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCarrier | undefined {
   if (typeof value === 'string') return { params, text: value };
+  const snapshot = snapshotManagedSqlStatement(value);
+  if (snapshot.ok) return { params: snapshot.statement.values, text: snapshot.statement.text };
   const toSQL = (value as { toSQL?: unknown }).toSQL;
   if (typeof toSQL === 'function') {
     try {
@@ -1026,14 +1029,19 @@ function scopedPostgresTransactionClient(
     get(target, prop, receiver) {
       if (prop === 'query') {
         return (query: unknown, params?: unknown[], queryOptions?: unknown) => {
-          assertAppPostgresStatementAllowed(query);
+          const snapshot = postgresQuerySnapshot(query, params);
+          assertAppPostgresTextAllowed(snapshot.text);
           const queryMethod = Reflect.get(target, 'query', receiver);
           if (typeof queryMethod !== 'function') {
             throw new KovoReadonlyHandleError(
               'KV433: Postgres scoped transaction client requires a callable query method (SPEC §10.3/§11.2).',
             );
           }
-          return Reflect.apply(queryMethod, target, [query, params, queryOptions]);
+          return Reflect.apply(queryMethod, target, [
+            snapshot.text,
+            [...snapshot.values],
+            queryOptions,
+          ]);
         };
       }
       if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
@@ -1051,17 +1059,18 @@ function scopedPostgresQuery(
   params?: unknown[],
   queryOptions?: unknown,
 ): Promise<unknown> {
-  assertAppPostgresStatementAllowed(query);
+  const snapshot = postgresQuerySnapshot(query, params);
+  assertAppPostgresTextAllowed(snapshot.text);
   return postgresTransaction(client, async (tx) => {
     await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
     try {
-      return (await queryMethod(query, params, queryOptions)) as unknown;
+      return (await queryMethod(snapshot.text, [...snapshot.values], queryOptions)) as unknown;
     } catch (error) {
-      throw translatedPostgresWriteDenial(error, query);
+      throw translatedPostgresWriteDenial(error, snapshot);
     }
   }).then(async (result) => {
-    await maybeReportPostgresRlsSilentDeny(options, query, result);
+    await maybeReportPostgresRlsSilentDeny(options, snapshot, result);
     return result;
   });
 }
@@ -1093,23 +1102,51 @@ function postgresQueryLooksLikeWrite(query: unknown): boolean {
 
 function postgresQueryText(query: unknown): string | undefined {
   if (typeof query === 'string') return query;
+  const snapshot = snapshotManagedSqlStatement(query, 'postgres');
+  if (snapshot.ok) return snapshot.statement.text;
+  return plainPostgresQueryConfigSnapshot(query, undefined)?.text;
+}
+
+function postgresQuerySnapshot(
+  query: unknown,
+  params: readonly unknown[] | undefined,
+): { text: string; values: readonly unknown[] } {
+  if (typeof query === 'string') return { text: query, values: params ?? [] };
+  const snapshot = snapshotManagedSqlStatement(query, 'postgres');
+  if (snapshot.ok) return snapshot.statement;
+  const config = plainPostgresQueryConfigSnapshot(query, params);
+  if (config !== undefined) return config;
+  throw new KovoReadonlyHandleError(
+    'KV414: Postgres scoped managed clients reject unknown SQL query carriers; app SQL must be a string or query config with text/sql (SPEC §10.2/§10.3).',
+  );
+}
+
+function plainPostgresQueryConfigSnapshot(
+  query: unknown,
+  params: readonly unknown[] | undefined,
+): { text: string; values: readonly unknown[] } | undefined {
   if (!isRecord(query)) return undefined;
-  return typeof query.sql === 'string'
-    ? query.sql
-    : typeof query.text === 'string'
-      ? query.text
-      : undefined;
+  const text = dataPropertyValue(query, 'text') ?? dataPropertyValue(query, 'sql');
+  if (typeof text !== 'string') return undefined;
+  const values = dataPropertyValue(query, 'values');
+  return Object.freeze({
+    text,
+    values: Object.freeze(Array.isArray(values) ? [...values] : [...(params ?? [])]),
+  });
+}
+
+function dataPropertyValue(
+  record: Record<PropertyKey, unknown>,
+  property: 'sql' | 'text' | 'values',
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(record, property);
+  if (descriptor === undefined || !('value' in descriptor)) return undefined;
+  return descriptor.value;
 }
 
 const APP_POSTGRES_ALLOWED_COMMANDS = new Set(['delete', 'insert', 'select', 'update', 'with']);
 
-function assertAppPostgresStatementAllowed(query: unknown): void {
-  const text = postgresQueryText(query);
-  if (text === undefined) {
-    throw new KovoReadonlyHandleError(
-      'KV414: Postgres scoped managed clients reject unknown SQL query carriers; app SQL must be a string or query config with text/sql (SPEC §10.2/§10.3).',
-    );
-  }
+function assertAppPostgresTextAllowed(text: string): void {
   const shape = scanAppPostgresStatementShape(text);
   if (!shape.ok) {
     throw new KovoReadonlyHandleError(

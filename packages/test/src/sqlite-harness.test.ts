@@ -16,6 +16,52 @@ import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 
 describe('@kovojs/test SQLite harness integration', () => {
+  it('executes managed query snapshots instead of rereading mutable SQLite carriers', () => {
+    const db = createSqliteTestDb();
+
+    try {
+      db.exec('create table products (id text primary key)');
+      db.write('products', { id: 'p1' });
+      let textDescriptorReads = 0;
+      const carrier = new Proxy(
+        {},
+        {
+          getOwnPropertyDescriptor(_target, prop) {
+            if (prop === 'sql') {
+              textDescriptorReads += 1;
+              return {
+                configurable: true,
+                enumerable: true,
+                value:
+                  textDescriptorReads === 1
+                    ? 'select id from products where id = ?'
+                    : 'delete from products where id = ?',
+                writable: true,
+              };
+            }
+            if (prop === 'values') {
+              return {
+                configurable: true,
+                enumerable: true,
+                value: ['p1'],
+                writable: true,
+              };
+            }
+            return undefined;
+          },
+        },
+      );
+      const writer = managedDb(db, 'write', {
+        sqlWritePolicy: { dialect: 'sqlite', tables: ['products'], touches: ['product'] },
+      }) as unknown as Pick<SqliteTestDb, 'query'>;
+
+      expect(writer.query<{ id: string }>(carrier as never)).toEqual([{ id: 'p1' }]);
+      expect(db.read<{ id: string }>('products')).toEqual([{ id: 'p1' }]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('backs managed readers with a dedicated readonly/query_only SQLite handle', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-sqlite-readonly-'));
     const db = createSqliteTestDb({ filename: join(root, 'app.sqlite') });

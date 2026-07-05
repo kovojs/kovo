@@ -14,6 +14,7 @@ type SqlBlessedSink =
 
 const rawSqlChunkBrand = Symbol('kovo.sql.raw-chunk');
 const sqlSafetyMetadataBrand = Symbol('kovo.sql.metadata');
+const managedSqlStatements = new WeakSet<object>();
 
 /** @internal */
 export type SqlSafetyMode = 'enforce';
@@ -191,7 +192,28 @@ export interface SqlStatementValidationResult {
 }
 
 /** @internal */
+export type ManagedSqlDialect = 'postgres' | 'sqlite' | undefined;
+
+/** @internal */
+export type ManagedSqlProvenance =
+  | 'branded-query-chunks'
+  | 'plain-separated-carrier'
+  | 'trusted-separated-carrier';
+
+/** @internal */
+export interface ManagedSqlStatement {
+  readonly dialect: ManagedSqlDialect;
+  readonly provenance: ManagedSqlProvenance;
+  readonly text: string;
+  readonly values: readonly unknown[];
+}
+
+/** @internal */
 export function validateManagedSqlStatement(statement: unknown): SqlStatementValidationResult {
+  const snapshot = snapshotManagedSqlStatement(statement);
+  if (snapshot.ok) return { ok: true };
+  if (snapshot.message !== undefined) return unsafeSqlResult(snapshot.message);
+
   if (typeof statement === 'string') {
     return unsafeSqlResult(
       'raw string statements are not accepted on Kovo-managed DB handles; use sql`...`, staticSql`...`, or a separated { text, values } carrier.',
@@ -229,6 +251,75 @@ export function validateManagedSqlStatement(statement: unknown): SqlStatementVal
   );
 }
 
+/** @internal */
+export type ManagedSqlSnapshotResult =
+  | { readonly ok: true; readonly statement: ManagedSqlStatement }
+  | { readonly message?: string; readonly ok: false };
+
+/** @internal */
+export function snapshotManagedSqlStatement(
+  statement: unknown,
+  dialect?: ManagedSqlDialect,
+): ManagedSqlSnapshotResult {
+  if (isManagedSqlStatement(statement)) {
+    const redialect =
+      statement.dialect === dialect || dialect === undefined
+        ? statement
+        : Object.freeze({ ...statement, dialect });
+    managedSqlStatements.add(redialect);
+    return {
+      ok: true,
+      statement: redialect,
+    };
+  }
+  if (typeof statement !== 'object' || statement === null) return { ok: false };
+
+  const record = statement as Record<PropertyKey, unknown>;
+  const textSnapshot = snapshotSqlText(record);
+  const parameterSnapshot = snapshotSqlParameters(record);
+  const queryChunks = dataPropertyValue(record, 'queryChunks');
+
+  if (isTrustedSql(statement) || isParameterizedSql(statement) || isStaticSql(statement)) {
+    if (textSnapshot.ok) {
+      return managedSqlSnapshot(
+        textSnapshot.value,
+        parameterSnapshot.ok ? parameterSnapshot.value : [],
+        dialect,
+        {
+          allowEmptyValues: true,
+          provenance: 'trusted-separated-carrier',
+        },
+      );
+    }
+    if (Array.isArray(queryChunks)) {
+      const values = parameterSnapshot.ok ? parameterSnapshot.value : [];
+      return managedSqlSnapshot(sqlFromQueryChunks(queryChunks), values, dialect, {
+        allowEmptyValues: true,
+        provenance: 'branded-query-chunks',
+      });
+    }
+    return { ok: false };
+  }
+
+  if (!textSnapshot.ok || !parameterSnapshot.ok) {
+    return !textSnapshot.ok && textSnapshot.message !== undefined
+      ? { message: textSnapshot.message, ok: false }
+      : !parameterSnapshot.ok && parameterSnapshot.message !== undefined
+        ? { message: parameterSnapshot.message, ok: false }
+        : { ok: false };
+  }
+
+  return managedSqlSnapshot(textSnapshot.value, parameterSnapshot.value, dialect, {
+    allowEmptyValues: false,
+    provenance: 'plain-separated-carrier',
+  });
+}
+
+/** @internal */
+export function isManagedSqlStatement(value: unknown): value is ManagedSqlStatement {
+  return typeof value === 'object' && value !== null && managedSqlStatements.has(value);
+}
+
 function unsafeSqlResult(message: string): SqlStatementValidationResult {
   return {
     ok: false,
@@ -249,12 +340,7 @@ function isTrustedSql(value: object): boolean {
 }
 
 function isSeparatedSqlCarrier(value: object): boolean {
-  const record = value as Record<PropertyKey, unknown>;
-  const sqlText = sqlCarrierText(record);
-  if (sqlText === undefined) return false;
-
-  const parameters = separatedSqlParameters(record);
-  return parameters !== undefined && parameters.length > 0 && hasSqlBindMarker(sqlText);
+  return snapshotManagedSqlStatement(value).ok;
 }
 
 // True when the object exposes a `.text`/`.sql` *string* (assembled SQL text). Callers reach this
@@ -263,22 +349,136 @@ function isSeparatedSqlCarrier(value: object): boolean {
 // objects expose `.sql` as a method/getter and carry no `.text` string, so they do not trip this.
 function carriesUnseparatedSqlText(value: object): boolean {
   const record = value as Record<PropertyKey, unknown>;
-  return typeof record.text === 'string' || typeof record.sql === 'string';
+  return (
+    typeof dataPropertyValue(record, 'text') === 'string' ||
+    typeof dataPropertyValue(record, 'sql') === 'string'
+  );
 }
 
-function sqlCarrierText(record: Record<PropertyKey, unknown>): string | undefined {
-  if (typeof record.text === 'string') return record.text;
-  if (typeof record.sql === 'string') return record.sql;
-  return undefined;
-}
-
-function separatedSqlParameters(
+function snapshotSqlText(
   record: Record<PropertyKey, unknown>,
-): readonly unknown[] | undefined {
-  if (Array.isArray(record.values)) return record.values;
-  if (Array.isArray(record.params)) return record.params;
-  if (Array.isArray(record.args)) return record.args;
-  return undefined;
+): { ok: true; value: string } | { message?: string; ok: false } {
+  return (
+    snapshotNamedSqlText(record, 'text') ?? snapshotNamedSqlText(record, 'sql') ?? { ok: false }
+  );
+}
+
+function snapshotNamedSqlText(
+  record: Record<PropertyKey, unknown>,
+  property: 'sql' | 'text',
+): { ok: true; value: string } | { message: string; ok: false } | undefined {
+  const value = dataPropertyValue(record, property);
+  if (value === ACCESSOR_OR_PROXY_PROPERTY) {
+    return {
+      ok: false,
+      message: `separated SQL carriers with accessor/proxy .${property} properties are not accepted; pass a plain data property so the framework can snapshot statement identity before validation.`,
+    };
+  }
+  if (value === undefined) return undefined;
+  return typeof value === 'string'
+    ? { ok: true, value }
+    : {
+        ok: false,
+        message: `separated SQL carrier .${property} must be a string data property.`,
+      };
+}
+
+function snapshotSqlParameters(
+  record: Record<PropertyKey, unknown>,
+): { ok: true; value: readonly unknown[] } | { message?: string; ok: false } {
+  return (
+    snapshotNamedSqlParameters(record, 'values') ??
+    snapshotNamedSqlParameters(record, 'params') ??
+    snapshotNamedSqlParameters(record, 'args') ?? { ok: false }
+  );
+}
+
+function snapshotNamedSqlParameters(
+  record: Record<PropertyKey, unknown>,
+  property: 'args' | 'params' | 'values',
+): { ok: true; value: readonly unknown[] } | { message: string; ok: false } | undefined {
+  const value = dataPropertyValue(record, property);
+  if (value === ACCESSOR_OR_PROXY_PROPERTY) {
+    return {
+      ok: false,
+      message: `separated SQL carriers with accessor/proxy .${property} properties are not accepted; pass a plain data array so the framework can snapshot statement identity before validation.`,
+    };
+  }
+  if (value === undefined) return undefined;
+  return Array.isArray(value)
+    ? { ok: true, value: Object.freeze([...value]) }
+    : {
+        ok: false,
+        message: `separated SQL carrier .${property} must be an array data property.`,
+      };
+}
+
+const ACCESSOR_OR_PROXY_PROPERTY = Symbol('kovo.sql.accessor-or-proxy-property');
+
+function dataPropertyValue(
+  record: Record<PropertyKey, unknown>,
+  property: 'args' | 'params' | 'queryChunks' | 'sql' | 'text' | 'values',
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(record, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) return ACCESSOR_OR_PROXY_PROPERTY;
+  return descriptor.value;
+}
+
+function managedSqlSnapshot(
+  text: string,
+  values: readonly unknown[],
+  dialect: ManagedSqlDialect,
+  options: { allowEmptyValues: boolean; provenance: ManagedSqlProvenance },
+): ManagedSqlSnapshotResult {
+  if (!options.allowEmptyValues && values.length === 0) return { ok: false };
+  if (!options.allowEmptyValues && !hasSqlBindMarker(text)) return { ok: false };
+  const statement = Object.freeze({
+    dialect,
+    provenance: options.provenance,
+    text,
+    values: Object.freeze([...values]),
+  });
+  managedSqlStatements.add(statement);
+  return {
+    ok: true,
+    statement,
+  };
+}
+
+function sqlFromQueryChunks(chunks: readonly unknown[]): string {
+  let sql = '';
+  let parameterIndex = 0;
+  const nextParameter = () => `$${++parameterIndex}`;
+
+  for (const chunk of chunks) {
+    sql += sqlFromQueryChunk(chunk, nextParameter);
+  }
+
+  return sql;
+}
+
+function sqlFromQueryChunk(chunk: unknown, nextParameter: () => string): string {
+  if (typeof chunk === 'string' || typeof chunk === 'number' || typeof chunk === 'boolean') {
+    return nextParameter();
+  }
+  if (typeof chunk !== 'object' || chunk === null) return nextParameter();
+
+  const record = chunk as Record<PropertyKey, unknown>;
+  const chunkValue = Object.getOwnPropertyDescriptor(record, 'value')?.value;
+  if (Array.isArray(chunkValue) && chunkValue.every((item) => typeof item === 'string')) {
+    return chunkValue.join('');
+  }
+  if (typeof chunkValue === 'string' && Object.prototype.hasOwnProperty.call(record, 'brand')) {
+    return chunkValue;
+  }
+
+  const nested = dataPropertyValue(record, 'queryChunks');
+  if (Array.isArray(nested)) {
+    return nested.map((item) => sqlFromQueryChunk(item, nextParameter)).join('');
+  }
+
+  return nextParameter();
 }
 
 function hasSqlBindMarker(sqlText: string): boolean {

@@ -10,6 +10,7 @@ import {
   type KovoDeclaredWriteDbCapable,
   type KovoReadonlyDbCapable,
 } from '@kovojs/server/internal/execution';
+import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
 
 interface BetterSqliteConstructor {
   new (filename: string, options?: SqliteTestDbOptions): SqliteNativeHandle;
@@ -411,6 +412,9 @@ function sqliteStatement(
   params: readonly unknown[],
 ): { text: string; values: readonly unknown[] } {
   if (typeof statement === 'string') return { text: statement, values: params };
+  const snapshot = snapshotManagedSqlStatement(statement, 'sqlite');
+  if (snapshot.ok) return snapshot.statement;
+  if (snapshot.message !== undefined) throw new Error(`KV422: ${snapshot.message}`);
   const text = statement.sql ?? statement.text;
   if (typeof text !== 'string') throw new Error('SQLite statement carrier must include sql/text.');
   return { text, values: statement.values ?? params };

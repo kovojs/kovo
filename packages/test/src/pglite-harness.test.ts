@@ -19,6 +19,52 @@ import { expectedDiagnostic } from './test-fixtures.js';
 import { assertOwnerWritesScoped, createDbVerifier } from './verifier.js';
 
 describe('@kovojs/test PGlite harness integration', () => {
+  it('executes managed query snapshots instead of rereading mutable PGlite carriers', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table products (id text primary key)');
+      await db.write('products', { id: 'p1' });
+      let textDescriptorReads = 0;
+      const carrier = new Proxy(
+        {},
+        {
+          getOwnPropertyDescriptor(_target, prop) {
+            if (prop === 'text') {
+              textDescriptorReads += 1;
+              return {
+                configurable: true,
+                enumerable: true,
+                value:
+                  textDescriptorReads === 1
+                    ? 'select id from products where id = $1'
+                    : 'delete from products where id = $1',
+                writable: true,
+              };
+            }
+            if (prop === 'values') {
+              return {
+                configurable: true,
+                enumerable: true,
+                value: ['p1'],
+                writable: true,
+              };
+            }
+            return undefined;
+          },
+        },
+      );
+      const writer = managedDb(db, 'write', {
+        sqlWritePolicy: { dialect: 'postgres', tables: ['products'], touches: ['product'] },
+      }) as unknown as Pick<PgliteTestDb, 'query'>;
+
+      await expect(writer.query<{ id: string }>(carrier as never)).resolves.toEqual([{ id: 'p1' }]);
+      await expect(db.read<{ id: string }>('products')).resolves.toEqual([{ id: 'p1' }]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('backs managed readers with read-only PGlite transactions', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-pglite-readonly-'));
     const db = await createPgliteTestDb({ dataDir: root });

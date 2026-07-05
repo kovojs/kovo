@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isDbAdapterLike,
+  isManagedSqlStatement,
   isPreparedStatementExecutionMethod,
   isSqlHandleLike,
   isSqlHandleProperty,
+  snapshotManagedSqlStatement,
   stampParameterizedSql,
   stampSqlIdentifier,
   stampSqlKeyword,
@@ -99,12 +101,24 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
   });
 
   it('accepts a genuinely separated { text, values } carrier', () => {
-    expect(
-      validateManagedSqlStatement({
-        text: 'select * from products where status = $1',
-        values: ['open'],
-      }).ok,
-    ).toBe(true);
+    const carrier = {
+      text: 'select * from products where status = $1',
+      values: ['open'],
+    };
+    expect(validateManagedSqlStatement(carrier).ok).toBe(true);
+    const snapshot = snapshotManagedSqlStatement(carrier, 'postgres');
+    expect(snapshot.ok).toBe(true);
+    if (!snapshot.ok) return;
+    expect(snapshot.statement).toMatchObject({
+      dialect: 'postgres',
+      provenance: 'plain-separated-carrier',
+      text: carrier.text,
+      values: carrier.values,
+    });
+    expect(isManagedSqlStatement(snapshot.statement)).toBe(true);
+    expect(Object.isFrozen(snapshot.statement)).toBe(true);
+    expect(Object.isFrozen(snapshot.statement.values)).toBe(true);
+    expect(snapshot.statement).not.toBe(carrier);
   });
 
   it('accepts common separated carrier parameter spellings', () => {
@@ -134,6 +148,86 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     expect(validateManagedSqlStatement(stampTrustedSql({}, 'audited report clause')).ok).toBe(true);
     expect(validateManagedSqlStatement(stampSqlIdentifier({})).ok).toBe(true);
     expect(validateManagedSqlStatement(stampSqlKeyword({})).ok).toBe(true);
+  });
+
+  it('snapshots branded queryChunks into immutable executable statement text', () => {
+    const statement = stampParameterizedSql({
+      queryChunks: [{ value: ['select * from products where id = '] }, 'p1'],
+      values: ['p1'],
+    });
+    const snapshot = snapshotManagedSqlStatement(statement, 'postgres');
+    expect(snapshot.ok).toBe(true);
+    if (!snapshot.ok) return;
+    expect(snapshot.statement).toMatchObject({
+      dialect: 'postgres',
+      provenance: 'branded-query-chunks',
+      text: 'select * from products where id = $1',
+      values: ['p1'],
+    });
+  });
+
+  it('does not treat structurally frozen objects as framework-owned ManagedSqlStatement values', () => {
+    const forged = Object.freeze({
+      dialect: 'postgres',
+      provenance: 'plain-separated-carrier',
+      text: 'select 1',
+      values: Object.freeze([]),
+    });
+    expect(isManagedSqlStatement(forged)).toBe(false);
+    expect(snapshotManagedSqlStatement(forged).ok).toBe(false);
+  });
+
+  it('rejects accessor-backed separated carrier properties before validation/execution identity can drift', () => {
+    let textReads = 0;
+    const result = validateManagedSqlStatement({
+      get text() {
+        textReads += 1;
+        return textReads === 1
+          ? 'select * from products where id = $1'
+          : 'delete from products where id = $1';
+      },
+      values: ['p1'],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/accessor\/proxy .*\.text/);
+    expect(textReads).toBe(0);
+  });
+
+  it('snapshots proxy data descriptors exactly once before validation', () => {
+    let descriptorReads = 0;
+    const carrier = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor(_target, prop) {
+          descriptorReads += 1;
+          if (prop === 'text') {
+            return {
+              configurable: true,
+              enumerable: true,
+              value:
+                descriptorReads === 1
+                  ? 'select * from products where id = $1'
+                  : 'delete from products where id = $1',
+              writable: true,
+            };
+          }
+          if (prop === 'values') {
+            return {
+              configurable: true,
+              enumerable: true,
+              value: ['p1'],
+              writable: true,
+            };
+          }
+          return undefined;
+        },
+      },
+    );
+    const snapshot = snapshotManagedSqlStatement(carrier, 'postgres');
+    expect(snapshot.ok).toBe(true);
+    if (!snapshot.ok) return;
+    expect(snapshot.statement.text).toBe('select * from products where id = $1');
+    expect(snapshot.statement.values).toEqual(['p1']);
   });
 
   it('accepts a branded parameterized carrier even when it also exposes a .text string', () => {

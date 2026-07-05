@@ -13,7 +13,9 @@ import {
   isPreparedStatementExecutionMethod,
   isSqlHandleLike,
   isSqlHandleProperty,
+  snapshotManagedSqlStatement,
   validateManagedSqlStatement,
+  type ManagedSqlStatement,
   type SqlSafetyMode,
 } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
@@ -318,8 +320,8 @@ function guardedSqlMethod(
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
-    enforceManagedSql(statement, mode, writePolicy);
-    return wrapReadonlyEngineResult(() => value.call(target, statement, ...args), writePolicy);
+    const snapshot = enforceManagedSql(statement, mode, writePolicy);
+    return wrapReadonlyEngineResult(() => value.call(target, snapshot, ...args), writePolicy);
   };
 }
 
@@ -396,25 +398,39 @@ function guardedUnknownSqlMethod(
   strictSqlTarget: boolean,
 ): Function {
   return (...args: unknown[]) => {
-    assertAmbiguousSqlMethodArguments(prop, args, mode, writePolicy, strictSqlTarget);
-    return wrapReadonlyEngineResult(() => value.apply(target, args), writePolicy);
+    const snappedArgs = snapshotAmbiguousSqlMethodArguments(
+      prop,
+      args,
+      mode,
+      writePolicy,
+      strictSqlTarget,
+    );
+    return wrapReadonlyEngineResult(() => value.apply(target, snappedArgs), writePolicy);
   };
 }
 
-function assertAmbiguousSqlMethodArguments(
+function snapshotAmbiguousSqlMethodArguments(
   prop: PropertyKey,
   args: readonly unknown[],
   mode: SqlSafetyMode,
   writePolicy: ManagedSqlWritePolicy | undefined,
   strictSqlTarget: boolean,
-): void {
-  const statements = args.filter(isSqlStatementCandidate);
-  for (const statement of statements) {
-    enforceManagedSql(statement, mode, writePolicy);
+): readonly unknown[] {
+  let foundStatement = false;
+  let changed = false;
+  const snappedArgs = args.map((arg) => {
+    if (!isSqlStatementCandidate(arg)) return arg;
+    foundStatement = true;
+    const snapshot = enforceManagedSql(arg, mode, writePolicy);
+    if (snapshot === arg) return arg;
+    changed = true;
+    return snapshot;
+  });
+  if (foundStatement) {
+    return changed ? snappedArgs : args;
   }
-  if (statements.length > 0) return;
-  if (writePolicy === undefined || !strictSqlTarget) return;
-  if (!isSqlCapabilityMethodName(prop)) return;
+  if (writePolicy === undefined || !strictSqlTarget) return args;
+  if (!isSqlCapabilityMethodName(prop)) return args;
 
   throw new Error(
     `KV422: unknown managed DB method ${describeSqlMethod(prop)} is not a proven SQL builder/read capability and did not receive a recognizable SQL carrier (SPEC §10.2/§10.3).`,
@@ -630,9 +646,9 @@ function guardedPrepareMethod(
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
-    enforceManagedSql(statement, mode, writePolicy);
+    const snapshot = enforceManagedSql(statement, mode, writePolicy);
     const prepared = wrapReadonlyEngineResult(
-      () => value.call(target, statement, ...args),
+      () => value.call(target, snapshot, ...args),
       writePolicy,
     );
     return typeof prepared === 'object' && prepared !== null
@@ -689,10 +705,19 @@ export const enforceManagedSql = securityClassifier(
     statement: unknown,
     mode: SqlSafetyMode,
     writePolicy: ManagedSqlWritePolicy | undefined,
-  ): void {
+  ): ManagedSqlStatement {
     void mode;
+    const snapshot = snapshotManagedSqlStatement(statement, writePolicy?.dialect);
+    if (snapshot.ok) {
+      assertSqlWriteTablesAllowed(snapshot.statement, writePolicy);
+      return snapshot.statement;
+    }
     const validation = validateManagedSqlStatement(statement);
-    if (validation.ok) return assertSqlWriteTablesAllowed(statement, writePolicy);
+    if (validation.ok) {
+      throw new Error(
+        'KV422: managed SQL statement was validated but could not be snapshotted for execution (SPEC §10.2/§10.3).',
+      );
+    }
     throw new Error(validation.message);
   },
 );
@@ -809,27 +834,13 @@ function isParsedSqlTableName(target: ParsedSqlWriteTarget): target is string {
 }
 
 function sqlStatementText(statement: unknown): string | undefined {
-  if (typeof statement === 'string') return statement;
-  if (typeof statement !== 'object' || statement === null) return undefined;
-
-  const record = statement as Record<PropertyKey, unknown>;
-  const text = readStringProperty(record, 'text') ?? readStringProperty(record, 'sql');
-  if (text !== undefined) return text;
-
-  const queryChunks = record.queryChunks;
-  if (Array.isArray(queryChunks)) return sqlFromQueryChunks(queryChunks);
-  return undefined;
+  const snapshot = snapshotManagedSqlStatement(statement);
+  return snapshot.ok ? snapshot.statement.text : undefined;
 }
 
 function assertNoSecretRawWriteBind(statement: unknown): void {
-  if (typeof statement !== 'object' || statement === null) return;
-  const record = statement as Record<PropertyKey, unknown>;
-  for (const key of ['values', 'params', 'args'] as const) {
-    const value = record[key];
-    if (Array.isArray(value)) assertNoSecretDbWriteValue(value);
-  }
-  const queryChunks = record.queryChunks;
-  if (Array.isArray(queryChunks)) assertNoSecretDbWriteValue(queryChunks);
+  const snapshot = snapshotManagedSqlStatement(statement);
+  if (snapshot.ok) assertNoSecretDbWriteValue(snapshot.statement.values);
 }
 
 function assertNoSecretDbWriteValue(value: unknown): void {
@@ -850,53 +861,6 @@ function containsSecret(value: unknown, seen: WeakSet<object>): boolean {
     if (containsSecret(entry, seen)) return true;
   }
   return false;
-}
-
-function readStringProperty(
-  record: Record<PropertyKey, unknown>,
-  property: 'text' | 'sql',
-): string | undefined {
-  try {
-    const value = record[property];
-    return typeof value === 'string' ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function sqlFromQueryChunks(chunks: readonly unknown[]): string {
-  let sql = '';
-  let parameterIndex = 0;
-  const nextParameter = () => `$${++parameterIndex}`;
-
-  for (const chunk of chunks) {
-    sql += sqlFromQueryChunk(chunk, nextParameter);
-  }
-
-  return sql;
-}
-
-function sqlFromQueryChunk(chunk: unknown, nextParameter: () => string): string {
-  if (typeof chunk === 'string' || typeof chunk === 'number' || typeof chunk === 'boolean') {
-    return nextParameter();
-  }
-  if (typeof chunk !== 'object' || chunk === null) return nextParameter();
-
-  const record = chunk as Record<PropertyKey, unknown>;
-  const value = record.value;
-  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
-    return value.join('');
-  }
-  if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(record, 'brand')) {
-    return value;
-  }
-
-  const nested = record.queryChunks;
-  if (Array.isArray(nested)) {
-    return nested.map((item) => sqlFromQueryChunk(item, nextParameter)).join('');
-  }
-
-  return nextParameter();
 }
 
 function isManagedDbAdapterLike(value: unknown): value is Record<PropertyKey, unknown> {
