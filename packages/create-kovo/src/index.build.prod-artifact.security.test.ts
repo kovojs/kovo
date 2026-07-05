@@ -93,6 +93,27 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  it('blocks request-authored runtime DB imports from the production build artifact', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-runtime-db-import-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Runtime Db Import Proof' });
+      linkStarterBuildDependencies(root);
+      addRuntimeDbImportEndpointProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV414.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV414');
+        expect(output).toContain('src/_kovo/app-runtime-db');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV435 runtime-secret-view-egress
   it('refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode', async () => {
     const tempParent = tmpdir();
@@ -980,6 +1001,53 @@ async function assertQueryWireServed(origin: string, output: () => string): Prom
 }
 
 const queryWireProofKey = 'queries/q-response-proof-query';
+
+function addRuntimeDbImportEndpointProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/dogfood-runtime-db.endpoint.ts'),
+    [
+      "import { endpoint, publicAccess } from '@kovojs/server';",
+      "import { sql } from '@kovojs/drizzle';",
+      "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
+      '',
+      "export const dogfoodReadAuthToken = endpoint('/api/dogfood-runtime-db', {",
+      "  access: publicAccess('runtime DB import proof'),",
+      "  auth: { justification: 'runtime DB import proof', kind: 'none' },",
+      '  csrf: false,',
+      "  csrfJustification: 'runtime DB import proof',",
+      "  method: 'GET',",
+      "  reason: 'runtime DB import proof',",
+      "  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },",
+      '  async handler() {',
+      '    const db = appRuntimeDbProvider();',
+      '    const rows = await db.execute(sql.raw(\'select token from "session"\'));',
+      '    return new Response(String(rows));',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { appTheme } from './theme.js';",
+    [
+      "import { appTheme } from './theme.js';",
+      "import { dogfoodReadAuthToken } from './dogfood-runtime-db.endpoint.js';",
+    ].join('\n'),
+    'runtime DB import proof app import',
+  );
+  app = replaceRequired(
+    app,
+    'endpoints: [healthEndpoint],',
+    'endpoints: [healthEndpoint, dogfoodReadAuthToken],',
+    'runtime DB import proof endpoint enrollment',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
 
 function addQueryWireProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
