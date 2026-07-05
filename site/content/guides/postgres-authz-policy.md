@@ -189,4 +189,6 @@ reviewed database object the policy can reference directly.
 - Postgres posture checks report missing forced RLS, missing `kovo_authz_policy`, or unsafe
   reachable objects through the database check output.
 
+API reference: [@kovojs/drizzle](/api/drizzle/), [@kovojs/test](/api/test/).
+
 </details>

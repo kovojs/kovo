@@ -89,4 +89,6 @@ builder example: `packages/headless-ui/src/public/tooltip.ts` and
 `packages/headless-ui/src/primitives/tooltip.ts`. The diagnostics named here are the primitive
 composition family in `spec/11-diagnostics.md`.
 
+API reference: [@kovojs/headless-ui](/api/headless-ui/).
+
 </details>

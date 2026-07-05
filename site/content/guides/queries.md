@@ -166,4 +166,6 @@ Opaque reads: KV410. Exempt table reads: KV411. Opaque writes: SPEC §10.3 and K
 mutation-handler writes are tracked by KV330: "Direct db access in a mutation handler; route through
 domain."
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

@@ -105,4 +105,6 @@ and `packages/create-kovo/src/index.ts`. Build preset override and paranoid mode
 `packages/server/src/csp.ts`. The main boot refusal path surfaces through `CreateAppBootError`; the
 database posture family is the same KV433 set surfaced by `kovo db check`.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

@@ -132,4 +132,6 @@ Do not edit history out from under an applied migration.
 `examples/crm/src/db.ts`, and `examples/crm/src/demo-data.ts`. The posture and migration failure
 family is the KV433 set surfaced by `kovo db check`, `provision`, and `migrate`.
 
+API reference: [@kovojs/drizzle](/api/drizzle/).
+
 </details>

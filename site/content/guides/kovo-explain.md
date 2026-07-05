@@ -273,4 +273,6 @@ Capability review through the shipped source/sink and ingress surfaces: SPEC §6
 vocabulary behind Network-panel debugging: SPEC §9.1. Debugging downward into plainer artifacts:
 SPEC §1.
 
+API reference: [@kovojs/test](/api/test/), [@kovojs/cli](/api/cli/).
+
 </details>

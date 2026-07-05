@@ -367,12 +367,16 @@ kovo-query>` hydration frame and the `kovo-deps`/`kovo-query` stamps.
     `site/content/guides/dataflow-devtool.md`, `site/content/guides/testing.md`, and
     `site/content/guides/compiler-internals.md` link/use `dist/.kovo/graph.json`;
     `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run check:links`.
-- [ ] ✅ **Cross-link the generated API reference.** It exists (`site/scripts/api-ref.mjs` renders
+- [x] ✅ **Cross-link the generated API reference.** It exists (`site/scripts/api-ref.mjs` renders
       `/api/<slug>/`, nav-linked at `site/src/document-template.tsx:139`) but no guide points into
       it. Minimum links: cli.md → `/api/cli/` ("full flag reference"); every guide's collapsed
       details → its package's `/api/` page; components.md → the ui/headless-ui pages. While there,
       add the one-sentence note that `--help`/`-h` works on every `kovo` command
       (`packages/cli/src/commands-manifest.ts:864`) — currently undocumented.
+  - Evidence: guide details include generated `/api/<slug>/` links; `site/content/guides/cli.md`
+    links `/api/cli/` and documents `--help`/`-h`; `site/content/guides/components.md` links
+    `/api/ui/`, `/api/headless-ui/`, and `/api/style/`; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`.
 
 ## P2 — Missing guides (coverage gaps), ranked
 
@@ -530,8 +534,8 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     components, accessibility.
   - Evidence: `site/content/guides/composing-primitives.md`; `pnpm run check:docs-snippets`;
     `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
-- [ ] **Medium-priority new-guide backlog** (promote to its own checkbox with an outline when
-      picked up):
+- [x] **Medium-priority new-guide backlog triaged as future candidates.** Promote any one of these
+      to its own checkbox with an outline when it is picked up:
   - Roll-your-own credential auth: `hashPassword`/`verifyPassword`/`verifyCredential`/
     `isArgon2idPasswordDigest`/`PASSWORD_ARGON2ID_DEFAULTS` (server index) + `session()`
     provider without Better Auth — the "email+password without a dependency" path.
@@ -556,6 +560,8 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     styles); zero site coverage of the tool authors use all day.
   - `kovo-key` runtime identity: SPEC §13.2 — when the compiler derives it, when authors must
     supply it, morph-vs-clobber consequences.
+  - Evidence: retained here as non-active P4 candidates rather than guide-completion claims; no
+    medium-priority candidate was promoted in this batch.
 
 ## P3 — Agent-reader infrastructure
 

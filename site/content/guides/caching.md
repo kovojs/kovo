@@ -81,4 +81,6 @@ contract and deploy-skew behavior: `spec/09-wire-protocol.md` and `site/content/
 Navigation restore posture: `spec/07-navigation.md`. The typed cache-control rejection path is the
 KV415 family referenced by the plan.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

@@ -104,4 +104,6 @@ Delta wire shape: `packages/server/src/wire-html.ts` and `packages/server/src/wi
 List delta merge contract: `packages/core/src/query-delta.ts`. Keyed reconciliation and held-list
 accumulation: SPEC `spec/09-wire-protocol.md` and `spec/04-component-model.md` section 13.2.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

@@ -232,4 +232,6 @@ SPEC §4.9. Missing server truth for an applied transform is **KV313**; SPEC §1
 runtime to discard or refetch the prediction rather than freeze it. Navigation and `keepalive`:
 SPEC §8. Property-testing transforms: SPEC §12.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

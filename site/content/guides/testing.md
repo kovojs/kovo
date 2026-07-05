@@ -238,4 +238,6 @@ The KV402–KV410 verification family: SPEC §11.3; manual touches at an opaque 
 query reading an `exempt` table is **KV411** (SPEC §10.1); `exempt` tables and the read/write rules:
 SPEC §10.1.
 
+API reference: [@kovojs/test](/api/test/).
+
 </details>

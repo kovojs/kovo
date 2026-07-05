@@ -276,4 +276,6 @@ Style scoping, tokens, stylesheet hints, and late fragment delivery: SPEC §13.1
 data-attribute / `[hidden]` binding posture and the update-plan grammar: SPEC §4.8. Why shadow DOM
 was rejected: SPEC §3.1.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/), [@kovojs/style](/api/style/), [@kovojs/ui](/api/ui/).
+
 </details>

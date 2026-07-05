@@ -170,4 +170,6 @@ File fields and stored uploads: `packages/server/src/schema.ts` (`s.file()`, `.a
 and `packages/server/src/app-load-shed.ts`. The server-minted opaque-key contract and verified file
 type path are the main diagnostics behind KV428.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

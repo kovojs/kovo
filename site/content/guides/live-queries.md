@@ -102,4 +102,6 @@ SPEC §9.1; BroadcastChannel principal filtering and refetch-on-focus: SPEC §9.
 render-plan version tokens: SPEC §9.4. Roadmap-only live-query shape: SSE transport, `live: true`,
 `<kovo-live>`, instance-key routing, and per-push guard rechecks: SPEC §9.3.
 
+API reference: [@kovojs/browser](/api/browser/), [@kovojs/server](/api/server/).
+
 </details>

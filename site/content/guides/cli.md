@@ -63,6 +63,8 @@ kovo: add, audit, build, check, db, compile, explain, export, mcp, update-docs
 
 Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`,
 `kovo-db/v1`, …) — the same artifact a reviewer reads and an agent consumes.
+Every command also accepts `--help` or `-h`; use that for the exact flag surface, and use the
+[CLI API reference](/api/cli/) when you need the programmatic command wrappers.
 
 ## Build the graph artifact first
 
@@ -296,6 +298,7 @@ to debug touch-graph consistency, optimistic exhaustiveness, and update coverage
 ## Next
 
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — interpreting the output in depth.
+- [CLI API reference](/api/cli/) — programmatic command wrappers and manifest-backed command data.
 - [create-kovo command reference](/api/create-kovo/) — scaffold flags, dialects, and write safety.
 - [Deployment](/guides/deployment/) — `kovo build` presets and `kovo export`.
 - [Testing](/guides/testing/) — what `vp test` runs and the browser-free verification surface.
@@ -310,5 +313,7 @@ audit: SPEC §11.4. Diagnostic severities and blocking policy: SPEC §11.3. Stat
 export`, KV229) and the request shell: SPEC §9.5. The CLI command surface (subcommands, flags,
 positional sub-checks) is verified against `packages/cli/src/commands-manifest.ts` and the
 `index.kovo-*.test.ts` suites.
+
+API reference: [@kovojs/ui](/api/ui/), [@kovojs/cli](/api/cli/), [create-kovo](/api/create-kovo/).
 
 </details>

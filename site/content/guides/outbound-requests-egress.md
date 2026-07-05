@@ -97,4 +97,6 @@ the remediation strings: `packages/server/src/egress.ts`. Task `ctx.fetch` publi
 docs in code: `packages/server/src/app-types.ts`. The floor is runtime defense-in-depth, not a
 by-construction proof; the authoritative contract is SPEC section 6.6.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

@@ -380,4 +380,6 @@ route is **KV220**; an ambiguous or duplicate route path is **KV228**; a route t
 statically exported as L0/L1 is **KV229**; a duplicate static view-transition name is **KV239**;
 unguarded credentialed prerender with `prefetch: 'moderate'` is **KV419**.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

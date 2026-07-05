@@ -299,4 +299,6 @@ fragments: SPEC §13.1. Defer vs. post-load data updates: SPEC §9.3. `kovo expl
 surface: SPEC §5.3. App-authored `defer(...)` as a JSX child is **KV244**; author `<Defer>` and let
 Kovo emit `<kovo-defer>`.
 
+API reference: [@kovojs/browser](/api/browser/), [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

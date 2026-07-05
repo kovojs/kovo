@@ -345,4 +345,6 @@ rendered positions and derives require declared `clocks`, query `.refresh({ ever
 or an app-local `renderOnce` helper: SPEC §4.1, §4.8, and §4.9; missing cadence is **KV312**, and
 raw clock reads in derives are **KV315**.
 
+API reference: [@kovojs/browser](/api/browser/), [@kovojs/core](/api/core/).
+
 </details>

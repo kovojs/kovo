@@ -283,4 +283,6 @@ lowered by the compiler (SPEC §5.2); hand-authored lowered IR is KV235. The pub
 for `@kovojs/ui`, `@kovojs/headless-ui`, and `@kovojs/style` is recorded in
 `plans/api-export-cleanup.md` and the repo `STABILITY.md`.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/headless-ui](/api/headless-ui/), [@kovojs/icons](/api/icons/), [@kovojs/server](/api/server/), [@kovojs/style](/api/style/), [@kovojs/ui](/api/ui/).
+
 </details>

@@ -169,4 +169,6 @@ dispatch order, no middleware chain, document assembly, error shells, static exp
 handler, and pre-dispatch 413/429 limits: SPEC §9.5. Mutation lifecycle after pre-dispatch:
 SPEC §10.3. Endpoint audit enrollment for the coarse limiter: SPEC §11.4.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

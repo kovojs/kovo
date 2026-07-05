@@ -215,4 +215,6 @@ Mutation lifecycle: SPEC §9.1 and §10.3. Access decisions: SPEC §10.2/KV436. 
 SPEC §10.3 request lifecycle. Opaque write declarations: KV406. Direct handler writes are KV330:
 "Direct db access in a mutation handler; route through domain." Stale version conflicts use KV429.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

@@ -121,4 +121,6 @@ Static export through the request shell, L0/L1 limits, guarded/session-dependent
 param path enumeration, and KV229: SPEC §9.5. Prior immutable module retention and KV417:
 SPEC §14. The MPA degradation contract: SPEC §8.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

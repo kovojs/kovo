@@ -217,4 +217,6 @@ Runtime verification: SPEC §11.2. Access posture: KV436. Opaque projection sche
 table reads: KV411. Opaque writes: KV406. Direct mutation-handler writes are KV330: "Direct db
 access in a mutation handler; route through domain."
 
+API reference: [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).
+
 </details>

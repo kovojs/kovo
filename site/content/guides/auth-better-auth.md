@@ -370,4 +370,6 @@ surfaces such as Better Auth callback mounts: SPEC §6.6. Mutation header forwar
 mounts, and the request shell live in SPEC §9.1 and §9.5. Default-deny access decisions live in
 SPEC §10.2.
 
+API reference: [@kovojs/better-auth](/api/better-auth/), [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

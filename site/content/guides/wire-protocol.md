@@ -204,4 +204,6 @@ SPEC §9.1.1. BroadcastChannel, refetch, and live transport vocabulary: SPEC §9
 guarded read cache posture, and canonical query instance keys: SPEC §9.4. Build-skew recovery:
 SPEC §14.
 
+API reference: [@kovojs/browser](/api/browser/), [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

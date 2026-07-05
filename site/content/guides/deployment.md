@@ -321,4 +321,6 @@ gates: SPEC §11.4. `createApp({ onError })` and `ServerErrorDiagnosticContext` 
 request-shell runtime failures without changing stable error responses: SPEC §9.2. KV417 reports a
 serving layer that cannot meet the skew-retention floor.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

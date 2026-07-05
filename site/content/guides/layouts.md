@@ -187,4 +187,6 @@ boundaries, stylesheets, and `kovo explain page --layouts`: SPEC §4.5 and §6.4
 by the request shell: SPEC §9.5. Navigation is full-document first; layout persistence is not an
 app-authored v1 contract: SPEC §8. KV420 stateful-island boundary: SPEC §4.5 and §9.1.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

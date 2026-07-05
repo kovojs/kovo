@@ -159,4 +159,6 @@ and `packages/server/src/task-runtime.ts`. Durable queue/status helpers:
 explain output: `packages/cli/src/index.kovo-explain.test.ts`. Builds fail closed when a preset has
 no runner capability or the default node runner would land on an unsupported SQLite queue path.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

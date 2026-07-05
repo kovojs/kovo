@@ -108,4 +108,6 @@ graph emission. The devtool should explain the graph you built, not patch around
 The graph/explain artifact contract and stable `kovo-explain/v1` text shape: SPEC §11.4. Machine-
 auditable generation and authorable outputs: SPEC §1.3, Constitution #3.
 
+API reference: [@kovojs/server](/api/server/).
+
 </details>

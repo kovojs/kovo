@@ -110,4 +110,6 @@ Wire refusal text: `packages/core/src/internal/wire-json.ts` and
 Column-level secret and confidential-at-rest annotations: `packages/drizzle/src/drizzle-surface.ts`.
 `encryptAtRest(...)`: `packages/server/src/confidential-at-rest.ts`. Main diagnostic: KV435.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).
+
 </details>

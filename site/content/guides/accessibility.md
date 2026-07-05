@@ -158,4 +158,6 @@ axe-core in Chromium over the static fixtures and the primitive families' termin
 states. Run them with
 `pnpm --filter @kovojs/example-gallery run test:browser`.
 
+API reference: [@kovojs/server](/api/server/), [@kovojs/ui](/api/ui/).
+
 </details>

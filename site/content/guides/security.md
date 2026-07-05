@@ -526,4 +526,6 @@ audit: SPEC §11.4. Confidential data and `trustedReveal`: SPEC §6.6, KV435. Go
 provenance and mass-assignment: SPEC §10.3, KV438. Capability URLs for storage downloads:
 SPEC §6.6. Typed mutation error path: SPEC §9.2.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).
+
 </details>

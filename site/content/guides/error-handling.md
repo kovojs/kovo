@@ -127,4 +127,6 @@ and the server routing surface. App error shells and `onError`: `packages/server
 `packages/server/src/app.ts`, and `site/content/guides/request-shell.md`. Enhanced mutation reauth
 handling lives in `packages/browser/src/mutation-fetch.ts` and the wire contract in `spec/09-wire-protocol.md`.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

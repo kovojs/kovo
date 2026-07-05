@@ -116,4 +116,6 @@ surface, the load-bearing `// @kovojs-ir` marker, and **KV235**: SPEC §5.2. Ren
 (`assertRenderEquivalence`): SPEC §5.2. Declare-once registry typing: SPEC §6.1. Immutable versioned
 module URLs retained across deploys: SPEC §6.6.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>

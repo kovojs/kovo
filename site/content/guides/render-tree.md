@@ -155,4 +155,6 @@ well-formed XML parsing, unknown-tag posture, attribute validation, and text esc
 by SPEC §4.10. Component composition and server-rendered child posture come from SPEC §4.5. Output
 safety and trusted HTML boundaries come from SPEC §4.8. Schema validation follows SPEC §6.3.
 
+API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
+
 </details>
