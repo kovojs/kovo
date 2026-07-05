@@ -76,13 +76,14 @@ to embedded PGlite when an external URL is present.
     through any public system facade either throws `KV435`/returns boxed `Secret` or requires an audited capability row.
   - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/create-kovo/src/index.test.ts packages/drizzle/src/static-analysis-context.test.ts --config ./vite.config.ts` passed; `postgres-runtime.test.ts` includes a `@ts-expect-error` assignment from `KovoPostgresSystemDb` to `KovoPostgresRuntimeDb`, and `pnpm run check:api-surface` plus `pnpm run check:capability-surface-census` passed.
 
-- [ ] **A3 — Move the `_kovo/app-runtime-db` import ban from a contributor script into production build/static analysis,
+- [x] **A3 — Move the `_kovo/app-runtime-db` import ban from a contributor script into production build/static analysis,
       and make allowlists operation-specific.** `src/auth.ts` may import the auth adapter factory, not raw runtime DB
       values. Request-authored modules, tests enrolled in the starter security surface, and transitive re-exports are all
       rejected when they carry raw runtime DB value bindings.
   - Acceptance: the throwaway `dogfoodReadAuthToken()` endpoint shape from `/Users/mini/kovo-dogfood-codex-pg-20260704`
     fails `kovo build` with a first-class diagnostic before endpoint-posture; direct tests importing `_kovo` fail the
     same way unless they import types only.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts --config ./vite.config.ts -t "blocks request-authored runtime DB imports"` passed with a KV414 production-build failure, and `pnpm exec vitest --run packages/drizzle/src/sql-safety-static.test.ts --config ./vite.config.ts` passed.
 
 ### DEC-B — SQL statement proof uses immutable snapshots (fixes `bugz-24` A2)
 
@@ -185,8 +186,9 @@ to embedded PGlite when an external URL is present.
 
 ## 6. Probes before committing
 
-- [ ] **DEC-A:** recreate the `bugz-24` A1 endpoint shape (helper in `src/auth.ts`, public endpoint serializing
+- [x] **DEC-A:** recreate the `bugz-24` A1 endpoint shape (helper in `src/auth.ts`, public endpoint serializing
       `session.token`) and prove `kovo build` or `check:sound-subset` fails before serving.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts --config ./vite.config.ts -t "blocks request-authored runtime DB imports"` injects `dogfoodReadAuthToken` and proves `kovo build` fails with KV414.
 - [ ] **DEC-A:** Better Auth sign-in/sign-out still pass in fresh Postgres starter dev, production artifact, and
       external-Postgres provisioned artifact without exporting `appRuntimeAuthDb`.
 - [ ] **DEC-B:** getter/proxy separated SQL carrier cannot execute a different statement than the one validated;
