@@ -26,7 +26,7 @@ export const addToCart = mutation({
   csrf: cartCsrf,
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
   registry: { touches: [cart] },
-  async handler(input, request) {
+  async handler(input, request: { db: unknown }) {
     await addCartRow(request.db, input);
   },
 });

@@ -937,6 +937,14 @@ export type BetterAuthSessionPayload<Session = any, User = any> = {
   session: Session;
   user: User;
 };
+export type BetterAuthLike<Session = any, User = any> = {
+  api: {
+    getSession(options: any): BetterAuthSessionPayload<Session, User> | null | Promise<BetterAuthSessionPayload<Session, User> | null>;
+  };
+};
+export type BetterAuthMountLike = {
+  handler(request: any): any;
+};
 
 export const KovoDevtool: any;
 export const PGlite: any;
@@ -982,6 +990,7 @@ export type ComponentRegistry = any;
 export type ComponentRegistryEntry = any;
 export type ComponentRegistryInput = any;
 export type ComponentTextNode = any;
+export type ComponentChild = any;
 export type IconProps = any;
 export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;

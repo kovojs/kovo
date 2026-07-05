@@ -106,7 +106,7 @@ import { createApp } from '@kovojs/server';
 
 export default createApp({
   onError(error, context) {
-    console.error('request failed', context.phase, error);
+    console.error('request failed', context.operation, error);
   },
 });
 ```

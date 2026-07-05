@@ -249,12 +249,16 @@ refines `req.session` identically — so `req.session.user` is non-null inside t
 ```tsx
 import { guards, route, s } from '@kovojs/server';
 
+interface ProductRequest {
+  session?: { user?: { id?: string } | null } | null;
+}
+
 export const productRoute = route('/products/:id', {
   params: s.object({ id: s.string() }),
-  guard: guards.authed(),
-  page({ params }, req: { session: { user: { id: string } } }) {
+  guard: guards.authed<ProductRequest>(),
+  page({ params }, req) {
     // req.session.user is non-null here, refined by the guard
-    return <ProductPage id={params.id} owner={req.session.user.id} />;
+    return <ProductPage id={params.id} owner={req.session.user.id ?? ''} />;
   },
 });
 ```

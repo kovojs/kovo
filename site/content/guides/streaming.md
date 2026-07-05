@@ -270,7 +270,6 @@ import { Defer } from '@kovojs/server';
   target="product-grid"
   timeoutMs={30_000}
   fallback={<section aria-busy="true">Loading products...</section>}
-  errorFallback={<section>Could not load products right now.</section>}
   render={() => <ProductGrid />}
 />;
 ```

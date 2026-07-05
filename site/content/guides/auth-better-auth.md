@@ -32,12 +32,11 @@ starter uses, with one addition: `appSignUp`.
 The smallest Kovo-facing piece is the session provider:
 
 ```ts
-import { betterAuthSession } from '@kovojs/better-auth';
+import { betterAuthSession, type BetterAuthLike } from '@kovojs/better-auth';
 
-declare const appSession: {
-  provider(value: unknown): unknown;
-};
-declare const auth: unknown;
+type Auth = BetterAuthLike<{ id: string }, { id: string; email: string; name?: string | null }>;
+declare const appSession: { provider(value: unknown): unknown };
+declare const auth: Auth;
 
 export const appSessionProvider = appSession.provider(
   betterAuthSession(auth, ({ session: authSession, user }) => ({
@@ -267,10 +266,10 @@ Kovo mutations are the right place for browser credential forms. Better Auth's o
 handler belongs on a mounted endpoint instead:
 
 ```ts
-import { mount } from '@kovojs/better-auth';
+import { mount, type BetterAuthMountLike } from '@kovojs/better-auth';
 import { createApp } from '@kovojs/server';
 
-declare const auth: unknown;
+declare const auth: BetterAuthMountLike;
 
 const app = createApp({
   endpoints: [mount('/api/auth', auth, { method: 'GET' })],

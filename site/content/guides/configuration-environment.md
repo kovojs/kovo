@@ -19,7 +19,7 @@ import { createApp, s } from '@kovojs/server';
 
 export const app = createApp({
   env: s.object({
-    STRIPE_SECRET_KEY: s.string().min(1),
+    STRIPE_SECRET_KEY: s.string().pattern(/.+/),
     SENTRY_DSN: s.string().url().optional(),
   }),
 });

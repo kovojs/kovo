@@ -11,11 +11,11 @@ Use a render tree when the content shape is data but the components it may call 
 your app.
 
 ```tsx
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import { renderRegistry, s } from '@kovojs/server';
 
 const Callout = component({
-  render: ({ tone = 'info' }, _state, slots: { children?: string }) => (
+  render: ({ tone = 'info' }, _state, slots: { children?: ComponentChild }) => (
     <aside data-tone={tone}>{slots.children ?? ''}</aside>
   ),
 });

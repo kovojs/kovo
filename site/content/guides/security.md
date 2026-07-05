@@ -146,6 +146,7 @@ export const orders = pgTable(
 Then scope every read and write of that table to the session, not to client input:
 
 ```ts
+// Source: app/orders/query.ts
 import { guards, query } from '@kovojs/server';
 
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
