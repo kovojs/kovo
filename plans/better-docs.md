@@ -275,7 +275,7 @@ test:browser` is already correct), and repoint the closer at a real self-serve a
 
 ## P1 — Systemic quality passes across existing guides
 
-- [ ] **Copy-paste-runnable samples policy, applied guide by guide.** Adopt one rule and enforce
+- [x] **Copy-paste-runnable samples policy, applied guide by guide.** Adopt one rule and enforce
       it everywhere: every fenced TS/TSX block either (a) compiles standalone — all imports present,
       every identifier defined in the block or a prior block on the same page — or (b) opens with a
       provenance comment naming its source file (`// examples/commerce/src/domain.ts`) and elides
@@ -297,6 +297,11 @@ test:browser` is already correct), and repoint the closer at a real self-serve a
   - Acceptance: the site's compile-checked-fences gate passes with the policy tightened to
     typecheck (not just parse) if that's not already the case — investigate why non-compiling
     samples currently pass it.
+  - Evidence: `site/scripts/code-snippets-check.mjs` enforces standalone vs provenance snippets,
+    explicit-`any` rejection on the strict docs surface, and reference-app symbol provenance;
+    `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site test -- code-snippets-check.test.mjs`;
+    `pnpm --filter @kovojs/site run build`.
 - [x] **Add a "Run it" proof moment to every guide missing one** (flagged on 15+ pages). The bar
       (`rules/docs-style.md:93-95`): a command, a View Source, or a click, plus what the reader sees
       change. Concrete recipe per page:
@@ -589,9 +594,12 @@ type="text/markdown" href="<route>.md">` to the head in `site/src/document-templ
       installed framework.
   - Evidence: `site/dist/llms.txt`, `site/dist/llms-guides.txt`, `site/dist/llms-api.txt`, and
     `site/dist/llms-full.txt` contain `Version: @kovojs 0.1.3 (unknown)` from build input.
-- [ ] Snippet provenance for reference-app symbols (same rule as P1 item 1; the agent sweep hit
+- [x] Snippet provenance for reference-app symbols (same rule as P1 item 1; the agent sweep hit
       it independently: testing.md/routing.md snippets lean on undefined commerce symbols with no
       file pointer, forcing exactly the guessing the mirrors otherwise eliminate).
+  - Evidence: `site/scripts/code-snippets-check.mjs` requires `// Source: <path>` for reference-app
+    symbols on the strict docs surface; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site test -- code-snippets-check.test.mjs`.
 
 ## P4 — Per-guide enrichment backlog (top adds per page)
 

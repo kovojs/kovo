@@ -25,11 +25,6 @@ const useBuiltPackageDeclarations = process.env.KOVO_DOC_SNIPPETS_USE_DIST === '
 
 const TS_LANGS = new Set(['ts', 'tsx']);
 const PROVENANCE_COMMENT = /^\/\/\s*Source:\s*(.+)$/;
-const EXCLUDED_SOURCE_PATHS = new Set([
-  'guides/endpoints-webhooks.md',
-  'guides/kovo-explain.md',
-  'guides/security.md',
-]);
 const STRICT_POLICY_SOURCE_PATHS = new Set([
   'getting-started/why-kovo.md',
   'guides/data-layer.md',
@@ -108,7 +103,6 @@ export async function collectCodeSnippets(dir = contentDir) {
   for (const file of await markdownFiles(dir)) {
     const markdown = readFileSync(file, 'utf8');
     const sourcePath = path.relative(dir, file);
-    if (EXCLUDED_SOURCE_PATHS.has(sourcePath)) continue;
     snippets.push(...extractCodeSnippets(markdown, sourcePath));
   }
   return snippets.sort((a, b) => a.id.localeCompare(b.id));
@@ -119,7 +113,6 @@ export async function checkAuthoredDocStyle({ dir = contentDir } = {}) {
   for (const file of await markdownFiles(dir)) {
     const markdown = readFileSync(file, 'utf8');
     const sourcePath = path.relative(dir, file);
-    if (EXCLUDED_SOURCE_PATHS.has(sourcePath)) continue;
     issues.push(...checkDocStyle(markdown, sourcePath));
   }
 
@@ -300,7 +293,8 @@ function explicitAnyIssues(snippet) {
       issues.push({
         code: 'explicit-any',
         line: snippet.startLine + line,
-        message: 'authored docs snippets may not use `any`; use the real contract or provenance mode',
+        message:
+          'authored docs snippets may not use `any`; use the real contract or provenance mode',
         sourcePath: snippet.sourcePath,
       });
     }

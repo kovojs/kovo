@@ -92,7 +92,7 @@ describe('authored code snippet extractor', () => {
           "import { route } from '@kovojs/server';",
           '',
           "export const cartRoute = route('/cart', {",
-          "  page: () => <main>Cart</main>,",
+          '  page: () => <main>Cart</main>,',
           '});',
           '```',
         ].join('\n'),
@@ -249,10 +249,11 @@ describe('authored code snippet extractor', () => {
   it('rejects explicit any in authored runnable snippets', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'kovo-code-snippets-'));
     await mkdir(path.join(process.cwd(), 'site/gen'), { recursive: true });
+    await mkdir(path.join(root, 'guides'), { recursive: true });
     const outDir = await mkdtemp(path.join(process.cwd(), 'site/gen/code-snippets-test-'));
     try {
       await writeFile(
-        path.join(root, 'page.md'),
+        path.join(root, 'guides/queries.md'),
         [
           '# Page',
           '',
