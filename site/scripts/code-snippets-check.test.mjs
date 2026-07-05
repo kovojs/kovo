@@ -92,7 +92,7 @@ describe('authored code snippet extractor', () => {
           "import { route } from '@kovojs/server';",
           '',
           "export const cartRoute = route('/cart', {",
-          '  page: () => <CartPage />,',
+          "  page: () => <main>Cart</main>,",
           '});',
           '```',
         ].join('\n'),
@@ -210,6 +210,67 @@ describe('authored code snippet extractor', () => {
       await expect(checkAuthoredDocStyle({ dir: root })).rejects.toThrow('doc-style');
     } finally {
       await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('accepts provenance-marked non-runnable snippets', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-code-snippets-'));
+    await mkdir(path.join(process.cwd(), 'site/gen'), { recursive: true });
+    const outDir = await mkdtemp(path.join(process.cwd(), 'site/gen/code-snippets-test-'));
+    try {
+      await writeFile(
+        path.join(root, 'page.md'),
+        [
+          '# Page',
+          '',
+          'A cart page should show the useful path first.',
+          '',
+          '```tsx',
+          '// Source: examples/commerce/src/testing.ts',
+          'export const harness = createKovoTestHarness({',
+          '  // ... real imports and helpers live in the source file',
+          "  pages: { '/cart': renderCartPage },",
+          '});',
+          '```',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(checkAuthoredCodeSnippets({ dir: root, outDir })).resolves.toMatchObject({
+        ok: true,
+        snippets: [{ id: 'page__L5', mode: 'provenance', sourcePath: 'page.md', startLine: 5 }],
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects explicit any in authored runnable snippets', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-code-snippets-'));
+    await mkdir(path.join(process.cwd(), 'site/gen'), { recursive: true });
+    const outDir = await mkdtemp(path.join(process.cwd(), 'site/gen/code-snippets-test-'));
+    try {
+      await writeFile(
+        path.join(root, 'page.md'),
+        [
+          '# Page',
+          '',
+          'A cart page should show the useful path first.',
+          '',
+          '```ts',
+          'const load = (value: any) => value;',
+          '```',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(checkAuthoredCodeSnippets({ dir: root, outDir })).rejects.toThrow(
+        'policy issue',
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outDir, { force: true, recursive: true });
     }
   });
 });

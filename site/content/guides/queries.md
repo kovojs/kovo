@@ -15,12 +15,13 @@ components that depend on the query after a matching write commits.
 Load through `context.db`. That handle is the framework-managed read handle for loaders.
 
 ```ts
+// Source: examples/commerce/src/queries.ts
 import { publicAccess, query, s } from '@kovojs/server';
 
 const cartSummaryDefinition = {
   access: publicAccess('cart badge is visible to anonymous shoppers'),
   output: s.object({ count: s.number() }),
-  load: async (_input, context?: { db?: any }): Promise<{ count: number }> => {
+  load: async (_input, context): Promise<{ count: number }> => {
     const rows = (await context?.db.select({ quantity: cartItems.quantity }).from(cartItems)) ?? [];
     return { count: rows.reduce((total, row) => total + row.quantity, 0) };
   },
@@ -75,6 +76,7 @@ That pairing is the proof moment: the visible text and the hydration frame came 
 On the Drizzle path, invalidation comes from the SQL that actually runs:
 
 ```ts
+// Source: examples/commerce/src/domain.ts
 const commitAddToCartRows = async (_db: unknown, _input: unknown) => {};
 
 export const addToCart = mutation({
@@ -98,6 +100,7 @@ and reruns the stale queries after the transaction commits.
 If the analyzer cannot see the tables, declare the mutation registry facts explicitly:
 
 ```ts
+// Source: examples/commerce/src/domain.ts
 const mergeCartRows = async (_db: unknown, _cartId: string) => {};
 
 export const mergeCart = mutation({

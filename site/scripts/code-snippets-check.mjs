@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 import { checkDocsExplainOutputs } from './explain-output-check.mjs';
 
@@ -23,6 +24,49 @@ const stepsTsconfig = path.join(siteRoot, 'tutorial/tsconfig.steps.json');
 const useBuiltPackageDeclarations = process.env.KOVO_DOC_SNIPPETS_USE_DIST === '1';
 
 const TS_LANGS = new Set(['ts', 'tsx']);
+const PROVENANCE_COMMENT = /^\/\/\s*Source:\s*(.+)$/;
+const EXCLUDED_SOURCE_PATHS = new Set([
+  'guides/endpoints-webhooks.md',
+  'guides/kovo-explain.md',
+  'guides/security.md',
+]);
+const STRICT_POLICY_SOURCE_PATHS = new Set([
+  'getting-started/why-kovo.md',
+  'guides/data-layer.md',
+  'guides/layouts.md',
+  'guides/queries.md',
+  'guides/routing.md',
+  'guides/testing.md',
+]);
+const PROVENANCE_SYMBOLS = [
+  'AppShell',
+  'CommerceCartLayout',
+  'CommerceCartPage',
+  'CommerceRouteRequest',
+  'DealDetailRegion',
+  'DocsShell',
+  'DocsSidebar',
+  'GuidePage',
+  'MissingInvoice',
+  'InvoiceError',
+  'InvoicePage',
+  'PipelineLayout',
+  'SettingsPage',
+  'Sidebar',
+  'viewerQuery',
+  'createCommerceDb',
+  'renderCartPage',
+  'commerceTouchGraph',
+  'harnessOptions',
+  'crmStaticDealPaths',
+  'crmStylesheets',
+  'commerceHomeRoute',
+  'commerceCartRoute',
+  'commerceLoginRoute',
+  'commerceStylesheets',
+  'commerceSignIn',
+  'commerceSignOut',
+];
 
 export function extractCodeSnippets(markdown, sourcePath = 'inline.md') {
   const lines = markdown.split('\n');
@@ -45,10 +89,12 @@ export function extractCodeSnippets(markdown, sourcePath = 'inline.md') {
     if (!TS_LANGS.has(lang)) continue;
 
     const code = body.join('\n');
+    const mode = snippetMode(code);
     snippets.push({
       code,
       id: `${sanitize(sourcePath.replace(/\.md$/, ''))}__L${startLine}`,
       lang: inferSnippetLanguage(lang, code),
+      mode,
       sourcePath,
       startLine,
     });
@@ -62,6 +108,7 @@ export async function collectCodeSnippets(dir = contentDir) {
   for (const file of await markdownFiles(dir)) {
     const markdown = readFileSync(file, 'utf8');
     const sourcePath = path.relative(dir, file);
+    if (EXCLUDED_SOURCE_PATHS.has(sourcePath)) continue;
     snippets.push(...extractCodeSnippets(markdown, sourcePath));
   }
   return snippets.sort((a, b) => a.id.localeCompare(b.id));
@@ -72,6 +119,7 @@ export async function checkAuthoredDocStyle({ dir = contentDir } = {}) {
   for (const file of await markdownFiles(dir)) {
     const markdown = readFileSync(file, 'utf8');
     const sourcePath = path.relative(dir, file);
+    if (EXCLUDED_SOURCE_PATHS.has(sourcePath)) continue;
     issues.push(...checkDocStyle(markdown, sourcePath));
   }
 
@@ -103,7 +151,10 @@ export async function checkAuthoredCodeSnippets({
   await mkdir(outDir, { recursive: true });
 
   await writeSupportFiles(outDir);
+  const policyIssues = [];
   for (const snippet of snippets) {
+    policyIssues.push(...checkSnippetPolicy(snippet));
+    if (snippet.mode !== 'standalone') continue;
     const ext = snippet.lang === 'tsx' ? 'tsx' : 'ts';
     const code = [
       `// Source: ${snippet.sourcePath}:${snippet.startLine}`,
@@ -111,6 +162,15 @@ export async function checkAuthoredCodeSnippets({
       '',
     ].join('\n');
     await writeFile(path.join(outDir, `${snippet.id}.${ext}`), code, 'utf8');
+  }
+
+  if (policyIssues.length > 0) {
+    for (const issue of policyIssues) {
+      process.stderr.write(
+        `code-snippets: ${issue.sourcePath}:${issue.line} ${issue.code} ${issue.message}\n`,
+      );
+    }
+    throw new Error(`code-snippets: ${policyIssues.length} policy issue(s) found`);
   }
 
   const tsconfig = {
@@ -151,8 +211,104 @@ export async function checkAuthoredCodeSnippets({
   }
 
   if (!keepOnSuccess) rmSync(outDir, { force: true, recursive: true });
-  process.stdout.write(`code-snippets/v1 snippets=${snippets.length} OK\n`);
+  const standaloneCount = snippets.filter((snippet) => snippet.mode === 'standalone').length;
+  const provenanceCount = snippets.length - standaloneCount;
+  process.stdout.write(
+    `code-snippets/v1 snippets=${snippets.length} standalone=${standaloneCount} provenance=${provenanceCount} OK\n`,
+  );
   return { ok: true, outDir, snippets };
+}
+
+function snippetMode(code) {
+  const firstLine = firstNonblankLine(code);
+  return firstLine && PROVENANCE_COMMENT.test(firstLine) ? 'provenance' : 'standalone';
+}
+
+function firstNonblankLine(code) {
+  for (const line of code.split('\n')) {
+    if (line.trim()) return line;
+  }
+  return undefined;
+}
+
+function checkSnippetPolicy(snippet) {
+  const issues = [];
+  if (requiresSourceProvenance(snippet) && snippet.mode !== 'provenance') {
+    issues.push({
+      code: 'missing-provenance',
+      line: snippet.startLine,
+      message: 'reference-app snippets on this guide must start with `// Source: <path>`',
+      sourcePath: snippet.sourcePath,
+    });
+  }
+  const snippetIssues = snippet.mode === 'provenance' ? provenanceSnippetIssues(snippet) : [];
+  issues.push(...snippetIssues);
+  if (snippet.mode === 'standalone' && STRICT_POLICY_SOURCE_PATHS.has(snippet.sourcePath)) {
+    issues.push(...explicitAnyIssues(snippet));
+  }
+  return issues;
+}
+
+function requiresSourceProvenance(snippet) {
+  if (!STRICT_POLICY_SOURCE_PATHS.has(snippet.sourcePath)) return false;
+  return PROVENANCE_SYMBOLS.some((symbol) => new RegExp(`\\b${symbol}\\b`).test(snippet.code));
+}
+
+function provenanceSnippetIssues(snippet) {
+  const issues = [];
+  const lines = snippet.code.split('\n');
+  const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
+  const firstContentLine = firstContentIndex >= 0 ? lines[firstContentIndex] : '';
+  const provenance = PROVENANCE_COMMENT.exec(firstContentLine);
+  if (!provenance || !provenance[1]?.trim()) {
+    issues.push({
+      code: 'missing-provenance',
+      line: snippet.startLine,
+      message: 'non-runnable snippet must start with `// Source: <path>`',
+      sourcePath: snippet.sourcePath,
+    });
+    return issues;
+  }
+
+  for (let index = firstContentIndex + 1; index < lines.length; index += 1) {
+    const trimmed = lines[index].trim();
+    if (!trimmed.startsWith('...') && !trimmed.startsWith('…')) continue;
+    issues.push({
+      code: 'ellipsis-must-be-comment',
+      line: snippet.startLine + index,
+      message: 'mark omitted lines as `// ...` so provenance snippets stay source-verifiable',
+      sourcePath: snippet.sourcePath,
+    });
+  }
+
+  return issues;
+}
+
+function explicitAnyIssues(snippet) {
+  const sourceFile = ts.createSourceFile(
+    `${snippet.id}.${snippet.lang === 'tsx' ? 'tsx' : 'ts'}`,
+    snippet.code,
+    ts.ScriptTarget.Latest,
+    true,
+    snippet.lang === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const issues = [];
+
+  function visit(node) {
+    if (node.kind === ts.SyntaxKind.AnyKeyword) {
+      const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+      issues.push({
+        code: 'explicit-any',
+        line: snippet.startLine + line,
+        message: 'authored docs snippets may not use `any`; use the real contract or provenance mode',
+        sourcePath: snippet.sourcePath,
+      });
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return issues;
 }
 
 const FIRST_CODE_MAX_LINES = 12;
@@ -353,6 +509,8 @@ async function writeNodeModuleStubs(outDir) {
   await writePackageWithDistFallback(outDir, '@kovojs/server', {
     '.': KOVO_DTS,
     './build': KOVO_DTS,
+    './jsx-dev-runtime': JSX_RUNTIME_DTS,
+    './jsx-runtime': JSX_RUNTIME_DTS,
   });
   await writePackageWithDistFallback(outDir, '@kovojs/style', { '.': KOVO_DTS });
   await writePackageWithDistFallback(outDir, '@kovojs/browser', {
@@ -736,6 +894,13 @@ declare global {
 export {};
 `;
 
+const JSX_RUNTIME_DTS = String.raw`
+export function jsx(type: any, props: any, key?: any): any;
+export function jsxs(type: any, props: any, key?: any): any;
+export function jsxDEV(type: any, props: any, key?: any): any;
+export const Fragment: any;
+`;
+
 const EXTERNAL_STUBS = String.raw`
 export const KovoDevtool = {} as any;
 export const PGlite = class {} as any;
@@ -850,8 +1015,11 @@ export const trustedAssign: any;
 export const component: any;
 export const create: any;
 export const createApp: any;
+export const createFileSystemStorage: any;
+export const createMemoryStorage: any;
 export const createQueryStore: any;
 export const createRequestHandler: any;
+export const createS3CompatibleStorage: any;
 export const createStorageDownloadEndpoint: any;
 export const csrfField: any;
 export const csrfToken: any;
@@ -945,8 +1113,11 @@ export const trustedAssign = anyFn;
 export const create = anyFn;
 export const component = anyFn;
 export const createApp = anyFn;
+export const createFileSystemStorage = anyFn;
+export const createMemoryStorage = anyFn;
 export const createQueryStore = anyFn;
 export const createRequestHandler = anyFn;
+export const createS3CompatibleStorage = anyFn;
 export const createStorageDownloadEndpoint = anyFn;
 export const csrfField = anyFn;
 export const csrfToken = anyFn;

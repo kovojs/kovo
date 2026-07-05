@@ -15,8 +15,10 @@ part of a normal app workflow. Reach for a raw endpoint only when the client can
 Start with the field and let the mutation own the upload:
 
 ```ts
-import { mutation, publicAccess, s } from '@kovojs/server';
-declare const avatarStorage: any;
+import { createMemoryStorage, mutation, publicAccess, s } from '@kovojs/server';
+
+const avatarStorage = createMemoryStorage();
+
 export const uploadAvatar = mutation({
   access: publicAccess('signed-in users can upload an avatar'),
   input: s.object({
@@ -110,9 +112,9 @@ adapter in deployed apps.
 To serve the file back, mount a storage download endpoint and mint the URL from request context:
 
 ```ts
-import { createStorageDownloadEndpoint, route } from '@kovojs/server';
+import { createMemoryStorage, createStorageDownloadEndpoint, route } from '@kovojs/server';
 
-declare const avatarStorage: any;
+const avatarStorage = createMemoryStorage();
 
 export const avatarDownloads = createStorageDownloadEndpoint({
   basePath: '/downloads/avatars',

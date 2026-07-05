@@ -16,6 +16,7 @@ A `route()` couples a literal path, optional param/search schemas, per-route con
 function. From the CRM reference app's parameterized detail route:
 
 ```tsx
+// Source: examples/crm/src/app.tsx
 import { route, s } from '@kovojs/server';
 
 export const dealDetailRoute = route('/deals/:id', {
@@ -33,6 +34,7 @@ export const dealDetailRoute = route('/deals/:id', {
 Singleton routes look the same without the param schema. From the commerce app:
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 export const commerceHomeRoute = route('/', {
   meta: { description: 'Browse products and checkout.', title: 'Kovo Commerce' },
   layout: CommerceCartLayout,
@@ -46,6 +48,7 @@ export const commerceHomeRoute = route('/', {
 Routes are registered on the closed `createApp()` aggregate the request shell owns:
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 const app = createApp({
   routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
   mutations: [addToCart, commerceSignIn, commerceSignOut],
@@ -137,6 +140,7 @@ redirect (declaring a `search` schema is the typed form; reading `context.search
 here, is what you do when a param is loosely shaped):
 
 ```tsx
+// Source: examples/commerce/src/app.tsx
 export const commerceLoginRoute = route('/login', {
   page(context) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/cart';
@@ -221,9 +225,10 @@ Returning `notFound()` from `page` renders the app's 404 shell with the correct 
 codes stay part of the typed surface rather than hand-constructed responses:
 
 ```tsx
+// Source: examples/crm/src/app.tsx
 export const dealDetailRoute = route('/deals/:id', {
   params: s.object({ id: s.string() }),
-  page({ params }, req: { db: any }) {
+  page({ params }, req) {
     const deal = loadDeal(req.db, params.id);
     if (!deal) return notFound(); // → app 404 shell, status 404
     return <DealDetailRegion deal={deal} />;
