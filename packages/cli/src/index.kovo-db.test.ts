@@ -33,6 +33,9 @@ describe('kovo db', () => {
     expect(provision.stdout).toContain('kovo-db/v1\nACTION provision\nDRIVER pglite\n');
     expect(provision.stdout).toContain('TARGET source=pglite\nSTATUS ok\n');
     expect(provision.stdout).toContain('ROLE readerRole="kovo_reader" management=create\n');
+    expect(provision.stdout).toContain('ROLE writerRole="kovo_writer" management=create\n');
+    expect(provision.stdout).toContain('ROLE adminRole="kovo_admin" management=create\n');
+    expect(provision.stdout).toContain('ROLE systemRole="kovo_system" management=create\n');
     expect(provision.stdout).toContain('SUMMARY issues=0\n');
 
     const check = await captureWrites(() =>
@@ -43,6 +46,10 @@ describe('kovo db', () => {
     expect(check.stderr).toBe('');
     expect(check.stdout).toContain('kovo-db/v1\nACTION check\nDRIVER pglite\n');
     expect(check.stdout).toContain('TARGET source=pglite\nSTATUS ok\n');
+    expect(check.stdout).toContain('ROLE readerRole="kovo_reader" management=create\n');
+    expect(check.stdout).toContain('ROLE writerRole="kovo_writer" management=create\n');
+    expect(check.stdout).toContain('ROLE adminRole="kovo_admin" management=create\n');
+    expect(check.stdout).toContain('ROLE systemRole="kovo_system" management=create\n');
     expect(check.stdout).toContain('SUMMARY issues=0\n');
   });
 
