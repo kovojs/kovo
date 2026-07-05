@@ -75,11 +75,13 @@ describe('@kovojs/drizzle static analysis context', () => {
 
   it('does not surface generated auth adapter construction as app touch graph work', () => {
     const providerSource = [
-      'function authAdapterDb(): AppDb {',
+      'function authAdapterDb(): KovoPostgresSystemDb {',
       '  return getAppDatabase().systemDb({ operation: "write" });',
       '}',
       'export function createAuthAdapter() {',
-      '  return drizzleAdapter(authAdapterDb(), { provider: "pg", schema: authSchema });',
+      '  return usePostgresSystemDb(authAdapterDb(), (db) =>',
+      '    drizzleAdapter(db, { provider: "pg", schema: authSchema }),',
+      '  );',
       '}',
     ].join('\n');
     const authAdapterDb: ExtractedFunction = {
@@ -109,6 +111,12 @@ describe('@kovojs/drizzle static analysis context', () => {
       receiverNames: [],
       receiverParameters: [],
       unresolvedCalls: [
+        {
+          index:
+            providerSource.indexOf('usePostgresSystemDb') -
+            (providerSource.indexOf('{', providerSource.indexOf('createAuthAdapter')) + 1),
+          name: 'usePostgresSystemDb',
+        },
         {
           index:
             providerSource.indexOf('drizzleAdapter') -
@@ -155,7 +163,8 @@ describe('@kovojs/drizzle static analysis context', () => {
         new Set(),
       ).unresolved,
     ).toEqual([
-      { operation: 'drizzleAdapter', site: 'src/_kovo/app-runtime-db.ts:5' },
+      { operation: 'usePostgresSystemDb', site: 'src/_kovo/app-runtime-db.ts:5' },
+      { operation: 'drizzleAdapter', site: 'src/_kovo/app-runtime-db.ts:6' },
       { operation: 'execute', site: 'src/_kovo/app-runtime-db.ts:4' },
     ]);
   });

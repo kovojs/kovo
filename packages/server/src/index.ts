@@ -14,6 +14,7 @@ export {
   migratePostgresAppDb,
   planPostgresAppDbMigration,
   provisionPostgresAppDb,
+  usePostgresSystemDb,
 } from './postgres-runtime.js';
 export type {
   KovoPostgresAppRuntimeDb,
@@ -31,6 +32,7 @@ export type {
   KovoPostgresResolvedRuntimeDriver,
   KovoPostgresRuntimeDb,
   KovoPostgresRuntimeDriver,
+  KovoPostgresSystemDb,
 } from './postgres-runtime.js';
 // SPEC §5.2/§10.3/§11.2: generated SQLite starter source must use public Kovo entrypoints, while
 // the adapter hooks and low-level secret/read/write wrappers remain internal.

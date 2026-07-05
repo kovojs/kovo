@@ -42,6 +42,8 @@ const DEFAULT_SYSTEM_ROLE = 'kovo_system';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
+const postgresSystemDbBrand: unique symbol = Symbol('kovo.postgres-system-db');
+const postgresSystemDbValues = new WeakMap<KovoPostgresSystemDb, KovoPostgresRuntimeDb>();
 const FRAMEWORK_INTERNAL_REACHABLE_TABLES = new Set([
   '_kovo_jobs',
   '_kovo_task_cron_occurrences',
@@ -427,13 +429,38 @@ export interface KovoPostgresAppRuntimeDb {
   db(request?: unknown): KovoPostgresRuntimeDb;
   readonlyDb: Reader<KovoPostgresRuntimeDb>;
   ready: Promise<void>;
-  /** Framework-owned non-request DB path for generated auth/seed wiring, still RLS-subject. */
+  /** Framework-owned non-request DB capability for generated auth/seed wiring, still RLS-subject. */
   systemDb(options: {
     operation: 'read' | 'write';
     reason: string;
     surface: string;
-  }): KovoPostgresRuntimeDb;
+  }): KovoPostgresSystemDb;
   close(): Promise<void>;
+}
+
+/** Opaque framework-owned system DB capability; consume through `usePostgresSystemDb(...)`. */
+export interface KovoPostgresSystemDb {
+  readonly [postgresSystemDbBrand]: {
+    readonly scope: 'postgres-system-db';
+  };
+}
+
+/**
+ * Consume a framework-owned Postgres system DB capability at a narrow generated/internal sink.
+ *
+ * SPEC §10.3: the raw system DB remains non-structural and is not returned as an app value.
+ */
+export function usePostgresSystemDb<Result>(
+  capability: KovoPostgresSystemDb,
+  use: (db: KovoPostgresRuntimeDb) => Result,
+): Result {
+  const db = postgresSystemDbValues.get(capability);
+  if (db === undefined) {
+    throw new Error(
+      'KV414: invalid Postgres system DB capability; use createPostgresAppRuntimeDb().systemDb(...) (SPEC §10.3).',
+    );
+  }
+  return use(db);
 }
 
 /** Privileged external Postgres provisioning options for the app schema. */
@@ -543,16 +570,26 @@ export function createPostgresAppRuntimeDb(
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
     ready,
     systemDb(options) {
-      return dbForRequest({
-        principalPosture: declareSystemPrincipal(options.reason, {
-          ingress: 'endpoint',
-          operation: options.operation,
-          surface: options.surface,
+      return createPostgresSystemDb(
+        dbForRequest({
+          principalPosture: declareSystemPrincipal(options.reason, {
+            ingress: 'endpoint',
+            operation: options.operation,
+            surface: options.surface,
+          }),
         }),
-      });
+      );
     },
     close: () => client.close(),
   };
+}
+
+function createPostgresSystemDb(db: KovoPostgresRuntimeDb): KovoPostgresSystemDb {
+  const capability = Object.freeze({
+    [postgresSystemDbBrand]: { scope: 'postgres-system-db' as const },
+  });
+  postgresSystemDbValues.set(capability, db);
+  return capability;
 }
 
 /**

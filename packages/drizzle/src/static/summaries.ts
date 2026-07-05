@@ -2676,11 +2676,10 @@ function isGeneratedAppRuntimeFrameworkFunction(
   }
 
   if (fn.name === 'createAuthAdapter') {
+    if (fn.readCalls.length > 0 || fn.writeCalls.length > 0) return false;
+    const calls = fn.unresolvedCalls.map((call) => call.name).sort();
     return (
-      fn.readCalls.length === 0 &&
-      fn.writeCalls.length === 0 &&
-      fn.unresolvedCalls.length === 1 &&
-      fn.unresolvedCalls[0]?.name === 'drizzleAdapter'
+      calls.length === 2 && calls[0] === 'drizzleAdapter' && calls[1] === 'usePostgresSystemDb'
     );
   }
 

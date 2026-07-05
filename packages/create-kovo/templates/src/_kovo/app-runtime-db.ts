@@ -1,8 +1,10 @@
 import {
   createPostgresAppRuntimeDb,
   declareSecretReadCapability,
+  usePostgresSystemDb,
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresAppRuntimeOptions,
+  type KovoPostgresSystemDb,
 } from '@kovojs/server';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
@@ -75,7 +77,7 @@ function lazyPromise<T>(load: () => Promise<T>): Promise<T> {
   } as Promise<T>;
 }
 
-function authAdapterDb(): AppDb {
+function authAdapterDb(): KovoPostgresSystemDb {
   return getAppDatabase().systemDb({
     operation: 'write',
     reason: 'Better Auth adapter manages session tables before an app session exists',
@@ -88,7 +90,9 @@ function authAdapterDb(): AppDb {
  * receives only Better Auth's narrowed adapter capability, never a raw AppDb value.
  */
 export function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
-  return drizzleAdapter(authAdapterDb(), { provider: 'pg', schema: schema.authSchema });
+  return usePostgresSystemDb(authAdapterDb(), (db) =>
+    drizzleAdapter(db, { provider: 'pg', schema: schema.authSchema }),
+  );
 }
 
 /** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */

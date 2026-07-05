@@ -24,6 +24,7 @@ import {
   drainPostgresPostureCheckOptOutFacts,
   __testPostgresRuntimeInternals,
   migratePostgresAppDb,
+  usePostgresSystemDb,
   type KovoPostgresAppRuntimeOptions,
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
@@ -1493,11 +1494,16 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const systemDb = runtime.systemDb({
+      const systemCapability = runtime.systemDb({
         operation: 'write',
         reason: 'repair every note in engine-role proof',
         surface: 'postgres-runtime.test',
       });
+      // SPEC §10.3: the system DB capability is intentionally not a raw app DB value.
+      // @ts-expect-error opaque system capability must not be assignable to the raw DB surface.
+      const _rawDb: KovoPostgresRuntimeDb = systemCapability;
+      void _rawDb;
+      const systemDb = usePostgresSystemDb(systemCapability, (db) => db);
       await systemDb.update(notes).set({ title: 'System repaired' });
       await expect(systemDb.select().from(notes).orderBy(notes.id)).resolves.toEqual([
         { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'System repaired' },

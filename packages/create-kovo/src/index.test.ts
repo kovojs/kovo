@@ -306,6 +306,12 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('getAppDatabase().systemDb({');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'function authAdapterDb(): KovoPostgresSystemDb',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'return usePostgresSystemDb(authAdapterDb(), (db) =>',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function createAuthAdapter(): ReturnType<typeof drizzleAdapter>',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('export const appRuntimeAuthDb');

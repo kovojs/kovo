@@ -70,8 +70,13 @@ rejectPattern(
 );
 requirePattern(
   postgresRuntime,
-  /\bfunction\s+authAdapterDb\(\):\s*AppDb\b/u,
-  'generated Postgres auth DB mint must stay module-private',
+  /\bfunction\s+authAdapterDb\(\):\s*KovoPostgresSystemDb\b/u,
+  'generated Postgres auth DB mint must return an opaque system capability',
+);
+requirePattern(
+  postgresRuntime,
+  /\busePostgresSystemDb\(authAdapterDb\(\),\s*\(db\)\s*=>/u,
+  'generated Postgres auth adapter must unwrap the system DB only at the adapter sink',
 );
 requirePattern(
   postgresRuntime,
