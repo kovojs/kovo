@@ -134,11 +134,12 @@ to embedded PGlite when an external URL is present.
     target or asks for `KOVO_DATABASE_URL`; it never reports local PGlite posture silently.
   - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts --config ./vite.config.ts` passed; the admin-URL check asserts no `DRIVER pglite` fallback and reports the external connection failure.
 
-- [ ] **C4 — Make role topology visible in `kovo explain --capabilities` / `kovo db check`.** Print adopted vs created
+- [x] **C4 — Make role topology visible in `kovo explain --capabilities` / `kovo db check`.** Print adopted vs created
       roles, runtime membership edges, and DBA-owned edges. This converts external deployment security from hidden env
       inference into a diffable fact reviewers can audit.
   - Acceptance: a generated external-Postgres report shows `readerRole`, `writerRole`, `adminRole`, `systemRole`,
     `runtimeLogin`, and membership status; missing membership is a blocking check issue.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts` passed; `kovo db` output asserts all role lines, while Postgres runtime/probe tests cover runtime membership status and blocking missing membership diagnostics.
 
 ### DEC-D — Capability-surface census: no raw authority leaves framework ownership
 
@@ -196,9 +197,10 @@ to embedded PGlite when an external URL is present.
       existing plain `{ text, values }`, Drizzle SQL, Kovo `sql`, and `trustedSql` still work.
 - [x] **DEC-B:** mutation testing kills a change that passes the original mutable carrier to the driver.
   - Evidence: `pnpm run check:capability-surface-census` rejects original-statement driver calls, and the DEC-B focused Vitest command above passed.
-- [ ] **DEC-C:** adopted reader/writer/admin/system roles on a `NOCREATEROLE` external database provision/check/boot
+- [x] **DEC-C:** adopted reader/writer/admin/system roles on a `NOCREATEROLE` external database provision/check/boot
       successfully when memberships are correct, and fail with named diagnostics when any membership is missing.
-- [ ] **DEC-C:** `KOVO_ADMIN_DATABASE_URL`-only `kovo db check` no longer reports embedded PGlite posture silently.
+- [x] **DEC-C:** `KOVO_ADMIN_DATABASE_URL`-only `kovo db check` no longer reports embedded PGlite posture silently.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts` passed.
 - [ ] **DEC-D:** capability-surface census has rows for every raw authority and fails if `appRuntimeAuthDb` or an
       equivalent system DB value is exported.
 
