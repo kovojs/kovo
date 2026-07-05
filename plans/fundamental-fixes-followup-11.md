@@ -85,17 +85,19 @@ to embedded PGlite when an external URL is present.
 
 ### DEC-B — SQL statement proof uses immutable snapshots (fixes `bugz-24` A2)
 
-- [ ] **B1 — Introduce `ManagedSqlStatement`, the only value managed DB handles pass to drivers.** At the first managed
+- [x] **B1 — Introduce `ManagedSqlStatement`, the only value managed DB handles pass to drivers.** At the first managed
       boundary, snapshot accepted carriers into `{ text: string, values: readonly unknown[], dialect, provenance }`, freeze
       it, validate it, classify tables/functions, and execute the snapshot. The original object is never passed onward.
   - Acceptance: a getter-backed `{ text, values }` carrier cannot present different SQL to validation and execution;
     the driver's observed statement is the validated text.
+  - Evidence: `pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/managed-db.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts packages/cli/src/index.kovo-db.test.ts --config ./vite.config.ts` passed with 201 tests.
 
-- [ ] **B2 — Treat separated carriers as input syntax, not trusted statement identity.** `isSeparatedSqlCarrier` may
+- [x] **B2 — Treat separated carriers as input syntax, not trusted statement identity.** `isSeparatedSqlCarrier` may
       admit only plain data properties whose descriptors are non-accessor, or it may snapshot accessors exactly once before
       any validation. Either way, mutable getters/proxies are rejected or made harmless.
   - Acceptance: object with `get text()` fails closed or executes the first snapped text; `Object.freeze`/descriptor
     tests cover `.text`, `.sql`, `.values`, and Drizzle/Kovo SQL object paths.
+  - Evidence: `pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/managed-db.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts --config ./vite.config.ts` covered accessor rejection, proxy snapshotting, frozen snapshots, PGlite, and SQLite execution.
 
 - [ ] **B3 — Enroll statement snapshotting in the security census and mutation gates.** Add a "statement identity"
       axis to the managed-SQL matrix: plain object, getter object, proxy, Drizzle SQL, Kovo `sql`, `trustedSql`, unknown
@@ -106,25 +108,28 @@ to embedded PGlite when an external URL is present.
 
 ### DEC-C — Role adoption is a verified topology manifest (fixes `codex-pg-1` B1-B3)
 
-- [ ] **C1 — Replace `createReaderRole` / `createWriterRole` booleans with a resolved `PostgresRoleTopology`.** The
+- [x] **C1 — Replace `createReaderRole` / `createWriterRole` booleans with a resolved `PostgresRoleTopology`.** The
       topology records role names, whether Kovo creates or adopts each role, runtime login, required membership edges,
       grant ownership, and whether DBA-owned edges are expected. Reader, writer, admin, and system roles all participate;
       no role creation path is implicit.
   - Acceptance: an adopted reader/writer topology still validates/grants runtime membership when Kovo owns that edge;
     if DBA owns the edge, provision/check/boot verify it and fail with an actionable diagnostic when missing.
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts` passed with adopted-role membership and missing-membership coverage.
 
-- [ ] **C2 — Add system/admin role adoption or explicit preflight refusal.** A locked-down provider path that adopts
+- [x] **C2 — Add system/admin role adoption or explicit preflight refusal.** A locked-down provider path that adopts
       reader/writer must not unexpectedly attempt `CREATE ROLE kovo_admin` or `kovo_system`. Either expose
       `KOVO_DB_ADMIN_ROLE` and `KOVO_DB_SYSTEM_ROLE` (or config equivalents) as first-class adoption inputs, or preflight
       with "this config still requires CREATEROLE for admin/system" before any DDL.
   - Acceptance: a `NOCREATEROLE` admin with all roles pre-created can provision; with missing admin/system adoption,
     provision fails before partial DDL and names the missing role/config.
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts` passed; `postgres-runtime.test.ts` verifies missing adopted system-role preflight leaves schema objects unapplied.
 
-- [ ] **C3 — `kovo db check` chooses the same target-resolution logic as provision/migrate.** An admin URL is an
+- [x] **C3 — `kovo db check` chooses the same target-resolution logic as provision/migrate.** An admin URL is an
       external-Postgres signal; runtime URL absence may be an error, not permission to check embedded PGlite. `DRIVER`
       output must include the selected URL source (`runtime`, `admin`, `pglite`, or explicit `--driver`).
   - Acceptance: `KOVO_ADMIN_DATABASE_URL=postgres://bad@127.0.0.1:1/nope kovo db check` attempts/diagnoses the external
     target or asks for `KOVO_DATABASE_URL`; it never reports local PGlite posture silently.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts --config ./vite.config.ts` passed; the admin-URL check asserts no `DRIVER pglite` fallback and reports the external connection failure.
 
 - [ ] **C4 — Make role topology visible in `kovo explain --capabilities` / `kovo db check`.** Print adopted vs created
       roles, runtime membership edges, and DBA-owned edges. This converts external deployment security from hidden env
@@ -134,12 +139,13 @@ to embedded PGlite when an external URL is present.
 
 ### DEC-D — Capability-surface census: no raw authority leaves framework ownership
 
-- [ ] **D1 — Add a raw-capability export census over generated starters and public packages.** Rows include system DB,
+- [x] **D1 — Add a raw-capability export census over generated starters and public packages.** Rows include system DB,
       auth adapter DB, readonly DB, request DB provider, raw driver clients, storage signer, webhook transaction DB,
       `ManagedSqlStatement`, principal posture, and role topology. Each row records: mint site, public/exported status,
       allowed consumers, build diagnostic, and prod-artifact proof.
   - Acceptance: `pnpm run check:capability-surface-census` fails if a raw authority is exported as a value without a
     branded/narrowed facade and a proof row.
+  - Evidence: `pnpm run check:capability-surface-census` validates `scripts/capability-surface-census.manifest.json` rows and rejects generated raw auth/system DB exports.
 
 - [ ] **D2 — Capability use is explainable.** Any privileged facade use (`system`, auth adapter, cross-owner read,
       secret read, trusted SQL, role topology opt-out) emits a capability fact. Absence from explain is a bug unless the
