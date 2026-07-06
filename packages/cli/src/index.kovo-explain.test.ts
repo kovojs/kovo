@@ -1103,7 +1103,110 @@ export const save = mutation('cart/save', {
     expect(result.output).toContain('TRUST kind=trustedHtml site=promo.tsx');
   });
 
-  it('prints the held dangerous-capability audit table (--capabilities)', () => {
+  // SPEC §6.6 (audit-only), threat-matrix-plan.md M3: the capability-escape producer rides through
+  // deriveAppGraph and `kovo explain --capabilities` enumerates every app-authored escape CALL SITE
+  // from REAL source — not a hand-injected graph. This is the end-to-end proof for M3.
+  it('surfaces app escape-hatch call sites end-to-end through --capabilities', async () => {
+    const { collectCapabilityEscapesFromProject } = await import('@kovojs/drizzle/internal/static');
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const capabilities = collectCapabilityEscapesFromProject({
+      files: [
+        {
+          fileName: 'admin.ts',
+          source: [
+            `import { serverValue, unsafeRegex, declarePublicRelation, accept } from '@kovojs/server';`,
+            `export const id = serverValue(generatedId, 'server-generated order id');`,
+            `export const re = unsafeRegex(/(a+)+$/, 'legacy importer format is trusted');`,
+            `export const rel = declarePublicRelation({ relation: 'public.totals', reason: 'no tenant ids' });`,
+            `export const zip = accept.unverified(['application/zip'], 'legacy importer trusts type');`,
+            `export async function support(reader: any) {`,
+            `  return reader.crossOwnerRead({ relation: 'public.orders', reason: 'admin support export' });`,
+            `}`,
+          ].join('\n'),
+        },
+      ],
+    });
+
+    // The REAL producer detected each escape at its call site (no hand-injection).
+    expect([...new Set(capabilities.map((capability) => capability.kind))].sort()).toEqual([
+      'acceptUnverified',
+      'crossOwnerRead',
+      'publicRelation',
+      'serverValue',
+      'unsafeRegex',
+    ]);
+
+    const merged = deriveAppGraph({ graph: { capabilities } } as Parameters<
+      typeof deriveAppGraph
+    >[0]);
+    const result = kovoExplain(
+      JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
+      { capabilities: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('CAPABILITY kind=serverValue site=admin.ts:2');
+    expect(result.output).toContain('CAPABILITY kind=unsafeRegex site=admin.ts:3');
+    expect(result.output).toContain('CAPABILITY kind=publicRelation site=admin.ts:4 module=- target=public.totals');
+    expect(result.output).toContain('CAPABILITY kind=acceptUnverified site=admin.ts:5');
+    expect(result.output).toContain('CAPABILITY kind=crossOwnerRead site=admin.ts:7 module=- target=public.orders');
+  });
+
+  // SPEC §6.6/§9.1 (audit-only), M3: the cookie-downgrade producer rides through deriveAppGraph and
+  // `kovo explain --cookies` surfaces a `serializeCookie(..., { unsafe: unsafeCookie(...) })` from
+  // REAL source (this field previously had no static producer at all).
+  it('surfaces a credential-cookie downgrade end-to-end through --cookies', async () => {
+    const { collectCookieDowngradesFromProject } = await import('@kovojs/drizzle/internal/static');
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const cookieDowngrades = collectCookieDowngradesFromProject({
+      files: [
+        {
+          fileName: 'embed.ts',
+          source: [
+            `import { serializeCookie, unsafeCookie } from '@kovojs/server';`,
+            `export const header = serializeCookie('embed_sid', value, {`,
+            `  class: 'session',`,
+            `  unsafe: unsafeCookie({ downgrade: { sameSite: 'none' }, justification: 'third-party embed' }),`,
+            `});`,
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(cookieDowngrades).toEqual([
+      {
+        class: 'session',
+        downgrade: { sameSite: 'none' },
+        justification: 'third-party embed',
+        name: 'embed_sid',
+        site: 'embed.ts:2',
+      },
+    ]);
+
+    const merged = deriveAppGraph({ graph: { cookieDowngrades } } as Parameters<
+      typeof deriveAppGraph
+    >[0]);
+    const result = kovoExplain(
+      JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
+      { cookies: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('COOKIE name=embed_sid class=session');
+    expect(result.output).toContain('downgrade=sameSite=none');
+  });
+
+  // RENDERER/FOLD unit test: this hand-injects `graph.capabilities` to pin the `capabilityLine`
+  // shape, the stable sort, and the `trustedReveal` fold in `collectCapabilityFacts` across ALL
+  // capability kinds — including the framework-FIXED ones (`managedSqlStatement`,
+  // `postgresRoleTopology`, `authAdapterDb`) that have NO per-app call site and so no static
+  // producer (they are tracked by the capability-surface census gate; see threat-matrix-plan.md M3).
+  // The REAL app-authored producer path is proven separately by the source-driven
+  // `--capabilities`/`--cookies` end-to-end tests above (collectCapabilityEscapesFromProject →
+  // deriveAppGraph → kovo explain).
+  it('renders the held dangerous-capability audit table for every capability kind (--capabilities)', () => {
     const result = kovoExplain(
       {
         capabilities: [

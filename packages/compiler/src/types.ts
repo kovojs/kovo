@@ -192,6 +192,7 @@ export type RegistryGraphInput = Pick<
   | 'authPosture'
   | 'capabilities'
   | 'components'
+  | 'cookieDowngrades'
   | 'endpoints'
   | 'handlerWriteSinks'
   | 'mutations'

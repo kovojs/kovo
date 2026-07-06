@@ -499,9 +499,12 @@ export function unsafeRegex(regex: RegExp, justification: string): UnsafeRegexBr
 /**
  * Drain the recorded `unsafeRegex()` capability facts (SPEC §6.6/§9.5).
  *
- * SF-WIRE(graph-output): render --capabilities unsafeRegex escapes — wire {@link drainUnsafeRegexFacts}
- * into `kovo explain --capabilities` so each audited ReDoS-risk pattern is surfaced in the audit a
- * reviewer runs.
+ * `kovo explain --capabilities` surfaces every `unsafeRegex(...)` escape STATICALLY: the build-time
+ * producer `collectCapabilityEscapesFromProject` (packages/drizzle/src/trust-escapes-static.ts,
+ * threat-matrix-plan.md M3) detects each call SITE and emits a `CapabilityExplain{ kind:'unsafeRegex' }`
+ * into `graph.capabilities`, so a merely-built (not run) app already lists every audited ReDoS-risk
+ * pattern for a reviewer. This runtime drain is retained only as defense-in-depth / test observation
+ * of patterns actually accepted during a live run; it is NOT the audit's source of truth.
  */
 export function drainUnsafeRegexFacts(): readonly UnsafeRegexFact[] {
   return unsafeRegexFacts.splice(0, unsafeRegexFacts.length);

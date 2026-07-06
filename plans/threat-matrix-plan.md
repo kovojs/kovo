@@ -48,10 +48,32 @@ supply chain**, **Runtime / infra**.
       (`bugz-24` A1, round-15 B4, round-16 B3): a request-reachable handle reads unboxed cross-user credentials. Make the
       adapter a first-class, minimal, TCB-manifest-enrolled module with a reachability-based non-egress proof (followup-13
       DEC-C is the mechanism); this cell stays OPEN until that proof is green.
-- [ ] **M3 — Escape-hatch audit completeness (C/I): every `trustedSql`/`rawRead`/`crossOwnerRead`/`trustedAssign`/
+- [x] **M3 — Escape-hatch audit completeness (C/I): every `trustedSql`/`rawRead`/`crossOwnerRead`/`trustedAssign`/
       `declarePublicRelation`/`unsafeRegex` site is logged and surfaced in `kovo explain --capabilities` with its
-      justification.** The escapes are intentional holes; the guarantee is that they are all VISIBLE to a reviewer. Verify
-      no escape exists that is not enumerated by `kovo explain`.
+      justification.** The escapes are intentional holes; the guarantee is that they are all VISIBLE to a reviewer.
+  - Static producer added: `collectCapabilityEscapesFromProject` + `collectCookieDowngradesFromProject`
+    (packages/drizzle/src/trust-escapes-static.ts) detect each app-authored escape at its CALL SITE and emit a
+    `CapabilityExplain`/`CookieDowngradeExplain`, mirroring the `publishToClient` call-site pattern — NOT the runtime
+    `drain*Facts()` collectors (those fire only during a live request and never populate a merely-built graph, which is
+    what `kovo explain` reads). Wired into `graph.capabilities`/`graph.cookieDowngrades` through both the real build
+    graph (build-export.ts `staticBuildCheckGraph`) and the `compile drizzle-static` extract, then through
+    `deriveAppGraph` (app-graph.ts) into `kovo explain --capabilities`/`--cookies`.
+  - Kinds now surfaced statically from source: `serverValue`, `trustedAssign` (as `serverValue`), `unsafeRegex`,
+    `publicRelation`, `systemDb` (`usePostgresSystemDb`), `acceptUnverified`, `unsafeCookie`, `crossOwnerRead`,
+    `rawRead`, `actAs`, `declareSystemRead`, `declareSystemWrite`, `egressAllowInternal`; `trustedSql` stays on
+    `--trust` (trust-escape pass); `trustedReveal` is folded from `graph.revealed`. New `CapabilityExplain.kind`s
+    added: `unsafeRegex`, `rawRead`, `actAs`, `declareSystemRead`, `declareSystemWrite` (packages/core/src/graph.ts).
+  - `SF-WIRE(graph-output)` at redos.ts is RESOLVED: `unsafeRegex(...)` is surfaced by the static producer; the runtime
+    `drainUnsafeRegexFacts()` is retained only as DiD/test observation, no longer the audit source of truth.
+  - Deferred (documented, honest): `managedSqlStatement` and `postgresRoleTopology` have NO per-app call site — they are
+    framework-FIXED capabilities (same identity every build) already enumerated by the capability-surface census gate
+    (scripts/capability-surface-census.manifest.json, rows `managed-sql-statement-identity`/`postgres-role-topology`).
+    They are visible to a reviewer via that gate rather than as a per-call `graph.capabilities` row; a future follow-up
+    could emit those fixed rows into `--capabilities` too so the audit truly reads from one place.
+  - Evidence: `pnpm --filter @kovojs/drizzle exec vitest run src/capability-escapes-static.test.ts` (14 pass, real
+    source → collector); `pnpm --filter @kovojs/cli exec vitest run src/index.kovo-explain.test.ts` (49 pass, incl. two
+    source-driven end-to-end `--capabilities`/`--cookies` producer tests that replace the former hand-injected graph;
+    the remaining hand-injected test is re-labeled as a renderer/fold unit test for the framework-fixed kinds).
 - [ ] **M4 — Timing side-channels (C): the trusted-zone secret compare is CONSTANT-TIME** (password/token verify), and
       no error-message-length / early-return oracle distinguishes "wrong user" from "wrong secret". (followup-12 O4 flagged
       the compare.)

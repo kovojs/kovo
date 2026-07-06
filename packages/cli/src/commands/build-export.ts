@@ -587,8 +587,13 @@ async function staticBuildCheckGraph(
   appModulePath: string,
   options: { cache: boolean },
 ): Promise<KovoBuildCheckArtifacts> {
-  const { buildCheckSourceFiles, buildCompilerQueryShapeFacts, staticDataPlaneBuildFacts } =
-    await import('@kovojs/server/internal/data-plane-static-analysis');
+  const [
+    { buildCheckSourceFiles, buildCompilerQueryShapeFacts, staticDataPlaneBuildFacts },
+    { collectCapabilityEscapesFromProject, collectCookieDowngradesFromProject },
+  ] = await Promise.all([
+    import('@kovojs/server/internal/data-plane-static-analysis'),
+    import('@kovojs/drizzle/internal/static'),
+  ]);
   const files = buildCheckSourceFiles(appModulePath);
   const [drizzleFacts, sourceGraphFacts] =
     files.length === 0
@@ -604,6 +609,13 @@ async function staticBuildCheckGraph(
           staticDataPlaneBuildFacts(files, { cache: options.cache }),
           sourceGraphFactsFromFiles(files, dirname(appModulePath)),
         ]);
+  // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
+  // (`kovo explain --capabilities`) and credential-cookie downgrade (`--cookies`) in the REAL build
+  // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
+  // still enumerates its whole intentional-security-hole surface for a reviewer. (The runtime
+  // `drain*Facts()` collectors only fire during live requests and never populate a built graph.)
+  const capabilities = files.length === 0 ? [] : collectCapabilityEscapesFromProject({ files });
+  const cookieDowngrades = files.length === 0 ? [] : collectCookieDowngradesFromProject({ files });
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
     drizzleFacts,
@@ -642,6 +654,8 @@ async function staticBuildCheckGraph(
         ? {}
         : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
+      ...(capabilities.length === 0 ? {} : { capabilities }),
+      ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
       endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
       mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
       optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
