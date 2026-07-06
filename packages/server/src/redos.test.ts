@@ -79,6 +79,43 @@ describe('static ReDoS pattern analysis (KV434)', () => {
     expect(() => assertLinearSafePattern('^(cat|dog|bird)$')).not.toThrow();
     expect(() => assertLinearSafePattern('hello')).not.toThrow();
   });
+
+  // Regression: round-17 F1 (SPEC §6.6 / KV434). The nested-quantifier gate must treat `?` as a
+  // quantifier: a quantified group whose body is quantified only with `?` (`(a?b?)+`, `(a?){50}b`,
+  // `(a?)+`) catastrophically backtracks. Before the fix `containsQuantifier` recognized only
+  // `+ * {` and OMITTED `?` (even though `quantifierAt` already knew `?`), so these compiled into a
+  // live RegExp — `(a?b?)+$` ran ~7s on a 53-char input, far under the 4096-char match budget that
+  // is explicitly NOT a CPU bound.
+  it('rejects optional-quantifier (?) nesting inside a quantified group', () => {
+    expect(() => assertLinearSafePattern('(a?b?)+$')).toThrow(RedosPatternError);
+    expect(() => assertLinearSafePattern('(a?b?)+$')).toThrow(/KV434/u);
+    expect(() => assertLinearSafePattern('(a?){50}b')).toThrow(RedosPatternError);
+    expect(() => assertLinearSafePattern('(a?)+')).toThrow(RedosPatternError);
+  });
+
+  // Do NOT over-block: `?` is only a nesting risk when the group itself is quantified. A benign
+  // group with no outer quantifier, and a flat run of optional atoms, stay linear-safe. Because the
+  // quantifier probe walks atoms first, a non-capturing/lookaround group-prefix `?` (`(?:…)`,
+  // `(?=…)`) is consumed inside the group and never mistaken for a quantifier.
+  it('accepts benign optional quantifiers with no outer-quantified group', () => {
+    expect(() => assertLinearSafePattern('(a?b?)')).not.toThrow();
+    expect(() => assertLinearSafePattern('a?b?c?')).not.toThrow();
+    expect(() => assertLinearSafePattern('^(a?b?)$')).not.toThrow();
+    expect(() => assertLinearSafePattern('((?:ab))+')).not.toThrow();
+    expect(() => assertLinearSafePattern('(?:ab)+')).not.toThrow();
+  });
+
+  // The backtracking-quantifier set is single-sourced: `quantifierAt` recognizes exactly `+ * ? {`,
+  // and `containsQuantifier` (which routes through it) must agree for every member. If any member
+  // silently dropped out of the shared set — as `?` once did — a group body quantified by that
+  // token would slip past the nested-quantifier gate. A non-quantifier body char must NOT trip it.
+  it('keeps the nested-quantifier set single-sourced across the full quantifier alphabet', () => {
+    for (const quantifier of ['+', '*', '?', '{2}', '{2,}', '{2,4}']) {
+      expect(() => assertLinearSafePattern(`(a${quantifier})+`)).toThrow(RedosPatternError);
+    }
+    // A group body with no quantifier is not nested-quantifier structure (control).
+    expect(() => assertLinearSafePattern('(ab)+')).not.toThrow();
+  });
 });
 
 describe('unsafeRegex escape (KV434)', () => {

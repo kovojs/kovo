@@ -156,14 +156,26 @@ function isLinearSafeLiteralPattern(source: string): boolean {
   return !hasAdjacentOverlappingQuantifiers(source);
 }
 
+/**
+ * Compile-time twin of the runtime `containsQuantifier` (packages/server/src/redos.ts). Both must
+ * stay in sync (SPEC §6.6 / KV434). The recognized quantifier set is single-sourced through
+ * {@link quantifierAt} (`+ * ? {n,m}`): walk atoms with {@link readAtom} and ask whether a
+ * quantifier starts right after each atom, so a group-prefix/lookaround `?` (`(?:…)`, `(?=…)`) is
+ * consumed inside the group and never mistaken for a quantifier.
+ *
+ * An earlier version tested only `+ * {` inline and OMITTED `?`, so the nested-quantifier reject in
+ * {@link isLinearSafeLiteralPattern} never fired for a group body quantified only with `?` —
+ * `(a?b?)+`, `(a?){50}b`, `(a?)+` slipped through as linear-safe.
+ */
 function containsQuantifier(source: string): boolean {
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i];
-    if (ch === '\\') {
+  for (let i = 0; i < source.length; ) {
+    const atom = readAtom(source, i);
+    if (!atom) {
       i += 1;
       continue;
     }
-    if (ch === '+' || ch === '*' || ch === '{') return true;
+    if (quantifierAt(source, atom.end) !== null) return true;
+    i = atom.end;
   }
   return false;
 }
