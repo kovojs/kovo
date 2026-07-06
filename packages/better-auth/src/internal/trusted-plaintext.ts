@@ -8,6 +8,7 @@ import type {
   BetterAuthSignUpEmailBody,
   BetterAuthSignUpEmailLike,
 } from './contracts.js';
+import { assertBetterAuthRequestSecretPath } from './non-egress-proof.js';
 
 type BetterAuthBareSessionPayload<Session, User> = {
   session: Session;
@@ -28,6 +29,8 @@ export function callBetterAuthSignInEmail(
   body: BetterAuthSignInEmailBody,
   headers: Headers,
 ): Promise<BetterAuthResponseLike> | BetterAuthResponseLike {
+  assertBetterAuthRequestSecretPath('better-auth.sign-in.submitted-password');
+  assertBetterAuthRequestSecretPath('better-auth.adapter.sign-in.account-password');
   return auth.api.signInEmail({
     asResponse: true,
     body,
@@ -41,6 +44,7 @@ export function callBetterAuthSignUpEmail(
   body: BetterAuthSignUpEmailBody,
   headers: Headers,
 ): Promise<BetterAuthResponseLike> | BetterAuthResponseLike {
+  assertBetterAuthRequestSecretPath('better-auth.sign-up.submitted-password');
   return auth.api.signUpEmail({
     asResponse: true,
     body,
@@ -53,6 +57,7 @@ export function callBetterAuthSignOut(
   auth: BetterAuthSignOutLike,
   headers: Headers,
 ): Promise<BetterAuthResponseLike> | BetterAuthResponseLike {
+  assertBetterAuthRequestSecretPath('better-auth.sign-out.request-cookie');
   return auth.api.signOut({
     asResponse: true,
     headers,
@@ -74,6 +79,8 @@ export function callBetterAuthGetSession<AuthSession, AuthUser>(
   | BetterAuthBareSessionPayload<AuthSession, AuthUser>
   | null
   | undefined {
+  assertBetterAuthRequestSecretPath('better-auth.get-session.request-cookie');
+  assertBetterAuthRequestSecretPath('better-auth.adapter.session-token-lookup');
   return auth.api.getSession({
     headers,
     returnHeaders: true,
@@ -82,6 +89,8 @@ export function callBetterAuthGetSession<AuthSession, AuthUser>(
 
 /** @internal Read all Better Auth `Set-Cookie` values for the session-cookie sink. */
 export function getBetterAuthSetCookie(headers: Headers | null | undefined): string[] {
+  assertBetterAuthRequestSecretPath('better-auth.set-cookie.forwarding');
+  assertBetterAuthRequestSecretPath('better-auth.session-refresh.set-cookie');
   if (headers === null || headers === undefined || typeof headers.get !== 'function') return [];
   const platformHeaders = headers as Headers & {
     getSetCookie?: () => string[];
