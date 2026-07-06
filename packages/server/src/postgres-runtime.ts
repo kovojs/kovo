@@ -49,6 +49,27 @@ const FRAMEWORK_INTERNAL_REACHABLE_TABLES = new Set([
   '_kovo_task_cron_occurrences',
   SCHEMA_STATE_TABLE,
 ]);
+const POSTGRES_ELEVATED_ROLE_ATTRIBUTES = [
+  { column: 'rolsuper', label: 'SUPERUSER' },
+  { column: 'rolbypassrls', label: 'BYPASSRLS' },
+  { column: 'rolreplication', label: 'REPLICATION' },
+  { column: 'rolcreaterole', label: 'CREATEROLE' },
+  { column: 'rolcreatedb', label: 'CREATEDB' },
+] as const;
+const POSTGRES_CLASSIFIED_ROLE_COLUMNS = new Set([
+  'rolname',
+  'rolsuper',
+  'rolinherit',
+  'rolcreaterole',
+  'rolcreatedb',
+  'rolcanlogin',
+  'rolreplication',
+  'rolconnlimit',
+  'rolpassword',
+  'rolvaliduntil',
+  'rolbypassrls',
+  'rolconfig',
+]);
 const POSTGRES_REACHABLE_RELATIONS_SQL = [
   'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
   'existing_roles AS (',
@@ -144,7 +165,10 @@ interface PostgresReachableRelation extends PostgresCatalogRelation {
 
 interface PostgresRoleAttributeRow {
   rolbypassrls: boolean;
+  rolcreatedb: boolean;
+  rolcreaterole: boolean;
   rolname: string;
+  rolreplication: boolean;
   rolsuper: boolean;
 }
 
@@ -727,9 +751,11 @@ export async function checkPostgresAppDbPosture(
         };
       }
     }
+    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);
     return await checkRuntimeDbPosture(client.sql, {
       config,
       metadata,
+      ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
       schemaTables,
     });
   } finally {
@@ -852,6 +878,7 @@ async function checkRuntimeDbPosture(
       ...(await postgresRuntimeLoginPostureIssues(client, input.config, runtimeLoginRole)),
     );
   }
+  issues.push(...(await postgresRoleAttributeVersionIssues(client)));
   if (input.config.driver === 'node-postgres') {
     issues.push(
       ...(await postgresRuntimeMembershipIssues(
@@ -1011,7 +1038,7 @@ async function checkRuntimeDbPosture(
   }
 
   issues.push(...(await auditPostgresReachableClosure(client, input)));
-  issues.push(...(await auditPostgresReachableRoutines(client, input.config)));
+  issues.push(...(await auditPostgresReachableRoutines(client, input.config, runtimeLoginRole)));
   issues.push(...(await auditPostgresUnexpectedPrivileges(client, input.config)));
 
   return {
@@ -1380,15 +1407,27 @@ async function provisionPostgresFrameworkTaskStore(
 async function auditPostgresReachableRoutines(
   client: RuntimeSqlClient,
   config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
 ): Promise<KovoPostgresPostureIssue[]> {
+  const auditedIdentities = await postgresAuditedIdentityNames(client, config, runtimeLoginRole);
+  if (auditedIdentities === undefined) {
+    return [
+      {
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail:
+          'could not enumerate runtime-login/assumable-role routine reachability from pg_roles/pg_has_role',
+      },
+    ];
+  }
+  if (auditedIdentities.length === 0) return [];
   const routineRows = await safeQuery<PostgresReachableRoutineRow>(
     client,
     [
-      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
+      'WITH audited_roles(role_name) AS (SELECT unnest($1::text[])),',
       'existing_roles AS (',
       '  SELECT DISTINCT r.oid, r.rolname',
       '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
+      '  JOIN audited_roles a ON a.role_name = r.rolname',
       ')',
       'SELECT DISTINCT n.nspname AS routine_schema, p.proname AS routine_name,',
       'r.rolname AS role_name',
@@ -1400,7 +1439,7 @@ async function auditPostgresReachableRoutines(
       "AND has_function_privilege(r.oid, p.oid, 'EXECUTE')",
       'ORDER BY n.nspname, p.proname, r.rolname',
     ].join(' '),
-    [config.readerRole, config.writerRole, config.adminRole, config.systemRole],
+    [auditedIdentities],
   );
   if (routineRows === undefined) {
     return [
@@ -1415,6 +1454,30 @@ async function auditPostgresReachableRoutines(
     code: 'KV433_REACHABLE_ROUTINE',
     detail: `${row.routine_schema}.${row.routine_name} is a SECURITY DEFINER routine executable by ${row.role_name}; routine reachability has no vetted Kovo allowlist`,
   }));
+}
+
+async function postgresAuditedIdentityNames(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<readonly string[] | undefined> {
+  if (runtimeLoginRole === undefined || runtimeLoginRole === '') {
+    return [
+      ...new Set([config.readerRole, config.writerRole, config.adminRole, config.systemRole]),
+    ].sort();
+  }
+  const rows = await safeQuery<{ rolname: string }>(
+    client,
+    [
+      'SELECT DISTINCT role.rolname',
+      'FROM pg_roles login',
+      'JOIN pg_roles role ON role.oid = login.oid OR pg_has_role(login.oid, role.oid, $2)',
+      'WHERE login.rolname = $1',
+      'ORDER BY role.rolname',
+    ].join(' '),
+    [runtimeLoginRole, 'MEMBER'],
+  );
+  return rows?.rows.map((row) => row.rolname);
 }
 
 async function auditPostgresUnexpectedPrivileges(
@@ -1859,6 +1922,9 @@ export const __testPostgresRuntimeInternals = {
   },
   resolvePostgresRuntimeConfig(options: PostgresRuntimeConfigInput): ResolvedPostgresRuntimeConfig {
     return resolvePostgresRuntimeConfig(options);
+  },
+  unclassifiedPostgresRoleColumns(columns: readonly string[]): readonly string[] {
+    return unclassifiedPostgresRoleColumns(columns);
   },
 };
 
@@ -2439,11 +2505,13 @@ async function preflightPostgresRoleTopology(
     client,
     adoptedRoles.map((role) => role.name),
   );
-  const privileged = attributeRows.filter((row) => row.rolsuper || row.rolbypassrls);
+  const privileged = attributeRows.filter((row) => postgresRoleElevatedAttributes(row).length > 0);
   if (privileged.length > 0) {
     throw new Error(
       [
-        'KV433_ROLE_TOPOLOGY: adopted Postgres roles must be NOSUPERUSER and NOBYPASSRLS (SPEC §10.3).',
+        `KV433_ROLE_TOPOLOGY: adopted Postgres roles must have no elevated role attributes (${POSTGRES_ELEVATED_ROLE_ATTRIBUTES.map(
+          (attribute) => `NO${attribute.label}`,
+        ).join(', ')}) (SPEC §10.3).`,
         `offending: ${privileged.map(postgresRoleAttributeDetail).join(', ')}`,
       ].join(' '),
     );
@@ -2478,18 +2546,68 @@ async function postgresRoleAttributeRows(
 ): Promise<readonly PostgresRoleAttributeRow[]> {
   if (roles.length === 0) return [];
   const result = await client.query<PostgresRoleAttributeRow>(
-    'SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = ANY($1::text[])',
+    [
+      'SELECT rolname, rolsuper, rolbypassrls, rolreplication, rolcreaterole, rolcreatedb',
+      'FROM pg_roles WHERE rolname = ANY($1::text[])',
+    ].join(' '),
     [roles],
   );
   return result.rows;
 }
 
+function postgresRoleElevatedAttributes(row: PostgresRoleAttributeRow): readonly string[] {
+  const attributes: string[] = [];
+  for (const attribute of POSTGRES_ELEVATED_ROLE_ATTRIBUTES) {
+    if (row[attribute.column]) attributes.push(attribute.label);
+  }
+  return attributes;
+}
+
 function postgresRoleAttributeDetail(row: PostgresRoleAttributeRow): string {
-  const attributes = [
-    row.rolsuper ? 'SUPERUSER' : undefined,
-    row.rolbypassrls ? 'BYPASSRLS' : undefined,
-  ].filter((attribute): attribute is string => attribute !== undefined);
+  const attributes = postgresRoleElevatedAttributes(row);
   return `${row.rolname}(${attributes.join('+')})`;
+}
+
+async function postgresRoleAttributeVersionIssues(
+  client: RuntimeTransactionClient,
+): Promise<KovoPostgresPostureIssue[]> {
+  const rows = await safeQuery<{ attname: string }>(
+    client,
+    [
+      'SELECT attname',
+      'FROM pg_attribute',
+      "WHERE attrelid = 'pg_catalog.pg_roles'::regclass",
+      'AND attnum > 0',
+      'AND attisdropped = false',
+      "AND attname LIKE 'rol%'",
+      'ORDER BY attname',
+    ].join(' '),
+  );
+  if (rows === undefined) {
+    return [
+      {
+        code: 'KV433_ROLE_ATTRIBUTE_SET',
+        detail:
+          'could not enumerate pg_roles role-attribute columns for fail-closed classification',
+      },
+    ];
+  }
+  const unclassified = unclassifiedPostgresRoleColumns(rows.rows.map((row) => row.attname));
+  if (unclassified.length === 0) return [];
+  return [
+    {
+      code: 'KV433_ROLE_ATTRIBUTE_SET',
+      detail: `pg_roles exposes unclassified role-attribute column(s): ${unclassified.join(
+        ', ',
+      )}; classify each as elevated or benign before trusting runtime identity posture (SPEC §10.3)`,
+    },
+  ];
+}
+
+function unclassifiedPostgresRoleColumns(columns: readonly string[]): readonly string[] {
+  return columns
+    .filter((column) => !POSTGRES_CLASSIFIED_ROLE_COLUMNS.has(column))
+    .sort((left, right) => left.localeCompare(right));
 }
 
 async function postgresRuntimeLoginPostureIssues(
@@ -2503,7 +2621,7 @@ async function postgresRuntimeLoginPostureIssues(
   >(
     client,
     [
-      'SELECT r.rolname, r.rolsuper, r.rolbypassrls,',
+      'SELECT r.rolname, r.rolsuper, r.rolbypassrls, r.rolreplication, r.rolcreaterole, r.rolcreatedb,',
       "(SELECT pg_has_role(r.oid, admin.oid, 'MEMBER') FROM pg_roles admin WHERE admin.rolname = $2) AS can_admin,",
       "(SELECT pg_has_role(r.oid, system_role.oid, 'MEMBER') FROM pg_roles system_role WHERE system_role.rolname = $3) AS can_system",
       'FROM pg_roles r WHERE r.rolname = $1',
@@ -2519,10 +2637,10 @@ async function postgresRuntimeLoginPostureIssues(
       },
     ];
   }
-  if (login.rolsuper || login.rolbypassrls) {
+  if (postgresRoleElevatedAttributes(login).length > 0) {
     issues.push({
       code: 'KV433_RUNTIME_ROLE',
-      detail: `runtime login ${runtimeLoginRole} must be NOSUPERUSER and NOBYPASSRLS; found ${postgresRoleAttributeDetail(
+      detail: `runtime login ${runtimeLoginRole} must have no elevated role attributes; found ${postgresRoleAttributeDetail(
         login,
       )}`,
     });
@@ -2541,7 +2659,7 @@ async function postgresRuntimeLoginPostureIssues(
   const assumableRows = await safeQuery<PostgresRoleAttributeRow>(
     client,
     [
-      'SELECT role.rolname, role.rolsuper, role.rolbypassrls',
+      'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb',
       'FROM pg_roles login',
       'JOIN pg_roles role ON role.oid <> login.oid',
       'WHERE login.rolname = $1',
@@ -2557,12 +2675,12 @@ async function postgresRuntimeLoginPostureIssues(
     });
   } else {
     for (const role of assumableRows.rows) {
-      if (!role.rolsuper && !role.rolbypassrls) continue;
+      if (postgresRoleElevatedAttributes(role).length === 0) continue;
       issues.push({
         code: 'KV433_RUNTIME_ROLE',
         detail: `runtime login ${runtimeLoginRole} can SET ROLE to ${postgresRoleAttributeDetail(
           role,
-        )}; every assumable role must be NOSUPERUSER and NOBYPASSRLS`,
+        )}; every assumable role must have no elevated role attributes`,
       });
     }
   }
