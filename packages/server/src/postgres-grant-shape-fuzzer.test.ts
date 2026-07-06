@@ -215,6 +215,7 @@ function grantShapeCases(): readonly GrantShapeCase[] {
   }
 
   cases.push(attachedTriggerCase());
+  cases.push(attachedInsteadOfTriggerCase());
   cases.push(attachedRewriteRuleCase());
   cases.push(attachedCheckConstraintCase());
   cases.push(attachedDefaultExpressionCase());
@@ -537,6 +538,52 @@ function attachedTriggerCase(): GrantShapeCase {
       return {
         cleanupSql: [
           `DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)} ON kovo_fuzzer_notes`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}() CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        sql: 'SELECT false AS unsafe',
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function attachedInsteadOfTriggerCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'attached-code:instead-of-trigger:definer-view',
+    objectClass: 'view',
+    probeKind: 'privilege',
+    rlsState: 'force-rls-policy',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const viewName = `kovo_fuzzer_writable_view_${ctx.index}`;
+      const functionName = `kovo_fuzzer_attached_instead_${ctx.index}`;
+      const triggerName = `kovo_fuzzer_attached_instead_${ctx.index}`;
+      await execMany(ctx.client, [
+        [
+          `CREATE VIEW ${quoteIdent(viewName)} AS`,
+          'SELECT id, "ownerId", title FROM kovo_fuzzer_notes',
+        ].join(' '),
+        `ALTER VIEW ${quoteIdent(viewName)} SET (security_invoker = true)`,
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}() RETURNS trigger`,
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          `CREATE TRIGGER ${quoteIdent(triggerName)}`,
+          `INSTEAD OF INSERT ON ${quoteIdent(viewName)}`,
+          `FOR EACH ROW EXECUTE FUNCTION ${quoteIdent(functionName)}()`,
+        ].join(' '),
+        `GRANT INSERT ON TABLE ${quoteIdent(viewName)} TO kovo_writer`,
+      ]);
+      return {
+        cleanupSql: [
+          `DROP VIEW IF EXISTS ${quoteIdent(viewName)} CASCADE`,
           `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}() CASCADE`,
         ],
         probeRole: 'kovo_writer',

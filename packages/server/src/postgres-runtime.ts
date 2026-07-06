@@ -142,6 +142,12 @@ interface PostgresReachableRelation extends PostgresCatalogRelation {
   table: string;
 }
 
+interface PostgresRoleAttributeRow {
+  rolbypassrls: boolean;
+  rolname: string;
+  rolsuper: boolean;
+}
+
 interface PostgresReachableRoutineRow {
   role_name: string;
   routine_name: string;
@@ -841,6 +847,11 @@ async function checkRuntimeDbPosture(
     input.config.driver === 'node-postgres'
       ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
       : input.runtimeLoginRole;
+  if (runtimeLoginRole !== undefined) {
+    issues.push(
+      ...(await postgresRuntimeLoginPostureIssues(client, input.config, runtimeLoginRole)),
+    );
+  }
   if (input.config.driver === 'node-postgres') {
     issues.push(
       ...(await postgresRuntimeMembershipIssues(
@@ -976,23 +987,25 @@ async function checkRuntimeDbPosture(
     const tableName = getTableConfig(table).name;
     const secretColumns = input.metadata.secretColumnNamesByTable.get(tableName) ?? new Set();
     for (const column of secretColumns) {
-      const grant = await safeQuery<{ can_select: boolean }>(
-        client,
-        ["SELECT has_column_privilege($1, $2, $3, 'SELECT') AS can_select"].join(' '),
-        [input.config.readerRole, tableName, column],
-      );
-      if (grant === undefined) {
-        issues.push({
-          code: 'KV433_REACHABILITY_AUDIT',
-          detail: `could not verify effective secret-column privilege for ${tableName}.${column}`,
-        });
-        continue;
-      }
-      if (grant.rows[0]?.can_select === true) {
-        issues.push({
-          code: 'KV435_SECRET_COLUMN_GRANT',
-          detail: `${input.config.readerRole} must not have effective SELECT on ${tableName}.${column}`,
-        });
+      for (const role of [input.config.readerRole, input.config.writerRole]) {
+        const grant = await safeQuery<{ can_select: boolean }>(
+          client,
+          ["SELECT has_column_privilege($1, $2, $3, 'SELECT') AS can_select"].join(' '),
+          [role, tableName, column],
+        );
+        if (grant === undefined) {
+          issues.push({
+            code: 'KV433_REACHABILITY_AUDIT',
+            detail: `could not verify effective secret-column privilege for ${role} on ${tableName}.${column}`,
+          });
+          continue;
+        }
+        if (grant.rows[0]?.can_select === true) {
+          issues.push({
+            code: 'KV435_SECRET_COLUMN_GRANT',
+            detail: `${role} must not have effective SELECT on ${tableName}.${column}`,
+          });
+        }
       }
     }
   }
@@ -1136,17 +1149,20 @@ async function auditPostgresAttachedCode(
   client: RuntimeSqlClient,
   reachable: ReadonlyMap<string, PostgresReachableRelation>,
 ): Promise<KovoPostgresPostureIssue[]> {
-  const reachableBaseTables = new Set(
+  const writableRelations = new Set(
     [...reachable.values()]
-      .filter((relation) => relation.relkind === 'r' || relation.relkind === 'p')
+      .filter((relation) => postgresRelationIsWritable(relation))
       .map((relation) => postgresRelationKey(relation.schema, relation.table)),
   );
-  if (reachableBaseTables.size === 0) return [];
+  if (writableRelations.size === 0) return [];
 
   const attachedRows = await safeQuery<PostgresAttachedCodeRow>(
     client,
     [
-      "SELECT 'DML trigger' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
+      "SELECT CASE WHEN trigger.tgconstraint <> 0 THEN 'CONSTRAINT trigger'",
+      "WHEN (trigger.tgtype & 64) <> 0 THEN 'INSTEAD OF trigger'",
+      "ELSE 'DML trigger' END AS mechanism,",
+      'rel_ns.nspname AS relation_schema, rel.relname AS relation_name,',
       'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
       'FROM pg_trigger trigger',
       'JOIN pg_class rel ON rel.oid = trigger.tgrelid',
@@ -1232,12 +1248,23 @@ async function auditPostgresAttachedCode(
   }
   return attachedRows.rows
     .filter((row) =>
-      reachableBaseTables.has(postgresRelationKey(row.relation_schema, row.relation_name)),
+      writableRelations.has(postgresRelationKey(row.relation_schema, row.relation_name)),
     )
     .map((row) => ({
       code: 'KV433_ATTACHED_CODE',
-      detail: `${row.relation_schema}.${row.relation_name} has ${row.mechanism} reaching app-authored routine ${row.routine_schema}.${row.routine_name}; attached code is app-role-reachable through table side effects (SPEC §10.3)`,
+      detail: `${row.relation_schema}.${row.relation_name} has ${row.mechanism} reaching app-authored routine ${row.routine_schema}.${row.routine_name}; attached code is app-role-reachable through writable relation side effects (SPEC §10.3)`,
     }));
+}
+
+function postgresRelationIsWritable(relation: PostgresReachableRelation): boolean {
+  return relation.privileges.some(
+    (privilege) =>
+      privilege === 'INSERT' ||
+      privilege === 'UPDATE' ||
+      privilege === 'DELETE' ||
+      privilege === 'INSERT_COLUMN' ||
+      privilege === 'UPDATE_COLUMN',
+  );
 }
 
 async function auditPostgresReachableView(
@@ -2399,14 +2426,28 @@ async function preflightPostgresRoleTopology(
     adoptedRoles.map((role) => role.name),
   );
   const missing = adoptedRoles.filter((role) => !existing.has(role.name));
-  if (missing.length === 0) return;
-  throw new Error(
-    [
-      'KV433_ROLE_TOPOLOGY: adopted Postgres roles must exist before provisioning (SPEC §10.3).',
-      `missing: ${missing.map((role) => `${role.purpose}Role=${role.name}`).join(', ')}`,
-      'Set KOVO_DB_READER_ROLE, KOVO_DB_WRITER_ROLE, KOVO_DB_ADMIN_ROLE, and KOVO_DB_SYSTEM_ROLE to pre-created roles, or allow Kovo to create its default roles.',
-    ].join(' '),
+  if (missing.length > 0) {
+    throw new Error(
+      [
+        'KV433_ROLE_TOPOLOGY: adopted Postgres roles must exist before provisioning (SPEC §10.3).',
+        `missing: ${missing.map((role) => `${role.purpose}Role=${role.name}`).join(', ')}`,
+        'Set KOVO_DB_READER_ROLE, KOVO_DB_WRITER_ROLE, KOVO_DB_ADMIN_ROLE, and KOVO_DB_SYSTEM_ROLE to pre-created roles, or allow Kovo to create its default roles.',
+      ].join(' '),
+    );
+  }
+  const attributeRows = await postgresRoleAttributeRows(
+    client,
+    adoptedRoles.map((role) => role.name),
   );
+  const privileged = attributeRows.filter((row) => row.rolsuper || row.rolbypassrls);
+  if (privileged.length > 0) {
+    throw new Error(
+      [
+        'KV433_ROLE_TOPOLOGY: adopted Postgres roles must be NOSUPERUSER and NOBYPASSRLS (SPEC §10.3).',
+        `offending: ${privileged.map(postgresRoleAttributeDetail).join(', ')}`,
+      ].join(' '),
+    );
+  }
 }
 
 async function ensurePostgresRoleTopology(
@@ -2429,6 +2470,129 @@ async function existingPostgresRoles(
     [roles],
   );
   return new Set(result.rows.map((row) => row.rolname));
+}
+
+async function postgresRoleAttributeRows(
+  client: RuntimeTransactionClient,
+  roles: readonly string[],
+): Promise<readonly PostgresRoleAttributeRow[]> {
+  if (roles.length === 0) return [];
+  const result = await client.query<PostgresRoleAttributeRow>(
+    'SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = ANY($1::text[])',
+    [roles],
+  );
+  return result.rows;
+}
+
+function postgresRoleAttributeDetail(row: PostgresRoleAttributeRow): string {
+  const attributes = [
+    row.rolsuper ? 'SUPERUSER' : undefined,
+    row.rolbypassrls ? 'BYPASSRLS' : undefined,
+  ].filter((attribute): attribute is string => attribute !== undefined);
+  return `${row.rolname}(${attributes.join('+')})`;
+}
+
+async function postgresRuntimeLoginPostureIssues(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string,
+): Promise<KovoPostgresPostureIssue[]> {
+  const issues: KovoPostgresPostureIssue[] = [];
+  const roleRows = await safeQuery<
+    PostgresRoleAttributeRow & { can_admin: boolean; can_system: boolean }
+  >(
+    client,
+    [
+      'SELECT r.rolname, r.rolsuper, r.rolbypassrls,',
+      "(SELECT pg_has_role(r.oid, admin.oid, 'MEMBER') FROM pg_roles admin WHERE admin.rolname = $2) AS can_admin,",
+      "(SELECT pg_has_role(r.oid, system_role.oid, 'MEMBER') FROM pg_roles system_role WHERE system_role.rolname = $3) AS can_system",
+      'FROM pg_roles r WHERE r.rolname = $1',
+    ].join(' '),
+    [runtimeLoginRole, config.adminRole, config.systemRole],
+  );
+  const login = roleRows?.rows[0];
+  if (login === undefined) {
+    return [
+      {
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `runtime login ${runtimeLoginRole} does not exist`,
+      },
+    ];
+  }
+  if (login.rolsuper || login.rolbypassrls) {
+    issues.push({
+      code: 'KV433_RUNTIME_ROLE',
+      detail: `runtime login ${runtimeLoginRole} must be NOSUPERUSER and NOBYPASSRLS; found ${postgresRoleAttributeDetail(
+        login,
+      )}`,
+    });
+  }
+  for (const [purpose, role, canAssume] of [
+    ['admin', config.adminRole, login.can_admin],
+    ['system', config.systemRole, login.can_system],
+  ] as const) {
+    if (canAssume !== true) continue;
+    issues.push({
+      code: 'KV433_RUNTIME_ROLE',
+      detail: `runtime login ${runtimeLoginRole} must not be able to SET ROLE to ${purpose}Role=${role}`,
+    });
+  }
+
+  const assumableRows = await safeQuery<PostgresRoleAttributeRow>(
+    client,
+    [
+      'SELECT role.rolname, role.rolsuper, role.rolbypassrls',
+      'FROM pg_roles login',
+      'JOIN pg_roles role ON role.oid <> login.oid',
+      'WHERE login.rolname = $1',
+      "AND pg_has_role(login.oid, role.oid, 'MEMBER')",
+      'ORDER BY role.rolname',
+    ].join(' '),
+    [runtimeLoginRole],
+  );
+  if (assumableRows === undefined) {
+    issues.push({
+      code: 'KV433_RUNTIME_ROLE',
+      detail: `could not enumerate roles assumable by runtime login ${runtimeLoginRole}`,
+    });
+  } else {
+    for (const role of assumableRows.rows) {
+      if (!role.rolsuper && !role.rolbypassrls) continue;
+      issues.push({
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `runtime login ${runtimeLoginRole} can SET ROLE to ${postgresRoleAttributeDetail(
+          role,
+        )}; every assumable role must be NOSUPERUSER and NOBYPASSRLS`,
+      });
+    }
+  }
+
+  const adminOptionRows = await safeQuery<{ role_name: string }>(
+    client,
+    [
+      'SELECT role.rolname AS role_name',
+      'FROM pg_auth_members member',
+      'JOIN pg_roles login ON login.oid = member.member',
+      'JOIN pg_roles role ON role.oid = member.roleid',
+      'WHERE login.rolname = $1 AND member.admin_option = true',
+      'ORDER BY role.rolname',
+    ].join(' '),
+    [runtimeLoginRole],
+  );
+  if (adminOptionRows === undefined) {
+    issues.push({
+      code: 'KV433_RUNTIME_ROLE',
+      detail: `could not verify runtime login ${runtimeLoginRole} ADMIN OPTION memberships`,
+    });
+  } else {
+    for (const row of adminOptionRows.rows) {
+      issues.push({
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `runtime login ${runtimeLoginRole} holds ADMIN OPTION on ${row.role_name}; runtime logins must not be able to grant themselves assumable roles`,
+      });
+    }
+  }
+  return issues;
 }
 
 async function postgresRuntimeMembershipIssues(
@@ -2604,7 +2768,7 @@ async function assertRuntimeConnectionLeastPrivilege(
 ): Promise<void> {
   const issue = await runtimeConnectionLeastPrivilegeIssue(client, config);
   if (issue !== undefined) {
-    throw new Error(`KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR} (SPEC §10.3).`);
+    throw new Error(`KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR}: ${issue.detail} (SPEC §10.3).`);
   }
 }
 
@@ -2612,36 +2776,17 @@ async function runtimeConnectionLeastPrivilegeIssue(
   client: RuntimeSqlClient,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<KovoPostgresPostureIssue | undefined> {
-  const role = await client.query<{
-    can_admin: boolean;
-    can_system: boolean;
-    rolbypassrls: boolean;
-    rolsuper: boolean;
-  }>(
-    [
-      'SELECT r.rolsuper, r.rolbypassrls,',
-      "(SELECT pg_has_role(current_user, admin.oid, 'USAGE')",
-      'FROM pg_roles admin WHERE admin.rolname = $1) AS can_admin,',
-      "(SELECT pg_has_role(current_user, system_role.oid, 'USAGE')",
-      'FROM pg_roles system_role WHERE system_role.rolname = $2) AS can_system',
-      'FROM pg_roles r WHERE r.rolname = current_user',
-    ].join(' '),
-    [config.adminRole, config.systemRole],
+  const current = await client.query<{ runtime_login: string }>(
+    'SELECT current_user AS runtime_login',
   );
-  const row = role.rows[0];
-  if (
-    row === undefined ||
-    row.rolsuper ||
-    row.rolbypassrls ||
-    row.can_admin === true ||
-    row.can_system === true
-  ) {
+  const runtimeLogin = current.rows[0]?.runtime_login;
+  if (runtimeLogin === undefined) {
     return {
       code: 'KV433_RUNTIME_ROLE',
       detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
     };
   }
-  return undefined;
+  return (await postgresRuntimeLoginPostureIssues(client, config, runtimeLogin))[0];
 }
 
 function assertProductionRuntimeDriver(config: ResolvedPostgresRuntimeConfig): void {
@@ -2857,10 +3002,17 @@ async function applyPostgresWriterTablePrivileges(
     );
     if (writableTables.has(tableConfig.name)) {
       await client.exec(
-        `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(
+        `GRANT INSERT, UPDATE, DELETE ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(
           config.writerRole,
         )}`,
       );
+      if (publicColumns.length > 0) {
+        await client.exec(
+          `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
+            tableConfig,
+          )} TO ${quoteIdent(config.writerRole)}`,
+        );
+      }
     } else if (authzPolicyDependencyTables.has(tableConfig.name) && publicColumns.length > 0) {
       await client.exec(
         `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(

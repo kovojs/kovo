@@ -9,6 +9,7 @@ import {
   AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES,
   PARANOID_SECURITY_ADVISORY_CODES,
   SECURITY_CODE_REGISTRY,
+  type SecurityBoundaryProof,
   securityClassifier,
   securityDecisionMetadata,
   wireEmitter,
@@ -105,6 +106,20 @@ describe('DEC-D security code registry', () => {
     }
   });
 
+  it('classifies request-state security codes by a non-proxy boundary proof', () => {
+    for (const code of ['KV406', 'KV414', 'KV415', 'KV422', 'KV428', 'KV433', 'KV435', 'KV438']) {
+      const entry = SECURITY_CODE_REGISTRY[code];
+
+      expect(entry.boundaryProof, `${entry.code} boundary proof`).toBeDefined();
+      expect([
+        'boxed-egress',
+        'engine-enumerated-door',
+        'framework-owned-door',
+        'static-provenance',
+      ] satisfies SecurityBoundaryProof[]).toContain(entry.boundaryProof!);
+    }
+  });
+
   it('documents engine-choke wording for authorization and confidentiality registry entries', () => {
     for (const code of AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES) {
       const property = SECURITY_CODE_REGISTRY[code].property;
@@ -132,7 +147,17 @@ describe('DEC-D security code registry', () => {
         SECURITY_CODE_REGISTRY[code].enforcement,
         `${code} must not rely only on build-time enumeration`,
       ).not.toBe('build-only');
+      expect(
+        SECURITY_CODE_REGISTRY[code].boundaryProof,
+        `${code} must name a non-proxy boundary proof`,
+      ).toMatch(/engine-enumerated-door|boxed-egress/u);
     }
+  });
+
+  it('keeps governed-column write provenance classified as static provenance, not a proxy-only floor', () => {
+    expect(SECURITY_CODE_REGISTRY.KV438.boundaryProof).toBe('static-provenance');
+    expect(SECURITY_CODE_REGISTRY.KV438.property).toContain('managed write boundary');
+    expect(SECURITY_CODE_REGISTRY.KV438.property).toContain('never a runtime proxy-only check');
   });
 
   it('requires a chokeId to name runtime-choke enforcement or a proven by-construction floor', () => {

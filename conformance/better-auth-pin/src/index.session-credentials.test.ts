@@ -110,7 +110,7 @@ describe('Better Auth pinned conformance', () => {
       signIn,
       {
         email: 'grace@example.com',
-        password: 'wrong',
+        password: 'wrong-conformance-secret',
       },
       { headers: requestHeaders() },
     );
@@ -123,6 +123,7 @@ describe('Better Auth pinned conformance', () => {
       ok: false,
       status: 422,
     });
+    expect(JSON.stringify(invalidSignIn)).not.toContain('wrong-conformance-secret');
 
     const signInResult = await runMutation(
       signIn,

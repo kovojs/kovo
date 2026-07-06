@@ -77,6 +77,15 @@ On the Postgres/PGlite managed path, the engine also enforces the dangerous writ
 
 Because instrumentation under-approximates (executed branches only), passing dev/test runs do **not** establish KV406 completeness; an unexercised raw-SQL arm is proven sound only by its statically-declared `tables:`/`touches`, which is why those declarations are KV406-`error` (not advisory) and an unexecuted such branch is KV405-`error` (§11.1). Read-side gets identical treatment (query loaders' SELECT/JOIN tables vs. derived read sets, **and observed result shapes vs. declared/inferred types — the runtime half of KV410**, so an opaque projection's schema claim is tested against what the database actually returns; an opaque projection that reads a table absent from its declared `reads:` set (§10.2) is a CI failure on the same `observed ⊆ static ∪ declared` invariant, but the static `reads:` declaration — not this dev/test-only observation — is what proves an unexercised branch sound). An observed read of an `exempt` table is the runtime half of **KV411** (§10.1) — the same CI failure whether the exempt read was statically visible or smuggled through raw SQL.
 
+**C9 sink-proof inventory (normative).** The verification surface MUST keep a single reviewed
+inventory for the required boundary-crossing sinks named in §10.3 C9. Each row names: the sink, its
+mechanism (`reconstruct`, `box`, or framework-`own`), the sole door, at least one lint/check/build
+proof, and at least one hostile-value test file or command. The inventory is a proof index, not a
+runtime policy source: if a sink exists without an inventory row, or a row has no hostile-value
+evidence, the verification surface is incomplete even if the implementation happens to be sound.
+For engine-door claims the inventory row points at the engine-closure audit; for wire/file/task/log
+surfaces it points at the single framework-owned choke or box, never at a proxy-only wrapper.
+
 ### 11.4 The verification surface (the Keppo contract)
 
 For a Kovo app, the following are checkable **without executing a browser**:

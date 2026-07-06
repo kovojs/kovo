@@ -7,6 +7,7 @@ and the typed `emitToWire` response choke lives in:
 - `packages/core/src/secret.tcb-proof.test.ts`
 - `packages/core/src/internal/wire-json.tcb-proof.test.ts`
 - `scripts/tcb-proof-harness.test.ts`
+- `packages/better-auth/src/internal.trusted-plaintext.test.ts`
 
 Those tests enumerate the modeled JS coercion operations, JSON value shapes, poisoned-box depths,
 and `emitToWire` framework/raw response cases. They prove the current runtime floor only: box
@@ -21,7 +22,7 @@ they are not claimed as the verified TCB.
 ```json tcb-manifest
 {
   "schema": "kovo.security.tcb/v1",
-  "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1",
+  "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-12.md DEC-D1",
   "budgets": {
     "entryMaxLines": 150,
     "totalTcbMaxLines": 1000
@@ -234,6 +235,60 @@ they are not claimed as the verified TCB.
       "wrapper": "securityClassifier",
       "decision": "server.secret-read.sqlite-boundary",
       "lineBudget": 80
+    },
+    {
+      "id": "better-auth.trusted-plaintext.sign-in",
+      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
+      "name": "callBetterAuthSignInEmail",
+      "kind": "third-party-auth-plaintext-comparison-sink",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 12
+    },
+    {
+      "id": "better-auth.trusted-plaintext.sign-up",
+      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
+      "name": "callBetterAuthSignUpEmail",
+      "kind": "third-party-auth-plaintext-write-comparison-sink",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 12
+    },
+    {
+      "id": "better-auth.trusted-plaintext.sign-out",
+      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
+      "name": "callBetterAuthSignOut",
+      "kind": "third-party-auth-cookie-revocation-sink",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 10
+    },
+    {
+      "id": "better-auth.trusted-plaintext.get-session",
+      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
+      "name": "callBetterAuthGetSession",
+      "kind": "third-party-auth-cookie-session-lookup-sink",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 20
+    },
+    {
+      "id": "better-auth.trusted-plaintext.set-cookie-read",
+      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
+      "name": "getBetterAuthSetCookie",
+      "kind": "third-party-auth-cookie-forwarding-source",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 16
+    },
+    {
+      "id": "better-auth.trusted-plaintext.split-folded-cookie",
+      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
+      "name": "splitFoldedSetCookie",
+      "kind": "third-party-auth-cookie-forwarding-parser",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 12
     },
     {
       "id": "drizzle.runtime-metadata.extract",

@@ -25,6 +25,11 @@ import type {
   BetterAuthSignOutLike,
   BetterAuthSignUpEmailLike,
 } from './internal.js';
+import {
+  callBetterAuthSignInEmail,
+  callBetterAuthSignOut,
+  callBetterAuthSignUpEmail,
+} from './internal/trusted-plaintext.js';
 
 type MutationWithAssignedKey<Definition, Key extends string> =
   Definition extends MutationDefinition<
@@ -82,14 +87,14 @@ export function betterAuthSignInEmailMutation<
         result.value.redirectTo,
       async handler(input, request, context) {
         try {
-          const response = await auth.api.signInEmail({
-            asResponse: true,
-            body: {
+          const response = await callBetterAuthSignInEmail(
+            auth,
+            {
               email: input.email,
               password: input.password,
             },
-            headers: request.headers,
-          });
+            request.headers,
+          );
 
           const success = await resolveBetterAuthCredentialSuccess(response, context, {
             redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
@@ -148,15 +153,15 @@ export function betterAuthSignUpEmailMutation<
         result.value.redirectTo,
       async handler(input, request, context) {
         try {
-          const response = await auth.api.signUpEmail({
-            asResponse: true,
-            body: {
+          const response = await callBetterAuthSignUpEmail(
+            auth,
+            {
               email: input.email,
               name: input.name,
               password: input.password,
             },
-            headers: request.headers,
-          });
+            request.headers,
+          );
 
           const success = await resolveBetterAuthCredentialSuccess(response, context, {
             redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
@@ -214,10 +219,7 @@ export function betterAuthSignOutMutation<
       redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-out'> }) =>
         result.value.redirectTo,
       async handler(_input, request, context) {
-        const response = await auth.api.signOut({
-          asResponse: true,
-          headers: request.headers,
-        });
+        const response = await callBetterAuthSignOut(auth, request.headers);
 
         forwardBetterAuthSetCookie(response.headers, context);
         setSessionRevocationClearSiteData(context);
