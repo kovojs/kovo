@@ -12,11 +12,11 @@ necessary-but-insufficient check.** followup-10 hardened the three axes round-14
 hold (the direct statement path, the object-reachability audit, and the runtime-login identity check are all robust —
 see Refuted) and finds the fail-open at each axis's edge:
 
-| Axis (followup-10) | The check | The edge that bypasses it |
-| --- | --- | --- |
-| DEC-B statement chokepoint | scans the SQL `.text` string | node-pg `Submittable` (`submit()` object) — the DRIVER ignores `.text` (B1) |
-| DEC-D attached-code audit | scans `pg_trigger` on reachable TABLES | an INSTEAD OF trigger on a reachable VIEW (B2) |
-| followup-9 B2 / C8 identity | checks the LOGIN role's `rolbypassrls` | an ADOPTED reader/writer role with `BYPASSRLS` that the login ASSUMES (B3) |
+| Axis (followup-10)          | The check                              | The edge that bypasses it                                                   |
+| --------------------------- | -------------------------------------- | --------------------------------------------------------------------------- |
+| DEC-B statement chokepoint  | scans the SQL `.text` string           | node-pg `Submittable` (`submit()` object) — the DRIVER ignores `.text` (B1) |
+| DEC-D attached-code audit   | scans `pg_trigger` on reachable TABLES | an INSTEAD OF trigger on a reachable VIEW (B2)                              |
+| followup-9 B2 / C8 identity | checks the LOGIN role's `rolbypassrls` | an ADOPTED reader/writer role with `BYPASSRLS` that the login ASSUMES (B3)  |
 
 Plus followup-11's capability model removed the app-EXPORTED privileged handle, but the auth adapter still reads auth
 secret columns unboxed through the framework `systemDb` capability (B4 — `bugz-24` A1 residual). The 15-round pattern:
