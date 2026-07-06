@@ -118,6 +118,11 @@ freshness/read-write proof
 diagnostics; **KV422** is distinct and answers how executable SQL text was constructed before it
 reached a managed handle.
 
+App-provided driver streaming/cursor values such as node-postgres `Submittable` objects are not an
+accepted v1 SQL carrier. Large owner-scoped reads, when needed after v1, must use a
+framework-owned SQL-level cursor that reconstructs `DECLARE`/`FETCH` statements through the same
+managed carrier boundary rather than blessing a driver-polymorphic app object.
+
 Scalar/runtime values MUST bind as parameters, never by interpolating bytes into SQL text.
 Identifiers, operators, sort directions, and clause fragments are not scalar values; they MUST come
 from static schema facts or typed allowlists such as `sql.identifier(..., { allow })` /
