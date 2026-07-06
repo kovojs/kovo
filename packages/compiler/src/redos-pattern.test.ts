@@ -92,6 +92,19 @@ const schema = s.string().min(3).pattern(re);`,
       const source = component(`const schema = s.string().pattern('[a-z]+[a-z]*');`);
       expect(codes(source)).toContain('KV434');
     });
+
+    // Regression: round-17 F1 (SPEC §6.6 / KV434). The compile-time twin must treat `?` as a
+    // quantifier: a quantified group whose body is quantified only with `?` catastrophically
+    // backtracks. Before the fix `containsQuantifier` recognized only `+ * {` and OMITTED `?`, so
+    // these compile-visible literals passed the nested-quantifier reject and were built into a live
+    // RegExp. Keep the compiler in sync with the runtime `assertLinearSafePattern`.
+    it('fires KV434 for optional-quantifier (?) nesting inside a quantified group', () => {
+      expect(codes(component(`const schema = s.string().pattern('(a?b?)+$');`))).toContain('KV434');
+      expect(codes(component(`const schema = s.string().pattern('(a?){50}b');`))).toContain(
+        'KV434',
+      );
+      expect(codes(component(`const schema = s.string().pattern('(a?)+');`))).toContain('KV434');
+    });
   });
 
   describe('NEGATIVE: a compile-visible literal the runtime already validates is NOT flagged', () => {
@@ -113,6 +126,21 @@ const schema = s.string().min(3).pattern(re);`,
     it('does not flag a literal-only concatenation pattern', () => {
       const source = component(`const schema = s.string().pattern('^[a-z]' + '+$');`);
       expect(codes(source)).not.toContain('KV434');
+    });
+
+    // Do NOT over-block optional quantifiers: `?` is only a nesting risk under an outer-quantified
+    // group. A benign group with no outer quantifier, a flat run of optional atoms, and a
+    // non-capturing group (whose prefix `?` is not a quantifier) stay linear-safe (round-17 F1).
+    it('does not flag benign optional quantifiers with no outer-quantified group', () => {
+      expect(codes(component(`const schema = s.string().pattern('(a?b?)');`))).not.toContain(
+        'KV434',
+      );
+      expect(codes(component(`const schema = s.string().pattern('^a?b?c?$');`))).not.toContain(
+        'KV434',
+      );
+      expect(codes(component(`const schema = s.string().pattern('((?:ab))+');`))).not.toContain(
+        'KV434',
+      );
     });
 
     it('does not flag a blessed format', () => {

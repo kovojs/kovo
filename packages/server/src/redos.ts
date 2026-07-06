@@ -224,15 +224,29 @@ export function assertLinearSafePattern(source: string): void {
   }
 }
 
-/** Whether `source` contains a quantifier (`+`, `*`, or `{n,m}`) outside an escape. */
+/**
+ * Whether `source` contains a backtracking quantifier applied to some atom (SPEC §6.6 / KV434).
+ *
+ * The recognized quantifier set is single-sourced through {@link quantifierAt} (`+ * ? {n,m}`) so it
+ * cannot drift out of sync: walk atoms with {@link readAtom} and ask `quantifierAt` whether a
+ * quantifier starts immediately after each atom. Parsing atoms first means a group-prefix or
+ * lookaround `?` (`(?:…)`, `(?=…)`) is consumed inside the group and never mistaken for a
+ * quantifier, so this stays precise without over-blocking benign non-capturing groups.
+ *
+ * An earlier version tested only `+ * {` inline here and OMITTED `?`, even though `quantifierAt`
+ * already recognized `?`. That internal inconsistency meant the nested-quantifier gate in
+ * {@link assertLinearSafePattern} never fired for a group body quantified only with `?`, so
+ * `(a?b?)+`, `(a?){50}b`, and `(a?)+` were compiled into catastrophically backtracking RegExps.
+ */
 function containsQuantifier(source: string): boolean {
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i];
-    if (ch === '\\') {
-      i += 1; // skip escaped char
+  for (let i = 0; i < source.length; ) {
+    const atom = readAtom(source, i);
+    if (!atom) {
+      i += 1;
       continue;
     }
-    if (ch === '+' || ch === '*' || ch === '{') return true;
+    if (quantifierAt(source, atom.end) !== null) return true;
+    i = atom.end;
   }
   return false;
 }
