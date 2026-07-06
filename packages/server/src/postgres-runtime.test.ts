@@ -1261,6 +1261,209 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(report.issues).toEqual([]);
   });
 
+  it('refuses SECURITY DEFINER triggers on FK cascade targets reached by app-role writes', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-fk-cascade-code-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        [
+          'CREATE TABLE kovo_runtime_fk_cascade_children (',
+          'id text PRIMARY KEY,',
+          'note_id text NOT NULL REFERENCES kovo_runtime_notes(id) ON DELETE CASCADE',
+          ')',
+        ].join(' '),
+        [
+          'CREATE FUNCTION kovo_runtime_fk_cascade_child_trigger() RETURNS trigger',
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN OLD; END $$',
+        ].join(' '),
+        [
+          'CREATE TRIGGER kovo_runtime_fk_cascade_child_trigger',
+          'BEFORE DELETE ON kovo_runtime_fk_cascade_children',
+          'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_fk_cascade_child_trigger()',
+        ].join(' '),
+      ].join('; '),
+    );
+
+    const childPrivileges = await queryPglite<{ writer_can_delete: boolean }>(
+      dataDir,
+      [
+        'SELECT has_table_privilege(',
+        "'kovo_writer',",
+        "'public.kovo_runtime_fk_cascade_children',",
+        "'DELETE'",
+        ') AS writer_can_delete',
+      ].join(' '),
+    );
+    expect(childPrivileges.rows).toEqual([{ writer_can_delete: false }]);
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_ATTACHED_CODE',
+        detail: expect.stringContaining('kovo_runtime_fk_cascade_children has DML trigger'),
+      }),
+    );
+  });
+
+  it('refuses SECURITY DEFINER triggers on partition children reached by app-role writes', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-partition-code-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        [
+          'CREATE TABLE kovo_runtime_partition_parent (',
+          'id text NOT NULL,',
+          'owner_id text NOT NULL',
+          ') PARTITION BY LIST (owner_id)',
+        ].join(' '),
+        [
+          'CREATE TABLE kovo_runtime_partition_child_u1',
+          'PARTITION OF kovo_runtime_partition_parent FOR VALUES IN (',
+          "'u1'",
+          ')',
+        ].join(' '),
+        [
+          'CREATE FUNCTION kovo_runtime_partition_child_trigger() RETURNS trigger',
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          'CREATE TRIGGER kovo_runtime_partition_child_trigger',
+          'BEFORE INSERT ON kovo_runtime_partition_child_u1',
+          'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_partition_child_trigger()',
+        ].join(' '),
+        'GRANT INSERT ON TABLE kovo_runtime_partition_parent TO kovo_writer',
+      ].join('; '),
+    );
+
+    const childPrivileges = await queryPglite<{ writer_can_insert: boolean }>(
+      dataDir,
+      [
+        'SELECT has_table_privilege(',
+        "'kovo_writer',",
+        "'public.kovo_runtime_partition_child_u1',",
+        "'INSERT'",
+        ') AS writer_can_insert',
+      ].join(' '),
+    );
+    expect(childPrivileges.rows).toEqual([{ writer_can_insert: false }]);
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_ATTACHED_CODE',
+        detail: expect.stringContaining('kovo_runtime_partition_child_u1 has DML trigger'),
+      }),
+    );
+  });
+
+  it('refuses SECURITY DEFINER triggers on rewrite-rule redirect targets reached by app-role writes', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-rule-target-code-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE TABLE kovo_runtime_rule_source (id text PRIMARY KEY)',
+        'CREATE TABLE kovo_runtime_rule_target (id text PRIMARY KEY)',
+        [
+          'CREATE FUNCTION kovo_runtime_rule_target_trigger() RETURNS trigger',
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          'CREATE TRIGGER kovo_runtime_rule_target_trigger',
+          'BEFORE INSERT ON kovo_runtime_rule_target',
+          'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_rule_target_trigger()',
+        ].join(' '),
+        [
+          'CREATE RULE kovo_runtime_rule_redirect AS ON INSERT TO kovo_runtime_rule_source',
+          'DO ALSO INSERT INTO kovo_runtime_rule_target (id) VALUES (NEW.id)',
+        ].join(' '),
+        'GRANT INSERT ON TABLE kovo_runtime_rule_source TO kovo_writer',
+      ].join('; '),
+    );
+
+    const targetPrivileges = await queryPglite<{ writer_can_insert: boolean }>(
+      dataDir,
+      [
+        'SELECT has_table_privilege(',
+        "'kovo_writer',",
+        "'public.kovo_runtime_rule_target',",
+        "'INSERT'",
+        ') AS writer_can_insert',
+      ].join(' '),
+    );
+    expect(targetPrivileges.rows).toEqual([{ writer_can_insert: false }]);
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_ATTACHED_CODE',
+        detail: expect.stringContaining('kovo_runtime_rule_target has DML trigger'),
+      }),
+    );
+  });
+
+  it('allows SECURITY DEFINER triggers on relations outside the app-role write closure', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-unreachable-code-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE TABLE kovo_runtime_ops_log (id text PRIMARY KEY)',
+        [
+          'CREATE FUNCTION kovo_runtime_ops_log_trigger() RETURNS trigger',
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        'REVOKE ALL ON FUNCTION kovo_runtime_ops_log_trigger() FROM PUBLIC',
+        [
+          'CREATE TRIGGER kovo_runtime_ops_log_trigger',
+          'BEFORE INSERT ON kovo_runtime_ops_log',
+          'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_ops_log_trigger()',
+        ].join(' '),
+      ].join('; '),
+    );
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
   it('refuses SECURITY DEFINER INSTEAD OF triggers on writable views', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-view-trigger-'));
     roots.push(dataDir);
