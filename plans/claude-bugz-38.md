@@ -11,12 +11,12 @@ Round 17 continues convergence: the two carried fail-opens are the SAME meta-pat
 COMPLETE closure/allowlist computed from the boundary, never a hand-picked subset") applied one level deeper than
 followup-13 reached:
 
-| Finding | The set                                    | How it was built (wrong)                                         | What it should be                                                                   |
-| ------- | ------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| B1      | dangerous engine-identity capabilities     | the ALLOWLIST over 5 role ATTRIBUTES (`rolsuper`…`rolcreatedb`)   | attributes ∪ **predefined-role membership** ∪ dangerous direct GRANTs — the full escalation surface |
-| F1      | regex structures `.pattern()` rejects       | a quantifier set of `{+, *, {n,m}}` — **omits `?`**              | every quantifier the engine backtracks on, incl. `?` (which the file's own `quantifierAt` already recognizes) |
+| Finding | The set                                | How it was built (wrong)                                        | What it should be                                                                                             |
+| ------- | -------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| B1      | dangerous engine-identity capabilities | the ALLOWLIST over 5 role ATTRIBUTES (`rolsuper`…`rolcreatedb`) | attributes ∪ **predefined-role membership** ∪ dangerous direct GRANTs — the full escalation surface           |
+| F1      | regex structures `.pattern()` rejects  | a quantifier set of `{+, *, {n,m}}` — **omits `?`**             | every quantifier the engine backtracks on, incl. `?` (which the file's own `quantifierAt` already recognizes) |
 
-DEC-B fixed B2 (the attribute *denylist* → attribute *allowlist*) but the allowlist is over the wrong domain: role
+DEC-B fixed B2 (the attribute _denylist_ → attribute _allowlist_) but the allowlist is over the wrong domain: role
 attributes are only ONE axis of PostgreSQL privilege elevation. F1 is the same shape on a fresh surface — the ReDoS
 analyzer's "safe subset" is a hand-picked subset of the dangerous-quantifier space.
 
@@ -31,13 +31,13 @@ analyzer's "safe subset" is a hand-picked subset of the dangerous-quantifier spa
       framework/authorization; `postgres-identity-closure` B1; code gap reproduced first-hand — live COPY-FROM-PROGRAM
       exploit NOT independently verified, see caveat)
   - Observed (confirmed first-hand): the assumable-role closure query enumerates the full `pg_has_role(login, role,
-    'MEMBER')` set (`postgres-runtime.ts:2746-2757`) but SELECTs only the 5 attribute booleans, and the per-role gate
+'MEMBER')` set (`postgres-runtime.ts:2746-2757`) but SELECTs only the 5 attribute booleans, and the per-role gate
     `if (postgresRoleElevatedAttributes(role).length === 0) continue` (`:2765`) drops any role whose 5 booleans are all
     false. `postgresRoleElevatedAttributes` (`:2645-2651`) iterates only `POSTGRES_ELEVATED_ROLE_ATTRIBUTES`
     (`:52-58` = `rolsuper, rolbypassrls, rolreplication, rolcreaterole, rolcreatedb`). PostgreSQL predefined roles are
     `NOLOGIN` roles with all five false, so each is skipped and no `KV433_RUNTIME_ROLE` issue is emitted. `grep` across
     `packages/` for any `pg_execute_server_program|pg_read_all_data|pg_write_all_data|pg_read_server_files|
-    pg_write_server_files|pg_monitor|pg_maintain|predefined` returns ZERO hits.
+pg_write_server_files|pg_monitor|pg_maintain|predefined` returns ZERO hits.
   - No backstop for the command-exec / bulk-write predefined roles: `auditPostgresReachableRoutines` (`:1500-1542`)
     inspects only `pg_proc` SECURITY DEFINER routines; `auditPostgresUnexpectedPrivileges` (`:1570-1678`) inspects only
     FDW/foreign-server/language/large-object/default_acl ACLs; the relation-reachability audit
@@ -48,7 +48,7 @@ analyzer's "safe subset" is a hand-picked subset of the dangerous-quantifier spa
     on new `pg_roles` ATTRIBUTE columns — it does not enumerate `pg_auth_members`/predefined-role edges.
   - Root cause: C10 recursion. DEC-B correctly made the attribute check an allowlist, but the SET the allowlist ranges
     over — role attributes — is itself a hand-picked subset of PostgreSQL's escalation axes. Membership in a predefined
-    role is escalation that the closure *enumerates the role for* and then discards because it carries no elevated
+    role is escalation that the closure _enumerates the role for_ and then discards because it carries no elevated
     attribute. This is the exact analog of round-16 B2 (the audit forgot `REPLICATION`), one level up: now it forgets an
     entire escalation axis (predefined-role membership).
   - Why it matters: the identity posture gate is the control `SPEC §10.3` delegates the "runtime identity is

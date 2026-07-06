@@ -23,7 +23,7 @@ they are not claimed as the verified TCB.
 
 ## Trusted dependency surfaces
 
-The `trustedDependencySurfaces` section names the third-party dependency *behaviors* that Kovo's
+The `trustedDependencySurfaces` section names the third-party dependency _behaviors_ that Kovo's
 security guarantees rest on (plan `plans/threat-matrix-plan.md` M6). Kovo does not audit these
 dependencies' internals; instead it pins them to an exact version and records which guarantee each
 surface underpins so that any version bump touching the surface is a deliberate review trigger, not
@@ -34,7 +34,7 @@ This section is enforced by `check:tcb-boundary` (`scripts/check-tcb-boundary.mj
 surface the gate fails if the named `dependency` is not declared in `packageJson`, if its declared
 specifier is not exactly `pinnedVersion` (a caret/range or a drifted pin fails), or if
 `pnpm-lock.yaml` has no resolved package at `dependency@pinnedVersion`. What the gate does **not**
-verify is the dependency's *actual runtime behavior* (that node-pg really parameterizes, that
+verify is the dependency's _actual runtime behavior_ (that node-pg really parameterizes, that
 Postgres/PGlite really enforce RLS, that Better Auth/argon2 hashing parameters are sound) — that
 review remains manual and is the point of the `reviewTrigger`. See `rules/dependency-policy.md`.
 

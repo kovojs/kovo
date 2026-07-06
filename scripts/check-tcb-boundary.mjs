@@ -483,7 +483,10 @@ export function collectTrustedDependencySurfaceFindings({
       }
     }
 
-    if (lockfileText !== undefined && !lockfileHasResolvedVersion(lockfileText, dependency, pinnedVersion)) {
+    if (
+      lockfileText !== undefined &&
+      !lockfileHasResolvedVersion(lockfileText, dependency, pinnedVersion)
+    ) {
       findings.push(
         `${lockfilePath}: TCB surface ${surface.id} pins ${dependency}@${pinnedVersion} but the lockfile has no resolved package at that version`,
       );

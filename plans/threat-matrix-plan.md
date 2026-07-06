@@ -102,7 +102,7 @@ supply chain**, **Runtime / infra**.
     missing lockfile resolution; +6 tests). New standing rule `rules/dependency-policy.md`. The dependency RUNTIME
     behavior remains a documented human review trigger, not a machine-checked property (stated in both files).
   - Evidence: `pnpm install --frozen-lockfile` PASS; `node scripts/check-tcb-boundary.mjs` PASS; `vitest run
-    scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.mjs` PASS; drift test flips the gate
+scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.mjs` PASS; drift test flips the gate
     RED on a re-introduced caret.
 - [x] **M7 — Build / compiler (I): the generated code trust boundary.** `dynamic.import.process` is a DEC-F sink;
       confirm the compiler's OUTPUT (lowered IR, generated server/client modules) cannot be influenced by app-authored

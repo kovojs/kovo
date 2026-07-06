@@ -1148,9 +1148,13 @@ export const save = mutation('cart/save', {
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain('CAPABILITY kind=serverValue site=admin.ts:2');
     expect(result.output).toContain('CAPABILITY kind=unsafeRegex site=admin.ts:3');
-    expect(result.output).toContain('CAPABILITY kind=publicRelation site=admin.ts:4 module=- target=public.totals');
+    expect(result.output).toContain(
+      'CAPABILITY kind=publicRelation site=admin.ts:4 module=- target=public.totals',
+    );
     expect(result.output).toContain('CAPABILITY kind=acceptUnverified site=admin.ts:5');
-    expect(result.output).toContain('CAPABILITY kind=crossOwnerRead site=admin.ts:7 module=- target=public.orders');
+    expect(result.output).toContain(
+      'CAPABILITY kind=crossOwnerRead site=admin.ts:7 module=- target=public.orders',
+    );
   });
 
   // SPEC §6.6/§9.1 (audit-only), M3: the cookie-downgrade producer rides through deriveAppGraph and

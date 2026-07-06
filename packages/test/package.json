@@ -115,7 +115,7 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.5.1",
+    "@electric-sql/pglite": "0.5.1",
     "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*",

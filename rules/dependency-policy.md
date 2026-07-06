@@ -2,7 +2,7 @@
 
 How Kovo keeps its supply chain honest. Kovo's security guarantees do not depend
 on auditing its dependencies' internals; they depend on a small set of dependency
-*behaviors* staying fixed. This rule keeps those behaviors pinned, keeps installs
+_behaviors_ staying fixed. This rule keeps those behaviors pinned, keeps installs
 reproducible, and makes any change to a guarantee-bearing dependency a deliberate
 review trigger rather than a silent transitive drift. Tracked by
 `plans/threat-matrix-plan.md` M6.

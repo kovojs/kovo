@@ -360,7 +360,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { pg: '8.22.0' } }),
-        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface()] },
@@ -374,7 +374,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { pg: '^8.22.0' } }),
-        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface()] },
@@ -391,7 +391,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { pg: '8.99.0' } }),
-        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface({ pinnedVersion: '8.99.0' })] },
@@ -408,7 +408,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { undici: '7.28.0' } }),
-        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface()] },
@@ -427,7 +427,8 @@ export function boxSecretReadRows(rows) {
         'packages/server/package.json': JSON.stringify({
           dependencies: { '@node-rs/argon2': '2.0.2' },
         }),
-        'pnpm-lock.yaml': "packages:\n  '@node-rs/argon2@2.0.2':\n    resolution: {integrity: sha}\n",
+        'pnpm-lock.yaml':
+          "packages:\n  '@node-rs/argon2@2.0.2':\n    resolution: {integrity: sha}\n",
       },
       [entry({ kind: 'function' })],
       {

@@ -14,9 +14,9 @@ Line numbers cite that HEAD.
       maintained denylist-shaped allowlist, not a reachability graph.** (LOW→MED, framework/proof-completeness;
       `pg-auth-nonegress-surface` P1; the same class as round-16 P1 — the proof checks a proxy, not the true surface)
   - Observed: `internal.trusted-plaintext.test.ts:96-109` regexes source for `auth.api.(getSession|signInEmail|signOut|
-    signUpEmail)(` and asserts all matches live in `internal/trusted-plaintext.ts`. The set of "APIs that read
+signUpEmail)(` and asserts all matches live in `internal/trusted-plaintext.ts`. The set of "APIs that read
     plaintext" is the four literal names — not derived from Better Auth's actual endpoint surface.
-  - Root cause: DEC-C fixed the *file-scan-vs-reachability* problem for the systemRole/adapter paths (the manifest in
+  - Root cause: DEC-C fixed the _file-scan-vs-reachability_ problem for the systemRole/adapter paths (the manifest in
     `non-egress-proof.ts:40-126`), but this sibling confinement scan re-introduces the same C10 shape at the
     plaintext-API layer: a hand-picked list of endpoint names standing in for "every plaintext-reading endpoint."
   - Why it matters: a Better Auth upgrade (or a plugin) that adds a plaintext-reading endpoint used outside the trusted
@@ -28,7 +28,7 @@ Line numbers cite that HEAD.
 
 - [ ] **P2 — Better Auth PLUGIN credential columns escape secret-classification: `betterAuthCredentialSecretFields` is
       a hardcoded 8-name denylist (`accessToken, backupCodes, clientSecret, idToken, password, refreshToken, secret,
-      token`), so a plugin credential column outside those names — canonically the official apiKey plugin's `key`
+token`), so a plugin credential column outside those names — canonically the official apiKey plugin's `key`
       column, or any custom credential `additionalField` — is never classified `secret:`, and the framework's OWN KV406
       bridge suggestion emits it as an ordinary readable column.** (MED, framework/confidentiality-hardening;
       `pg-plugin-secret-classification` P2; split verify — REAL as a same-owner KV435 wire-serialization gap, REFUTED as
@@ -98,7 +98,7 @@ Line numbers cite that HEAD.
     listed by the attached-code audit. The relation is still reported writable, but the "attached to X via mechanism Y"
     context is lost.
   - Why it is only hygiene: domain DEFAULT evaluation enforces EXECUTE, so whenever it fires the writer holds EXECUTE
-    and `auditPostgresReachableRoutines` (`:1500-1542`) independently refuses the definer routine (KV433_REACHABLE_
+    and `auditPostgresReachableRoutines` (`:1500-1542`) independently refuses the definer routine (KV433*REACHABLE*
     ROUTINE, no allowlist). The gap is message-specificity + a latent risk IF the routine audit ever gained a vetted
     allowlist (the attached-code path would then be the only cover and it does not scan `pg_type`).
   - Acceptance: the attached-code default mechanism also scans `pg_type.typdefaultbin` (and exclusion-constraint
@@ -110,9 +110,9 @@ Line numbers cite that HEAD.
       (`{...snapshot.diagnosticQuery, text, values}`) into the driver call, vetted only by a submit/then property
       denylist — a strict reduction of the wire-carrier boundary strictness that held through followup-12, and a
       denylist-shaped allowlist over driver-surface fields.** (LOW, framework/defense-in-depth; `pg-scoped-carrier-
-      passthrough` P5; REFUTED as a fail-open — text/values last-wins + single-statement + RLS FORCE)
+    passthrough` P5; REFUTED as a fail-open — text/values last-wins + single-statement + RLS FORCE)
   - Observed: `managed-db.ts:1180-1195` `postgresQueryExecutionArgs` returns `{...snapshot.diagnosticQuery, text,
-    values}` for any record-shaped config; `assertPlainPostgresQueryConfigSafe` (`:1163-1178`) denies only own
+values}` for any record-shaped config; `assertPlainPostgresQueryConfigSafe` (`:1163-1178`) denies only own
     `submit`/`then` descriptors. Pre-commit body was `return [snapshot.text, [...snapshot.values], queryOptions]`. The
     sibling cross-owner/raw-read path still uses a clean `reconstructedDriverCarrier` (`:1691-1699`) — the framework
     knows the stricter posture.
@@ -143,5 +143,5 @@ Line numbers cite that HEAD.
   `internal.trusted-plaintext.test.ts`, `postgres-grant-shape-fuzzer.test.ts`, and `postgres-runtime.ts:1201-1543`
   first-hand. P2 (plugin secret denylist) confirmed at `internal.ts:976-987`; split verify (same-owner KV435 gap REAL,
   cross-user egress REFUTED) → hardening papercut. P5 confirmed at `managed-db.ts:1180-1195` vs `git show
-  476cc1782^:...`; refuted as a fail-open. Throwaway probes under `/Users/mini/kovo-dogfood-round17-apps/` — safe to
+476cc1782^:...`; refuted as a fail-open. Throwaway probes under `/Users/mini/kovo-dogfood-round17-apps/` — safe to
   delete. `/Users/mini/kovo` untouched; no servers left running.

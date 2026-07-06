@@ -652,7 +652,7 @@ importers:
   packages/test:
     dependencies:
       '@electric-sql/pglite':
-        specifier: ^0.5.1
+        specifier: 0.5.1
         version: 0.5.1
       '@kovojs/browser':
         specifier: workspace:*
