@@ -43,6 +43,7 @@
 ## Progress Discipline
 
 - For GitHub Actions workflow edits, follow `rules/github-workflows.md`.
+- For dependency, lockfile, or supply-chain edits, follow `rules/dependency-policy.md`.
 - For compiler behavior edits, follow `rules/compiler-hard-rules.md`.
 - For public API surface edits, follow `rules/api-surface.md`.
 - For authored public docs under `site/content/**/*.md`, follow `rules/docs-style.md`.
