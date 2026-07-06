@@ -60,6 +60,21 @@ export interface SourceSinkRuntimeEvidence {
   runtimeChokepoints: readonly SourceSinkRuntimeChokepoint[];
 }
 
+/** @internal DEC-E boundary-crossing mechanism taxonomy for C9 sink inventory. */
+export type BoundaryCrossingMechanism = 'reconstruct' | 'box' | 'own';
+
+/** @internal Canonical proof-surface row for C9 boundary-crossing sinks. */
+export interface BoundaryCrossingSinkInventoryEntry {
+  hostileValueEvidence: readonly string[];
+  inventoryFamily: SourceSinkInventoryEntry['sink'];
+  mechanism: BoundaryCrossingMechanism;
+  mechanismDetail: string;
+  proofEvidence: readonly string[];
+  sink: string;
+  soleDoor: string;
+  specAnchor: string;
+}
+
 const existingEvidence = {
   browserOutput: 'packages/browser/src/security-output.test.ts',
   browserSelector: 'packages/browser/src/inline-loader-fragment-target.test.ts',
@@ -97,6 +112,11 @@ export function sourceSinkRedCorpus(): readonly SourceSinkCorpusEntry[] {
 /** @internal */
 export function sourceSinkRuntimeEvidence(): SourceSinkRuntimeEvidence {
   return runtimeEvidence;
+}
+
+/** @internal */
+export function boundaryCrossingSinkInventory(): readonly BoundaryCrossingSinkInventoryEntry[] {
+  return boundaryCrossingInventory;
 }
 
 const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
@@ -711,3 +731,187 @@ const runtimeEvidence: SourceSinkRuntimeEvidence = {
     },
   ],
 };
+
+const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] = [
+  {
+    hostileValueEvidence: ['packages/server/src/managed-db.test.ts'],
+    inventoryFamily: 'sql.executable',
+    mechanism: 'reconstruct',
+    mechanismDetail:
+      'The managed SQL boundary snapshots every accepted statement carrier into one immutable statement artifact before validation, classification, instrumentation, and driver execution.',
+    proofEvidence: [
+      'packages/server/src/managed-db.test.ts',
+      'packages/core/src/internal/security-markers.test.ts',
+    ],
+    sink: 'db driver statement',
+    soleDoor: 'managed SQL statement snapshot + enforceManagedSql/managedDb engine policy',
+    specAnchor: 'spec/10-data-plane.md §10.3; spec/11-verification.md §11.2',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/server/src/wire-html.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    ],
+    inventoryFamily: 'transport.query.live.broadcast',
+    mechanism: 'reconstruct',
+    mechanismDetail:
+      'Framework wire helpers reconstruct fragment/query/error bodies from normalized values and escaped text instead of forwarding caller-owned body strings through privileged response paths.',
+    proofEvidence: [
+      'packages/server/src/wire-html.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    ],
+    sink: 'http response body',
+    soleDoor: 'emit-to-wire render helpers and typed error/body envelopes',
+    specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-verification.md §11.4',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/server/src/response-posture.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+    ],
+    inventoryFamily: 'http.header.cookie',
+    mechanism: 'own',
+    mechanismDetail:
+      'Typed response-header channels and finalization own header names, multi-value semantics, and control-character rejection.',
+    proofEvidence: [
+      'packages/server/src/response-posture.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+    ],
+    sink: 'http response headers',
+    soleDoor: 'finalizeResponseHeaders on the framework-owned header channel',
+    specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/server/src/response-posture.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
+    ],
+    inventoryFamily: 'url.navigation.selector',
+    mechanism: 'reconstruct',
+    mechanismDetail:
+      'Redirect targets are normalized back into same-origin path-form values before Location is emitted.',
+    proofEvidence: [
+      'packages/server/src/response-posture.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
+    ],
+    sink: 'redirect URL',
+    soleDoor: 'redirectLocationHeaderValue / sanitizeNext normalization before header finalization',
+    specAnchor: 'spec/09-wire-protocol.md §9.1; spec/10-data-plane.md §10.3',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/server/src/cookies.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+    ],
+    inventoryFamily: 'http.header.cookie',
+    mechanism: 'own',
+    mechanismDetail:
+      'Cookie values cross the boundary only through the typed cookie builder, which owns encoding and attribute serialization.',
+    proofEvidence: [
+      'packages/server/src/cookies.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+    ],
+    sink: 'Set-Cookie',
+    soleDoor: 'typed cookie builder + serializer on the Set-Cookie channel',
+    specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/core/src/storage.test.ts',
+      'packages/server/src/static-export-output.test.ts',
+    ],
+    inventoryFamily: 'file.storage.static-export',
+    mechanism: 'own',
+    mechanismDetail:
+      'Storage keys, file paths, and static-export outputs cross through framework-owned containment and reserved-reference gates.',
+    proofEvidence: [
+      'packages/core/src/storage.test.ts',
+      'packages/server/src/static-export-output.test.ts',
+    ],
+    sink: 'blob/file write',
+    soleDoor: 'storage adapter key validation + static export writer containment checks',
+    specAnchor: 'spec/11-verification.md §11.4; plans/sources-sinks.md Phase 2',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/server/src/task-observability.test.ts',
+      'packages/server/src/task-runner.test.ts',
+    ],
+    inventoryFamily: 'transport.query.live.broadcast',
+    mechanism: 'own',
+    mechanismDetail:
+      'Durable-task args and status payloads cross process/store boundaries through framework-owned queue envelopes and redaction-aware observability views.',
+    proofEvidence: [
+      'packages/server/src/task-observability.test.ts',
+      'packages/server/src/task-runner.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
+    ],
+    sink: 'durable-task payload',
+    soleDoor: 'task queue envelope + observability redaction/export helpers',
+    specAnchor: 'spec/09-wire-protocol.md §9.6; spec/11-verification.md §11.4',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/server/src/webhook.test.ts',
+      'tests/integration/specs/webhook-hmac.spec.ts',
+    ],
+    inventoryFamily: 'ingress.endpoint.webhook',
+    mechanism: 'own',
+    mechanismDetail:
+      'Webhook payload bytes remain framework-owned until verifier-before-parse and replay posture accept them.',
+    proofEvidence: [
+      'packages/server/src/webhook.test.ts',
+      'tests/integration/specs/webhook-hmac.spec.ts',
+    ],
+    sink: 'webhook payload',
+    soleDoor: 'webhook verifier-before-parse + replay-scoped dispatch',
+    specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-verification.md §11.4',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/browser/src/security-output.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    ],
+    inventoryFamily: 'html.dom.output',
+    mechanism: 'reconstruct',
+    mechanismDetail:
+      'Renderer and browser output helpers reconstruct HTML/DOM output from contextual encoders or explicit trustedHtml/trustedUrl escapes.',
+    proofEvidence: [
+      'packages/browser/src/security-output.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    ],
+    sink: 'HTML/render output',
+    soleDoor: 'escaped render pipeline + explicit trusted output escape hatches',
+    specAnchor: 'SPEC.md §4.8; spec/11-verification.md §11.4',
+  },
+  {
+    hostileValueEvidence: [
+      'packages/core/src/secret.test.ts',
+      'packages/server/src/task-observability.test.ts',
+      'packages/server/src/query-endpoint.test.ts',
+    ],
+    inventoryFamily: 'transport.query.live.broadcast',
+    mechanism: 'box',
+    mechanismDetail:
+      'Secret and redacted runtime boxes refuse accidental coercion and are normalized to redacted or empty error payloads before logs, status views, or wire-visible error shells.',
+    proofEvidence: [
+      'packages/core/src/secret.test.ts',
+      'packages/server/src/task-observability.test.ts',
+      'packages/server/src/query-endpoint.test.ts',
+    ],
+    sink: 'log/error output',
+    soleDoor: 'Secret/redacted boxes plus normalized error shell emitters',
+    specAnchor: 'spec/10-data-plane.md §10.3; spec/11-verification.md §11.2',
+  },
+  {
+    hostileValueEvidence: ['packages/server/src/task-runner.test.ts'],
+    inventoryFamily: 'dynamic.import.process',
+    mechanism: 'own',
+    mechanismDetail:
+      'Outbound network requests use the framework allowlist choke instead of arbitrary request-authored fetch targets on privileged task/runtime surfaces.',
+    proofEvidence: ['packages/server/src/task-runner.test.ts'],
+    sink: 'outbound egress request',
+    soleDoor: 'framework egress allowlist choke on ctx.fetch and equivalent owned egress surfaces',
+    specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
+  },
+] as const;

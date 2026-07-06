@@ -13,13 +13,22 @@ export type SecurityCodeEnforcement =
 /** @internal Reviewed dependency axis from fundamental-fixes-followup-5 DEC-B. */
 export type SecurityCodePropertyDependency = 'build-artifact' | 'request-state' | 'concurrency';
 
+/** @internal Boundary proof classification for runtime or provenance-backed security codes. */
+export type SecurityBoundaryProof =
+  | 'engine-enumerated-door'
+  | 'framework-owned-door'
+  | 'boxed-egress'
+  | 'static-provenance';
+
 /** @internal Hand-maintained security-code registry entry (SPEC §6.6, §10.3, §11.2). */
 interface BaseSecurityCodeRegistryEntry {
+  readonly boundaryProof?: SecurityBoundaryProof;
   readonly code: string;
   readonly property: string;
 }
 
 interface BuildOnlySecurityCodeRegistryEntry extends BaseSecurityCodeRegistryEntry {
+  readonly boundaryProof?: never;
   readonly buildOnlyRationale: string;
   readonly enforcement: 'build-only';
   readonly propertyDependsOn: 'build-artifact';
@@ -51,6 +60,7 @@ export type SecurityCodeRegistryEntry =
  */
 export const SECURITY_CODE_REGISTRY = {
   KV406: {
+    boundaryProof: 'framework-owned-door',
     chokeId: 'server.sql.write-table-allowlist',
     code: 'KV406',
     enforcement: 'runtime-choke',
@@ -114,6 +124,7 @@ export const SECURITY_CODE_REGISTRY = {
     propertyDependsOn: 'build-artifact',
   },
   KV414: {
+    boundaryProof: 'engine-enumerated-door',
     code: 'KV414',
     enforcement: 'runtime-choke',
     property:
@@ -121,6 +132,7 @@ export const SECURITY_CODE_REGISTRY = {
     propertyDependsOn: 'request-state',
   },
   KV415: {
+    boundaryProof: 'framework-owned-door',
     chokeId: 'server.response.emit-to-wire',
     code: 'KV415',
     enforcement: 'runtime-choke',
@@ -176,6 +188,7 @@ export const SECURITY_CODE_REGISTRY = {
     propertyDependsOn: 'build-artifact',
   },
   KV422: {
+    boundaryProof: 'framework-owned-door',
     chokeId: 'server.sql.enforce-managed-sql',
     code: 'KV422',
     enforcement: 'runtime-choke',
@@ -209,6 +222,7 @@ export const SECURITY_CODE_REGISTRY = {
     propertyDependsOn: 'build-artifact',
   },
   KV428: {
+    boundaryProof: 'framework-owned-door',
     code: 'KV428',
     enforcement: 'by-construction',
     property: 'Upload inline rendering requires a branded server-side safety opt-in.',
@@ -243,6 +257,7 @@ export const SECURITY_CODE_REGISTRY = {
     propertyDependsOn: 'request-state',
   },
   KV433: {
+    boundaryProof: 'framework-owned-door',
     chokeId: 'server.sql.read-only-statement',
     code: 'KV433',
     enforcement: 'runtime-choke',
@@ -256,6 +271,7 @@ export const SECURITY_CODE_REGISTRY = {
     propertyDependsOn: 'request-state',
   },
   KV435: {
+    boundaryProof: 'boxed-egress',
     chokeId: 'server.response.emit-to-wire',
     code: 'KV435',
     enforcement: 'runtime-choke',
@@ -280,10 +296,12 @@ export const SECURITY_CODE_REGISTRY = {
     propertyDependsOn: 'build-artifact',
   },
   KV438: {
+    boundaryProof: 'static-provenance',
     code: 'KV438',
     enforcement: 'by-construction',
     paranoidAdvisory: true,
-    property: 'Governed-column writes bind only declared server-derived or audited values.',
+    property:
+      'Governed-column writes bind only declared server-derived or audited values through static provenance at the managed write boundary, never a runtime proxy-only check.',
     propertyDependsOn: 'request-state',
   },
   KV439: {
