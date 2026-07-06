@@ -168,6 +168,11 @@ interface PostgresAttachedCodeRow {
   routine_schema: string;
 }
 
+interface PostgresWritePropagationClosureRow {
+  relation_name: string;
+  relation_schema: string;
+}
+
 interface PostgresUnexpectedPrivilegeRow {
   object_kind: string;
   object_name: string;
@@ -1141,20 +1146,30 @@ async function auditPostgresReachableClosure(
       detail: `${relation.schema}.${relation.table} is reachable by an app role with unsupported relkind ${relation.relkind}`,
     });
   }
-  issues.push(...(await auditPostgresAttachedCode(client, reachable)));
+  issues.push(...(await auditPostgresAttachedCode(client, reachable, input.config)));
   return issues;
 }
 
 async function auditPostgresAttachedCode(
   client: RuntimeSqlClient,
   reachable: ReadonlyMap<string, PostgresReachableRelation>,
+  config: ResolvedPostgresRuntimeConfig,
 ): Promise<KovoPostgresPostureIssue[]> {
-  const writableRelations = new Set(
-    [...reachable.values()]
-      .filter((relation) => postgresRelationIsWritable(relation))
-      .map((relation) => postgresRelationKey(relation.schema, relation.table)),
+  const writableRelations = [...reachable.values()].filter((relation) =>
+    postgresRelationIsWritable(relation),
   );
-  if (writableRelations.size === 0) return [];
+  if (writableRelations.length === 0) return [];
+  const writeClosure = await postgresWritePropagationClosure(client, config);
+  if (writeClosure === undefined) {
+    return [
+      {
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail:
+          'could not enumerate structural write-propagation closure for app-role-reachable attached code',
+      },
+    ];
+  }
+  if (writeClosure.size === 0) return [];
 
   const attachedRows = await safeQuery<PostgresAttachedCodeRow>(
     client,
@@ -1247,13 +1262,85 @@ async function auditPostgresAttachedCode(
     ];
   }
   return attachedRows.rows
-    .filter((row) =>
-      writableRelations.has(postgresRelationKey(row.relation_schema, row.relation_name)),
-    )
+    .filter((row) => writeClosure.has(postgresRelationKey(row.relation_schema, row.relation_name)))
     .map((row) => ({
       code: 'KV433_ATTACHED_CODE',
       detail: `${row.relation_schema}.${row.relation_name} has ${row.mechanism} reaching app-authored routine ${row.routine_schema}.${row.routine_name}; attached code is app-role-reachable through writable relation side effects (SPEC §10.3)`,
     }));
+}
+
+async function postgresWritePropagationClosure(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<ReadonlySet<string> | undefined> {
+  const closureRows = await safeQuery<PostgresWritePropagationClosureRow>(
+    client,
+    [
+      'WITH RECURSIVE app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      '),',
+      'direct_writable(oid) AS (',
+      '  SELECT DISTINCT c.oid',
+      '  FROM pg_class c',
+      '  JOIN pg_namespace n ON n.oid = c.relnamespace',
+      '  JOIN existing_roles r ON true',
+      "  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
+      "  AND c.relkind IN ('r', 'p', 'v', 'm', 'f')",
+      '  AND (',
+      "    has_table_privilege(r.oid, c.oid, 'INSERT')",
+      "    OR has_table_privilege(r.oid, c.oid, 'UPDATE')",
+      "    OR has_table_privilege(r.oid, c.oid, 'DELETE')",
+      '    OR EXISTS (',
+      '      SELECT 1 FROM pg_attribute a',
+      '      WHERE a.attrelid = c.oid',
+      '      AND a.attnum > 0',
+      '      AND NOT a.attisdropped',
+      "      AND (has_column_privilege(r.oid, c.oid, a.attname, 'INSERT')",
+      "        OR has_column_privilege(r.oid, c.oid, a.attname, 'UPDATE'))",
+      '    )',
+      '  )',
+      '),',
+      'propagation_edges(source_oid, target_oid) AS (',
+      '  SELECT constraint_row.confrelid, constraint_row.conrelid',
+      '  FROM pg_constraint constraint_row',
+      "  WHERE constraint_row.contype = 'f'",
+      "  AND (constraint_row.confdeltype IN ('c', 'n', 'd')",
+      "    OR constraint_row.confupdtype IN ('c', 'n', 'd'))",
+      '  UNION',
+      '  SELECT inherits.inhparent, inherits.inhrelid',
+      '  FROM pg_inherits inherits',
+      '  UNION',
+      '  SELECT rewrite.ev_class, dep.refobjid',
+      '  FROM pg_rewrite rewrite',
+      "  JOIN pg_depend dep ON dep.classid = 'pg_rewrite'::regclass AND dep.objid = rewrite.oid",
+      "    AND dep.refclassid = 'pg_class'::regclass",
+      '  JOIN pg_class target_rel ON target_rel.oid = dep.refobjid',
+      "  WHERE target_rel.relkind IN ('r', 'p', 'v', 'm', 'f')",
+      '  AND dep.refobjid <> rewrite.ev_class',
+      '),',
+      'closure(oid) AS (',
+      '  SELECT oid FROM direct_writable',
+      '  UNION',
+      '  SELECT propagation_edges.target_oid',
+      '  FROM closure',
+      '  JOIN propagation_edges ON propagation_edges.source_oid = closure.oid',
+      ')',
+      'SELECT DISTINCT n.nspname AS relation_schema, c.relname AS relation_name',
+      'FROM closure',
+      'JOIN pg_class c ON c.oid = closure.oid',
+      'JOIN pg_namespace n ON n.oid = c.relnamespace',
+      "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'ORDER BY n.nspname, c.relname',
+    ].join(' '),
+    [config.readerRole, config.writerRole, config.adminRole, config.systemRole],
+  );
+  if (closureRows === undefined) return undefined;
+  return new Set(
+    closureRows.rows.map((row) => postgresRelationKey(row.relation_schema, row.relation_name)),
+  );
 }
 
 function postgresRelationIsWritable(relation: PostgresReachableRelation): boolean {
