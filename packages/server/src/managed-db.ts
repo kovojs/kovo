@@ -21,7 +21,7 @@ import {
   wrapManagedDbForSqlSafety,
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
-import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
+import { snapshotManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
@@ -1609,9 +1609,8 @@ function rawReadCapability(
     if (policy.executeSql !== undefined) {
       return policy.executeSql(carrier) as Promise<Row[]> | Row[];
     }
-    const executionTarget = frameworkManagedDbRawTarget(target) ?? target;
-    const method = rawReadExecutionMethod(executionTarget, policy);
-    return method.call(executionTarget, { text: carrier.text, values: [...carrier.params] }) as
+    const method = rawReadExecutionMethod(target, policy);
+    return method.call(target, reconstructedDriverCarrier(carrier, 'rawRead')) as
       | Promise<Row[]>
       | Row[];
   };
@@ -1652,12 +1651,22 @@ function crossOwnerReadCapability(
     if (policy.executeSql !== undefined) {
       return policy.executeSql(carrier) as Promise<Row[]> | Row[];
     }
-    const executionTarget = frameworkManagedDbRawTarget(policy.adminClient) ?? policy.adminClient;
-    const method = rawReadExecutionMethod(executionTarget, policy);
-    return method.call(executionTarget, { text: carrier.text, values: [...carrier.params] }) as
-      | Promise<Row[]>
-      | Row[];
+    const method = rawReadExecutionMethod(policy.adminClient, policy);
+    return method.call(
+      policy.adminClient,
+      reconstructedDriverCarrier(carrier, 'crossOwnerRead'),
+    ) as Promise<Row[]> | Row[];
   };
+}
+
+function reconstructedDriverCarrier(
+  carrier: SqlCarrier,
+  boundary: 'crossOwnerRead' | 'rawRead',
+): { readonly text: string; readonly values: readonly unknown[] } {
+  return stampTrustedSql(
+    { text: carrier.text, values: [...carrier.params] },
+    `framework reconstructed ${boundary} SQL carrier (SPEC §10.3)`,
+  );
 }
 
 function assertRawReadDeclaration(declaration: RawReadDeclaration): void {

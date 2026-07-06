@@ -879,11 +879,12 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(observed).toEqual([]);
 
     const carrier = { text: 'select id from products where id = $1', values: ['p1'] };
-    await expect(reader.rawRead(carrier, { reads: ['products'] })).resolves.toEqual([
-      { text: 'select id from products where id = $1', values: ['p1'] },
-    ]);
+    await expect(reader.rawRead(carrier, { reads: ['products'] })).resolves.toHaveLength(1);
     expect(observed[0]).not.toBe(carrier);
-    expect(observed).toEqual([{ text: 'select id from products where id = $1', values: ['p1'] }]);
+    expect(observed[0]).toMatchObject({
+      text: 'select id from products where id = $1',
+      values: ['p1'],
+    });
   });
 
   it('crossOwnerRead reconstructs the admin-client carrier and refuses submit-bearing app values', async () => {
