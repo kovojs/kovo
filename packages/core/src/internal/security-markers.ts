@@ -276,7 +276,7 @@ export const SECURITY_CODE_REGISTRY = {
     code: 'KV435',
     enforcement: 'runtime-choke',
     property:
-      'Confidentiality: runtime Secret values cannot cross client-readable wire egress; Postgres secret columns are engine-unreadable only under a least-privilege runtime, a classified role-attribute allowlist over the runtime-login/assumable-role closure, and engine-closure-audited reachable objects at the engine choke, while SQLite is experimental/non-guaranteeing and relies on runtime boxes.',
+      'Confidentiality: runtime Secret values cannot cross client-readable wire egress; Postgres secret columns are engine-unreadable only under a least-privilege runtime, a classified role-attribute allowlist plus a predefined-role-membership allowlist over the runtime-login/assumable-role closure, and engine-closure-audited reachable objects at the engine choke, while SQLite is experimental/non-guaranteeing and relies on runtime boxes.',
     propertyDependsOn: 'request-state',
   },
   KV436: {

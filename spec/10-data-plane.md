@@ -230,11 +230,22 @@ engine edges, and a property set is an allowlist of the minimal safe members. Th
 audit closes directly writable relations over structural write-propagation edges: FK referential
 actions, partition/inheritance routing, and rewrite-rule redirects that can route app-role writes.
 The runtime identity audit checks the runtime login plus the complete `pg_has_role(..., MEMBER)`
-assumable-role closure against the classified role-attribute allowlist: `rolsuper`, `rolbypassrls`,
-`rolreplication`, `rolcreaterole`, and `rolcreatedb` MUST be false, while benign role metadata is
-classified explicitly and future unclassified `pg_roles` role-attribute columns fail closed. The
-SECURITY DEFINER routine and attached-code audits use that same login-plus-assumable identity set
-for execution reachability. The auth non-egress proof enumerates the request-reachable
+assumable-role closure against **two** allowlists that jointly range the complete escalation surface,
+which is role ATTRIBUTES ∪ predefined-role MEMBERSHIP: (i) the classified role-attribute allowlist —
+`rolsuper`, `rolbypassrls`, `rolreplication`, `rolcreaterole`, and `rolcreatedb` MUST be false, while
+benign role metadata is classified explicitly and future unclassified `pg_roles` role-attribute
+columns fail closed; and (ii) an allowlist over PostgreSQL predefined-role membership — the login and
+every assumable role may be a member of only the framework's own roles plus an explicit benign
+don't-care set, so membership in any `pg_*` predefined role outside that allowlist (e.g.
+`pg_execute_server_program` ⇒ `COPY … FROM PROGRAM` OS command execution,
+`pg_read_all_data`/`pg_write_all_data`, `pg_read_server_files`/`pg_write_server_files`, `pg_monitor`,
+`pg_maintain`) is refused and named. The predefined-role allowlist is required because predefined
+roles carry NONE of the five elevated role attributes and would otherwise pass the attribute
+allowlist unflagged; predefined roles are detected by the reserved `pg_` name prefix and the
+< `FirstNormalObjectId` (16384) system-OID range and surfaced through the same `MEMBER` closure. As
+an allowlist (member-of-only-known-safe, not a denylist of known-bad roles), a new `pg_*` predefined
+role in a future PostgreSQL release fails closed by default. The SECURITY DEFINER routine and
+attached-code audits use that same login-plus-assumable identity set for execution reachability. The auth non-egress proof enumerates the request-reachable
 secret-handling surface and boxes or confines each path; it MUST NOT use a named file as a proxy for
 that surface.
 
@@ -262,8 +273,10 @@ pre-created roles does not relax verification: provision/check/boot MUST verify 
 existence and runtime membership edges, fail before partial DDL when a required adopted role is
 missing, and refuse configurations where the ordinary runtime login can assume privileged
 admin/system roles outside framework-owned scoped clients. The runtime login and every role it can
-assume through the `MEMBER` closure MUST have only the classified minimal-safe role attributes;
-unknown role-attribute columns fail closed until classified.
+assume through the `MEMBER` closure MUST have only the classified minimal-safe role attributes AND
+must be a member of only framework-owned roles plus an explicit benign don't-care set; unknown
+role-attribute columns and non-allowlisted `pg_*` predefined-role memberships (C10/C11) both fail
+closed until classified.
 
 The closure audit is side-effect-inclusive. Attached code is reachable when the app role can reach
 it by direct `EXECUTE`, DML trigger, rewrite rule, `CHECK`/domain constraint function,
