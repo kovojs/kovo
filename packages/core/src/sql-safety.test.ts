@@ -134,6 +134,42 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     ).toBe(true);
   });
 
+  it('rejects submit-bearing and thenable carriers before snapshotting driver surface', () => {
+    for (const carrier of [
+      {
+        submit() {
+          throw new Error('out-of-band submit');
+        },
+        text: 'select * from products where id = $1',
+        values: ['p1'],
+      },
+      {
+        text: 'select * from products where id = $1',
+        then() {
+          throw new Error('out-of-band then');
+        },
+        values: ['p1'],
+      },
+      Object.assign(
+        Object.create({
+          then() {
+            throw new Error('inherited then');
+          },
+        }),
+        {
+          text: 'select * from products where id = $1',
+          values: ['p1'],
+        },
+      ),
+    ]) {
+      const result = validateManagedSqlStatement(carrier);
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/KV422/);
+      expect(result.message).toMatch(/SPEC §10\.3/);
+      expect(snapshotManagedSqlStatement(carrier).ok).toBe(false);
+    }
+  });
+
   it('does not accept bind-marker lookalikes inside SQL strings or comments', () => {
     expect(
       validateManagedSqlStatement({

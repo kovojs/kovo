@@ -886,6 +886,7 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
       text: sqlTextFromValue(value) ?? snapshot.statement.text,
     };
   }
+  if (snapshot.message !== undefined) throw new Error(snapshot.message);
   const toSQL = (value as { toSQL?: unknown }).toSQL;
   if (typeof toSQL === 'function') {
     try {
@@ -1121,6 +1122,9 @@ function postgresQuerySnapshot(
   if (typeof query === 'string') return { text: query, values: params ?? [] };
   const snapshot = snapshotManagedSqlStatement(query, 'postgres');
   if (snapshot.ok) return snapshot.statement;
+  if (snapshot.message !== undefined) {
+    throw new KovoReadonlyHandleError(`KV414: ${snapshot.message}`);
+  }
   const config = plainPostgresQueryConfigSnapshot(query, params);
   if (config !== undefined) return config;
   throw new KovoReadonlyHandleError(
@@ -1130,7 +1134,6 @@ function postgresQuerySnapshot(
 
 type PostgresQuerySnapshot = {
   diagnosticQuery?: unknown;
-  driverQuery?: unknown;
   text: string;
   values: readonly unknown[];
 };
@@ -1150,30 +1153,13 @@ function plainPostgresQueryConfigSnapshot(
   return {
     diagnosticQuery: query,
     ...snapshot,
-    driverQuery: postgresDriverQueryConfig(query, snapshot),
   };
-}
-
-function postgresDriverQueryConfig(
-  query: Record<PropertyKey, unknown>,
-  snapshot: { text: string; values: readonly unknown[] },
-): Record<string, unknown> {
-  const config: Record<string, unknown> = {};
-  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(query))) {
-    if (!('value' in descriptor)) continue;
-    config[key] = descriptor.value;
-  }
-  delete config.sql;
-  config.text = snapshot.text;
-  config.values = [...snapshot.values];
-  return config;
 }
 
 function postgresQueryExecutionArgs(
   snapshot: PostgresQuerySnapshot,
   queryOptions: unknown,
 ): [unknown, unknown[] | undefined, unknown] {
-  if (snapshot.driverQuery !== undefined) return [snapshot.driverQuery, undefined, queryOptions];
   return [snapshot.text, [...snapshot.values], queryOptions];
 }
 
@@ -1237,12 +1223,11 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
       cleaned += ' ';
       continue;
     }
-    if (char === "'" || char === '"') {
-      const quote = char;
+    if (char === "'") {
       cleaned += ' ';
       for (index += 1; index < sql.length; index += 1) {
-        if (sql.charAt(index) === quote) {
-          if (sql.charAt(index + 1) === quote) {
+        if (sql.charAt(index) === "'") {
+          if (sql.charAt(index + 1) === "'") {
             index += 1;
             continue;
           }
@@ -1251,6 +1236,13 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
       }
       if (index >= sql.length) return { ok: false, reason: 'unterminated quoted literal' };
       cleaned += ' ';
+      continue;
+    }
+    if (char === '"') {
+      const quoted = scanSqlDoubleQuotedIdentifier(sql, index);
+      if (quoted === undefined) return { ok: false, reason: 'unterminated quoted identifier' };
+      cleaned += quoted.identifier;
+      index = quoted.endIndex;
       continue;
     }
     if (char === '$') {
@@ -1295,6 +1287,29 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
     return { ok: false, reason: 'app SQL cannot change framework transaction settings' };
   }
   return { command, ok: true };
+}
+
+function scanSqlDoubleQuotedIdentifier(
+  sql: string,
+  startIndex: number,
+): { endIndex: number; identifier: string } | undefined {
+  let identifier = '';
+  for (let index = startIndex + 1; index < sql.length; index += 1) {
+    const char = sql.charAt(index);
+    if (char === '"') {
+      if (sql.charAt(index + 1) === '"') {
+        identifier += '"';
+        index += 1;
+        continue;
+      }
+      return {
+        endIndex: index,
+        identifier: /^[A-Za-z_][A-Za-z0-9_]*$/u.test(identifier) ? identifier : ' ',
+      };
+    }
+    identifier += char;
+  }
+  return undefined;
 }
 
 function appPostgresTransactionControlShape(
@@ -1594,8 +1609,11 @@ function rawReadCapability(
     if (policy.executeSql !== undefined) {
       return policy.executeSql(carrier) as Promise<Row[]> | Row[];
     }
-    const method = rawReadExecutionMethod(target, policy);
-    return method.call(target, statement) as Promise<Row[]> | Row[];
+    const executionTarget = frameworkManagedDbRawTarget(target) ?? target;
+    const method = rawReadExecutionMethod(executionTarget, policy);
+    return method.call(executionTarget, { text: carrier.text, values: [...carrier.params] }) as
+      | Promise<Row[]>
+      | Row[];
   };
 }
 
@@ -1634,8 +1652,11 @@ function crossOwnerReadCapability(
     if (policy.executeSql !== undefined) {
       return policy.executeSql(carrier) as Promise<Row[]> | Row[];
     }
-    const method = rawReadExecutionMethod(policy.adminClient, policy);
-    return method.call(policy.adminClient, statement) as Promise<Row[]> | Row[];
+    const executionTarget = frameworkManagedDbRawTarget(policy.adminClient) ?? policy.adminClient;
+    const method = rawReadExecutionMethod(executionTarget, policy);
+    return method.call(executionTarget, { text: carrier.text, values: [...carrier.params] }) as
+      | Promise<Row[]>
+      | Row[];
   };
 }
 
