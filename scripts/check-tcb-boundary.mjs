@@ -9,6 +9,17 @@ import { collectFiles, collectSourceFiles, productionSourceRoots } from './lib/s
 
 export const repoRoot = findRepoRoot();
 export const defaultManifestPath = 'security/TCB.md';
+export const defaultLockfilePath = 'pnpm-lock.yaml';
+export const dependencySurfaceManifestBuckets = ['dependencies', 'devDependencies'];
+export const dependencySurfaceRequiredFields = [
+  'id',
+  'surface',
+  'dependency',
+  'packageJson',
+  'pinnedVersion',
+  'guarantee',
+  'reviewTrigger',
+];
 export const tcbClassification = 'tcb';
 export const generatedTemplateRoots = ['packages/create-kovo/templates'];
 export const legacyGeneratedTemplateDecisionFiles = new Set();
@@ -170,6 +181,16 @@ export function checkTcbBoundary(options = {}) {
       readText,
       sourceFiles,
       templateRoots: options.templateRoots ?? generatedTemplateRoots,
+    }),
+  );
+
+  findings.push(
+    ...collectTrustedDependencySurfaceFindings({
+      exists,
+      lockfilePath: options.lockfilePath ?? defaultLockfilePath,
+      manifestPath,
+      readText,
+      surfaces: manifest.trustedDependencySurfaces ?? [],
     }),
   );
 
@@ -373,7 +394,111 @@ function validateManifestShape(manifest, manifestPath) {
       findings.push(`${manifestPath}: ${label}.wrapper ${entry.wrapper} is not recognized`);
     }
   }
+
+  const surfaces = Array.isArray(manifest?.trustedDependencySurfaces)
+    ? manifest.trustedDependencySurfaces
+    : [];
+  if (
+    manifest?.trustedDependencySurfaces !== undefined &&
+    !Array.isArray(manifest.trustedDependencySurfaces)
+  ) {
+    findings.push(`${manifestPath}: trustedDependencySurfaces must be an array when present`);
+  }
+  for (const [index, surface] of surfaces.entries()) {
+    const label =
+      typeof surface?.id === 'string' ? surface.id : `trustedDependencySurfaces[${index}]`;
+    for (const field of dependencySurfaceRequiredFields) {
+      if (typeof surface?.[field] !== 'string' || surface[field] === '') {
+        findings.push(`${manifestPath}: ${label}.${field} must be a non-empty string`);
+      }
+    }
+  }
   return findings;
+}
+
+export function collectTrustedDependencySurfaceFindings({
+  exists,
+  lockfilePath = defaultLockfilePath,
+  manifestPath = defaultManifestPath,
+  readText,
+  surfaces = [],
+}) {
+  const findings = [];
+  if (surfaces.length === 0) return findings;
+
+  let lockfileText;
+  if (!exists(lockfilePath)) {
+    findings.push(
+      `${manifestPath}: trustedDependencySurfaces requires ${lockfilePath} but it is missing`,
+    );
+  } else {
+    lockfileText = readText(lockfilePath);
+  }
+
+  const packageJsonCache = new Map();
+  const seenIds = new Set();
+  for (const surface of surfaces) {
+    if (seenIds.has(surface.id)) {
+      findings.push(`${manifestPath}: duplicate trustedDependencySurfaces id ${surface.id}`);
+    }
+    seenIds.add(surface.id);
+
+    const { dependency, packageJson, pinnedVersion } = surface;
+    if (!exists(packageJson)) {
+      findings.push(
+        `${manifestPath}: trustedDependencySurfaces ${surface.id} packageJson ${packageJson} is missing`,
+      );
+      continue;
+    }
+
+    let manifestJson = packageJsonCache.get(packageJson);
+    if (manifestJson === undefined) {
+      try {
+        manifestJson = JSON.parse(readText(packageJson));
+      } catch {
+        manifestJson = null;
+      }
+      packageJsonCache.set(packageJson, manifestJson);
+    }
+    if (!manifestJson) {
+      findings.push(
+        `${packageJson}: trustedDependencySurfaces ${surface.id} packageJson is not valid JSON`,
+      );
+      continue;
+    }
+
+    const declaredSpecifiers = dependencySurfaceManifestBuckets
+      .map((bucket) => manifestJson[bucket]?.[dependency])
+      .filter((value) => typeof value === 'string');
+    if (declaredSpecifiers.length === 0) {
+      findings.push(
+        `${packageJson}: trustedDependencySurfaces ${surface.id} names dependency ${dependency} but it is not declared there`,
+      );
+    }
+    for (const specifier of declaredSpecifiers) {
+      if (specifier !== pinnedVersion) {
+        findings.push(
+          `${packageJson}: ${dependency} must be exact-pinned to ${pinnedVersion} for TCB surface ${surface.id} but is declared as ${specifier}`,
+        );
+      }
+    }
+
+    if (lockfileText !== undefined && !lockfileHasResolvedVersion(lockfileText, dependency, pinnedVersion)) {
+      findings.push(
+        `${lockfilePath}: TCB surface ${surface.id} pins ${dependency}@${pinnedVersion} but the lockfile has no resolved package at that version`,
+      );
+    }
+  }
+  return findings;
+}
+
+function lockfileHasResolvedVersion(lockfileText, dependency, version) {
+  const key = escapeRegExp(`${dependency}@${version}`);
+  return new RegExp(`^  '?${key}(?::|'|\\()`, 'mu').test(lockfileText);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 function collectPlannedEntryEnrollmentFindings({

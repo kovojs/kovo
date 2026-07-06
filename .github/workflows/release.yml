@@ -52,7 +52,7 @@ jobs:
         with:
           node-version: 24.18.0
 
-      - run: vp install
+      - run: vp install --frozen-lockfile
 
       - name: Ensure trusted-publishing npm CLI
         run: npm install -g npm@11.6.4

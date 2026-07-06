@@ -8,6 +8,7 @@ function manifestWithOptions({
   budgets = { entryMaxLines: 20, totalTcbMaxLines: 50 },
   entries,
   plannedEntries,
+  trustedDependencySurfaces,
 }) {
   return `# Test TCB
 
@@ -17,6 +18,7 @@ ${JSON.stringify(
     schema: 'kovo.security.tcb/v1',
     source: 'test',
     budgets,
+    ...(trustedDependencySurfaces === undefined ? {} : { trustedDependencySurfaces }),
     ...(plannedEntries === undefined ? {} : { plannedEntries }),
     entries,
   },
@@ -45,6 +47,7 @@ function run(files, entries, options = {}) {
       budgets: options.budgets,
       entries,
       plannedEntries: options.plannedEntries,
+      trustedDependencySurfaces: options.trustedDependencySurfaces,
     }),
     ...files,
   };
@@ -55,6 +58,19 @@ function run(files, entries, options = {}) {
     repoRoot: '/repo',
     sourceFiles: Object.keys(all).filter((file) => file.endsWith('.ts')),
   });
+}
+
+function surface(overrides = {}) {
+  return {
+    dependency: 'pg',
+    guarantee: 'node-pg binds values out-of-band.',
+    id: 'dep.node-pg.query-parameterization',
+    packageJson: 'packages/server/package.json',
+    pinnedVersion: '8.22.0',
+    reviewTrigger: 'Re-confirm parameterization on any pg bump.',
+    surface: 'node-pg query parameterization',
+    ...overrides,
+  };
 }
 
 describe('check-tcb-boundary', () => {
@@ -337,5 +353,108 @@ export function boxSecretReadRows(rows) {
     }
 
     expect(collectTcbBoundarySourceFiles(root)).toEqual([template, server]);
+  });
+
+  it('accepts a trusted dependency surface pinned in package.json and the lockfile', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/server/package.json': JSON.stringify({ dependencies: { pg: '8.22.0' } }),
+        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+      },
+      [entry({ kind: 'function' })],
+      { trustedDependencySurfaces: [surface()] },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects a trusted dependency surface declared with a caret range', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/server/package.json': JSON.stringify({ dependencies: { pg: '^8.22.0' } }),
+        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+      },
+      [entry({ kind: 'function' })],
+      { trustedDependencySurfaces: [surface()] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'pg must be exact-pinned to 8.22.0 for TCB surface dep.node-pg.query-parameterization but is declared as ^8.22.0',
+    );
+  });
+
+  it('rejects a trusted dependency surface whose pin has drifted from the lockfile', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/server/package.json': JSON.stringify({ dependencies: { pg: '8.99.0' } }),
+        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+      },
+      [entry({ kind: 'function' })],
+      { trustedDependencySurfaces: [surface({ pinnedVersion: '8.99.0' })] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'TCB surface dep.node-pg.query-parameterization pins pg@8.99.0 but the lockfile has no resolved package at that version',
+    );
+  });
+
+  it('rejects a trusted dependency surface whose dependency is not declared', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/server/package.json': JSON.stringify({ dependencies: { undici: '7.28.0' } }),
+        'pnpm-lock.yaml': "packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n",
+      },
+      [entry({ kind: 'function' })],
+      { trustedDependencySurfaces: [surface()] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'names dependency pg but it is not declared there',
+    );
+  });
+
+  it('matches scoped lockfile package keys for a trusted dependency surface', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/server/package.json': JSON.stringify({
+          dependencies: { '@node-rs/argon2': '2.0.2' },
+        }),
+        'pnpm-lock.yaml': "packages:\n  '@node-rs/argon2@2.0.2':\n    resolution: {integrity: sha}\n",
+      },
+      [entry({ kind: 'function' })],
+      {
+        trustedDependencySurfaces: [
+          surface({
+            dependency: '@node-rs/argon2',
+            id: 'dep.argon2.password-hashing',
+            pinnedVersion: '2.0.2',
+            surface: 'argon2 password hashing',
+          }),
+        ],
+      },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('requires trusted dependency surface fields to be non-empty strings', () => {
+    const result = run(
+      { 'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }' },
+      [entry({ kind: 'function' })],
+      { trustedDependencySurfaces: [surface({ guarantee: '' })] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'dep.node-pg.query-parameterization.guarantee must be a non-empty string',
+    );
   });
 });

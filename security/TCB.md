@@ -21,6 +21,23 @@ Entries classified as `tcb` count toward the size budget. Entries classified as
 listed so branded security-decision wrappers cannot appear without a manifest classification, but
 they are not claimed as the verified TCB.
 
+## Trusted dependency surfaces
+
+The `trustedDependencySurfaces` section names the third-party dependency *behaviors* that Kovo's
+security guarantees rest on (plan `plans/threat-matrix-plan.md` M6). Kovo does not audit these
+dependencies' internals; instead it pins them to an exact version and records which guarantee each
+surface underpins so that any version bump touching the surface is a deliberate review trigger, not
+a silent transitive change. Each surface records `{ dependency, packageJson, pinnedVersion,
+guarantee, reviewTrigger }`.
+
+This section is enforced by `check:tcb-boundary` (`scripts/check-tcb-boundary.mjs`): for every
+surface the gate fails if the named `dependency` is not declared in `packageJson`, if its declared
+specifier is not exactly `pinnedVersion` (a caret/range or a drifted pin fails), or if
+`pnpm-lock.yaml` has no resolved package at `dependency@pinnedVersion`. What the gate does **not**
+verify is the dependency's *actual runtime behavior* (that node-pg really parameterizes, that
+Postgres/PGlite really enforce RLS, that Better Auth/argon2 hashing parameters are sound) — that
+review remains manual and is the point of the `reviewTrigger`. See `rules/dependency-policy.md`.
+
 ```json tcb-manifest
 {
   "schema": "kovo.security.tcb/v1",
@@ -29,6 +46,71 @@ they are not claimed as the verified TCB.
     "entryMaxLines": 150,
     "totalTcbMaxLines": 1000
   },
+  "trustedDependencySurfaces": [
+    {
+      "id": "dep.node-pg.query-parameterization",
+      "surface": "node-pg query parameterization",
+      "dependency": "pg",
+      "packageJson": "packages/server/package.json",
+      "pinnedVersion": "8.22.0",
+      "guarantee": "Data-plane query values travel as bound parameters over the extended-query protocol and are never interpolated into SQL text, so app-supplied values cannot escape a value position (SPEC §10.3 confidentiality/integrity).",
+      "reviewTrigger": "Any bump of pg must re-confirm the node-postgres parameterized/extended-query path still binds values out-of-band before merging."
+    },
+    {
+      "id": "dep.drizzle.sql-generation-parameterization",
+      "surface": "Drizzle SQL-generation parameterization",
+      "dependency": "drizzle-orm",
+      "packageJson": "packages/server/package.json",
+      "pinnedVersion": "1.0.0-rc.4",
+      "guarantee": "Drizzle query builders emit parameterized SQL with placeholders for every interpolated value, keeping Kovo's managed-DB query surface injection-safe.",
+      "reviewTrigger": "Any bump of drizzle-orm must re-confirm the SQL generator still parameterizes interpolated values and that the sql`` template escaping contract is unchanged."
+    },
+    {
+      "id": "dep.pglite.set-local-role-rls",
+      "surface": "PGlite SET LOCAL ROLE / RLS enforcement",
+      "dependency": "@electric-sql/pglite",
+      "packageJson": "packages/server/package.json",
+      "pinnedVersion": "0.5.1",
+      "guarantee": "The embedded Postgres build honors SET LOCAL ROLE and FORCE ROW LEVEL SECURITY inside a request-scoped transaction, so the least-privilege runtime role cannot read or write beyond its grants.",
+      "reviewTrigger": "Any bump of @electric-sql/pglite must re-confirm the bundled Postgres engine still enforces SET LOCAL ROLE and row-level-security policies identically."
+    },
+    {
+      "id": "dep.postgres.set-role-force-rls",
+      "surface": "Postgres SET ROLE / FORCE RLS enforcement",
+      "dependency": "pg",
+      "packageJson": "packages/server/package.json",
+      "pinnedVersion": "8.22.0",
+      "guarantee": "The node-postgres driver faithfully issues Kovo's SET ROLE / RESET / DISCARD ALL and RLS statements against the deployer's Postgres, so per-request principal scoping holds. The Postgres server itself is the deployer's responsibility and out of scope; the pinned surface is the driver that carries these statements.",
+      "reviewTrigger": "Any bump of pg must re-confirm session/role statement and connection-reset (DISCARD ALL) semantics are unchanged, since they carry the per-request role boundary."
+    },
+    {
+      "id": "dep.better-auth.password-hashing",
+      "surface": "Better Auth password hashing",
+      "dependency": "better-auth",
+      "packageJson": "packages/better-auth/package.json",
+      "pinnedVersion": "1.6.17",
+      "guarantee": "Submitted passwords are hashed with a memory-hard KDF and verified in the trusted zone; plaintext credentials never egress (proven in packages/better-auth/src/internal.trusted-plaintext.test.ts).",
+      "reviewTrigger": "Any bump of better-auth must re-confirm the password hashing algorithm/parameters and that credential handling stays request-reachable-only with no new egress path."
+    },
+    {
+      "id": "dep.better-auth.session-cookie-integrity",
+      "surface": "Better Auth session/cookie integrity",
+      "dependency": "better-auth",
+      "packageJson": "packages/better-auth/package.json",
+      "pinnedVersion": "1.6.17",
+      "guarantee": "Session tokens and cookies are signed and verified with integrity protection, and Set-Cookie is emitted with HttpOnly/SameSite/Secure defaults, so a session cannot be forged or leaked.",
+      "reviewTrigger": "Any bump of better-auth must re-confirm cookie signing, session-token verification, and Set-Cookie attribute defaults are unchanged."
+    },
+    {
+      "id": "dep.argon2.password-hashing",
+      "surface": "argon2 password hashing",
+      "dependency": "@node-rs/argon2",
+      "packageJson": "packages/server/package.json",
+      "pinnedVersion": "2.0.2",
+      "guarantee": "The argon2id native binding provides the memory-hard hash/verify primitive underpinning Kovo's password hashing, with constant-time verification.",
+      "reviewTrigger": "Any bump of @node-rs/argon2 must re-confirm argon2id defaults (memory/iterations/parallelism) and constant-time verify behavior before merging."
+    }
+  ],
   "plannedEntries": [
     {
       "id": "server.declared-write.authorize",

@@ -19,7 +19,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         version: ${{ inputs.vp-version }}
-    - run: vp install
+    - run: vp install --frozen-lockfile
       shell: bash
     - id: compiler-cache-key
       run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
