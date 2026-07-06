@@ -76,7 +76,7 @@ describe('credential mutation helpers', () => {
       signIn,
       {
         email: 'ada@example.com',
-        password: 'wrong',
+        password: 'wrong-password-secret',
       },
       { headers: requestHeaders() },
     );
@@ -89,6 +89,7 @@ describe('credential mutation helpers', () => {
       ok: false,
       status: 422,
     });
+    expect(JSON.stringify(result)).not.toContain('wrong-password-secret');
   });
 
   it('wraps signUpEmail with a typed body and typed credential failure', async () => {

@@ -6,6 +6,7 @@ import {
   type BetterAuthLike,
   type BetterAuthRequestLike,
 } from './internal.js';
+import { callBetterAuthGetSession } from './internal/trusted-plaintext.js';
 
 /**
  * The `{ session, user }` pair Better Auth returns for an authenticated request. The
@@ -54,10 +55,7 @@ export function betterAuthSession<
   map: BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue>,
 ): SessionProvider<Request, SessionValue> {
   return async (request): Promise<SessionProviderResult<SessionValue> | SessionValue | null> => {
-    const result = await auth.api.getSession({
-      headers: request.headers,
-      returnHeaders: true,
-    });
+    const result = await callBetterAuthGetSession(auth, request.headers);
 
     // BACKWARD-COMPAT shape detection: an instance that honors `returnHeaders` returns the
     // `{ response, headers }` envelope; one that ignores it (the example apps, a
