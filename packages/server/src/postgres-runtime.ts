@@ -2531,7 +2531,7 @@ async function postgresRuntimeLoginPostureIssues(
     ['admin', config.adminRole, login.can_admin],
     ['system', config.systemRole, login.can_system],
   ] as const) {
-    if (role === runtimeLoginRole || canAssume !== true) continue;
+    if (canAssume !== true) continue;
     issues.push({
       code: 'KV433_RUNTIME_ROLE',
       detail: `runtime login ${runtimeLoginRole} must not be able to SET ROLE to ${purpose}Role=${role}`,

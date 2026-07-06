@@ -1512,6 +1512,34 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('refuses runtime logins that are the configured admin or system role', async () => {
+    for (const [purpose, role] of [
+      ['admin', 'kovo_admin'],
+      ['system', 'kovo_system'],
+    ] as const) {
+      const dataDir = mkdtempSync(join(tmpdir(), `kovo-postgres-runtime-${purpose}-login-`));
+      roots.push(dataDir);
+
+      const report = await migratePostgresAppDb({
+        dataDir,
+        driver: 'pglite',
+        migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
+        runtimeDatabaseUrl: `postgres://${role}@127.0.0.1/kovo`,
+        schema,
+      });
+
+      expect(report.posture.ok).toBe(false);
+      expect(report.posture.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining(
+            `runtime login ${role} must not be able to SET ROLE to ${purpose}Role=${role}`,
+          ),
+        }),
+      );
+    }
+  });
+
   it('preflights adopted admin and system roles before applying DDL', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-admin-system-'));
     roots.push(dataDir);
