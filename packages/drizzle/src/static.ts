@@ -103,6 +103,8 @@ export {
 } from './trust-escapes-static.js';
 /** @internal */
 export {
+  collectCapabilityEscapesFromProject,
+  collectCookieDowngradesFromProject,
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
 } from './trust-escapes-static.js';

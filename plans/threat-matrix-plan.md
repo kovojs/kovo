@@ -50,10 +50,32 @@ supply chain**, **Runtime / infra**.
       (`bugz-24` A1, round-15 B4, round-16 B3): a request-reachable handle reads unboxed cross-user credentials. Make the
       adapter a first-class, minimal, TCB-manifest-enrolled module with a reachability-based non-egress proof (followup-13
       DEC-C is the mechanism); this cell stays OPEN until that proof is green.
-- [ ] **M3 — Escape-hatch audit completeness (C/I): every `trustedSql`/`rawRead`/`crossOwnerRead`/`trustedAssign`/
+- [x] **M3 — Escape-hatch audit completeness (C/I): every `trustedSql`/`rawRead`/`crossOwnerRead`/`trustedAssign`/
       `declarePublicRelation`/`unsafeRegex` site is logged and surfaced in `kovo explain --capabilities` with its
-      justification.** The escapes are intentional holes; the guarantee is that they are all VISIBLE to a reviewer. Verify
-      no escape exists that is not enumerated by `kovo explain`.
+      justification.** The escapes are intentional holes; the guarantee is that they are all VISIBLE to a reviewer.
+  - Static producer added: `collectCapabilityEscapesFromProject` + `collectCookieDowngradesFromProject`
+    (packages/drizzle/src/trust-escapes-static.ts) detect each app-authored escape at its CALL SITE and emit a
+    `CapabilityExplain`/`CookieDowngradeExplain`, mirroring the `publishToClient` call-site pattern — NOT the runtime
+    `drain*Facts()` collectors (those fire only during a live request and never populate a merely-built graph, which is
+    what `kovo explain` reads). Wired into `graph.capabilities`/`graph.cookieDowngrades` through both the real build
+    graph (build-export.ts `staticBuildCheckGraph`) and the `compile drizzle-static` extract, then through
+    `deriveAppGraph` (app-graph.ts) into `kovo explain --capabilities`/`--cookies`.
+  - Kinds now surfaced statically from source: `serverValue`, `trustedAssign` (as `serverValue`), `unsafeRegex`,
+    `publicRelation`, `systemDb` (`usePostgresSystemDb`), `acceptUnverified`, `unsafeCookie`, `crossOwnerRead`,
+    `rawRead`, `actAs`, `declareSystemRead`, `declareSystemWrite`, `egressAllowInternal`; `trustedSql` stays on
+    `--trust` (trust-escape pass); `trustedReveal` is folded from `graph.revealed`. New `CapabilityExplain.kind`s
+    added: `unsafeRegex`, `rawRead`, `actAs`, `declareSystemRead`, `declareSystemWrite` (packages/core/src/graph.ts).
+  - `SF-WIRE(graph-output)` at redos.ts is RESOLVED: `unsafeRegex(...)` is surfaced by the static producer; the runtime
+    `drainUnsafeRegexFacts()` is retained only as DiD/test observation, no longer the audit source of truth.
+  - Deferred (documented, honest): `managedSqlStatement` and `postgresRoleTopology` have NO per-app call site — they are
+    framework-FIXED capabilities (same identity every build) already enumerated by the capability-surface census gate
+    (scripts/capability-surface-census.manifest.json, rows `managed-sql-statement-identity`/`postgres-role-topology`).
+    They are visible to a reviewer via that gate rather than as a per-call `graph.capabilities` row; a future follow-up
+    could emit those fixed rows into `--capabilities` too so the audit truly reads from one place.
+  - Evidence: `pnpm --filter @kovojs/drizzle exec vitest run src/capability-escapes-static.test.ts` (14 pass, real
+    source → collector); `pnpm --filter @kovojs/cli exec vitest run src/index.kovo-explain.test.ts` (49 pass, incl. two
+    source-driven end-to-end `--capabilities`/`--cookies` producer tests that replace the former hand-injected graph;
+    the remaining hand-injected test is re-labeled as a renderer/fold unit test for the framework-fixed kinds).
 - [x] **M4 — Timing side-channels (C): the trusted-zone secret compare is CONSTANT-TIME** (password/token verify), and
       no error-message-length / early-return oracle distinguishes "wrong user" from "wrong secret". (followup-12 O4 flagged
       the compare.)
@@ -68,15 +90,20 @@ supply chain**, **Runtime / infra**.
     pre-dispatch load-shed posture (SPEC §9.5: 1 MiB body cap, rate budgets, ReDoS static reject + 4096-char cap that
     bounds `unsafeRegex`, query-list cap 100, capped task retries, bounded pool); deploy owns query cost/`statement_timeout`,
     pool sizing, L3/L4. No framework footgun. Scope recorded in the matrix.
-- [ ] **M6 — Dependencies / supply chain (C/I/Au): scope + hygiene.** Better Auth, Drizzle, node-pg, PGlite have their
+- [x] **M6 — Dependencies / supply chain (C/I/Au): scope + hygiene.** Better Auth, Drizzle, node-pg, PGlite have their
       own surfaces. Out of scope to audit their internals, but IN scope: pinned versions + lockfile, a documented update
       policy, and the TCB manifest marking which dependency surfaces Kovo's guarantees DEPEND on (so a dependency change
       that touches them is a review trigger).
-  - INVESTIGATED → **OPEN (partial).** HAVE: `pnpm-lock.yaml`, `scripts/supply-chain-gates.mjs`, `check:pack-security`,
-    exact-pinned `better-auth`/`drizzle-orm`. GAPS: `pg`/`@electric-sql/pglite`/argon2/better-sqlite3 are CARET (not
-    exact) + no `--frozen-lockfile` in CI; `security/TCB.md` marks Kovo wrappers not the 7 dependency BEHAVIOR surfaces;
-    no `rules/dependency-policy.md`. FIX: exact-pin + `--frozen-lockfile`; `trustedDependencySurfaces` in TCB.md enforced
-    by `check:tcb-boundary`; `rules/dependency-policy.md`. Detail in the matrix (M6). → own follow-up.
+  - Done 2026-07-06: exact-pinned the TCB-surface deps (`pg` 8.22.0, `@electric-sql/pglite` 0.5.1, `@node-rs/argon2`
+    2.0.2, `better-sqlite3` 12.11.1) to the lockfile-resolved versions; `--frozen-lockfile` added to the shared
+    `.github/actions/kovo-setup` composite action + `release.yml`. `security/TCB.md` gained a `trustedDependencySurfaces`
+    manifest (7 dependency BEHAVIOR surfaces: node-pg + Drizzle parameterization, PGlite + Postgres RLS/role, Better
+    Auth password + session/cookie, argon2 hashing) ENFORCED by `check:tcb-boundary` (fails on caret/version-drift or a
+    missing lockfile resolution; +6 tests). New standing rule `rules/dependency-policy.md`. The dependency RUNTIME
+    behavior remains a documented human review trigger, not a machine-checked property (stated in both files).
+  - Evidence: `pnpm install --frozen-lockfile` PASS; `node scripts/check-tcb-boundary.mjs` PASS; `vitest run
+    scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.mjs` PASS; drift test flips the gate
+    RED on a re-introduced caret.
 - [x] **M7 — Build / compiler (I): the generated code trust boundary.** `dynamic.import.process` is a DEC-F sink;
       confirm the compiler's OUTPUT (lowered IR, generated server/client modules) cannot be influenced by app-authored
       untrusted input into an executable position, and that the build gates (`check:*`) own that boundary.

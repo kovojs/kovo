@@ -594,29 +594,41 @@ export interface UnregisteredSinkFact {
 
 /**
  * @internal A held dangerous *capability* surfaced by `kovo explain --capabilities` (SPEC §6.6,
- * audit-only). One row per declared escape: a `publishToClient` secret-emit escape (KV437), an
- * egress `allowInternal` private-network entry, a confidentiality `trustedReveal`, an audited
- * `crossOwnerRead`, a vetted public database relation, a framework-owned auth/system DB facade,
- * managed SQL statement identity, Postgres role topology, or a
- * `serverValue`/`unsafeCookie`/`accept.unverified` escape. The renderer collects these from the
- * merged slice facts so a reviewer can diff the app's entire dangerous-capability surface in one
- * audited table. Audit-only: surfacing informs review; it enforces nothing.
+ * audit-only, threat-matrix M3). One row per declared escape: a `publishToClient` secret-emit escape
+ * (KV437), an egress `allowInternal` private-network entry, a confidentiality `trustedReveal`, an
+ * audited `crossOwnerRead`/`rawRead`, a `serverValue`/`trustedAssign` privileged-write escape
+ * (KV438), an `unsafeRegex` ReDoS-risk acceptance (KV434), an `accept.unverified` upload escape, an
+ * `unsafeCookie` credential-cookie downgrade, an `actAs`/`declareSystemRead`/`declareSystemWrite`
+ * non-request principal elevation (SPEC §10.3 DEC-G), a vetted `declarePublicRelation`, a
+ * framework-owned auth/system DB facade (`usePostgresSystemDb`), managed SQL statement identity, or
+ * Postgres role topology. The app-authored escapes are detected at their CALL SITE by the static
+ * producer `collectCapabilityEscapesFromProject` (packages/drizzle/src/trust-escapes-static.ts),
+ * mirroring the `publishToClient` call-site pattern; the framework-fixed capabilities
+ * (`managedSqlStatement`/`postgresRoleTopology`) have no per-app call site and are tracked by the
+ * capability-surface census gate instead. The renderer collects these from the merged slice facts so
+ * a reviewer can diff the app's entire dangerous-capability surface in one audited table. Audit-only:
+ * surfacing informs review; it enforces nothing.
  */
 export interface CapabilityExplain {
   /** The capability family the escape belongs to. */
   kind:
     | 'acceptUnverified'
+    | 'actAs'
     | 'authAdapterDb'
     | 'crossOwnerRead'
+    | 'declareSystemRead'
+    | 'declareSystemWrite'
     | 'egressAllowInternal'
     | 'managedSqlStatement'
     | 'postgresRoleTopology'
     | 'publishToClient'
     | 'publicRelation'
+    | 'rawRead'
     | 'serverValue'
     | 'systemDb'
     | 'trustedReveal'
-    | 'unsafeCookie';
+    | 'unsafeCookie'
+    | 'unsafeRegex';
   /** A human justification recorded at the escape site (the audit's load-bearing field). */
   justification?: string;
   /** Source module for module-scoped escapes such as `publishToClient`. */
@@ -1164,6 +1176,7 @@ const arrayFields = [
   'authPosture',
   'capabilities',
   'components',
+  'cookieDowngrades',
   'derivedMutations',
   'derivedQueries',
   'diagnostics',

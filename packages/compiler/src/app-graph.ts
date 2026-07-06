@@ -143,6 +143,14 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.trustEscapes === undefined
       ? {}
       : { trustEscapes: options.graph.trustEscapes }),
+    // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): app-authored escape-hatch capability facts
+    // (`--capabilities`) and credential-cookie downgrades (`--cookies`) collected by the static
+    // producers ride from `compile drizzle-static` / the build-check graph through into graph.json.
+    // `capabilities` is folded in above (with the publishToClient call-site facts); this threads the
+    // typed cookie-downgrade surface, which previously had no static producer.
+    ...(options.graph?.cookieDowngrades === undefined
+      ? {}
+      : { cookieDowngrades: options.graph.cookieDowngrades }),
     ...(options.graph?.unregisteredSinks === undefined
       ? {}
       : { unregisteredSinks: options.graph.unregisteredSinks }),

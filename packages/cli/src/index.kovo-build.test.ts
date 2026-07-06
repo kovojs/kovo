@@ -833,7 +833,11 @@ export async function search(input, db) {
       touchGraph: {},
     }));
 
+    // build-export also runs the M3 capability/cookie-downgrade static producers over the same
+    // files (SPEC §6.6/§9.1); the mock must expose them so the build does not throw on undefined.
     vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      collectCapabilityEscapesFromProject: () => [],
+      collectCookieDowngradesFromProject: () => [],
       extractStaticBuildAnalysisFactsFromProject,
     }));
 
