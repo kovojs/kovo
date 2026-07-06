@@ -1771,6 +1771,114 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  // SPEC §10.3 (C10/C11): the identity escalation surface is role ATTRIBUTES ∪ predefined-role
+  // MEMBERSHIP. PostgreSQL predefined roles (pg_execute_server_program ⇒ COPY … FROM PROGRAM OS
+  // command execution, pg_write_all_data, pg_read_all_data, server-file read/write, pg_monitor,
+  // pg_maintain) carry NONE of the five elevated role attributes, so the attribute allowlist alone
+  // lets that membership pass unflagged (round-17 B1). The predefined-role allowlist closes it.
+  it('refuses runtime logins and assumable roles that are members of a predefined role', async () => {
+    for (const predefinedRole of [
+      'pg_execute_server_program',
+      'pg_write_all_data',
+      'pg_read_all_data',
+      'pg_read_server_files',
+      'pg_write_server_files',
+      'pg_monitor',
+    ] as const) {
+      const runtimeDataDir = mkdtempSync(
+        join(tmpdir(), `kovo-postgres-runtime-predefined-login-${predefinedRole}-`),
+      );
+      roots.push(runtimeDataDir);
+      const runtimeReport = await migratePostgresAppDb({
+        dataDir: runtimeDataDir,
+        driver: 'pglite',
+        migrations: [
+          {
+            id: '001_runtime_login_schema',
+            sql: [
+              'CREATE ROLE predefined_runtime_login LOGIN',
+              `GRANT ${predefinedRole} TO predefined_runtime_login`,
+              runtimeSchemaMigrationSql,
+            ].join('; '),
+          },
+        ],
+        runtimeDatabaseUrl: 'postgres://predefined_runtime_login@127.0.0.1/kovo',
+        schema,
+      });
+      expect(runtimeReport.posture.ok, `${predefinedRole} runtime login posture`).toBe(false);
+      expect(runtimeReport.posture.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining(`member of PostgreSQL predefined role ${predefinedRole}`),
+        }),
+      );
+
+      // Transitive membership: login → mid role → predefined role must surface in the MEMBER closure.
+      const assumableDataDir = mkdtempSync(
+        join(tmpdir(), `kovo-postgres-runtime-predefined-assumable-${predefinedRole}-`),
+      );
+      roots.push(assumableDataDir);
+      const assumableReport = await migratePostgresAppDb({
+        dataDir: assumableDataDir,
+        driver: 'pglite',
+        migrations: [
+          {
+            id: '001_runtime_login_schema',
+            sql: [
+              'CREATE ROLE predefined_provider_login LOGIN',
+              'CREATE ROLE predefined_mid_role',
+              `GRANT ${predefinedRole} TO predefined_mid_role`,
+              'GRANT predefined_mid_role TO predefined_provider_login',
+              runtimeSchemaMigrationSql,
+            ].join('; '),
+          },
+        ],
+        runtimeDatabaseUrl: 'postgres://predefined_provider_login@127.0.0.1/kovo',
+        schema,
+      });
+      expect(assumableReport.posture.ok, `${predefinedRole} assumable posture`).toBe(false);
+      expect(assumableReport.posture.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining(`member of PostgreSQL predefined role ${predefinedRole}`),
+        }),
+      );
+    }
+  });
+
+  // SPEC §10.3 (C10/C11): membership in only the framework's own roles must not over-block; the
+  // predefined-role allowlist targets `pg_*` predefined roles, not the framework reader/writer/etc.
+  it('passes a runtime login that is a member of only framework roles', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-predefined-ok-'));
+    roots.push(dataDir);
+    await execPglite(dataDir, 'CREATE ROLE "provider_reader"; CREATE ROLE "provider_writer";');
+    await withPostgresRoleEnv(
+      { reader: 'provider_reader', writer: 'provider_writer' },
+      async () => {
+        const report = await migratePostgresAppDb({
+          dataDir,
+          driver: 'pglite',
+          migrations: [
+            {
+              id: '001_runtime_login_schema',
+              sql: ['CREATE ROLE provider_runtime_login LOGIN', runtimeSchemaMigrationSql].join(
+                '; ',
+              ),
+            },
+          ],
+          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+          schema,
+        });
+        expect(report.posture.ok).toBe(true);
+        expect(
+          report.posture.issues.some((issue) =>
+            issue.detail.includes('member of PostgreSQL predefined role'),
+          ),
+        ).toBe(false);
+      },
+    );
+  });
+
   it('refuses runtime logins that hold ADMIN OPTION on an assumable role', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-admin-option-'));
     roots.push(dataDir);

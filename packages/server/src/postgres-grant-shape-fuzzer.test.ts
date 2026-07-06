@@ -225,6 +225,72 @@ describe('Postgres grant-shape closure fuzzer', () => {
       );
     }
   }, 120_000);
+
+  // SPEC §10.3 (C10/C11): the identity escalation surface is role ATTRIBUTES ∪ predefined-role
+  // MEMBERSHIP. Predefined roles carry NONE of the five elevated attributes, so this axis re-opens
+  // the round-17 B1 gap if the predefined-role allowlist is removed — the gate must range over the
+  // same runtime-login/assumable-role `MEMBER` closure.
+  it('matches the predefined-role membership axis against runtime-login and assumable-role posture', async () => {
+    for (const predefinedRole of [
+      'pg_execute_server_program',
+      'pg_write_all_data',
+      'pg_read_all_data',
+      'pg_read_server_files',
+      'pg_write_server_files',
+      'pg_monitor',
+      'pg_maintain',
+    ] as const) {
+      const runtimeDataDir = await provisionFuzzerRuntime(`predefined-runtime-${predefinedRole}`);
+      await withPglite(runtimeDataDir, async (client) => {
+        await execMany(client, [
+          `CREATE ROLE ${quoteIdent(`kovo_fuzzer_predef_${predefinedRole}`)} LOGIN`,
+          `GRANT ${predefinedRole} TO ${quoteIdent(`kovo_fuzzer_predef_${predefinedRole}`)}`,
+        ]);
+      });
+      const runtimeReport = await checkPostgresAppDbPosture({
+        dataDir: runtimeDataDir,
+        databaseUrl: `postgres://kovo_fuzzer_predef_${predefinedRole}@127.0.0.1/kovo`,
+        driver: 'pglite',
+        schema: fuzzerSchema,
+      });
+      expect(runtimeReport.ok, `${predefinedRole} runtime login posture`).toBe(false);
+      expect(runtimeReport.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining(`member of PostgreSQL predefined role ${predefinedRole}`),
+        }),
+      );
+
+      const assumableDataDir = await provisionFuzzerRuntime(
+        `predefined-assumable-${predefinedRole}`,
+      );
+      await withPglite(assumableDataDir, async (client) => {
+        await execMany(client, [
+          `CREATE ROLE ${quoteIdent(`kovo_fuzzer_predef_login_${predefinedRole}`)} LOGIN`,
+          `CREATE ROLE ${quoteIdent(`kovo_fuzzer_predef_mid_${predefinedRole}`)}`,
+          // Membership is transitive: the login → mid → predefined-role chain must still surface the
+          // predefined-role membership in the login's MEMBER closure.
+          `GRANT ${predefinedRole} TO ${quoteIdent(`kovo_fuzzer_predef_mid_${predefinedRole}`)}`,
+          `GRANT ${quoteIdent(`kovo_fuzzer_predef_mid_${predefinedRole}`)} TO ${quoteIdent(
+            `kovo_fuzzer_predef_login_${predefinedRole}`,
+          )}`,
+        ]);
+      });
+      const assumableReport = await checkPostgresAppDbPosture({
+        dataDir: assumableDataDir,
+        databaseUrl: `postgres://kovo_fuzzer_predef_login_${predefinedRole}@127.0.0.1/kovo`,
+        driver: 'pglite',
+        schema: fuzzerSchema,
+      });
+      expect(assumableReport.ok, `${predefinedRole} assumable-role posture`).toBe(false);
+      expect(assumableReport.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining(`member of PostgreSQL predefined role ${predefinedRole}`),
+        }),
+      );
+    }
+  }, 120_000);
 });
 
 async function withPglite<Result>(

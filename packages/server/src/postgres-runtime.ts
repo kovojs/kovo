@@ -56,6 +56,18 @@ const POSTGRES_ELEVATED_ROLE_ATTRIBUTES = [
   { column: 'rolcreaterole', label: 'CREATEROLE' },
   { column: 'rolcreatedb', label: 'CREATEDB' },
 ] as const;
+// SPEC §10.3 (C10/C11): the runtime-identity escalation surface is role ATTRIBUTES ∪
+// predefined-role MEMBERSHIP. Membership in a PostgreSQL predefined role (`pg_*`, e.g.
+// `pg_execute_server_program` ⇒ COPY … FROM PROGRAM OS command execution,
+// `pg_read_all_data`/`pg_write_all_data`, server-file read/write, `pg_monitor`, `pg_maintain`)
+// grants capabilities that carry NONE of the five elevated attribute booleans, so the
+// attribute allowlist alone lets that membership pass unflagged. We therefore range an ALLOWLIST
+// over predefined-role membership across the SAME `{login} ∪ {assumable-role closure}` DEC-B/DEC-C
+// audit: the login and every assumable role may be a member of only the framework's own roles plus
+// this explicit benign don't-care set. Any other `pg_*` predefined-role membership fails closed and
+// is named. This is an ALLOWLIST (member-of-only-known-safe), NOT a denylist of known-bad roles, so
+// a NEW `pg_*` predefined role in a future PostgreSQL release fails closed by default.
+const POSTGRES_BENIGN_PREDEFINED_ROLES: ReadonlySet<string> = new Set<string>([]);
 const POSTGRES_CLASSIFIED_ROLE_COLUMNS = new Set([
   'rolname',
   'rolsuper',
@@ -2743,10 +2755,16 @@ async function postgresRuntimeLoginPostureIssues(
     });
   }
 
-  const assumableRows = await safeQuery<PostgresRoleAttributeRow>(
+  // SPEC §10.3 (C10/C11): this is the SAME `pg_has_role(login, role, 'MEMBER')` closure DEC-B/DEC-C
+  // audit — the roles the login can SET ROLE to. `is_predefined` flags PostgreSQL predefined roles,
+  // identified by the reserved `pg_` name prefix (sound: `pg_` is reserved for predefined roles) and
+  // the < FirstNormalObjectId (16384) system-OID range, so the allowlist below can range over
+  // predefined-role MEMBERSHIP in addition to the role-ATTRIBUTE allowlist.
+  const assumableRows = await safeQuery<PostgresRoleAttributeRow & { is_predefined: boolean }>(
     client,
     [
-      'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb',
+      'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb,',
+      "(role.oid < 16384 OR role.rolname LIKE 'pg\\_%') AS is_predefined",
       'FROM pg_roles login',
       'JOIN pg_roles role ON role.oid <> login.oid',
       'WHERE login.rolname = $1',
@@ -2755,6 +2773,12 @@ async function postgresRuntimeLoginPostureIssues(
     ].join(' '),
     [runtimeLoginRole],
   );
+  const frameworkRoles: ReadonlySet<string> = new Set([
+    config.readerRole,
+    config.writerRole,
+    config.adminRole,
+    config.systemRole,
+  ]);
   if (assumableRows === undefined) {
     issues.push({
       code: 'KV433_RUNTIME_ROLE',
@@ -2762,6 +2786,21 @@ async function postgresRuntimeLoginPostureIssues(
     });
   } else {
     for (const role of assumableRows.rows) {
+      // SPEC §10.3 (C10/C11): ALLOWLIST over predefined-role membership. Membership in any `pg_*`
+      // predefined role that is not one of the framework's own roles or an explicit benign
+      // don't-care entry fails closed and is named — this catches escalation surfaces (OS command
+      // execution, all-data read/write, server-file access, monitoring/maintenance) that carry NONE
+      // of the five elevated role attributes and would otherwise pass the attribute allowlist.
+      if (
+        role.is_predefined === true &&
+        !frameworkRoles.has(role.rolname) &&
+        !POSTGRES_BENIGN_PREDEFINED_ROLES.has(role.rolname)
+      ) {
+        issues.push({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: `runtime login ${runtimeLoginRole} is a member of PostgreSQL predefined role ${role.rolname}; predefined-role membership grants escalation capabilities that carry no elevated role attribute, so the runtime login and every assumable role must be a member of only framework roles`,
+        });
+      }
       if (postgresRoleElevatedAttributes(role).length === 0) continue;
       issues.push({
         code: 'KV433_RUNTIME_ROLE',
