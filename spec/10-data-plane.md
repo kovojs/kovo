@@ -196,6 +196,44 @@ read/write facades whose SQL methods are governed by the source/sink, statement-
 secret-read boundaries in this section and §11.2. Any public use of such a privileged facade MUST
 appear in `kovo explain --capabilities` with its reason and consumer surface.
 
+**C9 — boundary-crossing doors are reconstructed, boxed, or framework-owned (normative).** Any
+value crossing a security-relevant boundary in Kovo MUST do so through exactly one of three
+mechanisms:
+
+1. **Reconstructed carrier** — the framework snapshots or rebuilds the boundary value from
+   normalized facts before the sink sees it, so caller-owned mutable carriers cannot change meaning
+   between validation and execution.
+2. **Boxed value** — the framework keeps the runtime value inside a non-coercible box until an
+   explicit reveal/redaction path discharges the sink.
+3. **Framework-owned door** — the only way across the boundary is a typed or branded framework
+   channel whose implementation owns grammar, normalization, and fail-closed rejection.
+
+Two corollaries are mandatory:
+
+- **Complete engine-door enumeration.** Where Kovo claims the engine is the authorization or
+  confidentiality door, the complete boundary-crossing set is the engine's effective privilege graph
+  itself (§10.3 engine-door completeness), not a source scan, proxy wrapper, or comment inventory.
+- **Secrets leave only boxed or owned sinks.** A secret, governed, or principal-bearing value MUST
+  never rely on a read-only proxy or a best-effort caller convention at egress. It crosses only via
+  a runtime box, a reconstructed carrier, or a framework-owned sink that is named in the proof
+  inventory and hostile-value tests.
+
+The canonical C9 sink inventory is:
+
+| Sink                  | Mechanism            | Sole door                                                                  | Proof inventory / hostile-value evidence                                                                                            |
+| --------------------- | -------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| DB driver statement   | reconstruct          | Managed SQL snapshots the statement carrier before validation/execution.   | `packages/server/src/managed-db.test.ts`; §11.2 immutable-statement rule.                                                           |
+| HTTP response body    | reconstruct          | `emitToWire`/wire render helpers rebuild fragment/query/error bodies.      | `packages/server/src/wire-html.test.ts`; `packages/create-kovo/src/index.build.prod-artifact.security.test.ts`.                     |
+| HTTP response headers | framework-owned door | Finalized typed header channel owns names, repetition, and control chars.  | `packages/server/src/response-posture.test.ts`; `packages/create-kovo/src/index.build.prod-artifact.headers.test.ts`.               |
+| Redirect URL          | reconstruct          | Redirect targets are normalized back to same-origin path form.             | `packages/server/src/response-posture.test.ts`; `packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts`.   |
+| `Set-Cookie`          | framework-owned door | Typed cookie builder/serializer owns value encoding and attributes.        | `packages/server/src/cookies.test.ts`; `packages/create-kovo/src/index.build.prod-artifact.headers.test.ts`.                        |
+| Blob/file write       | framework-owned door | Storage/static-export writers own key/path containment.                    | `packages/core/src/storage.test.ts`; `packages/server/src/static-export-output.test.ts`.                                            |
+| Durable-task payload  | framework-owned door | Queue envelope and observability views own serialization/redaction.        | `packages/server/src/task-observability.test.ts`; `packages/server/src/task-runner.test.ts`.                                        |
+| Webhook payload       | framework-owned door | Verifier-before-parse plus replay-scoped dispatch owns raw bytes.          | `packages/server/src/webhook.test.ts`; `tests/integration/specs/webhook-hmac.spec.ts`.                                              |
+| HTML/render output    | reconstruct          | Escaped render pipeline or explicit trusted output escape.                 | `packages/browser/src/security-output.test.ts`; `packages/create-kovo/src/index.build.prod-artifact.security.test.ts`.              |
+| Log/error output      | box                  | Secret/redacted boxes refuse coercion before logs or wire-visible errors.  | `packages/core/src/secret.test.ts`; `packages/server/src/task-observability.test.ts`; `packages/server/src/query-endpoint.test.ts`. |
+| Outbound egress       | framework-owned door | Framework egress allowlist choke owns network targets on privileged paths. | `packages/server/src/task-runner.test.ts`.                                                                                          |
+
 **External Postgres role topology is a manifest, not environment inference.** The runtime config
 MUST resolve reader, writer, admin, and system roles into one topology that records whether Kovo
 creates or adopts each role, the runtime login, and required runtime-login membership edges. The
