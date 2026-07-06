@@ -171,6 +171,60 @@ describe('Postgres grant-shape closure fuzzer', () => {
 
     expect(mismatches).toEqual([]);
   }, 120_000);
+
+  it('matches the identity-attribute axis against runtime-login and assumable-role posture', async () => {
+    for (const [sqlAttribute, label] of [
+      ['SUPERUSER', 'SUPERUSER'],
+      ['BYPASSRLS', 'BYPASSRLS'],
+      ['REPLICATION', 'REPLICATION'],
+      ['CREATEROLE', 'CREATEROLE'],
+      ['CREATEDB', 'CREATEDB'],
+    ] as const) {
+      const runtimeDataDir = await provisionFuzzerRuntime(`identity-runtime-${label}`);
+      await withPglite(runtimeDataDir, async (client) => {
+        await client.exec(
+          `CREATE ROLE ${quoteIdent(`kovo_fuzzer_runtime_${label}`)} LOGIN ${sqlAttribute}`,
+        );
+      });
+      const runtimeReport = await checkPostgresAppDbPosture({
+        dataDir: runtimeDataDir,
+        databaseUrl: `postgres://kovo_fuzzer_runtime_${label}@127.0.0.1/kovo`,
+        driver: 'pglite',
+        schema: fuzzerSchema,
+      });
+      expect(runtimeReport.ok, `${label} runtime login posture`).toBe(false);
+      expect(runtimeReport.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining(`kovo_fuzzer_runtime_${label}(${label})`),
+        }),
+      );
+
+      const assumableDataDir = await provisionFuzzerRuntime(`identity-assumable-${label}`);
+      await withPglite(assumableDataDir, async (client) => {
+        await execMany(client, [
+          `CREATE ROLE ${quoteIdent(`kovo_fuzzer_login_${label}`)} LOGIN`,
+          `CREATE ROLE ${quoteIdent(`kovo_fuzzer_assumable_${label}`)} ${sqlAttribute}`,
+          `GRANT ${quoteIdent(`kovo_fuzzer_assumable_${label}`)} TO ${quoteIdent(
+            `kovo_fuzzer_login_${label}`,
+          )}`,
+        ]);
+      });
+      const assumableReport = await checkPostgresAppDbPosture({
+        dataDir: assumableDataDir,
+        databaseUrl: `postgres://kovo_fuzzer_login_${label}@127.0.0.1/kovo`,
+        driver: 'pglite',
+        schema: fuzzerSchema,
+      });
+      expect(assumableReport.ok, `${label} assumable-role posture`).toBe(false);
+      expect(assumableReport.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining(`kovo_fuzzer_assumable_${label}(${label})`),
+        }),
+      );
+    }
+  }, 120_000);
 });
 
 async function withPglite<Result>(
@@ -183,6 +237,23 @@ async function withPglite<Result>(
   } finally {
     await client.close();
   }
+}
+
+async function provisionFuzzerRuntime(label: string): Promise<string> {
+  const dataDir = mkdtempSync(join(tmpdir(), `kovo-postgres-grant-fuzzer-${label}-`));
+  roots.push(dataDir);
+  const runtime = createPostgresAppRuntimeDb({
+    dataDir,
+    driver: 'pglite',
+    schema: fuzzerSchema,
+    seedSql: fuzzerSeedSql,
+  });
+  try {
+    await runtime.ready;
+  } finally {
+    await runtime.close();
+  }
+  return dataDir;
 }
 
 function grantShapeCases(): readonly GrantShapeCase[] {
@@ -225,6 +296,8 @@ function grantShapeCases(): readonly GrantShapeCase[] {
   cases.push(attachedInsteadOfTriggerCase());
   cases.push(fkCascadePropagationTriggerCase());
   cases.push(partitionPropagationTriggerCase());
+  cases.push(ruleRedirectPropagationTriggerCase());
+  cases.push(inheritancePropagationTriggerCase());
   cases.push(attachedRewriteRuleCase());
   cases.push(attachedCheckConstraintCase());
   cases.push(attachedDefaultExpressionCase());
@@ -712,6 +785,108 @@ function partitionPropagationTriggerCase(): GrantShapeCase {
         probeRole: 'kovo_writer',
         observationSql: `SELECT EXISTS (SELECT 1 FROM ${quoteIdent(logName)}) AS unsafe`,
         sql: `INSERT INTO ${quoteIdent(parentName)} (id, owner_id) VALUES ('p1', 'u1')`,
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function ruleRedirectPropagationTriggerCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    expectedIssueSubstring: 'kovo_fuzzer_rule_target_',
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'propagation:rewrite-rule-redirect:definer-trigger',
+    objectClass: 'definer-function',
+    probeKind: 'propagation-trigger',
+    rlsState: 'no-rls',
+    schemaKind: 'app',
+    shouldLeak: true,
+    async materialize(ctx) {
+      const sourceName = `kovo_fuzzer_rule_source_${ctx.index}`;
+      const targetName = `kovo_fuzzer_rule_target_${ctx.index}`;
+      const logName = `kovo_fuzzer_rule_log_${ctx.index}`;
+      const functionName = `kovo_fuzzer_rule_trigger_${ctx.index}`;
+      const triggerName = `kovo_fuzzer_rule_trigger_${ctx.index}`;
+      const ruleName = `kovo_fuzzer_rule_redirect_${ctx.index}`;
+      await execMany(ctx.client, [
+        `CREATE TABLE ${quoteIdent(sourceName)} (id text PRIMARY KEY)`,
+        `CREATE TABLE ${quoteIdent(targetName)} (id text PRIMARY KEY)`,
+        `CREATE TABLE ${quoteIdent(logName)} (id text PRIMARY KEY)`,
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}() RETURNS trigger`,
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          `AS $$ BEGIN INSERT INTO ${quoteIdent(logName)} (id) VALUES (NEW.id); RETURN NEW; END $$`,
+        ].join(' '),
+        [
+          `CREATE TRIGGER ${quoteIdent(triggerName)}`,
+          `BEFORE INSERT ON ${quoteIdent(targetName)}`,
+          `FOR EACH ROW EXECUTE FUNCTION ${quoteIdent(functionName)}()`,
+        ].join(' '),
+        [
+          `CREATE RULE ${quoteIdent(ruleName)} AS ON INSERT TO ${quoteIdent(sourceName)}`,
+          `DO ALSO INSERT INTO ${quoteIdent(targetName)} (id) VALUES (NEW.id)`,
+        ].join(' '),
+        `GRANT INSERT ON TABLE ${quoteIdent(sourceName)} TO kovo_writer`,
+        `GRANT SELECT ON TABLE ${quoteIdent(logName)} TO kovo_writer`,
+      ]);
+      return {
+        cleanupSql: [
+          `DROP TABLE IF EXISTS ${quoteIdent(sourceName)} CASCADE`,
+          `DROP TABLE IF EXISTS ${quoteIdent(targetName)} CASCADE`,
+          `DROP TABLE IF EXISTS ${quoteIdent(logName)} CASCADE`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}() CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        observationSql: `SELECT EXISTS (SELECT 1 FROM ${quoteIdent(logName)}) AS unsafe`,
+        sql: `INSERT INTO ${quoteIdent(sourceName)} (id) VALUES ('r1')`,
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function inheritancePropagationTriggerCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    expectedIssueSubstring: 'kovo_fuzzer_inheritance_child_',
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'propagation:inheritance-child:definer-trigger',
+    objectClass: 'definer-function',
+    probeKind: 'propagation-trigger',
+    rlsState: 'no-rls',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const parentName = `kovo_fuzzer_inheritance_parent_${ctx.index}`;
+      const childName = `kovo_fuzzer_inheritance_child_${ctx.index}`;
+      const functionName = `kovo_fuzzer_inheritance_trigger_${ctx.index}`;
+      const triggerName = `kovo_fuzzer_inheritance_trigger_${ctx.index}`;
+      await execMany(ctx.client, [
+        `CREATE TABLE ${quoteIdent(parentName)} (id text PRIMARY KEY)`,
+        `CREATE TABLE ${quoteIdent(childName)} () INHERITS (${quoteIdent(parentName)})`,
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}() RETURNS trigger`,
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          `CREATE TRIGGER ${quoteIdent(triggerName)}`,
+          `BEFORE INSERT ON ${quoteIdent(childName)}`,
+          `FOR EACH ROW EXECUTE FUNCTION ${quoteIdent(functionName)}()`,
+        ].join(' '),
+        `GRANT INSERT ON TABLE ${quoteIdent(parentName)} TO kovo_writer`,
+      ]);
+      return {
+        cleanupSql: [
+          `DROP TABLE IF EXISTS ${quoteIdent(parentName)} CASCADE`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}() CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        observationSql: 'SELECT false AS unsafe',
+        sql: 'SELECT false AS unsafe',
         unsafePrivilege: 'unsafe',
       };
     },
