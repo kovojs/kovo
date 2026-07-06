@@ -247,7 +247,14 @@ an allowlist (member-of-only-known-safe, not a denylist of known-bad roles), a n
 role in a future PostgreSQL release fails closed by default. The SECURITY DEFINER routine and
 attached-code audits use that same login-plus-assumable identity set for execution reachability. The auth non-egress proof enumerates the request-reachable
 secret-handling surface and boxes or confines each path; it MUST NOT use a named file as a proxy for
-that surface.
+that surface, and its plaintext-API confinement enumerates every request-reachable `auth.api.*`
+plaintext-reading endpoint so a new or unclassified endpoint used outside the trusted module fails
+closed rather than sliding through a fixed subset regex. The Better Auth plugin secret classifier
+follows the same rule in the confidentiality direction: a credential-shaped plugin column — one
+whose final name segment is a credential noun (`key`, `token`, `secret`, `password`, `hash`, …) —
+defaults to `secret:` unless the author explicitly annotates it non-secret, so the apiKey plugin's
+`key` column and custom credential additional fields fail closed to secret rather than being emitted
+as ordinary readable columns.
 
 The canonical C9 sink inventory is:
 

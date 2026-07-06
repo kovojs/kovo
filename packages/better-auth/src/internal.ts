@@ -973,18 +973,118 @@ function withBetterAuthSecretFields(
   return secret.length === 0 ? annotation : { ...annotation, secret };
 }
 
-function betterAuthCredentialSecretFields(fields: ReadonlySet<string>): readonly string[] {
-  return [
-    'accessToken',
-    'backupCodes',
-    'clientSecret',
-    'idToken',
-    'password',
-    'refreshToken',
-    'secret',
-    'token',
-  ].filter((field) => fields.has(field));
+// SPEC.md §10.1 C10: security sets are allowlists with fail-closed defaults, never a hand-picked
+// denylist of names. papercuts-36 P2: the old `betterAuthCredentialSecretFields` was a fixed
+// 8-name denylist, so a plugin credential column outside those names — canonically the official
+// apiKey plugin's `key` column, or a custom credential `additionalField` — escaped `secret:`
+// classification and the KV406 bridge suggestion emitted it as an ordinary readable column.
+//
+// The rule is now POSITIVE and fail-closed: a plugin column whose final name segment is a
+// credential noun defaults to `secret:` unless the author explicitly annotates it non-secret. New
+// credential-shaped columns are classified secret by default rather than requiring a name edit.
+const betterAuthCredentialColumnNouns = new Set<string>([
+  'apikey',
+  'apisecret',
+  'backupcode',
+  'backupcodes',
+  'certificate',
+  'code',
+  'codes',
+  'credential',
+  'credentials',
+  'hash',
+  'key',
+  'keys',
+  'otp',
+  'passcode',
+  'passphrase',
+  'password',
+  'pin',
+  'privatekey',
+  'salt',
+  'secret',
+  'secrets',
+  'seed',
+  'signature',
+  'token',
+  'tokens',
+]);
+
+/**
+ * @internal Split a Better Auth column name into lowercased word segments across camelCase and
+ * non-alphanumeric boundaries. `refreshTokenExpiresAt` → `[refresh, token, expires, at]`.
+ */
+function betterAuthColumnSegments(column: string): string[] {
+  return column
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .filter((segment) => segment.length > 0)
+    .map((segment) => segment.toLowerCase());
 }
+
+/**
+ * @internal SPEC.md §10.1 C10: a column is credential-shaped when its final name segment is a
+ * credential noun (the column *is* the secret). This is deliberately positive rather than a fixed
+ * denylist: `key`, `apiKey`, `clientSecret`, `passwordHash`, `backupCodes` classify secret, while
+ * metadata columns whose secret noun is a qualifier — `refreshTokenExpiresAt`, `keyId`,
+ * `accessTokenCreatedAt` — end in a temporal/identifier segment and stay readable. Non-credential
+ * columns (`name`, `createdAt`, `userId`, `provider`, `scope`, `prefix`) never match.
+ */
+export function isBetterAuthCredentialShapedColumn(column: string): boolean {
+  const segments = betterAuthColumnSegments(column);
+  if (segments.length === 0) return false;
+  const last = segments[segments.length - 1];
+  return last !== undefined && betterAuthCredentialColumnNouns.has(last);
+}
+
+/**
+ * @internal Positive, fail-closed secret classifier for Better Auth plugin credential columns.
+ * SPEC.md §10.1 C10 / papercuts-36 P2. Returns the sorted subset of `fields` that default to
+ * `secret:` because they are credential-shaped, so the KV406 bridge suggestion never omits a
+ * plausible credential column (e.g. apiKey `key`) without an explicit author override.
+ */
+export function betterAuthCredentialSecretFields(fields: ReadonlySet<string>): readonly string[] {
+  return [...fields].filter((field) => isBetterAuthCredentialShapedColumn(field)).sort();
+}
+
+/**
+ * @internal Known Better Auth plugin credential columns the positive classifier MUST cover.
+ * SPEC.md §10.1 C10: the completeness test in `index.schema-bridge.test.ts` binds the classifier to
+ * this set so a regression that stops classifying a real credential column fails closed (RED).
+ */
+export const betterAuthKnownPluginCredentialColumns = [
+  'accessToken', // account / oauthAccessToken OAuth bearer credential
+  'backupCodes', // twoFactor recovery codes
+  'clientSecret', // oauthApplication registered client secret
+  'idToken', // account OIDC id token
+  'key', // apiKey plugin stored API-key credential
+  'password', // account password hash
+  'privateKey', // jwks signing-key material
+  'refreshToken', // account / oauthAccessToken OAuth refresh credential
+  'secret', // twoFactor TOTP shared secret
+  'token', // session bearer credential
+] as const;
+
+/**
+ * @internal Better Auth columns that MUST stay readable (never classified secret) — used by the
+ * completeness test to prove the positive rule does not over-block ordinary owner-scoped columns.
+ */
+export const betterAuthKnownReadablePluginColumns = [
+  'accessTokenExpiresAt',
+  'createdAt',
+  'expiresAt',
+  'id',
+  'ipAddress',
+  'name',
+  'prefix',
+  'provider',
+  'refreshTokenExpiresAt',
+  'scope',
+  'start',
+  'updatedAt',
+  'userId',
+] as const;
 
 const betterAuthSchemaTableNames = new Set<string>(Object.keys(betterAuthSchemaBridge));
 

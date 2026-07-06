@@ -7,7 +7,7 @@ Line numbers cite that HEAD.
 
 ## Issues
 
-- [ ] **P1 — The DEC-C non-egress proof confines plaintext-reading to the trusted module by a HARDCODED 4-name regex
+- [x] **P1 — The DEC-C non-egress proof confines plaintext-reading to the trusted module by a HARDCODED 4-name regex
       (`auth.api.(getSession|signInEmail|signOut|signUpEmail)`), so any additional Better Auth plaintext-reading
       endpoint (`resetPassword`, `changePassword`, `forgetPassword`, `verifyEmail`, …) is invisible to the confinement
       scan and could be called outside the trusted zone without tripping any test — the "reachable secret surface" is a
@@ -26,7 +26,7 @@ signUpEmail)(` and asserts all matches live in `internal/trusted-plaintext.ts`. 
     fail-closed enumeration that goes RED when a new `auth.api.*` plaintext method appears unclassified), so a new
     plaintext endpoint fails the proof until it is classified boxed/confined — mirroring the DEC-B version-guard.
 
-- [ ] **P2 — Better Auth PLUGIN credential columns escape secret-classification: `betterAuthCredentialSecretFields` is
+- [x] **P2 — Better Auth PLUGIN credential columns escape secret-classification: `betterAuthCredentialSecretFields` is
       a hardcoded 8-name denylist (`accessToken, backupCodes, clientSecret, idToken, password, refreshToken, secret,
 token`), so a plugin credential column outside those names — canonically the official apiKey plugin's `key`
       column, or any custom credential `additionalField` — is never classified `secret:`, and the framework's OWN KV406

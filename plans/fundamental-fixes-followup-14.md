@@ -73,14 +73,18 @@ the true surface.**
 
 ## 3. Papercuts roll-up (from `claude-papercuts-36.md`) — decisions
 
-- [ ] **DEC-C (folds P1 + P2) — Better Auth secret-surface completeness.** (a) The plaintext-API confinement scan
-      (`internal.trusted-plaintext.test.ts:96-109`) derives its reading-endpoint set from a fail-closed enumeration (RED
-      when a new `auth.api.*` plaintext method appears unclassified), mirroring the DEC-B version-guard — not a
-      hand-picked 4-name regex (P1). (b) Unknown/plugin credential-shaped columns default to `secret:` classification
-      (`betterAuthCredentialSecretFields`, `internal.ts:976-987`), so `apiKey.key` and custom credential fields are
-      classified secret unless proven non-secret; the KV406 suggestion must not omit a plausible credential column
-      without an explicit author override (P2). A completeness test binds the classifier to the known plugin credential
-      columns. Both are the C11 shape (a hand-picked subset standing in for the true surface).
+- [x] **DEC-C (folds P1 + P2) — Better Auth secret-surface completeness.** (a) The plaintext-API confinement is now a
+      fail-closed enumeration: `proveBetterAuthPlaintextApiConfinement` (`internal/non-egress-proof.ts`) scans every
+      `auth.api.*` call site and goes RED when a method is unclassified or a plaintext-reading method is used outside the
+      trusted module — `internal.trusted-plaintext.test.ts` proves the real surface GREEN and two synthetic usages RED
+      (P1). (b) `betterAuthCredentialSecretFields`/`isBetterAuthCredentialShapedColumn` (`internal.ts`) is a POSITIVE
+      rule (final name segment is a credential noun → default `secret:`), so `apiKey.key` and custom credential fields
+      classify secret unless proven non-secret; the KV406 suggestion no longer omits them (proven by the
+      `customCredential` suggestion test) and `apiKey` is statically bridged with `secret: ['key']` (enforced) (P2). A
+      completeness test binds the classifier to the known plugin credential columns.
+  - Evidence: `pnpm --filter @kovojs/better-auth exec vitest run` → 6 files / 93 tests PASS, incl. the new
+    `plugin credential secret classification` + fail-closed plaintext-API confinement cases. SPEC.md §10.1 C10 note added
+    in `spec/10-data-plane.md`.
 - [ ] **DEC-D (folds P3 + P4) — differential-oracle + attached-code attribution completeness (test/DiD hygiene, lower
       priority).** (a) The fk-cascade fuzzer case grants enough that the driving write SUCCEEDS and the definer trigger
       fires (observed `leak=true`); add non-trigger differential cases (DEFAULT/CHECK/GENERATED/rewrite) that drive a
@@ -100,8 +104,10 @@ the true surface.**
   - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-grant-shape-fuzzer.test.ts`.
 - [ ] **DEC-B:** `?`-nesting rejected at runtime + compile; benign/linear pass; single-source quantifier test.
   - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts` + the compiler redos-pattern test.
-- [ ] **DEC-C:** new-plaintext-endpoint turns the proof RED; unknown plugin credential column classified secret;
+- [x] **DEC-C:** new-plaintext-endpoint turns the proof RED; unknown plugin credential column classified secret;
       completeness test binds the classifier.
+  - Evidence: `pnpm --filter @kovojs/better-auth exec vitest run` (93 pass) — `internal.trusted-plaintext.test.ts`
+    (unclassified + misplaced synthetic usages RED) and `index.schema-bridge.test.ts` (completeness + KV406 suggestion).
 - [ ] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
 
