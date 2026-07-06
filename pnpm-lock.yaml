@@ -526,7 +526,7 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       better-sqlite3:
-        specifier: ^12.0.0
+        specifier: 12.11.1
         version: 12.11.1
       vite:
         specifier: 8.0.16
@@ -596,7 +596,7 @@ importers:
   packages/server:
     dependencies:
       '@electric-sql/pglite':
-        specifier: ^0.5.1
+        specifier: 0.5.1
         version: 0.5.1
       '@kovojs/browser':
         specifier: workspace:*
@@ -611,13 +611,13 @@ importers:
         specifier: workspace:*
         version: link:../style
       '@node-rs/argon2':
-        specifier: ^2.0.2
+        specifier: 2.0.2
         version: 2.0.2
       drizzle-orm:
         specifier: 1.0.0-rc.4
         version: 1.0.0-rc.4(@electric-sql/pglite@0.5.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0)(zod@4.4.3)
       pg:
-        specifier: ^8.16.3
+        specifier: 8.22.0
         version: 8.22.0
       pgsql-ast-parser:
         specifier: ^12.0.2
@@ -633,7 +633,7 @@ importers:
         specifier: ^8.15.6
         version: 8.20.0
       better-sqlite3:
-        specifier: ^12.0.0
+        specifier: 12.11.1
         version: 12.11.1
       vitest:
         specifier: 4.1.8
