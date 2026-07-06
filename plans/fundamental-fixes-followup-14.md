@@ -11,10 +11,10 @@ followup-13 (DEC-B) fixed round-16 B2 by turning the dangerous-attribute check f
 round-17 fail-opens are the same error — **the set the allowlist/analyzer ranges over is itself a hand-picked subset of
 the true surface.**
 
-| Finding | The set the check ranges over        | The subset shipped (wrong)                                | The complete surface it must range over                                                         |
-| ------- | ------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| B1      | engine-identity escalation axes       | role ATTRIBUTES only (`rolsuper`…`rolcreatedb`)           | attributes ∪ **predefined-role membership** (`pg_execute_server_program`, `pg_write_all_data`, …) |
-| F1      | catastrophic-backtracking quantifiers | `{+, *, {n,m}}` — **omits `?`**                          | every quantifier the engine backtracks on, incl. `?` (already recognized by `quantifierAt`)      |
+| Finding | The set the check ranges over         | The subset shipped (wrong)                      | The complete surface it must range over                                                           |
+| ------- | ------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| B1      | engine-identity escalation axes       | role ATTRIBUTES only (`rolsuper`…`rolcreatedb`) | attributes ∪ **predefined-role membership** (`pg_execute_server_program`, `pg_write_all_data`, …) |
+| F1      | catastrophic-backtracking quantifiers | `{+, *, {n,m}}` — **omits `?`**                 | every quantifier the engine backtracks on, incl. `?` (already recognized by `quantifierAt`)       |
 
 **Meta-invariant (extends C10):**
 
@@ -28,7 +28,7 @@ the true surface.**
 
 ### DEC-A — Identity escalation surface = attributes ∪ predefined-role membership (fixes B1)
 
-- [ ] **A1 — The DEC-B runtime-identity posture (`postgresRuntimeLoginPostureIssues`, `postgres-runtime.ts:2700-2801`)
+- [x] **A1 — The DEC-B runtime-identity posture (`postgresRuntimeLoginPostureIssues`, `postgres-runtime.ts:2700-2801`)
       must range its allowlist over predefined-role MEMBERSHIP as well as role attributes. The runtime login AND every
       assumable role (the SAME `pg_has_role MEMBER` closure DEC-B already computes) must be a member of ONLY the
       framework's own roles (`{reader, writer, admin, system}`) plus an explicit benign don't-care set — membership in
@@ -45,8 +45,8 @@ the true surface.**
     future classification, not a default hole. Hard break OK (no one uses Kovo yet).
   - Acceptance: a runtime login (or assumable role) that is a member of `pg_execute_server_program` / `pg_write_all_data`
     / `pg_read_server_files` / `pg_write_server_files` / `pg_read_all_data` / `pg_monitor` makes `kovo db
-    check`/provision/boot REFUSE with the predefined role named; a login that is a member of only `{reader, writer,
-    admin, system}` passes; the audited identity set is the SAME `{login} ∪ assumable closure` DEC-B/DEC-C use (no
+check`/provision/boot REFUSE with the predefined role named; a login that is a member of only `{reader, writer,
+admin, system}` passes; the audited identity set is the SAME `{login} ∪ assumable closure` DEC-B/DEC-C use (no
     drift). Add a predefined-role-membership axis to the grant-shape fuzzer identity axis (re-introducing the gap turns
     it RED). SPEC §10.3 + `security-markers.ts` KV433 wording states the escalation surface is attributes ∪ predefined
     -role membership.
@@ -56,7 +56,7 @@ the true surface.**
 
 ### DEC-B — The sound-subset ReDoS analyzer's quantifier set is complete (fixes F1)
 
-- [ ] **B1 — `containsQuantifier` (`redos.ts:228-238`) and its compile-time twin (`redos-pattern.ts:159-169`) must treat
+- [x] **B1 — `containsQuantifier` (`redos.ts:228-238`) and its compile-time twin (`redos-pattern.ts:159-169`) must treat
       `?` as a quantifier, so a quantified group whose body is quantified with `?` — `(a?b?)+`, `(a?){50}b`, `(a?)+` — is
       rejected by `assertLinearSafePattern` at runtime AND flagged with a KV434 diagnostic at compile time. Route the
       quantifier test through the existing `quantifierAt` (which already recognizes `?`) so the quantifier set is defined
@@ -99,11 +99,14 @@ the true surface.**
 
 ## 4. Proving
 
-- [ ] **DEC-A:** predefined-role membership refusal (each escalation role) + framework-role-only pass + fuzzer identity
-      axis RED on re-introduction.
-  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-grant-shape-fuzzer.test.ts`.
-- [ ] **DEC-B:** `?`-nesting rejected at runtime + compile; benign/linear pass; single-source quantifier test.
-  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts` + the compiler redos-pattern test.
+- [x] **DEC-A:** predefined-role membership refusal (each escalation role) + framework-role-only pass + fuzzer identity
+      axis RED on re-introduction. Done 2026-07-06 (merged `fbfef070e`); detected via `pg_` prefix + oid<16384 over the
+      existing assumable-role closure, allowlist over `{reader,writer,admin,system}`; ran against a real PGlite engine.
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-grant-shape-fuzzer.test.ts` (60 pass).
+- [x] **DEC-B:** `?`-nesting rejected at runtime + compile; benign/linear pass; single-source quantifier test. Done
+      2026-07-06 (merged `ce46ed2dd`); `containsQuantifier` routes through `quantifierAt` via atom-walking in both twins,
+      so non-capturing groups `(?:…)` are not over-blocked.
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts` (12 pass) + `redos-pattern.test.ts` (17 pass).
 - [x] **DEC-C:** new-plaintext-endpoint turns the proof RED; unknown plugin credential column classified secret;
       completeness test binds the classifier.
   - Evidence: `pnpm --filter @kovojs/better-auth exec vitest run` (93 pass) — `internal.trusted-plaintext.test.ts`
