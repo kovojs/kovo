@@ -26,11 +26,13 @@ Threat categories: **Confidentiality** (C), **Integrity** (I), **Availability** 
 Surfaces: **DB / data plane**, **Auth**, **Wire / HTTP**, **Render / browser**, **Build / compiler**, **Dependencies /
 supply chain**, **Runtime / infra**.
 
-- [ ] **M1 — Author the matrix (one row per surface, one column per threat category) and fill every cell.** Seed it
+- [x] **M1 — Author the matrix (one row per surface, one column per threat category) and fill every cell.** Seed it
       from the arc's existing controls (below) so the already-solved cells are recorded, not re-litigated, and the gaps
       stand out.
   - Acceptance: `docs/security-threat-matrix.md` exists with every cell filled (control+test / escape / out-of-scope);
     a `## Open cells` section lists any cell without one; `rules/v1-acceptance.md` 16.9 references it as a freeze gate.
+  - Done 2026-07-06: `docs/security-threat-matrix.md` authored — 7 surfaces × 4 categories, every cell filled from the
+    arc + the M3–M8 probes; Open-cells section lists M2/M3/M6. (16.9 reference is still TODO — see A2.)
 
 ### Already-solved cells (record, do not re-open)
 
@@ -52,24 +54,46 @@ supply chain**, **Runtime / infra**.
       `declarePublicRelation`/`unsafeRegex` site is logged and surfaced in `kovo explain --capabilities` with its
       justification.** The escapes are intentional holes; the guarantee is that they are all VISIBLE to a reviewer. Verify
       no escape exists that is not enumerated by `kovo explain`.
-- [ ] **M4 — Timing side-channels (C): the trusted-zone secret compare is CONSTANT-TIME** (password/token verify), and
+- [x] **M4 — Timing side-channels (C): the trusted-zone secret compare is CONSTANT-TIME** (password/token verify), and
       no error-message-length / early-return oracle distinguishes "wrong user" from "wrong secret". (followup-12 O4 flagged
       the compare.)
-- [ ] **M5 — Availability / DoS (A): decide scope.** Connection exhaustion, ReDoS (the `unsafeRegex` escape), O(n^2)
+  - INVESTIGATED → **GREEN.** Kovo-owned compares constant-time (argon2 native `verify` + absent-account decoy digest
+    `password.ts:180-207`; `secureEqual` SHA-256+`timingSafeEqual` `keyring.ts:208`); all failures → opaque
+    `INVALID_CREDENTIALS`. Better Auth's internal compare is an out-of-scope dependency assumption (→ M6).
+- [x] **M5 — Availability / DoS (A): decide scope.** Connection exhaustion, ReDoS (the `unsafeRegex` escape), O(n^2)
       query shapes, unbounded uploads/result sets. Likely OUT OF SCOPE for the framework's security guarantee (rate-limit /
       resource limits are the app + deploy's responsibility) — but say so explicitly per cell, and confirm the framework
       ships no DoS FOOTGUN (e.g. an un-timeout-ed query path, an unbounded task fan-out).
+  - INVESTIGATED → **OUT-OF-SCOPE-for-the-guarantee + GREEN-no-footgun.** Framework ships a normative default-on
+    pre-dispatch load-shed posture (SPEC §9.5: 1 MiB body cap, rate budgets, ReDoS static reject + 4096-char cap that
+    bounds `unsafeRegex`, query-list cap 100, capped task retries, bounded pool); deploy owns query cost/`statement_timeout`,
+    pool sizing, L3/L4. No framework footgun. Scope recorded in the matrix.
 - [ ] **M6 — Dependencies / supply chain (C/I/Au): scope + hygiene.** Better Auth, Drizzle, node-pg, PGlite have their
       own surfaces. Out of scope to audit their internals, but IN scope: pinned versions + lockfile, a documented update
       policy, and the TCB manifest marking which dependency surfaces Kovo's guarantees DEPEND on (so a dependency change
       that touches them is a review trigger).
-- [ ] **M7 — Build / compiler (I): the generated code trust boundary.** `dynamic.import.process` is a DEC-F sink;
+  - INVESTIGATED → **OPEN (partial).** HAVE: `pnpm-lock.yaml`, `scripts/supply-chain-gates.mjs`, `check:pack-security`,
+    exact-pinned `better-auth`/`drizzle-orm`. GAPS: `pg`/`@electric-sql/pglite`/argon2/better-sqlite3 are CARET (not
+    exact) + no `--frozen-lockfile` in CI; `security/TCB.md` marks Kovo wrappers not the 7 dependency BEHAVIOR surfaces;
+    no `rules/dependency-policy.md`. FIX: exact-pin + `--frozen-lockfile`; `trustedDependencySurfaces` in TCB.md enforced
+    by `check:tcb-boundary`; `rules/dependency-policy.md`. Detail in the matrix (M6). → own follow-up.
+- [x] **M7 — Build / compiler (I): the generated code trust boundary.** `dynamic.import.process` is a DEC-F sink;
       confirm the compiler's OUTPUT (lowered IR, generated server/client modules) cannot be influenced by app-authored
       untrusted input into an executable position, and that the build gates (`check:*`) own that boundary.
-- [ ] **M8 — Runtime / infra × C: multi-tenant infra hygiene.** Connection-pool scrub (`DISCARD ALL`, followup-12
+  - INVESTIGATED → **GREEN.** Generated executable content framework-constructed; `dynamic.import.process` sole door is
+    the inline-loader `/c/` versioned-module allowlist; KV235 provenance token; `check:sink-policy` (empty
+    `eval`/`Function`/`vm` allowlist) + `import-boundary` + `check:inline-loader` own the boundary. Low-severity
+    author-trust note: `componentName` unsanitized at a few identifier sites (`emit/client.ts:311…`, filename fallback
+    `scan/parse.ts:444`) — route through `sanitizeIdentifier`. Detail in the matrix (M7).
+- [x] **M8 — Runtime / infra × C: multi-tenant infra hygiene.** Connection-pool scrub (`DISCARD ALL`, followup-12
       DEC-C) is done; also confirm no cross-tenant bleed via shared PGlite files, log aggregation carrying secrets, or a
       shared cache key. The `log/error output` sink (DEC-F) covers secret-in-logs; confirm cross-tenant log isolation is
       the deploy's job and documented.
+  - INVESTIGATED → **GREEN** (no cross-tenant bleed): pool doubly-scrubbed; module fact-arrays have no exported read
+    path; logs redact secrets; caches principal-independent. Deploy owns per-tenant log-stream isolation + production DB
+    (dev PGlite shares one data dir → RLS is the boundary). Latent non-confidentiality papercut:
+    `crossOwnerReadAuditFacts`/`publicReadAuditFacts` not env-gated → unbounded prod growth (`managed-db.ts:1651…`); gate
+    behind non-production. Detail in the matrix (M8).
 
 ## 3. External audit
 
