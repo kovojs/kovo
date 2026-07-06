@@ -3,8 +3,12 @@ import { basename, join, relative } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import {
+  betterAuthPlaintextReadingApiMethods,
   betterAuthRequestSecretPaths,
+  betterAuthTrustedPlaintextModule,
+  proveBetterAuthPlaintextApiConfinement,
   proveBetterAuthRequestSecretNonEgress,
+  type BetterAuthApiUsage,
   type BetterAuthRequestSecretPath,
 } from './internal/non-egress-proof.js';
 
@@ -93,18 +97,70 @@ describe('Better Auth trusted plaintext zone', () => {
     expect(asserted.every((id) => manifestIds.has(id))).toBe(true);
   });
 
-  it('confines Better Auth plaintext API calls to the trusted module', () => {
-    const apiCall = /\bauth\.api\.(?:getSession|signInEmail|signOut|signUpEmail)\s*\(/g;
-    const matches = sourceFiles(srcDir).flatMap((path) => {
-      const rel = relative(srcDir, path);
-      return [...sourceWithoutComments(rel).matchAll(apiCall)].map((match) => `${rel}:${match[0]}`);
+  // SPEC §10.1 C10 / §6.6 (papercuts-36 P1): confinement is a FAIL-CLOSED enumeration whose
+  // completeness is checked against the actual `auth.api.*` surface Kovo calls, not a hardcoded
+  // 4-name regex. A new plaintext-reading endpoint used outside the trusted module — or any
+  // unclassified `auth.api.*` usage — turns the proof RED until it is classified.
+  function scanBetterAuthApiUsages(): BetterAuthApiUsage[] {
+    const apiCall = /\bauth\.api\.([A-Za-z0-9_$]+)\s*\(/g;
+    return sourceFiles(srcDir).flatMap((path) => {
+      const rel = relative(srcDir, path).split('\\').join('/');
+      return [...sourceWithoutComments(rel).matchAll(apiCall)].map((match) => ({
+        method: match[1] as string,
+        file: rel,
+      }));
     });
+  }
 
-    expect(matches).toEqual([
-      'internal/trusted-plaintext.ts:auth.api.signInEmail(',
-      'internal/trusted-plaintext.ts:auth.api.signUpEmail(',
-      'internal/trusted-plaintext.ts:auth.api.signOut(',
-      'internal/trusted-plaintext.ts:auth.api.getSession(',
+  it('confines the enumerated Better Auth plaintext API surface to the trusted module', () => {
+    const usages = scanBetterAuthApiUsages();
+
+    // The real framework surface is fully classified and confined (proof is GREEN).
+    expect(proveBetterAuthPlaintextApiConfinement(usages)).toEqual([]);
+
+    // Every `auth.api.*` Kovo calls today reads plaintext and lives in the trusted module.
+    expect(new Set(usages.map((usage) => usage.file))).toEqual(
+      new Set([betterAuthTrustedPlaintextModule]),
+    );
+    expect([...new Set(usages.map((usage) => usage.method))].sort()).toEqual([
+      'getSession',
+      'signInEmail',
+      'signOut',
+      'signUpEmail',
+    ]);
+    for (const method of ['getSession', 'signInEmail', 'signOut', 'signUpEmail']) {
+      expect(betterAuthPlaintextReadingApiMethods).toContain(method);
+    }
+  });
+
+  it('fails red when a new plaintext-reading auth.api.* usage escapes the trusted module', () => {
+    const usages = scanBetterAuthApiUsages();
+
+    // A known plaintext endpoint (resetPassword) invoked outside the trusted module is MISPLACED.
+    expect(
+      proveBetterAuthPlaintextApiConfinement([
+        ...usages,
+        { method: 'resetPassword', file: 'mutations.ts' },
+      ]),
+    ).toEqual([
+      `KV439: plaintext-reading Better Auth API auth.api.resetPassword used outside ` +
+        `${betterAuthTrustedPlaintextModule} in mutations.ts`,
+    ]);
+  });
+
+  it('fails red when an unclassified auth.api.* method appears in framework source', () => {
+    const usages = scanBetterAuthApiUsages();
+
+    // A brand-new endpoint Kovo has never classified fails closed until it is enumerated.
+    expect(
+      proveBetterAuthPlaintextApiConfinement([
+        ...usages,
+        { method: 'signInWithFutureCredential', file: 'session.ts' },
+      ]),
+    ).toEqual([
+      `KV439: unclassified Better Auth plaintext API auth.api.signInWithFutureCredential in ` +
+        `session.ts; classify it as plaintext-reading (confined to ` +
+        `${betterAuthTrustedPlaintextModule}) or allowlist it as non-plaintext with justification`,
     ]);
   });
 

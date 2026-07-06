@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   type BetterAuthTable,
   annotateBetterAuthSchemaSource,
+  betterAuthCredentialSecretFields,
+  betterAuthKnownPluginCredentialColumns,
+  betterAuthKnownReadablePluginColumns,
+  isBetterAuthCredentialShapedColumn,
   betterAuthCredentialMutationDeclaredTableTouches,
   betterAuthCredentialMutationDefaultKeys,
   betterAuthCredentialOperationContracts,
@@ -32,6 +36,8 @@ describe('schema bridge', () => {
         key: 'userId',
         secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
       },
+      // papercuts-36 P2 (SPEC.md §10.1 C10): apiKey `key` is the raw stored credential, `secret:`.
+      apiKey: { domain: 'auth', key: 'userId', secret: ['key'] },
       deviceCode: {
         exempt: true,
         rationale:
@@ -151,6 +157,7 @@ describe('schema bridge', () => {
     expect(betterAuthDbVerificationConfig).toEqual({
       domainByTable: {
         account: 'auth',
+        apiKey: 'auth',
         invitation: 'organization',
         member: 'organization',
         oauthAccessToken: 'auth',
@@ -168,6 +175,7 @@ describe('schema bridge', () => {
       exemptTables: ['deviceCode', 'jwks', 'rateLimit', 'verification'],
       keyByTable: {
         account: 'userId',
+        apiKey: 'userId',
         invitation: 'organizationId',
         member: 'organizationId',
         oauthAccessToken: 'userId',
@@ -1033,5 +1041,74 @@ describe('schema bridge', () => {
     expect(result.source).toContain("pgTable('auth_session_state', {})");
     expect(verifierConfig.domainByTable).not.toHaveProperty('auth_session_state');
     expect(verifierConfig.keyByTable).not.toHaveProperty('auth_session_state');
+  });
+});
+
+// SPEC.md §10.1 C10 (papercuts-36 P2): the plugin credential-secret classifier is a POSITIVE
+// fail-closed rule (credential-shaped columns default to `secret:`), not a hardcoded denylist of
+// column names. A new/unknown credential column — canonically the apiKey plugin's `key`, or a
+// custom credential `additionalField` — is classified secret by default rather than emitted as an
+// ordinary readable column by the KV406 bridge suggestion.
+describe('plugin credential secret classification', () => {
+  it('classifies every known Better Auth plugin credential column as secret (completeness)', () => {
+    for (const column of betterAuthKnownPluginCredentialColumns) {
+      expect(isBetterAuthCredentialShapedColumn(column), column).toBe(true);
+    }
+    // The batch classifier returns the sorted credential-shaped subset of a field set.
+    const fields = new Set<string>([
+      ...betterAuthKnownPluginCredentialColumns,
+      ...betterAuthKnownReadablePluginColumns,
+    ]);
+    expect(betterAuthCredentialSecretFields(fields)).toEqual(
+      [...betterAuthKnownPluginCredentialColumns].sort(),
+    );
+  });
+
+  it('never classifies ordinary owner-scoped columns as secret (no over-block)', () => {
+    for (const column of betterAuthKnownReadablePluginColumns) {
+      expect(isBetterAuthCredentialShapedColumn(column), column).toBe(false);
+    }
+    // A credential noun that is a qualifier, not the column itself, stays readable.
+    expect(isBetterAuthCredentialShapedColumn('refreshTokenExpiresAt')).toBe(false);
+    expect(isBetterAuthCredentialShapedColumn('keyId')).toBe(false);
+  });
+
+  it('classifies a custom credential-shaped additionalField as secret', () => {
+    // A plugin credential column outside the historical 8-name denylist still defaults to secret.
+    expect(isBetterAuthCredentialShapedColumn('apiToken')).toBe(true);
+    expect(isBetterAuthCredentialShapedColumn('passwordHash')).toBe(true);
+    expect(isBetterAuthCredentialShapedColumn('signingKey')).toBe(true);
+    expect(betterAuthCredentialSecretFields(new Set(['userId', 'apiToken', 'label']))).toEqual([
+      'apiToken',
+    ]);
+  });
+
+  it('KV406 bridge suggestion refuses to omit a plausible credential column', () => {
+    // An unsupported plugin credential table (not in the static bridge) still gets a `secret:` list
+    // covering its credential-shaped columns, so the suggested annotation authors would paste
+    // classifies `key` secret instead of presenting it as readable.
+    const tables = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+      customCredential: authTable(['userId', 'key', 'name', 'createdAt']),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const customCredential = pgTable('customCredential', {});",
+      ].join('\n'),
+      tables,
+    );
+
+    const degradation = result.validation.pluginTableDegradations.find(
+      (fact) => fact.table === 'customCredential',
+    );
+    expect(degradation?.suggestedAnnotation).toEqual({
+      domain: 'auth',
+      key: 'userId',
+      secret: ['key'],
+    });
   });
 });

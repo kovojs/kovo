@@ -227,6 +227,8 @@ export const betterAuthCredentialMutationApis = [
 
 /** @internal Better Auth core table names recognized by the schema bridge. */
 export type BetterAuthCoreTable = 'account' | 'session' | 'user' | 'verification';
+/** @internal Better Auth apiKey plugin table name (stores the raw API-key credential in `key`). */
+export type BetterAuthApiKeyTable = 'apiKey';
 /** @internal Better Auth device-authorization plugin table name. */
 export type BetterAuthDeviceAuthorizationTable = 'deviceCode';
 /** @internal Better Auth organization plugin table names. */
@@ -250,6 +252,7 @@ export type BetterAuthTwoFactorTable = 'twoFactor';
 /** @internal Union of all Better Auth table names known to the schema bridge. */
 export type BetterAuthTable =
   | BetterAuthCoreTable
+  | BetterAuthApiKeyTable
   | BetterAuthDeviceAuthorizationTable
   | BetterAuthJwtTable
   | BetterAuthOidcProviderTable
@@ -565,6 +568,11 @@ export const betterAuthSchemaBridge = {
     key: 'userId',
     secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
   },
+  // papercuts-36 P2 (SPEC.md §10.1 C10): the official apiKey plugin stores the raw API-key
+  // credential in `key`. It is owner-scoped (`auth`/`userId`) so non-secret columns (name, prefix,
+  // start) stay readable, but `key` is classified `secret:` so a projection that reaches it fires
+  // KV435 instead of serializing a long-lived credential to the wire.
+  apiKey: { domain: 'auth', key: 'userId', secret: ['key'] },
   deviceCode: {
     exempt: true,
     rationale:
