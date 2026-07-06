@@ -273,6 +273,13 @@ export function snapshotManagedSqlStatement(
     };
   }
   if (typeof statement !== 'object' || statement === null) return { ok: false };
+  const unsafeSurface = unsafeSqlCarrierSurface(statement);
+  if (unsafeSurface !== undefined) {
+    return {
+      message: `${unsafeSurface} SQL carriers are not accepted on Kovo-managed DB handles; the framework reconstructs the DB driver carrier from validated { text, values } only (SPEC §10.3).`,
+      ok: false,
+    };
+  }
 
   const record = statement as Record<PropertyKey, unknown>;
   const textSnapshot = snapshotSqlText(record);
@@ -420,6 +427,26 @@ function snapshotNamedSqlParameters(
 }
 
 const ACCESSOR_OR_PROXY_PROPERTY = Symbol('kovo.sql.accessor-or-proxy-property');
+
+function unsafeSqlCarrierSurface(value: object): 'submit-bearing' | 'thenable' | undefined {
+  if (hasCallableOrAccessor(value, 'submit')) return 'submit-bearing';
+  if (hasCallableOrAccessor(value, 'then')) return 'thenable';
+  return undefined;
+}
+
+function hasCallableOrAccessor(value: object, property: 'submit' | 'then'): boolean {
+  if (!(property in value)) return false;
+  let current: object | null = value;
+  while (current !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor)) return true;
+      return typeof descriptor.value === 'function';
+    }
+    current = Object.getPrototypeOf(current);
+  }
+  return false;
+}
 
 function dataPropertyValue(
   record: Record<PropertyKey, unknown>,

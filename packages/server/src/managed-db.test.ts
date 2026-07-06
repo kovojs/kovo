@@ -846,6 +846,98 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['query']);
   });
 
+  it('rawRead reconstructs a plain carrier and never forwards submit-bearing app values', async () => {
+    const observed: unknown[] = [];
+    const reader = readonlyDb(
+      {
+        query(statement: unknown) {
+          observed.push(statement);
+          return Promise.resolve([statement]);
+        },
+      },
+      {
+        rawRead: {
+          dialectLabel: 'Postgres',
+          executeMethod: 'query',
+          normalizeTableName: (table) => table,
+        },
+      },
+    );
+
+    expect(() =>
+      reader.rawRead(
+        {
+          submit() {
+            throw new Error('out-of-band SQL executed');
+          },
+          text: 'select id from products where id = $1',
+          values: ['p1'],
+        },
+        { reads: ['products'] },
+      ),
+    ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
+    expect(observed).toEqual([]);
+
+    const carrier = { text: 'select id from products where id = $1', values: ['p1'] };
+    await expect(reader.rawRead(carrier, { reads: ['products'] })).resolves.toHaveLength(1);
+    expect(observed[0]).not.toBe(carrier);
+    expect(observed[0]).toMatchObject({
+      text: 'select id from products where id = $1',
+      values: ['p1'],
+    });
+  });
+
+  it('crossOwnerRead reconstructs the admin-client carrier and refuses submit-bearing app values', async () => {
+    const observed: unknown[] = [];
+    const adminClient = {
+      query(statement: unknown) {
+        observed.push(statement);
+        return Promise.resolve([statement]);
+      },
+    };
+    const reader = managedDb(fakeDb([]), 'read', {
+      crossOwnerRead: {
+        adminClient,
+        dialectLabel: 'Postgres',
+        executeMethod: 'query',
+        hasRole: (role) => role === 'admin',
+        normalizeTableName: (table) => table,
+        ownerTables: ['orders'],
+      },
+    }) as unknown as {
+      crossOwnerRead(
+        statement: unknown,
+        declaration: { reads: readonly string[]; reason: string; role: 'admin' },
+      ): Promise<unknown>;
+    };
+
+    const declaration = {
+      reads: ['orders'],
+      reason: 'admin support lookup',
+      role: 'admin' as const,
+    };
+    expect(() =>
+      reader.crossOwnerRead(
+        {
+          submit() {
+            throw new Error('out-of-band SQL executed');
+          },
+          text: 'select id from orders where id = $1',
+          values: ['o1'],
+        },
+        declaration,
+      ),
+    ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
+    expect(observed).toEqual([]);
+
+    const carrier = { text: 'select id from orders where id = $1', values: ['o1'] };
+    await expect(reader.crossOwnerRead(carrier, declaration)).resolves.toEqual([
+      { text: 'select id from orders where id = $1', values: ['o1'] },
+    ]);
+    expect(observed[0]).not.toBe(carrier);
+    expect(observed).toEqual([{ text: 'select id from orders where id = $1', values: ['o1'] }]);
+  });
+
   it('passes reads through unchanged', async () => {
     const log: string[] = [];
     const reader = readonlyDb(fakeDb(log));
@@ -1768,6 +1860,36 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(carrier.text).toBe('delete from products where id = $1');
   });
 
+  it('write mode refuses submit-bearing carriers before direct SQL execution', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          log.push(String((statement as { text?: unknown }).text));
+          return statement;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    ) as unknown as { query(statement: unknown): unknown };
+
+    expect(() =>
+      handle.query({
+        submit() {
+          throw new Error('out-of-band SQL executed');
+        },
+        text: 'select id from products where id = $1',
+        values: ['p1'],
+      }),
+    ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
+    expect(log).toEqual([]);
+  });
+
   it('fails closed on getter-backed separated carriers before driver execution', () => {
     const log: string[] = [];
     let reads = 0;
@@ -2243,6 +2365,8 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       '/* hidden utility */ SET ROLE kovo_admin',
       'SELECT 1; /* comment */ SELECT 2',
       "SELECT pg_catalog.set_config('kovo.principal', $1, true)",
+      'SELECT "set_config"(\'kovo.principal\', $1, true)',
+      'SELECT "pg_catalog"."set_config"(\'kovo.principal\', $1, true)',
       'VACUUM',
     ]) {
       expect(() => scoped.query(statement, ['victim'])).toThrow(/KV414/);
@@ -2291,6 +2415,47 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       /allowlist/,
     );
     expect(() => scoped.query('select 1 /* unterminated')).toThrow(/unterminated block comment/);
+  });
+
+  it('scoped Postgres query configs reconstruct text and values without copied carrier surface', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: unknown, params?: unknown[]) {
+        if (typeof statement !== 'string') {
+          throw new Error('driver received app query object');
+        }
+        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve({ rows: [] });
+      },
+    };
+    const scoped = createPostgresScopedClient(client, { role: false });
+    const carrier = {
+      text: 'select id from contacts where id = $1',
+      values: ['c1'],
+    };
+
+    await expect(scoped.query(carrier)).resolves.toEqual({ rows: [] });
+    carrier.text = 'delete from contacts where id = $1';
+    expect(log).toEqual(['transaction', 'query:select id from contacts where id = $1:["c1"]']);
+
+    expect(() =>
+      scoped.query({
+        submit() {
+          throw new Error('out-of-band SQL executed');
+        },
+        text: 'select id from contacts where id = $1',
+        values: ['c1'],
+      }),
+    ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
+    expect(log).toEqual(['transaction', 'query:select id from contacts where id = $1:["c1"]']);
   });
 
   it('guards nested Postgres transaction query paths with the same statement chokepoint', async () => {
