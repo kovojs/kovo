@@ -2417,7 +2417,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => scoped.query('select 1 /* unterminated')).toThrow(/unterminated block comment/);
   });
 
-  it('scoped Postgres query configs reconstruct text and values without copied carrier surface', async () => {
+  it('scoped Postgres query configs preserve driver metadata with copied text and values', async () => {
     const log: string[] = [];
     const client = {
       transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
@@ -2429,22 +2429,25 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         return Promise.resolve();
       },
       query(statement: unknown, params?: unknown[]) {
-        if (typeof statement !== 'string') {
-          throw new Error('driver received app query object');
-        }
-        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        log.push(`query:${JSON.stringify(statement)}:${JSON.stringify(params ?? [])}`);
         return Promise.resolve({ rows: [] });
       },
     };
     const scoped = createPostgresScopedClient(client, { role: false });
     const carrier = {
+      rowMode: 'array',
       text: 'select id from contacts where id = $1',
+      types: { getTypeParser: 'driver-codec-marker' },
       values: ['c1'],
     };
 
     await expect(scoped.query(carrier)).resolves.toEqual({ rows: [] });
     carrier.text = 'delete from contacts where id = $1';
-    expect(log).toEqual(['transaction', 'query:select id from contacts where id = $1:["c1"]']);
+    carrier.values.push('mutated');
+    expect(log).toEqual([
+      'transaction',
+      'query:{"rowMode":"array","text":"select id from contacts where id = $1","types":{"getTypeParser":"driver-codec-marker"},"values":["c1"]}:[]',
+    ]);
 
     expect(() =>
       scoped.query({
@@ -2455,7 +2458,10 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         values: ['c1'],
       }),
     ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
-    expect(log).toEqual(['transaction', 'query:select id from contacts where id = $1:["c1"]']);
+    expect(log).toEqual([
+      'transaction',
+      'query:{"rowMode":"array","text":"select id from contacts where id = $1","types":{"getTypeParser":"driver-codec-marker"},"values":["c1"]}:[]',
+    ]);
   });
 
   it('guards nested Postgres transaction query paths with the same statement chokepoint', async () => {

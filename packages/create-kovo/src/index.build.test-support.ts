@@ -4116,7 +4116,8 @@ export async function signInDemoUser(
     redirect: 'manual',
   });
   mergeCookies(jar, signIn.headers.getSetCookie());
-  expect(signIn.status).toBe(303);
+  const signInBody = await signIn.text();
+  expect(signIn.status, `${signInBody}\n${output()}`).toBe(303);
 }
 
 export function execFileSyncErrorOutput(error: unknown): string {

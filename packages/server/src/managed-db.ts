@@ -1123,13 +1123,13 @@ function postgresQuerySnapshot(
   params: readonly unknown[] | undefined,
 ): PostgresQuerySnapshot {
   if (typeof query === 'string') return { text: query, values: params ?? [] };
+  const config = plainPostgresQueryConfigSnapshot(query, params);
+  if (config !== undefined) return config;
   const snapshot = snapshotManagedSqlStatement(query, 'postgres');
   if (snapshot.ok) return snapshot.statement;
   if (snapshot.message !== undefined) {
     throw new KovoReadonlyHandleError(`KV414: ${snapshot.message}`);
   }
-  const config = plainPostgresQueryConfigSnapshot(query, params);
-  if (config !== undefined) return config;
   throw new KovoReadonlyHandleError(
     'KV414: Postgres scoped managed clients reject unknown SQL query carriers; app SQL must be a string or query config with text/sql (SPEC §10.2/§10.3).',
   );
@@ -1148,6 +1148,7 @@ function plainPostgresQueryConfigSnapshot(
   if (!isRecord(query)) return undefined;
   const text = dataPropertyValue(query, 'text') ?? dataPropertyValue(query, 'sql');
   if (typeof text !== 'string') return undefined;
+  assertPlainPostgresQueryConfigSafe(query);
   const values = dataPropertyValue(query, 'values');
   const snapshot = Object.freeze({
     text,
@@ -1159,10 +1160,38 @@ function plainPostgresQueryConfigSnapshot(
   };
 }
 
+function assertPlainPostgresQueryConfigSafe(query: Record<PropertyKey, unknown>): void {
+  for (const property of ['submit', 'then'] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(query, property);
+    if (descriptor === undefined) continue;
+    if ('get' in descriptor && descriptor.get !== undefined) {
+      throw new KovoReadonlyHandleError(
+        `KV414: Postgres scoped managed clients reject ${property}-bearing SQL carriers before snapshotting driver surface (SPEC §10.3).`,
+      );
+    }
+    if ('value' in descriptor && typeof descriptor.value === 'function') {
+      throw new KovoReadonlyHandleError(
+        `KV414: Postgres scoped managed clients reject ${property}-bearing SQL carriers before snapshotting driver surface (SPEC §10.3).`,
+      );
+    }
+  }
+}
+
 function postgresQueryExecutionArgs(
   snapshot: PostgresQuerySnapshot,
   queryOptions: unknown,
 ): [unknown, unknown[] | undefined, unknown] {
+  if (isRecord(snapshot.diagnosticQuery)) {
+    return [
+      {
+        ...snapshot.diagnosticQuery,
+        text: snapshot.text,
+        values: [...snapshot.values],
+      },
+      undefined,
+      queryOptions,
+    ];
+  }
   return [snapshot.text, [...snapshot.values], queryOptions];
 }
 
