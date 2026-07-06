@@ -352,4 +352,38 @@ describe('secret read boundary', () => {
     expect(isSecret(row)).toBe(true);
     expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
   });
+
+  it('boxes async privileged system-role secret reads before adapter serialization', async () => {
+    const privilegedDb = {
+      async query() {
+        return [{ classified: 'async-runtime-secret-value' }];
+      },
+    };
+    const db = createSecretBoxingReadDb(
+      {
+        query() {
+          throw new Error('reader handle must not serve declared system-role secret read');
+        },
+      },
+      metadata(),
+      {
+        privilegedDb,
+        rawSecretTableRead: 'engine',
+      },
+    );
+    const statement = declareSecretReadCapability(
+      { toSQL: () => ({ sql: 'select classified from secrets' }) },
+      {
+        columns: ['classified'],
+        justification: 'test async privileged system-role secret-read path',
+        source: 'test',
+        table: 'secrets',
+      },
+    );
+
+    const [row] = await db.query(statement);
+
+    expect(isSecret(row)).toBe(true);
+    expect(revealSecret(row, 'test')).toEqual({ classified: 'async-runtime-secret-value' });
+  });
 });
