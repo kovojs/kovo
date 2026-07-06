@@ -128,7 +128,7 @@ export const SECURITY_CODE_REGISTRY = {
     code: 'KV414',
     enforcement: 'runtime-choke',
     property:
-      'Authorization: Postgres owner-table access is scoped at the engine choke by unassumeable privilege roles, a confined statement surface for per-request principal GUCs on scrubbed connections, RLS, and side-effect-inclusive closure-audited reachable objects; SQLite is experimental/non-guaranteeing and cannot claim this authorization property.',
+      'Authorization: Postgres owner-table access is scoped at the engine choke by unassumeable privilege roles, a classified role-attribute allowlist over the runtime-login/assumable-role closure, a confined statement surface for per-request principal GUCs on scrubbed connections, RLS, and side-effect-inclusive engine-closure-audited reachable objects; SQLite is experimental/non-guaranteeing and cannot claim this authorization property.',
     propertyDependsOn: 'request-state',
   },
   KV415: {
@@ -276,7 +276,7 @@ export const SECURITY_CODE_REGISTRY = {
     code: 'KV435',
     enforcement: 'runtime-choke',
     property:
-      'Confidentiality: runtime Secret values cannot cross client-readable wire egress; Postgres secret columns are engine-unreadable only under a least-privilege runtime plus closure-audited reachable objects at the engine choke, while SQLite is experimental/non-guaranteeing and relies on runtime boxes.',
+      'Confidentiality: runtime Secret values cannot cross client-readable wire egress; Postgres secret columns are engine-unreadable only under a least-privilege runtime, a classified role-attribute allowlist over the runtime-login/assumable-role closure, and engine-closure-audited reachable objects at the engine choke, while SQLite is experimental/non-guaranteeing and relies on runtime boxes.',
     propertyDependsOn: 'request-state',
   },
   KV436: {

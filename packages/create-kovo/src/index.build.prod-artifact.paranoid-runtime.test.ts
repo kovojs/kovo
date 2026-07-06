@@ -4,10 +4,11 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { writeKovoProject } from './index.js';
+import { demoPasswordEnvVar, writeKovoProject } from './index.js';
 import {
   addPostgresParanoidFollowup8Shapes,
   addParanoidPhase5AuthorizationProof,
@@ -135,7 +136,12 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           runtimeUrl,
         ]);
         expect(provisionOutput).toContain('STATUS ok');
-        await installPhase5PostgresParanoidFixtures(cluster.url(database, 'postgres'));
+        await grantRuntimeDataRoles(cluster.url(database, 'postgres'), runtimeRole);
+        await installPhase5PostgresParanoidFixtures(
+          cluster.url(database, 'postgres'),
+          demoPasswordFromRoot(root),
+        );
+        await expectSystemAuthFixtureVisible(systemUrl);
 
         server = spawn(process.execPath, ['dist/server/server.mjs'], {
           cwd: root,
@@ -936,8 +942,37 @@ async function installFixtureUsers(databaseUrl: string): Promise<void> {
   });
 }
 
-async function installPhase5PostgresParanoidFixtures(databaseUrl: string): Promise<void> {
+function demoPasswordFromRoot(root: string): string {
+  return (
+    new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+      readFileSync(join(root, '.env'), 'utf8'),
+    )?.[1] ?? ''
+  );
+}
+
+async function installPhase5PostgresParanoidFixtures(
+  databaseUrl: string,
+  password: string,
+): Promise<void> {
+  const passwordHash = await betterAuthPasswordHash(password);
   await withPool(databaseUrl, async (pool) => {
+    await pool.query(
+      [
+        'INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")',
+        "VALUES ('demo-user', 'Demo User', 'demo@example.com', false, now(), now()),",
+        "('other-user', 'Other User', 'other@example.com', false, now(), now())",
+        'ON CONFLICT (id) DO NOTHING',
+      ].join(' '),
+    );
+    await pool.query(
+      [
+        'INSERT INTO account',
+        '(id, "accountId", "providerId", "userId", password, "createdAt", "updatedAt")',
+        "VALUES ('demo-account', 'demo-user', 'credential', 'demo-user', $1, now(), now())",
+        'ON CONFLICT (id) DO UPDATE SET password = excluded.password, "updatedAt" = now()',
+      ].join(' '),
+      [passwordHash],
+    );
     await pool.query(
       [
         'INSERT INTO phase5_pg_orders (id, user_id, label, classified) VALUES',
@@ -970,6 +1005,41 @@ async function installPhase5PostgresParanoidFixtures(databaseUrl: string): Promi
   });
 }
 
+async function expectSystemAuthFixtureVisible(databaseUrl: string): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    const result = await pool.query<{
+      account_rows: number;
+      credential_rows: number;
+      user_rows: number;
+    }>(
+      [
+        'SELECT',
+        '(SELECT count(*)::int FROM "user" WHERE email = $1) AS user_rows,',
+        '(SELECT count(*)::int FROM account WHERE "userId" = $2) AS account_rows,',
+        '(',
+        '  SELECT count(*)::int FROM account',
+        '  WHERE "userId" = $2 AND "providerId" = $3 AND password IS NOT NULL',
+        ') AS credential_rows',
+      ].join(' '),
+      ['demo@example.com', 'demo-user', 'credential'],
+    );
+    expect(result.rows[0]).toEqual({
+      account_rows: 1,
+      credential_rows: 1,
+      user_rows: 1,
+    });
+  });
+}
+
+async function betterAuthPasswordHash(password: string): Promise<string> {
+  const passwordModule = await import(
+    pathToFileURL(join(resolveDependencyRoot('@better-auth/utils'), 'dist/password.mjs')).href
+  );
+  return (passwordModule as { hashPassword: (password: string) => Promise<string> }).hashPassword(
+    password,
+  );
+}
+
 async function createExternalDatabase(
   cluster: LocalPostgresCluster,
   names: { adminRole: string; database: string; runtimeRole: string },
@@ -983,6 +1053,14 @@ async function createExternalDatabase(
     await pool.query(
       `CREATE DATABASE ${quoteIdent(names.database)} OWNER ${quoteIdent(names.adminRole)}`,
     );
+  });
+}
+
+async function grantRuntimeDataRoles(databaseUrl: string, runtimeRole: string): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    await pool.query(`GRANT kovo_reader TO ${quoteIdent(runtimeRole)}`);
+    await pool.query(`GRANT kovo_writer TO ${quoteIdent(runtimeRole)}`);
+    await pool.query(`GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(runtimeRole)}`);
   });
 }
 

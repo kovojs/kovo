@@ -7,6 +7,7 @@ import type {
 } from '@kovojs/server';
 
 import { betterAuthMountOperationContract } from './internal/contracts.js';
+import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
 import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
 
 /**
@@ -59,6 +60,7 @@ export function mount<
     csrfJustification:
       options.csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
     handler(request) {
+      assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
       return handler(request);
     },
     method: options.method,

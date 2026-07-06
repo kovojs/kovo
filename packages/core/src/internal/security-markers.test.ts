@@ -134,11 +134,22 @@ describe('DEC-D security code registry', () => {
     const property = SECURITY_CODE_REGISTRY.KV414.property;
 
     expect(property).toContain('unassumeable privilege roles');
+    expect(property).toContain('classified role-attribute allowlist');
+    expect(property).toContain('runtime-login/assumable-role closure');
     expect(property).toContain('confined statement surface');
     expect(property).toContain('per-request principal GUCs');
     expect(property).toContain('scrubbed connections');
-    expect(property).toContain('side-effect-inclusive closure-audited reachable objects');
+    expect(property).toContain('side-effect-inclusive engine-closure-audited reachable objects');
     expect(property).not.toMatch(/set_config/u);
+  });
+
+  it('documents KV435 confidentiality as boxed egress plus engine-computed identity and reachability sets', () => {
+    const property = SECURITY_CODE_REGISTRY.KV435.property;
+
+    expect(property).toContain('runtime Secret values cannot cross client-readable wire egress');
+    expect(property).toContain('classified role-attribute allowlist');
+    expect(property).toContain('runtime-login/assumable-role closure');
+    expect(property).toContain('engine-closure-audited reachable objects');
   });
 
   it('keeps authorization/confidentiality guarantees off build-only classifications', () => {

@@ -223,6 +223,21 @@ Two corollaries are mandatory:
   a runtime box, a reconstructed carrier, or a framework-owned sink that is named in the proof
   inventory and hostile-value tests.
 
+**C10 — security sets are closures or allowlists, never subsets or denylists (normative).** Any set
+used for an authorization, confidentiality, or privileged-execution decision MUST be computed from
+the boundary relation it represents: a reachability set is the complete closure over the relevant
+engine edges, and a property set is an allowlist of the minimal safe members. The write-reachability
+audit closes directly writable relations over structural write-propagation edges: FK referential
+actions, partition/inheritance routing, and rewrite-rule redirects that can route app-role writes.
+The runtime identity audit checks the runtime login plus the complete `pg_has_role(..., MEMBER)`
+assumable-role closure against the classified role-attribute allowlist: `rolsuper`, `rolbypassrls`,
+`rolreplication`, `rolcreaterole`, and `rolcreatedb` MUST be false, while benign role metadata is
+classified explicitly and future unclassified `pg_roles` role-attribute columns fail closed. The
+SECURITY DEFINER routine and attached-code audits use that same login-plus-assumable identity set
+for execution reachability. The auth non-egress proof enumerates the request-reachable
+secret-handling surface and boxes or confines each path; it MUST NOT use a named file as a proxy for
+that surface.
+
 The canonical C9 sink inventory is:
 
 | Sink                  | Mechanism            | Sole door                                                                  | Proof inventory / hostile-value evidence                                                                                            |
@@ -246,12 +261,16 @@ same topology facts drive provision, posture check, production boot, and `kovo d
 pre-created roles does not relax verification: provision/check/boot MUST verify required role
 existence and runtime membership edges, fail before partial DDL when a required adopted role is
 missing, and refuse configurations where the ordinary runtime login can assume privileged
-admin/system roles outside framework-owned scoped clients.
+admin/system roles outside framework-owned scoped clients. The runtime login and every role it can
+assume through the `MEMBER` closure MUST have only the classified minimal-safe role attributes;
+unknown role-attribute columns fail closed until classified.
 
 The closure audit is side-effect-inclusive. Attached code is reachable when the app role can reach
 it by direct `EXECUTE`, DML trigger, rewrite rule, `CHECK`/domain constraint function,
-default/generated expression function, or index/predicate expression function. Each such attached
-code path MUST resolve to the same safe object set above or fail closed.
+default/generated expression function, or index/predicate expression function, including structural
+write propagation through FK referential actions, partition/inheritance routing, and rewrite-rule
+redirects. Each such attached code path MUST resolve to the same safe object set above or fail
+closed.
 
 **Request lifecycle (normative):**
 

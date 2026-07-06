@@ -10,9 +10,11 @@ and the typed `emitToWire` response choke lives in:
 - `packages/better-auth/src/internal.trusted-plaintext.test.ts`
 
 Those tests enumerate the modeled JS coercion operations, JSON value shapes, poisoned-box depths,
-and `emitToWire` framework/raw response cases. They prove the current runtime floor only: box
-non-coercibility, fixed redacted observation, wire-JSON refusal for `Secret`/`Untrusted`, and
-`emitToWire` refusal for typed framework response header egress.
+`emitToWire` framework/raw response cases, and Better Auth request-reachable secret paths. They
+prove the current runtime floor only: box non-coercibility, fixed redacted observation, wire-JSON
+refusal for `Secret`/`Untrusted`, `emitToWire` refusal for typed framework response header egress,
+and Better Auth non-egress for submitted credentials, request cookies, Set-Cookie forwarding, and
+adapter `systemDb` stored-credential reads.
 
 Entries classified as `tcb` count toward the size budget. Entries classified as
 `delegating-wire-emitter`, `advisory-static-classifier`, or `inventory-classifier` are deliberately
@@ -237,58 +239,32 @@ they are not claimed as the verified TCB.
       "lineBudget": 80
     },
     {
-      "id": "better-auth.trusted-plaintext.sign-in",
-      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
-      "name": "callBetterAuthSignInEmail",
-      "kind": "third-party-auth-plaintext-comparison-sink",
-      "classification": "tcb",
+      "id": "better-auth.request-secret-surface.manifest",
+      "file": "packages/better-auth/src/internal/non-egress-proof.ts",
+      "name": "betterAuthRequestSecretPaths",
+      "kind": "request-reachable-auth-secret-path-inventory",
+      "classification": "inventory-classifier",
       "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 12
+      "paths": [
+        "better-auth.sign-in.submitted-password",
+        "better-auth.sign-up.submitted-password",
+        "better-auth.sign-out.request-cookie",
+        "better-auth.get-session.request-cookie",
+        "better-auth.set-cookie.forwarding",
+        "better-auth.session-refresh.set-cookie",
+        "better-auth.adapter.sign-in.account-password",
+        "better-auth.adapter.session-token-lookup",
+        "better-auth.mount.handler-delegation"
+      ]
     },
     {
-      "id": "better-auth.trusted-plaintext.sign-up",
-      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
-      "name": "callBetterAuthSignUpEmail",
-      "kind": "third-party-auth-plaintext-write-comparison-sink",
+      "id": "better-auth.request-secret-surface.proof",
+      "file": "packages/better-auth/src/internal/non-egress-proof.ts",
+      "name": "proveBetterAuthRequestSecretNonEgress",
+      "kind": "request-reachable-auth-secret-non-egress-proof",
       "classification": "tcb",
       "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 12
-    },
-    {
-      "id": "better-auth.trusted-plaintext.sign-out",
-      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
-      "name": "callBetterAuthSignOut",
-      "kind": "third-party-auth-cookie-revocation-sink",
-      "classification": "tcb",
-      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 10
-    },
-    {
-      "id": "better-auth.trusted-plaintext.get-session",
-      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
-      "name": "callBetterAuthGetSession",
-      "kind": "third-party-auth-cookie-session-lookup-sink",
-      "classification": "tcb",
-      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 20
-    },
-    {
-      "id": "better-auth.trusted-plaintext.set-cookie-read",
-      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
-      "name": "getBetterAuthSetCookie",
-      "kind": "third-party-auth-cookie-forwarding-source",
-      "classification": "tcb",
-      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 16
-    },
-    {
-      "id": "better-auth.trusted-plaintext.split-folded-cookie",
-      "file": "packages/better-auth/src/internal/trusted-plaintext.ts",
-      "name": "splitFoldedSetCookie",
-      "kind": "third-party-auth-cookie-forwarding-parser",
-      "classification": "tcb",
-      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 12
+      "lineBudget": 45
     },
     {
       "id": "drizzle.runtime-metadata.extract",
