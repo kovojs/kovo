@@ -13,12 +13,12 @@ open-redirect, SQL-identifier, headers, cookies, egress all reproduced SOUND) an
 (DEC-A) survived 13 attack angles with ZERO findings — the "reconstruct/own the value that reaches a sink" axis holds.
 The residual fail-opens are entirely on the enumeration axes:
 
-| Axis (Move 2) | Enumerates | Misses (→ fail-open) |
-| --- | --- | --- |
-| attached-code reachability (DEC-B/D) | DIRECTLY-writable relations (`has_table_privilege`) | relations reached via WRITE PROPAGATION — FK `ON DELETE CASCADE`, partition tuple-routing (B1) |
-| identity ATTRIBUTES (DEC-C) | `SUPERUSER` + `BYPASSRLS` | `REPLICATION` — a login that streams the whole cluster (B2) |
-| audited IDENTITY set (routine audit) | the 4 framework roles `{reader,writer,admin,system}` | the runtime LOGIN role (B4) |
-| auth non-egress proof (DEC-D) | `internal/trusted-plaintext.ts` | the request-reachable adapter surface that reads unboxed secrets (B3 + `papercuts-35` P1) |
+| Axis (Move 2)                        | Enumerates                                           | Misses (→ fail-open)                                                                           |
+| ------------------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| attached-code reachability (DEC-B/D) | DIRECTLY-writable relations (`has_table_privilege`)  | relations reached via WRITE PROPAGATION — FK `ON DELETE CASCADE`, partition tuple-routing (B1) |
+| identity ATTRIBUTES (DEC-C)          | `SUPERUSER` + `BYPASSRLS`                            | `REPLICATION` — a login that streams the whole cluster (B2)                                    |
+| audited IDENTITY set (routine audit) | the 4 framework roles `{reader,writer,admin,system}` | the runtime LOGIN role (B4)                                                                    |
+| auth non-egress proof (DEC-D)        | `internal/trusted-plaintext.ts`                      | the request-reachable adapter surface that reads unboxed secrets (B3 + `papercuts-35` P1)      |
 
 The round-16 lesson: "reachable" must be closed over PROPAGATION (cascades, routing); "dangerous authority" is the
 COMPLETE attribute set, not the two you named; and the audited identity set is EVERY identity that touches the engine,
