@@ -104,6 +104,7 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     expect(snapshot.statement).toMatchObject({
       dialect: 'sqlite',
       provenance: 'trusted-separated-carrier',
+      sql: 'select id from products',
       text: 'select id from products',
       values: [],
     });

@@ -217,6 +217,7 @@ export type ManagedSqlProvenance =
 export interface ManagedSqlStatement {
   readonly dialect: ManagedSqlDialect;
   readonly provenance: ManagedSqlProvenance;
+  readonly sql: string;
   readonly text: string;
   readonly values: readonly unknown[];
 }
@@ -482,6 +483,7 @@ function managedSqlSnapshot(
   const statement = Object.freeze({
     dialect,
     provenance: options.provenance,
+    sql: text,
     text,
     values: Object.freeze([...values]),
   });
