@@ -15,6 +15,9 @@ import type {
   BetterAuthRequestLike,
   BetterAuthResponseLike,
 } from './contracts.js';
+import { getBetterAuthSetCookie } from './trusted-plaintext.js';
+
+export { getBetterAuthSetCookie } from './trusted-plaintext.js';
 
 /** Success value returned by Better Auth credential mutations. */
 export interface BetterAuthCredentialMutationValue<Status extends string> {
@@ -67,55 +70,6 @@ type SessionRevocationHeaderContext = {
 // revoke path carries Clear-Site-Data alongside the session-clearing cookies.
 export function setSessionRevocationClearSiteData(context: unknown): void {
   (context as SessionRevocationHeaderContext).setSessionRevocationClearSiteData?.();
-}
-
-/** @internal Read all `Set-Cookie` values from a Headers object across platform variants. */
-export function getBetterAuthSetCookie(headers: Headers | null | undefined): string[] {
-  // part-3 I2 backward-compat: an instance that ignores `returnHeaders` returns the bare
-  // session payload, so there is no `headers` object to read — treat that as "no refresh
-  // cookies" rather than crashing on `undefined.getSetCookie`.
-  if (headers === null || headers === undefined || typeof headers.get !== 'function') return [];
-  const platformHeaders = headers as Headers & {
-    getSetCookie?: () => string[];
-  };
-
-  // part-3 L13-3: when `getSetCookie()` is available (every modern runtime) it is the only
-  // safe source — it returns each Set-Cookie as a separate, un-folded entry. Mandate it; an
-  // empty result genuinely means no cookies, so do NOT fall through to the folded `get()`
-  // path (which would re-introduce the comma-folding corruption this fix removes).
-  if (typeof platformHeaders.getSetCookie === 'function') {
-    return platformHeaders.getSetCookie();
-  }
-
-  const cookie = headers.get('set-cookie');
-  if (!cookie) return [];
-
-  // Fallback for a runtime without `getSetCookie()`: `get('set-cookie')` returns a single
-  // comma-FOLDED string when multiple cookies were set. Naively returning it as one cookie
-  // collapses multiple cookies into one AND corrupts any cookie whose `Expires` contains a
-  // comma (e.g. `Expires=Wed, 09 Jun 2021 …`). Split on a top-level cookie boundary that
-  // is Expires-comma-aware (a comma followed by a `name=` pair, not a comma inside a date).
-  return splitFoldedSetCookie(cookie);
-}
-
-// part-3 L13-3: split a comma-FOLDED `Set-Cookie` header into individual cookies without
-// splitting inside an RFC-1123/850 date that an `Expires` attribute embeds. A genuine
-// cookie boundary is `", <cookie-name>="`: a comma, optional whitespace, an HTTP cookie-name
-// token, then `=`. A comma inside an Expires date is followed by a weekday/day-of-month, not
-// a `token=`, so it is preserved.
-function splitFoldedSetCookie(folded: string): string[] {
-  const cookies: string[] = [];
-  // A cookie-name is an HTTP token (RFC 6265 token octets). The boundary requires the
-  // delimiter comma to be immediately followed (after optional spaces) by `token=`.
-  const boundary = /,(?=\s*[!#$%&'*+\-.^_`|~0-9A-Za-z]+=)/g;
-  let lastIndex = 0;
-  for (let match = boundary.exec(folded); match !== null; match = boundary.exec(folded)) {
-    cookies.push(folded.slice(lastIndex, match.index).trim());
-    lastIndex = boundary.lastIndex;
-  }
-  const tail = folded.slice(lastIndex).trim();
-  if (tail) cookies.push(tail);
-  return cookies.filter((cookie) => cookie.length > 0);
 }
 
 /** @internal True when a Better Auth response status (400/401/403) signals a credential failure. */
