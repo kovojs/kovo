@@ -76,6 +76,19 @@ export function stampTrustedSql<T extends object>(value: T, justification: strin
   return value as T & TrustedSql;
 }
 
+/** @internal Framework-owned SQL carrier reconstructed after a caller statement passed validation. */
+export function frameworkTrustedSqlCarrier(
+  value: { readonly text: string; readonly values: readonly unknown[] },
+  justification: string,
+): { readonly text: string; readonly values: readonly unknown[] } & TrustedSql {
+  if (!justification.trim()) {
+    throw new Error('frameworkTrustedSqlCarrier requires a non-empty justification.');
+  }
+  return Object.freeze(
+    stampTrustedSql({ text: value.text, values: [...value.values] }, justification),
+  );
+}
+
 /** @internal */
 export function stampSqlIdentifier<T extends object>(value: T): T & StaticSqlText & SqlIdentifier {
   blessSql('sql-identifier', value);

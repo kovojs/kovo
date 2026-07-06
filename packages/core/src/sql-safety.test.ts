@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  frameworkTrustedSqlCarrier,
   isDbAdapterLike,
   isManagedSqlStatement,
   isPreparedStatementExecutionMethod,
@@ -90,6 +91,23 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     });
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/KV422/);
+  });
+
+  it('accepts a framework-owned reconstructed carrier with empty values', () => {
+    const carrier = frameworkTrustedSqlCarrier(
+      { text: 'select id from products', values: [] },
+      'framework reconstructed rawRead carrier',
+    );
+    const snapshot = snapshotManagedSqlStatement(carrier, 'sqlite');
+    expect(snapshot.ok).toBe(true);
+    if (!snapshot.ok) return;
+    expect(snapshot.statement).toMatchObject({
+      dialect: 'sqlite',
+      provenance: 'trusted-separated-carrier',
+      text: 'select id from products',
+      values: [],
+    });
+    expect(Object.isFrozen(carrier)).toBe(true);
   });
 
   it('rejects an unbranded carrier whose values array has no SQL bind marker', () => {

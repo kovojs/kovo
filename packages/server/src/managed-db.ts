@@ -21,7 +21,10 @@ import {
   wrapManagedDbForSqlSafety,
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
-import { snapshotManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+import {
+  frameworkTrustedSqlCarrier,
+  snapshotManagedSqlStatement,
+} from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
@@ -1610,9 +1613,7 @@ function rawReadCapability(
       return policy.executeSql(carrier) as Promise<Row[]> | Row[];
     }
     const method = rawReadExecutionMethod(target, policy);
-    return method.call(target, reconstructedDriverCarrier(carrier, 'rawRead')) as
-      | Promise<Row[]>
-      | Row[];
+    return method.call(target, reconstructedDriverCarrier(carrier)) as Promise<Row[]> | Row[];
   };
 }
 
@@ -1652,20 +1653,19 @@ function crossOwnerReadCapability(
       return policy.executeSql(carrier) as Promise<Row[]> | Row[];
     }
     const method = rawReadExecutionMethod(policy.adminClient, policy);
-    return method.call(
-      policy.adminClient,
-      reconstructedDriverCarrier(carrier, 'crossOwnerRead'),
-    ) as Promise<Row[]> | Row[];
+    return method.call(policy.adminClient, reconstructedDriverCarrier(carrier)) as
+      | Promise<Row[]>
+      | Row[];
   };
 }
 
-function reconstructedDriverCarrier(
-  carrier: SqlCarrier,
-  boundary: 'crossOwnerRead' | 'rawRead',
-): { readonly text: string; readonly values: readonly unknown[] } {
-  return stampTrustedSql(
-    { text: carrier.text, values: [...carrier.params] },
-    `framework reconstructed ${boundary} SQL carrier (SPEC §10.3)`,
+function reconstructedDriverCarrier(carrier: SqlCarrier): {
+  readonly text: string;
+  readonly values: readonly unknown[];
+} {
+  return frameworkTrustedSqlCarrier(
+    { text: carrier.text, values: carrier.params },
+    'framework reconstructed audited raw-read SQL carrier (SPEC §10.3)',
   );
 }
 
