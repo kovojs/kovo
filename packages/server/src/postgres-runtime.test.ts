@@ -240,12 +240,12 @@ describe('createPostgresAppRuntimeDb', () => {
       const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       const u2Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u2') });
 
-      await expect(u1Db.select().from(notes)).resolves.toEqual([
-        { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'One' },
-      ]);
-      await expect(u2Db.select().from(notes)).resolves.toEqual([
-        { id: 'n2', ownerId: 'u2', secretNote: 's2', title: 'Two' },
-      ]);
+      await expect(
+        u1Db.select({ id: notes.id, ownerId: notes.ownerId, title: notes.title }).from(notes),
+      ).resolves.toEqual([{ id: 'n1', ownerId: 'u1', title: 'One' }]);
+      await expect(
+        u2Db.select({ id: notes.id, ownerId: notes.ownerId, title: notes.title }).from(notes),
+      ).resolves.toEqual([{ id: 'n2', ownerId: 'u2', title: 'Two' }]);
     } finally {
       await runtime.close();
     }
@@ -370,7 +370,12 @@ describe('createPostgresAppRuntimeDb', () => {
       await runtime.ready;
       const appDb = runtime.db();
 
-      await expect(appDb.select().from(notes).orderBy(notes.id)).resolves.toEqual([]);
+      await expect(
+        appDb
+          .select({ id: notes.id, ownerId: notes.ownerId, title: notes.title })
+          .from(notes)
+          .orderBy(notes.id),
+      ).resolves.toEqual([]);
       await expect(
         appDb.execute(sql.raw('CREATE TABLE kovo_no_request_superuser_escape (id text)')),
       ).rejects.toThrow();
@@ -409,6 +414,38 @@ describe('createPostgresAppRuntimeDb', () => {
     } finally {
       await runtime.close();
     }
+  });
+
+  it('denies writer engine reads of secret columns while preserving writes', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-writer-secret-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await usingPgliteRole(dataDir, 'kovo_writer', async (client) => {
+      await client.exec("SET LOCAL kovo.principal = 'u1'");
+      await client.query(
+        [
+          'INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title)',
+          "VALUES ('n3', 'u1', 's3', 'Three')",
+        ].join(' '),
+      );
+      await client.query("UPDATE kovo_runtime_notes SET \"secretNote\" = 's3b' WHERE id = 'n3'");
+      await expect(
+        client.query('SELECT title FROM kovo_runtime_notes WHERE id = $1', ['n3']),
+      ).resolves.toMatchObject({ rows: [{ title: 'Three' }] });
+      await expect(
+        client.query('SELECT "secretNote" FROM kovo_runtime_notes WHERE id = $1', ['n3']),
+      ).rejects.toThrow();
+    });
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
   });
 
   it('wires dev RLS empty-read diagnostics through the runtime readonly boundary', async () => {
@@ -457,18 +494,29 @@ describe('createPostgresAppRuntimeDb', () => {
         }),
       });
 
-      await expect(u1Db.select().from(notes).orderBy(notes.id)).resolves.toEqual([
-        { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'One' },
-      ]);
+      await expect(
+        u1Db
+          .select({ id: notes.id, ownerId: notes.ownerId, title: notes.title })
+          .from(notes)
+          .orderBy(notes.id),
+      ).resolves.toEqual([{ id: 'n1', ownerId: 'u1', title: 'One' }]);
       await systemDb.update(notes).set({ title: 'System touched' });
       await expect(systemDb.select().from(notes).orderBy(notes.id)).resolves.toEqual([
         { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'System touched' },
         { id: 'n2', ownerId: 'u2', secretNote: 's2', title: 'System touched' },
       ]);
-      await expect(u1Db.select().from(notes).orderBy(notes.id)).resolves.toEqual([
-        { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'System touched' },
-      ]);
-      await expect(runtime.db({}).select().from(notes)).resolves.toEqual([]);
+      await expect(
+        u1Db
+          .select({ id: notes.id, ownerId: notes.ownerId, title: notes.title })
+          .from(notes)
+          .orderBy(notes.id),
+      ).resolves.toEqual([{ id: 'n1', ownerId: 'u1', title: 'System touched' }]);
+      await expect(
+        runtime
+          .db({})
+          .select({ id: notes.id, ownerId: notes.ownerId, title: notes.title })
+          .from(notes),
+      ).resolves.toEqual([]);
     } finally {
       await runtime.close();
     }
@@ -1115,6 +1163,17 @@ describe('createPostgresAppRuntimeDb', () => {
           'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_attached_trigger()',
         ].join(' '),
         [
+          'CREATE FUNCTION kovo_runtime_attached_constraint_trigger() RETURNS trigger',
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          'CREATE CONSTRAINT TRIGGER kovo_runtime_attached_constraint_trigger',
+          'AFTER INSERT ON kovo_runtime_notes',
+          'DEFERRABLE INITIALLY IMMEDIATE',
+          'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_attached_constraint_trigger()',
+        ].join(' '),
+        [
           'CREATE FUNCTION kovo_runtime_attached_check(value text) RETURNS boolean',
           'LANGUAGE SQL SECURITY DEFINER',
           'AS $$ SELECT true $$',
@@ -1151,6 +1210,10 @@ describe('createPostgresAppRuntimeDb', () => {
         expect.objectContaining({
           code: 'KV433_ATTACHED_CODE',
           detail: expect.stringContaining('DML trigger'),
+        }),
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining('CONSTRAINT trigger'),
         }),
         expect.objectContaining({
           code: 'KV433_ATTACHED_CODE',
@@ -1196,6 +1259,48 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('refuses SECURITY DEFINER INSTEAD OF triggers on writable views', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-view-trigger-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        [
+          'CREATE VIEW kovo_runtime_notes_write_v AS',
+          'SELECT id, "ownerId", title FROM kovo_runtime_notes',
+        ].join(' '),
+        'ALTER VIEW kovo_runtime_notes_write_v SET (security_invoker = true)',
+        [
+          'CREATE FUNCTION kovo_runtime_notes_write_v_insert() RETURNS trigger',
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          'CREATE TRIGGER kovo_runtime_notes_write_v_insert',
+          'INSTEAD OF INSERT ON kovo_runtime_notes_write_v',
+          'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_notes_write_v_insert()',
+        ].join(' '),
+        'GRANT INSERT ON TABLE kovo_runtime_notes_write_v TO kovo_writer',
+      ].join('; '),
+    );
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_ATTACHED_CODE',
+        detail: expect.stringContaining('INSTEAD OF trigger'),
+      }),
+    );
   });
 
   it('allows protected-table serial sequences but refuses unrelated reachable sequences', async () => {
@@ -1311,6 +1416,29 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('rejects adopted provider roles with privileged attributes before provisioning', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-privileged-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      'CREATE ROLE "provider_reader" BYPASSRLS; CREATE ROLE "provider_writer";',
+    );
+
+    await withPostgresRoleEnv(
+      { reader: 'provider_reader', writer: 'provider_writer' },
+      async () => {
+        const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+        try {
+          await expect(runtime.ready).rejects.toThrow(
+            /adopted Postgres roles must be NOSUPERUSER and NOBYPASSRLS[\s\S]*provider_reader\(BYPASSRLS\)/,
+          );
+        } finally {
+          await runtime.close();
+        }
+      },
+    );
+  });
+
   it('grants runtime membership for adopted reader and writer roles', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-membership-'));
     roots.push(dataDir);
@@ -1344,6 +1472,42 @@ describe('createPostgresAppRuntimeDb', () => {
           ].join(' '),
         );
         expect(memberships.rows[0]).toEqual({ can_reader: true, can_writer: true });
+      },
+    );
+  });
+
+  it('refuses runtime logins that hold ADMIN OPTION on an assumable role', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-admin-option-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE provider_runtime_login LOGIN',
+        'CREATE ROLE provider_reader',
+        'CREATE ROLE provider_writer',
+        'GRANT provider_reader TO provider_runtime_login WITH ADMIN OPTION',
+      ].join('; '),
+    );
+
+    await withPostgresRoleEnv(
+      { reader: 'provider_reader', writer: 'provider_writer' },
+      async () => {
+        const report = await migratePostgresAppDb({
+          dataDir,
+          driver: 'pglite',
+          migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
+          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+          schema,
+        });
+        expect(report.posture.ok).toBe(false);
+        expect(report.posture.issues).toContainEqual(
+          expect.objectContaining({
+            code: 'KV433_RUNTIME_ROLE',
+            detail: expect.stringContaining(
+              'runtime login provider_runtime_login holds ADMIN OPTION on provider_reader',
+            ),
+          }),
+        );
       },
     );
   });
