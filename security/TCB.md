@@ -102,6 +102,33 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "reviewTrigger": "Any bump of better-auth must re-confirm cookie signing, session-token verification, and Set-Cookie attribute defaults are unchanged."
     },
     {
+      "id": "dep.better-auth.reset-and-verification-token-lifecycle",
+      "surface": "Better Auth password-reset and email-verification token lifecycle",
+      "dependency": "better-auth",
+      "packageJson": "packages/better-auth/package.json",
+      "pinnedVersion": "1.6.17",
+      "guarantee": "If an app enables Better Auth password-reset or email-verification flows, the reset/verification tokens remain Better Auth protocol state: Kovo confines submitted secrets and proves non-egress, but token single-use, expiry, and uniform non-enumerating reset/verify responses are delegated to Better Auth rather than enforced by Kovo.",
+      "reviewTrigger": "Any bump of better-auth, or any new Kovo wrapper around reset/verify flows, must re-confirm single-use + expiry semantics and that reset/verification responses do not introduce account-enumeration body/timing oracles."
+    },
+    {
+      "id": "dep.better-auth.two-factor-replay-resistance",
+      "surface": "Better Auth two-factor and backup-code replay resistance",
+      "dependency": "better-auth",
+      "packageJson": "packages/better-auth/package.json",
+      "pinnedVersion": "1.6.17",
+      "guarantee": "If an app enables Better Auth two-factor flows, Kovo's wrapper treats two-factor-pending responses as not authenticated, but TOTP/backup-code replay resistance, backup-code burn-on-use semantics, and second-factor challenge expiry remain Better Auth-enforced protocol behavior.",
+      "reviewTrigger": "Any bump of better-auth, or any new Kovo wrapper around two-factor enrollment/challenge APIs, must re-confirm that second-factor challenges and backup codes are single-use or otherwise replay-resistant and that pending-factor responses still cannot be misclassified as an authenticated session."
+    },
+    {
+      "id": "dep.better-auth.account-linking-state-binding",
+      "surface": "Better Auth account-linking callback state binding",
+      "dependency": "better-auth",
+      "packageJson": "packages/better-auth/package.json",
+      "pinnedVersion": "1.6.17",
+      "guarantee": "If an app enables Better Auth social/account-linking flows, Kovo mounts the callback protocol as a public Better Auth-owned endpoint and keeps the app session out of the handler, but the proof that a provider callback cannot bind an attacker-controlled identity to the victim account rests on Better Auth's callback-state, nonce, and identity-binding checks.",
+      "reviewTrigger": "Any bump of better-auth, or any Kovo change that wraps provider callback/linking flows more deeply than mount/session delegation, must re-confirm callback state/nonce validation and that account linking is bound to the initiating browser identity rather than ambient session confusion."
+    },
+    {
       "id": "dep.argon2.password-hashing",
       "surface": "argon2 password hashing",
       "dependency": "@node-rs/argon2",
