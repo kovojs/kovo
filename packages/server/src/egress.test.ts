@@ -1,6 +1,7 @@
 import http from 'node:http';
+import dns from 'node:dns';
 import type { AddressInfo } from 'node:net';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   EGRESS_BLOCKED_ERROR_NAME,
@@ -12,6 +13,7 @@ import {
   frameworkEgressFetch,
   installNetConnectFloor,
   isNetConnectFloorInstalled,
+  normalizeFastPathIpLiteral,
   normalizeIpLiteral,
   parseLooseIpv4,
   resolveEgressPolicy,
@@ -84,6 +86,25 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
     expect(classifyIp('::ffff:127.0.0.1')).toBe('loopback');
   });
 
+  it('keeps non-canonical IPv4 spellings out of the synchronous fast path', async () => {
+    const canonical = ['127.0.0.1', '8.8.8.8'];
+    for (const input of canonical) {
+      expect(normalizeFastPathIpLiteral(input), input).toBe(input);
+      expect(normalizeFastPathIpLiteral(input), input).toBe(await dnsLookupCanonical(input));
+    }
+
+    const loose = ['0127.0.0.1', '010.0.0.1', '0x7f000001', '2130706433', '127.1'];
+    for (const input of loose) {
+      expect(normalizeIpLiteral(input), input).not.toBeNull();
+      expect(normalizeFastPathIpLiteral(input), input).toBeNull();
+    }
+
+    expect(await dnsLookupCanonical('0127.0.0.1')).toBe('127.0.0.1');
+    expect(classifyIp(await dnsLookupCanonical('0127.0.0.1'))).toBe('loopback');
+    expect(await dnsLookupCanonical('010.0.0.1')).toBe('10.0.0.1');
+    expect(classifyIp(await dnsLookupCanonical('010.0.0.1'))).toBe('private-rfc1918');
+  });
+
   it('classifyHost returns null for a real DNS name (needs resolution)', () => {
     expect(classifyHost('example.com')).toBeNull();
     expect(classifyHost('metadata.google.internal')).toBeNull();
@@ -93,6 +114,31 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
     expect(classifyIp('not-an-ip')).toBe('special-use');
   });
 });
+
+async function dnsLookupCanonical(host: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    dns.lookup(host, { all: true }, (err, addresses) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(addresses[0]!.address);
+    });
+  });
+}
+
+function mockDnsLookup(addresses: { address: string; family: number }[]): void {
+  vi.spyOn(dns, 'lookup').mockImplementation(((_hostname: string, opts: unknown, cb?: unknown) => {
+    const callback = (typeof opts === 'function' ? opts : cb) as (
+      err: Error | null,
+      address: string | { address: string; family: number }[],
+      family?: number,
+    ) => void;
+    const lookupOptions = (typeof opts === 'function' ? {} : opts) as { all?: boolean };
+    if (lookupOptions.all) callback(null, addresses);
+    else callback(null, addresses[0]!.address, addresses[0]!.family);
+  }) as typeof dns.lookup);
+}
 
 // @kovo-security-classifier-corpus egress-ip
 describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
@@ -106,6 +152,16 @@ describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
     expect(classifyIp('feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')).toBe('special-use');
     expect(classifyIp('::a9fe:a9fe')).toBe('metadata');
     expect(classifyIp('2606:4700:4700::1111')).toBe('public');
+  });
+
+  it('classifies ISATAP embedded IPv4 forms by their low-32 IPv4 address', () => {
+    expect(classifyIp('2001:4860::0:5efe:10.0.0.1')).toBe('private-rfc1918');
+    expect(classifyIp('2001:4860::0:5efe:0a00:0001')).toBe('private-rfc1918');
+    expect(classifyIp('2001:4860::0:5efe:127.0.0.1')).toBe('loopback');
+    expect(classifyIp('2001:4860::0:5efe:169.254.169.254')).toBe('metadata');
+    expect(classifyIp('2001:4860::0:5efe:8.8.8.8')).toBe('public');
+    expect(classifyIp('2001:4860::0:5efe:0808:0808')).toBe('public');
+    expect(classifyIp('fe80::0:5efe:8.8.8.8')).toBe('link-local');
   });
 
   it('classifies equivalent IPv6 serializations identically', () => {
@@ -450,6 +506,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
 
   afterEach(() => {
     uninstall?.();
+    vi.restoreAllMocks();
     // Keep this net.connect-layer suite on fresh dials; pooled reuse is covered by egress-undici.test.ts.
     server.closeIdleConnections();
     http.globalAgent.destroy();
@@ -492,6 +549,35 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     });
   });
 
+  it('frameworkEgressFetch permits an allowlisted hostname only after resolving it to a public IP', async () => {
+    uninstall = installNetConnectFloor(
+      resolveEgressPolicy({ allowDestinations: ['https://api.service.test'] }, () => {}),
+    );
+    mockDnsLookup([{ address: '93.184.216.34', family: 4 }]);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('public-ok'));
+
+    const ok = await frameworkEgressFetch('https://api.service.test/v1');
+
+    expect(await ok.text()).toBe('public-ok');
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it('frameworkEgressFetch blocks an allowlisted hostname that resolves to a private IP', async () => {
+    uninstall = installNetConnectFloor(
+      resolveEgressPolicy({ allowDestinations: [`http://internal-alias.test:${port}`] }, () => {}),
+    );
+    mockDnsLookup([{ address: '127.0.0.1', family: 4 }]);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('unexpected'));
+
+    await expect(frameworkEgressFetch(`http://internal-alias.test:${port}/`)).rejects.toMatchObject(
+      {
+        name: EGRESS_BLOCKED_ERROR_NAME,
+        classification: 'loopback',
+      },
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('DENIES http.get to a literal loopback IP not in allowInternal', async () => {
     uninstall = installNetConnectFloor(emptyPolicy());
     await expect(
@@ -503,6 +589,33 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         req.on('error', reject);
       }),
     ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME });
+  });
+
+  it('DENIES non-canonical IPv4 spellings after DNS resolution instead of the fast path', async () => {
+    uninstall = installNetConnectFloor(emptyPolicy());
+    let lookupCalled = false;
+    const lookup: http.RequestOptions['lookup'] = (_hostname, opts, cb) => {
+      lookupCalled = true;
+      const callback = (typeof opts === 'function' ? opts : cb) as (
+        err: Error | null,
+        address: string | { address: string; family: number }[],
+        family?: number,
+      ) => void;
+      const lookupOptions = (typeof opts === 'function' ? {} : opts) as { all?: boolean };
+      if (lookupOptions.all) callback(null, [{ address: '127.0.0.1', family: 4 }]);
+      else callback(null, '127.0.0.1', 4);
+    };
+
+    await expect(
+      new Promise((resolve, reject) => {
+        const req = http.get({ host: '0127.0.0.1', port, lookup }, (res) => {
+          res.resume();
+          res.on('end', resolve);
+        });
+        req.on('error', reject);
+      }),
+    ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME, classification: 'loopback' });
+    expect(lookupCalled).toBe(true);
   });
 
   it('ALLOWS http.get to that same loopback host:port when in allowInternal', async () => {
