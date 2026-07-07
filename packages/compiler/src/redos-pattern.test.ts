@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  REDOS_ACCEPT_CORPUS,
+  REDOS_REJECT_CORPUS,
+} from '../../server/src/redos-regression-corpus.js';
+
 import { compileComponentModule } from './index.js';
 
 // SPEC §6.6/§9.5 + secure-framework Phase 6 (Tier 3): KV434 is the compile-time half of the ReDoS
@@ -28,6 +33,16 @@ export const Profile = component({ render: () => <div /> });
 
 describe('KV434 non-literal pattern() compile-time gate', () => {
   describe('POSITIVE: a non-literal pattern() argument is flagged at the call site', () => {
+    // @kovo-security-classifier-corpus redos
+    it('fires KV434 for every pinned unsafe runtime classifier regression', () => {
+      for (const entry of REDOS_REJECT_CORPUS) {
+        expect(
+          codes(component(`const schema = s.string().pattern(${JSON.stringify(entry.source)});`)),
+          entry.name,
+        ).toContain('KV434');
+      }
+    });
+
     it('fires KV434 for a variable pattern at the pattern() call site', () => {
       const source = component(
         `const myDynamicRegex = '^x+$';
@@ -108,6 +123,15 @@ const schema = s.string().min(3).pattern(re);`,
   });
 
   describe('NEGATIVE: a compile-visible literal the runtime already validates is NOT flagged', () => {
+    it('does not flag any pinned safe runtime classifier regression', () => {
+      for (const entry of REDOS_ACCEPT_CORPUS) {
+        expect(
+          codes(component(`const schema = s.string().pattern(${JSON.stringify(entry.source)});`)),
+          entry.name,
+        ).not.toContain('KV434');
+      }
+    });
+
     it('does not flag a regex literal pattern', () => {
       const source = component(`const schema = s.string().pattern(/^[a-z]+$/);`);
       expect(codes(source)).not.toContain('KV434');
@@ -160,4 +184,40 @@ const schema = s.string().min(3).pattern(re);`,
       expect(codes(source)).not.toContain('KV434');
     });
   });
+
+  it('keeps generated quantified-group nestings rejected or empirically non-superlinear at runtime', () => {
+    const atoms = ['a', 'ab', '[a-z]', '\\d'];
+    const innerQuantifiers = ['', '+', '*', '?', '{2,4}'];
+    const wrappers = [
+      (atom: string, quantifier: string) => `(${atom}${quantifier})+`,
+      (atom: string, quantifier: string) => `((${atom}${quantifier}))+`,
+      (atom: string, quantifier: string) => `(?:${atom}${quantifier})+`,
+    ];
+
+    for (const atom of atoms) {
+      for (const quantifier of innerQuantifiers) {
+        for (const wrap of wrappers) {
+          const source = wrap(atom, quantifier);
+          const diagnostics = codes(
+            component(`const schema = s.string().pattern(${JSON.stringify(source)});`),
+          );
+          if (diagnostics.includes('KV434')) continue;
+          expectNonSuperlinear(source);
+        }
+      }
+    }
+  });
 });
+
+function expectNonSuperlinear(source: string): void {
+  const regex = new RegExp(`^(?:${source})$`, 'u');
+  const elapsed = [16, 32, 64].map((units) => {
+    const input = 'ab'.repeat(units) + '!';
+    const start = performance.now();
+    for (let i = 0; i < 25; i += 1) regex.test(input);
+    return performance.now() - start;
+  });
+  const [small, medium, large] = elapsed;
+  expect(large, source).toBeLessThan(50);
+  expect(large / Math.max(medium, small, 0.01), source).toBeLessThan(20);
+}
