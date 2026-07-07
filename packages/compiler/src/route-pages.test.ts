@@ -362,7 +362,7 @@ export const missing = route('/missing', {
     ).toEqual([
       { access: { kind: 'public', reason: 'public docs' }, guards: undefined, route: '/docs' },
       {
-        access: { guards: [{ name: 'admin' }], kind: 'guard-chain' },
+        access: { guards: [], kind: 'guard-chain' },
         guards: ['authed'],
         route: '/admin',
       },

@@ -213,7 +213,7 @@ export interface OwnershipPostureFact {
  * and emits KV436 `missing` when the surface producer failed to provide one.
  */
 export type AccessDecisionFact =
-  | { guards: readonly { name: string }[]; kind: 'guard-chain' }
+  | { guards: readonly string[]; kind: 'guard-chain' }
   | { kind: 'public'; reason: string }
   | { kind: 'verified-machine-auth' };
 
@@ -815,13 +815,13 @@ export interface AccessDerivationInput {
  * @internal By-construction default-deny classifier (SPEC.md §10.2 / §6.6). Every
  * query/mutation/route-page/endpoint/webhook surface is classified into exactly one
  * producer-owned `AccessExplainFact`: an explicit `access:` decision
- * (`public`/`verified`/guard-chain) wins; otherwise the surface is `missing` and
+ * (`public`/`verified`/non-empty guard-chain) wins; otherwise the surface is `missing` and
  * the KV436 consumer fails `kovo check`.
  *
- * This proves a decision EXISTS, never that it is CORRECT — a no-op guard chain in
- * an explicit access fact satisfies it (KV414 carries IDOR correctness). The proof
- * is the static graph fact, not a TypeScript brand (the compiler runs no type checker,
- * §6.6).
+ * This proves a decision EXISTS, never that it is CORRECT — a non-empty executable
+ * guard chain in an explicit access fact satisfies it (KV414 carries IDOR
+ * correctness). The proof is the producer-owned graph fact, not a TypeScript brand
+ * (the compiler runs no type checker, §6.6).
  */
 export function deriveAccessExplainFacts(input: AccessDerivationInput): AccessExplainFact[] {
   return [
@@ -891,11 +891,11 @@ function explicitAccessExplainFact(
     };
   }
 
-  const guards =
-    access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
+  if (access.guards.length === 0) return undefined;
+
   return {
     decision: 'guard',
-    detail: `access=guard-chain guards=${guards}`,
+    detail: `access=guards guards=${access.guards.join(',')}`,
     kind,
     name,
     source: 'access',

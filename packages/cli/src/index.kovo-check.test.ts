@@ -273,7 +273,7 @@ describe('kovo check', () => {
         ],
         mutations: [
           {
-            access: { guards: [{ name: 'authed' }], kind: 'guard-chain' },
+            access: { guards: ['authed'], kind: 'guard-chain' },
             guards: ['authed'],
             key: 'cart/clear',
             writes: ['cart'],
@@ -282,7 +282,7 @@ describe('kovo check', () => {
         pages: [{ access: { kind: 'public', reason: 'public landing page' }, route: '/secret' }],
         queries: [
           {
-            access: { guards: [{ name: 'authed' }], kind: 'guard-chain' },
+            access: { guards: ['authed'], kind: 'guard-chain' },
             domains: ['draft'],
             guards: ['authed'],
             query: 'drafts',

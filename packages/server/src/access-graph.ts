@@ -10,6 +10,7 @@ import type {
 } from './endpoint.js';
 import type { LayoutDeclaration, RouteDeclaration } from './route.js';
 import type { WebhookDeclaration } from './webhook.js';
+import { explainGuard } from './guards.js';
 
 /**
  * @internal Build the producer-owned access ledger from an assembled app
@@ -139,9 +140,12 @@ function explicitAccessFact(
     };
   }
 
+  const guards = accessGuardNames(access);
+  if (guards.length === 0) return undefined;
+
   return {
     decision: 'guard',
-    detail: `access=guard-chain guards=${listAccessGuards(access)}`,
+    detail: `access=guards guards=${guards.join(',')}`,
     kind,
     name,
     source: 'access',
@@ -158,8 +162,14 @@ function missingAccessFact(kind: AccessExplainFact['kind'], name: string): Acces
   };
 }
 
-function listAccessGuards(access: Extract<AccessDecision, { kind: 'guard-chain' }>): string {
-  return access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
+function accessGuardNames(access: Extract<AccessDecision, { kind: 'guard-chain' }>): string[] {
+  const names = new Set<string>();
+  for (const step of access.guards) {
+    for (const fact of explainGuard(step.guard)) {
+      names.add(fact.name);
+    }
+  }
+  return [...names].sort();
 }
 
 function isWebhookEndpoint(
