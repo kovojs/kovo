@@ -19,7 +19,7 @@ env:
   PLAYWRIGHT_VERSION: 1.60.0
 
 jobs:
-  static-safety:
+  static-core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -28,16 +28,61 @@ jobs:
           rebuild-better-sqlite3: 'true'
       - name: Format, type, and import checks
         run: vp exec pnpm run check
+      - run: git diff --check
+
+  paranoid:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
       - name: Paranoid static classifier harness
         run: vp exec pnpm run check:paranoid-classifiers
       - name: Paranoid production runtime chokes
         run: vp exec pnpm run check:paranoid-runtime
+
+  api-surface:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
       - name: API surface
         run: vp exec pnpm run check:api-surface
+
+  docs-snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
       - name: Authored docs snippets
         run: vp exec pnpm run check:docs-snippets
+
+  docs-snippets-dist:
+    runs-on: ubuntu-latest
+    needs:
+      - publish-readiness
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-package-dist
+          path: ${{ runner.temp }}/kovo-package-dist
+      - name: Restore package dist artifact
+        run: tar -xzf "$RUNNER_TEMP/kovo-package-dist/kovo-package-dist.tgz" -C .
       - name: Authored docs snippets against dist types
-        run: vp exec pnpm run check:docs-snippets:dist
+        env:
+          KOVO_DOC_SNIPPETS_USE_DIST: '1'
+        run: vp exec node site/scripts/code-snippets-check.mjs
+
+  sql-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
       - name: SQL safety
         run: |
           vp exec vitest --run \
@@ -51,21 +96,55 @@ jobs:
             packages/core/src/diagnostics.test.ts \
             packages/test/src/pglite-harness.test.ts \
             packages/test/src/sqlite-harness.test.ts
+
+  metamorphic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
       - name: Metamorphic recognition
         run: vp exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts
+
+  compiler-perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
       - name: Compiler perf
         run: vp run compiler-perf
+
+  publish-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
       - name: Publish readiness
         run: vp exec pnpm run check:publish
-      - run: git diff --check
+      - name: Archive package dist outputs
+        run: |
+          tar -czf "$RUNNER_TEMP/kovo-package-dist.tgz" \
+            packages/better-auth/dist \
+            packages/browser/dist \
+            packages/core/dist \
+            packages/headless-ui/dist \
+            packages/icons/dist \
+            packages/server/dist \
+            packages/style/dist \
+            packages/ui/dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-package-dist
+          path: ${{ runner.temp }}/kovo-package-dist.tgz
+          retention-days: 1
 
   test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
-        total: [3]
+        shard: [1, 2, 3, 4]
+        total: [4]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
@@ -124,11 +203,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Shard budget: 3 root Vitest + 8 starter + 3 integration + 1 kovo-check = 15.
+        # Shard budget: 4 root Vitest + 10 starter + 4 chromium integration + 3 kovo-check = 21.
         # Starter entries are timing-weighted in scripts/ci-shards.mjs from the
         # cached 2026-07-02 green run so long artifact proofs are balanced.
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
-        total: [8]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        total: [10]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
@@ -234,8 +313,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
-        total: [3]
+        shard: [1, 2, 3, 4]
+        total: [4]
     env:
       KOVO_FAIL_ON_FLAKY: '1'
     steps:
@@ -243,10 +322,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - uses: ./.github/actions/playwright-install
         with:
-          browsers: chromium firefox webkit
-          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-all-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-all-
-      - run: vp exec playwright test --config tests/integration/playwright.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }}
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - run: vp exec playwright test --config tests/integration/playwright.config.ts --project=chromium --shard=${{ matrix.shard }}/${{ matrix.total }}
         env:
           KOVO_PLAYWRIGHT_TIMING_JSON: ${{ runner.temp }}/kovo-integration-timing-history/timing-history.json
       - name: Ensure integration timing artifact
@@ -263,6 +342,20 @@ jobs:
           name: kovo-integration-timing-history-${{ matrix.shard }}
           path: ${{ runner.temp }}/kovo-integration-timing-history/timing-history.json
           retention-days: 7
+
+  integration-cross-engine:
+    runs-on: ubuntu-latest
+    env:
+      KOVO_FAIL_ON_FLAKY: '1'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: firefox webkit
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-cross-engine-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-cross-engine-
+      - run: vp exec playwright test --config tests/integration/playwright.config.ts --project=firefox-engine-matrix --project=webkit-engine-matrix
 
   conformance:
     runs-on: ubuntu-latest
@@ -284,6 +377,10 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [compiler-runtime, server-browser, project]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
@@ -291,18 +388,27 @@ jobs:
         with:
           name: kovo-dist
           path: dist
-      - name: Kovo check suite
-        run: vp exec node scripts/kovo-check.mjs compiler-runtime server-browser project
+      - name: Kovo check suite (${{ matrix.suite }})
+        run: vp exec node scripts/kovo-check.mjs ${{ matrix.suite }}
 
   check:
     runs-on: ubuntu-latest
     needs:
-      - static-safety
+      - static-core
+      - paranoid
+      - api-surface
+      - docs-snippets
+      - docs-snippets-dist
+      - sql-safety
+      - metamorphic
+      - compiler-perf
+      - publish-readiness
       - test
       - starter-packages
       - starter
       - starter-packed
       - integration
+      - integration-cross-engine
       - build
       - browser
       - conformance

@@ -13,7 +13,7 @@ const DEFAULT_ROOTS = {
 
 const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
-const STARTER_SHARD_COUNT = 8;
+const STARTER_SHARD_COUNT = 10;
 const PACKED_STARTER_MANIFEST = 'packed-kovo-packages.json';
 const PACKED_WORKSPACE_PACKAGES = [
   { name: '@kovojs/core', dir: 'core' },

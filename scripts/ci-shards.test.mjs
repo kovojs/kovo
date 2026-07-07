@@ -224,17 +224,19 @@ describe('ci-shards', () => {
     ]);
   });
 
-  it('load-balances starter production artifact entries into eight CI shards', () => {
+  it('load-balances starter production artifact entries into ten CI shards', () => {
     const entries = starterEntries();
-    const shards = balanceStarterShards(8, entries);
+    const shards = balanceStarterShards(10, entries);
     const assigned = shards.flatMap((shard) => shard.entries.map((entry) => entry.id));
 
-    expect(shards).toHaveLength(8);
+    expect(shards).toHaveLength(10);
     expect(new Set(assigned).size).toBe(entries.length);
     expect(assigned.toSorted(compareStrings)).toEqual(
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(shards.map((shard) => shard.seconds)).toEqual([476, 481, 443, 468, 460, 496, 440, 476]);
+    expect(shards.map((shard) => shard.seconds)).toEqual([
+      381, 361, 363, 372, 371, 370, 373, 374, 396, 379,
+    ]);
   });
 
   it('splits starter entries into packed and unpacked shard modes', () => {
@@ -253,9 +255,9 @@ describe('ci-shards', () => {
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
       allEntries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(balanceStarterShards(8, unpackedEntries).flatMap((shard) => shard.entries)).toHaveLength(
-      unpackedEntries.length,
-    );
+    expect(
+      balanceStarterShards(10, unpackedEntries).flatMap((shard) => shard.entries),
+    ).toHaveLength(unpackedEntries.length);
     expect(balanceStarterShards(3, packedEntries).map((shard) => shard.entries)).toEqual([
       [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-runtime') }],
       [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-postgres') }],
@@ -265,14 +267,14 @@ describe('ci-shards', () => {
   });
 
   it('keeps browser-backed starter entries isolated to the shard that needs Chromium', () => {
-    const browserShards = balanceStarterShards(8)
+    const browserShards = balanceStarterShards(10)
       .map((shard, index) => ({
         index: index + 1,
         entries: shard.entries.filter((entry) => entry.needsBrowser).map((entry) => entry.id),
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 8, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 9, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {
