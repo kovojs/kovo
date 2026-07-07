@@ -12,7 +12,7 @@ import {
   EgressBlockedError,
   classifyIp,
   evaluateEgress,
-  normalizeIpLiteral,
+  normalizeFastPathIpLiteral,
   type EgressPolicy,
 } from './egress.js';
 
@@ -78,7 +78,7 @@ export class EgressGatingDispatcher extends Agent {
 
     // Literal IP at dispatch: classify + decide synchronously (catches metadata literals and
     // pooled reuse to a literal private IP without any DNS).
-    const literalIp = normalizeIpLiteral(host);
+    const literalIp = normalizeFastPathIpLiteral(host);
     if (literalIp !== null) {
       const blocked = evaluateEgress({ host, port, resolvedIp: literalIp, policy: this.#policy });
       if (blocked) {
