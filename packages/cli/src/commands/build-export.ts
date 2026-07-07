@@ -754,7 +754,6 @@ function queryCheckFact(
     ...((fact?.readOnlyDomains?.length ?? 0) > 0
       ? { readOnlyDomains: uniqueSorted(fact?.readOnlyDomains?.filter(isString) ?? []) }
       : {}),
-    ...(query.access === undefined ? {} : { access: query.access }),
     ...(query.guard === undefined ? {} : { guards: ['query.guard'] }),
   };
 }
@@ -774,7 +773,6 @@ function mutationCheckFact(
     ...inferredWrites,
   ]);
   return {
-    ...(mutation.access === undefined ? {} : { access: mutation.access }),
     csrf: mutation.csrf === false ? 'exempt' : 'checked',
     ...(mutation.csrf === false ? { csrfJustification: 'csrf:false mutation declaration' } : {}),
     ...(mutation.guard === undefined ? {} : { guards: ['mutation.guard'] }),
@@ -849,7 +847,6 @@ function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
 function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain {
   const layoutQueries = Object.values(route.layout?.queries ?? {}) as readonly { key: string }[];
   return {
-    ...(route.access === undefined ? {} : { access: route.access }),
     ...(route.guard === undefined ? {} : { guards: ['route.guard'] }),
     queries: uniqueSorted(layoutQueries.map((query) => query.key)),
     route: route.path,
@@ -872,7 +869,6 @@ function routeFileStreamEndpointFact(
   outcome: 'file' | 'stream',
 ): CoreGraph.EndpointExplain {
   return {
-    ...(route.access === undefined ? {} : { access: route.access }),
     ...(route.guard === undefined
       ? {}
       : {
@@ -895,7 +891,6 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
   const csrf = endpoint.csrf?.exempt === true ? 'exempt' : 'checked';
   const name = endpointWebhookName(endpoint);
   return {
-    ...(endpoint.access === undefined ? {} : { access: endpoint.access }),
     appOwnedSafety: endpoint.response.appOwnedSafety,
     ...(endpoint.auth === undefined
       ? {}

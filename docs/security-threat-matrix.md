@@ -15,7 +15,7 @@ an **audited escape hatch**, or an **explicit out-of-scope note (whose responsib
 | **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | GREEN — typed header/cookie channels, response reconstruct, redirect normalization                | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF, webhook verify, request-input provenance                                                       |
 | **Render / browser**            | GREEN — escape-by-default; `trustedHtml` the only branded raw door                                                                              | GREEN — contextual escaping across text/attr/URL-scheme positions                                 | N/A — client render cost is app-authored                                 | GREEN — Trusted-Types policy + inline-loader import allowlist                                                |
 | **Build / compiler**            | GREEN — server-only-value capture (KV437); generated code carries no secret                                                                     | GREEN (M7) — codegen framework-constructed; KV235 provenance; sink-policy + import-boundary gates | N/A — build is dev-time                                                  | GREEN (M7) — `dynamic.import.process` sole door = `/c/` versioned-module allowlist                           |
-| **Dependencies / supply chain** | GREEN (M6) — `trustedDependencySurfaces` + exact pins + `--frozen-lockfile`, `check:tcb-boundary`                                               | GREEN (M6) — `rules/dependency-policy.md` update policy + review triggers                         | out-of-scope — dependency-internal DoS                                   | GREEN (M6) — Better Auth session/hash enrolled as a `trustedDependencySurface` with a review trigger         |
+| **Dependencies / supply chain** | GREEN (M6) — `trustedDependencySurfaces` + exact pins + `--frozen-lockfile`, `check:tcb-boundary`                                               | GREEN (M6) — `rules/dependency-policy.md` update policy + review triggers                         | out-of-scope — dependency-internal DoS                                   | GREEN (M6) — Better Auth session/hash/reset/2FA/linking surfaces enrolled as review triggers                 |
 | **Runtime / infra**             | GREEN (M8) — no cross-tenant bleed; pool scrubbed; module state per-request; caches principal-independent                                       | GREEN (M8) — transaction-local session state; DISCARD ALL on release                              | scope: app/deploy (M5); GREEN — bounded pool + rate budgets              | GREEN (M8) — pool identity reset; no principal bleed across reuse                                            |
 
 ¹ **DB cells: `fundamental-fixes-followup-13` LANDED** the round-16 fixes (`claude-bugz-37`: write-propagation
@@ -45,9 +45,26 @@ GREEN (no longer pending).
     capability/CSRF compares use `secureEqual` = SHA-256 + `timingSafeEqual` (`keyring.ts:208`, no length oracle); every
     credential failure collapses to one opaque `INVALID_CREDENTIALS` (`better-auth/mutations.ts:105/111/172/178`). Better
     Auth's internal password/session compare is a **dependency assumption** (→ M6).
+- **Auth × Au (A2) — GREEN.** Session posture and lifecycle are covered by two Kovo-owned tests: the Better Auth
+  credential wrapper preserves/floors `HttpOnly`/`Secure`/`SameSite` cookie attributes when forwarding session cookies
+  (`packages/better-auth/src/index.credential-mutations.test.ts`), and `packages/better-auth/src/index.session.test.ts`
+  proves refresh `Set-Cookie` headers are forwarded through the lifecycle sink without exposing the app session to the
+  Better Auth redirect mount. Session-token signing/verification and provider callback state binding remain Better Auth
+  dependency surfaces in `security/TCB.md`.
 - **Wire × C/I** — the DEC-F sink inventory (22 sinks, `packages/core/src/internal/source-sink-registry.ts`) +
-  hostile-value tests; round-16 reproduced XSS/redirect/identifier/headers/cookies/egress all SOUND. Log/error secret
-  redaction via `scrubConsoleArgs` (`logging.ts:39`).
+  hostile-value tests; round-16 reproduced XSS/redirect/identifier/headers/cookies/egress all SOUND. For the round-22
+  A4 path specifically, `packages/server/src/app-mutation-request.test.ts` proves JSON mutation bodies are decoded
+  through a positive object-schema allowlist without prototype-pollution side effects, and
+  `packages/server/src/schema.test.ts` proves the FormData/object decoder uses null-prototype records with own-key
+  gating. Log/error secret redaction via `scrubConsoleArgs` (`logging.ts:39`).
+- **Wire × Au (A1) — GREEN.** CSRF does not rely on SameSite alone: `packages/server/src/csrf.test.ts` proves the
+  Origin / `Sec-Fetch-Site` floor and synchronizer-token audience binding for unsafe requests, and
+  `packages/server/src/app-dispatch.test.ts` covers the end-to-end mutation/endpoint dispatch paths that reject missing
+  or cross-origin CSRF attempts before handler execution.
+- **Runtime × Au (A6) — GREEN.** Capability URLs bind the signed canonical object, method, scope, and expiry before any
+  storage read. `packages/server/src/capability-url.test.ts` proves claim-mismatch, expiry, signature, audience, and
+  replay rejection; `packages/server/src/capability-route.test.ts` proves the verify sink runs before dereference, so a
+  wrong object/scope/method token never reaches storage.
 - **Build × I/Au (M7) — GREEN.** No app-untrusted string reaches an executable position: `templateLiteral` wraps lowered
   HTML; the two `node:vm` sites run only framework-constructed constant-returning modules in a timeboxed empty sandbox;
   the KV235 provenance token (`compiler-hard-rules.md:13`) makes lowered/executable content framework-only;
@@ -61,8 +78,9 @@ GREEN (no longer pending).
 - **Deps × C/I/Au (M6) — GREEN (closed, followup-16).** Exact-pinned `pg` 8.22.0 / `@electric-sql/pglite` 0.5.1 /
   `@node-rs/argon2` 2.0.2 / `better-sqlite3` 12.11.1 (+ `better-auth` 1.6.17, `drizzle-orm` 1.0.0-rc.4);
   `--frozen-lockfile` in the shared `kovo-setup` action + `release.yml`; `scripts/supply-chain-gates.mjs` +
-  `check:pack-security`. `security/TCB.md` gained a `trustedDependencySurfaces` manifest naming the 7 dependency BEHAVIOR
-  surfaces (node-pg + Drizzle parameterization; PGlite + Postgres RLS/role; Better Auth password + session/cookie;
+  `check:pack-security`. `security/TCB.md` gained a `trustedDependencySurfaces` manifest naming the 10 dependency
+  BEHAVIOR surfaces (node-pg + Drizzle parameterization; PGlite + Postgres RLS/role; Better Auth password,
+  session/cookie, reset/verification token lifecycle, two-factor replay resistance, and account-linking state binding;
   argon2) ENFORCED by `check:tcb-boundary` (fails on caret/drift). New `rules/dependency-policy.md`. The dependency
   runtime behavior stays a documented human review trigger, not a machine-checked property.
 - **Runtime × C (M8) — GREEN.** Pool doubly-scrubbed (`DISCARD ALL` `postgres-runtime.ts:1846` + transaction-local

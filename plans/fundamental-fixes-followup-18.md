@@ -41,7 +41,7 @@ be only ONE. A guard becomes a NAMED, self-describing value that enforces, names
 `access` becomes the guards themselves. This eliminates BOTH decouplings the finding exposed: the `access`-vs-`guard`
 field split (B1) and the `{name}`-vs-`guard` label split (a hand-written step name can lie about what its guard does).
 
-- [ ] **A1 — Guards are self-naming; `access` = the enforced guards.** New guard constructor
+- [x] **A1 — Guards are self-naming; `access` = the enforced guards.** New guard constructor
       `guard(name, fn)` attaches the audit name to the guard (guards already carry
       `GuardAuditFact`/`GuardPrincipalKeyAudit`/`GuardResourceKeyAudit` for KV414, so the name is one more fact on the
       same object). Change `AccessDecision` to `readonly Guard[] | PublicAccess | VerifiedMachineAccess` and DELETE
@@ -75,25 +75,41 @@ field split (B1) and the `{name}`-vs-`guard` label split (a hand-written step na
   - Scope note: this is a bounded, land-at-once refactor — a guard constructor + name field, an `AccessDecision` type
     change, deleting `GuardAccessStep`, folding the runtime read to iterate `access` guards, and updating the graph/
     explain projection to read guard names. No interim half-measure.
+  - Evidence: `pnpm exec vitest --run packages/server/src/access.test.ts packages/server/src/access-graph.test.ts
+packages/server/src/guards.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts
+packages/server/src/mutation.test.ts packages/server/src/endpoint.test.ts packages/server/src/static-export-route-plan.test.ts`
+    passed; `pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts
+packages/compiler/src/route-pages.test.ts packages/core/src/graph.test.ts packages/server/src/access-graph.test.ts
+packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts
+packages/cli/src/index.kovo-build.test.ts` passed; `pnpm exec vitest --run
+packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "fails the production build"` passed.
 
 ### 3.2 DEC-B — Record the verified first-line controls into the threat matrix (advance M2 + Auth/Wire cells)
 
-- [ ] **B1 — For each round-22-sound axis, write the named control + its test into `docs/security-threat-matrix.md` and
+- [x] **B1 — For each round-22-sound axis, write the named control + its test into `docs/security-threat-matrix.md` and
       flip the cell green:** A1→Wire×Au (CSRF token, not SameSite-reliant), A2→Auth×Au (session lifecycle + cookie
       posture), A4→Wire×I (positive schema allowlist + null-proto decode), A6→Runtime×Au (capability signature binding),
       and **A5→Auth×C/Au (M2): CLOSE the open cell** with the reachability-based non-egress proof — pending DEC-C's flow
       checks below. This is the round's threat-matrix payoff: a clean first-line sweep turns four cells green and closes
       the last named-open cell.
+  - Evidence: `docs/security-threat-matrix.md` records A1/A2/A4/A6 named controls with tests and flips M2 to GREEN;
+    `pnpm run check:tcb-boundary` passed with the updated `security/TCB.md`.
 
 ### 3.3 DEC-C — Confirm the auth-FLOW controls before flipping M2 green (completeness, not a found bug)
 
-- [ ] **C1 — M2 closes only when the non-egress proof is paired with the flow controls A5 did not disprove but did not
+- [x] **C1 — M2 closes only when the non-egress proof is paired with the flow controls A5 did not disprove but did not
       exhaustively execute:** password-reset / email-verification tokens are CSPRNG + single-use + expiring and DO NOT
       enable user-enumeration (uniform response + timing, per M4); 2FA / backup codes are replay-resistant;
       account-linking cannot bind an attacker identity. Where a flow is delegated to Better Auth, record it as a
       TCB-surface dependency assumption (`security/TCB.md`, M6) with a review trigger rather than claiming a Kovo
       guarantee. (No round-22 finding here; this is the evidence M2 needs to be signed off green, not open work against a
       bug.)
+  - Evidence: `security/TCB.md` records Better Auth reset/verification, 2FA/backup-code, and account-linking dependency
+    surfaces with review triggers; `pnpm exec vitest run packages/better-auth/src/internal.trusted-plaintext.test.ts
+packages/better-auth/src/index.credential-mutations.test.ts packages/better-auth/src/index.session.test.ts
+packages/server/src/password.test.ts packages/server/src/csrf.test.ts packages/server/src/app-dispatch.test.ts
+packages/server/src/app-mutation-request.test.ts packages/server/src/schema.test.ts
+packages/server/src/capability-url.test.ts packages/server/src/capability-route.test.ts` passed.
 
 ## 4. Resolved design decision (decided 2026-07-07)
 
@@ -107,14 +123,17 @@ field split (B1) and the `{name}`-vs-`guard` label split (a hand-written step na
 
 ## 5. Proving
 
-- [ ] DEC-A: the ignored-executable trap is unrepresentable (deleted from the type); `access` = self-naming guards;
+- [x] DEC-A: the ignored-executable trap is unrepresentable (deleted from the type); `access` = self-naming guards;
       `kovo explain --access` names derive from the enforced guards; `publicAccess`/`verifiedAccess` stay explicit; a
       no-guard side-effecting op fails `kovo check`; `explained-names == enforced-guard-names` pinned by a regression test.
-- [ ] DEC-B: `docs/security-threat-matrix.md` — A1/A2/A4/A6 cells green with named control+test; M2 flipped per DEC-C.
-- [ ] DEC-C: reset/verify enumeration + single-use + expiry, 2FA replay, account-linking tested (or delegated + recorded
+- [x] DEC-B: `docs/security-threat-matrix.md` — A1/A2/A4/A6 cells green with named control+test; M2 flipped per DEC-C.
+- [x] DEC-C: reset/verify enumeration + single-use + expiry, 2FA replay, account-linking tested (or delegated + recorded
       as TCB dependency).
-- [ ] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
+- [x] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
+  - Evidence: `pnpm run check:tcb-boundary`; `pnpm run check:capability-surface-census`; `pnpm run
+check:wire-output-boundary`; `pnpm run check:single-choke`; `pnpm run check:sink-policy`; `pnpm run check:vp`;
+    `git diff --check` all passed.
 
 ## 6. Meta
 

@@ -1,6 +1,6 @@
 import type { AccessExplainFact } from '@kovojs/core/internal/graph';
 
-import type { AccessDecision } from './access.js';
+import { isGuardAccessDecision, type AccessDecision } from './access.js';
 import type { AppMutationDeclaration, AppQueryDeclaration, KovoApp } from './app-types.js';
 import type {
   EndpointAuthDeclaration,
@@ -8,6 +8,7 @@ import type {
   EndpointMethod,
   EndpointMount,
 } from './endpoint.js';
+import { guardAuditName } from './guards.js';
 import type { LayoutDeclaration, RouteDeclaration } from './route.js';
 import type { WebhookDeclaration } from './webhook.js';
 
@@ -57,7 +58,11 @@ function endpointAccessFact(
   const name = webhook ? endpoint.name : endpoint.path;
   const auth = endpoint.auth;
   const detail = endpointAccessDetail(endpoint, auth);
-  if (endpoint.access?.kind === 'verified-machine-auth' && !hasExecutableMachineAuth(endpoint)) {
+  if (
+    !isGuardAccessDecision(endpoint.access) &&
+    endpoint.access?.kind === 'verified-machine-auth' &&
+    !hasExecutableMachineAuth(endpoint)
+  ) {
     return {
       decision: 'missing',
       detail: `access=verified-machine-auth audit-only-without-executable-verifier ${detail}`,
@@ -118,6 +123,17 @@ function explicitAccessFact(
 ): AccessExplainFact | undefined {
   if (access === undefined) return undefined;
 
+  if (isGuardAccessDecision(access)) {
+    if (access.length === 0) return undefined;
+    return {
+      decision: 'guard',
+      detail: `access=guards guards=${accessGuardNames(access).join(',')}`,
+      kind,
+      name,
+      source: 'access',
+    };
+  }
+
   if (access.kind === 'public') {
     return {
       decision: 'public',
@@ -138,14 +154,6 @@ function explicitAccessFact(
       source: 'access',
     };
   }
-
-  return {
-    decision: 'guard',
-    detail: `access=guard-chain guards=${listAccessGuards(access)}`,
-    kind,
-    name,
-    source: 'access',
-  };
 }
 
 function missingAccessFact(kind: AccessExplainFact['kind'], name: string): AccessExplainFact {
@@ -158,8 +166,8 @@ function missingAccessFact(kind: AccessExplainFact['kind'], name: string): Acces
   };
 }
 
-function listAccessGuards(access: Extract<AccessDecision, { kind: 'guard-chain' }>): string {
-  return access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
+function accessGuardNames(access: readonly import('./guards.js').Guard<any, any>[]): string[] {
+  return access.map((guard) => guardAuditName(guard));
 }
 
 function isWebhookEndpoint(

@@ -1,7 +1,7 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import type { AccessDecision } from './access.js';
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
-import type { DbProvider } from './guards.js';
+import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
@@ -244,6 +244,9 @@ export async function runEndpoint(
   options: EndpointRunOptions = {},
 ): Promise<Response> {
   const endpointRequest = endpointRequestWithoutSession(request);
+  const guardFailure = await runAccessDecisionGuards(definition.access, undefined, endpointRequest);
+  if (guardFailure) return endpointAccessGuardFailureResponse(guardFailure);
+
   const response =
     definition.db === true
       ? await (definition.handler as EndpointDbHandler)(
@@ -369,6 +372,21 @@ function endpointAuthFailureResponse(): Response {
       body: 'Unauthorized',
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       status: 401,
+    },
+    { method: 'GET' },
+  );
+}
+
+function endpointAccessGuardFailureResponse(failure: ResolvedGuardFailure): Response {
+  const status = failure.status === 429 ? 429 : failure.auth === 'unauthenticated' ? 401 : 403;
+  return finalizeServerResponse(
+    {
+      body: status === 429 ? 'Rate Limited' : status === 401 ? 'Unauthorized' : 'Forbidden',
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        ...(failure.retryAfter === undefined ? {} : { 'Retry-After': String(failure.retryAfter) }),
+      },
+      status,
     },
     { method: 'GET' },
   );

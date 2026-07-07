@@ -1,15 +1,5 @@
 import type { Guard } from './guards.js';
 
-/**
- * A named guard step in a structured access audit chain. The optional executable
- * `guard` is metadata only here; runtime enforcement still uses each definition's
- * existing `guard`/`auth`/`verify` fields (SPEC §6.5 and §9.1).
- */
-export interface GuardAccessStep {
-  guard?: Guard<any, any>;
-  name: string;
-}
-
 /** A human-justified public access decision. */
 export interface PublicAccess {
   kind: 'public';
@@ -21,18 +11,21 @@ export interface VerifiedMachineAccess {
   kind: 'verified-machine-auth';
 }
 
-/** A structured access decision backed by a named guard chain. */
-export interface GuardChainAccess {
-  guards: readonly GuardAccessStep[];
-  kind: 'guard-chain';
-}
-
 /**
- * Optional structured access metadata for audits. This is intentionally not an
- * executable policy engine: existing runtime `guard`, `auth`, and `verify` behavior
- * remains the enforcement surface for this phase.
+ * Optional structured access decision for SPEC §10 default-deny surfaces.
+ *
+ * A guard-chain decision is the executable readonly guard array itself: the same
+ * guards run at request time and project their private names into access audits.
+ * `publicAccess(reason)` and `verifiedAccess` are the explicit no-guard sentinels.
  */
-export type AccessDecision = GuardChainAccess | PublicAccess | VerifiedMachineAccess;
+export type AccessDecision = readonly Guard<any, any>[] | PublicAccess | VerifiedMachineAccess;
+
+/** @internal Test whether an access decision is an executable guard array. */
+export function isGuardAccessDecision(
+  access: AccessDecision | undefined,
+): access is readonly Guard<any, any>[] {
+  return Array.isArray(access);
+}
 
 /**
  * Declare that a surface is intentionally public, with the audit reason attached.

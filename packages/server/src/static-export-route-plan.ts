@@ -1,3 +1,4 @@
+import { isGuardAccessDecision, type AccessDecision } from './access.js';
 import type { KovoApp } from './app-types.js';
 import { matchRoute, normalizePathname, parseRoutePattern } from './match.js';
 import {
@@ -21,7 +22,7 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
   const targetPaths = new Map<string, StaticExportRouteTarget>();
 
   for (const route of app.routes) {
-    if (app.sessionProvider && route.access?.kind !== 'public') {
+    if (app.sessionProvider && !isPublicAccessDecision(route.access)) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
@@ -31,7 +32,7 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
       continue;
     }
 
-    if (route.guard) {
+    if (route.guard || isGuardAccessDecision(route.access)) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
@@ -41,7 +42,7 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
       continue;
     }
 
-    if (route.access?.kind === 'public' && appRouteMayEmitAnonymousCsrfCookie(app)) {
+    if (isPublicAccessDecision(route.access) && appRouteMayEmitAnonymousCsrfCookie(app)) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
@@ -65,6 +66,10 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
   }
 
   return { diagnostics, targets };
+}
+
+function isPublicAccessDecision(access: AccessDecision | undefined): boolean {
+  return !isGuardAccessDecision(access) && access?.kind === 'public';
 }
 
 function appRouteMayEmitAnonymousCsrfCookie(app: KovoApp): boolean {

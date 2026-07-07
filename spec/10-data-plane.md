@@ -86,8 +86,8 @@ Authorization is **default-deny, by construction**. Every request-reachable surf
 `mutation`, a route `page`, an `endpoint`, or a `webhook` — MUST carry an **explicit access
 decision**. A surface's decision is **satisfied** by any one of:
 
-- an **access guard chain** — an existing `guard`/`guard`-chain on the surface (or, for a route, a
-  guard inherited from a parent `layout`), or an explicit `access: { kind: 'guard-chain', … }`;
+- an **access guard chain** — one or more self-naming executable guards declared in `access:
+[guard("name", fn), …]` on the surface (or inherited from a parent `layout`);
 - a **public** decision — `access: publicAccess("reason")`, declaring the surface intentionally
   reachable without authentication, with a human-readable justification recorded in the ledger;
 - a **verified machine-auth** decision — `access: verifiedAccess`, or (for an `endpoint`/`webhook`)
@@ -97,15 +97,19 @@ A surface with **none** of these is **undecided**: the static app graph classifi
 `decision: 'missing'` and the build fails with **KV436** (§11.3). An existing guard already _counts_
 as a decision — guarded surfaces are not forced to re-declare `access`. The decision is recorded as a
 static graph fact (`graph.access`) that the build derives from each surface's source-captured
-guard/auth/`access` posture; `kovo explain --access` renders the full ledger (every surface, its
-decision, and any public justification), and a reviewer audits the `public` set before ship.
+`access` posture; `kovo explain --access` renders the full ledger (every surface, its decision, the
+names of the guards that actually execute, and any public justification), and a reviewer audits the
+`public` set before ship.
 
 This is **by-construction**: the unsafe state (a request-reachable surface with no access decision)
 is unrepresentable in a passing build, proven by the static graph fact rather than a TypeScript brand
-(the compiler runs no type checker, §6.6). The proof is **completeness, not correctness**: KV436
-proves a decision _exists_, never that it is _right_ — a no-op `return true` guard satisfies it. Row
-ownership / IDOR correctness remains KV414's obligation (§10.3), and `publicAccess` reason strings are
-greppable, so they MUST NOT carry sensitive operational detail.
+(the compiler runs no type checker, §6.6). The audited decision MUST be the enforced decision:
+`access` guard names are attached to the executable guard values, runtime dispatch runs those same
+guards, and audit-only guard labels are not an accepted access decision. The proof is
+**completeness, not correctness**: KV436 proves a decision _exists_, never that it is _right_ — a
+no-op `return true` guard satisfies it. Row ownership / IDOR correctness remains KV414's obligation
+(§10.3), and `publicAccess` reason strings are greppable, so they MUST NOT carry sensitive
+operational detail.
 
 #### SQL statement safety on managed DB handles
 

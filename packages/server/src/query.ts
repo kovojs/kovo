@@ -6,7 +6,7 @@ import type { AccessDecision } from './access.js';
 import {
   guardFailureToResult,
   renderHttpGuardFailureResponse,
-  runGuard,
+  runAccessDecisionGuards,
   withGuardArgs,
   type GuardFailureResponseOptions,
   type GuardResult,
@@ -434,7 +434,11 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
     definition.args === undefined
       ? resolvedRequest
       : (withGuardArgs(resolvedRequest, argsResult.value) as typeof resolvedRequest);
-  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+  const guardFailure = await runAccessDecisionGuards(
+    definition.access,
+    definition.guard,
+    lifecycleRequest,
+  );
   if (guardFailure) {
     return guardFailureToResult(guardFailure);
   }

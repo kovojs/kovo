@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { publicAccess, verifiedAccess, type AccessDecision } from './access.js';
 import { domain } from './domain.js';
-import { endpoint, runEndpointAuth } from './endpoint.js';
-import { guards } from './guards.js';
+import { endpoint, runEndpoint, runEndpointAuth } from './endpoint.js';
+import { explainGuard, guard, guardAuditName, guards } from './guards.js';
 import { renderedHtml } from './html.js';
 import { mutation, runMutation } from './mutation.js';
 import { query, renderQueryEndpointResponse } from './query.js';
@@ -24,23 +24,19 @@ function sign(body: string): string {
 }
 
 describe('structured access metadata', () => {
-  it('defines public, verified machine, and guard-chain access decisions', () => {
+  it('defines public, verified machine, and executable guard access decisions', () => {
     const publicDecision = publicAccess('marketing page');
     const machineDecision = verifiedAccess;
-    const guardChain = {
-      guards: [
-        { name: 'session' },
-        {
-          guard: guards.role<{ session?: { user?: { roles: readonly string[] } } }>('admin'),
-          name: 'admin',
-        },
-      ],
-      kind: 'guard-chain',
-    } satisfies AccessDecision;
+    const requireAdmin = guard(
+      'admin-only',
+      guards.role<{ session?: { user?: { roles: readonly string[] } } }>('admin'),
+    );
+    const guardChain = [requireAdmin] satisfies AccessDecision;
 
     expect(publicDecision).toEqual({ kind: 'public', reason: 'marketing page' });
     expect(machineDecision).toEqual({ kind: 'verified-machine-auth' });
-    expect(guardChain.guards.map((step) => step.name)).toEqual(['session', 'admin']);
+    expect(guardChain.map((item) => guardAuditName(item))).toEqual(['admin-only']);
+    expect(explainGuard(requireAdmin)[0]).toEqual({ kind: 'named', name: 'admin-only' });
   });
 
   it('carries access metadata through route, query, mutation, endpoint, and webhook declarations', () => {
@@ -83,25 +79,31 @@ describe('structured access metadata', () => {
     expect(statusWebhook.access).toBe(verifiedAccess);
   });
 
-  it('does not change route, query, or mutation guard enforcement', async () => {
+  it('runs access guards for route, query, mutation, and endpoint enforcement', async () => {
     type AppRequest = { session?: { user?: { roles: readonly string[] } | null } | null };
-    const access = publicAccess('audit metadata only');
+    const access = [guard('admin-only', guards.role<AppRequest>('admin'))];
     const guardedRoute = route('/admin', {
       access,
-      guard: guards.role<AppRequest>('admin'),
       page: () => renderedHtml('admin'),
     });
     const guardedQuery = query('adminStats', {
       access,
-      guard: guards.role<AppRequest>('admin'),
       reads: [domain('admin')],
     });
     const guardedMutation = mutation('admin/touch', {
       access,
       csrf: false,
-      guard: guards.role<AppRequest>('admin'),
       input: s.object({ id: s.string() }),
       handler: () => 'ok',
+    });
+    const guardedEndpoint = endpoint('/admin/raw', {
+      access: [guard('endpoint-admin-only', () => ({ kind: 'forbidden' as const, payload: {} }))],
+      csrf: false,
+      csrfJustification: 'raw access guard test',
+      handler: () => new Response('ok'),
+      method: 'GET',
+      reason: 'raw access guard test',
+      response: textResponse,
     });
     const request = { session: { user: { id: 'u1', roles: ['staff'] } } };
 
@@ -142,6 +144,11 @@ describe('structured access metadata', () => {
       ok: false,
       status: 403,
     });
+    const endpointForbidden = await runEndpoint(
+      guardedEndpoint,
+      new Request('https://example.test/admin/raw'),
+    );
+    expect(endpointForbidden.status).toBe(403);
   });
 
   it('does not change endpoint auth enforcement', async () => {

@@ -45,6 +45,27 @@ import {
 } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
+  it('fails the production build for a request-reachable no-row side-effect mutation with no access guard', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-missing-access-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Missing Access Proof' });
+      linkStarterBuildDependencies(root);
+      addNoAccessProvisionMutation(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV436.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV436');
+        expect(output).toContain('mutations/provision-account');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV435 local-helper-credential-laundering
   // @kovo-security-certifies KV435 direct-secret-projection-to-query-wire
   // @kovo-security-certifies KV435 transformed-query-loader-return-laundering
@@ -1182,6 +1203,46 @@ function addEnhancedMutationWireProof(root: string): void {
       "    route('/', {",
     ].join('\n'),
     'enhanced mutation wire proof route',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+function addNoAccessProvisionMutation(root: string): void {
+  const mutationsPath = join(root, 'src/mutations.ts');
+  const mutations = replaceRequired(
+    readFileSync(mutationsPath, 'utf8'),
+    'export const appMutations = [addContact];',
+    [
+      'const provisionedAccounts: string[] = [];',
+      '',
+      'export const provisionAccount = mutation({',
+      '  csrf: false,',
+      '  input: s.object({ marker: s.string() }),',
+      '  handler(input: { marker: string }) {',
+      '    provisionedAccounts.push(input.marker);',
+      '    return { ok: true };',
+      '  },',
+      '});',
+      "(provisionAccount as { key: string }).key = 'mutations/provision-account';",
+      '',
+      'export const appMutations = [addContact, provisionAccount];',
+    ].join('\n'),
+    'missing-access provision mutation',
+  );
+  writeFileSync(mutationsPath, mutations, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  const appWithMutationImport = replaceRequired(
+    readFileSync(appPath, 'utf8'),
+    "import { addContact } from './mutations.js';",
+    "import { addContact, provisionAccount } from './mutations.js';",
+    'missing-access provision mutation app import',
+  );
+  const app = replaceRequired(
+    appWithMutationImport,
+    '  mutations: [addContact, appSignIn, appSignOut],',
+    '  mutations: [addContact, provisionAccount, appSignIn, appSignOut],',
+    'missing-access provision mutation registration',
   );
   writeFileSync(appPath, app, 'utf8');
 }

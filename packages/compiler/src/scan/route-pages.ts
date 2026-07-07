@@ -71,6 +71,7 @@ interface RouteFrameworkBindings {
 }
 
 const LAYOUT_IDENTITY = frameworkExport('@kovojs/server', 'layout');
+const GUARD_IDENTITY = frameworkExport('@kovojs/server', 'guard');
 const PUBLIC_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'publicAccess');
 const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
 const ROOTED_FILES_IDENTITY = frameworkExport('@kovojs/server', 'rootedFiles');
@@ -593,6 +594,10 @@ function accessDecisionFact(
     if (reason && ts.isStringLiteralLike(reason)) return { kind: 'public', reason: reason.text };
   }
 
+  if (ts.isArrayLiteralExpression(access)) {
+    return { guards: accessGuardNames(access, sourceFile), kind: 'guard-chain' };
+  }
+
   if (!ts.isObjectLiteralExpression(access)) return undefined;
 
   const kind = staticStringProperty(access, 'kind', sourceFile);
@@ -602,7 +607,7 @@ function accessDecisionFact(
     if (reason !== undefined) return { kind: 'public', reason };
   }
   if (kind === 'guard-chain') {
-    return { guards: accessGuardNames(access, sourceFile).map((name) => ({ name })), kind };
+    return { guards: [], kind };
   }
 
   return undefined;
@@ -621,14 +626,16 @@ function isFrameworkAccessExpression(
   );
 }
 
-function accessGuardNames(access: ts.ObjectLiteralExpression, sourceFile: ts.SourceFile): string[] {
-  const guards = objectPropertyInitializer(access, 'guards');
-  if (!guards || !ts.isArrayLiteralExpression(guards)) return [];
-
-  return guards.elements.flatMap((element) => {
-    if (!ts.isObjectLiteralExpression(element)) return [];
-    const name = staticStringProperty(element, 'name', sourceFile);
-    return name === undefined ? [] : [name];
+function accessGuardNames(access: ts.ArrayLiteralExpression, sourceFile: ts.SourceFile): string[] {
+  return access.elements.flatMap((element) => {
+    if (
+      !ts.isCallExpression(element) ||
+      !isFrameworkAccessExpression(sourceFile, element.expression, GUARD_IDENTITY)
+    ) {
+      return [];
+    }
+    const [name] = element.arguments;
+    return name && ts.isStringLiteralLike(name) ? [name.text] : [];
   });
 }
 
