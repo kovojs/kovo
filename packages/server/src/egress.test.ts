@@ -106,13 +106,19 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
     expect(classifyHost('metadata.google.internal')).toBeNull();
   });
 
-  it('recognizes Node-accepted scoped literals that Kovo deliberately cannot normalize yet', () => {
-    for (const host of ['fd00:ec2::254%eth0', '::ffff:169.254.169.254%eth0', 'fe80::1%lo0']) {
+  it('normalizes Node-accepted scoped literals for classification', () => {
+    const cases = [
+      ['fd00:ec2::254%eth0', 'fd00:ec2::254', 'metadata'],
+      ['::ffff:169.254.169.254%eth0', '::ffff:a9fe:a9fe', 'metadata'],
+      ['fe80::1%lo0', 'fe80::1', 'link-local'],
+    ] as const;
+
+    for (const [host, normalized, classification] of cases) {
       expect(net.isIP(host), host).toBe(6);
-      expect(normalizeIpLiteral(host), host).toBeNull();
-      expect(normalizeFastPathIpLiteral(host), host).toBeNull();
-      expect(classifyHost(host), host).toBeNull();
-      expect(isNodeAcceptedUnnormalizedIpLiteral(host), host).toBe(true);
+      expect(normalizeIpLiteral(host), host).toBe(normalized);
+      expect(normalizeFastPathIpLiteral(host), host).toBe(normalized);
+      expect(classifyHost(host), host).toBe(classification);
+      expect(isNodeAcceptedUnnormalizedIpLiteral(host), host).toBe(false);
     }
   });
 
@@ -434,22 +440,36 @@ describe('evaluateEgress policy decision', () => {
     expect(inside).toBeNull();
   });
 
-  it('fails closed for Node-accepted scoped literals before allowInternal can admit them', () => {
-    const cases = [
-      { host: 'fd00:ec2::254%eth0', port: 80 },
-      { host: '::ffff:169.254.169.254%eth0', port: 80 },
-      { host: 'fe80::1%lo0', port: 8080 },
+  it('classifies scoped literals and only admits non-metadata forms by exact allowInternal', () => {
+    const blockedCases = [
+      { classification: 'metadata', host: 'fd00:ec2::254%eth0', port: 80 },
+      { classification: 'metadata', host: '::ffff:169.254.169.254%eth0', port: 80 },
+      { classification: 'link-local', host: 'fe80::1%lo0', port: 8080 },
     ];
 
-    for (const { host, port } of cases) {
-      const policy = resolveEgressPolicy(
-        { allowInternal: [`[${host}]:${port}`, `${host}:${port}`] },
-        () => {},
-      );
+    for (const { classification, host, port } of blockedCases) {
+      const policy = resolveEgressPolicy({ allowInternal: [] }, () => {});
       const blocked = evaluateEgress({ host, port, resolvedIp: host, policy });
       expect(blocked, host).toBeInstanceOf(EgressBlockedError);
-      expect(blocked?.classification, host).toBe('special-use');
+      expect(blocked?.classification, host).toBe(classification);
     }
+
+    const linkLocalPolicy = resolveEgressPolicy(
+      { allowInternal: ['[fe80::1%lo0]:8080'] },
+      () => {},
+    );
+    expect(
+      evaluateEgress({
+        host: 'fe80::1%lo0',
+        port: 8080,
+        resolvedIp: 'fe80::1%lo0',
+        policy: linkLocalPolicy,
+      }),
+    ).toBeNull();
+
+    expect(() =>
+      resolveEgressPolicy({ allowInternal: ['[fd00:ec2::254%eth0]:80'] }, () => {}),
+    ).toThrow(EgressConfigError);
   });
 
   it('metadata frame survives an await boundary (ALS, not a stack frame)', async () => {
@@ -642,10 +662,8 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     expect(lookupCalled).toBe(true);
   });
 
-  it('DENIES scoped IPv6 literals before DNS lookup or allowInternal handling', async () => {
-    uninstall = installNetConnectFloor(
-      resolveEgressPolicy({ allowInternal: ['[fd00:ec2::254%eth0]:80'] }, () => {}),
-    );
+  it('DENIES scoped metadata literals before DNS lookup', async () => {
+    uninstall = installNetConnectFloor(emptyPolicy());
     let lookupCalled = false;
     const lookup: http.RequestOptions['lookup'] = (_hostname, opts, cb) => {
       lookupCalled = true;
@@ -665,7 +683,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         });
         req.on('error', reject);
       }),
-    ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME, classification: 'special-use' });
+    ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME, classification: 'metadata' });
     expect(lookupCalled).toBe(false);
   });
 

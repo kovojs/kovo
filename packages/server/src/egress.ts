@@ -423,6 +423,9 @@ export function normalizeIpLiteral(host: string): string | null {
   const v6 = parseIpv6Bytes(h);
   if (v6 !== null) return canonicalizeIpv6Bytes(v6);
 
+  const scopedV6 = parseScopedIpv6Bytes(h);
+  if (scopedV6 !== null) return canonicalizeIpv6Bytes(scopedV6);
+
   return null;
 }
 
@@ -440,14 +443,18 @@ export function normalizeFastPathIpLiteral(host: string): string | null {
   const v6 = parseIpv6Bytes(h);
   if (v6 !== null) return canonicalizeIpv6Bytes(v6);
 
+  const scopedV6 = parseScopedIpv6Bytes(h);
+  if (scopedV6 !== null) return canonicalizeIpv6Bytes(scopedV6);
+
   return null;
 }
 
 /**
  * SPEC §6.6 / C15 corollary: if Node accepts an IP literal but Kovo cannot normalize it into
  * the classifier's canonical address model, the egress sink must fail closed before allowlists.
- * Today this deliberately excludes scoped IPv6 literals (`fe80::1%lo0`,
- * `::ffff:169.254.169.254%eth0`) until Kovo owns a canonical scoped-address parser.
+ * Scoped IPv6 literals (`fe80::1%lo0`, `::ffff:169.254.169.254%eth0`) are normalized by
+ * stripping the local interface zone for address classification while preserving the full
+ * scoped host token as the exact allowInternal key.
  *
  * @internal
  */
@@ -520,12 +527,12 @@ export function classifyHost(host: string): PrivateAddressClass | null {
 
 /** Classify a canonical IP literal. Unknown/unparseable → special-use (fails closed). */
 export function classifyIp(host: string): PrivateAddressClass {
-  const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
+  const h = normalizeIpLiteral(host);
+  if (h === null) return 'special-use';
   const v4 = parseLooseIpv4(h);
   if (v4 !== null) return classifyIpv4(v4);
   const v6 = parseIpv6Bytes(h);
   if (v6 !== null) return classifyIpv6Bytes(v6);
-  // Not an IP at all (e.g. a hostname slipped through) → fail closed.
   return 'special-use';
 }
 
@@ -649,6 +656,16 @@ function parseIpv6Bytes(input: string): Ipv6Bytes | null {
   const bytes: number[] = [];
   for (const word of words) bytes.push((word >> 8) & 0xff, word & 0xff);
   return { bytes };
+}
+
+function parseScopedIpv6Bytes(input: string): Ipv6Bytes | null {
+  const percent = input.lastIndexOf('%');
+  if (percent <= 0 || percent === input.length - 1) return null;
+  const address = input.slice(0, percent);
+  const scope = input.slice(percent + 1);
+  if (!/^[0-9a-z_.~-]+$/i.test(scope)) return null;
+  if (net.isIP(input) !== 6) return null;
+  return parseIpv6Bytes(address);
 }
 
 function parseIpv6Side(side: string): number[] | null {
