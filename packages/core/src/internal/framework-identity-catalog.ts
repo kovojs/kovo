@@ -146,6 +146,7 @@ export const frameworkIdentityCatalog = [
   ...['domain', 'mutation', 'query', 'Reader', 's', 'tag', 'task', 'write'].map(serverData),
   ...[
     'endpoint',
+    'guard',
     'href',
     'layout',
     'Link',

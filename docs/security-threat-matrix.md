@@ -15,7 +15,7 @@ an **audited escape hatch**, or an **explicit out-of-scope note (whose responsib
 | **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | GREEN — positive schema allowlist + null-proto decode + typed header/cookie channels              | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF Origin+token floor, webhook verify, request-input provenance                                     |
 | **Render / browser**            | GREEN — escape-by-default; `trustedHtml` the only branded raw door                                                                              | GREEN — contextual escaping across text/attr/URL-scheme positions                                 | N/A — client render cost is app-authored                                 | GREEN — Trusted-Types policy + inline-loader import allowlist                                                 |
 | **Build / compiler**            | GREEN — server-only-value capture (KV437); generated code carries no secret                                                                     | GREEN (M7) — codegen framework-constructed; KV235 provenance; sink-policy + import-boundary gates | N/A — build is dev-time                                                  | GREEN (M7) — `dynamic.import.process` sole door = `/c/` versioned-module allowlist                            |
-| **Dependencies / supply chain** | **OPEN (M6)** — TCB doesn't mark dep surfaces; caret pins on `pg`/`pglite`                                                                      | **OPEN (M6)** — no dependency update/provenance policy                                            | out-of-scope — dependency-internal DoS                                   | **OPEN (M6)** — session/hash unforgeability rests on Better Auth (undeclared)                                 |
+| **Dependencies / supply chain** | **OPEN (M6)** — dep surfaces recorded; caret pins remain on `pg`/`pglite`                                                                       | **OPEN (M6)** — no dependency update/provenance policy                                            | out-of-scope — dependency-internal DoS                                   | **OPEN (M6)** — Better Auth session/hash/reset/2FA/linking surfaces need review-on-bump policy                |
 | **Runtime / infra**             | GREEN (M8) — no cross-tenant bleed; pool scrubbed; module state per-request; caches principal-independent                                       | GREEN (M8) — transaction-local session state; DISCARD ALL on release                              | scope: app/deploy (M5); GREEN — bounded pool + rate budgets              | GREEN (M8) — pool identity reset; no principal bleed across reuse                                             |
 
 ¹ **DB cells depend on `fundamental-fixes-followup-13` landing** the round-16 fixes (`claude-bugz-37`: write-propagation
@@ -75,9 +75,9 @@ under implementation.
   derive/live-target emitters which sanitize. Route through `sanitizeIdentifier`.
 - **Deps × C/I/Au (M6) — OPEN.** HAVE: committed `pnpm-lock.yaml`; `scripts/supply-chain-gates.mjs`
   (`onlyBuiltDependencies` freeze, lifecycle-script ban, `pnpm audit` ≥moderate); `check:pack-security`; `better-auth`
-  1.6.17 + `drizzle-orm` 1.0.0-rc.4 exact-pinned. GAPS: (1) `pg` `^8.16.3` + `@electric-sql/pglite` `^0.5.1` (+ argon2,
-  better-sqlite3) are **caret** not exact; CI lacks `--frozen-lockfile`. (2) `security/TCB.md` marks Kovo **wrapper**
-  modules but not the **dependency behaviors** the guarantees rest on. (3) no `rules/dependency-policy.md`. The 10
+  1.6.17 + `drizzle-orm` 1.0.0-rc.4 exact-pinned; `security/TCB.md` records the dependency behaviors the guarantees
+  rest on. GAPS: (1) `pg` `^8.16.3` + `@electric-sql/pglite` `^0.5.1` (+ argon2, better-sqlite3) are **caret** not
+  exact; CI lacks `--frozen-lockfile`. (2) no `rules/dependency-policy.md`. The 10
   review-trigger dependency surfaces: node-pg parameterization; Drizzle SQL-gen parameterization; PGlite `SET LOCAL
 ROLE`/RLS; Postgres `SET ROLE`/`FORCE RLS`; Better Auth password hashing; Better Auth session/cookie integrity; Better
   Auth reset/verification token lifecycle; Better Auth two-factor replay resistance; Better Auth account-linking state
@@ -109,10 +109,10 @@ infrastructure-level (L3/L4) DDoS.
 
 ## Open cells (v1 blockers) + first-fill work
 
-| Cell                           | State | Owner / next step                                                                                                                                   |
-| ------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M3** Escape-hatch visibility | OPEN  | `kovo explain --capabilities` surfaces only 2 of ~12 escapes — see below; own follow-up                                                             |
-| **M6** Deps / supply chain     | OPEN  | exact-pin `pg`/`pglite`/argon2/better-sqlite3 + `--frozen-lockfile`; `trustedDependencySurfaces` in `security/TCB.md`; `rules/dependency-policy.md` |
+| Cell                           | State | Owner / next step                                                                                 |
+| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------- |
+| **M3** Escape-hatch visibility | OPEN  | `kovo explain --capabilities` surfaces only 2 of ~12 escapes — see below; own follow-up           |
+| **M6** Deps / supply chain     | OPEN  | exact-pin `pg`/`pglite`/argon2/better-sqlite3 + `--frozen-lockfile`; `rules/dependency-policy.md` |
 
 ### M3 — escape-hatch visibility gap (detail)
 

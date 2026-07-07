@@ -322,11 +322,11 @@ export const docs = route('/docs', {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',
       source: `
-import { guards, layout, publicAccess, route, verifiedAccess } from '@kovojs/server';
+import { guard, guards, layout, publicAccess, route, verifiedAccess } from '@kovojs/server';
 
 const authed = guards.authed();
 const AdminLayout = layout({
-  access: { guards: [{ name: 'admin' }], kind: 'guard-chain' },
+  access: [guard('admin', authed)],
   guard: authed,
   render: (_queries, _state, { children }) => <main>{children}</main>,
 });
@@ -362,7 +362,7 @@ export const missing = route('/missing', {
     ).toEqual([
       { access: { kind: 'public', reason: 'public docs' }, guards: undefined, route: '/docs' },
       {
-        access: { guards: [], kind: 'guard-chain' },
+        access: { guards: ['admin'], kind: 'guard-chain' },
         guards: ['authed'],
         route: '/admin',
       },
