@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  deriveAccessExplainFacts,
   deriveAuthPostureFacts,
   deriveOwnershipPostureFacts,
   deriveSessionAuthorityFacts,
@@ -80,6 +81,32 @@ describe('kovo graph input validation', () => {
         ],
       }),
     ).toEqual([]);
+  });
+
+  it('derives guarded access only from executable guard names', () => {
+    expect(
+      deriveAccessExplainFacts({
+        mutations: [
+          { access: { guards: ['admin-only'], kind: 'guard-chain' }, key: 'billing/charge' },
+          { access: { guards: [], kind: 'guard-chain' }, key: 'billing/email' },
+        ],
+      }),
+    ).toEqual([
+      {
+        detail: 'access=guards guards=admin-only',
+        decision: 'guard',
+        kind: 'mutation',
+        name: 'billing/charge',
+        source: 'access',
+      },
+      {
+        detail: 'missing access fact',
+        decision: 'missing',
+        kind: 'mutation',
+        name: 'billing/email',
+        source: 'access',
+      },
+    ]);
   });
 
   it('accepts producer-owned auth/session/ownership posture facts as graph arrays', () => {

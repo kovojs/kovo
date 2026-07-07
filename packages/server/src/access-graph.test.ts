@@ -43,8 +43,11 @@ describe('app access graph extraction', () => {
       input: s.object({}),
     });
     const guardedLayout = layout({ guard: authed });
+    const adminOnly = guards.role<{
+      session?: { user?: { id?: string; roles: readonly string[] } | null } | null;
+    }>('admin');
     const explicitGuardRoute = route('/admin', {
-      access: [guard('admin', () => true)],
+      access: [guard('admin-only', adminOnly)],
       page: () => '<main>admin</main>',
     });
     const guardedRoute = route('/cart', { layout: guardedLayout, page: () => '<main>cart</main>' });
@@ -138,7 +141,7 @@ describe('app access graph extraction', () => {
       },
       {
         decision: 'guard',
-        detail: 'access=guard-chain guards=admin',
+        detail: 'access=guards guards=admin-only',
         kind: 'page',
         name: '/admin',
         source: 'access',

@@ -602,7 +602,7 @@ function accessDecisionFact(
     if (reason !== undefined) return { kind: 'public', reason };
   }
   if (kind === 'guard-chain') {
-    return { guards: accessGuardNames(access, sourceFile).map((name) => ({ name })), kind };
+    return { guards: accessGuardNames(access), kind };
   }
 
   return undefined;
@@ -621,14 +621,16 @@ function isFrameworkAccessExpression(
   );
 }
 
-function accessGuardNames(access: ts.ObjectLiteralExpression, sourceFile: ts.SourceFile): string[] {
+function accessGuardNames(access: ts.ObjectLiteralExpression): string[] {
   const guards = objectPropertyInitializer(access, 'guards');
   if (!guards || !ts.isArrayLiteralExpression(guards)) return [];
 
   return guards.elements.flatMap((element) => {
     if (!ts.isObjectLiteralExpression(element)) return [];
-    const name = staticStringProperty(element, 'name', sourceFile);
-    return name === undefined ? [] : [name];
+    // SPEC §6.5/§9.1 C17: legacy hand-written guard step names are audit-only and
+    // cannot prove an enforced guard exists. Runtime app assembly owns executable
+    // guard-name projection from the guard object.
+    return [];
   });
 }
 

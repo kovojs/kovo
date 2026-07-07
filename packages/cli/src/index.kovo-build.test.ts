@@ -712,13 +712,13 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+import { createApp, guards, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
 
-const allow = () => true;
+const allow = guards.rateLimit({ max: 100, per: 'global' });
 
 const adminQuery = query('adminOrders', {
   args: s.object({ id: s.string() }),
-  access: { guards: [{ name: 'allow' }], kind: 'guard-chain' },
+  access: publicAccess('build access fixture query'),
   guard: allow,
   load(input) {
     return { id: input.id };
@@ -726,7 +726,7 @@ const adminQuery = query('adminOrders', {
 });
 
 const adminMutation = mutation('admin/update', {
-  access: { guards: [{ name: 'allow' }], kind: 'guard-chain' },
+  access: publicAccess('build access fixture mutation'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   guard: allow,

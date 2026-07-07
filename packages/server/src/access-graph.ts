@@ -124,9 +124,10 @@ function explicitAccessFact(
   if (access === undefined) return undefined;
 
   if (isGuardAccessDecision(access)) {
+    if (access.length === 0) return undefined;
     return {
       decision: 'guard',
-      detail: `access=guard-chain guards=${listAccessGuards(access)}`,
+      detail: `access=guards guards=${accessGuardNames(access).join(',')}`,
       kind,
       name,
       source: 'access',
@@ -165,8 +166,8 @@ function missingAccessFact(kind: AccessExplainFact['kind'], name: string): Acces
   };
 }
 
-function listAccessGuards(access: readonly import('./guards.js').Guard<any, any>[]): string {
-  return access.length === 0 ? '-' : access.map((guard) => guardAuditName(guard)).join(',');
+function accessGuardNames(access: readonly import('./guards.js').Guard<any, any>[]): string[] {
+  return access.map((guard) => guardAuditName(guard));
 }
 
 function isWebhookEndpoint(
