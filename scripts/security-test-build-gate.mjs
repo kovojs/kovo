@@ -15,6 +15,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV406',
   'KV311',
   'KV330',
+  'KV418',
 ];
 
 export const DEFAULT_TRUSTED_OUTPUT_SINK_POSITION_SEED = 'dec-g:kv426:trusted-output:v1';
@@ -279,6 +280,11 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   },
   {
     claimExtractor: 'security-certification-markers',
+    description: 'Production artifact default-CSRF refusal proof-scope enrollment tests',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.csrf.test.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
     description: 'Production artifact island derive proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
   },
@@ -305,6 +311,23 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
 ];
 
 export const SECURITY_BUILD_PROOFS = [
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'csrf-cross-origin-refusal-prod-artifact',
+    code: 'KV418',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.csrf.test.ts',
+    requiredNeedles: [
+      'addCsrfDefaultRefusalProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'csrf-proof/csrf-probe',
+      'data-error-code="CSRF"',
+      "origin: 'https://evil.example'",
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'", 'csrf: appCsrf'],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.csrf.test.ts',
+    testName:
+      'refuses cross-origin and missing-token unsafe requests to a default-CSRF mutation from the paranoid production artifact',
+  },
   {
     buildInvocation: 'cli-main-build',
     code: 'KV414',
