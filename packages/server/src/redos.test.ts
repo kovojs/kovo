@@ -7,6 +7,7 @@ import {
   RedosPatternError,
   unsafeRegex,
 } from './redos.js';
+import { REDOS_ACCEPT_CORPUS, REDOS_REJECT_CORPUS } from './redos-regression-corpus.js';
 
 // KV434 (SPEC §6.6/§9.5): blessed backtracking-free matchers + static ReDoS reject + audited escape.
 describe('blessed format matchers (KV434)', () => {
@@ -44,6 +45,19 @@ describe('blessed format matchers (KV434)', () => {
 });
 
 describe('static ReDoS pattern analysis (KV434)', () => {
+  // @kovo-security-classifier-corpus redos
+  it('keeps every pinned unsafe regression rejected by the runtime classifier', () => {
+    for (const entry of REDOS_REJECT_CORPUS) {
+      expect(() => assertLinearSafePattern(entry.source), entry.name).toThrow(RedosPatternError);
+    }
+  });
+
+  it('keeps every pinned safe regression accepted by the runtime classifier', () => {
+    for (const entry of REDOS_ACCEPT_CORPUS) {
+      expect(() => assertLinearSafePattern(entry.source), entry.name).not.toThrow();
+    }
+  });
+
   it('rejects nested-quantifier catastrophic structure', () => {
     expect(() => assertLinearSafePattern('(a+)+')).toThrow(RedosPatternError);
     expect(() => assertLinearSafePattern('(a*)*')).toThrow(/KV434/u);
@@ -116,7 +130,56 @@ describe('static ReDoS pattern analysis (KV434)', () => {
     // A group body with no quantifier is not nested-quantifier structure (control).
     expect(() => assertLinearSafePattern('(ab)+')).not.toThrow();
   });
+
+  it('rejects quantified groups whose nested group interiors contain quantifiers', () => {
+    for (const source of ['((a+))+', '(a(b+))+', '(([a-z]+))+', '((\\d+))*']) {
+      expect(() => assertLinearSafePattern(source), source).toThrow(RedosPatternError);
+    }
+
+    for (const source of ['(?:ab)+', 'a?b?c?', '((ab))+']) {
+      expect(() => assertLinearSafePattern(source), source).not.toThrow();
+    }
+  });
+
+  it('keeps generated quantified-group nestings rejected or empirically non-superlinear', () => {
+    const atoms = ['a', 'ab', '[a-z]', '\\d'];
+    const innerQuantifiers = ['', '+', '*', '?', '{2,4}'];
+    const wrappers = [
+      (atom: string, quantifier: string) => `(${atom}${quantifier})+`,
+      (atom: string, quantifier: string) => `((${atom}${quantifier}))+`,
+      (atom: string, quantifier: string) => `(?:${atom}${quantifier})+`,
+    ];
+
+    for (const atom of atoms) {
+      for (const quantifier of innerQuantifiers) {
+        for (const wrap of wrappers) {
+          const source = wrap(atom, quantifier);
+          let rejected = false;
+          try {
+            assertLinearSafePattern(source);
+          } catch (error) {
+            expect(error, source).toBeInstanceOf(RedosPatternError);
+            rejected = true;
+          }
+          if (!rejected) expectNonSuperlinear(source);
+        }
+      }
+    }
+  });
 });
+
+function expectNonSuperlinear(source: string): void {
+  const regex = new RegExp(`^(?:${source})$`, 'u');
+  const elapsed = [16, 32, 64].map((units) => {
+    const input = 'ab'.repeat(units) + '!';
+    const start = performance.now();
+    for (let i = 0; i < 25; i += 1) regex.test(input);
+    return performance.now() - start;
+  });
+  const [small, medium, large] = elapsed;
+  expect(large, source).toBeLessThan(50);
+  expect(large / Math.max(medium, small, 0.01), source).toBeLessThan(20);
+}
 
 describe('unsafeRegex escape (KV434)', () => {
   it('records a capability fact and requires a justification', () => {
