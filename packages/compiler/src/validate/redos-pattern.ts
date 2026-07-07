@@ -180,6 +180,7 @@ function classClose(source: string, open: number): number {
       const escaped = source[i + 1];
       if (escaped === undefined) return -1;
       if (escaped === 'x' || escaped === 'u' || escaped === 'c') return -1;
+      if (escaped >= '1' && escaped <= '9') return -1;
       if (escaped === 'p' || escaped === 'P' || escaped === 'k') return -1;
       if (escaped === '0' && isDigitCode(source.charCodeAt(i + 2))) return -1;
       i += 1;

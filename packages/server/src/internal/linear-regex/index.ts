@@ -237,8 +237,12 @@ class Parser {
     if (escaped === 'x' || escaped === 'u' || escaped === 'c') {
       this.#fail(`\\${escaped} escapes are not supported; use unsafeRegex(...)`);
     }
-    if (!inClass && escaped >= '1' && escaped <= '9') {
-      this.#fail('backreferences are not supported; use unsafeRegex(...)');
+    if (escaped >= '1' && escaped <= '9') {
+      this.#fail(
+        inClass
+          ? 'legacy numeric escapes in character classes are not supported; use unsafeRegex(...)'
+          : 'backreferences are not supported; use unsafeRegex(...)',
+      );
     }
     if (escaped === 'k') this.#fail('named backreferences are not supported; use unsafeRegex(...)');
     if (escaped === 'p' || escaped === 'P')
@@ -508,8 +512,8 @@ function assertionPasses(
   if (anchor === 'end') {
     return (
       position === input.length ||
-      isFinalLineTerminatorPosition(input, position) ||
-      (flags.multiline && isEcmaLineTerminatorAt(input, position))
+      (flags.multiline &&
+        (isFinalLineTerminatorPosition(input, position) || isEcmaLineTerminatorAt(input, position)))
     );
   }
   const before = position > 0 ? input.charCodeAt(position - 1) : -1;
@@ -528,10 +532,7 @@ function matchesChar(matcher: CharMatcher, charCode: number, flags: LinearRegexF
   const normalized = normalizeCode(charCode, flags);
   let found = false;
   for (const range of matcher.ranges) {
-    if (
-      normalized >= normalizeCode(range.from, flags) &&
-      normalized <= normalizeCode(range.to, flags)
-    ) {
+    if (codeInClassRange(charCode, normalized, range, flags)) {
       found = true;
       break;
     }
@@ -674,6 +675,25 @@ function isEcmaLineTerminatorAt(input: string, position: number): boolean {
 function normalizeCode(code: number, flags: LinearRegexFlags): number {
   if (!flags.ignoreCase) return code;
   if (code >= 0x41 && code <= 0x5a) return code + 0x20;
+  return code;
+}
+
+function codeInClassRange(
+  code: number,
+  normalized: number,
+  range: CharRange,
+  flags: LinearRegexFlags,
+): boolean {
+  if (code >= range.from && code <= range.to) return true;
+  if (!flags.ignoreCase) return false;
+  if (normalized >= range.from && normalized <= range.to) return true;
+  const folded = asciiCaseCounterpart(normalized);
+  return folded >= range.from && folded <= range.to;
+}
+
+function asciiCaseCounterpart(code: number): number {
+  if (code >= 0x41 && code <= 0x5a) return code + 0x20;
+  if (code >= 0x61 && code <= 0x7a) return code - 0x20;
   return code;
 }
 

@@ -88,10 +88,10 @@ describe('linear pattern engine (KV434)', () => {
     expect(testLinearPattern(program, 'b')).toBe(false);
   });
 
-  it('implements ECMAScript line terminator anchor semantics', () => {
+  it('implements strict non-multiline end anchors and multiline line terminator anchors', () => {
     for (const terminator of ['\n', '\r', '\r\n', '\u2028', '\u2029']) {
       expect(testLinearPattern(compileLinearPattern('a$'), `a${terminator}`), terminator).toBe(
-        true,
+        false,
       );
       expect(
         testLinearPattern(compileLinearPattern('^b', 'm'), `a${terminator}b`),
@@ -101,6 +101,26 @@ describe('linear pattern engine (KV434)', () => {
         testLinearPattern(compileLinearPattern('a$', 'm'), `a${terminator}b`),
         terminator,
       ).toBe(true);
+    }
+    expect(testLinearPattern(compileLinearPattern('^[a-z]+$'), 'admin\n')).toBe(false);
+  });
+
+  it('matches JavaScript RegExp parity for case-insensitive character-class ranges', () => {
+    const cases = [
+      { flags: 'i', source: '[A-_]' },
+      { flags: 'i', source: '[Z-a]' },
+    ];
+    const inputs = ['@', 'A', 'Z', '[', '_', '`', 'a', 'z', '{'];
+
+    for (const { flags, source } of cases) {
+      const program = compileLinearPattern(source, flags);
+      const regex = new RegExp(source, flags);
+      for (const input of inputs) {
+        expect(
+          testLinearPattern(program, input),
+          `${source}/${flags} on ${JSON.stringify(input)}`,
+        ).toBe(regex.test(input));
+      }
     }
   });
 

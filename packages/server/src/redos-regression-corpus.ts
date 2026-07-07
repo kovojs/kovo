@@ -15,6 +15,9 @@ export const REDOS_UNSUPPORTED_CORPUS: readonly RedosCorpusCase[] = [
   { name: 'positive lookbehind', source: '(?<=a)b' },
   { name: 'negative lookbehind', source: '(?<!a)b' },
   { name: 'numbered backreference', source: '(a)\\1' },
+  { name: 'legacy numeric escape in character class', source: '[\\1]' },
+  { name: 'legacy nine escape in character class', source: '[\\9]' },
+  { name: 'legacy multi-digit escape in character class', source: '^[^\\1-\\37]+$' },
   { name: 'named backreference', source: '(?<word>a)\\k<word>' },
   { name: 'unicode property escape', source: '\\p{Letter}+' },
 ] as const;

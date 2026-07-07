@@ -80,6 +80,12 @@ const schema = s.string().min(3).pattern(re);`,
       expect(codes(component(`const schema = s.string().pattern(/é/i);`))).toContain('KV434');
       expect(codes(component(`const schema = s.string().pattern(/[é]/i);`))).toContain('KV434');
     });
+
+    it('fires KV434 for legacy numeric escapes inside regex literal character classes', () => {
+      expect(codes(component(`const schema = s.string().pattern(/^[^\\1-\\37]+$/);`))).toContain(
+        'KV434',
+      );
+    });
   });
 
   describe('NEGATIVE: supported compile-visible literals are not flagged', () => {
