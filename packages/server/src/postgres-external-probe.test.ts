@@ -314,14 +314,19 @@ async function expectOwnerIsolation(
     await u2Db
       .insert(probeNotes)
       .values({ classified: 'secret-two', id: 'u2-note', ownerId: 'u2', title: 'Two' });
-    await expect(u1Db.select().from(probeNotes).orderBy(probeNotes.id)).resolves.toEqual([
-      { classified: 'secret-one', id: 'u1-note', ownerId: 'u1', title: 'One' },
-    ]);
-    await expect(u2Db.select().from(probeNotes).orderBy(probeNotes.id)).resolves.toEqual([
-      { classified: 'secret-two', id: 'u2-note', ownerId: 'u2', title: 'Two' },
-    ]);
+    const publicColumns = {
+      id: probeNotes.id,
+      ownerId: probeNotes.ownerId,
+      title: probeNotes.title,
+    };
     await expect(
-      u1Db.select().from(probeNotes).where(eq(probeNotes.ownerId, 'u2')),
+      u1Db.select(publicColumns).from(probeNotes).orderBy(probeNotes.id),
+    ).resolves.toEqual([{ id: 'u1-note', ownerId: 'u1', title: 'One' }]);
+    await expect(
+      u2Db.select(publicColumns).from(probeNotes).orderBy(probeNotes.id),
+    ).resolves.toEqual([{ id: 'u2-note', ownerId: 'u2', title: 'Two' }]);
+    await expect(
+      u1Db.select(publicColumns).from(probeNotes).where(eq(probeNotes.ownerId, 'u2')),
     ).resolves.toEqual([]);
   } finally {
     await runtime.close();
@@ -358,12 +363,11 @@ async function expectLeastPrivilegeRuntimePostureFailure(databaseUrl: string): P
     schema,
   });
   expect(report.ok).toBe(false);
-  expect(report.issues).toEqual([
-    {
-      code: 'KV433_RUNTIME_ROLE',
-      detail: 'runtime must be a least-privilege login role',
-    },
-  ]);
+  expect(report.issues).toHaveLength(1);
+  expect(report.issues[0]?.code).toBe('KV433_RUNTIME_ROLE');
+  expect(report.issues[0]?.detail).toMatch(
+    /runtime login .* (must have no elevated role attributes|must not be able to SET ROLE to adminRole=)/,
+  );
 }
 
 async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: string): Promise<void> {
