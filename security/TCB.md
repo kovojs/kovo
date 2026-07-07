@@ -208,6 +208,14 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "lineBudget": 20
     },
     {
+      "id": "server.csrf.request-authenticity-verifier",
+      "file": "packages/server/src/csrf.ts",
+      "name": "validateCsrfToken",
+      "kind": "csrf-request-authenticity-verifier",
+      "classification": "tcb",
+      "lineBudget": 40
+    },
+    {
       "id": "core.security-markers.security-classifier",
       "file": "packages/core/src/internal/security-markers.ts",
       "name": "securityClassifier",
