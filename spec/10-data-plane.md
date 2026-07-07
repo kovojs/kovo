@@ -285,6 +285,24 @@ must be a member of only framework-owned roles plus an explicit benign don't-car
 role-attribute columns and non-allowlisted `pg_*` predefined-role memberships (C10/C11) both fail
 closed until classified.
 
+**C15 — classify-and-pin or reconstruct after runtime classification (normative).** When a
+security-relevant sink accepts a caller-owned carrier whose bytes or object identity can still
+change after runtime validation/classification, the framework MUST do one of the following before
+the sink executes:
+
+1. **Pin** the exact accepted value into an immutable framework-owned carrier that the sink then
+   consumes without re-reading the caller-owned source; or
+2. **Reconstruct/fix** the sink value from normalized facts, discarding the caller-owned carrier and
+   failing closed to a fixed fallback when normalization does not bless the value.
+
+Re-reading or re-stringifying the mutable caller-owned carrier at the sink after an earlier
+classification decision is forbidden. A sink may be recorded as **N/A** only when the sink is
+already framework-owned and structural from construction time, so no caller-owned carrier survives
+to the decision point. The required audit inventory for this rule includes at least the egress
+resolved-IP floor, redirect `Location`, managed SQL statement carriers, `sql.identifier(...)`, and
+header/cookie serialization; each row must be classified as `pinned`, `fixed`, or `N-A` with
+hostile-value evidence.
+
 The closure audit is side-effect-inclusive. Attached code is reachable when the app role can reach
 it by direct `EXECUTE`, DML trigger, rewrite rule, `CHECK`/domain constraint function,
 default/generated expression function, or index/predicate expression function, including structural
