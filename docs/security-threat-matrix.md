@@ -8,36 +8,38 @@ an **audited escape hatch**, or an **explicit out-of-scope note (whose responsib
 
 ## The matrix
 
-| Surface                         | C (confidentiality)                                                                                                                             | I (integrity)                                                                                     | A (availability)                                                         | Au (authenticity)                                                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| **DB / data plane**             | GREEN¹ — RLS FORCE + non-superuser roles + column-REVOKE + closure/attached-code/identity audits                                                | GREEN¹ — narrowed writer grant, KV438 governed-column floor, WITH CHECK, declared-write choke     | scope: app/deploy (M5); GREEN-footgun — query-list cap 100, bounded pool | GREEN¹ — principal integrity: wrapped-client reconstruct + `set_config` confinement + identity allowlist      |
-| **Auth**                        | GREEN (M2) — non-egress proof + opaque credential failure/timing floor; reset/verify/2FA/linking semantics reviewed as Better Auth dep surfaces | GREEN — governed-column floor on `user`/`session` (KV438)                                         | GREEN — pre-dispatch rate budgets on auth endpoints (M5)                 | GREEN — CSRF, session-cookie posture/refresh lifecycle; token signing + callback-state binding = dep surfaces |
-| **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | GREEN — positive schema allowlist + null-proto decode + typed header/cookie channels              | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF Origin+token floor, webhook verify, request-input provenance                                     |
-| **Render / browser**            | GREEN — escape-by-default; `trustedHtml` the only branded raw door                                                                              | GREEN — contextual escaping across text/attr/URL-scheme positions                                 | N/A — client render cost is app-authored                                 | GREEN — Trusted-Types policy + inline-loader import allowlist                                                 |
-| **Build / compiler**            | GREEN — server-only-value capture (KV437); generated code carries no secret                                                                     | GREEN (M7) — codegen framework-constructed; KV235 provenance; sink-policy + import-boundary gates | N/A — build is dev-time                                                  | GREEN (M7) — `dynamic.import.process` sole door = `/c/` versioned-module allowlist                            |
-| **Dependencies / supply chain** | **OPEN (M6)** — dep surfaces recorded; caret pins remain on `pg`/`pglite`                                                                       | **OPEN (M6)** — no dependency update/provenance policy                                            | out-of-scope — dependency-internal DoS                                   | **OPEN (M6)** — Better Auth session/hash/reset/2FA/linking surfaces need review-on-bump policy                |
-| **Runtime / infra**             | GREEN (M8) — no cross-tenant bleed; pool scrubbed; module state per-request; caches principal-independent                                       | GREEN (M8) — transaction-local session state; DISCARD ALL on release                              | scope: app/deploy (M5); GREEN — bounded pool + rate budgets              | GREEN (M8) — pool identity reset; no principal bleed across reuse                                             |
+| Surface                         | C (confidentiality)                                                                                                                             | I (integrity)                                                                                     | A (availability)                                                         | Au (authenticity)                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **DB / data plane**             | GREEN¹ — RLS FORCE + non-superuser roles + column-REVOKE + closure/attached-code/identity audits                                                | GREEN¹ — narrowed writer grant, KV438 governed-column floor, WITH CHECK, declared-write choke     | scope: app/deploy (M5); GREEN-footgun — query-list cap 100, bounded pool | GREEN¹ — principal integrity: wrapped-client reconstruct + `set_config` confinement + identity allowlist     |
+| **Auth**                        | GREEN (M2) — adapter non-egress proof: fail-closed reachability proof over every request-reachable secret path, TCB-enrolled; timing GREEN (M4) | GREEN — governed-column floor on `user`/`session` (KV438)                                         | GREEN — pre-dispatch rate budgets on auth endpoints (M5)                 | GREEN — CSRF, HttpOnly+Secure+SameSite cookies, session lifecycle; session unforgeability = dep surface (M6) |
+| **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | GREEN — typed header/cookie channels, response reconstruct, redirect normalization                | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF, webhook verify, request-input provenance                                                       |
+| **Render / browser**            | GREEN — escape-by-default; `trustedHtml` the only branded raw door                                                                              | GREEN — contextual escaping across text/attr/URL-scheme positions                                 | N/A — client render cost is app-authored                                 | GREEN — Trusted-Types policy + inline-loader import allowlist                                                |
+| **Build / compiler**            | GREEN — server-only-value capture (KV437); generated code carries no secret                                                                     | GREEN (M7) — codegen framework-constructed; KV235 provenance; sink-policy + import-boundary gates | N/A — build is dev-time                                                  | GREEN (M7) — `dynamic.import.process` sole door = `/c/` versioned-module allowlist                           |
+| **Dependencies / supply chain** | GREEN (M6) — `trustedDependencySurfaces` + exact pins + `--frozen-lockfile`, `check:tcb-boundary`                                               | GREEN (M6) — `rules/dependency-policy.md` update policy + review triggers                         | out-of-scope — dependency-internal DoS                                   | GREEN (M6) — Better Auth session/hash/reset/2FA/linking surfaces enrolled as review triggers                 |
+| **Runtime / infra**             | GREEN (M8) — no cross-tenant bleed; pool scrubbed; module state per-request; caches principal-independent                                       | GREEN (M8) — transaction-local session state; DISCARD ALL on release                              | scope: app/deploy (M5); GREEN — bounded pool + rate budgets              | GREEN (M8) — pool identity reset; no principal bleed across reuse                                            |
 
-¹ **DB cells depend on `fundamental-fixes-followup-13` landing** the round-16 fixes (`claude-bugz-37`: write-propagation
-closure B1, REPLICATION attribute B2, login-identity B4). Green-**pending**-followup-13; the controls are specified and
-under implementation.
+¹ **DB cells: `fundamental-fixes-followup-13` LANDED** the round-16 fixes (`claude-bugz-37`: write-propagation
+closure B1, REPLICATION/predefined-role identity B2/round-17, login-identity B4) plus the DEC-E differential fuzzer —
+GREEN (no longer pending).
 
 ## Cell evidence (non-trivial cells)
 
 - **DB × C/I/Au** — the arc's core (`fundamental-fixes-followup-6..13`): engine RLS as the sole owner-scope door,
   secrets column-REVOKE'd + boxed, principal set via a confined single-statement surface, identity attribute allowlist.
   Enforced by `checkPostgresAppDbPosture`, `pnpm run test:authz-paranoid`, the grant-shape + (DEC-E) differential
-  fuzzers. **Pending:** followup-13 DEC-A (write-propagation closure) + DEC-B (REPLICATION/login) close `claude-bugz-37`.
-- **Auth × C/Au (M2) — GREEN.** Kovo now proves the request-reachable Better Auth secret surface instead of a proxy
-  module name: `packages/better-auth/src/internal.trusted-plaintext.test.ts` enumerates the submitted-password,
-  request-cookie, Set-Cookie, adapter sign-in/password-compare, adapter session-token-lookup, and mount-delegation
-  paths and fails red on any new unboxed cross-user credential read or unconfined plaintext API call. The app-visible
-  credential wrappers add two more Kovo-owned controls: `packages/server/src/password.test.ts` proves uniform
-  absent-account decoy work (no enumeration timing oracle), and
-  `packages/better-auth/src/index.credential-mutations.test.ts` proves sign-in/sign-up only succeed on positive session
-  evidence and treat `twoFactorRedirect` as unauthenticated. Reset/email-verification token single-use + expiry,
-  two-factor/backup-code replay resistance, and account-link callback identity binding are **dependency assumptions**
-  recorded in `security/TCB.md`, not independent Kovo guarantees.
+  fuzzers. followup-13 landed DEC-A (write-propagation closure) + DEC-B (REPLICATION/predefined-role identity), closing
+  `claude-bugz-37`; round-17 extended the identity allowlist to predefined-role membership.
+- **Auth × C (M2) — GREEN (closed).** The reachability-based non-egress proof is built, fail-closed, and TCB-enrolled:
+  `betterAuthRequestSecretPaths` (`internal/non-egress-proof.ts`) inventories every request-reachable secret path and
+  `proveBetterAuthRequestSecretNonEgress` rejects any cross-user credential read whose disposition is not boxed or a
+  vetted compare/verify — enrolled in `security/TCB.md` as `better-auth.request-secret-surface.proof`
+  (`classification: tcb`) + its inventory, proven by `internal.trusted-plaintext.test.ts` (22 tests; injecting an unsafe
+  path turns the proof RED). followup-13 DEC-C built the reachability proof + boxed `systemRole` read; followup-15 DEC-C
+  replaced the old named-module scan with the fail-closed plaintext-API enumeration (`proveBetterAuthPlaintextApiConfinement`,
+  closing `claude-papercuts-35` P1 / round-16 B3); round-22 axis A5 adversarially re-swept the surface and found no
+  request-reachable unboxed cross-user credential. Auth-FLOW controls (password-reset/verify token single-use+expiry,
+  2FA replay) are Better-Auth-owned and recorded as `trustedDependencySurface` review triggers (M6), not a Kovo
+  guarantee.
 - **Auth × C (M4 timing) — GREEN.** Kovo's own auth crypto is constant-time — argon2 native `verify` (`password.ts:216`)
   - a param-matched **decoy digest** for absent accounts (`password.ts:180-207`) closing the user-existence oracle;
     capability/CSRF compares use `secureEqual` = SHA-256 + `timingSafeEqual` (`keyring.ts:208`, no length oracle); every
@@ -73,15 +75,14 @@ under implementation.
   sites (`emit/client.ts:311/314/318/582`, `lower/handlers.ts:69`, `emit/bootstrap.ts:86`), reachable only via the
   filename fallback `inferComponentName` (`scan/parse.ts:444`) for an author-controlled component — asymmetric with the
   derive/live-target emitters which sanitize. Route through `sanitizeIdentifier`.
-- **Deps × C/I/Au (M6) — OPEN.** HAVE: committed `pnpm-lock.yaml`; `scripts/supply-chain-gates.mjs`
-  (`onlyBuiltDependencies` freeze, lifecycle-script ban, `pnpm audit` ≥moderate); `check:pack-security`; `better-auth`
-  1.6.17 + `drizzle-orm` 1.0.0-rc.4 exact-pinned; `security/TCB.md` records the dependency behaviors the guarantees
-  rest on. GAPS: (1) `pg` `^8.16.3` + `@electric-sql/pglite` `^0.5.1` (+ argon2, better-sqlite3) are **caret** not
-  exact; CI lacks `--frozen-lockfile`. (2) no `rules/dependency-policy.md`. The 10
-  review-trigger dependency surfaces: node-pg parameterization; Drizzle SQL-gen parameterization; PGlite `SET LOCAL
-ROLE`/RLS; Postgres `SET ROLE`/`FORCE RLS`; Better Auth password hashing; Better Auth session/cookie integrity; Better
-  Auth reset/verification token lifecycle; Better Auth two-factor replay resistance; Better Auth account-linking state
-  binding; argon2 hashing.
+- **Deps × C/I/Au (M6) — GREEN (closed, followup-16).** Exact-pinned `pg` 8.22.0 / `@electric-sql/pglite` 0.5.1 /
+  `@node-rs/argon2` 2.0.2 / `better-sqlite3` 12.11.1 (+ `better-auth` 1.6.17, `drizzle-orm` 1.0.0-rc.4);
+  `--frozen-lockfile` in the shared `kovo-setup` action + `release.yml`; `scripts/supply-chain-gates.mjs` +
+  `check:pack-security`. `security/TCB.md` gained a `trustedDependencySurfaces` manifest naming the 10 dependency
+  BEHAVIOR surfaces (node-pg + Drizzle parameterization; PGlite + Postgres RLS/role; Better Auth password,
+  session/cookie, reset/verification token lifecycle, two-factor replay resistance, and account-linking state binding;
+  argon2) ENFORCED by `check:tcb-boundary` (fails on caret/drift). New `rules/dependency-policy.md`. The dependency
+  runtime behavior stays a documented human review trigger, not a machine-checked property.
 - **Runtime × C (M8) — GREEN.** Pool doubly-scrubbed (`DISCARD ALL` `postgres-runtime.ts:1846` + transaction-local
   `set_config(...,true)`/`SET LOCAL` `managed-db.ts:1365-1378`); module-level audit-fact arrays have no exported read
   path (`declarePublicRead` is the only public export); logs redact secrets; caches are principal-independent (decoy
@@ -109,10 +110,11 @@ infrastructure-level (L3/L4) DDoS.
 
 ## Open cells (v1 blockers) + first-fill work
 
-| Cell                           | State | Owner / next step                                                                                 |
-| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------- |
-| **M3** Escape-hatch visibility | OPEN  | `kovo explain --capabilities` surfaces only 2 of ~12 escapes — see below; own follow-up           |
-| **M6** Deps / supply chain     | OPEN  | exact-pin `pg`/`pglite`/argon2/better-sqlite3 + `--frozen-lockfile`; `rules/dependency-policy.md` |
+| Cell                                 | State | Owner / next step                                                                                                                                               |
+| ------------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M2** Auth × C — adapter non-egress | GREEN | Closed: fail-closed non-egress proof TCB-enrolled (`better-auth.request-secret-surface.proof`), `internal.trusted-plaintext.test.ts` 22 pass; round-22 A5 clean |
+| **M3** Escape-hatch visibility       | GREEN | Closed by followup-16: static capability producers surface every escape in `kovo explain --capabilities`/`--cookies`                                            |
+| **M6** Deps / supply chain           | GREEN | Closed by followup-16 M6: exact pins + `--frozen-lockfile` + `trustedDependencySurfaces` (`check:tcb-boundary`) + `rules/dependency-policy.md`                  |
 
 ### M3 — escape-hatch visibility gap (detail)
 
@@ -130,7 +132,13 @@ orphaned drains + static producers into `graph.capabilities`/`graph.cookieDowngr
 
 ## Status
 
-- M1 authored (this document). M3–M8 first-fill complete (probe evidence above).
-- **Green:** M4 (timing), M5 (DoS scope + no footgun), M7 (build/compiler), M8 (runtime/infra).
-- **Open (v1 blockers):** M3 (escape visibility), M6 (supply chain).
-- **Not yet done:** external audit (threat-matrix-plan §3, after all cells green).
+- M1 authored (this document). M2–M8 all GREEN.
+- **Green:** M2 (auth-adapter non-egress proof, closed 2026-07-07), M3 (escape visibility, followup-16), M4 (timing),
+  M5 (DoS scope + no footgun), M6 (supply chain, followup-16), M7 (build/compiler), M8 (runtime/infra); DB/Wire/Render/
+  Runtime cells green (followup-{6..17} landed).
+- **Open cells: NONE.** Every {surface × category} cell has a named control+test, an audited escape, or a signed-off
+  out-of-scope note. The first-line pipeline (CSRF/session/wire/authz/capability) was swept clean in round-22, with one
+  bounded authz audit-vs-enforcement fix tracked in `fundamental-fixes-followup-18` (DEC-A) — a hardening item, not an
+  open matrix cell.
+- **Next:** the matrix is green → commission the external audit (`plans/threat-matrix-plan.md` §3 A1), the last v1
+  security-signoff step.

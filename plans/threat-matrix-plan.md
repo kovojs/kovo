@@ -46,10 +46,23 @@ supply chain**, **Runtime / infra**.
 
 ### Cells the arc has NOT systematically swept (fill first — these are the likely OPEN ones)
 
-- [ ] **M2 — Auth × C/Au: enroll and PROVE the auth-adapter TCB.** The Better Auth adapter has recurred three times
+- [x] **M2 — Auth × C/Au: enroll and PROVE the auth-adapter TCB.** The Better Auth adapter recurred three times
       (`bugz-24` A1, round-15 B4, round-16 B3): a request-reachable handle reads unboxed cross-user credentials. Make the
       adapter a first-class, minimal, TCB-manifest-enrolled module with a reachability-based non-egress proof (followup-13
-      DEC-C is the mechanism); this cell stays OPEN until that proof is green.
+      DEC-C mechanism); OPEN until that proof is green.
+  - Done 2026-07-07: the reachability-based non-egress proof is BUILT, FAIL-CLOSED, and TCB-ENROLLED.
+    `betterAuthRequestSecretPaths` (`packages/better-auth/src/internal/non-egress-proof.ts`) inventories every
+    request-reachable secret path; `proveBetterAuthRequestSecretNonEgress` rejects any cross-user credential read whose
+    disposition is not `boxed` or `vetted-compare-or-verify`. Enrolled in `security/TCB.md` as
+    `better-auth.request-secret-surface.proof` (`classification: tcb`, lineBudget 45) + its `…manifest` inventory.
+    followup-15 DEC-C replaced the round-16 named-module scan with the fail-closed `proveBetterAuthPlaintextApiConfinement`
+    (closing `claude-papercuts-35` P1). Auth-flow tokens (reset/verify/2FA) are Better-Auth-owned → recorded as
+    `trustedDependencySurface` review triggers (M6), not a Kovo guarantee.
+  - Evidence: `pnpm exec vitest --run packages/better-auth/src/internal.trusted-plaintext.test.ts packages/server/src/secret-read-boundary.test.ts`
+    → 22 pass (the proof returns `[]`; an injected unsafe path turns it RED — `internal.trusted-plaintext.test.ts:41/81`);
+    `node scripts/check-tcb-boundary.mjs` OK; round-22 dogfood axis A5 found no request-reachable unboxed cross-user
+    credential (`plans/claude-bugz-43.md`). **With M2 green, the matrix has NO open cell → the external audit (§3 A1) is
+    unblocked.**
 - [x] **M3 — Escape-hatch audit completeness (C/I): every `trustedSql`/`rawRead`/`crossOwnerRead`/`trustedAssign`/
       `declarePublicRelation`/`unsafeRegex` site is logged and surfaced in `kovo explain --capabilities` with its
       justification.** The escapes are intentional holes; the guarantee is that they are all VISIBLE to a reviewer.
