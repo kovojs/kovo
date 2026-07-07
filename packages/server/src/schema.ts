@@ -15,10 +15,12 @@ import {
 } from './upload-sniff.js';
 import {
   type BlessedFormatName,
+  type LinearRegexProgram,
   type UnsafeRegexBrand,
   BLESSED_FORMATS,
   PATTERN_MAX_INPUT_LENGTH,
-  assertLinearSafePattern,
+  compileLinearPattern,
+  testLinearPattern,
 } from './redos.js';
 
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
@@ -395,13 +397,12 @@ export interface StoredFileSchemaOptions {
 
 /**
  * String schema produced by `s.string()`; chains a blessed-format check (`.email()`/`.url()`/
- * `.uuid()`/`.slug()`), a linear-safe `.pattern(...)` literal, or the audited `.matches(unsafeRegex)`
- * escape (KV434, SPEC §6.6/§9.5).
+ * `.uuid()`/`.slug()`), a linear-engine `.pattern(...)` literal, or the audited
+ * `.matches(unsafeRegex)` escape (KV434, SPEC §6.6/§9.5).
  *
- * KV434: blessed formats are backtracking-free BY-CONSTRUCTION; `.pattern(literal)` is
- * by-construction-ISH (static nested/overlapping-quantifier reject + a runtime input-length
- * input-size cap); a non-literal/unanalyzable pattern is rejected. `unsafeRegex(re, justification)` is
- * the audited escape surfaced in `kovo explain --capabilities`.
+ * KV434: blessed formats are backtracking-free BY-CONSTRUCTION; `.pattern(literal)` compiles to
+ * Kovo's bounded Thompson-NFA/Pike VM subset; unsupported syntax must use
+ * `unsafeRegex(re, justification)`, the audited escape surfaced in `kovo explain --capabilities`.
  */
 export interface StringSchema extends Schema<string> {
   default(value: string): StringSchema;
@@ -413,9 +414,8 @@ export interface StringSchema extends Schema<string> {
   uuid(): StringSchema;
   slug(): StringSchema;
   /**
-   * Require the value to match a COMPILE-VISIBLE literal pattern. The pattern is statically rejected
-   * for catastrophic-backtracking structure and has a runtime input-size cap (KV434). Pass a
-   * string source or a literal `RegExp`; for a dynamic/unsafe pattern use `.matches(unsafeRegex(...))`.
+   * Require the value to match a COMPILE-VISIBLE literal pattern. Supported syntax is matched by
+   * Kovo's linear engine; unsupported syntax must use `.matches(unsafeRegex(...))`.
    */
   pattern(source: RegExp | string): StringSchema;
   /** Match against an audited {@link unsafeRegex} brand — the escape for an unanalyzable pattern (KV434). */
@@ -585,7 +585,7 @@ class NumberSchemaImpl implements NumberSchema {
 /** One refinement a `StringSchema` applies in order: a blessed format, a linear-safe pattern, or an audited regex. */
 type StringCheck =
   | { kind: 'format'; name: BlessedFormatName }
-  | { kind: 'pattern'; regex: RegExp; source: string }
+  | { kind: 'pattern'; program: LinearRegexProgram; source: string }
   | { kind: 'unsafe'; regex: RegExp };
 
 class StringSchemaImpl implements StringSchema {
@@ -627,12 +627,11 @@ class StringSchemaImpl implements StringSchema {
 
   pattern(source: RegExp | string): StringSchema {
     const src = typeof source === 'string' ? source : source.source;
-    // KV434: statically reject catastrophic-backtracking structure BEFORE the pattern can ever run.
-    // A dynamic/non-literal pattern reaches here as a runtime value the compiler cannot inspect; the
-    // KV434 lint flags that at the call site, and `unsafeRegex(...)` is the audited escape.
-    assertLinearSafePattern(src);
+    // KV434: compile to the framework-owned linear engine before the pattern can run. A
+    // dynamic/non-literal pattern reaches here as a runtime value the compiler cannot inspect; the
+    // KV434 lint flags that at the call site, and `unsafeRegex(...)` is the audited JS RegExp escape.
     const flags = typeof source === 'string' ? '' : source.flags.replace(/[gy]/g, '');
-    return this.#with({ kind: 'pattern', regex: new RegExp(src, flags), source: src });
+    return this.#with({ kind: 'pattern', program: compileLinearPattern(src, flags), source: src });
   }
 
   matches(brand: UnsafeRegexBrand): StringSchema {
@@ -654,14 +653,17 @@ class StringSchemaImpl implements StringSchema {
         }
         continue;
       }
-      // KV434 runtime input-size backstop (SPEC §6.6): JS RegExp has no native step limit, so this is
-      // not a CPU bound. Over-budget input is a non-match (fail-closed).
       if (input.length > PATTERN_MAX_INPUT_LENGTH) {
         throw validationError(
           `Expected string matching pattern (input exceeds the ${PATTERN_MAX_INPUT_LENGTH}-char match budget)`,
         );
       }
-      if (!check.regex.test(input)) throw validationError('Expected string matching pattern');
+      if (check.kind === 'pattern') {
+        if (!testLinearPattern(check.program, input)) {
+          throw validationError('Expected string matching pattern');
+        }
+      } else if (!check.regex.test(input))
+        throw validationError('Expected string matching pattern');
     }
 
     return input;

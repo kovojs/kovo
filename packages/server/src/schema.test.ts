@@ -586,7 +586,7 @@ describe('server schemas', () => {
     });
   });
 
-  // KV434 (SPEC §6.6/§9.5): blessed formats + linear-safe pattern + unsafeRegex on s.string().
+  // KV434 (SPEC §6.6/§9.5): blessed formats + linear-engine pattern + unsafeRegex on s.string().
   it('validates blessed string formats by-construction', () => {
     expect(s.string().email().parse('user@example.com')).toBe('user@example.com');
     expect(() => s.string().email().parse('nope')).toThrow('Expected email');
@@ -597,9 +597,14 @@ describe('server schemas', () => {
     expect(s.string().slug().parse('my-post')).toBe('my-post');
   });
 
-  it('rejects a catastrophic-backtracking pattern literal and accepts a safe one (KV434)', () => {
-    expect(() => s.string().pattern('(a+)+$')).toThrow(/KV434/u);
-    expect(() => s.string().pattern('^(a|a)*$')).toThrow(/KV434/u);
+  it('matches pattern() through the linear engine and rejects unsupported syntax (KV434)', () => {
+    const adversarial = s.string().pattern('(a+)+$');
+    expect(adversarial.parse('aaaa')).toBe('aaaa');
+    expect(() => adversarial.parse('aaa!')).toThrow('Expected string matching pattern');
+
+    expect(() => s.string().pattern('(?=a)a')).toThrow(/KV434/u);
+    expect(() => s.string().pattern('(a)\\1')).toThrow(/KV434/u);
+
     const safe = s.string().pattern('^[a-z0-9]+$');
     expect(safe.parse('abc123')).toBe('abc123');
     expect(() => safe.parse('Bad!')).toThrow('Expected string matching pattern');
