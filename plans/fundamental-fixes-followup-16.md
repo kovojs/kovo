@@ -108,7 +108,7 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
 
 ### DEC-B — Egress classify-and-PIN for IP literals (fixes B2)
 
-- [ ] **B1 — Only a CANONICAL IPv4 literal takes the synchronous IP-literal fast-path; any NON-canonical form
+- [x] **B1 — Only a CANONICAL IPv4 literal takes the synchronous IP-literal fast-path; any NON-canonical form
       (leading-zero/octal/hex/decimal-dword) is rejected from the fast-path so it falls through to the hostname
       resolve-then-pin path, which classifies the RESOLVED IP the socket actually dials. This eliminates the
       parse-differential at the source (no ambiguous form is ever classified-then-raw-dialed). Keep the pin invariant for
@@ -117,6 +117,7 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
   - Acceptance: `0127.0.0.1`/`010.0.0.1` are rejected from the fast-path and routed through resolve-then-pin (classify
     the actually-dialed IP → blocked); the floor never validates one IP and dials another; a corpus/differential test
     covers the loose-IPv4 forms.
+  - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` and `pnpm run check:security-classifier-corpus` pass with `normalizeFastPathIpLiteral` loose-IPv4 and net-floor resolution tests.
   - **O2 resolved:** REJECT non-canonical literals from the fast-path (fork a), NOT normalize-and-pin the loose form
     (fork b). The two converge on safety — a rejected loose literal routes to resolve-then-pin, which classifies what
     `dns.lookup` actually returns — but reject is simpler and avoids picking `parseLooseIpv4`'s interpretation as
@@ -125,12 +126,13 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
 
 ### DEC-C — Egress embedded-v4 completeness, fail-closed (fixes B3)
 
-- [ ] **C1 — The IPv6 embedded-v4 handling covers ISATAP and every interface-identifier embedding, OR (cleaner, per
+- [x] **C1 — The IPv6 embedded-v4 handling covers ISATAP and every interface-identifier embedding, OR (cleaner, per
       DEC-C's own fail-closed thesis) any `2000::/3` address whose low 32 bits encode a non-public v4 under a recognized
       interface-identifier form is treated NON-public.** Add ISATAP (`...:0:5efe:w.x.y.z`) + the other embedding forms to
       the egress corpus.
   - Acceptance: `2600::5efe:a9fe:a9fe` (and the private-embedded ISATAP forms) classify non-public; a legit global-unicast
     v6 with an incidental low-32 pattern is not over-blocked (or the over-block is accepted per O3).
+  - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` passes with ISATAP private, metadata, loopback, public, and link-local corpus cases.
   - **O3 resolved:** extend embedded-v4 extraction to ISATAP and classify the embedded v4 (public-embedded allowed,
     private denied) + keep the fail-closed top-level default (the convergence of forks a+b). Over-block risk is negligible
     (a legit global-unicast host with a private-looking interface-id is nonsensical). **LOW urgency** — host-dependent
@@ -138,13 +140,14 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
 
 ### DEC-D — Fix the hostname allowlist over-block (fixes P1)
 
-- [ ] **D1 — `frameworkEgressFetch` must permit an allowlisted PUBLIC hostname: resolve-then-pin (classify the RESOLVED
+- [x] **D1 — `frameworkEgressFetch` must permit an allowlisted PUBLIC hostname: resolve-then-pin (classify the RESOLVED
       IP, not the raw hostname string) so `allowDestinations: ['https://api.stripe.com']` works end-to-end
       (`egress.ts:779/687`). A hostname whose resolved IP passes the private-address floor and matches the allowlist is
       permitted.**
   - Acceptance: an allowlisted public-hostname fetch succeeds through the floor; a hostname resolving to a private IP is
     still blocked; the `allowDestinations` hostname contract is tested end-to-end. (Fail-closed today, so this is a
     functional-regression fix, not a security hole — but it breaks agent-tool/webhook outbound by hostname.)
+  - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` passes with allowlisted public-hostname success and private-resolving hostname denial.
 
 ### DEC-E — Corpus gate teeth + whole-grammar differential (fixes P2; C14)
 
@@ -202,9 +205,12 @@ O1–O4 are decided and folded into the DECs above. Recorded here for provenance
 - [ ] DEC-A: A0 interim — round-19 repro set rejects. A1 — `pattern()` matches on the linear engine (no timing cliff at
       any input length on `((a|a))+`/`((a+))+`/etc.); parity fuzzer green over ≥1e6 pattern×input cases; unsupported
       features throw KV434 → `unsafeRegex`; heuristic analyzer files deleted.
-- [ ] DEC-B: `0127.0.0.1`/`010.0.0.1` never let the floor validate one IP and dial another; loose-IPv4 differential test.
-- [ ] DEC-C: ISATAP private-embedded forms classify non-public.
-- [ ] DEC-D: allowlisted public-hostname fetch succeeds; private-resolving hostname still blocked.
+- [x] DEC-B: `0127.0.0.1`/`010.0.0.1` never let the floor validate one IP and dial another; loose-IPv4 differential test.
+  - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` covers loose IPv4 fast-path rejection and resolved-IP denial.
+- [x] DEC-C: ISATAP private-embedded forms classify non-public.
+  - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` covers ISATAP private/metadata/loopback denial and public-embedded allowance.
+- [x] DEC-D: allowlisted public-hostname fetch succeeds; private-resolving hostname still blocked.
+  - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` covers both hostname allowlist outcomes.
 - [ ] DEC-E: corpus gate mutation-tested RED on each historical regression.
 - [ ] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
