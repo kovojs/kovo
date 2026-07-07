@@ -81,6 +81,16 @@ describe('static ReDoS pattern analysis (KV434)', () => {
     expect(() => assertLinearSafePattern('^([a-z]|a)+$')).toThrow(RedosPatternError);
   });
 
+  it('rejects quantified groups whose nested group interiors contain overlapping alternatives', () => {
+    for (const source of ['((a|a))+', '(([ab]|[bc]))+', '(((a|a)))+', '((a|a)){1,}']) {
+      expect(() => assertLinearSafePattern(source), source).toThrow(RedosPatternError);
+    }
+
+    for (const source of ['((ab))+', '(a|b)+', '(?:ab)+']) {
+      expect(() => assertLinearSafePattern(source), source).not.toThrow();
+    }
+  });
+
   it('rejects overlapping adjacent quantifiers', () => {
     expect(() => assertLinearSafePattern('\\d+\\d+')).toThrow(RedosPatternError);
     expect(() => assertLinearSafePattern('a*a*')).toThrow(RedosPatternError);
