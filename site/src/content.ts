@@ -31,6 +31,9 @@ export interface DocPage {
    * render the category-grouped API navigation instead of the flat heading TOC. */
   apiSidebar?: ApiSidebar;
   body: string;
+  /** ISO date (YYYY-MM-DD) from `date:` frontmatter; present for date-sorted
+   * sections such as the blog, used for the `<time datetime>` on the index. */
+  date?: string;
   description: string;
   headings: Heading[];
   html: string;
@@ -144,6 +147,8 @@ const SECTIONS = [
   { dir: 'content/guides', key: 'guides', title: 'Guides' },
   { dir: 'gen/api', key: 'api', title: 'API Reference' },
   { dir: 'gen/reference', key: 'reference', title: 'Reference' },
+  // Blog posts sort newest-first by ISO `date:` frontmatter instead of `order:`.
+  { dir: 'content/blog', key: 'blog', sort: 'date-desc', title: 'Blog' },
 ] as const;
 
 const GUIDE_GROUPS = [
@@ -218,6 +223,7 @@ export const SECTION_INTROS: Record<string, string> = {
     'Complete Kovo apps you can run in the browser, embedded beside the authored source that renders them.',
   guides:
     'Task-focused deep dives grouped by the surfaces you actually build: pages, data, live UI, security, tooling, and deployment.',
+  blog: 'Notes from the Kovo team — release milestones, security posture, and how the framework is built.',
   reference:
     'Everything generated from the framework itself — the per-package API reference, the diagnostics catalog, and the normative specification.',
   tutorial:
@@ -392,6 +398,7 @@ export function specModuleAnchorsForTest(
 
 interface RawPage {
   body: string;
+  date?: string;
   description: string;
   mirror: string;
   order: number;
@@ -401,7 +408,12 @@ interface RawPage {
   url: string;
 }
 
-function loadSectionFiles(section: { dir: string; key: string; title: string }): RawPage[] {
+function loadSectionFiles(section: {
+  dir: string;
+  key: string;
+  sort?: string;
+  title: string;
+}): RawPage[] {
   const directory = path.join(siteRoot, section.dir);
   if (!existsSync(directory)) return [];
 
@@ -416,6 +428,7 @@ function loadSectionFiles(section: { dir: string; key: string; title: string }):
     const slug = (data.slug as string) ?? file.replace(/\.md$/, '');
     pages.push({
       body,
+      ...(data.date !== undefined ? { date: String(data.date) } : {}),
       description: (data.description as string) ?? '',
       mirror: `/${section.key}/${slug}.md`,
       order: (data.order as number) ?? 999,
@@ -426,7 +439,16 @@ function loadSectionFiles(section: { dir: string; key: string; title: string }):
     });
   }
 
-  pages.sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
+  // Date-sorted sections (blog) list newest first; ISO YYYY-MM-DD sorts
+  // lexicographically, so string compare is chronological. Everything else keeps
+  // the authored `order:` sequence. Slug is the stable tiebreaker either way.
+  if (section.sort === 'date-desc') {
+    pages.sort(
+      (a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.slug.localeCompare(b.slug),
+    );
+  } else {
+    pages.sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
+  }
   return pages;
 }
 
@@ -494,6 +516,7 @@ async function buildSiteContent(): Promise<SiteContent> {
       pages.push({
         ...(apiSidebar ? { apiSidebar } : {}),
         body: raw.body,
+        ...(raw.date !== undefined ? { date: raw.date } : {}),
         description: raw.description,
         headings: rendered.headings,
         html,

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
+import { trustedHtml, type TrustedHtml } from '@kovojs/browser';
 import type { ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
@@ -130,6 +130,15 @@ const docsLayoutStyles = style.create({
     ':hover': {
       borderColor: 'var(--teal)',
     },
+  },
+  sectionCardDate: {
+    color: 'var(--faint)',
+    display: 'block',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.66rem',
+    letterSpacing: '0.12em',
+    marginTop: '0.55rem',
+    textTransform: 'uppercase',
   },
   sectionCardDescription: {
     color: 'var(--dim)',
@@ -382,6 +391,39 @@ function DocsRouteContentView({ content }: { content: DocsRouteContent }): strin
   return <SectionIndex section={content.section} />;
 }
 
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+/** Build a semantic `<time datetime="YYYY-MM-DD">Month D, YYYY</time>` for a blog
+ * card date (WCAG 2.2 AA machine-readable date). The framework JSX type has no
+ * `datetime` attribute, so this composes the element through the same trusted-HTML
+ * sink the file already uses for prose. It is injection-safe: the datetime value
+ * and display text are assembled only from the regex-captured numeric parts and a
+ * fixed month-name table, never from raw frontmatter. Returns `undefined` when the
+ * value is not a plain ISO date so the card can simply omit the date. Display
+ * formatting avoids `Date` parsing so the day never shifts across the UTC boundary. */
+function sectionCardDateHtml(iso: string): TrustedHtml | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return undefined;
+  const month = MONTH_NAMES[Number(match[2]) - 1];
+  if (!month) return undefined;
+  const datetime = `${match[1]}-${match[2]}-${match[3]}`;
+  const display = `${month} ${Number(match[3])}, ${match[1]}`;
+  return trustedHtml(`<time datetime="${datetime}">${display}</time>`);
+}
+
 /** Section landing pages: a card grid in the ledger style. */
 export function SectionIndex({ section }: { section: SectionIndexInput }): string {
   const numbered = section.key === 'tutorial';
@@ -402,6 +444,7 @@ export function SectionIndex({ section }: { section: SectionIndexInput }): strin
           <ul style={docsLayoutStyles.sectionGrid}>
             {group.pages.map((page, index) => {
               const title = numbered ? page.title.replace(/^\d+\.\s*/, '') : page.title;
+              const dateHtml = page.date ? sectionCardDateHtml(page.date) : undefined;
               return (
                 <li>
                   <a href={page.url} style={docsLayoutStyles.sectionCard}>
@@ -430,6 +473,11 @@ export function SectionIndex({ section }: { section: SectionIndexInput }): strin
                       >
                         {title}
                       </h2>
+                    )}
+                    {dateHtml ? (
+                      <span style={docsLayoutStyles.sectionCardDate} rawHtml={dateHtml} />
+                    ) : (
+                      ''
                     )}
                     {page.description ? (
                       <p style={docsLayoutStyles.sectionCardDescription}>{page.description}</p>
