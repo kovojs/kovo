@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   { url: '/guides/', title: 'Guides' },
   { url: '/components/', title: 'Components' },
   { url: '/examples/', title: 'Examples' },
+  { url: '/blog/', title: 'Blog' },
   { url: '/reference/', title: 'Reference', match: ['/api', '/reference', '/spec'] },
 ];
 
@@ -45,11 +46,16 @@ const NAV: NavItem[] = [
 // of two families; the sidebar renders only the family of the active page.
 const LEARN_FAMILY = new Set(['getting-started', 'tutorial']);
 
-function isLearnGroup(group: NavGroup): boolean {
-  return LEARN_FAMILY.has(group.key) || group.key.startsWith('guides-');
+type SidebarFamily = 'blog' | 'learn' | 'reference';
+
+function groupFamily(group: NavGroup): SidebarFamily {
+  if (group.key === 'blog') return 'blog';
+  if (LEARN_FAMILY.has(group.key) || group.key.startsWith('guides-')) return 'learn';
+  return 'reference';
 }
 
-function sidebarFamilyForPath(activePath: string): 'learn' | 'reference' {
+function sidebarFamilyForPath(activePath: string): SidebarFamily {
+  if (activePath === '/blog' || activePath.startsWith('/blog/')) return 'blog';
   return ['/getting-started', '/tutorial', '/guides'].some(
     (prefix) => activePath === prefix || activePath.startsWith(`${prefix}/`),
   )
@@ -58,12 +64,11 @@ function sidebarFamilyForPath(activePath: string): 'learn' | 'reference' {
 }
 
 /** The sidebar groups relevant to the page at `activePath`: the learning-path
- * sections together, or the Components/Examples/reference sections together. */
+ * sections together, the Components/Examples/reference sections together, or the
+ * blog on its own. */
 export function sidebarGroupsForPath(groups: NavGroup[], activePath: string): NavGroup[] {
   const family = sidebarFamilyForPath(activePath);
-  const filtered = groups.filter(
-    (group) => (isLearnGroup(group) ? 'learn' : 'reference') === family,
-  );
+  const filtered = groups.filter((group) => groupFamily(group) === family);
   return filtered.length > 0 ? filtered : groups;
 }
 
