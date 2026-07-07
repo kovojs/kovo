@@ -219,7 +219,7 @@ O1–O4 are decided and folded into the DECs above. Recorded here for provenance
   - Evidence: `pnpm exec vitest --run scripts/check-security-classifier-corpus.test.mjs` covers nested-quantifier, overlapping-alt, and octal-literal anchor removals.
 - [x] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
-  - Evidence: all listed root gates pass in the integration worktree after the A0/B/C/D/E/F batch.
+  - Evidence: all listed root gates pass in the integration worktree after the A0/A1/B/C/D/E/F batch.
 
 ## 6. Meta
 
