@@ -175,7 +175,8 @@ function supportedFlags(flags: string): boolean {
 
 function classClose(source: string, open: number): number {
   for (let i = open + 1; i < source.length; i += 1) {
-    if (source[i] === '\\') {
+    const ch = source[i];
+    if (ch === '\\') {
       const escaped = source[i + 1];
       if (escaped === undefined) return -1;
       if (escaped === 'x' || escaped === 'u' || escaped === 'c') return -1;
@@ -184,7 +185,7 @@ function classClose(source: string, open: number): number {
       i += 1;
       continue;
     }
-    if (source[i] === ']' && i > open + 1) return i;
+    if (ch === ']' && i > open + 1) return i;
   }
   return -1;
 }
