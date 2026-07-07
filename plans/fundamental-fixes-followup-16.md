@@ -53,12 +53,13 @@ event loop (`schema.ts:664`), so one ~40-char request field exponentially backtr
 an author-triggered footgun on an API SOLD as ReDoS-safe, and three rounds prove the heuristic cannot be durably
 completed by patching. Make the unsafe state unrepresentable (the framework's own philosophy).
 
-- [ ] **A0 — INTERIM stopgap (do first, small): make `splitTopLevelAlternatives`/`hasOverlappingAlternatives` (runtime
+- [x] **A0 — INTERIM stopgap (do first, small): make `splitTopLevelAlternatives`/`hasOverlappingAlternatives` (runtime
       `redos.ts:291-333`, compiler twin `redos-pattern.ts:251-293`) recurse into groups so the live round-19 HIGH
       (`((a|a))+`, `(([ab]|[bc]))+`, `(((a|a)))+`, `((a|a)){1,}`) is closed on `main` while A1 is built — the engine work
       is multi-day and `((a|a))+` is a shipped fail-open. Benign `((ab))+`, `(a|b)+`, `(?:ab)+` still pass. A1 then
       deletes this machinery.**
   - Acceptance: round-19 repro set rejects (runtime + compile); over-block set passes; added to the DEC-E corpus.
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts packages/server/src/schema.test.ts` and `pnpm run check:security-classifier-corpus` pass after adding the round-19 nested-overlap corpus.
 
 - [ ] **A1 — Build `packages/core/src/internal/linear-regex/` (new module, ~600–1,200 LOC pure TS), a boolean
       linear-time matcher for the supported subset, and route `pattern()` through it.** Prescriptive build order:
