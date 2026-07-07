@@ -278,17 +278,16 @@ describe('server mutation endpoint routing', () => {
       status: 303,
     });
 
-    await expect(
-      renderMutationEndpointResponse(signIn, {
-        headers: {},
-        rawInput: { next: '/account\nSet-Cookie:owned=true' },
-        redirectTo: (result) => result.value.next,
-        request: {},
-      }),
-    ).resolves.toMatchObject({
-      headers: { Location: '/' },
-      status: 303,
+    const headerInjectionResponse = await renderMutationEndpointResponse(signIn, {
+      headers: {},
+      rawInput: { next: '/account\nSet-Cookie:owned=true' },
+      redirectTo: (result) => result.value.next,
+      request: {},
     });
+    expect(headerInjectionResponse.status).toBe(422);
+    expect(headerInjectionResponse.headers).not.toHaveProperty('Location');
+    expect(headerInjectionResponse.body).toContain('data-error-path="next"');
+    expect(headerInjectionResponse.body).toContain('Expected string without line terminators');
   });
 
   it('preserves no-JS mutation rate-limit denials as 429 with Retry-After', async () => {
