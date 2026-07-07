@@ -38,22 +38,25 @@ so the divergence sub-grammars were structurally unreachable, and a test even en
 
 ### DEC-A — Fix the confirmed engine parity divergences (fixes B1, B3, P2)
 
-- [ ] **A1 (B1) — Gate the `$` end-anchor on `flags.multiline`.** `assertionPasses` end-branch
+- [x] **A1 (B1) — Gate the `$` end-anchor on `flags.multiline`.** `assertionPasses` end-branch
       (`linear-regex/index.ts:508-513`) must NOT return true on `isFinalLineTerminatorPosition` (`:511`) unless
       `flags.multiline` — mirror the correctly-gated begin branch (`:503-507`). So non-multiline `$` asserts
       `endIndex===length` only; `^[a-z]+$` rejects `admin\n`/`1234\r\n`/`value\r` again. Fix the mislabeled test
       `redos.test.ts:91-105` (it asserts `/a$/` matches `'a\n'` under an "ECMAScript semantics" label — wrong).
-- [ ] **A2 (B3) — Reject in-class legacy escapes.** `\1`–`\9` and multi-digit `\NN` inside `[...]` must throw
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts` verifies `a$` rejects `a\n` without `m` and multiline anchors still pass.
+- [x] **A2 (B3) — Reject in-class legacy escapes.** `\1`–`\9` and multi-digit `\NN` inside `[...]` must throw
       KV434 → `unsafeRegex()` (consistent with out-of-class), not fall through to `escapeValue()` as a literal digit
       (`index.ts:240` gates backref-reject on `!inClass`; `:255-257` misses `\1`–`\9`). So an octal-based control-char
       denylist (`^[^\1-\37]+$`) either rejects at compile or matches `RegExp` exactly — no silent reinterpretation.
-- [ ] **A3 (P2) — Case-fold class ranges as a SET, not per-endpoint.** Under `i`, fold the whole range membership test
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts` verifies runtime `RedosPatternError` and compiler KV434 for in-class legacy numeric escapes.
+- [x] **A3 (P2) — Case-fold class ranges as a SET, not per-endpoint.** Under `i`, fold the whole range membership test
       (`index.ts:528-534`), not each endpoint independently, so a case-gap-straddling range (`[A-_]`, `[Z-a]`) matches
       what `RegExp` matches (fixes the over-block). Covered once DEC-C generates `i`-flag case-gap ranges.
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts` verifies `[A-_]/i` and `[Z-a]/i` against `RegExp`.
 
 ### DEC-B — Egress: fail closed when the sink out-parses the classifier (fixes B2; C15 corollary)
 
-- [ ] **B1 — The connect/egress floor DENIES any host where `net.isIP(host) !== 0` but `normalizeFastPathIpLiteral(host)`
+- [x] **B1 — The connect/egress floor DENIES any host where `net.isIP(host) !== 0` but `normalizeFastPathIpLiteral(host)`
       returned null — a literal the SINK recognizes but the classifier could not parse.** This closes the WHOLE class
       (zone-id and any future literal encoding), not just `%zone`. ADDITIONALLY parse scoped literals (strip the zone,
       classify the address bytes) so a scoped metadata/ULA/link-local literal classifies correctly and a legitimately
@@ -68,10 +71,11 @@ so the divergence sub-grammars were structurally unreachable, and a test even en
     not normalize closes the whole class (zone-id + every future encoding), at near-zero DevEx cost (nobody dials a
     scoped-IPv6 egress target). (a) is added only so an explicitly-allowlisted scoped address classifies correctly rather
     than being denied. This is the fourth egress address-encoding leak converted into a CLOSED class.
+  - Evidence: `pnpm exec vitest --run packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` verifies scoped metadata and IPv4-mapped metadata block, scoped link-local requires exact allowInternal, and DNS lookup is not reached for scoped metadata.
 
 ### DEC-C — Complete the parity GUARD's input domain (fixes P1; the C16 root of B1/B3/P2)
 
-- [ ] **C1 — The linear-regex parity differential fuzzer generates over the COMPLETE input alphabet and pattern grammar,
+- [x] **C1 — The linear-regex parity differential fuzzer generates over the COMPLETE input alphabet and pattern grammar,
       and the corpus gate MUTATION-tests.** Input alphabet: every code-point class — letters, digits, `_`, space, TAB,
       the line-terminator set `\n \r \r\n    `, C0 control chars `\x00-\x1f` + `\x7f`, a surrogate/astral
       sample, and `.`. Pattern generator: emit in-class escapes (`[\1]`, `[\d]`, `[\x41]`), anchors mid-pattern, `i`/`s`/
@@ -90,10 +94,11 @@ so the divergence sub-grammars were structurally unreachable, and a test even en
     fuzz-as-guarantee gives false confidence. (b) reject the legacy/ambiguous features where ECMA-262 behavior is
     surprising and nobody should rely on it (legacy octal escapes, `[\1]`) to `unsafeRegex()`, shrinking the surface
     where parity is hard. SPEC §6.6 states the supported subset + that parity is spec-derived, fuzz-confirmed.
+  - Evidence: `KOVO_LINEAR_REGEX_FUZZ_CASES=1000000 pnpm exec vitest --run packages/server/src/redos.test.ts --testNamePattern "seeded differential fuzzer"` passes; `pnpm exec vitest --run scripts/check-security-classifier-corpus.test.mjs` proves B1/B3/P2 anchors fail red when removed.
 
 ### DEC-D — `s.string()` rejects control chars by default (fixes O3; defense-in-depth for the whole parity-permissiveness class)
 
-- [ ] **D1 — `s.string()` REJECTS raw C0 control chars (`\x00-\x1f`) + `\x7f` + the line-terminator set by default, with
+- [x] **D1 — `s.string()` REJECTS raw C0 control chars (`\x00-\x1f`) + `\x7f` + the line-terminator set by default, with
       an explicit opt-in (`.multiline()` / `.allowControlChars()`) for textareas/descriptions.** This makes a parity
       bug (or a loose author regex) on the control-char axis NON-exploitable regardless of the engine — a trailing `\n`,
       an embedded NUL, or a CR never survives validation into a sink unless the author explicitly opted in. Defense-in-
@@ -104,6 +109,7 @@ so the divergence sub-grammars were structurally unreachable, and a test even en
     legitimately need raw control chars without the opt-in; SPEC documents the default + opt-in.
   - **Staging (per the O3 sign-off note):** ship DEC-A/B/C first (they close the confirmed holes); DEC-D can be a
     fast-follow once the opt-in ergonomics are designed, since it is the most opinionated behavior change.
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/redos.test.ts packages/server/src/api/app.test.ts` verifies default rejection plus `.multiline()` and `.allowControlChars()` opt-ins; `pnpm run check:api-surface` reports no new attention items.
 
 ## 4. Resolved design decisions (decided 2026-07-06)
 
@@ -123,13 +129,18 @@ O1–O3 are decided and folded into the DECs above. Recorded here for provenance
 
 ## 5. Proving
 
-- [ ] DEC-A: `^[a-z]+$` rejects `admin\n` (A1); in-class `\1`–`\9` reject/parity (A2); `[A-_]/i` matches `RegExp` (A3).
-- [ ] DEC-B: scoped metadata/ULA/link-local literals blocked; legit public egress not over-blocked.
-- [ ] DEC-C: completed fuzzer re-discovers B1/B3/P2, green after fix, mutation-tested RED on each; parser/assertion layer
+- [x] DEC-A: `^[a-z]+$` rejects `admin\n` (A1); in-class `\1`–`\9` reject/parity (A2); `[A-_]/i` matches `RegExp` (A3).
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts packages/server/src/schema.test.ts` passes after DEC-A integration.
+- [x] DEC-B: scoped metadata/ULA/link-local literals blocked; legit public egress not over-blocked.
+  - Evidence: `pnpm exec vitest --run packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` passes after scoped-literal parse/allowlist integration.
+- [x] DEC-C: completed fuzzer re-discovers B1/B3/P2, green after fix, mutation-tested RED on each; parser/assertion layer
       is spec-derived (O1 c) and the ambiguous legacy tail rejects to `unsafeRegex()`.
-- [ ] DEC-D (fast-follow): `s.string().parse('admin\n')` rejects at the string layer; `.multiline()` re-admits.
-- [ ] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
+  - Evidence: `KOVO_LINEAR_REGEX_FUZZ_CASES=1000000 pnpm exec vitest --run packages/server/src/redos.test.ts --testNamePattern "seeded differential fuzzer"` and `pnpm run check:security-classifier-corpus` pass after DEC-C integration.
+- [x] DEC-D (fast-follow): `s.string().parse('admin\n')` rejects at the string layer; `.multiline()` re-admits.
+  - Evidence: `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/redos.test.ts packages/server/src/api/app.test.ts` passes; `spec/06-type-system.md` documents the default and opt-ins.
+- [x] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
+  - Evidence: `pnpm run check:tcb-boundary && pnpm run check:capability-surface-census && pnpm run check:wire-output-boundary`; `pnpm run check:single-choke && pnpm run check:sink-policy && pnpm run check:vp && git diff --check`; and the 7-file focused suite pass on the final integration branch.
 
 ## 6. Meta
 
