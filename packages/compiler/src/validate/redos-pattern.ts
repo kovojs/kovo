@@ -127,12 +127,14 @@ function receiverRootsAtStringSchema(receiver: ts.Expression): boolean {
 
 function isSupportedLinearRegexLiteral(source: string, flags: string): boolean {
   if (!supportedFlags(flags)) return false;
+  if (flags.includes('i') && containsNonAscii(source)) return false;
 
   for (let i = 0; i < source.length; i += 1) {
     const ch = source[i];
     if (ch === '\\') {
       const escaped = source[i + 1];
       if (escaped === undefined) return false;
+      if (escaped === 'x' || escaped === 'u' || escaped === 'c') return false;
       if ((escaped >= '1' && escaped <= '9') || escaped === 'k') return false;
       if (escaped === 'p' || escaped === 'P') return false;
       if (escaped === '0' && isDigitCode(source.charCodeAt(i + 2))) return false;
@@ -176,6 +178,7 @@ function classClose(source: string, open: number): number {
     if (source[i] === '\\') {
       const escaped = source[i + 1];
       if (escaped === undefined) return -1;
+      if (escaped === 'x' || escaped === 'u' || escaped === 'c') return -1;
       if (escaped === 'p' || escaped === 'P' || escaped === 'k') return -1;
       if (escaped === '0' && isDigitCode(source.charCodeAt(i + 2))) return -1;
       i += 1;
@@ -188,6 +191,13 @@ function classClose(source: string, open: number): number {
 
 function isDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
+}
+
+function containsNonAscii(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) > 0x7f) return true;
+  }
+  return false;
 }
 
 function identifierName(name: ts.MemberName): string | null {

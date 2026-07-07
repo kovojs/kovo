@@ -6,6 +6,10 @@ export interface RedosCorpusCase {
 }
 
 export const REDOS_UNSUPPORTED_CORPUS: readonly RedosCorpusCase[] = [
+  { name: 'hex escape', source: '\\x41' },
+  { name: 'unicode escape', source: '\\u0041' },
+  { name: 'unicode code point escape', source: '\\u{41}' },
+  { name: 'control escape', source: '\\cA' },
   { name: 'positive lookahead', source: '(?=a)a' },
   { name: 'negative lookahead', source: '(?!a).' },
   { name: 'positive lookbehind', source: '(?<=a)b' },

@@ -82,6 +82,61 @@ describe('linear pattern engine (KV434)', () => {
     }
   });
 
+  it('matches backspace escape semantics inside character classes', () => {
+    const program = compileLinearPattern('[\\b]');
+    expect(testLinearPattern(program, '\b')).toBe(true);
+    expect(testLinearPattern(program, 'b')).toBe(false);
+  });
+
+  it('implements ECMAScript line terminator anchor semantics', () => {
+    for (const terminator of ['\n', '\r', '\r\n', '\u2028', '\u2029']) {
+      expect(testLinearPattern(compileLinearPattern('a$'), `a${terminator}`), terminator).toBe(
+        true,
+      );
+      expect(
+        testLinearPattern(compileLinearPattern('^b', 'm'), `a${terminator}b`),
+        terminator,
+      ).toBe(true);
+      expect(
+        testLinearPattern(compileLinearPattern('a$', 'm'), `a${terminator}b`),
+        terminator,
+      ).toBe(true);
+    }
+  });
+
+  it('uses the ECMAScript whitespace set for \\s and \\S', () => {
+    const whitespace = [
+      '\t',
+      '\n',
+      '\v',
+      '\f',
+      '\r',
+      ' ',
+      '\u00a0',
+      '\u1680',
+      '\u2000',
+      '\u200a',
+      '\u2028',
+      '\u2029',
+      '\u202f',
+      '\u205f',
+      '\u3000',
+      '\ufeff',
+    ];
+    const space = compileLinearPattern('^\\s$');
+    const nonSpace = compileLinearPattern('^\\S$');
+    for (const input of whitespace) {
+      expect(testLinearPattern(space, input), input.charCodeAt(0).toString(16)).toBe(true);
+      expect(testLinearPattern(nonSpace, input), input.charCodeAt(0).toString(16)).toBe(false);
+    }
+  });
+
+  it('rejects non-ASCII pattern source with i flag until unicode case folding is implemented', () => {
+    expect(() => compileLinearPattern('é', 'i')).toThrow(RedosPatternError);
+    expect(() => compileLinearPattern('[é]', 'i')).toThrow(/unsafeRegex/u);
+    expect(() => compileLinearPattern('é')).not.toThrow();
+  });
+
   it('matches formerly catastrophic structures through the linear engine', () => {
     for (const entry of REDOS_LINEAR_ADVERSARIAL_CORPUS) {
       const program = compileLinearPattern(entry.source);
@@ -182,7 +237,7 @@ function randomFlags(rng: Rng): string {
 }
 
 function randomInput(rng: Rng): string {
-  const alphabet = ['a', 'b', 'c', '1', '_', ' ', '\n', 'x'];
+  const alphabet = ['a', 'b', 'c', '1', '_', ' ', 'x'];
   const length = pick(rng, 12);
   let input = '';
   for (let i = 0; i < length; i += 1) input += alphabet[pick(rng, alphabet.length)] ?? '';

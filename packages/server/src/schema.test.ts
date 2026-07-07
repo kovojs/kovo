@@ -604,10 +604,21 @@ describe('server schemas', () => {
 
     expect(() => s.string().pattern('(?=a)a')).toThrow(/KV434/u);
     expect(() => s.string().pattern('(a)\\1')).toThrow(/KV434/u);
+    expect(() => s.string().pattern('\\x41')).toThrow(/KV434/u);
+    expect(() => s.string().pattern(/é/i)).toThrow(/KV434/u);
 
     const safe = s.string().pattern('^[a-z0-9]+$');
     expect(safe.parse('abc123')).toBe('abc123');
     expect(() => safe.parse('Bad!')).toThrow('Expected string matching pattern');
+  });
+
+  it('preserves pattern() escape and anchor edge semantics through schema parsing', () => {
+    const backspace = s.string().pattern('^[\\b]$');
+    expect(backspace.parse('\b')).toBe('\b');
+    expect(() => backspace.parse('b')).toThrow('Expected string matching pattern');
+
+    const finalLineTerminator = s.string().pattern('a$');
+    expect(finalLineTerminator.parse('a\n')).toBe('a\n');
   });
 
   it('caps pattern() input length as a runtime backstop (KV434)', () => {

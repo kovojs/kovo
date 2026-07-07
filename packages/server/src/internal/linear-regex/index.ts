@@ -53,6 +53,11 @@ export function compileLinearRegex(
   options: { readonly programSizeLimit?: number } = {},
 ): LinearRegexProgram {
   const flags = parseFlags(flagsText);
+  if (flags.ignoreCase && containsNonAscii(source)) {
+    throw new LinearRegexError(
+      'pattern(): non-ASCII pattern source with the i flag is not supported; use unsafeRegex(...)',
+    );
+  }
   const ast = new Parser(source).parse();
   const compiler = new Compiler(options.programSizeLimit ?? DEFAULT_PROGRAM_SIZE_LIMIT);
   return { flags, instructions: compiler.compile(ast), source };
@@ -229,6 +234,9 @@ class Parser {
     if (escaped === undefined) this.#fail('trailing escape');
     this.#index += 1;
 
+    if (escaped === 'x' || escaped === 'u' || escaped === 'c') {
+      this.#fail(`\\${escaped} escapes are not supported; use unsafeRegex(...)`);
+    }
     if (!inClass && escaped >= '1' && escaped <= '9') {
       this.#fail('backreferences are not supported; use unsafeRegex(...)');
     }
@@ -237,6 +245,7 @@ class Parser {
       this.#fail('unicode property escapes are not supported; use unsafeRegex(...)');
     if (!inClass && escaped === 'b') return { kind: 'anchor', anchor: 'word-boundary' };
     if (!inClass && escaped === 'B') return { kind: 'anchor', anchor: 'not-word-boundary' };
+    if (inClass && escaped === 'b') return literal('\b');
     if (escaped === 'd') return charClass([{ from: 0x30, to: 0x39 }]);
     if (escaped === 'D') return charClass([{ from: 0x30, to: 0x39 }], true);
     if (escaped === 'w') return charClass(wordRanges());
@@ -492,9 +501,16 @@ function assertionPasses(
   position: number,
 ): boolean {
   if (anchor === 'begin')
-    return position === 0 || (flags.multiline && input[position - 1] === '\n');
+    return (
+      position === 0 ||
+      (flags.multiline && isEcmaLineTerminatorAt(input, previousCodeUnitStart(input, position)))
+    );
   if (anchor === 'end') {
-    return position === input.length || (flags.multiline && input[position] === '\n');
+    return (
+      position === input.length ||
+      isFinalLineTerminatorPosition(input, position) ||
+      (flags.multiline && isEcmaLineTerminatorAt(input, position))
+    );
   }
   const before = position > 0 ? input.charCodeAt(position - 1) : -1;
   const after = position < input.length ? input.charCodeAt(position) : -1;
@@ -541,6 +557,13 @@ function parseFlags(flagsText: string): LinearRegexFlags {
       );
   }
   return { dotAll, ignoreCase, multiline };
+}
+
+function containsNonAscii(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) > 0x7f) return true;
+  }
+  return false;
 }
 
 function empty(): Ast {
@@ -608,7 +631,44 @@ function spaceRanges(): readonly CharRange[] {
     { from: 0x09, to: 0x0d },
     { from: 0x20, to: 0x20 },
     { from: 0xa0, to: 0xa0 },
+    { from: 0x1680, to: 0x1680 },
+    { from: 0x2000, to: 0x200a },
+    { from: 0x2028, to: 0x2029 },
+    { from: 0x202f, to: 0x202f },
+    { from: 0x205f, to: 0x205f },
+    { from: 0x3000, to: 0x3000 },
+    { from: 0xfeff, to: 0xfeff },
   ];
+}
+
+function previousCodeUnitStart(input: string, position: number): number {
+  if (position <= 0) return -1;
+  if (
+    position >= 2 &&
+    input.charCodeAt(position - 2) === 0x0d &&
+    input.charCodeAt(position - 1) === 0x0a
+  ) {
+    return position - 2;
+  }
+  return position - 1;
+}
+
+function isFinalLineTerminatorPosition(input: string, position: number): boolean {
+  if (position === input.length - 1) {
+    const code = input.charCodeAt(position);
+    return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
+  }
+  return (
+    position === input.length - 2 &&
+    input.charCodeAt(position) === 0x0d &&
+    input.charCodeAt(position + 1) === 0x0a
+  );
+}
+
+function isEcmaLineTerminatorAt(input: string, position: number): boolean {
+  if (position < 0 || position >= input.length) return false;
+  const code = input.charCodeAt(position);
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
 }
 
 function normalizeCode(code: number, flags: LinearRegexFlags): number {

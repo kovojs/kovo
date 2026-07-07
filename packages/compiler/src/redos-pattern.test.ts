@@ -75,6 +75,11 @@ const schema = s.string().min(3).pattern(re);`,
       const source = component(`const schema = s.string().pattern(/^[a-z]+$/u);`);
       expect(codes(source)).toContain('KV434');
     });
+
+    it('fires KV434 for non-ASCII pattern source with i flag', () => {
+      expect(codes(component(`const schema = s.string().pattern(/é/i);`))).toContain('KV434');
+      expect(codes(component(`const schema = s.string().pattern(/[é]/i);`))).toContain('KV434');
+    });
   });
 
   describe('NEGATIVE: supported compile-visible literals are not flagged', () => {
@@ -101,6 +106,11 @@ const schema = s.string().min(3).pattern(re);`,
 
     it('does not flag a regex literal pattern with supported flags', () => {
       const source = component(`const schema = s.string().pattern(/^[a-z]+$/ims);`);
+      expect(codes(source)).not.toContain('KV434');
+    });
+
+    it('does not flag supported backspace escapes inside character classes', () => {
+      const source = component(`const schema = s.string().pattern('[\\\\b]');`);
       expect(codes(source)).not.toContain('KV434');
     });
 
