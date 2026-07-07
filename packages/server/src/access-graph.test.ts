@@ -5,7 +5,7 @@ import { publicAccess, verifiedAccess } from './access.js';
 import { accessFactsFromApp } from './access-graph.js';
 import { createApp } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
-import { guards } from './guards.js';
+import { guard, guards } from './guards.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
@@ -44,7 +44,7 @@ describe('app access graph extraction', () => {
     });
     const guardedLayout = layout({ guard: authed });
     const explicitGuardRoute = route('/admin', {
-      access: { guards: [{ name: 'admin' }], kind: 'guard-chain' },
+      access: [guard('admin', () => true)],
       page: () => '<main>admin</main>',
     });
     const guardedRoute = route('/cart', { layout: guardedLayout, page: () => '<main>cart</main>' });

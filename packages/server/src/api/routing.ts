@@ -15,13 +15,7 @@ export type {
   WebhookVerifier,
 } from '@kovojs/core';
 export { publicAccess, verifiedAccess } from '../access.js';
-export type {
-  AccessDecision,
-  GuardAccessStep,
-  GuardChainAccess,
-  PublicAccess,
-  VerifiedMachineAccess,
-} from '../access.js';
+export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from '../access.js';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 export { endpoint } from '../endpoint.js';
 export type {
@@ -45,7 +39,7 @@ export type {
   EndpointResponsePosture,
   RedirectLocationAllowlistEntry,
 } from '../endpoint.js';
-export { guards, session } from '../guards.js';
+export { guard, guards, session } from '../guards.js';
 export type {
   AuthenticatedRequest,
   ClientIpRequestLike,

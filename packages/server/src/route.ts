@@ -14,7 +14,7 @@ import { reportServerError } from './diagnostics.js';
 import {
   guardFailureToResult,
   renderHttpGuardFailureResponse,
-  runGuard,
+  runAccessDecisionGuards,
   sanitizeNext,
   withGuardParams,
   type Guard,
@@ -617,7 +617,11 @@ async function runRoutePageInternal<
   for (let index = 0; index < layouts.length; index += 1) {
     const layoutDeclaration = layouts[index];
     if (!layoutDeclaration) continue;
-    const guardFailure = await runGuard(layoutDeclaration.guard, lifecycleRequest);
+    const guardFailure = await runAccessDecisionGuards(
+      layoutDeclaration.access,
+      layoutDeclaration.guard,
+      lifecycleRequest,
+    );
     if (guardFailure) {
       return withRouteBoundaryFailure(
         routeGuardFailure(guardFailure),
@@ -626,7 +630,11 @@ async function runRoutePageInternal<
     }
   }
 
-  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+  const guardFailure = await runAccessDecisionGuards(
+    definition.access,
+    definition.guard,
+    lifecycleRequest,
+  );
   if (guardFailure) {
     return withRouteBoundaryFailure(
       routeGuardFailure(guardFailure),

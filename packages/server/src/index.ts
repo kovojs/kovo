@@ -121,13 +121,7 @@ export type {
   PasswordHashOptions,
   PasswordVerifyResult,
 } from './password.js';
-export type {
-  AccessDecision,
-  GuardAccessStep,
-  GuardChainAccess,
-  PublicAccess,
-  VerifiedMachineAccess,
-} from './access.js';
+export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from './access.js';
 // SPEC §6.6 / §9.1: storage capability constructors are public app wiring surfaces for
 // upload/file schemas and the framework-owned capability download endpoint.
 export {
@@ -421,6 +415,7 @@ export type {
 } from './api/rendering.js';
 export {
   endpoint,
+  guard,
   guards,
   href,
   layout,
