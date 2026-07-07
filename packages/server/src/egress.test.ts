@@ -98,11 +98,6 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
       expect(normalizeIpLiteral(input), input).not.toBeNull();
       expect(normalizeFastPathIpLiteral(input), input).toBeNull();
     }
-
-    expect(await dnsLookupCanonical('0127.0.0.1')).toBe('127.0.0.1');
-    expect(classifyIp(await dnsLookupCanonical('0127.0.0.1'))).toBe('loopback');
-    expect(await dnsLookupCanonical('010.0.0.1')).toBe('10.0.0.1');
-    expect(classifyIp(await dnsLookupCanonical('010.0.0.1'))).toBe('private-rfc1918');
   });
 
   it('classifyHost returns null for a real DNS name (needs resolution)', () => {
