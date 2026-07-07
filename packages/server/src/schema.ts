@@ -407,6 +407,13 @@ export interface StoredFileSchemaOptions {
 export interface StringSchema extends Schema<string> {
   default(value: string): StringSchema;
   optional(): Schema<string | undefined>;
+  /**
+   * Admit line terminators in string values while still rejecting other raw C0 controls and DEL
+   * (SPEC §6.6).
+   */
+  multiline(): StringSchema;
+  /** Admit arbitrary raw control characters, including line terminators (SPEC §6.6). */
+  allowControlChars(): StringSchema;
   /** Restrict to one of the blessed backtracking-free formats (KV434). */
   format(name: BlessedFormatName): StringSchema;
   email(): StringSchema;
@@ -588,25 +595,41 @@ type StringCheck =
   | { kind: 'pattern'; program: LinearRegexProgram; source: string }
   | { kind: 'unsafe'; regex: RegExp };
 
+type StringControlPolicy = 'single-line' | 'multiline' | 'allow';
+
 class StringSchemaImpl implements StringSchema {
   readonly #checks: readonly StringCheck[];
+  readonly #controlPolicy: StringControlPolicy;
   readonly #defaultValue: string | undefined;
 
-  constructor(checks: readonly StringCheck[] = [], defaultValue?: string) {
+  constructor(
+    checks: readonly StringCheck[] = [],
+    defaultValue?: string,
+    controlPolicy: StringControlPolicy = 'single-line',
+  ) {
     this.#checks = checks;
     this.#defaultValue = defaultValue;
+    this.#controlPolicy = controlPolicy;
   }
 
   #with(check: StringCheck): StringSchema {
-    return new StringSchemaImpl([...this.#checks, check], this.#defaultValue);
+    return new StringSchemaImpl([...this.#checks, check], this.#defaultValue, this.#controlPolicy);
   }
 
   default(value: string): StringSchema {
-    return new StringSchemaImpl(this.#checks, value);
+    return new StringSchemaImpl(this.#checks, value, this.#controlPolicy);
   }
 
   optional(): Schema<string | undefined> {
     return optionalSchema(this, isMissingStringInput);
+  }
+
+  multiline(): StringSchema {
+    return new StringSchemaImpl(this.#checks, this.#defaultValue, 'multiline');
+  }
+
+  allowControlChars(): StringSchema {
+    return new StringSchemaImpl(this.#checks, this.#defaultValue, 'allow');
   }
 
   format(name: BlessedFormatName): StringSchema {
@@ -646,6 +669,8 @@ class StringSchemaImpl implements StringSchema {
     }
     if (typeof input !== 'string') throw validationError('Expected string');
 
+    assertStringControlPolicy(input, this.#controlPolicy);
+
     for (const check of this.#checks) {
       if (check.kind === 'format') {
         if (!BLESSED_FORMATS[check.name].test(input)) {
@@ -668,6 +693,25 @@ class StringSchemaImpl implements StringSchema {
 
     return input;
   }
+}
+
+function assertStringControlPolicy(input: string, policy: StringControlPolicy): void {
+  if (policy === 'allow') return;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    if (isLineTerminatorCode(code)) {
+      if (policy === 'multiline') continue;
+      throw validationError('Expected string without line terminators');
+    }
+    if (code <= 0x1f || code === 0x7f) {
+      throw validationError('Expected string without raw control characters');
+    }
+  }
+}
+
+function isLineTerminatorCode(code: number): boolean {
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
 }
 
 function parseDecimalString(input: string, scale: number | undefined): string {

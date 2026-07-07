@@ -597,6 +597,51 @@ describe('server schemas', () => {
     expect(s.string().slug().parse('my-post')).toBe('my-post');
   });
 
+  it('rejects raw controls and line terminators in strings by default (SPEC §6.6)', () => {
+    const schema = s.string();
+
+    for (let code = 0; code <= 0x1f; code += 1) {
+      expect(() => schema.parse(`before${String.fromCharCode(code)}after`)).toThrow(
+        code === 0x0a || code === 0x0d
+          ? 'Expected string without line terminators'
+          : 'Expected string without raw control characters',
+      );
+    }
+    expect(() => schema.parse('before\x7fafter')).toThrow(
+      'Expected string without raw control characters',
+    );
+    expect(() => schema.parse('before\u2028after')).toThrow(
+      'Expected string without line terminators',
+    );
+    expect(() => schema.parse('before\u2029after')).toThrow(
+      'Expected string without line terminators',
+    );
+
+    expect(schema.parse('plain text')).toBe('plain text');
+  });
+
+  it('offers explicit string control-character opt-ins (SPEC §6.6)', () => {
+    const multiline = s.string().multiline();
+
+    expect(multiline.parse('line 1\nline 2\r\nline 3\u2028line 4\u2029')).toBe(
+      'line 1\nline 2\r\nline 3\u2028line 4\u2029',
+    );
+    expect(() => multiline.parse('name\tvalue')).toThrow(
+      'Expected string without raw control characters',
+    );
+    expect(() => multiline.parse('before\x00after')).toThrow(
+      'Expected string without raw control characters',
+    );
+    expect(() => multiline.parse('before\x7fafter')).toThrow(
+      'Expected string without raw control characters',
+    );
+
+    const arbitraryControlChars = s.string().allowControlChars();
+    expect(arbitraryControlChars.parse('before\x00\t\n\r\u2028\u2029\x7fafter')).toBe(
+      'before\x00\t\n\r\u2028\u2029\x7fafter',
+    );
+  });
+
   it('matches pattern() through the linear engine and rejects unsupported syntax (KV434)', () => {
     const adversarial = s.string().pattern('(a+)+$');
     expect(adversarial.parse('aaaa')).toBe('aaaa');
@@ -613,12 +658,14 @@ describe('server schemas', () => {
   });
 
   it('preserves pattern() escape and anchor edge semantics through schema parsing', () => {
-    const backspace = s.string().pattern('^[\\b]$');
+    const backspace = s.string().allowControlChars().pattern('^[\\b]$');
     expect(backspace.parse('\b')).toBe('\b');
     expect(() => backspace.parse('b')).toThrow('Expected string matching pattern');
 
-    const finalLineTerminator = s.string().pattern('a$');
-    expect(finalLineTerminator.parse('a\n')).toBe('a\n');
+    const anchoredLetters = s.string().pattern('^[a-z]+$');
+    expect(() => anchoredLetters.parse('admin\n')).toThrow(
+      'Expected string without line terminators',
+    );
   });
 
   it('caps pattern() input length as a runtime backstop (KV434)', () => {
