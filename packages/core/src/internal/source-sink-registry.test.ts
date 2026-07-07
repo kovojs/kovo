@@ -5,6 +5,7 @@ import {
   frameworkSourceSinkInventory,
 } from './source-sink-registry.js';
 
+// @kovo-security-classifier-corpus sink-registry
 describe('boundary crossing sink inventory', () => {
   it('covers the DEC-E required sink set with mechanism and proof metadata', () => {
     const inventory = boundaryCrossingSinkInventory();

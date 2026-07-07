@@ -12,6 +12,7 @@ import { checkPostgresAppDbPosture, createPostgresAppRuntimeDb } from './postgre
 // SPEC §10.3: the Postgres closure audit must retain every app-role-reachable
 // object unless engine posture proves it safe at the finest effective privilege
 // granularity. This fuzzer compares the real audit to PGlite role execution.
+// @kovo-security-classifier-corpus postgres-identity-posture
 
 const APP_SCHEMA = 'public';
 const NON_APP_SCHEMA = 'kovo_fuzzer_extra';

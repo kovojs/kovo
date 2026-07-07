@@ -24,6 +24,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus better-auth-credentials',
     testFiles: ['packages/better-auth/src/index.schema-bridge.test.ts'],
   },
+  {
+    id: 'sink-registry',
+    marker: '@kovo-security-classifier-corpus sink-registry',
+    testFiles: ['packages/core/src/internal/source-sink-registry.test.ts'],
+  },
+  {
+    id: 'postgres-identity-posture',
+    marker: '@kovo-security-classifier-corpus postgres-identity-posture',
+    testFiles: ['packages/server/src/postgres-grant-shape-fuzzer.test.ts'],
+  },
 ];
 
 export function evaluateSecurityClassifierCorpus(options = {}) {
