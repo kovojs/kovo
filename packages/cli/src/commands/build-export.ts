@@ -17,6 +17,8 @@ import type {
   QueryShapeFact,
 } from '@kovojs/compiler/internal';
 import type {
+  AccessDecision,
+  Guard,
   KovoApp,
   StaticExportCompileDiagnostic,
   StaticExportResult,
@@ -31,6 +33,7 @@ import type {
   QueryReadFactLike,
   StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
+import { guardAuditName } from '@kovojs/server/internal/execution';
 import {
   runtimeRegistryWireFactsFromGraph,
   serializeRuntimeRegistryWireModule,
@@ -868,7 +871,9 @@ function routeFileStreamEndpointFact(
   route: KovoApp['routes'][number],
   outcome: 'file' | 'stream',
 ): CoreGraph.EndpointExplain {
+  const access = routeEndpointAccessFact(route);
   return {
+    ...(access === undefined ? {} : { access }),
     ...(route.guard === undefined
       ? {}
       : {
@@ -885,6 +890,41 @@ function routeFileStreamEndpointFact(
     reason: `route respond.${outcome} outcome`,
     surface: outcome === 'file' ? 'route-file' : 'route-stream',
   };
+}
+
+function routeEndpointAccessFact(
+  route: KovoApp['routes'][number],
+): CoreGraph.AccessDecisionFact | undefined {
+  const access = accessDecisionGraphFact(route.access);
+  if (access !== undefined) return access;
+
+  let layout = route.layout;
+  while (layout !== undefined) {
+    const layoutAccess = accessDecisionGraphFact(layout.access);
+    if (layoutAccess !== undefined) return layoutAccess;
+    layout = layout.parent;
+  }
+
+  return undefined;
+}
+
+function accessDecisionGraphFact(
+  access: AccessDecision | undefined,
+): CoreGraph.AccessDecisionFact | undefined {
+  if (access === undefined) return undefined;
+
+  if (isGuardAccessDecisionValue(access)) {
+    if (access.length === 0) return undefined;
+    return { guards: access.map((item) => guardAuditName(item)), kind: 'guard-chain' };
+  }
+
+  if (access.kind === 'public') return { kind: 'public', reason: access.reason };
+  if (access.kind === 'verified-machine-auth') return { kind: 'verified-machine-auth' };
+  return undefined;
+}
+
+function isGuardAccessDecisionValue(access: AccessDecision): access is readonly Guard<any, any>[] {
+  return Array.isArray(access);
 }
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {

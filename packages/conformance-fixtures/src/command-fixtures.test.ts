@@ -192,15 +192,16 @@ describe('@kovojs/test command fixtures', () => {
     ]);
   });
 
-  it('keeps kovo-check as one required full-suite CI proof without inert env fan-out', async () => {
+  it('keeps kovo-check as a required matrix proof without inert env fan-out', async () => {
     const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
     const commands = workflowStepCommands(workflow)
       .map((step) => step.run)
       .filter((command): command is string => Boolean(command));
 
     expect(commands.filter((command) => command.includes('scripts/kovo-check.mjs'))).toEqual([
-      'vp exec node scripts/kovo-check.mjs compiler-runtime server-browser project',
+      'vp exec node scripts/kovo-check.mjs ${{ matrix.suite }}',
     ]);
+    expect(workflow).toContain('suite: [compiler-runtime, server-browser, project]');
     expect(workflow).not.toContain('KOVO_SECURITY_PRESET');
     expect(workflow).not.toContain('KOVO_SECURITY_DIALECT');
   });
