@@ -77,6 +77,12 @@ ledger, but it must not add a broader guarantee outside the block.
         "phase-5-postgres-paranoid-dogfood-read-acceptance",
         "phase-5-postgres-paranoid-dogfood-write-acceptance"
       ]
+    },
+    {
+      "id": "csrf-request-authenticity",
+      "statement": "In a KOVO_PARANOID production artifact, a default-CSRF state-changing mutation refuses an unsafe request that is cross-origin, is missing its session-bound CSRF token, or is missing an Origin header: validateCsrfToken applies the Origin floor and the synchronizer-token check before the handler runs, and the handler executes only for a same-origin request that carries a valid token.",
+      "tcbChokes": ["server.csrf.request-authenticity-verifier"],
+      "runtimeProofs": ["csrf-cross-origin-refusal-prod-artifact"]
     }
   ],
   "nonGoals": [
@@ -109,14 +115,15 @@ it targets:
 1. **Formal guarantees** — the JSON register above. Each is backed by an enrolled TCB choke
    in `security/TCB.md` and a `KOVO_PARANOID` production-artifact runtime proof, and passes
    `pnpm run check:security-guarantee`. Today these cover **secret-value confidentiality at
-   the query-wire egress** and **owner-scope confinement of framework-managed reads and
-   writes** (cross-owner access refused by the engine RLS floor). These are the strongest
-   claims; a verified break is the most valuable finding.
+   the query-wire egress**, **owner-scope confinement of framework-managed reads and writes**
+   (cross-owner access refused by the engine RLS floor), and **request authenticity** (a
+   default-CSRF mutation refuses a cross-origin, missing-token, or missing-Origin unsafe
+   request). These are the strongest claims; a verified break is the most valuable finding.
 2. **Hardened controls** — the coverage map in `docs/security-threat-matrix.md`. Every
-   {surface × threat} cell names a control with its test/gate (CSRF + a default-on Origin
-   floor, session integrity, wire-injection defenses, the auth-adapter non-egress proof, the
-   escape-hatch visibility guarantee, …). These are tested and gated but are **controls, not
-   formal paranoid guarantees** unless they also appear in the register above.
+   {surface × threat} cell names a control with its test/gate (session integrity, wire-
+   injection defenses, the auth-adapter non-egress proof, the escape-hatch visibility
+   guarantee, …). These are tested and gated but are **controls, not formal paranoid
+   guarantees** unless they also appear in the register above.
 
 The threat matrix has no open cell as of 2026-07-07, but "no open cell" is a self-graded
 claim. This bounty exists to make it a verified one.
@@ -144,8 +151,9 @@ A finding is **verified** when we reproduce it. It must be:
 - **Injection** — XSS (a value reaching an HTML/attribute/URL-scheme/JS position unescaped by
   default), SQL injection through the managed query API, header/cookie/CRLF injection, open
   redirect, or SSRF past the egress floor.
-- **Request forgery (CSRF)** — a state-changing mutation executed cross-origin without a valid
-  session-bound CSRF token, in a default-CSRF app.
+- **Request forgery (CSRF)** — a state-changing mutation executed cross-origin, or without a
+  valid session-bound CSRF token, or without an Origin header, in a default-CSRF app.
+  **(Tier-1 formal guarantee: `csrf-request-authenticity`.)**
 - **Session / principal integrity** — forging, tampering with, or replaying a session to act
   as another principal, or principal confusion at dispatch.
 - **Auth-adapter non-egress** — a request-reachable code path that reads an _unboxed_

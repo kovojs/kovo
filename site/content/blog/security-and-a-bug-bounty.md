@@ -18,11 +18,12 @@ Two artifacts define what Kovo claims:
   explicit out-of-scope note. As of today it has **no open cell**.
 - **`SECURITY.md`** — a narrower, normative guarantee register. Each entry is backed by an
   enrolled trusted-computing-base choke and a `KOVO_PARANOID` production-artifact proof, and
-  passes `pnpm run check:security-guarantee`. Today the register formally guarantees two
-  things: **secret-value confidentiality at the query-wire egress**, and **owner-scope
+  passes `pnpm run check:security-guarantee`. Today the register formally guarantees three
+  things: **secret-value confidentiality at the query-wire egress**; **owner-scope
   confinement** — a cross-owner read returns nothing and a cross-owner write is refused by the
   engine's row-level-security floor, proven against a real Postgres cluster in a built
-  artifact.
+  artifact; and **request authenticity** — a default-CSRF mutation refuses a cross-origin,
+  missing-token, or missing-Origin unsafe request.
 
 "No open cell" is a real milestone. It is also a claim we graded ourselves. So we are doing
 the honest thing next: **paying people to prove a specific claim wrong.**
@@ -48,7 +49,7 @@ In scope is a default-path violation of a stated property:
   redirect, a log, or an error. _(Formal guarantee.)_
 - **Injection** — XSS in any render position, SQL injection through the managed query API,
   header/cookie/CRLF injection, open redirect, or SSRF past the egress floor.
-- **Cross-origin request forgery** on a state-changing mutation.
+- **Cross-origin request forgery** on a state-changing mutation. _(Formal guarantee.)_
 - **Session or principal forgery** — becoming another principal.
 - **Reading an unboxed cross-user credential** on a request-reachable path.
 - **An escape hatch that `kovo explain` does not show.** The guarantee is that every hole is
