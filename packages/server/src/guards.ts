@@ -1,4 +1,5 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
+import type { AccessDecision } from './access.js';
 import {
   mergeVaryHeader,
   renderErrorDocument,
@@ -74,6 +75,7 @@ export interface Guard<Request, RefinedRequest extends Request = Request> {
 
 export type GuardAuditFact =
   | AuthedGuardAuditFact
+  | NamedGuardAuditFact
   | OwnershipGuardAuditFact
   | RateLimitGuardAuditFact
   | RoleGuardAuditFact;
@@ -94,6 +96,11 @@ export interface AuthedGuardAuditFact {
   auth: 'session-user';
   kind: 'authed';
   name: 'authed';
+}
+
+export interface NamedGuardAuditFact {
+  kind: 'named';
+  name: string;
 }
 
 export interface RoleGuardAuditFact {
@@ -447,6 +454,31 @@ interface PassedRoleGuardRequest {
 }
 
 /**
+ * Construct a self-naming executable guard. SPEC §10 default-deny access decisions
+ * require the audited guard to be the guard that runs; this wrapper stores the
+ * audit name on the executable function itself instead of accepting a separate
+ * hand-written label.
+ */
+export function guard<Request, RefinedRequest extends Request = Request>(
+  name: string,
+  fn: Guard<Request, RefinedRequest>,
+): Guard<Request, RefinedRequest> {
+  const trimmed = name.trim();
+  if (trimmed === '') throw new TypeError('guard(name, fn) requires a non-empty name.');
+
+  const namedGuard: Guard<Request, RefinedRequest> = (request) => fn(request);
+  if (fn.refines !== undefined) {
+    Object.defineProperty(namedGuard, 'refines', {
+      configurable: false,
+      enumerable: false,
+      value: fn.refines,
+      writable: false,
+    });
+  }
+  return stampGuardAudit(namedGuard, [{ kind: 'named', name: trimmed }, ...explainGuard(fn)]);
+}
+
+/**
  * Built-in guard factories for routes, queries, and mutations. `guards.authed()`
  * requires a logged-in session (and refines the request type), `guards.role(r)`
  * requires a role, `guards.rateLimit(opts)` throttles, and `guards.all(...)`
@@ -619,6 +651,15 @@ export function explainGuard<Request>(
   return guard === undefined ? [] : ((guard as GuardWithAudit<Request>)[guardAuditSymbol] ?? []);
 }
 
+/** @internal Project the stable audit name attached to an executable guard. */
+export function guardAuditName<Request>(guard: Guard<Request>): string {
+  const facts = explainGuard(guard);
+  const named = facts.find((fact) => fact.kind === 'named');
+  if (named !== undefined) return named.name;
+  const firstNamedFact = facts.find((fact) => 'name' in fact);
+  return firstNamedFact?.name ?? guard.name ?? 'anonymous';
+}
+
 /** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */
 export function requestPassedRoleGuard(request: unknown, role: string): boolean {
   if (!isObjectLike(request)) return false;
@@ -722,6 +763,36 @@ export async function runGuard<Request>(
 
   const result = await guard(request);
   return result === true ? null : resolveGuardResult(result);
+}
+
+/** @internal Run an ordered executable guard chain through the same path as `guard:`. */
+export async function runGuardChain<Request>(
+  guardChain: readonly Guard<Request>[],
+  request: Request,
+): Promise<ResolvedGuardFailure | null> {
+  for (const item of guardChain) {
+    const failure = await runGuard(item, request);
+    if (failure) return failure;
+  }
+  return null;
+}
+
+/**
+ * @internal Run a surface's effective access guard.
+ *
+ * SPEC §10 requires the audited access decision to be the enforced object. When
+ * `access` is an executable guard array, those guards run. `publicAccess` and
+ * `verifiedAccess` are explicit no-guard decisions. The legacy top-level
+ * `guard:` remains only as a compatibility fallback when `access` is absent.
+ */
+export async function runAccessDecisionGuards<Request>(
+  access: AccessDecision | undefined,
+  fallbackGuard: Guard<Request> | undefined,
+  request: Request,
+): Promise<ResolvedGuardFailure | null> {
+  if (Array.isArray(access)) return runGuardChain(access, request);
+  if (access !== undefined) return null;
+  return runGuard(fallbackGuard, request);
 }
 
 /**

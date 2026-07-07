@@ -17,7 +17,7 @@ import {
   explainGuard,
   guardFailureToResult,
   resolveLifecycleRequest,
-  runGuard,
+  runAccessDecisionGuards,
   withGuardArgs,
   type Guard,
   type RequestLifecycleOptions,
@@ -217,7 +217,11 @@ async function executeMutationLifecycle<
   );
 
   if (!options.guardResolved) {
-    const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+    const guardFailure = await runAccessDecisionGuards(
+      definition.access,
+      definition.guard,
+      lifecycleRequest,
+    );
     if (guardFailure) {
       return {
         failure: mutationGuardFailureToResult(guardFailure),
@@ -407,7 +411,11 @@ export async function runMutation<
       input,
     );
 
-    const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+    const guardFailure = await runAccessDecisionGuards(
+      definition.access,
+      definition.guard,
+      lifecycleRequest,
+    );
     if (guardFailure) return mutationGuardFailureToResult(guardFailure);
   }
 
