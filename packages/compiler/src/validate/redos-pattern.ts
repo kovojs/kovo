@@ -169,7 +169,7 @@ function isLinearSafeLiteralPattern(source: string): boolean {
  */
 function containsQuantifier(source: string): boolean {
   for (let i = 0; i < source.length; ) {
-    if (source[i] === '(') {
+    if (source.charCodeAt(i) === CHAR_LEFT_PAREN) {
       const close = matchGroupClose(source, i);
       if (close !== -1) {
         const body = stripGroupPrefix(source.slice(i + 1, close));
