@@ -61,7 +61,7 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
   - Acceptance: round-19 repro set rejects (runtime + compile); over-block set passes; added to the DEC-E corpus.
   - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts packages/server/src/schema.test.ts` and `pnpm run check:security-classifier-corpus` pass after adding the round-19 nested-overlap corpus.
 
-- [ ] **A1 — Build `packages/core/src/internal/linear-regex/` (new module, ~600–1,200 LOC pure TS), a boolean
+- [x] **A1 — Build `packages/core/src/internal/linear-regex/` (new module, ~600–1,200 LOC pure TS), a boolean
       linear-time matcher for the supported subset, and route `pattern()` through it.** Prescriptive build order:
   1. **Parser → AST** (`parse.ts`). Reuse the existing `readAtom`/`quantifierAt` scaffolding as a starting point. AST
      nodes: `Literal(char)`, `CharClass(ranges, negated)` (incl. `\d\w\s\D\W\S`, `.`), `Concat(nodes)`,
@@ -105,6 +105,7 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
     run in provably linear time (no timing cliff at any input length); the parity fuzzer is green over ≥1e6 generated
     pattern×input cases; unsupported features throw KV434 pointing to `unsafeRegex`; the heuristic analyzer files are
     deleted; `kovo explain` still surfaces `unsafeRegex` sites.
+  - Evidence: `KOVO_LINEAR_REGEX_FUZZ_CASES=1000000 pnpm exec vitest --run packages/server/src/redos.test.ts --testNamePattern 'seeded differential fuzzer'`, focused ReDoS/schema/compiler tests, `pnpm run check:security-classifier-corpus`, and `pnpm run check:vp` pass after routing `pattern()` to `packages/server/src/internal/linear-regex/`.
 
 ### DEC-B — Egress classify-and-PIN for IP literals (fixes B2)
 
@@ -204,9 +205,10 @@ O1–O4 are decided and folded into the DECs above. Recorded here for provenance
 
 ## 5. Proving
 
-- [ ] DEC-A: A0 interim — round-19 repro set rejects. A1 — `pattern()` matches on the linear engine (no timing cliff at
+- [x] DEC-A: A0 interim — round-19 repro set rejects. A1 — `pattern()` matches on the linear engine (no timing cliff at
       any input length on `((a|a))+`/`((a+))+`/etc.); parity fuzzer green over ≥1e6 pattern×input cases; unsupported
       features throw KV434 → `unsafeRegex`; heuristic analyzer files deleted.
+  - Evidence: `KOVO_LINEAR_REGEX_FUZZ_CASES=1000000 pnpm exec vitest --run packages/server/src/redos.test.ts --testNamePattern 'seeded differential fuzzer'` passes; `pnpm exec vitest --run packages/server/src/redos.test.ts packages/server/src/schema.test.ts packages/compiler/src/redos-pattern.test.ts` covers unsupported KV434 and linear adversarial cases.
 - [x] DEC-B: `0127.0.0.1`/`010.0.0.1` never let the floor validate one IP and dial another; loose-IPv4 differential test.
   - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` covers loose IPv4 fast-path rejection and resolved-IP denial.
 - [x] DEC-C: ISATAP private-embedded forms classify non-public.
