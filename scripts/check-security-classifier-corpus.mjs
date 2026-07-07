@@ -25,9 +25,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: ['^(a|aa)+$', 'overlapping alternatives'],
       },
       {
+        id: 'nested-overlapping-alternatives-regression',
+        file: 'packages/server/src/redos.test.ts',
+        snippets: ['((a|a))+', 'nested group interiors contain overlapping alternatives'],
+      },
+      {
         id: 'compiler-overlapping-alternatives-regression',
         file: 'packages/compiler/src/redos-pattern.test.ts',
         snippets: ['^(a|a)*$', "toContain('KV434')"],
+      },
+      {
+        id: 'compiler-nested-overlapping-alternatives-regression',
+        file: 'packages/compiler/src/redos-pattern.test.ts',
+        snippets: ['((a|a))+', "toContain('KV434')"],
       },
     ],
   },

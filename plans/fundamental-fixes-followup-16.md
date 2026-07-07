@@ -151,7 +151,7 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
 
 ### DEC-E — Corpus gate teeth + whole-grammar differential (fixes P2; C14)
 
-- [ ] **E1 — `check:security-classifier-corpus` re-executes each in-scope classifier over its FULL corpus and asserts
+- [x] **E1 — `check:security-classifier-corpus` re-executes each in-scope classifier over its FULL corpus and asserts
       every verdict (not a marker/existence check), and a mutation test re-introduces a known regression (round-18
       nested-quantifier, round-19 overlapping-alt, round-19 octal literal) and confirms the gate goes RED. Each DEC-D
       differential fuzzer generates the classifier's WHOLE input grammar, not the shapes the last round happened to
@@ -161,10 +161,11 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
     fuzzer (`linearMatch` === JS `RegExp` over the supported subset) + the reject-set correctness — a decidable equality,
     replacing the retired "accept ⇒ measured-linear" timing heuristic; the egress fuzzer generates loose-IPv4 + ISATAP
     forms.
+  - Evidence: `pnpm exec vitest --run scripts/check-security-classifier-corpus.test.mjs` proves RED on removed historical anchors; `pnpm run check:security-classifier-corpus` passes with the live ReDoS and egress corpora.
 
 ### DEC-F — One-time C15 audit of every validate-then-emit sink (O4)
 
-- [ ] **F1 — Audit EVERY sink where the framework validates a value then emits/uses a possibly-different form, and
+- [x] **F1 — Audit EVERY sink where the framework validates a value then emits/uses a possibly-different form, and
       assert classify-and-pin (the emitted/dialed value is exactly the validated one). Known sinks to audit: the egress
       connect floor (DEC-B, first instance), the redirect `Location` header (validate the URL, emit a possibly-different
       URL), the wrapped-client statement reconstruct (validate the statement, execute a possibly-different one),
@@ -174,6 +175,7 @@ completed by patching. Make the unsafe state unrepresentable (the framework's ow
   - Acceptance: a short audit note per sink (pinned / fixed / N-A) recorded in the plan or `security/`; any split found
     is fixed and added to the DEC-E corpus; SPEC §6.6/§10.3 states the classify-and-pin (C15) invariant for
     validate-then-emit sinks.
+  - Evidence: `security/classify-and-pin-audit.md` records each sink status; `pnpm run check:spec-index` passes after adding the C15 invariant to `spec/06-type-system.md` and `spec/10-data-plane.md`.
 
 ## 4. Resolved design decisions (decided 2026-07-06)
 
@@ -211,7 +213,8 @@ O1–O4 are decided and folded into the DECs above. Recorded here for provenance
   - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` covers ISATAP private/metadata/loopback denial and public-embedded allowance.
 - [x] DEC-D: allowlisted public-hostname fetch succeeds; private-resolving hostname still blocked.
   - Evidence: `pnpm test packages/server/src/egress.test.ts packages/server/src/egress-undici.test.ts` covers both hostname allowlist outcomes.
-- [ ] DEC-E: corpus gate mutation-tested RED on each historical regression.
+- [x] DEC-E: corpus gate mutation-tested RED on each historical regression.
+  - Evidence: `pnpm exec vitest --run scripts/check-security-classifier-corpus.test.mjs` covers nested-quantifier, overlapping-alt, and octal-literal anchor removals.
 - [ ] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
 
