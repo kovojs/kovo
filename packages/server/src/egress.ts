@@ -443,6 +443,19 @@ export function normalizeFastPathIpLiteral(host: string): string | null {
   return null;
 }
 
+/**
+ * SPEC §6.6 / C15 corollary: if Node accepts an IP literal but Kovo cannot normalize it into
+ * the classifier's canonical address model, the egress sink must fail closed before allowlists.
+ * Today this deliberately excludes scoped IPv6 literals (`fe80::1%lo0`,
+ * `::ffff:169.254.169.254%eth0`) until Kovo owns a canonical scoped-address parser.
+ *
+ * @internal
+ */
+export function isNodeAcceptedUnnormalizedIpLiteral(host: string): boolean {
+  const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
+  return h !== '' && net.isIP(h) !== 0 && normalizeIpLiteral(h) === null;
+}
+
 function isCanonicalIpv4Literal(input: string): boolean {
   const parts = input.split('.');
   if (parts.length !== 4) return false;
@@ -718,6 +731,13 @@ export function evaluateEgress(args: {
     const blocked = evaluateDestinationAllowlist({ host, port, protocol, resolvedIp, policy });
     if (blocked) return blocked;
   }
+  if (isNodeAcceptedUnnormalizedIpLiteral(resolvedIp)) {
+    return new EgressBlockedError({
+      destination: `${host}:${port}`,
+      resolvedIp,
+      classification: 'special-use',
+    });
+  }
   const cls = classifyIp(resolvedIp);
   if (cls === 'public') return null;
 
@@ -828,6 +848,13 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       requireDestinationAllowlist: true,
     });
     if (blocked) throw blocked;
+  } else if (isNodeAcceptedUnnormalizedIpLiteral(host)) {
+    throw new EgressBlockedError({
+      destination: `${host}:${port}`,
+      resolvedIp: host,
+      classification: 'special-use',
+      reason: 'destination-allowlist',
+    });
   } else {
     const resolved = await lookupAllAddresses(host);
     if (resolved.length === 0) {
@@ -1004,6 +1031,13 @@ export function installNetConnectFloor(
       }
       return original.apply(this, args) as net.Socket;
     }
+    if (isNodeAcceptedUnnormalizedIpLiteral(host)) {
+      throw new EgressBlockedError({
+        destination: `${host}:${port}`,
+        resolvedIp: host,
+        classification: 'special-use',
+      });
+    }
 
     // Hostname: inject a pinning lookup that validates the RESOLVED IP and rejects before the
     // socket dials, defeating DNS rebinding (the answer we validate is the answer we connect to).
@@ -1102,6 +1136,13 @@ function evaluateHttpAgentRequest(
   const literalIp = normalizeFastPathIpLiteral(host);
   if (literalIp !== null) {
     return evaluateEgress({ host, port, resolvedIp: literalIp, policy });
+  }
+  if (isNodeAcceptedUnnormalizedIpLiteral(host)) {
+    return new EgressBlockedError({
+      destination: `${host}:${port}`,
+      resolvedIp: host,
+      classification: 'special-use',
+    });
   }
 
   const getName = (agent as unknown as { getName?: (opts: AgentRequestOptions) => string }).getName;

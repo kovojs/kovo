@@ -12,6 +12,7 @@ import {
   EgressBlockedError,
   classifyIp,
   evaluateEgress,
+  isNodeAcceptedUnnormalizedIpLiteral,
   normalizeFastPathIpLiteral,
   type EgressPolicy,
 } from './egress.js';
@@ -86,6 +87,17 @@ export class EgressGatingDispatcher extends Agent {
         return false;
       }
       return super.dispatch(options, handler);
+    }
+    if (isNodeAcceptedUnnormalizedIpLiteral(host)) {
+      rejectHandler(
+        handler,
+        new EgressBlockedError({
+          destination: `${host}:${port}`,
+          resolvedIp: host,
+          classification: 'special-use',
+        }),
+      );
+      return false;
     }
 
     // Hostname: resolve (with a short pin) and classify the resolved IP before dispatching.

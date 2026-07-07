@@ -1,6 +1,6 @@
 import http from 'node:http';
 import dns from 'node:dns';
-import type { AddressInfo } from 'node:net';
+import net, { type AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -12,6 +12,7 @@ import {
   evaluateEgress,
   frameworkEgressFetch,
   installNetConnectFloor,
+  isNodeAcceptedUnnormalizedIpLiteral,
   isNetConnectFloorInstalled,
   normalizeFastPathIpLiteral,
   normalizeIpLiteral,
@@ -103,6 +104,16 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
   it('classifyHost returns null for a real DNS name (needs resolution)', () => {
     expect(classifyHost('example.com')).toBeNull();
     expect(classifyHost('metadata.google.internal')).toBeNull();
+  });
+
+  it('recognizes Node-accepted scoped literals that Kovo deliberately cannot normalize yet', () => {
+    for (const host of ['fd00:ec2::254%eth0', '::ffff:169.254.169.254%eth0', 'fe80::1%lo0']) {
+      expect(net.isIP(host), host).toBe(6);
+      expect(normalizeIpLiteral(host), host).toBeNull();
+      expect(normalizeFastPathIpLiteral(host), host).toBeNull();
+      expect(classifyHost(host), host).toBeNull();
+      expect(isNodeAcceptedUnnormalizedIpLiteral(host), host).toBe(true);
+    }
   });
 
   it('fails closed: an unparseable host classifies as special-use, not public', () => {
@@ -423,6 +434,24 @@ describe('evaluateEgress policy decision', () => {
     expect(inside).toBeNull();
   });
 
+  it('fails closed for Node-accepted scoped literals before allowInternal can admit them', () => {
+    const cases = [
+      { host: 'fd00:ec2::254%eth0', port: 80 },
+      { host: '::ffff:169.254.169.254%eth0', port: 80 },
+      { host: 'fe80::1%lo0', port: 8080 },
+    ];
+
+    for (const { host, port } of cases) {
+      const policy = resolveEgressPolicy(
+        { allowInternal: [`[${host}]:${port}`, `${host}:${port}`] },
+        () => {},
+      );
+      const blocked = evaluateEgress({ host, port, resolvedIp: host, policy });
+      expect(blocked, host).toBeInstanceOf(EgressBlockedError);
+      expect(blocked?.classification, host).toBe('special-use');
+    }
+  });
+
   it('metadata frame survives an await boundary (ALS, not a stack frame)', async () => {
     const policy = emptyPolicy();
     const result = await runWithMetadataAccess(async () => {
@@ -611,6 +640,33 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       }),
     ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME, classification: 'loopback' });
     expect(lookupCalled).toBe(true);
+  });
+
+  it('DENIES scoped IPv6 literals before DNS lookup or allowInternal handling', async () => {
+    uninstall = installNetConnectFloor(
+      resolveEgressPolicy({ allowInternal: ['[fd00:ec2::254%eth0]:80'] }, () => {}),
+    );
+    let lookupCalled = false;
+    const lookup: http.RequestOptions['lookup'] = (_hostname, opts, cb) => {
+      lookupCalled = true;
+      const callback = (typeof opts === 'function' ? opts : cb) as (
+        err: Error | null,
+        address: string,
+        family: number,
+      ) => void;
+      callback(null, '8.8.8.8', 4);
+    };
+
+    await expect(
+      new Promise((resolve, reject) => {
+        const req = http.get({ host: 'fd00:ec2::254%eth0', port: 80, lookup }, (res) => {
+          res.resume();
+          res.on('end', resolve);
+        });
+        req.on('error', reject);
+      }),
+    ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME, classification: 'special-use' });
+    expect(lookupCalled).toBe(false);
   });
 
   it('ALLOWS http.get to that same loopback host:port when in allowInternal', async () => {
