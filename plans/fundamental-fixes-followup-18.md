@@ -1,141 +1,102 @@
-# Fundamental Fixes Followup 18 — the FIRST line: prove request-authenticity, function-level authz, and wire integrity above the DB floor
+# Fundamental Fixes Followup 18 — the first line is sound; make the authz AUDIT the same object as the ENFORCEMENT
 
 Created 2026-07-07. Self-standing. Source of truth for behavior is `SPEC.md`. Continues the C10–C16 line
-(`fundamental-fixes-followup-{6..17}.md`) and advances `plans/threat-matrix-plan.md` (the OPEN **M2** cell + the
-under-swept **Auth** and **Wire × Au/I** cells). This is a FRESH-SURFACE, threat-model-first plan: the round-22 dogfood
-(6 approved axes A1–A6) adversarially VERIFIES it, and any confirmed hole becomes a concrete work item under the matching
-DEC below.
+(`fundamental-fixes-followup-{6..17}.md`). **Findings-driven**: responds to the Round-22 fresh-surface dogfood of the
+first line (`plans/claude-bugz-43.md` B1, `plans/claude-papercuts-41.md`). Advances `plans/threat-matrix-plan.md` (the
+OPEN **M2** cell + the Auth / Wire × Au/I cells). Line numbers cite `main` (`58df770b1`).
 
-## 1. Why this plan exists — attack the first line, not the last line
+## 1. What round-22 actually found
 
-Rounds 6–21 hardened the DB FLOOR (engine RLS, secret boxing, sink inventory, the regex/egress classifiers) to
-convergence — the framework's LAST line of defense. But the arc's recurring wound (the Better Auth adapter, 3×:
-`bugz-24` A1 / round-15 B4 / round-16 B3) and the matrix's one named-OPEN cell (**M2, Auth × C/Au**) point at the FIRST
-lines, which the arc never swept as a primary target: **is the request authentic (CSRF), is the identity sound
-(session), can a principal invoke what it must not (function-level authz), and does untrusted wire input corrupt server
-state BEFORE it reaches the hardened floor?** RLS scopes ROWS; it does not authenticate the request, gate which
-OPERATION you may invoke, or stop prototype pollution. Those are separate controls, and they live in `app-dispatch.ts` /
-`csrf.ts` / `access.ts` / `keyring.ts` / `app-mutation-request.ts` / `better-auth/internal/*` — real code, never
-adversarially proven.
+Round-22 adversarially swept the request→identity→authorization→mutation pipeline ABOVE the converged DB floor (6 axes
+A1–A6). Result: **five of six axes are clean or sound** — a strong outcome for a never-swept surface — and the ONE gap
+is a single, precise defect.
 
-## 2. Meta-invariant (extends the fail-closed line)
+**Verified sound (→ record as matrix controls, §3.2):** A1 CSRF (default-CSRF, token-based, not SameSite-reliant),
+A2 session (entropy/rotation/invalidation/cookie posture), A4 wire integrity (positive schema allowlist + null-proto
+decode; no mass-assignment above the floor), A5 auth flows + **M2** (no request-reachable unboxed cross-user credential —
+the 3×-recurring wound is clean), A6 task/capability (signature binds canonical object/method/scope + expiry).
 
-- **C17 — Every state-changing operation requires, by DEFAULT and FAIL-CLOSED, BOTH an authenticity proof (the request
-  was intentionally issued by the authenticated principal) AND an explicit access decision (this principal may invoke
-  this operation). An operation with no declared authenticity posture or no declared access decision is DENIED, not
-  run.** This is the DB floor's default-deny lifted to the first line: just as an unclassified table is default-deny at
-  the engine, an un-annotated mutation must be default-deny at dispatch — RLS row-scoping is NOT a substitute for
-  invoke-time authorization (a delete/aggregate/admin/side-effecting op may have no row to scope), and SameSite is NOT a
-  substitute for an authenticity proof (it is browser-dependent and Lax-permissive for top-level navigation).
+**The one gap (B1):** invoke-time authorization's AUDIT is decoupled from its ENFORCEMENT. The `access` decision drives
+`kovo explain`, the KV436 build gate, and the `guarded` posture; the SEPARATE `guard` field enforces at runtime. A
+`GuardAccessStep`'s executable `guard` is accepted-but-IGNORED (`access.ts:3-7`), and runtime never reads
+`definition.access` (self-verified). So an op declared `access: guardChain([{ guard: requireAdmin }])` with the top-level
+`guard:` omitted builds green, reports `guarded: true` in `kovo explain`, and runs NO guard — `kovo explain`
+misrepresents an unguarded side-effecting op (charge/email/provision, which RLS cannot row-scope) as guarded.
 
-## 3. Decisions / work items (each = AUDIT the current control → ESTABLISH/PROVE it → fix any gap the round-22 dogfood confirms)
+## 2. Meta-invariant (refines the C17 the finding disproved)
 
-### DEC-A — Request authenticity / CSRF is default-on and not SameSite-reliant (axis A1; Wire × Au)
+- **C17 — The AUDITED security decision must BE the ENFORCED one; the review artifact (`kovo explain`) must never diverge
+  from what runs.** The arc's C9 ("decide on the entity, not a proxy") applied to authorization: an `access` audit field
+  that is a PROXY for enforcement — decoupled from the `guard` that actually runs — lets the audit report a control the
+  runtime does not apply. A security posture derived from a field the enforcement path never reads is a lie by
+  construction. Corollary: invoke-time authorization is fail-closed only if the thing you declare (and that `kovo
+explain` shows) is the thing that executes.
 
-- [ ] **A1 — AUDIT the CSRF control (`app-dispatch.ts:105/174-199`, `csrf.ts validateCsrfToken`) and PROVE: (i) every
-      unsafe/state-changing verb is CSRF-checked by DEFAULT (`endpoint()` default-CSRF is confirmed at
-      `app-dispatch.ts:179`; verify `mutation` is too, and that the "no-CSRF read path" at `:59` is provably
-      side-effect-free); (ii) the check is a real token bound to the session, not SameSite-reliance alone; (iii) the
-      `csrf: false` / `exempt` escape (`app-guards.ts:170-202`) is audited + justified + surfaced in `kovo explain`;
-      (iv) a defense-in-depth Origin/Sec-Fetch check backstops the token. A cross-origin form-POST / GET-mutation /
-      method-override must be REFUSED.** See **O1**.
-  - Acceptance: a cross-origin state-changing request without a valid token is refused; `csrf:false` requires
-    justification and is `kovo explain`-visible; a test forges the cross-site request and asserts refusal.
+## 3. Decisions / work items
 
-### DEC-B — Session & cookie integrity (axis A2; Auth × Au)
+### 3.1 DEC-A — Unify the authz audit with runtime enforcement (fixes B1; the ONE real work item)
 
-- [ ] **B1 — AUDIT session/cookie posture (`keyring.ts`, `cookies.ts`, `auth-principal.ts`) and PROVE: token entropy is
-      CSPRNG; the cookie carries `__Host-`/`HttpOnly`/`Secure`/`SameSite`; the session identifier ROTATES on login /
-      privilege change (fixation) and is INVALIDATED on logout + password change; a tampered/forged/replayed cookie
-      fails closed. Name which of these the framework OWNS vs delegates to Better Auth (a TCB-surface, `security/TCB.md`).**
-      See **O4**.
-  - Acceptance: a fixation attempt (pre-auth token still valid post-auth) fails; logout/password-change kills the
-    session; a tampered signed cookie is rejected; the owned-vs-delegated split is documented.
+- [ ] **A1 — Bind the audited `access` decision to runtime enforcement so `kovo explain` cannot report an op guarded
+      while it runs no guard.** The framework ALREADY does this on the sibling endpoint axis — `access:
+  verified-machine-auth` is downgraded to `missing`/KV436 when no executable verifier exists
+      (`access-graph.ts:60-67`); apply the same binding to the mutation/query guard-chain axis. Resolve via **O1**
+      (which of three bindings). Confirm the fix on a scaffolded op: an `access` guard-chain with no runtime guard must
+      either ENFORCE its steps or FAIL `kovo check`, and `kovo explain` must not show it guarded.
+  - Acceptance: (i) a mutation with `access: guardChain([{guard: requireAdmin}])` and no top-level `guard:` is caught —
+    it enforces `requireAdmin` at runtime, OR `kovo check` fails (KV436-style), OR `kovo explain` reports it UNGUARDED;
+    (ii) `publicAccess` still explicitly names its justification and is `kovo explain`-visible; (iii) a genuinely-guarded
+    op (runtime `guard` present) is unaffected; (iv) a test pins the `access`↔`guard` binding so a future refactor can't
+    re-decouple them (C13 superset-corpus style). SPEC §6.5/§9.1 states C17 (audit == enforce).
 
-### DEC-C — Function-level authorization is MANDATORY and fail-closed (axis A3; Auth × C/I) — likely the biggest DEC
+### 3.2 DEC-B — Record the verified first-line controls into the threat matrix (advance M2 + Auth/Wire cells)
 
-- [ ] **C1 — AUDIT the guard/access model (`access.ts`, `guards.ts`, `app-dispatch.ts`) and PROVE invoke-time authz is
-      MANDATORY: a mutation/query/endpoint with NO declared access decision (`guard`/`auth`/`verify`/`publicAccess`) is
-      DENIED at dispatch, not run (C17). Confirm the access decision runs BEFORE the handler and that RLS is not treated
-      as a substitute for it. Attack BFLA: a non-admin invoking an admin/system-only op; a principal invoking another
-      module's op; an operation with no row to scope (bulk delete, aggregate, side-effecting action).** See **O2**.
-  - Acceptance: an un-annotated mutation fails closed (build-time gate or runtime deny); an admin-only op invoked by a
-    non-admin is refused independent of RLS; a `publicAccess` op names its justification and is `kovo explain`-visible.
+- [ ] **B1 — For each round-22-sound axis, write the named control + its test into `docs/security-threat-matrix.md` and
+      flip the cell green:** A1→Wire×Au (CSRF token, not SameSite-reliant), A2→Auth×Au (session lifecycle + cookie
+      posture), A4→Wire×I (positive schema allowlist + null-proto decode), A6→Runtime×Au (capability signature binding),
+      and **A5→Auth×C/Au (M2): CLOSE the open cell** with the reachability-based non-egress proof — pending DEC-C's flow
+      checks below. This is the round's threat-matrix payoff: a clean first-line sweep turns four cells green and closes
+      the last named-open cell.
 
-### DEC-D — Wire input integrity: no prototype pollution, no mass-assignment above the floor (axis A4; Wire × I)
+### 3.3 DEC-C — Confirm the auth-FLOW controls before flipping M2 green (completeness, not a found bug)
 
-- [ ] **D1 — AUDIT the mutation/query input decode (`app-mutation-request.ts`, `core` decode + `json-clone.ts:173-184`)
-      and PROVE: untrusted wire JSON cannot pollute a prototype (`__proto__`/`constructor`/`prototype` keys are dropped
-      or the object is null-proto), cannot mass-assign a field the schema/form did not declare (the wire layer is a
-      positive allowlist, distinct from and ABOVE the DB governed-column floor), and the render-plan/build token cannot
-      be forged or replayed to smuggle a handler input. Type-confusion (array-for-object, etc.) fails closed.** See **O3**.
-  - Acceptance: a payload with `__proto__`/`constructor.prototype` does not pollute; an extra undeclared field is
-    rejected/ignored (not silently assigned); a forged/replayed render-plan token is refused.
+- [ ] **C1 — M2 closes only when the non-egress proof is paired with the flow controls A5 did not disprove but did not
+      exhaustively execute:** password-reset / email-verification tokens are CSPRNG + single-use + expiring and DO NOT
+      enable user-enumeration (uniform response + timing, per M4); 2FA / backup codes are replay-resistant;
+      account-linking cannot bind an attacker identity. Where a flow is delegated to Better Auth, record it as a
+      TCB-surface dependency assumption (`security/TCB.md`, M6) with a review trigger rather than claiming a Kovo
+      guarantee. (No round-22 finding here; this is the evidence M2 needs to be signed off green, not open work against a
+      bug.)
 
-### DEC-E — Auth protocol flows + the M2 auth-adapter TCB (axis A5; Auth × C/Au — the OPEN matrix cell)
+## 4. Open design decision (flagged for review — sharpened by the finding)
 
-- [ ] **E1 — AUDIT the Better Auth surface (`better-auth/internal/*`, `mount.ts`, `credential.ts`, `non-egress-proof.ts`)
-      and PROVE: (i) the M2 non-egress proof is GREEN — no request-reachable path reads an unboxed cross-user credential
-      (the 3×-recurring wound; followup-13 DEC-C mechanism); (ii) password-reset / email-verification tokens are CSPRNG,
-      single-use, expiring, and DO NOT enable user-enumeration (uniform response + timing, per M4); (iii) 2FA / backup
-      codes cannot be replayed; (iv) account-linking cannot bind an attacker identity. Enroll the adapter as a
-      first-class TCB-manifest module and close M2.**
-  - Acceptance: M2 flips to green in the threat matrix with a reachability-based non-egress proof + the flow controls
-    tested; user-enumeration and replay attempts fail.
-
-### DEC-F — Task/capability principal integrity (axis A6; Runtime × Au)
-
-- [ ] **F1 — AUDIT the durable-task/cron principal path + the capability-URL signing (`capability-route.ts createSignUrl`
-      / `deriveDownloadKey`) and PROVE: a task runs under its intended principal with no cross-tenant bleed; a task
-      payload cannot be forged/injected to run as another principal; a signed capability URL cannot be forged, scope-
-      confused, or replayed past expiry (the signature binds object/method/scope, `capability-route.ts:66-105`).**
-  - Acceptance: a forged/scope-swapped/expired capability URL is refused; a task's principal is bound and cross-tenant
-    isolation holds.
-
-## 4. Open design decisions (flagged for review — NOT yet decided)
-
-- [ ] **O1 — CSRF: what is the DEFAULT authenticity proof, and is `csrf: false` ever acceptable?** Forks: **(a)** a
-      session-bound CSRF token required by default for every state-changing op, `csrf:false` only via an audited +
-      justified + `kovo explain`-visible escape (matches the existing escape-hatch philosophy); **(b)** token PLUS a
-      mandatory Origin/`Sec-Fetch-Site` check as defense-in-depth so a token leak alone isn't sufficient and SameSite
-      is never load-bearing; **(c)** allow SameSite-reliance for same-site deployments. Lean: (b) — SameSite is
-      browser-dependent + Lax-permissive; a token + origin check is the fail-closed default, and `csrf:false` stays an
-      audited escape. **Decision:** is the default token-only, or token+origin, and is `csrf:false` retained?
-- [ ] **O2 — Function-level authz: MANDATORY-deny for un-annotated ops, or opt-in guards?** Forks: **(a)** an operation
-      with no access decision is a BUILD-TIME error / runtime DENY (C17, forces every op to declare access — strongest,
-      but a hard break for any existing un-guarded op); **(b)** runtime deny only; **(c)** default-run and rely on RLS
-      (status quo if that is what it is — fails for non-row-scoped ops). Lean: (a) build-time mandatory declaration, per
-      the technical-preview stronger-default bias and the DB floor's default-deny analogy. **Decision:** mandatory
-      declared access at build time, or runtime-only, or keep opt-in?
-- [ ] **O3 — Wire input: reject dangerous keys, null-proto parse, or strict schema-allowlist?** Forks: **(a)** parse to
-      null-prototype objects + strict schema allowlist (drop any key not in the declared input schema) — closes both
-      prototype pollution AND mass-assignment in one move; **(b)** reject payloads containing `__proto__`/`constructor`/
-      `prototype` (denylist — C11-fragile); **(c)** rely on the DB governed-column floor alone (insufficient for
-      non-DB mutation state). Lean: (a) — a positive schema allowlist at the wire layer is the C11-safe, class-closing
-      fix. **Decision:** strict-allowlist-and-null-proto, or a denylist?
-- [ ] **O4 — Session lifecycle: which invalidation guarantees does KOVO own vs delegate to Better Auth?** Rotation-on-
-      login, kill-on-password-change, logout-invalidation. Forks: **(a)** Kovo OWNS and tests these as framework
-      guarantees (strongest, but wraps/constrains Better Auth); **(b)** delegate to Better Auth and record them as
-      TCB-surface dependency assumptions (`security/TCB.md`, M6) with a review trigger. **Decision:** own-and-test, or
-      delegate-and-document?
+- [ ] **O1 — How to bind the authz audit to enforcement (the DEC-A fix)?** Forks: **(a)** ENFORCE the audited decision —
+      an `access` `guardChain` whose steps carry executable guards runs them at runtime (the declared decision IS the
+      enforcement; strongest, single source of truth, but changes `access` from audit-only to executable and must
+      compose with the existing `guard`/`auth`/`verify` fields without double-running); **(b)** BUILD-TIME DOWNGRADE —
+      an `access` decision that declares an executable guard not wired to a runtime `guard` is downgraded to
+      `missing`→KV436 fails (mirror `access-graph.ts:60-67` exactly; smallest change, keeps `access` audit-only, forces
+      the developer to also set `guard:`); **(c)** POSTURE-ONLY — `guarded` derives only from an enforcing field so
+      `kovo explain` never over-reports, but an un-enforced op still SHIPS (fixes the audit lie, NOT the enforcement
+      gap). Lean: **(b)** as the minimum (it reuses the proven downgrade machinery and fails closed at build), with
+      **(a)** as the better end-state if `access` becomes the one declared+enforced authz object (C17 in full). Reject
+      (c) alone — it fixes the honesty but leaves the op unguarded. **Decision:** ship (b) now, or commit to (a) as the
+      unified model?
 
 ## 5. Proving
 
-- [ ] DEC-A: cross-origin state-change refused; `csrf:false` audited + explain-visible.
-- [ ] DEC-B: fixation + logout/password-change invalidation + tampered-cookie rejection tested.
-- [ ] DEC-C: un-annotated op fails closed; admin-only op refused for non-admin independent of RLS.
-- [ ] DEC-D: proto-pollution + mass-assignment + token-replay refused.
-- [ ] DEC-E: M2 non-egress proof green; reset/verify enumeration + 2FA replay fail.
-- [ ] DEC-F: forged/expired capability URL + cross-tenant task refused.
+- [ ] DEC-A: the `access`-guard-chain-without-runtime-guard op is enforced-or-rejected; `kovo explain` never shows an
+      unenforced op guarded; genuinely-guarded ops unaffected; binding pinned by a regression test.
+- [ ] DEC-B: `docs/security-threat-matrix.md` — A1/A2/A4/A6 cells green with named control+test; M2 flipped per DEC-C.
+- [ ] DEC-C: reset/verify enumeration + single-use + expiry, 2FA replay, account-linking tested (or delegated + recorded
+      as TCB dependency).
 - [ ] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
-- [ ] `plans/threat-matrix-plan.md`: M2 → green; the Auth and Wire×Au/I cells gain named controls + tests.
 
 ## 6. Meta
 
-The regex/egress/data-plane surfaces are converged (round 21: zero fail-opens). Followup-18 pivots to the FIRST line —
-the request→identity→authorization→mutation pipeline above the floor — because that is where the matrix is still open
-(M2) and where the arc's recurring auth wound lives. The unifying invariant C17 (fail-closed authenticity + authorization
-by default) is the DB floor's default-deny applied one layer up. Round-22 (approved: A1–A6) is the adversarial
-verification pass; a clean round here closes the last named-open matrix cell and clears the path to the external audit
-(threat-matrix A1).
+Round-22 is the strongest fresh-surface result of the arc: attacking the first line (never swept) turned up no CSRF,
+session, wire-integrity, auth-flow, or capability fail-open, and the recurring M2 wound is clean — the arc's data-plane
+hardening did not leave the layer above it open. The single defect is not a hole in a control but a decoupling between
+the audit and the enforcement of a control that mostly works — C17: audit the object you enforce. Closing DEC-A + writing
+the verified controls into the matrix (DEC-B) closes the last named-open cell (M2) and clears the path to the external
+audit (`plans/threat-matrix-plan.md` A1).
