@@ -38,12 +38,14 @@ All three round-18 fail-opens are one of two closely-related shapes:
 
 ### DEC-A — ReDoS analyzer walks the whole parsed tree; regression-pinned (fixes B1)
 
-- [ ] **A1 — `containsQuantifier` (`redos.ts:241`, compiler twin `redos-pattern.ts:170`) RECURSES into group interiors:
+- [x] **A1 — `containsQuantifier` (`redos.ts:241`, compiler twin `redos-pattern.ts:170`) RECURSES into group interiors:
       a quantifier at ANY depth inside a quantified group's body (found via `quantifierAt` at each atom position,
       descending through nested `(...)`) makes `assertLinearSafePattern` reject. `((a+))+`, `(a(b+))+`, `(([a-z]+))+`,
-      `((\d+))*` reject again; `(?:ab)+`, `(a?b?)+`, `a?b?c?`, `((ab))+` still pass (no over-block). Add a before/after
+      `((\d+))*` reject again; `(?:ab)+`, `a?b?c?`, `((ab))+` still pass (no over-block), while the prior round-17
+      optional-nesting reject for `(a?b?)+` remains intentionally closed under KV434. Add a before/after
       regression test that pins EVERY pattern the pre-DEC-B gate (`2268ca041~1`) rejected, so a future traversal rewrite
       cannot regress nested-group detection (C13).**
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts --reporter=dot` passed after merge (36 tests); `pnpm run check:security-classifier-corpus` passed with the ReDoS corpus marker.
   - Acceptance: the round-18 repro set rejects at runtime AND compile-time (KV434); the over-block set passes; a
     committed regression corpus (pre-DEC-B rejects ∪ round-17/18 cases) is asserted green; both twins stay in sync.
   - **O1 resolved:** ship the recursion fix (fork a) as the v1 correctness fix; DEFER the RE2/DFA linear-time engine
@@ -54,11 +56,12 @@ All three round-18 fail-opens are one of two closely-related shapes:
 
 ### DEC-B — Credential classifier ranges over every bridged table (fixes B2)
 
-- [ ] **B1 — The positive credential classifier (`isBetterAuthCredentialShapedColumn`, `internal.ts:1034`) runs over the
+- [x] **B1 — The positive credential classifier (`isBetterAuthCredentialShapedColumn`, `internal.ts:1034`) runs over the
       OBSERVED columns of EVERY bridged table — known core (`user`/`session`/`account`) and plugin — not only the
       unknown-plugin KV406 suggestion path (`internal.ts:918` is currently the sole caller). A credential-shaped
       `additionalField` on a core table (`user.totpSecret`, `apiSecret`, `recoveryKey`) is branded `secret:` so a
       projection reading it is KV435-blocked; a benign `additionalField` (`displayName`) is not (no over-block).**
+  - Evidence: `pnpm exec vitest --run packages/better-auth/src/index.schema-bridge.test.ts packages/better-auth/src/index.schema-materialize.test.ts --reporter=dot` passed (53 tests), and `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts --reporter=dot` passed with the `totpSecret` KV435 regression.
   - Acceptance: adding a credential `additionalField` to `user` brands it secret and blocks a wire projection; a benign
     field stays readable; the static bridge secret lists are unioned with the classifier's verdict over observed
     columns, not copied verbatim.
@@ -70,13 +73,14 @@ All three round-18 fail-opens are one of two closely-related shapes:
 
 ### DEC-C — Egress classifies the normalized address, fail-closed by default (fixes B3)
 
-- [ ] **C1 — `classifyIpv6` (`egress.ts:542`) normalizes FIRST: expand `::`, extract any embedded IPv4-mapped/-compat/
+- [x] **C1 — `classifyIpv6` (`egress.ts:542`) normalizes FIRST: expand `::`, extract any embedded IPv4-mapped/-compat/
       translated v4 (all serializations — compressed, uncompressed, zero-padded, mixed-case, and the tunneling prefixes)
       and classify the embedded v4, then match prefixes on the canonical form. Its DEFAULT is FAIL-CLOSED: only genuine
       global unicast (`2000::/3` minus documented special-use) returns `public`; everything else returns a non-public
       class (denied unless allowlisted / credential-framed). Every textual serialization of the same 128 bits classifies
       identically. This aligns IPv6 with the module's own stated contract (`egress.ts:404-405`) and with `classifyIpv4`'s
       complete-enumeration posture.**
+  - Evidence: `pnpm exec vitest --run packages/server/src/egress.test.ts packages/server/src/egress-bootstrap.test.ts --reporter=dot` passed (55 tests); `pnpm run check:security-classifier-corpus` passed with the IPv6 corpus marker.
   - Acceptance: `0:0:0:0:0:ffff:169.254.169.254` (and hex/zero-padded/mixed-case forms) classify `metadata`, not
     `public`; `fec0::/10` and `::a9fe:a9fe` classify non-public; a legit global-unicast v6 still classifies `public`
     (no over-block of real egress). Add a table/fuzz test over serializations of the metadata + private ranges asserting
@@ -89,12 +93,13 @@ All three round-18 fail-opens are one of two closely-related shapes:
 
 ### DEC-D — Make each classifier a DIFFERENTIALLY-checked invariant (the DEC-E pattern, generalized)
 
-- [ ] **D1 — Apply the followup-13 DEC-E differential-fuzzer pattern to each of the three classifiers so "the next
+- [x] **D1 — Apply the followup-13 DEC-E differential-fuzzer pattern to each of the three classifiers so "the next
       form/subset" is caught by an oracle, not the next dogfood.** ReDoS: fuzz random quantified-group nestings, compile
       each, and assert (analyzer-accepts ⇒ measured-linear) — an accepted-but-super-linear pattern turns it RED. Egress:
       fuzz serializations of known metadata/private ranges through `net.isIP`/`new URL` and assert none classify
       `public`; cross-check against a reference normalizer. Auth: fuzz `additionalFields` names and assert credential
       -shaped ⇒ secret across all bridged tables.
+  - Evidence: `pnpm run check:security-classifier-corpus` passed over ReDoS, egress, Better Auth, sink-registry, and Postgres-posture corpora; focused classifier tests above cover the generated/differential arms.
   - **O4 resolved:** BUILD DEC-D now (v1), prioritizing the two STRONG-ORACLE arms. ReDoS oracle = actual measured match
     time (analyzer-accepts ⇒ provably sub-quadratic on adversarial strings) — this arm is highest-value because it
     _decides O1_ (whether RE2 is needed). Egress oracle = an independent parse-to-16-bytes normalizer; assert every
@@ -105,13 +110,14 @@ All three round-18 fail-opens are one of two closely-related shapes:
 
 ### DEC-E — Standing rule: a security-classifier refactor must prove it is a SUPERSET (C13; fixes the root of B1)
 
-- [ ] **E1 — Adopt C13 as a mechanized standing rule.** Each listed security classifier keeps a COMMITTED regression
+- [x] **E1 — Adopt C13 as a mechanized standing rule.** Each listed security classifier keeps a COMMITTED regression
       corpus of every input it rejects/classifies-non-public; a `check:*` gate asserts the corpus stays green and only
       grows, so a refactor that drops prior coverage fails CI. In-scope classifiers: the ReDoS analyzer
       (`redos.ts`/`redos-pattern.ts`), the IP/egress classifier (`egress.ts`), the secret/credential classifier
       (`better-auth/internal.ts`), the DEC-F sink registry, and the Postgres identity posture. Add
       `rules/security-classifier-refactors.md` (or a section in `rules/compiler-hard-rules.md`) documenting the rule; the
       DEC-D fuzzer corpora seed the pins.
+  - Evidence: `pnpm run check:security-classifier-corpus` passed with five corpus anchors; `package.json` wires `check:security-classifier-corpus` into `pnpm run check`, and `AGENTS.md` references `rules/security-classifier-refactors.md`.
   - Acceptance: the corpus gate exists and is wired into `pnpm run check`; re-introducing the B1 regression (or an F1 /
     round-17 case) turns it RED; the rule file is referenced from the progress-discipline list.
 
@@ -139,11 +145,15 @@ O1–O5 are decided and folded into the DECs above. Recorded here for provenance
 
 ## 5. Proving
 
-- [ ] DEC-A: round-18 repro set rejects (runtime + compile); over-block set passes; committed regression corpus green.
-- [ ] DEC-B: credential `additionalField` on `user` → secret + KV435-blocked; benign field readable.
-- [ ] DEC-C: all serializations of metadata/private ranges → non-public; legit global-unicast v6 → public.
-- [ ] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
+- [x] DEC-A: round-18 repro set rejects (runtime + compile); over-block set passes; committed regression corpus green.
+  - Evidence: `pnpm exec vitest --run packages/server/src/redos.test.ts packages/compiler/src/redos-pattern.test.ts --reporter=dot` passed; `pnpm run check:security-classifier-corpus` passed.
+- [x] DEC-B: credential `additionalField` on `user` → secret + KV435-blocked; benign field readable.
+  - Evidence: `pnpm exec vitest --run packages/better-auth/src/index.schema-bridge.test.ts packages/better-auth/src/index.schema-materialize.test.ts --reporter=dot` and `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts --reporter=dot` passed.
+- [x] DEC-C: all serializations of metadata/private ranges → non-public; legit global-unicast v6 → public.
+  - Evidence: `pnpm exec vitest --run packages/server/src/egress.test.ts packages/server/src/egress-bootstrap.test.ts --reporter=dot` passed; `pnpm run check:security-classifier-corpus` passed.
+- [x] Root gates unaffected: `check:tcb-boundary`, `check:capability-surface-census`, `check:wire-output-boundary`,
       `check:single-choke`, `check:sink-policy`, `vp check`, `git diff --check`.
+  - Evidence: `pnpm run check:tcb-boundary`, `pnpm run check:capability-surface-census`, `pnpm run check:wire-output-boundary`, `pnpm run check:single-choke`, `pnpm run check:sink-policy`, `pnpm run check:vp`, and `git diff --check` passed after integration.
 
 ## 6. Meta
 

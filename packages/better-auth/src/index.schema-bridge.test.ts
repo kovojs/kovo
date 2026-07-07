@@ -26,6 +26,8 @@ import {
 } from './internal.js';
 import { authTable } from './test-fakes.js';
 
+// @kovo-security-classifier-corpus better-auth-credentials
+
 describe('schema bridge', () => {
   it('exposes schema bridge annotations and keeps declared touches domain-aligned', () => {
     expect(betterAuthSchemaBridge).toEqual({
@@ -1110,5 +1112,79 @@ describe('plugin credential secret classification', () => {
       key: 'userId',
       secret: ['key'],
     });
+  });
+
+  it('unions observed credential-shaped fields into bridged table annotations', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        "export const user = pgTable('user', {",
+        "  id: text('id').primaryKey(),",
+        "  displayName: text('display_name'),",
+        "  totpSecret: text('totp_secret'),",
+        "  apiSecret: text('api_secret'),",
+        "  recoveryKey: text('recovery_key'),",
+        '});',
+        "export const account = pgTable('account', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        "  displayName: text('display_name'),",
+        "  apiSecret: text('api_secret'),",
+        '});',
+      ].join('\n'),
+      {
+        account: authTable(['userId', 'displayName', 'apiSecret']),
+        session: authTable(['userId']),
+        user: authTable(['displayName', 'totpSecret', 'apiSecret', 'recoveryKey']),
+        verification: authTable(),
+      },
+    );
+
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['account', 'user']);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  displayName: text('display_name'),\n" +
+        "  totpSecret: text('totp_secret'),\n" +
+        "  apiSecret: text('api_secret'),\n" +
+        "  recoveryKey: text('recovery_key'),\n" +
+        "}, kovo({ domain: 'user', key: 'id', secret: ['apiSecret', 'recoveryKey', 'totpSecret'] }));",
+    );
+    expect(result.source).toContain(
+      "export const account = pgTable('account', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "  displayName: text('display_name'),\n" +
+        "  apiSecret: text('api_secret'),\n" +
+        "}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken', 'apiSecret'] }));",
+    );
+  });
+
+  it('preserves explicit bridge annotations as manual classifier overrides', () => {
+    const source = [
+      "import { kovo } from '@kovojs/drizzle';",
+      "import { pgTable, text } from 'drizzle-orm/pg-core';",
+      "export const user = pgTable('user', {",
+      "  id: text('id').primaryKey(),",
+      "  displayName: text('display_name'),",
+      "  totpSecret: text('totp_secret'),",
+      "}, kovo({ domain: 'user', key: 'id' }));",
+    ].join('\n');
+    const result = annotateBetterAuthSchemaSource(source, {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(['displayName', 'totpSecret']),
+      verification: authTable(),
+    });
+
+    expect(result.annotatedTables).toEqual([]);
+    expect(result.alreadyAnnotatedTables).toEqual([]);
+    expect(result.existingExtraConfigTables).toEqual(['user']);
+    expect(result.source).toBe(source);
   });
 });

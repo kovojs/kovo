@@ -517,6 +517,7 @@ export function annotateBetterAuthSchemaSource(
           table,
           annotationCallee,
           schemaBridge,
+          betterAuthTableFieldNames(tables[table]),
         )
       ) {
         alreadyAnnotatedTables.push(call.tableName);
@@ -527,7 +528,13 @@ export function annotateBetterAuthSchemaSource(
     }
 
     replacements.push(
-      betterAuthSchemaTableAnnotationReplacement(call, table, annotationCallee, schemaBridge),
+      betterAuthSchemaTableAnnotationReplacement(
+        call,
+        table,
+        annotationCallee,
+        schemaBridge,
+        betterAuthTableFieldNames(tables[table]),
+      ),
     );
     annotatedTables.push(call.tableName);
   }
@@ -659,7 +666,12 @@ export function generateBetterAuthSchemaSource(
     generatedTables.push({ exportName, physicalTable, table });
     declarations.push(
       renderBetterAuthGeneratedSchemaDeclaration({
-        annotationCall: betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge),
+        annotationCall: betterAuthSchemaAnnotationCall(
+          table,
+          annotationCallee,
+          schemaBridge,
+          fieldNames,
+        ),
         columns: columns.columns,
         dialect,
         exportName,
@@ -965,12 +977,31 @@ function formatBetterAuthSchemaDomainAnnotation(
   return `{ domain: '${annotation.domain}'${key}${secret} }`;
 }
 
+function betterAuthObservedSchemaAnnotation(
+  annotation: BetterAuthSchemaBridgeDomainAnnotation,
+  fields: ReadonlySet<string> | null,
+): BetterAuthSchemaBridgeDomainAnnotation {
+  if (fields === null) return annotation;
+
+  const staticSecret = annotation.secret ?? [];
+  const classifiedSecret = betterAuthCredentialSecretFields(fields);
+  const secret = [...staticSecret];
+  const seen = new Set(secret);
+
+  for (const column of classifiedSecret) {
+    if (seen.has(column)) continue;
+    secret.push(column);
+    seen.add(column);
+  }
+
+  return secret.length === 0 ? annotation : { ...annotation, secret };
+}
+
 function withBetterAuthSecretFields(
   fields: ReadonlySet<string>,
   annotation: BetterAuthSchemaBridgeDomainAnnotation,
 ): BetterAuthSchemaBridgeDomainAnnotation {
-  const secret = betterAuthCredentialSecretFields(fields);
-  return secret.length === 0 ? annotation : { ...annotation, secret };
+  return betterAuthObservedSchemaAnnotation(annotation, fields);
 }
 
 // SPEC.md §10.1 C10: security sets are allowlists with fail-closed defaults, never a hand-picked
@@ -1836,19 +1867,20 @@ function betterAuthSchemaAnnotationCall(
   table: string,
   annotationCallee: string,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+  fields: ReadonlySet<string> | null = null,
 ): string {
-  const annotation = betterAuthSchemaBridgeAnnotation(table, schemaBridge);
+  let annotation = betterAuthSchemaBridgeAnnotation(table, schemaBridge);
 
   if (annotation === undefined) {
     throw new Error(`${table} is outside the Better Auth schema bridge`);
   }
 
   if ('domain' in annotation) {
+    annotation = betterAuthObservedSchemaAnnotation(annotation, fields);
     const key = annotation.key === undefined ? '' : `, key: ${quoteTsString(annotation.key)}`;
-    // bugz-3 M6 (SPEC.md §10.1): emit the credential/token/bearer columns as a `secret:` list so
-    // the Drizzle confidentiality gate (KV435) brands any projection that reads them. The list is
-    // over-approximated to the bridge's fixed column set; columns absent from a given app's table
-    // are simply ignored by the Drizzle analyzer (it matches secret names against real columns).
+    // bugz-3 M6 / DEC-B (SPEC.md §10.1): emit static bridge secrets unioned with the positive
+    // credential classifier over observed Better Auth fields, so KV435 covers plugin-added
+    // credentials on already-bridged tables as well as unknown-plugin suggestions.
     const secret =
       annotation.secret === undefined || annotation.secret.length === 0
         ? ''
@@ -1865,10 +1897,11 @@ function isBetterAuthSchemaAnnotationText(
   table: string,
   annotationCallee: string,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+  fields: ReadonlySet<string> | null = null,
 ): boolean {
   return (
     compactSourceText(text) ===
-    compactSourceText(betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge))
+    compactSourceText(betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge, fields))
   );
 }
 
@@ -1877,13 +1910,14 @@ function betterAuthSchemaTableAnnotationReplacement(
   table: string,
   annotationCallee: string,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+  fields: ReadonlySet<string> | null = null,
 ): { end: number; start: number; value: string } {
   return {
     end: call.callEnd,
     start: call.callStart,
     value: renderBetterAuthSchemaSourceTableCall(call, [
       ...call.arguments.map((argument) => argument.text.trim()),
-      betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge),
+      betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge, fields),
     ]),
   };
 }

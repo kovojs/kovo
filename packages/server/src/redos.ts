@@ -240,6 +240,16 @@ export function assertLinearSafePattern(source: string): void {
  */
 function containsQuantifier(source: string): boolean {
   for (let i = 0; i < source.length; ) {
+    if (source[i] === '(') {
+      const close = matchGroupClose(source, i);
+      if (close !== -1) {
+        const body = stripGroupPrefix(source.slice(i + 1, close));
+        if (containsQuantifier(body)) return true;
+        if (quantifierAt(source, close + 1) !== null) return true;
+        i = close + 1;
+        continue;
+      }
+    }
     const atom = readAtom(source, i);
     if (!atom) {
       i += 1;

@@ -167,6 +167,49 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('blocks Better Auth core additionalField credentials while preserving benign fields', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'better-auth-user.queries.ts',
+          source: `
+            export const user = pgTable("user", {
+              id: text("id").primaryKey(),
+              displayName: text("display_name"),
+              totpSecret: text("totp_secret"),
+            }, kovo({ domain: "user", key: "id", secret: ["totpSecret"] }));
+
+            export const userQuery = query("user", {
+              load(_input, db: PgAsyncDatabase<any, any>) {
+                return db.select({
+                  displayName: user.displayName,
+                  id: user.id,
+                  totpSecret: user.totpSecret,
+                }).from(user);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    const diagnostics = facts.flatMap((fact) => fact.diagnostics ?? []);
+    expect(diagnostics).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection user.totpSecret reads a secret-classified column or unresolved projection from secret-classified table(s): user. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+        severity: 'error',
+        site: 'better-auth-user.queries.ts:13',
+      },
+    ]);
+    expect(facts[0]?.shape).toMatchObject({
+      displayName: { kind: 'nullable', shape: 'string' },
+      id: 'string',
+      totpSecret: { kind: 'nullable', shape: { kind: 'secret', shape: 'string' } },
+    });
+  });
+
   it('brands every projected column when a table is annotated secret true', () => {
     const facts = extractQueryFactsFromProject({
       files: [
