@@ -31,11 +31,11 @@ export interface DocsRoutePageData {
 
 export interface SectionIndexInput {
   groups?: {
-    pages: { description?: string; title: string; url: string }[];
+    pages: { date?: string; description?: string; title: string; url: string }[];
     title: string;
   }[];
   key: string;
-  pages: { description?: string; title: string; url: string }[];
+  pages: { date?: string; description?: string; title: string; url: string }[];
   title: string;
 }
 
@@ -44,6 +44,7 @@ export function sectionIndexInput(section: DocSection): SectionIndexInput {
   return {
     key: section.key,
     pages: section.pages.map((page) => ({
+      ...(page.date !== undefined ? { date: page.date } : {}),
       description: page.description,
       title: page.title,
       url: page.url,
