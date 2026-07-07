@@ -180,8 +180,7 @@ const app = createApp({
       // The contact book is the signed-in user's data, so this route's KV436 access
       // decision is the session-presence guard (SPEC §10.2). The redirect below is
       // the no-JS UX for an unauthenticated visitor.
-      access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },
-      guard: appAuthed,
+      access: [appAuthed],
       meta: {
         description: 'A Kovo starter: a contact book over a real database, gated by real auth.',
         title: 'Kovo Starter',

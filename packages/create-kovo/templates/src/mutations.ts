@@ -1,7 +1,7 @@
-import { guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';
+import { mutation, s, serverValue, type MutationContext } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
-import { appCsrf, type AppRequest } from './auth.js';
+import { appAuthed, appCsrf, type AppRequest } from './auth.js';
 import { contact } from './model.js';
 import { contactsQuery, type ContactListResult } from './queries.js';
 import { contacts } from './schema.js';
@@ -46,10 +46,9 @@ async function addContactRow(
 // predict the optimistic list update. No-JS clients POST to the typed mutation
 // endpoint and get the refreshed page; `enhance` upgrades the same form to a fragment swap.
 export const addContact = mutation({
-  access: { guards: [{ name: 'authed' }], kind: 'guard-chain' },
+  access: [appAuthed],
   csrf: appCsrf,
   errors: { DUPLICATE_EMAIL: duplicateEmailError },
-  guard: guards.authed<AppRequest>(),
   input: s.object({
     name: s.string(),
     email: s.string(),

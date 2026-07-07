@@ -106,10 +106,9 @@ export const appSignOut = betterAuthSignOutMutation<
   AppRequest,
   AppRequest & { session: AppSession }
 >(auth, {
-  access: { guards: [{ name: 'authed' }], kind: 'guard-chain' },
+  access: [appAuthed],
   csrf: appCsrf,
   defaultRedirectTo: '/login',
-  guard: authed<AppRequest>(),
 });
 
 /**
