@@ -137,6 +137,20 @@ describe('linear pattern engine (KV434)', () => {
     expect(() => compileLinearPattern('é')).not.toThrow();
   });
 
+  it('pins the million-case fuzzer alternation counterexample', () => {
+    const source = '^(([^bc]{0,2}.?)+(\\w.{1,3})*c{0,2}|.*)+[ab]b|a{1,3}|.+?$';
+    const input = '_1a1aa1bxxb';
+    const program = compileLinearPattern(source);
+
+    expect(
+      testLinearPattern(
+        compileLinearPattern('^(([^bc]{0,2}.?)+(\\w.{1,3})*c{0,2}|.*)+[ab]b'),
+        input,
+      ),
+    ).toBe(false);
+    expect(testLinearPattern(program, input)).toBe(true);
+  });
+
   it('matches formerly catastrophic structures through the linear engine', () => {
     for (const entry of REDOS_LINEAR_ADVERSARIAL_CORPUS) {
       const program = compileLinearPattern(entry.source);
@@ -171,18 +185,26 @@ describe('linear pattern engine (KV434)', () => {
 
   it('keeps a seeded differential fuzzer over the supported grammar', () => {
     const rng = mulberry32(0x434);
-    for (let i = 0; i < 1500; i += 1) {
+    const cases = Number.parseInt(process.env.KOVO_LINEAR_REGEX_FUZZ_CASES ?? '1500', 10);
+    for (let i = 0; i < cases; i += 1) {
       const source = randomPattern(rng, 0);
       const flags = randomFlags(rng);
       const input = randomInput(rng);
       const program = compileLinearPattern(source, flags);
+      if (isPinnedMillionCaseCounterexample(source, flags, input)) {
+        expect(
+          testLinearPattern(program, input),
+          `${source}/${flags} on ${JSON.stringify(input)}`,
+        ).toBe(true);
+        continue;
+      }
       const regex = new RegExp(source, flags);
       expect(
         testLinearPattern(program, input),
         `${source}/${flags} on ${JSON.stringify(input)}`,
       ).toBe(regex.test(input));
     }
-  });
+  }, 300_000);
 });
 
 describe('unsafeRegex escape (KV434)', () => {
@@ -246,4 +268,12 @@ function randomInput(rng: Rng): string {
 
 function pick(rng: Rng, count: number): number {
   return Math.floor(rng() * count);
+}
+
+function isPinnedMillionCaseCounterexample(source: string, flags: string, input: string): boolean {
+  return (
+    flags === '' &&
+    input === '_1a1aa1bxxb' &&
+    source === '^(([^bc]{0,2}.?)+(\\w.{1,3})*c{0,2}|.*)+[ab]b|a{1,3}|.+?$'
+  );
 }
