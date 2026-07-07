@@ -54,6 +54,10 @@ describe('create-kovo starter (build integration: production contact artifacts)'
       const jar = new Map<string, string>();
 
       await fetchTextWhenReady(`${origin}/login`, output);
+      const anonymousHome = await fetch(`${origin}/`, { redirect: 'manual' });
+      expect([302, 303, 307]).toContain(anonymousHome.status);
+      expect(anonymousHome.headers.get('location')).toBe('/login?next=%2F');
+
       const loginResponse = await fetch(`${origin}/login`);
       mergeCookies(jar, loginResponse.headers.getSetCookie());
       const loginHtml = await loginResponse.text();
