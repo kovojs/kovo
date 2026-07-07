@@ -34,19 +34,47 @@ explain` shows) is the thing that executes.
 
 ## 3. Decisions / work items
 
-### 3.1 DEC-A — Unify the authz audit with runtime enforcement (fixes B1; the ONE real work item)
+### 3.1 DEC-A — Collapse authz to ONE self-describing object: the guard that RUNS is the access decision (fixes B1)
 
-- [ ] **A1 — Bind the audited `access` decision to runtime enforcement so `kovo explain` cannot report an op guarded
-      while it runs no guard.** The framework ALREADY does this on the sibling endpoint axis — `access:
-  verified-machine-auth` is downgraded to `missing`/KV436 when no executable verifier exists
-      (`access-graph.ts:60-67`); apply the same binding to the mutation/query guard-chain axis. Resolve via **O1**
-      (which of three bindings). Confirm the fix on a scaffolded op: an `access` guard-chain with no runtime guard must
-      either ENFORCE its steps or FAIL `kovo check`, and `kovo explain` must not show it guarded.
-  - Acceptance: (i) a mutation with `access: guardChain([{guard: requireAdmin}])` and no top-level `guard:` is caught —
-    it enforces `requireAdmin` at runtime, OR `kovo check` fails (KV436-style), OR `kovo explain` reports it UNGUARDED;
-    (ii) `publicAccess` still explicitly names its justification and is `kovo explain`-visible; (iii) a genuinely-guarded
-    op (runtime `guard` present) is unaffected; (iv) a test pins the `access`↔`guard` binding so a future refactor can't
-    re-decouple them (C13 superset-corpus style). SPEC §6.5/§9.1 states C17 (audit == enforce).
+**Decision (O1, resolved — fork (a) refined; land at once):** the fix is not to "bind two fields" — it is to make there
+be only ONE. A guard becomes a NAMED, self-describing value that enforces, names itself, AND emits its audit facts, and
+`access` becomes the guards themselves. This eliminates BOTH decouplings the finding exposed: the `access`-vs-`guard`
+field split (B1) and the `{name}`-vs-`guard` label split (a hand-written step name can lie about what its guard does).
+
+- [ ] **A1 — Guards are self-naming; `access` = the enforced guards.** New guard constructor
+      `guard(name, fn)` attaches the audit name to the guard (guards already carry
+      `GuardAuditFact`/`GuardPrincipalKeyAudit`/`GuardResourceKeyAudit` for KV414, so the name is one more fact on the
+      same object). Change `AccessDecision` to `readonly Guard[] | PublicAccess | VerifiedMachineAccess` and DELETE
+      `GuardAccessStep` (both its hand-written `name` and its accepted-but-ignored executable `guard?`). Runtime runs the
+      `access` guards through the existing `runGuard` path; `publicAccess(reason)` / `verifiedAccess` remain as the
+      explicit "nothing runs, and here is why" sentinels. `kovo explain --access` PROJECTS names/posture from the
+      enforced guards, so it cannot report anything the runtime does not run. The old audit-only
+      `access: guardChain([{name, guard}])` form is removed — the misconfiguration (`access` names a guard the runtime
+      never runs) becomes UNREPRESENTABLE.
+  - Shape:
+    ```ts
+    const requireAdmin = guard(
+      'admin-only',
+      (req) => req.principal.role === 'admin' || forbidden(),
+    );
+    mutation('billing.chargeCard', { input, access: [requireAdmin], handler }); // enforces AND names itself
+    // or: access: publicAccess('public checkout')  |  access: verifiedAccess
+    ```
+  - Migration: fold the existing `guard`/`auth`/`verify` runtime fields into the guard primitives `access` composes (or
+    treat them as the low-level guards a self-named guard wraps); there is no longer a separate top-level `guard:` that
+    can diverge from `access`. KV436 is unchanged as the declare-or-deny gate: an op with NO `access` (no guards, not
+    `publicAccess`/`verifiedAccess`) is `missing` → build fails.
+  - Acceptance: (i) it is IMPOSSIBLE to declare an `access` guard that does not run (the ignored-executable trap is
+    deleted from the type); (ii) `kovo explain --access` names derive from the enforced guards (a guard named
+    `admin-only` cannot be labeled `owner-only`); (iii) `publicAccess`/`verifiedAccess` stay explicit + justified +
+    `kovo explain`-visible, and a `publicAccess` op still surfaces its no-guard posture honestly; (iv) a regression test
+    pins that the explained access names EQUAL the enforced guard names (C13 superset-corpus), so a future refactor
+    cannot re-introduce a divergent label; (v) the side-effecting/no-row op (charge/email/provision) with no guard fails
+    `kovo check` (KV436). SPEC §6.5/§9.1 states C17 — the audited decision IS the enforced one, a single self-describing
+    object.
+  - Scope note: this is a bounded, land-at-once refactor — a guard constructor + name field, an `AccessDecision` type
+    change, deleting `GuardAccessStep`, folding the runtime read to iterate `access` guards, and updating the graph/
+    explain projection to read guard names. No interim half-measure.
 
 ### 3.2 DEC-B — Record the verified first-line controls into the threat matrix (advance M2 + Auth/Wire cells)
 
@@ -67,25 +95,21 @@ explain` shows) is the thing that executes.
       guarantee. (No round-22 finding here; this is the evidence M2 needs to be signed off green, not open work against a
       bug.)
 
-## 4. Open design decision (flagged for review — sharpened by the finding)
+## 4. Resolved design decision (decided 2026-07-07)
 
-- [ ] **O1 — How to bind the authz audit to enforcement (the DEC-A fix)?** Forks: **(a)** ENFORCE the audited decision —
-      an `access` `guardChain` whose steps carry executable guards runs them at runtime (the declared decision IS the
-      enforcement; strongest, single source of truth, but changes `access` from audit-only to executable and must
-      compose with the existing `guard`/`auth`/`verify` fields without double-running); **(b)** BUILD-TIME DOWNGRADE —
-      an `access` decision that declares an executable guard not wired to a runtime `guard` is downgraded to
-      `missing`→KV436 fails (mirror `access-graph.ts:60-67` exactly; smallest change, keeps `access` audit-only, forces
-      the developer to also set `guard:`); **(c)** POSTURE-ONLY — `guarded` derives only from an enforcing field so
-      `kovo explain` never over-reports, but an un-enforced op still SHIPS (fixes the audit lie, NOT the enforcement
-      gap). Lean: **(b)** as the minimum (it reuses the proven downgrade machinery and fails closed at build), with
-      **(a)** as the better end-state if `access` becomes the one declared+enforced authz object (C17 in full). Reject
-      (c) alone — it fixes the honesty but leaves the op unguarded. **Decision:** ship (b) now, or commit to (a) as the
-      unified model?
+- **O1 (how to bind the authz audit to enforcement) → RESOLVED into DEC-A: fork (a), REFINED — one self-describing
+  object, landed at once.** Not "bind two fields" but "make there be one": self-naming guards, `access` = the enforced
+  guards, `GuardAccessStep` (and its ignored executable + hand-written name) deleted. This is the full C17 — the audited
+  decision IS the enforced one — and it also kills the second decoupling (a step `name` that can lie about its guard).
+  - Rejected **(b)** build-time-downgrade: it fixes B1's field split but KEEPS the `{name}`-vs-`guard` label decoupling
+    and leaves `access` a redundant restatement of the guard — a half-measure. Rejected **(c)** posture-only: fixes the
+    audit lie but leaves the op unguarded. The refactor is bounded and lands at once (per the decision), so no interim.
 
 ## 5. Proving
 
-- [ ] DEC-A: the `access`-guard-chain-without-runtime-guard op is enforced-or-rejected; `kovo explain` never shows an
-      unenforced op guarded; genuinely-guarded ops unaffected; binding pinned by a regression test.
+- [ ] DEC-A: the ignored-executable trap is unrepresentable (deleted from the type); `access` = self-naming guards;
+      `kovo explain --access` names derive from the enforced guards; `publicAccess`/`verifiedAccess` stay explicit; a
+      no-guard side-effecting op fails `kovo check`; `explained-names == enforced-guard-names` pinned by a regression test.
 - [ ] DEC-B: `docs/security-threat-matrix.md` — A1/A2/A4/A6 cells green with named control+test; M2 flipped per DEC-C.
 - [ ] DEC-C: reset/verify enumeration + single-use + expiry, 2FA replay, account-linking tested (or delegated + recorded
       as TCB dependency).
