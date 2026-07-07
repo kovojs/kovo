@@ -416,26 +416,14 @@ export function normalizeIpLiteral(host: string): string | null {
   const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
   if (h === '') return null;
 
-  // Already-canonical IPv4/IPv6 fast path.
-  if (net.isIP(h) !== 0) return canonicalizeKnownIp(h);
-
-  // IPv4-mapped / -compat or NAT64 embedded in IPv6 text, e.g. ::ffff:169.254.169.254,
-  // ::ffff:7f00:1, 64:ff9b::a9fe:a9fe — net.isIP handles the textual forms; the embedded
-  // v4 is extracted by canonicalizeKnownIp below once recognized as v6.
-
   // Bare IPv4 in decimal/octal/hex (any of the 1–4 part forms inet_aton accepts).
   const v4 = parseLooseIpv4(h);
   if (v4 !== null) return v4;
 
-  return null;
-}
+  const v6 = parseIpv6Bytes(h);
+  if (v6 !== null) return canonicalizeIpv6Bytes(v6);
 
-/** Re-emit a recognized IP in a canonical, classification-friendly form. */
-function canonicalizeKnownIp(ip: string): string {
-  const fam = net.isIP(ip);
-  if (fam === 4) return ip;
-  // IPv6: lower-case; leave compression as-is (classification reads prefixes, not exact text).
-  return ip.toLowerCase();
+  return null;
 }
 
 /**
@@ -492,10 +480,11 @@ export function classifyHost(host: string): PrivateAddressClass | null {
 
 /** Classify a canonical IP literal. Unknown/unparseable → special-use (fails closed). */
 export function classifyIp(host: string): PrivateAddressClass {
-  const ip = normalizeIpLiteral(host) ?? host;
-  const fam = net.isIP(ip);
-  if (fam === 4) return classifyIpv4(ip);
-  if (fam === 6) return classifyIpv6(ip);
+  const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
+  const v4 = parseLooseIpv4(h);
+  if (v4 !== null) return classifyIpv4(v4);
+  const v6 = parseIpv6Bytes(h);
+  if (v6 !== null) return classifyIpv6Bytes(v6);
   // Not an IP at all (e.g. a hostname slipped through) → fail closed.
   return 'special-use';
 }
@@ -539,37 +528,140 @@ function classifyIpv4(ip: string): PrivateAddressClass {
   return 'public';
 }
 
-function classifyIpv6(ipRaw: string): PrivateAddressClass {
-  const ip = ipRaw.toLowerCase();
-  // IPv4-mapped (::ffff:a.b.c.d) and -compat: classify the embedded IPv4.
-  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/) ?? ip.match(/^::(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return classifyIpv4(mapped[1]!);
-  // Hex-form IPv4-mapped, e.g. ::ffff:a9fe:a9fe == 169.254.169.254.
-  const hexMapped = ip.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (hexMapped) {
-    const hi = parseInt(hexMapped[1]!, 16);
-    const lo = parseInt(hexMapped[2]!, 16);
-    const v4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
-    return classifyIpv4(v4);
+interface Ipv6Bytes {
+  readonly bytes: readonly number[];
+}
+
+function classifyIpv6Bytes(ip: Ipv6Bytes): PrivateAddressClass {
+  const bytes = ip.bytes;
+  if (bytes.every((byte) => byte === 0)) return 'unspecified';
+  if (bytes.slice(0, 15).every((byte) => byte === 0) && bytes[15] === 1) return 'loopback';
+
+  const extractedV4 = extractedIpv4FromIpv6(bytes);
+  if (extractedV4 !== null) return classifyIpv4(extractedV4);
+
+  // Azure/GCP also expose metadata over v6 link-local addresses; AWS IMDSv6 is fd00:ec2::254.
+  if (canonicalizeIpv6Bytes(ip) === 'fd00:ec2::254') return 'metadata';
+
+  const firstWord = wordAt(bytes, 0);
+  if ((firstWord & 0xffc0) === 0xfe80) return 'link-local'; // fe80::/10
+  if ((firstWord & 0xfe00) === 0xfc00) return 'unique-local'; // fc00::/7
+  if ((firstWord & 0xffc0) === 0xfec0) return 'special-use'; // fec0::/10 site-local
+  if ((bytes[0] ?? 0) === 0xff) return 'special-use'; // multicast ff00::/8
+  if ((firstWord & 0xfff0) === 0x2000 && (wordAt(bytes, 1) & 0xfff0) === 0x0020) {
+    return 'special-use'; // 2001:20::/28 ORCHIDv2
   }
-  // NAT64 (64:ff9b::/96, RFC6052): classify the embedded IPv4 — a metadata IP behind NAT64 is
-  // still a metadata reach.
-  const nat64 = ip.match(/^64:ff9b::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (nat64) {
-    const hi = parseInt(nat64[1]!, 16);
-    const lo = parseInt(nat64[2]!, 16);
-    const v4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
-    return classifyIpv4(v4);
+  if (firstWord === 0x2001 && wordAt(bytes, 1) === 0x0db8) return 'special-use'; // docs
+  if (firstWord === 0x2002) return 'special-use'; // 6to4
+  if (firstWord === 0x2001 && wordAt(bytes, 1) === 0x0000) return 'special-use'; // Teredo/IETF
+
+  // Fail closed: only genuine global unicast is public, after extracting/denying special forms.
+  if ((firstWord & 0xe000) === 0x2000) return 'public'; // 2000::/3
+  return 'special-use';
+}
+
+function extractedIpv4FromIpv6(bytes: readonly number[]): string | null {
+  const prefix96 = bytes.slice(0, 12);
+  const embedded = (): string => `${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`;
+
+  // ::a.b.c.d / ::hhhh:hhhh IPv4-compatible.
+  if (prefix96.every((byte) => byte === 0)) return embedded();
+
+  // ::ffff:a.b.c.d / ::ffff:hhhh:hhhh IPv4-mapped.
+  if (bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff) {
+    return embedded();
   }
-  if (ip === '::1') return 'loopback';
-  if (ip === '::') return 'unspecified';
-  if (ip.startsWith('fe80:') || ip.startsWith('fe80::')) return 'link-local'; // fe80::/10
-  // Azure/GCP also expose metadata over a v6 link-local; AWS IMDS v6 is fd00:ec2::254.
-  if (ip === 'fd00:ec2::254') return 'metadata';
-  if (/^f[cd][0-9a-f]{2}:/.test(ip)) return 'unique-local'; // fc00::/7 ULA
-  if (/^fe[89ab][0-9a-f]:/.test(ip)) return 'link-local';
-  if (ip.startsWith('ff')) return 'special-use'; // multicast ff00::/8
-  return 'public';
+
+  // 64:ff9b::/96 NAT64.
+  const nat64Prefix = [0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0];
+  if (prefix96.every((byte, index) => byte === nat64Prefix[index])) return embedded();
+
+  return null;
+}
+
+function parseIpv6Bytes(input: string): Ipv6Bytes | null {
+  const ip = input.toLowerCase();
+  if (!ip.includes(':') || ip.includes('%')) return null;
+  if (ip.split('::').length > 2) return null;
+
+  const [headRaw, tailRaw] = ip.split('::') as [string, string | undefined];
+  const head = parseIpv6Side(headRaw);
+  if (head === null) return null;
+  const tail = tailRaw === undefined ? [] : parseIpv6Side(tailRaw);
+  if (tail === null) return null;
+
+  const missing = 8 - head.length - tail.length;
+  if (tailRaw === undefined) {
+    if (missing !== 0) return null;
+  } else if (missing < 1) {
+    return null;
+  }
+
+  const words = tailRaw === undefined ? head : [...head, ...Array(missing).fill(0), ...tail];
+  if (words.length !== 8) return null;
+  const bytes: number[] = [];
+  for (const word of words) bytes.push((word >> 8) & 0xff, word & 0xff);
+  return { bytes };
+}
+
+function parseIpv6Side(side: string): number[] | null {
+  if (side === '') return [];
+  const parts = side.split(':');
+  const words: number[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
+    if (part === '') return null;
+    if (part.includes('.')) {
+      if (index !== parts.length - 1) return null;
+      const v4 = parseStrictIpv4(part);
+      if (v4 === null) return null;
+      words.push((v4[0]! << 8) | v4[1]!, (v4[2]! << 8) | v4[3]!);
+      continue;
+    }
+    if (!/^[0-9a-f]{1,4}$/.test(part)) return null;
+    words.push(parseInt(part, 16));
+  }
+  return words;
+}
+
+function parseStrictIpv4(input: string): readonly number[] | null {
+  const parts = input.split('.');
+  if (parts.length !== 4) return null;
+  const octets = parts.map((part) => {
+    if (!/^(0|[1-9][0-9]*)$/.test(part)) return null;
+    const value = Number(part);
+    return Number.isInteger(value) && value >= 0 && value <= 255 ? value : null;
+  });
+  return octets.some((octet) => octet === null) ? null : (octets as number[]);
+}
+
+function wordAt(bytes: readonly number[], index: number): number {
+  const offset = index * 2;
+  return ((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0);
+}
+
+function canonicalizeIpv6Bytes(ip: Ipv6Bytes): string {
+  const words = Array.from({ length: 8 }, (_, index) => wordAt(ip.bytes, index));
+  let bestStart = -1;
+  let bestLength = 0;
+  for (let index = 0; index < words.length; ) {
+    if (words[index] !== 0) {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    while (index < words.length && words[index] === 0) index += 1;
+    const length = index - start;
+    if (length > bestLength && length > 1) {
+      bestStart = start;
+      bestLength = length;
+    }
+  }
+  if (bestStart === -1) return words.map((word) => word.toString(16)).join(':');
+
+  const left = words.slice(0, bestStart).map((word) => word.toString(16));
+  const right = words.slice(bestStart + bestLength).map((word) => word.toString(16));
+  return `${left.join(':')}::${right.join(':')}`;
 }
 
 /**
