@@ -5,7 +5,21 @@ export interface RedosCorpusCase {
   readonly source: string;
 }
 
-export const REDOS_REJECT_CORPUS: readonly RedosCorpusCase[] = [
+export const REDOS_UNSUPPORTED_CORPUS: readonly RedosCorpusCase[] = [
+  { name: 'hex escape', source: '\\x41' },
+  { name: 'unicode escape', source: '\\u0041' },
+  { name: 'unicode code point escape', source: '\\u{41}' },
+  { name: 'control escape', source: '\\cA' },
+  { name: 'positive lookahead', source: '(?=a)a' },
+  { name: 'negative lookahead', source: '(?!a).' },
+  { name: 'positive lookbehind', source: '(?<=a)b' },
+  { name: 'negative lookbehind', source: '(?<!a)b' },
+  { name: 'numbered backreference', source: '(a)\\1' },
+  { name: 'named backreference', source: '(?<word>a)\\k<word>' },
+  { name: 'unicode property escape', source: '\\p{Letter}+' },
+] as const;
+
+export const REDOS_LINEAR_ADVERSARIAL_CORPUS: readonly RedosCorpusCase[] = [
   { name: 'nested plus', source: '(a+)+' },
   { name: 'nested star', source: '(a*)*' },
   { name: 'nested plus under star', source: '(a+)*' },
@@ -35,7 +49,7 @@ export const REDOS_REJECT_CORPUS: readonly RedosCorpusCase[] = [
   { name: 'adjacent class quantifiers', source: '[a-z]+[a-z]*' },
 ] as const;
 
-export const REDOS_ACCEPT_CORPUS: readonly RedosCorpusCase[] = [
+export const REDOS_PARITY_CORPUS: readonly RedosCorpusCase[] = [
   { name: 'flat class anchor', source: '^[a-z0-9]+$' },
   { name: 'date digits', source: '\\d{4}-\\d{2}-\\d{2}' },
   { name: 'disjoint literal alternatives', source: '^(cat|dog|bird)$' },
@@ -47,4 +61,10 @@ export const REDOS_ACCEPT_CORPUS: readonly RedosCorpusCase[] = [
   { name: 'nested unquantified capture under quantified group', source: '((ab))+' },
   { name: 'nested non-capturing group under quantified group', source: '((?:ab))+' },
   { name: 'disjoint alternatives under quantified group', source: '(a|b)+' },
+  { name: 'empty alternative', source: '(a|)+' },
+  { name: 'empty group', source: '()' },
+  { name: 'word boundary', source: '\\bcat\\b' },
+  { name: 'not word boundary', source: '\\Bcat' },
+  { name: 'dotall candidate', source: 'a.b' },
+  { name: 'case insensitive candidate', source: 'abc' },
 ] as const;
