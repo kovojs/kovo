@@ -94,6 +94,192 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
   });
 });
 
+// @kovo-security-classifier-corpus egress-ip
+describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
+  it('classifies acceptance IPv6 edge forms fail-closed before public', () => {
+    expect(classifyIp('0:0:0:0:0:ffff:169.254.169.254')).toBe('metadata');
+    expect(classifyIp('0000:0000:0000:0000:0000:FFFF:A9FE:A9FE')).toBe('metadata');
+    expect(classifyIp('::FFFF:169.254.169.254')).toBe('metadata');
+    expect(classifyIp('64:FF9B::A9FE:A9FE')).toBe('metadata');
+    expect(classifyIp('64:ff9b::169.254.169.254')).toBe('metadata');
+    expect(classifyIp('fec0::')).toBe('special-use');
+    expect(classifyIp('feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')).toBe('special-use');
+    expect(classifyIp('::a9fe:a9fe')).toBe('metadata');
+    expect(classifyIp('2606:4700:4700::1111')).toBe('public');
+  });
+
+  it('classifies equivalent IPv6 serializations identically', () => {
+    const cases: Array<{
+      name: string;
+      words: readonly number[];
+      expected: ReturnType<typeof classifyIp>;
+      dotted?: boolean;
+    }> = [
+      {
+        name: 'IPv4-compatible metadata',
+        words: [0, 0, 0, 0, 0, 0, 0xa9fe, 0xa9fe],
+        expected: 'metadata',
+        dotted: true,
+      },
+      {
+        name: 'IPv4-mapped metadata',
+        words: [0, 0, 0, 0, 0, 0xffff, 0xa9fe, 0xa9fe],
+        expected: 'metadata',
+        dotted: true,
+      },
+      {
+        name: 'NAT64 metadata',
+        words: [0x0064, 0xff9b, 0, 0, 0, 0, 0xa9fe, 0xa9fe],
+        expected: 'metadata',
+        dotted: true,
+      },
+      {
+        name: 'IPv4-compatible link-local',
+        words: [0, 0, 0, 0, 0, 0, 0xa9fe, 0x0101],
+        expected: 'link-local',
+        dotted: true,
+      },
+      {
+        name: 'IPv4-compatible loopback',
+        words: [0, 0, 0, 0, 0, 0, 0x7f00, 1],
+        expected: 'loopback',
+        dotted: true,
+      },
+      {
+        name: 'IPv4-compatible RFC1918',
+        words: [0, 0, 0, 0, 0, 0, 0xc0a8, 1],
+        expected: 'private-rfc1918',
+        dotted: true,
+      },
+      {
+        name: 'IPv4-compatible CGNAT',
+        words: [0, 0, 0, 0, 0, 0, 0x6440, 1],
+        expected: 'carrier-nat',
+        dotted: true,
+      },
+      { name: 'unspecified', words: [0, 0, 0, 0, 0, 0, 0, 0], expected: 'unspecified' },
+      { name: 'loopback', words: [0, 0, 0, 0, 0, 0, 0, 1], expected: 'loopback' },
+      { name: 'AWS IMDSv6', words: [0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x0254], expected: 'metadata' },
+      { name: 'link-local', words: [0xfe80, 0, 0, 0, 0, 0, 0, 1], expected: 'link-local' },
+      { name: 'ULA', words: [0xfd12, 0x3456, 0, 0, 0, 0, 0, 1], expected: 'unique-local' },
+      { name: 'site-local', words: [0xfec0, 0, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
+      { name: 'multicast', words: [0xff02, 0, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
+      { name: 'documentation', words: [0x2001, 0x0db8, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
+      { name: 'ORCHIDv2', words: [0x2001, 0x0020, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
+      { name: '6to4', words: [0x2002, 0xc000, 0x0201, 0, 0, 0, 0, 1], expected: 'special-use' },
+      { name: 'Teredo', words: [0x2001, 0, 0, 0, 0, 0, 0, 1], expected: 'special-use' },
+      {
+        name: 'global unicast',
+        words: [0x2606, 0x4700, 0x4700, 0, 0, 0, 0, 0x1111],
+        expected: 'public',
+      },
+    ];
+
+    for (const entry of cases) {
+      const serializations = ipv6Serializations(entry.words, entry.dotted === true);
+      const referenceKey = referenceIpv6Key(serializations[0]!);
+      expect(referenceKey, entry.name).not.toBeNull();
+      for (const candidate of serializations) {
+        expect(referenceIpv6Key(candidate), `${entry.name}: ${candidate}`).toBe(referenceKey);
+        expect(classifyIp(candidate), `${entry.name}: ${candidate}`).toBe(entry.expected);
+      }
+      if (entry.expected !== 'public') {
+        expect(serializations.map((candidate) => classifyIp(candidate))).not.toContain('public');
+      }
+    }
+  });
+});
+
+function ipv6Serializations(words: readonly number[], includeDotted: boolean): string[] {
+  const base = [
+    words.map((word) => word.toString(16)).join(':'),
+    words.map((word) => word.toString(16).padStart(4, '0').toUpperCase()).join(':'),
+    compressIpv6Words(words),
+    compressIpv6Words(words).toUpperCase(),
+  ];
+  if (includeDotted) {
+    const compressedPrefix = compressIpv6Words(words.slice(0, 6));
+    base.push(
+      `${words
+        .slice(0, 6)
+        .map((word) => word.toString(16))
+        .join(':')}:${ipv4Tail(words)}`,
+      `${compressedPrefix}${compressedPrefix.endsWith('::') ? '' : ':'}${ipv4Tail(words)}`,
+    );
+  }
+  return [...new Set(base)];
+}
+
+function compressIpv6Words(words: readonly number[]): string {
+  let bestStart = -1;
+  let bestLength = 0;
+  for (let index = 0; index < words.length; ) {
+    if (words[index] !== 0) {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    while (index < words.length && words[index] === 0) index += 1;
+    const length = index - start;
+    if (length > bestLength && length > 1) {
+      bestStart = start;
+      bestLength = length;
+    }
+  }
+  if (bestStart < 0) return words.map((word) => word.toString(16)).join(':');
+  const left = words.slice(0, bestStart).map((word) => word.toString(16));
+  const right = words.slice(bestStart + bestLength).map((word) => word.toString(16));
+  return `${left.join(':')}::${right.join(':')}`;
+}
+
+function ipv4Tail(words: readonly number[]): string {
+  const hi = words[6]!;
+  const lo = words[7]!;
+  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+}
+
+function referenceIpv6Key(input: string): string | null {
+  const normalized = input.toLowerCase();
+  const doubleColon = normalized.indexOf('::');
+  if (doubleColon !== normalized.lastIndexOf('::')) return null;
+  const leftText = doubleColon < 0 ? normalized : normalized.slice(0, doubleColon);
+  const rightText = doubleColon < 0 ? '' : normalized.slice(doubleColon + 2);
+  const left = referenceIpv6Words(leftText);
+  const right = doubleColon < 0 ? [] : referenceIpv6Words(rightText);
+  if (left === null || right === null) return null;
+  const zeros = doubleColon < 0 ? 0 : 8 - left.length - right.length;
+  if (doubleColon < 0 && left.length !== 8) return null;
+  if (doubleColon >= 0 && zeros < 1) return null;
+  const words = doubleColon < 0 ? left : [...left, ...Array(zeros).fill(0), ...right];
+  return words.length === 8
+    ? words.map((word) => word.toString(16).padStart(4, '0')).join('')
+    : null;
+}
+
+function referenceIpv6Words(side: string): number[] | null {
+  if (side === '') return [];
+  const output: number[] = [];
+  const pieces = side.split(':');
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.includes('.')) {
+      if (index !== pieces.length - 1) return null;
+      const octets = piece.split('.').map((part) => Number(part));
+      if (
+        octets.length !== 4 ||
+        octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
+      ) {
+        return null;
+      }
+      output.push((octets[0]! << 8) | octets[1]!, (octets[2]! << 8) | octets[3]!);
+    } else {
+      if (!/^[0-9a-f]{1,4}$/.test(piece)) return null;
+      output.push(Number.parseInt(piece, 16));
+    }
+  }
+  return output;
+}
+
 describe('evaluateEgress policy decision', () => {
   it('allows public, denies loopback not in allowInternal', () => {
     const policy = emptyPolicy();
