@@ -250,14 +250,25 @@ function stripGroupPrefix(body: string): string {
 
 function hasOverlappingAlternatives(body: string): boolean {
   const alternatives = splitTopLevelAlternatives(body);
-  if (alternatives.length < 2) return false;
-  const firstSets = alternatives.map((alternative) => firstTokenSet(alternative));
-  for (let i = 0; i < firstSets.length; i += 1) {
-    for (let j = i + 1; j < firstSets.length; j += 1) {
-      const left = firstSets[i];
-      const right = firstSets[j];
-      if (left && right && setsOverlap(left, right)) return true;
+  if (alternatives.length >= 2) {
+    const firstSets = alternatives.map((alternative) => firstTokenSet(alternative));
+    for (let i = 0; i < firstSets.length; i += 1) {
+      for (let j = i + 1; j < firstSets.length; j += 1) {
+        const left = firstSets[i];
+        const right = firstSets[j];
+        if (left && right && setsOverlap(left, right)) return true;
+      }
     }
+  }
+
+  for (let i = 0; i < body.length; i += 1) {
+    if (body.charCodeAt(i) !== CHAR_LEFT_PAREN) continue;
+    const close = matchGroupClose(body, i);
+    if (close === -1) continue;
+    if (hasOverlappingAlternatives(stripGroupPrefix(body.slice(i + 1, close)))) {
+      return true;
+    }
+    i = close;
   }
   return false;
 }

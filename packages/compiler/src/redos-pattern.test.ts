@@ -103,6 +103,15 @@ const schema = s.string().min(3).pattern(re);`,
       expect(codes(source)).toContain('KV434');
     });
 
+    it('fires KV434 for quantified groups whose nested group interiors contain overlapping alternatives', () => {
+      for (const source of ['((a|a))+', '(([ab]|[bc]))+', '(((a|a)))+', '((a|a)){1,}']) {
+        expect(
+          codes(component(`const schema = s.string().pattern(${JSON.stringify(source)});`)),
+          source,
+        ).toContain('KV434');
+      }
+    });
+
     it('fires KV434 for adjacent overlapping quantified atoms', () => {
       const source = component(`const schema = s.string().pattern('[a-z]+[a-z]*');`);
       expect(codes(source)).toContain('KV434');
@@ -160,6 +169,12 @@ const schema = s.string().min(3).pattern(re);`,
         'KV434',
       );
       expect(codes(component(`const schema = s.string().pattern('^a?b?c?$');`))).not.toContain(
+        'KV434',
+      );
+      expect(codes(component(`const schema = s.string().pattern('((ab))+');`))).not.toContain(
+        'KV434',
+      );
+      expect(codes(component(`const schema = s.string().pattern('(a|b)+');`))).not.toContain(
         'KV434',
       );
       expect(codes(component(`const schema = s.string().pattern('((?:ab))+');`))).not.toContain(

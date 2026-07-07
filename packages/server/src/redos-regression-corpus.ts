@@ -23,6 +23,13 @@ export const REDOS_REJECT_CORPUS: readonly RedosCorpusCase[] = [
   { name: 'overlapping identical alternatives', source: '^(a|a)*$' },
   { name: 'overlapping prefix alternatives', source: '^(a|aa)+$' },
   { name: 'overlapping class alternative', source: '^([a-z]|a)+$' },
+  { name: 'nested identical alternatives under quantified group', source: '((a|a))+' },
+  {
+    name: 'nested overlapping class alternatives under quantified group',
+    source: '(([ab]|[bc]))+',
+  },
+  { name: 'deeply nested identical alternatives under quantified group', source: '(((a|a)))+' },
+  { name: 'nested identical alternatives under braced quantified group', source: '((a|a)){1,}' },
   { name: 'adjacent digit quantifiers', source: '\\d+\\d+' },
   { name: 'adjacent star quantifiers', source: 'a*a*' },
   { name: 'adjacent class quantifiers', source: '[a-z]+[a-z]*' },
@@ -39,4 +46,5 @@ export const REDOS_ACCEPT_CORPUS: readonly RedosCorpusCase[] = [
   { name: 'quantified non-capturing group with unquantified body', source: '(?:ab)+' },
   { name: 'nested unquantified capture under quantified group', source: '((ab))+' },
   { name: 'nested non-capturing group under quantified group', source: '((?:ab))+' },
+  { name: 'disjoint alternatives under quantified group', source: '(a|b)+' },
 ] as const;
