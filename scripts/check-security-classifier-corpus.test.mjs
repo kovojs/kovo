@@ -111,6 +111,60 @@ describe('check-security-classifier-corpus gate', () => {
         text: '// @kovo-security-classifier-corpus egress-ip\nexpect(classifyIp("127.0.0.1")).toBe("loopback");\n',
         finding: 'egress-ip: missing verdict anchor "round-19-octal-literal" in egress.test.ts',
       },
+      {
+        corpus: {
+          id: 'redos',
+          marker: '@kovo-security-classifier-corpus redos',
+          testFiles: ['redos.test.ts'],
+          verdictAnchors: [
+            {
+              id: 'followup-17-b1-dollar-line-terminator-regression',
+              file: 'redos.test.ts',
+              snippets: ['B1 trailing line terminator', "compileLinearPattern('a$')", "'a\\n'"],
+            },
+          ],
+        },
+        text: '// @kovo-security-classifier-corpus redos\nexpect(testLinearPattern(compileLinearPattern("a$"), "a")).toBe(true);\n',
+        finding:
+          'redos: missing verdict anchor "followup-17-b1-dollar-line-terminator-regression" in redos.test.ts',
+      },
+      {
+        corpus: {
+          id: 'redos',
+          marker: '@kovo-security-classifier-corpus redos',
+          testFiles: ['redos.test.ts'],
+          verdictAnchors: [
+            {
+              id: 'followup-17-b3-in-class-legacy-numeric-regression',
+              file: 'redos.test.ts',
+              snippets: [
+                'B3 in-class legacy numeric escape',
+                "compileLinearPattern('^[^\\\\1-\\\\37]+$')",
+              ],
+            },
+          ],
+        },
+        text: '// @kovo-security-classifier-corpus redos\nexpect(() => compileLinearPattern("[^0-9]+")).not.toThrow();\n',
+        finding:
+          'redos: missing verdict anchor "followup-17-b3-in-class-legacy-numeric-regression" in redos.test.ts',
+      },
+      {
+        corpus: {
+          id: 'redos',
+          marker: '@kovo-security-classifier-corpus redos',
+          testFiles: ['redos.test.ts'],
+          verdictAnchors: [
+            {
+              id: 'followup-17-p2-case-gap-range-regression',
+              file: 'redos.test.ts',
+              snippets: ['P2 i-flag case-gap range', "'[A-_]'", "'[Z-a]'"],
+            },
+          ],
+        },
+        text: '// @kovo-security-classifier-corpus redos\nexpect(new RegExp("[A-Z]", "i").test("a")).toBe(true);\n',
+        finding:
+          'redos: missing verdict anchor "followup-17-p2-case-gap-range-regression" in redos.test.ts',
+      },
     ];
 
     for (const { corpus, finding, text } of cases) {

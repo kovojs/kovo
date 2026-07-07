@@ -224,6 +224,25 @@ describe('linear pattern engine (KV434)', () => {
       ).toBe(regex.test(input));
     }
   }, 300_000);
+
+  it('pins red mutation anchors for parity classes the fuzzer must keep reaching', () => {
+    // Corpus-gate anchors for followup-17 DEC-C mutation coverage:
+    // B1 trailing line terminator: a$ rejects a\n without m
+    // B3 in-class legacy numeric escape: ^[^\1-\37]+$ toThrow(RedosPatternError)
+    // P2 i-flag case-gap range: [A-_]/i and [Z-a]/i RegExp parity
+    expect(testLinearPattern(compileLinearPattern('a$'), 'a\n')).toBe(false);
+    expect(() => compileLinearPattern('^[^\\1-\\37]+$')).toThrow(RedosPatternError);
+
+    for (const source of ['[A-_]', '[Z-a]']) {
+      const program = compileLinearPattern(source, 'i');
+      const regex = new RegExp(source, 'i');
+      for (const input of ['@', 'A', 'Z', '[', '_', '`', 'a', 'z', '{']) {
+        expect(testLinearPattern(program, input), `${source}/i on ${JSON.stringify(input)}`).toBe(
+          regex.test(input),
+        );
+      }
+    }
+  });
 });
 
 describe('unsafeRegex escape (KV434)', () => {
@@ -245,6 +264,8 @@ describe('unsafeRegex escape (KV434)', () => {
 
 type Rng = () => number;
 
+const C0_CONTROL_INPUTS = Array.from({ length: 0x20 }, (_, code) => String.fromCharCode(code));
+
 function mulberry32(seed: number): Rng {
   return () => {
     seed |= 0;
@@ -256,29 +277,105 @@ function mulberry32(seed: number): Rng {
 }
 
 function randomPattern(rng: Rng, depth: number): string {
-  const pieces = 1 + pick(rng, 3);
+  const pieces = 1 + pick(rng, 4);
   let source = '';
   for (let i = 0; i < pieces; i += 1) source += randomAtom(rng, depth);
   if (depth < 2 && rng() < 0.3) source = `${source}|${randomPattern(rng, depth + 1)}`;
-  if (depth === 0 && rng() < 0.25) source = `^${source}$`;
+  if (depth === 0 && rng() < 0.3) source = `^${source}$`;
   return source;
 }
 
 function randomAtom(rng: Rng, depth: number): string {
-  const atoms = ['a', 'b', 'c', '.', '\\d', '\\w', '\\s', '[ab]', '[^bc]', ''];
+  const atoms = [
+    'a',
+    'b',
+    'c',
+    '.',
+    '\\d',
+    '\\w',
+    '\\s',
+    '\\b',
+    '\\B',
+    '^',
+    '$',
+    '[ab]',
+    '[^bc]',
+    '[\\d\\w\\s]',
+    '[^\\d\\w\\s]',
+    '[\\b\\t\\n\\r\\f\\v\\0]',
+    '[A-_]',
+    '[Z-a]',
+    '[\\]\\\\\\-^.]',
+    '[\\--/]',
+    '[[-`]',
+    '',
+  ];
   let atom = atoms[pick(rng, atoms.length)] ?? 'a';
   if (depth < 2 && rng() < 0.25) atom = `(${randomPattern(rng, depth + 1)})`;
   if (atom === '') return atom;
+  if (containsAssertionSource(atom)) return atom;
   const quantifiers = ['', '?', '*', '+', '{0,2}', '{1,3}', '+?', '??'];
   return atom + (quantifiers[pick(rng, quantifiers.length)] ?? '');
 }
 
+function containsAssertionSource(source: string): boolean {
+  return (
+    source.includes('^') || source.includes('$') || source.includes('\\b') || source.includes('\\B')
+  );
+}
+
 function randomFlags(rng: Rng): string {
-  return rng() < 0.15 ? 'i' : rng() < 0.3 ? 's' : rng() < 0.45 ? 'm' : '';
+  const flags = [];
+  if (rng() < 0.2) flags.push('i');
+  if (rng() < 0.2) flags.push('s');
+  if (rng() < 0.2) flags.push('m');
+  return flags.join('');
 }
 
 function randomInput(rng: Rng): string {
-  const alphabet = ['a', 'b', 'c', '1', '_', ' ', 'x'];
+  const alphabet = [
+    'a',
+    'b',
+    'c',
+    'x',
+    'A',
+    'Z',
+    '0',
+    '1',
+    '9',
+    '_',
+    ' ',
+    '\t',
+    '\n',
+    '\r',
+    '\r\n',
+    '\u2028',
+    '\u2029',
+    ...C0_CONTROL_INPUTS,
+    '\x7f',
+    '.',
+    '-',
+    '[',
+    ']',
+    '\\',
+    '^',
+    '$',
+    '*',
+    '+',
+    '?',
+    '{',
+    '}',
+    '|',
+    '(',
+    ')',
+    '/',
+    '@',
+    '`',
+    '{',
+    '\ud800',
+    '\udc00',
+    '😀',
+  ];
   const length = pick(rng, 12);
   let input = '';
   for (let i = 0; i < length; i += 1) input += alphabet[pick(rng, alphabet.length)] ?? '';

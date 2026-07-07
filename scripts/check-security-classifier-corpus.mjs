@@ -30,6 +30,24 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: ['((a|a))+', 'nested group interiors contain overlapping alternatives'],
       },
       {
+        id: 'followup-17-b1-dollar-line-terminator-regression',
+        file: 'packages/server/src/redos.test.ts',
+        snippets: ['B1 trailing line terminator', "compileLinearPattern('a$')", "'a\\n'"],
+      },
+      {
+        id: 'followup-17-b3-in-class-legacy-numeric-regression',
+        file: 'packages/server/src/redos.test.ts',
+        snippets: [
+          'B3 in-class legacy numeric escape',
+          "compileLinearPattern('^[^\\\\1-\\\\37]+$')",
+        ],
+      },
+      {
+        id: 'followup-17-p2-case-gap-range-regression',
+        file: 'packages/server/src/redos.test.ts',
+        snippets: ['P2 i-flag case-gap range', "'[A-_]'", "'[Z-a]'"],
+      },
+      {
         id: 'compiler-overlapping-alternatives-regression',
         file: 'packages/compiler/src/redos-pattern.test.ts',
         snippets: ['^(a|a)*$', "toContain('KV434')"],
