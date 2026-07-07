@@ -427,6 +427,33 @@ export function normalizeIpLiteral(host: string): string | null {
 }
 
 /**
+ * Normalize only address strings that are already canonical enough for the synchronous
+ * no-DNS fast path. Loose IPv4 spellings intentionally return null so `net`/undici resolve
+ * and pin the actual dialed address before the SPEC §6.6 sink decision.
+ */
+export function normalizeFastPathIpLiteral(host: string): string | null {
+  const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
+  if (h === '') return null;
+
+  if (isCanonicalIpv4Literal(h)) return h;
+
+  const v6 = parseIpv6Bytes(h);
+  if (v6 !== null) return canonicalizeIpv6Bytes(v6);
+
+  return null;
+}
+
+function isCanonicalIpv4Literal(input: string): boolean {
+  const parts = input.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    if (!/^(0|[1-9][0-9]*)$/.test(part)) return false;
+    const value = Number(part);
+    return Number.isInteger(value) && value >= 0 && value <= 255 && String(value) === part;
+  });
+}
+
+/**
  * Parse the loose IPv4 forms `inet_aton`/`URL` historically accept: 1–4 dotted parts, each in
  * decimal, octal (`0NNN`), or hex (`0xNN`), with the final part absorbing the remaining bytes.
  * Returns canonical dotted-quad or null.
@@ -575,6 +602,13 @@ function extractedIpv4FromIpv6(bytes: readonly number[]): string | null {
   // 64:ff9b::/96 NAT64.
   const nat64Prefix = [0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0];
   if (prefix96.every((byte, index) => byte === nat64Prefix[index])) return embedded();
+
+  // ISATAP embeds IPv4 in the low 32 bits after a 0000:5efe interface-id marker:
+  // <prefix>:0:5efe:w.x.y.z or <prefix>:0:5efe:hhhh:hhhh.
+  if (bytes[8] === 0 && bytes[9] === 0 && bytes[10] === 0x5e && bytes[11] === 0xfe) {
+    const v4 = embedded();
+    return classifyIpv4(v4) === 'public' ? null : v4;
+  }
 
   return null;
 }
@@ -775,19 +809,60 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   }
   const host = decodeURIComponent(url.hostname).replace(/^\[/, '').replace(/\]$/, '');
   const port = normalizedUrlPort(url);
-  const literalIp = normalizeIpLiteral(host);
-  const resolvedIp = literalIp ?? host;
-  const blocked = evaluateEgress({
-    host,
-    port,
-    protocol: url.protocol,
-    resolvedIp,
-    policy,
-    requireDestinationAllowlist: true,
-  });
-  if (blocked) throw blocked;
+  const origin = `${url.protocol}//${host.toLowerCase()}:${port}`;
+  if (!policy.allowDestinations.has(origin)) {
+    throw new EgressBlockedError({
+      destination: origin,
+      classification: 'special-use',
+      reason: 'destination-allowlist',
+    });
+  }
+  const literalIp = normalizeFastPathIpLiteral(host);
+  if (literalIp !== null) {
+    const blocked = evaluateEgress({
+      host,
+      port,
+      protocol: url.protocol,
+      resolvedIp: literalIp,
+      policy,
+      requireDestinationAllowlist: true,
+    });
+    if (blocked) throw blocked;
+  } else {
+    const resolved = await lookupAllAddresses(host);
+    if (resolved.length === 0) {
+      throw new EgressBlockedError({
+        destination: `${host}:${port}`,
+        classification: 'special-use',
+        reason: 'destination-allowlist',
+      });
+    }
+    for (const { address } of resolved) {
+      const blocked = evaluateEgress({
+        host,
+        port,
+        protocol: url.protocol,
+        resolvedIp: address,
+        policy,
+        requireDestinationAllowlist: true,
+      });
+      if (blocked) throw blocked;
+    }
+  }
   return globalThis.fetch(input, init);
 }) as typeof globalThis.fetch;
+
+function lookupAllAddresses(host: string): Promise<LookupAddress[]> {
+  return new Promise((resolve, reject) => {
+    dns.lookup(host, { all: true }, (err, addresses) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(addresses);
+    });
+  });
+}
 
 function urlFromRequestInput(input: RequestInfo | URL): URL | null {
   try {
@@ -920,7 +995,7 @@ export function installNetConnectFloor(
     const port = Number(options.port ?? 0);
 
     // If host is already an IP literal, classify + decide synchronously before connecting.
-    const literalIp = normalizeIpLiteral(host);
+    const literalIp = normalizeFastPathIpLiteral(host);
     if (literalIp !== null) {
       const blocked = evaluateEgress({ host, port, resolvedIp: literalIp, policy: activePolicy });
       if (blocked) {
@@ -1024,7 +1099,7 @@ function evaluateHttpAgentRequest(
   const port = Number(
     options.port ?? options.defaultPort ?? (options.protocol === 'https:' ? 443 : 80),
   );
-  const literalIp = normalizeIpLiteral(host);
+  const literalIp = normalizeFastPathIpLiteral(host);
   if (literalIp !== null) {
     return evaluateEgress({ host, port, resolvedIp: literalIp, policy });
   }

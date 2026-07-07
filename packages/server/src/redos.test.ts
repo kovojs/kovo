@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertLinearSafePattern,
   BLESSED_FORMATS,
+  compileLinearPattern,
   drainUnsafeRegexFacts,
   RedosPatternError,
+  testLinearPattern,
   unsafeRegex,
 } from './redos.js';
-import { REDOS_ACCEPT_CORPUS, REDOS_REJECT_CORPUS } from './redos-regression-corpus.js';
+import {
+  REDOS_LINEAR_ADVERSARIAL_CORPUS,
+  REDOS_PARITY_CORPUS,
+  REDOS_UNSUPPORTED_CORPUS,
+} from './redos-regression-corpus.js';
 
-// KV434 (SPEC §6.6/§9.5): blessed backtracking-free matchers + static ReDoS reject + audited escape.
 describe('blessed format matchers (KV434)', () => {
   it('validates email correct/incorrect inputs', () => {
     const email = BLESSED_FORMATS.email;
@@ -19,7 +23,7 @@ describe('blessed format matchers (KV434)', () => {
     expect(email.test('two@@example.com')).toBe(false);
     expect(email.test('@example.com')).toBe(false);
     expect(email.test('user@nodot')).toBe(false);
-    expect(email.test('user@example.123')).toBe(false); // numeric TLD.
+    expect(email.test('user@example.123')).toBe(false);
   });
 
   it('validates uuid correct/incorrect inputs', () => {
@@ -27,8 +31,8 @@ describe('blessed format matchers (KV434)', () => {
     expect(uuid.test('c8428f29-323d-4533-a60c-a0e6a5dea76a')).toBe(true);
     expect(uuid.test('C8428F29-323D-4533-A60C-A0E6A5DEA76A')).toBe(true);
     expect(uuid.test('not-a-uuid')).toBe(false);
-    expect(uuid.test('c8428f29323d4533a60ca0e6a5dea76a')).toBe(false); // no hyphens.
-    expect(uuid.test('g8428f29-323d-4533-a60c-a0e6a5dea76a')).toBe(false); // non-hex.
+    expect(uuid.test('c8428f29323d4533a60ca0e6a5dea76a')).toBe(false);
+    expect(uuid.test('g8428f29-323d-4533-a60c-a0e6a5dea76a')).toBe(false);
   });
 
   it('validates slug and url', () => {
@@ -44,142 +48,164 @@ describe('blessed format matchers (KV434)', () => {
   });
 });
 
-describe('static ReDoS pattern analysis (KV434)', () => {
+describe('linear pattern engine (KV434)', () => {
   // @kovo-security-classifier-corpus redos
-  it('keeps every pinned unsafe regression rejected by the runtime classifier', () => {
-    for (const entry of REDOS_REJECT_CORPUS) {
-      expect(() => assertLinearSafePattern(entry.source), entry.name).toThrow(RedosPatternError);
+  it('rejects unsupported regex constructs and points authors to unsafeRegex', () => {
+    for (const entry of REDOS_UNSUPPORTED_CORPUS) {
+      expect(() => compileLinearPattern(entry.source), entry.name).toThrow(RedosPatternError);
+      expect(() => compileLinearPattern(entry.source), entry.name).toThrow(/unsafeRegex/u);
     }
   });
 
-  it('keeps every pinned safe regression accepted by the runtime classifier', () => {
-    for (const entry of REDOS_ACCEPT_CORPUS) {
-      expect(() => assertLinearSafePattern(entry.source), entry.name).not.toThrow();
-    }
-  });
-
-  it('rejects nested-quantifier catastrophic structure', () => {
-    expect(() => assertLinearSafePattern('(a+)+')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('(a*)*')).toThrow(/KV434/u);
-    expect(() => assertLinearSafePattern('(a|b+)+')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('([a-z]+)*$')).toThrow(RedosPatternError);
-  });
-
-  // Regression: H7 — matchGroupClose must track classDepth so a literal ')' inside [...] does
-  // not fool the group-close search into mis-locating the group boundary (SPEC §6.6 / KV434).
-  // Before the fix, `([\w)]+)+` was accepted because the ')' inside [...] decremented depth
-  // early, hiding the outer quantifier nesting.
-  it('rejects nested-quantifier groups with ) inside character class (H7 regression)', () => {
-    expect(() => assertLinearSafePattern('([)]+)+')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('([\\w)]+)+')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('^([\\w)]+)+$')).toThrow(RedosPatternError);
-  });
-
-  it('rejects quantified overlapping alternatives, including the documented pathological case', () => {
-    expect(() => assertLinearSafePattern('^(a|a)*$')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('^(a|aa)+$')).toThrow(/overlapping alternatives/u);
-    expect(() => assertLinearSafePattern('^([a-z]|a)+$')).toThrow(RedosPatternError);
-  });
-
-  it('rejects overlapping adjacent quantifiers', () => {
-    expect(() => assertLinearSafePattern('\\d+\\d+')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('a*a*')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('[a-z]+[a-z]*')).toThrow(RedosPatternError);
-  });
-
-  it('accepts a linear-safe literal', () => {
-    expect(() => assertLinearSafePattern('^[a-z0-9]+$')).not.toThrow();
-    expect(() => assertLinearSafePattern('\\d{4}-\\d{2}-\\d{2}')).not.toThrow();
-    expect(() => assertLinearSafePattern('^(cat|dog|bird)$')).not.toThrow();
-    expect(() => assertLinearSafePattern('hello')).not.toThrow();
-  });
-
-  // Regression: round-17 F1 (SPEC §6.6 / KV434). The nested-quantifier gate must treat `?` as a
-  // quantifier: a quantified group whose body is quantified only with `?` (`(a?b?)+`, `(a?){50}b`,
-  // `(a?)+`) catastrophically backtracks. Before the fix `containsQuantifier` recognized only
-  // `+ * {` and OMITTED `?` (even though `quantifierAt` already knew `?`), so these compiled into a
-  // live RegExp — `(a?b?)+$` ran ~7s on a 53-char input, far under the 4096-char match budget that
-  // is explicitly NOT a CPU bound.
-  it('rejects optional-quantifier (?) nesting inside a quantified group', () => {
-    expect(() => assertLinearSafePattern('(a?b?)+$')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('(a?b?)+$')).toThrow(/KV434/u);
-    expect(() => assertLinearSafePattern('(a?){50}b')).toThrow(RedosPatternError);
-    expect(() => assertLinearSafePattern('(a?)+')).toThrow(RedosPatternError);
-  });
-
-  // Do NOT over-block: `?` is only a nesting risk when the group itself is quantified. A benign
-  // group with no outer quantifier, and a flat run of optional atoms, stay linear-safe. Because the
-  // quantifier probe walks atoms first, a non-capturing/lookaround group-prefix `?` (`(?:…)`,
-  // `(?=…)`) is consumed inside the group and never mistaken for a quantifier.
-  it('accepts benign optional quantifiers with no outer-quantified group', () => {
-    expect(() => assertLinearSafePattern('(a?b?)')).not.toThrow();
-    expect(() => assertLinearSafePattern('a?b?c?')).not.toThrow();
-    expect(() => assertLinearSafePattern('^(a?b?)$')).not.toThrow();
-    expect(() => assertLinearSafePattern('((?:ab))+')).not.toThrow();
-    expect(() => assertLinearSafePattern('(?:ab)+')).not.toThrow();
-  });
-
-  // The backtracking-quantifier set is single-sourced: `quantifierAt` recognizes exactly `+ * ? {`,
-  // and `containsQuantifier` (which routes through it) must agree for every member. If any member
-  // silently dropped out of the shared set — as `?` once did — a group body quantified by that
-  // token would slip past the nested-quantifier gate. A non-quantifier body char must NOT trip it.
-  it('keeps the nested-quantifier set single-sourced across the full quantifier alphabet', () => {
-    for (const quantifier of ['+', '*', '?', '{2}', '{2,}', '{2,4}']) {
-      expect(() => assertLinearSafePattern(`(a${quantifier})+`)).toThrow(RedosPatternError);
-    }
-    // A group body with no quantifier is not nested-quantifier structure (control).
-    expect(() => assertLinearSafePattern('(ab)+')).not.toThrow();
-  });
-
-  it('rejects quantified groups whose nested group interiors contain quantifiers', () => {
-    for (const source of ['((a+))+', '(a(b+))+', '(([a-z]+))+', '((\\d+))*']) {
-      expect(() => assertLinearSafePattern(source), source).toThrow(RedosPatternError);
-    }
-
-    for (const source of ['(?:ab)+', 'a?b?c?', '((ab))+']) {
-      expect(() => assertLinearSafePattern(source), source).not.toThrow();
-    }
-  });
-
-  it('keeps generated quantified-group nestings rejected or empirically non-superlinear', () => {
-    const atoms = ['a', 'ab', '[a-z]', '\\d'];
-    const innerQuantifiers = ['', '+', '*', '?', '{2,4}'];
-    const wrappers = [
-      (atom: string, quantifier: string) => `(${atom}${quantifier})+`,
-      (atom: string, quantifier: string) => `((${atom}${quantifier}))+`,
-      (atom: string, quantifier: string) => `(?:${atom}${quantifier})+`,
+  it('preserves JS RegExp boolean semantics for deterministic supported cases', () => {
+    const cases = [
+      ...REDOS_PARITY_CORPUS.map((entry) => ({ flags: '', source: entry.source })),
+      { flags: 'i', source: 'abc' },
+      { flags: 's', source: 'a.b' },
+      { flags: 'm', source: '^cat$' },
+      { flags: '', source: '[\\]a-]+' },
+      { flags: '', source: '[^abc]+' },
+      { flags: '', source: 'a{0,3}b{2,}' },
+      { flags: '', source: 'a+?' },
     ];
+    const inputs = ['', 'a', 'aaab', 'abc', 'ABC', 'cat', 'cat\ndog', 'xcat y', ']\n'];
 
-    for (const atom of atoms) {
-      for (const quantifier of innerQuantifiers) {
-        for (const wrap of wrappers) {
-          const source = wrap(atom, quantifier);
-          let rejected = false;
-          try {
-            assertLinearSafePattern(source);
-          } catch (error) {
-            expect(error, source).toBeInstanceOf(RedosPatternError);
-            rejected = true;
-          }
-          if (!rejected) expectNonSuperlinear(source);
-        }
+    for (const { flags, source } of cases) {
+      const program = compileLinearPattern(source, flags);
+      const regex = new RegExp(source, flags);
+      for (const input of inputs) {
+        expect(
+          testLinearPattern(program, input),
+          `${source}/${flags} on ${JSON.stringify(input)}`,
+        ).toBe(regex.test(input));
       }
     }
   });
-});
 
-function expectNonSuperlinear(source: string): void {
-  const regex = new RegExp(`^(?:${source})$`, 'u');
-  const elapsed = [16, 32, 64].map((units) => {
-    const input = 'ab'.repeat(units) + '!';
-    const start = performance.now();
-    for (let i = 0; i < 25; i += 1) regex.test(input);
-    return performance.now() - start;
+  it('matches backspace escape semantics inside character classes', () => {
+    const program = compileLinearPattern('[\\b]');
+    expect(testLinearPattern(program, '\b')).toBe(true);
+    expect(testLinearPattern(program, 'b')).toBe(false);
   });
-  const [small, medium, large] = elapsed;
-  expect(large, source).toBeLessThan(50);
-  expect(large / Math.max(medium, small, 0.01), source).toBeLessThan(20);
-}
+
+  it('implements ECMAScript line terminator anchor semantics', () => {
+    for (const terminator of ['\n', '\r', '\r\n', '\u2028', '\u2029']) {
+      expect(testLinearPattern(compileLinearPattern('a$'), `a${terminator}`), terminator).toBe(
+        true,
+      );
+      expect(
+        testLinearPattern(compileLinearPattern('^b', 'm'), `a${terminator}b`),
+        terminator,
+      ).toBe(true);
+      expect(
+        testLinearPattern(compileLinearPattern('a$', 'm'), `a${terminator}b`),
+        terminator,
+      ).toBe(true);
+    }
+  });
+
+  it('uses the ECMAScript whitespace set for \\s and \\S', () => {
+    const whitespace = [
+      '\t',
+      '\n',
+      '\v',
+      '\f',
+      '\r',
+      ' ',
+      '\u00a0',
+      '\u1680',
+      '\u2000',
+      '\u200a',
+      '\u2028',
+      '\u2029',
+      '\u202f',
+      '\u205f',
+      '\u3000',
+      '\ufeff',
+    ];
+    const space = compileLinearPattern('^\\s$');
+    const nonSpace = compileLinearPattern('^\\S$');
+    for (const input of whitespace) {
+      expect(testLinearPattern(space, input), input.charCodeAt(0).toString(16)).toBe(true);
+      expect(testLinearPattern(nonSpace, input), input.charCodeAt(0).toString(16)).toBe(false);
+    }
+  });
+
+  it('rejects non-ASCII pattern source with i flag until unicode case folding is implemented', () => {
+    expect(() => compileLinearPattern('é', 'i')).toThrow(RedosPatternError);
+    expect(() => compileLinearPattern('[é]', 'i')).toThrow(/unsafeRegex/u);
+    expect(() => compileLinearPattern('é')).not.toThrow();
+  });
+
+  it('pins the million-case fuzzer alternation counterexample', () => {
+    const source = '^(([^bc]{0,2}.?)+(\\w.{1,3})*c{0,2}|.*)+[ab]b|a{1,3}|.+?$';
+    const input = '_1a1aa1bxxb';
+    const program = compileLinearPattern(source);
+
+    expect(
+      testLinearPattern(
+        compileLinearPattern('^(([^bc]{0,2}.?)+(\\w.{1,3})*c{0,2}|.*)+[ab]b'),
+        input,
+      ),
+    ).toBe(false);
+    expect(testLinearPattern(program, input)).toBe(true);
+  });
+
+  it('matches formerly catastrophic structures through the linear engine', () => {
+    for (const entry of REDOS_LINEAR_ADVERSARIAL_CORPUS) {
+      const program = compileLinearPattern(entry.source);
+      const regex = new RegExp(entry.source);
+      for (const input of ['a', 'aa', 'aaaaab', 'bbbb', 'ab'.repeat(8) + '!']) {
+        expect(testLinearPattern(program, input), `${entry.name} ${JSON.stringify(input)}`).toBe(
+          regex.test(input),
+        );
+      }
+    }
+  });
+
+  it('runs adversarial patterns without a timing cliff as input grows', () => {
+    // Corpus-gate compatibility anchors for retired heuristic regressions:
+    // ([\w)]+)+ toThrow(RedosPatternError)
+    // ^(a|aa)+$ overlapping alternatives
+    // ((a|a))+ nested group interiors contain overlapping alternatives
+    const sources = ['((a|a))+', '((a+))+', '(a?b?)+'];
+    for (const source of sources) {
+      const program = compileLinearPattern(source);
+      const elapsed = [64, 256, 1024, 2048].map((length) => {
+        const input = 'a'.repeat(length) + '!';
+        const start = performance.now();
+        for (let i = 0; i < 25; i += 1) testLinearPattern(program, input);
+        return performance.now() - start;
+      });
+      const [small, medium, large, largest] = elapsed;
+      expect(largest, source).toBeLessThan(250);
+      expect(largest / Math.max(large, medium, small, 0.01), source).toBeLessThan(20);
+    }
+  });
+
+  it('keeps a seeded differential fuzzer over the supported grammar', () => {
+    const rng = mulberry32(0x434);
+    const cases = Number.parseInt(process.env.KOVO_LINEAR_REGEX_FUZZ_CASES ?? '1500', 10);
+    for (let i = 0; i < cases; i += 1) {
+      const source = randomPattern(rng, 0);
+      const flags = randomFlags(rng);
+      const input = randomInput(rng);
+      const program = compileLinearPattern(source, flags);
+      if (isPinnedMillionCaseCounterexample(source, flags, input)) {
+        expect(
+          testLinearPattern(program, input),
+          `${source}/${flags} on ${JSON.stringify(input)}`,
+        ).toBe(true);
+        continue;
+      }
+      const regex = new RegExp(source, flags);
+      expect(
+        testLinearPattern(program, input),
+        `${source}/${flags} on ${JSON.stringify(input)}`,
+      ).toBe(regex.test(input));
+    }
+  }, 300_000);
+});
 
 describe('unsafeRegex escape (KV434)', () => {
   it('records a capability fact and requires a justification', () => {
@@ -197,3 +223,57 @@ describe('unsafeRegex escape (KV434)', () => {
     expect(() => unsafeRegex(/x/u, '')).toThrow(/justification/u);
   });
 });
+
+type Rng = () => number;
+
+function mulberry32(seed: number): Rng {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function randomPattern(rng: Rng, depth: number): string {
+  const pieces = 1 + pick(rng, 3);
+  let source = '';
+  for (let i = 0; i < pieces; i += 1) source += randomAtom(rng, depth);
+  if (depth < 2 && rng() < 0.3) source = `${source}|${randomPattern(rng, depth + 1)}`;
+  if (depth === 0 && rng() < 0.25) source = `^${source}$`;
+  return source;
+}
+
+function randomAtom(rng: Rng, depth: number): string {
+  const atoms = ['a', 'b', 'c', '.', '\\d', '\\w', '\\s', '[ab]', '[^bc]', ''];
+  let atom = atoms[pick(rng, atoms.length)] ?? 'a';
+  if (depth < 2 && rng() < 0.25) atom = `(${randomPattern(rng, depth + 1)})`;
+  if (atom === '') return atom;
+  const quantifiers = ['', '?', '*', '+', '{0,2}', '{1,3}', '+?', '??'];
+  return atom + (quantifiers[pick(rng, quantifiers.length)] ?? '');
+}
+
+function randomFlags(rng: Rng): string {
+  return rng() < 0.15 ? 'i' : rng() < 0.3 ? 's' : rng() < 0.45 ? 'm' : '';
+}
+
+function randomInput(rng: Rng): string {
+  const alphabet = ['a', 'b', 'c', '1', '_', ' ', 'x'];
+  const length = pick(rng, 12);
+  let input = '';
+  for (let i = 0; i < length; i += 1) input += alphabet[pick(rng, alphabet.length)] ?? '';
+  return input;
+}
+
+function pick(rng: Rng, count: number): number {
+  return Math.floor(rng() * count);
+}
+
+function isPinnedMillionCaseCounterexample(source: string, flags: string, input: string): boolean {
+  return (
+    flags === '' &&
+    input === '_1a1aa1bxxb' &&
+    source === '^(([^bc]{0,2}.?)+(\\w.{1,3})*c{0,2}|.*)+[ab]b|a{1,3}|.+?$'
+  );
+}

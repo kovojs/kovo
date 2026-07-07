@@ -8,8 +8,8 @@ Isolated worktree at `b805b5c88`; `/Users/mini/kovo` untouched. Line numbers cit
 
 - [ ] **P1 — `frameworkEgressFetch` blocks an explicitly ALLOWLISTED public hostname, because it classifies the raw
       hostname STRING (which fails closed to `special-use`) instead of a resolved IP. `allowDestinations:
-  ['https://api.stripe.com']` passes the destination-allowlist check but is then denied by `classifyIp('api.stripe
-  .com') = special-use` before `globalThis.fetch` is called — so hostname egress to any allowlisted external API is
+['https://api.stripe.com']` passes the destination-allowlist check but is then denied by `classifyIp('api.stripe
+.com') = special-use` before `globalThis.fetch` is called — so hostname egress to any allowlisted external API is
       broken.** (MEDIUM, framework/functional-over-block; `egress-hostname-overblock` EGRESS-3; unanimous REAL;
       fail-closed but a real functional regression)
   - Observed: `frameworkEgressFetch` sets `resolvedIp = literalIp ?? host` (`egress.ts:779`); for a hostname `literalIp`
