@@ -1920,6 +1920,7 @@ function valueReadsColumn(value: SymbolicValue, column: string): boolean {
 type AtomicColumnKey = string;
 
 interface AtomicReadFlow {
+  memberAliasRootsBySymbol: Map<string, Set<string>>;
   rowColumnsBySymbol: Map<string, Map<string, Set<AtomicColumnKey>>>;
   valueColumnsBySymbol: Map<string, Set<AtomicColumnKey>>;
 }
@@ -1965,6 +1966,7 @@ function atomicReadFlowBefore(
   concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
 ): AtomicReadFlow {
   const flow: AtomicReadFlow = {
+    memberAliasRootsBySymbol: new Map(),
     rowColumnsBySymbol: new Map(),
     valueColumnsBySymbol: new Map(),
   };
@@ -1975,7 +1977,15 @@ function atomicReadFlowBefore(
       .flatMap((declaration) => {
         const initializer = declaration.getInitializer();
         return initializer
-          ? [{ binding: declaration.getNameNode(), initializer, node: declaration, replace: true }]
+          ? [
+              {
+                binding: declaration.getNameNode(),
+                compound: false,
+                initializer,
+                node: declaration,
+                replace: true,
+              },
+            ]
           : [];
       }),
     ...body
@@ -1983,10 +1993,11 @@ function atomicReadFlowBefore(
       .filter(
         (assignment) =>
           assignment.getStart() < before.getStart() &&
-          assignment.getOperatorToken().getKind() === SyntaxKind.EqualsToken,
+          isAtomicFlowAssignmentOperator(assignment.getOperatorToken().getKind()),
       )
       .map((assignment) => ({
         binding: assignment.getLeft(),
+        compound: assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken,
         initializer: assignment.getRight(),
         node: assignment,
         replace: assignmentDefinitelyPrecedesWrite(assignment, before),
@@ -2001,6 +2012,7 @@ function atomicReadFlowBefore(
       resolveTable,
       concurrencyByTable,
       event.replace,
+      event.compound,
     );
   }
 
@@ -2014,6 +2026,7 @@ function applyAtomicReadFlowBinding(
   resolveTable: (node: Node) => string | undefined,
   concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
   replace: boolean,
+  compound: boolean,
 ): void {
   const projection = projectedAtomicRowForExpression(
     initializer,
@@ -2022,16 +2035,34 @@ function applyAtomicReadFlowBinding(
     concurrencyByTable,
   );
   const reads = atomicReadsForExpression(initializer, flow);
-  const destructuredReads = projectedRowDestructuringReads(binding, initializer, flow);
-  if (replace) clearAtomicReadBinding(binding, flow);
-
-  if (projection.size > 0) assignProjectedRowBinding(binding, projection, flow, replace);
-  for (const target of destructuredReads) {
-    if (!Node.isIdentifier(target.target)) continue;
-    const key = symbolKeyForBinding(target.target);
-    if (key) mergeAtomicValueBinding(key, target.reads, flow, replace);
+  if (compound) {
+    for (const target of assignmentTargets(binding)) {
+      for (const read of atomicReadsForExpression(target, flow)) reads.add(read);
+    }
   }
-  if (reads.size > 0) assignAtomicReadBinding(binding, reads, flow, replace);
+  const destructuredReads = projectedRowDestructuringReads(binding, initializer, flow);
+  const shouldReplace = replace && !compound;
+  const aliasRoots = memberAliasRootsForExpression(initializer, flow);
+  if (shouldReplace) clearAtomicReadBinding(binding, flow);
+
+  if (Node.isIdentifier(binding)) {
+    const key = directAtomicFlowSymbolKey(binding);
+    if (key && aliasRoots.size > 0) {
+      const roots = shouldReplace
+        ? new Set<string>()
+        : new Set(flow.memberAliasRootsBySymbol.get(key) ?? []);
+      for (const root of aliasRoots) roots.add(root);
+      flow.memberAliasRootsBySymbol.set(key, roots);
+    }
+  }
+
+  if (projection.size > 0) assignProjectedRowBinding(binding, projection, flow, shouldReplace);
+  for (const target of destructuredReads) {
+    for (const key of atomicFlowKeysForTarget(target.target, flow)) {
+      mergeAtomicValueBinding(key, target.reads, flow, shouldReplace);
+    }
+  }
+  if (reads.size > 0) assignAtomicReadBinding(binding, reads, flow, shouldReplace);
 }
 
 function projectedAtomicRowForExpression(
@@ -2044,7 +2075,7 @@ function projectedAtomicRowForExpression(
   if (selected.size > 0) return selected;
   const node = unwrapAwait(expression);
   if (!Node.isIdentifier(node)) return new Map();
-  const key = symbolKeyForBinding(node);
+  const key = directAtomicFlowSymbolKey(node);
   const aliased = key ? flow.rowColumnsBySymbol.get(key) : undefined;
   return aliased ? cloneAtomicProjection(aliased) : new Map();
 }
@@ -2092,16 +2123,23 @@ function assignProjectedRowBinding(
   replace = true,
 ): void {
   if (Node.isIdentifier(binding)) {
-    const key = symbolKeyForBinding(binding);
+    const key = directAtomicFlowSymbolKey(binding);
     if (key) mergeAtomicProjectionBinding(key, projection, flow, replace);
+    return;
+  }
+
+  if (isStaticAtomicMemberAccess(binding)) {
+    for (const key of atomicFlowKeysForTarget(binding, flow)) {
+      mergeAtomicProjectionBinding(key, projection, flow, replace);
+    }
     return;
   }
 
   if (Node.isArrayBindingPattern(binding) || Node.isArrayLiteralExpression(binding)) {
     for (const target of arrayAssignmentTargets(binding)) {
-      if (!Node.isIdentifier(target)) continue;
-      const key = symbolKeyForBinding(target);
-      if (key) mergeAtomicProjectionBinding(key, projection, flow, replace);
+      for (const key of atomicFlowKeysForTarget(target, flow)) {
+        mergeAtomicProjectionBinding(key, projection, flow, replace);
+      }
     }
   }
 }
@@ -2113,15 +2151,22 @@ function assignAtomicReadBinding(
   replace = true,
 ): void {
   if (Node.isIdentifier(binding)) {
-    const key = symbolKeyForBinding(binding);
+    const key = directAtomicFlowSymbolKey(binding);
     if (key) mergeAtomicValueBinding(key, reads, flow, replace);
     return;
   }
 
+  if (isStaticAtomicMemberAccess(binding)) {
+    for (const key of atomicFlowKeysForTarget(binding, flow)) {
+      mergeAtomicValueBinding(key, reads, flow, replace);
+    }
+    return;
+  }
+
   for (const target of destructuringAssignmentTargets(binding)) {
-    if (!Node.isIdentifier(target)) continue;
-    const key = symbolKeyForBinding(target);
-    if (key) mergeAtomicValueBinding(key, reads, flow, replace);
+    for (const key of atomicFlowKeysForTarget(target, flow)) {
+      mergeAtomicValueBinding(key, reads, flow, replace);
+    }
   }
 }
 
@@ -2133,7 +2178,7 @@ function projectedRowDestructuringReads(
   if (!Node.isObjectBindingPattern(binding) && !Node.isObjectLiteralExpression(binding)) return [];
   const source = unwrapAwait(initializer);
   if (!Node.isIdentifier(source)) return [];
-  const sourceKey = symbolKeyForBinding(source);
+  const sourceKey = directAtomicFlowSymbolKey(source);
   const projection = sourceKey ? flow.rowColumnsBySymbol.get(sourceKey) : undefined;
   if (!projection) return [];
 
@@ -2145,16 +2190,19 @@ function projectedRowDestructuringReads(
 
 function clearAtomicReadBinding(binding: Node, flow: AtomicReadFlow): void {
   for (const target of assignmentTargets(binding)) {
-    if (!Node.isIdentifier(target)) continue;
-    const key = symbolKeyForBinding(target);
-    if (!key) continue;
-    flow.rowColumnsBySymbol.delete(key);
-    flow.valueColumnsBySymbol.delete(key);
+    for (const key of atomicFlowKeysForTarget(target, flow)) {
+      flow.rowColumnsBySymbol.delete(key);
+      flow.valueColumnsBySymbol.delete(key);
+    }
+    if (Node.isIdentifier(target)) {
+      const direct = directAtomicFlowSymbolKey(target);
+      if (direct) flow.memberAliasRootsBySymbol.delete(direct);
+    }
   }
 }
 
 function assignmentTargets(binding: Node): Node[] {
-  if (Node.isIdentifier(binding)) return [binding];
+  if (Node.isIdentifier(binding) || isStaticAtomicMemberAccess(binding)) return [binding];
   return destructuringAssignmentTargets(binding);
 }
 
@@ -2289,16 +2337,19 @@ function atomicReadsForExpression(expression: Node, flow: AtomicReadFlow): Set<A
   const visit = (node: Node): void => {
     const unwrapped = unwrappedStaticExpressionNode(node);
     if (Node.isIdentifier(unwrapped)) {
-      const key = symbolKeyForBinding(unwrapped);
+      const key = directAtomicFlowSymbolKey(unwrapped);
       for (const column of key ? (flow.valueColumnsBySymbol.get(key) ?? []) : []) {
         reads.add(column);
       }
     }
 
     if (Node.isPropertyAccessExpression(unwrapped) || Node.isElementAccessExpression(unwrapped)) {
+      for (const memberKey of atomicFlowKeysForTarget(unwrapped, flow)) {
+        for (const column of flow.valueColumnsBySymbol.get(memberKey) ?? []) reads.add(column);
+      }
       const property = staticAccessName(unwrapped);
       const root = staticExpressionRootIdentifier(unwrapped);
-      const rootKey = root ? symbolKeyForBinding(root) : undefined;
+      const rootKey = root ? directAtomicFlowSymbolKey(root) : undefined;
       const columns =
         rootKey && property ? flow.rowColumnsBySymbol.get(rootKey)?.get(property) : undefined;
       for (const column of columns ?? []) reads.add(column);
@@ -2315,8 +2366,75 @@ function unwrapAwait(expression: Node): Node {
   return Node.isAwaitExpression(node) ? unwrappedStaticExpressionNode(node.getExpression()) : node;
 }
 
-function symbolKeyForBinding(node: Node): string | undefined {
+function directAtomicFlowSymbolKey(node: Node): string | undefined {
   return resolvedSymbolKey(symbolForIdentifierReference(node) ?? node.getSymbol());
+}
+
+function isStaticAtomicMemberAccess(node: Node): boolean {
+  return (
+    (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) &&
+    staticAtomicMemberPath(node) !== undefined
+  );
+}
+
+function staticAtomicMemberPath(node: Node): { root: Node; segments: string[] } | undefined {
+  const segments: string[] = [];
+  let current = unwrappedStaticExpressionNode(node);
+  while (Node.isPropertyAccessExpression(current) || Node.isElementAccessExpression(current)) {
+    const segment = staticAccessName(current);
+    if (!segment) return undefined;
+    segments.unshift(segment);
+    current = unwrappedStaticExpressionNode(current.getExpression());
+  }
+  return Node.isIdentifier(current) && segments.length > 0
+    ? { root: current, segments }
+    : undefined;
+}
+
+function atomicFlowKeysForTarget(node: Node, flow: AtomicReadFlow): string[] {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isIdentifier(expression)) {
+    const key = directAtomicFlowSymbolKey(expression);
+    return key ? [key] : [];
+  }
+  const path = staticAtomicMemberPath(expression);
+  if (!path) return [];
+  const directRoot = directAtomicFlowSymbolKey(path.root);
+  if (!directRoot) return [];
+  const roots = flow.memberAliasRootsBySymbol.get(directRoot) ?? new Set([directRoot]);
+  return [...roots].map((root) => `${root}\0member:${path.segments.join('.')}`);
+}
+
+function memberAliasRootsForExpression(node: Node, flow: AtomicReadFlow): Set<string> {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isIdentifier(expression)) {
+    const direct = directAtomicFlowSymbolKey(expression);
+    return direct
+      ? new Set(flow.memberAliasRootsBySymbol.get(direct) ?? [direct])
+      : new Set<string>();
+  }
+  return new Set(atomicFlowKeysForTarget(expression, flow));
+}
+
+function isAtomicFlowAssignmentOperator(kind: SyntaxKind): boolean {
+  return (
+    kind === SyntaxKind.EqualsToken ||
+    kind === SyntaxKind.PlusEqualsToken ||
+    kind === SyntaxKind.MinusEqualsToken ||
+    kind === SyntaxKind.AsteriskEqualsToken ||
+    kind === SyntaxKind.AsteriskAsteriskEqualsToken ||
+    kind === SyntaxKind.SlashEqualsToken ||
+    kind === SyntaxKind.PercentEqualsToken ||
+    kind === SyntaxKind.LessThanLessThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.AmpersandEqualsToken ||
+    kind === SyntaxKind.BarEqualsToken ||
+    kind === SyntaxKind.CaretEqualsToken ||
+    kind === SyntaxKind.BarBarEqualsToken ||
+    kind === SyntaxKind.AmpersandAmpersandEqualsToken ||
+    kind === SyntaxKind.QuestionQuestionEqualsToken
+  );
 }
 
 function dedupeToctouFacts(facts: readonly ToctouFact[]): ToctouFact[] {

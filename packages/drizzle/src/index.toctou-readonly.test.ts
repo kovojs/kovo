@@ -222,6 +222,107 @@ describe('KV429 concurrency annotation composition corpus', () => {
     });
     expect(diagnostics.map(({ code }) => code)).toContain('KV429');
   });
+
+  it.each([
+    [
+      'property assignment',
+      [
+        "const concurrency: { atomic: 'stock' | 'price'; version: 'ver' } = { atomic: 'stock', version: 'ver' };",
+        "concurrency.atomic = 'price';",
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'array index assignment',
+      [
+        "const atomic: ('stock' | 'price')[] = ['stock'];",
+        "atomic[0] = 'price';",
+        'const concurrency = { atomic, version: "ver" };',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'array mutator',
+      [
+        "const atomic: ('stock' | 'price')[] = ['stock'];",
+        "atomic.push('price');",
+        'const concurrency = { atomic, version: "ver" };',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'Object.assign mutation',
+      [
+        "const concurrency: { atomic: 'stock' | 'price'; version: 'ver' } = { atomic: 'stock', version: 'ver' };",
+        "Object.assign(concurrency, { atomic: 'price' });",
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'unknown escape',
+      [
+        'declare function mutate(value: object): void;',
+        'const concurrency = { atomic: "stock", version: "ver" } as const;',
+        'mutate(concurrency);',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'exported mutable carrier',
+      [
+        'export const concurrency = { atomic: "stock", version: "ver" } as const;',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'named export escape',
+      [
+        'const concurrency = { atomic: "stock", version: "ver" } as const;',
+        'export { concurrency };',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'cyclic alias graph',
+      [
+        'const first = second;',
+        'const second = first;',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...first }));',
+      ].join('\n'),
+    ],
+    [
+      'shadowed Object.freeze lookalike',
+      [
+        'const Object = { freeze(value: { atomic: string; version: string }) { value.atomic = "price"; return value; } };',
+        'const concurrency = Object.freeze({ atomic: "stock", version: "ver" });',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+  ])('fails closed when a concurrency carrier has a %s', (_label, schema) => {
+    const diagnostics = analyzeSqlSafetyFromProject({
+      files: [writeDbTypes, { fileName: 'schema.ts', source: schema }],
+    });
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV429',
+          message: expect.stringContaining(
+            'concurrency annotation is dynamic or statically unresolved',
+          ),
+        }),
+      ]),
+    );
+  });
+
+  it('retains a deeply static Object.freeze carrier', () => {
+    const schema = [
+      'const concurrency = Object.freeze({ atomic: "stock", version: "ver" } as const);',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+    ].join('\n');
+    expect(toctou(schema, unsafeWrite)).toMatchObject([
+      { column: 'stock', name: 'buy', table: 'products' },
+    ]);
+  });
 });
 
 describe('KV429 assignment and destructuring dataflow corpus', () => {
@@ -319,6 +420,88 @@ describe('KV429 assignment and destructuring dataflow corpus', () => {
         ].join('\n'),
       ),
     ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'stable member assignment',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  const state = { next: 0 };',
+        '  state.next = Number(row.stock) - input.qty;',
+        '  await db.update(products).set({ stock: state.next }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'stable member alias assignment',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  const state = { next: 0 };',
+        '  const alias = state;',
+        '  alias.next = Number(row.stock) - input.qty;',
+        '  await db.update(products).set({ stock: state.next }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'compound assignment',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  let next = 0;',
+        '  next += Number(row.stock) - input.qty;',
+        '  await db.update(products).set({ stock: next }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'logical assignment branch join',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  let next: number | undefined;',
+        '  next ??= Number(row.stock) - input.qty;',
+        '  await db.update(products).set({ stock: next ?? 0 }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'branch-joined member alias',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  const first = { next: 0 };',
+        '  const second = { next: 0 };',
+        '  let alias = first;',
+        '  if (input.qty < 0) alias = second;',
+        '  alias.next = Number(row.stock) - input.qty;',
+        '  await db.update(products).set({ stock: first.next }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+  ])('retains an atomic read through %s', (_label, body) => {
+    expect(facts(body)).toEqual(FLAGGED);
+  });
+
+  it('clears stable-member provenance after a definite unrelated overwrite', () => {
+    expect(
+      facts(
+        [
+          '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+          '  const state = { next: 0 };',
+          '  state.next = Number(row.stock) - input.qty;',
+          '  state.next = 10;',
+          '  await db.update(products).set({ stock: state.next }).where(eq(products.id, input.id));',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps stable-member provenance when an unrelated overwrite is branch-only', () => {
+    expect(
+      facts(
+        [
+          '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+          '  const state = { next: 0 };',
+          '  state.next = Number(row.stock) - input.qty;',
+          '  if (input.qty < 0) state.next = 10;',
+          '  await db.update(products).set({ stock: state.next }).where(eq(products.id, input.id));',
+        ].join('\n'),
+      ),
+    ).toEqual(FLAGGED);
   });
 });
 

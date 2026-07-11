@@ -926,4 +926,55 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     `);
     expect(local).toEqual([]);
   });
+
+  it.each([
+    ['ordinary assignment', 'let dangerous: typeof sql.raw; dangerous = sql.raw;'],
+    [
+      'assignment alias chain',
+      'let first: typeof sql.raw; let dangerous: typeof sql.raw; first = sql.raw; dangerous = first;',
+    ],
+    ['destructuring assignment', 'let dangerous: typeof sql.raw; ({ raw: dangerous } = sql);'],
+    [
+      'stable member assignment',
+      'const holder: { dangerous: typeof sql.raw } = { dangerous: sql.raw }; holder.dangerous = sql.raw; const dangerous = holder.dangerous;',
+    ],
+  ])('flags request-derived SQL through %s helper flow', (_label, declaration) => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function loadProducts(input: { sort: string }, db: any) {
+        ${declaration}
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.raw(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('keeps a branch-only dangerous assignment and clears a definite local reassignment', () => {
+    const branch = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { raw: boolean; sort: string }, db: any) {
+        let dangerous = local;
+        if (input.raw) dangerous = sql.raw;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(branch.map(({ code }) => code)).toEqual(['KV422']);
+
+    const overwritten = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        let dangerous = sql.raw;
+        dangerous = local;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(overwritten).toEqual([]);
+  });
 });

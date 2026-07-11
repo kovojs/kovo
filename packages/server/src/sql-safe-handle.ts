@@ -363,6 +363,21 @@ function assertNoUnsafeRawSqlBuilderValue(value: unknown, seen = new WeakSet<obj
     return;
   }
 
+  // Native Drizzle SQL/Name carriers have non-plain prototypes. Previously that made the walk
+  // return below before it could distinguish a Kovo-minted parameterized/static/identifier value
+  // from an unbranded `drizzle-orm` sql.raw/sql.identifier value. The two raw/tag shapes are
+  // intentionally indistinguishable at runtime, so recognized native carriers must carry Kovo's
+  // module-private statement witness; app code uses @kovojs/drizzle sql/staticSql/trustedSql.
+  const nativeDrizzleVerdict = nativeDrizzleSqlCarrierVerdict(value);
+  if (nativeDrizzleVerdict !== undefined) {
+    if (nativeDrizzleVerdict !== 'safe') {
+      throw new Error(
+        'KV422: unbranded native Drizzle raw SQL/identifier carriers are not accepted by managed builders; use @kovojs/drizzle sql/staticSql/sql.identifier/trustedSql (SPEC §6.6/§10.2).',
+      );
+    }
+    return;
+  }
+
   if (Array.isArray(value)) {
     for (const item of value) assertNoUnsafeRawSqlBuilderValue(item, seen);
     return;
@@ -384,6 +399,125 @@ function assertNoUnsafeRawSqlBuilderValue(value: unknown, seen = new WeakSet<obj
       assertNoUnsafeRawSqlBuilderValue(descriptor.value, seen);
     }
   }
+}
+
+type NativeDrizzleSqlCarrierVerdict = 'safe' | 'string-chunk' | 'unsafe';
+
+function nativeDrizzleSqlCarrierVerdict(
+  value: object,
+  seen = new WeakSet<object>(),
+): NativeDrizzleSqlCarrierVerdict | undefined {
+  try {
+    if (seen.has(value)) return 'safe';
+    seen.add(value);
+    const kinds = nativeDrizzleEntityKinds(value);
+    if (kinds.size === 0) return undefined;
+
+    if (kinds.has('SQL')) {
+      const frameworkWitness = validateManagedSqlStatement(value).ok;
+      const chunks = Object.getOwnPropertyDescriptor(value, 'queryChunks');
+      if (!chunks || !('value' in chunks) || !Array.isArray(chunks.value)) return 'unsafe';
+      let structured = false;
+      for (const chunk of chunks.value as unknown[]) {
+        if (typeof chunk !== 'object' || chunk === null) {
+          // Drizzle turns primitive interpolations into bound parameters while rendering.
+          structured = true;
+          continue;
+        }
+        const verdict = nativeDrizzleSqlCarrierVerdict(chunk, seen);
+        if (verdict === 'unsafe') return 'unsafe';
+        if (verdict === 'safe') structured = true;
+        if (verdict === undefined) {
+          const prototype = Object.getPrototypeOf(chunk) as object | null;
+          if (prototype === Object.prototype || prototype === null) {
+            if (plainSqlWrapperSurface(chunk)) return 'unsafe';
+            structured = true;
+          } else return 'unsafe';
+        }
+      }
+      return frameworkWitness || structured ? 'safe' : 'unsafe';
+    }
+
+    if (kinds.has('Name')) {
+      return validateManagedSqlStatement(value).ok ? 'safe' : 'unsafe';
+    }
+
+    if (kinds.has('StringChunk')) return 'string-chunk';
+    if (
+      kinds.has('Param') ||
+      kinds.has('Placeholder') ||
+      kinds.has('Column') ||
+      kinds.has('Table') ||
+      kinds.has('View') ||
+      kinds.has('Subquery')
+    ) {
+      return 'safe';
+    }
+
+    // SQL.Aliased and future Drizzle wrappers remain closed by inspecting their own data fields
+    // without invoking accessors. This prevents a new non-plain wrapper from restoring the former
+    // prototype early-return around a nested raw SQL/Name carrier.
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    let foundSql = false;
+    let foundStringChunk = false;
+    for (const descriptor of Reflect.ownKeys(descriptors).map(
+      (key) => Reflect.get(descriptors, key) as PropertyDescriptor | undefined,
+    )) {
+      if (!descriptor || !('value' in descriptor)) continue;
+      const items = Array.isArray(descriptor.value) ? descriptor.value : [descriptor.value];
+      for (const item of items) {
+        if (typeof item !== 'object' || item === null) continue;
+        const verdict = nativeDrizzleSqlCarrierVerdict(item, seen);
+        if (verdict === 'unsafe') return 'unsafe';
+        if (verdict === 'safe') foundSql = true;
+        if (verdict === 'string-chunk') foundStringChunk = true;
+      }
+    }
+    if (foundStringChunk) return 'unsafe';
+    return foundSql ? 'safe' : undefined;
+  } catch {
+    throw new Error(
+      'KV422: managed SQL builder received a carrier whose native Drizzle provenance could not be inspected (SPEC §6.6/§10.2).',
+    );
+  }
+}
+
+function plainSqlWrapperSurface(value: object): boolean {
+  let current: object | null = value;
+  while (current !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, 'getSQL');
+    if (descriptor !== undefined) {
+      return !('value' in descriptor) || typeof descriptor.value === 'function';
+    }
+    current = Object.getPrototypeOf(current) as object | null;
+    if (current === Object.prototype) break;
+  }
+  return false;
+}
+
+function nativeDrizzleEntityKinds(value: object): Set<string> {
+  const kinds = new Set<string>();
+  let prototype = Object.getPrototypeOf(value) as object | null;
+  while (prototype !== null && prototype !== Object.prototype) {
+    const constructor = Object.getOwnPropertyDescriptor(prototype, 'constructor');
+    if (constructor && 'value' in constructor && typeof constructor.value === 'function') {
+      const descriptors = Object.getOwnPropertyDescriptors(constructor.value as object);
+      for (const key of Reflect.ownKeys(descriptors)) {
+        if (
+          typeof key !== 'symbol' ||
+          (Symbol.keyFor(key) ?? key.description) !== 'drizzle:entityKind'
+        ) {
+          continue;
+        }
+        const descriptor = Reflect.get(descriptors, key) as PropertyDescriptor | undefined;
+        if (descriptor && 'value' in descriptor && typeof descriptor.value === 'string') {
+          kinds.add(descriptor.value);
+        }
+      }
+    }
+    prototype = Object.getPrototypeOf(prototype) as object | null;
+  }
+  return kinds;
 }
 
 function guardedSqlMethod(
