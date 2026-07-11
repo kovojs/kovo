@@ -1849,34 +1849,100 @@ function resolvedDangerousSqlHelper(
 
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const member = staticAccessName(node);
-    if (member !== 'raw' && member !== 'identifier') return undefined;
-    const receiver = node.getExpression();
-    if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
-      return { method: member, provider: 'drizzle' };
+    if (member === 'raw' || member === 'identifier') {
+      const receiver = node.getExpression();
+      if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
+        return { method: member, provider: 'drizzle' };
+      }
+      if (
+        expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
+          legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+        })
+      ) {
+        return { method: member, provider: 'kovo' };
+      }
     }
-    if (
-      expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
-        legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
-      })
-    ) {
-      return { method: member, provider: 'kovo' };
+  }
+
+  const targetKey = dangerousSqlAliasTargetKey(node);
+  if (!targetKey) return undefined;
+  if (seen.has(targetKey)) return undefined;
+  seen.add(targetKey);
+
+  let resolved = dangerousSqlHelperFromDeclaration(node, seen, depth + 1);
+  const sourceFile = node.getSourceFile();
+  const assignments = sourceFile
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .filter(
+      (assignment) =>
+        assignment.getStart() < node.getStart() &&
+        assignment.getOperatorToken().getKind() === SyntaxKind.EqualsToken,
+    )
+    .sort((left, right) => left.getStart() - right.getStart());
+
+  for (const assignment of assignments) {
+    const assigned = dangerousSqlAssignmentValue(
+      assignment.getLeft(),
+      assignment.getRight(),
+      targetKey,
+      seen,
+      depth + 1,
+    );
+    if (!assigned.matched) continue;
+    const definite = dangerousSqlAssignmentDefinitelyPrecedesUse(assignment, node);
+    const next =
+      assigned.helper ??
+      (assigned.value
+        ? resolvedDangerousSqlHelper(assigned.value, new Set(seen), depth + 1)
+        : undefined);
+    if (next) {
+      if (definite || !resolved) resolved = next;
+      continue;
+    }
+    if (definite && assigned.value && definitelyLocalSqlHelperValue(assigned.value)) {
+      resolved = undefined;
+    }
+  }
+
+  return resolved;
+}
+
+function dangerousSqlHelperFromDeclaration(
+  node: Node,
+  seen: Set<string>,
+  depth: number,
+): DangerousSqlHelper | undefined {
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = staticAccessName(node);
+    const receiver = unwrappedStaticExpressionNode(node.getExpression());
+    if (!member || !Node.isIdentifier(receiver)) return undefined;
+    const symbol = symbolForIdentifierReference(receiver) ?? receiver.getSymbol();
+    for (const declaration of symbol?.getDeclarations() ?? []) {
+      if (!Node.isVariableDeclaration(declaration)) continue;
+      const initializer = declaration.getInitializer();
+      const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+      if (!object || !Node.isObjectLiteralExpression(object)) continue;
+      const property = object.getProperty(member);
+      const value = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : Node.isShorthandPropertyAssignment(property)
+          ? property.getNameNode()
+          : undefined;
+      if (!value) continue;
+      const resolved = resolvedDangerousSqlHelper(value, new Set(seen), depth + 1);
+      if (resolved) return resolved;
     }
     return undefined;
   }
 
   if (!Node.isIdentifier(node)) return undefined;
   const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
-  const symbolKey = resolvedSymbolKey(symbol);
-  if (symbolKey) {
-    if (seen.has(symbolKey)) return undefined;
-    seen.add(symbolKey);
-  }
 
   for (const declaration of symbol?.getDeclarations() ?? []) {
     if (Node.isVariableDeclaration(declaration)) {
       const initializer = declaration.getInitializer();
       if (!initializer) continue;
-      const resolved = resolvedDangerousSqlHelper(initializer, seen, depth + 1);
+      const resolved = resolvedDangerousSqlHelper(initializer, new Set(seen), depth + 1);
       if (resolved) return resolved;
       continue;
     }
@@ -1903,6 +1969,123 @@ function resolvedDangerousSqlHelper(
   }
 
   return undefined;
+}
+
+type DangerousSqlAssignmentValue =
+  | { helper?: DangerousSqlHelper; matched: true; value?: Node }
+  | { matched: false };
+
+function dangerousSqlAssignmentValue(
+  left: Node,
+  right: Node,
+  targetKey: string,
+  seen: Set<string>,
+  depth: number,
+): DangerousSqlAssignmentValue {
+  if (dangerousSqlAliasTargetKey(left) === targetKey) {
+    return { matched: true, value: right };
+  }
+
+  const binding = unwrappedStaticExpressionNode(left);
+  if (!Node.isObjectLiteralExpression(binding)) return { matched: false };
+  for (const property of binding.getProperties()) {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      continue;
+    }
+    const target = Node.isPropertyAssignment(property)
+      ? property.getInitializer()
+      : Node.isShorthandPropertyAssignment(property)
+        ? property.getNameNode()
+        : undefined;
+    if (!target || dangerousSqlAliasTargetKey(target) !== targetKey) continue;
+    const member = propertyNameText(property.getNameNode());
+    if (member !== 'raw' && member !== 'identifier') return { matched: true, value: right };
+    if (expressionResolvesToFrameworkExport(right, frameworkExport('drizzle-orm', 'sql'))) {
+      return { helper: { method: member, provider: 'drizzle' }, matched: true };
+    }
+    if (
+      expressionResolvesToFrameworkExport(right, frameworkExport('@kovojs/drizzle', 'sql'), {
+        legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+      })
+    ) {
+      return { helper: { method: member, provider: 'kovo' }, matched: true };
+    }
+    const resolved = resolvedDangerousSqlHelper(right, new Set(seen), depth + 1);
+    return resolved ? { helper: resolved, matched: true } : { matched: true, value: right };
+  }
+  return { matched: false };
+}
+
+function dangerousSqlAliasTargetKey(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isIdentifier(expression)) {
+    const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+    const key = resolvedSymbolKey(symbol);
+    return key ? `symbol:${key}` : undefined;
+  }
+  if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
+    return undefined;
+  }
+  const segments: string[] = [];
+  let current: Node = expression;
+  while (Node.isPropertyAccessExpression(current) || Node.isElementAccessExpression(current)) {
+    const segment = staticAccessName(current);
+    if (!segment) return undefined;
+    segments.unshift(segment);
+    current = unwrappedStaticExpressionNode(current.getExpression());
+  }
+  if (!Node.isIdentifier(current)) return undefined;
+  const root = resolvedSymbolKey(symbolForIdentifierReference(current) ?? current.getSymbol());
+  return root ? `member:${root}:${segments.join('.')}` : undefined;
+}
+
+function dangerousSqlAssignmentDefinitelyPrecedesUse(assignment: Node, use: Node): boolean {
+  const block = assignment.getFirstAncestorByKind(SyntaxKind.Block);
+  if (!block) return false;
+  const assignmentStatement = dangerousSqlDirectChildWithinBlock(assignment, block);
+  const useStatement = dangerousSqlDirectChildWithinBlock(use, block);
+  if (!assignmentStatement || !useStatement || !Node.isExpressionStatement(assignmentStatement)) {
+    return false;
+  }
+  let current: Node | undefined = assignment;
+  while (current && current !== assignmentStatement) {
+    if (Node.isConditionalExpression(current)) return false;
+    if (Node.isBinaryExpression(current)) {
+      const operator = current.getOperatorToken().getKind();
+      if (
+        operator === SyntaxKind.AmpersandAmpersandToken ||
+        operator === SyntaxKind.BarBarToken ||
+        operator === SyntaxKind.QuestionQuestionToken
+      ) {
+        return false;
+      }
+    }
+    current = current.getParent();
+  }
+  return assignment.getStart() < use.getStart();
+}
+
+function dangerousSqlDirectChildWithinBlock(node: Node, block: Node): Node | undefined {
+  let current: Node | undefined = node;
+  while (current && current.getParent() !== block) current = current.getParent();
+  return current;
+}
+
+function definitelyLocalSqlHelperValue(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return true;
+  if (!Node.isIdentifier(expression)) return false;
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  return (symbol?.getDeclarations() ?? []).some((declaration) => {
+    if (Node.isFunctionDeclaration(declaration)) return true;
+    if (!Node.isVariableDeclaration(declaration)) return false;
+    const initializer = declaration.getInitializer();
+    return Boolean(
+      initializer &&
+      (Node.isArrowFunction(unwrappedStaticExpressionNode(initializer)) ||
+        Node.isFunctionExpression(unwrappedStaticExpressionNode(initializer))),
+    );
+  });
 }
 
 function isKovoSqlTagExpression(tag: Node): boolean {
@@ -4859,19 +5042,15 @@ function staticObjectLiteralValue(
   if (depth > 12) return undefined;
   const node = unwrappedStaticExpressionNode(value);
   if (Node.isObjectLiteralExpression(node)) return node;
-  if (Node.isCallExpression(node) && staticAccessName(node.getExpression()) === 'freeze') {
-    const receiver = staticAccessExpression(node.getExpression());
-    if (
-      receiver &&
-      Node.isIdentifier(unwrappedStaticExpressionNode(receiver)) &&
-      unwrappedStaticExpressionNode(receiver).getText() === 'Object'
-    ) {
-      const [argument] = node.getArguments();
-      return argument ? staticObjectLiteralValue(argument, seen, depth + 1) : undefined;
-    }
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument ? staticObjectLiteralValue(argument, seen, depth + 1) : undefined;
   }
   if (!Node.isIdentifier(node)) return undefined;
-  const initializer = staticConstBindingInitializer(node, seen, depth + 1);
+  const initializer = staticConstBindingInitializer(node, seen, depth + 1, true);
   return initializer ? staticObjectLiteralValue(initializer, seen, depth + 1) : undefined;
 }
 
@@ -4883,7 +5062,7 @@ function staticConcurrencyColumns(
   if (depth > 12) return undefined;
   const node = unwrappedStaticExpressionNode(value);
   if (Node.isIdentifier(node)) {
-    const initializer = staticConstBindingInitializer(node, seen, depth + 1);
+    const initializer = staticConstBindingInitializer(node, seen, depth + 1, true);
     return initializer ? staticConcurrencyColumns(initializer, seen, depth + 1) : undefined;
   }
   if (Node.isArrayLiteralExpression(node)) {
@@ -4905,6 +5084,7 @@ function staticConstBindingInitializer(
   identifier: Node,
   seen: Set<string>,
   depth: number,
+  requireStableCarrier: boolean,
 ): Node | undefined {
   if (!Node.isIdentifier(identifier) || depth > 12) return undefined;
   const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
@@ -4920,7 +5100,14 @@ function staticConstBindingInitializer(
       const list = declaration.getParent();
       if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') continue;
       const initializer = declaration.getInitializer();
-      if (initializer) return initializer;
+      if (
+        initializer &&
+        (!requireStableCarrier ||
+          !staticInitializerRequiresPinnedCarrier(initializer) ||
+          staticConstCarrierIsStable(declaration))
+      ) {
+        return initializer;
+      }
       continue;
     }
     if (!Node.isBindingElement(declaration)) continue;
@@ -4936,6 +5123,13 @@ function staticConstBindingInitializer(
       continue;
     }
     if (!initializer) continue;
+    if (
+      requireStableCarrier &&
+      staticInitializerRequiresPinnedCarrier(initializer) &&
+      !staticConstCarrierIsStable(variable)
+    ) {
+      continue;
+    }
     const property = propertyNameText(
       declaration.getPropertyNameNode() ?? declaration.getNameNode(),
     );
@@ -4949,6 +5143,253 @@ function staticConstBindingInitializer(
     if (resolution.kind === 'resolved') return resolution.value;
   }
   return undefined;
+}
+
+function staticInitializerRequiresPinnedCarrier(value: Node, seen = new Set<string>()): boolean {
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isObjectLiteralExpression(node) || Node.isArrayLiteralExpression(node)) return true;
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    return false;
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const key = resolvedSymbolKey(symbol);
+  if (key) {
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (!Node.isVariableDeclaration(declaration)) continue;
+    const initializer = declaration.getInitializer();
+    if (initializer) return staticInitializerRequiresPinnedCarrier(initializer, seen);
+  }
+  return false;
+}
+
+const STATIC_CARRIER_MUTATOR_METHODS = new Set([
+  'add',
+  'clear',
+  'copyWithin',
+  'delete',
+  'fill',
+  'pop',
+  'push',
+  'reverse',
+  'set',
+  'shift',
+  'sort',
+  'splice',
+  'unshift',
+]);
+
+/**
+ * Concurrency facts may be composed through local const aliases only while the referenced carrier
+ * is provably stable. `as const` is a type-only promise and does not freeze runtime bytes: property,
+ * index, destructuring, mutator, Object.assign, export, and unknown-call escapes all make the
+ * annotation unresolved so KV429 fails closed (SPEC §6.6 C9/C15, §10.3).
+ */
+function staticConstCarrierIsStable(
+  declaration: VariableDeclaration,
+  seen = new Set<string>(),
+  depth = 0,
+): boolean {
+  if (depth > 12) return false;
+  const name = declaration.getNameNode();
+  if (!Node.isIdentifier(name)) return false;
+  const symbolKey = resolvedSymbolKey(name.getSymbol());
+  if (!symbolKey) return false;
+  if (seen.has(symbolKey)) return false;
+  const nextSeen = new Set(seen);
+  nextSeen.add(symbolKey);
+  const sourceFile = declaration.getSourceFile();
+  const statement = declaration.getFirstAncestorByKind(SyntaxKind.VariableStatement);
+  if (
+    statement?.getModifiers().some((modifier) => modifier.getKind() === SyntaxKind.ExportKeyword)
+  ) {
+    return false;
+  }
+  for (const specifier of sourceFile.getDescendantsOfKind(SyntaxKind.ExportSpecifier)) {
+    const exportedKey = resolvedSymbolKey(specifier.getLocalTargetSymbol());
+    if (exportedKey === symbolKey) return false;
+  }
+
+  for (const binary of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (!staticCarrierAssignmentOperator(binary.getOperatorToken().getKind())) continue;
+    if (staticCarrierMutationTargetContainsSymbol(binary.getLeft(), symbolKey)) return false;
+  }
+  for (const prefix of sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression)) {
+    const operator = prefix.getOperatorToken();
+    if (
+      (operator === SyntaxKind.PlusPlusToken || operator === SyntaxKind.MinusMinusToken) &&
+      staticCarrierMutationTargetContainsSymbol(prefix.getOperand(), symbolKey)
+    ) {
+      return false;
+    }
+  }
+  for (const postfix of sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression)) {
+    const operator = postfix.getOperatorToken();
+    if (
+      (operator === SyntaxKind.PlusPlusToken || operator === SyntaxKind.MinusMinusToken) &&
+      staticCarrierMutationTargetContainsSymbol(postfix.getOperand(), symbolKey)
+    ) {
+      return false;
+    }
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = call.getExpression();
+    const receiver = staticAccessExpression(callee);
+    const method = staticAccessName(callee);
+    if (
+      receiver &&
+      method &&
+      STATIC_CARRIER_MUTATOR_METHODS.has(method) &&
+      staticCarrierNodeReferencesSymbol(receiver, symbolKey)
+    ) {
+      return false;
+    }
+    if (
+      isUnshadowedGlobalObjectMethod(callee, 'assign') &&
+      call.getArguments()[0] &&
+      staticCarrierNodeReferencesSymbol(call.getArguments()[0]!, symbolKey)
+    ) {
+      return false;
+    }
+  }
+
+  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    if (!staticCarrierIdentifierMatches(identifier, symbolKey) || identifier === name) continue;
+    const binary = identifier.getFirstAncestorByKind(SyntaxKind.BinaryExpression);
+    if (
+      binary &&
+      staticCarrierAssignmentOperator(binary.getOperatorToken().getKind()) &&
+      binary.getLeft().getStart() <= identifier.getStart() &&
+      identifier.getEnd() <= binary.getLeft().getEnd()
+    ) {
+      continue;
+    }
+    const spread = identifier.getFirstAncestor(
+      (ancestor) => Node.isSpreadAssignment(ancestor) || Node.isSpreadElement(ancestor),
+    );
+    if (spread) continue;
+
+    const call = identifier.getFirstAncestorByKind(SyntaxKind.CallExpression);
+    if (
+      call &&
+      call
+        .getArguments()
+        .some(
+          (argument) =>
+            argument.getStart() <= identifier.getStart() &&
+            identifier.getEnd() <= argument.getEnd(),
+        )
+    ) {
+      if (isKovoAnnotationCall(call)) continue;
+      const callee = call.getExpression();
+      if (isUnshadowedGlobalObjectMethod(callee, 'freeze')) continue;
+      if (
+        isUnshadowedGlobalObjectMethod(callee, 'assign') &&
+        call.getArguments()[0] !== identifier
+      ) {
+        continue;
+      }
+      return false;
+    }
+
+    const variable = identifier.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+    if (variable?.getInitializer() === identifier) {
+      const list = variable.getParent();
+      if (
+        Node.isIdentifier(variable.getNameNode()) &&
+        Node.isVariableDeclarationList(list) &&
+        list.getDeclarationKind() === 'const' &&
+        staticConstCarrierIsStable(variable, nextSeen, depth + 1)
+      ) {
+        continue;
+      }
+      return false;
+    }
+    const property = identifier.getFirstAncestorByKind(SyntaxKind.PropertyAssignment);
+    if (property?.getInitializer() === identifier) {
+      const object = property.getFirstAncestorByKind(SyntaxKind.ObjectLiteralExpression);
+      const container = object?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+      const containerInitializer = container?.getInitializer();
+      if (
+        object &&
+        container &&
+        containerInitializer &&
+        unwrappedStaticExpressionNode(containerInitializer) === object &&
+        staticConstCarrierIsStable(container, nextSeen, depth + 1)
+      ) {
+        continue;
+      }
+      return false;
+    }
+    if (identifier.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) return false;
+    if (
+      identifier.getParent() &&
+      (Node.isPropertyAccessExpression(identifier.getParent()!) ||
+        Node.isElementAccessExpression(identifier.getParent()!))
+    ) {
+      continue;
+    }
+    if (identifier.getParent() && Node.isBindingElement(identifier.getParent()!)) continue;
+    return false;
+  }
+
+  return true;
+}
+
+function staticCarrierIdentifierMatches(identifier: Node, symbolKey: string): boolean {
+  return (
+    Node.isIdentifier(identifier) &&
+    resolvedSymbolKey(symbolForIdentifierReference(identifier) ?? identifier.getSymbol()) ===
+      symbolKey
+  );
+}
+
+function staticCarrierNodeReferencesSymbol(node: Node, symbolKey: string): boolean {
+  if (staticCarrierIdentifierMatches(node, symbolKey)) return true;
+  return node
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some((identifier) => staticCarrierIdentifierMatches(identifier, symbolKey));
+}
+
+function staticCarrierMutationTargetContainsSymbol(node: Node, symbolKey: string): boolean {
+  return staticCarrierNodeReferencesSymbol(node, symbolKey);
+}
+
+function staticCarrierAssignmentOperator(kind: SyntaxKind): boolean {
+  return (
+    kind === SyntaxKind.EqualsToken ||
+    kind === SyntaxKind.PlusEqualsToken ||
+    kind === SyntaxKind.MinusEqualsToken ||
+    kind === SyntaxKind.AsteriskEqualsToken ||
+    kind === SyntaxKind.AsteriskAsteriskEqualsToken ||
+    kind === SyntaxKind.SlashEqualsToken ||
+    kind === SyntaxKind.PercentEqualsToken ||
+    kind === SyntaxKind.LessThanLessThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.AmpersandEqualsToken ||
+    kind === SyntaxKind.BarEqualsToken ||
+    kind === SyntaxKind.CaretEqualsToken ||
+    kind === SyntaxKind.BarBarEqualsToken ||
+    kind === SyntaxKind.AmpersandAmpersandEqualsToken ||
+    kind === SyntaxKind.QuestionQuestionEqualsToken
+  );
+}
+
+function isUnshadowedGlobalObjectMethod(expression: Node, method: string): boolean {
+  if (staticAccessName(expression) !== method) return false;
+  const receiver = staticAccessExpression(expression);
+  const object = receiver ? unwrappedStaticExpressionNode(receiver) : undefined;
+  if (!object || !Node.isIdentifier(object) || object.getText() !== 'Object') return false;
+  const symbol = symbolForIdentifierReference(object) ?? object.getSymbol();
+  const declarations = symbol?.getDeclarations() ?? [];
+  return declarations.every((declaration) => declaration.getSourceFile().isDeclarationFile());
 }
 
 function unresolvedConcurrencyAnnotationDiagnostics(
