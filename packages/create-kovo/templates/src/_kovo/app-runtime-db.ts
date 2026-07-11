@@ -1,15 +1,24 @@
 import {
   createPostgresAppRuntimeDb,
   declareSecretReadCapability,
+  type AccessDecision,
+  type CsrfOptions,
   usePostgresSystemDb,
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresAppRuntimeOptions,
   type KovoPostgresSystemDb,
 } from '@kovojs/server';
+import {
+  betterAuthSession,
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+} from '@kovojs/better-auth';
+import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import * as schema from '../schema.js';
 import type { AppDb, AppReadonlyDb } from '../db.js';
+import type { AppRequest, AppSession } from '../auth.js';
 
 const SEED_CONTACTS =
   'INSERT INTO contacts (id, name, email, company) VALUES ' +
@@ -81,18 +90,75 @@ function authAdapterDb(): KovoPostgresSystemDb {
   return getAppDatabase().systemDb({
     operation: 'write',
     reason: 'Better Auth adapter manages session tables before an app session exists',
-    surface: 'src/auth.ts',
+    surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
   });
 }
 
-/**
- * Framework-owned auth adapter factory. The system DB remains module-private so auth code
- * receives only Better Auth's narrowed adapter capability, never a raw AppDb value.
- */
-export function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
+function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
   return usePostgresSystemDb(authAdapterDb(), (db) =>
     drizzleAdapter(db, { provider: 'pg', schema: schema.authSchema }),
   );
+}
+
+interface AppAuthBindingOptions {
+  baseURL: string;
+  csrf: CsrfOptions<AppRequest>;
+  secret: string;
+  signInAccess: AccessDecision;
+  signOutAccess: AccessDecision;
+}
+
+/**
+ * Framework-owned Better Auth construction boundary (SPEC §6.6/§10.3).
+ *
+ * The privileged adapter and raw Better Auth instance never cross this module. App-authored
+ * `auth.ts` receives only a sanitized session provider, Kovo mutation declarations, and the
+ * fixed demo-seed operation; none exposes `$context`, an adapter method, or an auth-table row.
+ */
+export function createAppAuthBindings(options: AppAuthBindingOptions) {
+  const auth = betterAuth({
+    advanced: { disableCSRFCheck: true },
+    baseURL: options.baseURL,
+    database: createAuthAdapter(),
+    emailAndPassword: { enabled: true },
+    secret: options.secret,
+  });
+
+  const sessionProvider = betterAuthSession(auth, ({ session: authSession, user }) => ({
+    id: authSession.id,
+    user: { email: user.email, id: user.id, name: user.name },
+  }));
+  const signIn = betterAuthSignInEmailMutation<'auth/sign-in', AppRequest>(auth, {
+    access: options.signInAccess,
+    csrf: options.csrf,
+    defaultRedirectTo: '/',
+  });
+  const signOut = betterAuthSignOutMutation<
+    'auth/sign-out',
+    AppRequest,
+    AppRequest & { session: AppSession }
+  >(auth, {
+    access: options.signOutAccess,
+    csrf: options.csrf,
+    defaultRedirectTo: '/login',
+  });
+
+  async function seedDemoUser(): Promise<void> {
+    const password = process.env.KOVO_DEMO_PASSWORD;
+    if (!password || password === 'replace-with-a-local-demo-password') return;
+
+    try {
+      await auth.api.signUpEmail({
+        asResponse: true,
+        body: { email: 'demo@example.com', name: 'Demo User', password },
+        headers: new Headers(),
+      });
+    } catch {
+      // Already seeded.
+    }
+  }
+
+  return Object.freeze({ seedDemoUser, sessionProvider, signIn, signOut });
 }
 
 /** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */

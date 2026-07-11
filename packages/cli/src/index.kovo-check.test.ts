@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { kovoCheck, main } from './index.js';
+import { kovoCheck, kovoExplain, main } from './index.js';
 
 type KovoCheckInput = Parameters<typeof kovoCheck>[0];
 
@@ -294,6 +294,32 @@ describe('kovo check', () => {
     expect(
       decidedResult.output.split('\n').filter((line) => line.startsWith('ERROR KV436')),
     ).toEqual([]);
+  });
+
+  it('fails KV436 and explains missing for a sparse executable access carrier', async () => {
+    const [{ accessFactsFromApp }, { createApp, query }] = await Promise.all([
+      import('@kovojs/server/internal/execution'),
+      import('@kovojs/server'),
+    ]);
+    const sparseAccess: ((request: unknown) => true)[] = [];
+    sparseAccess.length = 1;
+    const app = createApp({
+      queries: [
+        query('private-sparse', {
+          access: sparseAccess,
+          load: () => ({ secret: true }),
+        }),
+      ],
+    });
+    const input = { access: accessFactsFromApp(app) };
+
+    const check = kovoCheck(input);
+    expect(check.exitCode).toBe(1);
+    expect(check.output).toContain('ERROR KV436 QUERY private-sparse');
+
+    const explain = kovoExplain(input, { access: true });
+    expect(explain.output).toContain('ACCESS QUERY private-sparse decision=missing');
+    expect(explain.output).not.toContain('ACCESS QUERY private-sparse decision=guard');
   });
 
   // SPEC §10.2/§11.2: the by-construction SQL-safety analyzer (analyzeSqlSafetyFromProject) gates

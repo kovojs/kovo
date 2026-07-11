@@ -6,7 +6,7 @@ import type {
   Redirect,
 } from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
-import type { AccessDecision } from '../access.js';
+import { snapshotAccessDecision, type AccessDecision } from '../access.js';
 import type { CookieOptions } from '../cookies.js';
 import type { CsrfOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
@@ -486,6 +486,9 @@ export function mutation(
       definition.queue === true ? keyOrDefinition : normalizeMutationQueue(definition.queue);
     return {
       ...definition,
+      ...(definition.access === undefined
+        ? {}
+        : { access: snapshotAccessDecision(definition.access) }),
       ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
       key: keyOrDefinition,
       ...(queue === undefined ? {} : { queue }),
@@ -500,6 +503,9 @@ export function mutation(
   const queue = normalizeMutationQueue(keyOrDefinition.queue);
   return {
     ...keyOrDefinition,
+    ...(keyOrDefinition.access === undefined
+      ? {}
+      : { access: snapshotAccessDecision(keyOrDefinition.access) }),
     ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
     ...(queue === undefined ? {} : { queue }),
   } as MutationDefinition<string> & { key: string };

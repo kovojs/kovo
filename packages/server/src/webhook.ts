@@ -6,7 +6,7 @@ import {
   type PrincipalAccessOperation,
 } from './auth-principal.js';
 import type { ChangeRecord } from './change-record.js';
-import { verifiedAccess, type AccessDecision } from './access.js';
+import { snapshotAccessDecision, verifiedAccess, type AccessDecision } from './access.js';
 import type { Domain } from './domain.js';
 import { runMutation, type RunMutationOptions } from './mutation.js';
 import {
@@ -400,7 +400,7 @@ export function webhook<
       ? definition.verify === 'none'
         ? {}
         : { access: verifiedAccess }
-      : { access: definition.access }),
+      : { access: snapshotAccessDecision(definition.access) }),
     auth: webhookAuth(definition),
     csrf: {
       exempt: true,

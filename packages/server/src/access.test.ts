@@ -2,10 +2,22 @@ import { createHmac } from 'node:crypto';
 import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import { publicAccess, verifiedAccess, type AccessDecision } from './access.js';
+import {
+  isExecutableGuardAccessDecision,
+  publicAccess,
+  verifiedAccess,
+  type AccessDecision,
+} from './access.js';
 import { domain } from './domain.js';
 import { endpoint, runEndpoint, runEndpointAuth } from './endpoint.js';
-import { explainGuard, guard, guardAuditName, guards } from './guards.js';
+import {
+  explainGuard,
+  guard,
+  guardAuditName,
+  guards,
+  runAccessDecisionGuards,
+  type Guard,
+} from './guards.js';
 import { renderedHtml } from './html.js';
 import { mutation, runMutation } from './mutation.js';
 import { query, renderQueryEndpointResponse } from './query.js';
@@ -149,6 +161,88 @@ describe('structured access metadata', () => {
       new Request('https://example.test/admin/raw'),
     );
     expect(endpointForbidden.status).toBe(403);
+  });
+
+  it('snapshots valid guard chains at every declaration boundary', async () => {
+    const original = [guard('deny-snapshot', () => ({ kind: 'forbidden' as const }))];
+    const statusRoute = route('/snapshot', { access: original, page: () => renderedHtml('no') });
+    const statusQuery = query('snapshot', {
+      access: original,
+      load: () => ({ secret: true }),
+      reads: [domain('snapshot')],
+    });
+    const statusMutation = mutation('snapshot/touch', {
+      access: original,
+      handler: () => ({ changed: true }),
+      input: s.object({}),
+    });
+    const statusEndpoint = endpoint('/snapshot.txt', {
+      access: original,
+      csrf: false,
+      csrfJustification: 'snapshot guard test',
+      handler: () => new Response('no'),
+      method: 'GET',
+      reason: 'snapshot guard test',
+      response: textResponse,
+    });
+
+    original[0] = () => true;
+    original.length = 0;
+
+    for (const access of [
+      statusRoute.access,
+      statusQuery.access,
+      statusMutation.access,
+      statusEndpoint.access,
+    ]) {
+      expect(access).not.toBe(original);
+      expect(Object.isFrozen(access)).toBe(true);
+      expect(isExecutableGuardAccessDecision(access)).toBe(true);
+      await expect(runAccessDecisionGuards(access, undefined, {})).resolves.toMatchObject({
+        auth: 'unauthorized',
+        code: 'UNAUTHORIZED',
+      });
+    }
+  });
+
+  it('fails closed on empty, sparse, non-guard, and accessor-backed access arrays', async () => {
+    const sparse: Guard<object>[] = [];
+    sparse.length = 1;
+    const empty: Guard<object>[] = [];
+    const nonGuard = [undefined] as unknown as Guard<object>[];
+    let getterReads = 0;
+    const accessor: Guard<object>[] = [];
+    Object.defineProperty(accessor, 0, {
+      configurable: true,
+      get() {
+        getterReads += 1;
+        return () => true;
+      },
+    });
+
+    for (const [name, authored] of [
+      ['empty', empty],
+      ['sparse', sparse],
+      ['non-guard', nonGuard],
+      ['accessor', accessor],
+    ] as const) {
+      const definition = query(`invalid-${name}`, {
+        access: authored,
+        load: () => ({ secret: true }),
+        reads: [domain(`invalid-${name}`)],
+      });
+
+      expect(definition.access).not.toBe(authored);
+      expect(Object.isFrozen(definition.access)).toBe(true);
+      expect(isExecutableGuardAccessDecision(definition.access)).toBe(false);
+      await expect(runAccessDecisionGuards(definition.access, undefined, {})).resolves.toEqual({
+        auth: 'unauthorized',
+        code: 'UNAUTHORIZED',
+        payload: {},
+        status: 422,
+      });
+    }
+    expect(getterReads).toBe(0);
   });
 
   it('does not change endpoint auth enforcement', async () => {
