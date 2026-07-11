@@ -2,7 +2,6 @@ import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import { KOVO_IDEM_FIELD_NAME, type CsrfOptions } from '../csrf.js';
 import {
-  canonicalRequestFingerprint,
   MutationReplayConflictError,
   mutationReplayContext,
   readMutationReplay,
@@ -126,9 +125,20 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   const idem = mode.request.idem ?? readNoJsIdemField(mode.request.rawInput);
   if (!idem || !mode.request.replayStore) return undefined;
 
-  const scope = noJsReplayScopeFor(mode.csrf, mode.mutationKey, mode.request.request);
-  const fingerprint =
-    mode.request.requestFingerprint ?? canonicalRequestFingerprint(mode.request.rawInput);
+  const context = mutationReplayContext(mode.csrf ?? false, {
+    idem,
+    mutationKey: mode.mutationKey,
+    rawInput: mode.request.rawInput,
+    request: mode.request.request,
+    ...(mode.request.requestFingerprint === undefined
+      ? {}
+      : { requestFingerprint: mode.request.requestFingerprint }),
+  });
+  // Keep response vocabularies separated while deriving both enhanced and no-JS principal/fingerprint
+  // facts from the same session-or-anonymous-CSRF binding. csrf:false sessionless no-JS retains its
+  // mutation-key fallback for the existing public-machine submission contract.
+  const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
+  const fingerprint = context.fingerprint;
   return {
     async read() {
       return noJsReplayResponseOrConflict(
@@ -231,33 +241,4 @@ function readNoJsIdemField(rawInput: unknown): string | undefined {
     ? revealUntrusted(rawValue, 'validated request-derived no-js idempotency token')
     : rawValue;
   return typeof value === 'string' && value !== '' ? value : undefined;
-}
-
-function noJsReplayScopeFor<Request>(
-  csrf: CsrfOptions<Request> | false | undefined,
-  mutationKey: string,
-  request: Request,
-): string {
-  let sessionScope: string | null = null;
-
-  if (csrf !== false && csrf !== undefined && 'sessionId' in csrf) {
-    const id = (csrf as { sessionId(r: Request): string | undefined }).sessionId(request);
-    if (id) sessionScope = id;
-  }
-
-  if (!sessionScope && typeof request === 'object' && request !== null) {
-    const req = request as Record<string, unknown>;
-    if (typeof req['sessionId'] === 'string' && req['sessionId'] !== '') {
-      sessionScope = req['sessionId'];
-    } else if (
-      typeof req['session'] === 'object' &&
-      req['session'] !== null &&
-      typeof (req['session'] as Record<string, unknown>)['id'] === 'string' &&
-      (req['session'] as Record<string, unknown>)['id'] !== ''
-    ) {
-      sessionScope = (req['session'] as Record<string, unknown>)['id'] as string;
-    }
-  }
-
-  return sessionScope !== null ? `nojs:${mutationKey}\0${sessionScope}` : `nojs:${mutationKey}`;
 }

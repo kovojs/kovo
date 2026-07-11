@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { untrusted } from '@kovojs/core';
 
-import { csrfToken } from './csrf.js';
+import { csrfToken, mintCsrfField, type CsrfOptions } from './csrf.js';
 import { domain } from './domain.js';
 import { renderMutationResponse as renderMutationResponseBase } from './mutation.js';
 import { query } from './query.js';
@@ -10,7 +10,6 @@ import {
   canonicalRequestFingerprint,
   createMemoryMutationReplayStore,
   mutationReplayContext,
-  MutationReplayAbortedError,
   type MutationReplayResponse,
   type MutationReplayStore,
 } from './replay.js';
@@ -48,6 +47,35 @@ function deferred<Value = void>(): {
   return { promise, reject, resolve };
 }
 
+function anonymousCsrfRequest(mutationKey: string): {
+  csrf: CsrfOptions<Request>;
+  request: Request;
+  token(): string;
+} {
+  const csrf: CsrfOptions<Request> = {
+    field: 'csrf',
+    secret: 'anonymous-replay-csrf-secret-0123456789abcdef',
+    sessionId: () => undefined,
+  };
+  const origin = 'https://replay.test';
+  const minted = mintCsrfField(new Request(`${origin}/form`), {
+    ...csrf,
+    mutation: mutationKey,
+  });
+  if (!minted.setCookie) throw new Error('anonymous replay fixture did not mint a CSRF cookie');
+  const cookie = minted.setCookie.split(';', 1)[0];
+  if (!cookie) throw new Error('anonymous replay fixture emitted an empty CSRF cookie');
+  const request = new Request(`${origin}/_m/${mutationKey}`, {
+    headers: { Cookie: cookie, Origin: origin },
+    method: 'POST',
+  });
+  return {
+    csrf,
+    request,
+    token: () => csrfToken(request, csrf, { mutation: mutationKey }),
+  };
+}
+
 describe('server mutation replay store', () => {
   it('bounds memory mutation replay records by ttl and entry count', () => {
     vi.useFakeTimers();
@@ -76,6 +104,67 @@ describe('server mutation replay store', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('M7: pending reservations outlive ttl and committed ttl starts at commit', async () => {
+    vi.useFakeTimers();
+    try {
+      const replayStore = createMemoryMutationReplayStore({
+        maxEntries: 1,
+        maxPending: 1,
+        ttlMs: 10,
+      });
+      const reservation = replayStore.reserve('scope', 'idem', 'fingerprint');
+      expect(reservation).toBeDefined();
+      const joined = replayStore.get('scope', 'idem', 'fingerprint');
+      expect(joined).toBeInstanceOf(Promise);
+
+      vi.advanceTimersByTime(100);
+      // The in-flight generation neither expires nor frees maxPending capacity.
+      expect(replayStore.reserve('scope', 'idem', 'fingerprint')).toBeUndefined();
+      expect(replayStore.reserve('scope', 'other', 'fingerprint')).toBeUndefined();
+
+      const response = { body: 'settled', headers: {}, status: 200 } as const;
+      reservation!.commit(response);
+      await expect(joined).resolves.toEqual(response);
+      expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
+
+      vi.advanceTimersByTime(9);
+      expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
+      vi.advanceTimersByTime(1);
+      expect(replayStore.get('scope', 'idem', 'fingerprint')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('M7: a superseded reservation commit is generation-fenced from newer truth', async () => {
+    const replayStore = createMemoryMutationReplayStore({ ttlMs: 10 });
+    const stale = replayStore.reserve('scope', 'idem', 'fingerprint');
+    expect(stale).toBeDefined();
+    const joined = replayStore.get('scope', 'idem', 'fingerprint');
+
+    const newer = { body: 'newer', headers: {}, status: 200 } as const;
+    replayStore.set('scope', 'idem', newer, 'fingerprint');
+    await expect(joined).resolves.toEqual(newer);
+
+    stale!.commit({ body: 'stale', headers: {}, status: 200 });
+    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(newer);
+  });
+
+  it('M7: an aborted old generation cannot overwrite a replacement reservation', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const old = replayStore.reserve('scope', 'idem', 'fingerprint');
+    expect(old).toBeDefined();
+    old!.abort?.();
+
+    const replacement = replayStore.reserve('scope', 'idem', 'fingerprint');
+    expect(replacement).toBeDefined();
+    old!.commit({ body: 'old', headers: {}, status: 200 });
+    const newer = { body: 'replacement', headers: {}, status: 200 } as const;
+    replacement!.commit(newer);
+
+    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(newer);
   });
 });
 
@@ -175,6 +264,121 @@ describe('server mutation response replay', () => {
       body: '<kovo-query name="cart" settles="idem_concurrent_handler">{"count":1}</kovo-query>',
       status: 200,
     });
+  });
+
+  it('M4: real anonymous-CSRF enhanced duplicates join and replay across rotating tokens', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const anonymous = anonymousCsrfRequest('auth/sign-up');
+    const handlerStarted = deferred();
+    const handlerRelease = deferred();
+    let writes = 0;
+    const signUp = mutation('auth/sign-up', {
+      csrf: anonymous.csrf,
+      input: s.object({ email: s.string() }),
+      async handler(input) {
+        handlerStarted.resolve();
+        await handlerRelease.promise;
+        writes += 1;
+        return input;
+      },
+    });
+    const submit = () =>
+      renderMutationResponse(signUp, {
+        idem: 'idem_anonymous_signup',
+        rawInput: { csrf: anonymous.token(), email: 'person@example.test' },
+        replayStore,
+        request: anonymous.request,
+      });
+
+    const first = submit();
+    await handlerStarted.promise;
+    const concurrent = submit();
+    await Promise.resolve();
+    handlerRelease.resolve();
+
+    const [firstResponse, concurrentResponse] = await Promise.all([first, concurrent]);
+    const sequentialResponse = await submit();
+    expect(writes).toBe(1);
+    expect(concurrentResponse).toEqual(firstResponse);
+    expect(sequentialResponse).toEqual(firstResponse);
+  });
+
+  it('M4: anonymous replay scope follows the CSRF cookie and keeps mutation keys separate', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const firstAnonymous = anonymousCsrfRequest('cart/add');
+    const secondAnonymous = anonymousCsrfRequest('cart/add');
+    let addWrites = 0;
+    let removeWrites = 0;
+    const add = mutation('cart/add', {
+      csrf: firstAnonymous.csrf,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        addWrites += 1;
+        return input;
+      },
+    });
+    const remove = mutation('cart/remove', {
+      csrf: firstAnonymous.csrf,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        removeWrites += 1;
+        return input;
+      },
+    });
+    const addSubmit = (anonymous: ReturnType<typeof anonymousCsrfRequest>) =>
+      renderMutationResponse(add, {
+        idem: 'idem_shared_anonymous',
+        rawInput: { csrf: anonymous.token(), productId: 'p1' },
+        replayStore,
+        request: anonymous.request,
+      });
+
+    await addSubmit(firstAnonymous);
+    await addSubmit(secondAnonymous);
+    await renderMutationResponse(remove, {
+      idem: 'idem_shared_anonymous',
+      rawInput: {
+        csrf: csrfToken(firstAnonymous.request, firstAnonymous.csrf, {
+          mutation: 'cart/remove',
+        }),
+        productId: 'p1',
+      },
+      replayStore,
+      request: firstAnonymous.request,
+    });
+    await addSubmit(firstAnonymous);
+
+    // A caller-controlled form token cannot merge two cookie principals; a sibling mutation
+    // cannot consume the first mutation's response under the same cookie+idem either.
+    expect(addWrites).toBe(2);
+    expect(removeWrites).toBe(1);
+  });
+
+  it('M4: anonymous replay preserves request-fingerprint conflicts', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const anonymous = anonymousCsrfRequest('cart/add');
+    let writes = 0;
+    const add = mutation('cart/add', {
+      csrf: anonymous.csrf,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const submit = (productId: string) =>
+      renderMutationResponse(add, {
+        idem: 'idem_anonymous_conflict',
+        rawInput: { csrf: anonymous.token(), productId },
+        replayStore,
+        request: anonymous.request,
+      });
+
+    await expect(submit('p1')).resolves.toMatchObject({ status: 200 });
+    const conflict = await submit('p2');
+    expect(conflict.status).toBe(422);
+    expect(conflict.body).toContain('IDEMPOTENCY_CONFLICT');
+    expect(writes).toBe(1);
   });
 
   it('returns a conflict when the same Kovo-Idem is reused with a different body', async () => {
@@ -1141,50 +1345,25 @@ describe('server mutation response replay', () => {
     expect(replayStore.reserve('scope-c', 'idem_c')).toBeDefined();
   });
 
-  // K3 (SPEC §9.1): part-2 A6 stopped reserve() from FIFO-evicting in-flight pending
-  // reservations, but set()'s own maxEntries eviction still deleted the oldest record —
-  // which may be a pending reservation — without settling its promise. A concurrent
-  // duplicate that joined via get() (returning that pending promise) then hung forever.
-  // set()'s eviction must never silently drop a pending record: it must settle the
-  // awaiter (reject with MutationReplayAbortedError) so it falls back to running itself.
-  it('K3: set() eviction never strands an awaiter of an evicted pending reservation', async () => {
+  // M7/K3 (SPEC §10.3): capacity applies to settled truth only. set() must never evict an
+  // in-flight reservation or force its duplicate to run again; the waiter remains joined until
+  // the original owner commits/aborts, while committed state remains maxEntries-bounded.
+  it('M7: set() capacity never evicts an in-flight record or strands its waiter', async () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 1 });
 
-    // Reserve A (pending). A duplicate request joins it via get() → a pending promise.
     const reservationA = replayStore.reserve('scope', 'idem_a');
     expect(reservationA).toBeDefined();
     const joined = replayStore.get('scope', 'idem_a');
     expect(joined).toBeInstanceOf(Promise);
 
-    // A webhook-fallback set() for a different key fires while at maxEntries:1. Its eviction
-    // loop would otherwise delete A's pending record without resolving/rejecting it.
     replayStore.set('scope', 'idem_b', { body: 'b', headers: {}, status: 200 });
+    expect(replayStore.reserve('scope', 'idem_a')).toBeUndefined();
 
-    // The joined awaiter MUST settle (not hang). On the fixed store it rejects with
-    // MutationReplayAbortedError so the duplicate falls back to running itself.
-    let settled = false;
-    const settlePromise = Promise.resolve(joined).then(
-      (value) => {
-        settled = true;
-        return { kind: 'resolved' as const, value };
-      },
-      (error: unknown) => {
-        settled = true;
-        return { kind: 'rejected' as const, error };
-      },
-    );
-
-    const outcome = await Promise.race([
-      settlePromise,
-      new Promise<{ kind: 'timeout' }>((resolve) =>
-        setTimeout(() => resolve({ kind: 'timeout' }), 200),
-      ),
-    ]);
-
-    expect(settled).toBe(true);
-    expect(outcome.kind).not.toBe('timeout');
-    if (outcome.kind === 'rejected') {
-      expect(outcome.error).toBeInstanceOf(MutationReplayAbortedError);
-    }
+    const settledA = { body: 'a', headers: {}, status: 200 } as const;
+    reservationA!.commit(settledA);
+    await expect(joined).resolves.toEqual(settledA);
+    expect(replayStore.get('scope', 'idem_a')).toEqual(settledA);
+    // A committed after B, so FIFO committed capacity retains A and evicts B.
+    expect(replayStore.get('scope', 'idem_b')).toBeUndefined();
   });
 });
