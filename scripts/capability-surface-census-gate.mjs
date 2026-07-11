@@ -81,38 +81,53 @@ requirePattern(
 );
 requirePattern(
   postgresRuntime,
-  /\bexport\s+function\s+createAuthAdapter\(\):\s*ReturnType<typeof drizzleAdapter>/u,
-  'generated Postgres auth adapter factory must be exported',
+  /\bfunction\s+createAuthAdapter\(\):\s*ReturnType<typeof drizzleAdapter>/u,
+  'generated Postgres auth adapter factory must remain in the framework-owned runtime module',
 );
 requirePattern(
   sqliteRuntime,
-  /\bexport\s+function\s+createAuthAdapter\(\):\s*ReturnType<typeof drizzleAdapter>/u,
-  'generated SQLite auth adapter factory must be exported',
+  /\bfunction\s+createAuthAdapter\(\):\s*ReturnType<typeof drizzleAdapter>/u,
+  'generated SQLite auth adapter factory must remain in the framework-owned runtime module',
+);
+rejectPattern(
+  `${postgresRuntime}\n${sqliteRuntime}`,
+  /\bexport\s+function\s+createAuthAdapter\b/u,
+  'generated auth adapter factories must not cross the framework-owned runtime boundary',
+);
+requirePattern(
+  postgresRuntime,
+  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,900}?\bdatabase:\s*createAuthAdapter\(\)/u,
+  'generated Postgres runtime must consume the private adapter inside createAppAuthBindings',
+);
+requirePattern(
+  sqliteRuntime,
+  /\bexport\s+function\s+createAppAuthBindings\([\s\S]{0,900}?\bdatabase:\s*createAuthAdapter\(\)/u,
+  'generated SQLite runtime must consume the private adapter inside createAppAuthBindings',
 );
 requirePattern(
   postgresAuth,
-  /import\s+\{\s*createAuthAdapter\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
-  'Postgres auth module must import only the narrowed auth adapter factory',
+  /import\s+\{\s*createAppAuthBindings\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
+  'Postgres auth module must import only the sanitized auth-binding factory',
 );
 requirePattern(
   sqliteAuth,
-  /import\s+\{\s*createAuthAdapter\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
-  'SQLite auth module must import only the narrowed auth adapter factory',
+  /import\s+\{\s*createAppAuthBindings\s*\}\s+from\s+['"]\.\/_kovo\/app-runtime-db\.js['"]/u,
+  'SQLite auth module must import only the sanitized auth-binding factory',
 );
 rejectPattern(
   `${postgresAuth}\n${sqliteAuth}`,
-  /\bappRuntime(?:AuthDb|DbProvider|ReadonlyDb)\b/u,
-  'auth modules must not import or use raw runtime DB values',
+  /\b(?:appRuntime(?:AuthDb|DbProvider|ReadonlyDb)|createAuthAdapter|betterAuth|drizzleAdapter)\b/u,
+  'auth modules must not import or use raw runtime DB, adapter, or Better Auth capabilities',
 );
 requirePattern(
   soundSubset,
-  /\['src\/auth\.ts',\s+new Set\(\['createAuthAdapter'\]\)\]/u,
-  'sound-subset allowlist must restrict src/auth.ts to createAuthAdapter',
+  /\['src\/auth\.ts',\s+new Set\(\['createAppAuthBindings'\]\)\]/u,
+  'sound-subset allowlist must restrict src/auth.ts to createAppAuthBindings',
 );
 requirePattern(
   soundSubset,
-  /\['src\/auth\.sqlite\.ts',\s+new Set\(\['createAuthAdapter'\]\)\]/u,
-  'sound-subset allowlist must restrict src/auth.sqlite.ts to createAuthAdapter',
+  /\['src\/auth\.sqlite\.ts',\s+new Set\(\['createAppAuthBindings'\]\)\]/u,
+  'sound-subset allowlist must restrict src/auth.sqlite.ts to createAppAuthBindings',
 );
 requirePattern(
   sqlSafeHandle,
