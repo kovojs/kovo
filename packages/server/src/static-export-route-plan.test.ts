@@ -3,6 +3,7 @@ import { trustedHtml } from '@kovojs/browser';
 
 import { publicAccess } from './access.js';
 import { createApp } from './app.js';
+import { guard } from './guards.js';
 import { route } from './route.js';
 import { staticExportRoutePlan } from './static-export-route-plan.js';
 
@@ -101,6 +102,42 @@ describe('server static export route plan', () => {
         routePath: '/orders/:id',
       },
     ]);
+  });
+
+  it('uses the pinned descriptor snapshot for proxied route planning', () => {
+    const deny = guard('static-proxy-deny', () => ({ kind: 'forbidden' as const }));
+    const declaration = route('/proxied-private', {
+      access: [deny],
+      page: () => trustedHtml('<main>Private</main>'),
+    });
+    const clone = { ...declaration };
+    let accessReads = 0;
+    const proxied = new Proxy(clone, {
+      get(target, property, receiver) {
+        if (property === 'access') {
+          accessReads += 1;
+          return publicAccess('proxy get trap attempted public downgrade');
+        }
+        return Reflect.get(target, property, receiver);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return Reflect.getOwnPropertyDescriptor(target, property);
+      },
+    });
+    const app = createApp({ routes: [proxied] });
+
+    expect(staticExportRoutePlan(app)).toEqual({
+      diagnostics: [
+        {
+          code: 'KV229',
+          message:
+            "KV229 static export cannot export guarded route '/proxied-private'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.",
+          routePath: '/proxied-private',
+        },
+      ],
+      targets: [],
+    });
+    expect(accessReads).toBe(0);
   });
 
   it('allows explicitly public routes in an app with a session provider', () => {

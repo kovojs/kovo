@@ -27,7 +27,7 @@ import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfOptions } from './csrf.js';
-import { snapshotAccessDecision, type AccessDecision } from './access.js';
+import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { DeferredRegionCollector } from './jsx-context.js';
@@ -307,12 +307,7 @@ export function layout<
 >(
   definition: LayoutDefinition<Request, Queries, Page, Regions>,
 ): LayoutDeclaration<Request, Queries, Page, Regions> {
-  const declaration = {
-    ...definition,
-    ...(definition.access === undefined
-      ? {}
-      : { access: snapshotAccessDecision(definition.access) }),
-  };
+  const declaration = pinAccessDecision({ ...definition }, definition.access);
   const deps = Object.values(definition.queries ?? {}).map(
     (queryDefinition) => queryDefinition.key,
   );
@@ -323,7 +318,7 @@ export function layout<
       target: `kovo-layout-${nextLayoutLiveTargetId}`,
     });
   }
-  return declaration;
+  return Object.freeze(declaration);
 }
 
 /** App-scoped route factory. `createApp()` uses this to contextually type route guards/pages from configured request providers (SPEC §6.4/§9.5). */
@@ -393,18 +388,22 @@ export function route<
     Regions
   > = {},
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
-  const declaration = {
-    ...definition,
-    ...(definition.access === undefined
-      ? {}
-      : { access: snapshotAccessDecision(definition.access) }),
-    path,
-  } as RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>;
+  const declaration = pinAccessDecision(
+    { ...definition, path } as RouteDeclaration<
+      Path,
+      ParamsSchema,
+      SearchSchema,
+      Request,
+      Page,
+      GuardedRequest
+    >,
+    definition.access,
+  );
   const metadata =
     (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
     fallbackRoutePageMetadata(path, definition);
   if (metadata) routePageMetadata.set(declaration, metadata);
-  return declaration;
+  return Object.freeze(declaration);
 }
 
 function fallbackRoutePageMetadata<Path extends string>(
@@ -622,7 +621,7 @@ async function runRoutePageInternal<
     const layoutDeclaration = layouts[index];
     if (!layoutDeclaration) continue;
     const guardFailure = await runAccessDecisionGuards(
-      layoutDeclaration.access,
+      accessDecisionFor(layoutDeclaration),
       layoutDeclaration.guard,
       lifecycleRequest,
     );
@@ -635,7 +634,7 @@ async function runRoutePageInternal<
   }
 
   const guardFailure = await runAccessDecisionGuards(
-    definition.access,
+    accessDecisionFor(definition),
     definition.guard,
     lifecycleRequest,
   );

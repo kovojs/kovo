@@ -1,5 +1,5 @@
 import type { WebhookVerifier } from '@kovojs/core';
-import { snapshotAccessDecision, type AccessDecision } from './access.js';
+import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
@@ -65,6 +65,16 @@ export type EndpointAuthDeclaration =
   | { kind: 'custom'; name: string; verify?: WebhookVerifier }
   | { kind: 'none'; justification: string }
   | { kind: 'verifier'; name: string; verify?: WebhookVerifier };
+
+type EndpointVerifierRequest = Parameters<WebhookVerifier['verify']>[0];
+
+interface PinnedEndpointAuth {
+  auth: EndpointAuthDeclaration | undefined;
+  valid: boolean;
+  verify?: (request: EndpointVerifierRequest) => Promise<boolean>;
+}
+
+const pinnedEndpointAuth = new WeakMap<object, PinnedEndpointAuth>();
 
 /** A raw HTTP endpoint descriptor: path, method, mount mode, and auth/CSRF declarations. */
 export interface Endpoint<
@@ -210,25 +220,155 @@ export function endpoint<
   if (definition.reason.trim() === '') {
     throw new TypeError('endpoint() requires a non-empty reason');
   }
-  return {
-    ...(definition.access === undefined
-      ? {}
-      : { access: snapshotAccessDecision(definition.access) }),
-    ...(definition.auth === undefined ? {} : { auth: definition.auth }),
-    ...(definition.csrf === false
-      ? { csrf: { exempt: true, justification: definition.csrfJustification } }
-      : {}),
-    ...(definition.db === true ? { db: true as const } : {}),
-    handler: definition.handler,
-    method: definition.method,
-    mount,
-    ...(definition.mountJustification === undefined
-      ? {}
-      : { mountJustification: definition.mountJustification }),
-    path,
-    reason: definition.reason,
-    response: definition.response,
-  };
+  const declaration = pinAccessDecision(
+    {
+      ...(definition.csrf === false
+        ? { csrf: { exempt: true, justification: definition.csrfJustification } }
+        : {}),
+      ...(definition.db === true ? { db: true as const } : {}),
+      handler: definition.handler,
+      method: definition.method,
+      mount,
+      ...(definition.mountJustification === undefined
+        ? {}
+        : { mountJustification: definition.mountJustification }),
+      path,
+      reason: definition.reason,
+      response: definition.response,
+    } as EndpointDeclaration<Path, Method, Mount, Db>,
+    definition.access,
+  );
+  pinEndpointAuth(declaration, definition.auth);
+  return declaration;
+}
+
+/** @internal Pin endpoint machine-auth metadata and its executable verifier with the access fact. */
+export function pinEndpointAuth<Declaration extends object>(
+  declaration: Declaration,
+  auth: EndpointAuthDeclaration | undefined,
+): Declaration {
+  if (pinnedEndpointAuth.has(declaration)) return declaration;
+  const snapshot = snapshotEndpointAuth(auth);
+  Object.defineProperty(declaration, 'auth', {
+    configurable: false,
+    enumerable: auth !== undefined,
+    value: snapshot.auth,
+    writable: false,
+  });
+  pinnedEndpointAuth.set(declaration, snapshot);
+  return declaration;
+}
+
+/** @internal Resolve one endpoint's immutable machine-auth declaration. */
+export function endpointAuthFor(
+  declaration: object & { auth?: EndpointAuthDeclaration },
+): EndpointAuthDeclaration | undefined {
+  return endpointAuthSnapshotFor(declaration).auth;
+}
+
+/** @internal Whether the endpoint has an executable verifier pinned at declaration/assembly. */
+export function endpointHasExecutableVerifier(
+  declaration: object & { auth?: EndpointAuthDeclaration },
+): boolean {
+  return endpointAuthSnapshotFor(declaration).verify !== undefined;
+}
+
+function endpointAuthSnapshotFor(
+  declaration: object & { auth?: EndpointAuthDeclaration },
+): PinnedEndpointAuth {
+  const pinned = pinnedEndpointAuth.get(declaration);
+  if (pinned !== undefined) return pinned;
+
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(declaration, 'auth');
+  } catch {
+    throw new TypeError('Endpoint auth declaration must expose a stable own data property.');
+  }
+  const auth =
+    descriptor !== undefined && 'value' in descriptor
+      ? (descriptor.value as EndpointAuthDeclaration | undefined)
+      : undefined;
+  const snapshot =
+    descriptor !== undefined && !('value' in descriptor)
+      ? ({ auth: undefined, valid: false } satisfies PinnedEndpointAuth)
+      : snapshotEndpointAuth(auth);
+  try {
+    Object.defineProperty(declaration, 'auth', {
+      configurable: false,
+      enumerable: descriptor?.enumerable ?? auth !== undefined,
+      value: snapshot.auth,
+      writable: false,
+    });
+  } catch {
+    // Frozen structural declarations still consume the private authoritative snapshot.
+  }
+  pinnedEndpointAuth.set(declaration, snapshot);
+  return snapshot;
+}
+
+function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): PinnedEndpointAuth {
+  if (auth === undefined) return { auth: undefined, valid: true };
+
+  try {
+    const kind = Object.getOwnPropertyDescriptor(auth, 'kind');
+    if (kind === undefined || !('value' in kind)) return { auth: undefined, valid: false };
+    if (kind.value === 'none') {
+      const justification = Object.getOwnPropertyDescriptor(auth, 'justification');
+      if (
+        justification === undefined ||
+        !('value' in justification) ||
+        typeof justification.value !== 'string'
+      ) {
+        return { auth: undefined, valid: false };
+      }
+      return {
+        auth: Object.freeze({ kind: 'none', justification: justification.value }),
+        valid: true,
+      };
+    }
+    if (kind.value !== 'custom' && kind.value !== 'verifier') {
+      return { auth: undefined, valid: false };
+    }
+    const name = Object.getOwnPropertyDescriptor(auth, 'name');
+    if (name === undefined || !('value' in name) || typeof name.value !== 'string') {
+      return { auth: undefined, valid: false };
+    }
+    const verifierDescriptor = Object.getOwnPropertyDescriptor(auth, 'verify');
+    const verifier =
+      verifierDescriptor !== undefined && 'value' in verifierDescriptor
+        ? verifierDescriptor.value
+        : undefined;
+    if (verifier !== undefined && !isExecutableVerifier(verifier)) {
+      return { auth: undefined, valid: false };
+    }
+    const verifyMethod = verifier?.verify;
+    return {
+      auth: Object.freeze({
+        kind: kind.value,
+        name: name.value,
+        ...(verifier === undefined ? {} : { verify: verifier as WebhookVerifier }),
+      }),
+      valid: true,
+      ...(verifyMethod === undefined
+        ? {}
+        : {
+            verify: async (request: EndpointVerifierRequest) =>
+              Boolean(await Reflect.apply(verifyMethod, verifier, [request])),
+          }),
+    };
+  } catch {
+    return { auth: undefined, valid: false };
+  }
+}
+
+function isExecutableVerifier(value: unknown): value is WebhookVerifier {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'verify' in value &&
+    typeof value.verify === 'function'
+  );
 }
 
 /**
@@ -246,7 +386,11 @@ export async function runEndpoint(
   options: EndpointRunOptions = {},
 ): Promise<Response> {
   const endpointRequest = endpointRequestWithoutSession(request);
-  const guardFailure = await runAccessDecisionGuards(definition.access, undefined, endpointRequest);
+  const guardFailure = await runAccessDecisionGuards(
+    accessDecisionFor(definition),
+    undefined,
+    endpointRequest,
+  );
   if (guardFailure) return endpointAccessGuardFailureResponse(guardFailure);
 
   const response =
@@ -322,13 +466,14 @@ export async function runEndpointAuth(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   request: Request,
 ): Promise<Response | undefined> {
-  const verifier = definition.auth?.kind === 'none' ? undefined : definition.auth?.verify;
-  if (verifier === undefined) return undefined;
+  const auth = endpointAuthSnapshotFor(definition);
+  if (!auth.valid) return endpointAuthFailureResponse();
+  if (auth.verify === undefined) return undefined;
 
   let verified = false;
   try {
     const authRequest = endpointRequestWithoutSession(request.clone());
-    verified = await verifier.verify({
+    verified = await auth.verify({
       headers: authRequest.headers,
       payload: new Uint8Array(await authRequest.arrayBuffer()),
     });

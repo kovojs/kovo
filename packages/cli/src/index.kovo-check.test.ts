@@ -322,6 +322,35 @@ describe('kovo check', () => {
     expect(explain.output).not.toContain('ACCESS QUERY private-sparse decision=guard');
   });
 
+  it('keeps KV436 audit and runtime guard enforcement aligned after mutation attempts', async () => {
+    const [{ accessFactsFromApp, runQuery }, { createApp, guard, publicAccess, query }] =
+      await Promise.all([import('@kovojs/server/internal/execution'), import('@kovojs/server')]);
+    const definition = query('private-pinned', {
+      access: [guard('pinned-deny', () => ({ kind: 'forbidden' as const }))],
+      load: () => ({ secret: true }),
+    });
+    const app = createApp({ queries: [definition] });
+
+    expect(Reflect.set(definition, 'access', undefined)).toBe(false);
+    expect(Reflect.deleteProperty(definition, 'access')).toBe(false);
+    expect(() =>
+      Object.defineProperty(definition, 'access', {
+        configurable: true,
+        value: publicAccess('attempted post-check downgrade'),
+        writable: true,
+      }),
+    ).toThrow(TypeError);
+
+    const check = kovoCheck({ access: accessFactsFromApp(app) });
+    expect(check.exitCode).toBe(0);
+    expect(check.output).not.toContain('KV436');
+    await expect(runQuery(app.queries[0]!, undefined, {})).resolves.toMatchObject({
+      error: { code: 'UNAUTHORIZED' },
+      ok: false,
+      status: 422,
+    });
+  });
+
   // SPEC §10.2/§11.2: the by-construction SQL-safety analyzer (analyzeSqlSafetyFromProject) gates
   // `kovo check` — an error-severity KV422 finding in `sqlSafetyDiagnostics` fails the check.
   it('fails on KV422 SQL-safety diagnostics carried in the check graph', () => {
