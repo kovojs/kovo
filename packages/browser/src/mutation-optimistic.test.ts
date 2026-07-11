@@ -15,6 +15,70 @@ import {
 } from './runtime-test-fakes.js';
 
 describe('optimistic enhanced mutation submission', () => {
+  it('retires the old-principal channel before a slow transition body reaches optimistic apply', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
+    const root = new FakeMorphRoot();
+    store.set('account', { owner: 'anonymous' });
+    const reload = vi.fn();
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { reload },
+    });
+    const text = vi.fn(() => new Promise<string>(() => undefined));
+
+    try {
+      const result = await submitOptimisticEnhancedMutation({
+        broadcast,
+        fetch: async () => ({
+          headers: {
+            get(name: string) {
+              return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+            },
+          },
+          ok: true,
+          status: 200,
+          text,
+        }),
+        form: { action: '/_m/auth/custom-sign-in', method: 'post' },
+        formData: new FormData(),
+        input: { owner: 'pending-user' },
+        optimistic: {
+          transforms: {
+            account(_current, input) {
+              return { owner: input.owner };
+            },
+          },
+        },
+        rebaser,
+        root,
+        store,
+      });
+
+      expect(channel.closed).toBe(true);
+      expect(channel.onmessage).toBeNull();
+      expect(reload).toHaveBeenCalledOnce();
+      expect(text).not.toHaveBeenCalled();
+      channel.onmessage?.({
+        data: {
+          body: '<kovo-query name="account">{"owner":"old-principal"}</kovo-query>',
+          changes: [],
+          type: 'kovo:mutation-response',
+        },
+      });
+      expect(store.get('account')).toEqual({ owner: 'pending-user' });
+      expect(result.queries).toEqual([]);
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+  });
+
   it('reconciles server truth and broadcasts successful enhanced responses', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);

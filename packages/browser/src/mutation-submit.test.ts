@@ -46,6 +46,67 @@ function mutationSubmitSnapshot<
 }
 
 describe('enhanced mutation submit', () => {
+  it('closes the old-principal channel at the transition header before a slow body can apply', async () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
+    const root = new FakeMorphRoot();
+    const reload = vi.fn();
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { reload },
+    });
+    const text = vi.fn(() => new Promise<string>(() => undefined));
+
+    try {
+      const result = await submitEnhancedMutation({
+        broadcast,
+        fetch: async () => ({
+          headers: {
+            get(name: string) {
+              return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+            },
+          },
+          ok: true,
+          status: 200,
+          text,
+        }),
+        form: { action: '/_m/auth/custom-sign-in', method: 'post' },
+        formData: new FormData(),
+        root,
+        store,
+      });
+
+      expect(channel.closed).toBe(true);
+      expect(channel.onmessage).toBeNull();
+      expect(reload).toHaveBeenCalledOnce();
+      expect(text).not.toHaveBeenCalled();
+
+      channel.onmessage?.({
+        data: {
+          body: '<kovo-query name="account">{"owner":"old-principal"}</kovo-query>',
+          changes: [],
+          type: 'kovo:mutation-response',
+        },
+      });
+      expect(store.get('account')).toBeUndefined();
+      expect(result).toEqual({
+        appliedFragments: [],
+        changes: [],
+        fragments: [],
+        idem: expect.any(String),
+        queries: [],
+        targets: [],
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+  });
+
   it.each([
     {
       expected: '/',

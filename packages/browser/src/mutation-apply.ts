@@ -14,6 +14,7 @@ import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 import type { ImportHandlerModule } from './handlers.js';
+import { retireSessionTransitionRuntime } from './session-transition.js';
 
 /** @internal Inputs for applying a fetched enhanced mutation response to the runtime (SPEC §9.1). */
 export interface EnhancedMutationRuntimeApplyOptions {
@@ -52,7 +53,7 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
   fetched: FetchedEnhancedMutation,
   hooks: MutationRuntimeApplyHooks = {},
 ): EnhancedMutationAppliedResult {
-  if (fetched.sessionTransition) return retireSessionChangedRuntime(options, fetched);
+  if (fetched.sessionTransition) return sessionTransitionResult(options, fetched);
 
   // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
   // same-user broadcast all parse mutation bodies before entering the canonical
@@ -92,7 +93,7 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
   fetched: FetchedEnhancedMutation & { streamBody: ReadableStream<Uint8Array> },
   hooks: MutationRuntimeApplyHooks = {},
 ): Promise<EnhancedMutationAppliedResult> {
-  if (fetched.sessionTransition) return retireSessionChangedRuntime(options, fetched);
+  if (fetched.sessionTransition) return sessionTransitionResult(options, fetched);
 
   const applied = await applyStreamingMutationResponseBodyToRuntime({
     ...definedProps({
@@ -128,13 +129,21 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
  * rolling credential refresh also reloads conservatively while preserving the authenticated
  * session; it is never published under a stale fingerprint.
  */
-function retireSessionChangedRuntime(
+function sessionTransitionResult(
   options: EnhancedMutationRuntimeApplyOptions,
   fetched: FetchedEnhancedMutation,
 ): EnhancedMutationAppliedResult {
-  options.broadcast?.close();
-  const location = (globalThis as { location?: { reload?: () => void } }).location;
-  location?.reload?.();
+  // Direct/internal callers may invoke the apply boundary without the normal submit orchestrator,
+  // so this boundary still retires fail closed. The normal modular paths return the already-retired
+  // result before calling apply, avoiding a structurally forgeable "already retired" flag.
+  retireSessionTransitionRuntime(options);
+  return retiredSessionTransitionResult(fetched);
+}
+
+/** @internal Build the discarded result after the submit orchestrator retired at header time. */
+export function retiredSessionTransitionResult(
+  fetched: FetchedEnhancedMutation,
+): EnhancedMutationAppliedResult {
   return {
     appliedFragments: [],
     changes: [],

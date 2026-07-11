@@ -3,6 +3,7 @@ import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
 import {
   applyFetchedEnhancedMutationResponseToRuntime,
+  retiredSessionTransitionResult,
   type EnhancedMutationAppliedResult,
   type MutationRuntimeApplyHooks,
 } from './mutation-apply.js';
@@ -21,6 +22,7 @@ import type {
 import { stampPendingQueries } from './pending.js';
 import { rebaserApplyQueryInterposition } from './query-apply.js';
 import { queryStoreKey } from './query-store.js';
+import { retireSessionTransitionRuntime } from './session-transition.js';
 import type { QueryChunk } from './wire-parser.js';
 
 /** @internal Options for submitting an enhanced mutation with optimistic prediction (SPEC §10.4). */
@@ -114,8 +116,16 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   const { idem, optimisticKeys, queryNames } = context;
 
   try {
-    const fetched = await fetchEnhancedMutation({ ...options, ...definedProps({ signal }) }, idem);
+    const fetched = await fetchEnhancedMutation(
+      {
+        ...options,
+        ...definedProps({ signal }),
+        onSessionTransition: () => retireSessionTransitionRuntime(options),
+      },
+      idem,
+    );
     if (queueState?.timedOut) throw lateQueueSettlementAfterTimeoutError();
+    if (fetched.sessionTransition) return retiredSessionTransitionResult(fetched);
 
     if (isFailedMutationResponse(fetched.response)) {
       discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);

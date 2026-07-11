@@ -22,6 +22,7 @@ import {
 import {
   applyStreamingFetchedEnhancedMutationResponseToRuntime,
   applyFetchedEnhancedMutationResponseToRuntime,
+  retiredSessionTransitionResult,
   type EnhancedMutationAppliedResult,
 } from './mutation-apply.js';
 import { readPageBuildToken } from './build-token.js';
@@ -32,6 +33,7 @@ import type { QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
 import type { ImportHandlerModule } from './handlers.js';
+import { retireSessionTransitionRuntime } from './session-transition.js';
 
 export type {
   EnhancedFormLike,
@@ -197,8 +199,10 @@ export async function submitEnhancedMutation(
   try {
     const fetched = await fetchEnhancedMutation({
       ...options,
+      onSessionTransition: () => retireSessionTransitionRuntime(options),
       streaming: isStreamingEnhancedMutationForm(options.form),
     });
+    if (fetched.sessionTransition) return retiredSessionTransitionResult(fetched);
     // SPEC §9.1.1: default the build token (from the page meta) and the
     // refetch-full handler so the production submit path validates delta bases
     // and recovers on a miss/skew. Both stay injectable for tests.
