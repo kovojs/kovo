@@ -144,6 +144,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
           'KV422',
           'sql.raw(...) receives request-derived text',
           'bugz25-sql-alias-proof.ts',
+          'bugz25-sql-carrier-proof.ts',
+          'bugz25-sql-wrapper-proof.ts',
           'KV429',
           'concurrency annotation is dynamic or statically unresolved',
           'table=contacts',
@@ -409,6 +411,43 @@ function addBugz25SqlAliasProof(root: string): void {
       'export async function bugz25SqlAliasProof(input: { sort: string }, db: AppDb) {',
       '  let dangerous: typeof sql.raw;',
       '  ({ raw: dangerous } = sql);',
+      '  return db.select().from(contacts).orderBy(dangerous(input.sort));',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  writeFileSync(
+    join(root, 'src/bugz25-sql-carrier-proof.ts'),
+    [
+      "import { sql } from '@kovojs/drizzle';",
+      '',
+      "import type { AppDb } from './db.js';",
+      "import { contacts } from './schema.js';",
+      '',
+      'export async function bugz25SqlCarrierProof(input: { sort: string }, db: AppDb) {',
+      '  const holder = { nested: { dangerous: sql.raw } };',
+      '  const { nested: { dangerous } } = holder;',
+      '  return db.select().from(contacts).orderBy(dangerous(input.sort));',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  writeFileSync(
+    join(root, 'src/bugz25-sql-wrapper-proof.ts'),
+    [
+      "import { sql } from '@kovojs/drizzle';",
+      '',
+      "import type { AppDb } from './db.js';",
+      "import { contacts } from './schema.js';",
+      '',
+      'const carry = <T,>(value: T): T => value;',
+      '',
+      'export async function bugz25SqlWrapperProof(input: { sort: string }, db: AppDb) {',
+      '  const dangerous = carry(sql.raw);',
       '  return db.select().from(contacts).orderBy(dangerous(input.sort));',
       '}',
       '',
