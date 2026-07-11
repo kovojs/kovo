@@ -237,7 +237,7 @@ describe('compiled interactive gallery demos', () => {
       expect(deriveRun(menubar, 'GalleryMenubarDemo$button_tabIndex_derive_2', menubarState)).toBe(
         0,
       );
-      clientHandler(menubar, 'GalleryMenubarDemo$button_click')(new Event('click'), {
+      clientHandler(menubar, 'GalleryMenubarDemo$MenubarItem_click')(new Event('click'), {
         params: {},
         signal,
         state: menubarState,
@@ -251,7 +251,7 @@ describe('compiled interactive gallery demos', () => {
         'file',
       );
       const menubarKeyEvent = keyEvent('Escape');
-      clientHandler(menubar, 'GalleryMenubarDemo$button_keydown_2')(menubarKeyEvent, {
+      clientHandler(menubar, 'GalleryMenubarDemo$MenubarItem_keydown_2')(menubarKeyEvent, {
         params: {},
         signal,
         state: menubarState,
@@ -268,7 +268,7 @@ describe('compiled interactive gallery demos', () => {
 
       const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js', { document });
       const navigationState = { activeValue: 'products', openValue: '', value: 'none' };
-      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenu_keydown')(
         keyEvent('ArrowRight'),
         { params: {}, signal, state: navigationState },
       );
@@ -276,14 +276,18 @@ describe('compiled interactive gallery demos', () => {
       expect(
         deriveRun(
           navigationMenu,
-          'GalleryNavigationMenuDemo$button_tabIndex_derive',
+          'GalleryNavigationMenuDemo$NavigationMenuTrigger_tabIndex_derive',
           navigationState,
         ),
       ).toBe(-1);
       expect(
-        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$a_tabIndex_derive', navigationState),
+        deriveRun(
+          navigationMenu,
+          'GalleryNavigationMenuDemo$NavigationMenuLink_tabIndex_derive',
+          navigationState,
+        ),
       ).toBe(0);
-      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_pointerenter')(
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenuTrigger_pointerenter')(
         new Event('pointerenter'),
         {
           params: {},
@@ -299,21 +303,29 @@ describe('compiled interactive gallery demos', () => {
       expect(
         deriveRun(
           navigationMenu,
-          'GalleryNavigationMenuDemo$button_aria_expanded_derive',
+          'GalleryNavigationMenuDemo$NavigationMenuTrigger_aria_expanded_derive',
           navigationState,
         ),
       ).toBe('true');
       expect(
-        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$div_hidden_derive', navigationState),
+        deriveRun(
+          navigationMenu,
+          'GalleryNavigationMenuDemo$NavigationMenuContent_hidden_derive',
+          navigationState,
+        ),
       ).toBeNull();
       expect(
-        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$div_hidden_derive_2', navigationState),
+        deriveRun(
+          navigationMenu,
+          'GalleryNavigationMenuDemo$NavigationMenuViewport_hidden_derive',
+          navigationState,
+        ),
       ).toBeNull();
       expect(
         deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$output_text_derive', navigationState),
       ).toBe('products');
       const navEscape = keyEvent('Escape');
-      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(navEscape, {
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenu_keydown')(navEscape, {
         params: {},
         signal,
         state: navigationState,
@@ -323,26 +335,33 @@ describe('compiled interactive gallery demos', () => {
       expect(
         deriveRun(
           navigationMenu,
-          'GalleryNavigationMenuDemo$button_aria_expanded_derive',
+          'GalleryNavigationMenuDemo$NavigationMenuTrigger_aria_expanded_derive',
           navigationState,
         ),
       ).toBe('false');
       expect(
-        deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$div_hidden_derive', navigationState),
+        deriveRun(
+          navigationMenu,
+          'GalleryNavigationMenuDemo$NavigationMenuContent_hidden_derive',
+          navigationState,
+        ),
       ).toBe('');
       expect(
         deriveRun(navigationMenu, 'GalleryNavigationMenuDemo$output_text_derive', navigationState),
       ).toBe('none');
-      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenu_keydown')(
         keyEvent('ArrowRight'),
         { params: {}, signal, state: navigationState },
       );
       const navClick = new Event('click', { cancelable: true });
-      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$a_click')(navClick, {
-        params: {},
-        signal,
-        state: navigationState,
-      });
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenuLink_click')(
+        navClick,
+        {
+          params: {},
+          signal,
+          state: navigationState,
+        },
+      );
       expect(navClick.defaultPrevented).toBe(true);
       expect(navigationState).toEqual({ activeValue: 'docs', openValue: '', value: 'docs' });
 
@@ -539,28 +558,30 @@ describe('compiled interactive gallery demos', () => {
         previousCount: 0,
         previousOpen: false,
       });
-      expect(deriveRun(toast, 'GalleryToastDemo$div_data_state_derive_2', toastState)).toBe('open');
-      expect(deriveRun(toast, 'GalleryToastDemo$div_hidden_derive_2', toastState)).toBeNull();
+      expect(deriveRun(toast, 'GalleryToastDemo$Toast_data_state_derive_2', toastState)).toBe(
+        'open',
+      );
+      expect(deriveRun(toast, 'GalleryToastDemo$Toast_hidden_derive_2', toastState)).toBeNull();
       expect(deriveRun(toast, 'GalleryToastDemo$output_text_derive', toastState)).toBe('open');
-      clientHandler(toast, 'GalleryToastDemo$section_keydown')(keyEvent('Enter'), {
+      clientHandler(toast, 'GalleryToastDemo$ToastViewport_keydown')(keyEvent('Enter'), {
         params: {},
         signal,
         state: toastState,
       });
       expect(toastState.activeOpen).toBe(true);
-      clientHandler(toast, 'GalleryToastDemo$div_animationend')(animationEvent(), {
+      clientHandler(toast, 'GalleryToastDemo$Toast_animationend')(animationEvent(), {
         params: {},
         signal,
         state: toastState,
       });
       expect(toastState.activeOpen).toBe(false);
-      expect(deriveRun(toast, 'GalleryToastDemo$div_data_state_derive_2', toastState)).toBe(
+      expect(deriveRun(toast, 'GalleryToastDemo$Toast_data_state_derive_2', toastState)).toBe(
         'closed',
       );
-      expect(deriveRun(toast, 'GalleryToastDemo$div_hidden_derive_2', toastState)).toBe('');
+      expect(deriveRun(toast, 'GalleryToastDemo$Toast_hidden_derive_2', toastState)).toBe('');
       toastState.activeOpen = true;
       const disabledToastClick = new Event('click', { cancelable: true });
-      clientHandler(toast, 'GalleryToastDemo$button_click_6')(disabledToastClick, {
+      clientHandler(toast, 'GalleryToastDemo$ToastAction_click_3')(disabledToastClick, {
         params: {},
         signal,
         state: toastState,

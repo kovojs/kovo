@@ -304,11 +304,14 @@ describe('compiled interactive gallery demos', () => {
       clientX: 80,
       clientY: 120,
     });
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$div_contextmenu')(contextOpenEvent, {
-      params: {},
-      signal,
-      state: contextMenuState,
-    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$ContextMenuTrigger_contextmenu')(
+      contextOpenEvent,
+      {
+        params: {},
+        signal,
+        state: contextMenuState,
+      },
+    );
     expect(contextMenuState).toEqual({
       highlightedValue: 'copy',
       open: true,
@@ -318,7 +321,7 @@ describe('compiled interactive gallery demos', () => {
     expect(contextOpenEvent.defaultPrevented).toBe(true);
 
     const contextMoveEvent = keyEvent('ArrowDown');
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown')(contextMoveEvent, {
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$ContextMenuItem_keydown')(contextMoveEvent, {
       params: {},
       signal,
       state: contextMenuState,
@@ -332,11 +335,14 @@ describe('compiled interactive gallery demos', () => {
     });
 
     const contextTypeaheadEvent = keyEvent('c');
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown_2')(contextTypeaheadEvent, {
-      params: {},
-      signal,
-      state: contextMenuState,
-    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$ContextMenuItem_keydown_2')(
+      contextTypeaheadEvent,
+      {
+        params: {},
+        signal,
+        state: contextMenuState,
+      },
+    );
     expect(contextTypeaheadEvent.defaultPrevented).toBe(true);
     expect(contextMenuState).toEqual({
       highlightedValue: 'copy',
@@ -346,11 +352,14 @@ describe('compiled interactive gallery demos', () => {
     });
 
     const contextEscapeEvent = keyEvent('Escape');
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_keydown')(contextEscapeEvent, {
-      params: {},
-      signal,
-      state: contextMenuState,
-    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$ContextMenuItem_keydown')(
+      contextEscapeEvent,
+      {
+        params: {},
+        signal,
+        state: contextMenuState,
+      },
+    );
     expect(contextEscapeEvent.defaultPrevented).toBe(true);
     expect(contextMenuState).toEqual({
       highlightedValue: 'copy',
@@ -363,11 +372,14 @@ describe('compiled interactive gallery demos', () => {
       key: 'F10',
       shiftKey: true,
     });
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$div_keydown')(contextTriggerKeyEvent, {
-      params: {},
-      signal,
-      state: contextMenuState,
-    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$ContextMenuTrigger_keydown')(
+      contextTriggerKeyEvent,
+      {
+        params: {},
+        signal,
+        state: contextMenuState,
+      },
+    );
     expect(contextTriggerKeyEvent.defaultPrevented).toBe(true);
     expect(contextMenuState).toEqual({
       highlightedValue: 'copy',
@@ -376,11 +388,14 @@ describe('compiled interactive gallery demos', () => {
       value: 'copy',
     });
 
-    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_click_2')(new Event('click'), {
-      params: {},
-      signal,
-      state: contextMenuState,
-    });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$ContextMenuItem_click_2')(
+      new Event('click'),
+      {
+        params: {},
+        signal,
+        state: contextMenuState,
+      },
+    );
     expect(contextMenuState).toEqual({
       highlightedValue: 'inspect',
       open: false,
@@ -487,13 +502,16 @@ describe('compiled interactive gallery demos', () => {
     expect(dropdownMenuState).toEqual({ highlightedValue: 'rename', open: false, value: 'rename' });
 
     const hoverCardState = { open: false };
-    clientHandler(hoverCard, 'GalleryHoverCardDemo$a_pointerenter')(new Event('pointerenter'), {
-      params: {},
-      signal,
-      state: hoverCardState,
-    });
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$HoverCardTrigger_pointerenter')(
+      new Event('pointerenter'),
+      {
+        params: {},
+        signal,
+        state: hoverCardState,
+      },
+    );
     expect(hoverCardState).toEqual({ open: true });
-    clientHandler(hoverCard, 'GalleryHoverCardDemo$a_keydown')(
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$HoverCardTrigger_keydown')(
       Object.assign(new Event('keydown'), { key: 'Escape' }),
       {
         params: {},
@@ -502,26 +520,32 @@ describe('compiled interactive gallery demos', () => {
       },
     );
     expect(hoverCardState).toEqual({ open: false });
-    clientHandler(hoverCard, 'GalleryHoverCardDemo$a_focus')(new Event('focus'), {
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$HoverCardTrigger_focus')(new Event('focus'), {
       params: {},
       signal,
       state: hoverCardState,
     });
     expect(hoverCardState).toEqual({ open: true });
-    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerenter')(new Event('pointerenter'), {
-      params: {},
-      signal,
-      state: hoverCardState,
-    });
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$HoverCardContent_pointerenter')(
+      new Event('pointerenter'),
+      {
+        params: {},
+        signal,
+        state: hoverCardState,
+      },
+    );
     expect(hoverCardState).toEqual({ open: true });
-    clientHandler(hoverCard, 'GalleryHoverCardDemo$aside_pointerleave')(new Event('pointerleave'), {
-      params: {},
-      signal,
-      state: hoverCardState,
-    });
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$HoverCardContent_pointerleave')(
+      new Event('pointerleave'),
+      {
+        params: {},
+        signal,
+        state: hoverCardState,
+      },
+    );
     expect(hoverCardState).toEqual({ open: false });
     hoverCardState.open = true;
-    await asyncClientHandler(hoverCard, 'GalleryHoverCardDemo$a_pointerleave')(
+    await asyncClientHandler(hoverCard, 'GalleryHoverCardDemo$HoverCardTrigger_pointerleave')(
       new Event('pointerleave'),
       {
         params: {},
@@ -540,14 +564,14 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(menubarMoveEvent.defaultPrevented).toBe(true);
     expect(menubarState).toEqual({ activeValue: 'edit', openValue: '', value: 'new' });
-    clientHandler(menubar, 'GalleryMenubarDemo$button_click')(new Event('click'), {
+    clientHandler(menubar, 'GalleryMenubarDemo$MenubarItem_click')(new Event('click'), {
       params: {},
       signal,
       state: menubarState,
     });
     expect(menubarState).toEqual({ activeValue: 'new', openValue: 'file', value: 'new' });
     const menubarEscapeEvent = keyEvent('Escape');
-    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown_2')(menubarEscapeEvent, {
+    clientHandler(menubar, 'GalleryMenubarDemo$MenubarItem_keydown_2')(menubarEscapeEvent, {
       params: {},
       signal,
       state: menubarState,
@@ -555,7 +579,7 @@ describe('compiled interactive gallery demos', () => {
     expect(menubarEscapeEvent.defaultPrevented).toBe(true);
     expect(menubarState).toEqual({ activeValue: 'file', openValue: '', value: 'new' });
     const menubarKeyboardOpenEvent = keyEvent('Enter');
-    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown')(menubarKeyboardOpenEvent, {
+    clientHandler(menubar, 'GalleryMenubarDemo$MenubarItem_keydown')(menubarKeyboardOpenEvent, {
       params: {},
       signal,
       state: menubarState,
@@ -563,7 +587,7 @@ describe('compiled interactive gallery demos', () => {
     expect(menubarKeyboardOpenEvent.defaultPrevented).toBe(true);
     expect(menubarState).toEqual({ activeValue: 'new', openValue: 'file', value: 'new' });
     const menubarSelectEvent = keyEvent(' ');
-    clientHandler(menubar, 'GalleryMenubarDemo$button_keydown_2')(menubarSelectEvent, {
+    clientHandler(menubar, 'GalleryMenubarDemo$MenubarItem_keydown_2')(menubarSelectEvent, {
       params: {},
       signal,
       state: menubarState,
@@ -582,7 +606,7 @@ describe('compiled interactive gallery demos', () => {
     expect(meterState).toEqual({ value: 30 });
 
     const navigationMenuState = { activeValue: 'products', openValue: '', value: 'none' };
-    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenu_keydown')(
       keyEvent('ArrowRight'),
       {
         params: {},
@@ -595,7 +619,7 @@ describe('compiled interactive gallery demos', () => {
       key: 'Enter',
     });
     navigationMenuState.activeValue = 'products';
-    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenu_keydown')(
       navigationKeyboardEvent,
       {
         params: {},
@@ -612,7 +636,7 @@ describe('compiled interactive gallery demos', () => {
     const navigationEscapeEvent = Object.assign(new Event('keydown', { cancelable: true }), {
       key: 'Escape',
     });
-    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenu_keydown')(
       navigationEscapeEvent,
       {
         params: {},
@@ -626,7 +650,7 @@ describe('compiled interactive gallery demos', () => {
       openValue: '',
       value: 'none',
     });
-    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_pointerenter')(
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenuTrigger_pointerenter')(
       new Event('pointerenter'),
       {
         params: {},
@@ -640,7 +664,7 @@ describe('compiled interactive gallery demos', () => {
       value: 'none',
     });
     const navigationMoveToDocsEvent = keyEvent('ArrowRight');
-    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenu_keydown')(
       navigationMoveToDocsEvent,
       {
         params: {},
@@ -655,11 +679,14 @@ describe('compiled interactive gallery demos', () => {
       value: 'none',
     });
     const navigationClickEvent = new Event('click', { cancelable: true });
-    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$a_click')(navigationClickEvent, {
-      params: {},
-      signal,
-      state: navigationMenuState,
-    });
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$NavigationMenuLink_click')(
+      navigationClickEvent,
+      {
+        params: {},
+        signal,
+        state: navigationMenuState,
+      },
+    );
     expect(navigationClickEvent.defaultPrevented).toBe(true);
     expect(navigationMenuState).toEqual({
       activeValue: 'docs',
@@ -879,7 +906,7 @@ describe('compiled interactive gallery demos', () => {
         scrollWidth: 100,
       },
     });
-    clientHandler(scrollArea, 'GalleryScrollAreaDemo$div_scroll')(scrollEvent, {
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$ScrollAreaViewport_scroll')(scrollEvent, {
       params: {},
       signal,
       state: scrollAreaState,
@@ -905,7 +932,7 @@ describe('compiled interactive gallery demos', () => {
     scrollAreaState.scrollTop = 0;
     scrollAreaState.scrollY = 'start';
     scrollAreaState.thumbOffset = 0;
-    clientHandler(scrollArea, 'GalleryScrollAreaDemo$div_pointerdown')(
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$ScrollAreaScrollbar_pointerdown')(
       pointerEvent('pointerdown', {
         offsetY: 72,
         target: { clientHeight: 72 },
@@ -928,7 +955,7 @@ describe('compiled interactive gallery demos', () => {
     scrollAreaState.scrollTop = 0;
     scrollAreaState.scrollY = 'start';
     scrollAreaState.thumbOffset = 0;
-    clientHandler(scrollArea, 'GalleryScrollAreaDemo$span_pointerdown')(
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$ScrollAreaThumb_pointerdown')(
       pointerEvent('pointerdown', {
         clientY: 10,
         target: {
@@ -950,7 +977,7 @@ describe('compiled interactive gallery demos', () => {
       dragTrackSize: 72,
       scrolling: true,
     });
-    clientHandler(scrollArea, 'GalleryScrollAreaDemo$span_pointermove')(
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$ScrollAreaThumb_pointermove')(
       pointerEvent('pointermove', { clientY: 40 }),
       {
         params: {},
@@ -963,11 +990,14 @@ describe('compiled interactive gallery demos', () => {
       scrollY: 'middle',
       verticalVisible: true,
     });
-    clientHandler(scrollArea, 'GalleryScrollAreaDemo$span_pointerup')(new Event('pointerup'), {
-      params: {},
-      signal,
-      state: scrollAreaState,
-    });
+    clientHandler(scrollArea, 'GalleryScrollAreaDemo$ScrollAreaThumb_pointerup')(
+      new Event('pointerup'),
+      {
+        params: {},
+        signal,
+        state: scrollAreaState,
+      },
+    );
     expect(scrollAreaState.dragging).toBe(false);
     expect(scrollAreaState.scrolling).toBe(false);
 
@@ -1013,7 +1043,7 @@ describe('compiled interactive gallery demos', () => {
       dragValueStart: 25,
       value: 25,
     };
-    clientHandler(slider, 'GallerySliderDemo$div_pointerdown')(
+    clientHandler(slider, 'GallerySliderDemo$SliderTrack_pointerdown')(
       pointerEvent('pointerdown', {
         clientX: 150,
         currentTarget: {
@@ -1034,7 +1064,7 @@ describe('compiled interactive gallery demos', () => {
       value: 75,
     });
     const sliderKeyDown = keyEvent('ArrowLeft');
-    clientHandler(slider, 'GallerySliderDemo$span_keydown')(sliderKeyDown, {
+    clientHandler(slider, 'GallerySliderDemo$SliderThumb_keydown')(sliderKeyDown, {
       params: {},
       signal,
       state: sliderState,
@@ -1042,7 +1072,7 @@ describe('compiled interactive gallery demos', () => {
     expect(sliderKeyDown.defaultPrevented).toBe(true);
     // step is 1, so ArrowLeft from 75 lands on 74.
     expect(sliderState.value).toBe(74);
-    clientHandler(slider, 'GallerySliderDemo$span_pointerdown')(
+    clientHandler(slider, 'GallerySliderDemo$SliderThumb_pointerdown')(
       pointerEvent('pointerdown', { clientX: 20 }),
       {
         params: {},
@@ -1055,7 +1085,7 @@ describe('compiled interactive gallery demos', () => {
       dragPointerStart: 20,
       dragValueStart: 74,
     });
-    clientHandler(slider, 'GallerySliderDemo$span_pointermove')(
+    clientHandler(slider, 'GallerySliderDemo$SliderThumb_pointermove')(
       pointerEvent('pointermove', {
         clientX: 120,
         target: { parentElement: { clientWidth: 200 } },
@@ -1067,7 +1097,7 @@ describe('compiled interactive gallery demos', () => {
       },
     );
     expect(sliderState.value).toBe(100);
-    clientHandler(slider, 'GallerySliderDemo$span_pointerup')(new Event('pointerup'), {
+    clientHandler(slider, 'GallerySliderDemo$SliderThumb_pointerup')(new Event('pointerup'), {
       params: {},
       signal,
       state: sliderState,
