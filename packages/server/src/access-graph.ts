@@ -1,6 +1,10 @@
 import type { AccessExplainFact } from '@kovojs/core/internal/graph';
 
-import { isGuardAccessDecision, type AccessDecision } from './access.js';
+import {
+  isExecutableGuardAccessDecision,
+  isGuardAccessDecision,
+  type AccessDecision,
+} from './access.js';
 import type { AppMutationDeclaration, AppQueryDeclaration, KovoApp } from './app-types.js';
 import type {
   EndpointAuthDeclaration,
@@ -124,7 +128,7 @@ function explicitAccessFact(
   if (access === undefined) return undefined;
 
   if (isGuardAccessDecision(access)) {
-    if (access.length === 0) return undefined;
+    if (!isExecutableGuardAccessDecision(access)) return undefined;
     return {
       decision: 'guard',
       detail: `access=guards guards=${accessGuardNames(access).join(',')}`,

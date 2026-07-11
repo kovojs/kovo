@@ -8,6 +8,7 @@ import {
   mergeVaryHeader,
   renderErrorDocument,
   renderRouteDocumentResponse,
+  stampCredentialBearingResponseCacheFloor,
 } from './document-core.js';
 import { forwardSetCookie } from './cookies.js';
 import { currentSigningSecret } from './csrf.js';
@@ -145,7 +146,9 @@ export async function renderAppRouteDocumentResponse({
         'Set-Cookie',
         forwardSetCookie(cookie.raw, { class: 'session', source: cookie.source }),
       );
-    return response;
+    return refreshSetCookies.length > 0
+      ? stampCredentialBearingResponseCacheFloor(response)
+      : response;
   };
 
   if (routeResponse.status === 404 && !routeHasBoundary(route, 'notFound')) {

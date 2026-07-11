@@ -24,13 +24,18 @@ const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
   'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
   ['src/app.tsx', new Set(['appRuntimeDbProvider', 'appRuntimeDbReady'])],
-  ['src/auth.ts', new Set(['createAuthAdapter'])],
-  ['src/auth.sqlite.ts', new Set(['createAuthAdapter'])],
+  ['src/auth.ts', new Set(['createAppAuthBindings'])],
+  ['src/auth.sqlite.ts', new Set(['createAppAuthBindings'])],
   ['src/db.ts', new Set(['appRuntimeReadonlyDb'])],
   ['src/db.sqlite.ts', new Set(['appRuntimeReadonlyDb'])],
 ]);
 const RUNTIME_DB_IMPORT_MESSAGE =
   'SPEC.md §6.6 sound subset bans non-type imports of src/_kovo/app-runtime-db outside framework-owned starter files';
+const AUTH_BINDING_FACTORY = 'createAppAuthBindings';
+const AUTH_BINDING_SAFE_MEMBERS = new Set(['seedDemoUser', 'sessionProvider', 'signIn', 'signOut']);
+const AUTH_BINDING_CONFINEMENT_MESSAGE =
+  'SPEC.md §6.6/§10.3 confines the Better Auth instance and privileged adapter to the framework-owned runtime; ' +
+  'auth.ts may export only the returned sanitized session provider, credential mutations, and fixed demo-seed operation';
 const QUERY_LOADER_RAW_SQL_MESSAGE =
   'SPEC.md §6.6/§10.2 sound subset bans raw SQL in query loaders on the common path; ' +
   'use Drizzle typed builders or route explicit raw SQL through trustedSql(...) so runtime chokes stay authoritative';
@@ -98,6 +103,7 @@ function analyzeWithTypeScript(ts, source, relativeFile) {
     scriptKind(ts, relativeFile),
   );
   const bindings = frameworkBindingsForSourceFile(ts, sourceFile);
+  bindings.runtimeAuth = runtimeAuthBindingsForSourceFile(ts, sourceFile, relativeFile);
   visitTypeScriptNode(ts, sourceFile, sourceFile, relativeFile, bindings, {
     insideQueryLoader: false,
     insideTrustedSqlEscape: false,
@@ -106,6 +112,7 @@ function analyzeWithTypeScript(ts, source, relativeFile) {
 
 function visitTypeScriptNode(ts, node, sourceFile, relativeFile, bindings, context) {
   reportRuntimeDbImportIfNeeded(ts, node, sourceFile, relativeFile);
+  reportRuntimeAuthCapabilityUseIfNeeded(ts, node, sourceFile, relativeFile, bindings.runtimeAuth);
 
   if (node.kind === ts.SyntaxKind.AnyKeyword) {
     reportTypeScriptFinding(sourceFile, relativeFile, node, 'SPEC.md §6.6 sound subset bans any');
@@ -171,6 +178,135 @@ function visitTypeScriptNode(ts, node, sourceFile, relativeFile, bindings, conte
   ts.forEachChild(node, (child) =>
     visitTypeScriptNode(ts, child, sourceFile, relativeFile, bindings, context),
   );
+}
+
+function runtimeAuthBindingsForSourceFile(ts, sourceFile, relativeFile) {
+  const factories = new Set();
+  const containers = new Set();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const specifier = stringLiteralText(ts, statement.moduleSpecifier);
+    if (!specifier || !isRuntimeDbModuleSpecifier(relativeFile, specifier)) continue;
+    const named = statement.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    for (const element of named.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      if (imported === AUTH_BINDING_FACTORY) factories.add(element.name.text);
+    }
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node) => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        if (ts.isIdentifier(node.initializer) && factories.has(node.initializer.text)) {
+          const size = factories.size;
+          factories.add(node.name.text);
+          changed = factories.size !== size || changed;
+        } else if (
+          ts.isCallExpression(node.initializer) &&
+          ts.isIdentifier(node.initializer.expression) &&
+          factories.has(node.initializer.expression.text)
+        ) {
+          const size = containers.size;
+          containers.add(node.name.text);
+          changed = containers.size !== size || changed;
+        } else if (ts.isIdentifier(node.initializer) && containers.has(node.initializer.text)) {
+          const size = containers.size;
+          containers.add(node.name.text);
+          changed = containers.size !== size || changed;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+
+  return { containers, factories };
+}
+
+function reportRuntimeAuthCapabilityUseIfNeeded(ts, node, sourceFile, relativeFile, runtimeAuth) {
+  if (!runtimeAuth) return;
+
+  if (
+    (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+    ts.isIdentifier(node.expression) &&
+    runtimeAuth.containers.has(node.expression.text)
+  ) {
+    const member = ts.isPropertyAccessExpression(node)
+      ? node.name.text
+      : stringLiteralText(ts, node.argumentExpression);
+    if (member === null || !AUTH_BINDING_SAFE_MEMBERS.has(member)) {
+      reportTypeScriptFinding(sourceFile, relativeFile, node, AUTH_BINDING_CONFINEMENT_MESSAGE);
+    }
+    return;
+  }
+
+  if (ts.isCallExpression(node) && resolvesToRuntimeAuthFactory(ts, node.expression, runtimeAuth)) {
+    const declaration = node.parent;
+    const statement =
+      ts.isVariableDeclaration(declaration) && ts.isVariableDeclarationList(declaration.parent)
+        ? declaration.parent.parent
+        : undefined;
+    if (
+      !ts.isVariableDeclaration(declaration) ||
+      !ts.isIdentifier(declaration.name) ||
+      !statement ||
+      !ts.isVariableStatement(statement) ||
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    ) {
+      reportTypeScriptFinding(sourceFile, relativeFile, node, AUTH_BINDING_CONFINEMENT_MESSAGE);
+    }
+    return;
+  }
+
+  if (!ts.isIdentifier(node)) return;
+
+  if (runtimeAuth.containers.has(node.text)) {
+    const parent = node.parent;
+    if (
+      (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+      parent.expression === node
+    ) {
+      return;
+    }
+    if (ts.isVariableDeclaration(parent) && parent.name === node) return;
+    if (
+      ts.isVariableDeclaration(parent) &&
+      parent.initializer === node &&
+      ts.isIdentifier(parent.name) &&
+      runtimeAuth.containers.has(parent.name.text)
+    ) {
+      return;
+    }
+    reportTypeScriptFinding(sourceFile, relativeFile, node, AUTH_BINDING_CONFINEMENT_MESSAGE);
+    return;
+  }
+
+  if (!runtimeAuth.factories.has(node.text)) return;
+  const parent = node.parent;
+  if (ts.isImportSpecifier(parent)) return;
+  if (ts.isCallExpression(parent) && parent.expression === node) return;
+  if (
+    ts.isVariableDeclaration(parent) &&
+    parent.initializer === node &&
+    ts.isIdentifier(parent.name) &&
+    runtimeAuth.factories.has(parent.name.text) &&
+    ts.isVariableDeclarationList(parent.parent) &&
+    ts.isVariableStatement(parent.parent.parent) &&
+    !parent.parent.parent.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    )
+  ) {
+    return;
+  }
+  reportTypeScriptFinding(sourceFile, relativeFile, node, AUTH_BINDING_CONFINEMENT_MESSAGE);
+}
+
+function resolvesToRuntimeAuthFactory(ts, expression, runtimeAuth) {
+  return ts.isIdentifier(expression) && runtimeAuth.factories.has(expression.text);
 }
 
 function visitQueryCall(ts, call, sourceFile, relativeFile, bindings, context) {

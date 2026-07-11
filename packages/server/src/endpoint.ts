@@ -1,5 +1,5 @@
 import type { WebhookVerifier } from '@kovojs/core';
-import type { AccessDecision } from './access.js';
+import { snapshotAccessDecision, type AccessDecision } from './access.js';
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
@@ -211,7 +211,9 @@ export function endpoint<
     throw new TypeError('endpoint() requires a non-empty reason');
   }
   return {
-    ...(definition.access === undefined ? {} : { access: definition.access }),
+    ...(definition.access === undefined
+      ? {}
+      : { access: snapshotAccessDecision(definition.access) }),
     ...(definition.auth === undefined ? {} : { auth: definition.auth }),
     ...(definition.csrf === false
       ? { csrf: { exempt: true, justification: definition.csrfJustification } }

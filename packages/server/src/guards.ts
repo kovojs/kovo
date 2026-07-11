@@ -1,5 +1,5 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
-import type { AccessDecision } from './access.js';
+import { isExecutableGuardAccessDecision, type AccessDecision } from './access.js';
 import {
   mergeVaryHeader,
   renderErrorDocument,
@@ -770,6 +770,14 @@ export async function runGuardChain<Request>(
   guardChain: readonly Guard<Request>[],
   request: Request,
 ): Promise<ResolvedGuardFailure | null> {
+  if (!isExecutableGuardAccessDecision(guardChain)) {
+    return {
+      auth: 'unauthorized',
+      code: 'UNAUTHORIZED',
+      payload: {},
+      status: 422,
+    };
+  }
   for (const item of guardChain) {
     const failure = await runGuard(item, request);
     if (failure) return failure;

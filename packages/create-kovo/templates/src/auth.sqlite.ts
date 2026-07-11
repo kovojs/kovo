@@ -1,13 +1,7 @@
-import { betterAuth } from 'better-auth';
-import {
-  authed,
-  betterAuthSession,
-  betterAuthSignInEmailMutation,
-  betterAuthSignOutMutation,
-} from '@kovojs/better-auth';
+import { authed } from '@kovojs/better-auth';
 import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';
 
-import { createAuthAdapter } from './_kovo/app-runtime-db.js';
+import { createAppAuthBindings } from './_kovo/app-runtime-db.js';
 import type { AppDb } from './db.js';
 
 // Load .env into process.env for runtimes that don't do it automatically (plain
@@ -19,12 +13,11 @@ try {
   // No .env file present — rely on the ambient environment.
 }
 
-// Real Better Auth, backed by the same SQLite/Drizzle database as the app data
-// (src/db.ts), wired into Kovo through the `@kovojs/better-auth` adapter:
-// `betterAuthSession` turns Better Auth's session into `req.session`, and the
-// sign-in/out mutations below are ordinary CSRF-protected Kovo mutations. They are
-// module constants so the compiler can statically wire and CSRF-stamp the forms
-// that reference them (src/components/auth-forms.tsx).
+// Real Better Auth is instantiated inside the framework-owned `_kovo` runtime module.
+// This app-authored module receives only sanitized session and credential-mutation
+// bindings, never Better Auth's `$context` or its secret-readable system adapter
+// (SPEC §6.6/§10.3 capability ownership). The bindings remain module constants so
+// the compiler can statically wire and CSRF-stamp the forms that reference them.
 
 export interface AppSession {
   id: string;
@@ -68,24 +61,6 @@ export const appSession = session(
   }),
 );
 
-const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:5173',
-  secret: requireAuthSecret(),
-  emailAndPassword: { enabled: true },
-  // Kovo stamps and verifies its own CSRF token on every mutation form
-  // (SPEC.md §6.6), and these endpoints are reached server-side via `auth.api`,
-  // so Better Auth's own origin-based CSRF check is redundant here.
-  advanced: { disableCSRFCheck: true },
-  database: createAuthAdapter(),
-});
-
-export const appSessionProvider = appSession.provider(
-  betterAuthSession(auth, ({ session: authSession, user }) => ({
-    id: authSession.id,
-    user: { id: user.id, email: user.email, name: user.name },
-  })),
-);
-
 /**
  * The app's session-presence guard. Routes and queries that show the signed-in
  * user's data carry it as their KV436 access decision (SPEC §10.2), matching the
@@ -93,40 +68,15 @@ export const appSessionProvider = appSession.provider(
  */
 export const appAuthed = authed<AppRequest>();
 
-export const appSignIn = betterAuthSignInEmailMutation<'auth/sign-in', AppRequest>(auth, {
-  // Sign-in runs before authentication, so its KV436 access decision is public
-  // (SPEC §10.2); CSRF still applies.
-  access: publicAccess('sign-in runs before authentication'),
+const authBindings = createAppAuthBindings({
+  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:5173',
   csrf: appCsrf,
-  defaultRedirectTo: '/',
+  secret: requireAuthSecret(),
+  signInAccess: publicAccess('sign-in runs before authentication'),
+  signOutAccess: [appAuthed],
 });
 
-export const appSignOut = betterAuthSignOutMutation<
-  'auth/sign-out',
-  AppRequest,
-  AppRequest & { session: AppSession }
->(auth, {
-  access: [appAuthed],
-  csrf: appCsrf,
-  defaultRedirectTo: '/login',
-});
-
-/**
- * Create the local demo account when KOVO_DEMO_PASSWORD is present. create-kovo
- * writes a random value into the gitignored .env file; leave it unset in
- * production. Safe to call repeatedly — a duplicate sign-up is ignored.
- */
-export async function seedDemoUser(): Promise<void> {
-  const password = process.env.KOVO_DEMO_PASSWORD;
-  if (!password || password === 'replace-with-a-local-demo-password') return;
-
-  try {
-    await auth.api.signUpEmail({
-      asResponse: true,
-      body: { email: 'demo@example.com', name: 'Demo User', password },
-      headers: new Headers(),
-    });
-  } catch {
-    // Already seeded.
-  }
-}
+export const appSessionProvider = appSession.provider(authBindings.sessionProvider);
+export const appSignIn = authBindings.signIn;
+export const appSignOut = authBindings.signOut;
+export const seedDemoUser = authBindings.seedDemoUser;

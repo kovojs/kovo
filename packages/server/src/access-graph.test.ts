@@ -6,6 +6,7 @@ import { accessFactsFromApp } from './access-graph.js';
 import { createApp } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { guard, guards } from './guards.js';
+import type { Guard } from './guards.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
@@ -190,6 +191,48 @@ describe('app access graph extraction', () => {
         name: '/webhooks/stripe',
         source: 'access',
       },
+    ]);
+  });
+
+  it('reports invalid guard-array carriers as KV436-missing instead of guarded', () => {
+    const sparse: Guard<object>[] = [];
+    sparse.length = 1;
+    const invalidQuery = query('private-query', {
+      access: sparse,
+      load: () => ({ secret: true }),
+    });
+    const invalidMutation = mutation('private-mutation', {
+      access: sparse,
+      handler: () => ({ changed: true }),
+      input: s.object({}),
+    });
+    const invalidRoute = route('/private-page', {
+      access: sparse,
+      page: () => '<main>private</main>',
+    });
+    const invalidEndpoint = endpoint('/private-endpoint', {
+      access: sparse,
+      csrf: false,
+      csrfJustification: 'invalid access regression fixture',
+      handler: () => new Response('private'),
+      method: 'GET',
+      reason: 'invalid access regression fixture',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      endpoints: [invalidEndpoint],
+      mutations: [invalidMutation],
+      queries: [invalidQuery],
+      routes: [invalidRoute],
+    });
+
+    expect(
+      accessFactsFromApp(app).map(({ decision, kind, name }) => ({ decision, kind, name })),
+    ).toEqual([
+      { decision: 'missing', kind: 'endpoint', name: '/private-endpoint' },
+      { decision: 'missing', kind: 'mutation', name: 'private-mutation' },
+      { decision: 'missing', kind: 'page', name: '/private-page' },
+      { decision: 'missing', kind: 'query', name: 'private-query' },
     ]);
   });
 });

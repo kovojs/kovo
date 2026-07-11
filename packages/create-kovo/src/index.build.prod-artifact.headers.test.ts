@@ -98,6 +98,28 @@ describe('create-kovo starter (build integration: production response header art
       expect(unsafe.headers.getSetCookie()).toEqual([]);
       expect(unsafeBody).toContain('Server Error');
 
+      const rollingMissing = await fetch(`${origin}/rolling-cookie-404`, {
+        headers: { 'x-kovo-rolling-proof': '1' },
+      });
+      const rollingMissingBody = await rollingMissing.text();
+      expect(rollingMissing.status, rollingMissingBody).toBe(404);
+      expect(rollingMissing.headers.getSetCookie()).toEqual([
+        expect.stringContaining('rolling_proof=victim-token'),
+      ]);
+      expect(rollingMissing.headers.get('cache-control')).toBe('private, no-store');
+      expect(rollingMissing.headers.get('vary')).toContain('Cookie');
+
+      const rollingOk = await fetch(`${origin}/rolling-cookie-200`, {
+        headers: { 'x-kovo-rolling-proof': '1' },
+      });
+      await expect(rollingOk.text()).resolves.toContain('rolling cookie 200 control');
+      expect(rollingOk.status).toBe(200);
+      expect(rollingOk.headers.getSetCookie()).toEqual([
+        expect.stringContaining('rolling_proof=victim-token'),
+      ]);
+      expect(rollingOk.headers.get('cache-control')).toBe('private, no-store');
+      expect(rollingOk.headers.get('vary')).toContain('Cookie');
+
       const cookiePage = await fetch(`${origin}/header-cookie-proof`);
       const cookieForm = firstFormHtml(await cookiePage.text());
       const action = attributeValue(cookieForm, 'action');
@@ -157,6 +179,28 @@ describe('create-kovo starter (build integration: production response header art
 });
 
 function addHeaderSinkProofRoutes(root: string): void {
+  const authPath = join(root, 'src/auth.ts');
+  writeFileSync(
+    authPath,
+    replaceRequired(
+      readFileSync(authPath, 'utf8'),
+      'export const appSessionProvider = appSession.provider(authBindings.sessionProvider);',
+      [
+        'export const appSessionProvider = appSession.provider(async (request: { headers: Headers }) => {',
+        "  if (request.headers.get('x-kovo-rolling-proof') === '1') {",
+        '    return {',
+        "      setCookies: ['rolling_proof=victim-token; Path=/; HttpOnly; SameSite=Lax'],",
+        "      value: { id: 'rolling-proof', user: { id: 'rolling-proof', email: 'proof@example.test', name: 'Proof' } },",
+        '    };',
+        '  }',
+        '  return authBindings.sessionProvider(request);',
+        '});',
+      ].join('\n'),
+      'rolling-cookie response session provider',
+    ),
+    'utf8',
+  );
+
   writeFileSync(
     join(root, 'src/header-cookie-proof.tsx'),
     [
@@ -196,7 +240,7 @@ function addHeaderSinkProofRoutes(root: string): void {
   const withRespondImport = replaceRequired(
     app,
     '  redirect,\n  route,',
-    '  redirect,\n  respond,\n  route,',
+    '  notFound,\n  redirect,\n  respond,\n  route,',
     'response-header proof response imports',
   );
   const withRawEndpoint = replaceRequired(
@@ -262,6 +306,18 @@ function addHeaderSinkProofRoutes(root: string): void {
     "  routes: [\n    route('/', {",
     [
       '  routes: [',
+      "    route('/rolling-cookie-404', {",
+      "      access: publicAccess('rolling-cookie matched 404 cache-floor proof'),",
+      '      page() {',
+      '        return notFound();',
+      '      },',
+      '    }),',
+      "    route('/rolling-cookie-200', {",
+      "      access: publicAccess('rolling-cookie 200 cache-floor control'),",
+      '      page() {',
+      '        return <main>rolling cookie 200 control</main>;',
+      '      },',
+      '    }),',
       "    route('/header-sink-safe.txt', {",
       "      access: publicAccess('public response header sink proof'),",
       '      page() {',

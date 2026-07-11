@@ -27,7 +27,7 @@ import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfOptions } from './csrf.js';
-import type { AccessDecision } from './access.js';
+import { snapshotAccessDecision, type AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { DeferredRegionCollector } from './jsx-context.js';
@@ -307,7 +307,12 @@ export function layout<
 >(
   definition: LayoutDefinition<Request, Queries, Page, Regions>,
 ): LayoutDeclaration<Request, Queries, Page, Regions> {
-  const declaration = { ...definition };
+  const declaration = {
+    ...definition,
+    ...(definition.access === undefined
+      ? {}
+      : { access: snapshotAccessDecision(definition.access) }),
+  };
   const deps = Object.values(definition.queries ?? {}).map(
     (queryDefinition) => queryDefinition.key,
   );
@@ -388,14 +393,13 @@ export function route<
     Regions
   > = {},
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
-  const declaration = { ...definition, path } as RouteDeclaration<
-    Path,
-    ParamsSchema,
-    SearchSchema,
-    Request,
-    Page,
-    GuardedRequest
-  >;
+  const declaration = {
+    ...definition,
+    ...(definition.access === undefined
+      ? {}
+      : { access: snapshotAccessDecision(definition.access) }),
+    path,
+  } as RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>;
   const metadata =
     (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
     fallbackRoutePageMetadata(path, definition);

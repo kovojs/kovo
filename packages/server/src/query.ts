@@ -2,7 +2,7 @@ import type { JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
-import type { AccessDecision } from './access.js';
+import { snapshotAccessDecision, type AccessDecision } from './access.js';
 import {
   guardFailureToResult,
   renderHttpGuardFailureResponse,
@@ -316,6 +316,9 @@ function buildQueryDefinition<const Key extends string>(
   assertKnownQueryDefinitionKeys(definition);
   const queryDefinition = {
     ...definition,
+    ...(definition.access === undefined
+      ? {}
+      : { access: snapshotAccessDecision(definition.access) }),
     key,
     reads: definition.reads ?? [],
   };

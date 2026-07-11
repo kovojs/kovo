@@ -2,14 +2,17 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 import {
   betterAuthPlaintextReadingApiMethods,
   betterAuthRequestSecretPaths,
   betterAuthTrustedPlaintextModule,
   proveBetterAuthPlaintextApiConfinement,
   proveBetterAuthRequestSecretNonEgress,
+  proveBetterAuthRequestExportConfinement,
   type BetterAuthApiUsage,
   type BetterAuthRequestSecretPath,
+  type BetterAuthRequestReachableExport,
 } from './internal/non-egress-proof.js';
 
 const srcDir = new URL('.', import.meta.url).pathname;
@@ -36,7 +39,109 @@ function sourceWithoutComments(relativePath: string): string {
     .replace(/\/\/.*$/gm, '');
 }
 
+function generatedAuthRuntimeExports(source: string): BetterAuthRequestReachableExport[] {
+  const sourceFile = ts.createSourceFile('src/auth.ts', source, ts.ScriptTarget.Latest, true);
+  const facts: BetterAuthRequestReachableExport[] = [];
+
+  for (const statement of sourceFile.statements) {
+    const exported = statement.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    );
+    if (ts.isVariableStatement(statement) && exported) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        facts.push(
+          classifyGeneratedAuthExport(declaration.name.text, statement.getText(sourceFile)),
+        );
+      }
+      continue;
+    }
+    if (
+      exported &&
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name
+    ) {
+      facts.push(classifyGeneratedAuthExport(statement.name.text, statement.getText(sourceFile)));
+      continue;
+    }
+    if (ts.isExportDeclaration(statement) && !statement.isTypeOnly && statement.exportClause) {
+      if (!ts.isNamedExports(statement.exportClause)) continue;
+      for (const element of statement.exportClause.elements) {
+        if (element.isTypeOnly) continue;
+        facts.push(classifyGeneratedAuthExport(element.name.text, element.getText(sourceFile)));
+      }
+    }
+  }
+
+  return facts.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function classifyGeneratedAuthExport(
+  name: string,
+  source: string,
+): BetterAuthRequestReachableExport {
+  if (
+    /\bcreateAuthAdapter\b|\bauth\.\$context\b|\bauth\.api\b|\bauthBindings\.\$context\b|\b\.adapter\b/.test(
+      source,
+    ) ||
+    (/\bcreateAppAuthBindings\b/.test(source) && !/\bauthBindings\b/.test(source))
+  ) {
+    return { capability: 'privileged-adapter', name };
+  }
+
+  const members = [
+    ...source.matchAll(/\bauthBindings\.(seedDemoUser|sessionProvider|signIn|signOut)\b/g),
+  ].map((match) => match[1]);
+  if (/\bauthBindings\b/.test(source) && members.length === 0) {
+    return { capability: 'unclassified', name };
+  }
+  if (members.includes('sessionProvider')) {
+    return { capability: 'sanitized-session-provider', name };
+  }
+  if (members.includes('signIn') || members.includes('signOut')) {
+    return { capability: 'credential-mutation', name };
+  }
+  if (members.includes('seedDemoUser')) {
+    return { capability: 'fixed-seed-operation', name };
+  }
+  return { capability: 'app-owned-declaration', name };
+}
+
 describe('Better Auth trusted plaintext zone', () => {
+  it('proves every actual generated auth export is capability-clean in both dialects', () => {
+    const expectedNames = [
+      'appAuthed',
+      'appCsrf',
+      'appSession',
+      'appSessionProvider',
+      'appSignIn',
+      'appSignOut',
+      'seedDemoUser',
+    ];
+    for (const template of [
+      '../../create-kovo/templates/src/auth.ts',
+      '../../create-kovo/templates/src/auth.sqlite.ts',
+    ]) {
+      const exports = generatedAuthRuntimeExports(readFileSync(join(srcDir, template), 'utf8'));
+      expect(exports.map((exported) => exported.name)).toEqual(expectedNames);
+      expect(proveBetterAuthRequestExportConfinement(exports)).toEqual([]);
+    }
+
+    expect(
+      proveBetterAuthRequestExportConfinement([
+        { capability: 'privileged-adapter', name: 'leakedAdapter' },
+        { capability: 'raw-auth-instance', name: 'auth' },
+        { capability: 'unclassified', name: 'futureAuthHelper' },
+      ]),
+    ).toEqual([
+      'KV439: request-reachable Better Auth export leakedAdapter exposes privileged-adapter',
+      'KV439: request-reachable Better Auth export auth exposes raw-auth-instance',
+      'KV439: request-reachable Better Auth export futureAuthHelper exposes unclassified',
+    ]);
+  });
+
   it('proves the request-reachable auth secret surface instead of a proxy module name', () => {
     expect(proveBetterAuthRequestSecretNonEgress()).toEqual([]);
 
