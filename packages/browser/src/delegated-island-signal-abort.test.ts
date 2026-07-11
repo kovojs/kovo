@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './client.js';
 import { dispatchDelegatedEvent } from './handlers.js';
@@ -8,8 +8,19 @@ import {
   abortRemovedIslandSignals,
   createIslandSignalScope,
 } from './handler-context.js';
-import { FakeElement, FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';
+import {
+  FakeElement,
+  FakeMorphRoot,
+  FakeMorphTarget,
+  installTestClientModuleManifest,
+} from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest([
+  '/c/cart-filter.client.js',
+  '/c/cart-row.client.js',
+]);
+afterAll(restoreClientModuleManifest);
 
 // SPEC.md §4.7: ctx.signal is the island lifecycle primitive. Delegated event
 // dispatch creates one stable signal per island identity, fragment morphing

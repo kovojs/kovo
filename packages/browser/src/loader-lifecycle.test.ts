@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { createIslandSignalScope } from './handler-context.js';
 import {
@@ -7,7 +7,20 @@ import {
   installExecutionTriggers,
 } from './loader-lifecycle.js';
 import { createQueryStore } from './query-store.js';
-import { FakeElement, FakeFormElement, FakeRoot } from './runtime-test-fakes.js';
+import {
+  FakeElement,
+  FakeFormElement,
+  FakeRoot,
+  installTestClientModuleManifest,
+} from './runtime-test-fakes.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest([
+  '/c/cart.js',
+  '/c/chart.js',
+  '/c/idle.js',
+  '/c/load.js',
+]);
+afterAll(restoreClientModuleManifest);
 
 describe('loader lifecycle', () => {
   it('registers loader listeners with matching disposer options', () => {

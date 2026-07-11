@@ -52,6 +52,8 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
   fetched: FetchedEnhancedMutation,
   hooks: MutationRuntimeApplyHooks = {},
 ): EnhancedMutationAppliedResult {
+  if (fetched.sessionTransition) return retireSessionChangedRuntime(options, fetched);
+
   // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
   // same-user broadcast all parse mutation bodies before entering the canonical
   // decoded chunk apply path.
@@ -90,6 +92,8 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
   fetched: FetchedEnhancedMutation & { streamBody: ReadableStream<Uint8Array> },
   hooks: MutationRuntimeApplyHooks = {},
 ): Promise<EnhancedMutationAppliedResult> {
+  if (fetched.sessionTransition) return retireSessionChangedRuntime(options, fetched);
+
   const applied = await applyStreamingMutationResponseBodyToRuntime({
     ...definedProps({
       applyQuery: hooks.applyQuery ?? options.applyQuery,
@@ -112,6 +116,31 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
     ...applied,
     changes: fetched.changes,
     idem: fetched.idem,
+    targets: fetched.targets,
+  };
+}
+
+/**
+ * SPEC §9.3: a page-load principal cannot safely survive an in-place auth transition. Close the
+ * origin-wide sync channel before touching response truth, then force a full server render whose
+ * `<meta name="kovo-session">` installs the current principal. This deliberately handles
+ * anonymous→auth, auth→anonymous, and principal A→B identically and fail-closed. A same-principal
+ * rolling credential refresh also reloads conservatively while preserving the authenticated
+ * session; it is never published under a stale fingerprint.
+ */
+function retireSessionChangedRuntime(
+  options: EnhancedMutationRuntimeApplyOptions,
+  fetched: FetchedEnhancedMutation,
+): EnhancedMutationAppliedResult {
+  options.broadcast?.close();
+  const location = (globalThis as { location?: { reload?: () => void } }).location;
+  location?.reload?.();
+  return {
+    appliedFragments: [],
+    changes: [],
+    fragments: [],
+    idem: fetched.idem,
+    queries: [],
     targets: fetched.targets,
   };
 }

@@ -253,6 +253,10 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
     );
     const queryWarningHeaders =
       queryWarningHeader === undefined ? undefined : { 'Kovo-Warn': queryWarningHeader };
+    const sessionTransitionHeaders = mutationSessionTransitionHeaders(
+      result.changes,
+      result.responseHeaders,
+    );
 
     return {
       body: frameworkWireBody([...queryChunks, ...fragmentChunks].join('\n')),
@@ -263,6 +267,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
         },
         buildHeaders,
         result.responseHeaders,
+        sessionTransitionHeaders,
         queryWarningHeaders,
       ),
       status: 200,
@@ -341,9 +346,31 @@ function mutationRenderErrorResponse<Request>(
         'Kovo-Changes': mutationWireChangeHeader(changes),
       },
       responseHeaders,
+      mutationSessionTransitionHeaders(changes, responseHeaders),
     ),
     status: 500,
   };
+}
+
+/**
+ * SPEC §9.3: the browser's BroadcastChannel principal is page-scoped. A mutation that can
+ * change browser session authority must therefore force the old page/channel to retire before
+ * response truth is applied or published. The hint is framework-owned and derived from either an
+ * auth-domain invalidation or credential/storage response headers; app-authored response-header
+ * strings never choose it directly.
+ */
+function mutationSessionTransitionHeaders(
+  changes: readonly ChangeRecord[],
+  responseHeaders: ResponseHeaders | undefined,
+): ResponseHeaders | undefined {
+  const authChanged = changes.some((change) => change.domain === 'auth');
+  const credentialHeadersChanged = Object.keys(responseHeaders ?? {}).some((name) => {
+    const lower = name.toLowerCase();
+    return lower === 'set-cookie' || lower === 'clear-site-data';
+  });
+  return authChanged || credentialHeadersChanged
+    ? { 'Kovo-Session-Transition': 'reload' }
+    : undefined;
 }
 
 function mutationServerErrorResponse<Request>(

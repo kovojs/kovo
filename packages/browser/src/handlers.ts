@@ -10,7 +10,7 @@ import {
   type IslandSignalScope,
 } from './handler-context.js';
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
-import { assertAllowedKovoDynamicImportRef } from './dynamic-import-url.js';
+import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
@@ -148,7 +148,7 @@ async function dispatchDelegatedEventForElement(
     for (const { ref, source } of parseHandlerReferences(
       element.getAttribute(`on:${event.type}`),
     )) {
-      assertAllowedKovoDynamicImportRef(ref);
+      assertAllowedKovoDynamicImportRefForModule(ref, importModule);
       const mod = await importModule(ref.url);
       const fn = mod[ref.exportName];
 

@@ -117,6 +117,7 @@ export interface StructuralJsxLowering {
 
 export const structuralJsxPhaseOrder = [
   'primitive-spreads',
+  'dynamic-spread-control-boundary',
   'primitive-composition',
   'link-navigation',
   'platform-behaviors',
@@ -147,6 +148,7 @@ export function lowerStructuralJsx(
   let needsStylePropertyHelper = false;
 
   lowerPrimitiveSpreads(tree.elements);
+  const needsSafeJsxSpreadHelper = lowerDynamicJsxSpreads(tree.elements);
   diagnostics.push(...lowerPrimitiveComposition(tree.elements, options));
   lowerNavigationLinks(tree.elements, options);
   lowerPlatformBehaviors(model, tree.elements, options, platformSubstitutions, diagnostics);
@@ -206,17 +208,25 @@ export function lowerStructuralJsx(
   );
   const escapeApplied = inlineTextEscapeApplied || staticTextEscapeApplied;
 
-  const alreadyImportsEscapeText = model.namedImports.some(
-    // Compiler-emitted helper import de-dupe for lowered output; trusted HTML recognition is
-    // handled separately via framework identity in output-context facts.
-    (entry) =>
-      entry.importedName === 'escapeText' &&
-      entry.moduleSpecifier === '@kovojs/server/internal/escape',
+  const compilerEscapeImports = [
+    ...(escapeApplied ? ['escapeText'] : []),
+    ...(needsSafeJsxSpreadHelper ? ['kovoSafeJsxSpread'] : []),
+  ].filter(
+    (importedName) =>
+      !model.namedImports.some(
+        (entry) =>
+          entry.importedName === importedName &&
+          entry.moduleSpecifier === '@kovojs/server/internal/escape',
+      ),
   );
   const escapeImport =
-    escapeApplied && !alreadyImportsEscapeText
-      ? `import { escapeText } from '@kovojs/server/internal/escape';\n`
+    compilerEscapeImports.length > 0
+      ? `import { ${compilerEscapeImports.join(', ')} } from '@kovojs/server/internal/escape';\n`
       : '';
+  /*
+   * The helper import is compiler-owned ABI. App-authored imports from this internal subpath are
+   * rejected by the authoring-surface gate; the lowered artifact is reparsed after insertion.
+   */
   const runtimeImports = [
     ...(deriveExports.length > 0 ? ['derive'] : []),
     ...(needsStylePropertyHelper ? [runtimeOutputHelpers.styleProperty] : []),
@@ -240,6 +250,47 @@ export function lowerStructuralJsx(
     stateDerives,
     viewTransitionStamps,
   };
+}
+
+/**
+ * SPEC §4.7/§4.8, §5.2 rule 10, §6.6: caller-owned spread records may carry ordinary
+ * HTML/ARIA/data attributes, but may not mint Kovo's executable/control metadata. Static object
+ * spreads have already been expanded into typed IR by `lowerPrimitiveSpreads`, so only unresolved
+ * dynamic spreads on intrinsic elements cross the runtime reconstruction helper. Component props
+ * remain untouched, and the framework-owned `mutationFormAttributes()` carrier is a compiler-known
+ * declaration rather than a caller-owned record.
+ */
+function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
+  let changed = false;
+  for (const element of elements) {
+    if (isComponentTag(element.tag)) continue;
+    for (const attribute of element.attributes) {
+      const source = attribute.source;
+      if (!source || 'name' in source || source.objectEntries) continue;
+      if (
+        source.expressionCallImportedName === 'mutationFormAttributes' &&
+        source.expressionCallModuleSpecifier === '@kovojs/server'
+      ) {
+        continue;
+      }
+
+      attribute.name = `...kovoSafeJsxSpread(${source.expression})`;
+      attribute.value = {
+        kind: 'expression',
+        source: `...kovoSafeJsxSpread(${source.expression})`,
+      };
+      attribute.ownership = 'generated';
+      attribute.provenance = {
+        ...(attribute.anchor ? { anchor: attribute.anchor } : {}),
+        description: 'caller-owned JSX spread reconstructed without Kovo control attributes',
+        ownership: 'generated',
+        writer: 'dynamic JSX spread control boundary',
+      };
+      markJsxIrChanged(element);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function lowerPlatformBehaviors(

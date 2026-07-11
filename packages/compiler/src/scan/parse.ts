@@ -170,7 +170,7 @@ export function parseComponentModule(
   const moduleScopeBindings: ModuleScopeBindingModel[] = [];
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
-  const namedImports: NamedImportModel[] = [];
+  const namedImports = sourceFile.statements.flatMap((statement) => namedImportModels(statement));
   const renderSourceReturns: StringRenderModel[] = [];
   const taskRunHandlers: TaskRunHandlerModel[] = [];
   const webhookHandlers: WebhookHandlerModel[] = [];
@@ -180,7 +180,6 @@ export function parseComponentModule(
   const visit = (node: ts.Node): void => {
     const specifier = moduleSpecifierModel(node);
     if (specifier) moduleSpecifiers.push(specifier);
-    namedImports.push(...namedImportModels(node));
     moduleScopeBindings.push(...moduleScopeBindingModels(sourceFile, source, node));
 
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
@@ -196,7 +195,9 @@ export function parseComponentModule(
       if (model) components.push(model);
     }
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
-      jsxElements.push(jsxElementModel(sourceFile, source, node, moduleScopeObjectEntries));
+      jsxElements.push(
+        jsxElementModel(sourceFile, source, node, moduleScopeObjectEntries, namedImports),
+      );
     }
     if (ts.isJsxExpression(node)) {
       const comment = jsxCommentModel(sourceFile, source, node);
@@ -2205,6 +2206,7 @@ function jsxElementModel(
   source: string,
   node: ts.JsxElement | ts.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
+  namedImports: readonly NamedImportModel[],
 ): JsxElementModel {
   const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
   const closingStart = ts.isJsxElement(node)
@@ -2260,6 +2262,7 @@ function jsxElementModel(
         callExpression && ts.isIdentifier(callExpression.expression)
           ? callExpression.expression.text
           : undefined;
+      const callImport = namedImports.find((entry) => entry.localName === callName);
       const [firstCallArgument] = callExpression?.arguments ?? [];
       const callArgument = firstCallArgument ? unwrapExpression(firstCallArgument) : undefined;
       const callArgumentBareIdentifierName =
@@ -2274,6 +2277,12 @@ function jsxElementModel(
           end: property.getEnd(),
           expression: source.slice(expression.getStart(sourceFile), expression.getEnd()).trim(),
           ...(callName === undefined ? {} : { expressionCallName: callName }),
+          ...(callImport === undefined
+            ? {}
+            : {
+                expressionCallImportedName: callImport.importedName,
+                expressionCallModuleSpecifier: callImport.moduleSpecifier,
+              }),
           ...(callArgumentBareIdentifierName === undefined
             ? {}
             : { expressionCallArgumentBareIdentifierName: callArgumentBareIdentifierName }),

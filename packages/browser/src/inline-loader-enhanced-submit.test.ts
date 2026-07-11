@@ -5,13 +5,22 @@ import { submitEnhancedMutation } from './mutation-submit.js';
 import { inlineSourceInstallCases, InlineParityRoot } from './inline-loader-test-utils.js';
 
 class InertBroadcastChannel {
+  static instances: InertBroadcastChannel[] = [];
+  closed = false;
   onmessage: ((event: { data: unknown }) => void) | null = null;
+  readonly posted: unknown[] = [];
 
-  constructor(readonly name: string) {}
+  constructor(readonly name: string) {
+    InertBroadcastChannel.instances.push(this);
+  }
 
-  close(): void {}
+  close(): void {
+    this.closed = true;
+  }
 
-  postMessage(_value: unknown): void {}
+  postMessage(value: unknown): void {
+    this.posted.push(value);
+  }
 }
 
 describe('inline loader enhanced submit source', () => {
@@ -19,9 +28,106 @@ describe('inline loader enhanced submit source', () => {
   let originalBroadcastChannel: unknown;
 
   beforeEach(() => {
+    InertBroadcastChannel.instances = [];
     originalBroadcastChannel = globalRecord.BroadcastChannel;
     globalRecord.BroadcastChannel = InertBroadcastChannel;
   });
+
+  it.each(inlineSourceInstallCases)(
+    'retires the inline channel before applying a no-navigation session transition through %s',
+    async (_name, installSource) => {
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const reload = vi.fn();
+      const text = vi.fn(async () => '<kovo-query name="account">{"owner":"victim"}</kovo-query>');
+      const form = {
+        action: '/_m/auth/custom-sign-in',
+        getAttribute(name: string) {
+          return name === 'data-enhance' ? '' : null;
+        },
+        method: 'post',
+      };
+
+      try {
+        globalRecord.FormData = function FormData() {
+          return { get: () => null };
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelector() {
+            return null;
+          },
+          querySelectorAll() {
+            return [];
+          },
+        };
+        globalRecord.fetch = vi.fn(async () => ({
+          headers: {
+            get(name: string) {
+              return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+            },
+          },
+          ok: true,
+          status: 200,
+          text,
+        }));
+        globalRecord.location = {
+          href: 'https://kovo.test/login',
+          origin: 'https://kovo.test',
+          pathname: '/login',
+          reload,
+          search: '',
+        };
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(reload).toHaveBeenCalledOnce();
+        expect(text).not.toHaveBeenCalled();
+        expect(InertBroadcastChannel.instances).toHaveLength(1);
+        expect(InertBroadcastChannel.instances[0]?.closed).toBe(true);
+        expect(InertBroadcastChannel.instances[0]?.posted).toEqual([]);
+      } finally {
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          location: originals.location,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
 
   afterEach(() => {
     if (originalBroadcastChannel === undefined) {
@@ -837,8 +943,10 @@ describe('inline loader enhanced submit source', () => {
           querySelector(selector: string) {
             return selector === '[data-stream-text="assistant:a1"]' ? streamTarget : null;
           },
-          querySelectorAll() {
-            return [];
+          querySelectorAll(selector: string) {
+            return selector === '[data-kovo-module-allowlist]'
+              ? [{ getAttribute: () => '/c/client.ts' }]
+              : [];
           },
         };
         globalRecord.fetch = inlineFetch;
@@ -1023,8 +1131,10 @@ describe('inline loader enhanced submit source', () => {
             }
             return null;
           },
-          querySelectorAll() {
-            return [];
+          querySelectorAll(selector: string) {
+            return selector === '[data-kovo-module-allowlist]'
+              ? [{ getAttribute: () => '/c/client.ts' }]
+              : [];
           },
         };
         globalRecord.fetch = inlineFetch;

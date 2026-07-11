@@ -224,7 +224,7 @@ function executionTriggerRenderLowering(
       const value = formatKovoModuleRef({ ...ref, url: options.clientHref });
       replacements.push({
         end: attribute.end,
-        replacement: `${attribute.name}="${escapeAttribute(value)}"`,
+        replacement: `${attribute.name}="${escapeAttribute(value)}" ${clientModuleAllowlistAttribute([value])}`,
         start: attribute.start,
       });
       outputContexts.push({
@@ -328,6 +328,10 @@ function chainedPrimitiveHandlerAttribute(
         ...primitiveRefs.split(/\s+/).filter(Boolean),
       ].join(' '),
     )}"`,
+    clientModuleAllowlistAttribute([
+      ...handlers.map((handler) => handler.attributeValue),
+      ...primitiveRefs.split(/\s+/).filter(Boolean),
+    ]),
     emitElementParamTypes(handlers.flatMap((handler) => handler.params)),
     ...handlers.flatMap((handler) =>
       handler.params.map((param) => `${param.attributeName}="${escapeAttribute(param.value)}"`),
@@ -348,11 +352,23 @@ function handlerSourceReplacement(handler: HandlerLowering): SourceReplacement {
 function handlerAttributeReplacement(handler: HandlerLowering): string {
   return [
     `${handler.attributeName}="${handler.attributeValue}"`,
+    clientModuleAllowlistAttribute([handler.attributeValue]),
     emitElementParamTypes(handler.params),
     ...handler.params.map((param) => `${param.attributeName}="${escapeAttribute(param.value)}"`),
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+function clientModuleAllowlistAttribute(refValues: readonly string[]): string {
+  const urls = new Set<string>();
+  for (const value of refValues) {
+    const ref = parseKovoModuleRef(value, 'handler');
+    if (ref?.url.startsWith('/c/')) urls.add(ref.url);
+  }
+  return urls.size > 0
+    ? `data-kovo-module-allowlist="${escapeAttribute([...urls].join(' '))}"`
+    : '';
 }
 
 function renderHostStampPatches(

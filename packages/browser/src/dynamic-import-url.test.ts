@@ -34,13 +34,13 @@ describe('Kovo dynamic import URL guard', () => {
     }
   });
 
-  it('allows retained same-origin versioned client modules across build tokens', () => {
+  it('denies retained same-origin versioned modules when no compiler allowlist exists', () => {
     expect(
       isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/cart.client.js', { buildToken: 'cart-v1' }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isAllowedKovoDynamicImportUrl('/c/__v/old/cart.client.js', { buildToken: 'cart-v1' }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('requires manifest membership when a compiler-emitted allowlist is present', () => {
@@ -71,11 +71,11 @@ describe('Kovo dynamic import URL guard', () => {
     ).toBe(true);
   });
 
-  it('treats document modulepreloads as an allowlist only when explicitly marked', () => {
+  it('treats compiler-marked controls/modulepreloads as an allowlist, never ordinary preloads', () => {
     withDocumentModulepreloads(
       { allowlistHrefs: [], modulepreloadHrefs: ['/c/__v/cart-v1/eager.client.js'] },
       () => {
-        expect(isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/lazy.client.js')).toBe(true);
+        expect(isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/lazy.client.js')).toBe(false);
       },
     );
 
@@ -108,14 +108,14 @@ function withDocumentModulepreloads(
     value: {
       querySelectorAll(selector: string) {
         const hrefs =
-          selector === 'link[data-kovo-module-allowlist][rel~="modulepreload"][href]'
+          selector === '[data-kovo-module-allowlist]'
             ? options.allowlistHrefs
             : selector === 'link[rel~="modulepreload"][href]'
               ? options.modulepreloadHrefs
               : [];
         return hrefs.map((href) => ({
           getAttribute(name: string) {
-            return name === 'href' ? href : null;
+            return name === 'data-kovo-module-allowlist' ? href : null;
           },
         }));
       },

@@ -46,6 +46,28 @@ class FakeTargetRoot {
 }
 
 describe('enhanced mutation fetch', () => {
+  it('records the framework session-transition hint before body application', async () => {
+    const fetched = await fetchEnhancedMutation({
+      fetch: async () => ({
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+          },
+        },
+        ok: true,
+        status: 200,
+        text: async () => '<kovo-query name="account">{"private":true}</kovo-query>',
+      }),
+      form: { action: '/_m/auth/custom-sign-in' },
+      formData: new FormData(),
+      idem: 'idem_session_transition',
+      root: new FakeTargetRoot([]),
+    });
+
+    expect(fetched.sessionTransition).toBe(true);
+    expect(fetched.body).toContain('"private":true');
+  });
+
   it('builds the enhanced mutation request from live targets and returns sanitized wire metadata', async () => {
     const formData = new FormData();
     const uploadProgress = vi.fn();
