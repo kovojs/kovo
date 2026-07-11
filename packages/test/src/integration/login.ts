@@ -18,7 +18,8 @@ export interface LoginOptions {
 
 /**
  * Log in by submitting the rendered login form and waiting for the sign-in
- * mutation to succeed. Establishes the session cookie on the page's context.
+ * mutation to succeed and its principal-changing full navigation to settle.
+ * Establishes the session cookie on the page's context.
  */
 export async function login(page: Page, origin: string, options: LoginOptions): Promise<void> {
   const loginPath = options.loginPath ?? '/login';
@@ -41,6 +42,14 @@ export async function login(page: Page, origin: string, options: LoginOptions): 
           : response.url().includes('/_m/')) && response.status() < 400,
       { timeout: 15_000 },
     ),
+    // SPEC §9.3: a successful session-establishing mutation retires the page-load principal and
+    // performs a full navigation. Waiting only for the mutation headers lets callers race that
+    // reload with their next page.goto(), so the helper's completion boundary is the new document.
+    page.waitForEvent('framenavigated', {
+      predicate: (frame) => frame === page.mainFrame(),
+      timeout: 15_000,
+    }),
     submit.click(),
   ]);
+  await page.waitForLoadState('networkidle');
 }
