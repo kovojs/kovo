@@ -1843,6 +1843,7 @@ function resolvedDangerousSqlHelper(
   expression: Node,
   seen = new Set<string>(),
   depth = 0,
+  use: Node = expression,
 ): DangerousSqlHelper | undefined {
   if (depth > 12) return undefined;
   const node = unwrappedStaticExpressionNode(expression);
@@ -1864,18 +1865,23 @@ function resolvedDangerousSqlHelper(
     }
   }
 
+  if (Node.isCallExpression(node)) {
+    const callResult = dangerousSqlHelperFromCall(node, seen, depth + 1, use);
+    if (callResult) return callResult;
+  }
+
   const targetKey = dangerousSqlAliasTargetKey(node);
   if (!targetKey) return undefined;
   if (seen.has(targetKey)) return undefined;
   seen.add(targetKey);
 
-  let resolved = dangerousSqlHelperFromDeclaration(node, seen, depth + 1);
+  let resolved = dangerousSqlHelperFromDeclaration(node, seen, depth + 1, use);
   const sourceFile = node.getSourceFile();
   const assignments = sourceFile
     .getDescendantsOfKind(SyntaxKind.BinaryExpression)
     .filter(
       (assignment) =>
-        assignment.getStart() < node.getStart() &&
+        assignment.getStart() < use.getStart() &&
         assignment.getOperatorToken().getKind() === SyntaxKind.EqualsToken,
     )
     .sort((left, right) => left.getStart() - right.getStart());
@@ -1887,13 +1893,14 @@ function resolvedDangerousSqlHelper(
       targetKey,
       seen,
       depth + 1,
+      use,
     );
     if (!assigned.matched) continue;
-    const definite = dangerousSqlAssignmentDefinitelyPrecedesUse(assignment, node);
+    const definite = dangerousSqlAssignmentDefinitelyPrecedesUse(assignment, use);
     const next =
       assigned.helper ??
       (assigned.value
-        ? resolvedDangerousSqlHelper(assigned.value, new Set(seen), depth + 1)
+        ? resolvedDangerousSqlHelper(assigned.value, new Set(seen), depth + 1, use)
         : undefined);
     if (next) {
       if (definite || !resolved) resolved = next;
@@ -1911,28 +1918,13 @@ function dangerousSqlHelperFromDeclaration(
   node: Node,
   seen: Set<string>,
   depth: number,
+  use: Node,
 ): DangerousSqlHelper | undefined {
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
-    const member = staticAccessName(node);
-    const receiver = unwrappedStaticExpressionNode(node.getExpression());
-    if (!member || !Node.isIdentifier(receiver)) return undefined;
-    const symbol = symbolForIdentifierReference(receiver) ?? receiver.getSymbol();
-    for (const declaration of symbol?.getDeclarations() ?? []) {
-      if (!Node.isVariableDeclaration(declaration)) continue;
-      const initializer = declaration.getInitializer();
-      const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-      if (!object || !Node.isObjectLiteralExpression(object)) continue;
-      const property = object.getProperty(member);
-      const value = Node.isPropertyAssignment(property)
-        ? property.getInitializer()
-        : Node.isShorthandPropertyAssignment(property)
-          ? property.getNameNode()
-          : undefined;
-      if (!value) continue;
-      const resolved = resolvedDangerousSqlHelper(value, new Set(seen), depth + 1);
-      if (resolved) return resolved;
-    }
-    return undefined;
+    const access = dangerousSqlStaticAccessPath(node);
+    return access
+      ? dangerousSqlHelperFromCarrierPath(access.root, access.path, new Set(seen), depth + 1, use)
+      : undefined;
   }
 
   if (!Node.isIdentifier(node)) return undefined;
@@ -1942,30 +1934,24 @@ function dangerousSqlHelperFromDeclaration(
     if (Node.isVariableDeclaration(declaration)) {
       const initializer = declaration.getInitializer();
       if (!initializer) continue;
-      const resolved = resolvedDangerousSqlHelper(initializer, new Set(seen), depth + 1);
+      const resolved = resolvedDangerousSqlHelper(initializer, new Set(seen), depth + 1, use);
       if (resolved) return resolved;
       continue;
     }
 
     if (!Node.isBindingElement(declaration)) continue;
-    const property = propertyNameText(
-      declaration.getPropertyNameNode() ?? declaration.getNameNode(),
+    const binding = dangerousSqlBindingInitializerAndPath(declaration);
+    if (!binding) continue;
+    const sourcePath = dangerousSqlBindingSourcePath(binding, []);
+    if (!sourcePath) continue;
+    const resolved = dangerousSqlHelperFromCarrierPath(
+      binding.initializer,
+      sourcePath,
+      new Set(seen),
+      depth + 1,
+      use,
     );
-    if (property !== 'raw' && property !== 'identifier') continue;
-    const pattern = declaration.getFirstAncestorByKind(SyntaxKind.ObjectBindingPattern);
-    const variable = pattern?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
-    const initializer = variable?.getInitializer();
-    if (!initializer) continue;
-    if (expressionResolvesToFrameworkExport(initializer, frameworkExport('drizzle-orm', 'sql'))) {
-      return { method: property, provider: 'drizzle' };
-    }
-    if (
-      expressionResolvesToFrameworkExport(initializer, frameworkExport('@kovojs/drizzle', 'sql'), {
-        legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
-      })
-    ) {
-      return { method: property, provider: 'kovo' };
-    }
+    if (resolved) return resolved;
   }
 
   return undefined;
@@ -1981,39 +1967,739 @@ function dangerousSqlAssignmentValue(
   targetKey: string,
   seen: Set<string>,
   depth: number,
+  use: Node,
 ): DangerousSqlAssignmentValue {
   if (dangerousSqlAliasTargetKey(left) === targetKey) {
     return { matched: true, value: right };
   }
 
-  const binding = unwrappedStaticExpressionNode(left);
-  if (!Node.isObjectLiteralExpression(binding)) return { matched: false };
-  for (const property of binding.getProperties()) {
-    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
-      continue;
-    }
-    const target = Node.isPropertyAssignment(property)
-      ? property.getInitializer()
-      : Node.isShorthandPropertyAssignment(property)
-        ? property.getNameNode()
-        : undefined;
-    if (!target || dangerousSqlAliasTargetKey(target) !== targetKey) continue;
-    const member = propertyNameText(property.getNameNode());
-    if (member !== 'raw' && member !== 'identifier') return { matched: true, value: right };
-    if (expressionResolvesToFrameworkExport(right, frameworkExport('drizzle-orm', 'sql'))) {
-      return { helper: { method: member, provider: 'drizzle' }, matched: true };
+  const projection = dangerousSqlDestructuringTargetPath(left, targetKey);
+  if (!projection) return { matched: false };
+  const sourcePath = dangerousSqlProjectionSourcePath(projection, []);
+  if (!sourcePath) return { matched: false };
+  const helper = dangerousSqlHelperFromCarrierPath(
+    right,
+    sourcePath,
+    new Set(seen),
+    depth + 1,
+    use,
+  );
+  if (helper) return { helper, matched: true };
+  return {
+    matched: true,
+    value: dangerousSqlCarrierValueAtPath(right, sourcePath, new Set(seen), depth + 1) ?? right,
+  };
+}
+
+type DangerousSqlLocalFunction = ArrowFunction | FunctionDeclaration | FunctionExpression;
+
+function dangerousSqlHelperFromCall(
+  call: CallExpression,
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  if (
+    (Node.isPropertyAccessExpression(callee) || Node.isElementAccessExpression(callee)) &&
+    staticAccessName(callee) === 'bind'
+  ) {
+    const bound = resolvedDangerousSqlHelper(callee.getExpression(), new Set(seen), depth + 1, use);
+    if (bound) return bound;
+  }
+
+  const dangerousArguments = call
+    .getArguments()
+    .flatMap(
+      (argument) => resolvedDangerousSqlHelper(argument, new Set(seen), depth + 1, use) ?? [],
+    );
+  const local = dangerousSqlLocalFunctionFromCallee(callee);
+  if (local) {
+    const returns = dangerousSqlLocalFunctionReturnExpressions(local);
+    for (const returned of returns) {
+      const helper = resolvedDangerousSqlHelper(returned, new Set(seen), depth + 1, use);
+      if (helper) return helper;
     }
     if (
-      expressionResolvesToFrameworkExport(right, frameworkExport('@kovojs/drizzle', 'sql'), {
+      dangerousArguments.length > 0 &&
+      returns.length > 0 &&
+      returns.every((returned) => definitelyLocalSqlHelperValue(returned))
+    ) {
+      return undefined;
+    }
+  }
+
+  // SPEC §6.6 C13 / §10.2 KV422: an unproven call can return an argument unchanged. Once a
+  // raw/identifier member capability crosses that call boundary, preserve it in the result unless
+  // a local implementation above proves that every return is an unrelated safe helper.
+  return dangerousArguments[0];
+}
+
+function dangerousSqlLocalFunctionFromCallee(node: Node): DangerousSqlLocalFunction | undefined {
+  const callee = unwrappedStaticExpressionNode(node);
+  if (
+    Node.isArrowFunction(callee) ||
+    Node.isFunctionDeclaration(callee) ||
+    Node.isFunctionExpression(callee)
+  ) {
+    return callee;
+  }
+  if (!Node.isIdentifier(callee)) return undefined;
+  const symbol = symbolForIdentifierReference(callee) ?? callee.getSymbol();
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isFunctionDeclaration(declaration)) return declaration;
+    if (!Node.isVariableDeclaration(declaration)) continue;
+    const initializer = declaration.getInitializer();
+    const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+    if (value && (Node.isArrowFunction(value) || Node.isFunctionExpression(value))) return value;
+  }
+  return undefined;
+}
+
+function dangerousSqlLocalFunctionReturnExpressions(fn: DangerousSqlLocalFunction): Node[] {
+  const body = fn.getBody();
+  if (!body) return [];
+  if (Node.isArrowFunction(fn) && !Node.isBlock(body)) return [body];
+  return body
+    .getDescendantsOfKind(SyntaxKind.ReturnStatement)
+    .filter(
+      (statement) =>
+        statement.getFirstAncestor((ancestor) => dangerousSqlIsLocalFunction(ancestor)) === fn,
+    )
+    .flatMap((statement) => statement.getExpression() ?? []);
+}
+
+function dangerousSqlIsLocalFunction(node: Node): node is DangerousSqlLocalFunction {
+  return (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node)
+  );
+}
+
+function dangerousSqlHelperFromCarrierPath(
+  value: Node,
+  path: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  if (path.length === 0) {
+    return resolvedDangerousSqlHelper(value, seen, depth + 1, use);
+  }
+  const node = unwrappedStaticExpressionNode(value);
+  const segment = path[0];
+  if (segment === undefined) return undefined;
+  const rest = path.slice(1);
+
+  if (rest.length === 0 && (segment === 'raw' || segment === 'identifier')) {
+    if (expressionResolvesToFrameworkExport(node, frameworkExport('drizzle-orm', 'sql'))) {
+      return { method: segment, provider: 'drizzle' };
+    }
+    if (
+      expressionResolvesToFrameworkExport(node, frameworkExport('@kovojs/drizzle', 'sql'), {
         legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
       })
     ) {
-      return { helper: { method: member, provider: 'kovo' }, matched: true };
+      return { method: segment, provider: 'kovo' };
     }
-    const resolved = resolvedDangerousSqlHelper(right, new Set(seen), depth + 1);
-    return resolved ? { helper: resolved, matched: true } : { matched: true, value: right };
   }
-  return { matched: false };
+
+  if (Node.isObjectLiteralExpression(node)) {
+    const resolution = staticObjectPropertyResolution(node, segment);
+    if (resolution.kind === 'resolved') {
+      return dangerousSqlHelperFromCarrierPath(
+        resolution.value,
+        rest,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+    }
+    if (resolution.kind === 'unresolved') {
+      return dangerousSqlPossibleObjectPropertyHelper(node, segment, rest, seen, depth + 1, use);
+    }
+    return undefined;
+  }
+
+  if (Node.isArrayLiteralExpression(node)) {
+    const index = dangerousSqlArrayIndex(segment);
+    if (index === undefined) return undefined;
+    const elements = dangerousSqlStaticArrayElements(node, new Set(seen), depth + 1);
+    const element = elements?.[index];
+    if (element) {
+      return dangerousSqlHelperFromCarrierPath(element, rest, new Set(seen), depth + 1, use);
+    }
+    if (!elements) {
+      return dangerousSqlPossibleArrayElementHelper(node, rest, seen, depth + 1, use);
+    }
+    return undefined;
+  }
+
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument
+      ? dangerousSqlHelperFromCarrierPath(argument, path, seen, depth + 1, use)
+      : undefined;
+  }
+
+  if (Node.isCallExpression(node)) {
+    const local = dangerousSqlLocalFunctionFromCallee(node.getExpression());
+    if (local) {
+      const returns = dangerousSqlLocalFunctionReturnExpressions(local);
+      for (const returned of returns) {
+        const helper = dangerousSqlHelperFromCarrierPath(
+          returned,
+          path,
+          new Set(seen),
+          depth + 1,
+          use,
+        );
+        if (helper) return helper;
+      }
+      if (
+        returns.length > 0 &&
+        returns.every((returned) => {
+          const projected = dangerousSqlCarrierValueAtPath(
+            returned,
+            path,
+            new Set(seen),
+            depth + 1,
+          );
+          return Boolean(projected && definitelyLocalSqlHelperValue(projected));
+        })
+      ) {
+        return undefined;
+      }
+    }
+    for (const argument of node.getArguments()) {
+      const helper = dangerousSqlHelperFromCarrierPath(
+        argument,
+        path,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+      if (helper) return helper;
+    }
+    return undefined;
+  }
+
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const access = dangerousSqlStaticAccessPath(node);
+    return access
+      ? dangerousSqlHelperFromCarrierPath(
+          access.root,
+          [...access.path, ...path],
+          new Set(seen),
+          depth + 1,
+          use,
+        )
+      : undefined;
+  }
+
+  if (!Node.isIdentifier(node)) return undefined;
+  return dangerousSqlHelperFromIdentifierCarrier(node, path, seen, depth + 1, use);
+}
+
+function dangerousSqlHelperFromIdentifierCarrier(
+  identifier: Node,
+  path: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (!Node.isIdentifier(identifier) || depth > 12) return undefined;
+  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
+  const symbolKey = resolvedSymbolKey(symbol);
+  if (!symbolKey) return undefined;
+  const carrierKey = `carrier:${symbolKey}:${path.join('.')}`;
+  if (seen.has(carrierKey)) return undefined;
+  seen.add(carrierKey);
+
+  let resolved: DangerousSqlHelper | undefined;
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isVariableDeclaration(declaration)) {
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      resolved ??= dangerousSqlHelperFromCarrierPath(
+        initializer,
+        path,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+      continue;
+    }
+    if (!Node.isBindingElement(declaration)) continue;
+    const binding = dangerousSqlBindingInitializerAndPath(declaration);
+    if (!binding) continue;
+    const sourcePath = dangerousSqlBindingSourcePath(binding, path);
+    if (!sourcePath) continue;
+    resolved ??= dangerousSqlHelperFromCarrierPath(
+      binding.initializer,
+      sourcePath,
+      new Set(seen),
+      depth + 1,
+      use,
+    );
+  }
+
+  const rootTargetKey = `symbol:${symbolKey}`;
+  const memberTargetKey = `member:${symbolKey}:${path.join('.')}`;
+  const assignments = identifier
+    .getSourceFile()
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .filter(
+      (assignment) =>
+        assignment.getStart() < use.getStart() &&
+        assignment.getOperatorToken().getKind() === SyntaxKind.EqualsToken,
+    )
+    .sort((left, right) => left.getStart() - right.getStart());
+
+  for (const assignment of assignments) {
+    const left = assignment.getLeft();
+    const leftKey = dangerousSqlAliasTargetKey(left);
+    const destructuredRoot = dangerousSqlDestructuringTargetPath(left, rootTargetKey);
+    let helper: DangerousSqlHelper | undefined;
+    let projected: Node | undefined;
+    let matched = false;
+    if (leftKey === memberTargetKey) {
+      matched = true;
+      projected = assignment.getRight();
+      helper = resolvedDangerousSqlHelper(projected, new Set(seen), depth + 1, use);
+    } else if (leftKey === rootTargetKey) {
+      matched = true;
+      projected = dangerousSqlCarrierValueAtPath(
+        assignment.getRight(),
+        path,
+        new Set(seen),
+        depth + 1,
+      );
+      helper = dangerousSqlHelperFromCarrierPath(
+        assignment.getRight(),
+        path,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+    } else if (destructuredRoot) {
+      const sourcePath = dangerousSqlProjectionSourcePath(destructuredRoot, path);
+      if (!sourcePath) continue;
+      matched = true;
+      projected = dangerousSqlCarrierValueAtPath(
+        assignment.getRight(),
+        sourcePath,
+        new Set(seen),
+        depth + 1,
+      );
+      helper = dangerousSqlHelperFromCarrierPath(
+        assignment.getRight(),
+        sourcePath,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+    }
+    if (!matched) continue;
+    const definite = dangerousSqlAssignmentDefinitelyPrecedesUse(assignment, use);
+    if (helper) {
+      if (definite || !resolved) resolved = helper;
+    } else if (definite && projected && definitelyLocalSqlHelperValue(projected)) {
+      resolved = undefined;
+    }
+  }
+  return resolved;
+}
+
+function dangerousSqlPossibleObjectPropertyHelper(
+  object: ObjectLiteralExpression,
+  segment: string,
+  rest: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  for (const property of object.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      const helper = dangerousSqlHelperFromCarrierPath(
+        property.getExpression(),
+        [segment, ...rest],
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+      if (helper) return helper;
+      continue;
+    }
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      continue;
+    }
+    if (propertyNameText(property.getNameNode()) !== segment) continue;
+    const value = Node.isPropertyAssignment(property)
+      ? property.getInitializer()
+      : property.getNameNode();
+    if (!value) continue;
+    const helper = dangerousSqlHelperFromCarrierPath(value, rest, new Set(seen), depth + 1, use);
+    if (helper) return helper;
+  }
+  return undefined;
+}
+
+function dangerousSqlPossibleArrayElementHelper(
+  array: Node,
+  rest: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  const node = unwrappedStaticExpressionNode(array);
+  if (!Node.isArrayLiteralExpression(node)) return undefined;
+  for (const element of node.getElements()) {
+    if (Node.isOmittedExpression(element)) continue;
+    const value = Node.isSpreadElement(element) ? element.getExpression() : element;
+    const helper = Node.isSpreadElement(element)
+      ? dangerousSqlAnyCarrierHelper(value, new Set(seen), depth + 1, use)
+      : dangerousSqlHelperFromCarrierPath(value, rest, new Set(seen), depth + 1, use);
+    if (helper) return helper;
+  }
+  return undefined;
+}
+
+function dangerousSqlAnyCarrierHelper(
+  value: Node,
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  const direct = resolvedDangerousSqlHelper(value, new Set(seen), depth + 1, use);
+  if (direct) return direct;
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isObjectLiteralExpression(node)) {
+    for (const property of node.getProperties()) {
+      const child = Node.isSpreadAssignment(property)
+        ? property.getExpression()
+        : Node.isPropertyAssignment(property)
+          ? property.getInitializer()
+          : Node.isShorthandPropertyAssignment(property)
+            ? property.getNameNode()
+            : undefined;
+      if (!child) continue;
+      const helper = dangerousSqlAnyCarrierHelper(child, new Set(seen), depth + 1, use);
+      if (helper) return helper;
+    }
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    for (const element of node.getElements()) {
+      if (Node.isOmittedExpression(element)) continue;
+      const child = Node.isSpreadElement(element) ? element.getExpression() : element;
+      const helper = dangerousSqlAnyCarrierHelper(child, new Set(seen), depth + 1, use);
+      if (helper) return helper;
+    }
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+    const key = resolvedSymbolKey(symbol);
+    if (key && seen.has(`any-carrier:${key}`)) return undefined;
+    if (key) seen.add(`any-carrier:${key}`);
+    for (const declaration of symbol?.getDeclarations() ?? []) {
+      if (!Node.isVariableDeclaration(declaration)) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const helper = dangerousSqlAnyCarrierHelper(initializer, new Set(seen), depth + 1, use);
+      if (helper) return helper;
+    }
+  }
+  return undefined;
+}
+
+function dangerousSqlCarrierValueAtPath(
+  value: Node,
+  path: readonly string[],
+  seen: Set<string>,
+  depth: number,
+): Node | undefined {
+  if (depth > 12) return undefined;
+  if (path.length === 0) return unwrappedStaticExpressionNode(value);
+  const node = unwrappedStaticExpressionNode(value);
+  const segment = path[0];
+  if (segment === undefined) return undefined;
+  const rest = path.slice(1);
+  if (Node.isObjectLiteralExpression(node)) {
+    const resolution = staticObjectPropertyResolution(node, segment);
+    return resolution.kind === 'resolved'
+      ? dangerousSqlCarrierValueAtPath(resolution.value, rest, seen, depth + 1)
+      : undefined;
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    const index = dangerousSqlArrayIndex(segment);
+    if (index === undefined) return undefined;
+    const element = dangerousSqlStaticArrayElements(node, seen, depth + 1)?.[index];
+    return element ? dangerousSqlCarrierValueAtPath(element, rest, seen, depth + 1) : undefined;
+  }
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument ? dangerousSqlCarrierValueAtPath(argument, path, seen, depth + 1) : undefined;
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const access = dangerousSqlStaticAccessPath(node);
+    return access
+      ? dangerousSqlCarrierValueAtPath(access.root, [...access.path, ...path], seen, depth + 1)
+      : undefined;
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const key = resolvedSymbolKey(symbol);
+  if (key) {
+    const carrierKey = `carrier-value:${key}:${path.join('.')}`;
+    if (seen.has(carrierKey)) return undefined;
+    seen.add(carrierKey);
+  }
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isVariableDeclaration(declaration)) {
+      const initializer = declaration.getInitializer();
+      if (initializer) {
+        const projected = dangerousSqlCarrierValueAtPath(initializer, path, seen, depth + 1);
+        if (projected) return projected;
+      }
+      continue;
+    }
+    if (!Node.isBindingElement(declaration)) continue;
+    const binding = dangerousSqlBindingInitializerAndPath(declaration);
+    if (!binding) continue;
+    const sourcePath = dangerousSqlBindingSourcePath(binding, path);
+    if (!sourcePath) continue;
+    const projected = dangerousSqlCarrierValueAtPath(
+      binding.initializer,
+      sourcePath,
+      seen,
+      depth + 1,
+    );
+    if (projected) return projected;
+  }
+  return undefined;
+}
+
+type DangerousSqlPathProjection = {
+  path: string[];
+  rest?: { excluded: ReadonlySet<string>; kind: 'object' } | { kind: 'array'; offset: number };
+};
+
+type DangerousSqlBindingProjection = DangerousSqlPathProjection & { initializer: Node };
+
+function dangerousSqlBindingInitializerAndPath(
+  declaration: BindingElement,
+): DangerousSqlBindingProjection | undefined {
+  const path: string[] = [];
+  let rest: DangerousSqlBindingProjection['rest'];
+  let current: BindingElement = declaration;
+  for (;;) {
+    const pattern = current.getParent();
+    if (Node.isObjectBindingPattern(pattern)) {
+      if (current.getDotDotDotToken()) {
+        if (rest) return undefined;
+        const excluded = new Set(
+          pattern
+            .getElements()
+            .filter((element) => element !== current)
+            .flatMap(
+              (element) =>
+                propertyNameText(element.getPropertyNameNode() ?? element.getNameNode()) ?? [],
+            ),
+        );
+        rest = { excluded, kind: 'object' };
+      } else {
+        const segment = propertyNameText(current.getPropertyNameNode() ?? current.getNameNode());
+        if (!segment) return undefined;
+        path.unshift(segment);
+      }
+    } else if (Node.isArrayBindingPattern(pattern)) {
+      const index = pattern.getElements().findIndex((element) => element === current);
+      if (index < 0) return undefined;
+      if (current.getDotDotDotToken()) {
+        if (rest) return undefined;
+        rest = { kind: 'array', offset: index };
+      } else {
+        path.unshift(String(index));
+      }
+    } else {
+      return undefined;
+    }
+
+    const owner = pattern.getParent();
+    if (Node.isVariableDeclaration(owner)) {
+      const initializer = owner.getInitializer();
+      return initializer ? { initializer, path, ...(rest ? { rest } : {}) } : undefined;
+    }
+    if (!Node.isBindingElement(owner)) return undefined;
+    current = owner;
+  }
+}
+
+function dangerousSqlBindingSourcePath(
+  binding: DangerousSqlBindingProjection,
+  suffix: readonly string[],
+): string[] | undefined {
+  return dangerousSqlProjectionSourcePath(binding, suffix);
+}
+
+function dangerousSqlProjectionSourcePath(
+  projection: DangerousSqlPathProjection,
+  suffix: readonly string[],
+): string[] | undefined {
+  if (!projection.rest) return [...projection.path, ...suffix];
+  if (suffix.length === 0) return undefined;
+  const first = suffix[0];
+  if (first === undefined) return undefined;
+  const remaining = suffix.slice(1);
+  if (projection.rest.kind === 'object') {
+    return projection.rest.excluded.has(first)
+      ? undefined
+      : [...projection.path, first, ...remaining];
+  }
+  const index = dangerousSqlArrayIndex(first);
+  return index === undefined
+    ? undefined
+    : [...projection.path, String(projection.rest.offset + index), ...remaining];
+}
+
+function dangerousSqlDestructuringTargetPath(
+  binding: Node,
+  targetKey: string,
+  path: readonly string[] = [],
+): DangerousSqlPathProjection | undefined {
+  const node = unwrappedStaticExpressionNode(binding);
+  if (dangerousSqlAliasTargetKey(node) === targetKey) return { path: [...path] };
+  if (Node.isObjectLiteralExpression(node)) {
+    for (const property of node.getProperties()) {
+      if (Node.isSpreadAssignment(property)) {
+        if (dangerousSqlAliasTargetKey(property.getExpression()) === targetKey) {
+          const excluded = new Set(
+            node
+              .getProperties()
+              .filter((candidate) => candidate !== property && !Node.isSpreadAssignment(candidate))
+              .flatMap((candidate) => {
+                if (
+                  !Node.isPropertyAssignment(candidate) &&
+                  !Node.isShorthandPropertyAssignment(candidate)
+                ) {
+                  return [];
+                }
+                return propertyNameText(candidate.getNameNode()) ?? [];
+              }),
+          );
+          return { path: [...path], rest: { excluded, kind: 'object' } };
+        }
+        continue;
+      }
+      if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+        continue;
+      }
+      const segment = propertyNameText(property.getNameNode());
+      const target = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : property.getNameNode();
+      if (!segment || !target) continue;
+      const found = dangerousSqlDestructuringTargetPath(target, targetKey, [...path, segment]);
+      if (found) return found;
+    }
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    for (const [index, element] of node.getElements().entries()) {
+      if (Node.isOmittedExpression(element)) continue;
+      if (Node.isSpreadElement(element)) {
+        if (dangerousSqlAliasTargetKey(element.getExpression()) === targetKey) {
+          return { path: [...path], rest: { kind: 'array', offset: index } };
+        }
+        continue;
+      }
+      const found = dangerousSqlDestructuringTargetPath(element, targetKey, [
+        ...path,
+        String(index),
+      ]);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+function dangerousSqlStaticAccessPath(value: Node): { path: string[]; root: Node } | undefined {
+  const path: string[] = [];
+  let current = unwrappedStaticExpressionNode(value);
+  while (Node.isPropertyAccessExpression(current) || Node.isElementAccessExpression(current)) {
+    const segment = staticAccessName(current);
+    if (!segment) return undefined;
+    path.unshift(segment);
+    current = unwrappedStaticExpressionNode(current.getExpression());
+  }
+  return path.length > 0 ? { path, root: current } : undefined;
+}
+
+function dangerousSqlArrayIndex(segment: string): number | undefined {
+  if (!/^(?:0|[1-9]\d*)$/u.test(segment)) return undefined;
+  const index = Number(segment);
+  return Number.isSafeInteger(index) ? index : undefined;
+}
+
+function dangerousSqlStaticArrayElements(
+  value: Node,
+  seen: Set<string>,
+  depth: number,
+): (Node | undefined)[] | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(value);
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument ? dangerousSqlStaticArrayElements(argument, seen, depth + 1) : undefined;
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+    const key = resolvedSymbolKey(symbol);
+    if (key) {
+      if (seen.has(`array:${key}`)) return undefined;
+      seen.add(`array:${key}`);
+    }
+    for (const declaration of symbol?.getDeclarations() ?? []) {
+      if (!Node.isVariableDeclaration(declaration)) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const elements = dangerousSqlStaticArrayElements(initializer, seen, depth + 1);
+      if (elements) return elements;
+    }
+    return undefined;
+  }
+  if (!Node.isArrayLiteralExpression(node)) return undefined;
+  const elements: (Node | undefined)[] = [];
+  for (const element of node.getElements()) {
+    if (Node.isOmittedExpression(element)) {
+      elements.push(undefined);
+      continue;
+    }
+    if (Node.isSpreadElement(element)) {
+      const spread = dangerousSqlStaticArrayElements(
+        element.getExpression(),
+        new Set(seen),
+        depth + 1,
+      );
+      if (!spread) return undefined;
+      elements.push(...spread);
+      continue;
+    }
+    elements.push(element);
+  }
+  return elements;
 }
 
 function dangerousSqlAliasTargetKey(node: Node): string | undefined {

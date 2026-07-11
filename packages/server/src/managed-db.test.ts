@@ -1143,6 +1143,33 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(accepted).toEqual([]);
   });
 
+  it('rejects Kovo raw fragments after carrier destructuring and identity wrappers', () => {
+    const accepted: unknown[] = [];
+    const builder = {
+      from(_table: unknown) {
+        return this;
+      },
+      orderBy(value: unknown) {
+        accepted.push(value);
+        return [];
+      },
+    };
+    const raw = { select: () => builder };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+    const holder = { dangerous: sql.raw };
+    const { dangerous: destructured } = holder;
+    const identity = <T>(value: T): T => value;
+    const wrapped = identity(sql.raw);
+
+    expect(() =>
+      handle.select().from('products').orderBy(destructured('created_at desc; select 1--')),
+    ).toThrow(/KV422/);
+    expect(() =>
+      handle.select().from('products').orderBy(wrapped('created_at desc; select 1--')),
+    ).toThrow(/KV422/);
+    expect(accepted).toEqual([]);
+  });
+
   it('keeps typed native Drizzle predicates/orderings green while closing raw wrappers', () => {
     const products = pgTable('products', {
       id: text('id').primaryKey(),
