@@ -17,6 +17,8 @@ import { mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
 
+// SPEC §4.4/§5.2.1: these low-level trusted-HTML fixtures must declare the exact client module
+// URL that the compiler would mark beside each generated handler/derive reference.
 function appSource(): string {
   return `
 import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, route } from '@kovojs/server';
@@ -33,7 +35,7 @@ const home = route('/', {
   access: publicAccess('browser build fixture'),
   page: () =>
     trustedHtml('<main><counter-island kovo-c="counter-island" kovo-state="{&quot;n&quot;:0}">' +
-    '<button on:click="/c/__v/counter-v1/counter.client.js#increment">bump</button> ' +
+    '<button on:click="/c/__v/counter-v1/counter.client.js#increment" data-kovo-module-allowlist="/c/__v/counter-v1/counter.client.js">bump</button> ' +
     '<output data-bind="state.n">0</output>' +
     '</counter-island></main>'),
 });
@@ -90,7 +92,7 @@ function authoredIslandSource(): string {
   ].join('\n');
 }
 
-function authoredIslandRefs(): { click: string; input: string } {
+function authoredIslandRefs(): { click: string; href: string; input: string } {
   const result = compileComponentModule({
     fileName: 'src/components/counter-island.tsx',
     source: authoredIslandSource(),
@@ -104,6 +106,7 @@ function authoredIslandRefs(): { click: string; input: string } {
 
   return {
     click: `${href}#${click}`,
+    href,
     input: `${href}#${input}`,
   };
 }
@@ -141,6 +144,7 @@ function stateTextIslandRefs(): {
   ariaPressed: string;
   click: string;
   dataState: string;
+  href: string;
   text: string;
 } {
   const result = compileComponentModule({
@@ -157,6 +161,7 @@ function stateTextIslandRefs(): {
     ariaPressed: `${href}#StateTextIsland$button_aria_pressed_derive`,
     click: `${href}#${click}`,
     dataState: `${href}#StateTextIsland$button_data_state_derive`,
+    href,
     text: `${href}#StateTextIsland$button_text_derive`,
   };
 }
@@ -291,7 +296,7 @@ describe('kovo build — browser drive (S1)', () => {
           '          ' +
             JSON.stringify(
               `<main><section kovo-c="state-text-island" kovo-state="{&quot;urgentOnly&quot;:false,&quot;clicks&quot;:0}">` +
-                `<button data-testid="priority" type="button" aria-pressed="false" data-state="all" on:click="${refs.click}" data-bind="${refs.text}" data-bind:aria-pressed="${refs.ariaPressed}" data-bind:data-state="${refs.dataState}">urgent</button>` +
+                `<button data-testid="priority" type="button" aria-pressed="false" data-state="all" on:click="${refs.click}" data-kovo-module-allowlist="${refs.href}" data-bind="${refs.text}" data-bind:aria-pressed="${refs.ariaPressed}" data-bind:data-state="${refs.dataState}">urgent</button>` +
                 `<output data-testid="clicks" data-bind="state.clicks">0</output>` +
                 `</section></main>`,
             ) +
@@ -416,9 +421,9 @@ describe('kovo build — browser drive (S1)', () => {
           '          ' +
             JSON.stringify(
               `<main><section kovo-c="counter-island" kovo-state="{&quot;count&quot;:0,&quot;label&quot;:&quot;ready&quot;}">` +
-                `<button data-testid="counter" type="button" on:click="${refs.click}">bump</button>` +
+                `<button data-testid="counter" type="button" on:click="${refs.click}" data-kovo-module-allowlist="${refs.href}">bump</button>` +
                 `<output data-testid="count" data-bind="state.count">0</output>` +
-                `<input aria-label="label" value="ready" on:input="${refs.input}" data-bind:value="state.label">` +
+                `<input aria-label="label" value="ready" on:input="${refs.input}" data-kovo-module-allowlist="${refs.href}" data-bind:value="state.label">` +
                 `<output data-testid="label" data-bind="state.label">ready</output>` +
                 `</section></main>`,
             ) +
