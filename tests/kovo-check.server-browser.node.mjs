@@ -893,8 +893,8 @@ export const CartBadge = component({
         Link: '</c/cart.client.js>; rel=modulepreload, </c/generated/app.client.js>; rel=modulepreload',
       },
       html: [
-        '<link rel="modulepreload" href="/c/cart.client.js">',
-        '<link rel="modulepreload" href="/c/generated/app.client.js">',
+        '<link rel="modulepreload" href="/c/cart.client.js" data-kovo-module-allowlist>',
+        '<link rel="modulepreload" href="/c/generated/app.client.js" data-kovo-module-allowlist>',
         '<script type="module" src="/c/generated/app.client.js"></script>',
       ].join(''),
     },
