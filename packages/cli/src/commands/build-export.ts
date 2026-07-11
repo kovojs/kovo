@@ -1185,6 +1185,11 @@ async function loadBuildAppModule(
     ],
     root,
     server: buildTimeViteServerOptions(),
+    // The closed-app proof is intentionally module-local. Keep the app's Kovo imports inside this
+    // SSR graph so createApp() and the internal derivation capability share one app-guards WeakSet,
+    // including when the CLI runs from a packed install whose node_modules would otherwise be
+    // externalized by Vite.
+    ssr: { noExternal: [/^@kovojs\//] },
   });
   try {
     const [serverBuildModule, serverInternalBuildModule] = await Promise.all([
