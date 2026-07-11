@@ -3,13 +3,42 @@ import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
 
 import { renderComponentMutationFailure } from './component-render.js';
-import { KOVO_IDEM_FIELD_NAME } from './csrf.js';
+import { csrfToken, KOVO_IDEM_FIELD_NAME, mintCsrfField, type CsrfOptions } from './csrf.js';
 import { renderedHtml } from './html.js';
 import { renderMutationEndpointResponse, renderNoJsMutationResponse } from './mutation.js';
 import { createMemoryMutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
+
+function anonymousNoJsCsrfRequest(mutationKey: string): {
+  csrf: CsrfOptions<Request>;
+  request: Request;
+  token(): string;
+} {
+  const csrf: CsrfOptions<Request> = {
+    field: 'csrf',
+    secret: 'anonymous-nojs-replay-secret-0123456789abcdef',
+    sessionId: () => undefined,
+  };
+  const origin = 'https://nojs-replay.test';
+  const minted = mintCsrfField(new Request(`${origin}/form`), {
+    ...csrf,
+    mutation: mutationKey,
+  });
+  if (!minted.setCookie) throw new Error('anonymous no-JS fixture did not mint a CSRF cookie');
+  const cookie = minted.setCookie.split(';', 1)[0];
+  if (!cookie) throw new Error('anonymous no-JS fixture emitted an empty CSRF cookie');
+  const request = new Request(`${origin}/_m/${mutationKey}`, {
+    headers: { Cookie: cookie, Origin: origin },
+    method: 'POST',
+  });
+  return {
+    csrf,
+    request,
+    token: () => csrfToken(request, csrf, { mutation: mutationKey }),
+  };
+}
 
 describe('no-JS mutation responses', () => {
   it('renders no-JS mutation success as POST-redirect-GET', async () => {
@@ -279,6 +308,40 @@ describe('no-JS mutation responses', () => {
     // Second submit (same idem): handler must NOT run again; replayed 303 returned.
     const second = await renderNoJsMutationResponse(addToCart, base);
     expect(second.status).toBe(303);
+    expect(handlerCalls).toBe(1);
+  });
+
+  it('M4: anonymous no-JS submissions share the CSRF-cookie replay scope and normalized fingerprint', async () => {
+    const anonymous = anonymousNoJsCsrfRequest('auth/reset');
+    const replayStore = createMemoryMutationReplayStore();
+    let handlerCalls = 0;
+    const reset = mutation('auth/reset', {
+      csrf: anonymous.csrf,
+      input: s.object({ email: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+    const rawInput = () => {
+      const body = new FormData();
+      body.set('csrf', anonymous.token());
+      body.set(KOVO_IDEM_FIELD_NAME, 'idem_anonymous_nojs');
+      body.set('email', 'person@example.test');
+      return body;
+    };
+    const submit = () =>
+      renderNoJsMutationResponse(reset, {
+        rawInput: rawInput(),
+        redirectTo: '/reset-sent',
+        replayStore,
+        request: anonymous.request,
+      });
+
+    const first = await submit();
+    const replayed = await submit();
+    expect(first).toEqual(replayed);
+    expect(first.status).toBe(303);
     expect(handlerCalls).toBe(1);
   });
 

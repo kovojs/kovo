@@ -20,7 +20,7 @@ import {
 import { buildReusableProductionArtifact, waitForTcpPort } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: runtime and dev server)', () => {
-  it('fingerprints the starter stylesheet URL before serving it as immutable', async () => {
+  it('serves production assets and replays anonymous enhanced sign-in by CSRF cookie', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-build-prod-cache-'));
@@ -61,6 +61,53 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       );
       expect(stylesheetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
       expect(await stylesheetResponse.text()).toContain('--kovo-theme');
+
+      // SPEC §10.3: a pre-auth enhanced mutation has no session principal, so replay must bind
+      // to the framework-owned anonymous CSRF cookie instead of the rotating submitted token.
+      // Exercise the generated production artifact to prove the real app wiring preserves the
+      // first Better Auth Set-Cookie response byte-for-byte rather than creating a second session.
+      const jar = new Map<string, string>();
+      mergeCookies(jar, loginResponse.headers.getSetCookie());
+      const csrf = /name="csrf"\s+value="([^"]+)"/.exec(loginHtml)?.[1];
+      expect(csrf).toBeTruthy();
+      const demoPassword =
+        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+          readFileSync(join(root, '.env'), 'utf8'),
+        )?.[1] ?? '';
+      expect(demoPassword).toBeTruthy();
+
+      const idem = `anonymous-sign-in-${Date.now()}`;
+      const body = new URLSearchParams({
+        csrf: csrf ?? '',
+        email: 'demo@example.com',
+        next: '/',
+        password: demoPassword,
+      }).toString();
+      const submitSignIn = (): Promise<Response> =>
+        fetch(`${origin}/_m/auth/sign-in`, {
+          body,
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
+            'Kovo-Fragment': 'true',
+            'Kovo-Idem': idem,
+            origin,
+          },
+          method: 'POST',
+        });
+
+      const firstSignIn = await submitSignIn();
+      const firstSignInBody = await firstSignIn.text();
+      const duplicateSignIn = await submitSignIn();
+      const duplicateSignInBody = await duplicateSignIn.text();
+
+      expect(firstSignIn.status).toBe(200);
+      expect(duplicateSignIn.status).toBe(200);
+      expect(firstSignIn.headers.get('Kovo-Idem')).toBe(idem);
+      expect(duplicateSignIn.headers.get('Kovo-Idem')).toBe(idem);
+      expect(firstSignIn.headers.getSetCookie().length).toBeGreaterThan(0);
+      expect(duplicateSignIn.headers.getSetCookie()).toEqual(firstSignIn.headers.getSetCookie());
+      expect(duplicateSignInBody).toBe(firstSignInBody);
     } finally {
       await stopProcess(prodServer);
       rmSync(root, { force: true, recursive: true });

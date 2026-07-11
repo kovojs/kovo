@@ -1710,6 +1710,55 @@ describe('server mutation primitives', () => {
     expect(streamSpy).toHaveBeenCalledOnce();
   });
 
+  it('M7: streaming duplicates stay joined after replay ttl until the stream commits', async () => {
+    const replayStore = createMemoryMutationReplayStore({ ttlMs: 1 });
+    let releaseStream: () => void = () => undefined;
+    const streamRelease = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    let markStreamStarted: () => void = () => undefined;
+    const streamStarted = new Promise<void>((resolve) => {
+      markStreamStarted = resolve;
+    });
+    const handlerSpy = vi.fn((input: { body: string }) => input);
+    const streamSpy = vi.fn();
+    const sendMessage = mutation('chat/send-slow-replay', {
+      input: s.object({ body: s.string() }),
+      handler: handlerSpy,
+      async *stream() {
+        streamSpy();
+        markStreamStarted();
+        await streamRelease;
+        yield stream.text('assistant:a1', 'settled once');
+      },
+    });
+    const request = {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_slow_stream',
+        'Kovo-Stream': 'true',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = await renderMutationEndpointResponse(sendMessage, request);
+    expect(first.body).toBeInstanceOf(ReadableStream);
+    await streamStarted;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const duplicate = renderMutationEndpointResponse(sendMessage, request);
+    releaseStream();
+
+    const [firstBody, replayed] = await Promise.all([readResponseBody(first.body), duplicate]);
+    expect(firstBody).toContain('settled once');
+    expect(typeof replayed.body).toBe('string');
+    expect(replayed.body).toContain('settled once');
+    expect(handlerSpy).toHaveBeenCalledOnce();
+    expect(streamSpy).toHaveBeenCalledOnce();
+  });
+
   it('coalesces small text chunks by size and checkpoint boundaries', async () => {
     await expect(
       collectAsync(

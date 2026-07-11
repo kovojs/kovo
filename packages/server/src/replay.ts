@@ -6,6 +6,7 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
+import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { formLikeToRecord } from './schema.js';
 
 export type MutationReplayResponse = ServerResponseBase<
@@ -84,13 +85,15 @@ export interface ReplayReservationRequest<Response, Reservation> {
 }
 
 export interface MutationReplayStoreOptions {
+  /** Maximum number of settled responses retained independently from in-flight reservations. */
   maxEntries?: number;
   /**
    * E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): a separate
    * bound on concurrent *in-flight pending* reservations, independent of `maxEntries`.
    * Part-2 A6 (SPEC §10.3:1063/1065) correctly stopped EVICTING pending slots to avoid
    * the M4 double-execute hazard, but that left pending reservations free to bypass
-   * `maxEntries` and linger for the full `ttlMs` — an authenticated attacker firing many
+   * `maxEntries`; M7 additionally requires them to remain joined without TTL eviction until
+   * explicit commit/abort. An authenticated attacker firing many
    * concurrent slow mutations with client-chosen `Kovo-Idem` values could accumulate
    * unbounded pending records. When the number of pending reservations is at this cap,
    * `reserve()` REFUSES a new reservation (callers fail closed) rather than EVICTING an
@@ -98,20 +101,18 @@ export interface MutationReplayStoreOptions {
    * Defaults to `maxEntries` so the documented A6 maxEntries-pressure behavior is unchanged.
    */
   maxPending?: number;
+  /** Time-to-live for a committed response, measured from commit/set (pending work never expires). */
   ttlMs?: number;
 }
 
 type CsrfReplayScope<Request> =
   | false
-  | {
-      field?: string;
-      sessionId(request: Request): string | undefined;
-    };
+  | Pick<CsrfOptions<Request>, 'anonymousCookie' | 'field' | 'sessionId'>;
 
 /**
- * Build the default in-memory {@link MutationReplayStore} (SPEC §9.1): bounded by
- * `maxEntries` with a `ttlMs` expiry. Apps name this to provision an idempotent
- * replay store for webhook/mutation handlers (e.g. conformance/webhook-spike).
+ * Build the default in-memory {@link MutationReplayStore} (SPEC §9.1): settled responses are
+ * bounded by `maxEntries` with a post-commit `ttlMs`; in-flight work is independently bounded by
+ * `maxPending` and never expires or gets evicted before commit/abort.
  */
 export function createMemoryMutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
@@ -127,18 +128,33 @@ export function createMemoryMutationReplayStore<
   const ttlMs = options.ttlMs ?? 5 * 60_000;
   const responses = new Map<string, MutationReplayRecord<Response>>();
 
-  // E4: number of in-flight pending reservations currently held in `responses`. Kept in
-  // sync with every path that adds (reserve), removes (abort/commit/set-overwrite), or
-  // expires (evictExpiredPending) a pending record, so the `maxPending` refusal below is
-  // O(1) rather than re-scanning the map on every reserve.
+  // SPEC §10.3 (M7): pending and committed state have independent bounds/lifetimes. Pending
+  // reservations never expire or get capacity-evicted; maxPending keeps that state bounded.
+  // Committed responses start ttlMs at commit/set and maxEntries bounds only settled truth.
   let pendingCount = 0;
-  function evictExpired(): void {
+  let committedCount = 0;
+
+  function evictExpiredCommitted(): void {
     const now = Date.now();
     for (const [key, record] of responses) {
-      if (record.expiresAt <= now) {
-        if ('pending' in record) pendingCount -= 1;
+      if (!('pending' in record) && record.expiresAt <= now) {
         responses.delete(key);
+        committedCount -= 1;
       }
+    }
+  }
+
+  function evictCommittedOverCapacity(): void {
+    while (committedCount > Math.max(0, maxEntries)) {
+      let evicted = false;
+      for (const [key, record] of responses) {
+        if ('pending' in record) continue;
+        responses.delete(key);
+        committedCount -= 1;
+        evicted = true;
+        break;
+      }
+      if (!evicted) return;
     }
   }
 
@@ -147,9 +163,9 @@ export function createMemoryMutationReplayStore<
       const key = mutationReplayKey(scope, idem);
       const record = responses.get(key);
       if (!record) return undefined;
-      if (record.expiresAt <= Date.now()) {
-        if ('pending' in record) pendingCount -= 1;
+      if (!('pending' in record) && record.expiresAt <= Date.now()) {
         responses.delete(key);
+        committedCount -= 1;
         return undefined;
       }
 
@@ -164,7 +180,7 @@ export function createMemoryMutationReplayStore<
       return cloneMutationReplayResponse(record.response);
     },
     reserve(scope, idem, fingerprint) {
-      evictExpired();
+      evictExpiredCommitted();
       const key = mutationReplayKey(scope, idem);
       const existing = responses.get(key);
       if (existing) {
@@ -180,18 +196,6 @@ export function createMemoryMutationReplayStore<
       // re-opens the part-2 A6/M4 double-execute hazard.
       if (pendingCount >= maxPending) return undefined;
 
-      // A6 (SPEC §10.3:1063/1065): only evict committed/expired records, never
-      // in-flight pending reservations (evicting a pending slot re-opens the M4
-      // double-execute hazard).
-      if (responses.size >= maxEntries) {
-        for (const [evictKey, evictRecord] of responses) {
-          if (!('pending' in evictRecord)) {
-            responses.delete(evictKey);
-            break;
-          }
-        }
-      }
-
       let resolvePending: (response: Response) => void = () => undefined;
       let rejectPending: (reason?: unknown) => void = () => undefined;
       const pending = new Promise<Response>((resolve, reject) => {
@@ -202,7 +206,6 @@ export function createMemoryMutationReplayStore<
       // an unhandled-rejection warning; awaiting callers still observe the reject.
       pending.catch(() => undefined);
       const record: MutationReplayRecord<Response> = {
-        expiresAt: Date.now() + ttlMs,
         fingerprint,
         pending,
         reject: rejectPending,
@@ -213,62 +216,58 @@ export function createMemoryMutationReplayStore<
 
       return {
         abort() {
-          // Security finding M4: release the pending record so a corrected retry
-          // can run, and reject the pending promise so concurrent duplicates that
-          // raced onto this reservation fall back to running themselves.
-          if (responses.get(key) === record) {
-            responses.delete(key);
-            pendingCount -= 1;
-          }
+          // Release only this reservation generation. A stale abort must not remove or reject
+          // a newer committed/pending generation installed under the same key.
+          if (responses.get(key) !== record) return;
+          responses.delete(key);
+          pendingCount -= 1;
           rejectPending(new MutationReplayAbortedError());
         },
         commit(response) {
+          // Generation fence (M7): an aborted/superseded reservation has lost ownership of this
+          // key and may never overwrite newer truth. `set()` resolves its waiters when it
+          // supersedes a pending record, so a stale commit can safely become a no-op.
+          if (responses.get(key) !== record) return;
           const cloned = cloneMutationReplayResponse(response);
-          // Commit replaces the pending record with a committed one. Decrement only if
-          // this reservation's pending record is still the one in the map (an abort or
-          // set-overwrite may have already removed/replaced it).
-          if (responses.get(key) === record) pendingCount -= 1;
+          pendingCount -= 1;
+          committedCount += 1;
+          // Delete/reinsert so FIFO capacity order reflects commit time, not reservation time.
+          responses.delete(key);
           responses.set(key, {
             expiresAt: Date.now() + ttlMs,
             fingerprint,
             response: cloned,
           });
           resolvePending(cloned);
+          evictCommittedOverCapacity();
         },
       };
     },
     set(scope, idem, response, fingerprint) {
-      evictExpired();
+      evictExpiredCommitted();
       const key = mutationReplayKey(scope, idem);
       const existing = responses.get(key);
       if (existing && !fingerprintsMatch(existing.fingerprint, fingerprint)) {
         throw new MutationReplayConflictError();
       }
-      while (!existing && responses.size >= maxEntries) {
-        const oldest = responses.keys().next().value;
-        if (oldest === undefined) break;
-        const oldestRecord = responses.get(oldest);
-        responses.delete(oldest);
-        // K3 (SPEC §9.1): never silently drop a pending record. A6 stopped reserve() from
-        // evicting pending slots, but set()'s maxEntries eviction could still delete the
-        // oldest — which may be an in-flight reservation — leaving any duplicate that joined
-        // it via get() hung forever. Reject its pending promise (MutationReplayAbortedError)
-        // so the awaiter falls back to running itself (mirrors reserve()/A4 abort).
-        if (oldestRecord && 'pending' in oldestRecord) {
-          pendingCount -= 1;
-          oldestRecord.reject(new MutationReplayAbortedError());
-        }
-      }
-
-      // Overwriting an existing pending record with a committed one releases its pending slot.
-      if (existing && 'pending' in existing) pendingCount -= 1;
       const cloned = cloneMutationReplayResponse(response);
+      if (existing && 'pending' in existing) {
+        pendingCount -= 1;
+        committedCount += 1;
+      } else if (!existing) {
+        committedCount += 1;
+      }
+      // Refresh insertion order/TTL for an existing committed record too.
+      responses.delete(key);
       responses.set(key, {
         expiresAt: Date.now() + ttlMs,
         fingerprint,
         response: cloned,
       });
       if (existing && 'pending' in existing) existing.resolve(cloned);
+      // Capacity eviction is committed-only. Pending records stay joined until their owner
+      // explicitly commits/aborts; total state remains bounded by maxEntries + maxPending.
+      evictCommittedOverCapacity();
     },
   };
 }
@@ -314,8 +313,8 @@ function canonicalReplayInput<Request>(
   wireRequest: { rawInput?: unknown; request: Request },
 ): unknown {
   if (csrf === false || wireRequest.rawInput === undefined) return wireRequest.rawInput;
-  const csrfSessionId = csrf.sessionId(wireRequest.request);
-  if (!csrfSessionId) return wireRequest.rawInput;
+  const csrfBinding = resolveCsrfReplayBinding(wireRequest.request, csrf);
+  if (!csrfBinding) return wireRequest.rawInput;
 
   const field = csrf.field ?? 'kovo-csrf';
   const record = formLikeToRecord(wireRequest.rawInput);
@@ -323,7 +322,7 @@ function canonicalReplayInput<Request>(
 
   return {
     ...record,
-    [field]: `csrf-session:${csrfSessionId}`,
+    [field]: `csrf-binding:${csrfBinding}`,
   };
 }
 
@@ -467,11 +466,9 @@ export async function commitReservedMutationReplay<Response extends MutationRepl
 type MutationReplayRecord<Response extends MutationReplayResponse> =
   | { expiresAt: number; fingerprint: string | undefined; response: Response }
   | {
-      expiresAt: number;
       fingerprint: string | undefined;
       pending: Promise<Response>;
-      // K3 (SPEC §9.1): carried so an eviction path that drops a pending record can settle
-      // any joined awaiter (reject with MutationReplayAbortedError) instead of stranding it.
+      // Explicit abort settles joined awaiters; capacity and TTL never evict pending records.
       reject(reason?: unknown): void;
       resolve(response: Response): void;
     };
@@ -480,8 +477,8 @@ function mutationReplayScope<Request>(
   csrf: CsrfReplayScope<Request>,
   request: Request,
 ): string | null {
-  const csrfSessionId = csrf === false ? undefined : csrf.sessionId(request);
-  if (csrfSessionId) return csrfSessionId;
+  const csrfBinding = csrf === false ? undefined : resolveCsrfReplayBinding(request, csrf);
+  if (csrfBinding) return csrfBinding;
 
   if (
     typeof request === 'object' &&
