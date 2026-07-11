@@ -6,9 +6,11 @@
       "kind": "auth-adapter-db",
       "authority": "Postgres system DB used only to construct Better Auth's Drizzle adapter",
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#createAuthAdapter",
-      "publicStatus": "narrowed-factory",
-      "allowedConsumers": ["packages/create-kovo/templates/src/auth.ts"],
-      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits createAuthAdapter from src/auth.ts",
+      "publicStatus": "module-private",
+      "allowedConsumers": [
+        "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#createAppAuthBindings"
+      ],
+      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs permits src/auth.ts to import only the sanitized createAppAuthBindings facade",
       "evidence": "vp exec pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts"
     },
     {
@@ -16,9 +18,11 @@
       "kind": "auth-adapter-db",
       "authority": "SQLite app DB used only to construct Better Auth's Drizzle adapter",
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#createAuthAdapter",
-      "publicStatus": "narrowed-factory",
-      "allowedConsumers": ["packages/create-kovo/templates/src/auth.sqlite.ts"],
-      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits createAuthAdapter from src/auth.sqlite.ts",
+      "publicStatus": "module-private",
+      "allowedConsumers": [
+        "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#createAppAuthBindings"
+      ],
+      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs permits src/auth.sqlite.ts to import only the sanitized createAppAuthBindings facade",
       "evidence": "vp exec pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts"
     },
     {

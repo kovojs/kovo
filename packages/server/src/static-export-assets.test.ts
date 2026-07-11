@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -132,6 +132,7 @@ describe('server static export', () => {
         version: 'cart-sri',
       });
       const app = createApp({
+        clientModules: registry,
         routes: [
           route('/', {
             bootstrapScript: cartHref,
@@ -144,7 +145,6 @@ describe('server static export', () => {
           }),
         ],
       });
-      app.clientModules = registry;
 
       const result = await exportStaticApp(app, {
         assets: [
@@ -177,7 +177,7 @@ describe('server static export', () => {
         `<noscript><link rel="stylesheet" href="/assets/async.css" integrity="${asyncIntegrity}"></noscript>`,
       );
       expect(html).toContain(
-        `<link rel="modulepreload" href="${cartHref}" integrity="${moduleIntegrity}">`,
+        `<link rel="modulepreload" href="${cartHref}" data-kovo-module-allowlist integrity="${moduleIntegrity}">`,
       );
       expect(html).toContain(
         `<script type="module" src="${cartHref}" integrity="${moduleIntegrity}"></script>`,
@@ -236,10 +236,21 @@ describe('server static export', () => {
       });
 
       const result = await exportStaticApp(app, { outDir, publicAssetRoot: publicRoot });
+      const canonicalPublicRoot = await realpath(publicRoot);
 
       expect(result.assets).toEqual([
-        { headers: {}, path: '/mark.svg', source: path.join(publicRoot, 'mark.svg'), status: 200 },
-        { headers: {}, path: '/note.txt', source: path.join(publicRoot, 'note.txt'), status: 200 },
+        {
+          headers: {},
+          path: '/mark.svg',
+          source: path.join(canonicalPublicRoot, 'mark.svg'),
+          status: 200,
+        },
+        {
+          headers: {},
+          path: '/note.txt',
+          source: path.join(canonicalPublicRoot, 'note.txt'),
+          status: 200,
+        },
       ]);
       await expect(readFile(path.join(outDir, 'mark.svg'), 'utf8')).resolves.toBe(
         '<svg viewBox="0 0 1 1"></svg>',

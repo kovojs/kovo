@@ -578,6 +578,28 @@ function stampPerPrincipalRouteOutcomeFloor(
 }
 
 /**
+ * SPEC §7/§9.4: any response carrying a newly emitted credential is identity-varying, including a
+ * matched route's early 403/404/500 outcome. Apply this at the credential-forwarding sink so an
+ * otherwise cacheable status cannot replay one principal's Set-Cookie through a shared cache.
+ *
+ * @internal
+ */
+export function stampCredentialBearingResponseCacheFloor<
+  Response extends { headers: ResponseHeaders },
+>(response: Response): Response {
+  return {
+    ...response,
+    headers: mergeVaryHeader(
+      {
+        ...response.headers,
+        'Cache-Control': 'private, no-store',
+      },
+      'Cookie',
+    ),
+  };
+}
+
+/**
  * SPEC §6.6 / §9.5: guard failures and equivalent non-OK auth/cache-sensitive HTML documents are
  * per-principal outcomes. They do not always pass through the normal 200 document wrapper, so stamp
  * the same conservative document security baseline and no-store/Vary:Cookie floor here while

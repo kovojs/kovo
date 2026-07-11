@@ -242,7 +242,10 @@ export function renderPageHints(
     ...renderRouteMeta(options.meta, context),
     ...i18nCatalogs.map((catalog) => catalog.html),
     ...stylesheetHints.map((hint) => hint.html),
-    ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
+    ...modulepreloads.map(
+      (href) =>
+        `<link rel="modulepreload" href="${escapeAttribute(href)}"${isKovoClientModuleHref(href) ? ' data-kovo-module-allowlist' : ''}>`,
+    ),
     options.bootstrapScript
       ? `<script type="module" src="${escapeAttribute(options.bootstrapScript)}"></script>`
       : '',
@@ -266,6 +269,10 @@ export function renderStylesheetLinks(stylesheets: readonly (string | Stylesheet
 
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function isKovoClientModuleHref(href: string): boolean {
+  return href.startsWith('/c/');
 }
 
 function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): StylesheetAsset[] {

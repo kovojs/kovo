@@ -379,7 +379,8 @@ export function enhancedMutationFormBinding(
 
   const spread = element.spreadAttributes.find(
     (attribute) =>
-      attribute.expressionCallName === 'mutationFormAttributes' &&
+      attribute.expressionCallImportedName === 'mutationFormAttributes' &&
+      attribute.expressionCallModuleSpecifier === '@kovojs/server' &&
       attribute.expressionCallArgumentBareIdentifierName,
   );
   if (!spread?.expressionCallArgumentBareIdentifierName) return null;

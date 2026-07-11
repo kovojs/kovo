@@ -1,12 +1,26 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { dispatchDelegatedEvent } from './handlers.js';
 import {
   dispatchInlineDelegatedClick,
   InlineTriggerElement,
+  inlineModuleAllowlistQuery,
   inlineSourceInstallCases,
 } from './inline-loader-test-utils.js';
-import { FakeElement, FakeStatefulBindingElement } from './runtime-test-fakes.js';
+import {
+  FakeElement,
+  FakeStatefulBindingElement,
+  installTestClientModuleManifest,
+} from './runtime-test-fakes.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest([
+  '/c/abortable.js',
+  '/c/cart.js',
+  '/c/checkbox.js',
+  '/c/menu.js',
+  '/c/theme.js',
+]);
+afterAll(restoreClientModuleManifest);
 
 describe('inline loader delegated handlers', () => {
   it.each(inlineSourceInstallCases)(
@@ -44,7 +58,10 @@ describe('inline loader delegated handlers', () => {
         ) => {
           listeners.set(type, listener);
         };
-        globalRecord.document = { querySelectorAll: () => [] };
+        globalRecord.document = {
+          querySelectorAll: (selector: string) =>
+            inlineModuleAllowlistQuery(selector, ['/c/menu.js']),
+        };
 
         installSource(importModule, globalRecord);
 
@@ -149,7 +166,7 @@ describe('inline loader delegated handlers', () => {
         dispatchDelegatedEvent({ target: modularElement, type: 'click' }, importModule),
       );
       await runDelegatedHandlers(inlineElement, (importModule) =>
-        dispatchInlineDelegatedClick(inlineElement, importModule, installSource),
+        dispatchInlineDelegatedClick(inlineElement, importModule, installSource, ['/c/cart.js']),
       );
     },
   );
@@ -164,7 +181,9 @@ describe('inline loader delegated handlers', () => {
         ctx.state.opened = true;
       });
 
-      await dispatchInlineDelegatedClick(element, async () => ({ toggle }), installSource);
+      await dispatchInlineDelegatedClick(element, async () => ({ toggle }), installSource, [
+        '/c/theme.js',
+      ]);
 
       expect(toggle).toHaveBeenCalledTimes(1);
       expect(element.getAttribute('kovo-state')).toBeNull();
@@ -234,7 +253,7 @@ describe('inline loader delegated handlers', () => {
         },
       }));
 
-      await dispatchInlineDelegatedClick(host, importModule, installSource);
+      await dispatchInlineDelegatedClick(host, importModule, installSource, ['/c/cart.js']);
 
       expect(host.getAttribute('kovo-state')).toBe('{"count":2,"status":"open","label":"Ready"}');
       expect(host.getAttribute('data-state')).toBe('open');
@@ -281,7 +300,7 @@ describe('inline loader delegated handlers', () => {
 
       const globalRecord = globalThis as { __kovo_postCommitSchedule?: unknown };
       const previousHook = globalRecord.__kovo_postCommitSchedule;
-      await dispatchInlineDelegatedClick(host, importModule, installSource);
+      await dispatchInlineDelegatedClick(host, importModule, installSource, ['/c/menu.js']);
 
       // Focus callback runs strictly after the un-hide, and sees a revealed menu.
       expect(order).toEqual(['derive-unhide', 'focus:hidden=null']);
@@ -324,8 +343,8 @@ describe('inline loader delegated handlers', () => {
           createElement() {
             return { content: { querySelectorAll: () => [] }, innerHTML: '' };
           },
-          querySelectorAll() {
-            return [];
+          querySelectorAll(selector: string) {
+            return inlineModuleAllowlistQuery(selector, ['/c/abortable.js']);
           },
         };
 
@@ -395,10 +414,12 @@ describe('inline loader delegated handlers', () => {
         };
         globalRecord.document = {
           querySelectorAll(selector: string) {
-            return selector ===
+            return inlineModuleAllowlistQuery(selector, ['/c/checkbox.js'], () =>
+              selector ===
               'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]'
-              ? [input]
-              : [];
+                ? [input]
+                : [],
+            );
           },
         };
 
@@ -482,8 +503,8 @@ describe('inline loader delegated handlers', () => {
           listeners.set(type, listener);
         };
         globalRecord.document = {
-          querySelectorAll() {
-            return [];
+          querySelectorAll(selector: string) {
+            return inlineModuleAllowlistQuery(selector, ['/c/checkbox.js']);
           },
         };
 
@@ -527,7 +548,7 @@ describe('inline loader delegated handlers', () => {
           dispatchDelegatedEvent({ target: modularElement, type: 'click' }, importModule),
         );
         const inlineError = await capture(() =>
-          dispatchInlineDelegatedClick(inlineElement, importModule, installSource),
+          dispatchInlineDelegatedClick(inlineElement, importModule, installSource, ['/c/cart.js']),
         );
 
         expect(inlineError).toBeInstanceOf(Error);

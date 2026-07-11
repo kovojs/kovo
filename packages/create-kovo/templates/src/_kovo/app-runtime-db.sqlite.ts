@@ -10,8 +10,16 @@ import Database from 'better-sqlite3';
 import {
   createSqliteAppRuntimeDb,
   declareSecretReadCapability,
+  type AccessDecision,
+  type CsrfOptions,
   type KovoSqliteAppRuntimeDb,
 } from '@kovojs/server';
+import {
+  betterAuthSession,
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+} from '@kovojs/better-auth';
+import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { getTableConfig } from 'drizzle-orm/sqlite-core';
@@ -19,6 +27,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 
 import * as schema from '../schema.js';
 import type { AppDb, AppReadonlyDb } from '../db.js';
+import type { AppRequest, AppSession } from '../auth.js';
 
 // The framework-owned app database runtime for the opt-in SQLite scaffold.
 // Postgres remains the default starter dialect.
@@ -115,8 +124,63 @@ export const appRuntimeDbReady: Promise<void> = appDatabase.ready;
  * Framework-owned auth adapter factory. The SQLite DB value remains module-private to the
  * generated runtime module, matching the Postgres auth wiring capability boundary.
  */
-export function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
+function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
   return drizzleAdapter(appDatabase.db, { provider: 'sqlite', schema: schema.authSchema });
+}
+
+interface AppAuthBindingOptions {
+  baseURL: string;
+  csrf: CsrfOptions<AppRequest>;
+  secret: string;
+  signInAccess: AccessDecision;
+  signOutAccess: AccessDecision;
+}
+
+/** SQLite twin of the framework-owned Better Auth construction boundary (SPEC §6.6/§10.3). */
+export function createAppAuthBindings(options: AppAuthBindingOptions) {
+  const auth = betterAuth({
+    advanced: { disableCSRFCheck: true },
+    baseURL: options.baseURL,
+    database: createAuthAdapter(),
+    emailAndPassword: { enabled: true },
+    secret: options.secret,
+  });
+
+  const sessionProvider = betterAuthSession(auth, ({ session: authSession, user }) => ({
+    id: authSession.id,
+    user: { email: user.email, id: user.id, name: user.name },
+  }));
+  const signIn = betterAuthSignInEmailMutation<'auth/sign-in', AppRequest>(auth, {
+    access: options.signInAccess,
+    csrf: options.csrf,
+    defaultRedirectTo: '/',
+  });
+  const signOut = betterAuthSignOutMutation<
+    'auth/sign-out',
+    AppRequest,
+    AppRequest & { session: AppSession }
+  >(auth, {
+    access: options.signOutAccess,
+    csrf: options.csrf,
+    defaultRedirectTo: '/login',
+  });
+
+  async function seedDemoUser(): Promise<void> {
+    const password = process.env.KOVO_DEMO_PASSWORD;
+    if (!password || password === 'replace-with-a-local-demo-password') return;
+
+    try {
+      await auth.api.signUpEmail({
+        asResponse: true,
+        body: { email: 'demo@example.com', name: 'Demo User', password },
+        headers: new Headers(),
+      });
+    } catch {
+      // Already seeded.
+    }
+  }
+
+  return Object.freeze({ seedDemoUser, sessionProvider, signIn, signOut });
 }
 
 /** Framework construction/auth adapter hook; do not import this into endpoint/webhook/task code. */

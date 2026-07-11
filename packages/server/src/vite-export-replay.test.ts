@@ -215,7 +215,7 @@ describe('server app shell Vite plugin', () => {
         /<link rel="stylesheet" href="\/assets\/cart\.css" integrity="sha384-[^"]+">/,
       );
       expect(result.artifacts[0]?.body).toMatch(
-        /<link rel="modulepreload" href="\/c\/cart\.client\.js\?v=cart-v1" integrity="sha384-[^"]+">/,
+        /<link rel="modulepreload" href="\/c\/cart\.client\.js\?v=cart-v1" data-kovo-module-allowlist integrity="sha384-[^"]+">/,
       );
       expect(result.artifacts[0]?.body).toMatch(
         /<link rel="modulepreload" href="\/assets\/cart\.js" integrity="sha384-[^"]+">/,

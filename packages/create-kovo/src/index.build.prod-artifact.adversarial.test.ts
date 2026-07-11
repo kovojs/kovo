@@ -134,6 +134,28 @@ describe('create-kovo starter (build integration: adversarial production artifac
     240_000,
   );
 
+  it.each([...dialectIndependentCompilerGateCases])(
+    'bugz-25: detached SQL helpers and composed KV429 provenance fail the %s production build',
+    (_label: string, dialect: CreateKovoDialect | undefined) => {
+      withProject(`create-kovo-bugz25-drizzle-${_label}-red-`, dialect, (root) => {
+        addBugz25SqlAliasProof(root);
+        addBugz25ToctouProof(root);
+        expectBuildFailure(root, [
+          'KV422',
+          'sql.raw(...) receives request-derived text',
+          'bugz25-sql-alias-proof.ts',
+          'bugz25-sql-carrier-proof.ts',
+          'bugz25-sql-wrapper-proof.ts',
+          'KV429',
+          'concurrency annotation is dynamic or statically unresolved',
+          'table=contacts',
+          'column=company',
+        ]);
+      });
+    },
+    300_000,
+  );
+
   it.each([...dialectSpecificRuntimeCases])(
     'M1:output-wire tracks output-wire sinks after a warmed %s prod build',
     async (_label: string, dialect: CreateKovoDialect | undefined) => {
@@ -375,6 +397,152 @@ function expectStorageWriteBuildFailure(root: string): void {
     'operation=store',
     'operation=upload',
   ]);
+}
+
+function addBugz25SqlAliasProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/bugz25-sql-alias-proof.ts'),
+    [
+      "import { sql } from '@kovojs/drizzle';",
+      '',
+      "import type { AppDb } from './db.js';",
+      "import { contacts } from './schema.js';",
+      '',
+      'export async function bugz25SqlAliasProof(input: { sort: string }, db: AppDb) {',
+      '  let dangerous: typeof sql.raw;',
+      '  ({ raw: dangerous } = sql);',
+      '  return db.select().from(contacts).orderBy(dangerous(input.sort));',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  writeFileSync(
+    join(root, 'src/bugz25-sql-carrier-proof.ts'),
+    [
+      "import { sql } from '@kovojs/drizzle';",
+      '',
+      "import type { AppDb } from './db.js';",
+      "import { contacts } from './schema.js';",
+      '',
+      'export async function bugz25SqlCarrierProof(input: { sort: string }, db: AppDb) {',
+      '  const holder = { nested: { dangerous: sql.raw } };',
+      '  const { nested: { dangerous } } = holder;',
+      '  return db.select().from(contacts).orderBy(dangerous(input.sort));',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  writeFileSync(
+    join(root, 'src/bugz25-sql-wrapper-proof.ts'),
+    [
+      "import { sql } from '@kovojs/drizzle';",
+      '',
+      "import type { AppDb } from './db.js';",
+      "import { contacts } from './schema.js';",
+      '',
+      'const carry = <T,>(value: T): T => value;',
+      '',
+      'export async function bugz25SqlWrapperProof(input: { sort: string }, db: AppDb) {',
+      '  const dangerous = carry(sql.raw);',
+      '  return db.select().from(contacts).orderBy(dangerous(input.sort));',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+function addBugz25ToctouProof(root: string): void {
+  const schemaPath = join(root, 'src/schema.ts');
+  const schema = readFileSync(schemaPath, 'utf8')
+    .replace(
+      "import { contact } from './model.js';",
+      [
+        "import { contact } from './model.js';",
+        '',
+        'const contactAtomic = (table: Record<string, unknown>) => table.company;',
+        'const contactConcurrency = { atomic: contactAtomic } as const;',
+        "const mutableConcurrency: { atomic: 'stock' | 'price' } = { atomic: 'stock' };",
+        "mutableConcurrency.atomic = 'price';",
+      ].join('\n'),
+    )
+    .replace(
+      '    key: (table) => table.id,',
+      ['    key: (table) => table.id,', '    ...contactConcurrency,'].join('\n'),
+    );
+  const mutableTable = [
+    '',
+    'export const bugz25MutableConcurrency = pgTable(',
+    "  'bugz25_mutable_concurrency',",
+    '  { id: text("id").primaryKey(), stock: text("stock"), price: text("price") },',
+    '  kovo({ domain: "bugz25-mutable", key: "id", ...mutableConcurrency }),',
+    ');',
+    '',
+  ].join('\n');
+  writeFileSync(schemaPath, `${schema}${mutableTable}`, 'utf8');
+
+  writeFileSync(
+    join(root, 'src/bugz25-toctou-proof.ts'),
+    [
+      "import { eq } from 'drizzle-orm';",
+      '',
+      "import type { AppDb } from './db.js';",
+      "import { contacts } from './schema.js';",
+      '',
+      'export async function bugz25ToctouProof(',
+      '  input: { id: string; suffix: string },',
+      '  db: AppDb,',
+      ') {',
+      '  let row: { company: string } | undefined;',
+      '  [row] = await db',
+      '    .select({ company: contacts.company })',
+      '    .from(contacts)',
+      '    .where(eq(contacts.id, input.id));',
+      '  if (!row) return;',
+      '  let observed = "";',
+      '  ({ company: observed } = row);',
+      '  const nextCompany = observed + input.suffix;',
+      '  await db',
+      '    .update(contacts)',
+      '    .set({ company: nextCompany })',
+      '    .where(eq(contacts.id, input.id));',
+      '}',
+      '',
+      'export async function bugz25MemberToctouProof(',
+      '  input: { id: string; suffix: string },',
+      '  db: AppDb,',
+      ') {',
+      '  const [row] = await db',
+      '    .select({ company: contacts.company })',
+      '    .from(contacts)',
+      '    .where(eq(contacts.id, input.id));',
+      '  if (!row) return;',
+      '  const state = { next: "" };',
+      '  state.next = row.company + input.suffix;',
+      '  await db.update(contacts).set({ company: state.next }).where(eq(contacts.id, input.id));',
+      '}',
+      '',
+      'export async function bugz25CompoundToctouProof(',
+      '  input: { id: string; suffix: string },',
+      '  db: AppDb,',
+      ') {',
+      '  const [row] = await db',
+      '    .select({ company: contacts.company })',
+      '    .from(contacts)',
+      '    .where(eq(contacts.id, input.id));',
+      '  if (!row) return;',
+      '  let nextCompany = "";',
+      '  nextCompany += row.company + input.suffix;',
+      '  await db.update(contacts).set({ company: nextCompany }).where(eq(contacts.id, input.id));',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
 }
 
 async function withRunningProject(

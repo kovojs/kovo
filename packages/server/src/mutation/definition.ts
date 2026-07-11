@@ -6,7 +6,7 @@ import type {
   Redirect,
 } from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
-import type { AccessDecision } from '../access.js';
+import { pinAccessDecision, type AccessDecision } from '../access.js';
 import type { CookieOptions } from '../cookies.js';
 import type { CsrfOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
@@ -484,12 +484,15 @@ export function mutation(
     const fileFields = mutationInputFileFields(definition.input);
     const queue =
       definition.queue === true ? keyOrDefinition : normalizeMutationQueue(definition.queue);
-    return {
-      ...definition,
-      ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-      key: keyOrDefinition,
-      ...(queue === undefined ? {} : { queue }),
-    } as MutationDefinition<string> & { key: string };
+    return pinAccessDecision(
+      {
+        ...definition,
+        ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+        key: keyOrDefinition,
+        ...(queue === undefined ? {} : { queue }),
+      } as MutationDefinition<string> & { key: string },
+      definition.access,
+    );
   }
 
   // SPEC §6.3: app authors may write `mutation({ input, handler })`; the stable wire key is
@@ -498,11 +501,14 @@ export function mutation(
   // need a wire endpoint fail closed through `assertMutationKey`.
   const fileFields = mutationInputFileFields(keyOrDefinition.input);
   const queue = normalizeMutationQueue(keyOrDefinition.queue);
-  return {
-    ...keyOrDefinition,
-    ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-    ...(queue === undefined ? {} : { queue }),
-  } as MutationDefinition<string> & { key: string };
+  return pinAccessDecision(
+    {
+      ...keyOrDefinition,
+      ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+      ...(queue === undefined ? {} : { queue }),
+    } as MutationDefinition<string> & { key: string },
+    keyOrDefinition.access,
+  );
 }
 
 /**

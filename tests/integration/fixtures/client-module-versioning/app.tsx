@@ -17,7 +17,7 @@ const homeRoute = route('/', {
   meta: { title: 'Client Module Versioning' },
   page: () => `<main>
     <h1>Client Module Versioning</h1>
-    <button type="button" on:click="${moduleHref}#mark">Load versioned module</button>
+    <button type="button" on:click="${moduleHref}#mark" data-kovo-module-allowlist="${moduleHref}">Load versioned module</button>
     <output data-client-version>idle</output>
   </main>`,
 });

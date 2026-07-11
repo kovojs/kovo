@@ -898,6 +898,7 @@ describe('server mutation lifecycle', () => {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[]',
         'Kovo-Build': 'mutation-test-build',
+        'Kovo-Session-Transition': 'reload',
         'Set-Cookie': [
           'kovo_session=s1; Path=/; HttpOnly; SameSite=Lax',
           '__Host-kovo_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',

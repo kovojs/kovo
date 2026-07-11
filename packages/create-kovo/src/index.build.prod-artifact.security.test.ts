@@ -860,6 +860,100 @@ describe('create-kovo starter (build integration: production security artifacts)
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
+
+  // @kovo-security-certifies M3 dynamic-jsx-spread-control-provenance
+  // @kovo-security-certifies M6 enhanced-mutation-session-transition
+  it('serves only compiler-declared controls and session-transition reload hints from the production artifact', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-control-provenance-'));
+    const port = await reservePort();
+    const jar = new Map<string, string>();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { dialect: 'sqlite', name: 'Prod Control Provenance Proof' });
+      linkStarterBuildDependencies(root);
+      addControlProvenanceProof(root);
+      buildProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'test',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      const pageHtml = await fetchTextWhenReady(`${origin}/control-provenance-proof`, output);
+      const proofRoot = rootElementWithAttribute(pageHtml, 'data-proof', 'dynamic-spread');
+      expect(proofRoot).toContain('aria-label="Public profile"');
+      expect(proofRoot).toContain('data-profile-id="public-profile"');
+      expect(proofRoot).not.toMatch(
+        /on:load|kovo-param-types|data-p-account-id|data-bind|data-kovo-/iu,
+      );
+      expect(pageHtml).not.toContain('/c/attacker-selected.client.js');
+
+      const declaredHandler = /on:click="([^"#]+)#([^"]+)"/u.exec(pageHtml);
+      expect(declaredHandler).not.toBeNull();
+      const declaredModuleUrl = declaredHandler?.[1] ?? '';
+      expect(pageHtml).toContain(`data-kovo-module-allowlist="${declaredModuleUrl}"`);
+      const declaredModule = await fetch(`${origin}${declaredModuleUrl}`);
+      expect(declaredModule.status).toBe(200);
+      await expect(declaredModule.text()).resolves.toContain(declaredHandler?.[2] ?? 'missing');
+
+      for (const proof of ['auth-domain', 'same-principal-cookie'] as const) {
+        const form = formHtmlByDataProof(pageHtml, proof);
+        const response = await fetch(`${origin}${requiredAttribute(form, 'action')}`, {
+          body: new URLSearchParams({}),
+          headers: {
+            accept: 'text/vnd.kovo.fragment+html',
+            'content-type': 'application/x-www-form-urlencoded',
+            'Kovo-Fragment': 'true',
+            origin,
+          },
+          method: 'POST',
+        });
+        await response.text();
+        expect(response.status).toBe(200);
+        expect(response.headers.get('kovo-session-transition')).toBe('reload');
+        if (proof === 'auth-domain') expect(response.headers.get('kovo-changes')).toContain('auth');
+        else expect(response.headers.getSetCookie().join('\n')).toContain('proof_refresh=rotated');
+      }
+
+      await signInDemoUser(root, origin, jar, output);
+      const homeHtml = await fetchTextWhenReady(`${origin}/`, output, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const signOutForm = formHtmlByAction(homeHtml, '/_m/auth/sign-out');
+      const signOut = await fetch(`${origin}/_m/auth/sign-out`, {
+        body: new URLSearchParams({
+          csrf: fieldValue(signOutForm, 'csrf'),
+          'Kovo-Idem': fieldValue(signOutForm, 'Kovo-Idem'),
+        }),
+        headers: {
+          accept: 'text/vnd.kovo.fragment+html',
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          'Kovo-Fragment': 'true',
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      await signOut.text();
+      expect(signOut.status).toBe(200);
+      expect(signOut.headers.get('clear-site-data')).toContain('cookies');
+      expect(signOut.headers.getSetCookie().length).toBeGreaterThan(0);
+      expect(signOut.headers.get('kovo-session-transition')).toBe('reload');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
 });
 
 function assertEscapedAttackerTextCensus(root: string): void {
@@ -1245,6 +1339,139 @@ function addNoAccessProvisionMutation(root: string): void {
     'missing-access provision mutation registration',
   );
   writeFileSync(appPath, app, 'utf8');
+}
+
+function addControlProvenanceProof(root: string): void {
+  const configPath = join(root, 'kovo.config.ts');
+  writeFileSync(
+    configPath,
+    replaceRequired(
+      readFileSync(configPath, 'utf8'),
+      'preset: node(),',
+      [
+        'preset: node({',
+        '  retention: {',
+        '    hours: 24,',
+        "    immutableClientModules: 'retained',",
+        "    priorTokenQueryReads: 'retained',",
+        '  },',
+        '}),',
+      ].join('\n'),
+      'control provenance deploy-skew retention proof',
+    ),
+    'utf8',
+  );
+
+  writeFileSync(
+    join(root, 'src/control-provenance-proof.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { domain, mutation, mutationFormAttributes, publicAccess, s } from '@kovojs/server';",
+      '',
+      "const proofAccess = publicAccess('public dynamic spread and session transition proof');",
+      "const authDomain = domain('auth');",
+      'const attackerAttributes: Record<string, string | boolean> = {',
+      "  'ON:LOAD': '/c/attacker-selected.client.js#run',",
+      "  'aria-label': 'Public profile',",
+      "  'data-kovo-module-allowlist': true,",
+      "  'data-p-account-id': 'victim',",
+      "  'data-profile-id': 'public-profile',",
+      "  'kovo-param-types': 'accountId:string',",
+      '};',
+      '',
+      'function CallerOwnedShell({ attributes }: { attributes: Record<string, string | boolean> }): string {',
+      '  return <main data-proof="dynamic-spread" {...{ ...attributes, noop() {} }}>Caller-owned profile</main>;',
+      '}',
+      '',
+      'export const authDomainTransition = mutation({',
+      '  access: proofAccess,',
+      '  csrf: false,',
+      '  input: s.object({}),',
+      '  handler(_input, _request, context) {',
+      '    context.invalidate(authDomain);',
+      "    return 'auth-domain-transition';",
+      '  },',
+      '});',
+      '',
+      'export const samePrincipalCookieRefresh = mutation({',
+      '  access: proofAccess,',
+      '  csrf: false,',
+      '  input: s.object({}),',
+      '  handler(_input, _request, context) {',
+      "    context.setCookie?.('proof_refresh', 'rotated', { httpOnly: true, path: '/', sameSite: 'lax' });",
+      "    return 'same-principal-cookie-refresh';",
+      '  },',
+      '});',
+      '',
+      'interface ProofState { clicks: number }',
+      'export const ControlProvenanceProof = component({',
+      '  mutations: { authDomainTransition, samePrincipalCookieRefresh },',
+      '  state: (): ProofState => ({ clicks: 0 }),',
+      '  render: (_queries: Record<string, never>, state: ProofState) => (',
+      '    <section>',
+      '      <CallerOwnedShell attributes={attackerAttributes} />',
+      '      <button onClick={() => { state.clicks += 1; }}>Declared handler</button>',
+      '      <output>{state.clicks}</output>',
+      '      <form data-proof="auth-domain" {...mutationFormAttributes(authDomainTransition)}>',
+      '        <button type="submit">Auth domain transition</button>',
+      '      </form>',
+      '      <form data-proof="same-principal-cookie" {...mutationFormAttributes(samePrincipalCookieRefresh)}>',
+      '        <button type="submit">Refresh cookie</button>',
+      '      </form>',
+      '    </section>',
+      '  ),',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { ContactsRegion } from './components/contacts.js';",
+    [
+      "import { ContactsRegion } from './components/contacts.js';",
+      "import { authDomainTransition, ControlProvenanceProof, samePrincipalCookieRefresh } from './control-provenance-proof.js';",
+    ].join('\n'),
+    'control provenance proof import',
+  );
+  app = replaceRequired(
+    app,
+    '  mutations: [addContact, appSignIn, appSignOut],',
+    '  mutations: [addContact, authDomainTransition, samePrincipalCookieRefresh, appSignIn, appSignOut],',
+    'control provenance mutations',
+  );
+  app = replaceRequired(
+    app,
+    "    route('/', {",
+    [
+      "    route('/control-provenance-proof', {",
+      "      access: publicAccess('public dynamic spread and session transition proof'),",
+      "      meta: { title: 'Control provenance proof' },",
+      '      layout: AppLayout,',
+      '      stylesheets,',
+      '      page() {',
+      '        return <ControlProvenanceProof />;',
+      '      },',
+      '    }),',
+      "    route('/', {",
+    ].join('\n'),
+    'control provenance route',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+function formHtmlByDataProof(html: string, value: string): string {
+  const pattern = new RegExp(
+    `<form\\b[^>]*data-proof="${escapeRegExp(value)}"[^>]*>[\\s\\S]*?<\\/form>`,
+    'u',
+  );
+  const match = pattern.exec(html);
+  if (!match) throw new Error(`Missing form with data-proof="${value}".`);
+  return match[0];
 }
 
 function rootElementWithAttribute(html: string, name: string, value: string): string {

@@ -12,8 +12,8 @@ describe('browser loader behavior', () => {
     root.innerHTML = [
       '<section aria-label="P2 smoke demo">',
       '<nav kovo-c="catalog-tabs" kovo-state="{&quot;selected&quot;:&quot;featured&quot;}">',
-      '<button type="button" aria-controls="featured" aria-selected="true" on:click="/c/demo/tabs.js#select" data-p-tab="featured">Featured</button>',
-      '<button type="button" aria-controls="sale" aria-selected="false" on:click="/c/demo/tabs.js#select" data-p-tab="sale">Sale</button>',
+      '<button type="button" aria-controls="featured" aria-selected="true" on:click="/c/demo/tabs.js#select" data-kovo-module-allowlist="/c/demo/tabs.js" data-p-tab="featured">Featured</button>',
+      '<button type="button" aria-controls="sale" aria-selected="false" on:click="/c/demo/tabs.js#select" data-kovo-module-allowlist="/c/demo/tabs.js" data-p-tab="sale">Sale</button>',
       '</nav>',
       '<section id="featured">Featured products</section>',
       '<section id="sale" hidden>Sale products</section>',
@@ -21,10 +21,10 @@ describe('browser loader behavior', () => {
       '<dialog id="details-dialog"><form method="dialog"><button value="close">Close</button></form></dialog>',
       '<form kovo-c="catalog-filter" kovo-state="{&quot;query&quot;:&quot;&quot;}">',
       '<label for="filter-query">Filter</label>',
-      '<input id="filter-query" name="query" on:input="/c/demo/filter.js#filter" value="">',
+      '<input id="filter-query" name="query" on:input="/c/demo/filter.js#filter" data-kovo-module-allowlist="/c/demo/filter.js" value="">',
       '<output data-bind="filter.query"></output>',
       '</form>',
-      '<aside kovo-c="sales-chart" on:visible="/c/demo/chart.js#mount" data-chart-mounted="false">Chart</aside>',
+      '<aside kovo-c="sales-chart" on:visible="/c/demo/chart.js#mount" data-kovo-module-allowlist="/c/demo/chart.js" data-chart-mounted="false">Chart</aside>',
       '</section>',
     ].join('');
     document.body.append(root);
@@ -132,7 +132,7 @@ describe('browser loader behavior', () => {
   it('keeps the loader idle until the first delegated interaction', async () => {
     const root = document.createElement('main');
     root.innerHTML =
-      '<button kovo-state="{&quot;count&quot;:0}" on:click="/c/handlers/cart.js#increment" data-p-product-id="p1">Add</button>';
+      '<button kovo-state="{&quot;count&quot;:0}" on:click="/c/handlers/cart.js#increment" data-kovo-module-allowlist="/c/handlers/cart.js" data-p-product-id="p1">Add</button>';
     document.body.append(root);
     const button = root.querySelector('button');
     let imports = 0;

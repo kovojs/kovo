@@ -523,12 +523,7 @@ export const CartButton = component({
           outDir: distDir,
           staticExport: { outDir },
         }),
-      ).rejects.toThrow(
-        `App shell Vite build output cannot write client module because parent '${join(
-          distDir,
-          'c',
-        )}' is not a directory.`,
-      );
+      ).rejects.toThrow('App shell Vite build output cannot write client module because parent');
       await expect(readFile(join(outDir, 'cart/index.html'))).rejects.toThrow();
       await expect(readFile(join(outDir, 'c/cart.client.js'))).rejects.toThrow();
     } finally {

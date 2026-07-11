@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { kovoCheck, main } from './index.js';
+import { kovoCheck, kovoExplain, main } from './index.js';
 
 type KovoCheckInput = Parameters<typeof kovoCheck>[0];
 
@@ -294,6 +294,61 @@ describe('kovo check', () => {
     expect(
       decidedResult.output.split('\n').filter((line) => line.startsWith('ERROR KV436')),
     ).toEqual([]);
+  });
+
+  it('fails KV436 and explains missing for a sparse executable access carrier', async () => {
+    const [{ accessFactsFromApp }, { createApp, query }] = await Promise.all([
+      import('@kovojs/server/internal/execution'),
+      import('@kovojs/server'),
+    ]);
+    const sparseAccess: ((request: unknown) => true)[] = [];
+    sparseAccess.length = 1;
+    const app = createApp({
+      queries: [
+        query('private-sparse', {
+          access: sparseAccess,
+          load: () => ({ secret: true }),
+        }),
+      ],
+    });
+    const input = { access: accessFactsFromApp(app) };
+
+    const check = kovoCheck(input);
+    expect(check.exitCode).toBe(1);
+    expect(check.output).toContain('ERROR KV436 QUERY private-sparse');
+
+    const explain = kovoExplain(input, { access: true });
+    expect(explain.output).toContain('ACCESS QUERY private-sparse decision=missing');
+    expect(explain.output).not.toContain('ACCESS QUERY private-sparse decision=guard');
+  });
+
+  it('keeps KV436 audit and runtime guard enforcement aligned after mutation attempts', async () => {
+    const [{ accessFactsFromApp, runQuery }, { createApp, guard, publicAccess, query }] =
+      await Promise.all([import('@kovojs/server/internal/execution'), import('@kovojs/server')]);
+    const definition = query('private-pinned', {
+      access: [guard('pinned-deny', () => ({ kind: 'forbidden' as const }))],
+      load: () => ({ secret: true }),
+    });
+    const app = createApp({ queries: [definition] });
+
+    expect(Reflect.set(definition, 'access', undefined)).toBe(false);
+    expect(Reflect.deleteProperty(definition, 'access')).toBe(false);
+    expect(() =>
+      Object.defineProperty(definition, 'access', {
+        configurable: true,
+        value: publicAccess('attempted post-check downgrade'),
+        writable: true,
+      }),
+    ).toThrow(TypeError);
+
+    const check = kovoCheck({ access: accessFactsFromApp(app) });
+    expect(check.exitCode).toBe(0);
+    expect(check.output).not.toContain('KV436');
+    await expect(runQuery(app.queries[0]!, undefined, {})).resolves.toMatchObject({
+      error: { code: 'UNAUTHORIZED' },
+      ok: false,
+      status: 422,
+    });
   });
 
   // SPEC §10.2/§11.2: the by-construction SQL-safety analyzer (analyzeSqlSafetyFromProject) gates

@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
+import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { domain } from './domain.js';
 import { mutation } from './mutation.js';
 import { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
@@ -408,22 +409,23 @@ describe('server node adapter', () => {
         return { count: db.count };
       },
     });
-    const app = createApp({
-      mutations: [addToCart],
-      queries: [cartQuery],
-      routes: [
-        route('/cart', {
-          modulepreloads: [],
-          page: () => trustedHtml(`<main>Cart ${db.count}</main>`),
-        }),
-      ],
-    });
-    const clientHref = app.clientModules.put({
+    const clientModules = createMemoryVersionedClientModuleRegistry();
+    const clientHref = clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const cartClient = true;',
       version: 'cart-v1',
     });
-    app.routes[0]!.modulepreloads = [clientHref];
+    const app = createApp({
+      clientModules,
+      mutations: [addToCart],
+      queries: [cartQuery],
+      routes: [
+        route('/cart', {
+          modulepreloads: [clientHref],
+          page: () => trustedHtml(`<main>Cart ${db.count}</main>`),
+        }),
+      ],
+    });
     const server = await serveWithNode(toNodeHandler(createRequestHandler(app)));
 
     try {

@@ -72,6 +72,7 @@ describe('server static export app replay boundary', () => {
       version: 'cart-static',
     });
     const app = createApp({
+      clientModules: registry,
       routes: [
         route('/', {
           page: () =>
@@ -86,7 +87,6 @@ describe('server static export app replay boundary', () => {
         }),
       ],
     });
-    app.clientModules = registry;
 
     await expect(replayStaticExportApp({ app, onNonExportable: 'skip' })).resolves.toEqual({
       artifacts: [

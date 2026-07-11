@@ -156,12 +156,12 @@ export function installGeneratedKovoLoader(
 ): KovoGeneratedLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
-  const importModule =
-    options.allowedClientModuleUrls === undefined
-      ? options.importModule
-      : guardKovoDynamicImportModule(options.importModule, {
-          allowedModuleUrls: options.allowedClientModuleUrls,
-        });
+  // Every production import crosses one guarded boundary. An explicit compiler registry is used
+  // by generated/programmatic loaders; otherwise the guard consumes the marked document manifest.
+  const importModule = guardKovoDynamicImportModule(
+    options.importModule,
+    definedProps({ allowedModuleUrls: options.allowedClientModuleUrls }),
+  );
   const disposers: Array<() => void> = [];
   let queryRuntime: InstalledLoaderQueryRuntime | undefined;
   const rememberAppliedQueries = (queries: readonly string[]): void => {
@@ -184,12 +184,12 @@ export function installGeneratedKovoLoader(
                 reportRuntimeContextError(options.onError, error, { phase: 'mutation-broadcast' });
               }
             : undefined,
-          importModule:
-            options.enhancedMutations.importModule && options.allowedClientModuleUrls !== undefined
-              ? guardKovoDynamicImportModule(options.enhancedMutations.importModule, {
-                  allowedModuleUrls: options.allowedClientModuleUrls,
-                })
-              : (options.enhancedMutations.importModule ?? importModule),
+          importModule: options.enhancedMutations.importModule
+            ? guardKovoDynamicImportModule(
+                options.enhancedMutations.importModule,
+                definedProps({ allowedModuleUrls: options.allowedClientModuleUrls }),
+              )
+            : importModule,
           // K4 / SPEC §4.7: thread the loader's islandSignalScope into the broadcast
           // so a broadcast morph that removes an island correctly aborts its ctx.signal.
           islandSignalScope,
@@ -244,7 +244,10 @@ export function installGeneratedKovoLoader(
     );
   }
 
-  disposers.push(installExecutionTriggers(options, islandSignalScope));
+  // SPEC §4.7/§4.8: startup triggers cross the same exact compiler-manifest gate as
+  // delegated handlers. Passing the original importer here would make the trigger-level fallback
+  // perform a second empty-manifest check and reject legitimate generated on:load/idle/visible refs.
+  disposers.push(installExecutionTriggers({ ...options, importModule }, islandSignalScope));
   if (enhancedMutationSetup?.dispose) {
     disposers.push(enhancedMutationSetup.dispose);
   }

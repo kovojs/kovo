@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import { publicAccess, verifiedAccess } from './access.js';
 import { accessFactsFromApp } from './access-graph.js';
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { guard, guards } from './guards.js';
+import type { Guard } from './guards.js';
 import { mutation } from './mutation.js';
-import { query } from './query.js';
+import { query, renderQueryEndpointResponse } from './query.js';
 import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { webhook } from './webhook.js';
@@ -73,7 +74,9 @@ describe('app access graph extraction', () => {
         kind: 'verifier',
         name: 'sync-hmac',
         verify: hmacSignature({
+          encoding: 'hex',
           header: 'X-Signature',
+          payload: ({ payload }) => payload,
           scheme: 'sync-hmac',
           secret: 'test_secret',
         }),
@@ -88,7 +91,9 @@ describe('app access graph extraction', () => {
       handler: () => ({}),
       input: s.object({ id: s.string() }),
       verify: hmacSignature({
+        encoding: 'hex',
         header: 'Stripe-Signature',
+        payload: ({ payload }) => payload,
         scheme: 'stripe-signature',
         secret: 'test_secret',
       }),
@@ -191,5 +196,204 @@ describe('app access graph extraction', () => {
         source: 'access',
       },
     ]);
+  });
+
+  it('reports invalid guard-array carriers as KV436-missing instead of guarded', () => {
+    const sparse: Guard<object>[] = [];
+    sparse.length = 1;
+    const invalidQuery = query('private-query', {
+      access: sparse,
+      load: () => ({ secret: true }),
+    });
+    const invalidMutation = mutation('private-mutation', {
+      access: sparse,
+      handler: () => ({ changed: true }),
+      input: s.object({}),
+    });
+    const invalidRoute = route('/private-page', {
+      access: sparse,
+      page: () => '<main>private</main>',
+    });
+    const invalidLayoutRoute = route('/private-layout', {
+      layout: layout({ access: sparse }),
+      page: () => '<main>private layout</main>',
+    });
+    const invalidEndpoint = endpoint('/private-endpoint', {
+      access: sparse,
+      csrf: false,
+      csrfJustification: 'invalid access regression fixture',
+      handler: () => new Response('private'),
+      method: 'GET',
+      reason: 'invalid access regression fixture',
+      response: rawTextResponse,
+    });
+    const invalidWebhook = webhook('/private-webhook', {
+      access: sparse,
+      handler: () => ({ private: true }),
+      input: s.object({}),
+      verify: 'none',
+      verifyJustification: 'invalid access regression fixture',
+    });
+    const app = createApp({
+      endpoints: [invalidEndpoint, invalidWebhook],
+      mutations: [invalidMutation],
+      queries: [invalidQuery],
+      routes: [invalidRoute, invalidLayoutRoute],
+    });
+
+    expect(
+      accessFactsFromApp(app).map(({ decision, kind, name }) => ({ decision, kind, name })),
+    ).toEqual([
+      { decision: 'missing', kind: 'endpoint', name: '/private-endpoint' },
+      { decision: 'missing', kind: 'mutation', name: 'private-mutation' },
+      { decision: 'missing', kind: 'page', name: '/private-layout' },
+      { decision: 'missing', kind: 'page', name: '/private-page' },
+      { decision: 'missing', kind: 'query', name: 'private-query' },
+      { decision: 'missing', kind: 'webhook', name: '/private-webhook' },
+    ]);
+  });
+
+  it('shares one authoritative snapshot for proxied app assembly, audit, and runtime', async () => {
+    const deny = guard('proxy-deny', () => ({ kind: 'forbidden' as const }));
+    const allow = guard('proxy-allow', () => true);
+    const declaration = query('proxy-private', {
+      access: [deny],
+      load: () => ({ secret: true }),
+    });
+    const clone = { ...declaration };
+    let accessReads = 0;
+    const proxied = new Proxy(clone, {
+      get(target, property, receiver) {
+        if (property === 'access') {
+          accessReads += 1;
+          return [allow];
+        }
+        return Reflect.get(target, property, receiver);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return Reflect.getOwnPropertyDescriptor(target, property);
+      },
+    });
+    const app = createApp({ queries: [proxied] });
+
+    expect(Object.isFrozen(app)).toBe(true);
+    expect(Object.isFrozen(app.queries)).toBe(true);
+    expect(Reflect.set(app, 'queries', [])).toBe(false);
+    expect(Reflect.set(app.queries, '0', clone)).toBe(false);
+    expect(accessFactsFromApp(app)).toEqual([
+      {
+        decision: 'guard',
+        detail: 'access=guards guards=proxy-deny',
+        kind: 'query',
+        name: 'proxy-private',
+        source: 'access',
+      },
+    ]);
+    const response = await renderQueryEndpointResponse(app.queries[0]!, {
+      renderForbidden: () => '<main>Forbidden</main>',
+      request: {},
+    });
+    expect(response.status).toBe(403);
+    expect(accessReads).toBe(0);
+  });
+
+  it('stores every access-bearing registry entry as a frozen canonical declaration', () => {
+    const access = [guard('canonical-deny', () => ({ kind: 'forbidden' as const }))];
+    const routeDeclaration = { ...route('/canonical-route', { access }) };
+    const queryDeclaration = {
+      ...query('canonical-query', { access, load: () => ({ private: true }) }),
+    };
+    const mutationDeclaration = {
+      ...mutation('canonical-mutation', {
+        access,
+        handler: () => ({ private: true }),
+        input: s.object({}),
+      }),
+    };
+    const endpointDeclaration = {
+      ...endpoint('/canonical-endpoint', {
+        access,
+        csrf: false,
+        csrfJustification: 'canonical declaration regression',
+        handler: () => new Response('private'),
+        method: 'GET',
+        reason: 'canonical declaration regression',
+        response: rawTextResponse,
+      }),
+    };
+    const app = createApp({
+      endpoints: [endpointDeclaration],
+      mutations: [mutationDeclaration],
+      queries: [queryDeclaration],
+      routes: [routeDeclaration],
+    });
+
+    for (const registry of [app.routes, app.queries, app.mutations, app.endpoints]) {
+      expect(Object.isFrozen(registry)).toBe(true);
+      expect(Object.isFrozen(registry[0])).toBe(true);
+    }
+    expect(app.routes[0]).not.toBe(routeDeclaration);
+    expect(app.queries[0]).not.toBe(queryDeclaration);
+    expect(app.mutations[0]).not.toBe(mutationDeclaration);
+    expect(app.endpoints[0]).not.toBe(endpointDeclaration);
+    expect(Reflect.set(app, 'routes', [])).toBe(false);
+    expect(Reflect.set(app.routes, '0', routeDeclaration)).toBe(false);
+  });
+
+  it('rejects a Proxy route whose inherited layout disagrees between descriptor and get', () => {
+    const deny = guard('proxy-layout-deny', () => ({ kind: 'forbidden' as const }));
+    const denyingLayout = layout({ access: [deny] });
+    const proxiedRoute = new Proxy(
+      {
+        page: () => '<main>leaked</main>',
+        path: '/proxy-layout',
+      },
+      {
+        get(target, property, receiver) {
+          if (property === 'layout') return denyingLayout;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    expect(() => createApp({ routes: [proxiedRoute] })).toThrow(
+      'route(/proxy-layout).layout must not disagree between descriptor and property access',
+    );
+  });
+
+  it('snapshots a stable Proxy route layout before later get-trap drift', async () => {
+    const deny = guard('proxy-layout-deny', () => ({ kind: 'forbidden' as const }));
+    const denyingLayout = layout({ access: [deny] });
+    let hideLayout = false;
+    const proxiedRoute = new Proxy(
+      {
+        layout: denyingLayout,
+        page: () => '<main>leaked</main>',
+        path: '/proxy-layout-control',
+      },
+      {
+        get(target, property, receiver) {
+          if (property === 'layout' && hideLayout) return undefined;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    const app = createApp({ routes: [proxiedRoute] });
+    hideLayout = true;
+
+    expect(accessFactsFromApp(app)).toEqual([
+      {
+        decision: 'guard',
+        detail: 'access=guards guards=proxy-layout-deny source=layout.access',
+        kind: 'page',
+        name: '/proxy-layout-control',
+        source: 'access',
+      },
+    ]);
+    const response = await createRequestHandler(app)(
+      new Request('https://example.test/proxy-layout-control'),
+    );
+    expect(response.status).toBe(403);
+    await expect(response.text()).resolves.not.toContain('leaked');
   });
 });

@@ -884,6 +884,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const context = sqlSafetyContextForSourceFile(sourceFile);
   const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
   if (rawDriverImport) diagnostics.push(rawDriverImport);
+  diagnostics.push(...unresolvedConcurrencyAnnotationDiagnostics(sourceFile));
   diagnostics.push(...sqliteOwnerScopeWarningDiagnostics(file, sourceFile));
   diagnostics.push(...crossOwnerReadStaticGuardDiagnostics(file, sourceFile));
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
@@ -1797,14 +1798,11 @@ function sqlRawHelperDiagnostic(
   call: CallExpression,
   context: SqlSafetyContext,
 ): TouchGraphDiagnostic | null {
-  const expression = call.getExpression();
-  if (!Node.isPropertyAccessExpression(expression)) return null;
-  const receiver = expression.getExpression();
-
-  const method = expression.getName();
-  if (method !== 'raw' && method !== 'identifier') return null;
+  const helper = resolvedDangerousSqlHelper(call.getExpression());
+  if (!helper) return null;
+  const { method, provider } = helper;
   const [first, second] = call.getArguments();
-  if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
+  if (provider === 'drizzle') {
     return drizzleDiagnostic({
       code: 'KV422',
       detail: `Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
@@ -1816,13 +1814,6 @@ function sqlRawHelperDiagnostic(
   // `@kovojs/drizzle` binding — bare `sql`, an `import { sql as s }` alias, or a
   // namespace `<ns>.sql` accessor — so `s.raw(...)` / `k.sql.raw(...)` cannot slip a
   // raw chunk past the gate the way a literal `receiver === 'sql'` check did.
-  if (
-    !expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
-      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
-    })
-  ) {
-    return null;
-  }
   if (method === 'identifier' && sqlAllowlistSafety(second, context) === 'literal') return null;
 
   const safety = sqlTextSafety(first, context);
@@ -1832,6 +1823,954 @@ function sqlRawHelperDiagnostic(
     code: 'KV422',
     detail: `sql.${method}(...) receives ${sqlSafetyDescription(safety)} text; use sql.identifier(value, { allow }) for identifiers or trustedSql(...) for audited raw SQL.`,
     site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+  });
+}
+
+type DangerousSqlHelper = {
+  method: 'identifier' | 'raw';
+  provider: 'drizzle' | 'kovo';
+};
+
+/**
+ * Resolve a dangerous SQL member value by symbol identity (SPEC §6.6/§10.2, KV422).
+ *
+ * The sink is the callable member value, not merely the source spelling `sql.raw(...)`:
+ * `const raw = sql.raw`, `const alias = raw`, and `const { raw: alias } = sql` all preserve
+ * the exact same executable-text capability at runtime. Keep that identity through ordinary
+ * const aliases and object bindings so a harmless syntactic detour cannot erase the gate.
+ */
+function resolvedDangerousSqlHelper(
+  expression: Node,
+  seen = new Set<string>(),
+  depth = 0,
+  use: Node = expression,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = staticAccessName(node);
+    if (member === 'raw' || member === 'identifier') {
+      const receiver = node.getExpression();
+      if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
+        return { method: member, provider: 'drizzle' };
+      }
+      if (
+        expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
+          legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+        })
+      ) {
+        return { method: member, provider: 'kovo' };
+      }
+    }
+  }
+
+  if (Node.isCallExpression(node)) {
+    const callResult = dangerousSqlHelperFromCall(node, seen, depth + 1, use);
+    if (callResult) return callResult;
+  }
+
+  const targetKey = dangerousSqlAliasTargetKey(node);
+  if (!targetKey) return undefined;
+  if (seen.has(targetKey)) return undefined;
+  seen.add(targetKey);
+
+  let resolved = dangerousSqlHelperFromDeclaration(node, seen, depth + 1, use);
+  const sourceFile = node.getSourceFile();
+  const assignments = sourceFile
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .filter(
+      (assignment) =>
+        assignment.getStart() < use.getStart() &&
+        assignment.getOperatorToken().getKind() === SyntaxKind.EqualsToken,
+    )
+    .sort((left, right) => left.getStart() - right.getStart());
+
+  for (const assignment of assignments) {
+    const assigned = dangerousSqlAssignmentValue(
+      assignment.getLeft(),
+      assignment.getRight(),
+      targetKey,
+      seen,
+      depth + 1,
+      use,
+    );
+    if (!assigned.matched) continue;
+    const definite = dangerousSqlAssignmentDefinitelyPrecedesUse(assignment, use);
+    const next =
+      assigned.helper ??
+      (assigned.value
+        ? resolvedDangerousSqlHelper(assigned.value, new Set(seen), depth + 1, use)
+        : undefined);
+    if (next) {
+      if (definite || !resolved) resolved = next;
+      continue;
+    }
+    if (definite && assigned.value && definitelyLocalSqlHelperValue(assigned.value)) {
+      resolved = undefined;
+    }
+  }
+
+  return resolved;
+}
+
+function dangerousSqlHelperFromDeclaration(
+  node: Node,
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const access = dangerousSqlStaticAccessPath(node);
+    return access
+      ? dangerousSqlHelperFromCarrierPath(access.root, access.path, new Set(seen), depth + 1, use)
+      : undefined;
+  }
+
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isVariableDeclaration(declaration)) {
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const resolved = resolvedDangerousSqlHelper(initializer, new Set(seen), depth + 1, use);
+      if (resolved) return resolved;
+      continue;
+    }
+
+    if (!Node.isBindingElement(declaration)) continue;
+    const binding = dangerousSqlBindingInitializerAndPath(declaration);
+    if (!binding) continue;
+    const sourcePath = dangerousSqlBindingSourcePath(binding, []);
+    if (!sourcePath) continue;
+    const resolved = dangerousSqlHelperFromCarrierPath(
+      binding.initializer,
+      sourcePath,
+      new Set(seen),
+      depth + 1,
+      use,
+    );
+    if (resolved) return resolved;
+  }
+
+  return undefined;
+}
+
+type DangerousSqlAssignmentValue =
+  | { helper?: DangerousSqlHelper; matched: true; value?: Node }
+  | { matched: false };
+
+function dangerousSqlAssignmentValue(
+  left: Node,
+  right: Node,
+  targetKey: string,
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlAssignmentValue {
+  if (dangerousSqlAliasTargetKey(left) === targetKey) {
+    return { matched: true, value: right };
+  }
+
+  const projection = dangerousSqlDestructuringTargetPath(left, targetKey);
+  if (!projection) return { matched: false };
+  const sourcePath = dangerousSqlProjectionSourcePath(projection, []);
+  if (!sourcePath) return { matched: false };
+  const helper = dangerousSqlHelperFromCarrierPath(
+    right,
+    sourcePath,
+    new Set(seen),
+    depth + 1,
+    use,
+  );
+  if (helper) return { helper, matched: true };
+  return {
+    matched: true,
+    value: dangerousSqlCarrierValueAtPath(right, sourcePath, new Set(seen), depth + 1) ?? right,
+  };
+}
+
+type DangerousSqlLocalFunction = ArrowFunction | FunctionDeclaration | FunctionExpression;
+
+function dangerousSqlHelperFromCall(
+  call: CallExpression,
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  if (
+    (Node.isPropertyAccessExpression(callee) || Node.isElementAccessExpression(callee)) &&
+    staticAccessName(callee) === 'bind'
+  ) {
+    const bound = resolvedDangerousSqlHelper(callee.getExpression(), new Set(seen), depth + 1, use);
+    if (bound) return bound;
+  }
+
+  const dangerousArguments = call
+    .getArguments()
+    .flatMap(
+      (argument) => resolvedDangerousSqlHelper(argument, new Set(seen), depth + 1, use) ?? [],
+    );
+  const local = dangerousSqlLocalFunctionFromCallee(callee);
+  if (local) {
+    const returns = dangerousSqlLocalFunctionReturnExpressions(local);
+    for (const returned of returns) {
+      const helper = resolvedDangerousSqlHelper(returned, new Set(seen), depth + 1, use);
+      if (helper) return helper;
+    }
+    if (
+      dangerousArguments.length > 0 &&
+      returns.length > 0 &&
+      returns.every((returned) => definitelyLocalSqlHelperValue(returned))
+    ) {
+      return undefined;
+    }
+  }
+
+  // SPEC §6.6 C13 / §10.2 KV422: an unproven call can return an argument unchanged. Once a
+  // raw/identifier member capability crosses that call boundary, preserve it in the result unless
+  // a local implementation above proves that every return is an unrelated safe helper.
+  return dangerousArguments[0];
+}
+
+function dangerousSqlLocalFunctionFromCallee(node: Node): DangerousSqlLocalFunction | undefined {
+  const callee = unwrappedStaticExpressionNode(node);
+  if (
+    Node.isArrowFunction(callee) ||
+    Node.isFunctionDeclaration(callee) ||
+    Node.isFunctionExpression(callee)
+  ) {
+    return callee;
+  }
+  if (!Node.isIdentifier(callee)) return undefined;
+  const symbol = symbolForIdentifierReference(callee) ?? callee.getSymbol();
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isFunctionDeclaration(declaration)) return declaration;
+    if (!Node.isVariableDeclaration(declaration)) continue;
+    const initializer = declaration.getInitializer();
+    const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+    if (value && (Node.isArrowFunction(value) || Node.isFunctionExpression(value))) return value;
+  }
+  return undefined;
+}
+
+function dangerousSqlLocalFunctionReturnExpressions(fn: DangerousSqlLocalFunction): Node[] {
+  const body = fn.getBody();
+  if (!body) return [];
+  if (Node.isArrowFunction(fn) && !Node.isBlock(body)) return [body];
+  return body
+    .getDescendantsOfKind(SyntaxKind.ReturnStatement)
+    .filter(
+      (statement) =>
+        statement.getFirstAncestor((ancestor) => dangerousSqlIsLocalFunction(ancestor)) === fn,
+    )
+    .flatMap((statement) => statement.getExpression() ?? []);
+}
+
+function dangerousSqlIsLocalFunction(node: Node): node is DangerousSqlLocalFunction {
+  return (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node)
+  );
+}
+
+function dangerousSqlHelperFromCarrierPath(
+  value: Node,
+  path: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  if (path.length === 0) {
+    return resolvedDangerousSqlHelper(value, seen, depth + 1, use);
+  }
+  const node = unwrappedStaticExpressionNode(value);
+  const segment = path[0];
+  if (segment === undefined) return undefined;
+  const rest = path.slice(1);
+
+  if (rest.length === 0 && (segment === 'raw' || segment === 'identifier')) {
+    if (expressionResolvesToFrameworkExport(node, frameworkExport('drizzle-orm', 'sql'))) {
+      return { method: segment, provider: 'drizzle' };
+    }
+    if (
+      expressionResolvesToFrameworkExport(node, frameworkExport('@kovojs/drizzle', 'sql'), {
+        legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+      })
+    ) {
+      return { method: segment, provider: 'kovo' };
+    }
+  }
+
+  if (Node.isObjectLiteralExpression(node)) {
+    const resolution = staticObjectPropertyResolution(node, segment);
+    if (resolution.kind === 'resolved') {
+      return dangerousSqlHelperFromCarrierPath(
+        resolution.value,
+        rest,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+    }
+    if (resolution.kind === 'unresolved') {
+      return dangerousSqlPossibleObjectPropertyHelper(node, segment, rest, seen, depth + 1, use);
+    }
+    return undefined;
+  }
+
+  if (Node.isArrayLiteralExpression(node)) {
+    const index = dangerousSqlArrayIndex(segment);
+    if (index === undefined) return undefined;
+    const elements = dangerousSqlStaticArrayElements(node, new Set(seen), depth + 1);
+    const element = elements?.[index];
+    if (element) {
+      return dangerousSqlHelperFromCarrierPath(element, rest, new Set(seen), depth + 1, use);
+    }
+    if (!elements) {
+      return dangerousSqlPossibleArrayElementHelper(node, rest, seen, depth + 1, use);
+    }
+    return undefined;
+  }
+
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument
+      ? dangerousSqlHelperFromCarrierPath(argument, path, seen, depth + 1, use)
+      : undefined;
+  }
+
+  if (Node.isCallExpression(node)) {
+    const local = dangerousSqlLocalFunctionFromCallee(node.getExpression());
+    if (local) {
+      const returns = dangerousSqlLocalFunctionReturnExpressions(local);
+      for (const returned of returns) {
+        const helper = dangerousSqlHelperFromCarrierPath(
+          returned,
+          path,
+          new Set(seen),
+          depth + 1,
+          use,
+        );
+        if (helper) return helper;
+      }
+      if (
+        returns.length > 0 &&
+        returns.every((returned) => {
+          const projected = dangerousSqlCarrierValueAtPath(
+            returned,
+            path,
+            new Set(seen),
+            depth + 1,
+          );
+          return Boolean(projected && definitelyLocalSqlHelperValue(projected));
+        })
+      ) {
+        return undefined;
+      }
+    }
+    for (const argument of node.getArguments()) {
+      const helper = dangerousSqlHelperFromCarrierPath(
+        argument,
+        path,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+      if (helper) return helper;
+    }
+    return undefined;
+  }
+
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const access = dangerousSqlStaticAccessPath(node);
+    return access
+      ? dangerousSqlHelperFromCarrierPath(
+          access.root,
+          [...access.path, ...path],
+          new Set(seen),
+          depth + 1,
+          use,
+        )
+      : undefined;
+  }
+
+  if (!Node.isIdentifier(node)) return undefined;
+  return dangerousSqlHelperFromIdentifierCarrier(node, path, seen, depth + 1, use);
+}
+
+function dangerousSqlHelperFromIdentifierCarrier(
+  identifier: Node,
+  path: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (!Node.isIdentifier(identifier) || depth > 12) return undefined;
+  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
+  const symbolKey = resolvedSymbolKey(symbol);
+  if (!symbolKey) return undefined;
+  const carrierKey = `carrier:${symbolKey}:${path.join('.')}`;
+  if (seen.has(carrierKey)) return undefined;
+  seen.add(carrierKey);
+
+  let resolved: DangerousSqlHelper | undefined;
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isVariableDeclaration(declaration)) {
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      resolved ??= dangerousSqlHelperFromCarrierPath(
+        initializer,
+        path,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+      continue;
+    }
+    if (!Node.isBindingElement(declaration)) continue;
+    const binding = dangerousSqlBindingInitializerAndPath(declaration);
+    if (!binding) continue;
+    const sourcePath = dangerousSqlBindingSourcePath(binding, path);
+    if (!sourcePath) continue;
+    resolved ??= dangerousSqlHelperFromCarrierPath(
+      binding.initializer,
+      sourcePath,
+      new Set(seen),
+      depth + 1,
+      use,
+    );
+  }
+
+  const rootTargetKey = `symbol:${symbolKey}`;
+  const memberTargetKey = `member:${symbolKey}:${path.join('.')}`;
+  const assignments = identifier
+    .getSourceFile()
+    .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+    .filter(
+      (assignment) =>
+        assignment.getStart() < use.getStart() &&
+        assignment.getOperatorToken().getKind() === SyntaxKind.EqualsToken,
+    )
+    .sort((left, right) => left.getStart() - right.getStart());
+
+  for (const assignment of assignments) {
+    const left = assignment.getLeft();
+    const leftKey = dangerousSqlAliasTargetKey(left);
+    const destructuredRoot = dangerousSqlDestructuringTargetPath(left, rootTargetKey);
+    let helper: DangerousSqlHelper | undefined;
+    let projected: Node | undefined;
+    let matched = false;
+    if (leftKey === memberTargetKey) {
+      matched = true;
+      projected = assignment.getRight();
+      helper = resolvedDangerousSqlHelper(projected, new Set(seen), depth + 1, use);
+    } else if (leftKey === rootTargetKey) {
+      matched = true;
+      projected = dangerousSqlCarrierValueAtPath(
+        assignment.getRight(),
+        path,
+        new Set(seen),
+        depth + 1,
+      );
+      helper = dangerousSqlHelperFromCarrierPath(
+        assignment.getRight(),
+        path,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+    } else if (destructuredRoot) {
+      const sourcePath = dangerousSqlProjectionSourcePath(destructuredRoot, path);
+      if (!sourcePath) continue;
+      matched = true;
+      projected = dangerousSqlCarrierValueAtPath(
+        assignment.getRight(),
+        sourcePath,
+        new Set(seen),
+        depth + 1,
+      );
+      helper = dangerousSqlHelperFromCarrierPath(
+        assignment.getRight(),
+        sourcePath,
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+    }
+    if (!matched) continue;
+    const definite = dangerousSqlAssignmentDefinitelyPrecedesUse(assignment, use);
+    if (helper) {
+      if (definite || !resolved) resolved = helper;
+    } else if (definite && projected && definitelyLocalSqlHelperValue(projected)) {
+      resolved = undefined;
+    }
+  }
+  return resolved;
+}
+
+function dangerousSqlPossibleObjectPropertyHelper(
+  object: ObjectLiteralExpression,
+  segment: string,
+  rest: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  for (const property of object.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      const helper = dangerousSqlHelperFromCarrierPath(
+        property.getExpression(),
+        [segment, ...rest],
+        new Set(seen),
+        depth + 1,
+        use,
+      );
+      if (helper) return helper;
+      continue;
+    }
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      continue;
+    }
+    if (propertyNameText(property.getNameNode()) !== segment) continue;
+    const value = Node.isPropertyAssignment(property)
+      ? property.getInitializer()
+      : property.getNameNode();
+    if (!value) continue;
+    const helper = dangerousSqlHelperFromCarrierPath(value, rest, new Set(seen), depth + 1, use);
+    if (helper) return helper;
+  }
+  return undefined;
+}
+
+function dangerousSqlPossibleArrayElementHelper(
+  array: Node,
+  rest: readonly string[],
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  const node = unwrappedStaticExpressionNode(array);
+  if (!Node.isArrayLiteralExpression(node)) return undefined;
+  for (const element of node.getElements()) {
+    if (Node.isOmittedExpression(element)) continue;
+    const value = Node.isSpreadElement(element) ? element.getExpression() : element;
+    const helper = Node.isSpreadElement(element)
+      ? dangerousSqlAnyCarrierHelper(value, new Set(seen), depth + 1, use)
+      : dangerousSqlHelperFromCarrierPath(value, rest, new Set(seen), depth + 1, use);
+    if (helper) return helper;
+  }
+  return undefined;
+}
+
+function dangerousSqlAnyCarrierHelper(
+  value: Node,
+  seen: Set<string>,
+  depth: number,
+  use: Node,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  const direct = resolvedDangerousSqlHelper(value, new Set(seen), depth + 1, use);
+  if (direct) return direct;
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isObjectLiteralExpression(node)) {
+    for (const property of node.getProperties()) {
+      const child = Node.isSpreadAssignment(property)
+        ? property.getExpression()
+        : Node.isPropertyAssignment(property)
+          ? property.getInitializer()
+          : Node.isShorthandPropertyAssignment(property)
+            ? property.getNameNode()
+            : undefined;
+      if (!child) continue;
+      const helper = dangerousSqlAnyCarrierHelper(child, new Set(seen), depth + 1, use);
+      if (helper) return helper;
+    }
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    for (const element of node.getElements()) {
+      if (Node.isOmittedExpression(element)) continue;
+      const child = Node.isSpreadElement(element) ? element.getExpression() : element;
+      const helper = dangerousSqlAnyCarrierHelper(child, new Set(seen), depth + 1, use);
+      if (helper) return helper;
+    }
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+    const key = resolvedSymbolKey(symbol);
+    if (key && seen.has(`any-carrier:${key}`)) return undefined;
+    if (key) seen.add(`any-carrier:${key}`);
+    for (const declaration of symbol?.getDeclarations() ?? []) {
+      if (!Node.isVariableDeclaration(declaration)) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const helper = dangerousSqlAnyCarrierHelper(initializer, new Set(seen), depth + 1, use);
+      if (helper) return helper;
+    }
+  }
+  return undefined;
+}
+
+function dangerousSqlCarrierValueAtPath(
+  value: Node,
+  path: readonly string[],
+  seen: Set<string>,
+  depth: number,
+): Node | undefined {
+  if (depth > 12) return undefined;
+  if (path.length === 0) return unwrappedStaticExpressionNode(value);
+  const node = unwrappedStaticExpressionNode(value);
+  const segment = path[0];
+  if (segment === undefined) return undefined;
+  const rest = path.slice(1);
+  if (Node.isObjectLiteralExpression(node)) {
+    const resolution = staticObjectPropertyResolution(node, segment);
+    return resolution.kind === 'resolved'
+      ? dangerousSqlCarrierValueAtPath(resolution.value, rest, seen, depth + 1)
+      : undefined;
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    const index = dangerousSqlArrayIndex(segment);
+    if (index === undefined) return undefined;
+    const element = dangerousSqlStaticArrayElements(node, seen, depth + 1)?.[index];
+    return element ? dangerousSqlCarrierValueAtPath(element, rest, seen, depth + 1) : undefined;
+  }
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument ? dangerousSqlCarrierValueAtPath(argument, path, seen, depth + 1) : undefined;
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const access = dangerousSqlStaticAccessPath(node);
+    return access
+      ? dangerousSqlCarrierValueAtPath(access.root, [...access.path, ...path], seen, depth + 1)
+      : undefined;
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const key = resolvedSymbolKey(symbol);
+  if (key) {
+    const carrierKey = `carrier-value:${key}:${path.join('.')}`;
+    if (seen.has(carrierKey)) return undefined;
+    seen.add(carrierKey);
+  }
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isVariableDeclaration(declaration)) {
+      const initializer = declaration.getInitializer();
+      if (initializer) {
+        const projected = dangerousSqlCarrierValueAtPath(initializer, path, seen, depth + 1);
+        if (projected) return projected;
+      }
+      continue;
+    }
+    if (!Node.isBindingElement(declaration)) continue;
+    const binding = dangerousSqlBindingInitializerAndPath(declaration);
+    if (!binding) continue;
+    const sourcePath = dangerousSqlBindingSourcePath(binding, path);
+    if (!sourcePath) continue;
+    const projected = dangerousSqlCarrierValueAtPath(
+      binding.initializer,
+      sourcePath,
+      seen,
+      depth + 1,
+    );
+    if (projected) return projected;
+  }
+  return undefined;
+}
+
+type DangerousSqlPathProjection = {
+  path: string[];
+  rest?: { excluded: ReadonlySet<string>; kind: 'object' } | { kind: 'array'; offset: number };
+};
+
+type DangerousSqlBindingProjection = DangerousSqlPathProjection & { initializer: Node };
+
+function dangerousSqlBindingInitializerAndPath(
+  declaration: BindingElement,
+): DangerousSqlBindingProjection | undefined {
+  const path: string[] = [];
+  let rest: DangerousSqlBindingProjection['rest'];
+  let current: BindingElement = declaration;
+  for (;;) {
+    const pattern = current.getParent();
+    if (Node.isObjectBindingPattern(pattern)) {
+      if (current.getDotDotDotToken()) {
+        if (rest) return undefined;
+        const excluded = new Set(
+          pattern
+            .getElements()
+            .filter((element) => element !== current)
+            .flatMap(
+              (element) =>
+                propertyNameText(element.getPropertyNameNode() ?? element.getNameNode()) ?? [],
+            ),
+        );
+        rest = { excluded, kind: 'object' };
+      } else {
+        const segment = propertyNameText(current.getPropertyNameNode() ?? current.getNameNode());
+        if (!segment) return undefined;
+        path.unshift(segment);
+      }
+    } else if (Node.isArrayBindingPattern(pattern)) {
+      const index = pattern.getElements().findIndex((element) => element === current);
+      if (index < 0) return undefined;
+      if (current.getDotDotDotToken()) {
+        if (rest) return undefined;
+        rest = { kind: 'array', offset: index };
+      } else {
+        path.unshift(String(index));
+      }
+    } else {
+      return undefined;
+    }
+
+    const owner = pattern.getParent();
+    if (Node.isVariableDeclaration(owner)) {
+      const initializer = owner.getInitializer();
+      return initializer ? { initializer, path, ...(rest ? { rest } : {}) } : undefined;
+    }
+    if (!Node.isBindingElement(owner)) return undefined;
+    current = owner;
+  }
+}
+
+function dangerousSqlBindingSourcePath(
+  binding: DangerousSqlBindingProjection,
+  suffix: readonly string[],
+): string[] | undefined {
+  return dangerousSqlProjectionSourcePath(binding, suffix);
+}
+
+function dangerousSqlProjectionSourcePath(
+  projection: DangerousSqlPathProjection,
+  suffix: readonly string[],
+): string[] | undefined {
+  if (!projection.rest) return [...projection.path, ...suffix];
+  if (suffix.length === 0) return undefined;
+  const first = suffix[0];
+  if (first === undefined) return undefined;
+  const remaining = suffix.slice(1);
+  if (projection.rest.kind === 'object') {
+    return projection.rest.excluded.has(first)
+      ? undefined
+      : [...projection.path, first, ...remaining];
+  }
+  const index = dangerousSqlArrayIndex(first);
+  return index === undefined
+    ? undefined
+    : [...projection.path, String(projection.rest.offset + index), ...remaining];
+}
+
+function dangerousSqlDestructuringTargetPath(
+  binding: Node,
+  targetKey: string,
+  path: readonly string[] = [],
+): DangerousSqlPathProjection | undefined {
+  const node = unwrappedStaticExpressionNode(binding);
+  if (dangerousSqlAliasTargetKey(node) === targetKey) return { path: [...path] };
+  if (Node.isObjectLiteralExpression(node)) {
+    for (const property of node.getProperties()) {
+      if (Node.isSpreadAssignment(property)) {
+        if (dangerousSqlAliasTargetKey(property.getExpression()) === targetKey) {
+          const excluded = new Set(
+            node
+              .getProperties()
+              .filter((candidate) => candidate !== property && !Node.isSpreadAssignment(candidate))
+              .flatMap((candidate) => {
+                if (
+                  !Node.isPropertyAssignment(candidate) &&
+                  !Node.isShorthandPropertyAssignment(candidate)
+                ) {
+                  return [];
+                }
+                return propertyNameText(candidate.getNameNode()) ?? [];
+              }),
+          );
+          return { path: [...path], rest: { excluded, kind: 'object' } };
+        }
+        continue;
+      }
+      if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+        continue;
+      }
+      const segment = propertyNameText(property.getNameNode());
+      const target = Node.isPropertyAssignment(property)
+        ? property.getInitializer()
+        : property.getNameNode();
+      if (!segment || !target) continue;
+      const found = dangerousSqlDestructuringTargetPath(target, targetKey, [...path, segment]);
+      if (found) return found;
+    }
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    for (const [index, element] of node.getElements().entries()) {
+      if (Node.isOmittedExpression(element)) continue;
+      if (Node.isSpreadElement(element)) {
+        if (dangerousSqlAliasTargetKey(element.getExpression()) === targetKey) {
+          return { path: [...path], rest: { kind: 'array', offset: index } };
+        }
+        continue;
+      }
+      const found = dangerousSqlDestructuringTargetPath(element, targetKey, [
+        ...path,
+        String(index),
+      ]);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+function dangerousSqlStaticAccessPath(value: Node): { path: string[]; root: Node } | undefined {
+  const path: string[] = [];
+  let current = unwrappedStaticExpressionNode(value);
+  while (Node.isPropertyAccessExpression(current) || Node.isElementAccessExpression(current)) {
+    const segment = staticAccessName(current);
+    if (!segment) return undefined;
+    path.unshift(segment);
+    current = unwrappedStaticExpressionNode(current.getExpression());
+  }
+  return path.length > 0 ? { path, root: current } : undefined;
+}
+
+function dangerousSqlArrayIndex(segment: string): number | undefined {
+  if (!/^(?:0|[1-9]\d*)$/u.test(segment)) return undefined;
+  const index = Number(segment);
+  return Number.isSafeInteger(index) ? index : undefined;
+}
+
+function dangerousSqlStaticArrayElements(
+  value: Node,
+  seen: Set<string>,
+  depth: number,
+): (Node | undefined)[] | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(value);
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument ? dangerousSqlStaticArrayElements(argument, seen, depth + 1) : undefined;
+  }
+  if (Node.isIdentifier(node)) {
+    const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+    const key = resolvedSymbolKey(symbol);
+    if (key) {
+      if (seen.has(`array:${key}`)) return undefined;
+      seen.add(`array:${key}`);
+    }
+    for (const declaration of symbol?.getDeclarations() ?? []) {
+      if (!Node.isVariableDeclaration(declaration)) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const elements = dangerousSqlStaticArrayElements(initializer, seen, depth + 1);
+      if (elements) return elements;
+    }
+    return undefined;
+  }
+  if (!Node.isArrayLiteralExpression(node)) return undefined;
+  const elements: (Node | undefined)[] = [];
+  for (const element of node.getElements()) {
+    if (Node.isOmittedExpression(element)) {
+      elements.push(undefined);
+      continue;
+    }
+    if (Node.isSpreadElement(element)) {
+      const spread = dangerousSqlStaticArrayElements(
+        element.getExpression(),
+        new Set(seen),
+        depth + 1,
+      );
+      if (!spread) return undefined;
+      elements.push(...spread);
+      continue;
+    }
+    elements.push(element);
+  }
+  return elements;
+}
+
+function dangerousSqlAliasTargetKey(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isIdentifier(expression)) {
+    const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+    const key = resolvedSymbolKey(symbol);
+    return key ? `symbol:${key}` : undefined;
+  }
+  if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
+    return undefined;
+  }
+  const segments: string[] = [];
+  let current: Node = expression;
+  while (Node.isPropertyAccessExpression(current) || Node.isElementAccessExpression(current)) {
+    const segment = staticAccessName(current);
+    if (!segment) return undefined;
+    segments.unshift(segment);
+    current = unwrappedStaticExpressionNode(current.getExpression());
+  }
+  if (!Node.isIdentifier(current)) return undefined;
+  const root = resolvedSymbolKey(symbolForIdentifierReference(current) ?? current.getSymbol());
+  return root ? `member:${root}:${segments.join('.')}` : undefined;
+}
+
+function dangerousSqlAssignmentDefinitelyPrecedesUse(assignment: Node, use: Node): boolean {
+  const block = assignment.getFirstAncestorByKind(SyntaxKind.Block);
+  if (!block) return false;
+  const assignmentStatement = dangerousSqlDirectChildWithinBlock(assignment, block);
+  const useStatement = dangerousSqlDirectChildWithinBlock(use, block);
+  if (!assignmentStatement || !useStatement || !Node.isExpressionStatement(assignmentStatement)) {
+    return false;
+  }
+  let current: Node | undefined = assignment;
+  while (current && current !== assignmentStatement) {
+    if (Node.isConditionalExpression(current)) return false;
+    if (Node.isBinaryExpression(current)) {
+      const operator = current.getOperatorToken().getKind();
+      if (
+        operator === SyntaxKind.AmpersandAmpersandToken ||
+        operator === SyntaxKind.BarBarToken ||
+        operator === SyntaxKind.QuestionQuestionToken
+      ) {
+        return false;
+      }
+    }
+    current = current.getParent();
+  }
+  return assignment.getStart() < use.getStart();
+}
+
+function dangerousSqlDirectChildWithinBlock(node: Node, block: Node): Node | undefined {
+  let current: Node | undefined = node;
+  while (current && current.getParent() !== block) current = current.getParent();
+  return current;
+}
+
+function definitelyLocalSqlHelperValue(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return true;
+  if (!Node.isIdentifier(expression)) return false;
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  return (symbol?.getDeclarations() ?? []).some((declaration) => {
+    if (Node.isFunctionDeclaration(declaration)) return true;
+    if (!Node.isVariableDeclaration(declaration)) return false;
+    const initializer = declaration.getInitializer();
+    return Boolean(
+      initializer &&
+      (Node.isArrowFunction(unwrappedStaticExpressionNode(initializer)) ||
+        Node.isFunctionExpression(unwrappedStaticExpressionNode(initializer))),
+    );
   });
 }
 
@@ -4424,8 +5363,11 @@ function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
       : { name: UNRESOLVED_READ_SOURCE_EXPRESSION, unmapped: true };
   }
   if (!Node.isCallExpression(annotationCall)) return null;
-  const annotationObject = annotationCall.getArguments()[0];
-  if (!annotationObject || !Node.isObjectLiteralExpression(annotationObject)) return null;
+  const annotationArgument = annotationCall.getArguments()[0];
+  const annotationObject = annotationArgument
+    ? staticObjectLiteralValue(annotationArgument)
+    : undefined;
+  if (!annotationObject) return null;
 
   const tableName = tableNameArgument(initializer) ?? UNRESOLVED_READ_SOURCE_EXPRESSION;
   if (booleanPropertyFromObject(annotationObject, 'exempt') === true) {
@@ -4590,7 +5532,11 @@ function domainPropertyFromObject(object: Node, name: string): string | undefine
 function columnRefName(initializer: Node | undefined): string | undefined {
   if (!initializer) return undefined;
   if (Node.isStringLiteral(initializer)) return initializer.getLiteralText();
-  if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) {
+  if (
+    !Node.isArrowFunction(initializer) &&
+    !Node.isFunctionExpression(initializer) &&
+    !Node.isFunctionDeclaration(initializer)
+  ) {
     return undefined;
   }
   let body: Node | undefined = initializer.getBody();
@@ -4691,21 +5637,472 @@ function governedPropertyFromObject(object: Node): true | string[] | undefined {
  * the resolved column-name list. A column ref or list of column refs; never `true`.
  */
 function concurrencyColumnsFromObject(object: Node, name: string): string[] | undefined {
-  if (!Node.isObjectLiteralExpression(object)) return undefined;
-  for (const property of object.getProperties()) {
-    if (!Node.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.getNameNode()) !== name) continue;
+  const resolution = concurrencyColumnsResolutionFromObject(object, name);
+  return resolution.kind === 'resolved' ? resolution.columns : undefined;
+}
 
-    const initializer = property.getInitializer();
-    if (!initializer) return undefined;
-    if (Node.isArrayLiteralExpression(initializer)) {
-      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
-      return columns.length > 0 ? columns : undefined;
+type StaticObjectPropertyResolution =
+  | { kind: 'absent' }
+  | { kind: 'resolved'; node: Node; value: Node }
+  | { kind: 'unresolved'; node: Node };
+
+type ConcurrencyColumnsResolution =
+  | { kind: 'absent' }
+  | { columns: string[]; kind: 'resolved'; node: Node }
+  | { kind: 'unresolved'; node: Node };
+
+function concurrencyColumnsResolutionFromObject(
+  object: Node,
+  name: string,
+): ConcurrencyColumnsResolution {
+  const property = staticObjectPropertyResolution(object, name);
+  if (property.kind !== 'resolved') return property;
+  const columns = staticConcurrencyColumns(property.value);
+  return columns === undefined
+    ? { kind: 'unresolved', node: property.node }
+    : { columns, kind: 'resolved', node: property.node };
+}
+
+/**
+ * Resolve one property under JavaScript object-spread overwrite semantics. Later explicit
+ * properties can safely recover from an earlier dynamic spread; a later unresolved spread must
+ * fail closed because it may replace the concurrency fact retained by the runtime annotation.
+ */
+function staticObjectPropertyResolution(
+  object: Node,
+  name: string,
+  seen = new Set<string>(),
+  depth = 0,
+): StaticObjectPropertyResolution {
+  if (depth > 12) return { kind: 'unresolved', node: object };
+  const literal = staticObjectLiteralValue(object, seen, depth + 1);
+  if (!literal) return { kind: 'unresolved', node: object };
+
+  let resolution: StaticObjectPropertyResolution = { kind: 'absent' };
+  for (const property of literal.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      const spread = staticObjectPropertyResolution(
+        property.getExpression(),
+        name,
+        new Set(seen),
+        depth + 1,
+      );
+      if (spread.kind !== 'absent') resolution = spread;
+      continue;
     }
-    const column = columnRefName(initializer);
-    return column === undefined ? undefined : [column];
+
+    if (Node.isPropertyAssignment(property)) {
+      const propertyName = propertyNameText(property.getNameNode());
+      if (propertyName === name) {
+        const initializer = property.getInitializer();
+        resolution = initializer
+          ? { kind: 'resolved', node: property, value: initializer }
+          : { kind: 'unresolved', node: property };
+      } else if (propertyName === undefined) {
+        resolution = { kind: 'unresolved', node: property };
+      }
+      continue;
+    }
+
+    if (Node.isShorthandPropertyAssignment(property)) {
+      if (propertyNameText(property.getNameNode()) === name) {
+        resolution = { kind: 'resolved', node: property, value: property.getNameNode() };
+      }
+      continue;
+    }
+
+    // A computed accessor/method may overwrite `atomic`/`version` at runtime. Kovo's public
+    // annotation type does not need that shape, so retain the secure fail-closed verdict.
+    if (propertyNameText(property.getNameNode?.()) === undefined) {
+      resolution = { kind: 'unresolved', node: property };
+    }
+  }
+  return resolution;
+}
+
+function staticObjectLiteralValue(
+  value: Node,
+  seen = new Set<string>(),
+  depth = 0,
+): ObjectLiteralExpression | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isObjectLiteralExpression(node)) return node;
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    const [argument] = node.getArguments();
+    return argument ? staticObjectLiteralValue(argument, seen, depth + 1) : undefined;
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const initializer = staticConstBindingInitializer(node, seen, depth + 1, true);
+  return initializer ? staticObjectLiteralValue(initializer, seen, depth + 1) : undefined;
+}
+
+function staticConcurrencyColumns(
+  value: Node,
+  seen = new Set<string>(),
+  depth = 0,
+): string[] | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isIdentifier(node)) {
+    const initializer = staticConstBindingInitializer(node, seen, depth + 1, true);
+    return initializer ? staticConcurrencyColumns(initializer, seen, depth + 1) : undefined;
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    const columns: string[] = [];
+    for (const element of node.getElements()) {
+      if (Node.isOmittedExpression(element)) return undefined;
+      const item = Node.isSpreadElement(element) ? element.getExpression() : element;
+      const resolved = staticConcurrencyColumns(item, new Set(seen), depth + 1);
+      if (resolved === undefined) return undefined;
+      columns.push(...resolved);
+    }
+    return [...new Set(columns)];
+  }
+  const column = columnRefName(node);
+  return column === undefined ? undefined : [column];
+}
+
+function staticConstBindingInitializer(
+  identifier: Node,
+  seen: Set<string>,
+  depth: number,
+  requireStableCarrier: boolean,
+): Node | undefined {
+  if (!Node.isIdentifier(identifier) || depth > 12) return undefined;
+  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
+  const key = resolvedSymbolKey(symbol);
+  if (key) {
+    if (seen.has(key)) return undefined;
+    seen.add(key);
+  }
+
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isFunctionDeclaration(declaration)) return declaration;
+    if (Node.isVariableDeclaration(declaration)) {
+      const list = declaration.getParent();
+      if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') continue;
+      const initializer = declaration.getInitializer();
+      if (
+        initializer &&
+        (!requireStableCarrier ||
+          !staticInitializerRequiresPinnedCarrier(initializer) ||
+          staticConstCarrierIsStable(declaration))
+      ) {
+        return initializer;
+      }
+      continue;
+    }
+    if (!Node.isBindingElement(declaration)) continue;
+    const pattern = declaration.getFirstAncestorByKind(SyntaxKind.ObjectBindingPattern);
+    const variable = pattern?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+    const list = variable?.getParent();
+    const initializer = variable?.getInitializer();
+    if (
+      !variable ||
+      !Node.isVariableDeclarationList(list) ||
+      list.getDeclarationKind() !== 'const'
+    ) {
+      continue;
+    }
+    if (!initializer) continue;
+    if (
+      requireStableCarrier &&
+      staticInitializerRequiresPinnedCarrier(initializer) &&
+      !staticConstCarrierIsStable(variable)
+    ) {
+      continue;
+    }
+    const property = propertyNameText(
+      declaration.getPropertyNameNode() ?? declaration.getNameNode(),
+    );
+    if (!property) continue;
+    const resolution = staticObjectPropertyResolution(
+      initializer,
+      property,
+      new Set(seen),
+      depth + 1,
+    );
+    if (resolution.kind === 'resolved') return resolution.value;
   }
   return undefined;
+}
+
+function staticInitializerRequiresPinnedCarrier(value: Node, seen = new Set<string>()): boolean {
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isObjectLiteralExpression(node) || Node.isArrayLiteralExpression(node)) return true;
+  if (
+    Node.isCallExpression(node) &&
+    isUnshadowedGlobalObjectMethod(node.getExpression(), 'freeze')
+  ) {
+    return false;
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const key = resolvedSymbolKey(symbol);
+  if (key) {
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (!Node.isVariableDeclaration(declaration)) continue;
+    const initializer = declaration.getInitializer();
+    if (initializer) return staticInitializerRequiresPinnedCarrier(initializer, seen);
+  }
+  return false;
+}
+
+const STATIC_CARRIER_MUTATOR_METHODS = new Set([
+  'add',
+  'clear',
+  'copyWithin',
+  'delete',
+  'fill',
+  'pop',
+  'push',
+  'reverse',
+  'set',
+  'shift',
+  'sort',
+  'splice',
+  'unshift',
+]);
+
+/**
+ * Concurrency facts may be composed through local const aliases only while the referenced carrier
+ * is provably stable. `as const` is a type-only promise and does not freeze runtime bytes: property,
+ * index, destructuring, mutator, Object.assign, export, and unknown-call escapes all make the
+ * annotation unresolved so KV429 fails closed (SPEC §6.6 C9/C15, §10.3).
+ */
+function staticConstCarrierIsStable(
+  declaration: VariableDeclaration,
+  seen = new Set<string>(),
+  depth = 0,
+): boolean {
+  if (depth > 12) return false;
+  const name = declaration.getNameNode();
+  if (!Node.isIdentifier(name)) return false;
+  const symbolKey = resolvedSymbolKey(name.getSymbol());
+  if (!symbolKey) return false;
+  if (seen.has(symbolKey)) return false;
+  const nextSeen = new Set(seen);
+  nextSeen.add(symbolKey);
+  const sourceFile = declaration.getSourceFile();
+  const statement = declaration.getFirstAncestorByKind(SyntaxKind.VariableStatement);
+  if (
+    statement?.getModifiers().some((modifier) => modifier.getKind() === SyntaxKind.ExportKeyword)
+  ) {
+    return false;
+  }
+  for (const specifier of sourceFile.getDescendantsOfKind(SyntaxKind.ExportSpecifier)) {
+    const exportedKey = resolvedSymbolKey(specifier.getLocalTargetSymbol());
+    if (exportedKey === symbolKey) return false;
+  }
+
+  for (const binary of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (!staticCarrierAssignmentOperator(binary.getOperatorToken().getKind())) continue;
+    if (staticCarrierMutationTargetContainsSymbol(binary.getLeft(), symbolKey)) return false;
+  }
+  for (const prefix of sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression)) {
+    const operator = prefix.getOperatorToken();
+    if (
+      (operator === SyntaxKind.PlusPlusToken || operator === SyntaxKind.MinusMinusToken) &&
+      staticCarrierMutationTargetContainsSymbol(prefix.getOperand(), symbolKey)
+    ) {
+      return false;
+    }
+  }
+  for (const postfix of sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression)) {
+    const operator = postfix.getOperatorToken();
+    if (
+      (operator === SyntaxKind.PlusPlusToken || operator === SyntaxKind.MinusMinusToken) &&
+      staticCarrierMutationTargetContainsSymbol(postfix.getOperand(), symbolKey)
+    ) {
+      return false;
+    }
+  }
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = call.getExpression();
+    const receiver = staticAccessExpression(callee);
+    const method = staticAccessName(callee);
+    if (
+      receiver &&
+      method &&
+      STATIC_CARRIER_MUTATOR_METHODS.has(method) &&
+      staticCarrierNodeReferencesSymbol(receiver, symbolKey)
+    ) {
+      return false;
+    }
+    if (
+      isUnshadowedGlobalObjectMethod(callee, 'assign') &&
+      call.getArguments()[0] &&
+      staticCarrierNodeReferencesSymbol(call.getArguments()[0]!, symbolKey)
+    ) {
+      return false;
+    }
+  }
+
+  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    if (!staticCarrierIdentifierMatches(identifier, symbolKey) || identifier === name) continue;
+    const binary = identifier.getFirstAncestorByKind(SyntaxKind.BinaryExpression);
+    if (
+      binary &&
+      staticCarrierAssignmentOperator(binary.getOperatorToken().getKind()) &&
+      binary.getLeft().getStart() <= identifier.getStart() &&
+      identifier.getEnd() <= binary.getLeft().getEnd()
+    ) {
+      continue;
+    }
+    const spread = identifier.getFirstAncestor(
+      (ancestor) => Node.isSpreadAssignment(ancestor) || Node.isSpreadElement(ancestor),
+    );
+    if (spread) continue;
+
+    const call = identifier.getFirstAncestorByKind(SyntaxKind.CallExpression);
+    if (
+      call &&
+      call
+        .getArguments()
+        .some(
+          (argument) =>
+            argument.getStart() <= identifier.getStart() &&
+            identifier.getEnd() <= argument.getEnd(),
+        )
+    ) {
+      if (isKovoAnnotationCall(call)) continue;
+      const callee = call.getExpression();
+      if (isUnshadowedGlobalObjectMethod(callee, 'freeze')) continue;
+      if (
+        isUnshadowedGlobalObjectMethod(callee, 'assign') &&
+        call.getArguments()[0] !== identifier
+      ) {
+        continue;
+      }
+      return false;
+    }
+
+    const variable = identifier.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+    if (variable?.getInitializer() === identifier) {
+      const list = variable.getParent();
+      if (
+        Node.isIdentifier(variable.getNameNode()) &&
+        Node.isVariableDeclarationList(list) &&
+        list.getDeclarationKind() === 'const' &&
+        staticConstCarrierIsStable(variable, nextSeen, depth + 1)
+      ) {
+        continue;
+      }
+      return false;
+    }
+    const property = identifier.getFirstAncestorByKind(SyntaxKind.PropertyAssignment);
+    if (property?.getInitializer() === identifier) {
+      const object = property.getFirstAncestorByKind(SyntaxKind.ObjectLiteralExpression);
+      const container = object?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+      const containerInitializer = container?.getInitializer();
+      if (
+        object &&
+        container &&
+        containerInitializer &&
+        unwrappedStaticExpressionNode(containerInitializer) === object &&
+        staticConstCarrierIsStable(container, nextSeen, depth + 1)
+      ) {
+        continue;
+      }
+      return false;
+    }
+    if (identifier.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) return false;
+    if (
+      identifier.getParent() &&
+      (Node.isPropertyAccessExpression(identifier.getParent()!) ||
+        Node.isElementAccessExpression(identifier.getParent()!))
+    ) {
+      continue;
+    }
+    if (identifier.getParent() && Node.isBindingElement(identifier.getParent()!)) continue;
+    return false;
+  }
+
+  return true;
+}
+
+function staticCarrierIdentifierMatches(identifier: Node, symbolKey: string): boolean {
+  return (
+    Node.isIdentifier(identifier) &&
+    resolvedSymbolKey(symbolForIdentifierReference(identifier) ?? identifier.getSymbol()) ===
+      symbolKey
+  );
+}
+
+function staticCarrierNodeReferencesSymbol(node: Node, symbolKey: string): boolean {
+  if (staticCarrierIdentifierMatches(node, symbolKey)) return true;
+  return node
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some((identifier) => staticCarrierIdentifierMatches(identifier, symbolKey));
+}
+
+function staticCarrierMutationTargetContainsSymbol(node: Node, symbolKey: string): boolean {
+  return staticCarrierNodeReferencesSymbol(node, symbolKey);
+}
+
+function staticCarrierAssignmentOperator(kind: SyntaxKind): boolean {
+  return (
+    kind === SyntaxKind.EqualsToken ||
+    kind === SyntaxKind.PlusEqualsToken ||
+    kind === SyntaxKind.MinusEqualsToken ||
+    kind === SyntaxKind.AsteriskEqualsToken ||
+    kind === SyntaxKind.AsteriskAsteriskEqualsToken ||
+    kind === SyntaxKind.SlashEqualsToken ||
+    kind === SyntaxKind.PercentEqualsToken ||
+    kind === SyntaxKind.LessThanLessThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken ||
+    kind === SyntaxKind.AmpersandEqualsToken ||
+    kind === SyntaxKind.BarEqualsToken ||
+    kind === SyntaxKind.CaretEqualsToken ||
+    kind === SyntaxKind.BarBarEqualsToken ||
+    kind === SyntaxKind.AmpersandAmpersandEqualsToken ||
+    kind === SyntaxKind.QuestionQuestionEqualsToken
+  );
+}
+
+function isUnshadowedGlobalObjectMethod(expression: Node, method: string): boolean {
+  if (staticAccessName(expression) !== method) return false;
+  const receiver = staticAccessExpression(expression);
+  const object = receiver ? unwrappedStaticExpressionNode(receiver) : undefined;
+  if (!object || !Node.isIdentifier(object) || object.getText() !== 'Object') return false;
+  const symbol = symbolForIdentifierReference(object) ?? object.getSymbol();
+  const declarations = symbol?.getDeclarations() ?? [];
+  return declarations.every((declaration) => declaration.getSourceFile().isDeclarationFile());
+}
+
+function unresolvedConcurrencyAnnotationDiagnostics(
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isKovoAnnotationCall(call)) continue;
+    const annotation = call.getArguments()[0];
+    if (!annotation) continue;
+    const unresolved = ['atomic', 'version']
+      .map((name) => ({
+        name,
+        resolution: concurrencyColumnsResolutionFromObject(annotation, name),
+      }))
+      .filter(({ resolution }) => resolution.kind === 'unresolved');
+    if (unresolved.length === 0) continue;
+    const firstResolution = unresolved[0]?.resolution;
+    diagnostics.push(
+      drizzleDiagnostic({
+        code: 'KV429',
+        detail: `The ${unresolved.map(({ name }) => name).join('/')} concurrency annotation is dynamic or statically unresolved. Use const shorthand, statically composed object spreads, and literal column selectors so the lost-update gate cannot be erased.`,
+        node: firstResolution?.kind === 'unresolved' ? firstResolution.node : annotation,
+      }),
+    );
+  }
+  return diagnostics;
 }
 
 function booleanPropertyFromObject(object: Node, name: string): boolean | undefined {

@@ -298,6 +298,9 @@ export async function loaderSmokeBehaviorFact(
   let importCount = 0;
 
   const loader = runtime.installKovoLoader({
+    // SPEC §4.7/§4.8: executable refs are accepted only when the compiler-generated runtime
+    // declares their exact client module URL.
+    allowedClientModuleUrls: ['/c/loader.js'],
     importModule: async () => {
       importCount += 1;
       return handlers;

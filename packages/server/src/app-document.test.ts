@@ -142,9 +142,7 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
         renderPlanFingerprint: fingerprint,
       });
       registry.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
-      const app = createApp({ routes: [homeRoute] });
-      app.clientModules = registry;
-      return app;
+      return createApp({ clientModules: registry, routes: [homeRoute] });
     };
 
     const fp1 = computeRenderPlanFingerprint({ cart: 'field:id,count' });
@@ -1048,6 +1046,73 @@ describe('server app document boundary', () => {
     expect(headerValue(response.headers, 'x-shell')).toBe('kept');
   });
 
+  it('applies the credential cache floor to a matched default 404 carrying a rolling cookie', async () => {
+    const missingRoute = route('/rolling-missing', {
+      page: () => notFound(),
+    });
+    const request = new Request('https://shop.example.test/rolling-missing');
+    const app = createApp({
+      routes: [missingRoute],
+      sessionProvider: () => ({
+        setCookies: ['rolling_sid=victim-token; Path=/; HttpOnly; Secure; SameSite=Lax'],
+        value: { id: 'victim', user: { id: 'victim' } },
+      }),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request,
+      route: missingRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(404);
+    expect(headerValue(response.headers, 'set-cookie')).toContain('rolling_sid=victim-token');
+    expect(headerValue(response.headers, 'cache-control')).toBe('private, no-store');
+    expect(headerValue(response.headers, 'vary')).toBe('Cookie');
+  });
+
+  it('keeps the rolling-cookie cache floor on matched 200, 403, and 500 route outcomes', async () => {
+    const okRoute = route('/rolling-ok', { page: () => trustedHtml('<main>ok</main>') });
+    const forbiddenRoute = route('/rolling-forbidden', {
+      access: [() => ({ kind: 'forbidden' as const })],
+      page: () => trustedHtml('<main>must not render</main>'),
+    });
+    const brokenRoute = route('/rolling-broken', {
+      page() {
+        throw new Error('rolling route failure');
+      },
+    });
+    const app = createApp({
+      routes: [okRoute, forbiddenRoute, brokenRoute],
+      sessionProvider: () => ({
+        setCookies: ['rolling_sid=victim-token; Path=/; HttpOnly; Secure; SameSite=Lax'],
+        value: { id: 'victim', user: { id: 'victim' } },
+      }),
+    });
+
+    for (const [definition, status] of [
+      [okRoute, 200],
+      [forbiddenRoute, 403],
+      [brokenRoute, 500],
+    ] as const) {
+      const request = new Request(`https://shop.example.test${definition.path}`);
+      const response = await renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request,
+        route: definition,
+        url: new URL(request.url),
+      });
+
+      expect(response.status).toBe(status);
+      expect(headerValue(response.headers, 'set-cookie')).toContain('rolling_sid=victim-token');
+      expect(headerValue(response.headers, 'cache-control')).toBe('private, no-store');
+      expect(headerValue(response.headers, 'vary')).toBe('Cookie');
+    }
+  });
+
   it('renders route failures through the configured 500 shell without leaking internals', async () => {
     const routeError = new Error('private route detail');
     const onError = vi.fn();
@@ -1377,7 +1442,7 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
       'better-auth.session_token=tok; Path=/; HttpOnly; SameSite=Lax',
     ]);
     // …and because a per-principal cookie was emitted, the document MUST be non-cacheable.
-    expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(response.headers['Cache-Control']).toBe('private, no-store');
   });
 
   it('an unguarded route with a plain-value session provider (no Set-Cookie) is still no-store', async () => {

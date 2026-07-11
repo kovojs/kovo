@@ -1,5 +1,9 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
-import type { AccessDecision } from './access.js';
+import {
+  executableGuardAccessDecision,
+  snapshotAccessDecision,
+  type AccessDecision,
+} from './access.js';
 import {
   mergeVaryHeader,
   renderErrorDocument,
@@ -770,7 +774,16 @@ export async function runGuardChain<Request>(
   guardChain: readonly Guard<Request>[],
   request: Request,
 ): Promise<ResolvedGuardFailure | null> {
-  for (const item of guardChain) {
+  const executable = executableGuardAccessDecision(guardChain);
+  if (executable === undefined) {
+    return {
+      auth: 'unauthorized',
+      code: 'UNAUTHORIZED',
+      payload: {},
+      status: 422,
+    };
+  }
+  for (const item of executable) {
     const failure = await runGuard(item, request);
     if (failure) return failure;
   }
@@ -790,8 +803,9 @@ export async function runAccessDecisionGuards<Request>(
   fallbackGuard: Guard<Request> | undefined,
   request: Request,
 ): Promise<ResolvedGuardFailure | null> {
-  if (Array.isArray(access)) return runGuardChain(access, request);
-  if (access !== undefined) return null;
+  const decision = snapshotAccessDecision(access);
+  if (Array.isArray(decision)) return runGuardChain(decision, request);
+  if (decision !== undefined) return null;
   return runGuard(fallbackGuard, request);
 }
 

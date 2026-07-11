@@ -11,7 +11,7 @@ import { morphDomElement, sanitizeDomElementTree } from './morph.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 import { kovoCreateHTML } from './trusted-types.js';
-import { assertAllowedKovoDynamicImportRef } from './dynamic-import-url.js';
+import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import { reconcileKeyed } from './keyed-reconciler.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -474,7 +474,7 @@ async function applyStateDeriveBindings(
     const ref = parseDeriveReference(refValue);
     if (!ref) continue;
 
-    assertAllowedKovoDynamicImportRef(ref);
+    assertAllowedKovoDynamicImportRefForModule(ref, importModule);
     const mod = await importModule(ref.url);
     const derive = mod[ref.exportName];
     const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
@@ -489,7 +489,7 @@ async function applyStateDeriveBindings(
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
 
-      assertAllowedKovoDynamicImportRef(ref);
+      assertAllowedKovoDynamicImportRefForModule(ref, importModule);
       const mod = await importModule(ref.url);
       const derive = mod[ref.exportName];
       const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
@@ -507,7 +507,7 @@ async function applyStateDeriveBindings(
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
 
-      assertAllowedKovoDynamicImportRef(ref);
+      assertAllowedKovoDynamicImportRefForModule(ref, importModule);
       const mod = await importModule(ref.url);
       const derive = mod[ref.exportName];
       const value = isRunnableDerive(derive) ? derive.run(state) : undefined;

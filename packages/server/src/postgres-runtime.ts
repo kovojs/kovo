@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { PGlite } from '@electric-sql/pglite';
+import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
@@ -303,7 +304,8 @@ export interface PostgresPostureCheckOptOutFact {
   readonly site?: string;
 }
 
-const postgresPostureCheckOptOutFacts: PostgresPostureCheckOptOutFact[] = [];
+const postgresPostureCheckOptOutFacts =
+  createBoundedRuntimeAuditCollector<PostgresPostureCheckOptOutFact>();
 
 interface CreatedRuntimeClient {
   close(): Promise<void>;
@@ -780,9 +782,9 @@ export async function checkPostgresAppDbPosture(
   }
 }
 
-/** Drain audited Postgres boot-posture-check opt-outs for explain/capability ledgers. */
+/** Drain the newest 256 audited Postgres boot-posture-check opt-outs for diagnostics. */
 export function drainPostgresPostureCheckOptOutFacts(): readonly PostgresPostureCheckOptOutFact[] {
-  return postgresPostureCheckOptOutFacts.splice(0, postgresPostureCheckOptOutFacts.length);
+  return postgresPostureCheckOptOutFacts.drain();
 }
 
 async function initializeRuntimeDb(
@@ -816,7 +818,7 @@ async function initializeRuntimeDb(
       );
     }
   } else if (input.config.postureCheckOptOut !== undefined) {
-    postgresPostureCheckOptOutFacts.push({
+    postgresPostureCheckOptOutFacts.record({
       driver: input.config.driver,
       ...input.config.postureCheckOptOut,
     });

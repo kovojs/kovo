@@ -168,6 +168,12 @@ type RootDocumentShellAttributeValue = import('@kovojs/server').DocumentShellAtt
 if (false) {
   // @ts-expect-error - SPEC.md §9.5 document customization uses structured primitives, not string templates.
   publicApi.createApp({ document: { template: () => '<html></html>' } });
+
+  const closedApp = publicApi.createApp();
+  // @ts-expect-error - SPEC.md §9.5 closes the app aggregate after construction.
+  closedApp.routes = [];
+  // @ts-expect-error - SPEC.md §9.5 closes the app aggregate after construction.
+  closedApp.clientModules = publicApi.createMemoryVersionedClientModuleRegistry();
 }
 // SPEC.md §9.5: the versioned client-module registry constructor and its option
 // surface are public at the root barrel for `createApp({ clientModules })` consumers.
@@ -915,6 +921,7 @@ describe('server app-shell public API barrels', () => {
       'escapeHtml',
       'escapeScriptJson',
       'escapeText',
+      'kovoSafeJsxSpread',
       'safeUrlAttribute',
     ]);
     expect(packageInternalEscapeApi).toEqual(internalEscapeApi);
@@ -1032,6 +1039,8 @@ describe('server app-shell public API barrels', () => {
     expect(() =>
       publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
     ).toThrow('createApp({ document.template }) is not supported');
+    expect(publicApi.isKovoApp({ ...app })).toBe(false);
+    expect(publicApi.isKovoApp(new Proxy(app, {}))).toBe(false);
     expect(publicApi.isKovoApp({ ...app, document: undefined })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, document: { template: '<html></html>' } })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, document: { structured: {} } })).toBe(false);
@@ -1063,7 +1072,7 @@ describe('server app-shell public API barrels', () => {
         mutations: [{ handler: () => ({ ok: true }), key: 'cart/add' }],
       }),
     ).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart' }] })).toBe(true);
+    expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart' }] })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart', reads: [{}] }] })).toBe(false);
     expect(
       publicApi.isKovoApp({ ...app, routes: [{ page: () => trustedHtml('<main>Cart</main>') }] }),

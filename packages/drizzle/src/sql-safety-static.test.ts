@@ -858,4 +858,371 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     `);
     expect(aliasedLiteral).toEqual([]);
   });
+
+  // C13-style member-capability corpus: every spelling below preserves the same callable
+  // `sql.raw`/`sql.identifier` identity and therefore must preserve the same closed KV422 verdict.
+  it.each([
+    ['detached member', 'const dangerous = sql.raw;'],
+    ['ordinary alias chain', 'const first = sql.raw; const dangerous = first;'],
+    ['shorthand destructuring', 'const { raw: dangerous } = sql;'],
+    [
+      'destructuring through an alias',
+      'const helpers = sql; const { raw: first } = helpers; const dangerous = first;',
+    ],
+  ])('flags request-derived SQL through a %s alias', (_label, declaration) => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function loadProducts(input: { sort: string }, db: any) {
+        ${declaration}
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.raw(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('tracks detached identifier helpers while preserving literal allowlists', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function loadProducts(input: { table: string }, db: any) {
+        const { identifier } = sql;
+        const alias = identifier;
+        db.select().from(alias(input.table));
+        db.select().from(alias(input.table, { allow: ["products", "prices"] }));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.identifier(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('keeps detached native Drizzle helpers closed and local lookalikes open', () => {
+    const native = diagnosticsFor(`
+      import { sql as drizzleSql } from 'drizzle-orm';
+      const raw = drizzleSql.raw;
+      const alias = raw;
+      export async function loadProducts(db: any) {
+        return db.select().from(products).orderBy(alias("created_at desc"));
+      }
+    `);
+    expect(native).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('Direct drizzle-orm sql.raw(...) is not accepted'),
+      },
+    ]);
+
+    const local = diagnosticsFor(`
+      const sql = { raw: (value: string) => ({ value }) };
+      const raw = sql.raw;
+      export function format(input: { sort: string }) { return raw(input.sort); }
+    `);
+    expect(local).toEqual([]);
+  });
+
+  it.each([
+    ['ordinary assignment', 'let dangerous: typeof sql.raw; dangerous = sql.raw;'],
+    [
+      'assignment alias chain',
+      'let first: typeof sql.raw; let dangerous: typeof sql.raw; first = sql.raw; dangerous = first;',
+    ],
+    ['destructuring assignment', 'let dangerous: typeof sql.raw; ({ raw: dangerous } = sql);'],
+    [
+      'stable member assignment',
+      'const holder: { dangerous: typeof sql.raw } = { dangerous: sql.raw }; holder.dangerous = sql.raw; const dangerous = holder.dangerous;',
+    ],
+  ])('flags request-derived SQL through %s helper flow', (_label, declaration) => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function loadProducts(input: { sort: string }, db: any) {
+        ${declaration}
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.raw(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('keeps a branch-only dangerous assignment and clears a definite local reassignment', () => {
+    const branch = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { raw: boolean; sort: string }, db: any) {
+        let dangerous = local;
+        if (input.raw) dangerous = sql.raw;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(branch.map(({ code }) => code)).toEqual(['KV422']);
+
+    const overwritten = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        let dangerous = sql.raw;
+        dangerous = local;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(overwritten).toEqual([]);
+  });
+
+  it.each([
+    [
+      'object carrier destructuring',
+      'const holder = { dangerous: sql.raw }; const { dangerous } = holder;',
+    ],
+    [
+      'nested transitive carrier destructuring',
+      'const holder = { nested: { dangerous: sql.raw } }; const alias = holder; const { nested: { dangerous } } = alias;',
+    ],
+    [
+      'static computed property alias',
+      'const holder = { dangerous: sql.raw }; const dangerous = holder["dangerous"];',
+    ],
+    [
+      'object spread carrier',
+      'const base = { dangerous: sql.raw }; const holder = { safe: true, ...base }; const { dangerous } = holder;',
+    ],
+    ['tuple destructuring', 'const tuple = [sql.raw] as const; const [dangerous] = tuple;'],
+    [
+      'nested tuple carrier',
+      'const tuple = [{ nested: sql.raw }] as const; const alias = tuple; const [{ nested: dangerous }] = alias;',
+    ],
+    [
+      'object destructuring assignment',
+      'let dangerous: typeof sql.raw; const holder = { dangerous: sql.raw }; ({ dangerous } = holder);',
+    ],
+    [
+      'array destructuring assignment',
+      'let dangerous: typeof sql.raw; const tuple = [sql.raw] as const; [dangerous] = tuple;',
+    ],
+    [
+      'object-rest carrier declaration',
+      'const holder = { dangerous: sql.raw }; const { ...copy } = holder; const { dangerous } = copy;',
+    ],
+    [
+      'array-rest carrier declaration',
+      'const tuple = [sql.raw] as const; const [...copy] = tuple; const [dangerous] = copy;',
+    ],
+    [
+      'object-rest carrier assignment',
+      'const holder = { dangerous: sql.raw }; let copy: { dangerous: typeof sql.raw }; ({ ...copy } = holder); const { dangerous } = copy;',
+    ],
+    [
+      'array-rest carrier assignment',
+      'const tuple = [sql.raw] as const; let copy: (typeof sql.raw)[] = []; [...copy] = tuple; const [dangerous] = copy;',
+    ],
+    [
+      'offset array-rest carrier assignment',
+      'let ignored: unknown; let copy: (typeof sql.raw)[] = []; [ignored, ...copy] = [null, sql.raw] as const; const [dangerous] = copy;',
+    ],
+    [
+      'nested offset array-rest carrier assignment',
+      'let ignored: unknown; let copy: (typeof sql.raw)[] = []; ({ nested: [ignored, ...copy] } = { nested: [null, sql.raw] as const }); const [dangerous] = copy;',
+    ],
+  ])('flags request-derived SQL through a %s', (_label, declaration) => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export function load(input: { sort: string }, db: any) {
+        ${declaration}
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.raw(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('uses object-spread last-write semantics and keeps unknown overwrites conservative', () => {
+    const safe = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        const holder = { dangerous: sql.raw, ...{ dangerous: local } };
+        const { dangerous } = holder;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(safe).toEqual([]);
+
+    const dangerous = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        const holder = { ...{ dangerous: local }, dangerous: sql.raw };
+        const { dangerous } = holder;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(dangerous.map(({ code }) => code)).toEqual(['KV422']);
+
+    const unresolved = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      declare const maybe: { dangerous?: typeof sql.raw };
+      export function load(input: { sort: string }, db: any) {
+        const holder = { dangerous: sql.raw, ...maybe };
+        const { dangerous } = holder;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(unresolved.map(({ code }) => code)).toEqual(['KV422']);
+  });
+
+  it('keeps carrier reassignment branch-conservative while honoring a definite safe overwrite', () => {
+    const branch = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { raw: boolean; sort: string }, db: any) {
+        let dangerous = local;
+        if (input.raw) ({ dangerous } = { dangerous: sql.raw });
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(branch.map(({ code }) => code)).toEqual(['KV422']);
+
+    const overwritten = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        let dangerous = sql.raw;
+        ({ dangerous } = { dangerous: local });
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(overwritten).toEqual([]);
+
+    const memberBranch = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { raw: boolean; sort: string }, db: any) {
+        const holder = { dangerous: local as typeof sql.raw };
+        if (input.raw) holder.dangerous = sql.raw;
+        const { dangerous } = holder;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(memberBranch.map(({ code }) => code)).toEqual(['KV422']);
+
+    const safeMemberOverwrite = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        const holder = { dangerous: sql.raw };
+        holder.dangerous = local as typeof sql.raw;
+        const { dangerous } = holder;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(safeMemberOverwrite).toEqual([]);
+  });
+
+  it.each([
+    ['ambient identity wrapper', 'declare function carry<T>(value: T): T;', 'carry(sql.raw)'],
+    ['local identity wrapper', 'const carry = <T,>(value: T): T => value;', 'carry(sql.raw)'],
+    ['callback wrapper', 'const carry = <T,>(callback: T): T => callback;', 'carry(sql.raw)'],
+    ['bound helper', '', 'sql.raw.bind(sql)'],
+  ])('flags request-derived SQL through an %s', (_label, declaration, initializer) => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      ${declaration}
+      export function load(input: { sort: string }, db: any) {
+        const dangerous = ${initializer};
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.raw(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('proves an unrelated local wrapper result safe and ignores wrapped local lookalikes', () => {
+    const safe = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      const replace = (_value: unknown) => local;
+      export function load(input: { sort: string }, db: any) {
+        const dangerous = replace(sql.raw);
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(safe).toEqual([]);
+
+    const lookalike = diagnosticsFor(`
+      const sql = { raw: (value: string) => ({ value }) };
+      declare function carry<T>(value: T): T;
+      export function format(input: { sort: string }) {
+        const dangerous = carry(sql.raw);
+        return dangerous(input.sort);
+      }
+    `);
+    expect(lookalike).toEqual([]);
+  });
+
+  it('tracks call-result carriers while preserving a proven safe carrier return', () => {
+    const dangerous = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const carry = <T,>(value: T): T => value;
+      export function load(input: { sort: string }, db: any) {
+        const holder = carry({ dangerous: sql.raw });
+        const { dangerous } = holder;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(dangerous.map(({ code }) => code)).toEqual(['KV422']);
+
+    const safe = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      const replace = (_value: unknown) => ({ dangerous: local });
+      export function load(input: { sort: string }, db: any) {
+        const holder = replace({ dangerous: sql.raw });
+        const { dangerous } = holder;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(safe).toEqual([]);
+  });
+
+  it('maps object-rest exclusions and array-rest offsets without inventing helper provenance', () => {
+    const objectRest = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        const holder = { dangerous: sql.raw, safe: local };
+        const { dangerous: removed, ...copy } = holder;
+        return db.select().from(products).orderBy(copy.safe(input.sort));
+      }
+    `);
+    expect(objectRest).toEqual([]);
+
+    const arrayRest = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      const local = (value: string) => sql\`${'${value}'}\`;
+      export function load(input: { sort: string }, db: any) {
+        const tuple = [local, sql.raw] as const;
+        const [, ...copy] = tuple;
+        const [dangerous] = copy;
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(arrayRest.map(({ code }) => code)).toEqual(['KV422']);
+  });
 });

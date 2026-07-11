@@ -39,8 +39,14 @@ test('login → authed request → logout round-trip clears the session (testing
   // Logout clears the session cookie via the enhanced mutation.
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith('/_m/auth/sign-out') && r.status() < 400),
+    // SPEC §9.3 retires the authenticated page-load principal with a full navigation before the
+    // next request may safely observe anonymous truth.
+    page.waitForEvent('framenavigated', {
+      predicate: (frame) => frame === page.mainFrame(),
+    }),
     page.getByRole('button', { name: 'Sign out' }).click(),
   ]);
+  await page.waitForLoadState('networkidle');
 
   // The next request to the guarded route no longer renders the account.
   await page.goto('/account');

@@ -1,4 +1,15 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -37,6 +48,27 @@ describe('framework filesystem boundary', () => {
     }
   });
 
+  it('streams from the validated open handle when the root name changes after open', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-filesystem-stream-root-'));
+    const parkedRoot = `${root}-parked`;
+    const outside = await mkdtemp(join(tmpdir(), 'kovo-filesystem-stream-outside-'));
+    try {
+      await writeFile(join(root, 'data.txt'), 'inside stream', 'utf8');
+      await writeFile(join(outside, 'data.txt'), 'outside stream', 'utf8');
+      const fileSystem = await createFrameworkFileSystemBoundary(root);
+      const opened = await fileSystem.readFile('data.txt', { body: 'stream' });
+
+      await rename(root, parkedRoot);
+      await symlink(outside, root, 'dir');
+
+      await expect(new Response(opened?.body).text()).resolves.toBe('inside stream');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(parkedRoot, { force: true, recursive: true });
+      await rm(outside, { force: true, recursive: true });
+    }
+  });
+
   it('keeps output writes inside the root and rejects symlink parents', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-filesystem-output-boundary-'));
     const outside = await mkdtemp(join(tmpdir(), 'kovo-filesystem-output-boundary-outside-'));
@@ -50,6 +82,213 @@ describe('framework filesystem boundary', () => {
       await expect(fileSystem.writeFile('linked-outside/secret.txt', 'secret')).rejects.toThrow(
         /symbolic link/u,
       );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('replaces final-component links when copying instead of writing through them', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-copy-target-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    const source = join(base, 'source.txt');
+    try {
+      await mkdir(root);
+      await mkdir(outside);
+      await writeFile(source, 'copied', 'utf8');
+      await writeFile(join(outside, 'symlink-victim.txt'), 'outside symlink', 'utf8');
+      await writeFile(join(outside, 'hardlink-victim.txt'), 'outside hardlink', 'utf8');
+      await symlink(join(outside, 'symlink-victim.txt'), join(root, 'symlink-destination.txt'));
+      await symlink(join(outside, 'created-by-link.txt'), join(root, 'dangling-destination.txt'));
+      await link(join(outside, 'hardlink-victim.txt'), join(root, 'hardlink-destination.txt'));
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+
+      await fileSystem.copyFile(source, 'symlink-destination.txt');
+      await fileSystem.copyFile(source, 'dangling-destination.txt');
+      await fileSystem.copyFile(source, 'hardlink-destination.txt');
+
+      await expect(readFile(join(outside, 'symlink-victim.txt'), 'utf8')).resolves.toBe(
+        'outside symlink',
+      );
+      await expect(lstat(join(outside, 'created-by-link.txt'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      await expect(readFile(join(outside, 'hardlink-victim.txt'), 'utf8')).resolves.toBe(
+        'outside hardlink',
+      );
+      for (const name of [
+        'symlink-destination.txt',
+        'dangling-destination.txt',
+        'hardlink-destination.txt',
+      ]) {
+        await expect(readFile(join(root, name), 'utf8')).resolves.toBe('copied');
+        await expect(lstat(join(root, name))).resolves.toMatchObject({ nlink: 1 });
+      }
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('pins the root identity before every open, write, copy, rename, delete, and tree removal', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-root-identity-'));
+    const root = join(base, 'root');
+    const parkedRoot = join(base, 'root-parked');
+    const outside = join(base, 'outside');
+    const copySource = join(base, 'copy-source.txt');
+    const renameSource = join(base, 'rename-source.txt');
+    try {
+      await mkdir(root);
+      await mkdir(outside);
+      await writeFile(join(root, 'inside.txt'), 'inside', 'utf8');
+      await writeFile(join(outside, 'inside.txt'), 'outside', 'utf8');
+      await writeFile(copySource, 'copy', 'utf8');
+      await writeFile(renameSource, 'rename', 'utf8');
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+
+      await rename(root, parkedRoot);
+      await symlink(outside, root, 'dir');
+
+      expect(() => fileSystem.confinedPath('inside.txt')).toThrow(/root identity changed/u);
+      expect(() => fileSystem.pathForExistingChild('inside.txt')).toThrow(/root identity changed/u);
+      await expect(fileSystem.fileBytes('inside.txt')).rejects.toThrow(/root identity changed/u);
+      await expect(fileSystem.writeFile('written.txt', 'unsafe')).rejects.toThrow(
+        /root identity changed/u,
+      );
+      await expect(fileSystem.copyFile(copySource, 'copied.txt')).rejects.toThrow(
+        /root identity changed/u,
+      );
+      await expect(fileSystem.renameFrom(renameSource, 'renamed.txt')).rejects.toThrow(
+        /root identity changed/u,
+      );
+      await expect(fileSystem.deleteFile('inside.txt')).rejects.toThrow(/root identity changed/u);
+      await expect(fileSystem.removeTree()).rejects.toThrow(/root identity changed/u);
+
+      await expect(readFile(join(outside, 'inside.txt'), 'utf8')).resolves.toBe('outside');
+      await expect(readFile(copySource, 'utf8')).resolves.toBe('copy');
+      await expect(readFile(renameSource, 'utf8')).resolves.toBe('rename');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects ancestor substitution after the root identity is pinned', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-ancestor-identity-'));
+    const ancestor = join(base, 'ancestor');
+    const parkedAncestor = join(base, 'ancestor-parked');
+    const root = join(ancestor, 'root');
+    const outsideAncestor = join(base, 'outside-ancestor');
+    const outsideRoot = join(outsideAncestor, 'root');
+    try {
+      await mkdir(root, { recursive: true });
+      await mkdir(outsideRoot, { recursive: true });
+      await writeFile(join(outsideRoot, 'victim.txt'), 'outside', 'utf8');
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+
+      await rename(ancestor, parkedAncestor);
+      await symlink(outsideAncestor, ancestor, 'dir');
+
+      await expect(fileSystem.deleteFile('victim.txt')).rejects.toThrow(/root identity changed/u);
+      await expect(readFile(join(outsideRoot, 'victim.txt'), 'utf8')).resolves.toBe('outside');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('pins a missing root through safe creation and rejects a planted intermediate symlink', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-missing-root-'));
+    const root = join(base, 'missing', 'nested', 'root');
+    const plantedRoot = join(base, 'planted', 'root');
+    const outside = join(base, 'outside');
+    try {
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+      expect(fileSystem.confinedPath('missing.txt')).toBe(join(fileSystem.root, 'missing.txt'));
+      expect(fileSystem.pathForExistingChild('missing.txt')).toBeUndefined();
+      await expect(fileSystem.deleteFile('missing.txt')).resolves.toBeUndefined();
+      await expect(lstat(root)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      await fileSystem.writeFile('safe.txt', 'safe');
+      expect(fileSystem.pathForExistingChild('safe.txt')).toBe(join(fileSystem.root, 'safe.txt'));
+      await expect(fileSystem.fileBytes('safe.txt')).resolves.toBeInstanceOf(Uint8Array);
+      await expect(readFile(join(root, 'safe.txt'), 'utf8')).resolves.toBe('safe');
+
+      await mkdir(outside);
+      const planted = createFrameworkOutputFileSystemBoundary(plantedRoot);
+      await symlink(outside, join(base, 'planted'), 'dir');
+      await expect(planted.writeFile('escape.txt', 'escape')).rejects.toThrow(/symbolic link/u);
+      await expect(lstat(join(outside, 'escape.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects replacement of the pinned ancestor for an initially missing root', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-missing-anchor-'));
+    const anchor = join(base, 'anchor');
+    const parkedAnchor = join(base, 'anchor-parked');
+    const outsideAnchor = join(base, 'outside-anchor');
+    const root = join(anchor, 'missing-root');
+    try {
+      await mkdir(anchor);
+      await mkdir(outsideAnchor);
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+
+      await rename(anchor, parkedAnchor);
+      await symlink(outsideAnchor, anchor, 'dir');
+
+      await expect(fileSystem.writeFile('escape.txt', 'escape')).rejects.toThrow(
+        /root identity changed/u,
+      );
+      await expect(lstat(join(outsideAnchor, 'escape.txt'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('allows a pinned canonical ancestor symlink but rejects a final root symlink', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-canonical-anchor-'));
+    const canonicalParent = join(base, 'canonical-parent');
+    const lexicalAnchor = join(base, 'lexical-anchor');
+    const root = join(lexicalAnchor, 'missing-root');
+    const finalRootLink = join(base, 'final-root-link');
+    try {
+      await mkdir(canonicalParent);
+      await symlink(canonicalParent, lexicalAnchor, 'dir');
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+      expect(fileSystem.root).toBe(join(await realpath(canonicalParent), 'missing-root'));
+      await fileSystem.writeFile('safe.txt', 'safe');
+      await expect(
+        readFile(join(canonicalParent, 'missing-root', 'safe.txt'), 'utf8'),
+      ).resolves.toBe('safe');
+
+      await symlink(join(canonicalParent, 'missing-root'), finalRootLink, 'dir');
+      const finalRoot = createFrameworkOutputFileSystemBoundary(finalRootLink);
+      await expect(finalRoot.ensureDirectory()).rejects.toThrow(/non-symbolic-link directory/u);
+      await expect(createFrameworkFileSystemBoundary(finalRootLink)).rejects.toThrow(
+        /non-symbolic-link directory/u,
+      );
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('preserves normal, missing, and final-component symlink deletion semantics', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-filesystem-delete-controls-'));
+    const outside = await mkdtemp(join(tmpdir(), 'kovo-filesystem-delete-controls-outside-'));
+    try {
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+      await expect(fileSystem.deleteFile('missing.txt')).resolves.toBeUndefined();
+      await fileSystem.writeFile('normal.txt', 'normal');
+      await fileSystem.deleteFile('normal.txt');
+      await expect(lstat(join(root, 'normal.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+
+      await writeFile(join(outside, 'victim.txt'), 'outside', 'utf8');
+      await symlink(join(outside, 'victim.txt'), join(root, 'final-link.txt'));
+      await fileSystem.deleteFile('final-link.txt');
+      await expect(readFile(join(outside, 'victim.txt'), 'utf8')).resolves.toBe('outside');
+      await expect(lstat(join(root, 'final-link.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       await rm(root, { force: true, recursive: true });
       await rm(outside, { force: true, recursive: true });

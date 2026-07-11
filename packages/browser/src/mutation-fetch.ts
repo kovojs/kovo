@@ -55,6 +55,8 @@ export interface FetchEnhancedMutationOptions {
   formData: unknown;
   idem?: string;
   onError?: RuntimeErrorReporter;
+  /** @internal Retire the page-load principal as soon as the response header announces a change. */
+  onSessionTransition?: () => void;
   onUploadProgress?: (progress: UploadProgress) => void;
   root: TargetCollectorRoot;
   signal?: AbortSignal;
@@ -68,6 +70,8 @@ export interface FetchedEnhancedMutation {
   changes: MutationChangeRecord[];
   idem: string;
   response: EnhancedMutationResponseLike;
+  /** SPEC §9.3: retire this page/channel before applying response truth. */
+  sessionTransition?: true;
   streamBody?: ReadableStream<Uint8Array> | undefined;
   targets: string[];
 }
@@ -100,6 +104,22 @@ export async function fetchEnhancedMutation(
     method: (options.form.method ?? 'post').toUpperCase(),
     ...definedProps({ onUploadProgress: options.onUploadProgress, signal: options.signal }),
   });
+  const sessionTransition = readSessionTransition(response);
+  // SPEC §9.3 (bugz-25 M6): response headers are observable before the body settles. A slow
+  // custom auth response must not leave the old-principal BroadcastChannel alive while text or a
+  // stream is consumed, because an incoming old-principal envelope would still apply in that
+  // window. Retire synchronously at header observation and discard all response truth.
+  if (sessionTransition) {
+    options.onSessionTransition?.();
+    return {
+      body: '',
+      changes: [],
+      idem,
+      response,
+      sessionTransition: true,
+      targets: targetSnapshot.targets,
+    };
+  }
   const reauth = response.headers?.get('Kovo-Reauth') ?? response.headers?.get('kovo-reauth');
   if (response.status === 401 && reauth) {
     followReauthDirective(reauth);
@@ -153,6 +173,13 @@ export async function fetchEnhancedMutation(
     ...(options.streaming && response.body ? { streamBody: response.body } : {}),
     targets: targetSnapshot.targets,
   };
+}
+
+function readSessionTransition(response: EnhancedMutationResponseLike): boolean {
+  const value =
+    response.headers?.get('Kovo-Session-Transition') ??
+    response.headers?.get('kovo-session-transition');
+  return value?.trim().toLowerCase() === 'reload';
 }
 
 function followReauthDirective(location: string): void {

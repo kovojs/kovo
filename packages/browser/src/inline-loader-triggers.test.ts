@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { inlineSourceInstallCases, InlineTriggerElement } from './inline-loader-test-utils.js';
+import {
+  inlineModuleAllowlistQuery,
+  inlineSourceInstallCases,
+  InlineTriggerElement,
+} from './inline-loader-test-utils.js';
 
 describe('inline loader execution triggers', () => {
   it.each(inlineSourceInstallCases)(
@@ -44,10 +48,16 @@ describe('inline loader execution triggers', () => {
         };
         globalRecord.document = {
           querySelectorAll(selector: string) {
-            if (selector === '[on\\:load]') return [loadElement];
-            if (selector === '[on\\:idle]') return [idleElement];
-            if (selector === '[on\\:visible]') return [visibleElement];
-            return [];
+            return inlineModuleAllowlistQuery(
+              selector,
+              ['/c/load.js', '/c/idle.js', '/c/chart.js'],
+              () => {
+                if (selector === '[on\\:load]') return [loadElement];
+                if (selector === '[on\\:idle]') return [idleElement];
+                if (selector === '[on\\:visible]') return [visibleElement];
+                return [];
+              },
+            );
           },
         };
         globalRecord.requestIdleCallback = (callback: () => void) => {

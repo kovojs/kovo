@@ -178,7 +178,7 @@ describe('compiled interactive gallery demos', () => {
       ]) {
         expect(html).toMatch(
           new RegExp(
-            `<link rel="modulepreload" href="${escapeRegExp(href)}"(?: integrity="[^"]+")?>`,
+            `<link rel="modulepreload" href="${escapeRegExp(href)}" data-kovo-module-allowlist(?: integrity="[^"]+")?>`,
           ),
         );
         const modulePath = href.replace(/^\//, '');

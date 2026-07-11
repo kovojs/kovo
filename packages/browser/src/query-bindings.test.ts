@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import {
   setRuntimeSinkSecurityEventHandler,
@@ -17,7 +17,18 @@ import {
   FakeQueryPlanElement,
   FakeStatefulBindingElement,
   FakeTemplateStampHost,
+  installTestClientModuleManifest,
 } from './runtime-test-fakes.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest([
+  '/c/accordion.client.js',
+  '/c/checkbox.client.js',
+  '/c/disclosure.client.js',
+  '/c/number-field.client.js',
+  '/c/progress.client.js',
+  '/c/switch.client.js',
+]);
+afterAll(restoreClientModuleManifest);
 
 describe('query binding helpers', () => {
   it('applies DOM-shaped data-bind text and attribute updates', () => {

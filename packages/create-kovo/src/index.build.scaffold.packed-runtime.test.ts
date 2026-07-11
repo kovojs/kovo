@@ -46,10 +46,20 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
         },
       });
       const output = collectOutput(server);
-      const login = await fetchTextWhenReady(`http://127.0.0.1:${port}/login`, output);
+      const origin = `http://127.0.0.1:${port}`;
+      const login = await fetchTextWhenReady(`${origin}/login`, output);
+      const stylesheetHref = /\/assets\/styles\.css/.exec(login)?.[0] ?? '';
 
       expect(login).toContain('Sign in');
       expect(login).toContain('--kovo-theme');
+      expect(stylesheetHref).toBe('/assets/styles.css');
+
+      // The packed CLI must derive the closed aggregate to attach build CSS without crossing a
+      // second @kovojs/server module identity. Fetching the emitted asset keeps this regression
+      // test on that derivation path instead of merely proving that the server process boots.
+      const stylesheet = await fetch(`${origin}${stylesheetHref}`);
+      expect(stylesheet.status).toBe(200);
+      expect(await stylesheet.text()).toContain('--kovo-theme');
     } finally {
       await stopProcess(server);
       app.cleanup();

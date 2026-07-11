@@ -1,8 +1,26 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import * as runtime from './client.js';
 import { dispatchDelegatedEvent } from './handlers.js';
-import { FakeElement, FakeStatefulBindingElement } from './runtime-test-fakes.js';
+import {
+  FakeElement,
+  FakeStatefulBindingElement,
+  installTestClientModuleManifest,
+} from './runtime-test-fakes.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest([
+  '/c/a.js',
+  '/c/b.js',
+  '/c/cart-badge.client.js',
+  '/c/cart.client.js',
+  '/c/cart.client.js?v=1',
+  '/c/cart.client.js?v=2',
+  '/c/counter.client.js',
+  '/c/fail.client.js',
+  '/c/menu.js',
+  '/c/pass.client.js',
+]);
+afterAll(restoreClientModuleManifest);
 
 describe('delegated handler reference dispatch', () => {
   it('imports and invokes a url#export handler only when a matching event arrives', async () => {

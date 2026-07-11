@@ -185,6 +185,54 @@ export interface BetterAuthApiUsage {
   file: string;
 }
 
+export type BetterAuthRequestExportCapability =
+  | 'app-owned-declaration'
+  | 'credential-mutation'
+  | 'fixed-seed-operation'
+  | 'privileged-adapter'
+  | 'raw-auth-instance'
+  | 'sanitized-session-provider'
+  | 'unclassified';
+
+/** One actual runtime export from generated app-authored `src/auth.ts`. */
+export interface BetterAuthRequestReachableExport {
+  capability: BetterAuthRequestExportCapability;
+  name: string;
+}
+
+const permittedBetterAuthRequestExportCapabilities = new Set<BetterAuthRequestExportCapability>([
+  'app-owned-declaration',
+  'credential-mutation',
+  'fixed-seed-operation',
+  'sanitized-session-provider',
+]);
+
+/**
+ * SPEC §6.6/§10.3: prove confinement over the complete request-reachable export set, not a proxy
+ * file name. The caller supplies every real runtime export discovered from generated `auth.ts`;
+ * any unclassified export, raw Better Auth instance, or privileged adapter capability fails red.
+ */
+export function proveBetterAuthRequestExportConfinement(
+  exports: readonly BetterAuthRequestReachableExport[],
+): string[] {
+  const issues: string[] = [];
+  const names = new Set<string>();
+
+  for (const exported of exports) {
+    if (names.has(exported.name)) {
+      issues.push(`KV439: duplicate request-reachable Better Auth export ${exported.name}`);
+    }
+    names.add(exported.name);
+    if (!permittedBetterAuthRequestExportCapabilities.has(exported.capability)) {
+      issues.push(
+        `KV439: request-reachable Better Auth export ${exported.name} exposes ${exported.capability}`,
+      );
+    }
+  }
+
+  return issues;
+}
+
 const betterAuthPlaintextReadingApiMethodSet = new Set(betterAuthPlaintextReadingApiMethods);
 const betterAuthNonPlaintextApiMethodSet = new Set(betterAuthNonPlaintextApiMethods);
 

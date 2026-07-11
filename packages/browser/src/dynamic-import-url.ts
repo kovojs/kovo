@@ -7,6 +7,8 @@ export interface DynamicImportUrlOptions {
 
 export type DynamicImportModule<T = Record<string, unknown>> = (url: string) => Promise<T>;
 
+const guardedDynamicImportModules = new WeakSet<object>();
+
 /** @internal Runtime allowlist for compiler-emitted client-module import refs (SPEC §5.2.1). */
 export function assertAllowedKovoDynamicImportUrl(
   url: string,
@@ -32,10 +34,28 @@ export function guardKovoDynamicImportModule<T = Record<string, unknown>>(
   importModule: DynamicImportModule<T>,
   options: DynamicImportUrlOptions = {},
 ): DynamicImportModule<T> {
-  return (url) => {
+  const guarded = (url: string) => {
     assertAllowedKovoDynamicImportUrl(url, options);
     return importModule(url);
   };
+  guardedDynamicImportModules.add(guarded);
+  return guarded;
+}
+
+/** @internal Avoid a weaker second default-manifest check after an explicit guarded importer. */
+export function assertAllowedKovoDynamicImportRefForModule(
+  ref: KovoModuleRef,
+  importModule: DynamicImportModule,
+): void {
+  if (!guardedDynamicImportModules.has(importModule)) assertAllowedKovoDynamicImportRef(ref);
+}
+
+/** @internal Avoid a weaker second default-manifest check after an explicit guarded importer. */
+export function assertAllowedKovoDynamicImportUrlForModule(
+  url: string,
+  importModule: DynamicImportModule,
+): void {
+  if (!guardedDynamicImportModules.has(importModule)) assertAllowedKovoDynamicImportUrl(url);
 }
 
 /** @internal True when a parsed handler/derive ref points at an allowed client module. */
@@ -58,7 +78,10 @@ export function isAllowedKovoDynamicImportUrl(
   if (!parsed.pathname.startsWith('/c/')) return false;
 
   const manifest = allowedClientModuleUrlManifest(options.allowedModuleUrls);
-  if (manifest.size === 0) return true;
+  // SPEC §4.7/§4.8/§6.6: a missing/empty compiler-owned registry is deny, never a
+  // wildcard for every same-origin /c/ module. Local Vite source modules retain their explicit
+  // development-only branch above.
+  if (manifest.size === 0) return false;
 
   return manifest.has(canonicalImportUrl(parsed));
 }
@@ -109,15 +132,15 @@ function allowedClientModuleUrlManifest(explicit?: readonly string[]): ReadonlyS
 
 function documentModulepreloadClientModules(): readonly string[] | undefined {
   if (typeof document === 'undefined') return undefined;
-  const links = document.querySelectorAll?.(
-    'link[data-kovo-module-allowlist][rel~="modulepreload"][href]',
-  );
-  if (!links || typeof links[Symbol.iterator] !== 'function') return undefined;
+  const markers = document.querySelectorAll?.('[data-kovo-module-allowlist]');
+  if (!markers || typeof markers[Symbol.iterator] !== 'function') return undefined;
 
   const hrefs: string[] = [];
-  for (const link of links as Iterable<{ getAttribute?: (name: string) => string | null }>) {
-    const href = link.getAttribute?.('href');
-    if (href) hrefs.push(href);
+  for (const marker of markers as Iterable<{ getAttribute?: (name: string) => string | null }>) {
+    const declared = marker.getAttribute?.('data-kovo-module-allowlist');
+    if (declared) hrefs.push(...declared.split(/\s+/).filter(Boolean));
+    const href = marker.getAttribute?.('href');
+    if (!declared && href) hrefs.push(href);
   }
   return hrefs;
 }

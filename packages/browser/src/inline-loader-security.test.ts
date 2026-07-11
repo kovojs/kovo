@@ -58,6 +58,7 @@ describe('inline loader output security', () => {
               setPresence() {},
             }),
             installSource,
+            ['/c/client.js'],
           );
 
           expect(element.getAttribute(name)).toBe(value === true ? '' : null);
@@ -101,8 +102,10 @@ describe('inline loader output security', () => {
         modulepreloadHrefs: ['/c/eager.js'],
         origin: 'https://kovo.test',
       });
-      expect(plainModulepreload.error).toBeUndefined();
-      expect(plainModulepreload.importCalls).toEqual(['/c/lazy.js']);
+      expect(plainModulepreload.error).toEqual(
+        new Error('Disallowed Kovo dynamic import URL: /c/lazy.js'),
+      );
+      expect(plainModulepreload.importCalls).toEqual([]);
 
       const manifestAllowed = await dispatchInlineGuardPath({
         href: '/c/allowed.js?v=1#noop',
@@ -150,6 +153,7 @@ describe('inline loader output security', () => {
           },
         }),
         installSource,
+        ['/c/client.js'],
       );
 
       expect(element.getAttribute('action')).toBe('#');
@@ -184,6 +188,7 @@ describe('inline loader output security', () => {
           },
         }),
         installSource,
+        ['/c/client.js'],
       );
 
       // A relative URL with a colon in a path segment must NOT be neutralized.
@@ -206,6 +211,7 @@ describe('inline loader output security', () => {
           },
         }),
         installSource,
+        ['/c/client.js'],
       );
 
       // javascript: is a real scheme (matches /^[a-z][a-z0-9+.-]*:/) and not in the allowlist.
@@ -229,6 +235,7 @@ describe('inline loader output security', () => {
           noop() {},
         }),
         installSource,
+        ['/c/client.js'],
       );
 
       expect(element.getAttribute('innerHTML')).toBeNull();
@@ -266,14 +273,14 @@ async function dispatchInlineGuardPath(options: {
     globalRecord.document = {
       querySelectorAll(selector: string) {
         const hrefs =
-          selector === 'link[data-kovo-module-allowlist][rel~="modulepreload"][href]'
+          selector === '[data-kovo-module-allowlist]'
             ? (options.allowlistHrefs ?? [])
             : selector === 'link[rel~="modulepreload"][href]'
               ? (options.modulepreloadHrefs ?? [])
               : [];
         return hrefs.map((href) => ({
           getAttribute(name: string) {
-            return name === 'href' ? href : null;
+            return name === 'data-kovo-module-allowlist' ? href : null;
           },
         }));
       },

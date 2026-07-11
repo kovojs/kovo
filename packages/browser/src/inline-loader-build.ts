@@ -202,18 +202,17 @@ function installInlineKovoLoader(im) {
         return true;
       }
       if (!pn.startsWith('/c/')) return false;
-      let f = false;
       const k = p.origin + pn + p.search;
-      for (const a of qa(doc, 'link[data-kovo-module-allowlist][rel~="modulepreload"][href]')) {
-        try {
-          const u = new URL(a.getAttribute?.('href') || '', l.href);
-          if (u.origin === l.origin && u.pathname.startsWith('/c/')) {
-            f = true;
-            if (u.origin + u.pathname + u.search === k) return true;
-          }
-        } catch {}
+      for (const a of qa(doc, '[data-kovo-module-allowlist]')) {
+        const declared = a.getAttribute?.('data-kovo-module-allowlist') || a.getAttribute?.('href') || '';
+        for (const href of declared.split(/\s+/).filter(Boolean)) {
+          try {
+            const u = new URL(href, l.href);
+            if (u.origin === l.origin && u.pathname.startsWith('/c/') && u.origin + u.pathname + u.search === k) return true;
+          } catch {}
+        }
       }
-      return !f;
+      return false;
     } catch {
       return false;
     }
@@ -812,6 +811,17 @@ function installInlineKovoLoader(im) {
       type: 'kovo:mutation-response',
     });
   };
+  const rst = (response) =>
+    (response.headers?.get('Kovo-Session-Transition') ??
+      response.headers?.get('kovo-session-transition') ?? '').trim().toLowerCase() === 'reload';
+  const retireSession = () => {
+    if (bc) {
+      bc.onmessage = null;
+      bc.close?.();
+      bc = undefined;
+    }
+    location.reload?.();
+  };
   const badp = (value) => {
     for (let index = 0; index < value.length; index += 1) {
       const code = value.charCodeAt(index);
@@ -883,6 +893,12 @@ function installInlineKovoLoader(im) {
             : '';
         if (redirect) {
           ng(redirect);
+          return;
+        }
+        // SPEC §9.3: retire the page-load principal before any fragment/query truth is
+        // consumed or rebroadcast after an in-place session transition.
+        if (rst(response)) {
+          retireSession();
           return;
         }
         return streaming && response.body

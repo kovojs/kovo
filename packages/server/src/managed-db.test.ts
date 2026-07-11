@@ -5,6 +5,9 @@ import { PGlite } from '@electric-sql/pglite';
 import { describe, expect, it } from 'vitest';
 import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
+import { StringChunk, and, asc, count, eq, sql as drizzleSql } from 'drizzle-orm';
+import { integer, pgTable, text } from 'drizzle-orm/pg-core';
 import {
   KovoReadonlyHandleError,
   createAuthorizationCensusDb,
@@ -846,6 +849,42 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['query']);
   });
 
+  it('bounds normal public rawRead observations to the newest 256 facts', async () => {
+    drainPublicReadAuditFacts();
+    const reader = readonlyDb(
+      {
+        query(statement: unknown) {
+          return Promise.resolve([statement]);
+        },
+      },
+      {
+        rawRead: {
+          dialectLabel: 'Postgres',
+          executeMethod: 'query',
+          normalizeTableName: (table) => table,
+          ownerTables: ['orders'],
+        },
+      },
+    );
+    const statement = stampTrustedSql(
+      { sql: 'select id from orders where published = true', values: [] },
+      'bounded public rawRead',
+    );
+
+    for (let index = 0; index < 10_000; index += 1) {
+      await reader.rawRead(statement, {
+        declarePublicRead: declarePublicRead({ reason: `bounded public read ${index}` }),
+        reads: ['orders'],
+      });
+    }
+
+    const facts = drainPublicReadAuditFacts();
+    expect(facts).toHaveLength(256);
+    expect(facts[0]).toMatchObject({ reason: 'bounded public read 9744' });
+    expect(facts.at(-1)).toMatchObject({ reason: 'bounded public read 9999' });
+    expect(drainPublicReadAuditFacts()).toEqual([]);
+  });
+
   it('rawRead reconstructs a plain carrier and never forwards submit-bearing app values', async () => {
     const observed: unknown[] = [];
     const reader = readonlyDb(
@@ -1043,6 +1082,270 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('rejects untrusted sql.raw fragments across managed Drizzle builder fast paths', () => {
+    const log: string[] = [];
+    const builder = {
+      from(table: unknown) {
+        log.push(`from:${String(table)}`);
+        return this;
+      },
+      orderBy(value: unknown) {
+        const resolved = typeof value === 'function' ? value({}) : value;
+        log.push(`orderBy:${String(resolved)}`);
+        return [];
+      },
+      where(value: unknown) {
+        log.push(`where:${String(value)}`);
+        return this;
+      },
+    };
+    const raw = {
+      select(projection?: unknown) {
+        log.push(`select:${projection === undefined ? 'all' : 'projection'}`);
+        return builder;
+      },
+    };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+
+    expect(() => handle.select({ unsafe: sql.raw('count(*)') })).toThrow(/KV422[\s\S]*sql\.raw/);
+    expect(() => handle.select().from('products').where(sql.raw('1 = 1'))).toThrow(
+      /KV422[\s\S]*sql\.raw/,
+    );
+    expect(() =>
+      handle
+        .select()
+        .from('products')
+        .orderBy(() => sql.raw('created_at desc')),
+    ).toThrow(/KV422[\s\S]*sql\.raw/);
+    expect(log).not.toEqual(expect.arrayContaining([expect.stringContaining('orderBy:')]));
+  });
+
+  it('rejects unbranded native Drizzle raw/identifier carriers after detached assignment', () => {
+    const accepted: unknown[] = [];
+    const builder = {
+      from(_table: unknown) {
+        return this;
+      },
+      orderBy(value: unknown) {
+        accepted.push(value);
+        return [];
+      },
+    };
+    const raw = { select: () => builder };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+    let dangerous: typeof drizzleSql.raw;
+    dangerous = drizzleSql.raw;
+
+    expect(() =>
+      handle.select().from('products').orderBy(dangerous('created_at desc; select pg_sleep(10)--')),
+    ).toThrow(/KV422/);
+    expect(() => handle.select().from(drizzleSql.identifier('attacker_table'))).toThrow(/KV422/);
+    expect(accepted).toEqual([]);
+  });
+
+  it('rejects Kovo raw fragments after carrier destructuring and identity wrappers', () => {
+    const accepted: unknown[] = [];
+    const builder = {
+      from(_table: unknown) {
+        return this;
+      },
+      orderBy(value: unknown) {
+        accepted.push(value);
+        return [];
+      },
+    };
+    const raw = { select: () => builder };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+    const holder = { dangerous: sql.raw };
+    const { dangerous: destructured } = holder;
+    const identity = <T>(value: T): T => value;
+    const wrapped = identity(sql.raw);
+
+    expect(() =>
+      handle.select().from('products').orderBy(destructured('created_at desc; select 1--')),
+    ).toThrow(/KV422/);
+    expect(() =>
+      handle.select().from('products').orderBy(wrapped('created_at desc; select 1--')),
+    ).toThrow(/KV422/);
+    expect(accepted).toEqual([]);
+  });
+
+  it('keeps typed native Drizzle predicates/orderings green while closing raw wrappers', () => {
+    const products = pgTable('products', {
+      id: text('id').primaryKey(),
+      stock: integer('stock').notNull(),
+    });
+    const accepted: unknown[] = [];
+    const builder = {
+      from(value: unknown) {
+        accepted.push(value);
+        return this;
+      },
+      orderBy(value: unknown) {
+        accepted.push(value);
+        return this;
+      },
+      where(value: unknown) {
+        accepted.push(value);
+        return this;
+      },
+    };
+    const raw = { select: (_projection?: unknown) => builder };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+
+    expect(() =>
+      handle
+        .select()
+        .from(products)
+        .where(and(eq(products.id, 'p1'), eq(products.stock, 1)))
+        .orderBy(asc(products.id)),
+    ).not.toThrow();
+    expect(accepted).toHaveLength(3);
+
+    const dangerous = drizzleSql.raw('select pg_sleep(10)--');
+    expect(() =>
+      handle
+        .select()
+        .from(products)
+        .orderBy(new StringChunk(['raw desc'])),
+    ).toThrow(/KV422/);
+    expect(() => handle.select(dangerous.as('leak'))).toThrow(/KV422/);
+    expect(() => handle.select().from(products).where(dangerous.mapWith(Number))).toThrow(/KV422/);
+    expect(() =>
+      handle
+        .select()
+        .from(products)
+        .where(drizzleSql`${products.id} = ${dangerous}`),
+    ).toThrow(/KV422/);
+    expect(() =>
+      handle
+        .select()
+        .from(products)
+        .where(sql`${products.id} = ${dangerous}`),
+    ).toThrow(/KV422/);
+    const wrapper = { getSQL: () => dangerous };
+    expect(() =>
+      handle
+        .select()
+        .from(products)
+        .where(drizzleSql`${products.id} = ${wrapper}`),
+    ).toThrow(/KV422/);
+    expect(() =>
+      handle
+        .select()
+        .from(products)
+        .orderBy(drizzleSql.join([products.id, dangerous], drizzleSql`, `)),
+    ).toThrow(/KV422/);
+  });
+
+  it('accepts Drizzle count-star while keeping native raw near-matches closed', () => {
+    const products = pgTable('products', {
+      id: text('id').primaryKey(),
+    });
+    const accepted: unknown[] = [];
+    const builder = {
+      from(value: unknown) {
+        accepted.push(value);
+        return [];
+      },
+    };
+    const raw = {
+      select(projection?: unknown) {
+        accepted.push(projection);
+        return builder;
+      },
+    };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+
+    expect(() => handle.select({ value: count() }).from(products)).not.toThrow();
+    expect(() => handle.select({ value: count(products.id) }).from(products)).not.toThrow();
+    expect(() => handle.select({ value: count().as('total') }).from(products)).not.toThrow();
+
+    const countControl = count();
+    const injected = drizzleSql.raw('*); select pg_sleep(10)--');
+    let executablePropertyReads = 0;
+    const forgedCount = new Proxy(countControl, {
+      get(target, property, receiver) {
+        if (property === 'queryChunks') {
+          executablePropertyReads += 1;
+          return injected.queryChunks;
+        }
+        if (property === 'getSQL' || property === 'toQuery') {
+          executablePropertyReads += 1;
+          return Reflect.get(injected, property, injected);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    expect(() => handle.select({ value: forgedCount }).from(products)).not.toThrow();
+    const reconstructedProjection = accepted[6] as { value: unknown };
+    expect(executablePropertyReads).toBe(0);
+    expect(reconstructedProjection.value === forgedCount).toBe(false);
+    expect(Object.isFrozen(reconstructedProjection.value)).toBe(true);
+
+    expect(() => handle.select({ value: drizzleSql.raw('count(*)') })).toThrow(/KV422/);
+    expect(() => handle.select({ value: drizzleSql`count(*)` })).toThrow(/KV422/);
+    expect(() =>
+      handle.select({
+        value: drizzleSql`count(${drizzleSql.raw('*); select pg_sleep(10)--')})`,
+      }),
+    ).toThrow(/KV422/);
+    expect(accepted).toHaveLength(8);
+  });
+
+  it('keeps static/allowlisted builders green and requires trustedSql for raw builder chunks', () => {
+    const accepted: unknown[] = [];
+    const builder = {
+      from(_table: unknown) {
+        return this;
+      },
+      orderBy(value: unknown) {
+        accepted.push(value);
+        return [];
+      },
+    };
+    const raw = { select: () => builder };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(staticSql`created_at desc`),
+    ).toEqual([]);
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(sql`${sql.identifier('created_at', { allow: ['created_at'] })} desc`),
+    ).toEqual([]);
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(sql.identifier('created_at', { allow: ['created_at'] })),
+    ).toEqual([]);
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(
+          sql.join([sql.identifier('created_at', { allow: ['created_at'] })], staticSql`, `),
+        ),
+    ).toEqual([]);
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(
+          trustedSql(sql.raw('created_at desc'), {
+            justification: 'reviewed fixed report ordering',
+          }),
+        ),
+    ).toEqual([]);
+    expect(accepted).toHaveLength(5);
+  });
+
   it('denies schema tables with no DEC-K classification at the managed builder boundary', () => {
     const log: string[] = [];
     const raw = {

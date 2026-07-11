@@ -8,6 +8,7 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
+  dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin,
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
@@ -37,7 +38,7 @@ describe('server app shell Vite plugin', () => {
           middlewares.push(handler);
         },
       },
-      async ssrLoadModule(id) {
+      ssrLoadModule: viteDevSsrLoadModule(async (id) => {
         loadedModuleIds.push(id);
         return {
           shopApp: app,
@@ -46,7 +47,7 @@ describe('server app shell Vite plugin', () => {
             response.end('handled by generated app shell');
           },
         };
-      },
+      }),
     });
 
     expect(plugin.name).toBe('kovo-shop-app-shell-dev');
@@ -160,7 +161,7 @@ describe('server app shell Vite plugin', () => {
           middlewares.push(handler);
         },
       },
-      async ssrLoadModule(id) {
+      ssrLoadModule: viteDevSsrLoadModule(async (id) => {
         moduleLoads += 1;
         expect(id).toBe('/src/app-shell.ts');
         return {
@@ -170,7 +171,7 @@ describe('server app shell Vite plugin', () => {
           },
           default: app,
         };
-      },
+      }),
     });
 
     const server = createServer((request, response) => {
@@ -219,8 +220,7 @@ describe('server app shell Vite plugin', () => {
         return renderedHtml(`<main>${params.id}</main>`);
       },
     });
-    const app = createApp({ routes: [productRoute] });
-    app.clientModules = registry;
+    const app = createApp({ clientModules: registry, routes: [productRoute] });
     const plugin = kovoAppShellViteDevPlugin();
     const middlewares: KovoAppShellViteMiddleware[] = [];
     let moduleLoads = 0;
@@ -231,11 +231,11 @@ describe('server app shell Vite plugin', () => {
           middlewares.push(handler);
         },
       },
-      async ssrLoadModule(id) {
+      ssrLoadModule: viteDevSsrLoadModule(async (id) => {
         moduleLoads += 1;
         expect(id).toBe('/src/app-shell.ts');
         return { default: app };
-      },
+      }),
     });
 
     const server = createServer((request, response) => {
@@ -294,9 +294,9 @@ describe('server app shell Vite plugin', () => {
           middlewares.push(handler);
         },
       },
-      async ssrLoadModule() {
+      ssrLoadModule: viteDevSsrLoadModule(async () => {
         return { default: app };
-      },
+      }),
     });
 
     const server = createServer((request, response) => {
@@ -394,3 +394,12 @@ describe('server app shell Vite plugin', () => {
     }
   });
 });
+
+function viteDevSsrLoadModule(
+  loadAppModule: (id: string) => Promise<Record<string, unknown>> | Record<string, unknown>,
+): (id: string) => Promise<Record<string, unknown>> {
+  return async (id) =>
+    id === '@kovojs/server/internal/app-shell-vite'
+      ? { dispatchKovoAppShellViteDevRequest }
+      : await loadAppModule(id);
+}

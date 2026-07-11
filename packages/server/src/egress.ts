@@ -39,9 +39,11 @@ import type { LookupAddress } from 'node:dns';
  *     `egress.allowInternal` allowlist.
  *   - The cloud instance-metadata IP and Azure IMDS loopback: **DENIED** by default and —
  *     critically — **NOT** reachable via `allowInternal`. Reachable only inside the
- *     module-private {@link metadataAllowed} `AsyncLocalStorage` frame, which is entered
- *     ONLY by the per-cloud credential factories. A reflected SSRF never calls a factory,
- *     so it never enters the frame, so metadata stays denied at the very same IP.
+ *     module-private {@link metadataAccessProvider} `AsyncLocalStorage` frame, which is entered
+ *     ONLY by the per-cloud credential factories. Azure's configured endpoint additionally
+ *     requires the Azure frame: an AWS/GCP frame cannot cross-open that loopback authority.
+ *     A reflected SSRF never calls a factory, so it never enters the frame, so metadata stays
+ *     denied at the very same IP.
  *   - Enforcement is **dual-layer**: (a) `net.Socket.prototype.connect` (covers raw
  *     `node:http`/`node:https` — AWS IMDS via @smithy bypasses undici entirely — *and*
  *     undici/`fetch`, which dials through `net` underneath), pinning the validated IP via
@@ -133,7 +135,9 @@ export type PrivateAddressClass =
  * but an SSRF, which never calls the factory, can never forge it. That is what makes this
  * "provenance-as-current-frame" unforgeable by SSRF while remaining runtime-DiD, not a proof.
  */
-const metadataAllowed = new AsyncLocalStorage<true>();
+export type CloudMetadataProvider = 'aws' | 'azure' | 'gcp';
+
+const metadataAccessProvider = new AsyncLocalStorage<CloudMetadataProvider>();
 
 /**
  * Enter the metadata-allowed frame for the duration of `fn`. Module-internal: exported only
@@ -142,14 +146,27 @@ const metadataAllowed = new AsyncLocalStorage<true>();
  *
  * @internal
  */
-export function runWithMetadataAccess<T>(fn: () => T): T {
-  return metadataAllowed.run(true, fn);
+export function runWithMetadataAccess<T>(provider: CloudMetadataProvider, fn: () => T): T {
+  return metadataAccessProvider.run(provider, fn);
 }
 
 /** Whether the current async context is inside a credential-factory metadata frame. */
-function isMetadataAllowed(): boolean {
-  return metadataAllowed.getStore() === true;
+function isMetadataAllowed(provider?: CloudMetadataProvider): boolean {
+  const activeProvider = metadataAccessProvider.getStore();
+  return provider === undefined ? activeProvider !== undefined : activeProvider === provider;
 }
+
+interface AzureIdentityEndpoint {
+  /** Normalized hostname/IP token without IPv6 brackets or a trailing DNS dot. */
+  readonly host: string;
+  /** Canonical literal IP when the configured host is itself an IP literal. */
+  readonly literalIp: string | undefined;
+  readonly port: number;
+  /** IPs observed while resolving the configured hostname, pinned for later direct-IP dials. */
+  readonly resolvedIps: Set<string>;
+}
+
+const azureIdentityEndpointPolicy: unique symbol = Symbol('kovo.azure-identity-endpoint-policy');
 
 /** Resolved egress policy after normalizing operator config. */
 export interface EgressPolicy {
@@ -161,6 +178,8 @@ export interface EgressPolicy {
   readonly allowDestinations: ReadonlySet<string>;
   /** Broad-CIDR entries the operator passed (flagged + warned, honored as a fallback). */
   readonly allowInternalCidrs: readonly string[];
+  /** Module-private metadata authority; the symbol survives internal object-spread policy clones. */
+  readonly [azureIdentityEndpointPolicy]?: AzureIdentityEndpoint;
   /**
    * Internal dev-only posture: keep the floor installed and metadata blocked, but permit
    * non-metadata private/loopback/link-local destinations so local sidecars do not brick.
@@ -213,6 +232,8 @@ interface ResolveEgressPolicyOptions {
    * production/private-network floor is otherwise empty. Defaults to `KOVO_DATABASE_URL`.
    */
   databaseUrls?: readonly (string | undefined)[];
+  /** Test/bootstrap override; production defaults to the platform `IDENTITY_ENDPOINT` variable. */
+  identityEndpoint?: string | undefined;
 }
 
 const METADATA_ALLOWLIST_REJECT =
@@ -226,6 +247,9 @@ export function resolveEgressPolicy(
   warn: (message: string) => void = (m) => console.warn(`[kovo egress] ${m}`),
   policyOptions: ResolveEgressPolicyOptions = {},
 ): EgressPolicy {
+  const azureIdentityEndpoint = resolveAzureIdentityEndpoint(
+    policyOptions.identityEndpoint ?? process.env.IDENTITY_ENDPOINT,
+  );
   const allowInternal = new Set<string>();
   const allowDatabaseEndpoints = new Set<string>();
   const allowDestinations = new Set<string>();
@@ -261,6 +285,9 @@ export function resolveEgressPolicy(
       );
       continue;
     }
+    if (isConfiguredAzureIdentityAuthority(azureIdentityEndpoint, parsed.host, parsed.port)) {
+      throw new EgressConfigError(METADATA_ALLOWLIST_REJECT, entry);
+    }
     // A metadata-IP allowlist entry is rejected loudly — it must never re-open the path.
     const cls = classifyIp(parsed.host);
     if (cls === 'metadata') {
@@ -280,13 +307,17 @@ export function resolveEgressPolicy(
   for (const endpoint of policyOptions.databaseEndpoints ?? []) {
     allowDatabaseEndpoints.add(endpoint);
   }
-  return {
+  const policy: EgressPolicy = {
     allowInternal,
     allowDatabaseEndpoints,
     allowDestinations,
     allowInternalCidrs,
     allowPrivateNetwork: policyOptions.allowPrivateNetwork === true,
+    ...(azureIdentityEndpoint === undefined
+      ? {}
+      : { [azureIdentityEndpointPolicy]: azureIdentityEndpoint }),
   };
+  return policy;
 }
 
 /** @internal Normalize Postgres URLs into exact DB host:port egress exemptions. */
@@ -394,6 +425,110 @@ function normalizeHttpOrigin(entry: string): string | null {
 function normalizedUrlPort(url: URL): number {
   if (url.port) return Number(url.port);
   return url.protocol === 'https:' ? 443 : 80;
+}
+
+function resolveAzureIdentityEndpoint(raw: string | undefined): AzureIdentityEndpoint | undefined {
+  if (raw === undefined || raw.trim() === '') return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new EgressConfigError(
+      'IDENTITY_ENDPOINT must be an absolute http(s) URL so Kovo can classify its authority as ' +
+        'Azure metadata (SPEC §6.6). Refusing to install an ambiguous egress floor.',
+      raw,
+    );
+  }
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.username !== '' ||
+    url.password !== ''
+  ) {
+    throw new EgressConfigError(
+      'IDENTITY_ENDPOINT must be an absolute http(s) URL without embedded credentials so Kovo ' +
+        'can fail closed around its Azure metadata authority (SPEC §6.6).',
+      raw,
+    );
+  }
+
+  const host = normalizeAuthorityHost(url.hostname);
+  const port = normalizedUrlPort(url);
+  if (host === '' || !Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new EgressConfigError(
+      'IDENTITY_ENDPOINT has an invalid host or port; refusing to install an ambiguous Azure ' +
+        'metadata egress policy (SPEC §6.6).',
+      raw,
+    );
+  }
+  const literalIp = normalizeIpLiteral(host) ?? undefined;
+  return {
+    host,
+    literalIp,
+    port,
+    resolvedIps: new Set<string>(),
+  };
+}
+
+function normalizeAuthorityHost(host: string): string {
+  const unbracketed = host.trim().replace(/^\[/u, '').replace(/\]$/u, '');
+  const literalIp = normalizeIpLiteral(unbracketed);
+  if (literalIp !== null) return literalIp.toLowerCase();
+  return unbracketed.toLowerCase().replace(/\.$/u, '');
+}
+
+function isLocalhostName(host: string): boolean {
+  return host === 'localhost' || host.endsWith('.localhost');
+}
+
+function isConfiguredAzureIdentityAuthority(
+  endpoint: AzureIdentityEndpoint | undefined,
+  host: string,
+  port: number,
+): boolean {
+  if (endpoint === undefined || endpoint.port !== port) return false;
+  const normalizedHost = normalizeAuthorityHost(host);
+  if (normalizedHost === endpoint.host) return true;
+  const literalIp = normalizeIpLiteral(normalizedHost);
+  if (endpoint.literalIp !== undefined && literalIp === endpoint.literalIp) return true;
+  // IDENTITY_ENDPOINT is a platform-declared loopback credential authority. Reserve every
+  // loopback spelling on its port even when the configured hostname has not been resolved yet;
+  // this closes the direct-IP-before-first-provider-dial window.
+  return (
+    isLocalhostName(normalizedHost) || (literalIp !== null && classifyIp(literalIp) === 'loopback')
+  );
+}
+
+function isAzureIdentityDestination(args: {
+  endpoint: AzureIdentityEndpoint | undefined;
+  host: string;
+  port: number;
+  resolvedIp: string;
+}): boolean {
+  const { endpoint, host, port, resolvedIp } = args;
+  if (endpoint === undefined || endpoint.port !== port) return false;
+
+  const normalizedHost = normalizeAuthorityHost(host);
+  const normalizedResolvedIp = normalizeIpLiteral(resolvedIp);
+  if (normalizedHost === endpoint.host) {
+    if (normalizedResolvedIp !== null) {
+      endpoint.resolvedIps.add(normalizedResolvedIp);
+    }
+    return true;
+  }
+  if (
+    endpoint.literalIp !== undefined &&
+    (normalizedHost === endpoint.literalIp || normalizedResolvedIp === endpoint.literalIp)
+  ) {
+    return true;
+  }
+  if (
+    (normalizedResolvedIp !== null && classifyIp(normalizedResolvedIp) === 'loopback') ||
+    isLocalhostName(normalizedHost)
+  ) {
+    return true;
+  }
+  return normalizedResolvedIp !== null && endpoint.resolvedIps.has(normalizedResolvedIp);
 }
 
 // ---------------------------------------------------------------------------
@@ -753,6 +888,27 @@ export function evaluateEgress(args: {
       destination: `${host}:${port}`,
       resolvedIp,
       classification: 'special-use',
+    });
+  }
+  // SPEC §6.6: Azure App Service exposes managed-identity tokens on the configured
+  // IDENTITY_ENDPOINT, commonly a 127/8 authority. Treat that exact authority (and the resolved
+  // loopback spelling it pins) as metadata BEFORE ordinary public/private/allowInternal routing.
+  // Only azureCredential() provenance opens it; AWS/GCP frames and every operator allowlist remain
+  // unable to turn it into a generic SSRF target.
+  if (
+    isAzureIdentityDestination({
+      endpoint: policy[azureIdentityEndpointPolicy],
+      host,
+      port,
+      resolvedIp,
+    })
+  ) {
+    if (isMetadataAllowed('azure')) return null;
+    return new EgressBlockedError({
+      destination: `${host}:${port}`,
+      resolvedIp,
+      classification: 'metadata',
+      metadata: true,
     });
   }
   const cls = classifyIp(resolvedIp);

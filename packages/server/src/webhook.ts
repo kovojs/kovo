@@ -1,4 +1,5 @@
 import type { WebhookVerifier } from '@kovojs/core';
+import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import {
   actAsNonRequestPrincipal,
   declareSystemPrincipal,
@@ -6,11 +7,12 @@ import {
   type PrincipalAccessOperation,
 } from './auth-principal.js';
 import type { ChangeRecord } from './change-record.js';
-import { verifiedAccess, type AccessDecision } from './access.js';
+import { pinAccessDecision, verifiedAccess, type AccessDecision } from './access.js';
 import type { Domain } from './domain.js';
 import { runMutation, type RunMutationOptions } from './mutation.js';
 import {
   endpointRequestWithoutSession,
+  pinEndpointAuth,
   type EndpointDeclaration,
   type EndpointAuthDeclaration,
   type EndpointMethod,
@@ -389,40 +391,54 @@ export function webhook<
   path: Path,
   definition: WebhookDefinition<InputSchema, Value, Tx, Writes>,
 ): WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes> {
+  pinWebhookVerificationField(definition);
   const name = webhookNameFromPath(path);
   assertWebhookWritePosture(name, definition);
   let declaration: WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes>;
   const handler = async (request: EndpointRequest): Promise<Response> =>
     (await runWebhook(declaration, request)).response;
 
-  declaration = {
-    ...(definition.access === undefined
-      ? definition.verify === 'none'
-        ? {}
-        : { access: verifiedAccess }
-      : { access: definition.access }),
-    auth: webhookAuth(definition),
-    csrf: {
-      exempt: true,
-      justification: webhookCsrfJustification(name, definition),
-    },
-    handler,
-    method: 'POST' satisfies EndpointMethod,
-    mount: 'exact' satisfies EndpointMount,
-    name,
-    path,
-    reason: `webhook:${name}`,
-    response: {
-      appOwnedSafety: false,
-      body: 'text',
-      cache: 'no-store',
-      reservedHeaders: WEBHOOK_RESPONSE_RESERVED_HEADERS,
-    },
-    webhook: true,
-    webhookDefinition: definition,
-  } satisfies WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes>;
+  const access = definition.access ?? (definition.verify === 'none' ? undefined : verifiedAccess);
+  const auth = webhookAuth(definition);
+  declaration = pinAccessDecision(
+    {
+      csrf: {
+        exempt: true,
+        justification: webhookCsrfJustification(name, definition),
+      },
+      handler,
+      method: 'POST' satisfies EndpointMethod,
+      mount: 'exact' satisfies EndpointMount,
+      name,
+      path,
+      reason: `webhook:${name}`,
+      response: {
+        appOwnedSafety: false,
+        body: 'text',
+        cache: 'no-store',
+        reservedHeaders: WEBHOOK_RESPONSE_RESERVED_HEADERS,
+      },
+      webhook: true,
+      webhookDefinition: definition,
+    } satisfies WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes>,
+    access,
+  );
+  pinEndpointAuth(declaration, auth);
 
   return declaration;
+}
+
+function pinWebhookVerificationField(definition: WebhookVerificationFields): void {
+  const descriptor = Object.getOwnPropertyDescriptor(definition, 'verify');
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError('webhook() requires a stable own verification declaration.');
+  }
+  Object.defineProperty(definition, 'verify', {
+    configurable: false,
+    enumerable: descriptor.enumerable === true,
+    value: descriptor.value,
+    writable: false,
+  });
 }
 
 /**
@@ -775,6 +791,11 @@ function webhookAuth(definition: WebhookVerificationFields): EndpointAuthDeclara
   if (definition.verify.kind === 'custom') {
     return { kind: 'custom', name: definition.verify.name } satisfies EndpointAuthDeclaration;
   }
+  if (!isFrameworkHmacSignatureVerifier(definition.verify)) {
+    throw new TypeError(
+      'webhook() HMAC verification must come from hmacSignature() or a framework preset.',
+    );
+  }
 
   return {
     kind: 'verifier',
@@ -797,6 +818,9 @@ async function verifyWebhook(
   rawBody: Uint8Array,
 ): Promise<boolean> {
   if (definition.verify === 'none') return true;
+  if (definition.verify.kind === 'hmac' && !isFrameworkHmacSignatureVerifier(definition.verify)) {
+    return false;
+  }
 
   return definition.verify.verify({
     headers: request.headers,

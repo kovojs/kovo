@@ -65,6 +65,7 @@ export async function dispatchInlineDelegatedClick(
   element: unknown,
   importModule: (url: string) => Promise<Record<string, unknown>>,
   installSource: InlineSourceInstall,
+  allowedModuleUrls: readonly string[] = [],
 ): Promise<void> {
   const globalRecord = globalThis as unknown as Record<string, unknown>;
   const originals = {
@@ -79,8 +80,8 @@ export async function dispatchInlineDelegatedClick(
       listeners.set(type, listener);
     };
     globalRecord.document = {
-      querySelectorAll() {
-        return [];
+      querySelectorAll(selector: string) {
+        return inlineModuleAllowlistQuery(selector, allowedModuleUrls);
       },
     };
 
@@ -101,6 +102,21 @@ export async function dispatchInlineDelegatedClick(
       globalRecord.__kovoInlineImport = originals.importModule;
     }
   }
+}
+
+export function inlineModuleAllowlistQuery(
+  selector: string,
+  allowedModuleUrls: readonly string[],
+  fallback: () => unknown[] = () => [],
+): unknown[] {
+  if (selector !== '[data-kovo-module-allowlist]') {
+    return fallback();
+  }
+  return allowedModuleUrls.map((url) => ({
+    getAttribute(name: string) {
+      return name === 'data-kovo-module-allowlist' ? url : null;
+    },
+  }));
 }
 
 export class InlineTriggerElement {

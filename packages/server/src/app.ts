@@ -2,6 +2,16 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest, reportAppStartupError } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
+import {
+  closeKovoAppAggregate,
+  createAppDeclarationSnapshotContext,
+  snapshotAppEndpoint,
+  snapshotAppMutation,
+  snapshotAppQuery,
+  snapshotAppRegistry,
+  snapshotAppRoute,
+  snapshotLiveTargetRenderers,
+} from './app-snapshot.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
 import { createAppTaskRuntime, registerAppTaskRuntime } from './task-runtime.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
@@ -101,28 +111,54 @@ export function createApp<
   bootstrapEgressFloor(options.egress);
 
   const authoringContext = appAuthoringContext<AppRequest>();
-  const routes = resolveAppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>(
-    options.routes,
-    authoringContext,
-  ) as readonly AppRouteDeclaration<AppRequest>[];
-  const liveTargetRenderers =
-    options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers();
-  const runtimeFacts = runtimeRegistryFacts({
-    liveTargetRenderers,
-    mutations: assertUniqueMutationKeys(
+  const snapshotContext = createAppDeclarationSnapshotContext();
+  const routes = snapshotAppRegistry(
+    resolveAppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>(
+      options.routes,
+      authoringContext,
+    ) as readonly AppRouteDeclaration<AppRequest>[],
+    'createApp.routes',
+    (declaration) => snapshotAppRoute(declaration, snapshotContext),
+  );
+  const liveTargetRenderers = snapshotLiveTargetRenderers(
+    options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
+    snapshotContext,
+  );
+  const authoredMutations = assertUniqueMutationKeys(
+    snapshotAppRegistry(
       resolveAppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>(
         options.mutations,
         authoringContext,
       ),
+      'createApp.mutations',
+      (declaration) => snapshotAppMutation(declaration, snapshotContext),
     ),
-    queries: resolveAppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>(
+  );
+  const authoredQueries = snapshotAppRegistry(
+    resolveAppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>(
       options.queries,
       authoringContext,
     ),
+    'createApp.queries',
+    (declaration) => snapshotAppQuery(declaration, snapshotContext),
+  );
+  const endpoints = snapshotAppRegistry(
+    options.endpoints ?? [],
+    'createApp.endpoints',
+    (declaration) => snapshotAppEndpoint(declaration, snapshotContext),
+  );
+  const runtimeFacts = runtimeRegistryFacts({
+    liveTargetRenderers,
+    mutations: authoredMutations,
+    queries: authoredQueries,
     routes,
   });
-  const queries = runtimeFacts.queries;
-  const mutations = runtimeFacts.mutations;
+  const queries = snapshotAppRegistry(runtimeFacts.queries, 'app.queries', (declaration) =>
+    snapshotAppQuery(declaration, snapshotContext),
+  );
+  const mutations = snapshotAppRegistry(runtimeFacts.mutations, 'app.mutations', (declaration) =>
+    snapshotAppMutation(declaration, snapshotContext),
+  );
   const tasks = assertUniqueTaskKeys(
     resolveAppAuthoringDeclarations<AppTaskDeclaration<AppRequest>, AppRequest>(
       options.tasks,
@@ -132,29 +168,34 @@ export function createApp<
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
 
-  return {
-    clientModules,
-    diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
-    document: normalizeAppDocumentOptions(options.document),
-    endpoints: options.endpoints ?? [],
-    errorShells: options.errorShells ?? {},
-    liveTargetRenderers,
-    mutations,
-    queries,
-    requestLimits: normalizeAppRequestLimits(options.requestLimits),
-    routes,
-    stylesheets: options.stylesheets ?? [],
-    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
-    ...(options.db === undefined ? {} : { db: options.db }),
-    mutationResponses: options.mutationResponses ?? {},
-    ...(options.mutationReplayStore === undefined
-      ? {}
-      : { mutationReplayStore: options.mutationReplayStore }),
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-    ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
-    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
-    tasks,
-  };
+  return closeKovoAppAggregate(
+    {
+      clientModules,
+      diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
+      document: normalizeAppDocumentOptions(options.document),
+      endpoints,
+      errorShells: options.errorShells ?? {},
+      liveTargetRenderers,
+      mutations,
+      queries,
+      requestLimits: normalizeAppRequestLimits(options.requestLimits),
+      routes,
+      stylesheets: options.stylesheets ?? [],
+      ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+      ...(options.db === undefined ? {} : { db: options.db }),
+      mutationResponses: options.mutationResponses ?? {},
+      ...(options.mutationReplayStore === undefined
+        ? {}
+        : { mutationReplayStore: options.mutationReplayStore }),
+      ...(options.onError === undefined ? {} : { onError: options.onError }),
+      ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
+      ...(options.sessionProvider === undefined
+        ? {}
+        : { sessionProvider: options.sessionProvider }),
+      tasks,
+    } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest>,
+    snapshotContext,
+  );
 }
 
 function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {

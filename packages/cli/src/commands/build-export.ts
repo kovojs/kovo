@@ -267,7 +267,8 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         ]),
       );
       const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
-      const { writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
+      const { deriveClosedKovoApp, writeKovoNeutralBuild } =
+        loadedBuildApp.serverInternalBuildModule;
       const appModule = loadedBuildApp.appModule;
       const app = appFromModule(appModule, options.appModulePath);
       const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
@@ -278,6 +279,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         buildStylesheetCss,
         checkGraph: buildCheck.graph,
         cloudflare,
+        deriveClosedKovoApp,
         node,
         queryShapeFacts: buildCheck.queryShapeFacts,
         vercel,
@@ -298,6 +300,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       buildStylesheetCss,
       checkGraph,
       cloudflare,
+      deriveClosedKovoApp,
       node,
       queryShapeFacts,
       vercel,
@@ -316,7 +319,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       buildStylesheetCss.assets,
       clientBuild.assets,
     ]);
-    const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets);
+    const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
     const serverHandlerBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
       bundleKovoServerHandler(resolvedAppModulePath, {
         queryShapeFacts,
@@ -1182,6 +1185,11 @@ async function loadBuildAppModule(
     ],
     root,
     server: buildTimeViteServerOptions(),
+    // The closed-app proof is intentionally module-local. Keep the app's Kovo imports inside this
+    // SSR graph so createApp() and the internal derivation capability share one app-guards WeakSet,
+    // including when the CLI runs from a packed install whose node_modules would otherwise be
+    // externalized by Vite.
+    ssr: { noExternal: [/^@kovojs\//] },
   });
   try {
     const [serverBuildModule, serverInternalBuildModule] = await Promise.all([
@@ -1477,6 +1485,11 @@ async function buildKovoComponentClientModules(
       plugins: [kovoBuildLoweringVitePlugin(kovoPlugin), bundledUndiciRuntimeVitePlugin()],
       resolve: {
         alias: [
+          { find: /^@kovojs\/core$/, replacement: requireFromCli.resolve('@kovojs/core') },
+          {
+            find: /^@kovojs\/core\/internal\/verifier$/,
+            replacement: requireFromCli.resolve('@kovojs/core/internal/verifier'),
+          },
           { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },
           {
             find: /^@kovojs\/server\/jsx-dev-runtime$/,
@@ -1592,7 +1605,11 @@ function mergeStylesheetAssets(assets: readonly (string | StylesheetAsset)[]): S
   });
 }
 
-function appWithBuildStylesheetAssets(app: KovoApp, assets: KovoBuildStylesheetAssets): KovoApp {
+function appWithBuildStylesheetAssets(
+  app: KovoApp,
+  assets: KovoBuildStylesheetAssets,
+  deriveClosedApp: typeof import('@kovojs/server/internal/build').deriveClosedKovoApp,
+): KovoApp {
   if (
     assets.app.length === 0 &&
     Object.keys(assets.fragments).length === 0 &&
@@ -1600,8 +1617,7 @@ function appWithBuildStylesheetAssets(app: KovoApp, assets: KovoBuildStylesheetA
   )
     return app;
 
-  return {
-    ...app,
+  return deriveClosedApp(app, {
     liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {
       const fragmentAssets = assets.fragments[renderer.component] ?? [];
       if (fragmentAssets.length === 0) return renderer;
@@ -1616,10 +1632,12 @@ function appWithBuildStylesheetAssets(app: KovoApp, assets: KovoBuildStylesheetA
       const routeAssets = assets.routes[route.path] ?? [];
       if (routeAssets.length === 0) return route;
 
-      route.stylesheets = mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]);
-      return route;
+      return {
+        ...route,
+        stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]),
+      };
     }),
-  };
+  });
 }
 
 function kovoClientBuildRoot(appModulePath: string): string {
@@ -1702,7 +1720,16 @@ async function bundleKovoServerHandler(
       plugins: [kovoBuildLoweringVitePlugin(kovoPlugin), bundledUndiciRuntimeVitePlugin()],
       resolve: {
         alias: [
+          { find: /^@kovojs\/core$/, replacement: requireFromCli.resolve('@kovojs/core') },
+          {
+            find: /^@kovojs\/core\/internal\/verifier$/,
+            replacement: requireFromCli.resolve('@kovojs/core/internal/verifier'),
+          },
           { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },
+          {
+            find: /^@kovojs\/server\/internal\/app-shell-vite$/,
+            replacement: requireFromCli.resolve('@kovojs/server/internal/app-shell-vite'),
+          },
           {
             find: /^@kovojs\/server\/internal\/execution$/,
             replacement: requireFromCli.resolve('@kovojs/server/internal/execution'),
@@ -1848,6 +1875,7 @@ function kovoServerHandlerEntrySource(
   return [
     "import './runtime-registry.mjs';",
     "import { createRequestHandler } from '@kovojs/server';",
+    "import { deriveClosedKovoApp } from '@kovojs/server/internal/app-shell-vite';",
     `import * as appModule from ${JSON.stringify(pathToFileURL(appModulePath).href)};`,
     'const app = appModule.default ?? appModule.app;',
     `const stylesheetAssets = ${JSON.stringify(stylesheetAssets)};`,
@@ -1855,8 +1883,7 @@ function kovoServerHandlerEntrySource(
     '',
     'function appWithBuildStylesheetAssets(app, assets) {',
     '  if (assets.app.length === 0 && Object.keys(assets.fragments).length === 0 && Object.keys(assets.routes).length === 0) return app;',
-    '  return {',
-    '    ...app,',
+    '  return deriveClosedKovoApp(app, {',
     '    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {',
     '      const fragmentAssets = assets.fragments[renderer.component] ?? [];',
     '      if (fragmentAssets.length === 0) return renderer;',
@@ -1866,10 +1893,9 @@ function kovoServerHandlerEntrySource(
     '    routes: app.routes.map((route) => {',
     '      const routeAssets = assets.routes[route.path] ?? [];',
     '      if (routeAssets.length === 0) return route;',
-    '      route.stylesheets = mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]);',
-    '      return route;',
+    '      return { ...route, stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]) };',
     '    }),',
-    '  };',
+    '  });',
     '}',
     '',
     'function mergeStylesheetAssets(assets) {',

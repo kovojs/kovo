@@ -1,6 +1,6 @@
 import type { StreamTextChunk } from './wire-response-scanner.js';
 import type { ImportHandlerModule } from './handlers.js';
-import { assertAllowedKovoDynamicImportUrl } from './dynamic-import-url.js';
+import { assertAllowedKovoDynamicImportUrlForModule } from './dynamic-import-url.js';
 
 export interface StreamTextTarget {
   getAttribute?(name: string): string | null;
@@ -182,7 +182,7 @@ export class StreamTextBuffer {
     }
 
     try {
-      assertAllowedKovoDynamicImportUrl(parsed.url);
+      assertAllowedKovoDynamicImportUrlForModule(parsed.url, this.importModule);
       const mod = await this.importModule(parsed.url);
       const renderer = mod[parsed.exportName];
       if (typeof renderer !== 'function') {

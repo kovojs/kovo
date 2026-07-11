@@ -3,5 +3,6 @@ export {
   escapeHtml,
   escapeScriptJson,
   escapeText,
+  kovoSafeJsxSpread,
   safeUrlAttribute,
 } from '../html.js';

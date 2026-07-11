@@ -403,7 +403,7 @@ function buildAnonymousCsrfCookieOptions(
 
 function resolveCsrfBinding<Request>(
   request: Request,
-  options: CsrfOptions<Request>,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
   mintOptions: { anonymousCache?: Map<string, CsrfBinding>; mintAnonymous?: boolean } = {},
 ): CsrfBinding | undefined {
   const sessionId = options.sessionId(request);
@@ -432,6 +432,23 @@ function resolveCsrfBinding<Request>(
     setCookie: serializeCookie(name, anonymousSecret, cookie),
     value,
   };
+}
+
+/**
+ * Resolve the framework-owned principal binding used by mutation replay (SPEC §6.6/§10.3).
+ *
+ * Session requests return the app session id. Sessionless requests return the anonymous CSRF
+ * cookie binding that already passed the mutation CSRF gate. The submitted synchronizer-token
+ * field is deliberately not consulted: it is caller-controlled request data, while replay scope
+ * must be anchored in a server-minted cookie/session credential.
+ *
+ * @internal Package-internal replay bridge; not exported from the public server entrypoint.
+ */
+export function resolveCsrfReplayBinding<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
+): string | undefined {
+  return resolveCsrfBinding(request, options)?.value;
 }
 
 function anonymousCsrfCacheKey(name: string, cookie: CookieOptions): string {

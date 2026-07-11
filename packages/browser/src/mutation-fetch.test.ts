@@ -46,6 +46,62 @@ class FakeTargetRoot {
 }
 
 describe('enhanced mutation fetch', () => {
+  it('retires at the session-transition header without reading buffered response truth', async () => {
+    const onSessionTransition = vi.fn();
+    const text = vi.fn(async () => '<kovo-query name="account">{"private":true}</kovo-query>');
+    const fetched = await fetchEnhancedMutation({
+      fetch: async () => ({
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+          },
+        },
+        ok: true,
+        status: 200,
+        text,
+      }),
+      form: { action: '/_m/auth/custom-sign-in' },
+      formData: new FormData(),
+      idem: 'idem_session_transition',
+      onSessionTransition,
+      root: new FakeTargetRoot([]),
+    });
+
+    expect(fetched.sessionTransition).toBe(true);
+    expect(fetched.body).toBe('');
+    expect(fetched.changes).toEqual([]);
+    expect(onSessionTransition).toHaveBeenCalledOnce();
+    expect(text).not.toHaveBeenCalled();
+  });
+
+  it('retires a streaming transition before exposing or consuming its body', async () => {
+    const onSessionTransition = vi.fn();
+    const text = vi.fn(async () => 'must not be read');
+    const streamBody = {} as ReadableStream<Uint8Array>;
+    const fetched = await fetchEnhancedMutation({
+      fetch: async () => ({
+        body: streamBody,
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+          },
+        },
+        ok: true,
+        status: 200,
+        text,
+      }),
+      form: { action: '/_m/auth/custom-sign-in' },
+      formData: new FormData(),
+      onSessionTransition,
+      root: new FakeTargetRoot([]),
+      streaming: true,
+    });
+
+    expect(onSessionTransition).toHaveBeenCalledOnce();
+    expect(fetched).not.toHaveProperty('streamBody');
+    expect(text).not.toHaveBeenCalled();
+  });
+
   it('builds the enhanced mutation request from live targets and returns sanitized wire metadata', async () => {
     const formData = new FormData();
     const uploadProgress = vi.fn();

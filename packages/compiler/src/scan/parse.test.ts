@@ -1166,6 +1166,45 @@ export const ProductList = component({
     ]);
   });
 
+  it('exposes static JSX spread entries only when every runtime property is modelled (M3)', () => {
+    const source = `
+const labelName = 'aria-label';
+const completeAttrs = { class: 'card', [labelName]: 'Profile' };
+const partialAlias = { ...profileAttrs, noop() {} };
+
+export const SpreadShapes = component({
+  render: ({ profile, dynamicName }) => (
+    <section>
+      <article {...completeAttrs}>complete alias</article>
+      <article {...partialAlias}>partial alias</article>
+      <article {...{ ...profile.attributes }}>pure nested spread</article>
+      <article {...{ ...profile.attributes, noop() {} }}>spread plus method</article>
+      <article {...{ get ['ON:LOAD']() { return profile.handler; } }}>getter</article>
+      <article {...{ [dynamicName]: profile.value }}>dynamic computed name</article>
+    </section>
+  ),
+});
+`;
+    const spreads = jsxElements(parseComponentModule('spread-shapes.tsx', source))
+      .flatMap((element) => element.spreadAttributes)
+      .map((spread) => [spread.expression, spread.objectEntries] as const);
+
+    expect(spreads).toEqual([
+      [
+        'completeAttrs',
+        [
+          expect.objectContaining({ key: 'class', value: "'card'" }),
+          expect.objectContaining({ key: 'aria-label', value: "'Profile'" }),
+        ],
+      ],
+      ['partialAlias', undefined],
+      ['{ ...profile.attributes }', undefined],
+      ['{ ...profile.attributes, noop() {} }', undefined],
+      ["{ get ['ON:LOAD']() { return profile.handler; } }", undefined],
+      ['{ [dynamicName]: profile.value }', undefined],
+    ]);
+  });
+
   it('records the render slots parameter for compiler-bound form helpers', () => {
     const source = `
 export const ProductList = component({

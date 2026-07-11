@@ -74,6 +74,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/server/src/egress.test.ts',
         snippets: ["classifyIp('0xA9FEA9FE')", "'metadata'"],
       },
+      {
+        id: 'azure-identity-endpoint-provider-separation',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'Azure IDENTITY_ENDPOINT corpus',
+          "identityEndpoint: 'http://127.1:40342/msi/token?api-version=2019-08-01'",
+          "runWithMetadataAccess('azure'",
+          "runWithMetadataAccess('aws'",
+          "runWithMetadataAccess('gcp'",
+          'reserves a hostname-configured identity port before its first DNS resolution',
+          "identityEndpoint: 'http://identity.internal:40344/msi/token'",
+        ],
+      },
     ],
   },
   {

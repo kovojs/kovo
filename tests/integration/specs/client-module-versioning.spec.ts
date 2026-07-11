@@ -18,6 +18,10 @@ test('serves readable versioned client modules used by on:* refs', async ({
   await page.goto('/');
   const button = page.getByRole('button', { name: 'Load versioned module' });
   await expect(button).toHaveAttribute('on:click', '/c/__v/a1b2c3d4/versioned.client.js#mark');
+  await expect(button).toHaveAttribute(
+    'data-kovo-module-allowlist',
+    '/c/__v/a1b2c3d4/versioned.client.js',
+  );
 
   await button.click();
   await expect(page.locator('[data-client-version]')).toHaveText('loaded:a1b2c3d4');

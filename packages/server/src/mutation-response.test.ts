@@ -167,7 +167,31 @@ describe('server mutation primitives', () => {
       'session=s1; Path=/; HttpOnly; SameSite=Lax',
       'csrf=c1; Path=/; HttpOnly; SameSite=Strict',
     ]);
+    expect(response.headers['Kovo-Session-Transition']).toBe('reload');
     expect(response.headers['Content-Type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+  });
+
+  it('signals auth-domain transitions before browser truth can be applied or broadcast', async () => {
+    const auth = domain('auth');
+    const rotatePrincipal = mutation('auth/rotate-principal', {
+      input: s.object({ nextPrincipal: s.string() }),
+      registry: { touches: [auth] },
+      handler(input) {
+        return input.nextPrincipal;
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(rotatePrincipal, {
+      buildToken: 'mutation-response-test-build',
+      headers: { 'Kovo-Fragment': 'true' },
+      rawInput: { nextPrincipal: 'principal-b' },
+      redirectTo: '/account',
+      request: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['Kovo-Changes']).toBe('[{"domain":"auth"}]');
+    expect(response.headers['Kovo-Session-Transition']).toBe('reload');
   });
 
   it('caps enhanced mutation query chunks and emits the shared query warning header', async () => {
@@ -1682,6 +1706,55 @@ describe('server mutation primitives', () => {
     expect(typeof second.body).toBe('string');
     expect(second.body).toContain('first response only');
     expect(second.body).toContain('<kovo-done>');
+    expect(handlerSpy).toHaveBeenCalledOnce();
+    expect(streamSpy).toHaveBeenCalledOnce();
+  });
+
+  it('M7: streaming duplicates stay joined after replay ttl until the stream commits', async () => {
+    const replayStore = createMemoryMutationReplayStore({ ttlMs: 1 });
+    let releaseStream: () => void = () => undefined;
+    const streamRelease = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    let markStreamStarted: () => void = () => undefined;
+    const streamStarted = new Promise<void>((resolve) => {
+      markStreamStarted = resolve;
+    });
+    const handlerSpy = vi.fn((input: { body: string }) => input);
+    const streamSpy = vi.fn();
+    const sendMessage = mutation('chat/send-slow-replay', {
+      input: s.object({ body: s.string() }),
+      handler: handlerSpy,
+      async *stream() {
+        streamSpy();
+        markStreamStarted();
+        await streamRelease;
+        yield stream.text('assistant:a1', 'settled once');
+      },
+    });
+    const request = {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_slow_stream',
+        'Kovo-Stream': 'true',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = await renderMutationEndpointResponse(sendMessage, request);
+    expect(first.body).toBeInstanceOf(ReadableStream);
+    await streamStarted;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const duplicate = renderMutationEndpointResponse(sendMessage, request);
+    releaseStream();
+
+    const [firstBody, replayed] = await Promise.all([readResponseBody(first.body), duplicate]);
+    expect(firstBody).toContain('settled once');
+    expect(typeof replayed.body).toBe('string');
+    expect(replayed.body).toContain('settled once');
     expect(handlerSpy).toHaveBeenCalledOnce();
     expect(streamSpy).toHaveBeenCalledOnce();
   });

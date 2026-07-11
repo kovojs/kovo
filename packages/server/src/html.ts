@@ -225,6 +225,65 @@ export function safeRuntimeAttribute(name: string, value: string): string | null
 const safeAttributeNamePattern = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/;
 
 /**
+ * Kovo control-plane attribute namespaces. These attributes are executable or otherwise
+ * load-bearing runtime metadata: handler/derive refs, handler parameters, mutation/stream
+ * dispatch, query bindings, component identity, and fragment/live targeting. They may be
+ * emitted by the compiler or framework primitives, but a caller-owned JSX spread must not mint
+ * them (SPEC §4.7/§4.8, §5.2 rule 10, §6.6).
+ */
+export function isKovoControlAttributeName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    lower.startsWith('on:') ||
+    lower.startsWith('kovo-') ||
+    lower.startsWith('data-kovo-') ||
+    // Browser query/update plans. `data-plan` is a framework-authored selector anchor even
+    // though plans may also carry an explicit selector.
+    lower === 'data-bind' ||
+    lower.startsWith('data-bind:') ||
+    lower.startsWith('data-bind-prop:') ||
+    lower === 'data-derive' ||
+    lower === 'data-derive-attr' ||
+    lower === 'data-plan' ||
+    lower.startsWith('data-p-') ||
+    // Server JSX and browser enhanced-submit dispatch controls. Keep the bare JSX spellings in
+    // the same boundary as their rendered wire forms: a spread must not turn an ordinary form
+    // into a mutation/streaming form before the renderer emits the `data-*` attributes.
+    lower === 'mutation' ||
+    lower === 'enhance' ||
+    lower === 'data-enhance' ||
+    lower === 'stream' ||
+    lower === 'streamtext' ||
+    lower === 'data-mutation' ||
+    lower === 'data-mutation-stream' ||
+    lower === 'data-stream' ||
+    lower.startsWith('data-stream-') ||
+    // Unprefixed browser behavior/morph metadata. Standard ARIA, URL, id, and presentation
+    // attributes remain ordinary HTML and continue through the contextual sink policy.
+    lower === 'data-state' ||
+    lower === 'data-key'
+  );
+}
+
+/**
+ * @internal Compiler-injected reconstruction boundary for a dynamic intrinsic-element JSX
+ * spread. Only ordinary presentation/semantic attributes cross the boundary; Kovo control-plane
+ * attributes are omitted regardless of the carrier's prototype, getters, or key casing. The
+ * returned null-prototype snapshot also pins the values consumed by the JSX renderer so a mutable
+ * caller carrier is never re-read after classification (SPEC §6.6 rule 5).
+ */
+export function kovoSafeJsxSpread(value: unknown): Record<string, unknown> {
+  const safe = Object.create(null) as Record<string, unknown>;
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return safe;
+
+  for (const [name, attributeValue] of Object.entries(value)) {
+    if (isKovoControlAttributeName(name)) continue;
+    safe[name] = attributeValue;
+  }
+  return safe;
+}
+
+/**
  * @internal Fail-closed attribute-NAME guard for runtime server attribute writes
  * (SPEC.md §4.8 KV236). Returns true only for a safe HTML/XML name token; on mismatch
  * it omits the write (returns false) and drains a redacted KV236 sink event so the

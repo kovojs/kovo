@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { VersionedClientModuleInput } from './client-modules.js';
 import { assertNoBlockingAppDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
+import { deriveClosedKovoApp } from './app-snapshot.js';
 import type { KovoApp } from './app-types.js';
 import type { PageHintOptions } from './hints.js';
 import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
@@ -153,13 +154,17 @@ export function createKovoAppShellBuild(options: KovoAppShellBuildOptions): Kovo
   const app =
     routeHints.length === 0
       ? options.app
-      : {
-          ...options.app,
-          routes: options.app.routes.map((route) => {
-            const built = routeHints.find((entry) => entry.routePath === route.path);
-            return built ? { ...route, ...mergePageHints(route, built.hints) } : route;
+      : deriveClosedKovoApp(options.app, {
+          routes: options.app.routes.map((routeDeclaration) => {
+            const built = routeHints.find((entry) => entry.routePath === routeDeclaration.path);
+            return built
+              ? {
+                  ...routeDeclaration,
+                  ...mergePageHints(routeDeclaration, built.hints),
+                }
+              : routeDeclaration;
           }),
-        };
+        });
   const clientModules = registerCompiledClientModules(options.app, options.clientModules ?? []);
   const assets = options.manifest
     ? kovoAppShellViteManifestAssets(options.manifest, manifestOptions)

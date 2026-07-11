@@ -28,8 +28,8 @@ describe('page hints', () => {
         Link: '</c/cart.client.js>; rel=modulepreload, </c/recs.client.js>; rel=modulepreload',
       },
       html: [
-        '<link rel="modulepreload" href="/c/cart.client.js">',
-        '<link rel="modulepreload" href="/c/recs.client.js">',
+        '<link rel="modulepreload" href="/c/cart.client.js" data-kovo-module-allowlist>',
+        '<link rel="modulepreload" href="/c/recs.client.js" data-kovo-module-allowlist>',
         '<script type="speculationrules" data-kovo-csp-hash="sha256-/aovN5oxwLTJnSx2AWnlCNGwIbyhuoijwj3ORkZ7lac=">{"prerender":[{"eagerness":"conservative","urls":["/cart","/checkout"]}]}</script>',
       ].join(''),
     });
@@ -46,8 +46,8 @@ describe('page hints', () => {
         Link: '</c/cart.client.js>; rel=modulepreload, </c/generated/app.client.js>; rel=modulepreload',
       },
       html: [
-        '<link rel="modulepreload" href="/c/cart.client.js">',
-        '<link rel="modulepreload" href="/c/generated/app.client.js">',
+        '<link rel="modulepreload" href="/c/cart.client.js" data-kovo-module-allowlist>',
+        '<link rel="modulepreload" href="/c/generated/app.client.js" data-kovo-module-allowlist>',
         '<script type="module" src="/c/generated/app.client.js"></script>',
       ].join(''),
     });
@@ -67,8 +67,8 @@ describe('page hints', () => {
         Link: '</c/__v/cart-1/cart.client.js>; rel=modulepreload, </c/__v/build-1/generated/app.client.js>; rel=modulepreload',
       },
       html: [
-        '<link rel="modulepreload" href="/c/__v/cart-1/cart.client.js">',
-        '<link rel="modulepreload" href="/c/__v/build-1/generated/app.client.js">',
+        '<link rel="modulepreload" href="/c/__v/cart-1/cart.client.js" data-kovo-module-allowlist>',
+        '<link rel="modulepreload" href="/c/__v/build-1/generated/app.client.js" data-kovo-module-allowlist>',
         '<script type="module" src="/c/__v/build-1/generated/app.client.js"></script>',
       ].join(''),
     });
@@ -94,7 +94,7 @@ describe('page hints', () => {
       html: [
         '<link rel="stylesheet" href="/assets/styles.css">',
         '<link rel="stylesheet" href="/assets/print.css">',
-        '<link rel="modulepreload" href="/c/cart.client.js">',
+        '<link rel="modulepreload" href="/c/cart.client.js" data-kovo-module-allowlist>',
       ].join(''),
     });
   });
@@ -364,7 +364,7 @@ describe('page hints', () => {
       },
       html: [
         '<link rel="stylesheet" href="/assets/styles,print.css">',
-        '<link rel="modulepreload" href="/c/cart client.js?target=&lt;badge&gt;">',
+        '<link rel="modulepreload" href="/c/cart client.js?target=&lt;badge&gt;" data-kovo-module-allowlist>',
       ].join(''),
     });
   });
@@ -372,7 +372,7 @@ describe('page hints', () => {
   it('keeps speculation rules default-off for ordinary page hints', () => {
     expect(renderPageHints({ modulepreloads: ['/c/cart.client.js'] })).toEqual({
       earlyHints: { Link: '</c/cart.client.js>; rel=modulepreload' },
-      html: '<link rel="modulepreload" href="/c/cart.client.js">',
+      html: '<link rel="modulepreload" href="/c/cart.client.js" data-kovo-module-allowlist>',
     });
     expect(renderPageHints({ prefetch: false, prerenderUrls: ['/cart'] })).toEqual({
       earlyHints: {},

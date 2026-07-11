@@ -1,5 +1,6 @@
 import type { WebhookVerifier } from '@kovojs/core';
-import type { AccessDecision } from './access.js';
+import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
+import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
@@ -65,6 +66,23 @@ export type EndpointAuthDeclaration =
   | { kind: 'custom'; name: string; verify?: WebhookVerifier }
   | { kind: 'none'; justification: string }
   | { kind: 'verifier'; name: string; verify?: WebhookVerifier };
+
+type EndpointVerifierRequest = Parameters<WebhookVerifier['verify']>[0];
+
+interface PinnedEndpointAuth {
+  auth: EndpointAuthDeclaration | undefined;
+  valid: boolean;
+  verify?: (request: EndpointVerifierRequest) => Promise<boolean>;
+}
+
+interface PinnedExecutableVerifier {
+  auditName: string;
+  kind: WebhookVerifier['kind'];
+  verifier: WebhookVerifier;
+  verify: (request: EndpointVerifierRequest) => Promise<boolean>;
+}
+
+const pinnedEndpointAuth = new WeakMap<object, PinnedEndpointAuth>();
 
 /** A raw HTTP endpoint descriptor: path, method, mount mode, and auth/CSRF declarations. */
 export interface Endpoint<
@@ -210,23 +228,240 @@ export function endpoint<
   if (definition.reason.trim() === '') {
     throw new TypeError('endpoint() requires a non-empty reason');
   }
+  const declaration = pinAccessDecision(
+    {
+      ...(definition.csrf === false
+        ? { csrf: { exempt: true, justification: definition.csrfJustification } }
+        : {}),
+      ...(definition.db === true ? { db: true as const } : {}),
+      handler: definition.handler,
+      method: definition.method,
+      mount,
+      ...(definition.mountJustification === undefined
+        ? {}
+        : { mountJustification: definition.mountJustification }),
+      path,
+      reason: definition.reason,
+      response: definition.response,
+    } as EndpointDeclaration<Path, Method, Mount, Db>,
+    definition.access,
+  );
+  pinEndpointAuth(declaration, definition.auth);
+  return declaration;
+}
+
+/** @internal Pin endpoint machine-auth metadata and its executable verifier with the access fact. */
+export function pinEndpointAuth<Declaration extends object>(
+  declaration: Declaration,
+  auth: EndpointAuthDeclaration | undefined,
+): Declaration {
+  if (pinnedEndpointAuth.has(declaration)) return declaration;
+  const snapshot = snapshotEndpointAuth(auth);
+  Object.defineProperty(declaration, 'auth', {
+    configurable: false,
+    enumerable: auth !== undefined,
+    value: snapshot.auth,
+    writable: false,
+  });
+  pinnedEndpointAuth.set(declaration, snapshot);
+  return declaration;
+}
+
+/** @internal Resolve one endpoint's immutable machine-auth declaration. */
+export function endpointAuthFor(
+  declaration: object & { auth?: EndpointAuthDeclaration },
+): EndpointAuthDeclaration | undefined {
+  return endpointAuthSnapshotFor(declaration).auth;
+}
+
+/** @internal Whether the endpoint has an executable verifier pinned at declaration/assembly. */
+export function endpointHasExecutableVerifier(
+  declaration: object & { auth?: EndpointAuthDeclaration },
+): boolean {
+  return endpointAuthSnapshotFor(declaration).verify !== undefined;
+}
+
+/**
+ * @internal Copy the already-pinned auth/verifier snapshot onto a canonical app declaration.
+ *
+ * Re-snapshotting `source.auth` would reopen a validation/use gap: the verifier object is
+ * app-owned and its `.verify` method may have changed since endpoint() captured it. The app
+ * aggregate must carry the exact verifier closure that audit and request dispatch already share.
+ */
+export function copyEndpointAuthSnapshot<Declaration extends object>(
+  source: object & { auth?: EndpointAuthDeclaration },
+  target: Declaration,
+): Declaration {
+  if (pinnedEndpointAuth.has(target)) return target;
+  const snapshot = endpointAuthSnapshotFor(source);
+  Object.defineProperty(target, 'auth', {
+    configurable: false,
+    enumerable: snapshot.auth !== undefined,
+    value: snapshot.auth,
+    writable: false,
+  });
+  pinnedEndpointAuth.set(target, snapshot);
+  return target;
+}
+
+function endpointAuthSnapshotFor(
+  declaration: object & { auth?: EndpointAuthDeclaration },
+): PinnedEndpointAuth {
+  const pinned = pinnedEndpointAuth.get(declaration);
+  if (pinned !== undefined) return pinned;
+
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(declaration, 'auth');
+  } catch {
+    throw new TypeError('Endpoint auth declaration must expose a stable own data property.');
+  }
+  const auth =
+    descriptor !== undefined && 'value' in descriptor
+      ? (descriptor.value as EndpointAuthDeclaration | undefined)
+      : undefined;
+  const snapshot =
+    descriptor !== undefined && !('value' in descriptor)
+      ? ({ auth: undefined, valid: false } satisfies PinnedEndpointAuth)
+      : snapshotEndpointAuth(auth);
+  try {
+    Object.defineProperty(declaration, 'auth', {
+      configurable: false,
+      enumerable: descriptor?.enumerable ?? auth !== undefined,
+      value: snapshot.auth,
+      writable: false,
+    });
+  } catch {
+    // Frozen structural declarations still consume the private authoritative snapshot.
+  }
+  pinnedEndpointAuth.set(declaration, snapshot);
+  return snapshot;
+}
+
+function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): PinnedEndpointAuth {
+  if (auth === undefined) return { auth: undefined, valid: true };
+
+  try {
+    const kind = Object.getOwnPropertyDescriptor(auth, 'kind');
+    if (kind === undefined || !('value' in kind)) return { auth: undefined, valid: false };
+    if (kind.value === 'none') {
+      const justification = Object.getOwnPropertyDescriptor(auth, 'justification');
+      if (
+        justification === undefined ||
+        !('value' in justification) ||
+        typeof justification.value !== 'string'
+      ) {
+        return { auth: undefined, valid: false };
+      }
+      return {
+        auth: Object.freeze({ kind: 'none', justification: justification.value }),
+        valid: true,
+      };
+    }
+    if (kind.value !== 'custom' && kind.value !== 'verifier') {
+      return { auth: undefined, valid: false };
+    }
+    const name = Object.getOwnPropertyDescriptor(auth, 'name');
+    if (name === undefined || !('value' in name) || typeof name.value !== 'string') {
+      return { auth: undefined, valid: false };
+    }
+    const verifierDescriptor = Object.getOwnPropertyDescriptor(auth, 'verify');
+    const verifier =
+      verifierDescriptor !== undefined && 'value' in verifierDescriptor
+        ? verifierDescriptor.value
+        : undefined;
+    const executable = verifier === undefined ? undefined : snapshotExecutableVerifier(verifier);
+    if (
+      verifier !== undefined &&
+      (executable === undefined ||
+        (kind.value === 'custom' &&
+          (executable.kind !== 'custom' || executable.auditName !== name.value)) ||
+        (kind.value === 'verifier' &&
+          (executable.kind !== 'hmac' || executable.auditName !== name.value)))
+    ) {
+      return { auth: undefined, valid: false };
+    }
+    return {
+      auth: Object.freeze({
+        kind: kind.value,
+        name: name.value,
+        ...(executable === undefined ? {} : { verify: executable.verifier }),
+      }),
+      valid: true,
+      ...(executable === undefined
+        ? {}
+        : { verify: (request: EndpointVerifierRequest) => executable.verify(request) }),
+    };
+  } catch {
+    return { auth: undefined, valid: false };
+  }
+}
+
+function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | undefined {
+  if (isFrameworkHmacSignatureVerifier(value)) {
+    const verify = Object.getOwnPropertyDescriptor(value, 'verify')?.value as
+      | WebhookVerifier['verify']
+      | undefined;
+    if (typeof verify !== 'function') return undefined;
+    return {
+      auditName: value.resolved.scheme,
+      kind: 'hmac',
+      verifier: value,
+      verify: async (request) => Boolean(await Reflect.apply(verify, value, [request])),
+    };
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+
+  const kind = stableVerifierValue(value, 'kind');
+  const name = stableVerifierValue(value, 'name');
+  const scheme = stableVerifierValue(value, 'scheme');
+  const verify = stableVerifierValue(value, 'verify');
+  if (
+    kind !== 'custom' ||
+    typeof name !== 'string' ||
+    typeof scheme !== 'string' ||
+    typeof verify !== 'function'
+  ) {
+    return undefined;
+  }
+
+  let canonical: WebhookVerifier;
+  canonical = Object.freeze({
+    kind: 'custom',
+    name,
+    scheme,
+    async verify(request: EndpointVerifierRequest): Promise<boolean> {
+      return Boolean(await Reflect.apply(verify, canonical, [request]));
+    },
+  });
   return {
-    ...(definition.access === undefined ? {} : { access: definition.access }),
-    ...(definition.auth === undefined ? {} : { auth: definition.auth }),
-    ...(definition.csrf === false
-      ? { csrf: { exempt: true, justification: definition.csrfJustification } }
-      : {}),
-    ...(definition.db === true ? { db: true as const } : {}),
-    handler: definition.handler,
-    method: definition.method,
-    mount,
-    ...(definition.mountJustification === undefined
-      ? {}
-      : { mountJustification: definition.mountJustification }),
-    path,
-    reason: definition.reason,
-    response: definition.response,
+    auditName: name,
+    kind: 'custom',
+    verifier: canonical,
+    verify: (request) => canonical.verify(request),
   };
+}
+
+function stableVerifierValue(source: object, property: PropertyKey): unknown {
+  const before = Object.getOwnPropertyDescriptor(source, property);
+  if (before === undefined || !('value' in before)) return undefined;
+  const observed = Reflect.get(source, property, source);
+  const after = Object.getOwnPropertyDescriptor(source, property);
+  if (!sameVerifierDescriptor(before, after) || !Object.is(observed, before.value)) {
+    throw new TypeError('Endpoint verifier fields must be stable own data properties.');
+  }
+  return before.value;
+}
+
+function sameVerifierDescriptor(left: PropertyDescriptor, right: PropertyDescriptor | undefined) {
+  return (
+    right !== undefined &&
+    'value' in right &&
+    Object.is(left.value, right.value) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
 }
 
 /**
@@ -244,8 +479,8 @@ export async function runEndpoint(
   options: EndpointRunOptions = {},
 ): Promise<Response> {
   const endpointRequest = endpointRequestWithoutSession(request);
-  const guardFailure = await runAccessDecisionGuards(definition.access, undefined, endpointRequest);
-  if (guardFailure) return endpointAccessGuardFailureResponse(guardFailure);
+  const accessFailure = await runEndpointAccessDecision(definition, endpointRequest);
+  if (accessFailure) return accessFailure;
 
   const response =
     definition.db === true
@@ -256,6 +491,25 @@ export async function runEndpoint(
       : await (definition.handler as EndpointHandler)(endpointRequest);
   assertEndpointResponsePosture(definition, response);
   return response;
+}
+
+/**
+ * @internal Run the endpoint/webhook access decision through the shared fail-closed gate.
+ *
+ * Webhook dispatch needs this separately because it threads app DB/task options into runWebhook()
+ * instead of invoking the generic endpoint handler. Keeping the gate here prevents that special
+ * branch from bypassing the exact guard chain recorded by the access graph (SPEC §9.5/§10.2).
+ */
+export async function runEndpointAccessDecision(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  request: Request,
+): Promise<Response | undefined> {
+  const guardFailure = await runAccessDecisionGuards(
+    accessDecisionFor(definition),
+    undefined,
+    request,
+  );
+  return guardFailure === null ? undefined : endpointAccessGuardFailureResponse(guardFailure);
 }
 
 export interface EndpointRunOptions<Db = unknown> {
@@ -320,13 +574,14 @@ export async function runEndpointAuth(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   request: Request,
 ): Promise<Response | undefined> {
-  const verifier = definition.auth?.kind === 'none' ? undefined : definition.auth?.verify;
-  if (verifier === undefined) return undefined;
+  const auth = endpointAuthSnapshotFor(definition);
+  if (!auth.valid) return endpointAuthFailureResponse();
+  if (auth.verify === undefined) return undefined;
 
   let verified = false;
   try {
     const authRequest = endpointRequestWithoutSession(request.clone());
-    verified = await verifier.verify({
+    verified = await auth.verify({
       headers: authRequest.headers,
       payload: new Uint8Array(await authRequest.arrayBuffer()),
     });

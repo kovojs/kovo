@@ -28,7 +28,7 @@
  * proxy logs / CDN caches is **MITIGATED** (short expiry by default, narrow scope, optional
  * one-time replay) but **NOT proven**. Treat a signed URL as a secret.
  *
- * Every mint records a capability fact drained into `kovo explain --capabilities` (SF-WIRE below).
+ * Every mint is observed by a bounded runtime capability collector (SF-WIRE below).
  */
 
 import type { StorageReadCapability } from '@kovojs/core';
@@ -36,6 +36,7 @@ import {
   createReadOnlyStorageCapability,
   normalizeStorageKey,
 } from '@kovojs/core/internal/storage';
+import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
 import { verifiedAccess } from './access.js';
 import {
@@ -112,7 +113,7 @@ export interface CapabilityMintFact {
   readonly expiresInMs: number;
 }
 
-const capabilityMintFacts: CapabilityMintFact[] = [];
+const capabilityMintFacts = createBoundedRuntimeAuditCollector<CapabilityMintFact>();
 const STORAGE_DOWNLOAD_ENDPOINT_INFO = Symbol('kovo.storageDownloadEndpointInfo');
 
 export interface StorageDownloadEndpointInfo {
@@ -131,13 +132,13 @@ type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'pr
  * Drain the recorded `ctx.signUrl(...)` capability-mint facts (SPEC §6.6, audit-only).
  *
  * SF-WIRE(graph-output): render --capabilities capability-URL mints — wire
- * {@link drainCapabilityMintFacts} into `kovo explain --capabilities` so every minted bearer
- * download URL (key, method, scope, ttl, one-time) is surfaced in the audit a reviewer runs. Each
- * row is a `kind: 'capabilityUrlMint'` escape: the URL is a bearer credential whose leakage is
- * mitigated, not proven (label per SPEC §6.6). Do NOT edit cli/graph-output.ts from this slice.
+ * {@link drainCapabilityMintFacts} into runtime diagnostics. It retains the newest 256 mint
+ * observations and is deliberately not a complete process-lifetime inventory. Each row is a
+ * `kind: 'capabilityUrlMint'` escape: the URL is a bearer credential whose leakage is mitigated,
+ * not proven (label per SPEC §6.6).
  */
 export function drainCapabilityMintFacts(): readonly CapabilityMintFact[] {
-  return capabilityMintFacts.splice(0, capabilityMintFacts.length);
+  return capabilityMintFacts.drain();
 }
 
 /**
@@ -199,7 +200,7 @@ export function createSignUrl(options: {
       );
       // Audit (SPEC §6.6): record every mint of a bearer download URL for `kovo explain
       // --capabilities`. Surfacing informs review; it enforces nothing.
-      capabilityMintFacts.push({
+      capabilityMintFacts.record({
         key,
         method,
         ...(scope === undefined ? {} : { scope }),

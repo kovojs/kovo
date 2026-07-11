@@ -13,6 +13,7 @@ describe('runtime loader module', () => {
     const handler = vi.fn();
     const importModule = vi.fn(async () => ({ run: handler }));
     const loader = installKovoLoader({
+      allowedClientModuleUrls: ['/c/client.js'],
       events: ['click'],
       importModule,
       root,
@@ -72,5 +73,29 @@ describe('runtime loader module', () => {
 
     expect(importModule).not.toHaveBeenCalled();
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('uses the explicit compiler client-module allowlist for startup triggers', async () => {
+    const root = new FakeRoot();
+    const allowed = new FakeElement({ 'on:load': '/c/allowed.client.js#run' });
+    const blocked = new FakeElement({ 'on:load': '/c/blocked.client.js#run' });
+    const handler = vi.fn();
+    const importModule = vi.fn(async () => ({ run: handler }));
+    const onError = vi.fn();
+    root.elements.set('[on\\:load]', [allowed, blocked]);
+
+    installKovoLoader({
+      allowedClientModuleUrls: ['/c/allowed.client.js'],
+      importModule,
+      onError,
+      root,
+    });
+
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
+    expect(importModule).toHaveBeenCalledExactlyOnceWith('/c/allowed.client.js');
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      event: expect.objectContaining({ type: 'load' }),
+      phase: 'execution-trigger',
+    });
   });
 });
