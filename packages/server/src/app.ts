@@ -1,8 +1,17 @@
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
-import { accessDecisionFor, type AccessDecision } from './access.js';
 import { handleAppRequest, reportAppStartupError } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
+import {
+  closeKovoAppAggregate,
+  createAppDeclarationSnapshotContext,
+  snapshotAppEndpoint,
+  snapshotAppMutation,
+  snapshotAppQuery,
+  snapshotAppRegistry,
+  snapshotAppRoute,
+  snapshotLiveTargetRenderers,
+} from './app-snapshot.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
 import { createAppTaskRuntime, registerAppTaskRuntime } from './task-runtime.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
@@ -15,7 +24,6 @@ import { runtimeRegistryFacts } from './registry-facts.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
-import { endpointAuthFor, type EndpointAuthDeclaration } from './endpoint.js';
 export type {
   AppEgressOptions,
   AppEgressOptOut,
@@ -103,39 +111,54 @@ export function createApp<
   bootstrapEgressFloor(options.egress);
 
   const authoringContext = appAuthoringContext<AppRequest>();
-  const routes = Object.freeze([
-    ...(resolveAppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>(
+  const snapshotContext = createAppDeclarationSnapshotContext();
+  const routes = snapshotAppRegistry(
+    resolveAppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>(
       options.routes,
       authoringContext,
-    ) as readonly AppRouteDeclaration<AppRequest>[]),
-  ]);
-  pinRouteAccessDecisions(routes);
-  const liveTargetRenderers =
-    options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers();
+    ) as readonly AppRouteDeclaration<AppRequest>[],
+    'createApp.routes',
+    (declaration) => snapshotAppRoute(declaration, snapshotContext),
+  );
+  const liveTargetRenderers = snapshotLiveTargetRenderers(
+    options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers(),
+    snapshotContext,
+  );
   const authoredMutations = assertUniqueMutationKeys(
-    resolveAppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>(
-      options.mutations,
-      authoringContext,
+    snapshotAppRegistry(
+      resolveAppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>(
+        options.mutations,
+        authoringContext,
+      ),
+      'createApp.mutations',
+      (declaration) => snapshotAppMutation(declaration, snapshotContext),
     ),
   );
-  const authoredQueries = resolveAppAuthoringDeclarations<
-    AppQueryDeclaration<AppRequest>,
-    AppRequest
-  >(options.queries, authoringContext);
-  const endpoints = Object.freeze([...(options.endpoints ?? [])]);
-  pinAccessDecisions(authoredMutations);
-  pinAccessDecisions(authoredQueries);
-  pinEndpointAccessDecisions(endpoints);
+  const authoredQueries = snapshotAppRegistry(
+    resolveAppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>(
+      options.queries,
+      authoringContext,
+    ),
+    'createApp.queries',
+    (declaration) => snapshotAppQuery(declaration, snapshotContext),
+  );
+  const endpoints = snapshotAppRegistry(
+    options.endpoints ?? [],
+    'createApp.endpoints',
+    (declaration) => snapshotAppEndpoint(declaration, snapshotContext),
+  );
   const runtimeFacts = runtimeRegistryFacts({
     liveTargetRenderers,
     mutations: authoredMutations,
     queries: authoredQueries,
     routes,
   });
-  const queries = Object.freeze([...runtimeFacts.queries]);
-  const mutations = Object.freeze([...runtimeFacts.mutations]);
-  pinAccessDecisions(queries);
-  pinAccessDecisions(mutations);
+  const queries = snapshotAppRegistry(runtimeFacts.queries, 'app.queries', (declaration) =>
+    snapshotAppQuery(declaration, snapshotContext),
+  );
+  const mutations = snapshotAppRegistry(runtimeFacts.mutations, 'app.mutations', (declaration) =>
+    snapshotAppMutation(declaration, snapshotContext),
+  );
   const tasks = assertUniqueTaskKeys(
     resolveAppAuthoringDeclarations<AppTaskDeclaration<AppRequest>, AppRequest>(
       options.tasks,
@@ -145,58 +168,34 @@ export function createApp<
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
 
-  return Object.freeze({
-    clientModules,
-    diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
-    document: normalizeAppDocumentOptions(options.document),
-    endpoints,
-    errorShells: options.errorShells ?? {},
-    liveTargetRenderers,
-    mutations,
-    queries,
-    requestLimits: normalizeAppRequestLimits(options.requestLimits),
-    routes,
-    stylesheets: options.stylesheets ?? [],
-    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
-    ...(options.db === undefined ? {} : { db: options.db }),
-    mutationResponses: options.mutationResponses ?? {},
-    ...(options.mutationReplayStore === undefined
-      ? {}
-      : { mutationReplayStore: options.mutationReplayStore }),
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-    ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
-    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
-    tasks,
-  });
-}
-
-function pinAccessDecisions(declarations: readonly (object & { access?: AccessDecision })[]): void {
-  for (const declaration of declarations) accessDecisionFor(declaration);
-}
-
-function pinEndpointAccessDecisions(
-  declarations: readonly (object & {
-    access?: AccessDecision;
-    auth?: EndpointAuthDeclaration;
-  })[],
-): void {
-  for (const declaration of declarations) {
-    accessDecisionFor(declaration);
-    endpointAuthFor(declaration);
-  }
-}
-
-function pinRouteAccessDecisions(routes: readonly AppRouteDeclaration[]): void {
-  const seenLayouts = new Set<object>();
-  for (const declaration of routes) {
-    accessDecisionFor(declaration);
-    let current = declaration.layout;
-    while (current !== undefined && !seenLayouts.has(current)) {
-      seenLayouts.add(current);
-      accessDecisionFor(current);
-      current = current.parent;
-    }
-  }
+  return closeKovoAppAggregate(
+    {
+      clientModules,
+      diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
+      document: normalizeAppDocumentOptions(options.document),
+      endpoints,
+      errorShells: options.errorShells ?? {},
+      liveTargetRenderers,
+      mutations,
+      queries,
+      requestLimits: normalizeAppRequestLimits(options.requestLimits),
+      routes,
+      stylesheets: options.stylesheets ?? [],
+      ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+      ...(options.db === undefined ? {} : { db: options.db }),
+      mutationResponses: options.mutationResponses ?? {},
+      ...(options.mutationReplayStore === undefined
+        ? {}
+        : { mutationReplayStore: options.mutationReplayStore }),
+      ...(options.onError === undefined ? {} : { onError: options.onError }),
+      ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
+      ...(options.sessionProvider === undefined
+        ? {}
+        : { sessionProvider: options.sessionProvider }),
+      tasks,
+    } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest>,
+    snapshotContext,
+  );
 }
 
 function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {

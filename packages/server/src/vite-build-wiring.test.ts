@@ -93,7 +93,7 @@ describe('server app shell Vite plugin', () => {
         '<link rel="stylesheet" href="/assets/manual.css">',
         '<link rel="stylesheet" href="/assets/cart.css">',
         '<link rel="stylesheet" href="/assets/theme.css">',
-        '<link rel="modulepreload" href="/c/manual.client.js?v=manual">',
+        '<link rel="modulepreload" href="/c/manual.client.js?v=manual" data-kovo-module-allowlist>',
         '<link rel="modulepreload" href="/assets/cart.js">',
         '<link rel="modulepreload" href="/assets/shared.js">',
       ].join(''),

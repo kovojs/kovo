@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { customVerifier, hmacSignature } from '@kovojs/core';
+import { customVerifier, hmacSignature, type HmacSignatureVerifier } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -235,6 +235,100 @@ describe('server endpoints', () => {
 
     expect(thrown?.status).toBe(401);
     expect(thrown === undefined ? '' : await thrown.text()).toBe('Unauthorized');
+  });
+
+  it('rejects forged HMAC provenance and dishonest executable auth metadata', async () => {
+    const official = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: 'official-secret',
+    });
+    const forged = { ...official, verify: async () => true } as HmacSignatureVerifier;
+    const dishonest = [
+      endpoint('/machine/forged-hmac', {
+        auth: { kind: 'verifier', name: official.resolved.scheme, verify: forged },
+        csrf: false,
+        csrfJustification: 'forged verifier regression',
+        handler: () => new Response('leaked'),
+        method: 'POST',
+        reason: 'forged verifier regression',
+        response: rawTextResponse,
+      }),
+      endpoint('/machine/wrong-custom-name', {
+        auth: {
+          kind: 'custom',
+          name: 'audit-name',
+          verify: customVerifier('runtime-name', () => true),
+        },
+        csrf: false,
+        csrfJustification: 'dishonest custom metadata regression',
+        handler: () => new Response('leaked'),
+        method: 'POST',
+        reason: 'dishonest custom metadata regression',
+        response: rawTextResponse,
+      }),
+      endpoint('/machine/custom-as-hmac', {
+        auth: {
+          kind: 'verifier',
+          name: 'hmac-sha256:hex',
+          verify: customVerifier('allow', () => true),
+        },
+        csrf: false,
+        csrfJustification: 'dishonest verifier-kind regression',
+        handler: () => new Response('leaked'),
+        method: 'POST',
+        reason: 'dishonest verifier-kind regression',
+        response: rawTextResponse,
+      }),
+    ];
+
+    for (const declaration of dishonest) {
+      const response = await runEndpointAuth(
+        declaration,
+        new Request(`https://example.test${declaration.path}`, { body: '{}', method: 'POST' }),
+      );
+      expect(response?.status).toBe(401);
+    }
+  });
+
+  it('captures a structural custom verifier method exactly once through Proxy traps', async () => {
+    const deny = async () => false;
+    const allow = async () => true;
+    let verifyReads = 0;
+    const verifier = new Proxy(
+      {
+        kind: 'custom' as const,
+        name: 'proxy-custom',
+        scheme: 'custom:proxy-custom',
+        verify: deny,
+      },
+      {
+        get(target, property, receiver) {
+          if (property === 'verify') {
+            verifyReads += 1;
+            return verifyReads === 1 ? deny : allow;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    const declaration = endpoint('/machine/proxy-custom', {
+      auth: { kind: 'custom', name: 'proxy-custom', verify: verifier },
+      csrf: false,
+      csrfJustification: 'custom verifier snapshot regression',
+      handler: () => new Response('leaked'),
+      method: 'POST',
+      reason: 'custom verifier snapshot regression',
+      response: rawTextResponse,
+    });
+
+    const response = await runEndpointAuth(
+      declaration,
+      new Request('https://example.test/machine/proxy-custom', { body: '{}', method: 'POST' }),
+    );
+    expect(response?.status).toBe(401);
+    expect(verifyReads).toBe(1);
   });
 
   it('does not pass ambient session properties to endpoint handlers', async () => {

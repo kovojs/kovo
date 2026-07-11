@@ -310,27 +310,30 @@ export interface KovoApp<
   _RawRequest extends globalThis.Request = globalThis.Request,
   _AppRequest = any,
 > {
-  clientModules: VersionedClientModuleRegistry;
-  csrf?: CsrfOptions<any>;
-  db?: DbProvider<any, any, any>;
-  diagnostics: readonly AppDiagnostic[];
-  document: AppDocumentOptions;
-  endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
-  errorShells: AppErrorShellOptions;
-  liveTargetRenderers: readonly LiveTargetRenderer<any>[];
-  mutationResponses: AppMutationResponses;
-  mutations: readonly AppMutationDeclaration<any>[];
-  mutationReplayStore?: MutationReplayStore;
-  onError?: ServerErrorHandler;
-  queries: readonly AppQueryDeclaration<any>[];
-  renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
-  requestLimits: ResolvedAppRequestLimitOptions;
-  routes: readonly AppRouteDeclaration<any>[];
-  sessionProvider?: SessionProvider<any, any>;
+  readonly clientModules: VersionedClientModuleRegistry;
+  readonly csrf?: CsrfOptions<any>;
+  readonly db?: DbProvider<any, any, any>;
+  readonly diagnostics: readonly AppDiagnostic[];
+  readonly document: AppDocumentOptions;
+  readonly endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
+  readonly errorShells: AppErrorShellOptions;
+  readonly liveTargetRenderers: readonly LiveTargetRenderer<any>[];
+  readonly mutationResponses: AppMutationResponses;
+  readonly mutations: readonly AppMutationDeclaration<any>[];
+  readonly mutationReplayStore?: MutationReplayStore;
+  readonly onError?: ServerErrorHandler;
+  readonly queries: readonly AppQueryDeclaration<any>[];
+  readonly renderRoute?: (
+    value: unknown,
+    context: AppRouteRenderContext,
+  ) => Promise<string> | string;
+  readonly requestLimits: ResolvedAppRequestLimitOptions;
+  readonly routes: readonly AppRouteDeclaration<any>[];
+  readonly sessionProvider?: SessionProvider<any, any>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
-  stylesheets: readonly (string | StylesheetAsset)[];
+  readonly stylesheets: readonly (string | StylesheetAsset)[];
   /** Durable task registry drained by the node JobRunner (SPEC §9.6). */
-  tasks: readonly AppTaskDeclaration[];
+  readonly tasks: readonly AppTaskDeclaration[];
 }
 
 /** Web-standard request handler returned by `createRequestHandler()` (SPEC §9.5). */

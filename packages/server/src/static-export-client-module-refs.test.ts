@@ -26,6 +26,7 @@ describe('server static export', () => {
       version: 'cart-dry-run',
     });
     const app = createApp({
+      clientModules: registry,
       routes: [
         route('/cart', {
           page: () =>
@@ -33,7 +34,6 @@ describe('server static export', () => {
         }),
       ],
     });
-    app.clientModules = registry;
 
     const result = await exportStaticApp(app);
 
@@ -68,6 +68,7 @@ describe('server static export', () => {
         version: 'menu-1',
       });
       const app = createApp({
+        clientModules: registry,
         routes: [
           route('/cart', {
             modulepreloads: [cartHref],
@@ -78,7 +79,6 @@ describe('server static export', () => {
           }),
         ],
       });
-      app.clientModules = registry;
       const handler = createRequestHandler(app);
 
       const result = await exportStaticApp(app, { outDir });
@@ -124,6 +124,7 @@ describe('server static export', () => {
       const cartUrl = new URL(cartHref, 'https://shop.example.test').href;
       const menuUrl = new URL(menuHref, 'https://shop.example.test').href;
       const app = createApp({
+        clientModules: registry,
         routes: [
           route('/cart', {
             modulepreloads: [cartUrl],
@@ -134,7 +135,6 @@ describe('server static export', () => {
           }),
         ],
       });
-      app.clientModules = registry;
 
       const result = await exportStaticApp(app, {
         origin: 'https://shop.example.test',
@@ -160,25 +160,17 @@ describe('server static export', () => {
   it('rejects referenced client modules that replay to non-JavaScript before writing files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
-      const app = createApp({
-        routes: [
-          route('/', {
-            modulepreloads: ['/c/cart.client.js?v=cart-1'],
-            page: () => trustedHtml('<main>Home</main>'),
-          }),
-        ],
-      });
-      app.clientModules = {
+      const clientModules = {
         buildToken() {
           return '';
         },
         entries() {
           return [];
         },
-        put(module) {
+        put(module: { path: string; version: string }) {
           return `/c/__v/${module.version}/${module.path.slice('/c/'.length)}`;
         },
-        resolve(href) {
+        resolve(href?: string) {
           if (href?.includes('/kovo-runtime.client.js')) {
             return {
               body: 'export {};',
@@ -193,6 +185,15 @@ describe('server static export', () => {
           };
         },
       };
+      const app = createApp({
+        clientModules,
+        routes: [
+          route('/', {
+            modulepreloads: ['/c/cart.client.js?v=cart-1'],
+            page: () => trustedHtml('<main>Home</main>'),
+          }),
+        ],
+      });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
         code: 'KV229',
@@ -217,25 +218,17 @@ describe('server static export', () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const badHref = '/c/%2Fescape.client.js?v=v1';
-      const app = createApp({
-        routes: [
-          route('/unsafe', {
-            modulepreloads: [badHref],
-            page: () => trustedHtml('<main>Unsafe module path</main>'),
-          }),
-        ],
-      });
-      app.clientModules = {
+      const clientModules = {
         buildToken() {
           return '';
         },
         entries() {
           return [];
         },
-        put(module) {
+        put(module: { path: string; version: string }) {
           return `/c/__v/${module.version}/${module.path.slice('/c/'.length)}`;
         },
-        resolve(href) {
+        resolve(href?: string) {
           if (href?.includes('/kovo-runtime.client.js')) {
             return {
               body: 'export {};',
@@ -250,6 +243,15 @@ describe('server static export', () => {
           };
         },
       };
+      const app = createApp({
+        clientModules,
+        routes: [
+          route('/unsafe', {
+            modulepreloads: [badHref],
+            page: () => trustedHtml('<main>Unsafe module path</main>'),
+          }),
+        ],
+      });
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
         code: 'KV229',

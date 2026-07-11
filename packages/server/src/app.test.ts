@@ -4,6 +4,7 @@ import { component } from '@kovojs/core';
 
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 
+import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
 import { appRateLimitKeyCounts } from './app-load-shed.js';
 import { versionedClientModuleHref } from './client-modules.js';
@@ -655,6 +656,27 @@ describe('server createApp request shell', () => {
         renderRoute: '<main>compat</main>',
       } as unknown as Parameters<typeof createRequestHandler>[0]),
     ).toThrow('createRequestHandler() requires a Kovo app aggregate.');
+  });
+
+  it('rejects a shallow app clone before its audited query registry can be replaced', () => {
+    const privateQuery = query('probe-secret', {
+      access: [guards.authed()],
+      load: () => ({ secret: 'private' }),
+    });
+    const replacement = query('probe-secret', {
+      access: publicAccess('adversarial aggregate replacement'),
+      load: () => ({ secret: 'leaked' }),
+    });
+    const app = createApp({ queries: [privateQuery] });
+    const clone = { ...app };
+
+    expect(() => createRequestHandler(clone as Parameters<typeof createRequestHandler>[0])).toThrow(
+      'createRequestHandler() requires a Kovo app aggregate.',
+    );
+    clone.queries = [replacement];
+    expect(() => createRequestHandler(clone as Parameters<typeof createRequestHandler>[0])).toThrow(
+      'createRequestHandler() requires a Kovo app aggregate.',
+    );
   });
 
   it('rejects malformed declaration entries before request dispatch', () => {

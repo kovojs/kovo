@@ -36,6 +36,7 @@
           "./internal/component-render",
           "./internal/event",
           "./internal/storage",
+          "./internal/verifier",
           "./internal/wire-json"
         ]
       },

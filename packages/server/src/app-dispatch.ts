@@ -1,6 +1,6 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
 import { validateCsrfToken, type CsrfOptions } from './csrf.js';
-import { runEndpoint, runEndpointAuth } from './endpoint.js';
+import { runEndpoint, runEndpointAccessDecision, runEndpointAuth } from './endpoint.js';
 import {
   renderQueryRegistryEndpointResponse,
   type QueryEndpointRegistry,
@@ -105,6 +105,8 @@ export async function dispatchMatchedAppRequest({
     const csrfFailure = await validateEndpointCsrf(match.endpoint, request, app.csrf);
     if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
     if (isWebhookEndpoint(match.endpoint)) {
+      const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);
+      if (accessFailure) return finalizeRawWebResponse(accessFailure, request);
       const taskScheduler = appTaskScheduler(app);
       const mutationOptions = {
         clientIp: (req: Request) => resolveRequestClientIp(app, req),

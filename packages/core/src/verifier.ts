@@ -120,6 +120,12 @@ export interface StandardWebhooksOptions {
 
 const defaultWebhookToleranceSeconds = 5 * 60;
 const textEncoder = new TextEncoder();
+const frameworkHmacSignatureVerifiers = new WeakSet<object>();
+
+/** @internal Unforgeable provenance check for framework-constructed HMAC verifiers. */
+export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacSignatureVerifier {
+  return typeof value === 'object' && value !== null && frameworkHmacSignatureVerifiers.has(value);
+}
 
 /**
  * Build an HMAC webhook verifier that checks a signature header against the raw
@@ -140,28 +146,86 @@ const textEncoder = new TextEncoder();
  * });
  */
 export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerifier {
-  const name = options.name ?? 'hmac';
-  const scheme = options.scheme ?? `hmac-sha256:${options.encoding}`;
-  const resolved: ResolvedHmacSignatureConfig = {
-    encoding: options.encoding,
-    header: options.header,
+  // SPEC §9.1 verifier-before-parse is a security boundary. Keep the executable
+  // verifier on a private semantic snapshot so later writes through either the
+  // caller-owned options object or the public audit config cannot change which
+  // bytes, secrets, or timestamp posture authenticate an already-declared app.
+  const runtimeOptions = snapshotHmacSignatureOptions(options);
+  const config = snapshotHmacSignatureOptions(runtimeOptions);
+  const name = runtimeOptions.name ?? 'hmac';
+  const scheme = runtimeOptions.scheme ?? `hmac-sha256:${runtimeOptions.encoding}`;
+  const resolved: ResolvedHmacSignatureConfig = Object.freeze({
+    encoding: runtimeOptions.encoding,
+    header: runtimeOptions.header,
     kind: 'hmac',
-    multiSig: options.multiSig !== undefined && options.multiSig !== false,
+    multiSig: runtimeOptions.multiSig !== undefined && runtimeOptions.multiSig !== false,
     name,
     scheme,
-    ...(options.tolerance === undefined ? {} : { toleranceSeconds: options.tolerance.seconds }),
-  };
+    ...(runtimeOptions.tolerance === undefined
+      ? {}
+      : { toleranceSeconds: runtimeOptions.tolerance.seconds }),
+  });
 
-  return {
-    config: options,
+  const verifier: HmacSignatureVerifier = {
+    config,
     kind: 'hmac',
     name,
     resolved,
     scheme,
-    async verify(request) {
-      return verifyHmacSignature(options, request);
+    async verify(request: WebhookVerificationRequest) {
+      return verifyHmacSignature(runtimeOptions, request);
     },
   };
+  frameworkHmacSignatureVerifiers.add(verifier);
+  return Object.freeze(verifier);
+}
+
+function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignatureOptions {
+  return Object.freeze({
+    encoding: options.encoding,
+    header: options.header,
+    ...(options.multiSig === undefined ? {} : { multiSig: options.multiSig }),
+    ...(options.name === undefined ? {} : { name: options.name }),
+    payload: snapshotWebhookPayload(options.payload),
+    ...(options.scheme === undefined ? {} : { scheme: options.scheme }),
+    secret: snapshotHmacSecrets(options.secret),
+    ...(options.timestampBound === undefined ? {} : { timestampBound: options.timestampBound }),
+    ...(options.tolerance === undefined
+      ? {}
+      : {
+          tolerance: Object.freeze({
+            ...(options.tolerance.header === undefined ? {} : { header: options.tolerance.header }),
+            seconds: options.tolerance.seconds,
+            ...(options.tolerance.timestamp === undefined
+              ? {}
+              : { timestamp: options.tolerance.timestamp }),
+          }),
+        }),
+  });
+}
+
+function snapshotWebhookPayload(payload: HmacSignaturePayload): HmacSignaturePayload {
+  if (typeof payload === 'function' || typeof payload === 'string') return payload;
+  if (payload instanceof ArrayBuffer) return copyBytes(new Uint8Array(payload));
+  return copyBytes(new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength));
+}
+
+function snapshotHmacSecrets(
+  secret: HmacSignatureOptions['secret'],
+): HmacSignatureOptions['secret'] {
+  if (Array.isArray(secret)) {
+    return Object.freeze((secret as readonly HmacSecret[]).map(snapshotHmacSecret));
+  }
+  return snapshotHmacSecret(secret as HmacSecret);
+}
+
+function snapshotHmacSecret(secret: HmacSecret): HmacSecret {
+  if (typeof secret === 'string') return secret;
+  if (secret instanceof Uint8Array) return copyBytes(secret);
+  return Object.freeze({
+    ...(secret.encoding === undefined ? {} : { encoding: secret.encoding }),
+    value: typeof secret.value === 'string' ? secret.value : copyBytes(secret.value),
+  });
 }
 
 /**
@@ -455,6 +519,8 @@ async function hmacSha256(secret: Uint8Array, payload: Uint8Array): Promise<Uint
 }
 
 function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  // Do not dispatch to bytes.slice(): Node Buffer is a Uint8Array subclass whose
+  // slice() shares backing memory, which would retain caller-owned signing material.
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   return copy;

@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,6 +10,7 @@ import {
   type WebhookPayload,
   type WebhookVerificationRequest,
 } from './index.js';
+import { isFrameworkHmacSignatureVerifier } from './internal/verifier.js';
 
 const providerPayload = '{"id":"evt_test_webhook","object":"event"}';
 const providerTimestamp = 1674087231;
@@ -58,6 +60,93 @@ describe('webhook verifier kit', () => {
         },
       }),
     ).resolves.toBe(false);
+  });
+
+  it('keeps executable HMAC posture on a private semantic snapshot', async () => {
+    const secret = new TextEncoder().encode('snapshot-secret');
+    const payload = new TextEncoder().encode('snapshot-payload');
+    const tolerance = { header: 'x-timestamp', seconds: 300 };
+    const options = {
+      encoding: 'hex' as const,
+      header: 'x-signature',
+      payload,
+      secret,
+      tolerance,
+    };
+    const verifier = hmacSignature(options);
+    const timestamp = '1700000000';
+    const signature = createHmac('sha256', 'snapshot-secret')
+      .update(`${timestamp}.snapshot-payload`)
+      .digest('hex');
+
+    secret.fill(0);
+    payload.fill(0);
+    tolerance.header = 'x-attacker-time';
+    tolerance.seconds = 0;
+    options.secret = new TextEncoder().encode('attacker-secret');
+    options.payload = new TextEncoder().encode('attacker-payload');
+    const exposedSecret = verifier.config.secret as Uint8Array;
+    const exposedPayload = verifier.config.payload as Uint8Array;
+    exposedSecret.fill(0);
+    exposedPayload.fill(0);
+
+    await expect(
+      verifier.verify({
+        headers: {
+          'x-signature': signature,
+          'x-timestamp': timestamp,
+        },
+        now: Number(timestamp) * 1000,
+        payload: 'request-body-is-not-the-configured-payload',
+      }),
+    ).resolves.toBe(true);
+    expect(Object.isFrozen(verifier)).toBe(true);
+    expect(Object.isFrozen(verifier.config)).toBe(true);
+    expect(Object.isFrozen(verifier.config.tolerance)).toBe(true);
+    expect(Object.isFrozen(verifier.resolved)).toBe(true);
+    expect(isFrameworkHmacSignatureVerifier(verifier)).toBe(true);
+    expect(isFrameworkHmacSignatureVerifier(customVerifier('custom', () => true))).toBe(false);
+    expect(
+      isFrameworkHmacSignatureVerifier({
+        ...verifier,
+        verify: async () => true,
+      }),
+    ).toBe(false);
+    expect(await import('./index.js')).not.toHaveProperty('isFrameworkHmacSignatureVerifier');
+  });
+
+  it('copies Buffer payloads and direct or wrapped Buffer secrets without shared backing memory', async () => {
+    const directSecret = Buffer.from('old-secret');
+    const wrappedSecret = Buffer.from('old-secret');
+    const configuredPayload = Buffer.from('old-payload');
+    const direct = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: configuredPayload,
+      secret: directSecret,
+    });
+    const wrapped = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: configuredPayload,
+      secret: { encoding: 'utf8', value: wrappedSecret },
+    });
+    const attackerSignature = createHmac('sha256', 'new-secret')
+      .update('new-payload')
+      .digest('hex');
+    const request = {
+      headers: { 'x-signature': attackerSignature },
+      payload: 'request-body',
+    } satisfies WebhookVerificationRequest;
+
+    await expect(direct.verify(request)).resolves.toBe(false);
+    await expect(wrapped.verify(request)).resolves.toBe(false);
+    directSecret.set(Buffer.from('new-secret'));
+    wrappedSecret.set(Buffer.from('new-secret'));
+    configuredPayload.set(Buffer.from('new-payload'));
+
+    await expect(direct.verify(request)).resolves.toBe(false);
+    await expect(wrapped.verify(request)).resolves.toBe(false);
   });
 
   it('supports app-owned timestamped multi-signature HMAC recipes', async () => {

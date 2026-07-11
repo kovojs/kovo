@@ -132,6 +132,7 @@ describe('server static export', () => {
         version: 'cart-sri',
       });
       const app = createApp({
+        clientModules: registry,
         routes: [
           route('/', {
             bootstrapScript: cartHref,
@@ -144,7 +145,6 @@ describe('server static export', () => {
           }),
         ],
       });
-      app.clientModules = registry;
 
       const result = await exportStaticApp(app, {
         assets: [

@@ -142,9 +142,7 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
         renderPlanFingerprint: fingerprint,
       });
       registry.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
-      const app = createApp({ routes: [homeRoute] });
-      app.clientModules = registry;
-      return app;
+      return createApp({ clientModules: registry, routes: [homeRoute] });
     };
 
     const fp1 = computeRenderPlanFingerprint({ cart: 'field:id,count' });
