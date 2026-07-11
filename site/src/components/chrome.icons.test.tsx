@@ -16,5 +16,7 @@ describe('site chrome @kovojs/icons adoption', () => {
     // Lucide sun: a center circle plus rays; decorative by default.
     expect(html).toContain('<circle cx="12" cy="12" r="4">');
     expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('data-kovo-module-allowlist="/c/search"');
+    expect(html).toContain('data-kovo-module-allowlist="/c/theme"');
   });
 });

@@ -208,6 +208,7 @@ function SearchDialog(): string {
         placeholder="Search docs..."
         on:input={`${clientHrefs.search}#query`}
         on:keydown={`${clientHrefs.search}#navigate`}
+        data-kovo-module-allowlist={clientHrefs.search}
         kovo-state="{}"
       />
       <ul class={searchResultsClass} id="site-search-results">

@@ -685,6 +685,7 @@ function SecurityHero({ clients }: { clients: ClientHrefs }): string {
                 type="button"
                 style={landingStyles.copyButton}
                 on:click={`${clients.code}#copy`}
+                data-kovo-module-allowlist={clients.code}
               >
                 copy
               </button>

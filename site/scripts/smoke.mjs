@@ -96,7 +96,16 @@ try {
   await page.goto(`${origin}/getting-started/mental-model/`, { waitUntil: 'networkidle' });
   check(eagerIslandRequests.length === 0, 'JS: zero island bytes before first interaction');
 
-  await page.click('button[on\\:click$="search.js#open"]');
+  const searchButton = page.locator('button[on\\:click$="search.js#open"]').first();
+  const searchHandler = await searchButton.getAttribute('on:click');
+  const searchModule = searchHandler?.slice(0, searchHandler.lastIndexOf('#')) ?? '';
+  const searchAllowlist =
+    (await searchButton.getAttribute('data-kovo-module-allowlist'))?.split(/\s+/) ?? [];
+  check(
+    searchModule !== '' && searchAllowlist.includes(searchModule),
+    'JS: search handler carries an exact module allowlist',
+  );
+  await searchButton.click();
   await page.waitForFunction(() => document.getElementById('site-search')?.open === true);
   check(
     scriptRequests.some((script) => script.endsWith('/search.js')),

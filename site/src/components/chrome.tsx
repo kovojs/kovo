@@ -631,6 +631,7 @@ export const SiteHeader = component({
             type="button"
             style={chromeStyles.searchButton}
             on:click={`${clients.search}#open`}
+            data-kovo-module-allowlist={clients.search}
           >
             <span>Search</span>
             <kbd style={chromeStyles.searchKey}>&#8984;K</kbd>
@@ -639,6 +640,7 @@ export const SiteHeader = component({
             type="button"
             style={chromeStyles.searchIconButton}
             on:click={`${clients.search}#open`}
+            data-kovo-module-allowlist={clients.search}
             aria-label="Search documentation"
           >
             <svg
@@ -660,6 +662,7 @@ export const SiteHeader = component({
             type="button"
             style={chromeStyles.iconButton}
             on:click={`${clients.theme}#toggle`}
+            data-kovo-module-allowlist={clients.theme}
             aria-label="Toggle dark mode"
           >
             <Sun style={chromeStyles.themeIcon} />
@@ -762,6 +765,7 @@ export const DocsSidebar = component({
       data-docs-sidebar={mode}
       // KV211: desktop docs nav syncs at parse so the current section is visible immediately.
       on:load={mode === 'desktop' && syncHref ? `${syncHref}#sync` : undefined}
+      data-kovo-module-allowlist={mode === 'desktop' && syncHref ? syncHref : undefined}
     >
       {groups.map((group) => {
         const activeGroup =
