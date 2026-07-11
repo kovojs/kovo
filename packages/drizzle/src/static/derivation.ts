@@ -1920,7 +1920,7 @@ function valueReadsColumn(value: SymbolicValue, column: string): boolean {
 type AtomicColumnKey = string;
 
 interface AtomicReadFlow {
-  rowColumnsBySymbol: Map<string, Map<string, AtomicColumnKey>>;
+  rowColumnsBySymbol: Map<string, Map<string, Set<AtomicColumnKey>>>;
   valueColumnsBySymbol: Map<string, Set<AtomicColumnKey>>;
 }
 
@@ -1968,32 +1968,93 @@ function atomicReadFlowBefore(
     rowColumnsBySymbol: new Map(),
     valueColumnsBySymbol: new Map(),
   };
-  const declarations = body
-    .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
-    .filter((declaration) => declaration.getStart() < before.getStart())
-    .sort((left, right) => left.getStart() - right.getStart());
+  const events = [
+    ...body
+      .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+      .filter((declaration) => declaration.getStart() < before.getStart())
+      .flatMap((declaration) => {
+        const initializer = declaration.getInitializer();
+        return initializer
+          ? [{ binding: declaration.getNameNode(), initializer, node: declaration, replace: true }]
+          : [];
+      }),
+    ...body
+      .getDescendantsOfKind(SyntaxKind.BinaryExpression)
+      .filter(
+        (assignment) =>
+          assignment.getStart() < before.getStart() &&
+          assignment.getOperatorToken().getKind() === SyntaxKind.EqualsToken,
+      )
+      .map((assignment) => ({
+        binding: assignment.getLeft(),
+        initializer: assignment.getRight(),
+        node: assignment,
+        replace: assignmentDefinitelyPrecedesWrite(assignment, before),
+      })),
+  ].sort((left, right) => left.node.getStart() - right.node.getStart());
 
-  for (const declaration of declarations) {
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
-    const projection = selectAtomicProjectionColumns(initializer, resolveTable, concurrencyByTable);
-    if (projection.size > 0) {
-      assignProjectedRowBinding(declaration.getNameNode(), projection, flow);
-    }
-
-    const reads = atomicReadsForExpression(initializer, flow);
-    if (reads.size > 0) assignAtomicReadBinding(declaration.getNameNode(), reads, flow);
+  for (const event of events) {
+    applyAtomicReadFlowBinding(
+      event.binding,
+      event.initializer,
+      flow,
+      resolveTable,
+      concurrencyByTable,
+      event.replace,
+    );
   }
 
   return flow;
+}
+
+function applyAtomicReadFlowBinding(
+  binding: Node,
+  initializer: Node,
+  flow: AtomicReadFlow,
+  resolveTable: (node: Node) => string | undefined,
+  concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
+  replace: boolean,
+): void {
+  const projection = projectedAtomicRowForExpression(
+    initializer,
+    flow,
+    resolveTable,
+    concurrencyByTable,
+  );
+  const reads = atomicReadsForExpression(initializer, flow);
+  const destructuredReads = projectedRowDestructuringReads(binding, initializer, flow);
+  if (replace) clearAtomicReadBinding(binding, flow);
+
+  if (projection.size > 0) assignProjectedRowBinding(binding, projection, flow, replace);
+  for (const target of destructuredReads) {
+    if (!Node.isIdentifier(target.target)) continue;
+    const key = symbolKeyForBinding(target.target);
+    if (key) mergeAtomicValueBinding(key, target.reads, flow, replace);
+  }
+  if (reads.size > 0) assignAtomicReadBinding(binding, reads, flow, replace);
+}
+
+function projectedAtomicRowForExpression(
+  expression: Node,
+  flow: AtomicReadFlow,
+  resolveTable: (node: Node) => string | undefined,
+  concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
+): Map<string, Set<AtomicColumnKey>> {
+  const selected = selectAtomicProjectionColumns(expression, resolveTable, concurrencyByTable);
+  if (selected.size > 0) return selected;
+  const node = unwrapAwait(expression);
+  if (!Node.isIdentifier(node)) return new Map();
+  const key = symbolKeyForBinding(node);
+  const aliased = key ? flow.rowColumnsBySymbol.get(key) : undefined;
+  return aliased ? cloneAtomicProjection(aliased) : new Map();
 }
 
 function selectAtomicProjectionColumns(
   expression: Node,
   resolveTable: (node: Node) => string | undefined,
   concurrencyByTable: ReadonlyMap<string, ConcurrencyTableInfo>,
-): Map<string, AtomicColumnKey> {
-  const columns = new Map<string, AtomicColumnKey>();
+): Map<string, Set<AtomicColumnKey>> {
+  const columns = new Map<string, Set<AtomicColumnKey>>();
   const node = unwrapAwait(expression);
   const calls = [
     ...(Node.isCallExpression(node) ? [node] : []),
@@ -2018,7 +2079,7 @@ function selectAtomicProjectionColumns(
       const table = base ? resolveTable(base) : undefined;
       const info = table ? concurrencyByTable.get(table) : undefined;
       if (!table || !column || !info?.atomic.has(column)) continue;
-      columns.set(output, atomicColumnKey(table, column));
+      columns.set(output, new Set([atomicColumnKey(table, column)]));
     }
   }
   return columns;
@@ -2026,24 +2087,21 @@ function selectAtomicProjectionColumns(
 
 function assignProjectedRowBinding(
   binding: Node,
-  projection: Map<string, AtomicColumnKey>,
+  projection: Map<string, Set<AtomicColumnKey>>,
   flow: AtomicReadFlow,
+  replace = true,
 ): void {
   if (Node.isIdentifier(binding)) {
     const key = symbolKeyForBinding(binding);
-    if (key) flow.rowColumnsBySymbol.set(key, new Map(projection));
+    if (key) mergeAtomicProjectionBinding(key, projection, flow, replace);
     return;
   }
 
-  if (Node.isArrayBindingPattern(binding)) {
-    for (const element of binding.getElements()) {
-      if (!Node.isBindingElement(element) || element.getText().trimStart().startsWith('...')) {
-        continue;
-      }
-      const name = element.getNameNode();
-      if (!Node.isIdentifier(name)) continue;
-      const key = symbolKeyForBinding(name);
-      if (key) flow.rowColumnsBySymbol.set(key, new Map(projection));
+  if (Node.isArrayBindingPattern(binding) || Node.isArrayLiteralExpression(binding)) {
+    for (const target of arrayAssignmentTargets(binding)) {
+      if (!Node.isIdentifier(target)) continue;
+      const key = symbolKeyForBinding(target);
+      if (key) mergeAtomicProjectionBinding(key, projection, flow, replace);
     }
   }
 }
@@ -2052,22 +2110,178 @@ function assignAtomicReadBinding(
   binding: Node,
   reads: Set<AtomicColumnKey>,
   flow: AtomicReadFlow,
+  replace = true,
 ): void {
   if (Node.isIdentifier(binding)) {
     const key = symbolKeyForBinding(binding);
-    if (key) flow.valueColumnsBySymbol.set(key, new Set(reads));
+    if (key) mergeAtomicValueBinding(key, reads, flow, replace);
     return;
   }
 
-  if (Node.isObjectBindingPattern(binding)) {
-    for (const element of binding.getElements()) {
-      if (element.getText().trimStart().startsWith('...')) continue;
-      const name = element.getNameNode();
-      if (!Node.isIdentifier(name)) continue;
-      const key = symbolKeyForBinding(name);
-      if (key) flow.valueColumnsBySymbol.set(key, new Set(reads));
-    }
+  for (const target of destructuringAssignmentTargets(binding)) {
+    if (!Node.isIdentifier(target)) continue;
+    const key = symbolKeyForBinding(target);
+    if (key) mergeAtomicValueBinding(key, reads, flow, replace);
   }
+}
+
+function projectedRowDestructuringReads(
+  binding: Node,
+  initializer: Node,
+  flow: AtomicReadFlow,
+): { reads: Set<AtomicColumnKey>; target: Node }[] {
+  if (!Node.isObjectBindingPattern(binding) && !Node.isObjectLiteralExpression(binding)) return [];
+  const source = unwrapAwait(initializer);
+  if (!Node.isIdentifier(source)) return [];
+  const sourceKey = symbolKeyForBinding(source);
+  const projection = sourceKey ? flow.rowColumnsBySymbol.get(sourceKey) : undefined;
+  if (!projection) return [];
+
+  return objectAssignmentTargets(binding).flatMap((target) => {
+    const reads = projection.get(target.property);
+    return reads ? [{ reads: new Set(reads), target: target.target }] : [];
+  });
+}
+
+function clearAtomicReadBinding(binding: Node, flow: AtomicReadFlow): void {
+  for (const target of assignmentTargets(binding)) {
+    if (!Node.isIdentifier(target)) continue;
+    const key = symbolKeyForBinding(target);
+    if (!key) continue;
+    flow.rowColumnsBySymbol.delete(key);
+    flow.valueColumnsBySymbol.delete(key);
+  }
+}
+
+function assignmentTargets(binding: Node): Node[] {
+  if (Node.isIdentifier(binding)) return [binding];
+  return destructuringAssignmentTargets(binding);
+}
+
+function destructuringAssignmentTargets(binding: Node): Node[] {
+  if (Node.isArrayBindingPattern(binding) || Node.isArrayLiteralExpression(binding)) {
+    return arrayAssignmentTargets(binding);
+  }
+  if (Node.isObjectBindingPattern(binding) || Node.isObjectLiteralExpression(binding)) {
+    return objectAssignmentTargets(binding).map(({ target }) => target);
+  }
+  return [];
+}
+
+function arrayAssignmentTargets(binding: Node): Node[] {
+  if (Node.isArrayBindingPattern(binding)) {
+    return binding.getElements().flatMap((element) => {
+      if (!Node.isBindingElement(element) || element.getText().trimStart().startsWith('...')) {
+        return [];
+      }
+      return assignmentTargets(element.getNameNode());
+    });
+  }
+  if (Node.isArrayLiteralExpression(binding)) {
+    return binding.getElements().flatMap((element) => {
+      if (Node.isOmittedExpression(element) || Node.isSpreadElement(element)) return [];
+      return assignmentTargets(unwrappedStaticExpressionNode(element));
+    });
+  }
+  return [];
+}
+
+function objectAssignmentTargets(binding: Node): { property: string; target: Node }[] {
+  if (Node.isObjectBindingPattern(binding)) {
+    return binding.getElements().flatMap((element) => {
+      if (element.getText().trimStart().startsWith('...')) return [];
+      const property = propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
+      return property ? [{ property, target: element.getNameNode() }] : [];
+    });
+  }
+  if (Node.isObjectLiteralExpression(binding)) {
+    return binding.getProperties().flatMap((property) => {
+      if (Node.isShorthandPropertyAssignment(property)) {
+        const name = propertyNameText(property.getNameNode());
+        return name ? [{ property: name, target: property.getNameNode() }] : [];
+      }
+      if (!Node.isPropertyAssignment(property)) return [];
+      const name = propertyNameText(property.getNameNode());
+      const target = property.getInitializer();
+      return name && target ? [{ property: name, target }] : [];
+    });
+  }
+  return [];
+}
+
+function mergeAtomicProjectionBinding(
+  key: string,
+  projection: Map<string, Set<AtomicColumnKey>>,
+  flow: AtomicReadFlow,
+  replace: boolean,
+): void {
+  const merged = replace
+    ? new Map<string, Set<AtomicColumnKey>>()
+    : cloneAtomicProjection(flow.rowColumnsBySymbol.get(key) ?? new Map());
+  for (const [property, reads] of projection) {
+    const existing = merged.get(property) ?? new Set<AtomicColumnKey>();
+    for (const read of reads) existing.add(read);
+    merged.set(property, existing);
+  }
+  flow.rowColumnsBySymbol.set(key, merged);
+}
+
+function cloneAtomicProjection(
+  projection: ReadonlyMap<string, ReadonlySet<AtomicColumnKey>>,
+): Map<string, Set<AtomicColumnKey>> {
+  return new Map([...projection].map(([property, reads]) => [property, new Set(reads)]));
+}
+
+function mergeAtomicValueBinding(
+  key: string,
+  reads: ReadonlySet<AtomicColumnKey>,
+  flow: AtomicReadFlow,
+  replace: boolean,
+): void {
+  const merged = replace
+    ? new Set<AtomicColumnKey>()
+    : new Set(flow.valueColumnsBySymbol.get(key) ?? []);
+  for (const read of reads) merged.add(read);
+  flow.valueColumnsBySymbol.set(key, merged);
+}
+
+/**
+ * Only a plainly evaluated assignment in the write's own statement block may discard prior
+ * provenance. Branch/loop/logical assignments are path-conditional, so they join with the old
+ * facts and keep KV429 fail-closed on every path that can still carry the atomic read.
+ */
+function assignmentDefinitelyPrecedesWrite(assignment: Node, write: Node): boolean {
+  const block = assignment.getFirstAncestorByKind(SyntaxKind.Block);
+  if (!block) return false;
+  const assignmentStatement = directChildWithinBlock(assignment, block);
+  const writeStatement = directChildWithinBlock(write, block);
+  if (!assignmentStatement || !writeStatement || !Node.isExpressionStatement(assignmentStatement)) {
+    return false;
+  }
+  if (assignment.getStart() >= write.getStart()) return false;
+
+  let current: Node | undefined = assignment;
+  while (current && current !== assignmentStatement) {
+    if (Node.isConditionalExpression(current)) return false;
+    if (Node.isBinaryExpression(current)) {
+      const operator = current.getOperatorToken().getKind();
+      if (
+        operator === SyntaxKind.AmpersandAmpersandToken ||
+        operator === SyntaxKind.BarBarToken ||
+        operator === SyntaxKind.QuestionQuestionToken
+      ) {
+        return false;
+      }
+    }
+    current = current.getParent();
+  }
+  return true;
+}
+
+function directChildWithinBlock(node: Node, block: Node): Node | undefined {
+  let current: Node | undefined = node;
+  while (current && current.getParent() !== block) current = current.getParent();
+  return current;
 }
 
 function atomicReadsForExpression(expression: Node, flow: AtomicReadFlow): Set<AtomicColumnKey> {
@@ -2085,9 +2299,9 @@ function atomicReadsForExpression(expression: Node, flow: AtomicReadFlow): Set<A
       const property = staticAccessName(unwrapped);
       const root = staticExpressionRootIdentifier(unwrapped);
       const rootKey = root ? symbolKeyForBinding(root) : undefined;
-      const column =
+      const columns =
         rootKey && property ? flow.rowColumnsBySymbol.get(rootKey)?.get(property) : undefined;
-      if (column) reads.add(column);
+      for (const column of columns ?? []) reads.add(column);
     }
   };
 

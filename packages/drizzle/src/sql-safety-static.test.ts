@@ -858,4 +858,72 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     `);
     expect(aliasedLiteral).toEqual([]);
   });
+
+  // C13-style member-capability corpus: every spelling below preserves the same callable
+  // `sql.raw`/`sql.identifier` identity and therefore must preserve the same closed KV422 verdict.
+  it.each([
+    ['detached member', 'const dangerous = sql.raw;'],
+    ['ordinary alias chain', 'const first = sql.raw; const dangerous = first;'],
+    ['shorthand destructuring', 'const { raw: dangerous } = sql;'],
+    [
+      'destructuring through an alias',
+      'const helpers = sql; const { raw: first } = helpers; const dangerous = first;',
+    ],
+  ])('flags request-derived SQL through a %s alias', (_label, declaration) => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function loadProducts(input: { sort: string }, db: any) {
+        ${declaration}
+        return db.select().from(products).orderBy(dangerous(input.sort));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.raw(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('tracks detached identifier helpers while preserving literal allowlists', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function loadProducts(input: { table: string }, db: any) {
+        const { identifier } = sql;
+        const alias = identifier;
+        db.select().from(alias(input.table));
+        db.select().from(alias(input.table, { allow: ["products", "prices"] }));
+      }
+    `);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.identifier(...) receives request-derived text'),
+      },
+    ]);
+  });
+
+  it('keeps detached native Drizzle helpers closed and local lookalikes open', () => {
+    const native = diagnosticsFor(`
+      import { sql as drizzleSql } from 'drizzle-orm';
+      const raw = drizzleSql.raw;
+      const alias = raw;
+      export async function loadProducts(db: any) {
+        return db.select().from(products).orderBy(alias("created_at desc"));
+      }
+    `);
+    expect(native).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('Direct drizzle-orm sql.raw(...) is not accepted'),
+      },
+    ]);
+
+    const local = diagnosticsFor(`
+      const sql = { raw: (value: string) => ({ value }) };
+      const raw = sql.raw;
+      export function format(input: { sort: string }) { return raw(input.sort); }
+    `);
+    expect(local).toEqual([]);
+  });
 });

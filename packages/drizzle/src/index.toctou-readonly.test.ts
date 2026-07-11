@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  analyzeSqlSafetyFromProject,
   extractQueryWriteReachabilityFromProject,
   extractToctouFromProject,
 } from '@kovojs/drizzle/internal/static';
@@ -144,6 +145,180 @@ describe('KV429 TOCTOU lost-update gate', () => {
       ),
     );
     expect(result).toEqual([]);
+  });
+});
+
+describe('KV429 concurrency annotation composition corpus', () => {
+  const unsafeWrite = buy(
+    '  await db.update(products).set({ stock: sql`${products.stock} - ${input.qty}` }).where(eq(products.id, input.id));',
+  );
+
+  it.each([
+    [
+      'shorthand selectors',
+      [
+        'const atomic = (table: any) => table.stock;',
+        'const version = (table: any) => table.ver;',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", atomic, version }));',
+      ].join('\n'),
+    ],
+    [
+      'static object spread',
+      [
+        'const concurrency = { atomic: (table: any) => table.stock, version: (table: any) => table.ver } as const;',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'transitive aliases and spreads',
+      [
+        'const atomicColumns = [(table: any) => table.stock] as const;',
+        'const base = { atomic: atomicColumns, version: (table: any) => table.ver } as const;',
+        'const alias = base;',
+        'const concurrency = { ...alias } as const;',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...concurrency }));',
+      ].join('\n'),
+    ],
+    [
+      'const annotation object alias',
+      [
+        'const atomic = "stock";',
+        'const concurrency = { atomic, version: "ver" } as const;',
+        'const annotation = { domain: "product", key: "id", ...concurrency } as const;',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo(annotation));',
+      ].join('\n'),
+    ],
+  ])('retains declared atomic/version facts through %s', (_label, schema) => {
+    expect(toctou(schema, unsafeWrite)).toMatchObject([
+      { column: 'stock', name: 'buy', table: 'products' },
+    ]);
+  });
+
+  it('fails closed when a concurrency spread cannot be statically resolved', () => {
+    const schema = [
+      'declare const runtimeConcurrency: Record<string, unknown>;',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", ...runtimeConcurrency }));',
+    ].join('\n');
+    const diagnostics = analyzeSqlSafetyFromProject({
+      files: [writeDbTypes, { fileName: 'schema.ts', source: schema }],
+    });
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV429',
+        message: expect.stringContaining(
+          'concurrency annotation is dynamic or statically unresolved',
+        ),
+      },
+    ]);
+  });
+
+  it('fails closed on an explicitly dynamic atomic selector instead of erasing it', () => {
+    const schema = [
+      'declare function chooseAtomic(): (table: any) => unknown;',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo({ domain: "product", key: "id", atomic: chooseAtomic() }));',
+    ].join('\n');
+    const diagnostics = analyzeSqlSafetyFromProject({
+      files: [writeDbTypes, { fileName: 'schema.ts', source: schema }],
+    });
+    expect(diagnostics.map(({ code }) => code)).toContain('KV429');
+  });
+});
+
+describe('KV429 assignment and destructuring dataflow corpus', () => {
+  const FLAGGED = [{ column: 'stock', name: 'buy', table: 'products' }];
+  const facts = (body: string) =>
+    toctou(ATOMIC_SCHEMA, buy(body)).map(({ site: _site, ...fact }) => fact);
+
+  it.each([
+    [
+      'simple reassignment',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  let nextStock = 0;',
+        '  nextStock = Number(row.stock) - input.qty;',
+        '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'ordinary alias chain',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  let observed = 0; observed = row.stock;',
+        '  let alias = 0; alias = observed;',
+        '  const nextStock = alias - input.qty;',
+        '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'array destructuring assignment',
+      [
+        '  let row: { stock: number };',
+        '  [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  const nextStock = row.stock - input.qty;',
+        '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'object destructuring assignment',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  let observed = 0;',
+        '  ({ stock: observed } = row);',
+        '  const nextStock = observed - input.qty;',
+        '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+    [
+      'object destructuring declaration',
+      [
+        '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+        '  const { stock: observed } = row;',
+        '  const nextStock = observed - input.qty;',
+        '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+      ].join('\n'),
+    ],
+  ])('retains an atomic read through %s', (_label, body) => {
+    expect(facts(body)).toEqual(FLAGGED);
+  });
+
+  it('invalidates provenance after a definite server-value reassignment', () => {
+    expect(
+      facts(
+        [
+          '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+          '  let nextStock = row.stock - input.qty;',
+          '  nextStock = 10;',
+          '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps prior provenance when a branch-only reassignment does not dominate the write', () => {
+    expect(
+      facts(
+        [
+          '  const [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+          '  let nextStock = row.stock - input.qty;',
+          '  if (input.qty < 0) nextStock = 10;',
+          '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+        ].join('\n'),
+      ),
+    ).toEqual(FLAGGED);
+  });
+
+  it('invalidates a projected row after a definite row reassignment', () => {
+    expect(
+      facts(
+        [
+          '  let row: { stock: number };',
+          '  [row] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+          '  row = { stock: 10 };',
+          '  const nextStock = row.stock - input.qty;',
+          '  await db.update(products).set({ stock: nextStock }).where(eq(products.id, input.id));',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
   });
 });
 
