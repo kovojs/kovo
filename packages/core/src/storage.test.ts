@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -196,6 +196,37 @@ describe('filesystem storage delete confinement (SPEC §10.6)', () => {
     } finally {
       await rm(root, { force: true, recursive: true });
       await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a renamed-and-replaced storage root without deleting the external blob or sidecar', async () => {
+    const base = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-delete-root-swap-'));
+    const root = path.join(base, 'root');
+    const parkedRoot = path.join(base, 'root-parked');
+    const outside = path.join(base, 'outside');
+    try {
+      await mkdir(root);
+      await mkdir(outside);
+      const storage = createFileSystemStorage({ root });
+      await writeFile(path.join(outside, 'victim.txt'), 'external blob', 'utf8');
+      await writeFile(
+        path.join(outside, 'victim.txt.kovo-storage.json'),
+        'external sidecar',
+        'utf8',
+      );
+
+      await rename(root, parkedRoot);
+      await symlink(outside, root, 'dir');
+
+      await expect(storage.delete('victim.txt')).rejects.toThrow(/root identity changed/u);
+      await expect(readFile(path.join(outside, 'victim.txt'), 'utf8')).resolves.toBe(
+        'external blob',
+      );
+      await expect(
+        readFile(path.join(outside, 'victim.txt.kovo-storage.json'), 'utf8'),
+      ).resolves.toBe('external sidecar');
+    } finally {
+      await rm(base, { force: true, recursive: true });
     }
   });
 });

@@ -228,7 +228,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
   return {
     async delete(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = storageFilePath(fileSystem.root, normalizedKey);
+      const filePath = storageFilePath(fileSystem, normalizedKey);
       await withFileSystemWriteLock(writeLocks, filePath, async () => {
         await Promise.all([
           fileSystem.deleteFile(normalizedKey),
@@ -240,7 +240,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       const normalizedKey = normalizeStorageKey(key);
       const [bytes, info] = await Promise.all([
         fileSystem.fileBytes(normalizedKey),
-        fileSystemStat(fileSystem.root, normalizedKey),
+        fileSystemStat(fileSystem, normalizedKey),
       ]);
       if (bytes === undefined || info === undefined) return undefined;
 
@@ -251,7 +251,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = storageFilePath(fileSystem.root, normalizedKey);
+      const filePath = storageFilePath(fileSystem, normalizedKey);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new Date();
       const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, lastModified);
@@ -269,12 +269,12 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       return info;
     },
     async stat(key) {
-      return fileSystemStat(fileSystem.root, normalizeStorageKey(key));
+      return fileSystemStat(fileSystem, normalizeStorageKey(key));
     },
     async stream(key) {
       const normalizedKey = normalizeStorageKey(key);
       const bytes = await fileSystem.fileBytes(normalizedKey);
-      const info = await fileSystemStat(fileSystem.root, normalizedKey);
+      const info = await fileSystemStat(fileSystem, normalizedKey);
       if (bytes === undefined || info === undefined) return undefined;
 
       return {
@@ -494,8 +494,10 @@ function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
   };
 }
 
-async function fileSystemStat(root: string, key: string): Promise<StorageObjectInfo | undefined> {
-  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+async function fileSystemStat(
+  fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  key: string,
+): Promise<StorageObjectInfo | undefined> {
   const fileStats = await fileSystem.statFile(key);
   if (fileStats === undefined) return undefined;
 
@@ -522,8 +524,10 @@ async function fileSystemStat(root: string, key: string): Promise<StorageObjectI
   };
 }
 
-function storageFilePath(root: string, key: string): string {
-  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+function storageFilePath(
+  fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  key: string,
+): string {
   const filePath = fileSystem.confinedPath(key);
   if (filePath === undefined) throw new Error('Storage key resolves outside the storage root.');
   return filePath;
