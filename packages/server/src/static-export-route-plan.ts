@@ -1,4 +1,4 @@
-import { isGuardAccessDecision, type AccessDecision } from './access.js';
+import { accessDecisionFor, isGuardAccessDecision, type AccessDecision } from './access.js';
 import type { KovoApp } from './app-types.js';
 import { matchRoute, normalizePathname, parseRoutePattern } from './match.js';
 import {
@@ -22,7 +22,8 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
   const targetPaths = new Map<string, StaticExportRouteTarget>();
 
   for (const route of app.routes) {
-    if (app.sessionProvider && !isPublicAccessDecision(route.access)) {
+    const access = accessDecisionFor(route);
+    if (app.sessionProvider && !isPublicAccessDecision(access)) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
@@ -32,7 +33,7 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
       continue;
     }
 
-    if (route.guard || isGuardAccessDecision(route.access)) {
+    if (route.guard || isGuardAccessDecision(access)) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
@@ -42,7 +43,7 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
       continue;
     }
 
-    if (isPublicAccessDecision(route.access) && appRouteMayEmitAnonymousCsrfCookie(app)) {
+    if (isPublicAccessDecision(access) && appRouteMayEmitAnonymousCsrfCookie(app)) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,

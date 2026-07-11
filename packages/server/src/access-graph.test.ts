@@ -8,7 +8,7 @@ import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { guard, guards } from './guards.js';
 import type { Guard } from './guards.js';
 import { mutation } from './mutation.js';
-import { query } from './query.js';
+import { query, renderQueryEndpointResponse } from './query.js';
 import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { webhook } from './webhook.js';
@@ -210,6 +210,10 @@ describe('app access graph extraction', () => {
       access: sparse,
       page: () => '<main>private</main>',
     });
+    const invalidLayoutRoute = route('/private-layout', {
+      layout: layout({ access: sparse }),
+      page: () => '<main>private layout</main>',
+    });
     const invalidEndpoint = endpoint('/private-endpoint', {
       access: sparse,
       csrf: false,
@@ -219,11 +223,18 @@ describe('app access graph extraction', () => {
       reason: 'invalid access regression fixture',
       response: rawTextResponse,
     });
+    const invalidWebhook = webhook('/private-webhook', {
+      access: sparse,
+      handler: () => ({ private: true }),
+      input: s.object({}),
+      verify: 'none',
+      verifyJustification: 'invalid access regression fixture',
+    });
     const app = createApp({
-      endpoints: [invalidEndpoint],
+      endpoints: [invalidEndpoint, invalidWebhook],
       mutations: [invalidMutation],
       queries: [invalidQuery],
-      routes: [invalidRoute],
+      routes: [invalidRoute, invalidLayoutRoute],
     });
 
     expect(
@@ -231,8 +242,54 @@ describe('app access graph extraction', () => {
     ).toEqual([
       { decision: 'missing', kind: 'endpoint', name: '/private-endpoint' },
       { decision: 'missing', kind: 'mutation', name: 'private-mutation' },
+      { decision: 'missing', kind: 'page', name: '/private-layout' },
       { decision: 'missing', kind: 'page', name: '/private-page' },
       { decision: 'missing', kind: 'query', name: 'private-query' },
+      { decision: 'missing', kind: 'webhook', name: '/private-webhook' },
     ]);
+  });
+
+  it('shares one authoritative snapshot for proxied app assembly, audit, and runtime', async () => {
+    const deny = guard('proxy-deny', () => ({ kind: 'forbidden' as const }));
+    const allow = guard('proxy-allow', () => true);
+    const declaration = query('proxy-private', {
+      access: [deny],
+      load: () => ({ secret: true }),
+    });
+    const clone = { ...declaration };
+    let accessReads = 0;
+    const proxied = new Proxy(clone, {
+      get(target, property, receiver) {
+        if (property === 'access') {
+          accessReads += 1;
+          return [allow];
+        }
+        return Reflect.get(target, property, receiver);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return Reflect.getOwnPropertyDescriptor(target, property);
+      },
+    });
+    const app = createApp({ queries: [proxied] });
+
+    expect(Object.isFrozen(app)).toBe(true);
+    expect(Object.isFrozen(app.queries)).toBe(true);
+    expect(Reflect.set(app, 'queries', [])).toBe(false);
+    expect(Reflect.set(app.queries, '0', clone)).toBe(false);
+    expect(accessFactsFromApp(app)).toEqual([
+      {
+        decision: 'guard',
+        detail: 'access=guards guards=proxy-deny',
+        kind: 'query',
+        name: 'proxy-private',
+        source: 'access',
+      },
+    ]);
+    const response = await renderQueryEndpointResponse(app.queries[0]!, {
+      renderForbidden: () => '<main>Forbidden</main>',
+      request: {},
+    });
+    expect(response.status).toBe(403);
+    expect(accessReads).toBe(0);
   });
 });

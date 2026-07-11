@@ -1,16 +1,19 @@
 import type { AccessExplainFact } from '@kovojs/core/internal/graph';
 
 import {
-  isExecutableGuardAccessDecision,
+  accessDecisionFor,
+  executableGuardAccessDecision,
   isGuardAccessDecision,
   type AccessDecision,
 } from './access.js';
 import type { AppMutationDeclaration, AppQueryDeclaration, KovoApp } from './app-types.js';
-import type {
-  EndpointAuthDeclaration,
-  EndpointDeclaration,
-  EndpointMethod,
-  EndpointMount,
+import {
+  endpointAuthFor,
+  endpointHasExecutableVerifier,
+  type EndpointAuthDeclaration,
+  type EndpointDeclaration,
+  type EndpointMethod,
+  type EndpointMount,
 } from './endpoint.js';
 import { guardAuditName } from './guards.js';
 import type { LayoutDeclaration, RouteDeclaration } from './route.js';
@@ -33,14 +36,14 @@ export function accessFactsFromApp(
 }
 
 function queryAccessFact(query: AppQueryDeclaration): AccessExplainFact {
-  const explicit = explicitAccessFact('query', query.key, query.access);
+  const explicit = explicitAccessFact('query', query.key, accessDecisionFor(query));
   if (explicit) return explicit;
 
   return missingAccessFact('query', query.key);
 }
 
 function mutationAccessFact(mutation: AppMutationDeclaration): AccessExplainFact {
-  const explicit = explicitAccessFact('mutation', mutation.key, mutation.access);
+  const explicit = explicitAccessFact('mutation', mutation.key, accessDecisionFor(mutation));
   if (explicit) return explicit;
 
   return missingAccessFact('mutation', mutation.key);
@@ -48,7 +51,8 @@ function mutationAccessFact(mutation: AppMutationDeclaration): AccessExplainFact
 
 function routeAccessFact(route: RouteDeclaration<any, any, any, any, any, any>): AccessExplainFact {
   const explicit =
-    explicitAccessFact('page', route.path, route.access) ?? explicitLayoutAccessFact(route);
+    explicitAccessFact('page', route.path, accessDecisionFor(route)) ??
+    explicitLayoutAccessFact(route);
   if (explicit) return explicit;
 
   return missingAccessFact('page', route.path);
@@ -60,11 +64,12 @@ function endpointAccessFact(
   const webhook = isWebhookEndpoint(endpoint);
   const kind = webhook ? 'webhook' : 'endpoint';
   const name = webhook ? endpoint.name : endpoint.path;
-  const auth = endpoint.auth;
+  const auth = endpointAuthFor(endpoint);
+  const access = accessDecisionFor(endpoint);
   const detail = endpointAccessDetail(endpoint, auth);
   if (
-    !isGuardAccessDecision(endpoint.access) &&
-    endpoint.access?.kind === 'verified-machine-auth' &&
+    !isGuardAccessDecision(access) &&
+    access?.kind === 'verified-machine-auth' &&
     !hasExecutableMachineAuth(endpoint)
   ) {
     return {
@@ -76,7 +81,7 @@ function endpointAccessFact(
     };
   }
 
-  const explicit = explicitAccessFact(kind, name, endpoint.access);
+  const explicit = explicitAccessFact(kind, name, access);
   if (explicit) {
     return {
       ...explicit,
@@ -107,7 +112,7 @@ function explicitLayoutAccessFact(
 ): AccessExplainFact | undefined {
   let layout: LayoutDeclaration<any, any, any> | undefined = route.layout;
   while (layout !== undefined) {
-    const fact = explicitAccessFact('page', route.path, layout.access);
+    const fact = explicitAccessFact('page', route.path, accessDecisionFor(layout));
     if (fact) {
       return {
         ...fact,
@@ -128,10 +133,11 @@ function explicitAccessFact(
   if (access === undefined) return undefined;
 
   if (isGuardAccessDecision(access)) {
-    if (!isExecutableGuardAccessDecision(access)) return undefined;
+    const executable = executableGuardAccessDecision(access);
+    if (executable === undefined) return undefined;
     return {
       decision: 'guard',
-      detail: `access=guards guards=${accessGuardNames(access).join(',')}`,
+      detail: `access=guards guards=${accessGuardNames(executable).join(',')}`,
       kind,
       name,
       source: 'access',
@@ -188,12 +194,11 @@ function isWebhookEndpoint(
 function hasExecutableMachineAuth(
   endpoint: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
 ): boolean {
-  if (isWebhookEndpoint(endpoint)) {
-    return endpoint.webhookDefinition.verify !== 'none';
-  }
+  if (isWebhookEndpoint(endpoint)) return endpoint.webhookDefinition.verify !== 'none';
+  const auth = endpointAuthFor(endpoint);
   return (
-    endpoint.auth?.kind !== 'none' &&
-    (endpoint.auth?.verify !== undefined || endpoint.auth?.name === 'kovo-capability-url')
+    endpointHasExecutableVerifier(endpoint) ||
+    (auth?.kind !== 'none' && auth?.name === 'kovo-capability-url')
   );
 }
 

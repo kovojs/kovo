@@ -2,7 +2,7 @@ import type { JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
-import { snapshotAccessDecision, type AccessDecision } from './access.js';
+import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
 import {
   guardFailureToResult,
   renderHttpGuardFailureResponse,
@@ -314,14 +314,14 @@ function buildQueryDefinition<const Key extends string>(
   definition: Omit<RegisteredQueryDefinition, 'key'>,
 ): unknown {
   assertKnownQueryDefinitionKeys(definition);
-  const queryDefinition = {
-    ...definition,
-    ...(definition.access === undefined
-      ? {}
-      : { access: snapshotAccessDecision(definition.access) }),
-    key,
-    reads: definition.reads ?? [],
-  };
+  const queryDefinition = pinAccessDecision(
+    {
+      ...definition,
+      key,
+      reads: definition.reads ?? [],
+    },
+    definition.access,
+  );
   if (!definition.args) return queryDefinition;
 
   return Object.assign(queryDefinition, {
@@ -438,7 +438,7 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
       ? resolvedRequest
       : (withGuardArgs(resolvedRequest, argsResult.value) as typeof resolvedRequest);
   const guardFailure = await runAccessDecisionGuards(
-    definition.access,
+    accessDecisionFor(definition),
     definition.guard,
     lifecycleRequest,
   );

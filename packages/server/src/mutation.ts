@@ -1,5 +1,6 @@
 import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
+import { accessDecisionFor } from './access.js';
 import {
   forwardSetCookie,
   serializeCookie,
@@ -218,7 +219,7 @@ async function executeMutationLifecycle<
 
   if (!options.guardResolved) {
     const guardFailure = await runAccessDecisionGuards(
-      definition.access,
+      accessDecisionFor(definition),
       definition.guard,
       lifecycleRequest,
     );
@@ -412,7 +413,7 @@ export async function runMutation<
     );
 
     const guardFailure = await runAccessDecisionGuards(
-      definition.access,
+      accessDecisionFor(definition),
       definition.guard,
       lifecycleRequest,
     );
