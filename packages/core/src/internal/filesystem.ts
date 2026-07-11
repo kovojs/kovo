@@ -744,7 +744,24 @@ async function copyFileIntoRoot(
   await mkdir(path.dirname(targetPath), { recursive: true });
   await revalidatePreparedRoot(rootState);
   await ensureParentsStayDirectories(root, targetPath);
-  await copyFile(sourcePath, targetPath);
+  // SPEC §10.6 filesystem door: copyFile(2) follows an existing final-component symlink and
+  // writes through an existing hardlink's shared inode. Copy into a framework-minted sibling and
+  // atomically rename it over the directory entry instead, matching writeConfinedFile. The rename
+  // replaces a symlink, hardlink, FIFO, or device node without opening that caller-controlled
+  // target, so a confined copy cannot mutate an object reachable outside the root.
+  const tempPath = path.join(
+    path.dirname(targetPath),
+    `.${path.basename(targetPath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  try {
+    await copyFile(sourcePath, tempPath);
+    await revalidatePreparedRoot(rootState);
+    await ensureParentsStayDirectories(root, targetPath);
+    await rename(tempPath, targetPath);
+  } catch (error) {
+    await removeConfinedTemporaryFile(rootState, tempPath).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function renameIntoRoot(

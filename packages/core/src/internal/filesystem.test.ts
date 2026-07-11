@@ -1,4 +1,5 @@
 import {
+  link,
   lstat,
   mkdir,
   mkdtemp,
@@ -84,6 +85,48 @@ describe('framework filesystem boundary', () => {
     } finally {
       await rm(root, { force: true, recursive: true });
       await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('replaces final-component links when copying instead of writing through them', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-copy-target-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    const source = join(base, 'source.txt');
+    try {
+      await mkdir(root);
+      await mkdir(outside);
+      await writeFile(source, 'copied', 'utf8');
+      await writeFile(join(outside, 'symlink-victim.txt'), 'outside symlink', 'utf8');
+      await writeFile(join(outside, 'hardlink-victim.txt'), 'outside hardlink', 'utf8');
+      await symlink(join(outside, 'symlink-victim.txt'), join(root, 'symlink-destination.txt'));
+      await symlink(join(outside, 'created-by-link.txt'), join(root, 'dangling-destination.txt'));
+      await link(join(outside, 'hardlink-victim.txt'), join(root, 'hardlink-destination.txt'));
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+
+      await fileSystem.copyFile(source, 'symlink-destination.txt');
+      await fileSystem.copyFile(source, 'dangling-destination.txt');
+      await fileSystem.copyFile(source, 'hardlink-destination.txt');
+
+      await expect(readFile(join(outside, 'symlink-victim.txt'), 'utf8')).resolves.toBe(
+        'outside symlink',
+      );
+      await expect(lstat(join(outside, 'created-by-link.txt'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      await expect(readFile(join(outside, 'hardlink-victim.txt'), 'utf8')).resolves.toBe(
+        'outside hardlink',
+      );
+      for (const name of [
+        'symlink-destination.txt',
+        'dangling-destination.txt',
+        'hardlink-destination.txt',
+      ]) {
+        await expect(readFile(join(root, name), 'utf8')).resolves.toBe('copied');
+        await expect(lstat(join(root, name))).resolves.toMatchObject({ nlink: 1 });
+      }
+    } finally {
+      await rm(base, { force: true, recursive: true });
     }
   });
 
