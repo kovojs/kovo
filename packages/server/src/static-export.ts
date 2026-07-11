@@ -296,8 +296,9 @@ function staticExportPublicAssetSource(root: string, base: string, hrefPath: str
     decodedPathname = sourcePathname;
   }
 
-  const source = createFrameworkOutputFileSystemBoundary(root).confinedPath(`.${decodedPathname}`);
-  if (source !== undefined && source !== root) return source;
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+  const source = fileSystem.confinedPath(`.${decodedPathname}`);
+  if (source !== undefined && source !== fileSystem.root) return source;
 
   throw new StaticExportError([
     staticExportDiagnostic(
