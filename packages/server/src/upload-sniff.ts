@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
+
 /**
  * KV428 upload inline-XSS gate (SPEC §6.6/§9.1; plans/secure-framework.md Phase 6 Tier 1).
  *
@@ -222,7 +224,7 @@ export interface UnverifiedMimeFact {
   readonly types: readonly string[];
 }
 
-const unverifiedMimeFacts: UnverifiedMimeFact[] = [];
+const unverifiedMimeFacts = createBoundedRuntimeAuditCollector<UnverifiedMimeFact>();
 
 /**
  * The verified-MIME / unverified-escape acceptance namespace passed to `s.file().accept(...)`.
@@ -237,7 +239,7 @@ export const accept = Object.assign((types: readonly string[]): readonly string[
     if (!justification || justification.trim().length === 0) {
       throw new Error('accept.unverified(...) requires a justification (KV428, SPEC §6.6/§9.1).');
     }
-    unverifiedMimeFacts.push({ justification, types });
+    unverifiedMimeFacts.record({ justification, types });
     return { justification, types, unverified: true };
   },
 });
@@ -245,12 +247,11 @@ export const accept = Object.assign((types: readonly string[]): readonly string[
 /**
  * Drain the recorded `accept.unverified()` capability facts (SPEC §6.6/§9.1).
  *
- * SF-WIRE(graph-output): render --capabilities unverified-MIME escapes — wire
- * {@link drainUnverifiedMimeFacts} into `kovo explain --capabilities` so each place the server
- * trusts the client content-type is surfaced in the audit a reviewer runs.
+ * The runtime drain retains the newest 256 observations for diagnostics. Static
+ * `accept.unverified()` call-site facts remain the authoritative build/explain inventory.
  */
 export function drainUnverifiedMimeFacts(): readonly UnverifiedMimeFact[] {
-  return unverifiedMimeFacts.splice(0, unverifiedMimeFacts.length);
+  return unverifiedMimeFacts.drain();
 }
 
 /**

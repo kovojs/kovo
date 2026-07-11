@@ -847,6 +847,42 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['query']);
   });
 
+  it('bounds normal public rawRead observations to the newest 256 facts', async () => {
+    drainPublicReadAuditFacts();
+    const reader = readonlyDb(
+      {
+        query(statement: unknown) {
+          return Promise.resolve([statement]);
+        },
+      },
+      {
+        rawRead: {
+          dialectLabel: 'Postgres',
+          executeMethod: 'query',
+          normalizeTableName: (table) => table,
+          ownerTables: ['orders'],
+        },
+      },
+    );
+    const statement = stampTrustedSql(
+      { sql: 'select id from orders where published = true', values: [] },
+      'bounded public rawRead',
+    );
+
+    for (let index = 0; index < 10_000; index += 1) {
+      await reader.rawRead(statement, {
+        declarePublicRead: declarePublicRead({ reason: `bounded public read ${index}` }),
+        reads: ['orders'],
+      });
+    }
+
+    const facts = drainPublicReadAuditFacts();
+    expect(facts).toHaveLength(256);
+    expect(facts[0]).toMatchObject({ reason: 'bounded public read 9744' });
+    expect(facts.at(-1)).toMatchObject({ reason: 'bounded public read 9999' });
+    expect(drainPublicReadAuditFacts()).toEqual([]);
+  });
+
   it('rawRead reconstructs a plain carrier and never forwards submit-bearing app values', async () => {
     const observed: unknown[] = [];
     const reader = readonlyDb(

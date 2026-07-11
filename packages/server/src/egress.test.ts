@@ -429,7 +429,7 @@ describe('evaluateEgress policy decision', () => {
     expect(outside).toBeInstanceOf(EgressBlockedError);
     expect(outside?.classification).toBe('metadata');
 
-    const inside = runWithMetadataAccess(() =>
+    const inside = runWithMetadataAccess('aws', () =>
       evaluateEgress({
         host: '169.254.169.254',
         port: 80,
@@ -474,7 +474,7 @@ describe('evaluateEgress policy decision', () => {
 
   it('metadata frame survives an await boundary (ALS, not a stack frame)', async () => {
     const policy = emptyPolicy();
-    const result = await runWithMetadataAccess(async () => {
+    const result = await runWithMetadataAccess('aws', async () => {
       await new Promise((r) => setTimeout(r, 1));
       return evaluateEgress({
         host: '169.254.169.254',
@@ -485,6 +485,82 @@ describe('evaluateEgress policy decision', () => {
     });
     expect(result).toBeNull();
   });
+
+  // C13 superset: Azure IDENTITY_ENDPOINT corpus. Keep the previously closed loopback verdicts,
+  // add the configured authority as metadata, and prove provider-frame separation.
+  it('admits the configured Azure identity authority only in the Azure credential frame', () => {
+    const policy = resolveEgressPolicy(
+      { allowInternal: ['127.0.0.0/8', '127.0.0.1:40343'] },
+      () => {},
+      { identityEndpoint: 'http://127.1:40342/msi/token?api-version=2019-08-01' },
+    );
+    const identityDial = {
+      host: '127.0.0.1',
+      port: 40342,
+      resolvedIp: '127.0.0.1',
+      policy,
+    } as const;
+
+    expect(evaluateEgress(identityDial)).toMatchObject({ classification: 'metadata' });
+    expect(runWithMetadataAccess('azure', () => evaluateEgress(identityDial))).toBeNull();
+    expect(runWithMetadataAccess('aws', () => evaluateEgress(identityDial))).toMatchObject({
+      classification: 'metadata',
+    });
+    expect(runWithMetadataAccess('gcp', () => evaluateEgress(identityDial))).toMatchObject({
+      classification: 'metadata',
+    });
+
+    // The same address on a non-identity port retains ordinary exact allowInternal semantics.
+    expect(evaluateEgress({ ...identityDial, port: 40343 })).toBeNull();
+  });
+
+  it('normalizes hostname/default-port and IPv6 Azure identity authorities', () => {
+    const hostnamePolicy = resolveEgressPolicy(undefined, () => {}, {
+      identityEndpoint: 'https://LOCALHOST./msi/token',
+    });
+    const hostnameDial = {
+      host: 'localhost',
+      port: 443,
+      resolvedIp: '127.0.0.1',
+      policy: hostnamePolicy,
+    } as const;
+    expect(evaluateEgress(hostnameDial)).toMatchObject({ classification: 'metadata' });
+    expect(runWithMetadataAccess('azure', () => evaluateEgress(hostnameDial))).toBeNull();
+
+    const ipv6Policy = resolveEgressPolicy(undefined, () => {}, {
+      identityEndpoint: 'http://[::1]:40342/msi/token',
+    });
+    const ipv6Dial = { host: '::1', port: 40342, resolvedIp: '::1', policy: ipv6Policy } as const;
+    expect(evaluateEgress(ipv6Dial)).toMatchObject({ classification: 'metadata' });
+    expect(runWithMetadataAccess('azure', () => evaluateEgress(ipv6Dial))).toBeNull();
+  });
+
+  it('reserves a hostname-configured identity port before its first DNS resolution', () => {
+    expect(() =>
+      resolveEgressPolicy({ allowInternal: ['127.0.0.1:40344'] }, () => {}, {
+        identityEndpoint: 'http://identity.internal:40344/msi/token',
+      }),
+    ).toThrow(EgressConfigError);
+
+    const policy = resolveEgressPolicy({ allowInternal: ['127.0.0.1:40345'] }, () => {}, {
+      identityEndpoint: 'http://identity.internal:40344/msi/token',
+    });
+    const directIpBeforeProvider = {
+      host: '127.0.0.1',
+      port: 40344,
+      resolvedIp: '127.0.0.1',
+      policy,
+    } as const;
+    expect(evaluateEgress(directIpBeforeProvider)).toMatchObject({ classification: 'metadata' });
+    expect(runWithMetadataAccess('azure', () => evaluateEgress(directIpBeforeProvider))).toBeNull();
+
+    // Internal policy refreshes use object spread; the module-private symbol must retain the
+    // credential authority rather than silently reverting the clone to ordinary loopback rules.
+    const clonedPolicy: EgressPolicy = { ...policy };
+    expect(evaluateEgress({ ...directIpBeforeProvider, policy: clonedPolicy })).toMatchObject({
+      classification: 'metadata',
+    });
+  });
 });
 
 describe('resolveEgressPolicy config validation', () => {
@@ -492,6 +568,37 @@ describe('resolveEgressPolicy config validation', () => {
     expect(() => resolveEgressPolicy({ allowInternal: ['169.254.169.254:80'] }, () => {})).toThrow(
       EgressConfigError,
     );
+  });
+
+  it('reads IDENTITY_ENDPOINT fail closed and rejects its loopback authority in allowInternal', () => {
+    const previous = process.env.IDENTITY_ENDPOINT;
+    process.env.IDENTITY_ENDPOINT = 'http://127.0.0.1:40342/msi/token';
+    try {
+      expect(() => resolveEgressPolicy({ allowInternal: ['127.0.0.1:40342'] }, () => {})).toThrow(
+        EgressConfigError,
+      );
+      const policy = resolveEgressPolicy(undefined, () => {});
+      expect(
+        evaluateEgress({
+          host: '127.0.0.1',
+          port: 40342,
+          resolvedIp: '127.0.0.1',
+          policy,
+        }),
+      ).toMatchObject({ classification: 'metadata' });
+    } finally {
+      if (previous === undefined) delete process.env.IDENTITY_ENDPOINT;
+      else process.env.IDENTITY_ENDPOINT = previous;
+    }
+  });
+
+  it('refuses malformed IDENTITY_ENDPOINT configuration', () => {
+    expect(() =>
+      resolveEgressPolicy(undefined, () => {}, { identityEndpoint: 'not-an-absolute-url' }),
+    ).toThrow(EgressConfigError);
+    expect(() =>
+      resolveEgressPolicy(undefined, () => {}, { identityEndpoint: 'file:///tmp/token' }),
+    ).toThrow(EgressConfigError);
   });
 
   it('warns on a CIDR entry but honors it as a range fallback', () => {
@@ -733,6 +840,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     // Inside the frame the floor permits the connect; the request then fails for an unrelated
     // network reason (no metadata service in CI). The key assertion: it is NOT an EgressBlockedError.
     const err = await runWithMetadataAccess(
+      'aws',
       () =>
         new Promise<Error>((resolve) => {
           const req = http.get({ host: '169.254.169.254', port: 1, timeout: 50 }, (res) => {

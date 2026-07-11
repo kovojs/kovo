@@ -14,6 +14,8 @@
 //                                 write of a request value to a governed column. Recorded
 //                                 for `kovo explain --writes`.
 
+import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
+
 import { markPrivilegedRequestInputAssignment } from './request-input-provenance.js';
 
 /** A recorded `trustedAssign` audit fact for `kovo explain --writes` (SPEC §6.6, audit-grade). */
@@ -40,7 +42,7 @@ export interface TrustedAssignOptions {
   table?: string;
 }
 
-const trustedAssignFacts: TrustedAssignFact[] = [];
+const trustedAssignFacts = createBoundedRuntimeAuditCollector<TrustedAssignFact>();
 
 /**
  * Assert that `value` is a server-derived (non-request-input) value flowing into a
@@ -79,7 +81,7 @@ export function trustedAssign<T>(value: T, reason: string | TrustedAssignOptions
     throw new Error('trustedAssign requires a non-empty reason (KV438).');
   }
   markPrivilegedRequestInputAssignment(value);
-  trustedAssignFacts.push({
+  trustedAssignFacts.record({
     ...fact,
     ...(fact.columns ? { columns: [...fact.columns] } : {}),
   });
@@ -88,10 +90,11 @@ export function trustedAssign<T>(value: T, reason: string | TrustedAssignOptions
 
 /**
  * Drain the recorded {@link trustedAssign} audit facts (SPEC §6.6, audit-grade), for
- * `kovo explain --writes`. Returns and clears the accumulated facts.
+ * `kovo explain --writes`. Returns and clears the retained bounded window.
  *
- * @returns The recorded trusted-assign facts since the last drain.
+ * @returns The newest 256 retained observations since the last drain. Static trustedAssign
+ * call-site facts remain the authoritative audit inventory.
  */
 export function drainTrustedAssignFacts(): TrustedAssignFact[] {
-  return trustedAssignFacts.splice(0, trustedAssignFacts.length);
+  return trustedAssignFacts.drain();
 }

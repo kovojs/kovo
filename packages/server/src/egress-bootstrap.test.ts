@@ -12,7 +12,7 @@ import {
   registerEgressDatabaseUrl,
   selfProbe,
 } from './egress-bootstrap.js';
-import { awsCredential } from './egress-credentials.js';
+import { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
 
 describe('egress bootstrap: dual-layer install + self-probe', () => {
   let teardown: (() => void) | undefined;
@@ -317,5 +317,35 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     });
     const result = await provider();
     expect(result.name).not.toBe(EGRESS_BLOCKED_ERROR_NAME);
+  });
+
+  it('allows the configured loopback IDENTITY_ENDPOINT only through azureCredential()', async () => {
+    const server = http.createServer((_req, res) => res.end('azure-token'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    const endpoint = `http://127.0.0.1:${port}/msi/token`;
+    const previous = process.env.IDENTITY_ENDPOINT;
+    process.env.IDENTITY_ENDPOINT = endpoint;
+    try {
+      const install = await installEgressFloor(undefined, () => {});
+      teardown = install.uninstall;
+
+      await expect(fetch(endpoint)).rejects.toMatchObject({
+        cause: { name: EGRESS_BLOCKED_ERROR_NAME },
+      });
+      await expect(awsCredential(() => fetch(endpoint))()).rejects.toMatchObject({
+        cause: { name: EGRESS_BLOCKED_ERROR_NAME },
+      });
+      await expect(gcpCredential(() => fetch(endpoint))()).rejects.toMatchObject({
+        cause: { name: EGRESS_BLOCKED_ERROR_NAME },
+      });
+
+      const response = await azureCredential(() => fetch(endpoint))();
+      expect(await response.text()).toBe('azure-token');
+    } finally {
+      if (previous === undefined) delete process.env.IDENTITY_ENDPOINT;
+      else process.env.IDENTITY_ENDPOINT = previous;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
