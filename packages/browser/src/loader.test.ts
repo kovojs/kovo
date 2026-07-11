@@ -13,6 +13,7 @@ describe('runtime loader module', () => {
     const handler = vi.fn();
     const importModule = vi.fn(async () => ({ run: handler }));
     const loader = installKovoLoader({
+      allowedClientModuleUrls: ['/c/client.js'],
       events: ['click'],
       importModule,
       root,

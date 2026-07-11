@@ -3,7 +3,7 @@ import {
   renderedFragmentHtmlContent,
   type RenderedFragmentHtml,
 } from '@kovojs/core/internal/sink-policy';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import {
   applyMutationResponseBodyToRuntime,
@@ -11,9 +11,17 @@ import {
   applyStreamingMutationResponseBodyToRuntime,
 } from './apply-mutation-response.js';
 import { createQueryStore } from './client.js';
-import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
+import {
+  FakeMorphRoot,
+  FakeMorphTarget,
+  FakeQueryBindingElement,
+  installTestClientModuleManifest,
+} from './runtime-test-fakes.js';
 import { applyStreamTextChunks, StreamTextBuffer, type StreamTextRoot } from './stream-text.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest(['/c/markdown.client.js']);
+afterAll(restoreClientModuleManifest);
 
 type FragmentSnapshot = {
   html: string;
