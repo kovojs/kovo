@@ -28,6 +28,7 @@ const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
+const kovoAppShellViteDevModuleId = '@kovojs/server/internal/app-shell-vite';
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Minimal Vite dev-server
@@ -271,7 +272,7 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
       }
     },
   };
-  requestDiagnosticStores.set(ledger, { requestRecords });
+  registerRequestDiagnosticStore(ledger, requestRecords);
   return ledger;
 }
 
@@ -286,17 +287,104 @@ export function createKovoAppShellViteDevIntegration(
   options: KovoAppShellViteDevPluginOptions = {},
 ): KovoAppShellViteDevIntegration {
   const diagnostics = options.devDiagnostics ?? createKovoAppShellDevDiagnosticLedger();
+  // A caller may have created this structural ledger in the Vite-config module instance. Register
+  // it in every server module instance that consumes it so request-local diagnostics remain owned
+  // by the same graph-local middleware as app validation.
+  registerRequestDiagnosticStore(diagnostics);
+  const pluginOptions = {
+    ...options,
+    devDiagnostics: diagnostics,
+  };
 
   return {
     diagnostics,
     onModuleDiagnostics(report) {
       diagnostics.recordModuleDiagnostics(report);
     },
-    plugin: kovoAppShellViteDevPlugin({
-      ...options,
-      devDiagnostics: diagnostics,
-    }),
+    plugin: kovoAppShellViteDevPlugin(pluginOptions),
   };
+}
+
+function registerRequestDiagnosticStore(
+  diagnostics: KovoAppShellDevDiagnosticLedger,
+  requestRecords = new Map<string, KovoAppShellDevDiagnosticRecord>(),
+): void {
+  if (!requestDiagnosticStores.has(diagnostics)) {
+    requestDiagnosticStores.set(diagnostics, { requestRecords });
+  }
+}
+
+/**
+ * Dispatch one dev request from the current Vite SSR module graph.
+ *
+ * @internal The installed Vite middleware reloads this function through ssrLoadModule for every
+ * request. That keeps createApp()'s module-private closed-app proof, access metadata, and request
+ * sinks in the same graph even after an app-shell HMR invalidation replaces framework modules.
+ */
+export async function dispatchKovoAppShellViteDevRequest(
+  server: KovoAppShellViteDevModuleServer,
+  options: KovoAppShellViteDevPluginOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: (error?: unknown) => void,
+): Promise<void> {
+  const moduleId = options.moduleId ?? '/src/app-shell.ts';
+  const appExportName = options.appExportName ?? 'default';
+  if (options.devDiagnostics) registerRequestDiagnosticStore(options.devDiagnostics);
+
+  const module = await server.ssrLoadModule(moduleId);
+  const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
+  const stylesheetResponse = renderKovoAppShellViteDevStylesheetAsset(request, stylesheetAssets);
+  if (stylesheetResponse) {
+    await writeWebResponseToNode(stylesheetResponse, response, request.method ?? 'GET');
+    return;
+  }
+
+  const app = appWithDevDiagnostics(
+    appWithDevStylesheetAssets(
+      readKovoAppShellViteDevApp(module, appExportName, moduleId),
+      stylesheetAssets,
+    ),
+    options.devDiagnostics,
+  );
+  const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
+    request,
+    app,
+    options.shouldHandleRequest,
+  );
+  if (!shouldHandle) {
+    next();
+    return;
+  }
+
+  const hmrResponse = renderKovoAppShellViteDevHmrResponse(app, request, options.devDiagnostics);
+  if (hmrResponse) {
+    await writeWebResponseToNode(await hmrResponse, response, request.method ?? 'GET');
+    return;
+  }
+
+  const diagnosticResponse = renderKovoAppShellViteDevDiagnosticResponse(
+    app,
+    request,
+    options.devDiagnostics,
+  );
+  if (diagnosticResponse) {
+    await writeKovoAppShellViteDevRouteResponse(
+      injectKovoHmrScriptIntoRouteResponse(diagnosticResponse),
+      request,
+      response,
+    );
+    return;
+  }
+
+  const devResponse = injectKovoHmrScriptIntoNodeResponse(response, request);
+  readKovoAppShellViteDevNodeHandler(
+    module,
+    app,
+    options,
+    options.nodeHandlerExportName,
+    moduleId,
+  )(request, devResponse, next);
 }
 
 /**
@@ -310,75 +398,20 @@ export function kovoAppShellViteDevPlugin(
   options: KovoAppShellViteDevPluginOptions = {},
 ): KovoAppShellViteDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
-  const appExportName = options.appExportName ?? 'default';
   let root = process.cwd();
 
   const install = (server: KovoAppShellViteDevModuleServer) => {
     root = server.config?.root ?? root;
     server.middlewares.use((request, response, next) => {
-      Promise.resolve(server.ssrLoadModule(moduleId))
-        .then((module) => {
-          const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(
-            options.stylesheetAssets,
-          );
-          const stylesheetResponse = renderKovoAppShellViteDevStylesheetAsset(
-            request,
-            stylesheetAssets,
-          );
-          if (stylesheetResponse) {
-            return writeWebResponseToNode(stylesheetResponse, response, request.method ?? 'GET');
+      Promise.resolve(server.ssrLoadModule(kovoAppShellViteDevModuleId))
+        .then((serverModule) => {
+          const dispatch = serverModule.dispatchKovoAppShellViteDevRequest;
+          if (typeof dispatch !== 'function') {
+            throw new TypeError(
+              `${kovoAppShellViteDevModuleId} must export dispatchKovoAppShellViteDevRequest().`,
+            );
           }
-          const app = appWithDevDiagnostics(
-            appWithDevStylesheetAssets(
-              readKovoAppShellViteDevApp(module, appExportName, moduleId),
-              stylesheetAssets,
-            ),
-            options.devDiagnostics,
-          );
-          const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
-            request,
-            app,
-            options.shouldHandleRequest,
-          );
-          if (!shouldHandle) {
-            next();
-            return;
-          }
-
-          const hmrResponse = renderKovoAppShellViteDevHmrResponse(
-            app,
-            request,
-            options.devDiagnostics,
-          );
-          if (hmrResponse) {
-            return hmrResponse
-              .then((webResponse) =>
-                writeWebResponseToNode(webResponse, response, request.method ?? 'GET'),
-              )
-              .catch(next);
-          }
-
-          const diagnosticResponse = renderKovoAppShellViteDevDiagnosticResponse(
-            app,
-            request,
-            options.devDiagnostics,
-          );
-          if (diagnosticResponse) {
-            return writeKovoAppShellViteDevRouteResponse(
-              injectKovoHmrScriptIntoRouteResponse(diagnosticResponse),
-              request,
-              response,
-            ).catch(next);
-          }
-
-          const devResponse = injectKovoHmrScriptIntoNodeResponse(response, request);
-          return readKovoAppShellViteDevNodeHandler(
-            module,
-            app,
-            options,
-            options.nodeHandlerExportName,
-            moduleId,
-          )(request, devResponse, next);
+          return dispatch(server, options, request, response, next);
         })
         .catch(next);
     });

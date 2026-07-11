@@ -2,6 +2,7 @@ export { deriveClosedKovoApp } from '../app-snapshot.js';
 export {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
+  dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin,
   renderKovoAppShellViteDevDiagnosticResponse,
   shouldHandleKovoAppShellViteRequest,

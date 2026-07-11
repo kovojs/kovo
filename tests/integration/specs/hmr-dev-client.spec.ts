@@ -17,6 +17,7 @@ import { createApp, domain, query, route, s } from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
+  dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin,
   type KovoAppShellViteMiddleware,
 } from '@kovojs/server/internal/app-shell-vite';
@@ -558,7 +559,10 @@ async function serveHmrFixture(
         middleware = handler;
       },
     },
-    async ssrLoadModule() {
+    async ssrLoadModule(id) {
+      if (id === '@kovojs/server/internal/app-shell-vite') {
+        return { dispatchKovoAppShellViteDevRequest };
+      }
       return { default: app };
     },
   });
