@@ -25,7 +25,7 @@ side-channel makes the gate reason about a weaker proxy.
 
 ## High
 
-- [ ] **H1 - The generated Better Auth instance re-exposes its privileged system adapter to
+- [x] **H1 - The generated Better Auth instance re-exposes its privileged system adapter to
       app-authored `src/auth.ts`, allowing plaintext auth-secret reads.**
       `packages/create-kovo/templates/src/auth.ts:71-80`,
       `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts:80-95`,
@@ -50,8 +50,10 @@ side-channel makes the gate reason about a weaker proxy.
   - **Fix direction:** keep the Better Auth adapter and instance in a framework-owned trusted module;
     expose only the session/credential operations the app needs, and make the non-egress proof close
     over every request-reachable export rather than a hand-described adapter use.
+  - **Fix verified:** generated Postgres/SQLite auth modules keep the adapter and raw Better Auth
+    instance under `_kovo`; export-confinement, 35 focused auth tests, and paranoid runtime proofs pass.
 
-- [ ] **H2 - Detached or destructured `sql.raw` aliases bypass KV422 and enter an unwrapped Drizzle
+- [x] **H2 - Detached or destructured `sql.raw` aliases bypass KV422 and enter an unwrapped Drizzle
       builder.** `packages/drizzle/src/static.ts:1795-1835`,
       `packages/server/src/sql-safe-handle.ts:67-72,244-269`
   - `sqlRawHelperDiagnostic()` immediately returns unless the callee is still a property-access
@@ -72,8 +74,11 @@ side-channel makes the gate reason about a weaker proxy.
   - **Fix direction:** resolve member-value aliases/destructuring by symbol identity and fail closed on
     unresolved calls derived from `sql.raw`/`sql.identifier`; add a runtime raw-fragment choke to
     builder fast paths as defense in depth.
+  - **Fix verified:** static provenance covers detached, destructured, reassigned, spread/rest, and
+    offset-rest aliases; the managed runtime rebuilds exact `count(*)` and rejects forged/raw carriers
+    (`sql-safety`/runtime selection: 190/190).
 
-- [ ] **H3 - Shorthand and spread-composed `atomic`/`version` annotations silently disable KV429.**
+- [x] **H3 - Shorthand and spread-composed `atomic`/`version` annotations silently disable KV429.**
       `packages/drizzle/src/static.ts:4693-4708`,
       `packages/drizzle/src/static/derivation.ts:1785-1792,1860-1871`
   - `concurrencyColumnsFromObject()` accepts only direct `PropertyAssignment` nodes. Valid shorthand
@@ -91,8 +96,11 @@ side-channel makes the gate reason about a weaker proxy.
   - **Status:** newly identified annotation-extraction root cause.
   - **Fix direction:** resolve static shorthand/spread objects transitively, and emit a fatal
     diagnostic when a concurrency annotation cannot be proven instead of treating it as absent.
+  - **Fix verified:** shorthand and statically resolvable spreads now populate concurrency facts;
+    unresolved composition fails closed, proven by the 80/80 KV429 classifier corpus and production
+    build cases.
 
-- [ ] **H4 - KV429 loses read provenance across ordinary reassignment and destructuring assignment.**
+- [x] **H4 - KV429 loses read provenance across ordinary reassignment and destructuring assignment.**
       `packages/drizzle/src/static/derivation.ts:1931-1988`
   - `atomicReadFlowBefore()` scans only `VariableDeclaration` initializers. It never updates the flow
     maps for assignment expressions, so either `next = row.stock - qty` or
@@ -107,10 +115,12 @@ side-channel makes the gate reason about a weaker proxy.
   - **Status:** incomplete residual of the prior `bugz-8` KV429 fix.
   - **Fix direction:** include simple/destructuring assignment writes in the forward flow model and
     conservatively taint/fail closed when an atomic value's provenance cannot be resolved.
+  - **Fix verified:** simple, array, and object assignment update or invalidate atomic provenance;
+    reassignment/destructuring controls pass the 80/80 KV429 corpus and production build proofs.
 
 ## Medium
 
-- [ ] **M1 - A matched route's default 404 can forward a rolling session cookie without a cache
+- [x] **M1 - A matched route's default 404 can forward a rolling session cookie without a cache
       floor.** `packages/server/src/app-document.ts:138-157,177-233`,
       `packages/server/src/document-core.ts:717-759`
   - The matched non-200 fallback appends `sessionProvider` cookies and returns before document
@@ -128,8 +138,10 @@ side-channel makes the gate reason about a weaker proxy.
   - **Status:** incomplete regression of earlier cache-floor fixes (part-4 G1 and bugz-3 L2/M2).
   - **Fix direction:** compute/apply the session/provider-cookie cache posture before every early
     return, including matched 404/403/error outcomes.
+  - **Fix verified:** every matched fallback carrying provider cookies receives private `no-store`
+    and `Vary: Cookie`; direct document tests and the 1,857-test server suite pass.
 
-- [ ] **M2 - A sparse, non-empty `access` guard array audits as guarded but runs as allow-all.**
+- [x] **M2 - A sparse, non-empty `access` guard array audits as guarded but runs as allow-all.**
       `packages/server/src/access-graph.ts:119-135`, `packages/core/src/graph.ts:866-902`,
       `packages/server/src/guards.ts:758-795`
   - Audit logic treats `access.length > 0` as a guard decision; array mapping skips holes. Runtime
@@ -146,8 +158,11 @@ side-channel makes the gate reason about a weaker proxy.
   - **Status:** new array-density variant, distinct from the fixed legacy `access`/`guard` field split.
   - **Fix direction:** validate that access is a dense, non-empty array of actual guards at declaration
     and runtime, freeze/snapshot it, and make any invalid element fail closed.
+  - **Fix verified:** a single frozen app snapshot now owns dense executable access topology across
+    audit/build/runtime; 102 access tests, 16 adversarial probes, 15 production-artifact tests, and the
+    1,857-test server suite pass.
 
-- [ ] **M3 - Attacker-owned dynamic JSX spreads can inject executable Kovo `on:*` control
+- [x] **M3 - Attacker-owned dynamic JSX spreads can inject executable Kovo `on:*` control
       attributes.** `packages/compiler/src/security/output-context.ts:262-276`,
       `packages/server/src/jsx-runtime.ts:337-350`,
       `packages/browser/src/loader-lifecycle.ts:164-178`,
@@ -170,8 +185,11 @@ side-channel makes the gate reason about a weaker proxy.
   - **Fix direction:** caller-owned spreads must never create Kovo control attributes; require
     compiler-owned registry provenance at emission/runtime, and make an empty module allowlist deny
     rather than broaden `/c/` imports.
+  - **Fix verified:** unresolved intrinsic spreads cannot emit Kovo controls and dynamic imports must
+    match compiler-emitted module allowlist markers; browser units pass 688/688 and the browser matrix
+    passes 252/252.
 
-- [ ] **M4 - Anonymous enhanced mutations disable replay even with a configured store and idem
+- [x] **M4 - Anonymous enhanced mutations disable replay even with a configured store and idem
       token.** `packages/server/src/replay.ts:276-297,330-343,384-389,479-509`
   - Enhanced replay scope recognizes only an app session id. It does not carry the framework-owned
     anonymous CSRF binding, so pre-auth requests resolve to `scope: null`; lookup and reservation
@@ -187,8 +205,11 @@ side-channel makes the gate reason about a weaker proxy.
   - **Status:** residual of bugz-18 B2 / GAP4-2.
   - **Fix direction:** use the anonymous CSRF binding (or another framework-owned anonymous principal
     key) in the enhanced replay scope; preserve mutation and request-fingerprint separation.
+  - **Fix verified:** enhanced anonymous replay derives a framework CSRF-bound principal while
+    preserving mutation/fingerprint separation; anonymous, session, no-JS, and streaming replay
+    regressions pass.
 
-- [ ] **M5 - Request-time audit collectors retain one process-global object per invocation without a
+- [x] **M5 - Request-time audit collectors retain one process-global object per invocation without a
       bound or production drain.** `packages/core/src/secret.ts:61,411-417`,
       `packages/server/src/cookies.ts:114-131`,
       `packages/server/src/write-governance.ts:43,76-96`,
@@ -210,8 +231,10 @@ side-channel makes the gate reason about a weaker proxy.
     papercut to a request-time collector family.
   - **Fix direction:** use static call-site facts for build/explain, remove runtime-only collectors
     where redundant, and otherwise use bounded telemetry or request-scoped/dev-only drains.
+  - **Fix verified:** request-time collector families share a fixed-capacity newest-first buffer;
+    10,000 invocations retain exactly the newest 256 facts.
 
-- [ ] **M6 - BroadcastChannel keeps the page-load principal across a no-navigation session change.**
+- [x] **M6 - BroadcastChannel keeps the page-load principal across a no-navigation session change.**
       `packages/browser/src/loader.ts:170-197`,
       `packages/browser/src/broadcast.ts:140-147,188-203`,
       `packages/browser/src/mutation-apply.ts:119-125`
@@ -231,8 +254,11 @@ side-channel makes the gate reason about a weaker proxy.
   - **Fix direction:** have the server signal the post-response principal/session transition, rotate
     or close the channel before applying/publishing truth, and derive every envelope fingerprint from
     the current principal rather than installation state.
+  - **Fix verified:** `Kovo-Session-Transition` retires the old channel at header observation, discards
+    response truth, and forces a full render; browser units pass 688/688 and repeated auth navigation
+    integration passes 15/15.
 
-- [ ] **M7 - In-flight replay reservations expire, permit a duplicate execution, and allow a stale
+- [x] **M7 - In-flight replay reservations expire, permit a duplicate execution, and allow a stale
       commit to overwrite the newer result.** `packages/server/src/replay.ts:127,135-153,166-175,204-237`
   - Pending and committed records share one TTL. Expiry deletes a still-running reservation, so a
     duplicate can reserve the same key. The old reservation's `commit()` then unconditionally writes
@@ -248,8 +274,10 @@ side-channel makes the gate reason about a weaker proxy.
     evicted, but generic expiry still does so.
   - **Fix direction:** separate pending leases from committed-response TTLs and fence commits with a
     reservation generation/token so an expired or superseded owner cannot write.
+  - **Fix verified:** pending reservations use an independent lease and generation-fenced settlement;
+    expiry, takeover, stale-commit, and duplicate-wait regressions pass.
 
-- [ ] **M8 - Azure `IDENTITY_ENDPOINT` loopback is not metadata-classified, so the supported
+- [x] **M8 - Azure `IDENTITY_ENDPOINT` loopback is not metadata-classified, so the supported
       credential frame fails and the suggested workaround removes SSRF isolation.**
       `packages/server/src/egress.ts:40-44,552-563,761-785`,
       `packages/server/src/egress-credentials.ts:52-58`
@@ -269,10 +297,13 @@ side-channel makes the gate reason about a weaker proxy.
   - **Status:** new classification gap.
   - **Fix direction:** resolve and pin the configured Azure identity endpoint as metadata-sensitive,
     reject it from `allowInternal`, and allow it only within the Azure credential frame.
+  - **Fix verified:** the resolved Azure identity endpoint is pinned as metadata, excluded from
+    `allowInternal`, and accepted only inside `azureCredential()`; egress classifier and credential
+    frame regressions pass.
 
 ## Low
 
-- [ ] **L1 - Filesystem storage deletion follows a symlinked parent outside the configured root.**
+- [x] **L1 - Filesystem storage deletion follows a symlinked parent outside the configured root.**
       `packages/core/src/storage.ts:224-237`,
       `packages/core/src/internal/filesystem.ts:243-247`
   - Storage reads use realpath confinement, but `deleteConfinedFile()` performs only lexical
@@ -288,6 +319,8 @@ side-channel makes the gate reason about a weaker proxy.
   - **Status:** new read/delete parity gap.
   - **Fix direction:** reject symlink parents for delete using the same realpath-aware boundary as
     reads/writes, with a race-resistant filesystem operation where the platform permits it.
+  - **Fix verified:** storage roots are pinned, symlink parents fail closed, and final copy/delete
+    destinations are revalidated; 30 filesystem/storage tests and the filesystem boundary gate pass.
 
 ## Refuted / not carried forward
 
@@ -323,5 +356,15 @@ side-channel makes the gate reason about a weaker proxy.
 - Current regression control:
   `pnpm exec vitest run packages/core/src/sql-safety.test.ts packages/server/src/sql-safe-handle.test.ts --testNamePattern 'accessor-backed|mutable|snapshot|getter|same immutable' --reporter=verbose`
   passed.
-- Every proof file/worktree was removed after capture. The only repository change from this audit is
-  this ledger.
+- Every discovery proof file/worktree was removed after capture.
+
+## Implementation verification
+
+- `pnpm run test --maxWorkers=4 --reporter=dot`: 668 files and 6,790 tests passed (one file and three
+  tests skipped); the final HMR change additionally passed the full 1,857-test server suite.
+- `pnpm run test:browser`: 33 files / 252 tests passed across Chromium, Firefox, and WebKit;
+  `pnpm run test:integration`: 158/158 passed.
+- `pnpm run test:conformance` and `pnpm run test:authz-paranoid`: all five conformance packages and
+  7/7 paranoid runtime tests passed.
+- `pnpm run check`, `pnpm run check:api-surface`, `pnpm run check:build`, and `pnpm run check:kovo`
+  passed on the integrated branch.
