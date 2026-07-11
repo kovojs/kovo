@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
-import { StringChunk, and, asc, eq, sql as drizzleSql } from 'drizzle-orm';
+import { StringChunk, and, asc, count, eq, sql as drizzleSql } from 'drizzle-orm';
 import { integer, pgTable, text } from 'drizzle-orm/pg-core';
 import {
   KovoReadonlyHandleError,
@@ -1236,6 +1236,61 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         .from(products)
         .orderBy(drizzleSql.join([products.id, dangerous], drizzleSql`, `)),
     ).toThrow(/KV422/);
+  });
+
+  it('accepts Drizzle count-star while keeping native raw near-matches closed', () => {
+    const products = pgTable('products', {
+      id: text('id').primaryKey(),
+    });
+    const accepted: unknown[] = [];
+    const builder = {
+      from(value: unknown) {
+        accepted.push(value);
+        return [];
+      },
+    };
+    const raw = {
+      select(projection?: unknown) {
+        accepted.push(projection);
+        return builder;
+      },
+    };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+
+    expect(() => handle.select({ value: count() }).from(products)).not.toThrow();
+    expect(() => handle.select({ value: count(products.id) }).from(products)).not.toThrow();
+    expect(() => handle.select({ value: count().as('total') }).from(products)).not.toThrow();
+
+    const countControl = count();
+    const injected = drizzleSql.raw('*); select pg_sleep(10)--');
+    let executablePropertyReads = 0;
+    const forgedCount = new Proxy(countControl, {
+      get(target, property, receiver) {
+        if (property === 'queryChunks') {
+          executablePropertyReads += 1;
+          return injected.queryChunks;
+        }
+        if (property === 'getSQL' || property === 'toQuery') {
+          executablePropertyReads += 1;
+          return Reflect.get(injected, property, injected);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    expect(() => handle.select({ value: forgedCount }).from(products)).not.toThrow();
+    const reconstructedProjection = accepted[6] as { value: unknown };
+    expect(executablePropertyReads).toBe(0);
+    expect(reconstructedProjection.value === forgedCount).toBe(false);
+    expect(Object.isFrozen(reconstructedProjection.value)).toBe(true);
+
+    expect(() => handle.select({ value: drizzleSql.raw('count(*)') })).toThrow(/KV422/);
+    expect(() => handle.select({ value: drizzleSql`count(*)` })).toThrow(/KV422/);
+    expect(() =>
+      handle.select({
+        value: drizzleSql`count(${drizzleSql.raw('*); select pg_sleep(10)--')})`,
+      }),
+    ).toThrow(/KV422/);
+    expect(accepted).toHaveLength(8);
   });
 
   it('keeps static/allowlisted builders green and requires trustedSql for raw builder chunks', () => {
