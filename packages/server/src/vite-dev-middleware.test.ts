@@ -219,8 +219,7 @@ describe('server app shell Vite plugin', () => {
         return renderedHtml(`<main>${params.id}</main>`);
       },
     });
-    const app = createApp({ routes: [productRoute] });
-    app.clientModules = registry;
+    const app = createApp({ clientModules: registry, routes: [productRoute] });
     const plugin = kovoAppShellViteDevPlugin();
     const middlewares: KovoAppShellViteMiddleware[] = [];
     let moduleLoads = 0;

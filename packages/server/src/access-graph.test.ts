@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { publicAccess, verifiedAccess } from './access.js';
 import { accessFactsFromApp } from './access-graph.js';
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { guard, guards } from './guards.js';
 import type { Guard } from './guards.js';
@@ -74,7 +74,9 @@ describe('app access graph extraction', () => {
         kind: 'verifier',
         name: 'sync-hmac',
         verify: hmacSignature({
+          encoding: 'hex',
           header: 'X-Signature',
+          payload: ({ payload }) => payload,
           scheme: 'sync-hmac',
           secret: 'test_secret',
         }),
@@ -89,7 +91,9 @@ describe('app access graph extraction', () => {
       handler: () => ({}),
       input: s.object({ id: s.string() }),
       verify: hmacSignature({
+        encoding: 'hex',
         header: 'Stripe-Signature',
+        payload: ({ payload }) => payload,
         scheme: 'stripe-signature',
         secret: 'test_secret',
       }),
@@ -291,5 +295,105 @@ describe('app access graph extraction', () => {
     });
     expect(response.status).toBe(403);
     expect(accessReads).toBe(0);
+  });
+
+  it('stores every access-bearing registry entry as a frozen canonical declaration', () => {
+    const access = [guard('canonical-deny', () => ({ kind: 'forbidden' as const }))];
+    const routeDeclaration = { ...route('/canonical-route', { access }) };
+    const queryDeclaration = {
+      ...query('canonical-query', { access, load: () => ({ private: true }) }),
+    };
+    const mutationDeclaration = {
+      ...mutation('canonical-mutation', {
+        access,
+        handler: () => ({ private: true }),
+        input: s.object({}),
+      }),
+    };
+    const endpointDeclaration = {
+      ...endpoint('/canonical-endpoint', {
+        access,
+        csrf: false,
+        csrfJustification: 'canonical declaration regression',
+        handler: () => new Response('private'),
+        method: 'GET',
+        reason: 'canonical declaration regression',
+        response: rawTextResponse,
+      }),
+    };
+    const app = createApp({
+      endpoints: [endpointDeclaration],
+      mutations: [mutationDeclaration],
+      queries: [queryDeclaration],
+      routes: [routeDeclaration],
+    });
+
+    for (const registry of [app.routes, app.queries, app.mutations, app.endpoints]) {
+      expect(Object.isFrozen(registry)).toBe(true);
+      expect(Object.isFrozen(registry[0])).toBe(true);
+    }
+    expect(app.routes[0]).not.toBe(routeDeclaration);
+    expect(app.queries[0]).not.toBe(queryDeclaration);
+    expect(app.mutations[0]).not.toBe(mutationDeclaration);
+    expect(app.endpoints[0]).not.toBe(endpointDeclaration);
+    expect(Reflect.set(app, 'routes', [])).toBe(false);
+    expect(Reflect.set(app.routes, '0', routeDeclaration)).toBe(false);
+  });
+
+  it('rejects a Proxy route whose inherited layout disagrees between descriptor and get', () => {
+    const deny = guard('proxy-layout-deny', () => ({ kind: 'forbidden' as const }));
+    const denyingLayout = layout({ access: [deny] });
+    const proxiedRoute = new Proxy(
+      {
+        page: () => '<main>leaked</main>',
+        path: '/proxy-layout',
+      },
+      {
+        get(target, property, receiver) {
+          if (property === 'layout') return denyingLayout;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    expect(() => createApp({ routes: [proxiedRoute] })).toThrow(
+      'route(/proxy-layout).layout must not disagree between descriptor and property access',
+    );
+  });
+
+  it('snapshots a stable Proxy route layout before later get-trap drift', async () => {
+    const deny = guard('proxy-layout-deny', () => ({ kind: 'forbidden' as const }));
+    const denyingLayout = layout({ access: [deny] });
+    let hideLayout = false;
+    const proxiedRoute = new Proxy(
+      {
+        layout: denyingLayout,
+        page: () => '<main>leaked</main>',
+        path: '/proxy-layout-control',
+      },
+      {
+        get(target, property, receiver) {
+          if (property === 'layout' && hideLayout) return undefined;
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    const app = createApp({ routes: [proxiedRoute] });
+    hideLayout = true;
+
+    expect(accessFactsFromApp(app)).toEqual([
+      {
+        decision: 'guard',
+        detail: 'access=guards guards=proxy-layout-deny source=layout.access',
+        kind: 'page',
+        name: '/proxy-layout-control',
+        source: 'access',
+      },
+    ]);
+    const response = await createRequestHandler(app)(
+      new Request('https://example.test/proxy-layout-control'),
+    );
+    expect(response.status).toBe(403);
+    await expect(response.text()).resolves.not.toContain('leaked');
   });
 });

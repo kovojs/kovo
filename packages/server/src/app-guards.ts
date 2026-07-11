@@ -1,6 +1,18 @@
 import type { KovoApp } from './app-types.js';
 import { isDocumentConfig } from './document-structured.js';
 
+// SPEC §9.5 makes createApp() the sole app-aggregate bootstrap. A structural check alone lets a
+// shallow clone (or Proxy) impersonate that aggregate and swap one of the audited registries after
+// createRequestHandler() validates it. Keep the proof module-private and identity-based: trusted
+// framework derivations must explicitly close and mark their new aggregate through app-snapshot.
+const closedKovoApps = new WeakSet<object>();
+
+/** @internal Mark an aggregate after its declarations and registries have been snapshotted. */
+export function markClosedKovoApp<App extends KovoApp>(app: App): App {
+  closedKovoApps.add(app);
+  return app;
+}
+
 /**
  * Return whether a dynamically loaded value is a closed Kovo app aggregate.
  *
@@ -10,6 +22,7 @@ import { isDocumentConfig } from './document-structured.js';
 export function isKovoApp(value: unknown): value is KovoApp {
   return (
     isRecord(value) &&
+    closedKovoApps.has(value) &&
     isEndpointDeclarations(value.endpoints) &&
     isAppDiagnostics(value.diagnostics) &&
     isMutationDeclarations(value.mutations) &&

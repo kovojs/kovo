@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { isKovoApp } from './app-guards.js';
+import { deriveClosedKovoApp } from './app-snapshot.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
 import {
@@ -1189,8 +1190,7 @@ function appWithDevDiagnostics(
   app: KovoApp,
   diagnostics: KovoAppShellDevDiagnosticLedger | undefined,
 ): KovoApp {
-  return {
-    ...app,
+  return deriveClosedKovoApp(app, {
     onError(error, context) {
       const requestDiagnostic = endpointPostureRequestDiagnostic(error, context);
       if (requestDiagnostic && diagnostics) recordRequestDiagnostic(diagnostics, requestDiagnostic);
@@ -1201,7 +1201,7 @@ function appWithDevDiagnostics(
         void result.catch((_error) => undefined);
       }
     },
-  };
+  });
 }
 
 function reportDevServerError(error: unknown, context: ServerErrorDiagnosticContext): void {
@@ -1299,8 +1299,7 @@ function appWithDevStylesheetAssets(
     return app;
   }
 
-  return {
-    ...app,
+  return deriveClosedKovoApp(app, {
     liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {
       const stylesheets = fragmentAssets[renderer.component] ?? [];
       if (stylesheets.length === 0) return renderer;
@@ -1314,11 +1313,13 @@ function appWithDevStylesheetAssets(
       const stylesheets = routeAssets[route.path] ?? [];
       if (stylesheets.length === 0) return route;
 
-      route.stylesheets = mergeDevStylesheetAssets([...(route.stylesheets ?? []), ...stylesheets]);
-      return route;
+      return {
+        ...route,
+        stylesheets: mergeDevStylesheetAssets([...(route.stylesheets ?? []), ...stylesheets]),
+      };
     }),
     stylesheets: mergeDevStylesheetAssets([...app.stylesheets, ...appAssets]),
-  };
+  });
 }
 
 function mergeDevStylesheetAssets(

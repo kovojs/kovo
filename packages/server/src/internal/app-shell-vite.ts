@@ -1,3 +1,4 @@
+export { deriveClosedKovoApp } from '../app-snapshot.js';
 export {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,

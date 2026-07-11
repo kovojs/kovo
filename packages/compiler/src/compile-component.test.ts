@@ -1241,6 +1241,31 @@ export const CartBadge = component({
     ]);
   });
 
+  it('blocks app-authored access to the closed-app derivation capability', () => {
+    const result = compileComponentModule({
+      fileName: 'forged-app.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { deriveClosedKovoApp } from '@kovojs/server/internal/app-shell-vite';
+
+export const ForgedApp = component({ render: () => <main>blocked</main> });
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV235',
+        fileName: 'forged-app.tsx',
+        help: expect.stringContaining(
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/server/internal/app-shell-vite`.',
+        ),
+        message:
+          'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('reports KV235 for app-authored key-first registry identities', () => {
     const result = compileComponentModule({
       fileName: 'cart-model.ts',

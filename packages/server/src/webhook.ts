@@ -1,4 +1,5 @@
 import type { WebhookVerifier } from '@kovojs/core';
+import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import {
   actAsNonRequestPrincipal,
   declareSystemPrincipal,
@@ -790,6 +791,11 @@ function webhookAuth(definition: WebhookVerificationFields): EndpointAuthDeclara
   if (definition.verify.kind === 'custom') {
     return { kind: 'custom', name: definition.verify.name } satisfies EndpointAuthDeclaration;
   }
+  if (!isFrameworkHmacSignatureVerifier(definition.verify)) {
+    throw new TypeError(
+      'webhook() HMAC verification must come from hmacSignature() or a framework preset.',
+    );
+  }
 
   return {
     kind: 'verifier',
@@ -812,6 +818,9 @@ async function verifyWebhook(
   rawBody: Uint8Array,
 ): Promise<boolean> {
   if (definition.verify === 'none') return true;
+  if (definition.verify.kind === 'hmac' && !isFrameworkHmacSignatureVerifier(definition.verify)) {
+    return false;
+  }
 
   return definition.verify.verify({
     headers: request.headers,

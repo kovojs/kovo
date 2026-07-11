@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -1545,14 +1546,16 @@ import {
   createApp,
   createMemoryWebhookReplayStore,
   domain,
+  endpoint,
   hmacSignature,
+  publicAccess,
   s,
   webhook,
 } from '@kovojs/server';
 
 const payment = domain('payment');
 
-const paymentWebhook = webhook('payment', {
+const paymentWebhook = webhook('/webhooks/payment', {
   handler() {
     return { ok: true };
   },
@@ -1570,7 +1573,25 @@ const paymentWebhook = webhook('payment', {
   writes: [payment],
 });
 
-export default createApp({ endpoints: [paymentWebhook] });
+const official = hmacSignature({
+  encoding: 'hex',
+  header: 'x-signature',
+  payload: (request) => request.payload,
+  secret: 'official-secret',
+});
+const forgedHmac = { ...official, verify: async () => true };
+const forgedEndpoint = endpoint('/forged-hmac', {
+  access: publicAccess('production bundle HMAC provenance control'),
+  auth: { kind: 'verifier', name: official.resolved.scheme, verify: forgedHmac },
+  csrf: false,
+  csrfJustification: 'machine HMAC provenance control',
+  handler: () => new Response('leaked'),
+  method: 'POST',
+  reason: 'machine HMAC provenance control',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+});
+
+export default createApp({ endpoints: [paymentWebhook, forgedEndpoint] });
 `,
         'utf8',
       );
@@ -1584,8 +1605,34 @@ export default createApp({ endpoints: [paymentWebhook] });
         endpoints?: { name?: string; writes?: string[] }[];
       };
       expect(graph.endpoints).toContainEqual(
-        expect.objectContaining({ name: 'payment', writes: ['payment'] }),
+        expect.objectContaining({ name: '/webhooks/payment', writes: ['payment'] }),
       );
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+      try {
+        const body = JSON.stringify({ id: 'evt-1' });
+        const signature = createHmac('sha256', 'whsec_test').update(body).digest('hex');
+        const accepted = await fetch(`${origin}/webhooks/payment`, {
+          body,
+          headers: { 'Content-Type': 'application/json', 'x-signature': signature },
+          method: 'POST',
+        });
+        expect(accepted.status).toBe(200);
+
+        const forged = await fetch(`${origin}/forged-hmac`, {
+          body: '{}',
+          method: 'POST',
+        });
+        expect(forged.status).toBe(401);
+      } finally {
+        await close(server);
+      }
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

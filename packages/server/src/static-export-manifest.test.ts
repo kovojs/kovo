@@ -67,6 +67,7 @@ describe('server static export', () => {
       version: 'cart-inventory',
     });
     const app = createApp({
+      clientModules: registry,
       routes: [
         route('/', {
           modulepreloads: [cartHref],
@@ -74,7 +75,6 @@ describe('server static export', () => {
         }),
       ],
     });
-    app.clientModules = registry;
 
     const result = await exportStaticApp(app, {
       assets: [
@@ -147,6 +147,7 @@ describe('server static export', () => {
         },
       ];
       const app = createApp({
+        clientModules: registry,
         routes: [
           route('/', {
             modulepreloads: [cartHref],
@@ -154,7 +155,6 @@ describe('server static export', () => {
           }),
         ],
       });
-      app.clientModules = registry;
 
       const dryRun = await exportStaticApp(app, { assets });
       const dryRunPlan = staticExportOutputPlan(dryRun, { outDir: pathToFileURL(outDir) });
@@ -227,6 +227,7 @@ describe('server static export', () => {
       version: 'cart-manifest',
     });
     const app = createApp({
+      clientModules: registry,
       routes: [
         route('/', {
           modulepreloads: [cartHref],
@@ -238,7 +239,6 @@ describe('server static export', () => {
         }),
       ],
     });
-    app.clientModules = registry;
 
     const result = await exportStaticApp(app, {
       assets: [

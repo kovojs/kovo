@@ -1,5 +1,10 @@
 import { createHmac } from 'node:crypto';
-import { hmacSignature } from '@kovojs/core';
+import {
+  customVerifier,
+  hmacSignature,
+  type HmacSignatureOptions,
+  type HmacSignatureVerifier,
+} from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,6 +14,8 @@ import {
   verifiedAccess,
   type AccessDecision,
 } from './access.js';
+import { createApp, createRequestHandler } from './app.js';
+import { deriveClosedKovoApp } from './app-snapshot.js';
 import { domain } from './domain.js';
 import { endpoint, runEndpoint, runEndpointAuth } from './endpoint.js';
 import {
@@ -188,6 +195,161 @@ describe('structured access metadata', () => {
       }),
     );
     expect(webhookForbidden.status).toBe(403);
+  });
+
+  it('runs webhook access guards through the actual app-shell special dispatch branch', async () => {
+    let handlerCalls = 0;
+    const guardedWebhook = webhook('/guarded-hook', {
+      access: [guard('webhook-shell-deny', () => ({ kind: 'forbidden' as const }))],
+      handler: () => {
+        handlerCalls += 1;
+        return { leaked: true };
+      },
+      input: s.object({}),
+      verify: 'none',
+      verifyJustification: 'guarded webhook shell regression',
+    });
+    const app = createApp({ endpoints: [guardedWebhook] });
+
+    const response = await createRequestHandler(app)(
+      new Request('https://example.test/guarded-hook', {
+        body: '{}',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(handlerCalls).toBe(0);
+  });
+
+  it('rebinds a canonical webhook handler to its frozen webhook definition', async () => {
+    let originalCalls = 0;
+    let replacementCalls = 0;
+    const definition = {
+      access: publicAccess('canonical webhook snapshot regression'),
+      handler: () => {
+        originalCalls += 1;
+        return { source: 'original' };
+      },
+      input: s.object({}),
+      verify: 'none' as const,
+      verifyJustification: 'canonical webhook snapshot regression',
+    };
+    const declared = webhook('/canonical-hook', definition);
+    const app = createApp({ endpoints: [declared] });
+    definition.handler = () => {
+      replacementCalls += 1;
+      return { source: 'replacement' };
+    };
+
+    const response = await runEndpoint(
+      app.endpoints[0]!,
+      new Request('https://example.test/canonical-hook', {
+        body: '{}',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(originalCalls).toBe(1);
+    expect(replacementCalls).toBe(0);
+  });
+
+  it('pins a custom webhook verifier method and audit metadata when the app closes', async () => {
+    let handlerCalls = 0;
+    const verifier = customVerifier('deny', () => false);
+    const declared = webhook('/custom-verifier-snapshot', {
+      handler: () => {
+        handlerCalls += 1;
+        return { leaked: true };
+      },
+      input: s.object({}),
+      verify: verifier,
+    });
+    const app = createApp({ endpoints: [declared] });
+    const handle = createRequestHandler(app);
+    const request = () =>
+      new Request('https://example.test/custom-verifier-snapshot', {
+        body: '{}',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+
+    expect((await handle(request())).status).toBe(401);
+    verifier.name = 'allow';
+    verifier.scheme = 'custom:allow';
+    verifier.verify = async () => true;
+
+    expect((await handle(request())).status).toBe(401);
+    expect(handlerCalls).toBe(0);
+    const canonical = app.endpoints[0]!.webhookDefinition.verify;
+    expect(canonical).toMatchObject({ kind: 'custom', name: 'deny', scheme: 'custom:deny' });
+    expect(Object.isFrozen(canonical)).toBe(true);
+  });
+
+  it('keeps official HMAC webhook authentication on its construction-time option snapshot', async () => {
+    let handlerCalls = 0;
+    const authoredSecret = new TextEncoder().encode('old-secret');
+    const options: HmacSignatureOptions = {
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: authoredSecret,
+    };
+    const verifier = hmacSignature(options);
+    // Public byte-shaped config is audit metadata, not the executable source of truth. Mutating
+    // it before createApp() must not make canonicalization rebuild different authentication.
+    (verifier.config.secret as Uint8Array).set(new TextEncoder().encode('new-secret'));
+    const declared = webhook('/hmac-verifier-snapshot', {
+      handler: () => {
+        handlerCalls += 1;
+        return { leaked: true };
+      },
+      input: s.object({}),
+      verify: verifier,
+    });
+    const app = createApp({ endpoints: [declared] });
+    const derived = deriveClosedKovoApp(app, { routes: app.routes });
+    expect((derived.endpoints[0] as typeof declared).webhookDefinition.verify).toBe(verifier);
+    const handle = createRequestHandler(derived);
+    const body = '{}';
+    const signature = createHmac('sha256', 'new-secret').update(body).digest('hex');
+    const request = () =>
+      new Request('https://example.test/hmac-verifier-snapshot', {
+        body,
+        headers: { 'Content-Type': 'application/json', 'x-signature': signature },
+        method: 'POST',
+      });
+
+    expect((await handle(request())).status).toBe(401);
+    options.secret = 'new-secret';
+    authoredSecret.set(new TextEncoder().encode('new-secret'));
+
+    expect((await handle(request())).status).toBe(401);
+    expect(handlerCalls).toBe(0);
+    expect(Object.isFrozen(verifier)).toBe(true);
+    expect(Object.isFrozen(verifier.config)).toBe(true);
+  });
+
+  it('rejects a structural object that forges HMAC verifier audit metadata', () => {
+    const official = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: 'official-secret',
+    });
+    const forged = {
+      ...official,
+      verify: async () => true,
+    } as HmacSignatureVerifier;
+
+    expect(() =>
+      webhook('/forged-hmac', {
+        handler: () => ({ leaked: true }),
+        input: s.object({}),
+        verify: forged,
+      }),
+    ).toThrow('HMAC verification must come from hmacSignature() or a framework preset');
   });
 
   it('snapshots valid guard chains at every declaration boundary', async () => {
@@ -515,7 +677,7 @@ describe('structured access metadata', () => {
       writable: false,
     });
     expect(Reflect.set(guardedEndpoint, 'auth', undefined)).toBe(false);
-    verifier.verify = async () => true;
+    expect(Reflect.set(verifier, 'verify', async () => true)).toBe(false);
 
     const rejected = await runEndpointAuth(
       guardedEndpoint,

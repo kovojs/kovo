@@ -1,0 +1,531 @@
+import {
+  type CustomWebhookVerifier,
+  type WebhookVerificationRequest,
+  type WebhookVerifier,
+} from '@kovojs/core';
+import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
+import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
+import { isKovoApp, markClosedKovoApp } from './app-guards.js';
+import type {
+  AppMutationDeclaration,
+  AppQueryDeclaration,
+  AppRouteDeclaration,
+  KovoApp,
+} from './app-types.js';
+import {
+  copyEndpointAuthSnapshot,
+  type EndpointAuthDeclaration,
+  type EndpointDeclaration,
+  type EndpointMethod,
+  type EndpointMount,
+} from './endpoint.js';
+import type { LiveTargetRenderer } from './mutation-wire.js';
+import type { RegisteredQueryDefinition } from './query.js';
+import { layout, route, type LayoutDeclaration } from './route.js';
+import { runWebhook, type WebhookDeclaration } from './webhook.js';
+
+const MAX_APP_REGISTRY_LENGTH = 100_000;
+
+/** One assembly-local identity map keeps nested layout/mutation query references canonical. */
+export interface AppDeclarationSnapshotContext {
+  readonly endpoints: WeakMap<object, EndpointDeclaration<string, EndpointMethod, EndpointMount>>;
+  readonly layouts: WeakMap<object, LayoutDeclaration<any, any, any, any>>;
+  readonly layoutsInProgress: WeakSet<object>;
+  readonly mutations: WeakMap<object, AppMutationDeclaration>;
+  readonly queries: WeakMap<object, AppQueryDeclaration>;
+  readonly routes: WeakMap<object, AppRouteDeclaration>;
+}
+
+export function createAppDeclarationSnapshotContext(): AppDeclarationSnapshotContext {
+  return {
+    endpoints: new WeakMap(),
+    layouts: new WeakMap(),
+    layoutsInProgress: new WeakSet(),
+    mutations: new WeakMap(),
+    queries: new WeakMap(),
+    routes: new WeakMap(),
+  };
+}
+
+/** Snapshot an app-owned registry through dense own data descriptors, never Proxy indexed gets. */
+export function snapshotAppRegistry<Value, Result>(
+  values: readonly Value[],
+  label: string,
+  snapshot: (value: Value, index: number) => Result,
+): readonly Result[] {
+  const source = denseArrayValues(values, label);
+  return Object.freeze(source.map(snapshot));
+}
+
+export function snapshotAppQuery(
+  source: AppQueryDeclaration,
+  context: AppDeclarationSnapshotContext,
+): AppQueryDeclaration {
+  const object = requireDeclarationObject(source, 'query');
+  const existing = context.queries.get(object);
+  if (existing !== undefined) return existing;
+
+  const access = accessDecisionFor(object as AppQueryDeclaration & { access?: AccessDecision });
+  const record = snapshotOwnDataRecord(object, 'query declaration', new Set(['access']));
+  snapshotArrayProperty(record, 'reads', 'query.reads');
+  snapshotArrayProperty(record, 'delta', 'query.delta');
+
+  const declaration = pinAccessDecision(record, access) as AppQueryDeclaration;
+  Object.freeze(declaration);
+  context.queries.set(object, declaration);
+  context.queries.set(declaration, declaration);
+  return declaration;
+}
+
+export function snapshotAppMutation(
+  source: AppMutationDeclaration,
+  context: AppDeclarationSnapshotContext,
+): AppMutationDeclaration {
+  const object = requireDeclarationObject(source, 'mutation');
+  const existing = context.mutations.get(object);
+  if (existing !== undefined) return existing;
+
+  const access = accessDecisionFor(object as AppMutationDeclaration & { access?: AccessDecision });
+  const record = snapshotOwnDataRecord(object, 'mutation declaration', new Set(['access']));
+  snapshotArrayProperty(record, 'fileFields', 'mutation.fileFields');
+  if (record.registry !== undefined) {
+    record.registry = snapshotMutationRegistry(record.registry, context);
+  }
+  if (record.optimistic !== undefined) {
+    record.optimistic = Object.freeze(
+      snapshotOwnDataRecord(record.optimistic, 'mutation.optimistic'),
+    );
+  }
+
+  const declaration = pinAccessDecision(record, access) as AppMutationDeclaration;
+  Object.freeze(declaration);
+  context.mutations.set(object, declaration);
+  context.mutations.set(declaration, declaration);
+  return declaration;
+}
+
+export function snapshotAppEndpoint(
+  source: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  context: AppDeclarationSnapshotContext,
+): EndpointDeclaration<string, EndpointMethod, EndpointMount> {
+  const object = requireDeclarationObject(source, 'endpoint');
+  const existing = context.endpoints.get(object);
+  if (existing !== undefined) return existing;
+
+  const access = accessDecisionFor(
+    object as EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  );
+  const record = snapshotOwnDataRecord(object, 'endpoint declaration', new Set(['access', 'auth']));
+  if (record.csrf !== undefined) {
+    record.csrf = Object.freeze(snapshotOwnDataRecord(record.csrf, 'endpoint.csrf'));
+  }
+  if (record.response !== undefined) {
+    const response = snapshotOwnDataRecord(record.response, 'endpoint.response');
+    snapshotArrayProperty(response, 'body', 'endpoint.response.body');
+    snapshotArrayProperty(response, 'redirectAllowlist', 'endpoint.response.redirectAllowlist');
+    snapshotArrayProperty(response, 'reservedHeaders', 'endpoint.response.reservedHeaders');
+    record.response = Object.freeze(response);
+  }
+  if (record.webhookDefinition !== undefined) {
+    record.webhookDefinition = snapshotWebhookDefinition(record.webhookDefinition);
+  }
+
+  let declaration: EndpointDeclaration<string, EndpointMethod, EndpointMount>;
+  if (record.webhook === true && record.webhookDefinition !== undefined) {
+    // webhook()'s authored handler closes over its original declaration. Rebind the canonical
+    // endpoint so direct runEndpoint(app.endpoints[i]) and app-shell special dispatch both consume
+    // the frozen webhookDefinition stored on this aggregate, never that original mutable object.
+    record.handler = async (request: Request): Promise<Response> =>
+      (await runWebhook(declaration as WebhookDeclaration<string, string, any, any, any>, request))
+        .response;
+  }
+
+  declaration = pinAccessDecision(record, access) as EndpointDeclaration<
+    string,
+    EndpointMethod,
+    EndpointMount
+  >;
+  copyEndpointAuthSnapshot(object as object & { auth?: EndpointAuthDeclaration }, declaration);
+  Object.freeze(declaration);
+  context.endpoints.set(object, declaration);
+  context.endpoints.set(declaration, declaration);
+  return declaration;
+}
+
+export function snapshotAppRoute(
+  source: AppRouteDeclaration,
+  context: AppDeclarationSnapshotContext,
+): AppRouteDeclaration {
+  const object = requireDeclarationObject(source, 'route');
+  const existing = context.routes.get(object);
+  if (existing !== undefined) return existing;
+
+  const access = accessDecisionFor(object as AppRouteDeclaration & { access?: AccessDecision });
+  const path = stableOwnDataValue(object, 'path', 'route.path');
+  if (typeof path !== 'string') {
+    throw new TypeError('Kovo route declaration must expose path as a stable own string property.');
+  }
+  const sourceLayout = stableOwnDataValue(object, 'layout', `route(${path}).layout`);
+  const record = snapshotOwnDataRecord(
+    object,
+    `route(${path}) declaration`,
+    new Set(['access', 'layout', 'path']),
+  );
+  snapshotRouteHintArrays(record, `route(${path})`);
+
+  const declaration = route(path, {
+    ...record,
+    ...(access === undefined ? {} : { access }),
+    ...(sourceLayout === undefined
+      ? {}
+      : {
+          layout: snapshotAppLayout(sourceLayout as LayoutDeclaration<any, any, any, any>, context),
+        }),
+  } as any) as AppRouteDeclaration;
+  context.routes.set(object, declaration);
+  context.routes.set(declaration, declaration);
+  return declaration;
+}
+
+export function snapshotAppLayout(
+  source: LayoutDeclaration<any, any, any, any>,
+  context: AppDeclarationSnapshotContext,
+): LayoutDeclaration<any, any, any, any> {
+  const object = requireDeclarationObject(source, 'layout');
+  const existing = context.layouts.get(object);
+  if (existing !== undefined) return existing;
+  if (context.layoutsInProgress.has(object)) {
+    throw new TypeError('Kovo route layout topology must be acyclic and stable.');
+  }
+
+  context.layoutsInProgress.add(object);
+  try {
+    const access = accessDecisionFor(
+      object as LayoutDeclaration<any, any, any, any> & { access?: AccessDecision },
+    );
+    const sourceParent = stableOwnDataValue(object, 'parent', 'layout.parent');
+    const sourceQueries = stableOwnDataValue(object, 'queries', 'layout.queries');
+    const record = snapshotOwnDataRecord(
+      object,
+      'layout declaration',
+      new Set(['access', 'parent', 'queries']),
+    );
+    snapshotRouteHintArrays(record, 'layout');
+
+    const declaration = layout({
+      ...record,
+      ...(access === undefined ? {} : { access }),
+      ...(sourceParent === undefined
+        ? {}
+        : {
+            parent: snapshotAppLayout(
+              sourceParent as LayoutDeclaration<any, any, any, any>,
+              context,
+            ),
+          }),
+      ...(sourceQueries === undefined
+        ? {}
+        : { queries: snapshotLayoutQueries(sourceQueries, context) }),
+    } as any);
+    context.layouts.set(object, declaration);
+    context.layouts.set(declaration, declaration);
+    return declaration;
+  } finally {
+    context.layoutsInProgress.delete(object);
+  }
+}
+
+export function snapshotLiveTargetRenderers(
+  renderers: readonly LiveTargetRenderer<any>[],
+  context: AppDeclarationSnapshotContext,
+): readonly LiveTargetRenderer<any>[] {
+  return snapshotAppRegistry(renderers, 'app.liveTargetRenderers', (source, index) => {
+    const record = snapshotOwnDataRecord(source, `liveTargetRenderer[${index}]`);
+    if (record.queries !== undefined) {
+      record.queries = Object.freeze(
+        denseArrayValues(record.queries, 'liveTargetRenderer.queries'),
+      );
+    }
+    if (record.queryDefinitions !== undefined) {
+      record.queryDefinitions = snapshotAppRegistry(
+        record.queryDefinitions,
+        'liveTargetRenderer.queryDefinitions',
+        (queryDefinition) =>
+          snapshotAppQuery(
+            queryDefinition as AppQueryDeclaration,
+            context,
+          ) as RegisteredQueryDefinition,
+      );
+    }
+    snapshotArrayProperty(record, 'stylesheets', 'liveTargetRenderer.stylesheets');
+    return Object.freeze(record) as unknown as LiveTargetRenderer<any>;
+  });
+}
+
+/**
+ * Close and identity-mark a Kovo aggregate after all load-bearing declaration registries have been
+ * rebuilt as dense frozen arrays of canonical declarations (SPEC §9.5/§10.2).
+ */
+export function closeKovoAppAggregate<App extends KovoApp>(
+  source: App,
+  context: AppDeclarationSnapshotContext = createAppDeclarationSnapshotContext(),
+): App {
+  // Snapshot top-level queries first so layout/mutation references converge on these identities.
+  const queries = snapshotAppRegistry(source.queries, 'app.queries', (value) =>
+    snapshotAppQuery(value, context),
+  );
+  const routes = snapshotAppRegistry(source.routes, 'app.routes', (value) =>
+    snapshotAppRoute(value, context),
+  );
+  const mutations = snapshotAppRegistry(source.mutations, 'app.mutations', (value) =>
+    snapshotAppMutation(value, context),
+  );
+  const endpoints = snapshotAppRegistry(source.endpoints, 'app.endpoints', (value) =>
+    snapshotAppEndpoint(value, context),
+  );
+  const liveTargetRenderers = snapshotLiveTargetRenderers(source.liveTargetRenderers, context);
+  const diagnostics = Object.freeze(denseArrayValues(source.diagnostics, 'app.diagnostics'));
+  const stylesheets = Object.freeze(denseArrayValues(source.stylesheets, 'app.stylesheets'));
+  const tasks = Object.freeze(denseArrayValues(source.tasks, 'app.tasks'));
+
+  const aggregate = Object.freeze({
+    ...source,
+    diagnostics,
+    endpoints,
+    liveTargetRenderers,
+    mutations,
+    queries,
+    routes,
+    stylesheets,
+    tasks,
+  }) as App;
+  return markClosedKovoApp(aggregate);
+}
+
+/** @internal Derive a trusted dev/build app without reopening the public structural boundary. */
+export function deriveClosedKovoApp<App extends KovoApp>(
+  source: App,
+  overrides: Partial<App>,
+): App {
+  if (!isKovoApp(source)) {
+    throw new TypeError('Kovo app derivation requires a closed createApp() aggregate.');
+  }
+  return closeKovoAppAggregate({ ...source, ...overrides } as App);
+}
+
+function snapshotMutationRegistry(
+  source: unknown,
+  context: AppDeclarationSnapshotContext,
+): Readonly<Record<string, unknown>> {
+  const record = snapshotOwnDataRecord(source, 'mutation.registry', new Set(['queries']));
+  const queries = stableOwnDataValue(
+    requireDeclarationObject(source, 'mutation.registry'),
+    'queries',
+    'mutation.registry.queries',
+  );
+  if (queries !== undefined) {
+    record.queries = snapshotAppRegistry(
+      queries as readonly AppQueryDeclaration[],
+      'mutation.registry.queries',
+      (queryDefinition) => snapshotAppQuery(queryDefinition, context),
+    );
+  }
+  snapshotArrayProperty(record, 'inferredTouches', 'mutation.registry.inferredTouches');
+  snapshotArrayProperty(record, 'tables', 'mutation.registry.tables');
+  snapshotArrayProperty(record, 'touches', 'mutation.registry.touches');
+  return Object.freeze(record);
+}
+
+function snapshotWebhookDefinition(source: unknown): Readonly<Record<string, unknown>> {
+  const object = requireDeclarationObject(source, 'webhookDefinition');
+  // Verification is security topology just like route.layout. Reject a Proxy get/descriptor split
+  // and then preserve only the stable descriptor value in the canonical definition.
+  const verify = stableOwnDataValue(object, 'verify', 'webhookDefinition.verify');
+  const record = snapshotOwnDataRecord(object, 'webhookDefinition', new Set(['verify']));
+  record.verify = verify === 'none' ? verify : snapshotWebhookVerifier(verify);
+  snapshotArrayProperty(record, 'writes', 'webhookDefinition.writes');
+  return Object.freeze(record);
+}
+
+function snapshotWebhookVerifier(source: unknown): WebhookVerifier {
+  const object = requireDeclarationObject(source, 'webhookDefinition.verify');
+  const kind = stableOwnDataValue(object, 'kind', 'webhookDefinition.verify.kind');
+
+  if (kind === 'hmac') {
+    if (!isFrameworkHmacSignatureVerifier(object)) {
+      throw new TypeError(
+        'webhookDefinition.verify kind "hmac" must come from hmacSignature() or a framework preset.',
+      );
+    }
+    // Preserve the exact branded identity. hmacSignature() already freezes its public metadata
+    // and closes its executable method over a private semantic snapshot, so reconstructing from
+    // byte-shaped audit config would be both weaker and unnecessary.
+    return object;
+  }
+  if (kind !== 'custom') {
+    throw new TypeError('webhookDefinition.verify.kind must be "custom" or "hmac".');
+  }
+
+  const name = stableOwnDataValue(object, 'name', 'webhookDefinition.verify.name');
+  const scheme = stableOwnDataValue(object, 'scheme', 'webhookDefinition.verify.scheme');
+  const verify = stableOwnDataValue(object, 'verify', 'webhookDefinition.verify.verify');
+  if (typeof name !== 'string' || typeof scheme !== 'string' || typeof verify !== 'function') {
+    throw new TypeError('webhookDefinition.verify must expose stable custom verifier metadata.');
+  }
+
+  let canonical: CustomWebhookVerifier;
+  canonical = Object.freeze({
+    kind: 'custom',
+    name,
+    scheme,
+    async verify(request: WebhookVerificationRequest): Promise<boolean> {
+      return Boolean(await Reflect.apply(verify, canonical, [request]));
+    },
+  });
+  return canonical;
+}
+
+function snapshotLayoutQueries(
+  source: unknown,
+  context: AppDeclarationSnapshotContext,
+): Readonly<Record<string, AppQueryDeclaration>> {
+  const record = snapshotOwnDataRecord(source, 'layout.queries');
+  for (const key of Object.keys(record)) {
+    record[key] = snapshotAppQuery(record[key] as AppQueryDeclaration, context);
+  }
+  return Object.freeze(record) as Readonly<Record<string, AppQueryDeclaration>>;
+}
+
+function snapshotRouteHintArrays(record: Record<PropertyKey, any>, label: string): void {
+  for (const field of [
+    'i18n',
+    'meta',
+    'modulepreloads',
+    'prerenderUrls',
+    'staticPaths',
+    'stylesheets',
+  ] as const) {
+    snapshotArrayProperty(record, field, `${label}.${field}`);
+  }
+}
+
+function snapshotArrayProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined || !Array.isArray(value)) return;
+  record[property] = Object.freeze(denseArrayValues(value, label));
+}
+
+function denseArrayValues<Value>(source: readonly Value[], label: string): Value[] {
+  let array = false;
+  try {
+    array = Array.isArray(source);
+  } catch {
+    throw new TypeError(`${label} must be a stable dense array.`);
+  }
+  if (!array) throw new TypeError(`${label} must be a stable dense array.`);
+
+  try {
+    const length = Object.getOwnPropertyDescriptor(source, 'length');
+    if (
+      length === undefined ||
+      !('value' in length) ||
+      !Number.isSafeInteger(length.value) ||
+      length.value < 0 ||
+      length.value > MAX_APP_REGISTRY_LENGTH
+    ) {
+      throw new TypeError(`${label} must have a bounded stable length.`);
+    }
+
+    const values: Value[] = [];
+    for (let index = 0; index < length.value; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(source, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError(`${label}[${index}] must be a stable own data property.`);
+      }
+      values.push(descriptor.value as Value);
+    }
+    return values;
+  } catch (error) {
+    if (error instanceof TypeError && error.message.startsWith(label)) throw error;
+    throw new TypeError(`${label} must expose stable own data properties.`);
+  }
+}
+
+function snapshotOwnDataRecord(
+  source: unknown,
+  label: string,
+  omitted: ReadonlySet<PropertyKey> = new Set(),
+): Record<PropertyKey, any> {
+  const object = requireDeclarationObject(source, label);
+  const record: Record<PropertyKey, any> = {};
+  try {
+    for (const key of Reflect.ownKeys(object)) {
+      if (omitted.has(key)) continue;
+      const descriptor = Object.getOwnPropertyDescriptor(object, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError(`${label}.${String(key)} must be a stable own data property.`);
+      }
+      Object.defineProperty(record, key, {
+        configurable: true,
+        enumerable: descriptor.enumerable === true,
+        value: descriptor.value,
+        writable: true,
+      });
+    }
+  } catch (error) {
+    if (error instanceof TypeError && error.message.startsWith(label)) throw error;
+    throw new TypeError(`${label} must expose stable own data properties.`);
+  }
+  return record;
+}
+
+function stableOwnDataValue(source: object, property: PropertyKey, label: string): unknown {
+  try {
+    const before = Object.getOwnPropertyDescriptor(source, property);
+    if (before !== undefined && !('value' in before)) {
+      throw new TypeError(`${label} must be a stable own data property.`);
+    }
+    const observed = Reflect.get(source, property, source);
+    const after = Object.getOwnPropertyDescriptor(source, property);
+    if (!sameDataDescriptor(before, after)) {
+      throw new TypeError(`${label} changed while the app aggregate was assembled.`);
+    }
+    const descriptorValue = before === undefined ? undefined : before.value;
+    if (!Object.is(observed, descriptorValue)) {
+      throw new TypeError(`${label} must not disagree between descriptor and property access.`);
+    }
+    return descriptorValue;
+  } catch (error) {
+    if (error instanceof TypeError && error.message.startsWith(label)) throw error;
+    throw new TypeError(`${label} must expose a stable own data property.`);
+  }
+}
+
+function sameDataDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    'value' in left &&
+    'value' in right &&
+    Object.is(left.value, right.value) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
+}
+
+function requireDeclarationObject(
+  value: unknown,
+  label: string,
+): object & Record<PropertyKey, any> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object declaration.`);
+  }
+  return value as object & Record<PropertyKey, any>;
+}

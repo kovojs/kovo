@@ -27,7 +27,7 @@ describe('server route meta and i18n hints', () => {
         '<meta name="description" content="Fast cart &lt;checkout&gt;">',
         '<meta property="og:description" content="Fast cart &lt;checkout&gt;">',
         '<meta property="og:image" content="/products/p1.png">',
-        '<link rel="modulepreload" href="/c/cart.client.js">',
+        '<link rel="modulepreload" href="/c/cart.client.js" data-kovo-module-allowlist>',
       ].join(''),
     });
   });
