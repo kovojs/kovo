@@ -358,7 +358,7 @@ describe('browser inline loader enhanced navigation', () => {
       '<meta name="kovo-build" content="build-a">',
       '<title>Products</title>',
       '<link rel="stylesheet" href="/assets/site.css" data-loaded="css">',
-      '<link rel="modulepreload" href="/c/shared.js" data-loaded="module">',
+      '<link rel="modulepreload" href="/c/shared.js" data-kovo-module-allowlist data-loaded="module">',
     ].join('');
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
@@ -385,7 +385,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<title>Cart</title>',
           '<meta name="description" content="Cart">',
           '<link rel="stylesheet" href="/assets/site.css">',
-          '<link rel="modulepreload" href="/c/shared.js">',
+          '<link rel="modulepreload" href="/c/shared.js" data-kovo-module-allowlist>',
           '</head><body>',
           '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
           '<a id="to-cart" href="/cart">Cart</a>',
@@ -552,7 +552,7 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-      '<button type="button" class="icon-btn" on:click="/c/theme.js#toggle">Theme</button>',
+      '<button type="button" class="icon-btn" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
       '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
       '</main>',
     ].join('');
@@ -565,7 +565,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<title>Cart</title>',
           '</head><body data-theme="cart" data-shell="docs">',
           '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<button type="button" class="icon-btn" on:click="/c/theme.js#toggle">Theme</button>',
+          '<button type="button" class="icon-btn" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
           '</body></html>',
@@ -812,7 +812,7 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-      '<button id="theme" type="button" on:click="/c/theme.js#toggle">Theme</button>',
+      '<button id="theme" type="button" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
       '<a id="to-api" href="/api">API</a>',
       '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
       '</main>',
@@ -826,7 +826,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<title>API</title>',
           '</head><body data-route="api">',
           '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<button id="theme" type="button" on:click="/c/theme.js#toggle">Theme</button>',
+          '<button id="theme" type="button" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
           '<a id="to-api" href="/api">API</a>',
           '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
           '</main>',
@@ -910,7 +910,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
           '<section id="layout-island" kovo-c="layout-shell">Layout</section>',
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<article id="new-page-island" on:load="/c/page.js#load" on:idle="/c/page.js#idle" on:visible="/c/page.js#visible">Cart</article>',
+          '<article id="new-page-island" on:load="/c/page.js#load" on:idle="/c/page.js#idle" on:visible="/c/page.js#visible" data-kovo-module-allowlist="/c/page.js">Cart</article>',
           '</section>',
           '</main>',
           '</body></html>',
@@ -948,7 +948,7 @@ describe('browser inline loader enhanced navigation', () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
     document.body.innerHTML = [
       '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-      '<header id="layout-island" on:load="/c/layout.js#layoutLoad">Docs</header>',
+      '<header id="layout-island" on:load="/c/layout.js#layoutLoad" data-kovo-module-allowlist="/c/layout.js">Docs</header>',
       '<a id="to-api" href="/api">API</a>',
       '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
       '</main>',
@@ -962,10 +962,10 @@ describe('browser inline loader enhanced navigation', () => {
           '<title>API</title>',
           '</head><body>',
           '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<header id="layout-island" on:load="/c/layout.js#layoutLoad">Docs</header>',
+          '<header id="layout-island" on:load="/c/layout.js#layoutLoad" data-kovo-module-allowlist="/c/layout.js">Docs</header>',
           '<a id="to-api" href="/api">API</a>',
           '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<article id="api-page" on:load="/c/page.js#pageLoad">API</article>',
+          '<article id="api-page" on:load="/c/page.js#pageLoad" data-kovo-module-allowlist="/c/page.js">API</article>',
           '</section>',
           '</main>',
           '</body></html>',
