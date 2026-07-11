@@ -15,6 +15,7 @@ export const SEMANTIC_ATTRIBUTE_MANIFEST = {
       'data-bind-list',
       'data-derive',
       'data-derive-attr',
+      'data-kovo-module-allowlist',
       'kovo-c',
       'kovo-deps',
       'kovo-fragment-target',

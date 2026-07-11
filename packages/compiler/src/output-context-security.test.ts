@@ -491,6 +491,79 @@ export const SpreadSafe = component({
     });
 
     expect(result.diagnostics.filter((d) => d.code === 'KV236')).toEqual([]);
+    expect(result.files.find((file) => file.kind === 'server')?.source).not.toContain(
+      'kovoSafeJsxSpread',
+    );
+  });
+
+  it('reconstructs dynamic intrinsic spreads without Kovo control attributes (M3)', () => {
+    const result = compileComponentModule({
+      fileName: 'dynamic-control-spread.tsx',
+      source: `
+export const DynamicControlSpread = component({
+  render: ({ profile }) => (
+    <button {...profile.attributes} onClick={() => {}}>Open</button>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(serverSource).toContain(
+      "import { kovoSafeJsxSpread } from '@kovojs/server/internal/escape';",
+    );
+    expect(serverSource).toContain('{...kovoSafeJsxSpread(profile.attributes)}');
+    expect(serverSource).toMatch(/on:click="\/c\/.*#DynamicControlSpread\$button_click"/);
+  });
+
+  it('does not rewrite dynamic component props or compiler-owned mutation form spreads (M3)', () => {
+    const result = compileComponentModule({
+      fileName: 'owned-spreads.tsx',
+      source: `
+import { mutationFormAttributes as frameworkMutationFormAttributes } from '@kovojs/server';
+
+export const OwnedSpreads = component({
+  mutations: { save },
+  render: (_queries, _state, { forms }) => (
+    <section>
+      <Widget {...forms.save} />
+      <form {...frameworkMutationFormAttributes(save)}>Save</form>
+    </section>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(serverSource).toContain('<Widget {...forms.save} />');
+    expect(serverSource).toContain('{...frameworkMutationFormAttributes(save)}');
+    expect(serverSource).not.toContain('kovoSafeJsxSpread(forms.save)');
+    expect(serverSource).not.toContain('kovoSafeJsxSpread(frameworkMutationFormAttributes(save))');
+  });
+
+  it('does not trust a local mutationFormAttributes lookalike as framework form provenance (M3)', () => {
+    const result = compileComponentModule({
+      fileName: 'lookalike-form-spread.tsx',
+      source: `
+function mutationFormAttributes(value) {
+  return value;
+}
+
+export const LookalikeFormSpread = component({
+  render: ({ profile }) => (
+    <form {...mutationFormAttributes(profile.attributes)}>Save</form>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(serverSource).toContain(
+      '{...kovoSafeJsxSpread(mutationFormAttributes(profile.attributes))}',
+    );
+    expect(serverSource).not.toContain('action="/_m/');
+    expect(serverSource).not.toContain('data-mutation=');
   });
 
   // B1 (SPEC §4.8:358 / §5.2 #10): dynamic <script> element text is an unsafe RAWTEXT context —

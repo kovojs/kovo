@@ -213,6 +213,8 @@ export interface JsxSpreadAttributeModel {
   end: number;
   expression: string;
   expressionCallArgumentBareIdentifierName?: string;
+  expressionCallImportedName?: string;
+  expressionCallModuleSpecifier?: string;
   expressionCallName?: string;
   expressionBareIdentifierName?: string;
   expressionIsBareIdentifier?: boolean;

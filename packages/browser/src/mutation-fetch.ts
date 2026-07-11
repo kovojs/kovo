@@ -68,6 +68,8 @@ export interface FetchedEnhancedMutation {
   changes: MutationChangeRecord[];
   idem: string;
   response: EnhancedMutationResponseLike;
+  /** SPEC §9.3: retire this page/channel before applying response truth. */
+  sessionTransition?: true;
   streamBody?: ReadableStream<Uint8Array> | undefined;
   targets: string[];
 }
@@ -100,6 +102,7 @@ export async function fetchEnhancedMutation(
     method: (options.form.method ?? 'post').toUpperCase(),
     ...definedProps({ onUploadProgress: options.onUploadProgress, signal: options.signal }),
   });
+  const sessionTransition = readSessionTransition(response);
   const reauth = response.headers?.get('Kovo-Reauth') ?? response.headers?.get('kovo-reauth');
   if (response.status === 401 && reauth) {
     followReauthDirective(reauth);
@@ -108,6 +111,7 @@ export async function fetchEnhancedMutation(
       changes: [],
       idem,
       response,
+      ...(sessionTransition ? { sessionTransition: true as const } : {}),
       targets: targetSnapshot.targets,
     };
   }
@@ -119,6 +123,7 @@ export async function fetchEnhancedMutation(
       changes: [],
       idem,
       response,
+      ...(sessionTransition ? { sessionTransition: true as const } : {}),
       targets: targetSnapshot.targets,
     };
   }
@@ -140,6 +145,7 @@ export async function fetchEnhancedMutation(
       changes: [],
       idem,
       response,
+      ...(sessionTransition ? { sessionTransition: true as const } : {}),
       targets: targetSnapshot.targets,
     };
   }
@@ -150,9 +156,17 @@ export async function fetchEnhancedMutation(
     changes,
     idem,
     response,
+    ...(sessionTransition ? { sessionTransition: true as const } : {}),
     ...(options.streaming && response.body ? { streamBody: response.body } : {}),
     targets: targetSnapshot.targets,
   };
+}
+
+function readSessionTransition(response: EnhancedMutationResponseLike): boolean {
+  const value =
+    response.headers?.get('Kovo-Session-Transition') ??
+    response.headers?.get('kovo-session-transition');
+  return value?.trim().toLowerCase() === 'reload';
 }
 
 function followReauthDirective(location: string): void {

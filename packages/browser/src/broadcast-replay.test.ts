@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast } from './broadcast.js';
 import { createIslandSignalScope } from './handler-context.js';
@@ -11,7 +11,11 @@ import {
   FakeMorphTarget,
   FakeQueryBindingElement,
   FakeQueryPlanElement,
+  installTestClientModuleManifest,
 } from './runtime-test-fakes.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest(['/c/cart-filter.client.js']);
+afterAll(restoreClientModuleManifest);
 
 // SPEC.md §9.1/§9.2: incoming broadcast replay enters the canonical mutation
 // response apply path (keyed query chunks, tolerant per-chunk error seam, query

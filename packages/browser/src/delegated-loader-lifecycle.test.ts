@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore, installKovoLoader } from './client.js';
 import {
@@ -7,7 +7,14 @@ import {
   FakeMorphRoot,
   FakeMorphTarget,
   FakeRoot,
+  installTestClientModuleManifest,
 } from './runtime-test-fakes.js';
+
+const restoreClientModuleManifest = installTestClientModuleManifest([
+  '/c/cart-badge.client.js',
+  '/c/cart-filter.client.js',
+]);
+afterAll(restoreClientModuleManifest);
 
 // SPEC.md §4.4/§4.7: each loader install owns an isolated island ctx.signal
 // scope that aborts on dispose, enhanced-mutation fragments that remove an

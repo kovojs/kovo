@@ -9,7 +9,7 @@ import {
 import * as style from '@kovojs/style';
 
 import { validateCsrfToken } from './csrf.js';
-import { escapeText, renderHtmlValue } from './html.js';
+import { escapeText, kovoSafeJsxSpread, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { createElement, Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
 import { mutationFormAttributes } from './mutation.js';
@@ -409,6 +409,71 @@ describe('server jsx runtime', () => {
     expect(html(jsx('a', { 'data-bind': 'x', 'aria-label': 'Close', 'xlink:href': '/y' }))).toBe(
       '<a data-bind="x" aria-label="Close" xlink:href="/y"></a>',
     );
+  });
+
+  it('M3: compiler-owned spread reconstruction omits the runtime control-attribute census', () => {
+    const record = {
+      'ON:LOAD': '/c/account.client.js#deleteAccount',
+      'DaTa-BiNd': '/c/account.client.js#derive',
+      'DATA-DERIVE': '/c/account.client.js#derive',
+      'aria-label': 'Profile',
+      class: 'card',
+      'data-enhance': true,
+      'data-key': 'forged-morph-key',
+      'data-kovo-module-allowlist': true,
+      'data-mutation': 'account/delete',
+      'data-p-account-id': 'victim',
+      'data-plan': 'forged-plan-anchor',
+      'data-profile-id': 'public-profile',
+      'data-state': 'indeterminate',
+      'data-stream': true,
+      'data-stream-renderer': '/c/account.client.js#render',
+      enhance: true,
+      'kovo-param-types': 'accountId:string',
+      'kovo-state': '{"armed":true}',
+      mutation: { key: 'account/delete' },
+      stream: true,
+      streamText: 'secret:value',
+    };
+
+    expect(html(jsx('article', { ...kovoSafeJsxSpread(record) }))).toBe(
+      '<article aria-label="Profile" class="card" data-profile-id="public-profile"></article>',
+    );
+  });
+
+  it('M3: spread reconstruction snapshots mutable/getter/prototype carriers once', () => {
+    let reads = 0;
+    const inherited = {
+      'on:load': '/c/inherited.client.js#run',
+      'kovo-param-types': 'accountId:string',
+    };
+    const record = Object.assign(Object.create(inherited) as Record<string, unknown>, {
+      class: 'before',
+    });
+    Object.defineProperty(record, 'data-label', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return reads === 1 ? 'pinned' : 'changed';
+      },
+    });
+    Object.defineProperty(record, '__proto__', {
+      configurable: true,
+      enumerable: true,
+      value: 'ordinary-own-data',
+    });
+    const safe = kovoSafeJsxSpread(record);
+    record.class = 'after';
+    record['on:load'] = '/c/late.client.js#run';
+
+    expect(Object.getPrototypeOf(safe)).toBeNull();
+    expect(html(jsx('div', safe))).toBe(
+      '<div class="before" data-label="pinned" __proto__="ordinary-own-data"></div>',
+    );
+    expect(reads).toBe(1);
+    expect(safe.class).toBe('before');
+    expect(safe['on:load']).toBeUndefined();
+    expect(safe['kovo-param-types']).toBeUndefined();
   });
 
   it('H1: drains a redacted KV236 event when an attribute name is rejected', () => {

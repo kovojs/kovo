@@ -107,6 +107,52 @@ describe('enhanced mutation response apply orchestration', () => {
       ].join(''),
       [{ domain: 'cart', keys: ['cart:1'] }],
     );
+    expect(broadcast.close).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['anonymous to authenticated', undefined, 'principal-a'],
+    ['authenticated to anonymous', 'principal-a', undefined],
+    ['principal A to principal B', 'principal-a', 'principal-b'],
+    ['same-principal rolling credential refresh', 'principal-a', 'principal-a'],
+  ])('closes before apply/publish for %s', (_label, _pagePrincipal, _nextPrincipal) => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const broadcast = { close: vi.fn(), publish: vi.fn() };
+    const reload = vi.fn();
+    const originalLocation = globalThis.location;
+    Reflect.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { reload },
+    });
+
+    try {
+      const applied = applyFetchedEnhancedMutationResponseToRuntime(
+        applyOptions({ broadcast, root, store }),
+        fetchedMutation('<kovo-query name="account">{"owner":"victim"}</kovo-query>', {
+          changes: [{ domain: 'auth' }, { domain: 'account' }],
+          sessionTransition: true,
+        }),
+      );
+
+      expect(broadcast.close).toHaveBeenCalledOnce();
+      expect(broadcast.publish).not.toHaveBeenCalled();
+      expect(reload).toHaveBeenCalledOnce();
+      expect(store.get('account')).toBeUndefined();
+      expect(applied).toEqual({
+        appliedFragments: [],
+        changes: [],
+        fragments: [],
+        idem: 'idem_apply',
+        queries: [],
+        targets: [],
+      });
+    } finally {
+      Reflect.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
   });
 
   it('applies validation failure fragments without rebroadcasting failed responses', () => {

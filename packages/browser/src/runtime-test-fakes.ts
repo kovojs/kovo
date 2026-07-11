@@ -1,5 +1,44 @@
 import type { DelegatedEvent, EventElementLike } from './events.js';
 
+/** Install a compiler-shaped modulepreload registry for browser-free runtime tests. */
+export function installTestClientModuleManifest(urls: readonly string[]): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const previous = (
+    globalThis as { document?: { querySelectorAll?: (selector: string) => unknown } }
+  ).document;
+  const links = urls.map((url) => ({
+    getAttribute(name: string) {
+      return name === 'data-kovo-module-allowlist' ? url : null;
+    },
+  }));
+  const documentLike = new Proxy(previous ?? {}, {
+    get(target, property, receiver) {
+      if (property === 'querySelectorAll') {
+        return (selector: string) =>
+          selector === '[data-kovo-module-allowlist]'
+            ? links
+            : (previous?.querySelectorAll?.(selector) ?? []);
+      }
+      if (property === 'querySelector') {
+        return (selector: string) =>
+          (
+            previous as { querySelector?: (selector: string) => unknown } | undefined
+          )?.querySelector?.(selector) ?? null;
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: documentLike,
+    writable: true,
+  });
+  return () => {
+    if (descriptor) Object.defineProperty(globalThis, 'document', descriptor);
+    else delete (globalThis as { document?: unknown }).document;
+  };
+}
+
 export class FakeRoot {
   bindings: FakeQueryBindingElement[] = [];
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();

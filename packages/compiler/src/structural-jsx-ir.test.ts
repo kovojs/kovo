@@ -138,6 +138,7 @@ export const ProductPage = component({
     expect(structuralJsxPhaseOrder).toMatchInlineSnapshot(`
       [
         "primitive-spreads",
+        "dynamic-spread-control-boundary",
         "primitive-composition",
         "link-navigation",
         "platform-behaviors",
