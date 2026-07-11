@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { describe, expect, it } from 'vitest';
 import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
 import {
   KovoReadonlyHandleError,
   createAuthorizationCensusDb,
@@ -1043,6 +1044,83 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('rejects untrusted sql.raw fragments across managed Drizzle builder fast paths', () => {
+    const log: string[] = [];
+    const builder = {
+      from(table: unknown) {
+        log.push(`from:${String(table)}`);
+        return this;
+      },
+      orderBy(value: unknown) {
+        const resolved = typeof value === 'function' ? value({}) : value;
+        log.push(`orderBy:${String(resolved)}`);
+        return [];
+      },
+      where(value: unknown) {
+        log.push(`where:${String(value)}`);
+        return this;
+      },
+    };
+    const raw = {
+      select(projection?: unknown) {
+        log.push(`select:${projection === undefined ? 'all' : 'projection'}`);
+        return builder;
+      },
+    };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+
+    expect(() => handle.select({ unsafe: sql.raw('count(*)') })).toThrow(/KV422[\s\S]*sql\.raw/);
+    expect(() => handle.select().from('products').where(sql.raw('1 = 1'))).toThrow(
+      /KV422[\s\S]*sql\.raw/,
+    );
+    expect(() =>
+      handle
+        .select()
+        .from('products')
+        .orderBy(() => sql.raw('created_at desc')),
+    ).toThrow(/KV422[\s\S]*sql\.raw/);
+    expect(log).not.toEqual(expect.arrayContaining([expect.stringContaining('orderBy:')]));
+  });
+
+  it('keeps static/allowlisted builders green and requires trustedSql for raw builder chunks', () => {
+    const accepted: unknown[] = [];
+    const builder = {
+      from(_table: unknown) {
+        return this;
+      },
+      orderBy(value: unknown) {
+        accepted.push(value);
+        return [];
+      },
+    };
+    const raw = { select: () => builder };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(staticSql`created_at desc`),
+    ).toEqual([]);
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(sql.identifier('created_at', { allow: ['created_at'] })),
+    ).toEqual([]);
+    expect(
+      handle
+        .select()
+        .from('products')
+        .orderBy(
+          trustedSql(sql.raw('created_at desc'), {
+            justification: 'reviewed fixed report ordering',
+          }),
+        ),
+    ).toEqual([]);
+    expect(accepted).toHaveLength(3);
+  });
+
   it('denies schema tables with no DEC-K classification at the managed builder boundary', () => {
     const log: string[] = [];
     const raw = {

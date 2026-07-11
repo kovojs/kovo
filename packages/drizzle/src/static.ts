@@ -884,6 +884,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const context = sqlSafetyContextForSourceFile(sourceFile);
   const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
   if (rawDriverImport) diagnostics.push(rawDriverImport);
+  diagnostics.push(...unresolvedConcurrencyAnnotationDiagnostics(sourceFile));
   diagnostics.push(...sqliteOwnerScopeWarningDiagnostics(file, sourceFile));
   diagnostics.push(...crossOwnerReadStaticGuardDiagnostics(file, sourceFile));
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
@@ -1797,14 +1798,11 @@ function sqlRawHelperDiagnostic(
   call: CallExpression,
   context: SqlSafetyContext,
 ): TouchGraphDiagnostic | null {
-  const expression = call.getExpression();
-  if (!Node.isPropertyAccessExpression(expression)) return null;
-  const receiver = expression.getExpression();
-
-  const method = expression.getName();
-  if (method !== 'raw' && method !== 'identifier') return null;
+  const helper = resolvedDangerousSqlHelper(call.getExpression());
+  if (!helper) return null;
+  const { method, provider } = helper;
   const [first, second] = call.getArguments();
-  if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
+  if (provider === 'drizzle') {
     return drizzleDiagnostic({
       code: 'KV422',
       detail: `Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
@@ -1816,13 +1814,6 @@ function sqlRawHelperDiagnostic(
   // `@kovojs/drizzle` binding — bare `sql`, an `import { sql as s }` alias, or a
   // namespace `<ns>.sql` accessor — so `s.raw(...)` / `k.sql.raw(...)` cannot slip a
   // raw chunk past the gate the way a literal `receiver === 'sql'` check did.
-  if (
-    !expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
-      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
-    })
-  ) {
-    return null;
-  }
   if (method === 'identifier' && sqlAllowlistSafety(second, context) === 'literal') return null;
 
   const safety = sqlTextSafety(first, context);
@@ -1833,6 +1824,85 @@ function sqlRawHelperDiagnostic(
     detail: `sql.${method}(...) receives ${sqlSafetyDescription(safety)} text; use sql.identifier(value, { allow }) for identifiers or trustedSql(...) for audited raw SQL.`,
     site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
   });
+}
+
+type DangerousSqlHelper = {
+  method: 'identifier' | 'raw';
+  provider: 'drizzle' | 'kovo';
+};
+
+/**
+ * Resolve a dangerous SQL member value by symbol identity (SPEC §6.6/§10.2, KV422).
+ *
+ * The sink is the callable member value, not merely the source spelling `sql.raw(...)`:
+ * `const raw = sql.raw`, `const alias = raw`, and `const { raw: alias } = sql` all preserve
+ * the exact same executable-text capability at runtime. Keep that identity through ordinary
+ * const aliases and object bindings so a harmless syntactic detour cannot erase the gate.
+ */
+function resolvedDangerousSqlHelper(
+  expression: Node,
+  seen = new Set<string>(),
+  depth = 0,
+): DangerousSqlHelper | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = staticAccessName(node);
+    if (member !== 'raw' && member !== 'identifier') return undefined;
+    const receiver = node.getExpression();
+    if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
+      return { method: member, provider: 'drizzle' };
+    }
+    if (
+      expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
+        legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+      })
+    ) {
+      return { method: member, provider: 'kovo' };
+    }
+    return undefined;
+  }
+
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const symbolKey = resolvedSymbolKey(symbol);
+  if (symbolKey) {
+    if (seen.has(symbolKey)) return undefined;
+    seen.add(symbolKey);
+  }
+
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isVariableDeclaration(declaration)) {
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const resolved = resolvedDangerousSqlHelper(initializer, seen, depth + 1);
+      if (resolved) return resolved;
+      continue;
+    }
+
+    if (!Node.isBindingElement(declaration)) continue;
+    const property = propertyNameText(
+      declaration.getPropertyNameNode() ?? declaration.getNameNode(),
+    );
+    if (property !== 'raw' && property !== 'identifier') continue;
+    const pattern = declaration.getFirstAncestorByKind(SyntaxKind.ObjectBindingPattern);
+    const variable = pattern?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+    const initializer = variable?.getInitializer();
+    if (!initializer) continue;
+    if (expressionResolvesToFrameworkExport(initializer, frameworkExport('drizzle-orm', 'sql'))) {
+      return { method: property, provider: 'drizzle' };
+    }
+    if (
+      expressionResolvesToFrameworkExport(initializer, frameworkExport('@kovojs/drizzle', 'sql'), {
+        legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+      })
+    ) {
+      return { method: property, provider: 'kovo' };
+    }
+  }
+
+  return undefined;
 }
 
 function isKovoSqlTagExpression(tag: Node): boolean {
@@ -4424,8 +4494,11 @@ function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
       : { name: UNRESOLVED_READ_SOURCE_EXPRESSION, unmapped: true };
   }
   if (!Node.isCallExpression(annotationCall)) return null;
-  const annotationObject = annotationCall.getArguments()[0];
-  if (!annotationObject || !Node.isObjectLiteralExpression(annotationObject)) return null;
+  const annotationArgument = annotationCall.getArguments()[0];
+  const annotationObject = annotationArgument
+    ? staticObjectLiteralValue(annotationArgument)
+    : undefined;
+  if (!annotationObject) return null;
 
   const tableName = tableNameArgument(initializer) ?? UNRESOLVED_READ_SOURCE_EXPRESSION;
   if (booleanPropertyFromObject(annotationObject, 'exempt') === true) {
@@ -4590,7 +4663,11 @@ function domainPropertyFromObject(object: Node, name: string): string | undefine
 function columnRefName(initializer: Node | undefined): string | undefined {
   if (!initializer) return undefined;
   if (Node.isStringLiteral(initializer)) return initializer.getLiteralText();
-  if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) {
+  if (
+    !Node.isArrowFunction(initializer) &&
+    !Node.isFunctionExpression(initializer) &&
+    !Node.isFunctionDeclaration(initializer)
+  ) {
     return undefined;
   }
   let body: Node | undefined = initializer.getBody();
@@ -4691,21 +4768,214 @@ function governedPropertyFromObject(object: Node): true | string[] | undefined {
  * the resolved column-name list. A column ref or list of column refs; never `true`.
  */
 function concurrencyColumnsFromObject(object: Node, name: string): string[] | undefined {
-  if (!Node.isObjectLiteralExpression(object)) return undefined;
-  for (const property of object.getProperties()) {
-    if (!Node.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.getNameNode()) !== name) continue;
+  const resolution = concurrencyColumnsResolutionFromObject(object, name);
+  return resolution.kind === 'resolved' ? resolution.columns : undefined;
+}
 
-    const initializer = property.getInitializer();
-    if (!initializer) return undefined;
-    if (Node.isArrayLiteralExpression(initializer)) {
-      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
-      return columns.length > 0 ? columns : undefined;
+type StaticObjectPropertyResolution =
+  | { kind: 'absent' }
+  | { kind: 'resolved'; node: Node; value: Node }
+  | { kind: 'unresolved'; node: Node };
+
+type ConcurrencyColumnsResolution =
+  | { kind: 'absent' }
+  | { columns: string[]; kind: 'resolved'; node: Node }
+  | { kind: 'unresolved'; node: Node };
+
+function concurrencyColumnsResolutionFromObject(
+  object: Node,
+  name: string,
+): ConcurrencyColumnsResolution {
+  const property = staticObjectPropertyResolution(object, name);
+  if (property.kind !== 'resolved') return property;
+  const columns = staticConcurrencyColumns(property.value);
+  return columns === undefined
+    ? { kind: 'unresolved', node: property.node }
+    : { columns, kind: 'resolved', node: property.node };
+}
+
+/**
+ * Resolve one property under JavaScript object-spread overwrite semantics. Later explicit
+ * properties can safely recover from an earlier dynamic spread; a later unresolved spread must
+ * fail closed because it may replace the concurrency fact retained by the runtime annotation.
+ */
+function staticObjectPropertyResolution(
+  object: Node,
+  name: string,
+  seen = new Set<string>(),
+  depth = 0,
+): StaticObjectPropertyResolution {
+  if (depth > 12) return { kind: 'unresolved', node: object };
+  const literal = staticObjectLiteralValue(object, seen, depth + 1);
+  if (!literal) return { kind: 'unresolved', node: object };
+
+  let resolution: StaticObjectPropertyResolution = { kind: 'absent' };
+  for (const property of literal.getProperties()) {
+    if (Node.isSpreadAssignment(property)) {
+      const spread = staticObjectPropertyResolution(
+        property.getExpression(),
+        name,
+        new Set(seen),
+        depth + 1,
+      );
+      if (spread.kind !== 'absent') resolution = spread;
+      continue;
     }
-    const column = columnRefName(initializer);
-    return column === undefined ? undefined : [column];
+
+    if (Node.isPropertyAssignment(property)) {
+      const propertyName = propertyNameText(property.getNameNode());
+      if (propertyName === name) {
+        const initializer = property.getInitializer();
+        resolution = initializer
+          ? { kind: 'resolved', node: property, value: initializer }
+          : { kind: 'unresolved', node: property };
+      } else if (propertyName === undefined) {
+        resolution = { kind: 'unresolved', node: property };
+      }
+      continue;
+    }
+
+    if (Node.isShorthandPropertyAssignment(property)) {
+      if (propertyNameText(property.getNameNode()) === name) {
+        resolution = { kind: 'resolved', node: property, value: property.getNameNode() };
+      }
+      continue;
+    }
+
+    // A computed accessor/method may overwrite `atomic`/`version` at runtime. Kovo's public
+    // annotation type does not need that shape, so retain the secure fail-closed verdict.
+    if (propertyNameText(property.getNameNode?.()) === undefined) {
+      resolution = { kind: 'unresolved', node: property };
+    }
+  }
+  return resolution;
+}
+
+function staticObjectLiteralValue(
+  value: Node,
+  seen = new Set<string>(),
+  depth = 0,
+): ObjectLiteralExpression | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isObjectLiteralExpression(node)) return node;
+  if (Node.isCallExpression(node) && staticAccessName(node.getExpression()) === 'freeze') {
+    const receiver = staticAccessExpression(node.getExpression());
+    if (
+      receiver &&
+      Node.isIdentifier(unwrappedStaticExpressionNode(receiver)) &&
+      unwrappedStaticExpressionNode(receiver).getText() === 'Object'
+    ) {
+      const [argument] = node.getArguments();
+      return argument ? staticObjectLiteralValue(argument, seen, depth + 1) : undefined;
+    }
+  }
+  if (!Node.isIdentifier(node)) return undefined;
+  const initializer = staticConstBindingInitializer(node, seen, depth + 1);
+  return initializer ? staticObjectLiteralValue(initializer, seen, depth + 1) : undefined;
+}
+
+function staticConcurrencyColumns(
+  value: Node,
+  seen = new Set<string>(),
+  depth = 0,
+): string[] | undefined {
+  if (depth > 12) return undefined;
+  const node = unwrappedStaticExpressionNode(value);
+  if (Node.isIdentifier(node)) {
+    const initializer = staticConstBindingInitializer(node, seen, depth + 1);
+    return initializer ? staticConcurrencyColumns(initializer, seen, depth + 1) : undefined;
+  }
+  if (Node.isArrayLiteralExpression(node)) {
+    const columns: string[] = [];
+    for (const element of node.getElements()) {
+      if (Node.isOmittedExpression(element)) return undefined;
+      const item = Node.isSpreadElement(element) ? element.getExpression() : element;
+      const resolved = staticConcurrencyColumns(item, new Set(seen), depth + 1);
+      if (resolved === undefined) return undefined;
+      columns.push(...resolved);
+    }
+    return [...new Set(columns)];
+  }
+  const column = columnRefName(node);
+  return column === undefined ? undefined : [column];
+}
+
+function staticConstBindingInitializer(
+  identifier: Node,
+  seen: Set<string>,
+  depth: number,
+): Node | undefined {
+  if (!Node.isIdentifier(identifier) || depth > 12) return undefined;
+  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
+  const key = resolvedSymbolKey(symbol);
+  if (key) {
+    if (seen.has(key)) return undefined;
+    seen.add(key);
+  }
+
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (Node.isFunctionDeclaration(declaration)) return declaration;
+    if (Node.isVariableDeclaration(declaration)) {
+      const list = declaration.getParent();
+      if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') continue;
+      const initializer = declaration.getInitializer();
+      if (initializer) return initializer;
+      continue;
+    }
+    if (!Node.isBindingElement(declaration)) continue;
+    const pattern = declaration.getFirstAncestorByKind(SyntaxKind.ObjectBindingPattern);
+    const variable = pattern?.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+    const list = variable?.getParent();
+    const initializer = variable?.getInitializer();
+    if (
+      !variable ||
+      !Node.isVariableDeclarationList(list) ||
+      list.getDeclarationKind() !== 'const'
+    ) {
+      continue;
+    }
+    if (!initializer) continue;
+    const property = propertyNameText(
+      declaration.getPropertyNameNode() ?? declaration.getNameNode(),
+    );
+    if (!property) continue;
+    const resolution = staticObjectPropertyResolution(
+      initializer,
+      property,
+      new Set(seen),
+      depth + 1,
+    );
+    if (resolution.kind === 'resolved') return resolution.value;
   }
   return undefined;
+}
+
+function unresolvedConcurrencyAnnotationDiagnostics(
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isKovoAnnotationCall(call)) continue;
+    const annotation = call.getArguments()[0];
+    if (!annotation) continue;
+    const unresolved = ['atomic', 'version']
+      .map((name) => ({
+        name,
+        resolution: concurrencyColumnsResolutionFromObject(annotation, name),
+      }))
+      .filter(({ resolution }) => resolution.kind === 'unresolved');
+    if (unresolved.length === 0) continue;
+    const firstResolution = unresolved[0]?.resolution;
+    diagnostics.push(
+      drizzleDiagnostic({
+        code: 'KV429',
+        detail: `The ${unresolved.map(({ name }) => name).join('/')} concurrency annotation is dynamic or statically unresolved. Use const shorthand, statically composed object spreads, and literal column selectors so the lost-update gate cannot be erased.`,
+        node: firstResolution?.kind === 'unresolved' ? firstResolution.node : annotation,
+      }),
+    );
+  }
+  return diagnostics;
 }
 
 function booleanPropertyFromObject(object: Node, name: string): boolean | undefined {

@@ -14,6 +14,7 @@ import {
   isSqlHandleLike,
   isSqlHandleProperty,
   snapshotManagedSqlStatement,
+  sqlSafetyMetadata,
   validateManagedSqlStatement,
   type ManagedSqlStatement,
   type SqlSafetyMode,
@@ -243,12 +244,16 @@ function wrapDbAdapter(
 
       if (typeof value !== 'function') return value;
       return cachedSqlSafetyMethod(target, prop, value, methodCache, () => {
-        if (isWriteSqlBuilderEntry(prop, writePolicy)) {
-          return guardedWriteBuilderEntry(target, value, methodCache);
+        if (isSqlBuilderFastPath(prop, writePolicy)) {
+          return guardedSqlBuilderEntry(
+            target,
+            value,
+            proxyCache,
+            methodCache,
+            isWriteSqlBuilderEntry(prop, writePolicy),
+          );
         }
-        return isSqlBuilderFastPath(prop, writePolicy)
-          ? value.bind(target)
-          : guardedUnknownSqlMethod(target, prop, value, mode, writePolicy, strictSqlTarget);
+        return guardedUnknownSqlMethod(target, prop, value, mode, writePolicy, strictSqlTarget);
       });
     },
   });
@@ -276,43 +281,109 @@ function isWriteSqlBuilderEntry(
   return writePolicy?.capability !== 'read' && (prop === 'insert' || prop === 'update');
 }
 
-function guardedWriteBuilderEntry(
+function guardedSqlBuilderEntry(
   target: object,
   value: Function,
+  proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  secretWriteBoundary: boolean,
 ): Function {
   return (...args: unknown[]) => {
-    const builder = value.apply(target, args);
-    return isRecord(builder) ? wrapWriteBuilderSecretBoundary(builder, methodCache) : builder;
+    const builder = value.apply(target, guardedSqlBuilderArguments(args));
+    return isRecord(builder)
+      ? wrapSqlBuilderSafety(builder, proxyCache, methodCache, secretWriteBoundary)
+      : builder;
   };
 }
 
-function wrapWriteBuilderSecretBoundary(
+function wrapSqlBuilderSafety(
   builder: object,
+  proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  secretWriteBoundary: boolean,
 ): object {
-  return new Proxy(builder as Record<PropertyKey, unknown>, {
+  const cached = proxyCache.get(builder);
+  if (cached) return cached;
+
+  const proxy = new Proxy(builder as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
-      if ((prop === 'values' || prop === 'set') && typeof value === 'function') {
-        return cachedSqlSafetyMethod(
-          target,
-          prop,
-          value,
-          methodCache,
-          () =>
-            (...args: unknown[]) => {
-              assertNoSecretDbWriteValue(args);
-              const result = value.apply(target, args);
-              return isRecord(result)
-                ? wrapWriteBuilderSecretBoundary(result, methodCache)
-                : result;
-            },
-        );
-      }
-      return typeof value === 'function' ? value.bind(target) : value;
+      if (typeof value !== 'function') return value;
+      return cachedSqlSafetyMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+        if (secretWriteBoundary && (prop === 'values' || prop === 'set')) {
+          assertNoSecretDbWriteValue(args);
+        }
+        const result = value.apply(target, guardedSqlBuilderArguments(args));
+        return isRecord(result) && !isPromiseLike(result)
+          ? wrapSqlBuilderSafety(result, proxyCache, methodCache, secretWriteBoundary)
+          : result;
+      });
     },
   });
+  proxyCache.set(builder, proxy);
+  return proxy;
+}
+
+function guardedSqlBuilderArguments(args: readonly unknown[]): unknown[] {
+  return args.map((argument) => {
+    if (typeof argument === 'function') {
+      return function (this: unknown, ...callbackArgs: unknown[]) {
+        const result = argument.apply(this, callbackArgs);
+        assertNoUnsafeRawSqlBuilderValue(result);
+        return result;
+      };
+    }
+    assertNoUnsafeRawSqlBuilderValue(argument);
+    return argument;
+  });
+}
+
+/**
+ * Defense-in-depth for Drizzle builder fast paths (SPEC §6.6/§10.2, KV422). Direct execution
+ * already validates the final statement; builders previously bypassed that choke entirely. Walk
+ * caller-owned projection/where/order objects without invoking accessors and reject any Kovo
+ * `sql.raw(...)` fragment unless `trustedSql(...)` minted the accepted carrier.
+ */
+function assertNoUnsafeRawSqlBuilderValue(value: unknown, seen = new WeakSet<object>()): void {
+  if (!isRecord(value)) return;
+  if (seen.has(value)) return;
+  seen.add(value);
+
+  let metadata: ReturnType<typeof sqlSafetyMetadata>;
+  try {
+    metadata = sqlSafetyMetadata(value);
+  } catch {
+    throw new Error(
+      'KV422: managed SQL builder received a carrier whose raw-SQL provenance could not be inspected (SPEC §6.6/§10.2).',
+    );
+  }
+  if (metadata.containsRawChunk) {
+    const validation = validateManagedSqlStatement(value);
+    if (!validation.ok) throw new Error(`KV422: ${validation.message}`);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoUnsafeRawSqlBuilderValue(item, seen);
+    return;
+  }
+
+  let prototype: object | null;
+  let descriptors: Record<PropertyKey, PropertyDescriptor>;
+  try {
+    prototype = Object.getPrototypeOf(value) as object | null;
+    if (prototype !== Object.prototype && prototype !== null) return;
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    throw new Error(
+      'KV422: managed SQL builder received a carrier whose nested SQL provenance could not be inspected (SPEC §6.6/§10.2).',
+    );
+  }
+  for (const descriptor of Reflect.ownKeys(descriptors).map((key) => descriptors[key])) {
+    if (descriptor && 'value' in descriptor) {
+      assertNoUnsafeRawSqlBuilderValue(descriptor.value, seen);
+    }
+  }
 }
 
 function guardedSqlMethod(
