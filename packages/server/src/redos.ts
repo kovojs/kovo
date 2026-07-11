@@ -14,6 +14,8 @@
  * Honesty (SPEC §6.6): blessed formats and `pattern()` subset matching are by-construction at their
  * sinks; `unsafeRegex(re, justification)` is the explicit audited JS RegExp escape.
  */
+import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
+
 import {
   compileLinearRegex as compileLinearRegexProgram,
   LinearRegexError,
@@ -215,7 +217,7 @@ export interface UnsafeRegexFact {
   readonly source: string;
 }
 
-const unsafeRegexFacts: UnsafeRegexFact[] = [];
+const unsafeRegexFacts = createBoundedRuntimeAuditCollector<UnsafeRegexFact>();
 
 /** A regex brand carrying the audited ReDoS-risk acceptance from {@link unsafeRegex}. */
 export interface UnsafeRegexBrand {
@@ -237,7 +239,7 @@ export function unsafeRegex(regex: RegExp, justification: string): UnsafeRegexBr
   if (!justification || justification.trim().length === 0) {
     throw new Error('unsafeRegex(...) requires a justification (KV434, SPEC §6.6/§9.5).');
   }
-  unsafeRegexFacts.push({ justification, source: regex.source });
+  unsafeRegexFacts.record({ justification, source: regex.source });
   return { justification, regex, unsafe: true };
 }
 
@@ -249,8 +251,8 @@ export function unsafeRegex(regex: RegExp, justification: string): UnsafeRegexBr
  * threat-matrix-plan.md M3) detects each call SITE and emits a `CapabilityExplain{ kind:'unsafeRegex' }`
  * into `graph.capabilities`, so a merely-built (not run) app already lists every audited ReDoS-risk
  * pattern for a reviewer. This runtime drain is retained only as defense-in-depth / test observation
- * of patterns actually accepted during a live run; it is NOT the audit's source of truth.
+ * of the newest 256 patterns accepted during a live run; it is NOT the audit's source of truth.
  */
 export function drainUnsafeRegexFacts(): readonly UnsafeRegexFact[] {
-  return unsafeRegexFacts.splice(0, unsafeRegexFacts.length);
+  return unsafeRegexFacts.drain();
 }

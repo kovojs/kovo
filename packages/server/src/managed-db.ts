@@ -25,7 +25,10 @@ import {
   frameworkTrustedSqlCarrier,
   snapshotManagedSqlStatement,
 } from '@kovojs/core/internal/sql-safety';
-import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import {
+  createBoundedRuntimeAuditCollector,
+  securityClassifier,
+} from '@kovojs/core/internal/security-markers';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
 declare const readerDbBrand: unique symbol;
@@ -581,9 +584,10 @@ const DRIZZLE_NAME_SYMBOL = Symbol.for('drizzle:Name');
 const DRIZZLE_SCHEMA_SYMBOL = Symbol.for('drizzle:Schema');
 const DRIZZLE_IS_TABLE_SYMBOL = Symbol.for('drizzle:IsDrizzleTable');
 
-const publicReadAuditFacts: PublicReadAuditFact[] = [];
-const crossOwnerReadAuditFacts: CrossOwnerReadAuditFact[] = [];
-const postgresRlsSilentDenyDiagnostics: PostgresRlsSilentDenyDiagnostic[] = [];
+const publicReadAuditFacts = createBoundedRuntimeAuditCollector<PublicReadAuditFact>();
+const crossOwnerReadAuditFacts = createBoundedRuntimeAuditCollector<CrossOwnerReadAuditFact>();
+const postgresRlsSilentDenyDiagnostics =
+  createBoundedRuntimeAuditCollector<PostgresRlsSilentDenyDiagnostic>();
 
 /**
  * Declare an audited public-read authorization scope (SPEC §10.3 DEC-F). This does not assert SQL
@@ -602,27 +606,27 @@ export function declarePublicRead(options: PublicReadDeclaration): PublicReadDec
 }
 
 /**
- * Drain recorded public-read authorization audit facts for `kovo explain`/tests. Returns and clears
- * the facts accumulated since the last drain.
+ * Drain recorded public-read authorization audit facts for runtime diagnostics/tests. Returns and
+ * clears the newest 256 observations; static declaration call sites remain authoritative.
  */
 export function drainPublicReadAuditFacts(): PublicReadAuditFact[] {
-  return publicReadAuditFacts.splice(0, publicReadAuditFacts.length);
+  return publicReadAuditFacts.drain();
 }
 
 /**
- * Drain recorded cross-owner read audit facts for `kovo explain`/tests. Returns and clears the
- * facts accumulated since the last drain.
+ * Drain recorded cross-owner read audit facts for runtime diagnostics/tests. Returns and clears the
+ * newest 256 observations; static declaration call sites remain authoritative.
  */
 export function drainCrossOwnerReadAuditFacts(): CrossOwnerReadAuditFact[] {
-  return crossOwnerReadAuditFacts.splice(0, crossOwnerReadAuditFacts.length);
+  return crossOwnerReadAuditFacts.drain();
 }
 
 /**
- * Drain dev-only Postgres RLS empty-read diagnostics. Returns and clears facts accumulated since
- * the last drain; production scoped clients never write to this sink.
+ * Drain dev-only Postgres RLS empty-read diagnostics. Returns and clears the newest 256 observations
+ * since the last drain; production scoped clients never write to this sink.
  */
 export function drainPostgresRlsSilentDenyDiagnostics(): PostgresRlsSilentDenyDiagnostic[] {
-  return postgresRlsSilentDenyDiagnostics.splice(0, postgresRlsSilentDenyDiagnostics.length);
+  return postgresRlsSilentDenyDiagnostics.drain();
 }
 
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
@@ -1430,7 +1434,7 @@ async function maybeReportPostgresRlsSilentDeny(
 
   const table = resolvePostgresRlsDiagnosticTable(query, diagnostics);
   if (options.principal === undefined) {
-    postgresRlsSilentDenyDiagnostics.push({
+    postgresRlsSilentDenyDiagnostics.record({
       kind: 'principal-unset',
       message: 'Postgres owner-scoped read returned 0 rows because no kovo.principal was set.',
       ...(table === undefined ? {} : { table }),
@@ -1444,7 +1448,7 @@ async function maybeReportPostgresRlsSilentDeny(
   const count = await countPostgresDiagnosticRows(privilegedClient, table, options);
   if (count <= 0) return;
 
-  postgresRlsSilentDenyDiagnostics.push({
+  postgresRlsSilentDenyDiagnostics.record({
     filteredRows: count,
     kind: 'owner-scope-filtered',
     message: `kovo_owner_scope filtered ${count} row${count === 1 ? '' : 's'} for principal ${options.principal}.`,
@@ -1842,7 +1846,7 @@ function recordPublicReadAuditFact(
   policy: RawReadPolicyOptions,
   observed: { observedReads?: readonly string[]; ownerReads?: readonly string[] } = {},
 ): void {
-  publicReadAuditFacts.push({
+  publicReadAuditFacts.record({
     declaredReads: [...new Set(declaration.reads.map(policy.normalizeTableName))].sort(),
     dialectLabel: policy.dialectLabel,
     reason: publicRead.reason,
@@ -1915,7 +1919,7 @@ function recordCrossOwnerReadAuditFact(
   observedTable: string,
   policy: CrossOwnerReadPolicyOptions,
 ): void {
-  crossOwnerReadAuditFacts.push({
+  crossOwnerReadAuditFacts.record({
     declaredReads: [...new Set(declaration.reads.map(policy.normalizeTableName))].sort(),
     dialectLabel: policy.dialectLabel,
     observedRead: policy.normalizeTableName(observedTable),

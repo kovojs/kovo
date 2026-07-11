@@ -2,8 +2,8 @@ import { runWithMetadataAccess } from './egress.js';
 
 /**
  * Per-cloud credential factories (SPEC §6.6; `plans/secure-framework.md` Phase 5). These are
- * the ONLY entry points into the module-private `metadataAllowed` AsyncLocalStorage frame that
- * makes the cloud instance-metadata endpoint reachable. There is deliberately NO generic
+ * the ONLY entry points into the module-private provider-specific metadata AsyncLocalStorage frame
+ * that makes the cloud instance-metadata endpoint reachable. There is deliberately NO generic
  * `withMetadataAccess` helper: the capability is granted only by wrapping a real cloud-SDK
  * credential provider, so a reflected SSRF — which never calls one of these factories — never
  * enters the frame and the metadata endpoint stays denied at the very same IP.
@@ -37,7 +37,7 @@ export type CredentialProvider<C> = () => Promise<C>;
  *   const s3 = new S3Client({ credentials });
  */
 export function awsCredential<C>(provider: CredentialProvider<C>): CredentialProvider<C> {
-  return () => runWithMetadataAccess(() => provider());
+  return () => runWithMetadataAccess('aws', () => provider());
 }
 
 /**
@@ -46,7 +46,7 @@ export function awsCredential<C>(provider: CredentialProvider<C>): CredentialPro
  * server reaches the deny floor.
  */
 export function gcpCredential<C>(provider: CredentialProvider<C>): CredentialProvider<C> {
-  return () => runWithMetadataAccess(() => provider());
+  return () => runWithMetadataAccess('gcp', () => provider());
 }
 
 /**
@@ -55,5 +55,5 @@ export function gcpCredential<C>(provider: CredentialProvider<C>): CredentialPro
  * loopback reaches the deny floor.
  */
 export function azureCredential<C>(provider: CredentialProvider<C>): CredentialProvider<C> {
-  return () => runWithMetadataAccess(() => provider());
+  return () => runWithMetadataAccess('azure', () => provider());
 }

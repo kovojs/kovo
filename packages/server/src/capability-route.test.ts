@@ -465,6 +465,20 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(drainCapabilityMintFacts()).toHaveLength(0);
   });
 
+  it('bounds normal signUrl observations to the newest 256 facts', async () => {
+    drainCapabilityMintFacts();
+    const ctx = createSignUrl({ secret: SECRET, now: () => 1_000 });
+    for (let index = 0; index < 10_000; index += 1) {
+      await ctx.signUrl({ key: `bounded/${index}.txt` });
+    }
+
+    const facts = drainCapabilityMintFacts();
+    expect(facts).toHaveLength(256);
+    expect(facts[0]).toMatchObject({ key: 'bounded/9744.txt' });
+    expect(facts.at(-1)).toMatchObject({ key: 'bounded/9999.txt' });
+    expect(drainCapabilityMintFacts()).toEqual([]);
+  });
+
   it('canonicalizes the key before signing so the route re-derives the same key', async () => {
     const key = 'a.pdf';
     const storage = await storageWith(key, 'A');

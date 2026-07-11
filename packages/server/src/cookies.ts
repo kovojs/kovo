@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
 /**
  * The security class of a cookie, which selects the by-construction attribute floor applied at the
@@ -111,10 +112,10 @@ export interface CookieDowngradeFact {
   name: string;
 }
 
-const cookieDowngradeFacts: CookieDowngradeFact[] = [];
+const cookieDowngradeFacts = createBoundedRuntimeAuditCollector<CookieDowngradeFact>();
 
 function recordCookieDowngradeFact(fact: CookieDowngradeFact): void {
-  cookieDowngradeFacts.push(fact);
+  cookieDowngradeFacts.record(fact);
 }
 
 /**
@@ -122,13 +123,13 @@ function recordCookieDowngradeFact(fact: CookieDowngradeFact): void {
  *
  * The `kovo explain --cookies` renderer (packages/cli/src/graph-output.ts, the `'cookies' in options`
  * branch) consumes the typed `graph.cookieDowngrades` field (`CookieDowngradeExplain`, the
- * core-graph mirror of {@link CookieDowngradeFact}). A build/export step drains these runtime facts
- * — produced at the `serializeCookie` sink whenever an `unsafeCookie` downgrade is exercised — into
- * that graph field, so each justified downgrade is surfaced in the audit a reviewer runs. The
- * downgrade itself is gated at the sink (KV432); this surface is audit-only (enforces nothing).
+ * core-graph mirror of {@link CookieDowngradeFact}). This defense-in-depth runtime drain returns the
+ * newest 256 observations; static unsafeCookie call-site facts remain the authoritative build/
+ * explain inventory. The downgrade itself is gated at the sink (KV432); this surface is audit-only
+ * (enforces nothing).
  */
 export function drainCookieDowngradeFacts(): readonly CookieDowngradeFact[] {
-  return cookieDowngradeFacts.splice(0, cookieDowngradeFacts.length);
+  return cookieDowngradeFacts.drain();
 }
 
 /**

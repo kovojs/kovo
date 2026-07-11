@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { diagnosticDefinitions } from '../diagnostics.js';
 import {
   AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES,
+  createBoundedRuntimeAuditCollector,
   PARANOID_SECURITY_ADVISORY_CODES,
   SECURITY_CODE_REGISTRY,
   type SecurityBoundaryProof,
@@ -14,6 +15,45 @@ import {
   securityDecisionMetadata,
   wireEmitter,
 } from './security-markers.js';
+
+describe('bounded runtime audit collectors (SPEC §9.5)', () => {
+  it('retains the newest fixed window, drains in order, and is reusable', () => {
+    const collector = createBoundedRuntimeAuditCollector<number>(3);
+    for (let value = 0; value < 10_000; value += 1) collector.record(value);
+
+    expect(collector.drain()).toEqual([9_997, 9_998, 9_999]);
+    expect(collector.drain()).toEqual([]);
+    collector.record(10_000);
+    expect(collector.drain()).toEqual([10_000]);
+  });
+
+  it('isolates collectors and stays bounded in production', () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const left = createBoundedRuntimeAuditCollector<string>(2);
+      const right = createBoundedRuntimeAuditCollector<string>(2);
+      left.record('left-1');
+      right.record('right-1');
+      left.record('left-2');
+      left.record('left-3');
+
+      expect(left.drain()).toEqual(['left-2', 'left-3']);
+      expect(right.drain()).toEqual(['right-1']);
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
+  it('rejects invalid capacities', () => {
+    expect(() => createBoundedRuntimeAuditCollector(0)).toThrow(/integer from 1 to 256/);
+    expect(() => createBoundedRuntimeAuditCollector(257)).toThrow(/integer from 1 to 256/);
+    expect(() => createBoundedRuntimeAuditCollector(Number.POSITIVE_INFINITY)).toThrow(
+      /integer from 1 to 256/,
+    );
+  });
+});
 
 describe('security decision markers', () => {
   it('preserves classifier call behavior while attaching non-enumerable metadata', () => {

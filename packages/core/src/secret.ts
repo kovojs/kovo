@@ -1,3 +1,5 @@
+import { createBoundedRuntimeAuditCollector } from './internal/security-markers.js';
+
 declare const secretBrand: unique symbol;
 declare const untrustedBrand: unique symbol;
 
@@ -58,7 +60,7 @@ export interface SecretRevealAuditFact {
   revealedAt: string;
 }
 
-const secretRevealAuditFacts: SecretRevealAuditFact[] = [];
+const secretRevealAuditFacts = createBoundedRuntimeAuditCollector<SecretRevealAuditFact>();
 
 /**
  * Type-level marker for request-derived or otherwise untrusted values. This tag
@@ -297,11 +299,13 @@ export function revealSecret<T>(value: Secret<T>, reason: SecretRevealReason): T
  * Drain the runtime Secret reveal audit records collected in this process.
  *
  * Framework audit/explain integrations use this to make reveal-then-write paths reviewable
- * (SPEC §10.3). Draining is destructive so tests and request-scoped collectors can snapshot
- * only the facts produced by the operation they are proving.
+ * (SPEC §10.3). The runtime defense-in-depth collector retains only the newest 256 observations,
+ * so it is not a complete process-lifetime inventory. Draining is destructive so tests and
+ * request-scoped collectors can snapshot only the retained facts produced by the operation they
+ * are proving.
  */
 export function drainSecretRevealAuditFacts(): SecretRevealAuditFact[] {
-  return secretRevealAuditFacts.splice(0);
+  return secretRevealAuditFacts.drain();
 }
 
 /** Wraps a request-derived value in a non-coercible DX provenance tag. */
@@ -410,7 +414,7 @@ function validateRevealReason(reason: SecretRevealReason | undefined): void {
 
 function recordSecretReveal(reason: SecretRevealReason | undefined): void {
   const text = typeof reason === 'string' ? reason : reason?.justification;
-  secretRevealAuditFacts.push({
+  secretRevealAuditFacts.record({
     kind: 'secret-reveal',
     reason: text?.trim() ?? '<missing>',
     revealedAt: new Date().toISOString(),

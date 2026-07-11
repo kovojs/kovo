@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -166,6 +166,38 @@ storageConformance('filesystem', async () => {
     cleanup: () => rm(root, { force: true, recursive: true }),
     storage: createFileSystemStorage({ root }),
   };
+});
+
+describe('filesystem storage delete confinement (SPEC §10.6)', () => {
+  it('rejects a symlinked parent without deleting an external blob or metadata sidecar', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-delete-root-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-delete-outside-'));
+    try {
+      await mkdir(path.join(root, 'objects'));
+      await writeFile(path.join(outside, 'victim.txt'), 'external blob', 'utf8');
+      await writeFile(
+        path.join(outside, 'victim.txt.kovo-storage.json'),
+        'external sidecar',
+        'utf8',
+      );
+      await symlink(outside, path.join(root, 'objects', 'linked-outside'), 'dir');
+
+      const storage = createFileSystemStorage({ root });
+      await expect(storage.delete('objects/linked-outside/victim.txt')).rejects.toThrow(
+        /symbolic link/u,
+      );
+
+      await expect(readFile(path.join(outside, 'victim.txt'), 'utf8')).resolves.toBe(
+        'external blob',
+      );
+      await expect(
+        readFile(path.join(outside, 'victim.txt.kovo-storage.json'), 'utf8'),
+      ).resolves.toBe('external sidecar');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outside, { force: true, recursive: true });
+    }
+  });
 });
 
 storageConformance('S3-compatible', async () => {

@@ -13,6 +13,7 @@ import {
   rename,
   rm,
   stat,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -243,7 +244,29 @@ async function writeConfinedFile(root: string, relativePath: string, source: str
 async function deleteConfinedFile(root: string, relativePath: string): Promise<void> {
   const filePath = confinedPath(root, relativePath);
   if (filePath === undefined) return;
-  await rm(filePath, { force: true });
+
+  // SPEC §10.6 filesystem door: lexical confinement alone is insufficient because `unlink`/`rm`
+  // follows every parent directory component. Reject an existing symlink parent before reaching
+  // the destructive sink. `unlink` intentionally does not follow a final-component symlink, so a
+  // planted link at the object path removes only that link. Node does not expose portable
+  // unlinkat(2)-style directory-handle deletion, so a hostile local actor racing a parent swap
+  // remains outside this runtime-DiD boundary's honest platform ceiling.
+  await ensureParentsStayDirectories(root, filePath);
+  let targetStat: Awaited<ReturnType<typeof lstat>>;
+  try {
+    targetStat = await lstat(filePath);
+  } catch (error) {
+    if (isMissingPathError(error)) return;
+    throw error;
+  }
+  if (targetStat.isDirectory()) {
+    throw new Error(`Filesystem target '${filePath}' is a directory.`);
+  }
+  try {
+    await unlink(filePath);
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+  }
 }
 
 async function copyFileIntoRoot(

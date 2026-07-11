@@ -83,6 +83,20 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     ]);
   });
 
+  it('bounds request-time reveal observations to the newest 256 facts', () => {
+    drainSecretRevealAuditFacts();
+    const value = secret('bounded');
+    for (let index = 0; index < 10_000; index += 1) {
+      value.reveal(`bounded reveal ${index}`);
+    }
+
+    const facts = drainSecretRevealAuditFacts();
+    expect(facts).toHaveLength(256);
+    expect(facts[0]).toMatchObject({ reason: 'bounded reveal 9744' });
+    expect(facts.at(-1)).toMatchObject({ reason: 'bounded reveal 9999' });
+    expect(drainSecretRevealAuditFacts()).toEqual([]);
+  });
+
   it('derives via map() without un-poisoning', () => {
     const key = secret('sk_live_abcdef');
     const prefix = key.map((k) => k.slice(0, 7));
