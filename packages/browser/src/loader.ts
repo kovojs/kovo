@@ -244,7 +244,10 @@ export function installGeneratedKovoLoader(
     );
   }
 
-  disposers.push(installExecutionTriggers(options, islandSignalScope));
+  // SPEC §4.7/§4.8: startup triggers cross the same exact compiler-manifest gate as
+  // delegated handlers. Passing the original importer here would make the trigger-level fallback
+  // perform a second empty-manifest check and reject legitimate generated on:load/idle/visible refs.
+  disposers.push(installExecutionTriggers({ ...options, importModule }, islandSignalScope));
   if (enhancedMutationSetup?.dispose) {
     disposers.push(enhancedMutationSetup.dispose);
   }
