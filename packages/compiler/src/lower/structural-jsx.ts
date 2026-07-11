@@ -266,7 +266,11 @@ function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
     if (isComponentTag(element.tag)) continue;
     for (const attribute of element.attributes) {
       const source = attribute.source;
-      if (!source || 'name' in source || source.objectEntries) continue;
+      // `lowerPrimitiveSpreads()` has already removed every fully modelled static spread. Any
+      // spread that remains here is unresolved or only partially modelled and must cross the
+      // runtime control-name boundary. Do not use the presence of a partial `objectEntries` bag as
+      // provenance: that was the M3 residual for `{ ...callerAttrs, noop() {} }`.
+      if (!source || 'name' in source) continue;
       if (
         source.expressionCallImportedName === 'mutationFormAttributes' &&
         source.expressionCallModuleSpecifier === '@kovojs/server'

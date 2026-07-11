@@ -343,10 +343,13 @@ function moduleScopeObjectEntryModels(
       const initializer = unwrapExpression(declaration.initializer);
       if (!ts.isObjectLiteralExpression(initializer)) continue;
 
-      objectEntries.set(
-        declaration.name.text,
-        objectLiteralEntries(sourceFile, source, initializer, stringBindings),
+      const entries = completeJsxSpreadObjectLiteralEntries(
+        sourceFile,
+        source,
+        initializer,
+        stringBindings,
       );
+      if (entries !== undefined) objectEntries.set(declaration.name.text, entries);
     }
   }
 
@@ -2193,6 +2196,34 @@ function objectLiteralEntries(
   });
 }
 
+/**
+ * Return object entries only when the JSX primitive-spread lowerer can account for every own
+ * enumerable property the object literal creates. A partial fact bag is unsafe here: if an
+ * unmodelled spread/accessor/computed name remains at runtime while the lowerer removes the JSX
+ * spread, control metadata can either evade contextual analysis or be reconstructed without the
+ * runtime control-name boundary (SPEC §4.7/§4.8, §5.2 rule 10, §6.6).
+ *
+ * Methods and accessors deliberately remain runtime spreads. Static property assignments and
+ * shorthands are the only shapes whose names and value expressions the primitive pass preserves
+ * exactly. `__proto__` object-literal setters do not create an own enumerable property, so they
+ * also stay on the runtime path rather than being invented as an HTML attribute.
+ */
+function completeJsxSpreadObjectLiteralEntries(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.ObjectLiteralExpression,
+  staticStringValues: ReadonlyMap<string, string> = new Map(),
+): ObjectLiteralEntry[] | undefined {
+  for (const property of expression.properties) {
+    if (ts.isShorthandPropertyAssignment(property)) continue;
+    if (!ts.isPropertyAssignment(property)) return undefined;
+
+    const key = propertyNameText(property.name, { staticStringValues });
+    if (!key || key === '__proto__') return undefined;
+  }
+  return objectLiteralEntries(sourceFile, source, expression, staticStringValues);
+}
+
 function objectLiteralEntryPropertyAccesses(
   sourceFile: ts.SourceFile,
   initializer: ts.Expression,
@@ -2268,7 +2299,7 @@ function jsxElementModel(
       const callArgumentBareIdentifierName =
         callArgument && ts.isIdentifier(callArgument) ? callArgument.text : undefined;
       const objectEntries = ts.isObjectLiteralExpression(unwrapped)
-        ? objectLiteralEntries(sourceFile, source, unwrapped)
+        ? completeJsxSpreadObjectLiteralEntries(sourceFile, source, unwrapped)
         : bareIdentifierName === undefined
           ? undefined
           : moduleScopeObjectEntries.get(bareIdentifierName);

@@ -517,6 +517,83 @@ export const DynamicControlSpread = component({
     expect(serverSource).toMatch(/on:click="\/c\/.*#DynamicControlSpread\$button_click"/);
   });
 
+  it.each([
+    {
+      name: 'pure nested spread',
+      setup: '',
+      spread: '{ ...profile.attributes }',
+    },
+    {
+      name: 'nested spread plus method residual',
+      setup: '',
+      spread: '{ ...profile.attributes, noop() {} }',
+    },
+    {
+      name: 'getter and mixed-case control name',
+      setup: '',
+      spread: "{ get ['ON:LOAD']() { return profile.handler; }, class: 'card' }",
+    },
+    {
+      name: 'dynamic computed name',
+      setup: '',
+      spread: "{ [profile.attributeName]: profile.attributeValue, class: 'card' }",
+    },
+    {
+      name: 'partial module-scope alias',
+      setup: 'const residualAttrs = { ...profileAttributes, noop() {} };',
+      spread: 'residualAttrs',
+    },
+  ])(
+    'reconstructs every unresolved object-literal spread shape: $name (M3)',
+    ({ setup, spread }) => {
+      const result = compileComponentModule({
+        fileName: 'residual-control-spread.tsx',
+        source: `
+${setup}
+export const ResidualControlSpread = component({
+  render: ({ profile }) => (
+    <article {...${spread}}>Profile</article>
+  ),
+});
+`,
+      });
+      const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+      expect(serverSource).toContain(
+        "import { kovoSafeJsxSpread } from '@kovojs/server/internal/escape';",
+      );
+      expect(serverSource).toContain(`{...kovoSafeJsxSpread(${spread})}`);
+    },
+  );
+
+  it('keeps fully static page-declared controls while sanitizing unresolved control carriers (M3)', () => {
+    const result = compileComponentModule({
+      fileName: 'declared-control-spread.tsx',
+      source: `
+const declaredControls = {
+  'on:load': '/c/declared.client.js#run',
+  'data-kovo-module-allowlist': '/c/declared.client.js',
+  'data-p-account-id': 'declared',
+};
+
+export const DeclaredControlSpread = component({
+  render: ({ profile }) => (
+    <section>
+      <article {...declaredControls}>Declared</article>
+      <article {...{ ...profile.attributes, noop() {} }}>Unresolved</article>
+    </section>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(serverSource).toContain('on:load="/c/declared.client.js#run"');
+    expect(serverSource).toContain('data-kovo-module-allowlist="/c/declared.client.js"');
+    expect(serverSource).toContain('data-p-account-id="declared"');
+    expect(serverSource).toContain('{...kovoSafeJsxSpread({ ...profile.attributes, noop() {} })}');
+  });
+
   it('does not rewrite dynamic component props or compiler-owned mutation form spreads (M3)', () => {
     const result = compileComponentModule({
       fileName: 'owned-spreads.tsx',

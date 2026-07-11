@@ -1381,7 +1381,7 @@ function addControlProvenanceProof(root: string): void {
       '};',
       '',
       'function CallerOwnedShell({ attributes }: { attributes: Record<string, string | boolean> }): string {',
-      '  return <main data-proof="dynamic-spread" {...attributes}>Caller-owned profile</main>;',
+      '  return <main data-proof="dynamic-spread" {...{ ...attributes, noop() {} }}>Caller-owned profile</main>;',
       '}',
       '',
       'export const authDomainTransition = mutation({',
