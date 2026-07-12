@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    59 | C1-C59 |
+| Critical |    60 | C1-C60 |
 | High     |    31 | H1-H31 |
 | Medium   |     9 | M1-M9  |
 
@@ -696,6 +696,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     snapshots; late/import-order mutation cannot skip nested raw SQL or change the classified bytes
     delivered to the adapter, while reviewed parameterized/static/trusted carriers remain usable.
 
+- [ ] **C60 - Mutable SQL-table extraction hides an undeclared destructive write target.**
+      `packages/server/src/sql-write-allowlist.ts`
+  - A selective late `Array.prototype.map` replacement hid the second parsed QName in
+    `TRUNCATE TABLE allowed, victim_accounts`. The managed writer was declared only for `allowed`,
+    but the exact trusted statement reached the underlying `query` sink instead of raising KV406
+    for `victim_accounts`.
+  - **Acceptance:** SQLite normalization, parser AST traversal, nested statement/function-call
+    discovery, target collection/deduplication, and table-name comparison use boot-pinned collection,
+    reflection, string, and RegExp controls over one exact parsed snapshot; late/import-order
+    mutation cannot omit a direct, nested, CTE, compound, or schema-qualified write target, while
+    proven reads and fully declared writes retain their existing verdicts.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1126,7 +1138,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C59, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C60, H20, H27,
 and H31 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
