@@ -262,6 +262,12 @@ function wrapDbAdapter(
   if (writePolicy?.capability === 'write') void sqliteTransactionClient(db);
 
   const proxy = new Proxy(db as Record<PropertyKey, unknown>, {
+    defineProperty() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
+    },
     get(target, prop, receiver) {
       if (prop === kovoAsyncMutationTransaction) {
         if (writePolicy?.capability === 'read') return undefined;
@@ -400,11 +406,79 @@ function wrapDbAdapter(
         );
       });
     },
+    getOwnPropertyDescriptor(target, prop) {
+      return managedSqlProxyDescriptor(target, prop);
+    },
+    getPrototypeOf() {
+      return null;
+    },
+    ownKeys(target) {
+      return managedSqlProxyOwnKeys(target);
+    },
+    preventExtensions() {
+      return false;
+    },
+    set() {
+      return false;
+    },
+    setPrototypeOf() {
+      return false;
+    },
   });
 
   witnessWeakMapSet(proxyCache, db, proxy);
   witnessWeakMapSet(frameworkManagedDbRawTargets, proxy, db);
   return proxy;
+}
+
+function managedSqlProxyDescriptor(
+  target: object,
+  property: PropertyKey,
+): PropertyDescriptor | undefined {
+  const descriptor = witnessGetOwnPropertyDescriptor(target, property);
+  if (descriptor === undefined || !managedSqlDescriptorCarriesCapability(descriptor)) {
+    return descriptor;
+  }
+  if (descriptor.configurable === false) {
+    throw new Error(
+      `KV422: managed DB cannot reflect non-configurable authority property ${describeSqlMethod(property)} (SPEC §6.6/§10.3).`,
+    );
+  }
+  return undefined;
+}
+
+function managedSqlProxyOwnKeys(target: object): (string | symbol)[] {
+  const keys = witnessOwnKeys(target);
+  const visible: (string | symbol)[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = witnessGetOwnPropertyDescriptor(keys, index);
+    if (key === undefined || !('value' in key)) {
+      throw new TypeError('Managed DB reflection keys must remain dense.');
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(target, key.value);
+    if (
+      descriptor !== undefined &&
+      descriptor.configurable !== false &&
+      managedSqlDescriptorCarriesCapability(descriptor)
+    ) {
+      continue;
+    }
+    witnessDefineProperty(visible, visible.length, {
+      configurable: true,
+      enumerable: true,
+      value: key.value,
+      writable: true,
+    });
+  }
+  return visible;
+}
+
+function managedSqlDescriptorCarriesCapability(descriptor: PropertyDescriptor): boolean {
+  return (
+    !('value' in descriptor) ||
+    (descriptor.value !== null &&
+      (typeof descriptor.value === 'object' || typeof descriptor.value === 'function'))
+  );
 }
 
 function isSqlBuilderFastPath(
@@ -1711,10 +1785,44 @@ function snapshotAmbiguousSqlMethodArguments(
   }
   if (writePolicy === undefined || !strictSqlTarget) return args;
   if (isRelationalManagedSqlTarget(target) && isRelationalManagedSqlMethod(prop)) return args;
+  if (!hasStrictManagedSqlSurface(target)) return args;
 
   throw new Error(
     `KV422: unknown managed DB method ${describeSqlMethod(prop)} is not a proven SQL builder/read capability and did not receive a recognizable SQL carrier (SPEC §10.2/§10.3).`,
   );
+}
+
+function hasStrictManagedSqlSurface(target: object): boolean {
+  const properties = [
+    '$count',
+    'all',
+    'exec',
+    'execute',
+    'get',
+    'prepare',
+    'query',
+    'run',
+    'select',
+    'selectDistinct',
+    'selectDistinctOn',
+    'session',
+    'sql',
+    'values',
+  ] as const;
+  for (let index = 0; index < properties.length; index += 1) {
+    let owner: object | null = target;
+    while (owner !== null) {
+      const descriptor = witnessGetOwnPropertyDescriptor(owner, properties[index]!);
+      if (descriptor !== undefined) {
+        // Accessor-backed SQL-looking controls are ambiguous authority and therefore count as a
+        // strict surface even though the normal sink path will reject or snapshot them separately.
+        if (!('value' in descriptor) || descriptor.value !== undefined) return true;
+        break;
+      }
+      owner = witnessGetPrototypeOf(owner);
+    }
+  }
+  return false;
 }
 
 function snapshotDenseSqlMethodArguments(args: readonly unknown[]): readonly unknown[] {

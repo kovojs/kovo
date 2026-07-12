@@ -1240,6 +1240,12 @@ function authorizationCensusProxy(
 ): unknown {
   if (!isRecord(value)) return value;
   return new Proxy(value, {
+    defineProperty(target, prop, descriptor) {
+      return defineAuthorizationCensusFrameworkHook(target, prop, descriptor);
+    },
+    deleteProperty() {
+      return false;
+    },
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
       if (prop === 'query' && isRecord(item)) {
@@ -1273,6 +1279,24 @@ function authorizationCensusProxy(
       return (...args: unknown[]) =>
         authorizationCensusProxy(witnessReflectApply(item, target, args), options, builderMode);
     },
+    getOwnPropertyDescriptor(target, prop) {
+      return authorizationCensusProxyDescriptor(target, prop);
+    },
+    getPrototypeOf() {
+      return null;
+    },
+    ownKeys(target) {
+      return authorizationCensusProxyOwnKeys(target);
+    },
+    preventExtensions() {
+      return false;
+    },
+    set() {
+      return false;
+    },
+    setPrototypeOf() {
+      return false;
+    },
   });
 }
 
@@ -1281,6 +1305,12 @@ function authorizationCensusRelationalNamespace(
   options: AuthorizationCensusDbOptions,
 ): object {
   return new Proxy(namespace, {
+    defineProperty() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
+    },
     get(target, prop, receiver) {
       const builder = witnessReflectGet(target, prop, receiver);
       if (!isRecord(builder)) return builder;
@@ -1299,6 +1329,24 @@ function authorizationCensusRelationalNamespace(
       assertAuthorizationCensusTablesAllowed(names, options);
       return authorizationCensusRelationalBuilder(builder, options);
     },
+    getOwnPropertyDescriptor(target, prop) {
+      return authorizationCensusProxyDescriptor(target, prop);
+    },
+    getPrototypeOf() {
+      return null;
+    },
+    ownKeys(target) {
+      return authorizationCensusProxyOwnKeys(target);
+    },
+    preventExtensions() {
+      return false;
+    },
+    set() {
+      return false;
+    },
+    setPrototypeOf() {
+      return false;
+    },
   });
 }
 
@@ -1307,6 +1355,12 @@ function authorizationCensusRelationalBuilder(
   options: AuthorizationCensusDbOptions,
 ): object {
   return new Proxy(builder, {
+    defineProperty() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
+    },
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
       if ((prop !== 'findMany' && prop !== 'findFirst') || typeof item !== 'function') return item;
@@ -1326,7 +1380,102 @@ function authorizationCensusRelationalBuilder(
         );
       };
     },
+    getOwnPropertyDescriptor(target, prop) {
+      return authorizationCensusProxyDescriptor(target, prop);
+    },
+    getPrototypeOf() {
+      return null;
+    },
+    ownKeys(target) {
+      return authorizationCensusProxyOwnKeys(target);
+    },
+    preventExtensions() {
+      return false;
+    },
+    set() {
+      return false;
+    },
+    setPrototypeOf() {
+      return false;
+    },
   });
+}
+
+function defineAuthorizationCensusFrameworkHook(
+  target: object,
+  property: PropertyKey,
+  descriptor: PropertyDescriptor,
+): boolean {
+  if (
+    property !== kovoReadonlyDbHandle &&
+    property !== kovoDeclaredWriteDbHandle
+  ) {
+    return false;
+  }
+  if (
+    witnessGetOwnPropertyDescriptor(target, property) !== undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'function'
+  ) {
+    return false;
+  }
+  witnessDefineProperty(target, property, {
+    configurable: descriptor.configurable ?? false,
+    enumerable: descriptor.enumerable ?? false,
+    value: descriptor.value,
+    writable: descriptor.writable ?? false,
+  });
+  return true;
+}
+
+function authorizationCensusProxyDescriptor(
+  target: object,
+  property: PropertyKey,
+): PropertyDescriptor | undefined {
+  const descriptor = witnessGetOwnPropertyDescriptor(target, property);
+  if (descriptor === undefined || !authorizationDescriptorCarriesCapability(descriptor)) {
+    return descriptor;
+  }
+  if (descriptor.configurable === false) {
+    throw new Error(
+      `KV414: authorization census cannot reflect non-configurable authority property ${String(property)} (SPEC §6.6/§10.3 DEC-K).`,
+    );
+  }
+  return undefined;
+}
+
+function authorizationCensusProxyOwnKeys(target: object): (string | symbol)[] {
+  const keys = witnessOwnKeys(target);
+  const visible: (string | symbol)[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = witnessGetOwnPropertyDescriptor(keys, index);
+    if (key === undefined || !('value' in key)) {
+      throw new TypeError('Authorization census reflection keys must remain dense.');
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(target, key.value);
+    if (
+      descriptor !== undefined &&
+      descriptor.configurable !== false &&
+      authorizationDescriptorCarriesCapability(descriptor)
+    ) {
+      continue;
+    }
+    witnessDefineProperty(visible, visible.length, {
+      configurable: true,
+      enumerable: true,
+      value: key.value,
+      writable: true,
+    });
+  }
+  return visible;
+}
+
+function authorizationDescriptorCarriesCapability(descriptor: PropertyDescriptor): boolean {
+  return (
+    !('value' in descriptor) ||
+    (descriptor.value !== null &&
+      (typeof descriptor.value === 'object' || typeof descriptor.value === 'function'))
+  );
 }
 
 function assertAuthorizationRelationalConfigAllowed(

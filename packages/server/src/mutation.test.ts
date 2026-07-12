@@ -706,7 +706,28 @@ describe('server mutation lifecycle', () => {
     const victimSession = { user: { id: 'victim', roles: ['member'] } };
     const attackerSession = { user: { id: 'attacker', roles: ['admin'] } };
     const nativeArrayIterator = Array.prototype[Symbol.iterator];
+    const nativeArrayConstructor = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      'constructor',
+    )!;
     let pinnedRoles: readonly string[] | undefined;
+    const poisonedSpecies = new Proxy(function PoisonedArraySpecies() {}, {
+      construct(_target, args) {
+        const output = new Array(typeof args[0] === 'number' ? args[0] : 0);
+        return new Proxy(output, {
+          defineProperty(target, property, descriptor) {
+            return Reflect.defineProperty(target, property, {
+              ...descriptor,
+              value:
+                property === '0' && descriptor.value === 'member'
+                  ? 'admin'
+                  : descriptor.value,
+            });
+          },
+        });
+      },
+    });
+    Object.defineProperty(poisonedSpecies, Symbol.species, { value: poisonedSpecies });
     const followup = task('security/carrier-followup', {
       input: s.object({ id: s.string() }),
       run() {
@@ -722,6 +743,12 @@ describe('server mutation lifecycle', () => {
             ? Reflect.apply(nativeArrayIterator, ['admin'], [])
             : Reflect.apply(nativeArrayIterator, this, []);
         };
+        Object.defineProperty(Array.prototype, 'constructor', {
+          configurable: true,
+          get() {
+            return this === pinnedRoles ? poisonedSpecies : nativeArrayConstructor.value;
+          },
+        });
         return callback({ marker: 'transaction' });
       },
     };
@@ -731,7 +758,7 @@ describe('server mutation lifecycle', () => {
       input: s.object({}),
       async handler(_input, request) {
         const handle = await request.schedule(followup, { id: request.session.user.id });
-        return `${request.session.user.id}:${[...request.session.user.roles][0]}:${request.db.marker}:${handle.task}`;
+        return `${request.session.user.id}:${[...request.session.user.roles][0]}:${request.session.user.roles.map((role) => role)[0]}:${request.db.marker}:${handle.task}`;
       },
     });
     const nativeReflectGet = Reflect.get;
@@ -771,11 +798,12 @@ describe('server mutation lifecycle', () => {
         }),
       ).resolves.toMatchObject({
         ok: true,
-        value: 'victim:member:transaction:security/carrier-followup',
+        value: 'victim:member:member:transaction:security/carrier-followup',
       });
     } finally {
       Reflect.get = nativeReflectGet;
       Array.prototype[Symbol.iterator] = nativeArrayIterator;
+      Object.defineProperty(Array.prototype, 'constructor', nativeArrayConstructor);
     }
     expect(schedulerSessions).toEqual(['victim']);
     expect(victimSession).toEqual({ user: { id: 'attacker', roles: ['admin'] } });

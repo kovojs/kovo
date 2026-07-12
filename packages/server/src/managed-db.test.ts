@@ -1705,6 +1705,8 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       expect(() => handle.query.contacts.findMany({ with: { drafts: true } })).toThrow(
         /KV414[\s\S]*drafts[\s\S]*no authorization classification/,
       );
+      expect(Object.getOwnPropertyDescriptor(handle, 'query')).toBeUndefined();
+      expect(Reflect.ownKeys(handle)).not.toContain('query');
       await expect(handle.query.contacts.findMany()).resolves.toEqual([{ id: 'c1' }]);
     } finally {
       client.close();
@@ -4191,6 +4193,11 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
       expect(() => void handle.$primary).toThrow(/raw driver escape db\.\$primary|KV422/);
       expect(() => void handle.$replicas).toThrow(/raw driver escape db\.\$replicas|KV422/);
+      expect(Object.getOwnPropertyDescriptor(handle, '$primary')).toBeUndefined();
+      expect(Object.getOwnPropertyDescriptor(handle, '$replicas')).toBeUndefined();
+      expect(Reflect.ownKeys(handle)).not.toContain('$primary');
+      expect(Reflect.ownKeys(handle)).not.toContain('$replicas');
+      expect(Object.getPrototypeOf(handle)).toBeNull();
       expect(() => handle.$primary.execute(drizzleSql.raw('delete from victim_accounts'))).toThrow(
         /raw driver escape db\.\$primary|KV422/,
       );
@@ -4216,6 +4223,20 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       const handle = managedDb(drizzle({ client, relations }), 'read');
 
       await expect(handle.query.victims.findMany()).resolves.toEqual([{ id: 'v1' }]);
+      expect(
+        Object.getOwnPropertyDescriptor(handle.query.victims, 'session'),
+      ).toBeUndefined();
+      expect(Reflect.ownKeys(handle.query.victims)).not.toContain('session');
+      expect(Object.getPrototypeOf(handle.query.victims)).toBeNull();
+      expect(() =>
+        Object.defineProperty(handle.query.victims, 'findMany', {
+          configurable: true,
+          value(this: { session: { run(statement: unknown): unknown } }) {
+            this.session.run(drizzleSql.raw('delete from victim_accounts'));
+            return [];
+          },
+        }),
+      ).toThrow();
       expect(() =>
         (handle.query.victims as unknown as { session: { run(statement: unknown): unknown } })
           .session.run(drizzleSql.raw('delete from victim_accounts')),
@@ -4486,6 +4507,10 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         futureCapability(options: unknown) {
           log.push('futureCapability');
           return options;
+        },
+        execute(statement: unknown) {
+          log.push('execute');
+          return statement;
         },
         refreshMaterializedView(view: unknown) {
           log.push('refreshMaterializedView');

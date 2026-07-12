@@ -60,6 +60,14 @@ if (intrinsicArrayPrototypeCandidate === null) {
 }
 const intrinsicArrayPrototype = intrinsicArrayPrototypeCandidate;
 const pinnedArrayPrototypeMethods = createWitnessMap<PropertyKey, Function>();
+const pinnedLifecycleArrayConstructor = witnessCreateNullRecord<unknown>();
+witnessDefineProperty(pinnedLifecycleArrayConstructor, Symbol.species, {
+  configurable: false,
+  enumerable: false,
+  value: undefined,
+  writable: false,
+});
+witnessFreeze(pinnedLifecycleArrayConstructor);
 const MAX_PINNED_LIFECYCLE_DEPTH = 64;
 const MAX_PINNED_LIFECYCLE_NODES = 10_000;
 
@@ -197,6 +205,18 @@ function snapshotPinnedLifecycleNode(
 }
 
 function installPinnedLifecycleArraySurface(array: unknown[]): void {
+  witnessDefineProperty(array, 'constructor', {
+    configurable: true,
+    enumerable: false,
+    value: pinnedLifecycleArrayConstructor,
+    writable: false,
+  });
+  witnessDefineProperty(array, Symbol.isConcatSpreadable, {
+    configurable: true,
+    enumerable: false,
+    value: true,
+    writable: false,
+  });
   witnessMapForEach(pinnedArrayPrototypeMethods, (method, property) => {
     witnessDefineProperty(array, property, {
       configurable: true,
