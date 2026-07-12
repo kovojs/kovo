@@ -1,5 +1,6 @@
 import type {
   AccessDecision,
+  CsrfOptions,
   Domain,
   Guard,
   GuardDenial,
@@ -298,6 +299,16 @@ export function credentialMutationDefinitionOptions<
   MutationDefinition<Key, never, never, Request, never, GuardedRequest>,
   'access' | 'csrf' | 'guard' | 'registry' | 'transaction'
 > {
+  // SPEC §6.6: anonymous CSRF is mandatory for pre-authentication forms. Keep a runtime
+  // fail-closed check in addition to the public type so JavaScript callers and forged/cast values
+  // cannot turn a credential mutation into a login-CSRF or logout-CSRF endpoint.
+  const csrf = (options as { csrf?: CsrfOptions<Request> | false }).csrf;
+  if (csrf === false) {
+    throw new TypeError(
+      'Better Auth credential mutations cannot disable CSRF. SPEC §6.6 requires CSRF protection for sign-in, sign-up, and sign-out forms.',
+    );
+  }
+
   const access =
     options.access !== undefined
       ? options.access
@@ -313,7 +324,7 @@ export function credentialMutationDefinitionOptions<
     // SPEC.md §10.2: a credential mutation with no `guard` (sign-in/sign-up run
     // before authentication) declares its KV436 access decision via `access:`.
     ...(access === undefined ? {} : { access }),
-    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+    ...(csrf === undefined ? {} : { csrf }),
     ...(options.guard === undefined ? {} : { guard: options.guard }),
     registry: {
       ...options.registry,

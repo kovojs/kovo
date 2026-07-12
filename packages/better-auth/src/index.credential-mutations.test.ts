@@ -1,3 +1,4 @@
+import { csrfToken, type CsrfOptions, type MutationDefinition, type Schema } from '@kovojs/server';
 import { runMutation } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -17,6 +18,39 @@ import {
   responseWithCookies,
 } from './test-fakes.js';
 
+const CREDENTIAL_CSRF_SECRET = 'better-auth-credential-csrf-test-secret-0123456789';
+
+function credentialCsrf<Request>(): CsrfOptions<Request> {
+  return {
+    secret: CREDENTIAL_CSRF_SECRET,
+    sessionId: () => 'better-auth-credential-test-session',
+  };
+}
+
+async function runProtectedCredentialMutation<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request extends { headers: Headers },
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  rawInput: Record<string, unknown>,
+  request: Request,
+) {
+  const csrf = credentialCsrf<Request>();
+  return runMutation(
+    definition,
+    {
+      ...rawInput,
+      'kovo-csrf': csrfToken(request, csrf, { mutation: definition }),
+    },
+    request,
+    { csrf },
+  );
+}
+
 describe('credential mutation helpers', () => {
   const originalNodeEnv = process.env.NODE_ENV;
 
@@ -24,10 +58,46 @@ describe('credential mutation helpers', () => {
     process.env.NODE_ENV = originalNodeEnv;
   });
 
+  it('keeps browser credential mutations CSRF-protected by default', async () => {
+    const auth = new FakeCredentialAuth();
+    const signIn = betterAuthSignInEmailMutation(auth);
+    const request = { headers: requestHeaders() };
+
+    expect(signIn.csrf).toBeUndefined();
+    await expect(
+      runMutation(signIn, { email: 'ada@example.com', password: 'correct' }, request, {
+        csrf: credentialCsrf<typeof request>(),
+      }),
+    ).resolves.toEqual({
+      error: { code: 'CSRF', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    expect(auth.lastSignIn).toBeUndefined();
+  });
+
+  it('rejects forged csrf:false options for every credential mutation', () => {
+    const auth = new FakeCredentialAuth();
+    const message = /credential mutations cannot disable CSRF.*SPEC §6\.6/i;
+
+    expect(() => {
+      // @ts-expect-error SPEC §6.6: pre-authentication forms cannot disable CSRF.
+      betterAuthSignInEmailMutation(auth, { csrf: false });
+    }).toThrow(message);
+    expect(() => {
+      // @ts-expect-error SPEC §6.6: pre-authentication forms cannot disable CSRF.
+      betterAuthSignUpEmailMutation(auth, { csrf: false });
+    }).toThrow(message);
+    expect(() => {
+      // @ts-expect-error SPEC §6.6: current-browser sign-out cannot disable CSRF.
+      betterAuthSignOutMutation(auth, { csrf: false });
+    }).toThrow(message);
+  });
+
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders();
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+    const signIn = betterAuthSignInEmailMutation(auth);
 
     expect(signIn.access).toEqual({
       kind: 'public',
@@ -35,7 +105,7 @@ describe('credential mutation helpers', () => {
     });
     expect(signIn.registry?.touches?.map((touch) => touch.key)).toEqual(['auth']);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       {
         email: 'ada@example.com',
@@ -70,9 +140,9 @@ describe('credential mutation helpers', () => {
 
   it('maps invalid sign-in credentials to the declared mutation failure path', async () => {
     const auth = new FakeCredentialAuth();
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+    const signIn = betterAuthSignInEmailMutation(auth);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       {
         email: 'ada@example.com',
@@ -94,10 +164,7 @@ describe('credential mutation helpers', () => {
 
   it('wraps signUpEmail with a typed body and typed credential failure', async () => {
     const auth = new FakeCredentialAuth();
-    const signUp = betterAuthSignUpEmailMutation(auth, {
-      csrf: false,
-      defaultRedirectTo: '/welcome',
-    });
+    const signUp = betterAuthSignUpEmailMutation(auth, { defaultRedirectTo: '/welcome' });
     const headers = requestHeaders();
 
     expect(signUp.access).toEqual({
@@ -107,7 +174,7 @@ describe('credential mutation helpers', () => {
     expect(signUp.registry?.touches?.map((touch) => touch.key)).toEqual(['user', 'auth']);
 
     await expect(
-      runMutation(
+      runProtectedCredentialMutation(
         signUp,
         {
           email: 'grace@example.com',
@@ -137,7 +204,7 @@ describe('credential mutation helpers', () => {
     });
 
     await expect(
-      runMutation(
+      runProtectedCredentialMutation(
         signUp,
         {
           email: 'taken@example.com',
@@ -159,7 +226,7 @@ describe('credential mutation helpers', () => {
   it('wraps signOut and forwards clearing cookies', async () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders('kovo_session=session-1');
-    const signOut = betterAuthSignOutMutation(auth, { csrf: false });
+    const signOut = betterAuthSignOutMutation(auth);
 
     expect(signOut.access).toEqual({
       kind: 'public',
@@ -167,7 +234,7 @@ describe('credential mutation helpers', () => {
     });
     expect(signOut.registry?.touches?.map((touch) => touch.key)).toEqual(['auth']);
 
-    const result = await runMutation(signOut, {}, { headers });
+    const result = await runProtectedCredentialMutation(signOut, {}, { headers });
 
     expect(auth.lastSignOut).toEqual({
       asResponse: true,
@@ -193,13 +260,10 @@ describe('credential mutation helpers', () => {
 
   it('keeps redirect targets on same-origin paths', async () => {
     const auth = new FakeCredentialAuth();
-    const signIn = betterAuthSignInEmailMutation(auth, {
-      csrf: false,
-      defaultRedirectTo: '/dashboard',
-    });
+    const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/dashboard' });
 
     await expect(
-      runMutation(
+      runProtectedCredentialMutation(
         signIn,
         {
           email: 'ada@example.com',
@@ -242,9 +306,9 @@ describe('credential mutation helpers', () => {
           ]),
       },
     };
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false, defaultRedirectTo: '/home' });
+    const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/home' });
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -272,9 +336,9 @@ describe('credential mutation helpers', () => {
           responseWithCookies(['better-auth.session_token=tok-1; Path=/; HttpOnly; SameSite=Lax']),
       },
     };
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false, defaultRedirectTo: '/' });
+    const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/' });
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -306,9 +370,9 @@ describe('Expires-in-past clearing cookie is not session-establishing (part-3 I3
     const auth = signInAuthReturning([
       'better-auth.session_token=deleted; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly',
     ]);
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+    const signIn = betterAuthSignInEmailMutation(auth);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -321,9 +385,9 @@ describe('Expires-in-past clearing cookie is not session-establishing (part-3 I3
     const auth = signInAuthReturning([
       'better-auth.session_token=tok-1; Path=/; Expires=Tue, 19 Jan 2038 03:14:07 GMT; HttpOnly',
     ]);
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false, defaultRedirectTo: '/home' });
+    const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/home' });
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -379,12 +443,9 @@ describe('getBetterAuthSetCookie comma-folded fallback (part-3 L13-3)', () => {
 describe('redirectPath same-origin hardening', () => {
   async function signInWithNext(next: string): Promise<string | undefined> {
     const auth = new FakeCredentialAuth();
-    const signIn = betterAuthSignInEmailMutation(auth, {
-      csrf: false,
-      defaultRedirectTo: '/dashboard',
-    });
+    const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/dashboard' });
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', next, password: 'correct' },
       { headers: requestHeaders() },
@@ -442,9 +503,9 @@ describe('credential success is positively classified', () => {
         'better-auth.session_token=tok-1; Path=/; HttpOnly; SameSite=Lax',
       ]),
     );
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false, defaultRedirectTo: '/home' });
+    const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/home' });
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -461,9 +522,9 @@ describe('credential success is positively classified', () => {
 
   it('does NOT sign in on a 200 two-factor-pending body (no session cookie)', async () => {
     const auth = signInAuthReturning(jsonResponse(200, { twoFactorRedirect: true }));
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+    const signIn = betterAuthSignInEmailMutation(auth);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -478,9 +539,9 @@ describe('credential success is positively classified', () => {
 
   it('does NOT sign in on a 2xx response without a session-establishing cookie', async () => {
     const auth = signInAuthReturning(jsonResponse(200, { ok: true }));
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+    const signIn = betterAuthSignInEmailMutation(auth);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -491,9 +552,9 @@ describe('credential success is positively classified', () => {
 
   it('treats a 429 rate-limit response as a failure, not a sign-in', async () => {
     const auth = signInAuthReturning(jsonResponse(429, { message: 'rate limited' }));
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+    const signIn = betterAuthSignInEmailMutation(auth);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -504,9 +565,9 @@ describe('credential success is positively classified', () => {
 
   it('treats a 500 response as a failure, not a sign-in', async () => {
     const auth = signInAuthReturning(jsonResponse(500, { message: 'broken' }));
-    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+    const signIn = betterAuthSignInEmailMutation(auth);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signIn,
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
@@ -521,9 +582,9 @@ describe('credential success is positively classified', () => {
         signUpEmail: () => jsonResponse(200, { twoFactorRedirect: true }),
       },
     };
-    const signUp = betterAuthSignUpEmailMutation(auth, { csrf: false });
+    const signUp = betterAuthSignUpEmailMutation(auth);
 
-    const result = await runMutation(
+    const result = await runProtectedCredentialMutation(
       signUp,
       { email: 'grace@example.com', name: 'Grace Hopper', password: 'correct' },
       { headers: requestHeaders() },

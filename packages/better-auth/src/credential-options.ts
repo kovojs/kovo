@@ -14,7 +14,12 @@ export interface BetterAuthCredentialMutationOptions<
   GuardedRequest extends Request,
 > {
   access?: AccessDecision;
-  csrf?: CsrfOptions<Request> | false;
+  /**
+   * CSRF configuration for this browser credential mutation. Credential mutations may override
+   * the app's CSRF configuration, but they cannot disable it: SPEC §6.6 requires anonymous CSRF
+   * protection for sign-in, sign-up, and other pre-authentication forms.
+   */
+  csrf?: CsrfOptions<Request>;
   defaultRedirectTo?: string;
   guard?: Guard<Request, GuardedRequest>;
   key?: Key;
