@@ -48,10 +48,13 @@ const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeSetAdd = NativeSet.prototype.add;
+const nativeSetClear = NativeSet.prototype.clear;
+const nativeSetDelete = NativeSet.prototype.delete;
 const nativeSetForEach = NativeSet.prototype.forEach;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
+const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringSplit = NativeString.prototype.split;
@@ -62,6 +65,7 @@ const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapHas = NativeWeakMap.prototype.has;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeMapSize = stableOwnGetter(NativeMap.prototype, 'size');
+const nativeSetSize = stableOwnGetter(NativeSet.prototype, 'size');
 const nativeAsyncStorageGetStore = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'getStore');
 const nativeAsyncStorageRun = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'run');
 
@@ -255,6 +259,29 @@ export function verifierSetHas<T>(set: ReadonlySet<T>, value: T): boolean {
   return apply(nativeSetHas, set, [value]) === true;
 }
 
+export function verifierSetDelete<T>(set: Set<T>, value: T): boolean {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeSetDelete, set, [value]) === true;
+}
+
+export function verifierSetClear(set: Set<unknown>): void {
+  assertVerifierSecurityIntrinsics();
+  apply(nativeSetClear, set, []);
+  if (apply(nativeSetSize, set, []) !== 0) {
+    throw new NativeTypeError('Kovo verifier Set.clear integrity check failed.');
+  }
+}
+
+export function verifierSetForEach<T>(set: ReadonlySet<T>, callback: (value: T) => void): void {
+  assertVerifierSecurityIntrinsics();
+  apply(nativeSetForEach, set, [callback]);
+}
+
+export function verifierSetSize(set: ReadonlySet<unknown>): number {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeSetSize, set, []);
+}
+
 export function verifierSetValues<T>(set: ReadonlySet<T>): T[] {
   assertVerifierSecurityIntrinsics();
   const values: T[] = [];
@@ -292,6 +319,11 @@ export function verifierGetOwnPropertyDescriptor(
 export function verifierGetPrototypeOf(value: object): object | null {
   assertVerifierSecurityIntrinsics();
   return apply(nativeObjectGetPrototypeOf, NativeObject, [value]);
+}
+
+export function verifierStableMethod(value: object, property: PropertyKey): Function {
+  assertVerifierSecurityIntrinsics();
+  return stableOwnFunction(value, property);
 }
 
 export function verifierNullRecord<Value = unknown>(): Record<string, Value> {
@@ -378,6 +410,11 @@ export function verifierString(value: unknown): string {
   return apply(NativeString, undefined, [value]);
 }
 
+export function verifierNumber(value: unknown): number {
+  assertVerifierSecurityIntrinsics();
+  return apply(NativeNumber, undefined, [value]);
+}
+
 export function verifierStringEndsWith(value: string, search: string): boolean {
   assertVerifierSecurityIntrinsics();
   return apply(nativeStringEndsWith, value, [search]) === true;
@@ -386,6 +423,11 @@ export function verifierStringEndsWith(value: string, search: string): boolean {
 export function verifierStringIndexOf(value: string, search: string, position = 0): number {
   assertVerifierSecurityIntrinsics();
   return apply(nativeStringIndexOf, value, [search, position]);
+}
+
+export function verifierStringIncludes(value: string, search: string, position = 0): boolean {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeStringIncludes, value, [search, position]) === true;
 }
 
 export function verifierStringReplaceAll(
@@ -432,6 +474,16 @@ export function verifierRegExpExec(pattern: RegExp, value: string): RegExpExecAr
 export function verifierPromiseResolve<T>(value: T | PromiseLike<T>): Promise<T> {
   assertVerifierSecurityIntrinsics();
   return apply(nativePromiseResolve, NativePromise, [value]);
+}
+
+export function verifierPromise<T>(
+  executor: (
+    resolve: (value: T | PromiseLike<T>) => void,
+    reject: (reason?: unknown) => void,
+  ) => void,
+): Promise<T> {
+  assertVerifierSecurityIntrinsics();
+  return new NativePromise<T>(executor);
 }
 
 export function verifierPromiseThen<T, Result>(

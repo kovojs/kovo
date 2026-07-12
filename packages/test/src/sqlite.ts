@@ -11,6 +11,34 @@ import {
   type KovoReadonlyDbCapable,
 } from '@kovojs/server/internal/execution';
 import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
+import {
+  formatPolicyValues,
+  snapshotAdapterPolicy,
+  snapshotAdapterStatementCarrier,
+  snapshotAdapterValues,
+  snapshotRowEntries,
+} from './adapter-security.js';
+import {
+  verifierArrayJoin,
+  verifierArrayPush,
+  verifierApply,
+  verifierFreeze,
+  verifierGetPrototypeOf,
+  verifierSet,
+  verifierSetAdd,
+  verifierSetClear,
+  verifierSetForEach,
+  verifierSetHas,
+  verifierSetSize,
+  verifierRegExpExec,
+  verifierStringIncludes,
+  verifierStringReplaceAll,
+  verifierStringSplit,
+  verifierStableMethod,
+  verifierWeakMap,
+  verifierWeakMapGet,
+  verifierWeakMapSet,
+} from './verifier-security-intrinsics.js';
 
 interface BetterSqliteConstructor {
   new (filename: string, options?: SqliteTestDbOptions): SqliteNativeHandle;
@@ -93,47 +121,53 @@ export function createSqliteTestDb(options: SqliteTestDbOptions = {}): SqliteTes
   const Database = require('better-sqlite3') as BetterSqliteConstructor;
   const { filename = ':memory:', ...sqliteOptions } = options;
   const sqlite = new Database(filename, sqliteOptions);
-  const readonlyHandles = new Set<SqliteNativeHandle>();
-  const declaredWriteHandles = new Set<SqliteNativeHandle>();
+  pinSqliteHandle(sqlite);
+  pinSqliteStatement(callSqlitePrepare(sqlite, 'select 1'));
+  const readonlyHandles = verifierSet<SqliteNativeHandle>();
+  const declaredWriteHandles = verifierSet<SqliteNativeHandle>();
   let readonlyDb: ReadonlySqliteTestDb | null = null;
 
   const db: SqliteTestDb &
     KovoDeclaredWriteDbCapable<DeclaredWriteSqliteTestDb> &
     Partial<KovoReadonlyDbCapable<ReadonlySqliteTestDb>> = {
     close() {
-      for (const handle of readonlyHandles) handle.close();
-      readonlyHandles.clear();
-      for (const handle of declaredWriteHandles) handle.close();
-      declaredWriteHandles.clear();
-      sqlite.close();
+      verifierSetForEach(readonlyHandles, (handle) => callSqliteClose(handle));
+      verifierSetClear(readonlyHandles);
+      verifierSetForEach(declaredWriteHandles, (handle) => callSqliteClose(handle));
+      verifierSetClear(declaredWriteHandles);
+      callSqliteClose(sqlite);
     },
     exec(statement) {
-      sqlite.exec(sqliteStatementText(statement));
+      callSqliteExec(sqlite, sqliteStatementText(statement));
     },
     query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: SqliteStatementInput,
       params: readonly unknown[] = [],
     ): Row[] {
       const carrier = sqliteStatement(statement, params);
-      return sqlite.prepare<Row>(carrier.text).all(...carrier.values);
+      return callSqliteStatementAll<Row>(callSqlitePrepare(sqlite, carrier.text), carrier.values);
     },
     read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string): Row[] {
-      return sqlite.prepare<Row>(`select * from ${quoteSqlIdentifier(table)}`).all();
+      return callSqliteStatementAll<Row>(
+        callSqlitePrepare(sqlite, `select * from ${quoteSqlIdentifier(table)}`),
+        [],
+      );
     },
     sqlite,
     write(table, value) {
       insertSqliteRow(sqlite, table, value);
     },
     [kovoDeclaredWriteDbHandle](policy) {
+      const policySnapshot = snapshotAdapterPolicy(policy, 'sqlite') as DeclaredWritePolicy;
       if (filename !== ':memory:') {
-        const declaredWriteHandle = nodeSqliteDeclaredWriteHandle(filename, policy);
-        declaredWriteHandles.add(declaredWriteHandle);
-        return declaredWriteSqliteTestDbFromHandle(declaredWriteHandle, policy);
+        const declaredWriteHandle = nodeSqliteDeclaredWriteHandle(filename, policySnapshot);
+        verifierSetAdd(declaredWriteHandles, declaredWriteHandle);
+        return declaredWriteSqliteTestDbFromHandle(declaredWriteHandle, policySnapshot);
       }
 
       // In-memory better-sqlite3 databases cannot share state with a second native SQLite authorizer
       // connection. Keep the residual explicit: this fallback protects parser-blind helpers only.
-      return declaredWriteSqliteTestDbFromHandle(sqlite, policy);
+      return declaredWriteSqliteTestDbFromHandle(sqlite, policySnapshot);
     },
   };
 
@@ -145,8 +179,10 @@ export function createSqliteTestDb(options: SqliteTestDbOptions = {}): SqliteTes
         fileMustExist: true,
         readonly: true,
       });
-      readonlySqlite.exec('PRAGMA query_only=ON');
-      readonlyHandles.add(readonlySqlite);
+      pinSqliteHandle(readonlySqlite);
+      pinSqliteStatement(callSqlitePrepare(readonlySqlite, 'select 1'));
+      callSqliteExec(readonlySqlite, 'PRAGMA query_only=ON');
+      verifierSetAdd(readonlyHandles, readonlySqlite);
       readonlyDb = sqliteTestDbFromHandle(readonlySqlite);
       return readonlyDb;
     };
@@ -158,11 +194,14 @@ export function createSqliteTestDb(options: SqliteTestDbOptions = {}): SqliteTes
 class NodeSqliteDeclaredWriteError extends Error {
   constructor(policy: DeclaredWritePolicy, detail: string) {
     super(
-      [
-        `KV406: SQLite authorizer rejected ${detail} outside the mutation registry tables (SPEC §10.3/§11.2).`,
-        `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ')}`,
-        `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
-      ].join('\n'),
+      verifierArrayJoin(
+        [
+          `KV406: SQLite authorizer rejected ${detail} outside the mutation registry tables (SPEC §10.3/§11.2).`,
+          `  declared tables: ${formatPolicyValues(policy.tables ?? [])}`,
+          `  touches: ${formatPolicyValues(policy.touches ?? []) || '<none>'}`,
+        ],
+        '\n',
+      ),
     );
     this.name = 'NodeSqliteDeclaredWriteError';
   }
@@ -179,29 +218,40 @@ class NodeSqliteAuthorizedHandle implements SqliteNativeHandle {
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    this.sqlite.close();
+    callSqliteClose(this.sqlite as unknown as SqliteNativeHandle);
   }
 
   exec(statement: string): unknown {
-    return mapNodeSqliteAuthorizerError(this.policy, () => this.sqlite.exec(statement));
+    return mapNodeSqliteAuthorizerError(this.policy, () =>
+      callSqliteExec(this.sqlite as unknown as SqliteNativeHandle, statement),
+    );
   }
 
   prepare<Row = unknown>(statement: string): SqliteNativeStatement<Row> {
     return mapNodeSqliteAuthorizerError(this.policy, () => {
-      const prepared = this.sqlite.prepare(statement);
-      return nodeSqliteStatement<Row>(prepared, this.policy);
+      const prepared = callSqlitePrepare<Row>(
+        this.sqlite as unknown as SqliteNativeHandle,
+        statement,
+      );
+      return nodeSqliteStatement<Row>(prepared as unknown as NodeSqliteStatementSync, this.policy);
     });
   }
 
   transaction<Callback extends (...args: never[]) => unknown>(callback: Callback): Callback {
     return ((...args: Parameters<Callback>) => {
-      this.exec('BEGIN');
+      mapNodeSqliteAuthorizerError(this.policy, () =>
+        callSqliteExec(this.sqlite as unknown as SqliteNativeHandle, 'BEGIN'),
+      );
       try {
-        const result = callback(...(args as never[]));
-        this.exec('COMMIT');
+        const result = verifierApply<ReturnType<Callback>>(callback, undefined, args);
+        mapNodeSqliteAuthorizerError(this.policy, () =>
+          callSqliteExec(this.sqlite as unknown as SqliteNativeHandle, 'COMMIT'),
+        );
         return result;
       } catch (error) {
-        this.exec('ROLLBACK');
+        mapNodeSqliteAuthorizerError(this.policy, () =>
+          callSqliteExec(this.sqlite as unknown as SqliteNativeHandle, 'ROLLBACK'),
+        );
         throw error;
       }
     }) as Callback;
@@ -213,38 +263,54 @@ function nodeSqliteDeclaredWriteHandle(
   policy: DeclaredWritePolicy,
 ): SqliteNativeHandle {
   const sqlite = new NodeSqliteDatabaseSync(filename);
-  const allowedTables = new Set(
-    (policy.tables ?? []).map((name) => normalizePolicyTable(name, 'sqlite')),
-  );
-  sqlite.setAuthorizer((action, objectName, columnName, databaseName, triggerOrView) => {
-    if (sqliteAuthorizerDdlActions.has(action) || action === nodeSqliteConstants.SQLITE_PRAGMA) {
-      return nodeSqliteConstants.SQLITE_DENY;
-    }
-
-    if (sqliteAuthorizerWriteActions.has(action)) {
-      const table = sqliteAuthorizerTableName(databaseName, objectName);
-      if (allowedTables.size > 0 && allowedTables.has(table)) {
-        return nodeSqliteConstants.SQLITE_OK;
+  pinSqliteHandle(sqlite as unknown as SqliteNativeHandle);
+  pinSqliteStatement(callSqlitePrepare(sqlite as unknown as SqliteNativeHandle, 'select 1'));
+  const allowedTables = verifierSet<string>();
+  for (let index = 0; index < (policy.tables ?? []).length; index += 1) {
+    const table = policy.tables?.[index];
+    if (table !== undefined) verifierSetAdd(allowedTables, normalizePolicyTable(table, 'sqlite'));
+  }
+  const setAuthorizer = verifierStableMethod(sqlite, 'setAuthorizer');
+  verifierApply(setAuthorizer, sqlite, [
+    (
+      action: number,
+      objectName: string | null,
+      columnName: string | null,
+      databaseName: string | null,
+      triggerOrView: string | null,
+    ) => {
+      if (
+        verifierSetHas(sqliteAuthorizerDdlActions, action) ||
+        action === nodeSqliteConstants.SQLITE_PRAGMA
+      ) {
+        return nodeSqliteConstants.SQLITE_DENY;
       }
-      if (isInternalSqliteTable(objectName, triggerOrView)) {
-        return nodeSqliteConstants.SQLITE_OK;
-      }
-      return nodeSqliteConstants.SQLITE_DENY;
-    }
 
-    return nodeSqliteConstants.SQLITE_OK;
-  });
+      if (verifierSetHas(sqliteAuthorizerWriteActions, action)) {
+        const table = sqliteAuthorizerTableName(databaseName, objectName);
+        if (verifierSetSize(allowedTables) > 0 && verifierSetHas(allowedTables, table)) {
+          return nodeSqliteConstants.SQLITE_OK;
+        }
+        if (isInternalSqliteTable(objectName, triggerOrView)) {
+          return nodeSqliteConstants.SQLITE_OK;
+        }
+        return nodeSqliteConstants.SQLITE_DENY;
+      }
+
+      return nodeSqliteConstants.SQLITE_OK;
+    },
+  ]);
 
   return new NodeSqliteAuthorizedHandle(sqlite, policy);
 }
 
-const sqliteAuthorizerWriteActions = new Set([
-  nodeSqliteConstants.SQLITE_DELETE,
-  nodeSqliteConstants.SQLITE_INSERT,
-  nodeSqliteConstants.SQLITE_UPDATE,
-]);
+const sqliteAuthorizerWriteActions = verifierSet<number>();
+verifierSetAdd(sqliteAuthorizerWriteActions, nodeSqliteConstants.SQLITE_DELETE);
+verifierSetAdd(sqliteAuthorizerWriteActions, nodeSqliteConstants.SQLITE_INSERT);
+verifierSetAdd(sqliteAuthorizerWriteActions, nodeSqliteConstants.SQLITE_UPDATE);
 
-const sqliteAuthorizerDdlActions = new Set([
+const sqliteAuthorizerDdlActions = verifierSet<number>();
+for (const action of [
   nodeSqliteConstants.SQLITE_ALTER_TABLE,
   nodeSqliteConstants.SQLITE_ATTACH,
   nodeSqliteConstants.SQLITE_CREATE_INDEX,
@@ -267,7 +333,9 @@ const sqliteAuthorizerDdlActions = new Set([
   nodeSqliteConstants.SQLITE_DROP_VIEW,
   nodeSqliteConstants.SQLITE_DROP_VTABLE,
   nodeSqliteConstants.SQLITE_REINDEX,
-]);
+]) {
+  verifierSetAdd(sqliteAuthorizerDdlActions, action);
+}
 
 function nodeSqliteStatement<Row>(
   statement: NodeSqliteStatementSync,
@@ -275,13 +343,14 @@ function nodeSqliteStatement<Row>(
 ): SqliteNativeStatement<Row> {
   return {
     all(...params: unknown[]): Row[] {
-      return mapNodeSqliteAuthorizerError(
-        policy,
-        () => statement.all(...nodeSqliteParams(params)) as Row[],
+      return mapNodeSqliteAuthorizerError(policy, () =>
+        callSqliteStatementAll<Row>(statement, nodeSqliteParams(params)),
       );
     },
     run(...params: unknown[]): unknown {
-      return mapNodeSqliteAuthorizerError(policy, () => statement.run(...nodeSqliteParams(params)));
+      return mapNodeSqliteAuthorizerError(policy, () =>
+        callSqliteStatementRun(statement, nodeSqliteParams(params)),
+      );
     },
   };
 }
@@ -317,20 +386,23 @@ function declaredWriteSqliteTestDbFromHandle(
 ): DeclaredWriteSqliteTestDb {
   return {
     close() {
-      sqlite.close();
+      callSqliteClose(sqlite);
     },
     exec(statement) {
-      sqlite.exec(sqliteStatementText(statement));
+      callSqliteExec(sqlite, sqliteStatementText(statement));
     },
     query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: SqliteStatementInput,
       params: readonly unknown[] = [],
     ): Row[] {
       const carrier = sqliteStatement(statement, params);
-      return sqlite.prepare<Row>(carrier.text).all(...carrier.values);
+      return callSqliteStatementAll<Row>(callSqlitePrepare(sqlite, carrier.text), carrier.values);
     },
     read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string): Row[] {
-      return sqlite.prepare<Row>(`select * from ${quoteSqlIdentifier(table)}`).all();
+      return callSqliteStatementAll<Row>(
+        callSqlitePrepare(sqlite, `select * from ${quoteSqlIdentifier(table)}`),
+        [],
+      );
     },
     sqlite,
     write(table, value) {
@@ -343,20 +415,23 @@ function declaredWriteSqliteTestDbFromHandle(
 function sqliteTestDbFromHandle(sqlite: SqliteNativeHandle): ReadonlySqliteTestDb {
   return {
     close() {
-      sqlite.close();
+      callSqliteClose(sqlite);
     },
     exec(statement) {
-      sqlite.exec(sqliteStatementText(statement));
+      callSqliteExec(sqlite, sqliteStatementText(statement));
     },
     query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: SqliteStatementInput,
       params: readonly unknown[] = [],
     ): Row[] {
       const carrier = sqliteStatement(statement, params);
-      return sqlite.prepare<Row>(carrier.text).all(...carrier.values);
+      return callSqliteStatementAll<Row>(callSqlitePrepare(sqlite, carrier.text), carrier.values);
     },
     read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string): Row[] {
-      return sqlite.prepare<Row>(`select * from ${quoteSqlIdentifier(table)}`).all();
+      return callSqliteStatementAll<Row>(
+        callSqlitePrepare(sqlite, `select * from ${quoteSqlIdentifier(table)}`),
+        [],
+      );
     },
     sqlite,
     write(table, value) {
@@ -370,17 +445,29 @@ function insertSqliteRow(
   table: string,
   value: Record<string, unknown>,
 ): void {
-  const entries = Object.entries(value);
+  const entries = snapshotRowEntries(value);
   if (entries.length === 0) {
-    sqlite.exec(`insert into ${quoteSqlIdentifier(table)} default values`);
+    callSqliteExec(sqlite, `insert into ${quoteSqlIdentifier(table)} default values`);
     return;
   }
 
-  const columns = entries.map(([column]) => quoteSqlIdentifier(column)).join(', ');
-  const placeholders = entries.map(() => '?').join(', ');
-  sqlite
-    .prepare(`insert into ${quoteSqlIdentifier(table)} (${columns}) values (${placeholders})`)
-    .run(...entries.map(([, columnValue]) => columnValue));
+  const columns: string[] = [];
+  const placeholders: string[] = [];
+  const values: unknown[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry === undefined) continue;
+    verifierArrayPush(columns, quoteSqlIdentifier(entry[0]));
+    verifierArrayPush(placeholders, '?');
+    verifierArrayPush(values, entry[1]);
+  }
+  callSqliteStatementRun(
+    callSqlitePrepare(
+      sqlite,
+      `insert into ${quoteSqlIdentifier(table)} (${verifierArrayJoin(columns, ', ')}) values (${verifierArrayJoin(placeholders, ', ')})`,
+    ),
+    values,
+  );
 }
 
 function assertDeclaredWriteTableAllowed(
@@ -388,36 +475,45 @@ function assertDeclaredWriteTableAllowed(
   policy: DeclaredWritePolicy,
   dialect: 'postgres' | 'sqlite',
 ): void {
-  const allowed = new Set((policy.tables ?? []).map((name) => normalizePolicyTable(name, dialect)));
-  if (allowed.size === 0) return;
+  const allowed = verifierSet<string>();
+  for (let index = 0; index < (policy.tables ?? []).length; index += 1) {
+    const name = policy.tables?.[index];
+    if (name !== undefined) verifierSetAdd(allowed, normalizePolicyTable(name, dialect));
+  }
+  if (verifierSetSize(allowed) === 0) return;
 
   const normalized = normalizePolicyTable(table, dialect);
-  if (allowed.has(normalized)) return;
+  if (verifierSetHas(allowed, normalized)) return;
 
   throw new Error(
-    [
-      `KV406: SQLite adapter declared-write fallback rejected table ${normalized} outside the mutation registry tables (SPEC §10.3/§11.2).`,
-      `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ')}`,
-      `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
-    ].join('\n'),
+    verifierArrayJoin(
+      [
+        `KV406: SQLite adapter declared-write fallback rejected table ${normalized} outside the mutation registry tables (SPEC §10.3/§11.2).`,
+        `  declared tables: ${formatPolicyValues(policy.tables ?? [])}`,
+        `  touches: ${formatPolicyValues(policy.touches ?? []) || '<none>'}`,
+      ],
+      '\n',
+    ),
   );
 }
 
 function normalizePolicyTable(table: string, dialect: 'postgres' | 'sqlite'): string {
-  return table.includes('.') ? table : `${dialect === 'sqlite' ? 'main' : 'public'}.${table}`;
+  return verifierStringIncludes(table, '.')
+    ? table
+    : `${dialect === 'sqlite' ? 'main' : 'public'}.${table}`;
 }
 
 function sqliteStatement(
   statement: SqliteStatementInput,
   params: readonly unknown[],
 ): { text: string; values: readonly unknown[] } {
-  if (typeof statement === 'string') return { text: statement, values: params };
+  if (typeof statement === 'string') {
+    return { text: statement, values: snapshotAdapterValues(params) };
+  }
   const snapshot = snapshotManagedSqlStatement(statement, 'sqlite');
   if (snapshot.ok) return snapshot.statement;
   if (snapshot.message !== undefined) throw new Error(`KV422: ${snapshot.message}`);
-  const text = statement.sql ?? statement.text;
-  if (typeof text !== 'string') throw new Error('SQLite statement carrier must include sql/text.');
-  return { text, values: statement.values ?? params };
+  return snapshotAdapterStatementCarrier(statement, params, 'SQLite statement carrier');
 }
 
 function sqliteStatementText(statement: SqliteStatementInput): string {
@@ -425,14 +521,82 @@ function sqliteStatementText(statement: SqliteStatementInput): string {
 }
 
 function quoteSqlIdentifier(identifier: string): string {
-  return identifier
-    .split('.')
-    .map((part) => {
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(part)) {
-        throw new Error(`Invalid SQL identifier: ${identifier}`);
-      }
+  const parts = verifierStringSplit(identifier, '.');
+  const quoted: string[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part === undefined) continue;
+    if (verifierRegExpExec(/^[A-Za-z_][A-Za-z0-9_]*$/, part) === null) {
+      throw new Error(`Invalid SQL identifier: ${identifier}`);
+    }
+    verifierArrayPush(quoted, `"${verifierStringReplaceAll(part, '"', '""')}"`);
+  }
+  return verifierArrayJoin(quoted, '.');
+}
 
-      return `"${part.replaceAll('"', '""')}"`;
-    })
-    .join('.');
+interface SqliteHandleControls {
+  close: Function;
+  exec: Function;
+  prepare: Function;
+}
+
+interface SqliteStatementControls {
+  all: Function;
+  run: Function;
+}
+
+const sqliteHandleControls = verifierWeakMap<object, SqliteHandleControls>();
+const sqliteStatementControls = verifierWeakMap<object, SqliteStatementControls>();
+
+function pinSqliteHandle(handle: SqliteNativeHandle): SqliteHandleControls {
+  const cached = verifierWeakMapGet(sqliteHandleControls, handle);
+  if (cached !== undefined) return cached;
+  const controls = verifierFreeze({
+    close: verifierStableMethod(handle, 'close'),
+    exec: verifierStableMethod(handle, 'exec'),
+    prepare: verifierStableMethod(handle, 'prepare'),
+  });
+  verifierWeakMapSet(sqliteHandleControls, handle, controls);
+  return controls;
+}
+
+function pinSqliteStatement(statement: object): SqliteStatementControls {
+  const owner = verifierGetPrototypeOf(statement) ?? statement;
+  const cached = verifierWeakMapGet(sqliteStatementControls, owner);
+  if (cached !== undefined) return cached;
+  const controls = verifierFreeze({
+    all: verifierStableMethod(statement, 'all'),
+    run: verifierStableMethod(statement, 'run'),
+  });
+  verifierWeakMapSet(sqliteStatementControls, owner, controls);
+  return controls;
+}
+
+function callSqliteClose(handle: SqliteNativeHandle): void {
+  verifierApply(pinSqliteHandle(handle).close, handle, []);
+}
+
+function callSqliteExec(handle: SqliteNativeHandle, statement: string): unknown {
+  return verifierApply(pinSqliteHandle(handle).exec, handle, [statement]);
+}
+
+function callSqlitePrepare<Row>(
+  handle: SqliteNativeHandle,
+  statement: string,
+): SqliteNativeStatement<Row> {
+  const prepared = verifierApply<SqliteNativeStatement<Row>>(
+    pinSqliteHandle(handle).prepare,
+    handle,
+    [statement],
+  );
+  pinSqliteStatement(prepared);
+  return prepared;
+}
+
+function callSqliteStatementAll<Row>(statement: object, params: readonly unknown[]): Row[] {
+  return verifierApply(pinSqliteStatement(statement).all, statement, snapshotAdapterValues(params));
+}
+
+function callSqliteStatementRun(statement: object, params: readonly unknown[]): unknown {
+  return verifierApply(pinSqliteStatement(statement).run, statement, snapshotAdapterValues(params));
 }
