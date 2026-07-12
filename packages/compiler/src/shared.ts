@@ -1,7 +1,25 @@
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
+import {
+  compilerCreateSet,
+  compilerRegExpReplace,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringLocaleCompare,
+  compilerStringReplaceAll,
+  compilerStringSlice,
+  compilerStringSplit,
+  compilerStringToLowerCase,
+  compilerStringTrim,
+} from './compiler-security-intrinsics.js';
 
 export function escapeAttribute(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+  return compilerStringReplaceAll(
+    compilerStringReplaceAll(value, '&', '&amp;'),
+    '"',
+    '&quot;',
+  );
 }
 
 /**
@@ -27,7 +45,7 @@ export const PROPERTY_AUTHORITATIVE_ATTRIBUTES: ReadonlySet<string> = new Set([
 
 /** Returns whether the attribute should additionally emit a data-bind-prop stamp. */
 export function isPropertyAuthoritativeAttribute(name: string): boolean {
-  return PROPERTY_AUTHORITATIVE_ATTRIBUTES.has(name);
+  return compilerSetHas(PROPERTY_AUTHORITATIVE_ATTRIBUTES, name);
 }
 
 /** The companion live-property binding attribute name for a reactive attr. */
@@ -50,7 +68,7 @@ export function bindPropStampAttributeName(name: string): string {
  * compiler does not depend on the browser runtime package.
  */
 export function escapeCssString(value: string): string {
-  return value.replace(/[\n\r\f"\\]/g, (char) => {
+  return compilerRegExpReplace(/[\n\r\f"\\]/g, value, (char) => {
     if (char === '\n') return '\\a ';
     if (char === '\r') return '\\d ';
     if (char === '\f') return '\\c ';
@@ -59,54 +77,65 @@ export function escapeCssString(value: string): string {
 }
 
 export function indent(value: string): string {
-  return value
-    .split('\n')
-    .map((line) => `  ${line}`)
-    .join('\n');
+  const lines = compilerStringSplit(value, '\n');
+  let output = '';
+  for (let index = 0; index < lines.length; index += 1) {
+    if (index > 0) output += '\n';
+    output += `  ${lines[index] ?? ''}`;
+  }
+  return output;
 }
 
 export function dedupeBy<Value>(
   values: readonly Value[],
   keyFor: (value: Value) => string,
 ): Value[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
+  const seen = compilerCreateSet<string>();
+  const result: Value[] = [];
+  const snapshot = compilerSnapshotDenseArray(values, 'Compiler dedupe values');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const value = snapshot[index]!;
     const key = keyFor(value);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    if (compilerSetHas(seen, key)) continue;
+    compilerSetAdd(seen, key);
+    result[result.length] = value;
+  }
+  return result;
 }
 
 export function uniqueSorted(values: readonly string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+  return stableSortedCopy(
+    dedupeBy(values, (value) => value),
+    compilerStringLocaleCompare,
+    'strings',
+  );
 }
 
 export function kebabCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/_/g, '-')
-    .toLowerCase();
+  const separated = compilerRegExpReplace(/([a-z0-9])([A-Z])/g, value, (_match, left, right) =>
+    `${left}-${right}`,
+  );
+  return compilerStringToLowerCase(compilerRegExpReplace(/_/g, separated, '-'));
 }
 
 export function looseKebabCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[_\s]+/g, '-')
-    .toLowerCase();
+  const separated = compilerRegExpReplace(/([a-z0-9])([A-Z])/g, value, (_match, left, right) =>
+    `${left}-${right}`,
+  );
+  return compilerStringToLowerCase(compilerRegExpReplace(/[_\s]+/g, separated, '-'));
 }
 
 export function attributeKebabCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
+  const separated = compilerRegExpReplace(/([a-z0-9])([A-Z])/g, value, (_match, left, right) =>
+    `${left}-${right}`,
+  );
+  const normalized = compilerRegExpReplace(/[^A-Za-z0-9]+/g, separated, '-');
+  return compilerStringToLowerCase(compilerRegExpReplace(/^-|-$/g, normalized, ''));
 }
 
 export function sanitizeIdentifier(value: string): string {
-  const sanitized = value.replace(/[^A-Za-z0-9_$]/g, '_');
-  return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
+  const sanitized = compilerRegExpReplace(/[^A-Za-z0-9_$]/g, value, '_');
+  return compilerRegExpTest(/^[A-Za-z_$]/, sanitized) ? sanitized : `_${sanitized}`;
 }
 
 export function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
@@ -114,22 +143,28 @@ export function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutput
 }
 
 export function replaceExtension(fileName: string, extension: string): string {
-  return fileName.replace(/\.[^.]+$/, extension);
+  return compilerRegExpReplace(/\.[^.]+$/, fileName, extension);
 }
 
 export function normalizeComponentFileName(fileName: string): string {
-  const normalized = fileName.replaceAll('\\', '/').replace(/^[A-Za-z]:\/?/, '');
+  const normalized = compilerRegExpReplace(
+    /^[A-Za-z]:\/?/,
+    compilerStringReplaceAll(fileName, '\\', '/'),
+    '',
+  );
   const segments: string[] = [];
-  for (const segment of normalized.split('/')) {
+  const sourceSegments = compilerStringSplit(normalized, '/');
+  for (let index = 0; index < sourceSegments.length; index += 1) {
+    const segment = sourceSegments[index]!;
     if (segment.length === 0 || segment === '.') continue;
     if (segment === '..') {
-      segments.pop();
+      if (segments.length > 0) segments.length -= 1;
       continue;
     }
-    segments.push(segment);
+    segments[segments.length] = segment;
   }
 
-  return segments.join('/') || 'component.tsx';
+  return joinStrings(segments, '/') || 'component.tsx';
 }
 
 export interface SourceReplacement {
@@ -186,7 +221,14 @@ export class SourceReplacementAccumulator {
   private readonly entries: SourceReplacementEntry[] = [];
 
   add(owner: SourceReplacementOwner, replacements: readonly SourceReplacement[]): void {
-    for (const replacement of replacements) this.entries.push({ ...owner, ...replacement });
+    const snapshot = compilerSnapshotDenseArray(
+      replacements,
+      'Compiler source replacements',
+    );
+    for (let index = 0; index < snapshot.length; index += 1) {
+      const replacement = snapshot[index]!;
+      this.entries[this.entries.length] = { ...owner, ...replacement };
+    }
   }
 
   clear(): void {
@@ -224,7 +266,13 @@ export function sourceReplacementOffsetMap(
   let generatedCursor = prefixLength;
   let originalCursor = 0;
 
-  for (const replacement of [...replacements].sort((left, right) => left.start - right.start)) {
+  const sortedReplacements = stableSortedCopy(
+    replacements,
+    (left, right) => left.start - right.start,
+    'source replacements',
+  );
+  for (let index = 0; index < sortedReplacements.length; index += 1) {
+    const replacement = sortedReplacements[index]!;
     if (
       replacement.start < 0 ||
       replacement.end < replacement.start ||
@@ -240,11 +288,11 @@ export function sourceReplacementOffsetMap(
 
     const unchangedLength = replacement.start - originalCursor;
     if (unchangedLength > 0) {
-      segments.push({
+      segments[segments.length] = {
         generatedStart: generatedCursor,
         length: unchangedLength,
         originalStart: originalCursor,
-      });
+      };
       generatedCursor += unchangedLength;
     }
 
@@ -254,11 +302,11 @@ export function sourceReplacementOffsetMap(
 
   const tailLength = originalLength - originalCursor;
   if (tailLength > 0) {
-    segments.push({
+    segments[segments.length] = {
       generatedStart: generatedCursor,
       length: tailLength,
       originalStart: originalCursor,
-    });
+    };
   }
 
   return {
@@ -275,7 +323,9 @@ export function generatedOffsetToOriginal(
   if (generatedOffset === undefined) return undefined;
   if (generatedOffset === map.generatedLength) return map.originalLength;
 
-  for (const segment of map.segments) {
+  const segments = compilerSnapshotDenseArray(map.segments, 'Compiler source offset segments');
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
     if (
       generatedOffset >= segment.generatedStart &&
       generatedOffset < segment.generatedStart + segment.length
@@ -292,25 +342,37 @@ export function composeSourceOffsetMaps(
   intermediateToGenerated: SourceOffsetMap,
 ): SourceOffsetMap {
   const segments: SourceOffsetSegment[] = [];
+  const generatedSegments = compilerSnapshotDenseArray(
+    intermediateToGenerated.segments,
+    'Compiler generated source offset segments',
+  );
+  const originalSegments = compilerSnapshotDenseArray(
+    originalToIntermediate.segments,
+    'Compiler original source offset segments',
+  );
 
-  for (const generatedSegment of intermediateToGenerated.segments) {
+  for (let generatedIndex = 0; generatedIndex < generatedSegments.length; generatedIndex += 1) {
+    const generatedSegment = generatedSegments[generatedIndex]!;
     const intermediateStart = generatedSegment.originalStart;
     const intermediateEnd = intermediateStart + generatedSegment.length;
 
-    for (const originalSegment of originalToIntermediate.segments) {
-      const overlapStart = Math.max(intermediateStart, originalSegment.generatedStart);
-      const overlapEnd = Math.min(
-        intermediateEnd,
-        originalSegment.generatedStart + originalSegment.length,
-      );
+    for (let originalIndex = 0; originalIndex < originalSegments.length; originalIndex += 1) {
+      const originalSegment = originalSegments[originalIndex]!;
+      const overlapStart =
+        intermediateStart > originalSegment.generatedStart
+          ? intermediateStart
+          : originalSegment.generatedStart;
+      const originalSegmentEnd = originalSegment.generatedStart + originalSegment.length;
+      const overlapEnd =
+        intermediateEnd < originalSegmentEnd ? intermediateEnd : originalSegmentEnd;
       if (overlapStart >= overlapEnd) continue;
 
-      segments.push({
+      segments[segments.length] = {
         generatedStart: generatedSegment.generatedStart + overlapStart - intermediateStart,
         length: overlapEnd - overlapStart,
         originalStart:
           originalSegment.originalStart + overlapStart - originalSegment.generatedStart,
-      });
+      };
     }
   }
 
@@ -325,9 +387,13 @@ function mergeAdjacentOffsetSegments(
   segments: readonly SourceOffsetSegment[],
 ): SourceOffsetSegment[] {
   const merged: SourceOffsetSegment[] = [];
-  for (const segment of [...segments].sort(
+  const sortedSegments = stableSortedCopy(
+    segments,
     (left, right) => left.generatedStart - right.generatedStart,
-  )) {
+    'source offset segments',
+  );
+  for (let index = 0; index < sortedSegments.length; index += 1) {
+    const segment = sortedSegments[index]!;
     const previous = merged[merged.length - 1];
     if (
       previous &&
@@ -337,7 +403,7 @@ function mergeAdjacentOffsetSegments(
       previous.length += segment.length;
       continue;
     }
-    merged.push({ ...segment });
+    merged[merged.length] = { ...segment };
   }
   return merged;
 }
@@ -346,11 +412,16 @@ function patchedSourceLength(
   originalLength: number,
   replacements: readonly SourceReplacement[],
 ): number {
-  return replacements.reduce(
-    (length, replacement) =>
-      length - (replacement.end - replacement.start) + replacement.replacement.length,
-    originalLength,
+  let length = originalLength;
+  const snapshot = compilerSnapshotDenseArray(
+    replacements,
+    'Compiler source replacements',
   );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const replacement = snapshot[index]!;
+    length = length - (replacement.end - replacement.start) + replacement.replacement.length;
+  }
+  return length;
 }
 
 export function applySourceReplacements(
@@ -360,7 +431,13 @@ export function applySourceReplacements(
   let previousStart = source.length;
   let output = source;
 
-  for (const replacement of [...replacements].sort((left, right) => right.start - left.start)) {
+  const sortedReplacements = stableSortedCopy(
+    replacements,
+    (left, right) => right.start - left.start,
+    'source replacements',
+  );
+  for (let index = 0; index < sortedReplacements.length; index += 1) {
+    const replacement = sortedReplacements[index]!;
     if (
       replacement.start < 0 ||
       replacement.end < replacement.start ||
@@ -373,7 +450,10 @@ export function applySourceReplacements(
         `Overlapping source replacement span ${replacement.start}:${replacement.end}`,
       );
     }
-    output = `${output.slice(0, replacement.start)}${replacement.replacement}${output.slice(replacement.end)}`;
+    output = `${compilerStringSlice(output, 0, replacement.start)}${replacement.replacement}${compilerStringSlice(
+      output,
+      replacement.end,
+    )}`;
     previousStart = replacement.start;
   }
 
@@ -415,23 +495,32 @@ function sourceReplacementPlan(
 ): SourceReplacementPlan {
   const diagnostics: SourceReplacementConflictDiagnostic[] = [];
   const records: SourceReplacementRecord[] = [];
-  const sorted = [...replacements].sort((left, right) => left.start - right.start);
+  const sorted = stableSortedCopy(
+    replacements,
+    (left, right) => left.start - right.start,
+    'source replacement entries',
+  );
   let generatedCursor = prefixLength;
   let originalCursor = 0;
   let previous: SourceReplacementRecord | undefined;
 
-  for (const replacement of sorted) {
+  for (let index = 0; index < sorted.length; index += 1) {
+    const replacement = sorted[index]!;
     const invalid =
       replacement.start < 0 ||
       replacement.end < replacement.start ||
       replacement.end > originalLength;
     if (invalid) {
-      diagnostics.push(sourceReplacementDiagnostic('invalid-span', replacement));
+      diagnostics[diagnostics.length] = sourceReplacementDiagnostic('invalid-span', replacement);
       continue;
     }
 
     if (replacement.start < originalCursor) {
-      diagnostics.push(sourceReplacementDiagnostic('overlap', replacement, previous));
+      diagnostics[diagnostics.length] = sourceReplacementDiagnostic(
+        'overlap',
+        replacement,
+        previous,
+      );
       continue;
     }
 
@@ -445,7 +534,7 @@ function sourceReplacementPlan(
       replacement: replacement.replacement,
       writer: replacement.writer,
     };
-    records.push(record);
+    records[records.length] = record;
     previous = record;
     generatedCursor = record.generatedEnd;
     originalCursor = replacement.end;
@@ -454,7 +543,7 @@ function sourceReplacementPlan(
   return {
     diagnostics,
     records,
-    replacements: sorted.map(({ end, replacement, start }) => ({ end, replacement, start })),
+    replacements: copyReplacementFacts(sorted),
   };
 }
 
@@ -490,12 +579,68 @@ function sourceReplacementDiagnostic(
 function sourceReplacementDiagnosticsMessage(
   diagnostics: readonly SourceReplacementConflictDiagnostic[],
 ): string {
-  return diagnostics.map((diagnostic) => diagnostic.message).join('\n');
+  let message = '';
+  const snapshot = compilerSnapshotDenseArray(
+    diagnostics,
+    'Compiler source replacement diagnostics',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const diagnostic = snapshot[index]!;
+    if (message.length > 0) message += '\n';
+    message += diagnostic.message;
+  }
+  return message;
 }
 
 export function splitDepValue(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
+  const parts = compilerStringSplit(compilerRegExpReplace(/[\s,]+/g, value, '\n'), '\n');
+  const result: string[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
+    const dependency = compilerStringTrim(part);
+    if (dependency.length > 0) result[result.length] = dependency;
+  }
+  return result;
+}
+
+function stableSortedCopy<Value>(
+  values: readonly Value[],
+  compare: (left: Value, right: Value) => number,
+  label: string,
+): Value[] {
+  const sorted = compilerSnapshotDenseArray(values, `Compiler ${label}`);
+  for (let index = 1; index < sorted.length; index += 1) {
+    const value = sorted[index]!;
+    let insertion = index;
+    while (insertion > 0 && compare(sorted[insertion - 1]!, value) > 0) {
+      sorted[insertion] = sorted[insertion - 1]!;
+      insertion -= 1;
+    }
+    sorted[insertion] = value;
+  }
+  return sorted;
+}
+
+function joinStrings(values: readonly string[], separator: string): string {
+  let output = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) output += separator;
+    output += values[index] ?? '';
+  }
+  return output;
+}
+
+function copyReplacementFacts(
+  replacements: readonly SourceReplacementEntry[],
+): SourceReplacement[] {
+  const copied: SourceReplacement[] = [];
+  const snapshot = compilerSnapshotDenseArray(
+    replacements,
+    'Compiler source replacement entries',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const { end, replacement, start } = snapshot[index]!;
+    copied[copied.length] = { end, replacement, start };
+  }
+  return copied;
 }

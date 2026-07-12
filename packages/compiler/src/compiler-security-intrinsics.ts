@@ -58,6 +58,7 @@ const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
+const nativeStringLocaleCompare = NativeString.prototype.localeCompare;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
@@ -490,6 +491,11 @@ export function compilerStringIncludes(value: string, search: string): boolean {
 export function compilerStringIndexOf(value: string, search: string, position?: number): number {
   assertCompilerSecurityIntrinsics();
   return apply(nativeStringIndexOf, value, position === undefined ? [search] : [search, position]);
+}
+
+export function compilerStringLocaleCompare(left: string, right: string): number {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeStringLocaleCompare, left, [right]);
 }
 
 export function compilerStringReplaceAll(

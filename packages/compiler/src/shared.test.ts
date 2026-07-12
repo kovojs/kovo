@@ -6,6 +6,8 @@ import {
   applySourceReplacementsWithOffsetMap,
   attributeKebabCase,
   composeSourceOffsetMaps,
+  dedupeBy,
+  escapeCssString,
   generatedOffsetToOriginal,
   looseKebabCase,
   outputWriteFact,
@@ -18,6 +20,69 @@ import {
 describe('compiler shared micro helpers', () => {
   it('deduplicates and sorts strings in locale order', () => {
     expect(uniqueSorted(['beta', 'alpha', 'beta', 'gamma'])).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it('does not delegate authority-bearing dedupe or sorting to late collection controls', () => {
+    const values = ['beta', 'alpha', 'beta', 'gamma'];
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalHas = Set.prototype.has;
+    const originalLocaleCompare = String.prototype.localeCompare;
+    let poisonHits = 0;
+
+    try {
+      Array.prototype[Symbol.iterator] = function poisonedCompilerValuesIterator() {
+        if (this === values) {
+          poisonHits += 1;
+          return [][Symbol.iterator]();
+        }
+        return Reflect.apply(originalIterator, this, []);
+      };
+      Set.prototype.has = function poisonedCompilerDedupeHas(value) {
+        if (value === 'beta' && new Error().stack?.includes('dedupeBy')) {
+          poisonHits += 1;
+          return true;
+        }
+        return Reflect.apply(originalHas, this, [value]);
+      };
+      String.prototype.localeCompare = function poisonedCompilerSort(right) {
+        if ((this === 'alpha' || this === 'beta') && (right === 'alpha' || right === 'beta')) {
+          poisonHits += 1;
+          return 0;
+        }
+        return Reflect.apply(originalLocaleCompare, this, [right]);
+      };
+
+      expect(dedupeBy(values, (value) => value)).toEqual(['beta', 'alpha', 'gamma']);
+      expect(uniqueSorted(values)).toEqual(['alpha', 'beta', 'gamma']);
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+      Set.prototype.has = originalHas;
+      String.prototype.localeCompare = originalLocaleCompare;
+    }
+
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not delegate CSS string escaping to a late String replacement', () => {
+    const value = 'line\n"close\\tail';
+    const originalReplace = String.prototype.replace;
+    let poisonHits = 0;
+
+    try {
+      String.prototype.replace = function poisonedCssEscaping(search, replacement) {
+        if (String(this) === value) {
+          poisonHits += 1;
+          return value;
+        }
+        return Reflect.apply(originalReplace, this, [search, replacement]);
+      };
+
+      expect(escapeCssString(value)).toBe('line\\a \\"close\\\\tail');
+    } finally {
+      String.prototype.replace = originalReplace;
+    }
+
+    expect(poisonHits).toBe(0);
   });
 
   it('preserves the compiler kebab-case variants', () => {

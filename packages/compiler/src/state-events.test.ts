@@ -126,6 +126,42 @@ export function notifyPrice(product, emit) {
     ]);
   });
 
+  it('keeps KV320 blocking after late shared-dedupe traversal replacement', () => {
+    const originalFilter = Array.prototype.filter;
+    let poisonHits = 0;
+    let result!: ReturnType<typeof compileComponentModule>;
+
+    try {
+      Array.prototype.filter = function eraseQueryPayloadDiagnostic(callback, thisArg) {
+        if (
+          this.length === 1 &&
+          (this[0] as { path?: unknown } | undefined)?.path === 'product.unitPrice' &&
+          new Error().stack?.includes('dedupeBy')
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return Reflect.apply(originalFilter, this, [callback, thisArg]);
+      } as typeof Array.prototype.filter;
+      result = compileComponentModule({
+        fileName: 'cart.events.tsx',
+        queryShapes: { product: { id: 'string', unitPrice: 'number' } },
+        source: `
+export function notifyPrice(product, emit) {
+  emit('cart:added', { product: { unitPrice: product.unitPrice } });
+}
+`,
+      });
+    } finally {
+      Array.prototype.filter = originalFilter;
+    }
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: 'KV320', severity: kv320.severity }),
+    ]);
+    expect(poisonHits).toBe(0);
+  });
+
   it('reports KV320 when renamed event payload fields carry query values', () => {
     const result = compileComponentModule({
       fileName: 'order.events.tsx',

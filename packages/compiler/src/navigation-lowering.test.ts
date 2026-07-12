@@ -151,6 +151,41 @@ export const ProductLinks = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('does not let late attribute escaping inject markup into a lowered static href', () => {
+    const target = 'https://example.test/\" onmouseover=\"globalThis.__kovoCompilerPwned=1';
+    const originalReplaceAll = String.prototype.replaceAll;
+    let poisonHits = 0;
+    let result!: ReturnType<typeof compileComponentModule>;
+
+    try {
+      String.prototype.replaceAll = function skipQuoteEscaping(search, replacement) {
+        const value = String(this);
+        if (value === target && search === '"') {
+          poisonHits += 1;
+          return value;
+        }
+        return Reflect.apply(originalReplaceAll, this, [search, replacement]);
+      };
+      result = compileComponentModule({
+        fileName: 'external-link.tsx',
+        source: `
+export const ExternalLink = component({
+  render: () => <a href={'https://example.test/" onmouseover="globalThis.__kovoCompilerPwned=1'}>External</a>,
+});
+`,
+      });
+    } finally {
+      String.prototype.replaceAll = originalReplaceAll;
+    }
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain(
+      'href="https://example.test/&quot; onmouseover=&quot;globalThis.__kovoCompilerPwned=1"',
+    );
+    expect(serverSource).not.toContain('onmouseover="globalThis.__kovoCompilerPwned=1"');
+    expect(poisonHits).toBe(0);
+  });
+
   it('lowers static href params with explicit path scanning', () => {
     // H1 (bugs-part4 L6-1): a `:param` name is the whole segment after `:` up to
     // the next `/`, so a hyphen/dot param name is one key. The compiler scanner
