@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    77 | C1-C77 |
+| Critical |    80 | C1-C80 |
 | High     |    35 | H1-H35 |
 | Medium   |    12 | M1-M12 |
 
@@ -982,6 +982,39 @@ build:dist` passes.
     terminal methods, prepared/placeholder execution, nested relation output, and exact SQL/origin
     metadata; every secret-bearing relational result is boxed or fails closed, and no non-function
     namespace can escape the read boundary merely because it was reached through a property.
+
+- [ ] **C78 - Mutable response-policy closure replaces reviewed mutation failure HTML.**
+      `packages/server/src/app-mutation-responses.ts`
+  - A selective ambient `Object.freeze` replacement captured the normalized response policy during
+    `createApp()`, returned it unfrozen, and later replaced its reviewed `renderFailurePage`. A real
+    invalid no-JS mutation then returned raw attacker `<img onerror=...>` bytes in the 422 document
+    instead of the safe compiler-reviewed page, despite the aggregate claiming to be closed.
+  - **Acceptance:** policy registry traversal, supported-field checks, stable descriptor reads,
+    nested renderer/stylesheet arrays, redirect snapshots, object/array construction, and every
+    freeze use boot-pinned semantically checked controls; late/import-order collection or Object
+    poison cannot retain or mutate any post-validation output authority.
+
+- [ ] **C79 - Parameter-bearing prepared reads skip secret classification.**
+      `packages/server/src/secret-read-boundary.ts`
+  - The managed read proxy treated a terminal as classifiable only when invoked with zero arguments.
+    A real Drizzle better-sqlite3 prepared select invoked as `prepared.all({})` therefore inherited an
+    empty boundary; an aliased `secrets.classified AS derived` result returned the ordinary raw
+    string because the empty boundary did not know the alias. Placeholder-bearing `get` and
+    positional `values` share the leak; `execute` currently boxes only through a later thenable path
+    and still needs an explicit exact-snapshot regression at the same boundary.
+  - **Acceptance:** every prepared terminal classifies and executes one exact SQL/parameter snapshot
+    regardless of argument count, or fails closed to deep secret boxing; placeholder values cannot
+    turn a terminal into an ordinary chain method or desynchronize column origins from execution.
+
+- [ ] **C80 - SQLite relational `sync()` is an unclassified read terminal.**
+      `packages/server/src/secret-read-boundary.ts`
+  - The managed read terminal allowlist omitted Drizzle's supported relational
+    `.sync(placeholderValues)`. A real better-sqlite3 query that excluded the physical secret column
+    but exposed `classified AS derived` through `extras` returned the raw derived string through
+    `sync({})`; recursively wrapping `db.query` alone would therefore leave this second escape.
+  - **Acceptance:** recognize `sync` as a terminal, bind its placeholder values to one exact SQL and
+    origin snapshot, deep-box aliases/nested relations, and fail closed when exact classification is
+    unavailable; the terminal cannot inherit an empty boundary merely because it is synchronous.
 
 ## High
 
