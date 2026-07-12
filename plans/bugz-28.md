@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    46 | C1-C46 |
+| Critical |    47 | C1-C47 |
 | High     |    29 | H1-H29 |
 | Medium   |     9 | M1-M9  |
 
@@ -530,6 +530,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     independent Fragment-laundering proof now emits an empty script while direct `TrustedHtml`
     remains the explicit reviewed escape.
 
+- [ ] **C47 - Mutable component-root stamp replacement injects raw executable markup.**
+      `packages/server/src/component-root-stamps.ts`
+  - A query-backed component root with existing `kovo-c`/`kovo-deps` attributes reached the live
+    `String.prototype.replace` used after attribute validation and escaping. A selective replacement
+    substituted `><img onerror=...>` bytes, and the final stamped `RenderedHtml` emitted them raw.
+  - **Acceptance:** component/option/query/prop metadata, dependency tokens, attribute parsing and
+    replacement, target/props serialization, attestation inputs, and final root assembly consume
+    boot-pinned dense own-data snapshots; token and visible descriptors bind the same exact values,
+    and no late/import-order intrinsic replacement can add bytes after escaping.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -937,8 +947,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, H20, and
-H27-H28 are active compiler-cache, static-analysis, static-export, and build-output fixes.
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C47,
+H20, and H27-H28 are active compiler-cache, static-analysis, static-export, JSX stamp, and
+build-output fixes.
 Integrated
 evidence is
 green at
