@@ -177,7 +177,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 33-test wire-JSON/TCB/query-HTML matrix passes; the independent serializer
     replacement proof now emits only the classified `{ count: 1 }` truth.
 
-- [x] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
+- [ ] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
       `packages/server/src/task-queue.ts`
   - Replacing `Date.now` and `Math.random` with constants made two distinct memory-queue enqueues
     receive the same job id, so the second task silently replaced the first queued task and args.
@@ -187,11 +187,12 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cryptographic entropy with at least 128 random bits; queue lookup, iteration, coalescing, claim,
     heartbeat, completion, retry, and reaping use exact pinned controls, and neither late nor
     import-order poison can overwrite a sibling job or reuse expired worker authority.
-  - **Evidence:** the 66-test durable-task matrix plus server dist/DTS, import, and API gates pass;
-    independent clock/RNG, stale-lease, registry cross-binding, and late synchronized-crypto proofs
-    now retain distinct 128-bit identities and exact task dispatch.
+  - **Reopened evidence:** a selective pre-import `randomBytes` wrapper delegates both 16-byte boot
+    probes, then returns known bytes for the first real call. The current task membrane accepts it and
+    mints the predictable identity `job_6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b`; second-use replay
+    detection cannot protect the first job or lease authority.
 
-- [x] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
+- [ ] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
       `packages/server/src/command.ts`
   - `cmd()` froze the reviewed Node argv, but `runCommand()` later spread it through the live
     `Array.prototype[Symbol.iterator]`. A selective late iterator returned attacker `-e` source for
@@ -201,8 +202,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cloning, `execFile` identity, execution options, callback settlement, output conversion, and
     Promise controls are boot-pinned and semantically checked; late/import-order poison cannot alter
     any byte passed to the privileged process sink while genuine allowlisted commands still run.
-  - **Evidence:** the 161-test command/crypto/entropy consumer matrix plus server dist/DTS and
-    security gates pass; the independent iterator proof executes only the reviewed `reviewed` argv.
+  - **Reopened evidence:** a selective pre-import `execFile` wrapper includes the exact native-source
+    strings required by the current self-check, delegates every ordinary call, and substitutes only
+    the reviewed proof command. `runCommand()` accepts the controls and executes
+    `ATTACKER-CODE-EXECUTED` instead of `SAFE`.
 
 - [ ] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
       `packages/server/src/confidential-at-rest.ts`
@@ -1302,7 +1305,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C19, C21-C22, C25, C28, C31-C32, C42,
+The remediation pass remains intentionally non-zero: C17-C19, C21-C22, C25, C28, C31-C32, C42,
 C58-C69, H20, H27, H32, and M10 are active compiler-cache, static-analysis, server authority/output,
 and immutable-output fixes. Integrated evidence is green at 97 PostgreSQL, 88 egress, 37
 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158 auth/response, 51 Better Auth,
