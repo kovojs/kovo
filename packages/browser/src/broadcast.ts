@@ -5,10 +5,15 @@ import type { RuntimeErrorReporter } from './error-policy.js';
 import type { IslandSignalScope } from './handler-context.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
-import { isMutationBroadcastMessage, sanitizeMutationChangeRecord } from './mutation-response.js';
+import { sanitizeMutationChangeRecord } from './mutation-response.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
+
+// SPEC §6.6/§9.3: capture MessageEvent.data while the framework module graph
+// initializes. The generated inline runtime owns an equivalent boot-local set.
+const browserBroadcastSecurity = createBrowserNavigationSecurityControls();
 
 /** @internal The `BroadcastChannel`-like seam the mutation broadcast uses (SPEC §9.1). */
 export interface BroadcastLike {
@@ -139,16 +144,14 @@ export function installMutationBroadcast(
   // base — exactly the long-open-tab redeploy skew base-version validation catches.
   const pageBuildToken = options.buildToken ?? readPageBuildToken();
   options.channel.onmessage = (event) => {
-    if (!isMutationBroadcastMessage(event.data)) return;
+    const data = browserBroadcastSecurity.snapshotMutationBroadcastEnvelope(event);
+    if (!data) return;
     // bugs-1 F13 / SPEC §9.3: discard a rebroadcast from a different principal so one
     // session's private query data is never morphed into another session's UI.
     // An anonymous receiver (principal: undefined) must also discard a stamped
     // message — a present stamp against an absent receiver fingerprint is a mismatch.
-    if (event.data.principal !== options.principal) return;
-    const changes = event.data.changes.flatMap((change) => {
-      const sanitized = sanitizeMutationChangeRecord(change);
-      return sanitized ? [sanitized] : [];
-    });
+    if (data.principal !== options.principal) return;
+    const changes = data.changes;
 
     // SPEC.md §9.2: same-user tab sync consumes the same mutation wire body
     // through the shared runtime apply path as the submitting tab.
@@ -168,10 +171,10 @@ export function installMutationBroadcast(
         onDeltaMiss: options.onDeltaMiss,
         onError: options.onError,
         queryPlans: options.queryPlans,
-        responseBuildToken: event.data.buildToken,
+        responseBuildToken: data.buildToken,
         root: options.root,
       }),
-      body: event.data.body,
+      body: data.body,
       store: options.store,
     });
     options.onAppliedQueries?.(applied.queries);

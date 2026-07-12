@@ -89,6 +89,16 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('if(event.persisted)');
   });
 
+  it('keeps mutation broadcast envelopes on the immutable MessageEvent snapshot', () => {
+    // C137 / SPEC §9.3: the principal comparison and private wire body must
+    // originate from one boot-read snapshot, never repeated event.data reads.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'const data=bns.snapshotMutationBroadcastEnvelope(event);if(!data||data.principal!==sfp)return;ab(data.body,data.buildToken)',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain('const data=event.data');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('bmsg(');
+  });
+
   it('keeps the shipped minified response apply helper tied to the canonical runtime apply helper', () => {
     // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
     expect(inlineKovoLoaderInstallerSource).toBe(inlineKovoLoaderInstallerSource.trim());

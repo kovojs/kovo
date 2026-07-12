@@ -18,6 +18,21 @@ export type BrowserStreamChunkSnapshot =
   | { done: true; value?: undefined }
   | { done: false; value: Uint8Array };
 
+/** @internal Deeply immutable, own-data mutation broadcast change. */
+export interface BrowserMutationBroadcastChangeSnapshot {
+  readonly domain: string;
+  readonly keys?: readonly string[];
+}
+
+/** @internal Exact mutation broadcast envelope accepted from MessageEvent.data. */
+export interface BrowserMutationBroadcastEnvelopeSnapshot {
+  readonly body: string;
+  readonly buildToken?: string;
+  readonly changes: readonly BrowserMutationBroadcastChangeSnapshot[];
+  readonly principal?: string;
+  readonly type: 'kovo:mutation-response';
+}
+
 /**
  * Boot-pinned browser controls for navigation, mutation decoding, and DOM response commits.
  *
@@ -31,6 +46,7 @@ export type BrowserStreamChunkSnapshot =
  */
 export function createBrowserNavigationSecurityControls(scope: typeof globalThis = globalThis) {
   const NativeObject = Object;
+  const NativeArray = Array;
   const NativePromise = Promise;
   const NativeReflect = Reflect;
   const NativeRegExp = RegExp;
@@ -54,10 +70,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeReadableStream = scope.ReadableStream;
   const NativeReadableStreamDefaultReader = scope.ReadableStreamDefaultReader;
   const NativePageTransitionEvent = scope.PageTransitionEvent;
+  const NativeMessageEvent = scope.MessageEvent;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
   const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+  const nativeObjectFreeze = NativeObject.freeze;
+  const nativeObjectIsFrozen = NativeObject.isFrozen;
+  const nativeArrayIsArray = NativeArray.isArray;
   const nativePromiseThen = NativePromise.prototype.then;
   const nativeRegExpExec = NativeRegExp.prototype.exec;
   const nativeRegExpTest = NativeRegExp.prototype.test;
@@ -191,6 +211,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const pageTransitionPersisted = NativePageTransitionEvent
     ? getter(NativePageTransitionEvent.prototype, 'persisted')
+    : undefined;
+  const messageEventData = NativeMessageEvent
+    ? getter(NativeMessageEvent.prototype, 'data')
     : undefined;
   const locationObject = scope.location;
   const documentObject = scope.document;
@@ -925,6 +948,143 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return value === false ? false : true;
   }
 
+  function freezeBrowserSnapshot<Value extends object>(value: Value): Value {
+    const frozen = call<unknown>(nativeObjectFreeze, NativeObject, [value]);
+    if (frozen !== value || call<unknown>(nativeObjectIsFrozen, NativeObject, [value]) !== true) {
+      throw new TypeError('Kovo browser snapshot freeze control returned invalid data.');
+    }
+    return value;
+  }
+
+  function readOwnArrayLength(value: object): number | undefined {
+    const length = descriptor(value, 'length');
+    if (
+      !length ||
+      !('value' in length) ||
+      typeof length.value !== 'number' ||
+      length.value < 0 ||
+      length.value % 1 !== 0 ||
+      length.value > 0xffff_ffff
+    ) {
+      return undefined;
+    }
+    return length.value;
+  }
+
+  function snapshotBroadcastKeys(value: unknown): readonly string[] | undefined {
+    if (
+      value === null ||
+      typeof value !== 'object' ||
+      call<unknown>(nativeArrayIsArray, NativeArray, [value]) !== true
+    ) {
+      return undefined;
+    }
+    const length = readOwnArrayLength(value);
+    if (length === undefined) return undefined;
+    const keys: string[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const entry = descriptor(value, index);
+      if (!entry || !('value' in entry) || typeof entry.value !== 'string') return undefined;
+      keys[index] = entry.value;
+    }
+    return freezeBrowserSnapshot(keys);
+  }
+
+  function snapshotBroadcastChange(
+    value: unknown,
+  ): BrowserMutationBroadcastChangeSnapshot | undefined {
+    if (value === null || typeof value !== 'object') return undefined;
+    const domain = descriptor(value, 'domain');
+    if (!domain || !('value' in domain) || typeof domain.value !== 'string') return undefined;
+    const keys = descriptor(value, 'keys');
+    if (keys && !('value' in keys)) return undefined;
+    const keysSnapshot = keys ? snapshotBroadcastKeys(keys.value) : undefined;
+    if (keys && keysSnapshot === undefined) return undefined;
+    return freezeBrowserSnapshot(
+      keysSnapshot === undefined
+        ? { domain: domain.value }
+        : { domain: domain.value, keys: keysSnapshot },
+    );
+  }
+
+  function snapshotMutationBroadcastEnvelopeData(
+    value: unknown,
+  ): BrowserMutationBroadcastEnvelopeSnapshot | undefined {
+    if (!controlsSound || value === null || typeof value !== 'object') return undefined;
+    const type = descriptor(value, 'type');
+    const body = descriptor(value, 'body');
+    const changes = descriptor(value, 'changes');
+    if (
+      !type ||
+      !('value' in type) ||
+      type.value !== 'kovo:mutation-response' ||
+      !body ||
+      !('value' in body) ||
+      typeof body.value !== 'string' ||
+      !changes ||
+      !('value' in changes) ||
+      changes.value === null ||
+      typeof changes.value !== 'object' ||
+      call<unknown>(nativeArrayIsArray, NativeArray, [changes.value]) !== true
+    ) {
+      return undefined;
+    }
+    const changeCount = readOwnArrayLength(changes.value);
+    if (changeCount === undefined) return undefined;
+    const changeSnapshots: BrowserMutationBroadcastChangeSnapshot[] = [];
+    for (let index = 0; index < changeCount; index += 1) {
+      const entry = descriptor(changes.value, index);
+      if (!entry || !('value' in entry)) return undefined;
+      const snapshot = snapshotBroadcastChange(entry.value);
+      if (!snapshot) return undefined;
+      changeSnapshots[index] = snapshot;
+    }
+    const buildToken = descriptor(value, 'buildToken');
+    const principal = descriptor(value, 'principal');
+    if (
+      (buildToken && (!('value' in buildToken) || typeof buildToken.value !== 'string')) ||
+      (principal && (!('value' in principal) || typeof principal.value !== 'string'))
+    ) {
+      return undefined;
+    }
+    const frozenChanges = freezeBrowserSnapshot(changeSnapshots);
+    const envelope: {
+      body: string;
+      buildToken?: string;
+      changes: readonly BrowserMutationBroadcastChangeSnapshot[];
+      principal?: string;
+      type: 'kovo:mutation-response';
+    } = {
+      body: body.value,
+      changes: frozenChanges,
+      type: 'kovo:mutation-response',
+    };
+    if (buildToken && 'value' in buildToken) envelope.buildToken = buildToken.value as string;
+    if (principal && 'value' in principal) envelope.principal = principal.value as string;
+    return freezeBrowserSnapshot(envelope);
+  }
+
+  function snapshotMutationBroadcastEnvelope(
+    event: unknown,
+  ): BrowserMutationBroadcastEnvelopeSnapshot | undefined {
+    if (!controlsSound || event === null || typeof event !== 'object') return undefined;
+    let value: unknown;
+    if (messageEventData) {
+      try {
+        value = apply(messageEventData, event, []);
+      } catch {
+        // Node conformance fixtures use own-data event carriers and expose no
+        // native Document constructor. A browser realm never takes this seam:
+        // unbrandable MessageEvent receivers fail closed before envelope reads.
+        if (NativeDocument) return undefined;
+        value = readOwnData(event, 'data');
+      }
+    } else {
+      value = readOwnData(event, 'data');
+    }
+    return snapshotMutationBroadcastEnvelopeData(value);
+  }
+
   function readDocumentField(
     value: unknown,
     property: 'body' | 'documentElement' | 'head',
@@ -1260,6 +1420,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         typeof nativeReflectApply !== 'function' ||
         typeof nativeObjectGetOwnPropertyDescriptor !== 'function' ||
         typeof nativeObjectGetPrototypeOf !== 'function' ||
+        typeof nativeObjectFreeze !== 'function' ||
+        typeof nativeObjectIsFrozen !== 'function' ||
+        typeof nativeArrayIsArray !== 'function' ||
         typeof nativePromiseThen !== 'function' ||
         typeof nativeRegExpExec !== 'function' ||
         typeof nativeRegExpTest !== 'function' ||
@@ -1315,6 +1478,15 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       ) {
         return false;
       }
+      const freezeControl = { marker: 'kovo-browser-snapshot' };
+      if (
+        apply<unknown>(nativeObjectFreeze, NativeObject, [freezeControl]) !== freezeControl ||
+        apply<unknown>(nativeObjectIsFrozen, NativeObject, [freezeControl]) !== true ||
+        apply<unknown>(nativeArrayIsArray, NativeArray, [[]]) !== true ||
+        apply<unknown>(nativeArrayIsArray, NativeArray, [{}]) !== false
+      ) {
+        return false;
+      }
       const decoderControl = new NativeTextDecoder();
       const decoderBytes = new NativeUint8Array([
         60, 107, 111, 118, 111, 45, 100, 111, 110, 101, 32, 114, 101, 97, 115, 111, 110, 61, 34,
@@ -1361,6 +1533,31 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         ) {
           return false;
         }
+      }
+      if (NativeMessageEvent) {
+        if (!messageEventData) return false;
+        const firstData = {
+          body: '<kovo-done reason="security-control"></kovo-done>',
+          changes: [],
+          principal: 'kovo-message-control-a',
+          type: 'kovo:mutation-response',
+        };
+        const secondData = { marker: 'kovo-message-control-b' };
+        const firstEvent = new NativeMessageEvent('message', { data: firstData });
+        const secondEvent = new NativeMessageEvent('message', { data: secondData });
+        if (
+          apply<unknown>(messageEventData, firstEvent, []) !== firstData ||
+          apply<unknown>(messageEventData, secondEvent, []) !== secondData
+        ) {
+          return false;
+        }
+        let rejectedForeignReceiver = false;
+        try {
+          apply(messageEventData, {}, []);
+        } catch {
+          rejectedForeignReceiver = true;
+        }
+        if (!rejectedForeignReceiver) return false;
       }
       if (NativeHeaders && headersGet) {
         const headers = new NativeHeaders({ 'X-Kovo-Control': 'yes' });
@@ -1612,6 +1809,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     snapshotChildNodes,
     snapshotElementAttributes,
     snapshotElementChildren,
+    snapshotMutationBroadcastEnvelope,
     observePromiseRejection,
     trim,
     upper,

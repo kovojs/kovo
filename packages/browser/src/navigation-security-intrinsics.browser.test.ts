@@ -3,6 +3,56 @@ import { describe, expect, it } from 'vitest';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 describe('browser navigation security controls', () => {
+  it('pins MessageEvent data and returns an immutable exact broadcast snapshot', () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const descriptor = Object.getOwnPropertyDescriptor(MessageEvent.prototype, 'data');
+    if (!descriptor?.get) throw new Error('MessageEvent.data getter unavailable');
+    const keys = ['account:1'];
+    const changes = [{ domain: 'account', keys }];
+    const envelope = {
+      body: '<kovo-query name="account">{"secret":"SERVER"}</kovo-query>',
+      buildToken: 'build-safe',
+      changes,
+      principal: 'session-safe',
+      type: 'kovo:mutation-response',
+    };
+    const event = new MessageEvent('message', { data: envelope });
+    let poisonCalls = 0;
+
+    Object.defineProperty(MessageEvent.prototype, 'data', {
+      ...descriptor,
+      get: () => {
+        poisonCalls += 1;
+        return { ...envelope, body: 'ATTACKER', principal: 'session-attacker' };
+      },
+    });
+    let snapshot: ReturnType<typeof controls.snapshotMutationBroadcastEnvelope>;
+    try {
+      snapshot = controls.snapshotMutationBroadcastEnvelope(event);
+    } finally {
+      Object.defineProperty(MessageEvent.prototype, 'data', descriptor);
+    }
+
+    expect(poisonCalls).toBe(0);
+    expect(snapshot).toEqual({
+      body: '<kovo-query name="account">{"secret":"SERVER"}</kovo-query>',
+      buildToken: 'build-safe',
+      changes: [{ domain: 'account', keys: ['account:1'] }],
+      principal: 'session-safe',
+      type: 'kovo:mutation-response',
+    });
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot?.changes)).toBe(true);
+    expect(Object.isFrozen(snapshot?.changes[0])).toBe(true);
+    expect(Object.isFrozen(snapshot?.changes[0]?.keys)).toBe(true);
+
+    envelope.body = 'MUTATED AFTER SNAPSHOT';
+    changes[0]!.domain = 'mutated';
+    keys[0] = 'mutated';
+    expect(snapshot?.body).not.toContain('MUTATED');
+    expect(snapshot?.changes).toEqual([{ domain: 'account', keys: ['account:1'] }]);
+  });
+
   it('pins the PageTransitionEvent persisted getter after late replacement', () => {
     const controls = createBrowserNavigationSecurityControls();
     const descriptor = Object.getOwnPropertyDescriptor(PageTransitionEvent.prototype, 'persisted');
@@ -292,6 +342,32 @@ describe('browser navigation security controls', () => {
       );
     } finally {
       Object.defineProperty(PageTransitionEvent.prototype, 'persisted', descriptor);
+    }
+  });
+
+  it('fails closed when MessageEvent data was selectively poisoned before capture', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(MessageEvent.prototype, 'data');
+    if (!descriptor?.get) throw new Error('MessageEvent.data getter unavailable');
+    Object.defineProperty(MessageEvent.prototype, 'data', {
+      ...descriptor,
+      get(this: MessageEvent) {
+        const data = Reflect.apply(descriptor.get!, this, []) as unknown;
+        if (
+          data !== null &&
+          typeof data === 'object' &&
+          (data as { type?: unknown }).type === 'kovo:mutation-response'
+        ) {
+          return { ...(data as object), principal: 'session-forged' };
+        }
+        return data;
+      },
+    });
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      Object.defineProperty(MessageEvent.prototype, 'data', descriptor);
     }
   });
 });

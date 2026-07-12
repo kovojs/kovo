@@ -256,25 +256,29 @@ describe('browser inline loader response apply', () => {
     const channel = channels[0];
     if (!channel?.onmessage) throw new Error('missing inline broadcast channel');
 
-    channel.onmessage({
-      data: {
-        body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">wrong session</section></kovo-fragment>',
-        changes: [],
-        principal: 'session-b',
-        type: 'kovo:mutation-response',
-      },
-    });
+    channel.onmessage(
+      new MessageEvent('message', {
+        data: {
+          body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">wrong session</section></kovo-fragment>',
+          changes: [],
+          principal: 'session-b',
+          type: 'kovo:mutation-response',
+        },
+      }),
+    );
     expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('old cart');
 
-    channel.onmessage({
-      data: {
-        body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>',
-        buildToken: 'build-a',
-        changes: [],
-        principal: 'session-a',
-        type: 'kovo:mutation-response',
-      },
-    });
+    channel.onmessage(
+      new MessageEvent('message', {
+        data: {
+          body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>',
+          buildToken: 'build-a',
+          changes: [],
+          principal: 'session-a',
+          type: 'kovo:mutation-response',
+        },
+      }),
+    );
 
     expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('fresh cart');
   });
@@ -386,7 +390,7 @@ describe('browser inline loader response apply', () => {
 });
 
 class TestBroadcastChannel {
-  onmessage: ((event: { data: unknown }) => void) | null = null;
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   readonly posted: unknown[] = [];
 
   constructor(readonly name: string) {}

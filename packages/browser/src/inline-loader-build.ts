@@ -845,18 +845,10 @@ function installInlineKovoLoader(im) {
   try {
     bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('kovo:mutation-response') : undefined;
   } catch {}
-  const bmsg = (value) =>
-    value &&
-    typeof value === 'object' &&
-    value.type === 'kovo:mutation-response' &&
-    typeof value.body === 'string' &&
-    (value.buildToken === undefined || typeof value.buildToken === 'string') &&
-    Array.isArray(value.changes) &&
-    value.changes.every(schg);
   if (bc) {
     bc.onmessage = (event) => {
-      const data = event.data;
-      if (!bmsg(data) || data.principal !== sfp) return;
+      const data = bns.snapshotMutationBroadcastEnvelope(event);
+      if (!data || data.principal !== sfp) return;
       ab(data.body, data.buildToken);
     };
   }
