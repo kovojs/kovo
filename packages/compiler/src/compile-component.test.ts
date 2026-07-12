@@ -1012,6 +1012,46 @@ export const CartBadge = component({
     );
   });
 
+  it('does not let late Set traversal suppress the KV235 navigation-stamp gate', () => {
+    const nativeSetHas = Set.prototype.has;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+
+    try {
+      Set.prototype.has = function eraseNavigationStamp(value) {
+        if (
+          value === 'kovo-nav-segment' &&
+          Reflect.apply(nativeSetHas, this, ['kovo-nav-components']) &&
+          Reflect.apply(nativeSetHas, this, ['kovo-nav-kind']) &&
+          Reflect.apply(nativeSetHas, this, ['kovo-nav-name']) &&
+          Reflect.apply(nativeSetHas, this, ['kovo-nav-queries'])
+        ) {
+          poisonHits += 1;
+          return false;
+        }
+        return Reflect.apply(nativeSetHas, this, [value]);
+      };
+
+      result = compileComponentModule({
+        fileName: 'src/forged-navigation.tsx',
+        source: `
+import { component } from '@kovojs/core';
+
+export const ForgedNavigation = component({
+  render: () => <main kovo-nav-segment="layout:Forged">private</main>,
+});
+`,
+      });
+    } finally {
+      Set.prototype.has = nativeSetHas;
+    }
+
+    expect(result?.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'KV235' })]),
+    );
+    expect(poisonHits).toBe(0);
+  });
+
   it('reports KV244 for defer() used directly as a JSX child', () => {
     const result = compileComponentModule({
       fileName: 'deferred-panel.tsx',

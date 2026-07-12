@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   156 | C1-C156 |
+| Critical |   158 | C1-C158 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -1984,6 +1984,24 @@ build:dist` passes.
   - **Acceptance:** decoded asset paths resolve beneath the exact assets root with separator-aware
     relative containment and pinned URL/path controls; encoded separators, traversal, and prefix
     collisions fail closed before any filesystem read.
+
+- [x] **C157 - Mutable navigation-stamp classification suppresses KV235.**
+      `packages/compiler/src/validate/markup.ts`
+  - A selective late `Set.prototype.has` replacement hid the hand-authored `kovo-nav-segment`
+    attribute. The real compiler returned no diagnostic even though SPEC §8 reserves enhanced-
+    navigation segment identity and persistence policy to the loader/compiler.
+  - **Acceptance:** reserved-stamp construction/membership, JSX element and attribute traversal,
+    diagnostic collection, and help assembly use boot-pinned compiler controls over dense own-data
+    facts; late Set/collection/string replacement cannot suppress the KV235 verdict.
+  - **Evidence:** the exact private-set replacement receives zero calls and KV235 remains blocking;
+    125 compiler/Vite/route tests, compiler dist/DTS, and classifier routing/corpus gates pass.
+
+- [ ] **C158 - Bare page thunks execute outside verifier capture.**
+      `packages/test/src` page harness
+  - A bare page thunk closed over `harness.db`, read the undeclared `products` domain, and resolved
+    successfully because `loadHarnessPage()` executed it outside `verifier.capture`.
+  - **Acceptance:** every page thunk executes inside verifier capture against an immutable declared
+    read policy (empty when none is declared); no page representation can perform an unobserved read.
 
 ## High
 

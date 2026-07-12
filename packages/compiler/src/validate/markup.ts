@@ -1,6 +1,14 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { deriveComponentNames } from '../component-names.js';
+import {
+  compilerArrayJoin,
+  compilerArrayLength,
+  compilerCreateSet,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetHas,
+} from '../compiler-security-intrinsics.js';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   componentOptionObjectKeys,
@@ -30,13 +38,12 @@ interface ResidualStampValidationOptions {
   registryFacts?: RegistryFacts;
 }
 
-const navigationSegmentStampAttributes = new Set([
-  'kovo-nav-components',
-  'kovo-nav-kind',
-  'kovo-nav-name',
-  'kovo-nav-queries',
-  'kovo-nav-segment',
-]);
+const navigationSegmentStampAttributes = compilerCreateSet<string>();
+compilerSetAdd(navigationSegmentStampAttributes, 'kovo-nav-components');
+compilerSetAdd(navigationSegmentStampAttributes, 'kovo-nav-kind');
+compilerSetAdd(navigationSegmentStampAttributes, 'kovo-nav-name');
+compilerSetAdd(navigationSegmentStampAttributes, 'kovo-nav-queries');
+compilerSetAdd(navigationSegmentStampAttributes, 'kovo-nav-segment');
 
 export function validateIdrefs(
   diagnostics: DiagnosticFactory,
@@ -75,23 +82,50 @@ export function validateHandAuthoredNavigationSegmentStamps(
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Navigation-stamp JSX elements');
 
-  for (const element of jsxElements(model)) {
-    for (const attribute of element.attributes) {
-      if (!navigationSegmentStampAttributes.has(attribute.name)) continue;
-      found.push({
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Navigation-stamp JSX elements',
+    ) as JsxElementModel | undefined;
+    if (element === undefined) {
+      throw new TypeError(`Navigation-stamp JSX elements[${elementIndex}] must be dense.`);
+    }
+    const attributeLength = compilerArrayLength(
+      element.attributes,
+      `Navigation-stamp JSX element ${elementIndex} attributes`,
+    );
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        `Navigation-stamp JSX element ${elementIndex} attributes`,
+      ) as JsxAttributeModel | undefined;
+      if (attribute === undefined) {
+        throw new TypeError(
+          `Navigation-stamp JSX element ${elementIndex} attributes[${attributeIndex}] must be dense.`,
+        );
+      }
+      if (!compilerSetHas(navigationSegmentStampAttributes, attribute.name)) continue;
+      found[found.length] = {
         ...diagnostics.at(
           'KV235',
           { start: attribute.start, length: attribute.end - attribute.start },
           `hand-authored navigation segment stamp ${attribute.name}.`,
         ),
-        help: [
-          diagnosticDefinitions.KV235.help,
-          'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-          'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
-          'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
-        ].join('\n'),
-      });
+        help: compilerArrayJoin(
+          [
+            diagnosticDefinitions.KV235.help,
+            'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+            'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
+            'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+          ],
+          '\n',
+        ),
+      };
     }
   }
 
