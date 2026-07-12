@@ -713,6 +713,8 @@ describe('server mutation lifecycle', () => {
     });
     const db = {
       async transaction<Result>(callback: (tx: { marker: string }) => Promise<Result>) {
+        victimSession.user.id = 'attacker';
+        victimSession.user.roles = ['admin'];
         return callback({ marker: 'transaction' });
       },
     };
@@ -765,6 +767,7 @@ describe('server mutation lifecycle', () => {
       Reflect.get = nativeReflectGet;
     }
     expect(schedulerSessions).toEqual(['victim']);
+    expect(victimSession).toEqual({ user: { id: 'attacker', roles: ['admin'] } });
   });
 
   it('validates durable task args before scheduling from a mutation handler', async () => {

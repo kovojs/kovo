@@ -15,6 +15,7 @@ import {
   pinnedRequestCarrier,
   registerAuthorityNeutralRequestMetadata,
   requestForAuthorityNeutralMetadata,
+  snapshotPinnedLifecycleValue,
 } from './request-carrier.js';
 import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
@@ -998,14 +999,16 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     let sessionValue: SessionValue | null;
     const envelope = snapshotSessionProviderEnvelope<SessionValue>(resolved);
     if (envelope !== undefined) {
-      sessionValue = envelope.value ?? null;
+      sessionValue = snapshotPinnedLifecycleValue(envelope.value ?? null) as SessionValue | null;
       if (options.onSessionSetCookie) {
         for (let index = 0; index < envelope.setCookies.length; index += 1) {
           options.onSessionSetCookie(envelope.setCookies[index]!);
         }
       }
     } else {
-      sessionValue = (resolved as SessionValue | null | undefined) ?? null;
+      sessionValue = snapshotPinnedLifecycleValue(
+        (resolved as SessionValue | null | undefined) ?? null,
+      ) as SessionValue | null;
     }
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
   }

@@ -217,7 +217,10 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
       } else Object.defineProperty(Object.prototype, 'setCookies', existingSetCookies);
     }
 
-    expect(attachedSession).toBe(victim);
+    expect(attachedSession).toEqual(victim);
+    expect(attachedSession).not.toBe(victim);
+    expect(Object.isFrozen(attachedSession)).toBe(true);
+    expect(Object.isFrozen((attachedSession as typeof victim).user)).toBe(true);
     expect(adminDecision).toEqual({ kind: 'forbidden', payload: {} });
     expect(forwarded).toEqual([]);
   });

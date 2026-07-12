@@ -7,6 +7,8 @@ import {
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
+  witnessFreeze,
+  witnessIsArray,
   witnessMapGet,
   witnessMapForEach,
   witnessMapHas,
@@ -52,10 +54,118 @@ const nativeAddEventListener = witnessGetOwnPropertyDescriptor(
   'addEventListener',
 )?.value as unknown;
 const intrinsicObjectPrototype = witnessGetPrototypeOf({});
+const intrinsicArrayPrototype = witnessGetPrototypeOf([]);
+const MAX_PINNED_LIFECYCLE_DEPTH = 64;
+const MAX_PINNED_LIFECYCLE_NODES = 10_000;
 
 export interface PinnedRequestProperty {
   readonly key: PropertyKey;
   readonly value: unknown;
+}
+
+interface PinnedLifecycleSnapshotState {
+  readonly copies: WeakMap<object, object>;
+  nodes: number;
+}
+
+/**
+ * Deep-close provider-derived lifecycle data before it participates in guards or handlers.
+ *
+ * Session providers run in the shared application realm. Keeping even one nested source object
+ * would let a later DB/transaction/task hook change the principal-facing request after a guard
+ * accepted it. Kovo session values are therefore bounded data trees: primitives, dense arrays,
+ * and own-data records only. The reconstructed graph is null-prototype/frozen and preserves cycles
+ * and shared references without retaining app-owned mutable containers (SPEC §6.6 C9, §9.5).
+ *
+ * @internal
+ */
+export function snapshotPinnedLifecycleValue<Value>(value: Value): Value {
+  return snapshotPinnedLifecycleNode(
+    value,
+    { copies: createWitnessWeakMap<object, object>(), nodes: 0 },
+    0,
+  ) as Value;
+}
+
+function snapshotPinnedLifecycleNode(
+  value: unknown,
+  state: PinnedLifecycleSnapshotState,
+  depth: number,
+): unknown {
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
+  if (typeof value === 'function') {
+    throw new TypeError('Lifecycle session values cannot contain functions.');
+  }
+  if (depth > MAX_PINNED_LIFECYCLE_DEPTH || state.nodes >= MAX_PINNED_LIFECYCLE_NODES) {
+    throw new TypeError('Lifecycle session values exceed the bounded data-tree limit.');
+  }
+  const prior = witnessWeakMapGet(state.copies, value);
+  if (prior !== undefined) return prior;
+  state.nodes += 1;
+
+  if (witnessIsArray(value)) {
+    if (witnessGetPrototypeOf(value) !== intrinsicArrayPrototype) {
+      throw new TypeError('Lifecycle session arrays must use the intrinsic array prototype.');
+    }
+    const lengthDescriptor = witnessGetOwnPropertyDescriptor(value, 'length');
+    if (
+      lengthDescriptor === undefined ||
+      !('value' in lengthDescriptor) ||
+      typeof lengthDescriptor.value !== 'number' ||
+      lengthDescriptor.value < 0 ||
+      lengthDescriptor.value % 1 !== 0 ||
+      lengthDescriptor.value > MAX_PINNED_LIFECYCLE_NODES
+    ) {
+      throw new TypeError('Lifecycle session arrays must be bounded and dense.');
+    }
+    const clone: unknown[] = [];
+    witnessWeakMapSet(state.copies, value, clone);
+    for (let index = 0; index < lengthDescriptor.value; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Lifecycle session arrays must use dense own data elements.');
+      }
+      witnessDefineProperty(clone, index, {
+        configurable: true,
+        enumerable: true,
+        value: snapshotPinnedLifecycleNode(descriptor.value, state, depth + 1),
+        writable: true,
+      });
+    }
+    const ownKeys = witnessOwnKeys(value);
+    if (ownKeys.length !== lengthDescriptor.value + 1) {
+      throw new TypeError('Lifecycle session arrays cannot carry extra properties.');
+    }
+    return witnessFreeze(clone);
+  }
+
+  const prototype = witnessGetPrototypeOf(value);
+  if (prototype !== intrinsicObjectPrototype && prototype !== null) {
+    throw new TypeError('Lifecycle session values must contain only plain own-data records.');
+  }
+  const clone = witnessCreateNullRecord();
+  witnessWeakMapSet(state.copies, value, clone);
+  const keys = witnessOwnKeys(value);
+  if (keys.length > MAX_PINNED_LIFECYCLE_NODES - state.nodes) {
+    throw new TypeError('Lifecycle session values exceed the bounded data-tree limit.');
+  }
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+      throw new TypeError('Lifecycle session record keys must remain dense.');
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(value, keyDescriptor.value);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Lifecycle session records cannot contain accessors.');
+    }
+    witnessDefineProperty(clone, keyDescriptor.value, {
+      configurable: true,
+      enumerable: descriptor.enumerable ?? false,
+      value: snapshotPinnedLifecycleNode(descriptor.value, state, depth + 1),
+      writable: true,
+    });
+  }
+  return witnessFreeze(clone);
 }
 
 interface PinnedCarrierProperty {
