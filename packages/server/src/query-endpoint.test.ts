@@ -328,6 +328,77 @@ describe('query endpoints', () => {
     });
   });
 
+  it('keeps the API4 list ceiling after selective Array.isArray replacement', async () => {
+    const rows = Array.from({ length: 101 }, (_value, index) => ({ id: `row-${index}` }));
+    const definition = query('bounded-intrinsic-query', {
+      access: publicAccess('resource ceiling intrinsic regression'),
+      load: () => ({ rows }),
+      reads: [],
+    });
+    const nativeIsArray = Array.isArray;
+    let result: Awaited<ReturnType<typeof runQuery>> | undefined;
+    try {
+      Array.isArray = (value: unknown): value is unknown[] =>
+        value === rows ? false : nativeIsArray(value);
+      result = await runQuery(definition, {}, {});
+    } finally {
+      Array.isArray = nativeIsArray;
+    }
+
+    expect(result?.ok).toBe(true);
+    if (result?.ok !== true) throw new Error('bounded query unexpectedly failed');
+    expect((result.value as { rows: unknown[] }).rows).toHaveLength(100);
+    expect(result.warnings).toEqual([{ code: 'QUERY_LIST_LIMIT', limit: 100, path: '$.rows' }]);
+  });
+
+  it('reconstructs capped results without app-replaceable Array.map amplification', async () => {
+    const rows = [{ id: 'safe' }];
+    const definition = query('non-amplified-intrinsic-query', {
+      access: publicAccess('resource amplification intrinsic regression'),
+      load: () => ({ rows }),
+      reads: [],
+    });
+    const nativeMap = Array.prototype.map;
+    let result: Awaited<ReturnType<typeof runQuery>> | undefined;
+    try {
+      Array.prototype.map = function <Value, Result>(
+        callback: (value: Value, index: number, array: Value[]) => Result,
+        thisArg?: unknown,
+      ): Result[] {
+        if (this === rows) {
+          return Array.from({ length: 10_000 }, () => ({ id: 'amplified' })) as Result[];
+        }
+        return Reflect.apply(nativeMap, this, [callback, thisArg]) as Result[];
+      };
+      result = await runQuery(definition, {}, {});
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.ok).toBe(true);
+    if (result?.ok !== true) throw new Error('non-amplified query unexpectedly failed');
+    expect(result.value).toEqual({ rows: [{ id: 'safe' }] });
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it('fails closed on query result depth and byte amplification', async () => {
+    let nested: Record<string, unknown> = { leaf: true };
+    for (let depth = 0; depth < 70; depth += 1) nested = { nested };
+    const deep = query('deep-resource-query', {
+      access: publicAccess('depth ceiling regression'),
+      load: () => nested,
+      reads: [],
+    });
+    const wide = query('byte-resource-query', {
+      access: publicAccess('byte ceiling regression'),
+      load: () => ({ payload: 'x'.repeat(1_500_000) }),
+      reads: [],
+    });
+
+    await expect(runQuery(deep, {}, {})).rejects.toThrow(/depth ceiling/u);
+    await expect(runQuery(wide, {}, {})).rejects.toThrow(/byte ceiling/u);
+  });
+
   it('preserves explicit query list limits below the default ceiling', async () => {
     const catalogQuery = query('catalogLimited', {
       args: s.object({ limit: s.number().int().default(3) }),

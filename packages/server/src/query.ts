@@ -35,6 +35,17 @@ import { renderQueryWireHtml } from './wire-html.js';
 import type { Reader } from './managed-db.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
+import {
+  createWitnessWeakMap,
+  witnessCreateNullRecord,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessIsArray,
+  witnessObjectKeys,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 interface QueryDeltaListMeta {
   domain: string;
@@ -43,7 +54,12 @@ interface QueryDeltaListMeta {
 }
 
 const DEFAULT_QUERY_LIST_ITEMS = 100;
+const MAX_QUERY_RESULT_DEPTH = 64;
+const MAX_QUERY_RESULT_NODES = 100_000;
+const MAX_QUERY_RESULT_ESTIMATED_BYTES = 4 * 1_024 * 1_024;
 const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
+const intrinsicArrayPrototype = witnessGetPrototypeOf([]);
+const intrinsicObjectPrototype = witnessGetPrototypeOf({});
 
 /** Explicit cache posture for proven public, session-independent typed reads (SPEC §9.4). */
 export interface QueryReadConfig {
@@ -499,24 +515,30 @@ export function recordQueryRuntimeWarnings(
   if (warnings === undefined || warnings.length === 0) return;
   if (typeof request !== 'object' || request === null) return;
   const target = request as { [queryRuntimeWarningsKey]?: QueryRuntimeWarning[] };
-  const existing = target[queryRuntimeWarningsKey];
-  if (existing === undefined) {
-    Object.defineProperty(target, queryRuntimeWarningsKey, {
+  const existingDescriptor = witnessGetOwnPropertyDescriptor(target, queryRuntimeWarningsKey);
+  if (existingDescriptor === undefined) {
+    const snapshot: QueryRuntimeWarning[] = [];
+    appendQueryWarnings(snapshot, warnings);
+    witnessDefineProperty(target, queryRuntimeWarningsKey, {
       configurable: true,
       enumerable: false,
-      value: [...warnings],
+      value: snapshot,
       writable: true,
     });
     return;
   }
-  existing.push(...warnings);
+  if (!('value' in existingDescriptor) || !isQueryResultArray(existingDescriptor.value)) {
+    throw new TypeError('Kovo query warning carrier is not an own array data property.');
+  }
+  appendQueryWarnings(existingDescriptor.value as QueryRuntimeWarning[], warnings);
 }
 
 /** @internal Read query-runtime warnings recorded on a lifecycle request. */
 export function queryRuntimeWarningsFromRequest(request: unknown): readonly QueryRuntimeWarning[] {
   if (typeof request !== 'object' || request === null) return [];
-  const warnings = (request as { [queryRuntimeWarningsKey]?: unknown })[queryRuntimeWarningsKey];
-  return Array.isArray(warnings) ? (warnings as QueryRuntimeWarning[]) : [];
+  const descriptor = witnessGetOwnPropertyDescriptor(request, queryRuntimeWarningsKey);
+  if (descriptor === undefined || !('value' in descriptor)) return [];
+  return isQueryResultArray(descriptor.value) ? (descriptor.value as QueryRuntimeWarning[]) : [];
 }
 
 /** @internal */
@@ -800,35 +822,123 @@ function capQueryListResults(
   limit: number,
 ): { value: unknown; warnings: QueryRuntimeWarning[] } {
   const warnings: QueryRuntimeWarning[] = [];
-  const seen = new WeakMap<object, unknown>();
+  const seen = createWitnessWeakMap<object, unknown>();
+  let nodes = 0;
+  let estimatedBytes = 0;
 
-  const cap = (current: unknown, path: string): unknown => {
-    if (Array.isArray(current)) {
-      const source = current.length > limit ? current.slice(0, limit) : current;
-      if (current.length > limit) warnings.push({ code: 'QUERY_LIST_LIMIT', limit, path });
-      return source.map((item, index) => cap(item, `${path}[${index}]`));
+  const cap = (current: unknown, path: string, depth: number): unknown => {
+    if (depth > MAX_QUERY_RESULT_DEPTH) {
+      throw new Error('KV430: query result exceeded the framework depth ceiling (SPEC §9.5).');
+    }
+    nodes += 1;
+    if (nodes > MAX_QUERY_RESULT_NODES) {
+      throw new Error('KV430: query result exceeded the framework node ceiling (SPEC §9.5).');
+    }
+    estimatedBytes += estimatedQueryValueBytes(current);
+    if (estimatedBytes > MAX_QUERY_RESULT_ESTIMATED_BYTES) {
+      throw new Error('KV430: query result exceeded the framework byte ceiling (SPEC §9.5).');
+    }
+
+    if (isQueryResultArray(current)) {
+      const length = queryArrayLength(current);
+      const cappedLength = length > limit ? limit : length;
+      if (length > limit) {
+        appendQueryValue(warnings, { code: 'QUERY_LIST_LIMIT', limit, path });
+      }
+      const existing = witnessWeakMapGet(seen, current);
+      if (existing !== undefined) return existing;
+      const next: unknown[] = [];
+      witnessWeakMapSet(seen, current, next);
+      for (let index = 0; index < cappedLength; index += 1) {
+        const descriptor = witnessGetOwnPropertyDescriptor(current, index);
+        if (descriptor === undefined || !('value' in descriptor)) {
+          throw new Error(
+            'KV430: query result arrays must contain dense own data properties (SPEC §9.5).',
+          );
+        }
+        appendQueryValue(next, cap(descriptor.value, `${path}[${index}]`, depth + 1));
+      }
+      return next;
     }
 
     if (!isPlainRecord(current)) return current;
-    const existing = seen.get(current);
+    const existing = witnessWeakMapGet(seen, current);
     if (existing !== undefined) return existing;
-    const next: Record<string, unknown> = {};
-    seen.set(current, next);
-    for (const [key, nested] of Object.entries(current)) {
-      next[key] = cap(nested, path === '$' ? `$.${key}` : `${path}.${key}`);
+    const next = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
+    witnessWeakMapSet(seen, current, next);
+    const keys = witnessObjectKeys(current);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const descriptor = witnessGetOwnPropertyDescriptor(current, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new Error(
+          'KV430: query result records must contain own data properties (SPEC §9.5).',
+        );
+      }
+      estimatedBytes += key.length * 3;
+      if (estimatedBytes > MAX_QUERY_RESULT_ESTIMATED_BYTES) {
+        throw new Error('KV430: query result exceeded the framework byte ceiling (SPEC §9.5).');
+      }
+      witnessDefineProperty(next, key, {
+        configurable: true,
+        enumerable: true,
+        value: cap(descriptor.value, path === '$' ? `$.${key}` : `${path}.${key}`, depth + 1),
+        writable: true,
+      });
     }
     return next;
   };
 
   // SPEC §9.5: the framework-owned query sink applies the API4 default result-count
   // ceiling after `load` and before any query value reaches SSR or the client wire.
-  return { value: cap(value, '$'), warnings };
+  return { value: cap(value, '$', 0), warnings };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  const prototype = witnessGetPrototypeOf(value);
+  return prototype === intrinsicObjectPrototype || prototype === null;
+}
+
+function isQueryResultArray(value: unknown): value is unknown[] {
+  if (witnessIsArray(value)) return true;
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    witnessGetPrototypeOf(value) === intrinsicArrayPrototype
+  );
+}
+
+function queryArrayLength(value: readonly unknown[]): number {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, 'length');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'number' ||
+    descriptor.value < 0 ||
+    descriptor.value > 4_294_967_295 ||
+    descriptor.value % 1 !== 0
+  ) {
+    throw new Error('KV430: query result array length is not trustworthy (SPEC §9.5).');
+  }
+  return descriptor.value;
+}
+
+function estimatedQueryValueBytes(value: unknown): number {
+  if (typeof value === 'string') return value.length * 3;
+  if (typeof value === 'number' || typeof value === 'bigint') return 32;
+  if (typeof value === 'boolean') return 5;
+  if (value === null || value === undefined) return 4;
+  return 16;
+}
+
+function appendQueryValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 function validationFailurePayload(error: SchemaValidationErrorLike): ValidationFailurePayload {
@@ -944,11 +1054,29 @@ export function queryRuntimeWarningHeaderValue(
   warnings: readonly QueryRuntimeWarning[] | undefined,
 ): string | undefined {
   if (warnings === undefined || warnings.length === 0) return undefined;
-  const listLimits = warnings
-    .filter((warning) => warning.code === 'QUERY_LIST_LIMIT')
-    .map((warning) => `${warning.path};limit=${warning.limit}`)
-    .join(',');
+  let listLimits = '';
+  for (let index = 0; index < warnings.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(warnings, index);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const warning = descriptor.value;
+    if (warning.code !== 'QUERY_LIST_LIMIT') continue;
+    if (listLimits !== '') listLimits += ',';
+    listLimits += `${warning.path};limit=${warning.limit}`;
+  }
   return listLimits ? `QUERY_LIST_LIMIT ${listLimits}` : undefined;
+}
+
+function appendQueryWarnings(
+  target: QueryRuntimeWarning[],
+  warnings: readonly QueryRuntimeWarning[],
+): void {
+  for (let index = 0; index < warnings.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(warnings, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo query warnings must be dense own data properties.');
+    }
+    appendQueryValue(target, descriptor.value);
+  }
 }
 
 function withQueryBuildHeaders<Request>(
