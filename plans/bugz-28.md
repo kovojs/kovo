@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |    10 | C1-C10 |
+| Critical |    11 | C1-C11 |
 | High     |    15 | H1-H15 |
 | Medium   |     8 | M1-M8 |
 
@@ -100,6 +100,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     nonce generation, and replay Map/TTL use boot-pinned, semantically checked controls; late and
     import-order poison cannot substitute key/method/scope/audience, extend expiry, or reuse a
     one-time token, while genuine scoped/rotated tokens retain round-trip behavior.
+
+- [ ] **C11 - A storage download endpoint retains mutable signing authority after construction.**
+      `packages/server/src/capability-route.ts`
+  - Mutating the original `createStorageDownloadEndpoint(options).secret` from the victim key to an
+    attacker key after construction made a newly attacker-signed URL pass the real verify-before-read
+    sink and return the existing `private.pdf` bytes with status 200.
+  - **Acceptance:** snapshot and pin secret/keyring, storage, scope, replay store, clock, stored-file
+    posture, signer defaults, and base-path facts at endpoint/context construction; later mutation,
+    getters/proxies, and scalar/URL collection poison cannot replace the authority or make request
+    derivation disagree with the exact key read from storage.
 
 ## High
 
@@ -301,7 +311,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, C10, H9-H10, H15, M4, and M7-M8 are
+The remediation pass remains intentionally non-zero: C6, C10-C11, H9-H10, H15, M4, and M7-M8 are
 active document/cookie/CSRF, capability, generated/live diagnostics, task, request-limit, and replay
 fixes. Integrated evidence is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
