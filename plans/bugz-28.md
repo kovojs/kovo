@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    11 | C1-C11 |
-| High     |    15 | H1-H15 |
+| High     |    16 | H1-H16 |
 | Medium   |     8 | M1-M8 |
 
 ## Critical
@@ -56,14 +56,14 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 87-test scalar route/handler/secret matrix passes with captured encoders/views,
     indexed constant-time comparison, unequal string/byte poison regressions, and equal controls.
 
-- [ ] **C6 - A mutable CSRF token parser can substitute a cached victim token.**
+- [x] **C6 - A mutable CSRF token parser can substitute a cached victim token.**
       `packages/server/src/csrf.ts`
   - A selective late `String.prototype.split` override returned the parts of a genuine cached victim
     token while validating the unrelated submitted string `v1.attacker.attacker`; synchronizer-token
     validation returned true for the victim session.
-  - **Acceptance:** token minting/parsing, base64url validation, byte conversion, active-key lookup,
-    and purpose selection use boot-pinned, semantically checked exact-byte operations; cached-token
-    substitution rejects under hostile import order and late poison while genuine rotation works.
+  - **Evidence:** the 259-test response-security matrix pins token minting/parsing, base64url bytes,
+    active-key lookup, randomness, Buffer, hash, and purpose controls; the independent cached-token
+    substitution proof rejects under hostile late `split`, while genuine rotation remains green.
 
 - [x] **C7 - Mutable route normalization can select a different route authority.**
       `packages/core/src/internal/route-pattern.ts`
@@ -177,22 +177,22 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 37-test filesystem/storage/intrinsic matrix passes with pinned map operations,
     exact logical-key controls, late-poison isolation, and import-order fail-closed coverage.
 
-- [ ] **H9 - Mutable document array operations can replace the complete response shell.**
+- [x] **H9 - Mutable document array operations can replace the complete response shell.**
       `packages/server/src/document-core.ts`
   - A selective late `Array.prototype.join` override on the final shell array replaced an otherwise
     safe `renderDocument()` result with a raw event-bearing document.
-  - **Acceptance:** document parts, query scripts, CSP facts, and final/deferred shell assembly use
-    boot-pinned, semantically checked traversal/concatenation over closed own-data arrays; hostile
-    import-order and late-poison regressions retain the original shell bytes and matching CSP.
+  - **Evidence:** the 259-test response-security matrix pins document parts, query scripts, CSP
+    hashes/facts, and final shell assembly; the independent whole-document `Array.join` replacement
+    proof retains the original safe shell under late poison and import-order failure controls.
 
-- [ ] **H10 - Mutable cookie scalar/collection controls permit raw Set-Cookie attribute injection.**
+- [x] **H10 - Mutable cookie scalar/collection controls permit raw Set-Cookie attribute injection.**
       `packages/server/src/cookies.ts`
   - A selective late `String.prototype.includes` override hid a semicolon in the declared Domain and
     made `serializeCookie()` emit attacker-supplied `Partitioned` attribute text; parser Map/Set and
     token/attribute controls have the same mutable dispatch surface.
-  - **Acceptance:** cookie token/octet validation, prefix/floor decisions, parsing, attribute maps,
-    and serialization use boot-pinned, semantically checked operations; semicolon/control injection
-    and forged forwarded attributes fail closed under hostile import order and late poison.
+  - **Evidence:** the 259-test response-security matrix pins cookie token/octet validation,
+    prefix/floor decisions, parsing, attribute maps, and serialization; the independent injected
+    Domain proof throws under late `includes` poison and forged forwarded attributes fail closed.
 
 - [x] **H11 - Mutable dynamic-import URL controls escape compiler module authority.**
       `packages/browser/src/{dynamic-import-url,dom-like}.ts`
@@ -236,6 +236,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     scheduling registration and lineage, queue identities, and lease transitions use boot-pinned,
     semantically checked exact-key and collection controls; late/import-order poison cannot
     cross-bind definitions, jobs, principal context, or completion state.
+
+- [ ] **H16 - Mutable guard redirect controls reopen protocol-relative login targets.**
+      `packages/server/src/guards.ts`
+  - Selective late `String.prototype.startsWith` plus a replacement global `URL` constructor made
+    `sanitizeNext('//evil.example/phish')` return the attacker target instead of `/`, violating the
+    value handed to default and custom unauthenticated redirect flows.
+  - **Acceptance:** raw/final target checks, URL construction/getters, route matching, query/hash
+    stripping, and login URL assembly use boot-pinned, semantically checked exact-byte controls;
+    protocol-relative, backslash, scheme, normalized-authority, and control-bearing targets retain
+    the safe fallback under late and import-order poison.
 
 ## Medium
 
@@ -312,9 +322,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, C10-C11, H9-H10, H15, M4, and M7-M8 are
-active document/cookie/CSRF, capability, generated/live diagnostics, task, request-limit, and replay
-fixes. Integrated evidence is green at
+The remediation pass remains intentionally non-zero: C10-C11, H15-H16, M4, and M7-M8 are active
+capability, generated/live diagnostics, task/guard, request-limit, and replay fixes. Integrated
+evidence is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
 route/handler/secret, and 18 password tests.
