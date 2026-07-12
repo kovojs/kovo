@@ -207,6 +207,14 @@ export function createSecretBoxingReadDb<Db extends object>(
   return new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
+      if (prop === 'query' && item !== null && typeof item === 'object') {
+        return wrapReadSurface(
+          item,
+          pinnedMetadata,
+          failClosedExecutionBoundary(emptyReadBoundary()),
+          pinnedOptions,
+        );
+      }
       if (typeof item !== 'function') return item;
       if (!isReadSurfaceMethod(prop)) {
         return (...args: unknown[]) => witnessReflectApply(item, target, args);
@@ -579,11 +587,17 @@ export const boxSecretReadRows = securityClassifier(
       const secretColumnNames = boundary.secretColumnScopeKnown
         ? boundary.secretColumnNames
         : metadata.secretColumnNames;
+      const boxEveryLeaf =
+        boundary.boxEveryResultValue && item !== null && typeof item === 'object'
+          ? boxSecretReadRows(item, metadata, boundary)
+          : undefined;
       const boxedValue =
         item === null || item === undefined
           ? item
-          : boundary.boxEveryResultValue ||
-              witnessSetHas(boundary.secretResultKeys as Set<string>, key) ||
+          : boxEveryLeaf !== undefined
+            ? boxEveryLeaf
+            : boundary.boxEveryResultValue ||
+                witnessSetHas(boundary.secretResultKeys as Set<string>, key) ||
               witnessSetHas(boundary.opaqueResultKeys as Set<string>, key) ||
               witnessSetHas(secretColumnKeys as Set<string>, key) ||
               witnessSetHas(secretColumnNames as Set<string>, key)
@@ -736,7 +750,7 @@ function wrapReadSurface(
       if (prop === 'then' && typeof item === 'function') {
         const carrier = sqlCarrierFromValue(target, []);
         const exact =
-          carrier === undefined
+          carrier === undefined || inheritedBoundary.boxEveryResultValue
             ? undefined
             : exactSecretReadExecution(target, carrier, 'all', options);
         const boundary = mergeReadBoundaries(
@@ -767,13 +781,19 @@ function wrapReadSurface(
           ]);
         };
       }
-      if (typeof item !== 'function') return item;
+      if (typeof item !== 'function') {
+        return item !== null && typeof item === 'object'
+          ? wrapReadSurface(item, metadata, inheritedBoundary, options)
+          : item;
+      }
       return (...args: unknown[]) => {
         const terminalMode = readBuilderTerminalMode(prop, args);
         if (terminalMode !== undefined) {
           const carrier = sqlCarrierFromValue(target, []);
           const exact =
-            carrier === undefined
+            carrier === undefined ||
+            inheritedBoundary.boxEveryResultValue ||
+            args.length !== 0
               ? undefined
               : exactSecretReadExecution(target, carrier, terminalMode, options);
           const boundary = mergeReadBoundaries(
@@ -834,12 +854,13 @@ function readBoundaryForQuery(
 
 function readBuilderTerminalMode(
   property: PropertyKey,
-  args: readonly unknown[],
+  _args: readonly unknown[],
 ): SecretReadExecutionMode | undefined {
-  if (args.length !== 0) return undefined;
   if (property === 'get') return 'get';
   if (property === 'values') return 'values';
-  return property === 'all' || property === 'execute' ? 'all' : undefined;
+  return property === 'all' || property === 'execute' || property === 'sync'
+    ? 'all'
+    : undefined;
 }
 
 function exactSecretReadExecution(

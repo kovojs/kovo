@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isSecret, revealSecret } from '@kovojs/core';
 import Database from 'better-sqlite3';
+import { defineRelations, sql as drizzleSql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import {
@@ -402,6 +403,76 @@ describe('secret read boundary', () => {
 
       expect(isSecret(row.alias)).toBe(true);
       expect(revealSecret(row.alias, 'test')).toBe('victim-secret');
+    } finally {
+      client.close();
+    }
+  });
+
+  it('deep-boxes relational namespaces and parameter-bearing prepared terminals', async () => {
+    const client = new Database(':memory:');
+    try {
+      client.exec(
+        [
+          'create table parents (id text primary key)',
+          'create table secrets (id text primary key, parent_id text, classified text not null)',
+          "insert into parents values ('p1')",
+          "insert into secrets values ('s1', 'p1', 'victim-secret')",
+        ].join(';'),
+      );
+      const parents = sqliteTable('parents', { id: text('id').primaryKey() });
+      const secrets = sqliteTable('secrets', {
+        classified: text('classified').notNull(),
+        id: text('id').primaryKey(),
+        parentId: text('parent_id').references(() => parents.id),
+      });
+      const relations = defineRelations({ parents, secrets }, (r) => ({
+        parents: { secrets: r.many.secrets() },
+        secrets: {
+          parent: r.one.parents({ from: r.secrets.parentId, to: r.parents.id }),
+        },
+      }));
+      const db = createSecretBoxingReadDb(drizzle({ client, relations }), metadata(), {
+        sqliteColumnOrigins: client,
+      });
+
+      const [relational] = await db.query.secrets.findMany();
+      expect(isSecret(relational.classified)).toBe(true);
+
+      const first = await db.query.secrets.findFirst({
+        extras: {
+          derived: drizzleSql.raw('"d0"."classified"').as('derived'),
+        },
+      });
+      expect(isSecret(first?.derived)).toBe(true);
+
+      const [parent] = await db.query.parents.findMany({ with: { secrets: true } });
+      expect(isSecret(parent.secrets[0]!.classified)).toBe(true);
+
+      const [synced] = db.query.secrets
+        .findMany({
+          extras: { derived: drizzleSql.raw('"d0"."classified"').as('derived') },
+        })
+        .sync({});
+      expect(isSecret(synced.derived)).toBe(true);
+
+      const preparedAll = db
+        .select({ derived: secrets.classified })
+        .from(secrets)
+        .prepare()
+        .all({});
+      expect(isSecret(preparedAll[0]!.derived)).toBe(true);
+      const preparedGet = db
+        .select({ derived: secrets.classified })
+        .from(secrets)
+        .prepare()
+        .get({});
+      expect(isSecret(preparedGet?.derived)).toBe(true);
+      const preparedValues = db
+        .select({ derived: secrets.classified })
+        .from(secrets)
+        .prepare()
+        .values({});
+      expect(isSecret(preparedValues[0]![0])).toBe(true);
     } finally {
       client.close();
     }
