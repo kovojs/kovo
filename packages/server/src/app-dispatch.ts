@@ -30,10 +30,12 @@ import { appTaskScheduler } from './task-runtime.js';
 import { readCsrfCarrierFromRequest } from './untrusted-request-body.js';
 import { runWebhook, type WebhookDeclaration } from './webhook.js';
 import { canonicalRequestMethod } from './request-method.js';
+import { requestMethod, requestUrlSearchParams } from './request-body-intrinsics.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
   match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>;
+  method?: string;
   request: Request;
   reservedKey?: string;
   url: URL;
@@ -42,17 +44,19 @@ export interface MatchedAppDispatchOptions {
 export async function dispatchMatchedAppRequest({
   app,
   match,
+  method,
   request,
   reservedKey,
   url,
 }: MatchedAppDispatchOptions): Promise<Response> {
+  const exactMethod = method ?? requestMethod(request);
   if (match.kind === 'client-module') {
     return routeResponseToWebResponse(
       renderVersionedClientModuleResponse(app.clientModules, {
         ...(app.onError === undefined ? {} : { onError: app.onError }),
         url: appRequestUrl(url),
       }),
-      request,
+      { method: exactMethod },
     );
   }
 
@@ -60,9 +64,9 @@ export async function dispatchMatchedAppRequest({
     // SPEC §9.4: /_q/ is a credentialed GET endpoint. Reject non-GET/HEAD methods
     // with 405 so state-unsafe verbs (POST, DELETE …) cannot use the query channel
     // as a no-CSRF read path.
-    const method = canonicalRequestMethod(request.method);
-    if (method !== 'GET' && method !== 'HEAD') {
-      return methodNotAllowedWebResponse(request, ['GET', 'HEAD']);
+    const canonicalMethod = canonicalRequestMethod(exactMethod);
+    if (canonicalMethod !== 'GET' && canonicalMethod !== 'HEAD') {
+      return methodNotAllowedWebResponse({ method: exactMethod }, ['GET', 'HEAD']);
     }
 
     // SPEC §5.2.1 rule 2(d): include the build token so `renderQueryEndpointResponse`
@@ -74,7 +78,7 @@ export async function dispatchMatchedAppRequest({
       buildToken,
       maxListItems: app.requestLimits.maxQueryListItems,
       request,
-      search: url.searchParams,
+      search: requestUrlSearchParams(url),
       clientIp: (req) => resolveRequestClientIp(app, req),
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
@@ -86,7 +90,7 @@ export async function dispatchMatchedAppRequest({
         reservedKey ?? decodeURIComponent(match.key),
         queryRequest,
       ),
-      request,
+      { method: exactMethod },
     );
   }
 
@@ -101,7 +105,7 @@ export async function dispatchMatchedAppRequest({
 
   if (match.kind === 'endpoint') {
     if (!match.methodAllowed) {
-      return methodNotAllowedWebResponse(request, match.allowedMethods);
+      return methodNotAllowedWebResponse({ method: exactMethod }, match.allowedMethods);
     }
 
     const endpointRequest = await resolveKovoLifecycleRequest(request, {
@@ -110,12 +114,17 @@ export async function dispatchMatchedAppRequest({
       surface: 'endpoint',
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
-    if (authFailure) return finalizeRawWebResponse(authFailure, request);
-    const csrfFailure = await validateEndpointCsrf(match.endpoint, request, app.csrf);
-    if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
+    if (authFailure) return finalizeRawWebResponse(authFailure, { method: exactMethod });
+    const csrfFailure = await validateEndpointCsrf(
+      match.endpoint,
+      request,
+      app.csrf,
+      exactMethod,
+    );
+    if (csrfFailure) return finalizeRawWebResponse(csrfFailure, { method: exactMethod });
     if (isWebhookEndpoint(match.endpoint)) {
       const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);
-      if (accessFailure) return finalizeRawWebResponse(accessFailure, request);
+      if (accessFailure) return finalizeRawWebResponse(accessFailure, { method: exactMethod });
       const taskScheduler = appTaskScheduler(app);
       const mutationOptions = {
         clientIp: (req: Request) => resolveRequestClientIp(app, req),
@@ -131,7 +140,7 @@ export async function dispatchMatchedAppRequest({
         })
       ).response;
       assertEndpointResponsePosture(match.endpoint, response, { request: endpointRequest });
-      return finalizeRawWebResponse(response, request, match.endpoint.response);
+      return finalizeRawWebResponse(response, { method: exactMethod }, match.endpoint.response);
     }
     return finalizeRawWebResponse(
       await runEndpoint(
@@ -139,14 +148,14 @@ export async function dispatchMatchedAppRequest({
         endpointRequest,
         app.db === undefined ? {} : { db: app.db },
       ),
-      request,
+      { method: exactMethod },
       match.endpoint.response,
     );
   }
 
   if (match.kind === 'route') {
     if (!match.methodAllowed) {
-      return methodNotAllowedWebResponse(request, match.allowedMethods);
+      return methodNotAllowedWebResponse({ method: exactMethod }, match.allowedMethods);
     }
 
     return routeResponseToWebResponse(
@@ -157,13 +166,13 @@ export async function dispatchMatchedAppRequest({
         route: match.route,
         url,
       }),
-      request,
+      { method: exactMethod },
     );
   }
 
   return routeResponseToWebResponse(
     await renderAppErrorDocumentResponse(app, request, 404),
-    request,
+    { method: exactMethod },
   );
 }
 
@@ -183,9 +192,10 @@ async function validateEndpointCsrf(
   endpoint: KovoApp['endpoints'][number],
   request: Request,
   csrf: CsrfOptions<any> | undefined,
+  method: string,
 ): Promise<Response | undefined> {
   if (endpoint.csrf?.exempt) return undefined;
-  if (!requiresCsrf(request.method)) return undefined;
+  if (!requiresCsrf(method)) return undefined;
 
   // SPEC §9.1 / §6.6: endpoint() is default-CSRF for unsafe browser verbs.
   // Exempt endpoints keep raw-body access; protected endpoints validate a cloned

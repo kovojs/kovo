@@ -10,6 +10,7 @@ import { renderedHtml, renderHtmlValue } from './html.js';
 import { stylesheet } from './hints.js';
 import { jsx } from './jsx-runtime.js';
 import { layout, notFound, route } from './route.js';
+import { s } from './schema.js';
 import {
   computeRenderPlanFingerprint,
   createMemoryVersionedClientModuleRegistry,
@@ -56,6 +57,56 @@ function expectDocumentSecurityFloor(headers: Record<string, string | readonly s
   expect(headerValue(headers, 'x-content-type-options')).toBe('nosniff');
   expect(headerValue(headers, 'cache-control')).toBe('private, no-store');
 }
+
+describe('route search carrier integrity', () => {
+  it('does not substitute cached capability bytes through late URLSearchParams iteration', async () => {
+    const victimCapability = 'victim-route-capability';
+    const capabilityRoute = route('/capability', {
+      page: ({ search }) =>
+        trustedHtml(
+          search.token === victimCapability
+            ? '<main>victim-account</main>'
+            : '<main>access-denied</main>',
+        ),
+      search: s.object({ token: s.string() }),
+    });
+    const url = new URL('https://example.test/capability?token=attacker-submitted');
+    const submitted = url.searchParams;
+    const victim = new URLSearchParams([['token', victimCapability]]);
+    const originalIterator = URLSearchParams.prototype[Symbol.iterator];
+    const originalSearchParams = Object.getOwnPropertyDescriptor(URL.prototype, 'searchParams')!;
+    URLSearchParams.prototype[Symbol.iterator] = function iterator() {
+      return originalIterator.call(this === submitted ? victim : this);
+    };
+    Object.defineProperty(URL.prototype, 'searchParams', {
+      configurable: true,
+      get() {
+        return this === url
+          ? victim
+          : Reflect.apply(originalSearchParams.get!, this, []);
+      },
+    });
+
+    let response: Awaited<ReturnType<typeof renderAppRouteDocumentResponse>>;
+    try {
+      response = await renderAppRouteDocumentResponse({
+        app: createApp({ routes: [capabilityRoute] }),
+        params: {},
+        request: new Request(url),
+        route: capabilityRoute,
+        url,
+      });
+    } finally {
+      Object.defineProperty(URL.prototype, 'searchParams', originalSearchParams);
+      URLSearchParams.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(response.status).toBe(200);
+    const body = await responseBodyText(response.body);
+    expect(body).toContain('access-denied');
+    expect(body).not.toContain('victim-account');
+  });
+});
 
 describe('trusted request scheme provenance', () => {
   it('does not attach HSTS from a spoofed x-forwarded-proto header on an http Request', async () => {

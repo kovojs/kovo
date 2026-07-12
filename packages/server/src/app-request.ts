@@ -29,6 +29,12 @@ import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import { schemaMaxUploadBytes, type Schema } from './schema.js';
 import { mutationResponseWithoutBrowserState } from './mutation.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
+import {
+  requestCreateUrl,
+  requestMethod,
+  requestUrl,
+  requestUrlSnapshot,
+} from './request-body-intrinsics.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
@@ -38,22 +44,27 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     return routeResponseToWebResponse(renderDiagnosticDocument(appDiagnostics), request);
   }
 
-  const url = new URL(request.url);
+  const method = requestMethod(request);
+  const url = requestCreateUrl(requestUrl(request));
+  const urlSnapshot = requestUrlSnapshot(url);
   const match = matchShellDispatch({
     endpoints: app.endpoints,
-    method: request.method,
-    pathname: url.pathname,
+    method,
+    pathname: urlSnapshot.pathname,
     routes: app.routes,
   });
   const surface = loadShedSurface(match.kind);
   const buildToken = systemResponseBuildToken(app, surface);
 
   if (match.normalization.redirect) {
-    url.pathname = match.normalization.redirect.pathname;
     return appSystemResponse(null, {
       buildToken,
-      headers: { Location: redirectLocationHeader(`${url.pathname}${url.search}${url.hash}`) },
-      method: request.method,
+      headers: {
+        Location: redirectLocationHeader(
+          `${match.normalization.redirect.pathname}${urlSnapshot.search}${urlSnapshot.hash}`,
+        ),
+      },
+      method,
       status: match.normalization.redirect.status,
       surface,
     });
@@ -64,7 +75,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     return appSystemResponse('Not Found', {
       buildToken,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      method: request.method,
+      method,
       status: 404,
       surface,
     });
@@ -86,7 +97,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     );
     if (loadShed) return loadShed;
 
-    if (url.pathname === KOVO_CSP_REPORT_ENDPOINT) {
+    if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
       return kovoSecurityReportResponse(app, request);
     }
 
@@ -98,6 +109,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     return await dispatchMatchedAppRequest({
       app,
       match,
+      method,
       request: limitedRequest,
       ...(reservedKey === undefined ? {} : { reservedKey }),
       url,
@@ -107,7 +119,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       return appSystemResponse('Payload Too Large', {
         buildToken,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        method: request.method,
+        method,
         status: 413,
         surface,
       });
@@ -124,7 +136,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       return appSystemResponse(JSON.stringify({ code: 'SERVER_ERROR', payload: {} }), {
         buildToken,
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        method: request.method,
+        method,
         status: 500,
         surface,
       });
@@ -146,11 +158,13 @@ export async function handleAppStartupErrorResponse(
   request: Request,
   error: unknown,
 ): Promise<Response> {
-  const url = new URL(request.url);
+  const method = requestMethod(request);
+  const url = requestCreateUrl(requestUrl(request));
+  const urlSnapshot = requestUrlSnapshot(url);
   const match = matchShellDispatch({
     endpoints: app.endpoints,
-    method: request.method,
-    pathname: url.pathname,
+    method,
+    pathname: urlSnapshot.pathname,
     routes: app.routes,
   });
   reportAppStartupError(app, request, error);
@@ -170,7 +184,7 @@ export async function handleAppStartupErrorResponse(
 }
 
 export function reportAppStartupError(app: KovoApp, request: Request, error: unknown): void {
-  const url = new URL(request.url);
+  const url = requestCreateUrl(requestUrl(request));
   reportServerError(app.onError, error, {
     operation: 'task-runtime-startup',
     request,

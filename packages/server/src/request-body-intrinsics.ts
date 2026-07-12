@@ -44,6 +44,7 @@ const NativeRequest = globalThis.Request;
 const NativeReadableStream = globalThis.ReadableStream;
 const NativeTextDecoder = globalThis.TextDecoder;
 const NativeUint8Array = globalThis.Uint8Array;
+const NativeURL = globalThis.URL;
 const NativeURLSearchParams = globalThis.URLSearchParams;
 const nativeIteratorSymbol: typeof Symbol.iterator = Symbol.iterator;
 
@@ -54,7 +55,15 @@ const nativeHeadersGet = stablePlatformMethod(NativeHeaders.prototype, 'get');
 const nativeRequestBody = stablePlatformAccessor(NativeRequest.prototype, 'body');
 const nativeRequestClone = stablePlatformMethod(NativeRequest.prototype, 'clone');
 const nativeRequestHeaders = stablePlatformAccessor(NativeRequest.prototype, 'headers');
+const nativeRequestMethod = stablePlatformAccessor(NativeRequest.prototype, 'method');
 const nativeRequestUrl = stablePlatformAccessor(NativeRequest.prototype, 'url');
+const nativeUrlHash = stablePlatformAccessor(NativeURL.prototype, 'hash');
+const nativeUrlHref = stablePlatformAccessor(NativeURL.prototype, 'href');
+const nativeUrlOrigin = stablePlatformAccessor(NativeURL.prototype, 'origin');
+const nativeUrlPathname = stablePlatformAccessor(NativeURL.prototype, 'pathname');
+const nativeUrlProtocol = stablePlatformAccessor(NativeURL.prototype, 'protocol');
+const nativeUrlSearch = stablePlatformAccessor(NativeURL.prototype, 'search');
+const nativeUrlSearchParams = stablePlatformAccessor(NativeURL.prototype, 'searchParams');
 const nativeFormDataAppend = stablePlatformMethod(NativeFormData.prototype, 'append');
 const nativeFormDataEntries = stablePlatformMethod(NativeFormData.prototype, 'entries');
 const nativeFormDataGet = stablePlatformMethod(NativeFormData.prototype, 'get');
@@ -187,6 +196,7 @@ function capturedRequestControlsAreSound(): boolean {
     if (witnessReflectApply(nativeRequestUrl, request, []) !== 'https://kovo.invalid/submit') {
       return false;
     }
+    if (witnessReflectApply(nativeRequestMethod, request, []) !== 'POST') return false;
     const clone = witnessReflectApply<Request>(nativeRequestClone, request, []);
     if (
       clone === request ||
@@ -226,6 +236,12 @@ function capturedRequestControlsAreSound(): boolean {
     witnessReflectApply(nativeUrlSearchParamsAppend, appendedSearchParams, ['control', 'genuine']);
     witnessReflectApply(nativeUrlSearchParamsAppend, appendedSearchParams, ['second', 'value']);
     const searchEntries = urlSearchParamsEntriesUnchecked(searchParams);
+    const parsedUrl = new NativeURL('https://kovo.invalid/path?control=genuine&second=value');
+    const parsedSearchParams = witnessReflectApply<URLSearchParams>(
+      nativeUrlSearchParams,
+      parsedUrl,
+      [],
+    );
     if (
       !isInstanceUnchecked(NativeURLSearchParams, searchParams) ||
       isInstanceUnchecked(NativeURLSearchParams, {}) ||
@@ -237,7 +253,16 @@ function capturedRequestControlsAreSound(): boolean {
       witnessReflectApply(nativeUrlSearchParamsToString, searchParams, []) !==
         'control=genuine&second=value' ||
       witnessReflectApply(nativeUrlSearchParamsToString, appendedSearchParams, []) !==
-        'control=genuine&second=value'
+        'control=genuine&second=value' ||
+      witnessReflectApply(nativeUrlSearchParamsToString, parsedSearchParams, []) !==
+        'control=genuine&second=value' ||
+      witnessReflectApply(nativeUrlHref, parsedUrl, []) !==
+        'https://kovo.invalid/path?control=genuine&second=value' ||
+      witnessReflectApply(nativeUrlOrigin, parsedUrl, []) !== 'https://kovo.invalid' ||
+      witnessReflectApply(nativeUrlPathname, parsedUrl, []) !== '/path' ||
+      witnessReflectApply(nativeUrlProtocol, parsedUrl, []) !== 'https:' ||
+      witnessReflectApply(nativeUrlSearch, parsedUrl, []) !== '?control=genuine&second=value' ||
+      witnessReflectApply(nativeUrlHash, parsedUrl, []) !== ''
     ) {
       return false;
     }
@@ -841,6 +866,53 @@ export function requestIsRequest(value: unknown): value is Request {
   return isRequestUnchecked(value);
 }
 
+export interface RequestUrlSnapshot {
+  readonly hash: string;
+  readonly href: string;
+  readonly origin: string;
+  readonly pathname: string;
+  readonly protocol: string;
+  readonly search: string;
+  readonly searchParams: URLSearchParams;
+}
+
+export function requestMethod(request: Request): string {
+  assertRequestBodyIntrinsics();
+  if (!isRequestUnchecked(request)) {
+    throw new TypeError('Kovo request method requires a genuine Request carrier.');
+  }
+  return witnessReflectApply(nativeRequestMethod, request, []);
+}
+
+export function requestUrl(request: Request): string {
+  assertRequestBodyIntrinsics();
+  if (!isRequestUnchecked(request)) {
+    throw new TypeError('Kovo request URL requires a genuine Request carrier.');
+  }
+  return witnessReflectApply(nativeRequestUrl, request, []);
+}
+
+export function requestCreateUrl(input: string, base?: string): URL {
+  assertRequestBodyIntrinsics();
+  return base === undefined ? new NativeURL(input) : new NativeURL(input, base);
+}
+
+export function requestUrlSnapshot(url: URL): RequestUrlSnapshot {
+  assertRequestBodyIntrinsics();
+  if (!isInstanceUnchecked(NativeURL, url)) {
+    throw new TypeError('Kovo request URL snapshot requires a genuine URL carrier.');
+  }
+  return {
+    hash: witnessReflectApply(nativeUrlHash, url, []),
+    href: witnessReflectApply(nativeUrlHref, url, []),
+    origin: witnessReflectApply(nativeUrlOrigin, url, []),
+    pathname: witnessReflectApply(nativeUrlPathname, url, []),
+    protocol: witnessReflectApply(nativeUrlProtocol, url, []),
+    search: witnessReflectApply(nativeUrlSearch, url, []),
+    searchParams: witnessReflectApply(nativeUrlSearchParams, url, []),
+  };
+}
+
 export function requestIsFormData(value: unknown): value is FormData {
   assertRequestBodyIntrinsics();
   return isInstanceUnchecked(NativeFormData, value);
@@ -849,6 +921,14 @@ export function requestIsFormData(value: unknown): value is FormData {
 export function requestIsUrlSearchParams(value: unknown): value is URLSearchParams {
   assertRequestBodyIntrinsics();
   return isInstanceUnchecked(NativeURLSearchParams, value);
+}
+
+export function requestUrlSearchParams(url: URL): URLSearchParams {
+  assertRequestBodyIntrinsics();
+  if (!isInstanceUnchecked(NativeURL, url)) {
+    throw new TypeError('Kovo request URL must be a genuine URL carrier.');
+  }
+  return witnessReflectApply(nativeUrlSearchParams, url, []);
 }
 
 export function requestUrlSearchParamsEntries(

@@ -1,4 +1,5 @@
 import { customVerifier } from '@kovojs/core';
+import { trustedHtml } from '@kovojs/browser';
 import { describe, expect, it } from 'vitest';
 
 import { publicAccess, verifiedAccess } from './access.js';
@@ -6,10 +7,90 @@ import { createApp, createRequestHandler } from './app.js';
 import { csrfToken } from './csrf.js';
 import { endpoint } from './endpoint.js';
 import { mutation } from './mutation.js';
+import { route } from './route.js';
 import { s } from './schema.js';
 import { webhook } from './webhook.js';
 
 describe('request ingress intrinsic authority', () => {
+  it('does not let a late global URL constructor cross-bind route capability bytes', async () => {
+    const victimCapability = 'victim-route-capability';
+    const publicRoute = route('/public', {
+      page: () => trustedHtml('<main>public-route</main>'),
+    });
+    const capabilityRoute = route('/capability', {
+      page: ({ search }) =>
+        trustedHtml(
+          search.token === victimCapability
+            ? '<main>victim-account</main>'
+            : '<main>access-denied</main>',
+        ),
+      search: s.object({ token: s.string() }),
+    });
+    const handler = createRequestHandler(
+      createApp({ routes: [publicRoute, capabilityRoute] }),
+    );
+    const request = new Request('https://kovo.local/public?token=attacker-submitted');
+    const NativeURL = globalThis.URL;
+    class PoisonedURL extends NativeURL {
+      constructor(input: string | URL, base?: string | URL) {
+        const source = typeof input === 'string' ? input : input.href;
+        super(
+          source === request.url
+            ? `https://kovo.local/capability?token=${victimCapability}`
+            : input,
+          base,
+        );
+      }
+    }
+    globalThis.URL = PoisonedURL;
+
+    let response: Response;
+    try {
+      response = await handler(request);
+    } finally {
+      globalThis.URL = NativeURL;
+    }
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain('public-route');
+    expect(body).not.toContain('victim-account');
+  });
+
+  it('does not let a late Request.method getter turn an unsafe route request into GET', async () => {
+    const calls: string[] = [];
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/account', {
+            page: () => {
+              calls.push('rendered');
+              return trustedHtml('<main>account</main>');
+            },
+          }),
+        ],
+      }),
+    );
+    const request = new Request('https://kovo.local/account', { method: 'POST' });
+    const nativeMethod = Object.getOwnPropertyDescriptor(Request.prototype, 'method')!;
+    Object.defineProperty(Request.prototype, 'method', {
+      configurable: true,
+      get() {
+        return this === request ? 'GET' : Reflect.apply(nativeMethod.get!, this, []);
+      },
+    });
+
+    let response: Response;
+    try {
+      response = await handler(request);
+    } finally {
+      Object.defineProperty(Request.prototype, 'method', nativeMethod);
+    }
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('GET, HEAD');
+    expect(calls).toEqual([]);
+  });
+
   it('keeps oversized endpoint bytes at 413 after late stream-reader replacement', async () => {
     const echo = endpoint('/intrinsics/echo', {
       access: publicAccess('body-limit intrinsic regression'),

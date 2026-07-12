@@ -44,9 +44,19 @@ import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from 
 import type { KovoApp } from './app-types.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
+import {
+  requestCreateUrl,
+  requestUrl,
+  requestUrlSearchParams,
+  requestUrlSearchParamsEntries,
+  requestUrlSnapshot,
+} from './request-body-intrinsics.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import {
+  witnessCreateNullRecord,
+  witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
   witnessReflectApply,
   witnessReflectGet,
 } from './security-witness-intrinsics.js';
@@ -71,7 +81,7 @@ export async function renderAppRouteDocumentResponse({
   route,
   url,
 }: AppRouteDocumentOptions): Promise<RoutePageResponse> {
-  const search = searchParamsToRecord(url.searchParams);
+  const search = searchParamsToRecord(requestUrlSearchParams(url));
   // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a storage download endpoint
   // is mounted. The route context must mint with the same configured capability signer that the
   // endpoint verify sink uses; otherwise the documented pairing fails closed as an opaque 404.
@@ -236,7 +246,9 @@ export async function renderAppRouteDocumentResponse({
       ...(metaContext === undefined ? {} : { metaContext }),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
       loaderRuntimeHref,
-      reportingOrigin: new URL(request.url).origin,
+      reportingOrigin: requestUrlSnapshot(
+        requestCreateUrl(requestUrl(requestForAuthorityNeutralMetadata(request))),
+      ).origin,
       // bugs-1 F34: a guarded route renders session-dependent content; mark its
       // document no-store so a Back/bfcache restore can't show it after logout.
       // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
@@ -336,10 +348,11 @@ export async function renderAppErrorDocumentResponse(
 ): Promise<RoutePageResponse> {
   const shellRequest = requestMetadataWithoutAmbientAuthority(request);
   const stableRequestUrl = readErrorShellRequestUrl(shellRequest);
-  const stableUrl = new URL(stableRequestUrl);
+  const stableUrl = requestCreateUrl(stableRequestUrl);
+  const stableUrlSnapshot = requestUrlSnapshot(stableUrl);
   const diagnosticUrl = appRequestUrl(stableUrl);
-  const reportingOrigin = stableUrl.origin;
-  const secure = stableUrl.protocol === 'https:';
+  const reportingOrigin = stableUrlSnapshot.origin;
+  const secure = stableUrlSnapshot.protocol === 'https:';
   const renderer =
     status === 403
       ? app.errorShells.forbidden
@@ -489,7 +502,8 @@ function stripContentTypeHeader(
 }
 
 export function appRequestUrl(url: URL): string {
-  return `${url.pathname}${url.search}${url.hash}`;
+  const snapshot = requestUrlSnapshot(url);
+  return `${snapshot.pathname}${snapshot.search}${snapshot.hash}`;
 }
 
 function renderDefaultRouteValue(value: unknown): string {
@@ -508,16 +522,59 @@ function mergeAppRouteHints(app: KovoApp, route: AnyRouteDeclaration): PageHintO
 }
 
 function searchParamsToRecord(searchParams: URLSearchParams): Record<string, string | string[]> {
-  const record: Record<string, string | string[]> = {};
-
-  for (const [key, value] of searchParams) {
-    const existing = record[key];
+  const record = witnessCreateNullRecord<string | string[]>() as Record<
+    string,
+    string | string[]
+  >;
+  const entries = requestUrlSearchParamsEntries(searchParams);
+  for (let index = 0; index < entries.length; index += 1) {
+    const entryDescriptor = witnessGetOwnPropertyDescriptor(entries, index);
+    if (
+      entryDescriptor === undefined ||
+      !('value' in entryDescriptor) ||
+      !witnessIsArray(entryDescriptor.value) ||
+      entryDescriptor.value.length !== 2
+    ) {
+      throw new TypeError('Kovo route search entries must be dense stable pairs.');
+    }
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(entryDescriptor.value, 0);
+    const valueDescriptor = witnessGetOwnPropertyDescriptor(entryDescriptor.value, 1);
+    if (
+      keyDescriptor === undefined ||
+      !('value' in keyDescriptor) ||
+      typeof keyDescriptor.value !== 'string' ||
+      valueDescriptor === undefined ||
+      !('value' in valueDescriptor) ||
+      typeof valueDescriptor.value !== 'string'
+    ) {
+      throw new TypeError('Kovo route search entries must contain stable strings.');
+    }
+    const key = keyDescriptor.value;
+    const value = valueDescriptor.value;
+    const existing = witnessGetOwnPropertyDescriptor(record, key);
     if (existing === undefined) {
-      record[key] = value;
-    } else if (Array.isArray(existing)) {
-      existing.push(value);
+      witnessDefineProperty(record, key, {
+        configurable: true,
+        enumerable: true,
+        value,
+        writable: true,
+      });
+    } else if ('value' in existing && typeof existing.value === 'string') {
+      witnessDefineProperty(record, key, {
+        configurable: true,
+        enumerable: true,
+        value: [existing.value, value],
+        writable: true,
+      });
+    } else if ('value' in existing && witnessIsArray(existing.value)) {
+      witnessDefineProperty(existing.value, existing.value.length, {
+        configurable: true,
+        enumerable: true,
+        value,
+        writable: true,
+      });
     } else {
-      record[key] = [existing, value];
+      throw new TypeError('Kovo route search record contains an invalid repeated value.');
     }
   }
 
