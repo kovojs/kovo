@@ -414,8 +414,19 @@ export function kovoAppShellViteDevPlugin(
 
   const install = (server: KovoAppShellViteDevModuleServer) => {
     root = server.config?.root ?? root;
+    // The supported CLI installs this middleware before authored configureServer hooks. Pin the
+    // exact SSR loader and expose only that fixed carrier to per-request dispatch: a later caller
+    // hook may decorate its own server view, but cannot redirect framework/app loads to a second
+    // module graph after the trust profile was established (SPEC §6.6 rule 6).
+    const ssrLoadModule = server.ssrLoadModule.bind(server);
+    const dispatchServer: KovoAppShellViteDevModuleServer = Object.freeze({
+      ...(server.config === undefined ? {} : { config: server.config }),
+      middlewares: server.middlewares,
+      ssrLoadModule,
+      ...(server.ws === undefined ? {} : { ws: server.ws }),
+    });
     server.middlewares.use((request, response, next) => {
-      Promise.resolve(server.ssrLoadModule(kovoAppShellViteDevModuleId))
+      Promise.resolve(ssrLoadModule(kovoAppShellViteDevModuleId))
         .then((serverModule) => {
           const dispatch = serverModule.dispatchKovoAppShellViteDevRequest;
           if (typeof dispatch !== 'function') {
@@ -423,7 +434,7 @@ export function kovoAppShellViteDevPlugin(
               `${kovoAppShellViteDevModuleId} must export dispatchKovoAppShellViteDevRequest().`,
             );
           }
-          return dispatch(server, options, request, response, next);
+          return dispatch(dispatchServer, options, request, response, next);
         })
         .catch(next);
     });

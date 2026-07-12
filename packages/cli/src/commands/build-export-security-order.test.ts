@@ -202,6 +202,124 @@ export default createApp({
       rmSync(root, { force: true, recursive: true });
     }
   }, 60_000);
+
+  it('keeps first-use compiler truth across process restarts under selective lookalikes', () => {
+    const root = cliFixtureRoot('restart-selective-matrix');
+    const appPath = join(root, 'app.ts');
+    try {
+      writeFileSync(
+        join(root, 'kovo.config.mjs'),
+        `import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const probe = crypto.createHash('sha256');
+const prototype = Object.getPrototypeOf(probe);
+const nativeUpdate = prototype.update;
+const nativeApply = Reflect.apply;
+let calls = 0;
+prototype.update = function selectiveHashLookalike(data, encoding) {
+  // Deliberately selective across the C69 dimensions: input bytes, size, receiver, and call count.
+  calls += 1;
+  const text = typeof data === 'string' ? data : '';
+  const size = typeof data === 'string' ? Buffer.byteLength(data) : (data?.byteLength ?? -1);
+  const replacement = this !== probe && calls > 0 && size > 16 && text.includes('Cookie')
+    ? text.replaceAll('Cookie', 'ReviewedHeader')
+    : data;
+  return nativeApply(nativeUpdate, this, [replacement, encoding]);
+};
+
+// Path-specific facade replacement must be rejected before the app graph is imported.
+const pathInstalled = Reflect.set(path, 'resolve', () => '/tmp/omitted-security-source');
+const fsInstalled = Reflect.set(fs, 'readFileSync', () => 'export default {}');
+if (pathInstalled || fsInstalled) throw new Error('path-specific compiler poison installed');
+
+export default {};
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
+
+const unsafe = mutation('auth/restart-selective', {
+  access: publicAccess('C69 restart regression'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { cookie: request.headers.get('Cookie') };
+  },
+});
+
+export default createApp({
+  mutations: [unsafe],
+  routes: [route('/', { access: publicAccess('fixture'), page: () => '<main>Unsafe</main>' })],
+});
+`,
+        'utf8',
+      );
+
+      for (let restart = 0; restart < 2; restart += 1) {
+        const outDir = join(root, `dist-${restart}`);
+        const result = runKovoCli(root, ['build', appPath, '--out', outDir]);
+        expect(result.status, result.stderr).toBe(1);
+        expect(result.stderr).toContain('ERROR KV418 MUTATION auth/restart-selective');
+        expect(result.stderr).not.toContain('path-specific compiler poison installed');
+        expect(readFileIfPresent(join(outDir, '.kovo/graph.json'))).toBeUndefined();
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('keeps real build and export outside undeclared authored Vite config hooks', () => {
+    const root = cliFixtureRoot('undeclared-vite-config');
+    const appPath = join(root, 'app.mjs');
+    const markerPath = join(root, 'vite-config-evaluated.marker');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>\n',
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+      writeFileSync(
+        join(root, 'vite.config.mjs'),
+        `import { writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(markerPath)}, 'evaluated', 'utf8');
+throw new Error('undeclared authored Vite config evaluated');
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `import { createApp, publicAccess, route } from '@kovojs/server';
+export default createApp({
+  routes: [route('/', {
+    access: publicAccess('C74 undeclared Vite config regression'),
+    page: () => 'C74-safe-document',
+  })],
+});
+`,
+        'utf8',
+      );
+
+      const buildOut = join(root, 'build-dist');
+      const built = runKovoCli(root, ['build', appPath, '--out', buildOut, '--check']);
+      expect(built.status, built.stderr).toBe(0);
+      expect(built.stdout).toContain('CHECK ok preset=node');
+      expect(readFileIfPresent(markerPath)).toBeUndefined();
+
+      const exportOut = join(root, 'export-dist');
+      const exported = runKovoCli(root, ['export', appPath, '--out', exportOut]);
+      expect(exported.status, exported.stderr).toBe(0);
+      expect(readFileSync(join(exportOut, 'index.html'), 'utf8')).toContain('C74-safe-document');
+      expect(readFileIfPresent(markerPath)).toBeUndefined();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
 });
 
 function cliFixtureRoot(name: string): string {

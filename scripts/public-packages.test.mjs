@@ -77,6 +77,7 @@ describe('public-packages manifest', () => {
       './graph',
       './internal',
       './internal/graph',
+      './internal/security-bootstrap',
       './package-styles',
       './vite',
     ]);

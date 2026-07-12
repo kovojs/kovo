@@ -1834,6 +1834,7 @@
           "./internal/runtime-registry-wire",
           "./internal/route",
           "./internal/static-export",
+          "./internal/vite-security-profile",
           "./internal/wire"
         ]
       },
