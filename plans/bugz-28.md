@@ -789,12 +789,14 @@ This is an active closure ledger; `SPEC.md` remains normative.
     full public `createRequestHandler` proof, a custom verifier accepted only `signed-safe` while the
     submitted body was `dangerous`; late and pre-import reader substitutions supplied `signed-safe`
     only to auth, after which the handler read and executed `dangerous` and returned 200 instead of
-    the control 401.
+    the control 401. Separately, selective live `Headers.prototype.get` substitution made endpoint
+    and webhook verifiers see `accepted` while their handlers received the actual `attacker` header;
+    both public request-handler paths changed from the control 401 to 200 and executed.
   - **Acceptance:** ingress method/URL/headers/body, size limiting, executable verifier input,
     CSRF/schema parsing, and handler reconstruction consume one framework-owned immutable request
     snapshot through boot-pinned semantically checked readers; no late/import-order mutation or
     clone/body-use ordering can make auth approve different bytes from those dispatched, across
-    custom and HMAC verifier paths.
+    custom and HMAC verifier paths, including endpoint and webhook header authentication.
 
 - [ ] **C68 - Mutable managed-DB allowlists admit undeclared writes and confidential reads.**
       `packages/server/src/managed-db.ts`
