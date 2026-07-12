@@ -38,6 +38,40 @@ export const C = component({
     expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV426')).toHaveLength(1);
   });
 
+  it('does not suppress trustedHtml identity through render-parameter Array.find', () => {
+    const source = `
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  render: ({}, _state, { request: input }) => <div>{trustedHtml(input.body)}</div>,
+});
+`;
+    const nativeFind = Array.prototype.find;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.find = function poisonedRenderParameterFind<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T | undefined {
+        if (
+          this.length === 3 &&
+          typeof (this[0] as { name?: unknown } | undefined)?.name === 'object' &&
+          typeof (this[2] as { name?: unknown } | undefined)?.name === 'object'
+        ) {
+          poisonHits += 1;
+          return this[0];
+        }
+        return nativeApply(nativeFind, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({ fileName: 'identity-probe.tsx', source });
+    } finally {
+      Array.prototype.find = nativeFind;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV426')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not suppress secret query-wire diagnostics through query-name Array.flatMap', () => {
     const nativeFlatMap = Array.prototype.flatMap;
     const nativeApply = Reflect.apply;

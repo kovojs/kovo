@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalFrameworkExportForExpression,
   expressionAtSpan,
+  frameworkCatalogExportForSourcePath,
   frameworkExport,
   frameworkIdentityExpressionKindRows,
   registerFrameworkIdentityProject,
@@ -99,6 +100,60 @@ function expectedExpressionSyntaxKinds(): readonly ts.SyntaxKind[] {
 }
 
 describe('framework identity resolver', () => {
+  it('does not let late scalar traversal erase a framework source-path identity', () => {
+    const originalReplaceAll = String.prototype.replaceAll;
+    const originalIncludes = String.prototype.includes;
+    const originalSlice = String.prototype.slice;
+    const originalSplit = String.prototype.split;
+    const originalReplace = String.prototype.replace;
+    const originalArrayIncludes = Array.prototype.includes;
+    const originalStringValueOf = String.prototype.valueOf;
+    let poisonHits = 0;
+    let identity: ReturnType<typeof frameworkCatalogExportForSourcePath>;
+
+    try {
+      String.prototype.replaceAll = function eraseSourcePath() {
+        poisonHits += 1;
+        return '';
+      };
+      String.prototype.includes = function eraseCatalogMatch() {
+        poisonHits += 1;
+        return false;
+      };
+      String.prototype.slice = function erasePackageName() {
+        poisonHits += 1;
+        return '';
+      };
+      String.prototype.split = function eraseSourceSegments() {
+        poisonHits += 1;
+        return [];
+      };
+      String.prototype.replace = function eraseSourceExtension() {
+        poisonHits += 1;
+        return Reflect.apply(originalStringValueOf, this, []);
+      };
+      Array.prototype.includes = function eraseSourceAllowlist() {
+        poisonHits += 1;
+        return false;
+      };
+
+      identity = frameworkCatalogExportForSourcePath(
+        '/repo/packages/server/src/api/data.ts',
+        'query',
+      );
+    } finally {
+      String.prototype.replaceAll = originalReplaceAll;
+      String.prototype.includes = originalIncludes;
+      String.prototype.slice = originalSlice;
+      String.prototype.split = originalSplit;
+      String.prototype.replace = originalReplace;
+      Array.prototype.includes = originalArrayIncludes;
+    }
+
+    expect(identity).toEqual({ exportName: 'query', module: '@kovojs/server' });
+    expect(poisonHits).toBe(0);
+  });
+
   it('publishes an expression-kind table with a fail-closed default', () => {
     const rows = frameworkIdentityExpressionKindRows(ts);
     const expressionRows = rows.filter((row) => row.kind !== 'default');

@@ -5,10 +5,15 @@ import {
   securityMapGet,
   securityMapHas,
   securityMapSet,
+  securityOwnArrayEntry,
   securitySet,
   securitySetAdd,
   securitySetHas,
   securitySetValues,
+  securityStringCharCodeAt,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapSet,
@@ -110,6 +115,16 @@ export interface FrameworkIdentityExpressionKindRow {
 
 const MAX_RESOLUTION_DEPTH = 12;
 
+function identityArrayEntry<Value>(values: readonly Value[], index: number, label: string): Value {
+  const entry = securityOwnArrayEntry(values, index);
+  if (!entry.ok) throw new TypeError(`${label}[${index}] must be a dense own data value.`);
+  return entry.value;
+}
+
+function appendIdentityValue<Value>(values: Value[], value: Value): void {
+  values[values.length] = value;
+}
+
 interface DeclarationIndexEntry {
   readonly declaration: TypeScript.Node;
   readonly start: number;
@@ -157,7 +172,14 @@ export function frameworkExportIn(
   identity: FrameworkExportIdentity | undefined,
   expected: readonly FrameworkExportIdentity[],
 ): boolean {
-  return expected.some((item) => frameworkExportEquals(identity, item));
+  for (let index = 0; index < expected.length; index += 1) {
+    if (
+      frameworkExportEquals(identity, identityArrayEntry(expected, index, 'Expected identities'))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** @internal */
@@ -243,13 +265,21 @@ export function frameworkExportForModuleSpecifier(
 export function frameworkIdentityExpressionKindRows(
   ts: FrameworkIdentityTypeScript,
 ): readonly FrameworkIdentityExpressionKindRow[] {
-  return [
-    ...frameworkIdentityExpressionSyntaxKinds(ts).map((kind) => ({
+  const rows: FrameworkIdentityExpressionKindRow[] = [];
+  const kinds = frameworkIdentityExpressionSyntaxKinds(ts);
+  for (let index = 0; index < kinds.length; index += 1) {
+    const kind = identityArrayEntry(kinds, index, 'Framework identity expression kinds');
+    appendIdentityValue(rows, {
       kind,
       ...frameworkIdentityExpressionKindDisposition(ts, kind),
-    })),
-    { kind: 'default', resolution: 'fail-closed', status: 'fails-closed' },
-  ];
+    });
+  }
+  appendIdentityValue(rows, {
+    kind: 'default',
+    resolution: 'fail-closed',
+    status: 'fails-closed',
+  });
+  return rows;
 }
 
 function frameworkIdentityExpressionSyntaxKinds(
@@ -314,7 +344,9 @@ function uniqueSyntaxKinds(
   kinds: readonly TypeScript.SyntaxKind[],
 ): readonly TypeScript.SyntaxKind[] {
   const uniqueKinds = securitySet<TypeScript.SyntaxKind>();
-  for (const kind of kinds) securitySetAdd(uniqueKinds, kind);
+  for (let index = 0; index < kinds.length; index += 1) {
+    securitySetAdd(uniqueKinds, identityArrayEntry(kinds, index, 'Framework syntax kinds'));
+  }
   return securitySetValues(uniqueKinds);
 }
 
@@ -325,14 +357,33 @@ export function registerFrameworkIdentityProject(
 ): void {
   if (files.length === 0) return;
   const project = securityMap<string, TypeScript.SourceFile>();
-  for (const name of sourceFileLookupNames(sourceFile.fileName)) {
-    securityMapSet(project, name, sourceFile);
+  const sourceNames = sourceFileLookupNames(sourceFile.fileName);
+  for (let index = 0; index < sourceNames.length; index += 1) {
+    securityMapSet(
+      project,
+      identityArrayEntry(sourceNames, index, 'Framework source lookup names'),
+      sourceFile,
+    );
   }
-  for (const file of files) {
-    for (const name of sourceFileLookupNames(file.fileName)) securityMapSet(project, name, file);
+  for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+    const file = identityArrayEntry(files, fileIndex, 'Framework identity project files');
+    const names = sourceFileLookupNames(file.fileName);
+    for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+      securityMapSet(
+        project,
+        identityArrayEntry(names, nameIndex, 'Framework project lookup names'),
+        file,
+      );
+    }
   }
   securityWeakMapSet(frameworkIdentityProjectCache, sourceFile, project);
-  for (const file of files) securityWeakMapSet(frameworkIdentityProjectCache, file, project);
+  for (let index = 0; index < files.length; index += 1) {
+    securityWeakMapSet(
+      frameworkIdentityProjectCache,
+      identityArrayEntry(files, index, 'Framework identity project files'),
+      project,
+    );
+  }
 }
 
 /** @internal Return the call expression whose span exactly matches a parser model span. */
@@ -588,8 +639,11 @@ function objectLiteralMemberIdentity(
   securitySetAdd(seen, key);
 
   for (let index = object.properties.length - 1; index >= 0; index -= 1) {
-    const property = object.properties[index];
-    if (property === undefined) continue;
+    const property = identityArrayEntry(
+      object.properties,
+      index,
+      'Framework identity object properties',
+    );
     if (ts.isPropertyAssignment(property)) {
       const propertyName = propertyNameText(ts, property.name);
       if (propertyName !== member) continue;
@@ -622,10 +676,9 @@ function arrayLiteralMemberIdentity(
   depth: number,
 ): FrameworkExportIdentity | undefined {
   if (depth > MAX_RESOLUTION_DEPTH) return undefined;
-  const index = Number(member);
-  if (!Number.isInteger(index) || index < 0) return undefined;
-  const element = array.elements[index];
-  if (element === undefined) return undefined;
+  const index = identityArrayIndex(member);
+  if (index === undefined || index >= array.elements.length) return undefined;
+  const element = identityArrayEntry(array.elements, index, 'Framework identity array elements');
   const key = `array:${array.getStart(sourceFile)}:${member}`;
   if (securitySetHas(seen, key)) return undefined;
   securitySetAdd(seen, key);
@@ -675,7 +728,12 @@ function functionReturnIdentity(
   if (!ts.isBlock(fn.body)) {
     return canonicalExpression(ts, sourceFile, fn.body, options, seen, depth + 1);
   }
-  for (const statement of fn.body.statements) {
+  for (let index = 0; index < fn.body.statements.length; index += 1) {
+    const statement = identityArrayEntry(
+      fn.body.statements,
+      index,
+      'Framework identity function statements',
+    );
     if (ts.isReturnStatement(statement) && statement.expression !== undefined) {
       return canonicalExpression(ts, sourceFile, statement.expression, options, seen, depth + 1);
     }
@@ -717,7 +775,12 @@ function newExpressionMemberIdentity(
   const key = `new-member:${classDeclaration.getStart(sourceFile)}:${member}`;
   if (securitySetHas(seen, key)) return undefined;
   securitySetAdd(seen, key);
-  for (const classMember of classDeclaration.members) {
+  for (let index = 0; index < classDeclaration.members.length; index += 1) {
+    const classMember = identityArrayEntry(
+      classDeclaration.members,
+      index,
+      'Framework identity class members',
+    );
     if (!ts.isPropertyDeclaration(classMember) || classMember.initializer === undefined) continue;
     if (propertyNameText(ts, classMember.name) !== member) continue;
     return canonicalExpression(ts, sourceFile, classMember.initializer, options, seen, depth + 1);
@@ -778,7 +841,15 @@ function parameterDeclarationInScope(
 ): TypeScript.ParameterDeclaration | undefined {
   if (!isFunctionLikeWithParameters(ts, scope)) return undefined;
   if (scope.getStart(scope.getSourceFile()) >= position) return undefined;
-  return scope.parameters.find((parameter) => bindingNameBinds(ts, parameter.name, name));
+  for (let index = 0; index < scope.parameters.length; index += 1) {
+    const parameter = identityArrayEntry(
+      scope.parameters,
+      index,
+      'Framework identity function parameters',
+    );
+    if (bindingNameBinds(ts, parameter.name, name)) return parameter;
+  }
+  return undefined;
 }
 
 function declarationInContainerBefore(
@@ -795,7 +866,8 @@ function declarationInContainerBefore(
   if (!declarations) return undefined;
 
   let found: TypeScript.Node | undefined;
-  for (const entry of declarations) {
+  for (let index = 0; index < declarations.length; index += 1) {
+    const entry = identityArrayEntry(declarations, index, 'Framework identity declaration entries');
     if (entry.start >= position) break;
     found = entry.declaration;
   }
@@ -820,7 +892,7 @@ function declarationIndexForContainer(
   const add = (name: string, declaration: TypeScript.Node): void => {
     const bucket = securityMapGet(index, name);
     const entry = { declaration, start: declaration.getStart(sourceFile) };
-    if (bucket) bucket.push(entry);
+    if (bucket) bucket[bucket.length] = entry;
     else securityMapSet(index, name, [entry]);
   };
 
@@ -895,8 +967,12 @@ function expressionSpanIndex(
 
   const index = securityMap<string, TypeScript.Expression>();
   const expressionKinds = securitySet<TypeScript.SyntaxKind>();
-  for (const kind of frameworkIdentityExpressionSyntaxKinds(ts)) {
-    securitySetAdd(expressionKinds, kind);
+  const kinds = frameworkIdentityExpressionSyntaxKinds(ts);
+  for (let index = 0; index < kinds.length; index += 1) {
+    securitySetAdd(
+      expressionKinds,
+      identityArrayEntry(kinds, index, 'Framework identity expression kinds'),
+    );
   }
   const visit = (node: TypeScript.Node): void => {
     if (isFrameworkIdentityExpressionNode(node, expressionKinds)) {
@@ -956,7 +1032,12 @@ function addImportDeclarationBindings(
     return;
   }
   if (!ts.isNamedImports(bindings)) return;
-  for (const element of bindings.elements) {
+  for (let index = 0; index < bindings.elements.length; index += 1) {
+    const element = identityArrayEntry(
+      bindings.elements,
+      index,
+      'Framework identity import bindings',
+    );
     add(element.name.text, element);
   }
 }
@@ -966,7 +1047,12 @@ function addObjectBindingElements(
   pattern: TypeScript.ObjectBindingPattern,
   add: (name: string, declaration: TypeScript.Node) => void,
 ): void {
-  for (const element of pattern.elements) {
+  for (let index = 0; index < pattern.elements.length; index += 1) {
+    const element = identityArrayEntry(
+      pattern.elements,
+      index,
+      'Framework identity binding elements',
+    );
     if (ts.isIdentifier(element.name)) add(element.name.text, element);
   }
 }
@@ -978,7 +1064,14 @@ function bindingNameBinds(
 ): boolean {
   if (ts.isIdentifier(binding)) return binding.text === name;
   if (ts.isObjectBindingPattern(binding)) {
-    return binding.elements.some((element) => bindingNameBinds(ts, element.name, name));
+    for (let index = 0; index < binding.elements.length; index += 1) {
+      const element = identityArrayEntry(
+        binding.elements,
+        index,
+        'Framework identity nested bindings',
+      );
+      if (bindingNameBinds(ts, element.name, name)) return true;
+    }
   }
   return false;
 }
@@ -1032,12 +1125,22 @@ function exportedIdentity(
 ): FrameworkExportIdentity | undefined {
   if (depth > MAX_RESOLUTION_DEPTH) return undefined;
 
-  for (const statement of sourceFile.statements) {
+  for (let statementIndex = 0; statementIndex < sourceFile.statements.length; statementIndex += 1) {
+    const statement = identityArrayEntry(
+      sourceFile.statements,
+      statementIndex,
+      'Framework identity source statements',
+    );
     if (ts.isExportDeclaration(statement)) {
       const moduleSpecifier = statement.moduleSpecifier;
       const exportClause = statement.exportClause;
       if (exportClause && ts.isNamedExports(exportClause)) {
-        for (const element of exportClause.elements) {
+        for (let elementIndex = 0; elementIndex < exportClause.elements.length; elementIndex += 1) {
+          const element = identityArrayEntry(
+            exportClause.elements,
+            elementIndex,
+            'Framework identity export elements',
+          );
           if (element.name.text !== exportName) continue;
           const importedName = element.propertyName?.text ?? element.name.text;
           if (moduleSpecifier === undefined) {
@@ -1091,7 +1194,13 @@ function exportedIdentity(
     }
 
     if (ts.isVariableStatement(statement) && hasExportModifier(ts, statement)) {
-      for (const declaration of statement.declarationList.declarations) {
+      const declarations = statement.declarationList.declarations;
+      for (let index = 0; index < declarations.length; index += 1) {
+        const declaration = identityArrayEntry(
+          declarations,
+          index,
+          'Framework identity exported declarations',
+        );
         if (!ts.isIdentifier(declaration.name) || declaration.name.text !== exportName) continue;
         return declarationIdentity(ts, sourceFile, declaration, options, seen, depth + 1);
       }
@@ -1173,7 +1282,9 @@ function resolveProjectSourceFile(
   if (!project) return undefined;
   const baseDir = directoryName(importingSourceFile.fileName);
   const base = normalizePath(`${baseDir}${baseDir ? '/' : ''}${specifier}`);
-  for (const candidate of sourceFileLookupNames(base)) {
+  const candidates = sourceFileLookupNames(base);
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = identityArrayEntry(candidates, index, 'Framework identity source candidates');
     const file = securityMapGet(project, candidate);
     if (file) return file;
   }
@@ -1182,40 +1293,102 @@ function resolveProjectSourceFile(
 
 function hasExportModifier(ts: FrameworkIdentityTypeScript, node: TypeScript.Node): boolean {
   const modifiers = (node as { readonly modifiers?: readonly TypeScript.Modifier[] }).modifiers;
-  return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+  if (modifiers === undefined) return false;
+  for (let index = 0; index < modifiers.length; index += 1) {
+    if (
+      identityArrayEntry(modifiers, index, 'Framework identity export modifiers').kind ===
+      ts.SyntaxKind.ExportKeyword
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isRelativeSpecifier(specifier: string): boolean {
-  return specifier.startsWith('./') || specifier.startsWith('../');
+  return securityStringStartsWith(specifier, './') || securityStringStartsWith(specifier, '../');
 }
 
 function sourceFileLookupNames(fileName: string): readonly string[] {
   const normalized = normalizePath(fileName);
-  const withoutExtension = normalized.replace(/\.(?:[cm]?[jt]sx?|d\.ts)$/u, '');
+  const withoutExtension = sourcePathWithoutExtension(normalized);
   return normalized === withoutExtension ? [normalized] : [normalized, withoutExtension];
+}
+
+function sourcePathWithoutExtension(value: string): string {
+  const extensions = ['.d.ts', '.tsx', '.jsx', '.mts', '.cts', '.mjs', '.cjs', '.ts', '.js'];
+  for (let index = 0; index < extensions.length; index += 1) {
+    const extension = identityArrayEntry(extensions, index, 'Framework identity source extensions');
+    if (securityStringSlice(value, -extension.length) === extension) {
+      return securityStringSlice(value, 0, value.length - extension.length);
+    }
+  }
+  return value;
 }
 
 function directoryName(fileName: string): string {
   const normalized = normalizePath(fileName);
-  const index = normalized.lastIndexOf('/');
-  return index === -1 ? '' : normalized.slice(0, index);
+  for (let index = normalized.length - 1; index >= 0; index -= 1) {
+    if (securityStringCharCodeAt(normalized, index) === 0x2f) {
+      return securityStringSlice(normalized, 0, index);
+    }
+  }
+  return '';
 }
 
 function normalizePath(path: string): string {
   const parts: string[] = [];
-  for (const part of path.replace(/\\/gu, '/').split('/')) {
-    if (part === '' || part === '.') continue;
-    if (part === '..') parts.pop();
-    else parts.push(part);
+  let slashNormalized = '';
+  for (let index = 0; index < path.length; index += 1) {
+    const code = securityStringCharCodeAt(path, index);
+    slashNormalized += code === 0x5c ? '/' : securityStringSlice(path, index, index + 1);
   }
-  return parts.join('/');
+  const sourceParts = securityStringSplit(slashNormalized, '/');
+  for (let index = 0; index < sourceParts.length; index += 1) {
+    const part = identityArrayEntry(sourceParts, index, 'Framework identity path segments');
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      if (parts.length > 0) parts.length -= 1;
+    } else {
+      parts[parts.length] = part;
+    }
+  }
+  return joinIdentityStrings(parts, '/');
+}
+
+function joinIdentityStrings(values: readonly string[], separator: string): string {
+  let result = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) result += separator;
+    result += identityArrayEntry(values, index, 'Framework identity strings');
+  }
+  return result;
+}
+
+function identityArrayIndex(value: string): number | undefined {
+  if (value.length === 0) return undefined;
+  let result = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code < 0x30 || code > 0x39) return undefined;
+    const digit = code - 0x30;
+    if (result > (9_007_199_254_740_991 - digit) / 10) return undefined;
+    result = result * 10 + digit;
+  }
+  return result;
 }
 
 function legacyGlobalIdentity(
   name: string,
   options: FrameworkIdentityOptions,
 ): FrameworkExportIdentity | undefined {
-  return options.legacyGlobals?.find((identity) => identity.exportName === name);
+  const globals = options.legacyGlobals;
+  if (globals === undefined) return undefined;
+  for (let index = 0; index < globals.length; index += 1) {
+    const identity = identityArrayEntry(globals, index, 'Framework legacy identities');
+    if (identity.exportName === name) return identity;
+  }
+  return undefined;
 }
 
 function propertyNameText(

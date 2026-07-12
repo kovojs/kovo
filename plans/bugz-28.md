@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   158 | C1-C158 |
+| Critical |   167 | C1-C167 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -1929,7 +1929,7 @@ build:dist` passes.
     verification authority before execution using own-data traversal; later mutation or prototype
     substitution cannot widen coverage.
 
-- [ ] **C151 - Mutable BroadcastChannel dispatch strips a private wire's principal stamp.**
+- [x] **C151 - Mutable BroadcastChannel dispatch strips a private wire's principal stamp.**
       `packages/browser/src/broadcast.ts`, generated inline loader
   - A late `BroadcastChannel.prototype.postMessage` wrapper preserved session A's private body but
     deleted only its principal. An anonymous sibling then accepted and applied the genuine structured
@@ -1937,6 +1937,8 @@ build:dist` passes.
   - **Acceptance:** publishers use a boot-pinned witnessed channel constructor and postMessage over
     one immutable exact envelope. Late prototype replacement cannot remove or rewrite principal,
     build, query, fragment, or body truth before transport.
+  - **Evidence:** exact modular/generated late and pre-init dispatch substitutions reject 6/6 across
+    Chromium, Firefox, and WebKit; full browser and browser-package matrices pass 426/426 and 750/750.
 
 - [ ] **C152 - A mutable Response constructor converts verifier failure into HTTP success.**
       `packages/test/src/integration/fixture-instance.ts`
@@ -2002,6 +2004,82 @@ build:dist` passes.
     successfully because `loadHarnessPage()` executed it outside `verifier.capture`.
   - **Acceptance:** every page thunk executes inside verifier capture against an immutable declared
     read policy (empty when none is declared); no page representation can perform an unobserved read.
+
+- [x] **C159 - Residual server Proxy construction removes request security membranes.**
+      `packages/server/src/{untrusted-request-body,request-input-provenance,request-carrier,app-load-shed,secret-read-boundary,webhook}.ts`
+  - Six production paths still constructed live global `Proxy` values after application code could
+    replace the constructor, allowing FormData tags, mass-assignment provenance, request body caps,
+    secret boxing, or transaction scope to be removed with the raw target returned instead.
+  - **Acceptance:** every remaining request/database security membrane uses the shared boot-captured,
+    witnessed Proxy constructor and pinned traps; no production `new Proxy(...)` remains.
+  - **Evidence:** exact late Proxy regressions retain all six membranes in an 82-test focused matrix;
+    FormData stays tagged, writes tracked, body caps enforced, secrets boxed, and webhook scope denied.
+
+- [ ] **C160 - Mutable request URL rewrites post-dispatch verifier authority.**
+      `packages/test/src/integration/fixture-instance.ts`
+  - A query for `/_q/cart` made an undeclared products read, then shadowed `request.url` to
+    `/_q/products`; post-dispatch verification re-read the forged URL and accepted the broader policy.
+    Mutation touch-graph routing has the same TOCTOU.
+  - **Acceptance:** verification snapshots and decodes the exact request route before dispatch with
+    pinned URL controls; query and mutation verification consume only that immutable route authority.
+
+- [x] **C161 - Mutable framework-identity lookup suppresses raw-trust provenance.**
+      `packages/core/src/internal/{framework-identity,framework-identity-catalog}.ts`
+  - A selective late `Array.prototype.find` made the resolver treat an unrelated render parameter as
+    the imported `trustedHtml` declaration. The real request-derived raw-HTML call then emitted no
+    KV426. Adjacent live catalog/path operations could erase Drizzle/compiler identity facts.
+  - **Acceptance:** expression/declaration/import/export/project traversal, path normalization,
+    catalog construction/source lookup, set/map membership, and scalar parsing use captured security
+    controls over dense frozen facts; late collection/string mutation cannot lose or forge identity.
+  - **Evidence:** the exact render-parameter and catalog scalar substitutions receive zero calls;
+    the 120-test core/compiler/Drizzle identity matrix, all three dist/DTS builds, API, and classifier
+    routing/corpus gates pass.
+
+- [ ] **C162 - Mutable query-shape extraction downgrades secret wire facts.**
+      `packages/core/src/internal/query-shape-source.ts`
+  - Late `Array.prototype.map` either replaced an exact primary secret shape with a public string
+    shape during merge or omitted every source file during output-schema extraction. The real serial
+    build path then handed forged/missing KV435 authority to the compiler after app evaluation.
+  - **Acceptance:** source/project traversal, TS dispatch, object/schema extraction, fact merge,
+    dedupe/order, and every shape carrier use captured dense own-data controls; a changed or ambiguous
+    fact fails closed and the C13 secret/table-row corpus remains a superset.
+
+- [ ] **C163 - Integration route pages have no declared read policy.**
+      `packages/test/src/integration/fixture-instance.ts`
+  - A `/products` route read the products domain with no declaration and returned HTTP 200 because
+    non-query/non-mutation routes skipped read verification entirely.
+  - **Acceptance:** fixtures expose an explicit immutable page/route read-policy map with empty-deny
+    default; every route-page operation is captured and undeclared reads fail KV407.
+
+- [ ] **C164 - Mutable BroadcastChannel subscription bypasses receive principal checks.**
+      `packages/browser/src/broadcast.ts`, generated inline loader
+  - A late `BroadcastChannel.prototype.onmessage` setter wrapped the receiver and delivered a new
+    brand-valid event with session A's private body but no principal. Modular/generated anonymous UIs
+    applied it synchronously before the asynchronous controls witness; exploit reproduces 6/6.
+  - **Acceptance:** subscription uses only a captured witnessed setter/listener and cannot process any
+    event before controls readiness; late setter interposition cannot bypass the C137 snapshot floor.
+
+- [ ] **C165 - Integration route pages can write outside mutation authority.**
+      `packages/test/src/integration/fixture-instance.ts`
+  - A non-mutation page wrote the products domain under an empty touch graph and returned HTTP 200;
+    the newly explicit route read check still did not assert the no-write invariant from SPEC §11.2.
+  - **Acceptance:** every route/page request first asserts zero writes against immutable empty write
+    authority, then checks declared reads; page writes fail KV402 before response success.
+
+- [ ] **C166 - Read-only query and page harnesses ignore writes.**
+      `packages/test/src` harness and integration query paths
+  - Query loaders and object/thunk page renderers called only read-coverage checks; each could write a
+    mapped products domain and resolve successfully instead of KV402. Integration `/_q/` was symmetric.
+  - **Acceptance:** every read-only execution path asserts zero observed writes before read coverage;
+    query, object-page, thunk-page, route-page, and integration query paths share the invariant.
+
+- [ ] **C167 - Standalone mutation reads escape declared read coverage.**
+      `packages/test/src` mutation verifier
+  - `assertMutationReadsCovered()` considered only reads embedded inside write statements
+    (`mutationRead === true`). A standalone `request.db.read('products')` inside the same mutation
+    capture window bypassed an empty declared read policy and resolved successfully.
+  - **Acceptance:** every read observed during mutation capture is mutation-scoped and checked against
+    the immutable declared reads; `mutationRead` remains provenance metadata, never an inclusion gate.
 
 ## High
 

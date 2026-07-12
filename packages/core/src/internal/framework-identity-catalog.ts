@@ -1,9 +1,13 @@
 import {
+  freezeSecurityValue,
   securityMap,
   securityMapGet,
   securityMapSet,
+  securityOwnArrayEntry,
   securitySet,
   securitySetAdd,
+  securityStringCharCodeAt,
+  securityStringSlice,
 } from '#security-witness-intrinsics';
 
 /** @internal Canonical package identity used by compiler/static gates. */
@@ -149,10 +153,16 @@ function drizzleOrmSql(exportName: string): FrameworkIdentityCatalogEntry {
   };
 }
 
-/** @internal Shared manifest-backed export catalog for TS and ts-morph identity adapters. */
-export const frameworkIdentityCatalog = [
-  ...['domain', 'mutation', 'query', 'Reader', 's', 'tag', 'task', 'write'].map(serverData),
-  ...[
+const catalogEntries: FrameworkIdentityCatalogEntry[] = [];
+
+appendCatalogFactories(
+  catalogEntries,
+  ['domain', 'mutation', 'query', 'Reader', 's', 'tag', 'task', 'write'],
+  serverData,
+);
+appendCatalogFactories(
+  catalogEntries,
+  [
     'endpoint',
     'guard',
     'href',
@@ -166,40 +176,89 @@ export const frameworkIdentityCatalog = [
     'route',
     'verifiedAccess',
     'webhook',
-  ].map(serverRouting),
-  serverRendering('safeRichHtml'),
-  serverRendering('trustedHtml', '@kovojs/browser'),
-  serverRendering('trustedUrl', '@kovojs/browser'),
-  serverBrowserRenderingReExport('trustedHtml'),
-  serverBrowserRenderingReExport('trustedUrl'),
-  serverInternalRendering('renderedHtml'),
-  ...['trustedAssign', 'encryptAtRest', 'hashPassword', 'serverValue', 'stream'].map((exportName) =>
-    exportName === 'trustedAssign' || exportName === 'serverValue'
-      ? serverWriteGovernance(exportName)
-      : serverData(exportName),
-  ),
-  ...['component', 'declareOffWire', 'publishToClient', 'trustedReveal'].map(coreAuthoring),
-  serverRendering('safeRichHtml', '@kovojs/browser'),
-  ...['kovo', 'kovoAnalyzerSummary', 'sql', 'staticSql', 'trustedSql'].map(drizzleSql),
-  ...[
-    'avg',
-    'avgDistinct',
-    'count',
-    'countDistinct',
-    'max',
-    'min',
-    'sql',
-    'sum',
-    'sumDistinct',
-  ].map(drizzleOrmSql),
-] as const satisfies readonly FrameworkIdentityCatalogEntry[];
+  ],
+  serverRouting,
+);
+appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml'));
+appendCatalogEntry(catalogEntries, serverRendering('trustedHtml', '@kovojs/browser'));
+appendCatalogEntry(catalogEntries, serverRendering('trustedUrl', '@kovojs/browser'));
+appendCatalogEntry(catalogEntries, serverBrowserRenderingReExport('trustedHtml'));
+appendCatalogEntry(catalogEntries, serverBrowserRenderingReExport('trustedUrl'));
+appendCatalogEntry(catalogEntries, serverInternalRendering('renderedHtml'));
+appendCatalogEntry(catalogEntries, serverWriteGovernance('trustedAssign'));
+appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));
+appendCatalogEntry(catalogEntries, serverData('hashPassword'));
+appendCatalogEntry(catalogEntries, serverWriteGovernance('serverValue'));
+appendCatalogEntry(catalogEntries, serverData('stream'));
+appendCatalogFactories(
+  catalogEntries,
+  ['component', 'declareOffWire', 'publishToClient', 'trustedReveal'],
+  coreAuthoring,
+);
+appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml', '@kovojs/browser'));
+appendCatalogFactories(
+  catalogEntries,
+  ['kovo', 'kovoAnalyzerSummary', 'sql', 'staticSql', 'trustedSql'],
+  drizzleSql,
+);
+appendCatalogFactories(
+  catalogEntries,
+  ['avg', 'avgDistinct', 'count', 'countDistinct', 'max', 'min', 'sql', 'sum', 'sumDistinct'],
+  drizzleOrmSql,
+);
+
+/** @internal Shared manifest-backed export catalog for TS and ts-morph identity adapters. */
+export const frameworkIdentityCatalog: readonly FrameworkIdentityCatalogEntry[] =
+  freezeSecurityValue(catalogEntries);
+
+function appendCatalogFactories(
+  target: FrameworkIdentityCatalogEntry[],
+  exportNames: readonly string[],
+  factory: (exportName: string) => FrameworkIdentityCatalogEntry,
+): void {
+  for (let index = 0; index < exportNames.length; index += 1) {
+    const entry = securityOwnArrayEntry(exportNames, index);
+    if (!entry.ok) throw new TypeError(`Framework identity export names[${index}] must be dense.`);
+    appendCatalogEntry(target, factory(entry.value));
+  }
+}
+
+function appendCatalogEntry(
+  target: FrameworkIdentityCatalogEntry[],
+  entry: FrameworkIdentityCatalogEntry,
+): void {
+  target[target.length] = freezeSecurityValue({
+    exportName: entry.exportName,
+    module: entry.module,
+    ...(entry.packageSourceFiles === undefined
+      ? {}
+      : {
+          packageSourceFiles: freezeStringArray(entry.packageSourceFiles, 'package source files'),
+        }),
+    scopes: freezeStringArray(entry.scopes, 'scopes') as readonly FrameworkIdentityScope[],
+    specifiers: freezeStringArray(entry.specifiers, 'specifiers'),
+  });
+}
+
+function freezeStringArray(values: readonly string[], label: string): readonly string[] {
+  const snapshot: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) throw new TypeError(`Framework identity ${label}[${index}] must be dense.`);
+    snapshot[snapshot.length] = entry.value;
+  }
+  return freezeSecurityValue(snapshot);
+}
 
 const moduleSpecifierIndex = securityMap<string, Map<string, FrameworkExportIdentity>>();
 const moduleExportIndex = securityMap<FrameworkIdentityModule, Set<string>>();
 
 for (let index = 0; index < frameworkIdentityCatalog.length; index += 1) {
-  const entry = frameworkIdentityCatalog[index];
-  if (entry === undefined) continue;
+  const catalogEntry = securityOwnArrayEntry(frameworkIdentityCatalog, index);
+  if (!catalogEntry.ok) {
+    throw new TypeError(`Framework identity catalog[${index}] must be dense.`);
+  }
+  const entry = catalogEntry.value;
   let exports = securityMapGet(moduleExportIndex, entry.module);
   if (!exports) {
     exports = securitySet();
@@ -208,8 +267,11 @@ for (let index = 0; index < frameworkIdentityCatalog.length; index += 1) {
   securitySetAdd(exports, entry.exportName);
 
   for (let offset = 0; offset < entry.specifiers.length; offset += 1) {
-    const specifier = entry.specifiers[offset];
-    if (specifier === undefined) continue;
+    const specifierEntry = securityOwnArrayEntry(entry.specifiers, offset);
+    if (!specifierEntry.ok) {
+      throw new TypeError(`Framework identity specifiers[${offset}] must be dense.`);
+    }
+    const specifier = specifierEntry.value;
     let specifierExports = securityMapGet(moduleSpecifierIndex, specifier);
     if (!specifierExports) {
       specifierExports = securityMap();
@@ -244,22 +306,80 @@ export function frameworkCatalogExportForSourcePath(
   filePath: string,
   exportName: string,
 ): FrameworkExportIdentity | undefined {
-  const normalized = filePath.replaceAll('\\', '/');
-  for (const entry of frameworkIdentityCatalog) {
+  const normalized = normalizeCatalogPath(filePath);
+  for (let index = 0; index < frameworkIdentityCatalog.length; index += 1) {
+    const catalogEntry = securityOwnArrayEntry(frameworkIdentityCatalog, index);
+    if (!catalogEntry.ok) {
+      throw new TypeError(`Framework identity catalog[${index}] must be dense.`);
+    }
+    const entry = catalogEntry.value;
     if (entry.exportName !== exportName) continue;
     if (entry.module === 'drizzle-orm') {
-      if (normalized.includes('drizzle-orm')) return catalogIdentity(entry);
+      if (catalogStringIncludes(normalized, 'drizzle-orm')) return catalogIdentity(entry);
       continue;
     }
-    const packageName = entry.module.slice('@kovojs/'.length);
-    if (normalized.includes(`/@kovojs/${packageName}/`)) return catalogIdentity(entry);
+    const packageName = securityStringSlice(entry.module, '@kovojs/'.length);
+    if (catalogStringIncludes(normalized, `/@kovojs/${packageName}/`)) {
+      return catalogIdentity(entry);
+    }
     if (!entry.packageSourceFiles?.length) continue;
-    const relative = normalized.split(`/packages/${packageName}/src/`)[1];
+    const sourceMarker = `/packages/${packageName}/src/`;
+    const markerIndex = catalogStringIndexOf(normalized, sourceMarker);
+    const relative =
+      markerIndex < 0
+        ? undefined
+        : securityStringSlice(normalized, markerIndex + sourceMarker.length);
     if (!relative) continue;
-    const withoutExtension = relative.replace(/\.[cm]?[jt]sx?$/u, '');
-    if (entry.packageSourceFiles.includes(withoutExtension)) return catalogIdentity(entry);
+    const withoutExtension = catalogSourcePathWithoutExtension(relative);
+    if (catalogArrayIncludes(entry.packageSourceFiles, withoutExtension)) {
+      return catalogIdentity(entry);
+    }
   }
   return undefined;
+}
+
+function normalizeCatalogPath(value: string): string {
+  let normalized = '';
+  for (let index = 0; index < value.length; index += 1) {
+    normalized +=
+      securityStringCharCodeAt(value, index) === 0x5c
+        ? '/'
+        : securityStringSlice(value, index, index + 1);
+  }
+  return normalized;
+}
+
+function catalogStringIncludes(value: string, search: string): boolean {
+  return catalogStringIndexOf(value, search) >= 0;
+}
+
+function catalogStringIndexOf(value: string, search: string): number {
+  if (search.length === 0) return 0;
+  for (let index = 0; index + search.length <= value.length; index += 1) {
+    if (securityStringSlice(value, index, index + search.length) === search) return index;
+  }
+  return -1;
+}
+
+function catalogSourcePathWithoutExtension(value: string): string {
+  const extensions = ['.tsx', '.jsx', '.mts', '.cts', '.mjs', '.cjs', '.ts', '.js'];
+  for (let index = 0; index < extensions.length; index += 1) {
+    const entry = securityOwnArrayEntry(extensions, index);
+    if (!entry.ok) throw new TypeError(`Framework source extensions[${index}] must be dense.`);
+    if (securityStringSlice(value, -entry.value.length) === entry.value) {
+      return securityStringSlice(value, 0, value.length - entry.value.length);
+    }
+  }
+  return value;
+}
+
+function catalogArrayIncludes(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) throw new TypeError(`Framework source files[${index}] must be dense.`);
+    if (entry.value === expected) return true;
+  }
+  return false;
 }
 
 function catalogIdentity(entry: FrameworkExportIdentity): FrameworkExportIdentity {
