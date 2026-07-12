@@ -1,6 +1,8 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 
 import { createHash } from 'node:crypto';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { securityArrayIsArray, securityNumberIsInteger } from './response-security-intrinsics.ts';
 import {
@@ -29,7 +31,13 @@ import {
 const NativeResponse = globalThis.Response;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeCreateHash = createHash;
+const nativeFileURLToPath = fileURLToPath;
 const nativeFunctionToString = globalThis.Function.prototype.toString;
+const nativePathBasename = path.basename;
+const nativePathDirname = path.dirname;
+const nativePathResolve = path.resolve;
+const nativePosixExtname = path.posix.extname;
+const nativePosixDirname = path.posix.dirname;
 const nativeResponseText = stableOwnFunction(NativeResponse.prototype, 'text');
 const nativeResponseStatus = stableOwnGetter(NativeResponse.prototype, 'status');
 
@@ -86,9 +94,16 @@ function rawDigest(
 function capturedControlsAreSound(): boolean {
   try {
     const response = new NativeResponse('control', { status: 201 });
+    const pathControl = nativePathResolve('kovo-build-control', 'child.txt');
+    const fileUrlControl = nativeFileURLToPath('file:///tmp/kovo-build-control.txt');
     return (
       witnessReflectApply<number>(nativeResponseStatus, response, []) === 201 &&
       witnessReflectApply(nativeDecodeURIComponent, undefined, ['safe%2Fchild']) === 'safe/child' &&
+      nativePathBasename(pathControl) === 'child.txt' &&
+      nativePathBasename(nativePathDirname(pathControl)) === 'kovo-build-control' &&
+      nativePathBasename(fileUrlControl) === 'kovo-build-control.txt' &&
+      nativePosixExtname('/assets/app.css') === '.css' &&
+      nativePosixDirname('/assets/app.css') === '/assets' &&
       rawDigest('sha256', '', 'hex') ===
         'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' &&
       rawDigest('sha384', '', 'hex') ===
@@ -162,6 +177,36 @@ export function buildOwnDataProperty(
 export function buildSecurityDecodeURIComponent(value: string): string {
   assertBuildSecurityIntrinsics();
   return witnessReflectApply(nativeDecodeURIComponent, undefined, [value]);
+}
+
+export function buildSecurityFileUrlToPath(href: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativeFileURLToPath(href);
+}
+
+export function buildSecurityPathBasename(value: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativePathBasename(value);
+}
+
+export function buildSecurityPathDirname(value: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativePathDirname(value);
+}
+
+export function buildSecurityPathResolve(value: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativePathResolve(value);
+}
+
+export function buildSecurityPosixDirname(value: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativePosixDirname(value);
+}
+
+export function buildSecurityPosixExtname(value: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativePosixExtname(value);
 }
 
 export function buildSecurityResponseStatus(response: Response): number {

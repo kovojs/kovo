@@ -1,11 +1,21 @@
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import {
+  createFrameworkOutputFileSystemBoundary,
+  type FrameworkOutputFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 
 import type { KovoApp } from './app-types.js';
 import { isKovoApp } from './app-guards.js';
-import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
+import {
+  buildOwnDataProperty,
+  buildSecurityDecodeURIComponent,
+  buildSecurityFileUrlToPath,
+  buildSecurityPathBasename,
+  buildSecurityPathDirname,
+  buildSecurityPathResolve,
+  buildSecurityPosixDirname,
+  buildSecurityPosixExtname,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
@@ -22,9 +32,28 @@ import {
 } from './static-export-diagnostics.js';
 import {
   type StaticExportAssetInput,
+  type StaticExportAssetArtifact,
   type StaticExportOptions,
   type StaticExportResult,
 } from './static-export-types.js';
+import {
+  createSecuritySet,
+  securityArraySort,
+  securityDecodeUtf8Fatal,
+  securityIsUrl,
+  securityRegExpExec,
+  securityRegExpReplace,
+  securitySetAdd,
+  securitySetHas,
+  securityStringEndsWith,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
+  securityStringTrim,
+  securityUrlObjectSnapshot,
+  securityUrlSnapshot,
+} from './response-security-intrinsics.js';
+import { witnessSetForEach } from './security-witness-intrinsics.js';
 
 /**
  * Pre-render an app's static routes to files on disk for static hosting,
@@ -40,38 +69,56 @@ export async function exportStaticApp(
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
   assertStaticExportAppAggregate(app);
-  assertStaticExportCompileDiagnostics(
-    combinedStaticExportCompileDiagnostics(app.diagnostics, options.diagnostics ?? []),
-  );
   assertNoStaticExportHtmlPathStyleOption(options);
-  if (options.outDir !== undefined) staticExportOutputRoot(options.outDir);
+  const pinnedOptions = snapshotStaticExportOptions(options);
+  assertStaticExportCompileDiagnostics(
+    combinedStaticExportCompileDiagnostics(app.diagnostics, pinnedOptions.diagnostics ?? []),
+  );
+  if (pinnedOptions.outDir !== undefined) staticExportOutputRoot(pinnedOptions.outDir);
 
-  staticExportAssetArtifacts(options.assets ?? []);
+  // SPEC §6.6/§9.5: route replay executes authored code in this realm. Convert every configured
+  // asset to a framework-owned artifact, and prepare the public-root discovery authority, before
+  // any route can mutate its original option/asset carriers or ambient intrinsics.
+  const configuredAssets = staticExportAssetArtifacts(pinnedOptions.assets ?? []);
+  const publicAssetDiscovery =
+    pinnedOptions.publicAssetRoot === undefined
+      ? undefined
+      : await prepareDocumentPublicAssetDiscovery({
+          app,
+          base: pinnedOptions.publicAssetBase,
+          configuredAssets,
+          root: pinnedOptions.publicAssetRoot,
+        });
+
   const replay = await replayStaticExportApp({
     app,
-    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
-    ...(options.origin === undefined ? {} : { origin: options.origin }),
+    ...(pinnedOptions.onNonExportable === undefined
+      ? {}
+      : { onNonExportable: pinnedOptions.onNonExportable }),
+    ...(pinnedOptions.origin === undefined ? {} : { origin: pinnedOptions.origin }),
   });
-  const assetInputs = await staticExportAssetsWithDocumentPublicAssets(
-    app,
-    options,
-    replay.artifacts,
+  const publicAssetInputs =
+    publicAssetDiscovery === undefined
+      ? []
+      : await documentPublicAssetInputs(publicAssetDiscovery, replay.artifacts);
+  const assets = combineStaticExportAssets(
+    configuredAssets,
+    staticExportAssetArtifacts(publicAssetInputs),
   );
-  const assets = staticExportAssetArtifacts(assetInputs);
   const artifacts = await applyStaticExportSubresourceIntegrity({
     artifacts: replay.artifacts,
     assets,
     clientModules: replay.clientModules,
-    origin: options.origin ?? 'https://kovo.local',
+    origin: pinnedOptions.origin ?? 'https://kovo.local',
   });
   const outputPlan = createStaticExportOutputPlan({
     artifacts,
     assets,
     clientModules: replay.clientModules,
-    outDir: options.outDir ?? STATIC_EXPORT_DRY_RUN_ROOT,
+    outDir: pinnedOptions.outDir ?? STATIC_EXPORT_DRY_RUN_ROOT,
   });
 
-  if (options.outDir !== undefined) {
+  if (pinnedOptions.outDir !== undefined) {
     await writeStaticExportOutput(outputPlan);
   }
 
@@ -81,6 +128,45 @@ export async function exportStaticApp(
     clientModules: replay.clientModules,
     diagnostics: replay.diagnostics,
   };
+}
+
+function snapshotStaticExportOptions(options: StaticExportOptions): StaticExportOptions {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Kovo static-export options must be an own-data object.');
+  }
+
+  const snapshot: StaticExportOptions = {};
+  const assets = optionalStaticExportOption(options, 'assets');
+  const diagnostics = optionalStaticExportOption(options, 'diagnostics');
+  const onNonExportable = optionalStaticExportOption(options, 'onNonExportable');
+  const origin = optionalStaticExportOption(options, 'origin');
+  const outDir = optionalStaticExportOption(options, 'outDir');
+  const publicAssetBase = optionalStaticExportOption(options, 'publicAssetBase');
+  const publicAssetRoot = optionalStaticExportOption(options, 'publicAssetRoot');
+
+  if (assets !== undefined) snapshot.assets = assets as NonNullable<StaticExportOptions['assets']>;
+  if (diagnostics !== undefined) {
+    snapshot.diagnostics = diagnostics as NonNullable<StaticExportOptions['diagnostics']>;
+  }
+  if (onNonExportable !== undefined) {
+    snapshot.onNonExportable = onNonExportable as NonNullable<
+      StaticExportOptions['onNonExportable']
+    >;
+  }
+  if (origin !== undefined) snapshot.origin = origin as string;
+  if (outDir !== undefined) snapshot.outDir = outDir as string | URL;
+  if (publicAssetBase !== undefined) snapshot.publicAssetBase = publicAssetBase as string;
+  if (publicAssetRoot !== undefined) snapshot.publicAssetRoot = publicAssetRoot as string | URL;
+  return snapshot;
+}
+
+function optionalStaticExportOption(options: object, property: PropertyKey): unknown {
+  const field = buildOwnDataProperty(
+    options,
+    property,
+    `static-export options.${String(property)}`,
+  );
+  return field.present ? field.value : undefined;
 }
 
 function combinedStaticExportCompileDiagnostics(
@@ -99,75 +185,154 @@ function combinedStaticExportCompileDiagnostics(
   return combined;
 }
 
-async function staticExportAssetsWithDocumentPublicAssets(
-  app: KovoApp,
-  options: StaticExportOptions,
-  artifacts: StaticExportResult['artifacts'],
-): Promise<NonNullable<StaticExportOptions['assets']>> {
-  const configuredAssets = options.assets ?? [];
-  if (options.publicAssetRoot === undefined) return configuredAssets;
-
-  const publicAssets = await documentPublicAssetInputs({
-    app,
-    artifacts,
-    base: options.publicAssetBase,
-    configuredAssets,
-    root: options.publicAssetRoot,
-  });
-  if (publicAssets.length === 0) return configuredAssets;
-
-  return [...configuredAssets, ...publicAssets];
+interface DocumentPublicAssetDiscovery {
+  base: string;
+  buildOwnedStylesheetHrefSet: Set<string>;
+  configuredPaths: Set<string>;
+  fileSystem: FrameworkOutputFileSystemBoundary;
+  root: string;
+  stylesheetReferencedPaths: readonly string[];
 }
 
-async function documentPublicAssetInputs(options: {
+async function prepareDocumentPublicAssetDiscovery(options: {
   app: KovoApp;
-  artifacts: StaticExportResult['artifacts'];
   base: string | undefined;
-  configuredAssets: readonly NonNullable<StaticExportOptions['assets']>[number][];
+  configuredAssets: readonly StaticExportAssetArtifact[];
   root: string | URL;
-}): Promise<NonNullable<StaticExportOptions['assets']>> {
+}): Promise<DocumentPublicAssetDiscovery> {
   const root = staticExportPublicAssetRoot(options.root);
   const base = normalizedStaticExportPublicAssetBase(options.base);
   const buildOwnedStylesheetHrefSet = buildOwnedStylesheetHrefs(options.app, base);
-  const existingPaths = new Set(options.configuredAssets.map((asset) => asset.path));
-  const documentPaths = new Set(options.artifacts.map((artifact) => artifact.path));
+  const configuredAssets = snapshotBuildArray(
+    options.configuredAssets,
+    'configured static-export public-discovery assets',
+  );
+  const configuredPaths = createSecuritySet<string>();
+  for (let index = 0; index < configuredAssets.length; index += 1) {
+    securitySetAdd(
+      configuredPaths,
+      requiredBuildString(
+        configuredAssets[index]!,
+        'path',
+        `configured static-export public-discovery asset ${index}.path`,
+      ),
+    );
+  }
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+  return {
+    base,
+    buildOwnedStylesheetHrefSet,
+    configuredPaths,
+    fileSystem,
+    root: fileSystem.root,
+    stylesheetReferencedPaths: await stylesheetReferencedStaticAssetPaths(configuredAssets, base),
+  };
+}
+
+async function documentPublicAssetInputs(
+  discovery: DocumentPublicAssetDiscovery,
+  artifacts: StaticExportResult['artifacts'],
+): Promise<StaticExportAssetInput[]> {
+  const pinnedArtifacts = snapshotBuildArray(
+    artifacts,
+    'static-export public-discovery route artifacts',
+  );
+  const documentPaths = createSecuritySet<string>();
+  for (let index = 0; index < pinnedArtifacts.length; index += 1) {
+    securitySetAdd(
+      documentPaths,
+      requiredBuildString(
+        pinnedArtifacts[index]!,
+        'path',
+        `static-export public-discovery route artifact ${index}.path`,
+      ),
+    );
+  }
   const publicAssets: StaticExportAssetInput[] = [];
   const diagnostics: ReturnType<typeof staticExportDiagnostic>[] = [];
+  const referencedPaths = createSecuritySet<string>();
 
-  const referencedPaths = new Set([
-    ...documentReferencedStaticAssetPaths(options.artifacts, base),
-    ...(await stylesheetReferencedStaticAssetPaths(options.configuredAssets, base)),
-  ]);
+  const documentReferences = documentReferencedStaticAssetPaths(pinnedArtifacts, discovery.base);
+  for (let index = 0; index < documentReferences.length; index += 1) {
+    securitySetAdd(referencedPaths, documentReferences[index]!);
+  }
+  const stylesheetReferences = snapshotBuildArray(
+    discovery.stylesheetReferencedPaths,
+    'static-export public-discovery stylesheet references',
+  );
+  for (let index = 0; index < stylesheetReferences.length; index += 1) {
+    securitySetAdd(referencedPaths, stylesheetReferences[index]!);
+  }
 
-  for (const hrefPath of [...referencedPaths].sort()) {
-    if (existingPaths.has(hrefPath) || documentPaths.has(hrefPath)) continue;
-    if (hrefPath.startsWith('/c/')) continue;
-    if (buildOwnedStylesheetHrefSet.has(hrefPath)) continue;
+  const orderedReferences = sortedSecurityStringSet(referencedPaths);
+  for (let index = 0; index < orderedReferences.length; index += 1) {
+    const hrefPath = orderedReferences[index]!;
+    if (
+      securitySetHas(discovery.configuredPaths, hrefPath) ||
+      securitySetHas(documentPaths, hrefPath)
+    ) {
+      continue;
+    }
+    if (securityStringStartsWith(hrefPath, '/c/')) continue;
+    if (securitySetHas(discovery.buildOwnedStylesheetHrefSet, hrefPath)) continue;
 
-    const source = staticExportPublicAssetSource(root, base, hrefPath);
-    if ((await readableFileExists(source)) === false) {
-      diagnostics.push(
-        staticExportDiagnostic(
-          hrefPath,
-          `KV229 static export cannot copy referenced public asset '${hrefPath}' because source '${source}' was not found under public asset root '${root}'. SPEC §9.5 exports referenced static assets with route documents.`,
-        ),
+    const source = staticExportPublicAssetSource(discovery.fileSystem, discovery.base, hrefPath);
+    if ((await discovery.fileSystem.fileExists(source.relativePath)) === false) {
+      diagnostics[diagnostics.length] = staticExportDiagnostic(
+        hrefPath,
+        `KV229 static export cannot copy referenced public asset '${hrefPath}' because source '${source.source}' was not found under public asset root '${discovery.root}'. SPEC §9.5 exports referenced static assets with route documents.`,
       );
       continue;
     }
 
-    existingPaths.add(hrefPath);
-    publicAssets.push({ path: hrefPath, source });
+    securitySetAdd(discovery.configuredPaths, hrefPath);
+    publicAssets[publicAssets.length] = { path: hrefPath, source: source.source };
   }
 
   if (diagnostics.length > 0) throw new StaticExportError(diagnostics);
   return publicAssets;
 }
 
-function buildOwnedStylesheetHrefs(app: KovoApp, base: string): ReadonlySet<string> {
-  const hrefs = new Set<string>();
-  for (const stylesheet of app.stylesheets) addBuildOwnedStylesheetHref(hrefs, stylesheet, base);
-  for (const route of app.routes) {
-    for (const stylesheet of route.stylesheets ?? []) {
+function combineStaticExportAssets(
+  configuredAssets: readonly StaticExportAssetArtifact[],
+  publicAssets: readonly StaticExportAssetArtifact[],
+): StaticExportAssetArtifact[] {
+  const configured = snapshotBuildArray(configuredAssets, 'configured static-export assets');
+  const discovered = snapshotBuildArray(publicAssets, 'discovered static-export public assets');
+  const combined: StaticExportAssetArtifact[] = [];
+  for (let index = 0; index < configured.length; index += 1) {
+    combined[combined.length] = configured[index]!;
+  }
+  for (let index = 0; index < discovered.length; index += 1) {
+    combined[combined.length] = discovered[index]!;
+  }
+  return combined;
+}
+
+function buildOwnedStylesheetHrefs(app: KovoApp, base: string): Set<string> {
+  const hrefs = createSecuritySet<string>();
+  const appStylesheets = snapshotBuildArray(
+    app.stylesheets,
+    'static-export app-wide stylesheet declarations',
+  );
+  for (let index = 0; index < appStylesheets.length; index += 1) {
+    addBuildOwnedStylesheetHref(hrefs, appStylesheets[index]!, base);
+  }
+
+  const routes = snapshotBuildArray(app.routes, 'static-export stylesheet route declarations');
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const routeStylesheets = buildOwnDataProperty(
+      routes[routeIndex]!,
+      'stylesheets',
+      `static-export route ${routeIndex}.stylesheets`,
+    );
+    if (!routeStylesheets.present || routeStylesheets.value === undefined) continue;
+    const stylesheets = snapshotBuildArray(
+      routeStylesheets.value as readonly KovoApp['stylesheets'][number][],
+      `static-export route ${routeIndex} stylesheet declarations`,
+    );
+    for (let stylesheetIndex = 0; stylesheetIndex < stylesheets.length; stylesheetIndex += 1) {
+      const stylesheet = stylesheets[stylesheetIndex]!;
       addBuildOwnedStylesheetHref(hrefs, stylesheet, base);
     }
   }
@@ -181,9 +346,10 @@ function addBuildOwnedStylesheetHref(
 ): void {
   if (typeof stylesheet === 'string') return;
 
-  const hrefPath = staticExportPublicHrefPath(stylesheet.href, base, 'https://kovo.local/');
-  if (hrefPath !== undefined && path.posix.extname(hrefPath) === '.css') {
-    hrefs.add(hrefPath);
+  const href = requiredBuildString(stylesheet, 'href', 'build-owned stylesheet href');
+  const hrefPath = staticExportPublicHrefPath(href, base, 'https://kovo.local/');
+  if (hrefPath !== undefined && buildSecurityPosixExtname(hrefPath) === '.css') {
+    securitySetAdd(hrefs, hrefPath);
   }
 }
 
@@ -191,25 +357,47 @@ function documentReferencedStaticAssetPaths(
   artifacts: StaticExportResult['artifacts'],
   base: string,
 ): string[] {
-  const paths = new Set<string>();
-  for (const artifact of artifacts) {
-    for (const rawHref of htmlAttributeUrls(artifact.body)) {
+  const paths = createSecuritySet<string>();
+  const pinnedArtifacts = snapshotBuildArray(
+    artifacts,
+    'static-export public-discovery document artifacts',
+  );
+  for (let artifactIndex = 0; artifactIndex < pinnedArtifacts.length; artifactIndex += 1) {
+    const artifact = pinnedArtifacts[artifactIndex]!;
+    const body = requiredBuildString(
+      artifact,
+      'body',
+      `static-export public-discovery document artifact ${artifactIndex}.body`,
+    );
+    const rawHrefs = htmlAttributeUrls(body);
+    for (let hrefIndex = 0; hrefIndex < rawHrefs.length; hrefIndex += 1) {
+      const rawHref = rawHrefs[hrefIndex]!;
       const hrefPath = staticExportPublicHrefPath(rawHref, base, 'https://kovo.local/');
-      if (hrefPath !== undefined) paths.add(hrefPath);
+      if (hrefPath !== undefined) securitySetAdd(paths, hrefPath);
     }
   }
-  return [...paths].sort();
+  return sortedSecurityStringSet(paths);
 }
 
 async function stylesheetReferencedStaticAssetPaths(
-  configuredAssets: readonly NonNullable<StaticExportOptions['assets']>[number][],
+  configuredAssets: readonly StaticExportAssetArtifact[],
   base: string,
 ): Promise<string[]> {
-  const paths = new Set<string>();
-  for (const asset of configuredAssets) {
-    if (path.posix.extname(asset.path) !== '.css') continue;
-    const source = staticExportConfiguredAssetSource(asset.source);
-    if (source === undefined) continue;
+  const paths = createSecuritySet<string>();
+  const assets = snapshotBuildArray(configuredAssets, 'configured static-export stylesheet assets');
+  for (let assetIndex = 0; assetIndex < assets.length; assetIndex += 1) {
+    const asset = assets[assetIndex]!;
+    const assetPath = requiredBuildString(
+      asset,
+      'path',
+      `configured static-export stylesheet asset ${assetIndex}.path`,
+    );
+    if (buildSecurityPosixExtname(assetPath) !== '.css') continue;
+    const source = requiredBuildString(
+      asset,
+      'source',
+      `configured static-export stylesheet asset ${assetIndex}.source`,
+    );
 
     let css: string;
     try {
@@ -218,34 +406,59 @@ async function stylesheetReferencedStaticAssetPaths(
       continue;
     }
 
-    const assetDirectory = path.posix.dirname(asset.path).replace(/\/+$/, '') || '/';
+    const assetDirectory =
+      securityRegExpReplace(buildSecurityPosixDirname(assetPath), /\/+$/u, '') || '/';
     const cssUrlBase = `https://kovo.local${assetDirectory}/`;
-    for (const rawHref of cssUrlUrls(css)) {
+    const rawHrefs = cssUrlUrls(css);
+    for (let hrefIndex = 0; hrefIndex < rawHrefs.length; hrefIndex += 1) {
+      const rawHref = rawHrefs[hrefIndex]!;
       const hrefPath = staticExportPublicHrefPath(rawHref, base, cssUrlBase);
       if (hrefPath !== undefined && !isConfiguredAssetNamespaceHref(hrefPath, assetDirectory)) {
-        paths.add(hrefPath);
+        securitySetAdd(paths, hrefPath);
       }
     }
   }
-  return [...paths].sort();
+  return sortedSecurityStringSet(paths);
 }
 
 function isConfiguredAssetNamespaceHref(hrefPath: string, assetDirectory: string): boolean {
-  return assetDirectory !== '/' && hrefPath.startsWith(`${assetDirectory}/`);
+  return assetDirectory !== '/' && securityStringStartsWith(hrefPath, `${assetDirectory}/`);
+}
+
+function sortedSecurityStringSet(values: ReadonlySet<string>): string[] {
+  const result: string[] = [];
+  witnessSetForEach(values, (value) => {
+    result[result.length] = value;
+  });
+  securityArraySort(result, (left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  return result;
+}
+
+function requiredBuildString(value: object, property: PropertyKey, label: string): string {
+  const field = buildOwnDataProperty(value, property, label);
+  if (!field.present || typeof field.value !== 'string') {
+    throw new TypeError(`Kovo build security boundary expected ${label} to be a string.`);
+  }
+  return field.value;
 }
 
 function htmlAttributeUrls(html: string): string[] {
   const urls: string[] = [];
   const attrPattern = /\s(?:href|src|poster)=["']([^"']+)["']/gi;
-  for (const match of html.matchAll(attrPattern)) {
-    if (match[1] !== undefined) urls.push(match[1]);
+  let match: RegExpExecArray | null;
+  while ((match = securityRegExpExec(attrPattern, html)) !== null) {
+    if (match[1] !== undefined) urls[urls.length] = match[1];
   }
 
   const srcsetPattern = /\ssrcset=["']([^"']+)["']/gi;
-  for (const match of html.matchAll(srcsetPattern)) {
-    for (const candidate of (match[1] ?? '').split(',')) {
-      const url = candidate.trim().split(/\s+/, 1)[0];
-      if (url) urls.push(url);
+  while ((match = securityRegExpExec(srcsetPattern, html)) !== null) {
+    const candidates = securityStringSplit(match[1] ?? '', ',');
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = securityStringTrim(candidates[index]!);
+      const whitespace = securityRegExpExec(/\s/u, candidate);
+      const url =
+        whitespace === null ? candidate : securityStringSlice(candidate, 0, whitespace.index);
+      if (url !== '') urls[urls.length] = url;
     }
   }
   return urls;
@@ -254,9 +467,10 @@ function htmlAttributeUrls(html: string): string[] {
 function cssUrlUrls(css: string): string[] {
   const urls: string[] = [];
   const urlPattern = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^'")]*))\s*\)/gi;
-  for (const match of css.matchAll(urlPattern)) {
+  let match: RegExpExecArray | null;
+  while ((match = securityRegExpExec(urlPattern, css)) !== null) {
     const rawUrl = match[1] ?? match[2] ?? match[3];
-    if (rawUrl !== undefined) urls.push(rawUrl.trim());
+    if (rawUrl !== undefined) urls[urls.length] = securityStringTrim(rawUrl);
   }
   return urls;
 }
@@ -268,97 +482,95 @@ function staticExportPublicHrefPath(
 ): string | undefined {
   if (
     rawHref === '' ||
-    rawHref.startsWith('#') ||
-    rawHref.startsWith('data:') ||
-    rawHref.startsWith('javascript:') ||
-    rawHref.startsWith('mailto:') ||
-    rawHref.startsWith('tel:')
+    securityStringStartsWith(rawHref, '#') ||
+    securityStringStartsWith(rawHref, 'data:') ||
+    securityStringStartsWith(rawHref, 'javascript:') ||
+    securityStringStartsWith(rawHref, 'mailto:') ||
+    securityStringStartsWith(rawHref, 'tel:')
   ) {
     return undefined;
   }
 
-  let url: URL;
+  let url: ReturnType<typeof securityUrlSnapshot>;
   try {
-    url = new URL(rawHref, resolutionBase);
+    url = securityUrlSnapshot(rawHref, resolutionBase);
   } catch {
     return undefined;
   }
   if (url.origin !== 'https://kovo.local') return undefined;
-  if (!url.pathname.startsWith('/')) return undefined;
-  if (base !== '/' && url.pathname !== base.slice(0, -1) && !url.pathname.startsWith(base)) {
+  if (!securityStringStartsWith(url.pathname, '/')) return undefined;
+  if (
+    base !== '/' &&
+    url.pathname !== securityStringSlice(base, 0, -1) &&
+    !securityStringStartsWith(url.pathname, base)
+  ) {
     return undefined;
   }
-  if (url.pathname.endsWith('/')) return undefined;
-  if (path.posix.extname(url.pathname) === '') return undefined;
+  if (securityStringEndsWith(url.pathname, '/')) return undefined;
+  if (buildSecurityPosixExtname(url.pathname) === '') return undefined;
   return url.pathname;
 }
 
-function staticExportConfiguredAssetSource(source: string | URL): string | undefined {
-  if (source instanceof URL) {
-    if (source.protocol === 'file:') return fileURLToPath(source);
-    return undefined;
-  }
-  return source;
-}
-
-function staticExportPublicAssetSource(root: string, base: string, hrefPath: string): string {
+function staticExportPublicAssetSource(
+  fileSystem: FrameworkOutputFileSystemBoundary,
+  base: string,
+  hrefPath: string,
+): { relativePath: string; source: string } {
   const sourcePathname =
     base === '/'
       ? hrefPath
-      : hrefPath === base.slice(0, -1)
+      : hrefPath === securityStringSlice(base, 0, -1)
         ? '/'
-        : hrefPath.slice(base.length - 1);
+        : securityStringSlice(hrefPath, base.length - 1);
   let decodedPathname: string;
   try {
-    decodedPathname = decodeURIComponent(sourcePathname);
+    decodedPathname = buildSecurityDecodeURIComponent(sourcePathname);
   } catch {
     decodedPathname = sourcePathname;
   }
 
-  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
-  const source = fileSystem.confinedPath(`.${decodedPathname}`);
-  if (source !== undefined && source !== fileSystem.root) return source;
+  const relativePath = `.${decodedPathname}`;
+  const source = fileSystem.confinedPath(relativePath);
+  if (source !== undefined && source !== fileSystem.root) return { relativePath, source };
 
   throw new StaticExportError([
     staticExportDiagnostic(
       hrefPath,
-      `KV229 static export cannot copy referenced public asset '${hrefPath}' because it escapes public asset root '${root}'. SPEC §9.5 exports referenced static assets with route documents.`,
+      `KV229 static export cannot copy referenced public asset '${hrefPath}' because it escapes public asset root '${fileSystem.root}'. SPEC §9.5 exports referenced static assets with route documents.`,
     ),
   ]);
 }
 
 function normalizedStaticExportPublicAssetBase(base: string | undefined): string {
   if (base === undefined) return '/';
-  const normalized = `/${base.replace(/^\/+|\/+$/g, '')}/`;
+  const normalized = `/${securityRegExpReplace(base, /^\/+|\/+$/gu, '')}/`;
   return normalized === '//' ? '/' : normalized;
 }
 
 function staticExportPublicAssetRoot(root: string | URL): string {
-  if (root instanceof URL) {
-    if (root.protocol === 'file:') return path.resolve(fileURLToPath(root));
+  if (securityIsUrl(root)) {
+    const snapshot = securityUrlObjectSnapshot(root);
+    if (snapshot.protocol === 'file:') {
+      return buildSecurityPathResolve(buildSecurityFileUrlToPath(snapshot.href));
+    }
 
     throw new StaticExportError([
       staticExportDiagnostic(
         'publicAssetRoot',
-        `KV229 static export cannot copy public assets from '${root.href}'. Public asset roots must be filesystem paths or file: URLs.`,
+        `KV229 static export cannot copy public assets from '${snapshot.href}'. Public asset roots must be filesystem paths or file: URLs.`,
       ),
     ]);
   }
-  return path.resolve(root);
-}
-
-async function readableFileExists(source: string): Promise<boolean> {
-  const root = path.dirname(source);
-  return createFrameworkOutputFileSystemBoundary(root).fileExists(path.basename(source));
+  return buildSecurityPathResolve(root);
 }
 
 async function readFrameworkTextFile(source: string): Promise<string> {
-  const root = path.dirname(source);
+  const root = buildSecurityPathDirname(source);
   const bytes = await createFrameworkOutputFileSystemBoundary(root).fileBytes(
-    path.basename(source),
+    buildSecurityPathBasename(source),
   );
   if (bytes === undefined) throw new Error(`File '${source}' was not found.`);
-  return new TextDecoder().decode(bytes);
+  return securityDecodeUtf8Fatal(bytes);
 }
 
 function assertStaticExportAppAggregate(app: KovoApp): void {

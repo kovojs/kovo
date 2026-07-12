@@ -854,13 +854,23 @@ export interface SecurityUrlSnapshot {
 export function securityUrlSnapshot(value: string, base?: string): SecurityUrlSnapshot {
   assertResponseSecurityIntrinsics();
   const url = base === undefined ? new NativeURL(value) : new NativeURL(value, base);
+  return securityUrlObjectSnapshot(url);
+}
+
+export function securityIsUrl(value: unknown): value is URL {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeFunctionHasInstance, NativeURL, [value]);
+}
+
+export function securityUrlObjectSnapshot(value: URL): SecurityUrlSnapshot {
+  assertResponseSecurityIntrinsics();
   return {
-    hash: apply(nativeUrlHashGet, url, []),
-    href: apply(nativeUrlHrefGet, url, []),
-    origin: apply(nativeUrlOriginGet, url, []),
-    pathname: apply(nativeUrlPathnameGet, url, []),
-    protocol: apply(nativeUrlProtocolGet, url, []),
-    search: apply(nativeUrlSearchGet, url, []),
+    hash: apply(nativeUrlHashGet, value, []),
+    href: apply(nativeUrlHrefGet, value, []),
+    origin: apply(nativeUrlOriginGet, value, []),
+    pathname: apply(nativeUrlPathnameGet, value, []),
+    protocol: apply(nativeUrlProtocolGet, value, []),
+    search: apply(nativeUrlSearchGet, value, []),
   };
 }
 

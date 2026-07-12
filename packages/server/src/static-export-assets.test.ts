@@ -323,6 +323,51 @@ describe('server static export', () => {
     }
   });
 
+  it('does not let late array sorting publish an unreferenced public-root file', async () => {
+    // SPEC §6.6/§9.5 / C169: public-root discovery is publication authority, so it must consume
+    // the exact post-choke document references rather than a late-mutable collection traversal.
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-public-sort-'));
+    const publicRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-public-sort-'));
+    const originalSort = Array.prototype.sort;
+    let poisonHits = 0;
+
+    try {
+      await writeFile(path.join(publicRoot, 'mark.svg'), '<svg></svg>', 'utf8');
+      await writeFile(
+        path.join(publicRoot, 'server-secret.env'),
+        'DATABASE_PASSWORD=victim-only\n',
+        'utf8',
+      );
+      const app = createApp({
+        routes: [
+          route('/', {
+            page() {
+              Array.prototype.sort = function (compareFn) {
+                if (this.length === 1 && this[0] === '/mark.svg') {
+                  poisonHits += 1;
+                  return ['/server-secret.env'];
+                }
+                return Reflect.apply(originalSort, this, [compareFn]);
+              } as typeof Array.prototype.sort;
+              return trustedHtml('<main><img src="/mark.svg" alt=""></main>');
+            },
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, { outDir, publicAssetRoot: publicRoot });
+
+      expect(result.assets.map((asset) => asset.path)).toEqual(['/mark.svg']);
+      expect(poisonHits).toBe(0);
+      await expect(readFile(path.join(outDir, 'mark.svg'), 'utf8')).resolves.toBe('<svg></svg>');
+      await expect(readFile(path.join(outDir, 'server-secret.env'))).rejects.toThrow();
+    } finally {
+      Array.prototype.sort = originalSort;
+      await rm(outDir, { force: true, recursive: true });
+      await rm(publicRoot, { force: true, recursive: true });
+    }
+  });
+
   it('copies public assets referenced by exported CSS url(...) values', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     const publicRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-public-'));
