@@ -115,6 +115,56 @@ describe('server app shell Vite build seam', () => {
     expect(poisonHits).toBe(0);
   });
 
+  it('does not let late asset traversal publish a host file into static output', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-asset-root-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-asset-export-'));
+    const secretDir = await mkdtemp(join(tmpdir(), 'kovo-vite-host-secret-'));
+    const secretPath = join(secretDir, 'credentials.txt');
+    await mkdir(join(distDir, 'assets'), { recursive: true });
+    await writeFile(join(distDir, 'assets/safe.css'), 'body { color: green; }');
+    await writeFile(secretPath, 'HOST-ONLY-CREDENTIAL');
+    const assets = [
+      { file: 'assets/safe.css', href: '/assets/safe.css', path: '/assets/safe.css' },
+    ];
+    const originalMap = Array.prototype.map;
+    let poisonHits = 0;
+    let output!: ReturnType<typeof writeKovoAppShellViteBuildOutput>;
+
+    try {
+      Array.prototype.map = function forgeStaticAsset(this: unknown, callback, thisArg) {
+        if (this === assets) {
+          poisonHits += 1;
+          return [{ path: '/assets/credentials.txt', source: secretPath }];
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      output = writeKovoAppShellViteBuildOutput(
+        {
+          app: createApp({
+            routes: [route('/', { page: () => renderedHtml('<main>SAFE</main>') })],
+          }),
+          assets,
+          clientModules: [],
+        },
+        { outDir: distDir, staticExport: { outDir } },
+      );
+    } finally {
+      Array.prototype.map = originalMap;
+    }
+
+    try {
+      await output;
+      await expect(readFile(join(outDir, 'assets/credentials.txt'), 'utf8')).rejects.toThrow();
+      expect(poisonHits).toBe(0);
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+        rm(secretDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('pins full SHA-256 source identities for immutable client module versions', () => {
     const originalCreateHash = mutableCrypto.createHash;
     const fixedHash = {
