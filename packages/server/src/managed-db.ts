@@ -3213,37 +3213,53 @@ function readonlyCapabilityDb<Db extends object>(
   options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions },
   preserveInnerCapabilities = false,
 ): Reader<Db> {
-  // SPEC §11.2: integration fixtures use a repo-owned engine-readonly PGlite target so legacy
-  // fixture SQL can still exercise the real driver. The private managed-proxy witness plus the
-  // adapter hook are both required: ordinary app readers continue to reject callable query().
   const allowTestFixtureQuery =
     preserveInnerCapabilities && isFrameworkManagedTestFixtureSqlDispatchProxy(db);
   const proxy = witnessProxy(db, {
     get(target, prop, receiver) {
-      const reject = readonlyCapabilityError;
-      if (prop === 'then') return undefined;
-      if (typeof prop !== 'string') return witnessReflectGet(target, prop, receiver);
-      if (stringListHas(DENIED_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
-      if (!stringListHas(READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
-      if (prop === 'crossOwnerRead')
-        return readonlyCrossOwnerRead(target, receiver, options, preserveInnerCapabilities);
-      if (prop === 'rawRead')
-        return readonlyRawRead(target, receiver, options, preserveInnerCapabilities);
-      const value = witnessReflectGet(target, prop, receiver);
-      if (prop === 'query') {
-        if (typeof value !== 'function') return value;
-        return allowTestFixtureQuery
-          ? (...args: unknown[]) => witnessReflectApply(value, target, args)
-          : reject(prop);
-      }
-      if (!stringListHas(CALLABLE_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
-      return typeof value === 'function'
-        ? (...args: unknown[]) => witnessReflectApply(value, target, args)
-        : value;
+      return readonlyCapabilityValue(
+        target,
+        prop,
+        receiver,
+        options,
+        preserveInnerCapabilities,
+        allowTestFixtureQuery,
+      );
     },
   }) as Reader<Db>;
   witnessWeakSetAdd(frameworkReadonlyCapabilityHandles, proxy);
   return proxy;
+}
+
+function readonlyCapabilityValue(
+  target: object,
+  prop: PropertyKey,
+  receiver: unknown,
+  options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions },
+  preserveInnerCapabilities: boolean,
+  allowTestFixtureQuery: boolean,
+): unknown {
+  const reject = readonlyCapabilityError;
+  if (prop === 'then') return undefined;
+  if (typeof prop !== 'string') return witnessReflectGet(target, prop, receiver);
+  if (stringListHas(DENIED_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
+  if (!stringListHas(READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
+  if (prop === 'crossOwnerRead')
+    return readonlyCrossOwnerRead(target, receiver, options, preserveInnerCapabilities);
+  if (prop === 'rawRead')
+    return readonlyRawRead(target, receiver, options, preserveInnerCapabilities);
+  const value = witnessReflectGet(target, prop, receiver);
+  if (prop === 'query') {
+    if (typeof value !== 'function') return value;
+    // SPEC §11.2: only a repo-witnessed engine-readonly fixture retains legacy query().
+    return allowTestFixtureQuery
+      ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+      : reject(prop);
+  }
+  if (!stringListHas(CALLABLE_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
+  return typeof value === 'function'
+    ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+    : value;
 }
 
 function readonlyCapabilityError(prop: string): () => never {
