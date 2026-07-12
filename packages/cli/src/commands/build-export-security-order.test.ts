@@ -9,7 +9,11 @@ import {
   kovoServerHandlerEntrySource,
   serializeBuildRuntimeRegistryWireModule,
 } from './build-export.js';
-import { buildPromiseAll, buildStringSplit } from './build-security-intrinsics.js';
+import {
+  buildPromiseAll,
+  buildSnapshotDenseArray,
+  buildStringSplit,
+} from './build-security-intrinsics.js';
 
 describe('build/export security bootstrap ordering', () => {
   it('imports the server bootstrap owner before generated registry and app modules', () => {
@@ -25,6 +29,10 @@ describe('build/export security bootstrap ordering', () => {
     expect(serverImport).toBeGreaterThanOrEqual(0);
     expect(serverImport).toBeLessThan(registryImport);
     expect(registryImport).toBeLessThan(appImport);
+    expect(source).toContain('appendFrameworkRuntimeArrayValue');
+    expect(source).not.toContain('[result.length]');
+    expect(source).not.toContain('[hrefOrder.length]');
+    expect(source).not.toContain('[chunksByHref.length]');
     expect(source).not.toContain('.map(');
     expect(source).not.toContain('new Map(');
   });
@@ -72,6 +80,40 @@ describe('build/export security bootstrap ordering', () => {
       if (descriptor === undefined) Reflect.deleteProperty(String.prototype, Symbol.split);
       else Object.defineProperty(String.prototype, Symbol.split, descriptor);
     }
+  });
+
+  it('does not erase build snapshots through inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    const source = ['reviewed-build-fact'];
+    let poisonHits = 0;
+    let snapshot: string[] | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'reviewed-build-fact') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      snapshot = buildSnapshotDenseArray(source, 'Build setter proof');
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+    expect(snapshot).toEqual(['reviewed-build-fact']);
+    expect(poisonHits).toBe(0);
   });
 
   it('does not let late Promise/iterator controls replace build-join inputs', async () => {

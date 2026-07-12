@@ -25,6 +25,7 @@ const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectCreate = NativeObject.create;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
@@ -134,6 +135,36 @@ export function buildArrayLength(value: readonly unknown[], label: string): numb
   return before.value;
 }
 
+export function buildSecurityArrayAppend<Value>(
+  target: Value[],
+  value: Value,
+  label: string,
+): void {
+  const length = buildArrayLength(target, label);
+  if (length >= 1_000_000) {
+    throw new NativeTypeError(`${label} exceeds the build collection limit.`);
+  }
+  apply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    length,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = descriptor(target, length);
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    !apply(nativeObjectIs, NativeObject, [committed.value, value]) ||
+    buildArrayLength(target, label) !== length + 1
+  ) {
+    throw new NativeTypeError(`${label} own-data append failed.`);
+  }
+}
+
 export function buildOwnDataValue(source: unknown, key: PropertyKey, label: string): unknown {
   assertBuildSecurityIntrinsics();
   if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
@@ -160,7 +191,7 @@ export function buildSnapshotDenseArray<Value>(value: readonly Value[], label: s
     if (entry === undefined) {
       throw new NativeTypeError(`${label}[${index}] must be a dense own value.`);
     }
-    snapshot[snapshot.length] = entry as Value;
+    buildSecurityArrayAppend(snapshot, entry as Value, label);
   }
   return snapshot;
 }
@@ -245,10 +276,18 @@ export function buildStringSplit(value: string, separator: string): string[] {
   while (true) {
     const matchIndex = apply<number>(nativeStringIndexOf, value, [separator, sourceIndex]);
     if (matchIndex < 0) break;
-    result[result.length] = apply(nativeStringSlice, value, [sourceIndex, matchIndex]);
+    buildSecurityArrayAppend(
+      result,
+      apply(nativeStringSlice, value, [sourceIndex, matchIndex]),
+      'Kovo build split result',
+    );
     sourceIndex = matchIndex + separator.length;
   }
-  result[result.length] = apply(nativeStringSlice, value, [sourceIndex]);
+  buildSecurityArrayAppend(
+    result,
+    apply(nativeStringSlice, value, [sourceIndex]),
+    'Kovo build split result',
+  );
   return result;
 }
 
@@ -322,6 +361,9 @@ export function buildPromiseAll<Values extends readonly unknown[] | []>(
   const source = buildSnapshotDenseArray(values, 'Kovo build Promise inputs');
   return new NativePromise((resolvePromise, rejectPromise) => {
     const results: unknown[] = [];
+    for (let index = 0; index < source.length; index += 1) {
+      buildSecurityArrayAppend(results, undefined, 'Kovo build Promise results');
+    }
     let remaining = source.length;
     if (remaining === 0) {
       resolvePromise(results as { -readonly [Index in keyof Values]: Awaited<Values[Index]> });

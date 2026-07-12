@@ -24,6 +24,7 @@ import {
 } from '../commands-manifest.js';
 import type { CliCommandResult } from '../shared.js';
 import {
+  buildSecurityArrayAppend,
   buildArrayIsArray,
   buildObjectKeys,
   buildOwnDataValue,
@@ -375,7 +376,11 @@ export function isolateAuthoredDevPluginOptions(options: readonly PluginOption[]
   for (let index = 0; index < source.length; index += 1) {
     const option = source[index]!;
     if (isDirectKovoPlugin(option)) continue;
-    result[result.length] = isolateAuthoredPluginOption(option);
+    buildSecurityArrayAppend(
+      result,
+      isolateAuthoredPluginOption(option),
+      'CLI packages/cli/src/commands/dev.ts collection',
+    );
   }
   return freezeFrameworkPlugin(result);
 }
@@ -448,9 +453,13 @@ function fixedDevPluginArray(
   const source = buildSnapshotDenseArray(authoredPlugins, 'Isolated authored Vite plugins');
   const result: PluginOption[] = [prePlugin, kovoPlugin];
   for (let index = 0; index < source.length; index += 1) {
-    result[result.length] = source[index]!;
+    buildSecurityArrayAppend(
+      result,
+      source[index]!,
+      'CLI packages/cli/src/commands/dev.ts collection',
+    );
   }
-  result[result.length] = postPlugin;
+  buildSecurityArrayAppend(result, postPlugin, 'CLI packages/cli/src/commands/dev.ts collection');
   return freezeFrameworkPlugin(result);
 }
 
@@ -465,7 +474,11 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
     const source = buildSnapshotDenseArray(option, 'Nested authored Vite plugin options');
     const nested: PluginOption[] = [];
     for (let index = 0; index < source.length; index += 1) {
-      nested[nested.length] = isolateAuthoredPluginOption(source[index]!);
+      buildSecurityArrayAppend(
+        nested,
+        isolateAuthoredPluginOption(source[index]!),
+        'CLI packages/cli/src/commands/dev.ts collection',
+      );
     }
     return freezeFrameworkPlugin(nested);
   }
@@ -664,7 +677,11 @@ function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): {
           if (candidate === kovoPlugin || candidate === prePlugin || candidate === postPlugin) {
             continue;
           }
-          isolated[isolated.length] = isolateAuthoredPluginOption(candidate);
+          buildSecurityArrayAppend(
+            isolated,
+            isolateAuthoredPluginOption(candidate),
+            'CLI packages/cli/src/commands/dev.ts collection',
+          );
         }
         config.plugins = fixedDevPluginArray(prePlugin, kovoPlugin, isolated, postPlugin);
       },

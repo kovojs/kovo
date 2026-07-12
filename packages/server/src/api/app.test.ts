@@ -936,6 +936,7 @@ describe('server app-shell public API barrels', () => {
       // internal execution subpath (SPEC §6.6/§10.2); keep the barrel census explicit.
       'accessDecisionFor',
       'accessFactsFromApp',
+      'appendFrameworkRuntimeArrayValue',
       'createFrameworkManagedSqlDispatchProxy',
       'createMemoryMutationReplayStore',
       'endpointMatches',

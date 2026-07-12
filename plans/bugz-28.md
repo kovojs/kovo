@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   254 | C1-C254 |
+| Critical |   255 | C1-C255 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2970,6 +2970,16 @@ build:dist` passes.
     non-test package census has no numeric length assignment.
   - **Evidence:** the exact cookie-split setter receives zero commits and preserves both cookie
     values; all 109 Better Auth tests and dist/DTS builds pass.
+
+- [x] **C255 - CLI build facts and emitted server handlers remain cross-bindable by array setters.**
+      `packages/cli/src/commands`, `packages/server/src/internal/execution.ts`
+  - Build/export parsing, app/registry snapshots, promise aggregation, and generated handler route,
+    stylesheet, and critical-CSS collections still used ordinary indexed writes. Selective setters
+    could erase reviewed graph facts before emission or cross-bind runtime assets after generation.
+  - **Acceptance:** CLI-owned arrays and emitted handlers route commits through boot-pinned own-data
+    primitives; generated code imports only the narrow internal append capability.
+  - **Evidence:** the exact build-snapshot setter receives zero commits, generated-source assertions
+    reject direct appends, all 18 focused build/MCP tests pass, and CLI dist/DTS builds are green.
 
 ## High
 

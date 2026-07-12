@@ -78,6 +78,7 @@ import {
 } from '../shared.js';
 import { findNearestFile, readJsonRecord } from '../tooling.js';
 import {
+  buildSecurityArrayAppend,
   buildArrayIsArray,
   buildArrayJoin,
   buildCreateNullRecord,
@@ -155,7 +156,11 @@ function buildMapDense<Value, Result>(
   const source = buildSnapshotDenseArray(values, label);
   const result: Result[] = [];
   for (let index = 0; index < source.length; index += 1) {
-    result[result.length] = map(source[index]!, index);
+    buildSecurityArrayAppend(
+      result,
+      map(source[index]!, index),
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   return result;
 }
@@ -170,7 +175,11 @@ function buildFlatMapDense<Value, Result>(
   for (let index = 0; index < source.length; index += 1) {
     const mapped = buildSnapshotDenseArray(map(source[index]!, index), `${label} mapped result`);
     for (let mappedIndex = 0; mappedIndex < mapped.length; mappedIndex += 1) {
-      result[result.length] = mapped[mappedIndex]!;
+      buildSecurityArrayAppend(
+        result,
+        mapped[mappedIndex]!,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     }
   }
   return result;
@@ -194,7 +203,12 @@ function buildFilterDense<Value>(
   const source = buildSnapshotDenseArray(values, label);
   const result: Value[] = [];
   for (let index = 0; index < source.length; index += 1) {
-    if (keep(source[index]!, index)) result[result.length] = source[index]!;
+    if (keep(source[index]!, index))
+      buildSecurityArrayAppend(
+        result,
+        source[index]!,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
   }
   return result;
 }
@@ -246,7 +260,12 @@ function appendDense<Value>(
 ): Value[] {
   const result = buildSnapshotDenseArray(first, `${label} first values`);
   const tail = buildSnapshotDenseArray(second, `${label} second values`);
-  for (let index = 0; index < tail.length; index += 1) result[result.length] = tail[index]!;
+  for (let index = 0; index < tail.length; index += 1)
+    buildSecurityArrayAppend(
+      result,
+      tail[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   return result;
 }
 
@@ -256,7 +275,11 @@ function buildPathSegments(value: string): string[] {
   for (let index = 0; index < slashSegments.length; index += 1) {
     const segments = buildStringSplit(slashSegments[index]!, '\\');
     for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
-      result[result.length] = segments[segmentIndex]!;
+      buildSecurityArrayAppend(
+        result,
+        segments[segmentIndex]!,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     }
   }
   return result;
@@ -789,7 +812,11 @@ async function buildCheckGraph(
     'Existing static build diagnostics',
   );
   for (let index = 0; index < existingDiagnostics.length; index += 1) {
-    diagnostics[diagnostics.length] = existingDiagnostics[index]!;
+    buildSecurityArrayAppend(
+      diagnostics,
+      existingDiagnostics[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   const componentDiagnostics = buildPreflightComponentDiagnostics(staticArtifacts.components ?? []);
   const mappedComponentDiagnostics = buildMapDense(
@@ -798,7 +825,11 @@ async function buildCheckGraph(
     staticDiagnosticFact,
   );
   for (let index = 0; index < mappedComponentDiagnostics.length; index += 1) {
-    diagnostics[diagnostics.length] = mappedComponentDiagnostics[index]!;
+    buildSecurityArrayAppend(
+      diagnostics,
+      mappedComponentDiagnostics[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   const derivedDiagnostics = buildMapDense(
     result.diagnostics,
@@ -806,7 +837,11 @@ async function buildCheckGraph(
     staticDiagnosticFact,
   );
   for (let index = 0; index < derivedDiagnostics.length; index += 1) {
-    diagnostics[diagnostics.length] = derivedDiagnostics[index]!;
+    buildSecurityArrayAppend(
+      diagnostics,
+      derivedDiagnostics[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   if (diagnostics.length > 0) {
     return {
@@ -906,7 +941,11 @@ async function staticBuildCheckGraph(
   );
   const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', endpointCheckFact);
   for (let index = 0; index < routeOutcomeFacts.length; index += 1) {
-    endpoints[endpoints.length] = routeOutcomeFacts[index]!;
+    buildSecurityArrayAppend(
+      endpoints,
+      routeOutcomeFacts[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   const mutations = buildMapDense(app.mutations, 'Build app mutations', (mutation) =>
     mutationCheckFact(mutation, queryReadSets, options.execution),
@@ -981,7 +1020,12 @@ async function sessionAuthorityFactsFromEntry(
         break;
       }
     }
-    if (existingIndex < 0) reachable[reachable.length] = file;
+    if (existingIndex < 0)
+      buildSecurityArrayAppend(
+        reachable,
+        file,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     else reachable[existingIndex] = file;
   }
 
@@ -1003,7 +1047,11 @@ async function sessionAuthorityFactsFromEntry(
       `Session-authority facts for ${file.fileName}`,
     );
     for (let factIndex = 0; factIndex < facts.length; factIndex += 1) {
-      result[result.length] = facts[factIndex]!;
+      buildSecurityArrayAppend(
+        result,
+        facts[factIndex]!,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     }
   }
   return result;
@@ -1044,7 +1092,12 @@ function completeMutationSessionAuthorityFacts(
       ...fact,
       ...(handlerFingerprints.length === 0 ? {} : { handlerFingerprints }),
     };
-    if (factIndex < 0) facts[facts.length] = { fact: merged, key };
+    if (factIndex < 0)
+      buildSecurityArrayAppend(
+        facts,
+        { fact: merged, key },
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     else facts[factIndex] = { fact: merged, key };
   }
 
@@ -1084,14 +1137,20 @@ function completeMutationSessionAuthorityFacts(
       referencesSession: true,
       source: 'session-authority',
     };
-    if (exactIndex < 0) facts[facts.length] = { fact: ambientFact, key: exactKey };
+    if (exactIndex < 0)
+      buildSecurityArrayAppend(
+        facts,
+        { fact: ambientFact, key: exactKey },
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     else facts[exactIndex] = { fact: ambientFact, key: exactKey };
   }
 
   const result: CoreGraph.SessionAuthorityFact[] = [];
   for (let index = 0; index < facts.length; index += 1) {
     const fact = facts[index]!.fact;
-    let insertAt = result.length;
+    buildSecurityArrayAppend(result, fact, 'Sorted session-authority facts');
+    let insertAt = result.length - 1;
     while (insertAt > 0 && fact.name < result[insertAt - 1]!.name) {
       result[insertAt] = result[insertAt - 1]!;
       insertAt -= 1;
@@ -1124,7 +1183,12 @@ function uniqueHandlerFingerprints(first: readonly string[], second: readonly st
       if (typeof value !== 'string') {
         throw new TypeError('Session-authority handler fingerprints must be strings.');
       }
-      if (!handlerFingerprintIsCovered(result, value)) result[result.length] = value;
+      if (!handlerFingerprintIsCovered(result, value))
+        buildSecurityArrayAppend(
+          result,
+          value,
+          'CLI packages/cli/src/commands/build-export.ts collection',
+        );
     }
   }
   return result;
@@ -1179,12 +1243,20 @@ async function sourceGraphFactsFromFiles(
       component.taskGraphFacts.length > 0 ||
       component.updateCoverage.length > 0
     ) {
-      components[components.length] = component;
+      buildSecurityArrayAppend(
+        components,
+        component,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     }
 
     const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
     if (routePage.routePageFacts.length > 0) {
-      routePages[routePages.length] = routePage;
+      buildSecurityArrayAppend(
+        routePages,
+        routePage,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
       const routePageFacts = buildSnapshotDenseArray(
         routePage.routePageFacts,
         `Route page facts for ${file.fileName}`,
@@ -1450,7 +1522,8 @@ function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
     const query = snapshot[index]!;
     if (buildSetHas(seen, query.key)) continue;
     buildSetAdd(seen, query.key);
-    let insertAt = unique.length;
+    buildSecurityArrayAppend(unique, query, 'Unique sorted queries');
+    let insertAt = unique.length - 1;
     while (insertAt > 0 && query.key < unique[insertAt - 1]!.key) {
       unique[insertAt] = unique[insertAt - 1]!;
       insertAt -= 1;
@@ -1475,7 +1548,11 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
       typeof query === 'object' &&
       typeof (query as { key?: unknown }).key === 'string'
     ) {
-      layoutQueries[layoutQueries.length] = query as { key: string };
+      buildSecurityArrayAppend(
+        layoutQueries,
+        query as { key: string },
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     }
   }
   return {
@@ -1666,7 +1743,8 @@ function uniqueSorted(values: readonly string[]): string[] {
     const value = source[index]!;
     if (buildSetHas(seen, value)) continue;
     buildSetAdd(seen, value);
-    let insertAt = result.length;
+    buildSecurityArrayAppend(result, value, 'Unique sorted strings');
+    let insertAt = result.length - 1;
     while (insertAt > 0 && value < result[insertAt - 1]!) {
       result[insertAt] = result[insertAt - 1]!;
       insertAt -= 1;
@@ -1785,9 +1863,12 @@ function assertKovoBuildCssDelivery(
   const detailCount = diagnostics.length < 10 ? diagnostics.length : 10;
   for (let index = 0; index < detailCount; index += 1) {
     const diagnostic = diagnostics[index]!;
-    detailLines[detailLines.length] =
+    buildSecurityArrayAppend(
+      detailLines,
       `${diagnostic.route} links ${diagnostic.href} atom ${diagnostic.className} ` +
-      `from ${diagnostic.source}`;
+        `from ${diagnostic.source}`,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   const details = buildArrayJoin(detailLines, '\n');
   const suffix =
@@ -2317,7 +2398,11 @@ function buildStylesheetAssets(
 function appendBuildDense<Value>(target: Value[], source: readonly Value[], label: string): void {
   const values = buildSnapshotDenseArray(source, label);
   for (let index = 0; index < values.length; index += 1) {
-    target[target.length] = values[index]!;
+    buildSecurityArrayAppend(
+      target,
+      values[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
 }
 
@@ -2476,7 +2561,11 @@ function mergeKovoBuildStylesheetAssets(
       buildOwnDataValue(assets, 'fragments', `Build stylesheet asset set[${index}]`),
       `Build stylesheet asset set[${index}].fragments`,
     );
-    appGroups[appGroups.length] = app;
+    buildSecurityArrayAppend(
+      appGroups,
+      app,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
     mergeStylesheetAssetsInto(routes, sourceRoutes);
     mergeStylesheetAssetsInto(fragments, sourceFragments);
   }
@@ -2512,9 +2601,19 @@ function mergeStylesheetAssets(assets: readonly (string | StylesheetAsset)[]): S
   const hrefOrder: string[] = [];
   for (let index = 0; index < source.length; index += 1) {
     const asset = exactStylesheetAsset(source[index]!, index);
-    if (!buildMapHas(byHref, asset.href)) hrefOrder[hrefOrder.length] = asset.href;
+    if (!buildMapHas(byHref, asset.href))
+      buildSecurityArrayAppend(
+        hrefOrder,
+        asset.href,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     const chunks = buildMapGet(byHref, asset.href) ?? [];
-    if (asset.criticalCss) chunks[chunks.length] = asset.criticalCss;
+    if (asset.criticalCss)
+      buildSecurityArrayAppend(
+        chunks,
+        asset.criticalCss,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
     buildMapSet(byHref, asset.href, chunks);
   }
 
@@ -2890,6 +2989,7 @@ export function kovoServerHandlerEntrySource(
       "import { createRequestHandler } from '@kovojs/server';",
       "import './runtime-registry.mjs';",
       "import { deriveClosedKovoApp } from '@kovojs/server/internal/app-shell-vite';",
+      "import { appendFrameworkRuntimeArrayValue } from '@kovojs/server/internal/execution';",
       `import * as appModule from ${stringifyBuildValue(pathToFileURL(appModulePath).href)};`,
       'const app = appModule.default ?? appModule.app;',
       `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
@@ -2900,17 +3000,13 @@ export function kovoServerHandlerEntrySource(
       '  for (let index = 0; index < app.liveTargetRenderers.length; index += 1) {',
       '    const renderer = app.liveTargetRenderers[index];',
       '    const fragmentAssets = assets.fragments[renderer.component] ?? [];',
-      '    liveTargetRenderers[liveTargetRenderers.length] = fragmentAssets.length === 0',
-      '      ? renderer',
-      '      : { ...renderer, stylesheets: mergeStylesheetAssets(concatStylesheetAssets(renderer.stylesheets ?? [], fragmentAssets)) };',
+      "    appendFrameworkRuntimeArrayValue(liveTargetRenderers, fragmentAssets.length === 0 ? renderer : { ...renderer, stylesheets: mergeStylesheetAssets(concatStylesheetAssets(renderer.stylesheets ?? [], fragmentAssets)) }, 'Generated live-target renderers');",
       '  }',
       '  const routes = [];',
       '  for (let index = 0; index < app.routes.length; index += 1) {',
       '    const route = app.routes[index];',
       '    const routeAssets = assets.routes[route.path] ?? [];',
-      '    routes[routes.length] = routeAssets.length === 0',
-      '      ? route',
-      '      : { ...route, stylesheets: mergeStylesheetAssets(concatStylesheetAssets(route.stylesheets ?? [], routeAssets)) };',
+      "    appendFrameworkRuntimeArrayValue(routes, routeAssets.length === 0 ? route : { ...route, stylesheets: mergeStylesheetAssets(concatStylesheetAssets(route.stylesheets ?? [], routeAssets)) }, 'Generated routes');",
       '  }',
       '  return deriveClosedKovoApp(app, {',
       '    liveTargetRenderers,',
@@ -2921,8 +3017,8 @@ export function kovoServerHandlerEntrySource(
       '',
       'function concatStylesheetAssets(left, right) {',
       '  const result = [];',
-      '  for (let index = 0; index < left.length; index += 1) result[result.length] = left[index];',
-      '  for (let index = 0; index < right.length; index += 1) result[result.length] = right[index];',
+      "  for (let index = 0; index < left.length; index += 1) appendFrameworkRuntimeArrayValue(result, left[index], 'Generated stylesheet concatenation');",
+      "  for (let index = 0; index < right.length; index += 1) appendFrameworkRuntimeArrayValue(result, right[index], 'Generated stylesheet concatenation');",
       '  return result;',
       '}',
       '',
@@ -2938,12 +3034,12 @@ export function kovoServerHandlerEntrySource(
       '    }',
       '    if (hrefIndex < 0) {',
       '      hrefIndex = hrefOrder.length;',
-      '      hrefOrder[hrefIndex] = href;',
-      '      chunksByHref[hrefIndex] = [];',
+      "      appendFrameworkRuntimeArrayValue(hrefOrder, href, 'Generated stylesheet href order');",
+      "      appendFrameworkRuntimeArrayValue(chunksByHref, [], 'Generated stylesheet chunk groups');",
       '    }',
       "    if (typeof asset !== 'string' && asset.criticalCss) {",
       '      const chunks = chunksByHref[hrefIndex];',
-      '      chunks[chunks.length] = asset.criticalCss;',
+      "      appendFrameworkRuntimeArrayValue(chunks, asset.criticalCss, 'Generated critical CSS chunks');",
       '    }',
       '  }',
       '  const result = [];',
@@ -2956,7 +3052,7 @@ export function kovoServerHandlerEntrySource(
       '      if (criticalCss) criticalCss += "\\n";',
       '      criticalCss += chunk;',
       '    }',
-      '    result[result.length] = { ...(criticalCss ? { criticalCss } : {}), href: hrefOrder[hrefIndex] };',
+      "    appendFrameworkRuntimeArrayValue(result, { ...(criticalCss ? { criticalCss } : {}), href: hrefOrder[hrefIndex] }, 'Generated stylesheet assets');",
       '  }',
       '  return result;',
       '}',
@@ -3363,13 +3459,24 @@ function kovoBuildResult(options: {
     (message) => `PRESET ${stableText(message)}`,
   );
   for (let index = 0; index < diagnosticLines.length; index += 1) {
-    lines[lines.length] = diagnosticLines[index]!;
+    buildSecurityArrayAppend(
+      lines,
+      diagnosticLines[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   for (let index = 0; index < presetLogLines.length; index += 1) {
-    lines[lines.length] = presetLogLines[index]!;
+    buildSecurityArrayAppend(
+      lines,
+      presetLogLines[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
-  lines[lines.length] =
-    `SUMMARY preset=${options.preset} outDir=${stringifyBuildValue(options.outDir)} serverOutDir=${stringifyBuildValue(options.serverOutDir)}`;
+  buildSecurityArrayAppend(
+    lines,
+    `SUMMARY preset=${options.preset} outDir=${stringifyBuildValue(options.outDir)} serverOutDir=${stringifyBuildValue(options.serverOutDir)}`,
+    'CLI packages/cli/src/commands/build-export.ts collection',
+  );
 
   return { exitCode: 0, output: `${buildJoinStrings(lines, '\n', 'Build result lines')}\n` };
 }
@@ -3397,13 +3504,24 @@ function kovoBuildCheckResult(options: {
     (message) => `PRESET ${stableText(message)}`,
   );
   for (let index = 0; index < diagnosticLines.length; index += 1) {
-    lines[lines.length] = diagnosticLines[index]!;
+    buildSecurityArrayAppend(
+      lines,
+      diagnosticLines[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   for (let index = 0; index < presetLogLines.length; index += 1) {
-    lines[lines.length] = presetLogLines[index]!;
+    buildSecurityArrayAppend(
+      lines,
+      presetLogLines[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
-  lines[lines.length] =
-    `CHECK ok preset=${options.preset} (validate-only; deployable output not emitted)`;
+  buildSecurityArrayAppend(
+    lines,
+    `CHECK ok preset=${options.preset} (validate-only; deployable output not emitted)`,
+    'CLI packages/cli/src/commands/build-export.ts collection',
+  );
 
   return {
     exitCode: 0,

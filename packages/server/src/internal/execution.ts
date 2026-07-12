@@ -46,3 +46,4 @@ export {
   createFrameworkManagedSqlDispatchProxy,
   frameworkManagedDbRawTarget,
 } from '../sql-safe-handle.js';
+export { witnessArrayAppend as appendFrameworkRuntimeArrayValue } from '../security-witness-intrinsics.js';
