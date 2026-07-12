@@ -3012,6 +3012,15 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       sqliteColumnOrigins: client,
       tableNames: (table) => [`main.${getTableConfig(table as typeof allowed).name}`],
     });
+    Object.defineProperty(runtime.db, kovoReadonlyDbHandle, {
+      configurable: true,
+      value: () => db,
+    });
+    Object.defineProperty(runtime.db, kovoDeclaredWriteDbHandle, {
+      configurable: true,
+      value: () => db,
+    });
+    const reader = managedDb(runtime.db, 'read') as typeof db;
     const writer = managedDb(runtime.db, 'write', {
       sqlWritePolicy: { tables: ['allowed'], touches: ['allowed'] },
     }) as typeof db;
@@ -3024,6 +3033,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     });
 
     try {
+      expect(() => reader.insert(victim).values({ id: 'reader', secret: 'stolen' })).toThrow(
+        /KV433/u,
+      );
       expect(() => writer.insert(victim).values({ id: 'v2', secret: 'stolen' }).run()).toThrow(
         /KV406/u,
       );

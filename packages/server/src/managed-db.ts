@@ -443,15 +443,30 @@ export const createFrameworkAuthorizationCensusDb = securityClassifier(
       snapshotAuthorizationCensusOptions(options),
       undefined,
     ) as Db;
+    registerFrameworkManagedDbHooks(proxy, createReadonly, createDeclaredWrite);
+    return proxy;
+  },
+);
+
+/** Register framework-owned adapter hooks before a runtime DB handle is exposed. @internal */
+export const registerFrameworkManagedDbHooks = securityClassifier(
+  'server.managed-db.register-framework-hooks',
+  function (
+    target: object,
+    createReadonly: () => unknown,
+    createDeclaredWrite: (policy: ManagedSqlWritePolicy) => unknown,
+  ): void {
+    if (witnessWeakMapGet(authorizationCensusFrameworkHooks, target) !== undefined) {
+      throw new Error('Framework managed DB hooks were already registered for this handle.');
+    }
     witnessWeakMapSet(
       authorizationCensusFrameworkHooks,
-      proxy,
+      target,
       witnessFreeze({
         declaredWrite: createDeclaredWrite,
         readonly: createReadonly,
       }),
     );
-    return proxy;
   },
 );
 

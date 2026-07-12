@@ -1,13 +1,11 @@
 import {
   createDeclaredWriteDb,
-  kovoDeclaredWriteDbHandle,
-  kovoReadonlyDbHandle,
+  registerFrameworkManagedDbHooks,
   readonlyDb,
   type DeclaredWriteSqliteAuthorizerOptions,
   type Reader,
 } from './managed-db.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
-import { witnessDefineProperty } from './security-witness-intrinsics.js';
 
 /** Runtime source metadata for one SQLite result column. */
 export interface KovoSqliteRuntimeColumnSource {
@@ -97,13 +95,10 @@ export function createSqliteAppRuntimeDb<Db extends object>(
       ? {}
       : { sqliteColumnOrigins: options.sqliteColumnOrigins },
   );
-  witnessDefineProperty(options.db, kovoReadonlyDbHandle, {
-    configurable: true,
-    value: () => readDb,
-  });
-  witnessDefineProperty(options.db, kovoDeclaredWriteDbHandle, {
-    configurable: true,
-    value: (policy: Parameters<typeof createDeclaredWriteDb>[1]) =>
+  registerFrameworkManagedDbHooks(
+    options.db,
+    () => readDb,
+    (policy: Parameters<typeof createDeclaredWriteDb>[1]) =>
       createDeclaredWriteDb(options.db, policy, {
         dialectLabel: 'SQLite',
         governedColumns: options.metadata,
@@ -111,7 +106,7 @@ export function createSqliteAppRuntimeDb<Db extends object>(
         sqliteAuthorizer: options.sqliteAuthorizer,
         tableNames: options.tableNames,
       }),
-  });
+  );
   return {
     db: options.db,
     readonlyDb: readDb,
