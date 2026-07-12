@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |     9 | C1-C9 |
-| High     |    14 | H1-H14 |
+| High     |    15 | H1-H15 |
 | Medium   |     8 | M1-M8 |
 
 ## Critical
@@ -204,6 +204,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     Set-Cookie bytes and clearing semantics, two-factor state, redirect bytes, and registry touches;
     failed or cookie-free provider responses remain typed failures under late/import-order poison.
 
+- [ ] **H15 - Mutable task-registry dispatch can execute a privileged sibling task.**
+      `packages/server/src/{task-runner,task-queue}.ts`
+  - A selective late `Map.prototype.get` override resolved an ordinary queued task key to a
+    different privileged definition. The real runner parsed the ordinary job with the sibling
+    schema, skipped the named task, and executed the privileged task body once.
+  - **Acceptance:** task registry construction/lookup, claim filters, per-task concurrency,
+    scheduling registration and lineage, queue identities, and lease transitions use boot-pinned,
+    semantically checked exact-key and collection controls; late/import-order poison cannot
+    cross-bind definitions, jobs, principal context, or completion state.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -247,15 +257,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     comparison; an oversized stream is cancelled with 413 and the mutation handler is not called
     under late `Math.max` poison.
 
-- [ ] **M6 - Mutable PHC parsing can authenticate a non-Argon2id password digest.**
+- [x] **M6 - Mutable PHC parsing can authenticate a non-Argon2id password digest.**
       `packages/server/src/password.ts`
   - Selective late `String.prototype.startsWith`/`split` overrides substituted the structural facts
     of an Argon2id digest while the original Argon2i string reached `@node-rs/argon2`; both
     `isArgon2idPasswordDigest()` and `verifyPassword()` accepted the downgraded algorithm with
     `needsRehash: false`.
-  - **Acceptance:** parse the exact submitted digest with boot-pinned, semantically checked scalar
-    operations and collection storage; reject Argon2i/Argon2d, malformed, duplicate, substituted,
-    and import-order-poisoned PHC strings while preserving genuine Argon2id verify/rehash behavior.
+  - **Evidence:** the 18-test password matrix parses exact PHC bytes with pinned scalar/RegExp/
+    Number/Map controls; Argon2i/Argon2d, malformed, duplicate, substituted, and import-order-poisoned
+    strings fail closed while genuine Argon2id verify, rehash, and strong decoy cost remain intact.
 
 - [ ] **M7 - Mutable rate-limit state and clock controls reset enforced request windows.**
       `packages/server/src/app-load-shed.ts`
@@ -278,10 +288,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, H9-H10, M4, and M6-M8 are active
-document/cookie/CSRF, generated-diagnostics, password, request-limit, and replay fixes. Integrated
+The remediation pass remains intentionally non-zero: C6, H9-H10, H15, M4, and M7-M8 are active
+document/cookie/CSRF, generated/live diagnostics, task, request-limit, and replay fixes. Integrated
 evidence is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
-route/handler/secret tests.
+route/handler/secret, and 18 password tests.
 A complete fresh sweep of the final integrated tree is still required.
