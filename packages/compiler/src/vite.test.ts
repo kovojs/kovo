@@ -793,6 +793,7 @@ export const RealKv437 = component({
     );
     const nativeReplace = String.prototype.replace;
     const nativeToString = String.prototype.toString;
+    const nativeExec = RegExp.prototype.exec;
     try {
       String.prototype.replace = function poisonedProductionClientReplace(
         searchValue: string | RegExp,
@@ -802,9 +803,14 @@ export const RealKv437 = component({
         if (value === clientSource) return 'export const attackerClient = globalThis.secret;';
         return Reflect.apply(nativeReplace, this, [searchValue, replaceValue]);
       };
+      RegExp.prototype.exec = function poisonedProductionClientExec(value: string) {
+        if (value === clientSource) return null;
+        return Reflect.apply(nativeExec, this, [value]);
+      };
       await plugin.transform('component(', 'src/reviewed.tsx');
     } finally {
       String.prototype.replace = nativeReplace;
+      RegExp.prototype.exec = nativeExec;
     }
 
     const [compiled] = plugin.getClientModules?.() ?? [];

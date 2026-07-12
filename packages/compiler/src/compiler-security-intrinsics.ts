@@ -49,7 +49,6 @@ const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRegExpTest = NativeRegExp.prototype.test;
-const nativeRegExpReplace = NativeRegExp.prototype[Symbol.replace];
 const nativeObjectIs = NativeObject.is;
 const nativeReflectApply = NativeReflect.apply;
 const nativeSetAdd = NativeSet.prototype.add;
@@ -79,6 +78,8 @@ function getOwnPropertyDescriptor(
 ): PropertyDescriptor | undefined {
   return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
 }
+
+const nativeRegExpGlobalGetter = getOwnPropertyDescriptor(NativeRegExp.prototype, 'global')?.get;
 
 function capturedMethod(value: object, property: PropertyKey): Function | undefined {
   let owner: object | null = value;
@@ -426,7 +427,51 @@ export function compilerRegExpReplace(
   replacement: string | ((...values: string[]) => string),
 ): string {
   assertCompilerSecurityIntrinsics();
-  return apply(nativeRegExpReplace, expression, [input, replacement]);
+  if (typeof nativeRegExpGlobalGetter !== 'function') {
+    throw new NativeTypeError('Compiler RegExp global control is unavailable.');
+  }
+  if (typeof replacement === 'string' && compilerStringIncludes(replacement, '$')) {
+    throw new NativeTypeError('Compiler RegExp replacements must not contain substitutions.');
+  }
+  const global = apply<boolean>(nativeRegExpGlobalGetter, expression, []);
+  expression.lastIndex = 0;
+  let output = '';
+  let sourceIndex = 0;
+  while (true) {
+    const match = apply<RegExpExecArray | null>(nativeRegExpExec, expression, [input]);
+    if (match === null) break;
+    const index = compilerOwnDataValue(match, 'index', 'Compiler RegExp match');
+    const matched = compilerOwnDataValue(match, 0, 'Compiler RegExp match');
+    if (
+      typeof index !== 'number' ||
+      !compilerNumberIsSafeInteger(index) ||
+      index < sourceIndex ||
+      typeof matched !== 'string'
+    ) {
+      throw new NativeTypeError('Compiler RegExp match has an invalid shape.');
+    }
+    output += compilerStringSlice(input, sourceIndex, index);
+    if (typeof replacement === 'string') {
+      output += replacement;
+    } else {
+      const captureLength = compilerArrayLength(match, 'Compiler RegExp match');
+      const captures: string[] = [];
+      for (let captureIndex = 0; captureIndex < captureLength; captureIndex += 1) {
+        const capture = compilerOwnDataValue(match, captureIndex, 'Compiler RegExp match');
+        if (capture !== undefined && typeof capture !== 'string') {
+          throw new NativeTypeError('Compiler RegExp captures must be strings or undefined.');
+        }
+        captures[captures.length] = capture ?? '';
+      }
+      output += apply<string>(replacement, undefined, captures);
+    }
+    sourceIndex = index + matched.length;
+    if (!global) break;
+    if (matched.length === 0) {
+      throw new NativeTypeError('Compiler RegExp replacements cannot use empty global matches.');
+    }
+  }
+  return output + compilerStringSlice(input, sourceIndex);
 }
 
 export function compilerStringCharCodeAt(value: string, index: number): number {
