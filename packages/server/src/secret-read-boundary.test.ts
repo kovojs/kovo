@@ -414,15 +414,16 @@ describe('secret read boundary', () => {
       client.exec(
         [
           'create table parents (id text primary key)',
-          'create table secrets (id text primary key, parent_id text, classified text not null)',
+          'create table secrets (id text primary key, parent_id text, classified text not null, label text not null)',
           "insert into parents values ('p1')",
-          "insert into secrets values ('s1', 'p1', 'victim-secret')",
+          "insert into secrets values ('s1', 'p1', 'victim-secret', 'public-label')",
         ].join(';'),
       );
       const parents = sqliteTable('parents', { id: text('id').primaryKey() });
       const secrets = sqliteTable('secrets', {
         classified: text('classified').notNull(),
         id: text('id').primaryKey(),
+        label: text('label').notNull(),
         parentId: text('parent_id').references(() => parents.id),
       });
       const relations = defineRelations({ parents, secrets }, (r) => ({
@@ -437,6 +438,25 @@ describe('secret read boundary', () => {
 
       const [relational] = await db.query.secrets.findMany();
       expect(isSecret(relational.classified)).toBe(true);
+
+      const publicOnly = await db.query.secrets.findFirst({
+        columns: { classified: false, label: true },
+      });
+      expect(publicOnly?.label).toBe('public-label');
+      expect(isSecret(publicOnly?.label)).toBe(false);
+
+      const retainedConfig: {
+        columns: { classified: boolean; label: boolean };
+        extras?: Record<string, unknown>;
+      } = { columns: { classified: false, label: true } };
+      const pinnedPublicRead = db.query.secrets.findFirst(retainedConfig);
+      retainedConfig.columns = { classified: true, label: false };
+      retainedConfig.extras = {
+        label: drizzleSql.raw('"d0"."classified"').as('label'),
+      };
+      const stillPublic = await pinnedPublicRead;
+      expect(stillPublic?.label).toBe('public-label');
+      expect(isSecret(stillPublic?.label)).toBe(false);
 
       const first = await db.query.secrets.findFirst({
         extras: {
@@ -473,6 +493,13 @@ describe('secret read boundary', () => {
         .prepare()
         .values({});
       expect(isSecret(preparedValues[0]![0])).toBe(true);
+      const preparedExecute = await db
+        .select({ derived: secrets.classified })
+        .from(secrets)
+        .prepare()
+        .execute({});
+      expect(Array.isArray(preparedExecute)).toBe(true);
+      expect(isSecret(preparedExecute[0]!.derived)).toBe(true);
     } finally {
       client.close();
     }

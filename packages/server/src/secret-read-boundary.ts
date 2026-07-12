@@ -139,6 +139,13 @@ interface ExactSecretReadExecution {
   execute(): unknown;
 }
 
+interface PinnedRelationalReadQuery {
+  readonly carrier: SqlCarrier;
+  readonly nestedResultKeys: ReadonlySet<string>;
+  readonly opaqueResultKeys: ReadonlySet<string>;
+  execute(args: readonly unknown[]): unknown;
+}
+
 const declaredSecretReadCapabilities = createWitnessWeakMap<object, DeclaredSecretReadCapability>();
 const pinnedSecretReadMetadata = createWitnessWeakSet<object>();
 const pinnedSecretReadBoundaries = createWitnessWeakSet<object>();
@@ -208,12 +215,7 @@ export function createSecretBoxingReadDb<Db extends object>(
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
       if (prop === 'query' && item !== null && typeof item === 'object') {
-        return wrapReadSurface(
-          item,
-          pinnedMetadata,
-          failClosedExecutionBoundary(emptyReadBoundary()),
-          pinnedOptions,
-        );
+        return wrapReadSurface(item, pinnedMetadata, emptyReadBoundary(), pinnedOptions);
       }
       if (typeof item !== 'function') return item;
       if (!isReadSurfaceMethod(prop)) {
@@ -652,6 +654,7 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
     metadata: SecretReadMetadata,
     client: SecretReadSqliteColumnOriginClient | undefined,
     exactColumns?: readonly SecretReadSqliteColumnOrigin[],
+    nestedResultKeys?: ReadonlySet<string>,
   ): SecretReadBoundary {
     const secretResultKeys = createWitnessSet<string>();
     const opaqueResultKeys = createWitnessSet<string>();
@@ -678,6 +681,14 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
       }
       if (secretBearingCompound) {
         witnessSetAdd(opaqueResultKeys, key);
+        continue;
+      }
+      if (
+        nestedResultKeys !== undefined &&
+        witnessSetHas(nestedResultKeys as Set<string>, key)
+      ) {
+        // Drizzle relational selections encode a nested relation into one driver JSON column.
+        // Preserve that container so the post-mapping walk can classify each nested schema key.
         continue;
       }
       if (
@@ -744,23 +755,42 @@ function wrapReadSurface(
       (result: unknown) => boxSecretReadRows(result, metadata, inheritedBoundary),
     ]);
   }
+  const relationalQuery = pinRelationalReadQuery(value);
   return new Proxy(value, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
       if (prop === 'then' && typeof item === 'function') {
-        const carrier = sqlCarrierFromValue(target, []);
+        const carrier = relationalQuery?.carrier ?? sqlCarrierFromValue(target, []);
         const exact =
-          carrier === undefined || inheritedBoundary.boxEveryResultValue
+          carrier === undefined
             ? undefined
             : exactSecretReadExecution(target, carrier, 'all', options);
         const boundary = mergeReadBoundaries(
-          inheritedBoundary,
-          readBoundaryForQuery(target, carrier, metadata, options, exact),
+          mergeReadBoundaries(
+            inheritedBoundary,
+            readBoundaryForQuery(
+              target,
+              carrier,
+              metadata,
+              options,
+              exact,
+              relationalQuery?.nestedResultKeys,
+            ),
+          ),
+          relationalReadBoundary(relationalQuery, metadata),
         );
         return (
           onFulfilled?: (value: unknown) => unknown,
           onRejected?: (reason: unknown) => unknown,
         ) => {
+          if (relationalQuery !== undefined) {
+            const settled = settleSecretReadResult(relationalQuery.execute([]));
+            return witnessReflectApply(nativePromiseThen, settled, [
+              (result: unknown) =>
+                onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
+              onRejected,
+            ]);
+          }
           if (exact !== undefined) {
             const settled = witnessReflectApply<Promise<unknown>>(
               nativePromiseResolve,
@@ -789,17 +819,32 @@ function wrapReadSurface(
       return (...args: unknown[]) => {
         const terminalMode = readBuilderTerminalMode(prop, args);
         if (terminalMode !== undefined) {
-          const carrier = sqlCarrierFromValue(target, []);
+          const carrier = relationalQuery?.carrier ?? sqlCarrierFromValue(target, []);
           const exact =
             carrier === undefined ||
-            inheritedBoundary.boxEveryResultValue ||
+            relationalQuery !== undefined ||
             args.length !== 0
               ? undefined
               : exactSecretReadExecution(target, carrier, terminalMode, options);
           const boundary = mergeReadBoundaries(
-            inheritedBoundary,
-            readBoundaryForQuery(target, carrier, metadata, options, exact),
+            mergeReadBoundaries(
+              inheritedBoundary,
+              readBoundaryForQuery(
+                target,
+                carrier,
+                metadata,
+                options,
+                exact,
+                relationalQuery?.nestedResultKeys,
+              ),
+            ),
+            relationalReadBoundary(relationalQuery, metadata),
           );
+          if (relationalQuery !== undefined) {
+            const result = relationalQuery.execute(args);
+            if (prop === 'sync') return boxSecretReadRows(result, metadata, boundary);
+            return boxSecretReadExecutionResult(result, metadata, boundary);
+          }
           const result =
             exact === undefined
               ? witnessReflectApply(item, target, args)
@@ -831,6 +876,7 @@ function readBoundaryForQuery(
   metadata: SecretReadMetadata,
   options: SecretReadBoundaryOptions,
   exact: ExactSecretReadExecution | undefined,
+  nestedResultKeys?: ReadonlySet<string>,
 ): SecretReadBoundary {
   if (carrier === undefined) return failClosedExecutionBoundary(emptyReadBoundary());
   if (exact?.exactColumns === true) {
@@ -840,6 +886,7 @@ function readBoundaryForQuery(
       metadata,
       undefined,
       exact.columns,
+      nestedResultKeys,
     );
   }
   return options.sqliteColumnOrigins === undefined
@@ -849,7 +896,114 @@ function readBoundaryForQuery(
         carrier.text,
         metadata,
         options.sqliteColumnOrigins,
+        undefined,
+        nestedResultKeys,
       );
+}
+
+function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | undefined {
+  const config = optionalOwnDataValue(value, 'config');
+  const tableConfig = optionalOwnDataValue(value, 'tableConfig');
+  if (!isPlainRecord(config) || !isPlainRecord(tableConfig)) return undefined;
+  const prepare = optionalInheritedFunctionDataProperty(value, '_prepare');
+  if (prepare === undefined) return undefined;
+  // Compile once now. The private prepared object binds the exact config/SQL/mapping that every
+  // later terminal below executes, so a retained app config reference cannot split the verdict
+  // from a second relational compilation (SPEC §6.6 C9, §10.3).
+  const prepared = witnessReflectApply<unknown>(prepare, value, []);
+  if (!isObjectLike(prepared)) {
+    throw new TypeError('Relational query preparation did not return an object.');
+  }
+  const query = ownDataValue(prepared, 'query');
+  const carrier = sqlCarrierFromValue(query, []);
+  const all = optionalInheritedFunctionDataProperty(prepared, 'all');
+  if (carrier === undefined || all === undefined) {
+    throw new TypeError('Relational query preparation did not expose stable SQL execution.');
+  }
+  const posture = relationalResultPosture(config);
+  return witnessFreeze({
+    carrier,
+    nestedResultKeys: posture.nestedResultKeys,
+    opaqueResultKeys: posture.opaqueResultKeys,
+    execute(args: readonly unknown[]) {
+      if (args.length > 1) {
+        throw new TypeError('Relational query terminals accept at most one placeholder bag.');
+      }
+      return witnessReflectApply(all, prepared, args.length === 0 ? [] : [args[0]]);
+    },
+  });
+}
+
+function relationalResultPosture(config: Record<string, unknown>): {
+  nestedResultKeys: ReadonlySet<string>;
+  opaqueResultKeys: ReadonlySet<string>;
+} {
+  const nestedResultKeys = createWitnessSet<string>();
+  const opaqueResultKeys = createWitnessSet<string>();
+  const seen = createWitnessWeakSet<object>();
+  const visit = (current: Record<string, unknown>, depth: number): void => {
+    if (depth > 32 || witnessWeakSetHas(seen, current)) {
+      throw new TypeError('Relational query config must be finite.');
+    }
+    witnessWeakSetAdd(seen, current);
+    const extras = stableRelationalConfigValue(current, 'extras');
+    if (extras !== undefined) {
+      if (!isPlainRecord(extras)) throw new TypeError('Relational extras must be a record.');
+      const extraKeys = witnessObjectKeys(extras);
+      for (let index = 0; index < extraKeys.length; index += 1) {
+        witnessSetAdd(opaqueResultKeys, extraKeys[index]!);
+      }
+    }
+    const relations = stableRelationalConfigValue(current, 'with');
+    if (relations === undefined) return;
+    if (!isPlainRecord(relations)) throw new TypeError('Relational with must be a record.');
+    const relationKeys = witnessObjectKeys(relations);
+    for (let index = 0; index < relationKeys.length; index += 1) {
+      const key = relationKeys[index]!;
+      const descriptor = witnessGetOwnPropertyDescriptor(relations, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Relational selections must use own data properties.');
+      }
+      if (descriptor.value === false || descriptor.value === undefined) continue;
+      witnessSetAdd(nestedResultKeys, key);
+      if (isPlainRecord(descriptor.value)) visit(descriptor.value, depth + 1);
+      else if (descriptor.value !== true) {
+        throw new TypeError('Relational selections must be true or a config record.');
+      }
+    }
+  };
+  visit(config, 0);
+  return {
+    nestedResultKeys: witnessFreeze(nestedResultKeys),
+    opaqueResultKeys: witnessFreeze(opaqueResultKeys),
+  };
+}
+
+function stableRelationalConfigValue(
+  config: Record<string, unknown>,
+  property: 'extras' | 'with',
+): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(config, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`Relational ${property} cannot be accessor-backed.`);
+  }
+  return descriptor.value;
+}
+
+function relationalReadBoundary(
+  query: PinnedRelationalReadQuery | undefined,
+  metadata: SecretReadMetadata,
+): SecretReadBoundary {
+  return query === undefined
+    ? emptyReadBoundary()
+    : {
+        ...emptyReadBoundary(),
+        opaqueResultKeys: query.opaqueResultKeys,
+        secretColumnKeys: metadata.secretColumnKeys,
+        secretColumnNames: metadata.secretColumnNames,
+        secretColumnScopeKnown: true,
+      };
 }
 
 function readBuilderTerminalMode(
@@ -960,11 +1114,41 @@ function boxSecretReadExecutionResult(
   metadata: SecretReadMetadata,
   boundary: SecretReadBoundary,
 ): unknown {
-  return result !== null && typeof result === 'object' && isNativePromise(result)
-    ? witnessReflectApply(nativePromiseThen, result, [
+  if (result !== null && typeof result === 'object') {
+    if (isNativePromise(result)) {
+      return witnessReflectApply(nativePromiseThen, result, [
         (value: unknown) => boxSecretReadRows(value, metadata, boundary),
-      ])
-    : boxSecretReadRows(result, metadata, boundary);
+      ]);
+    }
+    const then = optionalInheritedFunctionDataProperty(result, 'then');
+    if (then !== undefined) {
+      return witnessReflectApply(nativePromiseThen, settleSecretReadResult(result, then), [
+        (value: unknown) => boxSecretReadRows(value, metadata, boundary),
+      ]);
+    }
+  }
+  return boxSecretReadRows(result, metadata, boundary);
+}
+
+function settleSecretReadResult(result: unknown, pinnedThen?: Function): Promise<unknown> {
+  if (result !== null && typeof result === 'object' && isNativePromise(result)) return result;
+  return new NativePromise((resolve, reject) => {
+    if (result === null || typeof result !== 'object') {
+      resolve(result);
+      return;
+    }
+    let then = pinnedThen;
+    try {
+      then ??= optionalInheritedFunctionDataProperty(result, 'then');
+      if (then === undefined) {
+        resolve(result);
+        return;
+      }
+      witnessReflectApply(then, result, [resolve, reject]);
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 function failClosedExecutionBoundary(boundary: SecretReadBoundary): SecretReadBoundary {
