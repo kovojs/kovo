@@ -66,7 +66,7 @@ export function createKovoTrustedTypesSecurityControls(
   let htmlControlsVerified = false;
   let scriptUrlControlsVerified = false;
 
-  function exactTrustedHTML(value: unknown, expected: string): boolean {
+  function readTrustedHTML(value: unknown): string | undefined {
     if (
       !factory ||
       !isHTML ||
@@ -74,16 +74,19 @@ export function createKovoTrustedTypesSecurityControls(
       value === null ||
       typeof value !== 'object'
     ) {
-      return false;
+      return undefined;
     }
     try {
-      return (
-        apply<unknown>(isHTML, factory, [value]) === true &&
-        apply<unknown>(trustedHtmlToString, value, []) === expected
-      );
+      if (apply<unknown>(isHTML, factory, [value]) !== true) return undefined;
+      const content = apply<unknown>(trustedHtmlToString, value, []);
+      return typeof content === 'string' ? content : undefined;
     } catch {
-      return false;
+      return undefined;
     }
+  }
+
+  function exactTrustedHTML(value: unknown, expected: string): boolean {
+    return readTrustedHTML(value) === expected;
   }
 
   function exactTrustedScriptURL(value: unknown, expected: string): boolean {
@@ -195,7 +198,12 @@ export function createKovoTrustedTypesSecurityControls(
     return value as string;
   }
 
-  return { createHTML, createScriptURL };
+  function readHTML(value: unknown): string | undefined {
+    if (!controlsSound || !htmlControlsVerified) return undefined;
+    return readTrustedHTML(value);
+  }
+
+  return { createHTML, createScriptURL, readHTML };
 }
 
 let trustedTypesControls = createKovoTrustedTypesSecurityControls();
@@ -208,6 +216,11 @@ export function kovoCreateHTML(html: string): string {
 /** Route a framework-controlled script URL through the same private policy. @internal */
 export function kovoCreateScriptURL(url: string): string {
   return trustedTypesControls.createScriptURL(url);
+}
+
+/** Read exact bytes from a platform-branded TrustedHTML through the boot-captured stringifier. */
+export function kovoReadTrustedHTML(value: unknown): string | undefined {
+  return trustedTypesControls.readHTML(value);
 }
 
 /** Reset the private controller against the current realm. Test-only. @internal */

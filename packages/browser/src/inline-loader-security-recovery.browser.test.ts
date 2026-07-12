@@ -152,6 +152,52 @@ it('fails closed when the Trusted Types factory was replaced before generated in
   );
 });
 
+it.each(['before', 'after'] as const)(
+  'keeps generated fragment bytes exact when TrustedHTML stringification changes %s install',
+  async (timing) => {
+    const harness = await createFrame(
+      '<section kovo-fragment-target="victim"><span>OLD</span></section>',
+      '<meta name="kovo-build" content="build-a">',
+    );
+    const descriptor = Object.getOwnPropertyDescriptor(
+      harness.window.TrustedHTML.prototype,
+      'toString',
+    );
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('TrustedHTML stringifier control unavailable');
+    }
+    const poison = () => {
+      Object.defineProperty(harness.window.TrustedHTML.prototype, 'toString', {
+        ...descriptor,
+        value() {
+          return '<img data-c227-generated-attack src="x">';
+        },
+      });
+    };
+    if (timing === 'before') poison();
+    try {
+      await installGeneratedInlineLoader(harness.window);
+      if (timing === 'after') poison();
+      const apply = (harness.window as unknown as Record<string, unknown>).__kovo_a;
+      if (typeof apply !== 'function') throw new Error('generated fragment apply is unavailable');
+      apply(
+        [
+          '<kovo-fragment target="victim">',
+          '<section kovo-fragment-target="victim"><strong data-c227-generated-safe>SAFE</strong></section>',
+          '</kovo-fragment>',
+        ].join(''),
+      );
+    } finally {
+      Object.defineProperty(harness.window.TrustedHTML.prototype, 'toString', descriptor);
+    }
+
+    expect(harness.window.document.querySelector('[data-c227-generated-attack]')).toBeNull();
+    expect(harness.window.document.querySelector('[data-c227-generated-safe]')?.textContent).toBe(
+      'SAFE',
+    );
+  },
+);
+
 it('retires the old channel and hard-navigates before applying a same-build new-session document', async () => {
   const harness = await createFrame(
     [

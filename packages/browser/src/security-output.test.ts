@@ -228,7 +228,7 @@ describe('runtime output-context helpers', () => {
     expect(isBrowserTrustedHtml(browserTrustedHtml)).toBe(false);
     expect(isBrowserTrustedHtml({ toString: () => '<i>not branded</i>' })).toBe(false);
     expect(kovoTrustedHtmlContent(trustedHtml('<b>safe</b>'))).toBe('<b>safe</b>');
-    expect(kovoTrustedHtmlContent(trustedHtml(browserTrustedHtml))).toBe('<i>browser trusted</i>');
+    expect(kovoTrustedHtmlContent(trustedHtml(browserTrustedHtml))).toBe('');
     expect(kovoTrustedHtmlContent(browserTrustedHtml)).toBe('');
     expect(kovoTrustedHtmlContent('<img src=x onerror=alert(1)>')).toBe('');
     expect(kovoTrustedHtmlContent({ toString: () => '<i>not branded</i>' })).toBe('');
@@ -254,9 +254,9 @@ describe('runtime output-context helpers', () => {
       Object.defineProperty(html, 'value', { value: '<script>alert(1)</script>' }),
     ).toThrow();
 
-    // Mutating the nested foreign TrustedHTML-like source also cannot change the eager snapshot.
+    // A foreign structural TrustedHTML-like source never crosses the browser-carrier boundary.
     browserBytes = '<img src=x onerror=alert(1)>';
-    expect(kovoTrustedHtmlContent(html)).toBe('<i>browser-safe</i>');
+    expect(kovoTrustedHtmlContent(html)).toBe('');
     expect(kovoSafeUrl(url)).toBe('javascript:reviewed()');
     expect(kovoTrustedHtmlContent(rich)).toBe('<p>safe</p>');
   });
@@ -349,7 +349,7 @@ describe('runtime output-context helpers', () => {
     }
   });
 
-  it('pins a platform-branded TrustedHTML instance captured during module initialization', async () => {
+  it('rejects a structural TrustedHTML host installed before module initialization', async () => {
     const previousConstructor = Object.getOwnPropertyDescriptor(globalThis, 'TrustedHTML');
     const previousFactory = Object.getOwnPropertyDescriptor(globalThis, 'trustedTypes');
     class PlatformTrustedHTML {
@@ -373,11 +373,11 @@ describe('runtime output-context helpers', () => {
     try {
       const fresh = await import('./security-output.js');
       const browserValue = new PlatformTrustedHTML();
-      expect(fresh.isBrowserTrustedHtml(browserValue)).toBe(true);
-      expect(fresh.kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+      expect(fresh.isBrowserTrustedHtml(browserValue)).toBe(false);
+      expect(fresh.kovoTrustedHtmlContent(browserValue)).toBe('');
 
       browserValue.value = '<img src=x onerror=alert(1)>';
-      expect(fresh.kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+      expect(fresh.kovoTrustedHtmlContent(browserValue)).toBe('');
 
       class LateFakeTrustedHTML {
         readonly [Symbol.toStringTag] = 'TrustedHTML' as const;

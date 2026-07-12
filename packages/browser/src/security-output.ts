@@ -5,11 +5,9 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 
 import {
-  applySecurityIntrinsic,
   defineSecurityProperties,
   freezeSecurityValue,
   securityGetOwnPropertyDescriptor,
-  securityHasInstance,
   securityObjectKeys,
   securityRegExpExec,
   securityRegExpTest,
@@ -34,7 +32,7 @@ import {
   securityWeakSetAdd,
   securityWeakSetHas,
 } from './security-witness-intrinsics.js';
-import { kovoCreateHTML } from './trusted-types.js';
+import { kovoCreateHTML, kovoReadTrustedHTML } from './trusted-types.js';
 
 /**
  * Optional provenance attached to explicit trust escape hatches.
@@ -108,20 +106,6 @@ const trustedUrlValues = securityWeakSet<object>();
 const trustedHtmlSnapshots = securityWeakMap<object, string>();
 const trustedUrlSnapshots = securityWeakMap<object, string>();
 const browserTrustedHtmlSnapshots = securityWeakMap<object, string>();
-
-interface TrustedTypesBrandFactory {
-  isHTML(value: unknown): boolean;
-}
-
-// Capture the platform brand owners before evaluated app code can replace them. A late ambient
-// `globalThis.TrustedHTML` class is never authority for a raw HTML sink. Requiring the platform
-// factory's brand predicate as well as captured ordinary Function@@hasInstance also rejects the
-// common Node/polyfill forgery where an app merely installs a lookalike constructor.
-const importTimeTrustedHtmlConstructor = (globalThis as { TrustedHTML?: unknown }).TrustedHTML;
-const importTimeTrustedTypesFactory = (
-  globalThis as { trustedTypes?: Partial<TrustedTypesBrandFactory> }
-).trustedTypes;
-const importTimeTrustedTypesIsHtml = importTimeTrustedTypesFactory?.isHTML;
 
 /**
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
@@ -238,26 +222,9 @@ export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
  * Returns whether a value matches the browser TrustedHTML brand accepted by Kovo.
  */
 export function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTML {
-  if (
-    typeof importTimeTrustedHtmlConstructor !== 'function' ||
-    typeof importTimeTrustedTypesIsHtml !== 'function' ||
-    importTimeTrustedTypesFactory === undefined ||
-    typeof value !== 'object' ||
-    value === null
-  ) {
-    return false;
-  }
-
-  try {
-    return (
-      securityHasInstance(importTimeTrustedHtmlConstructor, value) &&
-      applySecurityIntrinsic<boolean>(importTimeTrustedTypesIsHtml, importTimeTrustedTypesFactory, [
-        value,
-      ]) === true
-    );
-  } catch {
-    return false;
-  }
+  if (value === null || typeof value !== 'object') return false;
+  const snapshot = snapshotBrowserTrustedHtml(value);
+  return snapshot !== undefined;
 }
 
 /**
@@ -265,7 +232,7 @@ export function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTM
  */
 export function kovoTrustedHtmlContent(value: unknown): string {
   if (isKovoTrustedHtml(value)) return securityWeakMapGet(trustedHtmlSnapshots, value) ?? '';
-  if (isBrowserTrustedHtml(value)) return snapshotBrowserTrustedHtml(value);
+  if (isBrowserTrustedHtml(value)) return snapshotBrowserTrustedHtml(value) ?? '';
 
   return '';
 }
@@ -369,13 +336,17 @@ function formatOutputValue(value: unknown): string {
 }
 
 function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
-  return typeof value === 'string' ? value : securityString(value);
+  return typeof value === 'string' ? value : (snapshotBrowserTrustedHtml(value) ?? '');
 }
 
-function snapshotBrowserTrustedHtml(value: BrowserTrustedHTML): string {
+function snapshotBrowserTrustedHtml(value: object): string | undefined {
   const existing = securityWeakMapGet(browserTrustedHtmlSnapshots, value);
   if (existing !== undefined) return existing;
-  const snapshot = securityString(value);
+  // C227 / SPEC §6.6: generic String(object) would re-read a mutable TrustedHTML prototype after
+  // the private policy verified its bytes. Only the boot-witnessed WebIDL brand/stringifier may
+  // cross the browser-carrier boundary, and foreign/mismatched carriers fail closed.
+  const snapshot = kovoReadTrustedHTML(value);
+  if (snapshot === undefined) return undefined;
   securityWeakMapSet(browserTrustedHtmlSnapshots, value, snapshot);
   return snapshot;
 }

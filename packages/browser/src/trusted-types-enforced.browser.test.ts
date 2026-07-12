@@ -4,9 +4,19 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { __resetKovoTrustedTypePolicyForTest, kovoCreateHTML } from './trusted-types.js';
+import {
+  __resetKovoTrustedTypePolicyForTest,
+  createKovoTrustedTypesSecurityControls,
+  kovoCreateHTML,
+} from './trusted-types.js';
 import { applyHtmlResponseFragments } from './response-fragment-apply.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import {
+  type BrowserTrustedHTML,
+  kovoTrustedHtmlContent,
+  safeRichHtml,
+  trustedHtml,
+} from './security-output.js';
 
 // SF (secure-framework Tier 3, SPEC §6.6): the LOAD-BEARING proof that Trusted Types can
 // ship DEFAULT-ON without bricking Kovo's own hydration on Chromium. Trusted Types is
@@ -54,6 +64,59 @@ afterEach(() => {
 });
 
 describe('Trusted Types default-on enforcement (SF Tier 3, Chromium-only)', () => {
+  it('fails closed when TrustedHTML stringification changed before controller initialization', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(TrustedHTML.prototype, 'toString');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('TrustedHTML stringifier control unavailable');
+    }
+    Object.defineProperty(TrustedHTML.prototype, 'toString', {
+      ...descriptor,
+      value() {
+        return '<img data-c227-preinit-attack src="x">';
+      },
+    });
+    let controls: ReturnType<typeof createKovoTrustedTypesSecurityControls>;
+    try {
+      controls = createKovoTrustedTypesSecurityControls();
+    } finally {
+      Object.defineProperty(TrustedHTML.prototype, 'toString', descriptor);
+    }
+
+    const reviewed = '<strong data-c227-preinit-safe>SAFE</strong>';
+    const output = controls.createHTML(reviewed);
+    expect(output).toBe(reviewed);
+    const template = document.createElement('template');
+    template.innerHTML = output;
+    expect(template.content.querySelector('[data-c227-preinit-attack]')).toBeNull();
+    expect(template.content.querySelector('[data-c227-preinit-safe]')?.textContent).toBe('SAFE');
+  });
+
+  it('keeps sanitized TrustedHTML bytes exact after late platform stringifier replacement', () => {
+    const directCarrier = kovoCreateHTML(
+      '<em data-kovo-direct-stringifier-safe>DIRECT SAFE</em>',
+    ) as unknown as BrowserTrustedHTML;
+    const descriptor = Object.getOwnPropertyDescriptor(TrustedHTML.prototype, 'toString');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('TrustedHTML stringifier control unavailable');
+    }
+    Object.defineProperty(TrustedHTML.prototype, 'toString', {
+      ...descriptor,
+      value() {
+        return '<img data-kovo-trusted-html-stringifier-attack src="x">';
+      },
+    });
+    try {
+      const direct = trustedHtml(directCarrier);
+      const safe = safeRichHtml('<strong data-kovo-stringifier-safe>SAFE</strong>');
+      expect(kovoTrustedHtmlContent(direct)).toBe(
+        '<em data-kovo-direct-stringifier-safe>DIRECT SAFE</em>',
+      );
+      expect(kovoTrustedHtmlContent(safe)).toBe('<strong>SAFE</strong>');
+    } finally {
+      Object.defineProperty(TrustedHTML.prototype, 'toString', descriptor);
+    }
+  });
+
   it('does not accept a caller-owned shared policy cache as HTML authority', () => {
     const globalRecord = globalThis as typeof globalThis & {
       __kovo_tt?: { createHTML(input: string): unknown } | null;
