@@ -66,7 +66,10 @@ describe('inline loader minified artifact', () => {
       "const ftd=(root,target)=>{try{const selectorTarget=sq(target);return(root.querySelector?.('[kovo-fragment-target=\"'+selectorTarget+'\"]')??root.getElementById?.(target)??root.querySelector?.('[id=\"'+selectorTarget+'\"]')??root.querySelector?.('[kovo-c=\"'+selectorTarget+'\"]')??root.querySelector?.('kovo-defer[target=\"'+selectorTarget+'\"]'));}catch{return;}};const ft=(target)=>ftd(doc,target);",
     );
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-param-types')");
-    expect(inlineKovoLoaderInstallerSource).toContain('new DOMParser().parseFromString');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('new DOMParser().parseFromString');
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'parseHtmlDocument:(value)=>bns.parseHtmlDocument(value)',
+    );
     expect(inlineKovoLoaderInstallerSource).toContain("'[kovo-nav-segment]'");
     expect(inlineKovoLoaderInstallerSource).not.toContain('Math.random');
   });

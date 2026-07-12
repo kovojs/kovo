@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 
 import { applyBindProp } from './bind-prop.js';
+import { createDocumentLifecycleRecovery } from './document-lifecycle.js';
 import { isAllowedKovoDynamicImportUrl } from './dynamic-import-url.js';
 import { installEnhancedNavigationRuntime } from './enhanced-navigation.js';
 import { DomMorphRoot, applyFragments } from './morph.js';
-import { applyStateBindings } from './query-bindings.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import { applyCompiledQueryUpdatePlan, applyStateBindings } from './query-bindings.js';
 import { applyHtmlResponseFragments } from './response-fragment-apply.js';
 import { kovoTrustedHtmlContent, safeRichHtml } from './security-output.js';
 import { StreamTextBuffer } from './stream-text.js';
@@ -84,6 +86,41 @@ describe('browser-runtime security regressions', () => {
     );
   });
 
+  it('keeps compiler-rendered template stamp bytes authoritative after late trim replacement', () => {
+    const safeHtml = '<li>SERVER-SAFE</li>';
+    const hostileHtml = '<base data-browser-runtime-security href="https://attacker.example/">';
+    const list = document.createElement('ul');
+    list.setAttribute('id', 'security-list');
+    list.innerHTML = '<template kovo-stamp><li></li></template>';
+    document.body.append(list);
+    const originalBase = document.baseURI;
+
+    String.prototype.trim = function () {
+      if (String(this) === safeHtml) return hostileHtml;
+      return Reflect.apply(originalTrim, this, []);
+    };
+
+    applyCompiledQueryUpdatePlan(
+      document,
+      'inventory',
+      { items: [{ id: 'item-1' }] },
+      {
+        templateStamps: [
+          {
+            key: 'id',
+            list: 'items',
+            render: () => safeHtml,
+            selector: '#security-list',
+          },
+        ],
+      },
+    );
+
+    expect(document.querySelector('base[data-browser-runtime-security]')).toBeNull();
+    expect(document.baseURI).toBe(originalBase);
+    expect(list.querySelector('li[kovo-key="item-1"]')?.textContent).toBe('SERVER-SAFE');
+  });
+
   it('keeps inline wire fragment bytes authoritative after late slice replacement', () => {
     const safeContent = '<section kovo-fragment-target="account">SERVER-SAFE</section>';
     const hostileHtml = '<base data-browser-runtime-security href="https://attacker.example/">';
@@ -116,6 +153,45 @@ describe('browser-runtime security regressions', () => {
     } finally {
       String.prototype.slice = originalSlice;
     }
+  });
+
+  it('applies the scanned fragment array by index after late iterator replacement', () => {
+    const safeContent = '<section kovo-fragment-target="account">SERVER-SAFE</section>';
+    const hostileHtml = '<base data-browser-runtime-security href="https://attacker.example/">';
+    const body = `<kovo-fragment target="account">${safeContent}</kovo-fragment>`;
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'account');
+    target.textContent = 'CURRENT-SAFE';
+    document.body.append(target);
+    const originalBase = document.baseURI;
+    const chunks = readInlineMutationResponseBodyChunks(body);
+    const fragments = chunks.fragments;
+    const originalIterator = Array.prototype[Symbol.iterator];
+
+    try {
+      Array.prototype[Symbol.iterator] = function () {
+        if (this === fragments) {
+          return [
+            {
+              html: {
+                html: hostileHtml,
+                toJSON: () => hostileHtml,
+                toString: () => hostileHtml,
+              },
+              target: 'account',
+            },
+          ][Symbol.iterator]();
+        }
+        return Reflect.apply(originalIterator, this, []);
+      };
+      applyHtmlResponseFragments(fragments, (name) => (name === 'account' ? target : null));
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(document.querySelector('base[data-browser-runtime-security]')).toBeNull();
+    expect(document.baseURI).toBe(originalBase);
+    expect(target.textContent).toBe('SERVER-SAFE');
   });
 
   it('keeps a genuine dialog open binding on the closed property allowlist after pollution', () => {
@@ -227,6 +303,79 @@ describe('browser-runtime security regressions', () => {
     expect(pushState).toHaveBeenCalledWith({}, '', new URL('/orders?page=2', location.href).href);
     expect(document.querySelector('#privileged-old')).toBeNull();
     expect(document.querySelector('#revoked-next')?.textContent).toBe('ACCESS-REVOKED');
+  });
+
+  it('uses stable snapshots when reconstructing fetched live-target fragments', async () => {
+    if (!originalOuterHtmlDescriptor?.get) throw new Error('outerHTML getter unavailable');
+    const safeHtml = [
+      '<!doctype html><html><body>',
+      '<section kovo-fragment-target="account">SERVER-SAFE</section>',
+      '</body></html>',
+    ].join('');
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'account');
+    target.textContent = 'CURRENT-SAFE';
+    document.body.append(target);
+    const originalBase = document.baseURI;
+    const security = createBrowserNavigationSecurityControls();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(safeHtml, { status: 200 })),
+    );
+
+    const recovery = createDocumentLifecycleRecovery({
+      acceptHeader: 'text/html',
+      applyBody(body) {
+        const chunks = readInlineMutationResponseBodyChunks(body);
+        applyHtmlResponseFragments(chunks.fragments, (name) =>
+          name === 'account' ? target : null,
+        );
+      },
+      buildHeader: () => '',
+      currentBuild: () => '',
+      currentHref: () => security.currentUrl()?.href,
+      document,
+      encodeAttribute: (value) => value,
+      fetchValue: (input, init) => security.fetchValue(input, init),
+      findTarget(root, name) {
+        return root.querySelector(`[kovo-fragment-target="${name}"]`) ?? undefined;
+      },
+      liveTargets: () => ['account#account@tok_account:{}'],
+      parseHtmlDocument: (value) => security.parseHtmlDocument(value),
+      queryAll: (root, selector) => [...root.querySelectorAll(selector)],
+      queryUrl: () => '',
+      readAttribute: () => null,
+      readElementAttribute: () => ({ present: false }),
+      readResponseStatus: (response) => {
+        const status = security.readResponseField(response, 'status');
+        return typeof status === 'number' ? status : undefined;
+      },
+      readResponseText: (response) => security.readResponseText(response),
+      reload: () => security.reload(),
+      snapshotElementHtml: (element) => security.readElementOuterHtml(element),
+      targetHeader: () => [],
+      wireKey: () => '',
+    });
+
+    const nativeOuterHtmlGet = originalOuterHtmlDescriptor.get;
+    Object.defineProperty(Element.prototype, 'outerHTML', {
+      ...originalOuterHtmlDescriptor,
+      get(this: Element) {
+        if (
+          this.ownerDocument !== document &&
+          this.getAttribute('kovo-fragment-target') === 'account'
+        ) {
+          return '<base data-browser-runtime-security href="https://attacker.example/">';
+        }
+        return Reflect.apply(nativeOuterHtmlGet, this, []);
+      },
+    });
+
+    recovery.refreshLiveTargets();
+
+    await vi.waitFor(() => expect(target.textContent).toBe('SERVER-SAFE'));
+    expect(document.querySelector('base[data-browser-runtime-security]')).toBeNull();
+    expect(document.baseURI).toBe(originalBase);
   });
 
   it('strips framework control attributes from rich CMS markup before DOM insertion', async () => {

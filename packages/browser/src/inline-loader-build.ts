@@ -624,14 +624,24 @@ function installInlineKovoLoader(im) {
     applyBody: fab,
     buildHeader: bh,
     currentBuild: kb,
+    currentHref: () => bns.currentUrl()?.href,
     document: doc,
     encodeAttribute: ea,
+    fetchValue: (input, init) => bns.fetchValue(input, init),
     findTarget: ftd,
     liveTargets: rlt,
+    parseHtmlDocument: (value) => bns.parseHtmlDocument(value),
     queryAll: qa,
     queryUrl: qurl,
     readAttribute,
     readElementAttribute: readWireElementAttribute,
+    readResponseStatus: (response) => {
+      const status = bns.readResponseField(response, 'status');
+      return typeof status === 'number' ? status : undefined;
+    },
+    readResponseText: (response) => bns.readResponseText(response),
+    reload: () => bns.reload(),
+    snapshotElementHtml: (element) => bns.readElementOuterHtml(element),
     targetHeader: rt,
     wireKey: qwk,
   });
@@ -712,9 +722,17 @@ function installInlineKovoLoader(im) {
   };
   const ax = (chunks) => {
     const textStart = chunks.texts[0]?.start ?? 1 / 0;
-    af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start < textStart)));
+    const before = [];
+    const after = [];
+    for (let index = 0; index < chunks.fragments.length; index += 1) {
+      const chunk = chunks.fragments[index];
+      if (!chunk) continue;
+      const target = chunk.start < textStart ? before : after;
+      target[target.length] = chunk;
+    }
+    af(readFragmentChunksFromElements(before));
     const appliedTexts = at(readStreamTextChunksFromElements(chunks.texts));
-    af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start >= textStart)));
+    af(readFragmentChunksFromElements(after));
     return appliedTexts;
   };
   const streamRecoveryError = {};

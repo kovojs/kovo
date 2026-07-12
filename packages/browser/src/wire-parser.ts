@@ -4,6 +4,13 @@ import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import {
+  securityRegExpTest,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './security-witness-intrinsics.js';
+import {
   readElementChunks,
   readMutationResponseBodyCore,
   readMutationResponseElementChunks,
@@ -62,7 +69,7 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
     const markerStart = nextBoundaryMarker(body, marker, cursor);
     if (markerStart === -1) return chunks;
 
-    if (body.startsWith(`${marker}--`, markerStart)) return chunks;
+    if (securityStringStartsWith(body, `${marker}--`, markerStart)) return chunks;
 
     const chunkStart = boundaryLineEnd(body, markerStart + marker.length);
     if (chunkStart === undefined) return chunks;
@@ -70,7 +77,7 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
     const nextMarkerStart = nextBoundaryMarker(body, marker, chunkStart);
     const chunkEnd =
       nextMarkerStart === -1 ? body.length : trimBoundaryPrelude(body, nextMarkerStart);
-    const chunk = body.slice(chunkStart, chunkEnd);
+    const chunk = securityStringSlice(body, chunkStart, chunkEnd);
     let containsMutationResponseElement = false;
     const responseElements = readMutationResponseElementChunks(chunk, {
       onMalformedFragment() {
@@ -89,7 +96,7 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
       responseElements.fragments.length > 0 ||
       responseElements.texts.length > 0
     ) {
-      chunks.push(chunk);
+      chunks[chunks.length] = chunk;
     }
     cursor = nextMarkerStart === -1 ? body.length : nextMarkerStart;
   }
@@ -99,7 +106,7 @@ function nextBoundaryMarker(body: string, marker: string, start: number): number
   let cursor = start;
 
   while (cursor < body.length) {
-    const markerStart = body.indexOf(marker, cursor);
+    const markerStart = securityStringIndexOf(body, marker, cursor);
     if (markerStart === -1) return -1;
     if (markerStart === 0 || body[markerStart - 1] === '\n') return markerStart;
     cursor = markerStart + marker.length;
@@ -122,13 +129,16 @@ function trimBoundaryPrelude(body: string, markerStart: number): number {
 export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): QueryChunk[] {
   const queries: QueryChunk[] = [];
 
-  for (const chunk of readElementChunks(body, 'kovo-query', {
+  const chunks = readElementChunks(body, 'kovo-query', {
     onMalformed(reason) {
       reportRuntimeError(onError, malformedQueryError(reason));
     },
-  })) {
+  });
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (!chunk) continue;
     const query = readQueryElementChunk(chunk, onError);
-    if (query) queries.push(query);
+    if (query) queries[queries.length] = query;
   }
 
   return queries;
@@ -228,24 +238,29 @@ function readQueryChunkPayload(
  */
 function parseSettlementSet(settles?: string | null): string[] {
   if (!settles) return [];
-  return settles
-    .trim()
-    .split(/\s+/)
-    .filter((token) => token.length > 0);
+  const value = securityStringTrim(settles);
+  const tokens: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    if (index < value.length && !securityRegExpTest(/\s/u, value[index] ?? '')) continue;
+    if (index > start) tokens[tokens.length] = securityStringSlice(value, start, index);
+    start = index + 1;
+  }
+  return tokens;
 }
 
 function readQueryChunkIdentity(name: string, key?: string | null): { key?: string; name: string } {
   if (key != null) return { key, name };
 
-  const separator = name.indexOf(':');
+  const separator = securityStringIndexOf(name, ':');
   if (separator <= 0 || separator === name.length - 1) return { name };
 
   // SPEC.md §9.4/§10.2: typed reads and hydration may carry the canonical
   // instance key directly as `name:key`, while the runtime store still applies
   // decoded chunks as `{ name, key }`.
   return {
-    key: name.slice(separator + 1),
-    name: name.slice(0, separator),
+    key: securityStringSlice(name, separator + 1),
+    name: securityStringSlice(name, 0, separator),
   };
 }
 
@@ -268,26 +283,30 @@ export function readMutationResponseBodyChunks(
   const malformedTexts: string[] = [];
   const chunks = readMutationResponseBodyCore(body, {
     onMalformedFragment(reason) {
-      malformedFragments.push(reason);
+      malformedFragments[malformedFragments.length] = reason;
     },
     onMalformedQuery(reason) {
       reportRuntimeError(onError, malformedQueryError(reason));
     },
     onMalformedText(reason) {
-      malformedTexts.push(reason);
+      malformedTexts[malformedTexts.length] = reason;
     },
   });
   const queries: QueryChunk[] = [];
 
-  for (const chunk of chunks.queries) {
+  for (let index = 0; index < chunks.queries.length; index += 1) {
+    const chunk = chunks.queries[index];
+    if (!chunk) continue;
     const query = readQueryElementChunk(chunk, onError);
-    if (query) queries.push(query);
+    if (query) queries[queries.length] = query;
   }
-  for (const reason of malformedFragments) {
-    reportRuntimeError(onError, malformedFragmentError(reason));
+  for (let index = 0; index < malformedFragments.length; index += 1) {
+    const reason = malformedFragments[index];
+    if (reason !== undefined) reportRuntimeError(onError, malformedFragmentError(reason));
   }
-  for (const reason of malformedTexts) {
-    reportRuntimeError(onError, malformedTextError(reason));
+  for (let index = 0; index < malformedTexts.length; index += 1) {
+    const reason = malformedTexts[index];
+    if (reason !== undefined) reportRuntimeError(onError, malformedTextError(reason));
   }
 
   return {
@@ -305,15 +324,17 @@ export function readMutationResponseBodyPrefixChunks(
   const consumed = consumedElementEnd(elements.queries, elements.fragments, elements.texts);
   const queries: QueryChunk[] = [];
 
-  for (const chunk of elements.queries) {
+  for (let index = 0; index < elements.queries.length; index += 1) {
+    const chunk = elements.queries[index];
+    if (!chunk) continue;
     const query = readQueryElementChunk(chunk, onError);
-    if (query) queries.push(query);
+    if (query) queries[queries.length] = query;
   }
 
   return {
     chunks: {
       fragments: pinScannedFragmentChunks(
-        readMutationResponseBodyCore(body.slice(0, consumed)).fragments,
+        readMutationResponseBodyCore(securityStringSlice(body, 0, consumed)).fragments,
       ),
       queries,
       ...(elements.texts.length === 0
@@ -325,30 +346,47 @@ export function readMutationResponseBodyPrefixChunks(
 }
 
 function pinScannedFragmentChunks(chunks: readonly FragmentChunk[]): FragmentChunk[] {
-  return chunks.map((chunk) => ({
-    ...chunk,
+  const pinned: FragmentChunk[] = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (!chunk) continue;
     // The shared scanner must also be extractable into the dependency-free inline loader. At the
-    // modular boundary, immediately convert its frozen transport record into the private witnessed
+    // modular boundary, immediately convert its exact transport bytes into the private witnessed
     // carrier consumed by DOM sinks (SPEC §6.6 / bugz-26 H1).
-    html: createRenderedFragmentHtml(chunk.html.html),
-  }));
+    pinned[pinned.length] = {
+      html: createRenderedFragmentHtml(chunk.html.html),
+      ...(chunk.mode === undefined ? {} : { mode: chunk.mode }),
+      target: chunk.target,
+    };
+  }
+  return pinned;
 }
 
 function consumedElementEnd(...groups: readonly ElementChunk[][]): number {
   let end = 0;
-  for (const group of groups) {
-    for (const chunk of group) {
-      end = Math.max(end, chunk.end);
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const group = groups[groupIndex];
+    if (!group) continue;
+    for (let index = 0; index < group.length; index += 1) {
+      const chunk = group[index];
+      if (chunk && chunk.end > end) end = chunk.end;
     }
   }
   return end;
 }
 
 function decodeStreamTextChunks(chunks: readonly StreamTextChunk[]): StreamTextChunk[] {
-  return chunks.map((chunk) => ({
-    ...chunk,
-    text: unescapeHtml(chunk.text),
-  }));
+  const decoded: StreamTextChunk[] = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (!chunk) continue;
+    decoded[decoded.length] = {
+      ...(chunk.mode === undefined ? {} : { mode: chunk.mode }),
+      target: chunk.target,
+      text: unescapeHtml(chunk.text),
+    };
+  }
+  return decoded;
 }
 
 function malformedQueryError(reason: string): Error {

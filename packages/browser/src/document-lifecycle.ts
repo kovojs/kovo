@@ -1,12 +1,15 @@
 export interface DocumentLifecycleRecoveryOptions {
   acceptHeader: string;
   applyBody: (body: string, build?: string) => void;
-  buildHeader: (response: Response) => string;
+  buildHeader: (response: unknown) => string;
   currentBuild: (root?: ParentNode) => string;
+  currentHref: () => string | undefined;
   document: Document;
   encodeAttribute: (value: string) => string;
+  fetchValue: (input: string, init: object) => Promise<unknown>;
   findTarget: (root: ParentNode, target: string) => Element | undefined;
   liveTargets: () => string[];
+  parseHtmlDocument: (value: string) => Document | undefined;
   queryUrl: (wireKey: string) => string;
   readAttribute: (attrs: string, name: string) => string | null;
   readElementAttribute: (
@@ -14,6 +17,11 @@ export interface DocumentLifecycleRecoveryOptions {
     name: string,
   ) => { present: boolean };
   queryAll: (root: ParentNode, selector: string) => Element[];
+  readResponseStatus: (response: unknown) => number | undefined;
+  readResponseText: (response: unknown) => Promise<string>;
+  reload: () => boolean;
+  /** Boot-pinned serialization for fetched live-target truth (SPEC §6.6/§8). */
+  snapshotElementHtml: (element: Element) => string | undefined;
   targetHeader: () => string[];
   wireKey: (name: string | null, key: string | null) => string;
 }
@@ -46,78 +54,89 @@ export function createDocumentLifecycleRecovery(
             ),
           );
     if (!u) return;
-    fetch(u, {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    })
+    options
+      .fetchValue(u, {
+        cache: 'no-store',
+        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+        method: 'GET',
+      })
       .then((res) => {
-        if (res.status >= 400) return;
+        const status = options.readResponseStatus(res);
+        if (status === undefined || status >= 400) return;
         if (
           options.currentBuild() &&
           (!options.buildHeader(res) || options.buildHeader(res) !== options.currentBuild())
         ) {
-          location.reload?.();
+          options.reload();
           return;
         }
-        return res.text().then((text) => options.applyBody(text, options.buildHeader(res)));
+        return options
+          .readResponseText(res)
+          .then((text) => options.applyBody(text, options.buildHeader(res)));
       })
       .catch(() => {});
   };
   const refreshLiveTargets = () => {
     const live = options.liveTargets();
     if (!live.length) return;
-    fetch(location.href, {
-      cache: 'no-store',
-      headers: {
-        Accept: options.acceptHeader,
-        'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': live.join('; '),
-        'Kovo-Targets': options.targetHeader().join('; '),
-      },
-      method: 'GET',
-    })
+    const href = options.currentHref();
+    if (!href) return;
+    options
+      .fetchValue(href, {
+        cache: 'no-store',
+        headers: {
+          Accept: options.acceptHeader,
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': lifecycleJoin(live, '; '),
+          'Kovo-Targets': lifecycleJoin(options.targetHeader(), '; '),
+        },
+        method: 'GET',
+      })
       .then((res) => {
-        if (res.status >= 400) return;
+        const status = options.readResponseStatus(res);
+        if (status === undefined || status >= 400) return;
         const responseBuild = options.buildHeader(res);
         if (options.currentBuild() && responseBuild && responseBuild !== options.currentBuild()) {
-          location.reload?.();
+          options.reload();
           return;
         }
-        return res.text().then((text) => {
+        return options.readResponseText(res).then((text) => {
           if (
-            text.includes('<kovo-fragment') ||
-            text.includes('<kovo-query') ||
-            text.includes('<kovo-text')
+            lifecycleContains(text, '<kovo-fragment') ||
+            lifecycleContains(text, '<kovo-query') ||
+            lifecycleContains(text, '<kovo-text')
           ) {
             options.applyBody(text, responseBuild || options.currentBuild());
             return;
           }
-          const nextDoc = new DOMParser().parseFromString(text, 'text/html');
+          const nextDoc = options.parseHtmlDocument(text);
+          if (!nextDoc) return;
           const nextBuild = responseBuild || options.currentBuild(nextDoc);
           if (options.currentBuild() && (!nextBuild || nextBuild !== options.currentBuild())) {
-            location.reload?.();
+            options.reload();
             return;
           }
-          const fragments: string[] = [];
+          let fragments = '';
           const seen = new Set<string>();
-          for (const entry of live) {
-            const target = entry.split('#')[0];
+          for (let index = 0; index < live.length; index += 1) {
+            const entry = live[index];
+            if (entry === undefined) continue;
+            const target = lifecycleBeforeHash(entry);
             if (!target || seen.has(target)) continue;
             seen.add(target);
             const next = options.findTarget(nextDoc, target);
             if (next) {
-              fragments.push(
+              const nextHtml = options.snapshotElementHtml(next);
+              if (nextHtml === undefined) continue;
+              fragments +=
                 '<kovo-fragment target="' +
-                  options.encodeAttribute(target) +
-                  '">' +
-                  next.outerHTML +
-                  '</kovo-fragment>',
-              );
+                options.encodeAttribute(target) +
+                '">' +
+                nextHtml +
+                '</kovo-fragment>';
             }
           }
-          if (fragments.length)
-            options.applyBody(fragments.join(''), nextBuild || options.currentBuild());
+          if (fragments.length) options.applyBody(fragments, nextBuild || options.currentBuild());
         });
       })
       .catch(() => {});
@@ -168,4 +187,36 @@ export function createDocumentLifecycleRecovery(
     rememberQueryScripts,
     visibleReturnRefresh,
   };
+}
+
+function lifecycleBeforeHash(value: string): string {
+  let target = '';
+  for (let index = 0; index < value.length && value[index] !== '#'; index += 1) {
+    target += value[index];
+  }
+  return target;
+}
+
+function lifecycleContains(value: string, search: string): boolean {
+  for (let offset = 0; offset + search.length <= value.length; offset += 1) {
+    let equal = true;
+    for (let index = 0; index < search.length; index += 1) {
+      if (value[offset + index] !== search[index]) {
+        equal = false;
+        break;
+      }
+    }
+    if (equal) return true;
+  }
+  return false;
+}
+
+function lifecycleJoin(values: readonly string[], separator: string): string {
+  let result = '';
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === undefined) continue;
+    result += (result === '' ? '' : separator) + value;
+  }
+  return result;
 }

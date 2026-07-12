@@ -273,6 +273,68 @@ describe('wire parser HTML entity handling', () => {
     ]);
   });
 
+  it('mints the private fragment witness from the scanned array despite late map replacement', () => {
+    const safeContent = '<section>SERVER-SAFE</section>';
+    const substituted = '<base href="https://attacker.example/">';
+    const body = `<kovo-fragment target="account">${safeContent}</kovo-fragment>`;
+    const originalMap = Array.prototype.map;
+    let parsed: ReturnType<typeof readMutationResponseBodyChunks> | undefined;
+
+    try {
+      Array.prototype.map = function <T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const values = this as T[];
+        const candidate = values[0] as { html?: { html?: unknown }; target?: unknown } | undefined;
+        if (
+          values.length === 1 &&
+          candidate?.target === 'account' &&
+          candidate.html?.html === safeContent
+        ) {
+          const replaced = [
+            {
+              ...(candidate as object),
+              html: { html: substituted, toJSON: () => substituted, toString: () => substituted },
+            },
+          ];
+          return Reflect.apply(originalMap, replaced, [callback, thisArg]) as U[];
+        }
+        return Reflect.apply(originalMap, values, [callback, thisArg]) as U[];
+      };
+      parsed = readMutationResponseBodyChunks(body);
+    } finally {
+      Array.prototype.map = originalMap;
+    }
+
+    expect(fragmentSnapshots(parsed?.fragments ?? [])).toEqual([
+      { html: safeContent, target: 'account' },
+    ]);
+  });
+
+  it('does not let a late Object.freeze replacement rewrite the scanned carrier', () => {
+    const safeContent = '<section>SERVER-SAFE</section>';
+    const substituted = '<base href="https://attacker.example/">';
+    const body = `<kovo-fragment target="account">${safeContent}</kovo-fragment>`;
+    const originalFreeze = Object.freeze;
+    let parsed: ReturnType<typeof readMutationResponseBodyChunks> | undefined;
+
+    try {
+      Object.freeze = function <T extends object>(value: T): Readonly<T> {
+        const candidate = value as T & { html?: unknown };
+        if (candidate.html === safeContent) candidate.html = substituted;
+        return Reflect.apply(originalFreeze, Object, [value]) as Readonly<T>;
+      };
+      parsed = readMutationResponseBodyChunks(body);
+    } finally {
+      Object.freeze = originalFreeze;
+    }
+
+    expect(fragmentSnapshots(parsed?.fragments ?? [])).toEqual([
+      { html: safeContent, target: 'account' },
+    ]);
+  });
+
   it('preserves malformed query-then-fragment reporting order through the shared core', () => {
     const onError = vi.fn();
 

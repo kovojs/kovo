@@ -10,6 +10,7 @@ import type {
 import { morphDomElement, sanitizeDomElementTree } from './morph.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
+import { securityStringTrim } from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import { reconcileKeyed } from './keyed-reconciler.js';
@@ -347,7 +348,7 @@ function domTemplateStampElement(
 ): Element | null {
   const parser = template.ownerDocument.createElement('template');
   // SF (secure-framework Tier 3): Trusted Types policy seam (see trusted-types.ts).
-  parser.innerHTML = kovoCreateHTML(item.html.trim());
+  parser.innerHTML = kovoCreateHTML(securityStringTrim(item.html));
   const element = parser.content.firstElementChild;
   if (!element) return null;
 

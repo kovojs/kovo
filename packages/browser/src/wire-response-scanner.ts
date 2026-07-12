@@ -118,20 +118,26 @@ function readFragmentElementChunk(
 }
 
 export function readFragmentChunksFromElements(
-  chunks: Iterable<Pick<ElementChunk, 'attrs' | 'content'>>,
+  chunks: readonly Pick<ElementChunk, 'attrs' | 'content'>[],
 ): FragmentChunk[] {
   const fragments: FragmentChunk[] = [];
 
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (!chunk) continue;
     const fragment = readFragmentElementChunk(chunk);
-    if (fragment) fragments.push(fragment);
+    if (fragment) fragments[fragments.length] = fragment;
   }
 
   return fragments;
 }
 
 function createRenderedFragmentHtml(html: string): RenderedFragmentHtml {
-  return Object.freeze({
+  // This dependency-free carrier exists only between the synchronous inline
+  // scanner and DOM adapter. Do not dispatch through ambient Object.freeze:
+  // a late replacement could rewrite `html` before the modular boundary mints
+  // its private core witness (SPEC.md §6.6/§9.4).
+  return {
     html,
     toJSON() {
       return html;
@@ -139,7 +145,7 @@ function createRenderedFragmentHtml(html: string): RenderedFragmentHtml {
     toString() {
       return html;
     },
-  });
+  };
 }
 
 function readStreamTextElementChunk(
@@ -157,13 +163,15 @@ function readStreamTextElementChunk(
 }
 
 export function readStreamTextChunksFromElements(
-  chunks: Iterable<Pick<ElementChunk, 'attrs' | 'content'>>,
+  chunks: readonly Pick<ElementChunk, 'attrs' | 'content'>[],
 ): StreamTextChunk[] {
   const texts: StreamTextChunk[] = [];
 
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (!chunk) continue;
     const text = readStreamTextElementChunk(chunk);
-    if (text) texts.push(text);
+    if (text) texts[texts.length] = text;
   }
 
   return texts;
@@ -175,19 +183,16 @@ export function readElementChunks(
   options: ReadElementChunksOptions = {},
 ): ElementChunk[] {
   const chunks: ElementChunk[] = [];
-  for (const token of readWireElementTokens(body, tagName, options)) {
-    const chunk: ElementChunk = {
+  const tokens = readWireElementTokens(body, tagName, options);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (!token) continue;
+    chunks[chunks.length] = {
       attrs: token.attrs,
       content: token.content,
       end: token.end,
       start: token.start,
     };
-    Object.defineProperty(chunk, 'attributes', {
-      configurable: true,
-      enumerable: false,
-      value: token.attributes,
-    });
-    chunks.push(chunk);
   }
 
   return chunks;

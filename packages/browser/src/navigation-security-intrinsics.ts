@@ -75,6 +75,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const elementOuterHtml = NativeElement ? getter(NativeElement.prototype, 'outerHTML') : undefined;
   const elementRemove = NativeElement ? valueMethod(NativeElement.prototype, 'remove') : undefined;
   const nodeCloneNode = NativeNode ? valueMethod(NativeNode.prototype, 'cloneNode') : undefined;
+  const nodeAppendChild = NativeNode ? valueMethod(NativeNode.prototype, 'appendChild') : undefined;
   const documentCreateElement = NativeDocument
     ? valueMethod(NativeDocument.prototype, 'createElement')
     : undefined;
@@ -675,22 +676,47 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !elementSetAttribute ||
           !elementOuterHtml ||
           !elementRemove ||
-          !nodeCloneNode
+          !nodeCloneNode ||
+          !nodeAppendChild ||
+          !elementQuerySelector
         ) {
           return false;
         }
-        const snapshotControl = apply<unknown>(documentCreateElement, documentObject, ['div']);
-        if (snapshotControl === null || typeof snapshotControl !== 'object') return false;
-        apply(elementSetAttribute, snapshotControl, ['data-kovo-control', 'yes']);
+        const snapshotControl = apply<unknown>(documentCreateElement, documentObject, ['section']);
+        const nestedControl = apply<unknown>(documentCreateElement, documentObject, ['span']);
+        if (
+          snapshotControl === null ||
+          typeof snapshotControl !== 'object' ||
+          nestedControl === null ||
+          typeof nestedControl !== 'object'
+        ) {
+          return false;
+        }
+        apply(elementSetAttribute, snapshotControl, ['kovo-nav-segment', 'security-control']);
+        apply(elementSetAttribute, nestedControl, ['kovo-nav-segment', 'nested-control']);
+        apply(elementSetAttribute, nestedControl, ['kovo-fragment-target', 'security-live-target']);
+        apply(nodeAppendChild, snapshotControl, [nestedControl]);
+        const expectedSnapshot =
+          '<section kovo-nav-segment="security-control"><span kovo-nav-segment="nested-control" kovo-fragment-target="security-live-target"></span></section>';
+        const expectedWithoutNested = '<section kovo-nav-segment="security-control"></section>';
+        const expectedNested =
+          '<span kovo-nav-segment="nested-control" kovo-fragment-target="security-live-target"></span>';
         const snapshotClone = apply<unknown>(nodeCloneNode, snapshotControl, [true]);
         if (
           snapshotClone === null ||
           typeof snapshotClone !== 'object' ||
-          apply(elementOuterHtml, snapshotControl, []) !== '<div data-kovo-control="yes"></div>' ||
-          apply(elementOuterHtml, snapshotClone, []) !== '<div data-kovo-control="yes"></div>'
+          apply(elementOuterHtml, snapshotControl, []) !== expectedSnapshot ||
+          apply(elementOuterHtml, nestedControl, []) !== expectedNested ||
+          apply(elementOuterHtml, snapshotClone, []) !== expectedSnapshot
         ) {
           return false;
         }
+        const nestedClone = apply<unknown>(elementQuerySelector, snapshotClone, [
+          '[kovo-nav-segment="nested-control"]',
+        ]);
+        if (nestedClone === null || typeof nestedClone !== 'object') return false;
+        apply(elementRemove, nestedClone, []);
+        if (apply(elementOuterHtml, snapshotClone, []) !== expectedWithoutNested) return false;
       }
       return true;
     } catch {

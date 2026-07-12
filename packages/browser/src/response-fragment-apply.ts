@@ -110,8 +110,11 @@ export function applyResponseFragments<Target>(
   // list whether the caller is modular DOM morph or the generated inline loader.
   const applied: string[] = [];
 
-  for (const fragment of fragments) {
-    if (applyResponseFragment(fragment, options)) applied.push(fragment.target);
+  for (let index = 0; index < fragments.length; index += 1) {
+    const fragment = fragments[index];
+    if (fragment && applyResponseFragment(fragment, options)) {
+      applied[applied.length] = fragment.target;
+    }
   }
 
   return applied;
@@ -132,7 +135,9 @@ export function p(
   // tests share the DOM HTML adapter instead of carrying an inline-only clone.
   const a: string[] = [];
 
-  for (const x of fs) {
+  for (let index = 0; index < fs.length; index += 1) {
+    const x = fs[index];
+    if (!x) continue;
     const e = f(x.target);
     if (!e) continue;
 
@@ -171,7 +176,7 @@ export function p(
     } else {
       d(e, x.html);
     }
-    a.push(x.target);
+    a[a.length] = x.target;
   }
 
   return a;
