@@ -18,6 +18,8 @@ import type {
 } from './contracts.js';
 import { getBetterAuthSetCookie } from './trusted-plaintext.js';
 
+const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+
 export { getBetterAuthSetCookie } from './trusted-plaintext.js';
 
 /** Success value returned by Better Auth credential mutations. */
@@ -256,11 +258,14 @@ function isCredentialFailureStatus(status: number): boolean {
 }
 
 function readNumericProperty(value: object, key: string): number | undefined {
-  if (!Object.hasOwn(value, key)) return undefined;
-
-  const property = (value as Record<string, unknown>)[key];
-
-  return typeof property === 'number' ? property : undefined;
+  try {
+    const descriptor = nativeObjectGetOwnPropertyDescriptor(value, key);
+    return descriptor && 'value' in descriptor && typeof descriptor.value === 'number'
+      ? descriptor.value
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // SECURITY (SECURITY_FINDINGS.md H4): the same-origin redirect guard must reject

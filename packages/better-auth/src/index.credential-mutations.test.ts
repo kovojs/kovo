@@ -94,6 +94,20 @@ describe('credential mutation helpers', () => {
     }).toThrow(message);
   });
 
+  it('does not invoke provider-owned status accessors while classifying credential failures', () => {
+    let reads = 0;
+    const password = 'ACCESSOR_PASSWORD_SHOULD_NEVER_ESCAPE';
+    const error = Object.defineProperty(new Error('provider failed'), 'status', {
+      get() {
+        reads += 1;
+        throw new Error(`accessor leaked ${password}`);
+      },
+    });
+
+    expect(isBetterAuthCredentialFailureError(error)).toBe(false);
+    expect(reads).toBe(0);
+  });
+
   it.each(['sign-in', 'sign-up'] as const)(
     'does not let %s provider errors carry submitted passwords out of the trusted boundary',
     async (kind) => {
