@@ -5,6 +5,8 @@ import {
   createFileSystemMap,
   fileSystemArrayJoin,
   fileSystemArraySome,
+  fileSystemJsonParse,
+  fileSystemJsonStringify,
   fileSystemMapDelete,
   fileSystemMapGet,
   fileSystemMapSet,
@@ -14,6 +16,8 @@ import {
   fileSystemStringSplit,
   fileSystemStringStartsWith,
   fileSystemStringToLowerCase,
+  fileSystemUtf8Decode,
+  fileSystemUtf8Encode,
 } from './internal/filesystem-intrinsics.js';
 
 /** The accepted body shapes when writing an object: a string, raw bytes, or a byte stream. */
@@ -173,7 +177,6 @@ interface FileSystemMetadataRecord {
   size?: number;
 }
 
-const textEncoder = new TextEncoder();
 const sidecarSuffix = '.kovo-storage.json';
 const fileSystemObjectPrefix = 'kovo-storage-v1';
 
@@ -286,7 +289,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
         await fileSystem.writeFile(physicalKey, bytes);
         await fileSystem.writeFile(
           metadataStorageKey(physicalKey),
-          JSON.stringify(metadataRecord(info)),
+          fileSystemJsonStringify(metadataRecord(info)),
         );
       });
 
@@ -470,7 +473,7 @@ export function normalizeStorageKey(key: string): string {
  * @returns The body's bytes as a `Uint8Array`.
  */
 export async function storageBodyToBytes(body: StorageBody): Promise<Uint8Array> {
-  if (typeof body === 'string') return textEncoder.encode(body);
+  if (typeof body === 'string') return fileSystemUtf8Encode(body);
   if (body instanceof ArrayBuffer) return new Uint8Array(body.slice(0));
   if (ArrayBuffer.isView(body)) {
     return new Uint8Array(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
@@ -560,7 +563,7 @@ async function fileSystemStat(
  * an authorization proof.
  */
 function fileSystemStorageKey(key: string): string {
-  const digest = createHash('sha256').update(textEncoder.encode(key)).digest('hex');
+  const digest = createHash('sha256').update(fileSystemUtf8Encode(key)).digest('hex');
   return `${fileSystemObjectPrefix}/${digest.slice(0, 2)}/${digest.slice(2)}`;
 }
 
@@ -571,7 +574,7 @@ async function readFileSystemMetadataRecord(
   const bytes = await fileSystem.fileBytes(metadataStorageKey(physicalKey));
   if (bytes === undefined) return undefined;
   try {
-    const value: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    const value: unknown = fileSystemJsonParse(fileSystemUtf8Decode(bytes));
     return isFileSystemMetadataRecord(value) ? value : undefined;
   } catch (error) {
     if (error instanceof SyntaxError) return undefined;
@@ -697,7 +700,7 @@ function storageBodyToReadableStream(body: StorageBody): ReadableStream<Uint8Arr
 }
 
 function storageBodySize(body: StorageBody): number | undefined {
-  if (typeof body === 'string') return textEncoder.encode(body).byteLength;
+  if (typeof body === 'string') return fileSystemUtf8Encode(body).byteLength;
   if (body instanceof ArrayBuffer) return body.byteLength;
   if (ArrayBuffer.isView(body)) return body.byteLength;
   return undefined;

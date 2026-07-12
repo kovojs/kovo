@@ -434,6 +434,33 @@ describe('storage adapters', () => {
     }
   });
 
+  it('pins logical-key hashing and sidecar decoding against late codec substitution', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-codec-authority-'));
+    const originalEncode = TextEncoder.prototype.encode;
+    const originalDecode = TextDecoder.prototype.decode;
+    try {
+      const storage = createFileSystemStorage({ root });
+      const victim = 'private/victim.txt';
+      const attacker = 'public/attacker.txt';
+      await storage.put(victim, 'VICTIM');
+
+      TextEncoder.prototype.encode = function (value) {
+        return Reflect.apply(originalEncode, this, [value === attacker ? victim : value]);
+      };
+      TextDecoder.prototype.decode = () =>
+        `{"lastModified":"2026-07-11T00:00:00.000Z","logicalKey":"${attacker}"}`;
+
+      await expect(storage.get(attacker)).resolves.toBeUndefined();
+      TextEncoder.prototype.encode = originalEncode;
+      TextDecoder.prototype.decode = originalDecode;
+      expect(bytesToText((await storage.get(victim))?.body)).toBe('VICTIM');
+    } finally {
+      TextEncoder.prototype.encode = originalEncode;
+      TextDecoder.prototype.decode = originalDecode;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('uses exact sidecar ownership to close physical digest collisions across every operation', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-exact-key-'));
     try {

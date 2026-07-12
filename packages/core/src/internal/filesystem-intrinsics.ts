@@ -10,6 +10,9 @@ const NativeMap = globalThis.Map;
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
 const NativeString = globalThis.String;
+const NativeJSON = globalThis.JSON;
+const NativeTextDecoder = globalThis.TextDecoder;
+const NativeTextEncoder = globalThis.TextEncoder;
 const nativeReflectApply = NativeReflect.apply;
 const nativeArrayIncludes = NativeArray.prototype.includes;
 const nativeArrayJoin = NativeArray.prototype.join;
@@ -23,6 +26,12 @@ const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeJsonParse = NativeJSON.parse;
+const nativeJsonStringify = NativeJSON.stringify;
+const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
+const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
+const textDecoder = new NativeTextDecoder();
+const textEncoder = new NativeTextEncoder();
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -33,6 +42,14 @@ function capturedControlsAreSound(): boolean {
     const parts = apply<string[]>(nativeStringSplit, 'safe/file.txt', ['/']);
     const map = new NativeMap<string, string>();
     apply(nativeMapSet, map, ['safe', 'value']);
+    const encoded = apply<Uint8Array>(nativeTextEncoderEncode, textEncoder, ['Kovo-storage']);
+    const decoded = apply<string>(nativeTextDecoderDecode, textDecoder, [encoded]);
+    const parsed = apply<{ logicalKey?: unknown }>(nativeJsonParse, NativeJSON, [
+      '{"logicalKey":"safe/file.txt"}',
+    ]);
+    const stringified = apply<string | undefined>(nativeJsonStringify, NativeJSON, [
+      { logicalKey: 'safe/file.txt' },
+    ]);
     return (
       parts.length === 2 &&
       parts[0] === 'safe' &&
@@ -51,7 +68,10 @@ function capturedControlsAreSound(): boolean {
       apply(nativeMapGet, map, ['safe']) === 'value' &&
       apply(nativeMapGet, map, ['escape']) === undefined &&
       apply(nativeMapDelete, map, ['safe']) === true &&
-      apply(nativeMapGet, map, ['safe']) === undefined
+      apply(nativeMapGet, map, ['safe']) === undefined &&
+      decoded === 'Kovo-storage' &&
+      parsed.logicalKey === 'safe/file.txt' &&
+      stringified === '{"logicalKey":"safe/file.txt"}'
     );
   } catch {
     return false;
@@ -134,4 +154,26 @@ export function fileSystemStringStartsWith(value: string, prefix: string): boole
 export function fileSystemStringToLowerCase(value: string): string {
   assertFileSystemIntrinsics();
   return apply(nativeStringToLowerCase, value, []);
+}
+
+export function fileSystemUtf8Encode(value: string): Uint8Array {
+  assertFileSystemIntrinsics();
+  return apply(nativeTextEncoderEncode, textEncoder, [value]);
+}
+
+export function fileSystemUtf8Decode(value: Uint8Array): string {
+  assertFileSystemIntrinsics();
+  return apply(nativeTextDecoderDecode, textDecoder, [value]);
+}
+
+export function fileSystemJsonParse(value: string): unknown {
+  assertFileSystemIntrinsics();
+  return apply(nativeJsonParse, NativeJSON, [value]);
+}
+
+export function fileSystemJsonStringify(value: unknown): string {
+  assertFileSystemIntrinsics();
+  const result = apply<string | undefined>(nativeJsonStringify, NativeJSON, [value]);
+  if (result === undefined) throw new TypeError('Filesystem metadata is not JSON-serializable.');
+  return result;
 }
