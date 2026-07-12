@@ -166,7 +166,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 42-test canonical-JSON/security-witness/task-queue matrix passes; the independent
     serialized-argument replacement proof now writes the exact validated victim operation/principal.
 
-- [ ] **C16 - Mutable wire-JSON controls can replace reconstructed query truth.**
+- [x] **C16 - Mutable wire-JSON controls can replace reconstructed query truth.**
       `packages/core/src/internal/wire-json.ts`
   - A selective late `JSON.stringify` replacement recognized a safe normalized query result and
     replaced it with an admin-bearing record containing a server-only token. The canonical wire
@@ -174,6 +174,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** secret/untrusted classification, Date/bigint tagging, array/object traversal,
     own-data reconstruction, canonical serialization, tagged-value parse/revival, and diagnostics use
     boot-pinned controls; late/import-order poison cannot add, remove, or replace client-wire truth.
+  - **Evidence:** the 33-test wire-JSON/TCB/query-HTML matrix passes; the independent serializer
+    replacement proof now emits only the classified `{ count: 1 }` truth.
 
 ## High
 
@@ -499,8 +501,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C16, H15, and H17-H25 are active wire JSON,
-response/deferred/mutation/client output, task, and browser-navigation/replay-token fixes.
+The remediation pass remains intentionally non-zero: H15 and H17-H25 are active response/deferred/
+mutation/client output, task, and browser-navigation/replay-token fixes.
 Integrated
 evidence is
 green at

@@ -4,6 +4,27 @@
  * runtime Date/bigint values without letting package-local encoders drift.
  */
 import { isSecret, isUntrusted } from '../secret.js';
+import {
+  securityApply,
+  securityDefineProperty,
+  securityGetOwnPropertyDescriptor,
+  securityHasInstance,
+  securityHasOwn,
+  securityIsArray,
+  securityJsonStringify,
+  securityNullRecord,
+  securityObjectKeys,
+  securityString,
+} from './security-witness-intrinsics.js';
+
+const IntrinsicBigInt = globalThis.BigInt;
+const IntrinsicDate = globalThis.Date;
+const IntrinsicError = globalThis.Error;
+const IntrinsicJSON = globalThis.JSON;
+const intrinsicDateGetTime = IntrinsicDate.prototype.getTime;
+const intrinsicDateToISOString = IntrinsicDate.prototype.toISOString;
+const intrinsicJsonParse = IntrinsicJSON.parse;
+const wireJsonControlsSound = verifyWireJsonControls();
 
 /** @internal Discriminator key for Kovo's tagged wire JSON forms. */
 export const KOVO_WIRE_TAG = '$kovo' as const;
@@ -150,19 +171,47 @@ export function jsonSafeWireValue(value: unknown): unknown {
     );
   }
   if (typeof value === 'bigint') {
-    return { [KOVO_WIRE_TAG]: 'bigint', value: value.toString() };
+    return { [KOVO_WIRE_TAG]: 'bigint', value: securityString(value) };
   }
-  if (value instanceof Date) {
-    const iso = Number.isNaN(value.getTime()) ? null : value.toISOString();
+  if (securityHasInstance(IntrinsicDate, value)) {
+    assertWireJsonControls();
+    const time = securityApply<number>(intrinsicDateGetTime, value, []);
+    const iso = time !== time ? null : securityApply<string>(intrinsicDateToISOString, value, []);
     return { [KOVO_WIRE_TAG]: 'date', value: iso };
   }
-  if (Array.isArray(value)) {
-    return value.map((item) => jsonSafeWireValue(item));
+  if (securityIsArray(value)) {
+    const out: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = securityGetOwnPropertyDescriptor(value, securityString(index));
+      // JSON.stringify emits array holes as null. Reconstruct that exact value rather than
+      // dispatching through caller-controlled Array iteration/map methods.
+      if (descriptor === undefined) {
+        out[index] = null;
+        continue;
+      }
+      if (!('value' in descriptor)) {
+        throw new TypeError('Kovo wire JSON arrays must contain stable data properties.');
+      }
+      out[index] = jsonSafeWireValue(descriptor.value);
+    }
+    return out;
   }
   if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = jsonSafeWireValue(item);
+    const out = securityNullRecord<unknown>();
+    const keys = securityObjectKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index];
+      if (key === undefined) continue;
+      const descriptor = securityGetOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Kovo wire JSON objects must contain stable own data properties.');
+      }
+      securityDefineProperty(out, key, {
+        configurable: true,
+        enumerable: true,
+        value: jsonSafeWireValue(descriptor.value),
+        writable: true,
+      });
     }
     return out;
   }
@@ -171,7 +220,12 @@ export function jsonSafeWireValue(value: unknown): unknown {
 
 /** @internal Stringify through the canonical Kovo wire JSON encoder. */
 export function stringifyWireValue(value: unknown): string {
-  return JSON.stringify(jsonSafeWireValue(value));
+  assertWireJsonControls();
+  const result = securityJsonStringify(jsonSafeWireValue(value));
+  if (result === undefined) {
+    throw new TypeError('Kovo wire JSON cannot encode an undefined top-level value.');
+  }
+  return result;
 }
 
 /**
@@ -180,25 +234,27 @@ export function stringifyWireValue(value: unknown): string {
  * `$kovo` plus additional fields remain application data.
  */
 export function reviveWireValue(_key: string, value: unknown): unknown {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+  if (value === null || typeof value !== 'object' || securityIsArray(value)) return value;
 
   const record = value as Record<string, unknown>;
   const tag = record[KOVO_WIRE_TAG];
   if (tag === undefined) return value;
 
-  const keys = Object.keys(record);
-  if (keys.length !== 2 || !('value' in record)) return value;
+  const keys = securityObjectKeys(record);
+  if (keys.length !== 2 || !securityHasOwn(record, 'value')) return value;
 
   if (tag === 'bigint' && typeof record.value === 'string') {
     try {
-      return BigInt(record.value);
+      assertWireJsonControls();
+      return securityApply<bigint>(IntrinsicBigInt, undefined, [record.value]);
     } catch {
       return value;
     }
   }
   if (tag === 'date') {
-    if (record.value === null) return new Date(Number.NaN);
-    if (typeof record.value === 'string') return new Date(record.value);
+    assertWireJsonControls();
+    if (record.value === null) return new IntrinsicDate(IntrinsicNumberNaN());
+    if (typeof record.value === 'string') return new IntrinsicDate(record.value);
   }
   return value;
 }
@@ -206,7 +262,14 @@ export function reviveWireValue(_key: string, value: unknown): unknown {
 /** @internal Parse a Kovo wire JSON string through the shared reviver. */
 export function parseWireJsonValue(raw: string): ParseWireJsonResult {
   try {
-    return { ok: true, value: JSON.parse(raw, reviveWireValue) as KovoWireJsonDecodedValue };
+    assertWireJsonControls();
+    return {
+      ok: true,
+      value: securityApply<KovoWireJsonDecodedValue>(intrinsicJsonParse, IntrinsicJSON, [
+        raw,
+        reviveWireValue,
+      ]),
+    };
   } catch (error) {
     return { error, ok: false };
   }
@@ -214,6 +277,41 @@ export function parseWireJsonValue(raw: string): ParseWireJsonResult {
 
 /** @internal Stable malformed-JSON error message shared by browser readers. */
 export function malformedWireJsonError(context: string, cause: unknown): Error {
-  const message = cause instanceof Error ? cause.message : String(cause);
-  return new Error(`Malformed JSON in ${context}: ${message}`, { cause });
+  const message = securityHasInstance(IntrinsicError, cause)
+    ? (cause as Error).message
+    : securityString(cause);
+  return new IntrinsicError(`Malformed JSON in ${context}: ${message}`, { cause });
+}
+
+function IntrinsicNumberNaN(): number {
+  // NaN is the only JavaScript number unequal to itself and needs no mutable Number helper.
+  return 0 / 0;
+}
+
+function assertWireJsonControls(): void {
+  if (!wireJsonControlsSound) {
+    throw new TypeError(
+      'Kovo wire JSON controls are unavailable because realm intrinsics were modified before framework initialization.',
+    );
+  }
+}
+
+function verifyWireJsonControls(): boolean {
+  try {
+    const parsed = securityApply<{ kovo?: unknown }>(intrinsicJsonParse, IntrinsicJSON, [
+      '{"kovo":418}',
+    ]);
+    const date = new IntrinsicDate('2020-01-02T03:04:05.678Z');
+    const time = securityApply<number>(intrinsicDateGetTime, date, []);
+    const iso = securityApply<string>(intrinsicDateToISOString, date, []);
+    const bigint = securityApply<bigint>(IntrinsicBigInt, undefined, ['42']);
+    return (
+      parsed.kovo === 418 &&
+      time === 1_577_934_245_678 &&
+      iso === '2020-01-02T03:04:05.678Z' &&
+      securityString(bigint) === '42'
+    );
+  } catch {
+    return false;
+  }
 }

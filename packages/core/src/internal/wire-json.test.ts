@@ -48,6 +48,57 @@ describe('wire-json core contract', () => {
     }
   });
 
+  it('pins normalization, serialization, and parsing after late intrinsic replacement', () => {
+    const originalStringify = JSON.stringify;
+    const originalParse = JSON.parse;
+    const originalMap = Array.prototype.map;
+    const originalEntries = Object.entries;
+    const originalGetTime = Date.prototype.getTime;
+    const originalToISOString = Date.prototype.toISOString;
+    const originalBigIntToString = BigInt.prototype.toString;
+    try {
+      JSON.stringify = () => '{"admin":true,"token":"forged"}';
+      JSON.parse = () => ({ forged: true });
+      Array.prototype.map = () => ['forged'];
+      Object.entries = () => [['admin', true]];
+      Date.prototype.getTime = () => 0;
+      Date.prototype.toISOString = () => 'forged';
+      BigInt.prototype.toString = () => '999';
+
+      expect(stringifyWireValue({ count: 1, rows: ['safe'] })).toBe(
+        '{"count":1,"rows":["safe"]}',
+      );
+      expect(stringifyWireValue({ at: new Date('2020-01-02T03:04:05.678Z'), id: 42n })).toBe(
+        '{"at":{"$kovo":"date","value":"2020-01-02T03:04:05.678Z"},"id":{"$kovo":"bigint","value":"42"}}',
+      );
+      expect(parseWireJsonValue('{"count":1}')).toEqual({ ok: true, value: { count: 1 } });
+    } finally {
+      JSON.stringify = originalStringify;
+      JSON.parse = originalParse;
+      Array.prototype.map = originalMap;
+      Object.entries = originalEntries;
+      Date.prototype.getTime = originalGetTime;
+      Date.prototype.toISOString = originalToISOString;
+      BigInt.prototype.toString = originalBigIntToString;
+    }
+  });
+
+  it('reconstructs special keys and rejects mutable accessors', () => {
+    const value = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(value, '__proto__', {
+      enumerable: true,
+      value: { safe: true },
+    });
+    expect(stringifyWireValue(value)).toBe('{"__proto__":{"safe":true}}');
+
+    const accessor = {} as Record<string, unknown>;
+    Object.defineProperty(accessor, 'role', {
+      enumerable: true,
+      get: () => 'admin',
+    });
+    expect(() => stringifyWireValue(accessor)).toThrow('stable own data properties');
+  });
+
   it('reports malformed JSON without throwing', () => {
     const parsed = parseWireJsonValue('{not json');
     expect(parsed.ok).toBe(false);
