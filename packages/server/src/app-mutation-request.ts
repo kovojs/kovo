@@ -36,11 +36,8 @@ import { appTaskScheduler } from './task-runtime.js';
 import { readUntrustedRequestBody, revealUntrustedRequestValue } from './untrusted-request-body.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import { canonicalRequestMethod } from './request-method.js';
-import {
-  requestCreateUrl,
-  requestMethod,
-  requestUrlSnapshot,
-} from './request-body-intrinsics.js';
+import { requestCreateUrl, requestMethod, requestUrlSnapshot } from './request-body-intrinsics.js';
+import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -76,6 +73,7 @@ export async function handleAppMutationRequest(
   // mutation a compile error; this runtime floor makes the exemption sound even if a graph fact
   // is stale or missing, so `req.session` is genuinely absent rather than the victim's cookie.
   const csrfExempt = !mutationRequiresPreBodyCsrf(mutation, app);
+  const mutationDb = csrfExempt ? mutationDbProvider(app, request) : app.db;
   // Neutralize the Web Request itself before body parsing or lifecycle providers can observe it.
   // Omitting sessionProvider alone is insufficient: handlers and DB providers can read the raw
   // Cookie header directly. The proxy also re-wraps every usable clone (SPEC §6.6 / KV418).
@@ -87,7 +85,7 @@ export async function handleAppMutationRequest(
     // mutation (e.g. a credential mutation) keys by IP. Reuses the coarse limiter's trusted source
     // (`resolveRequestClientIp`), never a raw header read in the guard.
     clientIp: (req) => resolveRequestClientIp(app, req),
-    ...(app.db === undefined ? {} : { db: app.db }),
+    ...(mutationDb === undefined ? {} : { db: mutationDb }),
     ...(app.sessionProvider === undefined || csrfExempt
       ? {}
       : { sessionProvider: app.sessionProvider }),
@@ -210,6 +208,25 @@ export async function handleAppMutationRequest(
   });
 
   return serverResponseToWebResponse(endpointResponse, { method: ingressMethod });
+}
+
+function mutationDbProvider(app: KovoApp, request: Request): KovoApp['db'] {
+  // SPEC §6.6/§9.5/§11.2: an explicit app provider is the primary DB authority. Do not even
+  // inspect a caller-added request property when that framework configuration exists.
+  if (app.db !== undefined) return app.db;
+
+  // Adapters may bind a request-scoped DB/verifier capability as an own data property before
+  // dispatch (the integration harness and app shells use this contract). A csrf:false mutation
+  // reconstructs a fresh credential-neutral Web Request, so capture that one explicit server
+  // capability before cloning and reinstall it through the normal managed-db lifecycle provider.
+  // Accessors and inherited values remain outside the authority boundary and are never invoked.
+  const descriptor = witnessGetOwnPropertyDescriptor(request, 'db');
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError('A request-scoped mutation db must be an own data property.');
+  }
+  const requestDb = descriptor.value;
+  return requestDb === undefined ? undefined : () => requestDb;
 }
 
 async function renderPreBodyCsrfFailure(

@@ -1,9 +1,85 @@
 import { describe, expect, it } from 'vitest';
+import {
+  kovoDeclaredWriteDbHandle,
+  managedDb,
+  type KovoDeclaredWriteDbCapable,
+} from '@kovojs/server/internal/execution';
 
 import { createFakeDb, expectedDiagnostic, expectedDiagnosticMessage } from './test-fixtures.js';
 import { createDbVerifier } from './verifier.js';
 
 describe('@kovojs/test DB verifier', () => {
+  it('keeps declared-write handles and inherited SQL methods inside verification', async () => {
+    class DeclaredWriteDb {
+      readonly calls: unknown[] = [];
+
+      async query(statement: unknown): Promise<unknown[]> {
+        this.calls.push(statement);
+        return [];
+      }
+    }
+
+    const declaredDb = new DeclaredWriteDb();
+    const rawDb: KovoDeclaredWriteDbCapable<DeclaredWriteDb> = {
+      [kovoDeclaredWriteDbHandle]() {
+        return declaredDb;
+      },
+    };
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          tables: ['cart_items'],
+          touches: [{ domain: 'cart', keys: null, site: 'cart.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { cart_items: 'cart' }, sqlDialect: 'postgres' },
+    );
+    const writer = managedDb(verifier.wrap(rawDb), 'write', {
+      sqlWritePolicy: { dialect: 'postgres', tables: ['cart_items'], touches: ['cart'] },
+    }) as unknown as Pick<DeclaredWriteDb, 'query'>;
+
+    await writer.query({
+      text: 'insert into cart_items (product_id) values ($1)',
+      values: ['p1'],
+    });
+
+    expect(declaredDb.calls).toContainEqual(
+      expect.objectContaining({
+        text: 'insert into cart_items (product_id) values ($1)',
+        values: ['p1'],
+      }),
+    );
+    expect(verifier.observed).toEqual([
+      expect.objectContaining({ domain: 'cart', kind: 'write', table: 'cart_items' }),
+    ]);
+    expect(verifier.diagnostics()).toEqual([]);
+  });
+
+  it('does not invoke an accessor-backed SQL method while composing managed verification', () => {
+    let queryReads = 0;
+    const declaredDb = {};
+    Object.defineProperty(declaredDb, 'query', {
+      configurable: true,
+      get() {
+        queryReads += 1;
+        return () => [];
+      },
+    });
+    const rawDb: KovoDeclaredWriteDbCapable<object> = {
+      [kovoDeclaredWriteDbHandle]() {
+        return declaredDb;
+      },
+    };
+    const verifier = createDbVerifier({}, { domainByTable: {} });
+    const writer = managedDb(verifier.wrap(rawDb), 'write', {
+      sqlWritePolicy: { dialect: 'postgres', tables: [], touches: [] },
+    }) as unknown as { query: unknown };
+
+    expect(() => writer.query).toThrow(/KV422.*accessor-backed/);
+    expect(queryReads).toBe(0);
+  });
+
   it('rejects observed writes covered only by unscoped KV406 static analysis', () => {
     const verifier = createDbVerifier(
       {

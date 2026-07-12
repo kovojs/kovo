@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
 import { normalizeAppMutationResponseOptions } from './app-mutation-responses.js';
 import { csrfToken } from './csrf.js';
@@ -391,6 +391,14 @@ describe('server app mutation request boundary', () => {
       headers: { Cookie: 'sid=victim', 'X-Machine-Signature': 'kept' },
       method: 'POST',
     });
+    let shadowDbReads = 0;
+    Object.defineProperty(request, 'db', {
+      configurable: true,
+      get() {
+        shadowDbReads += 1;
+        throw new Error('request db accessor must not override the app provider');
+      },
+    });
 
     const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
 
@@ -399,6 +407,94 @@ describe('server app mutation request boundary', () => {
     expect(writes).toEqual(['p1']);
     expect(providerHeaders).toEqual([[null, null, 'kept']]);
     expect(request.headers.get('cookie')).toBe('sid=victim');
+    expect(shadowDbReads).toBe(0);
+  });
+
+  it('preserves an own-data request db across csrf-exempt enhanced dispatch', async () => {
+    // C194 / SPEC §6.6/§9.5/§11.2: adapters may bind a per-request DB capability before app
+    // dispatch. Cookie/authorization neutralization must preserve that exact framework input for
+    // the handler and post-lifecycle response policy without retaining ambient browser authority.
+    const writes: string[] = [];
+    const db = {
+      insert(value: string) {
+        writes.push(value);
+      },
+    };
+    const seen: string[] = [];
+    const addToCart = mutation('cart/request-db', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input, request: Request & { db: typeof db; session?: never }) {
+        expect('session' in request).toBe(false);
+        expect(request.headers.get('cookie')).toBeNull();
+        request.db.insert(input.productId);
+        seen.push('handler');
+        return input;
+      },
+    });
+    const app = createApp({
+      mutationResponses: {
+        'cart/request-db': ({ request }) => {
+          (request as Request & { db: typeof db }).db.insert('response-policy');
+          seen.push('response-policy');
+          return { redirectTo: '/cart' };
+        },
+      },
+      mutations: [addToCart],
+    });
+    const form = new FormData();
+    form.set('productId', 'p1');
+    const request = new Request('https://shop.example.test/_m/cart/request-db', {
+      body: form,
+      headers: {
+        Cookie: 'sid=victim',
+        'Kovo-Fragment': 'true',
+        'X-Machine-Signature': 'kept',
+      },
+      method: 'POST',
+    });
+    Object.defineProperty(request, 'db', {
+      configurable: true,
+      value: db,
+    });
+
+    const response = await createRequestHandler(app)(request);
+
+    expect(response.status).toBe(200);
+    expect(writes).toEqual(['p1', 'response-policy']);
+    expect(seen).toEqual(['handler', 'response-policy']);
+    expect(request.headers.get('cookie')).toBe('sid=victim');
+  });
+
+  it('rejects an accessor-backed request db without invoking it', async () => {
+    const handler = vi.fn(() => ({ ok: true }));
+    const app = createApp({
+      mutations: [
+        mutation('cart/accessor-db', {
+          csrf: false,
+          handler,
+          input: s.object({}),
+        }),
+      ],
+    });
+    const request = new Request('https://shop.example.test/_m/cart/accessor-db', {
+      body: new FormData(),
+      method: 'POST',
+    });
+    let reads = 0;
+    Object.defineProperty(request, 'db', {
+      configurable: true,
+      get() {
+        reads += 1;
+        return {};
+      },
+    });
+
+    await expect(
+      handleAppMutationRequest(app, request, new URL(request.url), 'cart/accessor-db'),
+    ).rejects.toThrow('A request-scoped mutation db must be an own data property.');
+    expect(reads).toBe(0);
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it('inherits app and source-route stylesheets into enhanced live-target fragments', async () => {

@@ -534,9 +534,27 @@ export async function requestWithVerifiedBodyLimit(
     signal: readNativeRequestSignal(request),
   });
   copyRequestPeerAddress(request, verified);
+  copyRequestScopedDb(request, verified);
   pinRequestIngressSurface(verified);
   witnessWeakSetAdd(verifiedBodyRequests, verified);
   return verified;
+}
+
+function copyRequestScopedDb(source: Request, target: Request): void {
+  // C194 / SPEC §6.6/§9.5/§11.2: body verification reconstructs a native Request so hostile
+  // accessors and ad-hoc authority do not cross the predispatch boundary. The request-scoped DB
+  // capability is the one explicit adapter binding that mutation dispatch must retain. Copy only
+  // an own data value, pin its identity, and never invoke or inherit an authored getter.
+  const descriptor = witnessGetOwnPropertyDescriptor(source, 'db');
+  if (descriptor === undefined || !('value' in descriptor) || descriptor.value === undefined) {
+    return;
+  }
+  witnessDefineProperty(target, 'db', {
+    configurable: false,
+    enumerable: descriptor.enumerable ?? false,
+    value: descriptor.value,
+    writable: false,
+  });
 }
 
 /** Framework-owned verifier input reconstructed from one exact Request snapshot (SPEC §6.6). */
