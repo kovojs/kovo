@@ -706,23 +706,20 @@ function expressionSafetyByResultKey(
 
 function selectedFieldsFromValue(value: unknown): Record<string, unknown> | undefined {
   if (value === null || typeof value !== 'object') return undefined;
-  const candidates: unknown[] = [];
   const config = optionalOwnDataValue(value, 'config');
   const internal = optionalOwnDataValue(value, '_');
-  candidates[0] =
+  const configFields =
     config !== null && typeof config === 'object'
       ? optionalOwnDataValue(config, 'fields')
       : undefined;
-  candidates[1] =
+  if (isPlainRecord(configFields)) return configFields;
+  const internalFields =
     internal !== null && typeof internal === 'object'
       ? optionalOwnDataValue(internal, 'selectedFields')
       : undefined;
-  candidates[2] = optionalOwnDataValue(value, 'selectedFields');
-  for (let index = 0; index < candidates.length; index += 1) {
-    const candidate = candidates[index];
-    if (isPlainRecord(candidate)) return candidate;
-  }
-  return undefined;
+  if (isPlainRecord(internalFields)) return internalFields;
+  const selectedFields = optionalOwnDataValue(value, 'selectedFields');
+  return isPlainRecord(selectedFields) ? selectedFields : undefined;
 }
 
 function classifySqlExpression(
@@ -848,7 +845,12 @@ function sqlIdentifierWords(value: string): string[] {
       word += asciiLowerCharacter(value[index]!);
       index += 1;
     }
-    words[words.length] = word;
+    witnessDefineProperty(words, words.length, {
+      configurable: true,
+      enumerable: true,
+      value: word,
+      writable: true,
+    });
   }
   return words;
 }

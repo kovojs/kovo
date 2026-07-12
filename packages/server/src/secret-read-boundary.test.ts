@@ -216,6 +216,40 @@ describe('secret read boundary', () => {
     expect(revealSecret(row?.leaked, 'test')).toBe('victim-secret');
   });
 
+  it('keeps SQL word classification closed under inherited array index setters', async () => {
+    const query = queryObject(
+      'select max(classified) as leaked from secrets',
+      [{ leaked: 'victim-secret' }],
+      { leaked: { queryChunks: [{ value: ['max('] }, secretColumn, { value: [')'] }] } },
+    );
+    const db = createSecretBoxingReadDb(builderDb(query), metadata(), {
+      sqliteColumnOrigins: originClient([{ column: null, name: 'leaked', table: null }]),
+    });
+    const prior = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let row: Record<string, unknown> | undefined;
+    try {
+      Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (typeof value === 'string') return;
+          Object.defineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      [row] = await db.select();
+    } finally {
+      if (prior === undefined) delete (Array.prototype as { 0?: unknown })[0];
+      else Object.defineProperty(Array.prototype, '0', prior);
+    }
+
+    expect(isSecret(row?.leaked)).toBe(true);
+    expect(revealSecret(row?.leaked, 'test')).toBe('victim-secret');
+  });
+
   it('boxes compound selects before trusting a benign left-arm SQLite origin', async () => {
     const db = createSecretBoxingReadDb(
       builderDb(
