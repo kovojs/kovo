@@ -842,20 +842,22 @@ function installInlineKovoLoader(im) {
     (value.keys === undefined || Array.isArray(value.keys) && value.keys.every((key) => typeof key === 'string'));
   const sfp = doc.querySelector?.('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined;
   let bc;
+  let broadcastRetired = false;
   try {
     bc = bns.createMutationBroadcastChannel('kovo:mutation-response');
   } catch {}
   if (bc) {
     bns.observePromiseRejection(
       bns.setMutationBroadcastMessageHandler(bc, (event) => {
+        if (broadcastRetired) return;
         const data = bns.snapshotMutationBroadcastEnvelope(event);
-        if (!data || data.principal !== sfp) return;
+        if (broadcastRetired || !data || data.principal !== sfp) return;
         ab(data.body, data.buildToken);
-      }),
+      }, () => broadcastRetired),
     );
   }
   const pb = (body, changes) => {
-    if (!bc) return;
+    if (broadcastRetired || !bc) return;
     const envelope = bns.snapshotMutationBroadcastEnvelopeData({
       body,
       ...(kb() ? { buildToken: kb() } : {}),
@@ -864,7 +866,9 @@ function installInlineKovoLoader(im) {
       type: 'kovo:mutation-response',
     });
     if (!envelope) return;
-    bns.observePromiseRejection(bns.postMutationBroadcastEnvelope(bc, envelope));
+    bns.observePromiseRejection(
+      bns.postMutationBroadcastEnvelope(bc, envelope, () => broadcastRetired),
+    );
   };
   const rsp = (response, fallback = 0) => {
     const value = bns.readResponseField(response, 'status');
@@ -873,11 +877,11 @@ function installInlineKovoLoader(im) {
   const rst = (response) =>
     bns.isTrimmedAsciiEqual(bns.readHeader(response, 'Kovo-Session-Transition'), 'reload');
   function retireBroadcast() {
-    if (bc) {
-      bc.onmessage = null;
-      bc.close?.();
-      bc = undefined;
-    }
+    if (broadcastRetired) return;
+    broadcastRetired = true;
+    const channel = bc;
+    bc = undefined;
+    if (channel) bns.retireMutationBroadcastChannel(channel);
   }
   const retireSession = () => {
     retireBroadcast();

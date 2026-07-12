@@ -145,20 +145,23 @@ export function installMutationBroadcast(
   // so without this the receive path would merge a cross-build delta onto a stale
   // base — exactly the long-open-tab redeploy skew base-version validation catches.
   const pageBuildToken = options.buildToken ?? readPageBuildToken();
+  let retired = false;
   const onMessage = (event: { data: unknown }) => {
+    if (retired) return;
     const data = browserBroadcastSecurity.snapshotMutationBroadcastEnvelope(event);
     if (!data) return;
     // bugs-1 F13 / SPEC §9.3: discard a rebroadcast from a different principal so one
     // session's private query data is never morphed into another session's UI.
     // An anonymous receiver (principal: undefined) must also discard a stamped
     // message — a present stamp against an absent receiver fingerprint is a mismatch.
-    if (data.principal !== options.principal) return;
+    if (retired || data.principal !== options.principal) return;
     const changes = data.changes;
 
     // SPEC.md §9.2: same-user tab sync consumes the same mutation wire body
     // through the shared runtime apply path as the submitting tab.
     // K4 / SPEC §4.7: pass islandSignalScope so a morph that removes an island
     // correctly aborts its ctx.signal.
+    if (retired) return;
     const applied = applyMutationResponseBodyToRuntime({
       ...definedProps({
         applyQuery: options.applyQuery,
@@ -185,15 +188,21 @@ export function installMutationBroadcast(
     }
   };
   browserBroadcastSecurity.observePromiseRejection(
-    browserBroadcastSecurity.setMutationBroadcastMessageHandler(options.channel, onMessage),
+    browserBroadcastSecurity.setMutationBroadcastMessageHandler(
+      options.channel,
+      onMessage,
+      () => retired,
+    ),
   );
 
   return {
     close() {
-      options.channel.onmessage = null;
-      options.channel.close?.();
+      if (retired) return;
+      retired = true;
+      browserBroadcastSecurity.retireMutationBroadcastChannel(options.channel);
     },
     publish(body: string, changes: readonly MutationChangeRecord[] = []) {
+      if (retired) return;
       const envelope = browserBroadcastSecurity.snapshotMutationBroadcastEnvelopeData({
         body,
         // D3 / SPEC §9.1.1, §847, §14: stamp the sender's render-plan version token so
@@ -211,7 +220,11 @@ export function installMutationBroadcast(
       });
       if (!envelope) return;
       browserBroadcastSecurity.observePromiseRejection(
-        browserBroadcastSecurity.postMutationBroadcastEnvelope(options.channel, envelope),
+        browserBroadcastSecurity.postMutationBroadcastEnvelope(
+          options.channel,
+          envelope,
+          () => retired,
+        ),
       );
     },
   };

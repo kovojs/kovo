@@ -83,9 +83,12 @@ describe('mutation broadcast publish', () => {
     expect(store.get('cart')).toBeUndefined();
 
     broadcast.close();
+    broadcast.close();
+    broadcast.publish('<kovo-query name="cart">{"count":99}</kovo-query>');
 
     expect(channel.onmessage).toBeNull();
     expect(channel.closed).toBe(true);
+    expect(channel.messages).toEqual([]);
   });
 
   it('rebroadcasts and applies mutation responses for same-user tab sync', () => {

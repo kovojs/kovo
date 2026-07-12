@@ -128,12 +128,12 @@ it('never installs generated receive when the pre-init setter fails its witness'
     type: 'kovo:mutation-response',
   });
 
-  await vi.waitFor(() => expect(poison.messageCalls()).toBeGreaterThan(0));
-  await new Promise((resolve) => setTimeout(resolve, 2_100));
+  await new Promise((resolve) => setTimeout(resolve, 100));
   expect(frameDocument.querySelector('[kovo-fragment-target="private"]')?.textContent).toBe(
     'ANONYMOUS INITIAL',
   );
-  // Only boot witnesses subscribed through the poisoned setter. The application
-  // handler stayed behind the rejected controls-ready promise.
+  // Only boot witnesses reached the poisoned setter. The getter/setter identity
+  // witness rejected before dispatch, and the application handler stayed behind
+  // the rejected controls-ready promise.
   expect(poison.handlerSetterCalls()).toBe(witnessSetterCalls);
 });

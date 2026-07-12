@@ -94,7 +94,7 @@ describe('inline loader minified artifact', () => {
     // originate from one boot-read snapshot, and C164 keeps the application
     // callback behind the witnessed setter rather than a live assignment.
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'bns.setMutationBroadcastMessageHandler(bc,(event)=>{const data=bns.snapshotMutationBroadcastEnvelope(event);if(!data||data.principal!==sfp)return;ab(data.body,data.buildToken);})',
+      'bns.setMutationBroadcastMessageHandler(bc,(event)=>{if(broadcastRetired)return;const data=bns.snapshotMutationBroadcastEnvelope(event);if(broadcastRetired||!data||data.principal!==sfp)return;ab(data.body,data.buildToken);},()=>broadcastRetired)',
     );
     expect(inlineKovoLoaderInstallerSource).not.toContain('const data=event.data');
     expect(inlineKovoLoaderInstallerSource).not.toContain('bmsg(');
@@ -111,10 +111,20 @@ describe('inline loader minified artifact', () => {
       'const envelope=bns.snapshotMutationBroadcastEnvelopeData({body,',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'bns.observePromiseRejection(bns.postMutationBroadcastEnvelope(bc,envelope))',
+      'bns.observePromiseRejection(bns.postMutationBroadcastEnvelope(bc,envelope,()=>broadcastRetired))',
     );
     expect(inlineKovoLoaderInstallerSource).not.toContain('new BroadcastChannel(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('bc.postMessage(');
+  });
+
+  it('retires mutation broadcast authority before pinned platform cleanup', () => {
+    // C171 / SPEC §9.3: session-change retirement is synchronous and local;
+    // late prototype clear/close wrappers are not consulted by the artifact.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'function retireBroadcast(){if(broadcastRetired)return;broadcastRetired=true;const channel=bc;bc=undefined;if(channel)bns.retireMutationBroadcastChannel(channel);}',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain('bc.onmessage=null');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('bc.close?.()');
   });
 
   it('keeps the shipped minified response apply helper tied to the canonical runtime apply helper', () => {
