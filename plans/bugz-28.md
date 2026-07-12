@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    69 | C1-C69 |
-| High     |    32 | H1-H32 |
+| Critical |    72 | C1-C72 |
+| High     |    33 | H1-H33 |
 | Medium   |    10 | M1-M10 |
 
 ## Critical
@@ -846,6 +846,50 @@ This is an active closure ledger; `SPEC.md` remains normative.
     Selective lookalike pre-import tests must cover input-, size-, receiver-, call-count-, and
     path-specific wrappers plus process restarts.
 
+- [ ] **C70 - Authored runtime poisoning escapes the emitted Node static-file root.**
+      `packages/server/src/build.ts` (`nodeServerSource`)
+  - The generated Node wrapper continued to use live `globalThis.URL`,
+    `String.prototype.startsWith`, decoding, path, collection, header, and body controls after it
+    dynamically loaded the authored handler. A selective handler replacement preserved ordinary
+    requests but returned the raw encoded traversal pathname and made both `containsPath` checks
+    succeed. A second real HTTP request for `/assets/%2e%2e/%2e%2e/secret.txt` received a real file
+    outside the emitted `client/` root with HTTP 200.
+  - **Acceptance:** the emitted wrapper captures and validates every URL/path/decode/string/
+    collection/header/filesystem/body control before the first handler import; static target
+    parsing reconstructs one exact relative path, both lexical and realpath confinement consume
+    pinned operations, and response emission cannot re-read mutable realm controls. The executable
+    two-request regression must keep the outside marker byte-for-byte absent under selective
+    constructor, receiver, path, and call-order replacements.
+
+- [ ] **C71 - Mutable source serialization compiles attacker code into deploy artifacts.**
+      `packages/{cli,server}/src/{commands/build-export,build,internal/runtime-registry-wire}.ts`
+  - Build and preset generators interpolated late `Function.prototype.toString`, `JSON.stringify`,
+    and RegExp stringification results directly into executable JavaScript after authored app/config/
+    plugin evaluation. A selective Function replacement returned attacker source only for
+    `generatedNodeDiagnosticFactory`; `node().emit()` produced a green `server.mjs` containing
+    `ATTACKER-CODE-RAN`, which executes at server startup. The same sink family can inject through
+    stylesheet/runtime-registry/header JSON and immutable-asset pattern serialization across Node,
+    Vercel, and Cloudflare artifacts.
+  - **Acceptance:** generated JavaScript uses only reviewed literal source plus boot-pinned canonical
+    serialization captured before caller code; no live function/RegExp source coercion or JSON
+    serializer participates after that boundary. Every interpolated value is reconstructed as data,
+    the complete generated module is parsed before output, and artifact identity binds its exact
+    bytes. Selective serializer tests must target each input shape and prove attacker syntax/side
+    effects are absent from emitted source and startup across all three presets.
+
+- [ ] **C72 - Mutable final Response getters substitute attacker output after rendering.**
+      `packages/server/src/{node,build}.ts` (`writeWebResponseToNode`, `nodeAdapterRuntimeSource`)
+  - The source and emitted Node/Vercel adapters captured `Headers` but re-read
+    `response.headers`, `status`, `statusText`, and `body` through live Response prototype getters
+    after authored handler execution. A selective replacement targeting only the real safe Response
+    changed a real HTTP result from status 200/plain `SAFE-RESPONSE` into status 201, attacker HTML,
+    and an attacker `Set-Cookie` header after every framework output choke had completed.
+  - **Acceptance:** capture the native Response accessors before authored code, read every field once
+    into one framework-owned exact snapshot, clone/pin the full multi-value header bag, and drive
+    compression, early hints, status/head, body/null/stream selection, and Node writes only from that
+    snapshot. Source and emitted adapters must share the same contract and real-HTTP regressions must
+    prove selective getter/body/header substitutions cannot alter any wire byte.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1199,6 +1243,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     list/depth/node/byte ceilings or suppress the corresponding warning, while in-bound results
     retain their wire shape.
 
+- [ ] **H33 - Authored Cloudflare handler initialization can suppress static security headers.**
+      `packages/server/src/build.ts` (`cloudflareWorkerSource`)
+  - The emitted Worker statically imported the authored handler before initializing its wrapper,
+    then applied cache/CORP/nosniff/error policy through live URL, String, Headers, Object, and
+    Response controls. A handler top-level replacement of `Headers.prototype.set` selectively
+    dropped `X-Content-Type-Options`; a real ASSETS response was returned without `nosniff`.
+  - **Acceptance:** the Worker captures its complete static-policy control set before dynamically
+    importing the handler, classifies one pinned request URL/method, reconstructs policy headers
+    without live caller-controlled iteration or setters, and returns an exact response under
+    selective late constructor/prototype replacements. The emitted-worker regression must retain
+    the full client-module, immutable/revalidating asset, document, and error header matrices.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -1306,7 +1362,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 ## Latest verification
 
 The remediation pass remains intentionally non-zero: C17-C19, C21-C22, C25, C28, C31-C32, C42,
-C58-C69, H20, H27, H32, and M10 are active compiler-cache, static-analysis, server authority/output,
+C58-C72, H20, H27, H32-H33, and M10 are active compiler-cache, static-analysis, server authority/output,
 and immutable-output fixes. Integrated evidence is green at 97 PostgreSQL, 88 egress, 37
 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158 auth/response, 51 Better Auth,
 86 crypto/replay, 234 output/compiler/core, 87 scalar route/handler/secret, and 18 password tests. A
