@@ -90,7 +90,7 @@ export interface FrameworkOutputFileSystemBoundary {
   createStagingRoot(prefix?: string): Promise<string>;
   deleteFile(relativePath: string): Promise<void>;
   ensureDirectory(): Promise<void>;
-  entries(relativePath?: string): AsyncIterable<ConfinedFileSystemEntry>;
+  entries(relativePath?: string): Promise<readonly ConfinedFileSystemEntry[]>;
   fileBytes(relativePath: string): Promise<Uint8Array | undefined>;
   fileExists(relativePath: string): Promise<boolean>;
   pathForExistingChild(relativePath: string): string | undefined;
@@ -907,28 +907,31 @@ function assertSiblingStagingPrefix(prefix: string): void {
   }
 }
 
-async function* confinedDirectoryEntries(
+async function confinedDirectoryEntries(
   rootState: FileSystemRootState,
   relativePath: string,
-): AsyncGenerator<ConfinedFileSystemEntry> {
-  if (confinedPath(rootState.root, relativePath) === undefined) return;
-  if (!(await prepareFileSystemRoot(rootState, 'observe'))) return;
+): Promise<readonly ConfinedFileSystemEntry[]> {
+  if (confinedPath(rootState.root, relativePath) === undefined) return fileSystemFreeze([]);
+  if (!(await prepareFileSystemRoot(rootState, 'observe'))) return fileSystemFreeze([]);
   const root = preparedRootPath(rootState);
   const directoryPath = confinedPath(root, relativePath);
-  if (directoryPath === undefined) return;
+  if (directoryPath === undefined) return fileSystemFreeze([]);
   const resolvedDirectory = await safeRealpath(directoryPath);
-  if (resolvedDirectory === undefined || !containsPath(root, resolvedDirectory)) return;
+  if (resolvedDirectory === undefined || !containsPath(root, resolvedDirectory)) {
+    return fileSystemFreeze([]);
+  }
   let entries: Dirent[];
   try {
     entries = await fileSystemReadDirectory(resolvedDirectory);
   } catch (error) {
-    if (isMissingPathError(error)) return;
+    if (isMissingPathError(error)) return fileSystemFreeze([]);
     throw error;
   }
+  const output: ConfinedFileSystemEntry[] = [];
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
     const childRelativePath = fileSystemPathJoin(relativePath, entry.name);
-    yield {
+    output[output.length] = fileSystemFreeze({
       kind: fileSystemDirentIsDirectory(entry)
         ? 'directory'
         : fileSystemDirentIsFile(entry)
@@ -936,8 +939,9 @@ async function* confinedDirectoryEntries(
           : 'other',
       name: entry.name,
       relativePath: childRelativePath,
-    };
+    });
   }
+  return fileSystemFreeze(output);
 }
 
 async function ensureParentsStayDirectories(root: string, targetPath: string): Promise<void> {

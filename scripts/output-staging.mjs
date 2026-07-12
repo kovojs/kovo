@@ -92,8 +92,16 @@ async function changedScriptArtifacts(manifest) {
 
 async function staleScriptArtifacts(root, manifest, cleanup) {
   const owned = new Set(manifest.map((entry) => entry.targetPath));
+  const candidates = await cleanup.enumerate(root);
+  if (!Array.isArray(candidates)) {
+    throw new TypeError('script artifact cleanup candidates must be an array');
+  }
   const stale = [];
-  for await (const candidate of cleanup.enumerate(root)) {
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    if (typeof candidate !== 'string') {
+      throw new TypeError(`script artifact cleanup candidate ${index} must be a string`);
+    }
     const resolved = path.resolve(candidate);
     const relativePath = path.relative(root, resolved);
     if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) continue;

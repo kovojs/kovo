@@ -50,7 +50,7 @@ export interface ArtifactOutputManifestEntry {
  * the writer removes paths not present in the current output manifest.
  */
 export interface ArtifactOutputCleanup {
-  enumerate(root: string): AsyncIterable<string>;
+  enumerate(root: string): Promise<readonly string[]>;
 }
 
 /**
@@ -340,8 +340,16 @@ async function staleArtifactOutputPaths(
   for (let index = 0; index < manifest.length; index += 1) {
     securitySetAdd(owned, manifest[index]!.targetPath);
   }
+  const candidates = snapshotBuildArray(
+    await cleanup.enumerate(root),
+    'artifact cleanup candidates',
+  );
   const stale: string[] = [];
-  for await (const candidate of cleanup.enumerate(root)) {
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    if (typeof candidate !== 'string') {
+      throw new TypeError(`Artifact cleanup candidate ${index} must be a string.`);
+    }
     const resolved = buildSecurityPathResolve(candidate);
     if (pathRelativeToRoot(root, resolved) === undefined) continue;
     if (!securitySetHas(owned, resolved)) stale[stale.length] = resolved;

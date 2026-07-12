@@ -6,9 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import { ScriptArtifactCheckError, writeScriptArtifacts } from './output-staging.mjs';
 
-async function* enumerateArtifacts(root) {
-  yield path.join(root, 'stale.txt');
-  yield path.join(root, 'fresh.txt');
+async function enumerateArtifacts(root) {
+  return [path.join(root, 'stale.txt'), path.join(root, 'fresh.txt')];
 }
 
 describe('script artifact output staging', () => {

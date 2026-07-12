@@ -69,6 +69,24 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
     ]);
   });
 
+  it('rejects async-iterator protocol dispatch in filesystem authority enumeration', () => {
+    const outputStaging = 'packages/server/src/output-staging.ts';
+    const result = checkFilesystemBoundary({
+      allowedRuntimeFiles: [filesystemBoundaryFile, outputStaging],
+      allowedToolingFiles: [],
+      exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      readText: (relativePath) =>
+        relativePath === outputStaging
+          ? 'for await (const victim of cleanup.enumerate(root)) deleteFile(victim);'
+          : 'export const boundary = true;',
+      sourceFiles: [filesystemBoundaryFile, outputStaging],
+    });
+
+    expect(result.findings).toContain(
+      `${outputStaging}:1: filesystem authority enumeration must use snapshotted arrays, not mutable async-iterator protocol dispatch`,
+    );
+  });
+
   it('rejects raw fs access outside the filesystem boundary', () => {
     const result = runFixture({
       [filesystemBoundaryFile]: 'export const boundary = true;',

@@ -163,8 +163,8 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
   }
   await writeArtifactOutput(plan.root, outputEntries, {
     cleanup: {
-      enumerate(root) {
-        return enumerateStaticExportRouteDocuments(root, buildSecurityPathJoin(root, 'c'));
+      async enumerate(root) {
+        return await enumerateStaticExportRouteDocuments(root, buildSecurityPathJoin(root, 'c'));
       },
     },
     diagnostics: {
@@ -209,10 +209,12 @@ async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan
   }
 
   const clientModuleRoot = buildSecurityPathJoin(plan.root, 'c');
-  for await (const indexHtmlPath of enumerateStaticExportRouteDocuments(
-    plan.root,
-    clientModuleRoot,
-  )) {
+  const existingDocuments = snapshotBuildArray(
+    await enumerateStaticExportRouteDocuments(plan.root, clientModuleRoot),
+    'existing static-export route documents',
+  );
+  for (let index = 0; index < existingDocuments.length; index += 1) {
+    const indexHtmlPath = existingDocuments[index]!;
     if (!securitySetHas(ownedIndexHtmlDocuments, indexHtmlPath)) {
       // Remove only the stale directory-index document; leave any sibling files (assets the export
       // does not own a manifest for, user-managed files) untouched.
@@ -228,24 +230,37 @@ async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan
  * skipping the entire `/c/` client-module subtree so immutable versioned modules (SPEC §14) are
  * never considered for pruning.
  */
-async function* enumerateStaticExportRouteDocuments(
+async function enumerateStaticExportRouteDocuments(
   root: string,
   clientModuleRoot: string,
-): AsyncGenerator<string> {
+): Promise<readonly string[]> {
   const fileSystem = createFrameworkOutputFileSystemBoundary(root);
-  for await (const entry of fileSystem.entries('.')) {
+  const entries = snapshotBuildArray(
+    await fileSystem.entries('.'),
+    'static-export directory entries',
+  );
+  const documents: string[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
     const entryPath = buildSecurityPathJoin(root, entry.relativePath);
     if (entry.kind === 'directory') {
       // `/c/` holds immutable versioned client modules — never descend (SPEC §14 retention).
       if (entryPath === clientModuleRoot) continue;
-      yield* enumerateStaticExportRouteDocuments(entryPath, clientModuleRoot);
+      const nestedDocuments = snapshotBuildArray(
+        await enumerateStaticExportRouteDocuments(entryPath, clientModuleRoot),
+        'nested static-export route documents',
+      );
+      for (let nestedIndex = 0; nestedIndex < nestedDocuments.length; nestedIndex += 1) {
+        securityArrayPush(documents, nestedDocuments[nestedIndex]!);
+      }
       continue;
     }
 
     if (entry.kind === 'file' && entry.name === 'index.html') {
-      yield entryPath;
+      securityArrayPush(documents, entryPath);
     }
   }
+  return documents;
 }
 
 /**

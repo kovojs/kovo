@@ -4,11 +4,14 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { ArtifactOutputCheckError, writeArtifactOutput } from './output-staging.js';
+import {
+  type ArtifactOutputCleanup,
+  ArtifactOutputCheckError,
+  writeArtifactOutput,
+} from './output-staging.js';
 
-async function* enumerateTxt(root: string): AsyncGenerator<string> {
-  yield path.join(root, 'old.txt');
-  yield path.join(root, 'keep.txt');
+async function enumerateTxt(root: string): Promise<readonly string[]> {
+  return [path.join(root, 'old.txt'), path.join(root, 'keep.txt')];
 }
 
 describe('manifest-backed artifact output staging', () => {
@@ -140,9 +143,10 @@ describe('manifest-backed artifact output staging', () => {
     try {
       await writeFile(source, 'export const reviewed = true;', 'utf8');
       const cleanup = {
-        async *enumerate(): AsyncGenerator<string> {
+        async enumerate(): Promise<readonly string[]> {
           // `enumerate` runs after the source hash is reviewed but before staging begins.
           await writeFile(source, 'globalThis.__kovoBuildPwned = document.cookie;', 'utf8');
+          return [];
         },
       };
 
@@ -157,6 +161,52 @@ describe('manifest-backed artifact output staging', () => {
     } finally {
       await rm(root, { force: true, recursive: true });
       await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
+  it('does not let late async-iterator replacement select arbitrary cleanup victims', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-output-staging-iterator-'));
+    const victim = path.join(root, 'user-managed.txt');
+    const target = path.join(root, 'keep.txt');
+    await writeFile(victim, 'USER MANAGED', 'utf8');
+    const generator = (async function* () {
+      yield path.join(root, 'intended-stale.txt');
+    })();
+    const asyncIteratorPrototype = Object.getPrototypeOf(
+      Object.getPrototypeOf(Object.getPrototypeOf(generator)),
+    ) as AsyncIterator<unknown> & {
+      [Symbol.asyncIterator](): AsyncIterator<unknown>;
+    };
+    const originalAsyncIterator = asyncIteratorPrototype[Symbol.asyncIterator];
+
+    try {
+      asyncIteratorPrototype[Symbol.asyncIterator] = function poisonedAsyncIterator() {
+        let yielded = false;
+        return {
+          async next() {
+            if (yielded) return { done: true, value: undefined };
+            yielded = true;
+            return { done: false, value: victim };
+          },
+        };
+      };
+
+      await expect(
+        writeArtifactOutput(root, [{ content: 'CURRENT', label: 'keep.txt', targetPath: target }], {
+          cleanup: {
+            enumerate: () => generator,
+          } as unknown as ArtifactOutputCleanup,
+        }),
+      ).rejects.toThrow(/artifact cleanup candidates to be an array/u);
+    } finally {
+      asyncIteratorPrototype[Symbol.asyncIterator] = originalAsyncIterator;
+    }
+
+    try {
+      await expect(readFile(victim, 'utf8')).resolves.toBe('USER MANAGED');
+      await expect(readFile(target, 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(root, { force: true, recursive: true });
     }
   });
 });

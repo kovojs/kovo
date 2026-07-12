@@ -11,6 +11,11 @@ export const repoRoot = findRepoRoot();
 export const defaultSourceRoots = ['packages/core/src', 'packages/server/src'];
 export const filesystemBoundaryFile = 'packages/core/src/internal/filesystem.ts';
 export const filesystemIntrinsicsFile = 'packages/core/src/internal/filesystem-intrinsics.ts';
+export const protocolFreeFilesystemEnumerationFiles = [
+  filesystemBoundaryFile,
+  'packages/server/src/output-staging.ts',
+  'packages/server/src/static-export-output.ts',
+];
 
 export const defaultAllowedRuntimeFiles = [
   filesystemBoundaryFile,
@@ -46,6 +51,9 @@ export function checkFilesystemBoundary(options = {}) {
   const allowedRuntimeFiles = new Set(options.allowedRuntimeFiles ?? defaultAllowedRuntimeFiles);
   const allowedToolingFiles = new Set(options.allowedToolingFiles ?? defaultAllowedToolingFiles);
   const allowedFiles = new Set([...allowedRuntimeFiles, ...allowedToolingFiles]);
+  const protocolFreeEnumerationFiles = new Set(
+    options.protocolFreeEnumerationFiles ?? protocolFreeFilesystemEnumerationFiles,
+  );
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
   const exists = options.exists ?? ((relativePath) => existsSync(path.join(root, relativePath)));
@@ -79,6 +87,15 @@ export function checkFilesystemBoundary(options = {}) {
       for (const match of rawLateBoundBoundaryImports(sourceText)) {
         findings.push(
           `${filePath}:${lineOf(sourceText, match.index)}: raw ${match.moduleName} controls must be boot-pinned in ${filesystemIntrinsicsFile}`,
+        );
+      }
+    }
+
+    if (protocolFreeEnumerationFiles.has(filePath)) {
+      const protocolLoop = /\bfor\s+await\s*\(/u.exec(scanText);
+      if (protocolLoop !== null) {
+        findings.push(
+          `${filePath}:${lineOf(sourceText, protocolLoop.index)}: filesystem authority enumeration must use snapshotted arrays, not mutable async-iterator protocol dispatch`,
         );
       }
     }
