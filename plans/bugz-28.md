@@ -12,7 +12,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | -------- | ----: | ----- |
 | Critical |     9 | C1-C9 |
 | High     |    14 | H1-H14 |
-| Medium   |     7 | M1-M7 |
+| Medium   |     8 | M1-M8 |
 
 ## Critical
 
@@ -266,11 +266,21 @@ This is an active closure ledger; `SPEC.md` remains normative.
     LRU eviction, and retry calculations use boot-pinned, semantically checked controls; late and
     import-order poison cannot reset windows, cross-bind clients, or exceed the configured key cap.
 
+- [ ] **M8 - Mutable replay-store state and clock controls erase committed idempotency truth.**
+      `packages/server/src/replay.ts`
+  - Selective late `Map.prototype.get` hid a committed `(scope, idem)` response, and an advanced
+    `Date.now` expired it immediately. Both independent proofs made the same token appear unused,
+    reopening duplicate mutation execution; adjacent mutable capacity/iteration controls can also
+    evade pending and settled memory bounds.
+  - **Acceptance:** replay records, exact keys, pending/committed discrimination, generation fences,
+    time reads, TTL, and capacity calculations use boot-pinned, semantically checked controls; late
+    and import-order poison cannot hide/cross-bind records, expire fresh truth, or evade either cap.
+
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, H9-H10, M4, and M6-M7 are active
-document/cookie/CSRF, generated-diagnostics, password, and request-limit fixes. Integrated evidence
-is green at
+The remediation pass remains intentionally non-zero: C6, H9-H10, M4, and M6-M8 are active
+document/cookie/CSRF, generated-diagnostics, password, request-limit, and replay fixes. Integrated
+evidence is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
 route/handler/secret tests.
