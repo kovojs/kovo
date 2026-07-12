@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     8 | C1-C8 |
-| High     |    13 | H1-H13 |
+| Critical |     9 | C1-C9 |
+| High     |    14 | H1-H14 |
 | Medium   |     6 | M1-M6 |
 
 ## Critical
@@ -79,6 +79,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 87-test scalar matrix pins exact module/export bytes and proves only `pass`
     executes under late and import-order poison controls.
 
+- [x] **C9 - Inherited Better Auth envelope fields can forge the lifecycle principal.**
+      `packages/better-auth/src/session.ts`
+  - Polluting `Object.prototype.response` and `.headers` made a plain genuine Better Auth session
+    look like the framework's response envelope, replacing the mapped request session with an
+    attacker-supplied user, roles, and session identifier plus a forged Set-Cookie value.
+  - **Evidence:** the 51-test Better Auth matrix requires exact own-data envelope fields, maps the
+    provider's genuine bare session under inherited pollution, and forwards cookies only from a
+    validated framework-shaped envelope.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -128,14 +137,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     poison while canonical targets retain their configured authority. The independent
     `/_m/a/%2f/b` RegExp poison proof now throws before Web Request construction.
 
-- [ ] **H7 - Mutable redirect string controls reopen Better Auth protocol-relative redirects.**
+- [x] **H7 - Mutable redirect string controls reopen Better Auth protocol-relative redirects.**
       `packages/better-auth/src/internal/credential.ts`
   - A selective late `String.prototype.startsWith` override made `redirectPath` return
     `//evil.example/phish` instead of its same-origin fallback; the mutation then emits that result as
     its post-login redirect.
-  - **Acceptance:** control-character, backslash, leading-slash, and authority checks use boot-pinned,
-    semantically checked operations over the exact emitted bytes; hostile import-order and late-poison
-    regressions keep absolute, protocol-relative, backslash, and control-bearing targets on fallback.
+  - **Evidence:** the 51-test Better Auth matrix uses pinned exact-byte control, leading-slash, and
+    authority checks; absolute, protocol-relative, backslash, and control-bearing targets retain the
+    fallback under late/import-order poison. The independent `//evil.example/phish` proof now returns
+    `/` rather than the attacker target.
 
 - [x] **H8 - Mutable storage Map controls can cross logical object identities.**
       `packages/core/src/storage.ts`
@@ -184,6 +194,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     channel classification.
   - **Evidence:** the same 180-test request-dispatch matrix pins exact ASCII GET/HEAD/POST/PUT/PATCH/
     DELETE classification across mutation, query, endpoint matching, method-allow, and CSRF gates.
+
+- [x] **H14 - Mutable Better Auth response and cookie controls can forge credential success.**
+      `packages/better-auth/src/{internal/credential,internal/trusted-plaintext}.ts`
+  - Selective Array/Header/RegExp/Date and native Response getter overrides turned a provider 500,
+    a cookie-free 200, or an expired/deleting cookie into a successful sign-in with attacker-chosen
+    session evidence; adjacent redirect, cookie splitting, and touch merging shared mutable controls.
+  - **Evidence:** the 51-test Better Auth matrix pins native response status/header identity, exact
+    Set-Cookie bytes and clearing semantics, two-factor state, redirect bytes, and registry touches;
+    failed or cookie-free provider responses remain typed failures under late/import-order poison.
 
 ## Medium
 
@@ -240,9 +259,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, H7, H9-H10, M4, and M6 are active
-document/cookie/CSRF, Better Auth, generated-diagnostics, and password fixes. Integrated evidence is
-green at
+The remediation pass remains intentionally non-zero: C6, H9-H10, M4, and M6 are active
+document/cookie/CSRF, generated-diagnostics, and password fixes. Integrated evidence is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
-auth/response, 86 crypto/replay, 234 output/compiler/core, and 87 scalar route/handler/secret tests.
+auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
+route/handler/secret tests.
 A complete fresh sweep of the final integrated tree is still required.
