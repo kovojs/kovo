@@ -23,7 +23,6 @@ const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
 const NativeUint8Array = globalThis.Uint8Array;
 const nativeArrayJoin = NativeArray.prototype.join;
-const nativeArrayPush = NativeArray.prototype.push;
 const nativeBufferAlloc = NativeBuffer.alloc;
 const nativeBufferConcat = NativeBuffer.concat;
 const nativeBufferFrom = NativeBuffer.from;
@@ -32,6 +31,7 @@ const nativeBufferToString = NativeBuffer.prototype.toString;
 const nativeCreateCipheriv = builtinCreateCipheriv;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIs = NativeObject.is;
 const nativeRandomBytes = builtinRandomBytes;
@@ -202,7 +202,21 @@ function rememberIv(iv: Buffer): void {
     );
   }
   if (recentIvOrder.length < IV_REPLAY_WINDOW) {
-    apply(nativeArrayPush, recentIvOrder, [key]);
+    const index = recentIvOrder.length;
+    apply(nativeObjectDefineProperty, NativeObject, [
+      recentIvOrder,
+      index,
+      { configurable: true, enumerable: true, value: key, writable: true },
+    ]);
+    const committed = getOwnPropertyDescriptor(recentIvOrder, index);
+    if (
+      committed === undefined ||
+      !('value' in committed) ||
+      committed.value !== key ||
+      recentIvOrder.length !== index + 1
+    ) {
+      throw new NativeTypeError('Kovo confidential IV own-data commit failed.');
+    }
   } else {
     const expired = recentIvOrder[recentIvCursor]!;
     apply(nativeSetDelete, recentIvs, [expired]);

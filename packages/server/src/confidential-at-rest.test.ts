@@ -31,6 +31,39 @@ describe('encryptAtRest', () => {
     expect(first).not.toContain('123-45-6789');
   });
 
+  it('C247 bypasses inherited setters while retaining recent IVs', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let ivSetterHits = 0;
+    let encrypted = '';
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (typeof value === 'string' && /^[A-Za-z0-9_-]{16}$/u.test(value)) {
+            ivSetterHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      encrypted = encryptAtRest('private-value', new Uint8Array(32).fill(7), {
+        aad: 'profiles.secret',
+      });
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+    }
+
+    expect(ivSetterHits).toBe(0);
+    expect(encrypted).toMatch(/^kovo-aes256gcm-v1\./u);
+  });
+
   it('refuses weak keys and missing authenticated context', () => {
     expect(() => encryptAtRest('secret', new Uint8Array(16), { aad: 'profiles.ssn' })).toThrow(
       /32-byte AES-256-GCM key/u,
