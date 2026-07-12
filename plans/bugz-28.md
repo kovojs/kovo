@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    76 | C1-C76 |
+| Critical |    77 | C1-C77 |
 | High     |    35 | H1-H35 |
 | Medium   |    12 | M1-M12 |
 
@@ -971,6 +971,17 @@ vitest.bugz.config.ts` passes 32 tests; the all-preset late JSON/Function/RegExp
     passes 64 source/emitted real-HTTP and HTTP/2 tests, including CSRF Origin, body/constructor,
     native getter, Node output, and Vercel output poison-first regressions; `packages/server` `vp run
 build:dist` passes.
+
+- [ ] **C77 - Drizzle relational queries bypass the managed secret-read boundary.**
+      `packages/server/src/secret-read-boundary.ts`
+  - `createSecretBoxingReadDb()` governs callable top-level builder methods but returned the
+    non-function `db.query` namespace unchanged. A real better-sqlite3 database wrapped around
+    `drizzle({ client, relations })` therefore let `db.query.secrets.findMany()` return the ordinary
+    `{ classified: 'victim-secret' }` row with a raw string instead of a `SecretValue`.
+  - **Acceptance:** recursively snapshot and govern relational query namespaces, table builders,
+    terminal methods, prepared/placeholder execution, nested relation output, and exact SQL/origin
+    metadata; every secret-bearing relational result is boxed or fails closed, and no non-function
+    namespace can escape the read boundary merely because it was reached through a property.
 
 ## High
 
