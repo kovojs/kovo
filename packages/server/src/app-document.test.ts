@@ -1641,4 +1641,42 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     expect(response.headers['Cache-Control']).toBe('no-store');
     expect(response.headers.Vary).toBe('Cookie');
   });
+
+  it('does not lose the session cache floor through late lifecycle attachment poison', async () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const homeRoute = route('/', {
+      page: () => {
+        Object.defineProperty = ((target, property, descriptor) =>
+          property === 'lifecycleRequest'
+            ? target
+            : Reflect.apply(nativeDefineProperty, Object, [
+                target,
+                property,
+                descriptor,
+              ])) as typeof Object.defineProperty;
+        return trustedHtml('<main>private account</main>');
+      },
+    });
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider: () => ({ user: { id: 'victim-account' } }),
+    });
+
+    let response: Awaited<ReturnType<typeof renderAppRouteDocumentResponse>>;
+    try {
+      response = await renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: new Request('https://example.test/'),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      });
+    } finally {
+      Object.defineProperty = nativeDefineProperty;
+    }
+
+    expect(response.status).toBe(200);
+    expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(response.headers.Vary).toBe('Cookie');
+  });
 });

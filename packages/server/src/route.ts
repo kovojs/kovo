@@ -81,6 +81,7 @@ import {
   createWitnessMap,
   createWitnessSet,
   createWitnessWeakMap,
+  witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
   witnessMapGet,
   witnessMapSet,
@@ -1301,7 +1302,7 @@ function attachLifecycleRequest<Request>(
   response: RoutePageResponse,
   lifecycleRequest: Request,
 ): RoutePageResponse {
-  Object.defineProperty(response, 'lifecycleRequest', {
+  witnessDefineProperty(response, 'lifecycleRequest', {
     configurable: true,
     enumerable: false,
     value: lifecycleRequest,
