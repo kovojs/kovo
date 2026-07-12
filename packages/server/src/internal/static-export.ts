@@ -1,3 +1,5 @@
+import '../security-bootstrap.js';
+
 export {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,

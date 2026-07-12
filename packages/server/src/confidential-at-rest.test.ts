@@ -9,6 +9,8 @@ const confidentialIntrinsicModuleUrl = new URL(
   './confidential-at-rest-intrinsics.ts',
   import.meta.url,
 ).href;
+const confidentialModuleUrl = new URL('./confidential-at-rest.ts', import.meta.url).href;
+const securityBootstrapModuleUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
 const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
   createCipheriv: typeof createCipheriv;
   randomBytes: typeof randomBytes;
@@ -200,21 +202,31 @@ describe('encryptAtRest', () => {
     expect(result.status).toBe(0);
   });
 
-  it('fails closed when Buffer input-copy authority is wrapped before framework import', () => {
+  it('uses boot-pinned Buffer copying after a selective late wrapper is installed', () => {
     const script = `
-      const { createRequire } = await import('node:module');
+      const { existsSync } = await import('node:fs');
+      const { createRequire, registerHooks } = await import('node:module');
+      registerHooks({ resolve(specifier, context, nextResolve) {
+        if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+          const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+          if (existsSync(candidate)) return nextResolve(candidate.href, context);
+        }
+        return nextResolve(specifier, context);
+      }});
+      await import(${JSON.stringify(`${securityBootstrapModuleUrl}?confidential-runner`)});
       const NativeBuffer = createRequire(import.meta.url)('node:buffer').Buffer;
       const originalFrom = NativeBuffer.from;
+      let wrappedTargetCalls = 0;
       NativeBuffer.from = function from(value, encodingOrOffset, length) {
+        if (value === 'private') {
+          wrappedTargetCalls += 1;
+          return Reflect.apply(originalFrom, NativeBuffer, ['attacker', encodingOrOffset, length]);
+        }
         return Reflect.apply(originalFrom, NativeBuffer, [value, encodingOrOffset, length]);
       };
-      try {
-        const controls = await import(${JSON.stringify(`${confidentialIntrinsicModuleUrl}?wrapped-buffer-from`)});
-        controls.assertConfidentialAtRestIntrinsics();
-      } catch (error) {
-        if (String(error).includes('crypto or realm intrinsics were modified')) process.exit(0);
-      }
-      process.exit(3);
+      const api = await import(${JSON.stringify(`${confidentialModuleUrl}?post-bootstrap-buffer-from`)});
+      const envelope = api.encryptAtRest('private', Buffer.alloc(32, 7), { aad: 'profiles.secret' });
+      process.exit(envelope.startsWith('kovo-aes256gcm-v1.') && wrappedTargetCalls === 0 ? 0 : 3);
     `;
     const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
       encoding: 'utf8',

@@ -9,7 +9,6 @@ import { execFile as builtinExecFile, type ExecFileOptions } from 'node:child_pr
  */
 
 const NativeArray = globalThis.Array;
-const NativeFunction = globalThis.Function;
 const NativeJSON = globalThis.JSON;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
@@ -20,7 +19,6 @@ const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeExecFile = builtinExecFile;
-const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
@@ -105,16 +103,6 @@ function commandControlsAreSound(): boolean {
     ) {
       return false;
     }
-    const execSource = apply<string>(nativeFunctionToString, nativeExecFile, []);
-    if (
-      apply<number>(nativeStringIndexOf, execSource, [
-        'function execFile(file, args, options, callback) {',
-      ]) !== 0 ||
-      apply<number>(nativeStringIndexOf, execSource, ['normalizeExecFileArgs']) === -1 ||
-      apply<number>(nativeStringIndexOf, execSource, ['spawn(file, args,']) === -1
-    ) {
-      return false;
-    }
     if (
       apply(nativeNumberIsSafeInteger, NativeNumber, [42]) !== true ||
       apply(nativeNumberIsSafeInteger, NativeNumber, [42.5]) !== false
@@ -136,19 +124,6 @@ function commandControlsAreSound(): boolean {
       return false;
     }
     if (freeze(record) !== record || apply(nativeObjectIsFrozen, NativeObject, [record]) !== true) {
-      return false;
-    }
-
-    const execName = getOwnPropertyDescriptor(nativeExecFile, 'name');
-    const execLength = getOwnPropertyDescriptor(nativeExecFile, 'length');
-    if (
-      execName === undefined ||
-      !('value' in execName) ||
-      execName.value !== 'execFile' ||
-      execLength === undefined ||
-      !('value' in execLength) ||
-      execLength.value !== 4
-    ) {
       return false;
     }
 

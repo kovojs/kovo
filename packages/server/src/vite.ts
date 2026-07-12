@@ -1,3 +1,5 @@
+import './security-bootstrap.js';
+
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { registerHooks } from 'node:module';

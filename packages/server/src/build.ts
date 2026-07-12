@@ -1,3 +1,5 @@
+import './security-bootstrap.js';
+
 import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 

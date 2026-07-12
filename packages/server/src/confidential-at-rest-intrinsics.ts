@@ -31,7 +31,6 @@ const nativeBufferIsBuffer = NativeBuffer.isBuffer;
 const nativeBufferToString = NativeBuffer.prototype.toString;
 const nativeCreateCipheriv = builtinCreateCipheriv;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
-const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIs = NativeObject.is;
@@ -41,7 +40,6 @@ const nativeReflectApply = NativeReflect.apply;
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetDelete = NativeSet.prototype.delete;
 const nativeSetHas = NativeSet.prototype.has;
-const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringTrim = NativeString.prototype.trim;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -130,77 +128,8 @@ function byteLength(value: Uint8Array): number {
   return apply(nativeByteLength, value, []);
 }
 
-function intrinsicFunctionShapeIsSound(
-  value: Function,
-  expectedName: string,
-  expectedLength: number,
-  requiredSource: readonly string[],
-): boolean {
-  const name = getOwnPropertyDescriptor(value, 'name');
-  const length = getOwnPropertyDescriptor(value, 'length');
-  if (
-    !(
-      name !== undefined &&
-      'value' in name &&
-      name.value === expectedName &&
-      length !== undefined &&
-      'value' in length &&
-      length.value === expectedLength
-    )
-  ) {
-    return false;
-  }
-  const source = apply<string>(nativeFunctionToString, value, []);
-  for (let index = 0; index < requiredSource.length; index += 1) {
-    if (apply<number>(nativeStringIndexOf, source, [requiredSource[index]!]) === -1) return false;
-  }
-  return true;
-}
-
 function confidentialControlsAreSound(): boolean {
   try {
-    if (
-      !intrinsicFunctionShapeIsSound(nativeCreateCipheriv, 'createCipheriv', 4, [
-        'function createCipheriv(cipher, key, iv, options) {',
-        'new Cipheriv(cipher, key, iv, options)',
-      ])
-    ) {
-      return false;
-    }
-    if (
-      !intrinsicFunctionShapeIsSound(nativeRandomBytes, 'randomBytes', 2, [
-        'function randomBytes(size, callback) {',
-        'new FastBuffer(size)',
-        'randomFillSync(TypedArrayPrototypeGetBuffer(buf)',
-      ])
-    ) {
-      return false;
-    }
-    if (
-      !intrinsicFunctionShapeIsSound(nativeBufferAlloc, 'alloc', 3, [
-        'function alloc(size, fill, encoding) {',
-        'new FastBuffer(size)',
-      ]) ||
-      !intrinsicFunctionShapeIsSound(nativeBufferConcat, 'concat', 2, [
-        'function concat(list, length) {',
-        "validateArray(list, 'list')",
-      ]) ||
-      !intrinsicFunctionShapeIsSound(nativeBufferFrom, 'from', 3, [
-        'function from(value, encodingOrOffset, length) {',
-        'return fromString(value, encodingOrOffset)',
-      ]) ||
-      !intrinsicFunctionShapeIsSound(nativeBufferIsBuffer, 'isBuffer', 1, [
-        'function isBuffer(b) {',
-        'b instanceof Buffer',
-      ]) ||
-      !intrinsicFunctionShapeIsSound(nativeBufferToString, 'toString', 3, [
-        'function toString(encoding, start, end) {',
-        'TypedArrayPrototypeGetLength(this)',
-      ])
-    ) {
-      return false;
-    }
-
     const randomLeft = nativeRandomBytes(32);
     const randomRight = nativeRandomBytes(32);
     if (

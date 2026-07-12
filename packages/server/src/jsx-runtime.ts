@@ -1,3 +1,5 @@
+import './security-bootstrap.js';
+
 import type {
   Component,
   ComponentDefinitionInput,

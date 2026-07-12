@@ -12,7 +12,8 @@ import {
   type CommandAllowlist,
 } from './command.js';
 
-const commandIntrinsicModuleUrl = new URL('./command-intrinsics.ts', import.meta.url).href;
+const commandModuleUrl = new URL('./command.ts', import.meta.url).href;
+const securityBootstrapModuleUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
 const mutableChildProcess = createRequire(import.meta.url)('node:child_process') as {
   execFile: typeof execFile;
 };
@@ -155,20 +156,31 @@ describe('server command primitive', () => {
     ).toThrow(/changed while|own data property/);
   });
 
-  it('fails closed when execFile was replaced before command controls initialize', () => {
+  it('executes reviewed argv through boot-pinned execFile after a selective late replacement', () => {
     const script = `
-      const { createRequire, syncBuiltinESMExports } = await import('node:module');
+      const { existsSync } = await import('node:fs');
+      const { createRequire, registerHooks, syncBuiltinESMExports } = await import('node:module');
+      registerHooks({ resolve(specifier, context, nextResolve) {
+        if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+          const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+          if (existsSync(candidate)) return nextResolve(candidate.href, context);
+        }
+        return nextResolve(specifier, context);
+      }});
+      await import(${JSON.stringify(`${securityBootstrapModuleUrl}?command-runner`)});
       const mutable = createRequire(import.meta.url)('node:child_process');
       const original = mutable.execFile;
-      mutable.execFile = (...args) => original(...args);
+      let poisonedCalls = 0;
+      mutable.execFile = (...args) => {
+        poisonedCalls += 1;
+        return original(...args);
+      };
       syncBuiltinESMExports();
-      try {
-        const controls = await import(${JSON.stringify(`${commandIntrinsicModuleUrl}?poisoned-exec-file`)});
-        controls.assertCommandIntrinsics();
-      } catch (error) {
-        if (String(error).includes('process or realm intrinsics were modified')) process.exit(0);
-      }
-      process.exit(3);
+      const api = await import(${JSON.stringify(`${commandModuleUrl}?post-bootstrap-exec-file`)});
+      const allow = api.commandAllowlist([process.execPath], { justification: 'bootstrap regression' });
+      const command = api.cmd(process.execPath, ['-e', 'process.stdout.write("SAFE")'], { allow });
+      const result = await api.runCommand(command);
+      process.exit(result.stdout === 'SAFE' && poisonedCalls === 0 ? 0 : 3);
     `;
     const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
       encoding: 'utf8',

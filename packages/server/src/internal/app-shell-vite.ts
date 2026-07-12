@@ -1,3 +1,5 @@
+import '../security-bootstrap.js';
+
 export { deriveClosedKovoApp } from '../app-snapshot.js';
 export {
   createKovoAppShellDevDiagnosticLedger,

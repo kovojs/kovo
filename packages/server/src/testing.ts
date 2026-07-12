@@ -1,3 +1,5 @@
+import './security-bootstrap.js';
+
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 

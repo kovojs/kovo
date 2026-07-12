@@ -49,7 +49,6 @@ const nativeDateToUtcString = NativeDate.prototype.toUTCString;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeEncodeUri = globalThis.encodeURI;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
-const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
@@ -161,39 +160,6 @@ function stableOwnAccessor(value: object, property: PropertyKey): Function {
     owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
   }
   throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
-}
-
-function cryptoFunctionShapeIsSound(
-  value: Function,
-  expectedName: string,
-  expectedLength: number,
-  requiredSource: readonly string[],
-): boolean {
-  const name = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, 'name'],
-  );
-  const length = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, 'length'],
-  );
-  if (
-    name === undefined ||
-    !('value' in name) ||
-    name.value !== expectedName ||
-    length === undefined ||
-    !('value' in length) ||
-    length.value !== expectedLength
-  ) {
-    return false;
-  }
-  const source = apply<string>(nativeFunctionToString, value, []);
-  for (let index = 0; index < requiredSource.length; index += 1) {
-    if (apply<number>(nativeStringIndexOf, source, [requiredSource[index]!]) === -1) return false;
-  }
-  return true;
 }
 
 function capturedControlsAreSound(): boolean {
@@ -397,15 +363,6 @@ function capturedControlsAreSound(): boolean {
     apply(nativeHashUpdate, hash, ['abc']);
     if (
       apply(nativeHashDigest, hash, ['base64']) !== 'ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0='
-    ) {
-      return false;
-    }
-    if (
-      !cryptoFunctionShapeIsSound(nativeRandomBytes, 'randomBytes', 2, [
-        'function randomBytes(size, callback) {',
-        'new FastBuffer(size)',
-        'randomFillSync(TypedArrayPrototypeGetBuffer(buf)',
-      ])
     ) {
       return false;
     }
