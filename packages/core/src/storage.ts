@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
 
 /** The accepted body shapes when writing an object: a string, raw bytes, or a byte stream. */
@@ -152,12 +154,14 @@ interface FileSystemMetadataRecord {
   contentType?: string;
   etag?: string;
   lastModified: string;
+  logicalKey: string;
   metadata?: Readonly<Record<string, string>>;
   size?: number;
 }
 
 const textEncoder = new TextEncoder();
 const sidecarSuffix = '.kovo-storage.json';
+const fileSystemObjectPrefix = 'kovo-storage-v1';
 
 /**
  * Create an in-memory object store implementing `StorageCapability`.
@@ -228,21 +232,25 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
   return {
     async delete(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = storageFilePath(fileSystem, normalizedKey);
+      const physicalKey = fileSystemStorageKey(normalizedKey);
+      const filePath = storageFilePath(fileSystem, physicalKey);
       await withFileSystemWriteLock(writeLocks, filePath, async () => {
+        const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
+        // SPEC §6.6 object-exact capability binding: deletion is a sink too. A missing, malformed,
+        // or differently-owned sidecar cannot authorize removing bytes from an aliased host path.
+        if (record?.logicalKey !== normalizedKey) return;
         await Promise.all([
-          fileSystem.deleteFile(normalizedKey),
-          fileSystem.deleteFile(metadataStorageKey(normalizedKey)),
+          fileSystem.deleteFile(physicalKey),
+          fileSystem.deleteFile(metadataStorageKey(physicalKey)),
         ]);
       });
     },
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const [bytes, info] = await Promise.all([
-        fileSystem.fileBytes(normalizedKey),
-        fileSystemStat(fileSystem, normalizedKey),
-      ]);
-      if (bytes === undefined || info === undefined) return undefined;
+      const info = await fileSystemStat(fileSystem, normalizedKey);
+      if (info === undefined) return undefined;
+      const bytes = await fileSystem.fileBytes(fileSystemStorageKey(normalizedKey));
+      if (bytes === undefined) return undefined;
 
       return {
         ...info,
@@ -251,17 +259,19 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = storageFilePath(fileSystem, normalizedKey);
+      const physicalKey = fileSystemStorageKey(normalizedKey);
+      const filePath = storageFilePath(fileSystem, physicalKey);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new Date();
       const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, lastModified);
 
       await withFileSystemWriteLock(writeLocks, filePath, async () => {
+        await assertFileSystemStorageSlotOwnership(fileSystem, physicalKey, normalizedKey);
         // SPEC §12/§13 storage parity: filesystem writes must not expose half-written blobs or
         // mismatched blob/sidecar metadata under concurrent puts to the same object.
-        await fileSystem.writeFile(normalizedKey, bytes);
+        await fileSystem.writeFile(physicalKey, bytes);
         await fileSystem.writeFile(
-          metadataStorageKey(normalizedKey),
+          metadataStorageKey(physicalKey),
           JSON.stringify(metadataRecord(info)),
         );
       });
@@ -273,9 +283,10 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
     },
     async stream(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const bytes = await fileSystem.fileBytes(normalizedKey);
       const info = await fileSystemStat(fileSystem, normalizedKey);
-      if (bytes === undefined || info === undefined) return undefined;
+      if (info === undefined) return undefined;
+      const bytes = await fileSystem.fileBytes(fileSystemStorageKey(normalizedKey));
+      if (bytes === undefined) return undefined;
 
       return {
         ...info,
@@ -487,6 +498,7 @@ function objectInfo(
 function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
   return {
     lastModified: info.lastModified?.toISOString() ?? new Date().toISOString(),
+    logicalKey: info.key,
     ...(info.size === undefined ? {} : { size: info.size }),
     ...(info.contentType === undefined ? {} : { contentType: info.contentType }),
     ...(info.etag === undefined ? {} : { etag: info.etag }),
@@ -498,30 +510,91 @@ async function fileSystemStat(
   fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
   key: string,
 ): Promise<StorageObjectInfo | undefined> {
-  const fileStats = await fileSystem.statFile(key);
-  if (fileStats === undefined) return undefined;
+  const physicalKey = fileSystemStorageKey(key);
+  const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
+  // The lowercase ASCII physical name is only an index. The exact logical key in the sidecar is
+  // the authority that closes hash collisions, ill-formed UTF-16 replacement collisions, and any
+  // host filesystem aliasing. Missing/malformed/mismatched ownership fails closed as not found.
+  if (record?.logicalKey !== key) return undefined;
 
-  const record = await fileSystem
-    .fileBytes(metadataStorageKey(key))
-    .then((value) =>
-      value === undefined
-        ? undefined
-        : (JSON.parse(new TextDecoder().decode(value)) as Partial<FileSystemMetadataRecord>),
-    )
-    .catch((error: unknown) => {
-      if (error instanceof SyntaxError) return undefined;
-      throw error;
-    });
+  const fileStats = await fileSystem.statFile(physicalKey);
+  if (fileStats === undefined) return undefined;
 
   return {
     key,
-    lastModified:
-      record?.lastModified === undefined ? fileStats.mtime : new Date(record.lastModified),
+    lastModified: new Date(record.lastModified),
     size: fileStats.size,
-    ...(record?.contentType === undefined ? {} : { contentType: record.contentType }),
-    ...(record?.etag === undefined ? {} : { etag: record.etag }),
-    ...(record?.metadata === undefined ? {} : { metadata: record.metadata }),
+    ...(record.contentType === undefined ? {} : { contentType: record.contentType }),
+    ...(record.etag === undefined ? {} : { etag: record.etag }),
+    ...(record.metadata === undefined ? {} : { metadata: record.metadata }),
   };
+}
+
+/**
+ * Map an exact logical UTF-8 key to a host-stable physical path (SPEC §6.6).
+ *
+ * Only lowercase ASCII hex reaches the filesystem, so case folding, Unicode normalization,
+ * Windows reserved basenames, and trailing-dot/space trimming cannot alias distinct logical keys.
+ * The sidecar still stores and verifies the exact logical string because a digest is an index, not
+ * an authorization proof.
+ */
+function fileSystemStorageKey(key: string): string {
+  const digest = createHash('sha256').update(textEncoder.encode(key)).digest('hex');
+  return `${fileSystemObjectPrefix}/${digest.slice(0, 2)}/${digest.slice(2)}`;
+}
+
+async function readFileSystemMetadataRecord(
+  fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  physicalKey: string,
+): Promise<FileSystemMetadataRecord | undefined> {
+  const bytes = await fileSystem.fileBytes(metadataStorageKey(physicalKey));
+  if (bytes === undefined) return undefined;
+  try {
+    const value: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    return isFileSystemMetadataRecord(value) ? value : undefined;
+  } catch (error) {
+    if (error instanceof SyntaxError) return undefined;
+    throw error;
+  }
+}
+
+function isFileSystemMetadataRecord(value: unknown): value is FileSystemMetadataRecord {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Partial<FileSystemMetadataRecord>;
+  if (typeof record.logicalKey !== 'string' || typeof record.lastModified !== 'string')
+    return false;
+  if (!Number.isFinite(Date.parse(record.lastModified))) return false;
+  if (record.contentType !== undefined && typeof record.contentType !== 'string') return false;
+  if (record.etag !== undefined && typeof record.etag !== 'string') return false;
+  if (record.size !== undefined && (!Number.isSafeInteger(record.size) || record.size < 0))
+    return false;
+  if (
+    record.metadata !== undefined &&
+    (typeof record.metadata !== 'object' ||
+      record.metadata === null ||
+      Array.isArray(record.metadata) ||
+      Object.values(record.metadata).some((entry) => typeof entry !== 'string'))
+  )
+    return false;
+  return true;
+}
+
+async function assertFileSystemStorageSlotOwnership(
+  fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  physicalKey: string,
+  logicalKey: string,
+): Promise<void> {
+  const [fileStats, sidecarBytes] = await Promise.all([
+    fileSystem.statFile(physicalKey),
+    fileSystem.fileBytes(metadataStorageKey(physicalKey)),
+  ]);
+  if (fileStats === undefined && sidecarBytes === undefined) return;
+
+  const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
+  if (record?.logicalKey === logicalKey) return;
+  throw new Error(
+    'Filesystem storage physical-key collision or metadata ownership mismatch; refusing to overwrite.',
+  );
 }
 
 function storageFilePath(

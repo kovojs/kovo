@@ -1,6 +1,10 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageReadCapability } from '@kovojs/core';
-import { createMemoryStorage } from '@kovojs/core/internal/storage';
+import { createFileSystemStorage, createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import { createApp, createRequestHandler } from './app.js';
 import {
@@ -164,6 +168,36 @@ describe('capability download route: verify-before-read sink', () => {
     // The object was NEVER read: the verify sink rejected before storage.get.
     expect(reads).toEqual([]);
     expect(await response.text()).not.toContain('B-secret');
+  });
+
+  it('does not let a case-aliased filesystem key turn an exact capability into another object', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-capability-storage-exact-key-'));
+    try {
+      const storedKey = 'Tenant/Victim.txt';
+      const aliasedKey = 'tenant/victim.txt';
+      const storage = createFileSystemStorage({ root });
+      await storage.put(storedKey, 'VICTIM SECRET');
+      const route = createStorageDownloadEndpoint({ secret: SECRET, storage });
+      const ctx = createSignUrl({ secret: SECRET });
+
+      const aliasCapability = await ctx.signUrl({ key: aliasedKey });
+      const aliasResponse = await runEndpoint(
+        route,
+        new Request(`https://app.example${aliasCapability.url}`),
+      );
+      expect(aliasResponse.status).toBe(404);
+      expect(await aliasResponse.text()).not.toContain('VICTIM SECRET');
+
+      const exactCapability = await ctx.signUrl({ key: storedKey });
+      const exactResponse = await runEndpoint(
+        route,
+        new Request(`https://app.example${exactCapability.url}`),
+      );
+      expect(exactResponse.status).toBe(200);
+      expect(await exactResponse.text()).toBe('VICTIM SECRET');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('REJECTS a tampered signature, object never read, no reason leaked', async () => {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,6 +41,12 @@ interface MockS3Object {
 
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
+const fileSystemSidecarSuffix = '.kovo-storage.json';
+
+function fileSystemPhysicalStorageKey(key: string): string {
+  const digest = createHash('sha256').update(textEncoder.encode(key)).digest('hex');
+  return path.join('kovo-storage-v1', digest.slice(0, 2), digest.slice(2));
+}
 
 function storageConformance(name: string, createHarness: () => Promise<StorageHarness>) {
   describe(`${name} storage conformance`, () => {
@@ -173,25 +180,29 @@ describe('filesystem storage delete confinement (SPEC §10.6)', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-delete-root-'));
     const outside = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-delete-outside-'));
     try {
-      await mkdir(path.join(root, 'objects'));
-      await writeFile(path.join(outside, 'victim.txt'), 'external blob', 'utf8');
+      const logicalKey = 'objects/linked-outside/victim.txt';
+      const physicalKey = fileSystemPhysicalStorageKey(logicalKey);
+      const physicalParent = path.dirname(physicalKey);
+      const physicalName = path.basename(physicalKey);
+      await mkdir(path.join(root, path.dirname(physicalParent)), { recursive: true });
+      await symlink(outside, path.join(root, physicalParent), 'dir');
+      await writeFile(path.join(outside, physicalName), 'external blob', 'utf8');
       await writeFile(
-        path.join(outside, 'victim.txt.kovo-storage.json'),
+        path.join(outside, `${physicalName}${fileSystemSidecarSuffix}`),
         'external sidecar',
         'utf8',
       );
-      await symlink(outside, path.join(root, 'objects', 'linked-outside'), 'dir');
 
       const storage = createFileSystemStorage({ root });
-      await expect(storage.delete('objects/linked-outside/victim.txt')).rejects.toThrow(
-        /symbolic link/u,
-      );
+      // Exact-key verification cannot read a valid owned sidecar through the symlink, so delete
+      // retires as a no-op before it ever reaches the destructive filesystem sink.
+      await expect(storage.delete(logicalKey)).resolves.toBeUndefined();
 
-      await expect(readFile(path.join(outside, 'victim.txt'), 'utf8')).resolves.toBe(
+      await expect(readFile(path.join(outside, physicalName), 'utf8')).resolves.toBe(
         'external blob',
       );
       await expect(
-        readFile(path.join(outside, 'victim.txt.kovo-storage.json'), 'utf8'),
+        readFile(path.join(outside, `${physicalName}${fileSystemSidecarSuffix}`), 'utf8'),
       ).resolves.toBe('external sidecar');
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -208,9 +219,12 @@ describe('filesystem storage delete confinement (SPEC §10.6)', () => {
       await mkdir(root);
       await mkdir(outside);
       const storage = createFileSystemStorage({ root });
-      await writeFile(path.join(outside, 'victim.txt'), 'external blob', 'utf8');
+      const logicalKey = 'victim.txt';
+      const physicalKey = fileSystemPhysicalStorageKey(logicalKey);
+      await mkdir(path.join(outside, path.dirname(physicalKey)), { recursive: true });
+      await writeFile(path.join(outside, physicalKey), 'external blob', 'utf8');
       await writeFile(
-        path.join(outside, 'victim.txt.kovo-storage.json'),
+        path.join(outside, `${physicalKey}${fileSystemSidecarSuffix}`),
         'external sidecar',
         'utf8',
       );
@@ -218,12 +232,12 @@ describe('filesystem storage delete confinement (SPEC §10.6)', () => {
       await rename(root, parkedRoot);
       await symlink(outside, root, 'dir');
 
-      await expect(storage.delete('victim.txt')).rejects.toThrow(/root identity changed/u);
-      await expect(readFile(path.join(outside, 'victim.txt'), 'utf8')).resolves.toBe(
+      await expect(storage.delete(logicalKey)).rejects.toThrow(/root identity changed/u);
+      await expect(readFile(path.join(outside, physicalKey), 'utf8')).resolves.toBe(
         'external blob',
       );
       await expect(
-        readFile(path.join(outside, 'victim.txt.kovo-storage.json'), 'utf8'),
+        readFile(path.join(outside, `${physicalKey}${fileSystemSidecarSuffix}`), 'utf8'),
       ).resolves.toBe('external sidecar');
     } finally {
       await rm(base, { force: true, recursive: true });
@@ -348,24 +362,104 @@ describe('storage adapters', () => {
     await expect(storage.put('/absolute.txt', 'x')).rejects.toThrow(/relative/u);
   });
 
-  it('falls back to filesystem metadata when a sidecar is malformed', async () => {
+  it('fails closed instead of serving a blob when its exact-key sidecar is malformed', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-sidecar-'));
     try {
       const storage = createFileSystemStorage({ root });
-      await storage.put('docs/report.txt', 'report', {
+      const key = 'docs/report.txt';
+      await storage.put(key, 'report', {
         contentType: 'text/plain',
         metadata: { kind: 'report' },
       });
-      await writeFile(path.join(root, 'docs/report.txt.kovo-storage.json'), '{not-json', 'utf8');
+      const physicalKey = fileSystemPhysicalStorageKey(key);
+      await writeFile(
+        path.join(root, `${physicalKey}${fileSystemSidecarSuffix}`),
+        '{not-json',
+        'utf8',
+      );
 
-      const stat = await storage.stat('docs/report.txt');
-      const get = await storage.get('docs/report.txt');
+      await expect(storage.stat(key)).resolves.toBeUndefined();
+      await expect(storage.get(key)).resolves.toBeUndefined();
+      await expect(storage.stream(key)).resolves.toBeUndefined();
+      await expect(storage.put(key, 'replacement')).rejects.toThrow(/ownership mismatch/u);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 
-      expect(stat).toMatchObject({ key: 'docs/report.txt', size: 6 });
-      expect(stat?.contentType).toBeUndefined();
-      expect(stat?.metadata).toBeUndefined();
-      expect(bytesToText(get?.body)).toBe('report');
-      expect(get?.size).toBe(6);
+  it('uses exact sidecar ownership to close physical digest collisions across every operation', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-exact-key-'));
+    try {
+      const storage = createFileSystemStorage({ root });
+      // TextEncoder replaces each lone surrogate with the same U+FFFD bytes, deliberately forcing
+      // the two distinct JavaScript logical keys onto one physical SHA-256 index.
+      const firstKey = 'ill-formed/\ud800';
+      const collidingKey = 'ill-formed/\ud801';
+      expect(fileSystemPhysicalStorageKey(firstKey)).toBe(
+        fileSystemPhysicalStorageKey(collidingKey),
+      );
+
+      await storage.put(firstKey, 'FIRST', { etag: '"first"' });
+      const sidecar = JSON.parse(
+        await readFile(
+          path.join(root, `${fileSystemPhysicalStorageKey(firstKey)}${fileSystemSidecarSuffix}`),
+          'utf8',
+        ),
+      ) as { logicalKey?: unknown };
+      expect(sidecar.logicalKey).toBe(firstKey);
+
+      await expect(storage.get(collidingKey)).resolves.toBeUndefined();
+      await expect(storage.stat(collidingKey)).resolves.toBeUndefined();
+      await expect(storage.stream(collidingKey)).resolves.toBeUndefined();
+      await storage.delete(collidingKey);
+      expect(bytesToText((await storage.get(firstKey))?.body)).toBe('FIRST');
+      await expect(storage.put(collidingKey, 'SECOND', { etag: '"second"' })).rejects.toThrow(
+        /collision/u,
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps host-equivalent logical keys distinct across memory, filesystem, and S3', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-host-aliases-'));
+    try {
+      const adapters = [
+        createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') }),
+        createFileSystemStorage({ root }),
+        createS3CompatibleStorage({ bucket: 'kovo-test', client: new MockS3Client() }),
+      ];
+      const distinctPairs = [
+        ['Tenant/Victim.txt', 'tenant/victim.txt'],
+        ['unicode/caf\u00e9.txt', 'unicode/cafe\u0301.txt'],
+        ['windows/report.', 'windows/report'],
+        ['windows/report ', 'windows/report'],
+        ['windows/CON', 'windows/con'],
+        ['windows/COM1.txt', 'windows/com1.txt'],
+      ] as const;
+
+      for (const storage of adapters) {
+        for (const [firstKey, secondKey] of distinctPairs) {
+          await storage.put(firstKey, 'FIRST');
+          await storage.put(secondKey, 'SECOND');
+
+          expect(bytesToText((await storage.get(firstKey))?.body)).toBe('FIRST');
+          expect(bytesToText((await storage.get(secondKey))?.body)).toBe('SECOND');
+          await expect(storage.stat(firstKey)).resolves.toMatchObject({ key: firstKey });
+          await expect(storage.stat(secondKey)).resolves.toMatchObject({ key: secondKey });
+          expect(
+            bytesToText(await storageBodyToBytes((await storage.stream(firstKey))?.body ?? '')),
+          ).toBe('FIRST');
+          expect(
+            bytesToText(await storageBodyToBytes((await storage.stream(secondKey))?.body ?? '')),
+          ).toBe('SECOND');
+
+          await storage.delete(secondKey);
+          expect(bytesToText((await storage.get(firstKey))?.body)).toBe('FIRST');
+          await expect(storage.get(secondKey)).resolves.toBeUndefined();
+          await storage.delete(firstKey);
+        }
+      }
     } finally {
       await rm(root, { force: true, recursive: true });
     }
