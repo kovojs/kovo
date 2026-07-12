@@ -8,7 +8,22 @@ import type {
   BetterAuthSignUpEmailBody,
   BetterAuthSignUpEmailLike,
 } from './contracts.js';
+import {
+  betterAuthApply,
+  betterAuthCharacterCodeAt,
+  betterAuthGetOwnPropertyDescriptor,
+  betterAuthIsSafeInteger,
+  betterAuthSlice,
+  betterAuthTrim,
+} from './intrinsics.js';
 import { assertBetterAuthRequestSecretPath } from './non-egress-proof.js';
+
+const NativeHeaders = globalThis.Headers;
+const nativeHeadersGet = betterAuthGetOwnPropertyDescriptor(NativeHeaders.prototype, 'get')?.value;
+const nativeHeadersGetSetCookie = betterAuthGetOwnPropertyDescriptor(
+  NativeHeaders.prototype,
+  'getSetCookie',
+)?.value;
 
 type BetterAuthBareSessionPayload<Session, User> = {
   session: Session;
@@ -91,16 +106,29 @@ export function callBetterAuthGetSession<AuthSession, AuthUser>(
 export function getBetterAuthSetCookie(headers: Headers | null | undefined): string[] {
   assertBetterAuthRequestSecretPath('better-auth.set-cookie.forwarding');
   assertBetterAuthRequestSecretPath('better-auth.session-refresh.set-cookie');
-  if (headers === null || headers === undefined || typeof headers.get !== 'function') return [];
-  const platformHeaders = headers as Headers & {
-    getSetCookie?: () => string[];
-  };
-
-  if (typeof platformHeaders.getSetCookie === 'function') {
-    return platformHeaders.getSetCookie();
+  if (headers === null || headers === undefined) return [];
+  const ownGetSetCookie = betterAuthGetOwnPropertyDescriptor(headers, 'getSetCookie');
+  if (
+    ownGetSetCookie !== undefined &&
+    'value' in ownGetSetCookie &&
+    typeof ownGetSetCookie.value === 'function'
+  ) {
+    return copySetCookieValues(betterAuthApply(ownGetSetCookie.value, headers, []));
   }
 
-  const cookie = headers.get('set-cookie');
+  let cookie: string | null;
+  if (typeof nativeHeadersGet === 'function') {
+    try {
+      if (typeof nativeHeadersGetSetCookie === 'function') {
+        return copySetCookieValues(betterAuthApply(nativeHeadersGetSetCookie, headers, []));
+      }
+      cookie = betterAuthApply(nativeHeadersGet, headers, ['set-cookie']);
+    } catch {
+      cookie = readStructuralSetCookie(headers);
+    }
+  } else {
+    cookie = readStructuralSetCookie(headers);
+  }
   if (!cookie) return [];
 
   return splitFoldedSetCookie(cookie);
@@ -108,13 +136,84 @@ export function getBetterAuthSetCookie(headers: Headers | null | undefined): str
 
 function splitFoldedSetCookie(folded: string): string[] {
   const cookies: string[] = [];
-  const boundary = /,(?=\s*[!#$%&'*+\-.^_`|~0-9A-Za-z]+=)/g;
   let lastIndex = 0;
-  for (let match = boundary.exec(folded); match !== null; match = boundary.exec(folded)) {
-    cookies.push(folded.slice(lastIndex, match.index).trim());
-    lastIndex = boundary.lastIndex;
+  for (let index = 0; index < folded.length; index += 1) {
+    if (betterAuthCharacterCodeAt(folded, index) !== 0x2c) continue;
+    let next = index + 1;
+    while (next < folded.length && isCookieWhitespace(betterAuthCharacterCodeAt(folded, next))) {
+      next += 1;
+    }
+    const nameStart = next;
+    while (next < folded.length && isCookieTokenCode(betterAuthCharacterCodeAt(folded, next))) {
+      next += 1;
+    }
+    if (next === nameStart || betterAuthCharacterCodeAt(folded, next) !== 0x3d) continue;
+    const cookie = betterAuthTrim(betterAuthSlice(folded, lastIndex, index));
+    if (cookie !== '') cookies[cookies.length] = cookie;
+    lastIndex = index + 1;
   }
-  const tail = folded.slice(lastIndex).trim();
-  if (tail) cookies.push(tail);
-  return cookies.filter((cookie) => cookie.length > 0);
+  const tail = betterAuthTrim(betterAuthSlice(folded, lastIndex));
+  if (tail !== '') cookies[cookies.length] = tail;
+  return cookies;
+}
+
+function copySetCookieValues(value: unknown): string[] {
+  if (value === null || typeof value !== 'object') return [];
+  const lengthDescriptor = betterAuthGetOwnPropertyDescriptor(value, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number' ||
+    !betterAuthIsSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0
+  ) {
+    return [];
+  }
+  const result: string[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    const descriptor = betterAuthGetOwnPropertyDescriptor(value, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      return [];
+    }
+    result[index] = descriptor.value;
+  }
+  return result;
+}
+
+function readStructuralSetCookie(headers: Headers): string | null {
+  const get = betterAuthGetOwnPropertyDescriptor(headers, 'get');
+  if (get === undefined || !('value' in get) || typeof get.value !== 'function') return null;
+  const value = betterAuthApply<unknown>(get.value, headers, ['set-cookie']);
+  return typeof value === 'string' ? value : null;
+}
+
+function isCookieWhitespace(code: number): boolean {
+  return code === 0x09 || code === 0x20;
+}
+
+function isCookieTokenCode(code: number): boolean {
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    (code >= 0x61 && code <= 0x7a) ||
+    code === 0x21 ||
+    code === 0x23 ||
+    code === 0x24 ||
+    code === 0x25 ||
+    code === 0x26 ||
+    code === 0x27 ||
+    code === 0x2a ||
+    code === 0x2b ||
+    code === 0x2d ||
+    code === 0x2e ||
+    code === 0x5e ||
+    code === 0x5f ||
+    code === 0x60 ||
+    code === 0x7c ||
+    code === 0x7e
+  );
 }

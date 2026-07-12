@@ -47,6 +47,41 @@ describe('betterAuthSession', () => {
     await expect(provider({ headers: new Headers() })).resolves.toBeNull();
   });
 
+  it('does not reinterpret a bare session through inherited envelope properties', async () => {
+    const auth = {
+      api: {
+        getSession: () => ({
+          session: { activeOrganizationId: 'org-1', id: 'session-1' },
+          user: {
+            email: 'ada@example.com',
+            id: 'user-1',
+            roles: ['admin', 'member'] as const,
+          },
+        }),
+      },
+    };
+    const attackerPayload = {
+      session: { activeOrganizationId: null, id: 'attacker-session' },
+      user: { email: 'evil@example.com', id: 'attacker', roles: ['admin'] as const },
+    };
+    const attackerHeaders = new Headers({ 'set-cookie': 'attacker_session=forged' });
+    const provider = betterAuthSession(auth, mapSession);
+    try {
+      Object.defineProperty(Object.prototype, 'response', {
+        configurable: true,
+        value: attackerPayload,
+      });
+      Object.defineProperty(Object.prototype, 'headers', {
+        configurable: true,
+        value: attackerHeaders,
+      });
+      await expect(provider({ headers: new Headers() })).resolves.toEqual(mappedAppSession);
+    } finally {
+      delete (Object.prototype as { response?: unknown }).response;
+      delete (Object.prototype as { headers?: unknown }).headers;
+    }
+  });
+
   // part-3 I2 (SPEC.md §6.5, §9.1.1:854): with rolling sessions / cookie-cache, Better Auth
   // writes a fresh session Set-Cookie on every authenticated GET. The framework lifecycle
   // MUST set the resolved session AND forward that refresh cookie to the response sink, so a

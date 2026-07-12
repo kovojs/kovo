@@ -460,6 +460,36 @@ describe('Expires-in-past clearing cookie is not session-establishing (part-3 I3
 
     expect(result).toMatchObject({ ok: true, value: { status: 'signed-in' } });
   });
+
+  it('keeps clearing-cookie evidence closed after late RegExp and Date poisoning', async () => {
+    const auth = signInAuthReturning([
+      'better-auth.session_token=deleted; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly',
+    ]);
+    const signIn = betterAuthSignInEmailMutation(auth);
+    const originalExec = RegExp.prototype.exec;
+    const originalDateParse = Date.parse;
+    let result: unknown;
+    try {
+      RegExp.prototype.exec = function (value) {
+        if (this.source.includes('max-age')) return null;
+        return Reflect.apply(originalExec, this, [value]);
+      };
+      Date.parse = (value) =>
+        value === 'Thu, 01 Jan 1970 00:00:00 GMT'
+          ? originalDateParse('Tue, 19 Jan 2038 03:14:07 GMT')
+          : originalDateParse(value);
+      result = await runProtectedCredentialMutation(
+        signIn,
+        { email: 'ada@example.com', password: 'correct' },
+        { headers: requestHeaders() },
+      );
+    } finally {
+      RegExp.prototype.exec = originalExec;
+      Date.parse = originalDateParse;
+    }
+
+    expect(result).toMatchObject({ ok: false, status: 422 });
+  });
 });
 
 // part-3 L13-3: `getBetterAuthSetCookie`'s no-`getSetCookie()` fallback must split a
@@ -533,6 +563,41 @@ describe('redirectPath same-origin hardening', () => {
   it('keeps legitimate same-origin paths intact', async () => {
     expect(await signInWithNext('/cart')).toBe('/cart');
     expect(await signInWithNext('/a/b?x=1#h')).toBe('/a/b?x=1#h');
+  });
+
+  it('keeps cross-origin and CRLF targets closed after late redirect-control poisoning', async () => {
+    const originalStartsWith = String.prototype.startsWith;
+    const originalReplace = String.prototype.replace;
+    const originalTest = RegExp.prototype.test;
+    let protocolRelative: string | undefined;
+    let backslashAuthority: string | undefined;
+    let headerInjection: string | undefined;
+    try {
+      String.prototype.startsWith = function (search, position) {
+        if (this.valueOf() === '//evil.example/phish' && search === '//') return false;
+        return Reflect.apply(originalStartsWith, this, [search, position]);
+      };
+      String.prototype.replace = function (search, replacement) {
+        if (this.valueOf() === '/\\evil.example/phish') return this.valueOf();
+        return Reflect.apply(originalReplace, this, [search, replacement]);
+      };
+      RegExp.prototype.test = function (value) {
+        if (value === '/account\r\nLocation: https://evil.example') return false;
+        return Reflect.apply(originalTest, this, [value]);
+      };
+
+      protocolRelative = await signInWithNext('//evil.example/phish');
+      backslashAuthority = await signInWithNext('/\\evil.example/phish');
+      headerInjection = await signInWithNext('/account\r\nLocation: https://evil.example');
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.replace = originalReplace;
+      RegExp.prototype.test = originalTest;
+    }
+
+    expect(protocolRelative).toBe('/dashboard');
+    expect(backslashAuthority).toBe('/dashboard');
+    expect(headerInjection).toBe('/dashboard');
   });
 });
 
@@ -615,6 +680,31 @@ describe('credential success is positively classified', () => {
     expect(result).toMatchObject({ ok: false, status: 422 });
   });
 
+  it('does NOT sign in when late Array/Headers poisoning forges session evidence', async () => {
+    const auth = signInAuthReturning(jsonResponse(200, { ok: true }));
+    const signIn = betterAuthSignInEmailMutation(auth);
+    const originalSome = Array.prototype.some;
+    const originalGetSetCookie = Headers.prototype.getSetCookie;
+    let result: Awaited<ReturnType<typeof runProtectedCredentialMutation>>;
+    try {
+      Array.prototype.some = function (callback, thisArg) {
+        if (callback.name === 'isSessionEstablishingSetCookie') return true;
+        return Reflect.apply(originalSome, this, [callback, thisArg]);
+      };
+      Headers.prototype.getSetCookie = () => ['attacker_session=forged; Path=/; HttpOnly'];
+      result = await runProtectedCredentialMutation(
+        signIn,
+        { email: 'ada@example.com', password: 'correct' },
+        { headers: requestHeaders() },
+      );
+    } finally {
+      Array.prototype.some = originalSome;
+      Headers.prototype.getSetCookie = originalGetSetCookie;
+    }
+
+    expect(result).toMatchObject({ ok: false, status: 422 });
+  });
+
   it('treats a 429 rate-limit response as a failure, not a sign-in', async () => {
     const auth = signInAuthReturning(jsonResponse(429, { message: 'rate limited' }));
     const signIn = betterAuthSignInEmailMutation(auth);
@@ -637,6 +727,37 @@ describe('credential success is positively classified', () => {
       { email: 'ada@example.com', password: 'correct' },
       { headers: requestHeaders() },
     );
+
+    expect(result).toMatchObject({ ok: false, status: 422 });
+  });
+
+  it('does NOT trust late-poisoned native Response status or headers getters', async () => {
+    const response = jsonResponse(500, { message: 'broken' });
+    const auth = signInAuthReturning(response);
+    const signIn = betterAuthSignInEmailMutation(auth);
+    const statusDescriptor = Object.getOwnPropertyDescriptor(Response.prototype, 'status')!;
+    const headersDescriptor = Object.getOwnPropertyDescriptor(Response.prototype, 'headers')!;
+    const forgedHeaders = new Headers();
+    forgedHeaders.append('set-cookie', 'attacker_session=forged; Path=/; HttpOnly');
+    let result: unknown;
+    try {
+      Object.defineProperty(Response.prototype, 'status', {
+        ...statusDescriptor,
+        get: () => 200,
+      });
+      Object.defineProperty(Response.prototype, 'headers', {
+        ...headersDescriptor,
+        get: () => forgedHeaders,
+      });
+      result = await runProtectedCredentialMutation(
+        signIn,
+        { email: 'ada@example.com', password: 'correct' },
+        { headers: requestHeaders() },
+      );
+    } finally {
+      Object.defineProperty(Response.prototype, 'status', statusDescriptor);
+      Object.defineProperty(Response.prototype, 'headers', headersDescriptor);
+    }
 
     expect(result).toMatchObject({ ok: false, status: 422 });
   });

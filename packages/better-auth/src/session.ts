@@ -7,6 +7,7 @@ import {
   type BetterAuthRequestLike,
 } from './internal.js';
 import { callBetterAuthGetSession } from './internal/trusted-plaintext.js';
+import { betterAuthGetOwnPropertyDescriptor } from './internal/intrinsics.js';
 
 const NativeError = Error;
 const betterAuthSessionBoundaryFailureMessage =
@@ -74,16 +75,28 @@ export function betterAuthSession<
     // `{ response, headers }` envelope; one that ignores it (the example apps, a
     // non-overloaded instance) returns the bare session payload. A session payload never
     // carries both `response` and `headers`, so their joint presence identifies the envelope.
+    const responseDescriptor =
+      result !== null && typeof result === 'object'
+        ? betterAuthGetOwnPropertyDescriptor(result, 'response')
+        : undefined;
+    const headersDescriptor =
+      result !== null && typeof result === 'object'
+        ? betterAuthGetOwnPropertyDescriptor(result, 'headers')
+        : undefined;
     const isEnvelope =
-      result !== null && typeof result === 'object' && 'response' in result && 'headers' in result;
+      responseDescriptor !== undefined &&
+      'value' in responseDescriptor &&
+      headersDescriptor !== undefined &&
+      'value' in headersDescriptor;
     const payload = isEnvelope
-      ? (result as BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>).response
+      ? (responseDescriptor.value as
+          | BetterAuthSessionPayload<AuthSession, AuthUser>
+          | null
+          | undefined)
       : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);
     const value = payload ? map(payload) : null;
 
-    const headers = isEnvelope
-      ? (result as BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>).headers
-      : undefined;
+    const headers = isEnvelope ? (headersDescriptor.value as Headers) : undefined;
     const setCookies = getBetterAuthSetCookie(headers);
 
     // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually

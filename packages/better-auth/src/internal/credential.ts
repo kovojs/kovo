@@ -16,9 +16,24 @@ import type {
   BetterAuthRequestLike,
   BetterAuthResponseLike,
 } from './contracts.js';
+import {
+  betterAuthApply,
+  betterAuthCharacterCodeAt,
+  betterAuthDateNow,
+  betterAuthDateParse,
+  betterAuthGetOwnPropertyDescriptor,
+  betterAuthIndexOf,
+  betterAuthIsNaN,
+  betterAuthRegExpExec,
+  betterAuthResponseHeaders,
+  betterAuthResponseJson,
+  betterAuthResponseStatus,
+  betterAuthSlice,
+  betterAuthSplit,
+  betterAuthToLowerCase,
+  betterAuthTrim,
+} from './intrinsics.js';
 import { getBetterAuthSetCookie } from './trusted-plaintext.js';
-
-const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 
 export { getBetterAuthSetCookie } from './trusted-plaintext.js';
 
@@ -46,7 +61,9 @@ export function forwardBetterAuthSetCookie(headers: Headers, context: unknown): 
   const forward = readBetterAuthForwardSetCookie(context);
   if (!forward) return;
 
-  for (const cookie of getBetterAuthSetCookie(headers)) {
+  const cookies = getBetterAuthSetCookie(headers);
+  for (let index = 0; index < cookies.length; index += 1) {
+    const cookie = cookies[index]!;
     // P1.5 / SPEC.md §9.1.1: Better Auth owns the cookie name it later reads. The server
     // internal forwarding sink preserves that name and every upstream attribute while applying
     // Kovo's credential-cookie floor.
@@ -58,26 +75,33 @@ function readBetterAuthForwardSetCookie(
   context: unknown,
 ): ((rawSetCookie: string, posture: BetterAuthForwardSetCookiePosture) => void) | undefined {
   if (typeof context !== 'object' || context === null) return undefined;
-  const candidate = (context as { forwardSetCookie?: unknown }).forwardSetCookie;
-  return typeof candidate === 'function'
-    ? (candidate as (rawSetCookie: string, posture: BetterAuthForwardSetCookiePosture) => void)
+  const candidate = betterAuthGetOwnPropertyDescriptor(context, 'forwardSetCookie');
+  return candidate !== undefined && 'value' in candidate && typeof candidate.value === 'function'
+    ? (candidate.value as (
+        rawSetCookie: string,
+        posture: BetterAuthForwardSetCookiePosture,
+      ) => void)
     : undefined;
 }
-
-type SessionRevocationHeaderContext = {
-  setSessionRevocationClearSiteData?: () => void;
-};
 
 /** @internal Emit browser-side storage clearing for framework-owned session revocation. */
 // OPP-15 runtime-DiD: Kovo owns the Better Auth sign-out mutation response, so its successful
 // revoke path carries Clear-Site-Data alongside the session-clearing cookies.
 export function setSessionRevocationClearSiteData(context: unknown): void {
-  (context as SessionRevocationHeaderContext).setSessionRevocationClearSiteData?.();
+  if (typeof context !== 'object' || context === null) return;
+  const candidate = betterAuthGetOwnPropertyDescriptor(
+    context,
+    'setSessionRevocationClearSiteData',
+  );
+  if (candidate !== undefined && 'value' in candidate && typeof candidate.value === 'function') {
+    betterAuthApply(candidate.value, context, []);
+  }
 }
 
 /** @internal True when a Better Auth response status (400/401/403) signals a credential failure. */
 export function isBetterAuthCredentialFailureResponse(response: BetterAuthResponseLike): boolean {
-  return isCredentialFailureStatus(response.status);
+  const status = betterAuthResponseStatus(response);
+  return status === undefined ? false : isCredentialFailureStatus(status);
 }
 
 // SECURITY (SECURITY_FINDINGS.md M2): a credential sign-in/sign-up must be classified
@@ -93,16 +117,18 @@ function isSuccessStatus(status: number): boolean {
 // deletion (`Max-Age=0` / `Expires` in the past / empty value). Sign-out clears
 // cookies this way, so the same predicate cleanly distinguishes establish vs. clear.
 function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
-  const firstPair = rawSetCookie.split(';', 1)[0] ?? '';
-  const separatorIndex = firstPair.indexOf('=');
+  const firstPair = betterAuthSplit(rawSetCookie, ';', 1)[0] ?? '';
+  const separatorIndex = betterAuthIndexOf(firstPair, '=');
   if (separatorIndex < 0) return false;
 
-  const value = firstPair.slice(separatorIndex + 1).trim();
+  const value = betterAuthTrim(betterAuthSlice(firstPair, separatorIndex + 1));
   if (value === '') return false;
 
-  const attributes = rawSetCookie.slice(firstPair.length).toLowerCase();
-  if (/(?:^|;)\s*max-age\s*=\s*0(?:\s*;|\s*$)/.test(attributes)) return false;
-  if (/(?:^|;)\s*max-age\s*=\s*-/.test(attributes)) return false;
+  const attributes = betterAuthToLowerCase(betterAuthSlice(rawSetCookie, firstPair.length));
+  if (betterAuthRegExpExec(/(?:^|;)\s*max-age\s*=\s*0(?:\s*;|\s*$)/u, attributes)) {
+    return false;
+  }
+  if (betterAuthRegExpExec(/(?:^|;)\s*max-age\s*=\s*-/u, attributes)) return false;
 
   // part-3 I3 (SECURITY_FINDINGS.md M2): the docstring lists "Expires in the past" as a
   // clearing cookie, but only Max-Age was checked. A `sid=deleted; Expires=Thu, 01 Jan
@@ -110,7 +136,7 @@ function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
   // Parse Expires off the ORIGINAL-case raw string (Date.parse needs the real casing) and
   // treat a valid past/now date as a deletion.
   const expires = parseSetCookieExpires(rawSetCookie);
-  if (expires !== undefined && expires <= Date.now()) return false;
+  if (expires !== undefined && expires <= betterAuthDateNow()) return false;
 
   return true;
 }
@@ -119,25 +145,28 @@ function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
 // attribute is absent or unparseable. Operates on the raw (original-case) header so the
 // HTTP-date is recoverable by `Date.parse`.
 function parseSetCookieExpires(rawSetCookie: string): number | undefined {
-  const segments = rawSetCookie.split(';');
+  const segments = betterAuthSplit(rawSetCookie, ';');
   for (let index = 1; index < segments.length; index += 1) {
-    const segment = segments[index]?.trim() ?? '';
-    const separator = segment.indexOf('=');
+    const segment = betterAuthTrim(segments[index] ?? '');
+    const separator = betterAuthIndexOf(segment, '=');
     if (separator === -1) continue;
-    if (segment.slice(0, separator).trim().toLowerCase() !== 'expires') continue;
-    const parsed = Date.parse(segment.slice(separator + 1).trim());
-    return Number.isNaN(parsed) ? undefined : parsed;
+    if (
+      betterAuthToLowerCase(betterAuthTrim(betterAuthSlice(segment, 0, separator))) !== 'expires'
+    ) {
+      continue;
+    }
+    const parsed = betterAuthDateParse(betterAuthTrim(betterAuthSlice(segment, separator + 1)));
+    return betterAuthIsNaN(parsed) ? undefined : parsed;
   }
   return undefined;
 }
 
 function hasSessionEstablishingSetCookie(headers: Headers): boolean {
-  return getBetterAuthSetCookie(headers).some(isSessionEstablishingSetCookie);
-}
-
-interface BetterAuthCredentialResponseWithBody extends BetterAuthResponseLike {
-  clone?: () => { json?: () => Promise<unknown> };
-  json?: () => Promise<unknown>;
+  const cookies = getBetterAuthSetCookie(headers);
+  for (let index = 0; index < cookies.length; index += 1) {
+    if (isSessionEstablishingSetCookie(cookies[index]!)) return true;
+  }
+  return false;
 }
 
 // Better Auth returns `200 { twoFactorRedirect: true, ... }` (no session cookie) when
@@ -148,25 +177,14 @@ interface BetterAuthCredentialResponseWithBody extends BetterAuthResponseLike {
 async function isBetterAuthTwoFactorPendingResponse(
   response: BetterAuthResponseLike,
 ): Promise<boolean> {
-  const withBody = response as BetterAuthCredentialResponseWithBody;
-  const readJson = (() => {
-    if (typeof withBody.clone === 'function') {
-      const cloned = withBody.clone();
-      if (cloned && typeof cloned.json === 'function') return cloned.json.bind(cloned);
-    }
-    if (typeof withBody.json === 'function') return withBody.json.bind(withBody);
-    return undefined;
-  })();
-
-  if (!readJson) return false;
+  const readJson = betterAuthResponseJson(response);
+  if (readJson === undefined) return false;
 
   try {
-    const body = await readJson();
-    return (
-      typeof body === 'object' &&
-      body !== null &&
-      (body as Record<string, unknown>).twoFactorRedirect === true
-    );
+    const body = await readJson;
+    if (typeof body !== 'object' || body === null) return false;
+    const descriptor = betterAuthGetOwnPropertyDescriptor(body, 'twoFactorRedirect');
+    return descriptor !== undefined && 'value' in descriptor && descriptor.value === true;
   } catch {
     // A non-JSON or unreadable body cannot be a two-factor-pending payload.
     return false;
@@ -183,11 +201,13 @@ export async function resolveBetterAuthCredentialSuccess<Status extends string>(
   context: unknown,
   success: BetterAuthCredentialMutationValue<Status>,
 ): Promise<BetterAuthCredentialMutationValue<Status> | null> {
-  if (!isSuccessStatus(response.status)) return null;
+  const status = betterAuthResponseStatus(response);
+  const headers = betterAuthResponseHeaders(response);
+  if (status === undefined || headers === undefined || !isSuccessStatus(status)) return null;
   if (await isBetterAuthTwoFactorPendingResponse(response)) return null;
-  if (!hasSessionEstablishingSetCookie(response.headers)) return null;
+  if (!hasSessionEstablishingSetCookie(headers)) return null;
 
-  forwardBetterAuthSetCookie(response.headers, context);
+  forwardBetterAuthSetCookie(headers, context);
 
   return success;
 }
@@ -259,7 +279,7 @@ function isCredentialFailureStatus(status: number): boolean {
 
 function readNumericProperty(value: object, key: string): number | undefined {
   try {
-    const descriptor = nativeObjectGetOwnPropertyDescriptor(value, key);
+    const descriptor = betterAuthGetOwnPropertyDescriptor(value, key);
     return descriptor && 'value' in descriptor && typeof descriptor.value === 'number'
       ? descriptor.value
       : undefined;
@@ -273,18 +293,15 @@ function readNumericProperty(value: object, key: string): number | undefined {
 // to `/` when resolving http(s) URLs, so `/\evil.com` resolves cross-origin) and
 // reject ASCII control characters that can smuggle a CRLF / header-splitting
 // payload into the emitted `Location` response header.
-// eslint-disable-next-line no-control-regex -- intentional ASCII control-char class (U+0000 to U+001F, U+007F).
-const redirectControlCharPattern = /[\u0000-\u001f\u007f]/;
-
 /** @internal Same-origin redirect-target guard for the credential mutations (SECURITY_FINDINGS.md H4). */
 export function redirectPath(value: string | undefined, fallback: string): string {
   if (typeof value !== 'string' || value === '') return fallback;
-  if (redirectControlCharPattern.test(value)) return fallback;
-
-  // Browsers treat backslashes as path separators when resolving http(s) URLs, so
-  // collapse them before checking for a protocol-relative (`//`) authority.
-  const collapsed = value.replace(/\\/g, '/');
-  if (!collapsed.startsWith('/') || collapsed.startsWith('//')) return fallback;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = betterAuthCharacterCodeAt(value, index);
+    if (code <= 0x1f || code === 0x7f || code === 0x5c) return fallback;
+  }
+  if (betterAuthCharacterCodeAt(value, 0) !== 0x2f) return fallback;
+  if (value.length > 1 && betterAuthCharacterCodeAt(value, 1) === 0x2f) return fallback;
 
   return value;
 }
@@ -345,13 +362,24 @@ function mergeDomainTouches(
   defaults: readonly Domain[],
   overrides: readonly Domain[] | undefined,
 ): Domain[] {
-  const merged = new Map(defaults.map((item) => [item.key, item]));
-
-  for (const item of overrides ?? []) {
-    merged.set(item.key, item);
+  const merged: Domain[] = [];
+  for (let index = 0; index < defaults.length; index += 1) {
+    merged[index] = defaults[index]!;
   }
-
-  return [...merged.values()];
+  const additions = overrides ?? [];
+  for (let index = 0; index < additions.length; index += 1) {
+    const item = additions[index]!;
+    let existing = -1;
+    for (let candidate = 0; candidate < merged.length; candidate += 1) {
+      if (merged[candidate]!.key === item.key) {
+        existing = candidate;
+        break;
+      }
+    }
+    if (existing < 0) merged[merged.length] = item;
+    else merged[existing] = item;
+  }
+  return merged;
 }
 
 export function isBetterAuthCredentialMutationTouchGraphOptions(
