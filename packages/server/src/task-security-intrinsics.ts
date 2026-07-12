@@ -181,7 +181,7 @@ function capturedTaskControlsAreSound(): boolean {
     if (apply(nativeMathMin, NativeMath, [1, 2]) !== 1) return false;
 
     if (apply(nativeStringTrim, ' safe ', []) !== 'safe') return false;
-    if (apply(nativeStringSplit, 'a,b', [','])[1] !== 'b') return false;
+    if (apply<string[]>(nativeStringSplit, 'a,b', [','])[1] !== 'b') return false;
     if (apply(nativeStringIncludes, 'safe-task', ['task']) !== true) return false;
     if (apply(nativeStringStartsWith, 'cron:safe', ['cron:']) !== true) return false;
     if (apply(nativeStringSlice, 'safe', [1, 3]) !== 'af') return false;
@@ -372,6 +372,10 @@ export function taskArraySort<Value>(
   return apply(nativeArraySort, values, [compare]);
 }
 
+export function taskIsArray<Value>(
+  value: ReadonlyArray<Value> | ReadonlyMap<unknown, unknown>,
+): value is ReadonlyArray<Value>;
+export function taskIsArray(value: unknown): value is unknown[];
 export function taskIsArray(value: unknown): value is unknown[] {
   assertTaskSecurityIntrinsics();
   return witnessIsArray(value);
@@ -803,7 +807,7 @@ export function taskCreateEntropyId(prefix: 'job' | 'lease'): string {
   let encoded = '';
   for (let index = 0; index < bytes.byteLength; index += 1) {
     const byte = bytes[index]!;
-    encoded += alphabet[(byte >>> 4) & 0x0f] + alphabet[byte & 0x0f];
+    encoded += alphabet[(byte >>> 4) & 0x0f]! + alphabet[byte & 0x0f]!;
   }
   return `${prefix}_${encoded}`;
 }

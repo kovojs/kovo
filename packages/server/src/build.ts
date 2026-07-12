@@ -1225,7 +1225,7 @@ function defaultOrigin(nodeRequest, options) {
   // E2 (SPEC §9.5): under HTTP/2 the \`Host\` header is often absent — the authority lives in
   // the \`:authority\` pseudo-header instead. Fall back to it (then \`:scheme\`) so URL resolution
   // works for HTTP/2 requests, not just HTTP/1.1.
-  const host = nodeRequest.headers.host ?? firstHeaderValue(nodeRequest.headers[':authority']) ?? '127.0.0.1';
+  const host = firstHeaderValue(nodeRequest.headers.host) ?? firstHeaderValue(nodeRequest.headers[':authority']) ?? '127.0.0.1';
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
     : undefined;

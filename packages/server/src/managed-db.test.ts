@@ -509,6 +509,7 @@ readonlyDb(relationalRaw).query.products.findMany();
         JSON.stringify(
           {
             compilerOptions: {
+              allowImportingTsExtensions: true,
               exactOptionalPropertyTypes: true,
               module: 'NodeNext',
               moduleResolution: 'NodeNext',
@@ -581,6 +582,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
         JSON.stringify(
           {
             compilerOptions: {
+              allowImportingTsExtensions: true,
               exactOptionalPropertyTypes: true,
               module: 'NodeNext',
               moduleResolution: 'NodeNext',

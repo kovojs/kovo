@@ -307,12 +307,15 @@ export function witnessWeakSetDelete<Value extends object>(
   return apply(nativeWeakSetDelete, set, [value]);
 }
 
-export function witnessMapGet<Key, Value>(map: Map<Key, Value>, key: Key): Value | undefined {
+export function witnessMapGet<Key, Value>(
+  map: ReadonlyMap<Key, Value>,
+  key: Key,
+): Value | undefined {
   assertSecurityWitnessIntrinsics();
   return apply(nativeMapGet, map, [key]);
 }
 
-export function witnessMapHas<Key>(map: Map<Key, unknown>, key: Key): boolean {
+export function witnessMapHas<Key>(map: ReadonlyMap<Key, unknown>, key: Key): boolean {
   assertSecurityWitnessIntrinsics();
   return apply(nativeMapHas, map, [key]);
 }
@@ -328,14 +331,14 @@ export function witnessMapDelete<Key>(map: Map<Key, unknown>, key: Key): boolean
 }
 
 export function witnessMapForEach<Key, Value>(
-  map: Map<Key, Value>,
+  map: ReadonlyMap<Key, Value>,
   callback: (value: Value, key: Key) => void,
 ): void {
   assertSecurityWitnessIntrinsics();
   apply(nativeMapForEach, map, [callback]);
 }
 
-export function witnessMapSize(map: Map<unknown, unknown>): number {
+export function witnessMapSize(map: ReadonlyMap<unknown, unknown>): number {
   assertSecurityWitnessIntrinsics();
   if (typeof nativeMapSize !== 'function') {
     throw new TypeError('Kovo security witness Map size control is unavailable.');
@@ -343,7 +346,7 @@ export function witnessMapSize(map: Map<unknown, unknown>): number {
   return apply(nativeMapSize, map, []);
 }
 
-export function witnessSetHas<Value>(set: Set<Value>, value: Value): boolean {
+export function witnessSetHas<Value>(set: ReadonlySet<Value>, value: Value): boolean {
   assertSecurityWitnessIntrinsics();
   return apply(nativeSetHas, set, [value]);
 }
@@ -358,7 +361,7 @@ export function witnessSetDelete<Value>(set: Set<Value>, value: Value): boolean 
   return apply(nativeSetDelete, set, [value]);
 }
 
-export function witnessSetSize(set: Set<unknown>): number {
+export function witnessSetSize(set: ReadonlySet<unknown>): number {
   assertSecurityWitnessIntrinsics();
   if (typeof nativeSetSize !== 'function') {
     throw new TypeError('Kovo security witness Set size control is unavailable.');
@@ -366,7 +369,10 @@ export function witnessSetSize(set: Set<unknown>): number {
   return apply(nativeSetSize, set, []);
 }
 
-export function witnessSetForEach<Value>(set: Set<Value>, callback: (value: Value) => void): void {
+export function witnessSetForEach<Value>(
+  set: ReadonlySet<Value>,
+  callback: (value: Value) => void,
+): void {
   assertSecurityWitnessIntrinsics();
   apply(nativeSetForEach, set, [callback]);
 }
@@ -446,6 +452,10 @@ export function witnessString(value: unknown): string {
   return apply(NativeString, undefined, [value]);
 }
 
+export function witnessIsArray<Value>(
+  value: readonly Value[] | ReadonlySet<Value>,
+): value is readonly Value[];
+export function witnessIsArray(value: unknown): value is unknown[];
 export function witnessIsArray(value: unknown): value is unknown[] {
   assertSecurityWitnessIntrinsics();
   return apply(nativeArrayIsArray, NativeArray, [value]);

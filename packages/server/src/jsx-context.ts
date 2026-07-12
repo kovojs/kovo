@@ -96,27 +96,35 @@ function createJsxFrameworkContext(
   request: unknown,
   options: Omit<JsxFrameworkContext, 'mutationFormHelpers' | 'request'>,
 ): JsxFrameworkContext {
+  const anonymousCsrfBindings = formHelperOwnDataValue(options, 'anonymousCsrfBindings') as
+    | Map<string, JsxAnonymousCsrfBinding>
+    | undefined;
+  const csrf = formHelperOwnDataValue(options, 'csrf') as CsrfOptions<any> | undefined;
+  const deferredRegions = formHelperOwnDataValue(options, 'deferredRegions') as
+    | DeferredRegionCollector
+    | undefined;
+  const maxListItems = formHelperOwnDataValue(options, 'maxListItems') as number | undefined;
   const mutationFailure = formHelperOwnDataValue(options, 'mutationFailure');
+  const onCsrfSetCookie = formHelperOwnDataValue(options, 'onCsrfSetCookie') as
+    | ((rawSetCookie: string) => void)
+    | undefined;
+  const normalizedMutationFailure =
+    typeof mutationFailure === 'object' && mutationFailure !== null
+      ? (formHelperSnapshotRecord(
+          mutationFailure as unknown as Record<string, unknown>,
+          'JSX mutation failure context',
+        ) as unknown as JsxMutationFailureContext)
+      : undefined;
   const context: JsxFrameworkContext = {
-    anonymousCsrfBindings: formHelperOwnDataValue(options, 'anonymousCsrfBindings') as
-      | Map<string, JsxAnonymousCsrfBinding>
-      | undefined,
-    csrf: formHelperOwnDataValue(options, 'csrf') as CsrfOptions<any> | undefined,
-    deferredRegions: formHelperOwnDataValue(options, 'deferredRegions') as
-      | DeferredRegionCollector
-      | undefined,
-    maxListItems: formHelperOwnDataValue(options, 'maxListItems') as number | undefined,
-    mutationFailure:
-      typeof mutationFailure === 'object' && mutationFailure !== null
-        ? (formHelperSnapshotRecord(
-            mutationFailure as unknown as Record<string, unknown>,
-            'JSX mutation failure context',
-          ) as unknown as JsxMutationFailureContext)
-        : undefined,
+    ...(anonymousCsrfBindings === undefined ? {} : { anonymousCsrfBindings }),
+    ...(csrf === undefined ? {} : { csrf }),
+    ...(deferredRegions === undefined ? {} : { deferredRegions }),
+    ...(maxListItems === undefined ? {} : { maxListItems }),
+    ...(normalizedMutationFailure === undefined
+      ? {}
+      : { mutationFailure: normalizedMutationFailure }),
     mutationFormHelpers: createMutationFormHelperRegistry(),
-    onCsrfSetCookie: formHelperOwnDataValue(options, 'onCsrfSetCookie') as
-      | ((rawSetCookie: string) => void)
-      | undefined,
+    ...(onCsrfSetCookie === undefined ? {} : { onCsrfSetCookie }),
     request,
   };
   return context;

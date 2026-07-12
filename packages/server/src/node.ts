@@ -1062,9 +1062,9 @@ function preferredCompression(acceptEncoding: string): 'br' | 'gzip' | undefined
 }
 
 interface ParsedAcceptEncoding {
-  br?: number;
-  gzip?: number;
-  wildcard?: number;
+  br: number | undefined;
+  gzip: number | undefined;
+  wildcard: number | undefined;
 }
 
 function parseAcceptEncoding(value: string): ParsedAcceptEncoding {
@@ -1325,7 +1325,9 @@ function defaultOrigin(request: PinnedNodeRequest, options: PinnedNodeHandlerOpt
   // the `:authority` pseudo-header instead. Fall back to it (then `:scheme`) so URL resolution
   // works for HTTP/2 requests, not just HTTP/1.1.
   const host =
-    request.headers.host ?? firstHeaderValue(request.headers[':authority']) ?? '127.0.0.1';
+    firstHeaderValue(request.headers.host) ??
+    firstHeaderValue(request.headers[':authority']) ??
+    '127.0.0.1';
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(request.headers['x-forwarded-proto'])
     : undefined;
