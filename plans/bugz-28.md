@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     4 | C1-C4 |
-| High     |     7 | H1-H7 |
+| Critical |     5 | C1-C5 |
+| High     |     8 | H1-H8 |
 | Medium   |     4 | M1-M4 |
 
 ## Critical
@@ -33,14 +33,13 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 88-test egress/Undici/redirect/bootstrap/intrinsic matrix passes, including
     real fetch, host-swap, forged-cache, late-poison, and import-order fail-closed regressions.
 
-- [ ] **C3 - Mutable path-containment prototypes escape the framework output filesystem root.**
+- [x] **C3 - Mutable path-containment prototypes escape the framework output filesystem root.**
       `packages/core/src/{storage,internal/filesystem}.ts`
   - Selective late `String.prototype.startsWith` and `Array.prototype.includes` overrides made the
     real output boundary write `../outside/escaped.txt` outside its pinned root; storage key
     normalization uses adjacent mutable segment controls.
-  - **Acceptance:** logical-key parsing, relative-path rejection, and every read/write/copy/rename/
-    delete containment decision use boot-pinned, semantically checked operations and exact path bytes;
-    a real outside sentinel must remain unchanged under hostile import order and late poison.
+  - **Evidence:** the 37-test filesystem/storage/intrinsic matrix passes; the independent real outside
+    write proof now throws before touching the sentinel, with safe writes preserved.
 
 - [x] **C4 - Mutable Math controls can authenticate a forged HMAC signature.**
       `packages/core/src/verifier.ts`
@@ -49,6 +48,14 @@ This is an active closure ledger; `SPEC.md` remains normative.
     tolerance.
   - **Evidence:** the 234-test matrix rejects real forged equal-length signatures and stale events
     under Math/Number/String/RegExp poison while preserving a valid HMAC control.
+
+- [ ] **C5 - A mutable typed-array iterator can make unequal secrets compare equal.**
+      `packages/core/src/secret.ts`
+  - Replacing `Uint8Array.prototype[Symbol.iterator]` with an empty iterator made `Secret.equals()`
+    accept any same-kind unequal secret; mutable encoder/view controls affected the compared bytes.
+  - **Acceptance:** secret encoding, view extraction, and constant-time byte comparison use
+    boot-pinned, semantically checked controls with indexed traversal; unequal string/byte secrets
+    remain unequal under hostile import order and late poison while equal controls pass.
 
 ## High
 
@@ -107,6 +114,13 @@ This is an active closure ledger; `SPEC.md` remains normative.
     semantically checked operations over the exact emitted bytes; hostile import-order and late-poison
     regressions keep absolute, protocol-relative, backslash, and control-bearing targets on fallback.
 
+- [x] **H8 - Mutable storage Map controls can cross logical object identities.**
+      `packages/core/src/storage.ts`
+  - A selective late `Map.prototype.get` override made an attacker logical key read a different
+    victim object's body from memory storage.
+  - **Evidence:** the 37-test filesystem/storage/intrinsic matrix passes with pinned map operations,
+    exact logical-key controls, late-poison isolation, and import-order fail-closed coverage.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -143,7 +157,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C3, H6-H7, and M4 are active filesystem,
-request-transport, Better Auth, and diagnostics fixes. Integrated evidence is green at 97 PostgreSQL,
+The remediation pass remains intentionally non-zero: H6-H7 and M4 are active request-transport,
+Better Auth, and diagnostics fixes. Integrated evidence is green at 97 PostgreSQL,
 88 egress, 198 app/schema/document, 158 auth/response, 86 crypto/replay, and 234 output/compiler/core
 tests. A complete fresh sweep of the final integrated tree is still required.
