@@ -75,6 +75,36 @@ describe('server app shell Vite static export result boundary', () => {
     );
   });
 
+  it('C192 rejects manifest drift after late JSON and inherited toJSON replacement', async () => {
+    const previousToJson = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    const originalStringify = JSON.stringify;
+    let outcome: unknown;
+    try {
+      Object.defineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value: () => ({ hidden: true }),
+      });
+      JSON.stringify = () => '{}';
+      outcome = await kovoAppShellViteStaticExportWithManifest({
+        async dryRun() {
+          return staticExportResult('/index.html');
+        },
+        async write() {
+          return staticExportResult('/about/index.html');
+        },
+      }).catch((error: unknown) => error);
+    } finally {
+      JSON.stringify = originalStringify;
+      if (previousToJson === undefined) delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      else Object.defineProperty(Object.prototype, 'toJSON', previousToJson);
+    }
+
+    expect(outcome).toBeInstanceOf(Error);
+    expect((outcome as Error).message).toContain(
+      'Static export manifest does not match the written export result.',
+    );
+  });
+
   it('rejects stale flat route-document manifests before export tasks publish compatibility output', async () => {
     const flatResult = staticExportResult('/about.html');
 
@@ -115,5 +145,28 @@ describe('server app shell Vite static export result boundary', () => {
     ).toThrow(
       'Static export manifest contains non-directory-index route documents. Invalid route documents: /about.html. SPEC §9.5 exports route documents as directory-index HTML.',
     );
+  });
+
+  it('C192 keeps flat route documents blocking after late collection-method replacement', () => {
+    const manifest = staticExportManifest(staticExportResult('/about.html'));
+    const originalMap = Array.prototype.map;
+    const originalFilter = Array.prototype.filter;
+    try {
+      Array.prototype.map = function (callback, thisArg) {
+        if (this === manifest.routeDocuments) return ['/index.html'];
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      Array.prototype.filter = function (callback, thisArg) {
+        if (this === manifest.files) return [];
+        return Reflect.apply(originalFilter, this, [callback, thisArg]);
+      } as typeof Array.prototype.filter;
+
+      expect(() => assertStaticExportManifestUsesDirectoryIndexDocuments(manifest)).toThrow(
+        /non-directory-index route documents/u,
+      );
+    } finally {
+      Array.prototype.map = originalMap;
+      Array.prototype.filter = originalFilter;
+    }
   });
 });
