@@ -469,7 +469,9 @@ const removedCoreExportStarResolverBranch = [
 const compileSiblingRegistrationBranch = [
   '  registerFrameworkIdentityProject(',
   '    sourceFile,',
-  '    options.extraFiles.map((file) => parseSourceFile(file.fileName, file.source)),',
+  "    compilerMapDense(options.extraFiles, 'Compiler framework-identity files', (file) =>",
+  '      parseSourceFile(file.fileName, file.source),',
+  '    ),',
   '  );',
 ].join('\n');
 
@@ -1571,7 +1573,7 @@ async function assertManagedRawDriverEscapeDenialPrecedesNestedWrapping(
   if (denial === -1) {
     throw new Error('managed raw-driver escape denial branch is missing');
   }
-  const firstReflectGet = sourceText.indexOf('Reflect.get(target, prop, receiver)');
+  const firstReflectGet = sourceText.indexOf('witnessReflectGet(target, prop, receiver)');
   const nestedWrap = sourceText.indexOf('isNestedSqlHandleProperty(prop)');
   if (firstReflectGet === -1 || nestedWrap === -1) {
     throw new Error('managed SQL handle wrapping landmarks are missing');
