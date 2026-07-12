@@ -7,6 +7,7 @@ import type {
   ServerResponse,
 } from 'node:http';
 import { connect as http2Connect, createServer as createHttp2Server } from 'node:http2';
+import { connect as netConnect } from 'node:net';
 import type { AddressInfo, Socket } from 'node:net';
 import { Readable } from 'node:stream';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
@@ -520,6 +521,77 @@ describe('server node adapter', () => {
   });
 });
 
+describe('toNodeHandler incomplete request transport closure', () => {
+  const oversized = (): Response =>
+    new Response('Payload Too Large', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 413,
+    });
+
+  function requestHandler(): RequestListener {
+    return toNodeHandler(async (request) => {
+      const pathname = new URL(request.url).pathname;
+      if (pathname === '/declared') return oversized();
+      if (pathname === '/chunked') {
+        await request.body?.getReader().read();
+        return oversized();
+      }
+      if (pathname === '/complete') {
+        await request.text();
+        return oversized();
+      }
+      return new Response('ok');
+    });
+  }
+
+  it.each([
+    [
+      'declared Content-Length',
+      'POST /declared HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nContent-Length: 1000000\r\n\r\n',
+    ],
+    [
+      'unterminated chunked body',
+      'POST /chunked HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n',
+    ],
+  ])('flushes the 413 and closes an incomplete %s request', async (_shape, wireRequest) => {
+    const server = await serveWithNode(requestHandler());
+    try {
+      const wireResponse = await rawHttpExchange(server.origin, wireRequest);
+      expect(wireResponse).toContain('HTTP/1.1 413');
+      expect(wireResponse).toMatch(/connection: close/i);
+      expect(wireResponse).toContain('Payload Too Large');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('keeps a completed request reusable on the same keep-alive connection', async () => {
+    const sockets: Socket[] = [];
+    const nodeHandler = requestHandler();
+    const server = await serveWithNode((request, response) => {
+      if (!sockets.includes(request.socket)) sockets.push(request.socket);
+      return nodeHandler(request, response);
+    });
+    const agent = new Agent({ keepAlive: true, maxSockets: 1 });
+
+    try {
+      const first = await keepAliveRequest(server.origin, '/complete', agent, {
+        body: 'abcde',
+        headers: { 'Content-Length': '5' },
+        method: 'POST',
+      });
+      const second = await keepAliveRequest(server.origin, '/ok', agent);
+
+      expect(first).toEqual({ body: 'Payload Too Large', status: 413 });
+      expect(second).toEqual({ body: 'ok', status: 200 });
+      expect(sockets).toHaveLength(1);
+    } finally {
+      agent.destroy();
+      await server.close();
+    }
+  });
+});
+
 describe('responseHeadersToNodeHeaders (B1)', () => {
   // SPEC §9.4/§9.1.1: multiple Set-Cookie headers must not be collapsed to the last.
   it('preserves multiple Set-Cookie headers as a string array (B1)', async () => {
@@ -805,20 +877,60 @@ function keepAliveGet(
   pathname: string,
   agent: Agent,
 ): Promise<{ body: string; status: number }> {
+  return keepAliveRequest(origin, pathname, agent);
+}
+
+function keepAliveRequest(
+  origin: string,
+  pathname: string,
+  agent: Agent,
+  options: NodeTestRequestOptions = {},
+): Promise<{ body: string; status: number }> {
   return new Promise((resolve, reject) => {
-    const request = httpRequest(`${origin}${pathname}`, { agent, method: 'GET' }, (response) => {
-      const chunks: Buffer[] = [];
-      response.on('data', (chunk: Buffer) => chunks.push(chunk));
-      response.on('error', reject);
-      response.on('end', () =>
-        resolve({
-          body: Buffer.concat(chunks).toString('utf8'),
-          status: response.statusCode ?? 0,
-        }),
-      );
-    });
+    const request = httpRequest(
+      `${origin}${pathname}`,
+      {
+        agent,
+        headers: options.headers,
+        method: options.method ?? 'GET',
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('error', reject);
+        response.on('end', () =>
+          resolve({
+            body: Buffer.concat(chunks).toString('utf8'),
+            status: response.statusCode ?? 0,
+          }),
+        );
+      },
+    );
     request.on('error', reject);
-    request.end();
+    request.end(options.body);
+  });
+}
+
+async function rawHttpExchange(origin: string, wireRequest: string): Promise<string> {
+  const url = new URL(origin);
+  return await new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const socket = netConnect({ host: url.hostname, port: Number(url.port) });
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('Timed out waiting for the incomplete HTTP request socket to close.'));
+    }, 2_000);
+
+    socket.on('data', (chunk: Buffer) => chunks.push(chunk));
+    socket.once('connect', () => socket.write(wireRequest));
+    socket.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    socket.once('close', () => {
+      clearTimeout(timeout);
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
   });
 }
 

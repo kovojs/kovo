@@ -55,6 +55,7 @@ export function toNodeHandler(
     try {
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
       const response = await handler(request);
+      armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       // L16-2 (RFC 8297): thread the request's HTTP version so 103 Early Hints is gated to
       // HTTP/1.1+ clients (an HTTP/1.0 peer cannot parse interim 1xx responses).
       const acceptEncoding = firstHeaderValue(nodeRequest.headers['accept-encoding']);
@@ -76,6 +77,7 @@ export function toNodeHandler(
         nodeResponse.destroy();
         return;
       }
+      armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       nodeResponse.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
       nodeResponse.end('Internal Server Error');
     }
@@ -149,6 +151,9 @@ export async function writeWebResponseToNode(
 ): Promise<void> {
   const compression = responseCompression(response, options, method);
   const responseHeaders = new Headers(response.headers);
+  if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
+    responseHeaders.set('Connection', 'close');
+  }
   if (compression) {
     responseHeaders.set('Content-Encoding', compression);
     responseHeaders.delete('Content-Length');
@@ -183,6 +188,26 @@ export async function writeWebResponseToNode(
   if (compression === 'br') await pipeline(source, createBrotliCompress(), nodeResponse);
   else if (compression === 'gzip') await pipeline(source, createGzip(), nodeResponse);
   else await pipeline(source, nodeResponse);
+}
+
+/**
+ * SPEC §9.5: a response that finishes before Node has received the complete request body
+ * cannot leave the HTTP/1 connection reusable. An oversized declared/chunked body can otherwise
+ * collect a 413 while retaining the socket until a much later transport timeout. Mark the response
+ * non-persistent before its head is written, then tear down only after the response has flushed.
+ */
+function armIncompleteNodeRequestClose(
+  nodeRequest: IncomingMessage,
+  nodeResponse: ServerResponse,
+): void {
+  if (nodeRequest.complete || nodeRequest.destroyed || nodeResponse.destroyed) return;
+
+  nodeResponse.shouldKeepAlive = false;
+  const closeIncompleteRequest = (): void => {
+    if (!nodeRequest.complete && !nodeRequest.destroyed) nodeRequest.destroy();
+  };
+  nodeResponse.once('finish', closeIncompleteRequest);
+  nodeResponse.once('close', closeIncompleteRequest);
 }
 
 function responseCompression(

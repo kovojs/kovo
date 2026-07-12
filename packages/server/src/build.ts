@@ -652,8 +652,23 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
   return request;
 }
 
-export async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
-  const headers = responseHeadersToNodeHeaders(response.headers);
+export function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
+  if (nodeRequest.complete || nodeRequest.destroyed || nodeResponse.destroyed) return;
+
+  nodeResponse.shouldKeepAlive = false;
+  const closeIncompleteRequest = () => {
+    if (!nodeRequest.complete && !nodeRequest.destroyed) nodeRequest.destroy();
+  };
+  nodeResponse.once('finish', closeIncompleteRequest);
+  nodeResponse.once('close', closeIncompleteRequest);
+}
+
+export async function writeWebResponseToNode(response, nodeResponse, method = 'GET', options = {}) {
+  const responseHeaders = new Headers(response.headers);
+  if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
+    responseHeaders.set('connection', 'close');
+  }
+  const headers = responseHeadersToNodeHeaders(responseHeaders);
 
   nodeResponse.writeHead(response.status, response.statusText, headers);
   if (method === 'HEAD' || response.body === null) {
@@ -746,11 +761,15 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
     const { nodeRequestToWebRequest, writeWebResponseToNode } = await loadNodeAdapter();
     const request = nodeRequestToWebRequest(nodeRequest, {}, nodeResponse);
     const response = await handler(request);
-    await writeWebResponseToNode(response, nodeResponse, request.method);
+    armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+    await writeWebResponseToNode(response, nodeResponse, request.method, {
+      httpVersion: nodeRequest.httpVersion,
+    });
   } catch {
     if (nodeResponse.headersSent) {
       nodeResponse.destroy();
     } else {
+      armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
       nodeResponse.end('Internal Server Error');
     }
@@ -765,6 +784,15 @@ async function loadHandler() {
 async function loadNodeAdapter() {
   nodeAdapterPromise ||= import('./node-adapter.mjs');
   return nodeAdapterPromise;
+}
+function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
+  if (nodeRequest.complete || nodeRequest.destroyed || nodeResponse.destroyed) return;
+  nodeResponse.shouldKeepAlive = false;
+  const closeIncompleteRequest = () => {
+    if (!nodeRequest.complete && !nodeRequest.destroyed) nodeRequest.destroy();
+  };
+  nodeResponse.once('finish', closeIncompleteRequest);
+  nodeResponse.once('close', closeIncompleteRequest);
 }
 function isImmutableStaticAssetPath(pathname) {
   return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
@@ -912,11 +940,16 @@ import { basename, extname, isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { nodeRequestToWebRequest, writeWebResponseToNode } from './node-adapter.mjs';
+import {
+  armIncompleteNodeRequestClose,
+  nodeRequestToWebRequest,
+  writeWebResponseToNode,
+} from './node-adapter.mjs';
 import handler from './server/handler.mjs';
 
 const sanitizeDiagnosticUrl = (${sanitizeDiagnosticUrl.toString()});
 const sanitizeDiagnosticText = (${sanitizeDiagnosticText.toString()});
+const nativeErrorStackGetter = Object.getOwnPropertyDescriptor(new Error(), 'stack')?.get;
 
 const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
 const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
@@ -932,19 +965,26 @@ const rootedFileCapabilities = new Map();
 
 export function createKovoNodeServer(options = {}) {
   const server = createServer(async (nodeRequest, nodeResponse) => {
-    let diagnosticRequest;
+    let diagnosticRequestUrl;
     try {
+      if (bodylessMethods.has(nodeRequest.method ?? 'GET')) {
+        armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+      }
       if (await maybeServeStatic(nodeRequest, nodeResponse)) return;
 
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
-      diagnosticRequest = request;
+      diagnosticRequestUrl = request.url;
       const response = await handler(request);
-      await writeWebResponseToNode(response, nodeResponse, request.method);
+      armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+      await writeWebResponseToNode(response, nodeResponse, request.method, {
+        httpVersion: nodeRequest.httpVersion,
+      });
     } catch (error) {
-      logUnhandledNodeError(error, nodeRequest, diagnosticRequest);
+      logUnhandledNodeError(error, nodeRequest, diagnosticRequestUrl);
       if (nodeResponse.headersSent) {
         nodeResponse.destroy();
       } else {
+        armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
         nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
         nodeResponse.end('Internal Server Error');
       }
@@ -955,47 +995,227 @@ export function createKovoNodeServer(options = {}) {
   return server;
 }
 
-function logUnhandledNodeError(error, nodeRequest, webRequest) {
-  const method = nodeRequest.method ?? 'UNKNOWN';
-  const rawUrl = nodeRequest.url ?? '/';
-  const url = sanitizeDiagnosticUrl(rawUrl);
-  const requestUrls = [rawUrl, webRequest && webRequest.url].filter(
-    (value) => typeof value === 'string',
-  );
-  const detail =
-    error && typeof error === 'object' && 'stack' in error && typeof error.stack === 'string'
-      ? error.stack
-      : error;
-  console.error(
-    '[kovo] unhandled node server error',
-    scrubConsoleValue({ method, url, error: detail }, requestUrls),
+function logUnhandledNodeError(error, nodeRequest, webRequestUrl) {
+  try {
+    const inputs = nodeDiagnosticInputs(nodeRequest, webRequestUrl);
+    const method = nodeRequest.method ?? 'UNKNOWN';
+    const url = sanitizeDiagnosticUrl(nodeRequest.url ?? '/');
+    const detail = safeNodeDiagnosticErrorDetail(error);
+    console.error(
+      '[kovo] unhandled node server error',
+      scrubConsoleValue({ method, url, error: detail }, inputs),
+    );
+  } catch {
+    try {
+      console.error('[kovo] unhandled node server error', {
+        method: 'UNKNOWN',
+        url: '/',
+        error: '[redacted]',
+      });
+    } catch {}
+  }
+}
+
+function nodeDiagnosticInputs(nodeRequest, webRequestUrl) {
+  const urls = [nodeRequest.url ?? '/'];
+  if (typeof webRequestUrl === 'string') urls.push(webRequestUrl);
+  const secretValues = [];
+  for (const url of urls) secretValues.push(...nodeDiagnosticUrlValues(url));
+
+  for (const [name, rawValue] of Object.entries(nodeRequest.headers ?? {})) {
+    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+    for (const value of values) {
+      if (typeof value !== 'string' || value === '') continue;
+      if (nodeDiagnosticNameCarriesUrl(name)) urls.push(value);
+      if (!nodeDiagnosticNameCarriesSecret(name)) continue;
+      secretValues.push(value, ...nodeDiagnosticAuthorizationValues(value));
+      if (normalizeNodeDiagnosticName(name).includes('cookie')) {
+        secretValues.push(...nodeDiagnosticCookieValues(value));
+      }
+    }
+  }
+
+  for (const url of urls) secretValues.push(...nodeDiagnosticUrlValues(url));
+  return {
+    secretValues: [...new Set(secretValues.filter((value) => value !== ''))],
+    urls: [...new Set(urls)],
+  };
+}
+
+function normalizeNodeDiagnosticName(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function nodeDiagnosticNameCarriesSecret(value) {
+  const normalized = normalizeNodeDiagnosticName(value);
+  return [
+    'access',
+    'auth',
+    'authorization',
+    'cap',
+    'code',
+    'cookie',
+    'credential',
+    'csrf',
+    'idem',
+    'key',
+    'password',
+    'secret',
+    'session',
+    'signature',
+    'state',
+    'token',
+  ].some((part) => normalized.includes(part));
+}
+
+function nodeDiagnosticNameCarriesUrl(value) {
+  const normalized = normalizeNodeDiagnosticName(value);
+  return (
+    normalized.endsWith('location') ||
+    normalized.endsWith('referer') ||
+    normalized.endsWith('referrer') ||
+    normalized.endsWith('uri') ||
+    normalized.endsWith('url')
   );
 }
 
-function scrubConsoleValue(value, requestUrls = [], seen = new WeakMap()) {
-  if (isSecretDisplayValue(value)) return '[secret]';
-  if (typeof value === 'string') {
-    return sanitizeDiagnosticText(value, requestUrls, sanitizeDiagnosticUrl);
+function nodeDiagnosticCookieValues(value) {
+  return value.split(';').flatMap((part) => {
+    const separator = part.indexOf('=');
+    if (separator < 0) return [];
+    const raw = part.slice(separator + 1).trim();
+    if (raw === '') return [];
+    const unquoted =
+      raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')
+        ? raw.slice(1, -1).replace(/\\\\(["\\\\])/g, '$1')
+        : raw;
+    try {
+      return [...new Set([raw, unquoted, decodeURIComponent(unquoted)])];
+    } catch {
+      return [...new Set([raw, unquoted])];
+    }
+  });
+}
+
+function nodeDiagnosticAuthorizationValues(value) {
+  const match = /^\\s*(basic|bearer|digest|negotiate)\\s+(.+)$/i.exec(value);
+  if (!match || !match[1] || !match[2]) return [];
+  const scheme = match[1].toLowerCase();
+  const payload = match[2].trim();
+  const values = [payload];
+  if (scheme === 'basic') {
+    try {
+      const decoded = Buffer.from(payload, 'base64').toString('utf8');
+      values.push(decoded);
+      const separator = decoded.indexOf(':');
+      if (separator >= 0) values.push(decoded.slice(0, separator), decoded.slice(separator + 1));
+    } catch {}
   }
+  if (scheme === 'digest') {
+    for (const field of payload.matchAll(/(?:^|,)\\s*[^=,]+=(?:"([^"]*)"|([^,]*))/g)) {
+      const fieldValue = (field[1] ?? field[2])?.trim();
+      if (fieldValue) values.push(fieldValue);
+    }
+  }
+  return [...new Set(values.filter((item) => item !== ''))];
+}
+
+function nodeDiagnosticUrlValues(value) {
+  let parsed;
+  try {
+    parsed = new URL(value, 'https://kovo.invalid');
+  } catch {
+    return [];
+  }
+  const values = [...parsed.searchParams.entries()]
+    .filter(([key]) => nodeDiagnosticNameCarriesSecret(key))
+    .map(([, item]) => item)
+    .filter((item) => item !== '');
+  const rawValues = parsed.search
+    .slice(1)
+    .split('&')
+    .flatMap((pair) => {
+      const separator = pair.indexOf('=');
+      if (separator < 0) return [];
+      let key = pair.slice(0, separator);
+      try {
+        key = decodeURIComponent(key.replace(/\\+/g, ' '));
+      } catch {}
+      return nodeDiagnosticNameCarriesSecret(key) ? [pair.slice(separator + 1)] : [];
+    })
+    .filter((item) => item !== '');
+  return [...values, ...rawValues];
+}
+
+function safeNodeDiagnosticErrorDetail(error) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'stack');
+    if (descriptor && 'value' in descriptor && typeof descriptor.value === 'string') {
+      return descriptor.value;
+    }
+    if (
+      descriptor &&
+      !('value' in descriptor) &&
+      descriptor.get === nativeErrorStackGetter &&
+      typeof nativeErrorStackGetter === 'function'
+    ) {
+      const stack = Reflect.apply(nativeErrorStackGetter, error, []);
+      return typeof stack === 'string' ? stack : '[redacted]';
+    }
+    return error;
+  } catch {
+    return '[redacted]';
+  }
+}
+
+function scrubConsoleValue(value, inputs, seen = new WeakMap()) {
+  if (isSecretDisplayValue(value)) return '[secret]';
+  if (typeof value === 'string') return sanitizeNodeDiagnosticString(value, inputs);
   if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
   if (seen.has(value)) return seen.get(value);
-  if (Array.isArray(value)) {
-    const next = [];
-    seen.set(value, next);
-    for (const item of value) next.push(scrubConsoleValue(item, requestUrls, seen));
-    return next;
-  }
-  if (!isPlainConsoleObject(value)) return String(value);
-  const next = {};
+  if (!Array.isArray(value) && !isPlainConsoleObject(value)) return '[redacted]';
+
+  const next = Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));
   seen.set(value, next);
   for (const key of Object.keys(value)) {
-    next[key] = scrubConsoleValue(value[key], requestUrls, seen);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor) continue;
+    const sanitizedKey = sanitizeNodeDiagnosticString(key, inputs);
+    const sanitized =
+      'value' in descriptor
+        ? scrubConsoleValue(descriptor.value, inputs, seen)
+        : '[redacted]';
+    Object.defineProperty(next, sanitizedKey, {
+      configurable: true,
+      enumerable: true,
+      value: sanitized,
+      writable: true,
+    });
   }
   return next;
 }
 
+function sanitizeNodeDiagnosticString(value, inputs) {
+  let sanitized = sanitizeDiagnosticText(value, inputs.urls, sanitizeDiagnosticUrl);
+  for (const secretValue of [...inputs.secretValues].sort(
+    (left, right) => right.length - left.length,
+  )) {
+    sanitized = sanitized.replaceAll(secretValue, '[redacted]');
+  }
+  return sanitized.replace(/[\\u0000-\\u001f\\u007f-\\u009f]/g, (char) =>
+    '\\\\u' + char.charCodeAt(0).toString(16).padStart(4, '0'),
+  );
+}
+
 function isSecretDisplayValue(value) {
-  return Object.prototype.toString.call(value) === '[object Secret]';
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return false;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, Symbol.toStringTag);
+    return !!descriptor && 'value' in descriptor && descriptor.value === 'Secret';
+  } catch {
+    return false;
+  }
 }
 
 function isPlainConsoleObject(value) {

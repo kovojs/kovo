@@ -8,6 +8,7 @@ import {
   type Server,
   type ServerResponse,
 } from 'node:http';
+import { connect as netConnect } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -810,6 +811,13 @@ describe('server build-time deployment API', () => {
         serverHandlerSource: `
 export default async function handler(request) {
   const url = new URL(request.url);
+  if (url.pathname === '/declared-oversized') {
+    return new Response('Payload Too Large', { status: 413 });
+  }
+  if (url.pathname === '/chunked-oversized') {
+    await request.body?.getReader().read();
+    return new Response('Payload Too Large', { status: 413 });
+  }
   if (url.pathname === '/cookies') {
     const headers = new Headers({ 'content-type': 'text/plain; charset=utf-8' });
     headers.append('set-cookie', 'session=s1; Path=/; HttpOnly');
@@ -842,9 +850,8 @@ export default async function handler(request) {
       await expect(readFile(join(nodeOutDir, 'Dockerfile'))).rejects.toThrow();
       expect(logs).toEqual([`Emitted Kovo node preset output to ${nodeOutDir}`]);
       const nodeServer = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
-      expect(nodeServer).toContain(
-        "import { nodeRequestToWebRequest, writeWebResponseToNode } from './node-adapter.mjs';",
-      );
+      expect(nodeServer).toContain('armIncompleteNodeRequestClose');
+      expect(nodeServer).toContain("from './node-adapter.mjs';");
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
@@ -879,6 +886,28 @@ export default async function handler(request) {
       const baseUrl = await listen(server);
 
       try {
+        const declaredOversized = await rawHttpExchange(
+          baseUrl,
+          'POST /declared-oversized HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nContent-Length: 1000000\r\n\r\n',
+        );
+        expect(declaredOversized).toContain('HTTP/1.1 413');
+        expect(declaredOversized).toMatch(/connection: close/i);
+
+        const chunkedOversized = await rawHttpExchange(
+          baseUrl,
+          'POST /chunked-oversized HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n',
+        );
+        expect(chunkedOversized).toContain('HTTP/1.1 413');
+        expect(chunkedOversized).toMatch(/connection: close/i);
+
+        const incompleteStatic = await rawHttpExchange(
+          baseUrl,
+          'GET /assets/cart.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nContent-Length: 1000000\r\n\r\n',
+        );
+        expect(incompleteStatic).toContain('HTTP/1.1 200');
+        expect(incompleteStatic).toMatch(/connection: close/i);
+        expect(incompleteStatic).toContain('body { color: navy; }');
+
         const routeResponse = await fetch(`${baseUrl}/hello?cart=1`, {
           headers: {
             // SPEC §9.5: generated Node output must not trust forwarded scheme headers by default.
@@ -1077,6 +1106,111 @@ export default async function handler() {
         error: { reason: 'provider failed', token: '[secret]' },
       });
       expect(JSON.stringify(consoleErrors)).not.toContain('sk_live_q5_generated_node');
+    } finally {
+      console.error = originalConsoleError;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('redacts isolated request credentials and controls from post-response node errors', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-stream-errors-'));
+    const originalConsoleError = console.error;
+    const consoleErrors: unknown[][] = [];
+    const basicPassword = 'BASIC_PASSWORD_SHOULD_NOT_LOG';
+    const basic = Buffer.from(`basic-user:${basicPassword}`).toString('base64');
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+export default async function handler(request) {
+  const url = new URL(request.url);
+  const cookie = /sid=([^;]+)/.exec(request.headers.get('cookie') ?? '')?.[1] ?? '';
+  const authorization = request.headers.get('authorization') ?? '';
+  const basicPassword = Buffer.from(authorization.replace(/^Basic\\s+/i, ''), 'base64')
+    .toString('utf8')
+    .split(':')[1] ?? '';
+  const failure = url.pathname === '/proxy-stream-error'
+    ? new Proxy({}, {
+        getOwnPropertyDescriptor() { throw new Error('getter trap must not escape'); },
+      })
+    : new Error(
+        'stream failed query=' + url.searchParams.get('apiKeyV2') +
+        ' cookie=' + cookie +
+        ' header=' + request.headers.get('x-api-key') +
+        ' basic=' + basicPassword +
+        '\\nFORGED-LINE\\u001b[31m',
+      );
+  let started = false;
+  return new Response(new ReadableStream({
+    async pull(controller) {
+      if (!started) {
+        started = true;
+        controller.enqueue(new TextEncoder().encode('partial-'));
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      controller.error(failure);
+    },
+  }), { headers: { 'content-type': 'text/plain; charset=utf-8' } });
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
+
+      try {
+        const response = await fetch(
+          `${baseUrl}/stream-error?apiKeyV2=QUERY_SECRET_SHOULD_NOT_LOG`,
+          {
+            headers: {
+              Authorization: `Basic ${basic}`,
+              Cookie: 'sid=COOKIE_SECRET_SHOULD_NOT_LOG',
+              'X-API-Key': 'HEADER_SECRET_SHOULD_NOT_LOG',
+            },
+          },
+        );
+        expect(response.status).toBe(200);
+        await expect(response.text()).rejects.toThrow();
+
+        const proxyResponse = await fetch(`${baseUrl}/proxy-stream-error`);
+        expect(proxyResponse.status).toBe(200);
+        await expect(proxyResponse.text()).rejects.toThrow();
+        await waitForConsoleErrorCount(consoleErrors, 2);
+      } finally {
+        console.error = originalConsoleError;
+        await close(server);
+      }
+
+      expect(consoleErrors).toHaveLength(2);
+      const loggedError = (consoleErrors[0]?.[1] as { error?: unknown } | undefined)?.error;
+      expect(typeof loggedError).toBe('string');
+      expect(String(loggedError)).toContain('[redacted]');
+      expect(String(loggedError)).toContain('\\u000aFORGED-LINE\\u001b[31m');
+      expect(String(loggedError)).not.toContain('\n');
+      expect(String(loggedError)).not.toContain('\u001b');
+      expect(consoleErrors[1]?.[1]).toMatchObject({ error: '[redacted]' });
+      expect(JSON.stringify(consoleErrors)).not.toContain('QUERY_SECRET_SHOULD_NOT_LOG');
+      expect(JSON.stringify(consoleErrors)).not.toContain('COOKIE_SECRET_SHOULD_NOT_LOG');
+      expect(JSON.stringify(consoleErrors)).not.toContain('HEADER_SECRET_SHOULD_NOT_LOG');
+      expect(JSON.stringify(consoleErrors)).not.toContain(basicPassword);
     } finally {
       console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });
@@ -2211,6 +2345,42 @@ async function nodeGet(
     request.on('error', reject);
     request.end();
   });
+}
+
+async function rawHttpExchange(baseUrl: string, wireRequest: string): Promise<string> {
+  const url = new URL(baseUrl);
+  return await new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const socket = netConnect({ host: url.hostname, port: Number(url.port) });
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('Timed out waiting for the incomplete HTTP request socket to close.'));
+    }, 2_000);
+
+    socket.on('data', (chunk: Buffer) => chunks.push(chunk));
+    socket.once('connect', () => socket.write(wireRequest));
+    socket.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    socket.once('close', () => {
+      clearTimeout(timeout);
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
+  });
+}
+
+async function waitForConsoleErrorCount(
+  errors: readonly unknown[][],
+  count: number,
+): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (errors.length < count && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (errors.length < count) {
+    throw new Error(`Timed out waiting for ${count} generated Node error log entries.`);
+  }
 }
 
 async function close(server: Server): Promise<void> {
