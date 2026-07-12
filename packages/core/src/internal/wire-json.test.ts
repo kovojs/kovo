@@ -65,9 +65,7 @@ describe('wire-json core contract', () => {
       Date.prototype.toISOString = () => 'forged';
       BigInt.prototype.toString = () => '999';
 
-      expect(stringifyWireValue({ count: 1, rows: ['safe'] })).toBe(
-        '{"count":1,"rows":["safe"]}',
-      );
+      expect(stringifyWireValue({ count: 1, rows: ['safe'] })).toBe('{"count":1,"rows":["safe"]}');
       expect(stringifyWireValue({ at: new Date('2020-01-02T03:04:05.678Z'), id: 42n })).toBe(
         '{"at":{"$kovo":"date","value":"2020-01-02T03:04:05.678Z"},"id":{"$kovo":"bigint","value":"42"}}',
       );

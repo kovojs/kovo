@@ -93,9 +93,7 @@ describe('JSON value utilities', () => {
       Number.isFinite = () => true;
       Number.isInteger = () => true;
 
-      expect(canonicalJsonStringify({ principalId: 'victim' })).toBe(
-        '{"principalId":"victim"}',
-      );
+      expect(canonicalJsonStringify({ principalId: 'victim' })).toBe('{"principalId":"victim"}');
       expect(jsonEncodedByteLength('Kovo')).toBe(6);
       expect(() => assertJsonValue(Number.NaN, { root: 'args' })).toThrow(
         'must be a finite JSON number',

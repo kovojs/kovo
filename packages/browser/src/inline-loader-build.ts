@@ -68,10 +68,7 @@ const inlineHelperSpecs = {
     label: 'enhanced navigation',
     readableParityLabel: 'canonical enhanced navigation helper closure',
     minifiedParityLabel: 'canonical minified enhanced navigation helper closure',
-    rootFunctionNames: [
-      'createMutationIdemSecurityControls',
-      'installEnhancedNavigationRuntime',
-    ],
+    rootFunctionNames: ['createMutationIdemSecurityControls', 'installEnhancedNavigationRuntime'],
     sourceFileName: 'enhanced-navigation.ts',
     sourcePath: enhancedNavigationSourcePath,
     sourcePaths: [

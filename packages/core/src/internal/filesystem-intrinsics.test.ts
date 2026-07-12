@@ -64,9 +64,7 @@ describe('filesystem intrinsic membrane', () => {
       expect([...fileSystemUtf8Encode('Kovo')]).toEqual([75, 111, 118, 111]);
       expect(fileSystemUtf8Decode(new Uint8Array([75, 111, 118, 111]))).toBe('Kovo');
       expect(fileSystemJsonParse('{"logicalKey":"safe"}')).toEqual({ logicalKey: 'safe' });
-      expect(fileSystemJsonStringify({ logicalKey: 'safe' })).toBe(
-        '{"logicalKey":"safe"}',
-      );
+      expect(fileSystemJsonStringify({ logicalKey: 'safe' })).toBe('{"logicalKey":"safe"}');
     } finally {
       TextEncoder.prototype.encode = originalEncode;
       TextDecoder.prototype.decode = originalDecode;

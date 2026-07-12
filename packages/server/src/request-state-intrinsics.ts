@@ -76,7 +76,12 @@ function capturedRequestStateControlsAreSound(): boolean {
     }
     if (apply(nativeMathCeil, NativeMath, [1.01]) !== 2) return false;
     const promiseControl = new NativePromise<string>((resolve) => resolve('accepted'));
-    if (!(apply(nativePromiseThen, promiseControl, [(value: string) => value]) instanceof NativePromise)) {
+    if (
+      !(
+        apply(nativePromiseThen, promiseControl, [(value: string) => value]) instanceof
+        NativePromise
+      )
+    ) {
       return false;
     }
     if (!(apply(nativePromiseCatch, promiseControl, [() => 'rejected']) instanceof NativePromise)) {
@@ -295,9 +300,7 @@ export function requestStateRightmostHeaderListValue(value: string | null): stri
   }
 }
 
-export function requestStateRightmostForwardedForValue(
-  value: string | null,
-): string | undefined {
+export function requestStateRightmostForwardedForValue(value: string | null): string | undefined {
   assertRequestStateIntrinsics();
   if (value === null) return undefined;
   let end = value.length;

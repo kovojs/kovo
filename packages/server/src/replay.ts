@@ -360,13 +360,19 @@ function assertMutationReplayStoreOptions(options: {
   ttlMs: number;
 }): void {
   if (!requestStateIsSafeInteger(options.maxEntries) || options.maxEntries < 0) {
-    throw new TypeError('createMemoryMutationReplayStore({ maxEntries }) must be a non-negative integer.');
+    throw new TypeError(
+      'createMemoryMutationReplayStore({ maxEntries }) must be a non-negative integer.',
+    );
   }
   if (!requestStateIsSafeInteger(options.maxPending) || options.maxPending < 0) {
-    throw new TypeError('createMemoryMutationReplayStore({ maxPending }) must be a non-negative integer.');
+    throw new TypeError(
+      'createMemoryMutationReplayStore({ maxPending }) must be a non-negative integer.',
+    );
   }
   if (!requestStateIsSafeInteger(options.ttlMs) || options.ttlMs < 0) {
-    throw new TypeError('createMemoryMutationReplayStore({ ttlMs }) must be a non-negative integer.');
+    throw new TypeError(
+      'createMemoryMutationReplayStore({ ttlMs }) must be a non-negative integer.',
+    );
   }
 }
 

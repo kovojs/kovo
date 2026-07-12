@@ -5,14 +5,9 @@ import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
-import {
-  sanitizeAuthNavigationTarget,
-  sanitizeReauthDirective,
-} from './reauth-directive.js';
+import { sanitizeAuthNavigationTarget, sanitizeReauthDirective } from './reauth-directive.js';
 
-type BrowserNavigationSecurityControls = ReturnType<
-  typeof createBrowserNavigationSecurityControls
->;
+type BrowserNavigationSecurityControls = ReturnType<typeof createBrowserNavigationSecurityControls>;
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormLike {
@@ -105,9 +100,7 @@ export async function fetchEnhancedMutation(
     throw new TypeError('Kovo enhanced mutation transport is invalid.');
   }
   const headers: Record<string, string> = {
-    Accept: streaming
-      ? 'text/vnd.kovo.fragment+html; stream=1'
-      : 'text/vnd.kovo.fragment+html',
+    Accept: streaming ? 'text/vnd.kovo.fragment+html; stream=1' : 'text/vnd.kovo.fragment+html',
     'Kovo-Fragment': 'true',
     'Kovo-Idem': idem,
     'Kovo-Live-Targets': targetSnapshot.liveHeader,
@@ -171,8 +164,7 @@ export async function fetchEnhancedMutation(
     onError,
   );
   // SPEC §9.1.1: read build token from response header for delta validation.
-  const buildToken =
-    security.readHeader(response, 'Kovo-Build') ?? undefined;
+  const buildToken = security.readHeader(response, 'Kovo-Build') ?? undefined;
   const responseBody = security.readResponseField(response, 'body') as
     | ReadableStream<Uint8Array>
     | null

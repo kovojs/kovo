@@ -1296,10 +1296,7 @@ function rateLimitKey<Request extends SessionRequestLike>(
   options: RateLimitOptions<Request>,
 ): string {
   if (options.key) {
-    return requestStateRequiredRateLimitKey(
-      options.key(request),
-      'guards.rateLimit({ key })',
-    );
+    return requestStateRequiredRateLimitKey(options.key(request), 'guards.rateLimit({ key })');
   }
   if (options.per === 'global') return 'global';
 

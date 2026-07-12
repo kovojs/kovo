@@ -216,12 +216,8 @@ export function installEnhancedNavigationRuntime(
       }
       const nextDoc = security.parseHtmlDocument(await security.readResponseText(response));
       if (navId !== ni) return;
-      const nextBody = security.readDocumentField(nextDoc, 'body') as
-        | HTMLBodyElement
-        | undefined;
-      const nextHead = security.readDocumentField(nextDoc, 'head') as
-        | HTMLHeadElement
-        | undefined;
+      const nextBody = security.readDocumentField(nextDoc, 'body') as HTMLBodyElement | undefined;
+      const nextHead = security.readDocumentField(nextDoc, 'head') as HTMLHeadElement | undefined;
       const nextDocumentElement = security.readDocumentField(nextDoc, 'documentElement') as
         | Element
         | undefined;
@@ -294,10 +290,7 @@ export function installEnhancedNavigationRuntime(
               if (same[index]) continue;
               let parentChanged = false;
               for (let other = 0; other < index; other += 1) {
-                if (
-                  changed[other] &&
-                  currentSegments[other]?.contains?.(currentSegments[index]!)
-                ) {
+                if (changed[other] && currentSegments[other]?.contains?.(currentSegments[index]!)) {
                   parentChanged = true;
                   break;
                 }
@@ -309,8 +302,7 @@ export function installEnhancedNavigationRuntime(
               for (let islandIndex = 0; islandIndex < islands.length; islandIndex += 1) {
                 (islands[islandIndex] as { a?: AbortController } | undefined)?.a?.abort();
               }
-              triggerRoot =
-                morph(currentSegments[index]!, nextSegments[index]!) || triggerRoot;
+              triggerRoot = morph(currentSegments[index]!, nextSegments[index]!) || triggerRoot;
             }
           }
         }

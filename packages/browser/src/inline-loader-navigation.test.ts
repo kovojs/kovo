@@ -520,9 +520,7 @@ describe('inline loader enhanced navigation fallback', () => {
             });
           },
           async assert({ assign, preventDefault, pushState }) {
-            await vi.waitFor(() =>
-              expect(assign).toHaveBeenCalledWith('http://app.test/account'),
-            );
+            await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('http://app.test/account'));
             expect(preventDefault).toHaveBeenCalledOnce();
             expect(replaceWith).not.toHaveBeenCalled();
             expect(pushState).not.toHaveBeenCalled();

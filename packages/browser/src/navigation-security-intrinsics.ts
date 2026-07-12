@@ -58,9 +58,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const domParserParse = NativeDOMParser
     ? valueMethod(NativeDOMParser.prototype, 'parseFromString')
     : undefined;
-  const formDataGet = NativeFormData
-    ? valueMethod(NativeFormData.prototype, 'get')
-    : undefined;
+  const formDataGet = NativeFormData ? valueMethod(NativeFormData.prototype, 'get') : undefined;
   const documentQuerySelector = NativeDocument
     ? valueMethod(NativeDocument.prototype, 'querySelector')
     : undefined;
@@ -108,9 +106,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
 
   function valueMethod(value: object, property: PropertyKey): Function | undefined {
     const found = descriptor(value, property);
-    return found && 'value' in found && typeof found.value === 'function'
-      ? found.value
-      : undefined;
+    return found && 'value' in found && typeof found.value === 'function' ? found.value : undefined;
   }
 
   function stableMethod(value: object, property: PropertyKey): Function | undefined {
@@ -136,7 +132,10 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return undefined;
   }
 
-  function stableSetter(value: object, property: PropertyKey): ((value: string) => void) | undefined {
+  function stableSetter(
+    value: object,
+    property: PropertyKey,
+  ): ((value: string) => void) | undefined {
     let owner: object | null = value;
     for (let depth = 0; owner !== null && depth < 16; depth += 1) {
       const found = descriptor(owner, property);
@@ -192,18 +191,15 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
 
   function readAttribute(element: unknown, name: string): string | null {
     if (!controlsSound || element === null || typeof element !== 'object') return null;
-    const value = callPlatformOrCustom<unknown>(
-      element,
-      [elementGetAttribute],
-      'getAttribute',
-      [name],
-    );
+    const value = callPlatformOrCustom<unknown>(element, [elementGetAttribute], 'getAttribute', [
+      name,
+    ]);
     return typeof value === 'string' ? value : null;
   }
 
-  function readLocationString(property: 'hash' | 'href' | 'origin' | 'pathname' | 'search'):
-    | string
-    | undefined {
+  function readLocationString(
+    property: 'hash' | 'href' | 'origin' | 'pathname' | 'search',
+  ): string | undefined {
     if (!locationObject) return undefined;
     const fieldGetter =
       property === 'hash'
@@ -366,11 +362,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   }
 
   function isTrimmedAsciiEqual(value: unknown, expectedLowercase: string): boolean {
-    return (
-      controlsSound &&
-      typeof value === 'string' &&
-      lower(trim(value)) === expectedLowercase
-    );
+    return controlsSound && typeof value === 'string' && lower(trim(value)) === expectedLowercase;
   }
 
   function readFormDataValue(formData: unknown, name: string): unknown {

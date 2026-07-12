@@ -63,7 +63,10 @@ it.each(inlineSourceInstallCases)(
       };
       globalRecord.setTimeout = () => 0;
 
-      installSource(vi.fn(async () => ({})), globalRecord);
+      installSource(
+        vi.fn(async () => ({})),
+        globalRecord,
+      );
       Object.defineProperty(globalThis, 'crypto', {
         configurable: true,
         value: {
@@ -89,9 +92,7 @@ it.each(inlineSourceInstallCases)(
       await Promise.resolve();
 
       // Two boot probes consume calls 1/2; the logical submit receives call 3 (0x33..0x42).
-      expect(requests[0]?.headers['Kovo-Idem']).toBe(
-        'idem_333435363738393a3b3c3d3e3f404142',
-      );
+      expect(requests[0]?.headers['Kovo-Idem']).toBe('idem_333435363738393a3b3c3d3e3f404142');
     } finally {
       Object.assign(globalRecord, {
         FormData: originals.FormData,

@@ -23,9 +23,7 @@ describe('browser navigation security controls in Chromium', () => {
       return document.implementation.createHTMLDocument('attacker');
     };
     try {
-      expect(controls.parseUrl('https://evil.example/phish')?.origin).toBe(
-        'https://evil.example',
-      );
+      expect(controls.parseUrl('https://evil.example/phish')?.origin).toBe('https://evil.example');
       expect(controls.readHeader(response, 'content-type')).toBe('text/html; charset=utf-8');
       expect(
         controls.parseHtmlDocument('<!doctype html><html><body>safe</body></html>')?.body

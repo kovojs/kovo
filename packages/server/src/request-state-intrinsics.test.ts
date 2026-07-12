@@ -77,10 +77,7 @@ describe('request-state intrinsic membrane', () => {
         retry: requestStateRetryAfterSeconds(59_001),
         safeInteger: requestStateIsSafeInteger(1.5),
         safePath: requestStateSameOriginPath('//evil.example/phish', 'https://kovo.local'),
-        trimmedKey: requestStateRequiredRateLimitKey(
-          ' 203.0.113.9 ',
-          'test client-key resolver',
-        ),
+        trimmedKey: requestStateRequiredRateLimitKey(' 203.0.113.9 ', 'test client-key resolver'),
       };
     } finally {
       Date.now = originalDateNow;
@@ -206,7 +203,10 @@ describe('request-state intrinsic membrane', () => {
     }
 
     const empty = guards.rateLimit<Record<string, never>>({ key: () => '   ', max: 1 });
-    const oversized = guards.rateLimit<Record<string, never>>({ key: () => 'x'.repeat(1_025), max: 1 });
+    const oversized = guards.rateLimit<Record<string, never>>({
+      key: () => 'x'.repeat(1_025),
+      max: 1,
+    });
     expect(() => empty({})).toThrow(/non-empty string/u);
     expect(() => oversized({})).toThrow(/longer than 1024/u);
   });

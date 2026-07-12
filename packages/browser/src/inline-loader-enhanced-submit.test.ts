@@ -529,7 +529,10 @@ describe('inline loader enhanced submit source', () => {
             search: '',
           };
 
-          installSource(vi.fn(async () => ({})), globalRecord);
+          installSource(
+            vi.fn(async () => ({})),
+            globalRecord,
+          );
           String.prototype.startsWith = function (search: string, position?: number) {
             if (this.valueOf() === '//evil.example/phish') return search === '/';
             return Reflect.apply(originalStartsWith, this, [search, position]);

@@ -123,9 +123,7 @@ function reportingControlsAreSound(): boolean {
     if (!(cancel instanceof Promise)) return false;
     requestStateIgnorePromiseRejection(read);
     requestStateIgnorePromiseRejection(cancel);
-    if (
-      apply(nativeTextDecoderDecode, new NativeTextDecoder(), [new Uint8Array([65])]) !== 'A'
-    ) {
+    if (apply(nativeTextDecoderDecode, new NativeTextDecoder(), [new Uint8Array([65])]) !== 'A') {
       return false;
     }
     const bytes = apply<Uint8Array>(nativeUint8ArraySlice, new Uint8Array([1, 2, 3]), [0, 2]);
@@ -223,7 +221,8 @@ async function collectSecurityReports(app: KovoApp, request: Request, now: numbe
   if (reports.length > MAX_REPORTS_PER_REQUEST) {
     state.dropped += reports.length - MAX_REPORTS_PER_REQUEST;
   }
-  const accepted = reports.length < MAX_REPORTS_PER_REQUEST ? reports.length : MAX_REPORTS_PER_REQUEST;
+  const accepted =
+    reports.length < MAX_REPORTS_PER_REQUEST ? reports.length : MAX_REPORTS_PER_REQUEST;
   for (let index = 0; index < accepted; index += 1) {
     const raw = reports[index];
     const report = normalizeSecurityReport(raw);
@@ -401,7 +400,8 @@ function reportKey(report: NormalizedSecurityReport): string {
     report.blocked,
     report.disposition,
   ]);
-  if (key === undefined) throw new TypeError('Kovo reporting fingerprint controls are unavailable.');
+  if (key === undefined)
+    throw new TypeError('Kovo reporting fingerprint controls are unavailable.');
   return key;
 }
 

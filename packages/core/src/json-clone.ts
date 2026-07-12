@@ -264,7 +264,9 @@ function isArrayIndexKey(key: string, length: number): boolean {
   if (key === '') return false;
   assertJsonScalarControls();
   const index = securityApply<number>(IntrinsicNumber, undefined, [key]);
-  return jsonNumberIsInteger(index) && index >= 0 && index < length && securityString(index) === key;
+  return (
+    jsonNumberIsInteger(index) && index >= 0 && index < length && securityString(index) === key
+  );
 }
 
 function jsonValueError(

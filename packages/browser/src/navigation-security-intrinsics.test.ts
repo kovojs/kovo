@@ -25,9 +25,7 @@ describe('browser navigation security intrinsics', () => {
       value: () => '/',
     });
     try {
-      expect(controls.parseUrl('https://evil.example/phish')?.origin).toBe(
-        'https://evil.example',
-      );
+      expect(controls.parseUrl('https://evil.example/phish')?.origin).toBe('https://evil.example');
       expect(controls.safeSameOriginPath('//evil.example/phish')).toBeUndefined();
       expect(controls.safeSameOriginPath('/\\evil.example/phish')).toBeUndefined();
       expect(sanitizeReauthDirective('//evil.example/phish')).toBe('/');

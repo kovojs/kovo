@@ -66,8 +66,9 @@ describe('mutation response metadata', () => {
       expect(fallback).not.toMatch(/loyw3v28/); // not Date.now()-derived
 
       // No cryptographic source at all → throw rather than degrade to a predictable token.
-      const unavailable = createMutationIdemSecurityControls({ crypto: undefined } as unknown as
-        typeof globalThis);
+      const unavailable = createMutationIdemSecurityControls({
+        crypto: undefined,
+      } as unknown as typeof globalThis);
       expect(() => unavailable.createMutationIdem()).toThrow(/cryptographic source/);
     } finally {
       if (cryptoDescriptor) {

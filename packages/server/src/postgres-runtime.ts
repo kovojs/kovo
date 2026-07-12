@@ -2488,9 +2488,7 @@ class NodePostgresTransactionClient implements RuntimeSqlClient {
       await this.client.query(`RELEASE SAVEPOINT ${savepoint}`);
       return result;
     } catch (error) {
-      await this.client
-        .query(`ROLLBACK TO SAVEPOINT ${savepoint}`)
-        .catch(() => undefined);
+      await this.client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`).catch(() => undefined);
       throw error;
     }
   }

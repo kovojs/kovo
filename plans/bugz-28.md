@@ -8,11 +8,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Severity summary
 
-| Severity | Count | Items |
-| -------- | ----: | ----- |
+| Severity | Count | Items  |
+| -------- | ----: | ------ |
 | Critical |    17 | C1-C17 |
 | High     |    25 | H1-H25 |
-| Medium   |     9 | M1-M9 |
+| Medium   |     9 | M1-M9  |
 
 ## Critical
 

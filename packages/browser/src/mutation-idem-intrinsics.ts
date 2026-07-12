@@ -81,7 +81,9 @@ export function createMutationIdemSecurityControls(scope: typeof globalThis = gl
     }
     const version = value[14];
     const variant = apply<string>(nativeStringToLowerCase, value[19] || '', []);
-    return version === '4' && (variant === '8' || variant === '9' || variant === 'a' || variant === 'b');
+    return (
+      version === '4' && (variant === '8' || variant === '9' || variant === 'a' || variant === 'b')
+    );
   }
 
   function uuidControlIsSound(): boolean {

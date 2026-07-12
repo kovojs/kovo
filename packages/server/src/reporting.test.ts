@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
-import {
-  kovoSecurityReportResponse,
-  kovoSecurityReportSnapshot,
-} from './reporting.js';
+import { kovoSecurityReportResponse, kovoSecurityReportSnapshot } from './reporting.js';
 
 const endpoint = 'https://example.test/_kovo/reports/csp';
 const reportingModuleUrl = new URL('./reporting.ts', import.meta.url).href;
@@ -29,7 +26,8 @@ describe('security reporting intrinsic boundary', () => {
       report(`https://cdn.example.test/reset/${secret}?token=${secret}#${secret}`),
     );
     const descriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin');
-    if (descriptor?.get === undefined) throw new Error('URL origin getter unavailable in test realm');
+    if (descriptor?.get === undefined)
+      throw new Error('URL origin getter unavailable in test realm');
     const nativeOrigin = descriptor.get;
     try {
       Object.defineProperty(URL.prototype, 'origin', {
@@ -173,7 +171,8 @@ describe('security reporting intrinsic boundary', () => {
     expect(kovoSecurityReportSnapshot(app).aggregates).toHaveLength(512);
 
     const sizeDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'size');
-    if (sizeDescriptor?.get === undefined) throw new Error('Map size getter unavailable in test realm');
+    if (sizeDescriptor?.get === undefined)
+      throw new Error('Map size getter unavailable in test realm');
     try {
       Object.defineProperty(Map.prototype, 'size', {
         ...sizeDescriptor,
