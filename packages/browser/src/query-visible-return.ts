@@ -15,6 +15,13 @@ import { createQueryScriptHydrationLedger } from './query-script-hydration.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
 import { splitQueryWireKey } from './query-store.js';
 import type { QueryStore } from './query-store.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
+// SPEC §6.6/§8: capture the bfcache revalidation getter while the framework
+// module graph initializes, before authored client modules can replace realm
+// intrinsics. The generated inline runtime owns an equivalent boot-local set.
+const browserLifecycleSecurity =
+  typeof document === 'undefined' ? undefined : createBrowserNavigationSecurityControls();
 
 export interface RefetchQueryLedger {
   eligible(optOut?: readonly string[]): readonly string[];
@@ -240,6 +247,8 @@ export interface BfcacheSessionReloadOptions {
   pageShowTarget?: ListenerTargetLike<unknown>;
   /** The full server reload performed on a persisted restore. Defaults to `globalThis.location.reload()`. */
   reload?: () => void;
+  /** @internal Injectable persisted-event reader for non-browser conformance tests. */
+  readPageTransitionPersisted?: (event: unknown) => boolean;
 }
 
 /** A running bfcache session-reload guard; `dispose` removes the `pageshow` listener. */
@@ -270,6 +279,10 @@ export function installBfcacheSessionReload(
   const sessionDependent = sessionMetaDocument?.querySelector('meta[name="kovo-session"]') != null;
   const pageShowTarget = options.pageShowTarget ?? globalEventTarget();
   const reload = options.reload ?? globalLocationReload();
+  const readPageTransitionPersisted =
+    options.readPageTransitionPersisted ??
+    browserLifecycleSecurity?.readPageTransitionPersisted ??
+    readNonBrowserPageTransitionPersisted;
 
   // SPEC §780: anonymous/exportable documents carry no `kovo-session` posture, so the handler is
   // a no-op and the page remains fully bfcache-eligible.
@@ -282,7 +295,7 @@ export function installBfcacheSessionReload(
     if (disposed) return;
     // SPEC §780: only a persisted restore bypassed the network/guard. A normal (non-persisted)
     // navigation already ran the loader and `sessionProvider`, so it is left untouched.
-    if ((event as { persisted?: boolean } | null | undefined)?.persisted !== true) return;
+    if (!readPageTransitionPersisted(event)) return;
     reload();
   };
   pageShowTarget.addEventListener('pageshow', listener);
@@ -293,6 +306,15 @@ export function installBfcacheSessionReload(
       pageShowTarget.removeEventListener?.('pageshow', listener);
     },
   };
+}
+
+function readNonBrowserPageTransitionPersisted(event: unknown): boolean {
+  // This fallback is unreachable in a browser build. Keep injected/fake event
+  // tests honest without dispatching through a mutable inherited getter, and
+  // fail closed toward revalidation when the carrier is malformed.
+  if (event === null || typeof event !== 'object') return true;
+  const descriptor = Object.getOwnPropertyDescriptor(event, 'persisted');
+  return !descriptor || !('value' in descriptor) || descriptor.value !== false;
 }
 
 function globalSessionMetaDocument(): SessionMetaDocumentLike | undefined {

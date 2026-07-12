@@ -85,8 +85,12 @@ describe.each(inlineSourceInstallCases)(
         reload.mockClear();
         // A non-persisted pageshow already ran the loader/sessionProvider — no reload.
         pageShow?.({ persisted: false, type: 'pageshow' });
-        pageShow?.({ type: 'pageshow' });
         expect(reload).not.toHaveBeenCalled();
+
+        // A malformed carrier cannot prove the non-persisted posture, so the
+        // session defense fails closed toward a server reload.
+        pageShow?.({ type: 'pageshow' });
+        expect(reload).toHaveBeenCalledTimes(1);
       });
     });
 

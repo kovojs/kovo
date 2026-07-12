@@ -635,6 +635,7 @@ function installInlineKovoLoader(im) {
     queryUrl: qurl,
     readAttribute,
     readElementAttribute: readWireElementAttribute,
+    readPageTransitionPersisted: (event) => bns.readPageTransitionPersisted(event),
     readResponseStatus: (response) => {
       const status = bns.readResponseField(response, 'status');
       return typeof status === 'number' ? status : undefined;

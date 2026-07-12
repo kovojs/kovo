@@ -3,6 +3,31 @@ import { describe, expect, it } from 'vitest';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 describe('browser navigation security controls', () => {
+  it('pins the PageTransitionEvent persisted getter after late replacement', () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const descriptor = Object.getOwnPropertyDescriptor(PageTransitionEvent.prototype, 'persisted');
+    if (!descriptor?.get) throw new Error('PageTransitionEvent.persisted getter unavailable');
+    const restored = new PageTransitionEvent('pageshow', { persisted: true });
+    const ordinary = new PageTransitionEvent('pageshow', { persisted: false });
+    let poisonCalls = 0;
+
+    Object.defineProperty(PageTransitionEvent.prototype, 'persisted', {
+      ...descriptor,
+      get: () => {
+        poisonCalls += 1;
+        return false;
+      },
+    });
+    try {
+      expect(controls.readPageTransitionPersisted(restored)).toBe(true);
+      expect(controls.readPageTransitionPersisted(ordinary)).toBe(false);
+      expect(controls.readPageTransitionPersisted(new Event('pageshow'))).toBe(true);
+      expect(poisonCalls).toBe(0);
+    } finally {
+      Object.defineProperty(PageTransitionEvent.prototype, 'persisted', descriptor);
+    }
+  });
+
   it('pins reader read, cancel, release, lock posture, and byte snapshots after late replacement', async () => {
     const controls = createBrowserNavigationSecurityControls();
     const lockedDescriptor = Object.getOwnPropertyDescriptor(ReadableStream.prototype, 'locked')!;
@@ -251,6 +276,22 @@ describe('browser navigation security controls', () => {
         ReadableStreamDefaultReader.prototype.cancel = nativeCancel;
         ReadableStream.prototype.cancel = nativeStreamCancel;
       }
+    }
+  });
+
+  it('fails closed when PageTransitionEvent persisted was poisoned before capture', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(PageTransitionEvent.prototype, 'persisted');
+    if (!descriptor?.get) throw new Error('PageTransitionEvent.persisted getter unavailable');
+    Object.defineProperty(PageTransitionEvent.prototype, 'persisted', {
+      ...descriptor,
+      get: () => false,
+    });
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      Object.defineProperty(PageTransitionEvent.prototype, 'persisted', descriptor);
     }
   });
 });

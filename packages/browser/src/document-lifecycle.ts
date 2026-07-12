@@ -17,6 +17,8 @@ export interface DocumentLifecycleRecoveryOptions {
     name: string,
   ) => { present: boolean };
   queryAll: (root: ParentNode, selector: string) => Element[];
+  /** Boot-pinned PageTransitionEvent.persisted read; uncertainty fails toward refresh/reload. */
+  readPageTransitionPersisted: (event: unknown) => boolean;
   readResponseStatus: (response: unknown) => number | undefined;
   readResponseText: (response: unknown) => Promise<string>;
   reload: () => boolean;
@@ -167,13 +169,13 @@ export function createDocumentLifecycleRecovery(
       visibleReturnRefresh();
     });
     addEventListener('pageshow', (event) => {
-      if (event.persisted) visibleReturnRefresh();
+      if (options.readPageTransitionPersisted(event)) visibleReturnRefresh();
     });
     // SPEC.md §8: guarded/session-dependent bfcache restores must revalidate
     // with a full server GET rather than presenting a persisted authenticated DOM.
     if (doc.querySelector?.('meta[name="kovo-session"]')) {
       addEventListener('pageshow', (event) => {
-        if (event.persisted) location.reload?.();
+        if (options.readPageTransitionPersisted(event)) options.reload();
       });
     }
   };

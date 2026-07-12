@@ -346,6 +346,7 @@ describe('browser-runtime security regressions', () => {
       queryUrl: () => '',
       readAttribute: () => null,
       readElementAttribute: () => ({ present: false }),
+      readPageTransitionPersisted: (event) => security.readPageTransitionPersisted(event),
       readResponseStatus: (response) => {
         const status = security.readResponseField(response, 'status');
         return typeof status === 'number' ? status : undefined;

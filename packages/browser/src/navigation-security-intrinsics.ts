@@ -53,6 +53,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeUint8Array = scope.Uint8Array;
   const NativeReadableStream = scope.ReadableStream;
   const NativeReadableStreamDefaultReader = scope.ReadableStreamDefaultReader;
+  const NativePageTransitionEvent = scope.PageTransitionEvent;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -187,6 +188,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const readerReleaseLock = NativeReadableStreamDefaultReader
     ? valueMethod(NativeReadableStreamDefaultReader.prototype, 'releaseLock')
+    : undefined;
+  const pageTransitionPersisted = NativePageTransitionEvent
+    ? getter(NativePageTransitionEvent.prototype, 'persisted')
     : undefined;
   const locationObject = scope.location;
   const documentObject = scope.document;
@@ -902,6 +906,25 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return typeof value === 'string' ? value : undefined;
   }
 
+  function readPageTransitionPersisted(event: unknown): boolean {
+    // SPEC §8: uncertainty at this session-revalidation branch fails toward a full
+    // reload. Browser events are read through the witnessed native WebIDL getter;
+    // the own-data fallback exists only for non-browser/test scopes without the
+    // PageTransitionEvent constructor.
+    if (!controlsSound || event === null || typeof event !== 'object') return true;
+    let value: unknown;
+    if (pageTransitionPersisted) {
+      try {
+        value = apply(pageTransitionPersisted, event, []);
+      } catch {
+        return true;
+      }
+    } else {
+      value = readOwnData(event, 'persisted');
+    }
+    return value === false ? false : true;
+  }
+
   function readDocumentField(
     value: unknown,
     property: 'body' | 'documentElement' | 'head',
@@ -1328,6 +1351,17 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       }
       apply(readerReleaseLock, readerControl, []);
       if (apply<unknown>(readableStreamLocked, streamControl, []) !== false) return false;
+      if (NativePageTransitionEvent) {
+        if (!pageTransitionPersisted) return false;
+        const persistedControl = new NativePageTransitionEvent('pageshow', { persisted: true });
+        const ordinaryControl = new NativePageTransitionEvent('pageshow', { persisted: false });
+        if (
+          apply<unknown>(pageTransitionPersisted, persistedControl, []) !== true ||
+          apply<unknown>(pageTransitionPersisted, ordinaryControl, []) !== false
+        ) {
+          return false;
+        }
+      }
       if (NativeHeaders && headersGet) {
         const headers = new NativeHeaders({ 'X-Kovo-Control': 'yes' });
         if (
@@ -1557,6 +1591,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     readElementOuterHtml,
     readElementTagName,
     readHeader,
+    readPageTransitionPersisted,
     readFormDataValue,
     readDocumentField,
     readResponseField,

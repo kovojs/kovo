@@ -64,11 +64,12 @@ describe('bfcache session reload (SPEC §780)', () => {
     });
 
     target.listeners.get('pageshow')?.({ persisted: false, type: 'pageshow' });
-    target.listeners.get('pageshow')?.({ type: 'pageshow' });
-
-    // SPEC §780: a normal (non-persisted) navigation already ran the loader and sessionProvider,
-    // so the second-defense reload must not fire — only `event.persisted === true` reloads.
     expect(reload).not.toHaveBeenCalled();
+
+    // A malformed carrier cannot prove a normal navigation, so the second
+    // defense fails closed toward server revalidation.
+    target.listeners.get('pageshow')?.({ type: 'pageshow' });
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 
   it('registers no pageshow handler for an anonymous document (no kovo-session meta)', () => {

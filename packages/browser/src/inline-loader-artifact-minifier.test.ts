@@ -74,6 +74,21 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('Math.random');
   });
 
+  it('keeps bfcache persisted reads on the boot-witnessed browser controls', () => {
+    // C136 / SPEC §8: both visible-return recovery and the session-dependent
+    // reload defense consume the captured WebIDL getter, never event.persisted.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'readPageTransitionPersisted:(event)=>bns.readPageTransitionPersisted(event)',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'if(options.readPageTransitionPersisted(event))visibleReturnRefresh()',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'if(options.readPageTransitionPersisted(event))options.reload()',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain('if(event.persisted)');
+  });
+
   it('keeps the shipped minified response apply helper tied to the canonical runtime apply helper', () => {
     // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
     expect(inlineKovoLoaderInstallerSource).toBe(inlineKovoLoaderInstallerSource.trim());
