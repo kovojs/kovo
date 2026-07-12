@@ -66,6 +66,9 @@ export function checkFilesystemBoundary(options = {}) {
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
   );
+  const presetDiagnosticAggregationFiles = new Set(
+    options.presetDiagnosticAggregationFiles ?? [presetRetentionPolicyFile],
+  );
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
   const exists = options.exists ?? ((relativePath) => existsSync(path.join(root, relativePath)));
@@ -120,6 +123,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
+    }
+    if (presetDiagnosticAggregationFiles.has(filePath)) {
+      findings.push(...presetDiagnosticAggregationFindings(filePath, sourceText));
     }
 
     if (!allowed && usesPathConfinementPrimitive(scanText, importedPathNames)) {
@@ -213,6 +219,68 @@ export function presetRetentionPolicyFindings(filePath, sourceText) {
     findings.push(
       `${filePath}: deploy-skew retention policy must classify pinned client modules with indexed traversal`,
     );
+  }
+  return findings;
+}
+
+export function presetDiagnosticAggregationFindings(filePath, sourceText) {
+  const scanText = stripCommentsAndStrings(sourceText);
+  const findings = [];
+  const mutableAppend = /\bdiagnostics\s*\.\s*push\s*\(/u.exec(scanText);
+  if (mutableAppend !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableAppend.index)}: preset diagnostics must not append through mutable Array.push`,
+    );
+  }
+  const mutableSpread =
+    /\.\.\.\s*(?:clientModuleRetentionDiagnostics\s*\(|missingJobRunnerDiagnostics\s*\(|retentionDiagnostics\b|jobRunnerDiagnostics\b)/u.exec(
+      scanText,
+    );
+  if (mutableSpread !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableSpread.index)}: preset diagnostic aggregation must not dispatch through mutable iterator spread`,
+    );
+  }
+  const mutableTaskList = /\bbuild\s*\.\s*tasks\s*\.\s*map\s*\(/u.exec(scanText);
+  if (mutableTaskList !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableTaskList.index)}: preset task diagnostics must snapshot tasks and build their key list with indexed traversal`,
+    );
+  }
+  const mutablePromise = /\b(?:runnerDiagnostics|source)\s*\.\s*then\s*\(/u.exec(scanText);
+  if (mutablePromise !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutablePromise.index)}: preset inspection must not chain through mutable Promise.prototype.then`,
+    );
+  }
+  const mutableBlockedModuleTraversal =
+    /\bfor\s*\(\s*const\s+[A-Za-z_$][\w$]*\s+of\s+cloudflareBlockedNodeModules\s*\)/u.exec(
+      scanText,
+    );
+  if (mutableBlockedModuleTraversal !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableBlockedModuleTraversal.index)}: Cloudflare blocked-module classifiers must use a pinned snapshot and indexed traversal`,
+    );
+  }
+
+  if (!/\bfunction\s+appendPresetDiagnostics\s*\(/u.test(scanText)) {
+    findings.push(
+      `${filePath}: built-in preset diagnostics must keep one boot-pinned aggregation helper`,
+    );
+  }
+  if (!/\bcommitBuildArrayValue\s*\(\s*target\s*,\s*diagnostic\s*,/u.test(scanText)) {
+    findings.push(
+      `${filePath}: built-in preset diagnostics must commit through commitBuildArrayValue()`,
+    );
+  }
+  if (!/\bsnapshotBuildArray\s*\(\s*build\s*\.\s*tasks\s*,/u.test(scanText)) {
+    findings.push(`${filePath}: preset task diagnostics must snapshot the complete task ledger`);
+  }
+  if (!/\bsecurityRegExpTest\s*\(/u.test(scanText)) {
+    findings.push(`${filePath}: preset source classifiers must use boot-pinned RegExp execution`);
+  }
+  if (!/\bsecurityPromiseThen\s*\(/u.test(scanText)) {
+    findings.push(`${filePath}: async preset inspection must use boot-pinned Promise chaining`);
   }
   return findings;
 }

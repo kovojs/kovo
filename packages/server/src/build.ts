@@ -14,10 +14,19 @@ import {
   buildSecurityFunctionSource,
   buildSecuritySha256Hex,
   buildSecuritySourceLiteral,
+  commitBuildArrayValue,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
-import { securityStringEndsWith } from './response-security-intrinsics.js';
+import {
+  securityIsPromise,
+  securityNumberIsFinite,
+  securityPromiseResolve,
+  securityPromiseThen,
+  securityRegExpTest,
+  securityStringEndsWith,
+  securityStringIncludes,
+} from './response-security-intrinsics.js';
 import {
   staticHostHeaders,
   staticHostImmutableAssetPathPatternFlags,
@@ -242,8 +251,20 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
       const appendNodeDiagnostics = (
         jobRunnerDiagnostics: readonly PresetDiagnostic[],
       ): readonly PresetDiagnostic[] =>
-        nodePresetDiagnostics(build, [...retentionDiagnostics, ...jobRunnerDiagnostics]);
-      if (isPromiseLike(runnerDiagnostics)) return runnerDiagnostics.then(appendNodeDiagnostics);
+        nodePresetDiagnostics(
+          build,
+          concatenatePresetDiagnostics(
+            retentionDiagnostics,
+            jobRunnerDiagnostics,
+            'node preset diagnostics',
+          ),
+        );
+      if (securityIsPromise(runnerDiagnostics)) {
+        return securityPromiseThen(
+          runnerDiagnostics as Promise<readonly PresetDiagnostic[]>,
+          appendNodeDiagnostics,
+        );
+      }
       return appendNodeDiagnostics(runnerDiagnostics);
     },
     name: 'node',
@@ -265,16 +286,21 @@ export function vercel(options: VercelPresetOptions = {}): KovoPreset {
       return emitVercelPreset(build, context, options);
     },
     inspect(build, _context) {
-      const diagnostics = [
-        ...clientModuleRetentionDiagnostics(build, 'vercel', options),
-        ...missingJobRunnerDiagnostics(build, 'vercel'),
-      ];
+      const diagnostics = concatenatePresetDiagnostics(
+        clientModuleRetentionDiagnostics(build, 'vercel', options),
+        missingJobRunnerDiagnostics(build, 'vercel'),
+        'vercel preset diagnostics',
+      );
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-        diagnostics.push({
-          code: 'vercel-missing-handler',
-          message: 'The vercel preset requires a neutral build with server/handler.mjs.',
-          severity: 'error',
-        });
+        appendPresetDiagnostic(
+          diagnostics,
+          {
+            code: 'vercel-missing-handler',
+            message: 'The vercel preset requires a neutral build with server/handler.mjs.',
+            severity: 'error',
+          },
+          'vercel missing-handler diagnostic',
+        );
       }
       return diagnostics;
     },
@@ -296,20 +322,29 @@ export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset {
       return emitCloudflarePreset(build, context, options);
     },
     async inspect(build, context) {
-      const diagnostics = [
-        ...clientModuleRetentionDiagnostics(build, 'cloudflare', options),
-        ...missingJobRunnerDiagnostics(build, 'cloudflare'),
-      ];
+      const diagnostics = concatenatePresetDiagnostics(
+        clientModuleRetentionDiagnostics(build, 'cloudflare', options),
+        missingJobRunnerDiagnostics(build, 'cloudflare'),
+        'cloudflare preset diagnostics',
+      );
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-        diagnostics.push({
-          code: 'cloudflare-missing-handler',
-          message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
-          severity: 'error',
-        });
+        appendPresetDiagnostic(
+          diagnostics,
+          {
+            code: 'cloudflare-missing-handler',
+            message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
+            severity: 'error',
+          },
+          'cloudflare missing-handler diagnostic',
+        );
       }
       if (build.serverHandlerPath === undefined) return diagnostics;
 
-      diagnostics.push(...(await cloudflareRuntimeDiagnostics(build, context)));
+      appendPresetDiagnostics(
+        diagnostics,
+        await cloudflareRuntimeDiagnostics(build, context),
+        'cloudflare runtime diagnostics',
+      );
       return diagnostics;
     },
     name: 'cloudflare',
@@ -492,7 +527,7 @@ function deploySkewRetentionProofSatisfiesFloor(
 ): boolean {
   return (
     retention !== undefined &&
-    Number.isFinite(retention.hours) &&
+    securityNumberIsFinite(retention.hours) &&
     retention.hours >= 24 &&
     retention.immutableClientModules === 'retained' &&
     retention.priorTokenQueryReads === 'retained'
@@ -523,8 +558,13 @@ function nodeJobRunnerDiagnostics(
   }
   if (capability === undefined) return missingJobRunnerDiagnostics(build, 'node');
   const source = context.readServerHandlerSource?.();
+  if (securityIsPromise(source)) {
+    return securityPromiseThen(source as Promise<string | undefined>, (serverHandlerSource) =>
+      durableTaskStoreDiagnostics(build, 'node', serverHandlerSource),
+    );
+  }
   if (isPromiseLike(source)) {
-    return source.then((serverHandlerSource) =>
+    return securityPromiseThen(securityPromiseResolve(source), (serverHandlerSource) =>
       durableTaskStoreDiagnostics(build, 'node', serverHandlerSource),
     );
   }
@@ -536,7 +576,8 @@ function durableTaskStoreDiagnostics(
   presetName: string,
   serverHandlerSource: string | undefined,
 ): PresetDiagnostic[] {
-  if (build.tasks.length === 0) return [];
+  const taskList = presetTaskList(build, 'node durable task-store diagnostics');
+  if (taskList === undefined) return [];
   if (
     serverHandlerSource === undefined ||
     !serverHandlerUsesSqliteDurableIncompatibleStore(serverHandlerSource)
@@ -544,7 +585,6 @@ function durableTaskStoreDiagnostics(
     return [];
   }
 
-  const taskList = build.tasks.map((task) => task.key).join(', ');
   return [
     {
       code: 'KV446',
@@ -558,8 +598,8 @@ function missingJobRunnerDiagnostics(
   build: KovoNeutralBuild,
   presetName: string,
 ): PresetDiagnostic[] {
-  if (build.tasks.length === 0) return [];
-  const taskList = build.tasks.map((task) => task.key).join(', ');
+  const taskList = presetTaskList(build, `${presetName} missing JobRunner diagnostics`);
+  if (taskList === undefined) return [];
   return [
     {
       code: 'KV445',
@@ -574,13 +614,62 @@ function nodePresetDiagnostics(
   diagnostics: PresetDiagnostic[],
 ): readonly PresetDiagnostic[] {
   if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-    diagnostics.push({
-      code: 'node-missing-handler',
-      message: 'The node preset requires a neutral build with server/handler.mjs.',
-      severity: 'error',
-    });
+    appendPresetDiagnostic(
+      diagnostics,
+      {
+        code: 'node-missing-handler',
+        message: 'The node preset requires a neutral build with server/handler.mjs.',
+        severity: 'error',
+      },
+      'node missing-handler diagnostic',
+    );
   }
   return diagnostics;
+}
+
+function concatenatePresetDiagnostics(
+  first: readonly PresetDiagnostic[],
+  second: readonly PresetDiagnostic[],
+  label: string,
+): PresetDiagnostic[] {
+  const diagnostics: PresetDiagnostic[] = [];
+  appendPresetDiagnostics(diagnostics, first, `${label} first`);
+  appendPresetDiagnostics(diagnostics, second, `${label} second`);
+  return diagnostics;
+}
+
+function appendPresetDiagnostics(
+  target: PresetDiagnostic[],
+  source: readonly PresetDiagnostic[],
+  label: string,
+): void {
+  const diagnostics = snapshotBuildArray(source, label);
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    appendPresetDiagnostic(target, diagnostics[index]!, `${label} ${index}`);
+  }
+}
+
+function appendPresetDiagnostic(
+  target: PresetDiagnostic[],
+  diagnostic: PresetDiagnostic,
+  label: string,
+): void {
+  commitBuildArrayValue(target, diagnostic, label);
+}
+
+function presetTaskList(build: KovoNeutralBuild, label: string): string | undefined {
+  const tasks = snapshotBuildArray(build.tasks, `${label} tasks`);
+  if (tasks.length === 0) return undefined;
+
+  let taskList = '';
+  for (let index = 0; index < tasks.length; index += 1) {
+    const key = tasks[index]!.key;
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new TypeError(`Kovo preset inspection found an invalid ${label} task key.`);
+    }
+    taskList += `${index === 0 ? '' : ', '}${key}`;
+  }
+  return taskList;
 }
 
 function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
@@ -593,7 +682,8 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
 }
 
 function serverHandlerUsesSqliteDurableIncompatibleStore(source: string): boolean {
-  return /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3)["']/.test(
+  return securityRegExpTest(
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3)["']/,
     source,
   );
 }
@@ -1587,35 +1677,81 @@ async function cloudflareRuntimeDiagnostics(
   if (source === undefined) return [];
 
   const diagnostics: PresetDiagnostic[] = [];
-  if (context.declaredEnv.includes('DATABASE_URL') || source.includes('DATABASE_URL')) {
-    diagnostics.push({
-      code: 'cloudflare-tcp-database',
-      message:
-        'The cloudflare preset emits a Worker with nodejs_compat. TCP database drivers behind DATABASE_URL need Hyperdrive, Cloudflare Containers, or an HTTP database driver before deploy.',
-      severity: 'warning',
-    });
+  const declaredEnv = snapshotBuildArray(
+    context.declaredEnv,
+    'cloudflare declared environment names',
+  );
+  let declaresDatabaseUrl = false;
+  for (let index = 0; index < declaredEnv.length; index += 1) {
+    if (declaredEnv[index] !== 'DATABASE_URL') continue;
+    declaresDatabaseUrl = true;
+    break;
+  }
+  if (declaresDatabaseUrl || securityStringIncludes(source, 'DATABASE_URL')) {
+    appendPresetDiagnostic(
+      diagnostics,
+      {
+        code: 'cloudflare-tcp-database',
+        message:
+          'The cloudflare preset emits a Worker with nodejs_compat. TCP database drivers behind DATABASE_URL need Hyperdrive, Cloudflare Containers, or an HTTP database driver before deploy.',
+        severity: 'warning',
+      },
+      'cloudflare TCP database diagnostic',
+    );
   }
 
-  for (const moduleName of cloudflareBlockedNodeModules) {
-    if (serverHandlerImportsModule(source, moduleName)) {
-      diagnostics.push({
+  const blockedModules = snapshotBuildArray(
+    cloudflareBlockedNodeModules,
+    'cloudflare blocked Node module classifiers',
+  );
+  for (let index = 0; index < blockedModules.length; index += 1) {
+    const blocked = blockedModules[index]!;
+    if (!serverHandlerImportsModule(source, blocked.pattern)) continue;
+    appendPresetDiagnostic(
+      diagnostics,
+      {
         code: 'cloudflare-unsupported-node-api',
-        message: `The cloudflare preset cannot run ${moduleName}; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.`,
+        message: `The cloudflare preset cannot run ${blocked.name}; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.`,
         severity: 'error',
-      });
-    }
+      },
+      `cloudflare blocked Node module diagnostic ${index}`,
+    );
   }
 
   return diagnostics;
 }
 
 const cloudflareBlockedNodeModules = [
-  'child_process',
-  'cluster',
-  'dgram',
-  'node:child_process',
-  'node:cluster',
-  'node:dgram',
+  {
+    name: 'child_process',
+    pattern:
+      /\b(?:from\s*['"]child_process['"]|import\s*['"]child_process['"]|import\s*\(\s*['"]child_process['"]\s*\)|require\s*\(\s*['"]child_process['"]\s*\))/,
+  },
+  {
+    name: 'cluster',
+    pattern:
+      /\b(?:from\s*['"]cluster['"]|import\s*['"]cluster['"]|import\s*\(\s*['"]cluster['"]\s*\)|require\s*\(\s*['"]cluster['"]\s*\))/,
+  },
+  {
+    name: 'dgram',
+    pattern:
+      /\b(?:from\s*['"]dgram['"]|import\s*['"]dgram['"]|import\s*\(\s*['"]dgram['"]\s*\)|require\s*\(\s*['"]dgram['"]\s*\))/,
+  },
+  {
+    name: 'node:child_process',
+    pattern:
+      /\b(?:from\s*['"]node:child_process['"]|import\s*['"]node:child_process['"]|import\s*\(\s*['"]node:child_process['"]\s*\)|require\s*\(\s*['"]node:child_process['"]\s*\))/,
+  },
+  {
+    name: 'node:cluster',
+    pattern:
+      /\b(?:from\s*['"]node:cluster['"]|import\s*['"]node:cluster['"]|import\s*\(\s*['"]node:cluster['"]\s*\)|require\s*\(\s*['"]node:cluster['"]\s*\))/,
+  },
+  {
+    name: 'node:dgram',
+    pattern:
+      /\b(?:from\s*['"]node:dgram['"]|import\s*['"]node:dgram['"]|import\s*\(\s*['"]node:dgram['"]\s*\)|require\s*\(\s*['"]node:dgram['"]\s*\))/,
+  },
 ] as const;
 
 async function serverHandlerSourceForInspection(
@@ -1628,16 +1764,8 @@ async function serverHandlerSourceForInspection(
   return readFile(build.serverHandlerPath, 'utf8');
 }
 
-function serverHandlerImportsModule(source: string, moduleName: string): boolean {
-  const quotedModule = moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const modulePattern = new RegExp(
-    [
-      `\\bfrom\\s*['"]${quotedModule}['"]`,
-      `\\bimport\\s*\\(\\s*['"]${quotedModule}['"]\\s*\\)`,
-      `\\brequire\\s*\\(\\s*['"]${quotedModule}['"]\\s*\\)`,
-    ].join('|'),
-  );
-  return modulePattern.test(source);
+function serverHandlerImportsModule(source: string, modulePattern: RegExp): boolean {
+  return securityRegExpTest(modulePattern, source);
 }
 
 function wranglerTomlSource(options: CloudflarePresetOptions): string {

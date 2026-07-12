@@ -648,6 +648,133 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('C205 keeps retention and JobRunner diagnostics after route-time iterator replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-preset-diagnostic-iterator-'));
+    const originalIterator = Array.prototype[Symbol.iterator];
+    let poisonHits = 0;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                Array.prototype[Symbol.iterator] = function omitPresetDiagnostics() {
+                  const first = this[0] as { code?: unknown } | undefined;
+                  if (first?.code === 'KV417' || first?.code === 'KV445') {
+                    poisonHits += 1;
+                    return Reflect.apply(originalIterator, [], []);
+                  }
+                  return Reflect.apply(originalIterator, this, []);
+                } as (typeof Array.prototype)[Symbol.iterator];
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/app.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
+            source: 'export const app = true;',
+            version: 'app-v1',
+          },
+        ],
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      const inspectionBuild = { ...build, tasks: [{ key: 'receipt/send' }] };
+      const expected = [
+        clientModuleRetentionError('node'),
+        missingJobRunnerError('node', 'receipt/send'),
+      ];
+
+      expect(node({ jobRunner: false }).inspect!(inspectionBuild, { declaredEnv: [] })).toEqual(
+        expected,
+      );
+      expect(vercel().inspect!(inspectionBuild, { declaredEnv: [] })).toEqual([
+        clientModuleRetentionError('vercel'),
+        missingJobRunnerError('vercel', 'receipt/send'),
+      ]);
+      await expect(cloudflare().inspect!(inspectionBuild, { declaredEnv: [] })).resolves.toEqual([
+        clientModuleRetentionError('cloudflare'),
+        missingJobRunnerError('cloudflare', 'receipt/send'),
+      ]);
+      expect(poisonHits).toBe(0);
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('C205 keeps missing-handler diagnostics after route-time Array.push replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-preset-diagnostic-push-'));
+    const originalPush = Array.prototype.push;
+    let poisonHits = 0;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                Array.prototype.push = function omitMissingHandler(...items) {
+                  const first = items[0] as { code?: unknown } | undefined;
+                  if (
+                    first?.code === 'node-missing-handler' ||
+                    first?.code === 'vercel-missing-handler' ||
+                    first?.code === 'cloudflare-missing-handler'
+                  ) {
+                    poisonHits += 1;
+                    return this.length;
+                  }
+                  return Reflect.apply(originalPush, this, items);
+                } as typeof Array.prototype.push;
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+      });
+      const dynamicBuild = { ...build };
+      delete dynamicBuild.serverHandlerPath;
+      delete dynamicBuild.staticOutput;
+
+      const nodeDiagnostics = node().inspect!(dynamicBuild, { declaredEnv: [] });
+      const vercelDiagnostics = vercel().inspect!(dynamicBuild, { declaredEnv: [] });
+      const cloudflareDiagnostics = await cloudflare().inspect!(dynamicBuild, { declaredEnv: [] });
+      const poisonHitsAfterInspection = poisonHits;
+      Array.prototype.push = originalPush;
+
+      expect(nodeDiagnostics).toEqual([
+        {
+          code: 'node-missing-handler',
+          message: 'The node preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        },
+      ]);
+      expect(vercelDiagnostics).toEqual([
+        {
+          code: 'vercel-missing-handler',
+          message: 'The vercel preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        },
+      ]);
+      expect(cloudflareDiagnostics).toEqual([
+        {
+          code: 'cloudflare-missing-handler',
+          message: 'The cloudflare preset requires a neutral build with server/handler.mjs.',
+          severity: 'error',
+        },
+      ]);
+      expect(poisonHitsAfterInspection).toBe(0);
+    } finally {
+      Array.prototype.push = originalPush;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails closed when a task-using build targets a preset without a JobRunner', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-task-preset-runner-'));
     const sendReceipt = task('receipt/send', {
@@ -2932,6 +3059,76 @@ export default async function handler() {
         },
       ]);
     } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('C205 keeps preset source classifiers blocking after route-time RegExp.test replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-preset-regexp-test-'));
+    const originalTest = RegExp.prototype.test;
+    const serverHandlerSource = `
+import Database from 'better-sqlite3';
+import { spawnSync } from 'node:child_process';
+import 'node:dgram';
+export default async function handler() {
+  new Database(':memory:');
+  spawnSync('true');
+  return new Response('ok');
+}
+`;
+    let poisonHits = 0;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                RegExp.prototype.test = function omitBlockedSource(source) {
+                  if (
+                    typeof source === 'string' &&
+                    (source.includes('better-sqlite3') || source.includes('node:child_process'))
+                  ) {
+                    poisonHits += 1;
+                    return false;
+                  }
+                  return Reflect.apply(originalTest, this, [source]);
+                };
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource,
+      });
+      const inspectionBuild = { ...build, tasks: [{ key: 'receipt/send' }] };
+      const inspectContext = {
+        declaredEnv: [],
+        readServerHandlerSource: () => serverHandlerSource,
+      };
+
+      expect(node().inspect!(inspectionBuild, inspectContext)).toEqual([
+        sqliteDurableTaskStoreError('node', 'receipt/send'),
+      ]);
+      await expect(cloudflare().inspect!(inspectionBuild, inspectContext)).resolves.toEqual([
+        missingJobRunnerError('cloudflare', 'receipt/send'),
+        {
+          code: 'cloudflare-unsupported-node-api',
+          message:
+            'The cloudflare preset cannot run node:child_process; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.',
+          severity: 'error',
+        },
+        {
+          code: 'cloudflare-unsupported-node-api',
+          message:
+            'The cloudflare preset cannot run node:dgram; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.',
+          severity: 'error',
+        },
+      ]);
+      expect(poisonHits).toBe(0);
+    } finally {
+      RegExp.prototype.test = originalTest;
       await rm(root, { force: true, recursive: true });
     }
   });

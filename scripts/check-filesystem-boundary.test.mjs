@@ -5,6 +5,7 @@ import {
   defaultAllowedToolingFiles,
   filesystemBoundaryFile,
   filesystemIntrinsicsFile,
+  presetDiagnosticAggregationFindings,
   presetRetentionPolicyFile,
   presetRetentionPolicyFindings,
   staticExportEndpointBlockerFile,
@@ -173,6 +174,45 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
     ).toEqual([]);
   });
 
+  it('C205 pins built-in preset diagnostic aggregation and source classifiers', () => {
+    const unsafe = `
+      const diagnostics = [...clientModuleRetentionDiagnostics(build), ...missingJobRunnerDiagnostics(build)];
+      diagnostics.push(...runtimeDiagnostics);
+      const taskList = build.tasks.map((task) => task.key).join(', ');
+      if (source.then) source.then(classify);
+      for (const moduleName of cloudflareBlockedNodeModules) classify(moduleName);
+    `;
+    expect(presetDiagnosticAggregationFindings(presetRetentionPolicyFile, unsafe)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('mutable Array.push'),
+        expect.stringContaining('mutable iterator spread'),
+        expect.stringContaining('snapshot tasks'),
+        expect.stringContaining('mutable Promise.prototype.then'),
+        expect.stringContaining('pinned snapshot and indexed traversal'),
+      ]),
+    );
+
+    expect(
+      presetDiagnosticAggregationFindings(
+        presetRetentionPolicyFile,
+        `
+          function appendPresetDiagnostics(target, source) {
+            const diagnostics = snapshotBuildArray(source, 'preset diagnostics');
+            for (let index = 0; index < diagnostics.length; index += 1) {
+              appendPresetDiagnostic(target, diagnostics[index]);
+            }
+          }
+          function appendPresetDiagnostic(target, diagnostic) {
+            commitBuildArrayValue(target, diagnostic, 'preset diagnostic');
+          }
+          const tasks = snapshotBuildArray(build.tasks, 'preset tasks');
+          securityRegExpTest(modulePattern, source);
+          securityPromiseThen(sourcePromise, classify);
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects raw fs access outside the filesystem boundary', () => {
     const result = runFixture({
       [filesystemBoundaryFile]: 'export const boundary = true;',
@@ -210,6 +250,7 @@ export function escape(root: string, key: string) {
       allowedRuntimeFiles: [filesystemBoundaryFile],
       allowedToolingFiles: ['packages/server/src/build.ts'],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      presetDiagnosticAggregationFiles: [],
       presetRetentionPolicyFiles: [],
       readText: (relativePath) =>
         relativePath === 'packages/server/src/build.ts'
