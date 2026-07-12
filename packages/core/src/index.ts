@@ -2,6 +2,16 @@ import type { ComponentMutationDefinitions, ComponentMutationForms, Form } from 
 import type { JsonValue } from './json.js';
 import { blessSink } from './internal/sink-policy.js';
 import { buildRoutePatternHref } from './internal/route-pattern.js';
+import {
+  freezeSecurityValue,
+  securityDefineProperty,
+  securityGetOwnPropertyDescriptor,
+  securityObjectKeys,
+  securityNullRecord,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from './internal/security-witness-intrinsics.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
@@ -110,6 +120,12 @@ interface FrameworkRenderedHtml {
   [Symbol.toPrimitive](): string;
   toJSON(): string;
   toString(): string;
+}
+
+interface MutationFormHelperOperation extends FrameworkRenderedHtml {
+  readonly __kovoMutationFormHelperOperation: 'v1';
+  readonly kind: 'field' | 'form';
+  readonly props: Record<string, unknown>;
 }
 
 /** Props accepted by the server-bound `<ErrorBoundary />` render fallback helper. */
@@ -308,7 +324,7 @@ export interface Component<Definition extends ComponentDefinitionInput> {
   <const Props extends ComponentProps<Definition>>(
     ...args: ComponentCallArgs<Definition, Props>
   ): any;
-  definition: Definition;
+  readonly definition: Definition;
   name?: string;
 }
 
@@ -389,14 +405,58 @@ export function component(
 ): Component<any> {
   assertKnownComponentDefinitionKeys(definition as unknown as Record<PropertyKey, unknown>);
   const descriptor = (() => undefined) as Component<any>;
-  Object.defineProperty(descriptor, 'name', {
+  securityDefineProperty(descriptor, 'name', {
     configurable: true,
     enumerable: true,
     value: undefined,
     writable: true,
   });
-  descriptor.definition = definition;
+  securityDefineProperty(descriptor, 'definition', {
+    configurable: false,
+    enumerable: true,
+    value: snapshotComponentDefinition(definition),
+    writable: false,
+  });
+  securityWeakSetAdd(componentDescriptors, descriptor);
   return descriptor;
+}
+
+const componentDescriptors = securityWeakSet<object>();
+const componentDescriptorVerifierKey = '__kovoIsComponentDescriptor';
+
+securityDefineProperty(component, componentDescriptorVerifierKey, {
+  configurable: false,
+  enumerable: false,
+  value(value: unknown): boolean {
+    return (
+      (typeof value === 'object' || typeof value === 'function') &&
+      value !== null &&
+      securityWeakSetHas(componentDescriptors, value)
+    );
+  },
+  writable: false,
+});
+
+function snapshotComponentDefinition(
+  definition: ComponentDefinitionInput,
+): ComponentDefinitionInput {
+  const snapshot = securityNullRecord<unknown>();
+  const keys = securityObjectKeys(definition);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) continue;
+    const descriptor = securityGetOwnPropertyDescriptor(definition, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`component() definition field "${key}" must be an own data value.`);
+    }
+    securityDefineProperty(snapshot, key, {
+      configurable: false,
+      enumerable: true,
+      value: descriptor.value,
+      writable: false,
+    });
+  }
+  return freezeSecurityValue(snapshot) as unknown as ComponentDefinitionInput;
 }
 
 const COMPONENT_DEFINITION_KEYS = new Set([
@@ -908,28 +968,13 @@ export interface FormErrorProps<Failure = unknown> {
 }
 
 type MutationFormHelperKind = 'field' | 'form';
-
-interface MutationFormHelperRenderContext {
-  defer(kind: MutationFormHelperKind, props: Record<string, unknown>): unknown;
-  renderHtml?(html: string): unknown;
-}
-
-const mutationFormHelperRenderContextKey = Symbol.for('kovo.mutationFormHelperRenderContext');
 const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
-
-function currentMutationFormHelperRenderContext(): MutationFormHelperRenderContext | undefined {
-  const global = globalThis as typeof globalThis & Record<symbol, unknown>;
-  const context = global[mutationFormHelperRenderContextKey];
-  if (!isRecord(context) || typeof context.defer !== 'function') return undefined;
-  return context as unknown as MutationFormHelperRenderContext;
-}
 
 function deferMutationFormHelper(
   kind: MutationFormHelperKind,
   props: Record<string, unknown>,
 ): string {
-  return (currentMutationFormHelperRenderContext()?.defer(kind, props) ??
-    frameworkRenderedHtml('')) as string;
+  return mutationFormHelperOperation(kind, props, '') as unknown as string;
 }
 
 interface SchemaLike<Value> {
@@ -1093,7 +1138,7 @@ export function FieldError<Failure = unknown>(props: FieldErrorProps<Failure>): 
   const message = fieldErrorMessage(failure, props);
   if (message === undefined || message === null || message === false) return '';
 
-  return renderFailureOutput(props, failure, message);
+  return renderFailureOutput('field', props, failure, message);
 }
 
 /**
@@ -1113,7 +1158,7 @@ export function FormError<Failure = unknown>(props: FormErrorProps<Failure>): st
   const message = failureMessage(failure, props);
   if (message === undefined || message === null || message === false) return '';
 
-  return renderFailureOutput(props, failure, message);
+  return renderFailureOutput('form', props, failure, message);
 }
 
 function fieldErrorMessage<Failure>(
@@ -1153,12 +1198,17 @@ function failureCodeMatches(
 }
 
 function renderFailureOutput<Failure>(
+  kind: MutationFormHelperKind,
   props: FieldErrorProps<Failure> | FormErrorProps<Failure>,
   failure: Record<string, unknown>,
   message: unknown,
 ): string {
   const attrs = failureOutputAttributes(props, failure);
-  return frameworkRenderedHtml(`<output${attrs}>${escapeHtmlText(String(message))}</output>`);
+  return mutationFormHelperOperation(
+    kind,
+    props as Record<string, unknown>,
+    `<output${attrs}>${escapeHtmlText(String(message))}</output>`,
+  ) as unknown as string;
 }
 
 function failureOutputAttributes<Failure>(
@@ -1185,12 +1235,16 @@ function escapeHtmlText(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-function frameworkRenderedHtml(html: string): string {
-  const contextualRenderedHtml = currentMutationFormHelperRenderContext()?.renderHtml?.(html);
-  if (contextualRenderedHtml !== undefined) return contextualRenderedHtml as string;
-
-  const rendered: FrameworkRenderedHtml = {
+function mutationFormHelperOperation(
+  kind: MutationFormHelperKind,
+  props: Record<string, unknown>,
+  html: string,
+): MutationFormHelperOperation {
+  return {
+    __kovoMutationFormHelperOperation: 'v1',
     html,
+    kind,
+    props,
     [Symbol.toPrimitive]() {
       return html;
     },
@@ -1201,5 +1255,4 @@ function frameworkRenderedHtml(html: string): string {
       return html;
     },
   };
-  return rendered as unknown as string;
 }

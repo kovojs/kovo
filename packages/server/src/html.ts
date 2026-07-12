@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
@@ -13,6 +13,14 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
+import { capabilityRandomBytes } from './capability-intrinsics.js';
+import {
+  securityStringIncludes,
+  securityStringIndexOf,
+  securityStringLastIndexOf,
+  securityStringSlice,
+  securityUint8ArrayLength,
+} from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
@@ -36,7 +44,9 @@ import {
 
 const intrinsicBufferFrom = Buffer.from;
 const intrinsicBufferToString = Buffer.prototype.toString;
-const hmacMethodProbe = createHmac('sha256', 'kovo-method-probe');
+const intrinsicCreateHmac = createHmac;
+const intrinsicTimingSafeEqual = timingSafeEqual;
+const hmacMethodProbe = intrinsicCreateHmac('sha256', 'kovo-method-probe');
 const intrinsicHmacUpdate = hmacMethodProbe.update;
 const intrinsicHmacDigest = hmacMethodProbe.digest;
 const capturedHtmlCryptoControlsSound = verifyCapturedHtmlCryptoControls();
@@ -66,7 +76,7 @@ export function escapeAttribute(value: string): string {
 
 const coercedRenderedHtmlPrefix = '\uE000kovo-rendered-html:v2:';
 const coercedRenderedHtmlSuffix = '\uE001';
-const coercedRenderedHtmlSecret = randomBytes(32);
+const coercedRenderedHtmlSecret = capabilityRandomBytes(32);
 const renderedHtmlValues = createWitnessWeakSet<object>();
 const renderedHtmlSnapshots = createWitnessWeakMap<object, string>();
 const maxCoercedRenderedHtmlDepth = 32;
@@ -191,7 +201,7 @@ export function escapeTextWithRenderedHtml(value: unknown): string {
 
   // Mirrors renderJsxChildren's scalar coercion so escaped text stays byte-identical for safe values.
   // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  return renderStringWithCoercedRenderedHtml(String(value), escapeHtml);
+  return renderStringWithCoercedRenderedHtml(witnessString(value), escapeHtml);
 }
 
 /** @internal unwrap framework-rendered HTML coerced via `+`, leaving other text raw. */
@@ -214,25 +224,29 @@ function renderStringWithCoercedRenderedHtml(
   renderText: (text: string) => string,
   depth = 0,
 ): string {
-  if (!value.includes(coercedRenderedHtmlPrefix)) return renderText(value);
+  if (!securityStringIncludes(value, coercedRenderedHtmlPrefix)) return renderText(value);
 
   let html = '';
   let offset = 0;
   while (offset < value.length) {
-    const markerStart = value.indexOf(coercedRenderedHtmlPrefix, offset);
+    const markerStart = securityStringIndexOf(value, coercedRenderedHtmlPrefix, offset);
     if (markerStart === -1) {
-      html += renderText(value.slice(offset));
+      html += renderText(securityStringSlice(value, offset));
       break;
     }
 
-    html += renderText(value.slice(offset, markerStart));
-    const markerEnd = value.indexOf(coercedRenderedHtmlSuffix, markerStart);
+    html += renderText(securityStringSlice(value, offset, markerStart));
+    const markerEnd = securityStringIndexOf(value, coercedRenderedHtmlSuffix, markerStart);
     if (markerEnd === -1) {
-      html += renderText(value.slice(markerStart));
+      html += renderText(securityStringSlice(value, markerStart));
       break;
     }
 
-    const marker = value.slice(markerStart, markerEnd + coercedRenderedHtmlSuffix.length);
+    const marker = securityStringSlice(
+      value,
+      markerStart,
+      markerEnd + coercedRenderedHtmlSuffix.length,
+    );
     const rendered = decodeCoercedRenderedHtml(marker);
     html +=
       rendered === undefined
@@ -256,21 +270,30 @@ function coercedRenderedHtmlSignature(payload: string): string {
 }
 
 function decodeCoercedRenderedHtml(marker: string): string | undefined {
-  const encoded = marker.slice(
+  const encoded = securityStringSlice(
+    marker,
     coercedRenderedHtmlPrefix.length,
     marker.length - coercedRenderedHtmlSuffix.length,
   );
-  const divider = encoded.lastIndexOf('.');
+  const divider = securityStringLastIndexOf(encoded, '.');
   if (divider < 0) return undefined;
-  const payload = encoded.slice(0, divider);
-  const signature = encoded.slice(divider + 1);
-  if (!/^[A-Za-z0-9_-]*$/.test(payload) || !/^[A-Za-z0-9_-]+$/.test(signature)) {
+  const payload = securityStringSlice(encoded, 0, divider);
+  const signature = securityStringSlice(encoded, divider + 1);
+  if (
+    !witnessRegExpTest(/^[A-Za-z0-9_-]*$/, payload) ||
+    !witnessRegExpTest(/^[A-Za-z0-9_-]+$/, signature)
+  ) {
     return undefined;
   }
 
   const expected = capturedBufferFrom(coercedRenderedHtmlSignature(payload), 'base64url');
   const received = capturedBufferFrom(signature, 'base64url');
-  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return undefined;
+  if (
+    securityUint8ArrayLength(expected) !== securityUint8ArrayLength(received) ||
+    !witnessReflectApply(intrinsicTimingSafeEqual, undefined, [expected, received])
+  ) {
+    return undefined;
+  }
   return capturedBufferToString(capturedBufferFrom(payload, 'base64url'), 'utf8');
 }
 
@@ -300,7 +323,7 @@ function capturedHmacDigest(
   encoding: 'base64url' | 'hex',
 ): string {
   assertHtmlCryptoControls();
-  const hmac = createHmac('sha256', key);
+  const hmac = intrinsicCreateHmac('sha256', key);
   if (witnessReflectApply(intrinsicHmacUpdate, hmac, [payload]) !== hmac) {
     throw new TypeError('Kovo rendered HTML HMAC update control failed.');
   }
@@ -317,13 +340,22 @@ function verifyCapturedHtmlCryptoControls(): boolean {
     ]);
     if (witnessReflectApply(intrinsicBufferToString, decoded, ['utf8']) !== 'Kovo') return false;
 
-    const hmac = createHmac('sha256', 'kovo-control-key');
+    const hmac = intrinsicCreateHmac('sha256', 'kovo-control-key');
     if (witnessReflectApply(intrinsicHmacUpdate, hmac, ['kovo-control-payload']) !== hmac) {
       return false;
     }
-    return (
-      witnessReflectApply(intrinsicHmacDigest, hmac, ['hex']) ===
+    if (
+      witnessReflectApply(intrinsicHmacDigest, hmac, ['hex']) !==
       '557d532657c49d16a9f5024f40ed1fdd00fb0b5c53484e258dc5dd4af6b3ad23'
+    ) {
+      return false;
+    }
+    const left = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['safe']);
+    const same = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['safe']);
+    const other = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['evil']);
+    return (
+      witnessReflectApply(intrinsicTimingSafeEqual, undefined, [left, same]) === true &&
+      witnessReflectApply(intrinsicTimingSafeEqual, undefined, [left, other]) === false
     );
   } catch {
     return false;

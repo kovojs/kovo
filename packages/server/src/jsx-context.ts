@@ -1,8 +1,14 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomUUID } from 'node:crypto';
-
 import type { CsrfOptions } from './csrf.js';
 import type { DeferredStreamChunk } from './deferred-stream.js';
+import {
+  formHelperAsyncLocalGetStore,
+  formHelperAsyncLocalRun,
+  formHelperCreateAsyncLocalStorage,
+  formHelperCreateMap,
+  formHelperOwnDataValue,
+  formHelperSnapshotRecord,
+  formHelperToken,
+} from './jsx-form-helper-intrinsics.js';
 import type { MutationFail } from './mutation.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
@@ -37,7 +43,7 @@ export type JsxMutationFormHelperKind = 'field' | 'form';
 
 export interface JsxMutationFormHelperPlaceholder {
   kind: JsxMutationFormHelperKind;
-  props: Record<string, unknown>;
+  props: Readonly<Record<string, unknown>>;
 }
 
 export interface JsxMutationFormHelperRegistry {
@@ -46,18 +52,18 @@ export interface JsxMutationFormHelperRegistry {
   token: string;
 }
 
-const jsxRequestContext = new AsyncLocalStorage<JsxFrameworkContext>();
+const jsxRequestContext = formHelperCreateAsyncLocalStorage<JsxFrameworkContext>();
 
 export function currentJsxRequestContext(): unknown {
-  return jsxRequestContext.getStore()?.request;
+  return formHelperAsyncLocalGetStore(jsxRequestContext)?.request;
 }
 
 export function currentJsxFrameworkContext(): JsxFrameworkContext | undefined {
-  return jsxRequestContext.getStore();
+  return formHelperAsyncLocalGetStore(jsxRequestContext);
 }
 
 export function currentJsxMutationFormHelperRegistry(): JsxMutationFormHelperRegistry | undefined {
-  return jsxRequestContext.getStore()?.mutationFormHelpers;
+  return formHelperAsyncLocalGetStore(jsxRequestContext)?.mutationFormHelpers;
 }
 
 export function runWithJsxRequestContext<Value>(
@@ -79,16 +85,47 @@ export function runWithJsxRequestContext<Value>(
   const options = typeof optionsOrRender === 'function' ? {} : optionsOrRender;
   const render = typeof optionsOrRender === 'function' ? optionsOrRender : maybeRender;
   if (!render) throw new Error('runWithJsxRequestContext requires a render callback');
-  return jsxRequestContext.run(
-    { ...options, mutationFormHelpers: createMutationFormHelperRegistry(), request },
+  return formHelperAsyncLocalRun(
+    jsxRequestContext,
+    createJsxFrameworkContext(request, options),
     render,
   );
+}
+
+function createJsxFrameworkContext(
+  request: unknown,
+  options: Omit<JsxFrameworkContext, 'mutationFormHelpers' | 'request'>,
+): JsxFrameworkContext {
+  const mutationFailure = formHelperOwnDataValue(options, 'mutationFailure');
+  const context: JsxFrameworkContext = {
+    anonymousCsrfBindings: formHelperOwnDataValue(options, 'anonymousCsrfBindings') as
+      | Map<string, JsxAnonymousCsrfBinding>
+      | undefined,
+    csrf: formHelperOwnDataValue(options, 'csrf') as CsrfOptions<any> | undefined,
+    deferredRegions: formHelperOwnDataValue(options, 'deferredRegions') as
+      | DeferredRegionCollector
+      | undefined,
+    maxListItems: formHelperOwnDataValue(options, 'maxListItems') as number | undefined,
+    mutationFailure:
+      typeof mutationFailure === 'object' && mutationFailure !== null
+        ? (formHelperSnapshotRecord(
+            mutationFailure as unknown as Record<string, unknown>,
+            'JSX mutation failure context',
+          ) as unknown as JsxMutationFailureContext)
+        : undefined,
+    mutationFormHelpers: createMutationFormHelperRegistry(),
+    onCsrfSetCookie: formHelperOwnDataValue(options, 'onCsrfSetCookie') as
+      | ((rawSetCookie: string) => void)
+      | undefined,
+    request,
+  };
+  return context;
 }
 
 function createMutationFormHelperRegistry(): JsxMutationFormHelperRegistry {
   return {
     nextId: 0,
-    placeholders: new Map(),
-    token: randomUUID(),
+    placeholders: formHelperCreateMap(),
+    token: formHelperToken(),
   };
 }

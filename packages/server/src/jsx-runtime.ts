@@ -4,8 +4,6 @@ import type {
   ComponentProps,
   ComponentRenderSlots,
   ErrorBoundaryProps,
-  FieldErrorProps,
-  FormErrorProps,
   JsonValue,
 } from '@kovojs/core';
 import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
@@ -23,22 +21,50 @@ import {
 import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
 
 import { componentMutationFailureSlots } from './component-render.js';
+import { isKovoComponentDescriptor } from './component-authority.js';
 import { renderMutationCsrfField, renderMutationIdemField, type CsrfOptions } from './csrf.js';
 import {
   escapeAttribute,
-  isRenderedHtml,
   renderedHtml,
   type RenderedHtml,
   safeRuntimeAttribute,
   safeRuntimeAttributeName,
-  unwrapCoercedRenderedHtml,
 } from './html.js';
 import {
   currentJsxFrameworkContext,
   currentJsxMutationFormHelperRegistry,
   currentJsxRequestContext,
+  type JsxMutationFormHelperKind,
 } from './jsx-context.js';
+import {
+  deferMutationFormHelper,
+  renderMutationFormHelperOutput,
+  resolveMutationFormHelpers,
+  structuredMutationFormHelperOperation,
+} from './jsx-form-helper.js';
+import {
+  formHelperCreateRecord,
+  formHelperDefineArrayValue,
+  formHelperDefineDataProperty,
+  formHelperIsArray,
+  formHelperIsSafeElementName,
+  formHelperIsPromise,
+  formHelperObjectKeys,
+  formHelperOwnDataValue,
+  formHelperPromiseAll,
+  formHelperPromiseThen,
+  formHelperSnapshotRecord,
+  formHelperString,
+  formHelperStringEndsWith,
+  formHelperStringStartsWith,
+  formHelperStringToLowerCase,
+} from './jsx-form-helper-intrinsics.js';
 import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './query.js';
+import {
+  requestFormDataGet,
+  requestFormDataValues,
+  requestIsFormData,
+} from './request-body-intrinsics.js';
 import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { isDocumentConfig, isStructuredDocumentNode } from './document-structured.js';
@@ -57,24 +83,7 @@ import { revealUntrustedRequestValue } from './untrusted-request-body.js';
 //   through the internal RenderedHtml brand so nested JSX composes without
 //   turning app/DB text into markup (SPEC.md §4.5, §5.2).
 
-const voidElements = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'source',
-  'track',
-  'wbr',
-]);
-
 const kovoFormKeyFieldName = 'kovo-form-key';
-const mutationFormHelperRenderContextKey = Symbol.for('kovo.mutationFormHelperRenderContext');
 const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
@@ -109,20 +118,6 @@ type KovoJsxComponent = Component<ComponentDefinitionInput>;
 type KovoJsxComponentProps<Type> =
   Type extends Component<infer Definition> ? ComponentProps<Definition> : never;
 
-type MutationFormHelperKind = 'field' | 'form';
-
-installMutationFormHelperRenderContext();
-
-function installMutationFormHelperRenderContext(): void {
-  const global = globalThis as typeof globalThis & Record<symbol, unknown>;
-  global[mutationFormHelperRenderContextKey] = {
-    defer(kind: MutationFormHelperKind, props: Record<string, unknown>) {
-      return renderedHtml(deferMutationFormHelperInCurrentRender(kind, props as JsxProps) ?? '');
-    },
-    renderHtml: renderedHtml,
-  };
-}
-
 /** @generated JSX automatic-runtime ABI `Fragment` (compiler-emitted). */
 export function Fragment(props: JsxProps): MaybePromise<RenderedHtml> {
   return toRenderedHtml(renderJsxChildren(props.children));
@@ -137,10 +132,10 @@ export function jsx(
   if (isErrorBoundaryComponent(type)) {
     return renderErrorBoundary(props as unknown as ErrorBoundaryProps);
   }
-  if (isMutationFormHelperComponent(type, FieldError, 'FieldError')) {
+  if (isMutationFormHelperComponent(type, FieldError)) {
     return renderMutationFormHelper('field', props);
   }
-  if (isMutationFormHelperComponent(type, FormError, 'FormError')) {
+  if (isMutationFormHelperComponent(type, FormError)) {
     return renderMutationFormHelper('form', props);
   }
   if (isGetRouteFormHelperComponent(type, 'form')) {
@@ -159,20 +154,50 @@ export function jsx(
     return renderFunctionComponentResult(functionComponent(props));
   }
 
-  const attributes = renderJsxAttributes(type, props, key);
-  if (voidElements.has(type)) return renderedHtml(`<${type}${attributes}>`);
+  const intrinsicProps = formHelperSnapshotRecord(props, 'JSX intrinsic element props') as JsxProps;
+  if (!formHelperIsSafeElementName(type)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        'element-name',
+        'attribute',
+        type,
+        'element name is not a safe HTML name token',
+      ),
+    );
+    return renderedHtml('');
+  }
+  const attributes = renderJsxAttributes(type, intrinsicProps, key);
+  if (isVoidElement(type)) return renderedHtml(`<${type}${attributes}>`);
 
-  const children = renderJsxElementChildren(type, renderJsxContent(props));
-  const afterChildren = type === 'form' ? renderFormAfterChildrenContent(props, key) : '';
+  const children = renderJsxElementChildren(type, renderJsxContent(intrinsicProps));
+  const afterChildren = type === 'form' ? renderFormAfterChildrenContent(intrinsicProps, key) : '';
   return isPromiseLike(children)
-    ? children.then((html) =>
+    ? formHelperPromiseThen(children, (html) =>
         renderedHtml(
-          `<${type}${attributes}>${renderFormChildrenContent(type, props, key, html)}${afterChildren}</${type}>`,
+          `<${type}${attributes}>${renderFormChildrenContent(type, intrinsicProps, key, html)}${afterChildren}</${type}>`,
         ),
       )
     : renderedHtml(
-        `<${type}${attributes}>${renderFormChildrenContent(type, props, key, children)}${afterChildren}</${type}>`,
+        `<${type}${attributes}>${renderFormChildrenContent(type, intrinsicProps, key, children)}${afterChildren}</${type}>`,
       );
+}
+
+function isVoidElement(type: string): boolean {
+  return (
+    type === 'area' ||
+    type === 'base' ||
+    type === 'br' ||
+    type === 'col' ||
+    type === 'embed' ||
+    type === 'hr' ||
+    type === 'img' ||
+    type === 'input' ||
+    type === 'link' ||
+    type === 'meta' ||
+    type === 'source' ||
+    type === 'track' ||
+    type === 'wbr'
+  );
 }
 
 function isErrorBoundaryComponent(type: JsxComponent | KovoJsxComponent | string): boolean {
@@ -185,11 +210,15 @@ function isErrorBoundaryComponent(type: JsxComponent | KovoJsxComponent | string
 function renderErrorBoundary(props: ErrorBoundaryProps): MaybePromise<RenderedHtml> {
   try {
     const rendered = renderJsxChildren(props.children as JsxNode);
-    return isPromiseLike(rendered)
-      ? rendered
-          .catch((error) => renderErrorBoundaryFallback(props, error))
-          .then((html) => (typeof html === 'string' ? renderedHtml(html) : html))
-      : renderedHtml(rendered);
+    if (!isPromiseLike(rendered)) return renderedHtml(rendered);
+    const recovered = formHelperPromiseThen(
+      rendered,
+      (html) => html,
+      (error) => renderErrorBoundaryFallback(props, error),
+    );
+    return formHelperPromiseThen(recovered, (html) =>
+      typeof html === 'string' ? renderedHtml(html) : html,
+    );
   } catch (error) {
     return renderErrorBoundaryFallback(props, error);
   }
@@ -206,9 +235,8 @@ function renderErrorBoundaryFallback(
 function isMutationFormHelperComponent(
   type: JsxComponent | KovoJsxComponent | string,
   helper: unknown,
-  name: string,
 ): boolean {
-  return type === helper || (typeof type === 'function' && type.name === name);
+  return type === helper;
 }
 
 function isGetRouteFormHelperComponent(
@@ -257,7 +285,7 @@ export function createElement(
 }
 
 function renderFunctionComponentResult(value: unknown): MaybePromise<RenderedHtml | object> {
-  if (isPromiseLike(value)) return value.then(renderFunctionComponentResult);
+  if (isPromiseLike(value)) return formHelperPromiseThen(value, renderFunctionComponentResult);
   if (isStructuredDocumentValue(value)) return value;
   return toRenderedHtml(renderJsxChildren(value as JsxChild));
 }
@@ -279,7 +307,11 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     rendered += ` kovo-key="${escapeAttribute(attributeText('kovo-key', key))}"`;
   }
 
-  for (const [name, value] of Object.entries(props)) {
+  const names = formHelperObjectKeys(props);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name !== 'string') continue;
+    const value = formHelperOwnDataValue(props, name);
     if (
       name === 'children' ||
       name === 'key' ||
@@ -383,14 +415,21 @@ function isKovoStyleInput(value: unknown): boolean {
 }
 
 function renderMutationFormAttributes(key: string, props: JsxProps): string {
-  return [
-    props.method === undefined ? ' method="post"' : '',
-    props.action === undefined ? ` action="${escapeAttribute(`/_m/${key}`)}"` : '',
-    props['data-mutation'] === undefined ? ` data-mutation="${escapeAttribute(key)}"` : '',
-    props.stream === true && props['data-mutation-stream'] === undefined
-      ? ' data-mutation-stream="true"'
-      : '',
-  ].join('');
+  let attributes = '';
+  if (formHelperOwnDataValue(props, 'method') === undefined) attributes += ' method="post"';
+  if (formHelperOwnDataValue(props, 'action') === undefined) {
+    attributes += ` action="${escapeAttribute(`/_m/${key}`)}"`;
+  }
+  if (formHelperOwnDataValue(props, 'data-mutation') === undefined) {
+    attributes += ` data-mutation="${escapeAttribute(key)}"`;
+  }
+  if (
+    formHelperOwnDataValue(props, 'stream') === true &&
+    formHelperOwnDataValue(props, 'data-mutation-stream') === undefined
+  ) {
+    attributes += ' data-mutation-stream="true"';
+  }
+  return attributes;
 }
 
 function renderFormAfterChildrenContent(props: JsxProps, jsxKey?: unknown): string {
@@ -429,142 +468,135 @@ function renderFormChildrenContent(
   html: string,
 ): string {
   if (type !== 'form') return html;
-  return resolveMutationFormHelperPlaceholders(html, props, jsxKey);
+  return resolveMutationFormHelpers(
+    html,
+    currentJsxMutationFormHelperRegistry(),
+    mutationFailureForForm(props, jsxKey),
+  );
 }
 
-function renderMutationFormHelper(kind: MutationFormHelperKind, props: JsxProps): RenderedHtml {
-  if (props.failure !== undefined) {
-    const rendered = renderMutationFormHelperNow(kind, props, props.failure);
-    return isRenderedHtml(rendered) ? rendered : renderedHtml(rendered);
+function renderMutationFormHelper(kind: JsxMutationFormHelperKind, props: JsxProps): RenderedHtml {
+  const failure = formHelperOwnDataValue(props, 'failure');
+  if (failure !== undefined) {
+    return renderedHtml(renderMutationFormHelperOutput(kind, props, failure));
   }
 
-  const placeholder = deferMutationFormHelperInCurrentRender(kind, props);
-  return renderedHtml(placeholder ?? '');
-}
-
-function resolveMutationFormHelperPlaceholders(
-  html: string,
-  formProps: JsxProps,
-  jsxKey: unknown,
-): string {
-  if (!html.includes('<!--kovo-form-helper:')) return html;
-  const failure = mutationFailureForForm(formProps, jsxKey);
-  const registry = currentJsxMutationFormHelperRegistry();
-  if (!registry) return html.replace(/<!--kovo-form-helper:[^>]*-->/g, '');
-
-  const placeholderPattern = /<!--kovo-form-helper:([0-9a-f-]+):(\d+)-->/g;
-  return html.replace(placeholderPattern, (_match, token: string, idText: string) => {
-    if (token !== registry.token) return '';
-    const id = Number(idText);
-    const placeholder = registry.placeholders.get(id);
-    registry.placeholders.delete(id);
-    if (!placeholder) return '';
-
-    return renderMutationFormHelperNow(placeholder.kind, placeholder.props, failure);
-  });
-}
-
-function deferMutationFormHelperInCurrentRender(
-  kind: MutationFormHelperKind,
-  props: JsxProps,
-): string | undefined {
-  const registry = currentJsxMutationFormHelperRegistry();
-  if (!registry) return undefined;
-  registry.nextId += 1;
-  registry.placeholders.set(registry.nextId, { kind, props });
-  return `<!--kovo-form-helper:${registry.token}:${registry.nextId}-->`;
-}
-
-function renderMutationFormHelperNow(
-  kind: MutationFormHelperKind,
-  props: JsxProps,
-  failure: unknown,
-): RenderedHtml | string {
-  const helperProps = { ...props, failure };
-  return kind === 'field'
-    ? FieldError(helperProps as FieldErrorProps)
-    : FormError(helperProps as FormErrorProps);
+  return renderedHtml(deferMutationFormHelper(currentJsxMutationFormHelperRegistry(), kind, props));
 }
 
 function mutationFailureForForm(formProps: JsxProps, jsxKey: unknown): unknown {
-  const mutation = formProps.mutation;
-  if (!isMutationDefinitionLike(mutation)) return null;
+  const mutation = formHelperOwnDataValue(formProps, 'mutation');
+  if (!isRecord(mutation)) return null;
+  const mutationKey = formHelperOwnDataValue(mutation, 'key');
+  if (typeof mutationKey !== 'string') return null;
 
-  const failureContext = currentJsxFrameworkContext()?.mutationFailure;
-  if (!failureContext || failureContext.mutationKey !== mutation.key) return null;
+  const context = currentJsxFrameworkContext();
+  const failureContext = context?.mutationFailure;
+  if (!failureContext) return null;
+  const failedMutationKey = formHelperOwnDataValue(failureContext, 'mutationKey');
+  if (failedMutationKey !== mutationKey) return null;
+  const failure = formHelperOwnDataValue(failureContext, 'failure');
+  const input = formHelperOwnDataValue(failureContext, 'input');
 
   const key = formKeyValue(formProps, jsxKey);
-  if (key === undefined) return formFailureFromMutationFailure(failureContext.failure);
+  if (key === undefined) return formFailureFromMutationFailure(failure);
 
-  const submittedKey = submittedFormKey(failureContext.input);
+  const submittedKey = submittedFormKey(input);
   if (submittedKey !== undefined) {
-    return submittedKey === key ? formFailureFromMutationFailure(failureContext.failure) : null;
+    return submittedKey === key ? formFailureFromMutationFailure(failure) : null;
   }
-  if (failureContext.target && failureContext.target.endsWith(`:${key}`)) {
-    return formFailureFromMutationFailure(failureContext.failure);
+  const target = formHelperOwnDataValue(failureContext, 'target');
+  if (typeof target === 'string' && formHelperStringEndsWith(target, `:${key}`)) {
+    return formFailureFromMutationFailure(failure);
   }
 
-  return submittedInputContainsValue(failureContext.input, key)
-    ? formFailureFromMutationFailure(failureContext.failure)
-    : null;
+  return submittedInputContainsValue(input, key) ? formFailureFromMutationFailure(failure) : null;
 }
 
 function formFailureFromMutationFailure(failure: unknown): unknown {
   if (!isRecord(failure)) return failure;
-  const error = failure.error;
-  if (!isRecord(error) || typeof error.code !== 'string') return failure;
-  if (error.code === 'VALIDATION') {
+  const error = formHelperOwnDataValue(failure, 'error');
+  if (!isRecord(error)) return failure;
+  const code = formHelperOwnDataValue(error, 'code');
+  if (typeof code !== 'string') return failure;
+  if (code === 'VALIDATION') {
     return {
       code: 'VALIDATION',
-      fieldErrors: validationFieldErrors(error.payload),
+      fieldErrors: validationFieldErrors(formHelperOwnDataValue(error, 'payload')),
     };
   }
   return {
-    code: error.code,
-    payload: error.payload,
+    code,
+    payload: formHelperOwnDataValue(error, 'payload'),
   };
 }
 
 function validationFieldErrors(payload: unknown): Record<string, string> {
-  if (!isRecord(payload) || !Array.isArray(payload.issues)) return {};
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of payload.issues) {
-    if (!isRecord(issue) || typeof issue.message !== 'string' || !Array.isArray(issue.path)) {
-      continue;
+  const fieldErrors = formHelperCreateRecord() as Record<string, string>;
+  if (!isRecord(payload)) return fieldErrors;
+  const issues = formHelperOwnDataValue(payload, 'issues');
+  if (!formHelperIsArray(issues)) return fieldErrors;
+  for (let issueIndex = 0; issueIndex < issues.length; issueIndex += 1) {
+    const issue = formHelperOwnDataValue(issues, issueIndex);
+    if (!isRecord(issue)) continue;
+    const message = formHelperOwnDataValue(issue, 'message');
+    const issuePath = formHelperOwnDataValue(issue, 'path');
+    if (typeof message !== 'string' || !formHelperIsArray(issuePath)) continue;
+    let path = '';
+    for (let pathIndex = 0; pathIndex < issuePath.length; pathIndex += 1) {
+      const part = formHelperOwnDataValue(issuePath, pathIndex);
+      if (part === undefined) {
+        path = '';
+        break;
+      }
+      if (path !== '') path += '.';
+      path += formHelperString(part);
     }
-    const path = issue.path.map((part) => String(part)).join('.');
-    if (path) fieldErrors[path] = issue.message;
+    if (path !== '') formHelperDefineDataProperty(fieldErrors, path, message);
   }
   return fieldErrors;
 }
 
 function formKeyValue(props: JsxProps, jsxKey?: unknown): string | undefined {
-  const key = props['kovo-key'] ?? props.key ?? jsxKey;
+  const explicitKey = formHelperOwnDataValue(props, 'kovo-key');
+  const propKey = formHelperOwnDataValue(props, 'key');
+  const key = explicitKey ?? propKey ?? jsxKey;
   if (key === false || key === null || key === undefined) return undefined;
-  return attributeText('kovo-key', key);
+  return formHelperString(key);
 }
 
 function submittedFormKey(input: unknown): string | undefined {
-  if (input instanceof FormData) {
-    const value = revealSubmittedFormValue(input.get(kovoFormKeyFieldName));
+  if (requestIsFormData(input)) {
+    const value = revealSubmittedFormValue(requestFormDataGet(input, kovoFormKeyFieldName));
     return typeof value === 'string' ? value : undefined;
   }
   if (isRecord(input)) {
-    const value = revealSubmittedFormValue(input[kovoFormKeyFieldName]);
+    const value = revealSubmittedFormValue(formHelperOwnDataValue(input, kovoFormKeyFieldName));
     return typeof value === 'string' ? value : undefined;
   }
   return undefined;
 }
 
 function submittedInputContainsValue(input: unknown, value: string): boolean {
-  if (input instanceof FormData) {
-    for (const submitted of input.values()) {
-      if (revealSubmittedFormValue(submitted) === value) return true;
+  if (requestIsFormData(input)) {
+    const values = requestFormDataValues(input);
+    for (let index = 0; index < values.length; index += 1) {
+      if (revealSubmittedFormValue(formHelperOwnDataValue(values, index)) === value) return true;
     }
     return false;
   }
   if (!isRecord(input)) return false;
-  return Object.values(input).some((submitted) => revealSubmittedFormValue(submitted) === value);
+  const keys = formHelperObjectKeys(input);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = formHelperOwnDataValue(keys, index);
+    if (
+      typeof key === 'string' &&
+      revealSubmittedFormValue(formHelperOwnDataValue(input, key)) === value
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function revealSubmittedFormValue(value: unknown): unknown {
@@ -577,7 +609,21 @@ function renderJsxContent(props: JsxProps): JsxChild {
 }
 
 function renderJsxElementChildren(type: string, children: JsxChild): MaybePromise<string> {
-  if (isExecutableTextElement(type) && plainExecutableElementText(children)) {
+  return isExecutableTextElement(type)
+    ? renderExecutableElementChildren(type, children)
+    : renderJsxChildren(children);
+}
+
+function renderExecutableElementChildren(type: string, children: JsxChild): MaybePromise<string> {
+  if (isPromiseLike(children)) {
+    return formHelperPromiseThen(children, (resolved) =>
+      renderExecutableElementChildren(type, resolved),
+    );
+  }
+  if (formHelperIsArray(children)) {
+    return renderJsxChildArray(children, (child) => renderExecutableElementChildren(type, child));
+  }
+  if (plainExecutableElementText(children)) {
     drainRuntimeSinkSecurityEvent(
       runtimeElementSinkEvent(
         type,
@@ -592,7 +638,7 @@ function renderJsxElementChildren(type: string, children: JsxChild): MaybePromis
 }
 
 function isExecutableTextElement(type: string): boolean {
-  const tag = type.toLowerCase();
+  const tag = formHelperStringToLowerCase(type);
   return tag === 'script' || tag === 'style';
 }
 
@@ -633,10 +679,11 @@ function renderContextualAttributeValue(
 
 function isMetaRefreshContentAttribute(type: string, props: JsxProps, name: string): boolean {
   return (
-    type.toLowerCase() === 'meta' &&
-    name.toLowerCase() === 'content' &&
-    attributeText('http-equiv', props['http-equiv'] ?? props['httpEquiv']).toLowerCase() ===
-      'refresh'
+    formHelperStringToLowerCase(type) === 'meta' &&
+    formHelperStringToLowerCase(name) === 'content' &&
+    formHelperStringToLowerCase(
+      attributeText('http-equiv', props['http-equiv'] ?? props['httpEquiv']),
+    ) === 'refresh'
   );
 }
 
@@ -682,7 +729,11 @@ function renderStyleProperties(properties: Record<string, unknown>): string {
 }
 
 function rawHtmlContent(props: JsxProps): string | undefined {
-  for (const [name, value] of Object.entries(props)) {
+  const names = formHelperObjectKeys(props);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name !== 'string') continue;
+    const value = formHelperOwnDataValue(props, name);
     if (!isRawHtmlAttribute(name)) continue;
 
     // SPEC.md §1/§5.2: raw HTML is an explicit escape hatch, so dynamic values
@@ -703,28 +754,61 @@ function isRawHtmlAttribute(name: string): boolean {
 }
 
 function isAriaAttribute(name: string): boolean {
-  return name.toLowerCase().startsWith('aria-');
+  return formHelperStringStartsWith(formHelperStringToLowerCase(name), 'aria-');
 }
 
 function renderJsxChildren(children: JsxChild): MaybePromise<string> {
-  if (isPromiseLike(children)) return children.then((resolved) => renderJsxChildren(resolved));
-  if (Array.isArray(children)) {
-    const rendered = children.map((child) => renderJsxChildren(child));
-    if (rendered.some(isPromiseLike)) {
-      return Promise.all(rendered.map((part) => Promise.resolve(part))).then((parts) =>
-        parts.join(''),
-      );
-    }
-    if (rendered.every((part): part is string => typeof part === 'string')) {
-      return rendered.join('');
-    }
-    throw new TypeError('Kovo JSX child renderer produced a non-string synchronous value');
+  if (isPromiseLike(children)) {
+    return formHelperPromiseThen(children, (resolved) => renderJsxChildren(resolved));
+  }
+  if (formHelperIsArray(children)) {
+    return renderJsxChildArray(children, renderJsxChildren);
+  }
+  const helper = structuredMutationFormHelperOperation(children);
+  if (helper !== undefined) {
+    const failure = formHelperOwnDataValue(helper.props, 'failure');
+    return failure === undefined
+      ? deferMutationFormHelper(currentJsxMutationFormHelperRegistry(), helper.kind, helper.props)
+      : renderMutationFormHelperOutput(helper.kind, helper.props, failure);
   }
   return renderServerRenderable(children);
 }
 
+function renderJsxChildArray(
+  children: readonly unknown[],
+  renderChild: (child: JsxChild) => MaybePromise<string>,
+): MaybePromise<string> {
+  const rendered: MaybePromise<string>[] = [];
+  let containsPromise = false;
+  for (let index = 0; index < children.length; index += 1) {
+    const part = renderChild(formHelperOwnDataValue(children, index) as JsxChild);
+    formHelperDefineArrayValue(rendered, index, part);
+    if (isPromiseLike(part)) containsPromise = true;
+  }
+  if (containsPromise) {
+    return formHelperPromiseThen(formHelperPromiseAll(rendered), (parts) => {
+      let joined = '';
+      for (let index = 0; index < parts.length; index += 1) {
+        joined += formHelperOwnDataValue(parts, index) as string;
+      }
+      return joined;
+    });
+  }
+  let joined = '';
+  for (let index = 0; index < rendered.length; index += 1) {
+    const part = formHelperOwnDataValue(rendered, index);
+    if (typeof part !== 'string') {
+      throw new TypeError('Kovo JSX child renderer produced a non-string synchronous value');
+    }
+    joined += part;
+  }
+  return joined;
+}
+
 function toRenderedHtml(value: MaybePromise<string>): MaybePromise<RenderedHtml> {
-  return isPromiseLike(value) ? value.then((html) => renderedHtml(html)) : renderedHtml(value);
+  return isPromiseLike(value)
+    ? formHelperPromiseThen(value, (html) => renderedHtml(html))
+    : renderedHtml(value);
 }
 
 async function renderKovoComponent(
@@ -742,10 +826,7 @@ async function renderKovoComponent(
     slots: ComponentRenderSlots,
   ) => unknown;
   const rendered = render({ ...props, ...queries }, state, slots) as JsxNode;
-  const html =
-    typeof rendered === 'string'
-      ? unwrapCoercedRenderedHtml(rendered)
-      : await renderJsxChildren(rendered);
+  const html = await renderJsxChildren(rendered);
   const context = currentJsxFrameworkContext();
   return renderedHtml(
     stampKovoComponentRoot({
@@ -837,11 +918,7 @@ function jsxPropsToSlots(props: JsxProps): ComponentRenderSlots {
 }
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {
-  return (
-    isObjectLike(value) &&
-    isRecord(value.definition) &&
-    typeof value.definition.render === 'function'
-  );
+  return isKovoComponentDescriptor(value);
 }
 
 function isQueryDefinition(value: unknown): value is QueryDefinition {
@@ -867,7 +944,7 @@ function isObjectLike(value: unknown): value is Record<string, unknown> {
 }
 
 function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Value> {
-  return isRecord(value) && typeof value.then === 'function';
+  return formHelperIsPromise(value);
 }
 
 /** @generated JSX automatic-runtime ABI `JSX` namespace (compiler-emitted). */

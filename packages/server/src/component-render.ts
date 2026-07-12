@@ -4,12 +4,8 @@ import type {
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
-import {
-  isRenderedHtml,
-  renderedHtmlContent,
-  renderHtmlValue,
-  unwrapCoercedRenderedHtml,
-} from './html.js';
+import { isRenderedHtml, renderedHtmlContent, renderHtmlValue } from './html.js';
+import { isKovoComponentDescriptor } from './component-authority.js';
 import type { MutationFail } from './mutation.js';
 import type { ValidationFailurePayload } from './schema.js';
 
@@ -62,6 +58,9 @@ export function renderComponent<
   queries: Queries,
   options: ComponentRenderOptions<State> = {},
 ): string {
+  if (!isKovoComponentDescriptor(component)) {
+    throw new TypeError('Kovo refused a component descriptor without framework provenance.');
+  }
   const state = options.state ?? (component.definition.state?.() as State | undefined);
   const slots = options.slots ?? {};
   const render = component.definition.render as (
@@ -76,8 +75,6 @@ export function renderComponent<
 function renderComponentValue(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (isRenderedHtml(value)) return renderedHtmlContent(value);
-  if (typeof value === 'string') return unwrapCoercedRenderedHtml(value);
-
   return renderHtmlValue(value);
 }
 
