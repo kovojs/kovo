@@ -1,8 +1,20 @@
 import { mergeVaryHeader } from './document-core.js';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
-import { blessRedirectResponse } from './response.js';
+import { blessRedirectResponse, cloneResponseHeaders, readHeader } from './response.js';
 import type { ResponseHeaders, ResponseHeaderValue, WebResponseBody } from './response.js';
 import { finalizeServerResponse } from './response-posture.js';
+import {
+  createSecurityHeaders,
+  createSecurityNullRecord,
+  securityArrayIsArray,
+  securityHeadersForEach,
+  securityIsHeaders,
+  securityIsMap,
+  securityNumberIsInteger,
+  securityObjectKeys,
+  securityStringToLowerCase,
+} from './response-security-intrinsics.js';
+import { witnessGetOwnPropertyDescriptor, witnessObjectIs } from './security-witness-intrinsics.js';
 
 export type AppSystemResponseSurface = 'mutation' | 'query' | 'other';
 
@@ -24,14 +36,31 @@ interface AppSystemResponseInit {
 export const appSystemResponse = wireEmitter(
   'server.wire.system-response',
   function (body: WebResponseBody | null, init: AppSystemResponseInit): Response {
+    const status = stableSystemInitValue(init, 'status');
+    const surface = stableSystemInitValue(init, 'surface');
+    const method = stableSystemInitValue(init, 'method');
+    const buildToken = stableSystemInitValue(init, 'buildToken');
+    const initialHeaders = stableSystemInitValue(init, 'headers');
+    if (typeof status !== 'number' || !securityNumberIsInteger(status)) {
+      throw new TypeError('Kovo system response status must be an integer.');
+    }
+    if (surface !== 'mutation' && surface !== 'query' && surface !== 'other') {
+      throw new TypeError('Kovo system response surface is invalid.');
+    }
+    if (method !== undefined && typeof method !== 'string') {
+      throw new TypeError('Kovo system response method must be a string.');
+    }
+    if (buildToken !== undefined && typeof buildToken !== 'string') {
+      throw new TypeError('Kovo system response build token must be a string.');
+    }
     const response = {
       body,
-      headers: appSystemResponseHeaders(init.headers, {
-        buildToken: init.buildToken,
+      headers: appSystemResponseHeaders(initialHeaders, {
+        buildToken,
         hasBody: body !== null,
-        surface: init.surface,
+        surface,
       }),
-      status: init.status,
+      status,
     };
     if (
       response.status >= 300 &&
@@ -40,12 +69,12 @@ export const appSystemResponse = wireEmitter(
     ) {
       blessRedirectResponse(response);
     }
-    return finalizeServerResponse(response, { method: init.method ?? 'GET' });
+    return finalizeServerResponse(response, { method: method ?? 'GET' });
   },
 );
 
 function appSystemResponseHeaders(
-  initHeaders: HeadersInit | ResponseHeaders | undefined,
+  initHeaders: unknown,
   options: {
     buildToken?: string | undefined;
     hasBody: boolean;
@@ -67,28 +96,32 @@ function appSystemResponseHeaders(
   return headers;
 }
 
-function headersInitToRecord(
-  initHeaders: HeadersInit | ResponseHeaders | undefined,
-): ResponseHeaders {
-  if (isHeaderRecord(initHeaders)) return { ...initHeaders };
+function headersInitToRecord(initHeaders: unknown): ResponseHeaders {
+  if (isHeaderRecord(initHeaders)) return cloneResponseHeaders(initHeaders);
 
-  const headers = new Headers(initHeaders);
-  const record: ResponseHeaders = {};
-  headers.forEach((value, name) => {
+  if (
+    initHeaders !== undefined &&
+    !securityIsHeaders(initHeaders) &&
+    !securityIsMap(initHeaders) &&
+    !securityArrayIsArray(initHeaders)
+  ) {
+    throw new TypeError('Kovo system response headers must be a header record or HeadersInit.');
+  }
+  const headers = createSecurityHeaders(initHeaders);
+  const record: ResponseHeaders = createSecurityNullRecord<ResponseHeaderValue>();
+  securityHeadersForEach(headers, (value, name) => {
     record[name] = value;
   });
   return record;
 }
 
-function isHeaderRecord(
-  value: HeadersInit | ResponseHeaders | undefined,
-): value is ResponseHeaders {
+function isHeaderRecord(value: unknown): value is ResponseHeaders {
   return (
     typeof value === 'object' &&
     value !== null &&
-    !(value instanceof Headers) &&
-    !Array.isArray(value) &&
-    typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] !== 'function'
+    !securityIsHeaders(value) &&
+    !securityIsMap(value) &&
+    !securityArrayIsArray(value)
   );
 }
 
@@ -98,12 +131,28 @@ function setHeader(headers: ResponseHeaders, name: string, value: ResponseHeader
   headers[name] = value;
 }
 
-function readHeader(headers: ResponseHeaders, name: string): ResponseHeaderValue | undefined {
-  const existingName = headerName(headers, name);
-  return existingName === undefined ? undefined : headers[existingName];
+function headerName(headers: ResponseHeaders, name: string): string | undefined {
+  const normalized = securityStringToLowerCase(name);
+  const names = securityObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const candidate = names[index]!;
+    if (securityStringToLowerCase(candidate) === normalized) return candidate;
+  }
+  return undefined;
 }
 
-function headerName(headers: ResponseHeaders, name: string): string | undefined {
-  const normalized = name.toLowerCase();
-  return Object.keys(headers).find((candidate) => candidate.toLowerCase() === normalized);
+function stableSystemInitValue(init: object, property: PropertyKey): unknown {
+  const before = witnessGetOwnPropertyDescriptor(init, property);
+  const after = witnessGetOwnPropertyDescriptor(init, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`Kovo system response ${String(property)} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`Kovo system response ${String(property)} must be an own data property.`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`Kovo system response ${String(property)} changed during validation.`);
+  }
+  return before.value;
 }

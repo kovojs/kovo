@@ -13,6 +13,7 @@ const NativeArray = globalThis.Array;
 const NativeBuffer = Buffer;
 const NativeDate = globalThis.Date;
 const NativeFunction = globalThis.Function;
+const NativeHeaders = globalThis.Headers;
 const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
 const NativeMath = globalThis.Math;
@@ -24,6 +25,10 @@ const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTextEncoder = globalThis.TextEncoder;
 const NativeUint8Array = globalThis.Uint8Array;
+const NativeURL = globalThis.URL;
+const NativePromise = globalThis.Promise;
+const NativeReadableStream = globalThis.ReadableStream;
+const NativeReadableStreamDefaultController = globalThis.ReadableStreamDefaultController;
 const nativeCreateHash = createHash;
 const nativeRandomBytes = randomBytes;
 const nativeRandomUuid = randomUUID;
@@ -32,19 +37,25 @@ const nativeReflectApply = NativeReflect.apply;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArrayPush = NativeArray.prototype.push;
+const nativeArraySort = NativeArray.prototype.sort;
 const nativeBufferAllocUnsafe = NativeBuffer.allocUnsafe;
 const nativeBufferFrom = NativeBuffer.from;
 const nativeBufferToString = NativeBuffer.prototype.toString;
 const nativeDateToUtcString = NativeDate.prototype.toUTCString;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
+const nativeEncodeUri = globalThis.encodeURI;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
 const nativeJsonStringify = NativeJSON.stringify;
+const nativeHeadersForEach = NativeHeaders.prototype.forEach;
+const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
+const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeMathFloor = NativeMath.floor;
 const nativeNumberIsFinite = NativeNumber.isFinite;
 const nativeNumberIsInteger = NativeNumber.isInteger;
+const nativeNumberParseInt = NativeNumber.parseInt;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
@@ -61,7 +72,19 @@ const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeStringFromCodePoint = NativeString.fromCodePoint;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
+const nativePromiseResolve = NativePromise.resolve;
+const nativePromiseThen = NativePromise.prototype.then;
+const nativeControllerClose = NativeReadableStreamDefaultController.prototype.close;
+const nativeControllerEnqueue = NativeReadableStreamDefaultController.prototype.enqueue;
+const nativeControllerError = NativeReadableStreamDefaultController.prototype.error;
+const nativeUrlHashGet = stableOwnGetter(NativeURL.prototype, 'hash');
+const nativeUrlHrefGet = stableOwnGetter(NativeURL.prototype, 'href');
+const nativeUrlOriginGet = stableOwnGetter(NativeURL.prototype, 'origin');
+const nativeUrlPathnameGet = stableOwnGetter(NativeURL.prototype, 'pathname');
+const nativeUrlProtocolGet = stableOwnGetter(NativeURL.prototype, 'protocol');
+const nativeUrlSearchGet = stableOwnGetter(NativeURL.prototype, 'search');
 
 const hashControl = nativeCreateHash('sha256');
 const nativeHashUpdate = stableOwnFunction(hashControl, 'update');
@@ -91,6 +114,18 @@ function stableOwnFunction(value: object, property: PropertyKey): Function {
   throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
 }
 
+function stableOwnGetter(value: object, property: PropertyKey): Function {
+  const descriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, property],
+  );
+  if (typeof descriptor?.get !== 'function') {
+    throw new TypeError(`Kovo response security getter ${String(property)} is unavailable.`);
+  }
+  return descriptor.get;
+}
+
 function capturedControlsAreSound(): boolean {
   try {
     const shell = ['<!doctype html>', '<html><body>safe</body></html>'];
@@ -105,6 +140,9 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeArrayPush, pushed, ['safe']) !== 1 || pushed[0] !== 'safe') return false;
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
+    const sorted = [1, 3, 2];
+    apply(nativeArraySort, sorted, [(left: number, right: number) => right - left]);
+    if (sorted[0] !== 3 || sorted[1] !== 2 || sorted[2] !== 1) return false;
 
     const injectedDomain = 'example.test; Partitioned';
     if (apply(nativeStringIncludes, injectedDomain, [';']) !== true) return false;
@@ -128,6 +166,8 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeStringStartsWith, 'id', ['__Host-']) !== false) return false;
     if (apply(nativeStringStartsWith, 'data-safe', ['data-']) !== true) return false;
     if (apply(nativeStringStartsWith, 'onclick', ['data-']) !== false) return false;
+    if (apply(nativeStringStartsWith, '//evil.example/phish', ['//']) !== true) return false;
+    if (apply(nativeStringStartsWith, '/safe', ['//']) !== false) return false;
     if (apply(nativeStringCharCodeAt, '\u007f', [0]) !== 0x7f) return false;
     if (apply(nativeStringReplaceAll, '&amp;&amp;', ['&amp;', '&']) !== '&&') return false;
     if (apply(NativeString, undefined, [42]) !== '42') return false;
@@ -173,9 +213,12 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeNumberIsInteger, NativeNumber, [2.5]) !== false) return false;
     if (apply(nativeNumberIsFinite, NativeNumber, [2]) !== true) return false;
     if (apply(nativeNumberIsFinite, NativeNumber, [Infinity]) !== false) return false;
+    if (apply(nativeNumberParseInt, NativeNumber, ['10', 10]) !== 10) return false;
     if (apply(nativeMathFloor, NativeMath, [2.9]) !== 2) return false;
     if (apply(nativeEncodeURIComponent, undefined, ['a;b']) !== 'a%3Bb') return false;
+    if (apply(nativeEncodeUri, undefined, ['/a b,<']) !== '/a%20b,%3C') return false;
     if (apply(nativeJsonStringify, NativeJSON, [{ safe: true }]) !== '{"safe":true}') return false;
+    if (apply(nativeStringFromCodePoint, NativeString, [0x1f642]) !== '🙂') return false;
 
     const map = new NativeMap<string, string>();
     apply(nativeMapSet, map, ['safe', 'value']);
@@ -183,10 +226,42 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeMapHas, map, ['attacker']) !== false) return false;
     if (apply(nativeMapGet, map, ['safe']) !== 'value') return false;
     if (apply(nativeMapGet, map, ['attacker']) !== undefined) return false;
+    let mapSeen = false;
+    apply(nativeMapForEach, map, [
+      (value: string, key: string) => {
+        if (key === 'safe' && value === 'value') mapSeen = true;
+      },
+    ]);
+    if (!mapSeen) return false;
     const set = new NativeSet<string>();
     apply(nativeSetAdd, set, ['safe']);
     if (apply(nativeSetHas, set, ['safe']) !== true) return false;
     if (apply(nativeSetHas, set, ['attacker']) !== false) return false;
+
+    const headers = new NativeHeaders([['X-Kovo-Probe', 'safe']]);
+    if (apply(nativeHeadersGet, headers, ['x-kovo-probe']) !== 'safe') return false;
+    let headerSeen = false;
+    apply(nativeHeadersForEach, headers, [
+      (value: string, name: string) => {
+        if (name === 'x-kovo-probe' && value === 'safe') headerSeen = true;
+      },
+    ]);
+    if (!headerSeen) return false;
+
+    const url = new NativeURL('https://example.test/a?b=1#c');
+    if (apply(nativeUrlProtocolGet, url, []) !== 'https:') return false;
+    if (apply(nativeUrlOriginGet, url, []) !== 'https://example.test') return false;
+    if (apply(nativeUrlPathnameGet, url, []) !== '/a') return false;
+    if (apply(nativeUrlSearchGet, url, []) !== '?b=1') return false;
+    if (apply(nativeUrlHashGet, url, []) !== '#c') return false;
+    if (apply(nativeUrlHrefGet, url, []) !== 'https://example.test/a?b=1#c') return false;
+
+    const promise = apply<Promise<string>>(nativePromiseResolve, NativePromise, ['safe']);
+    if (apply(nativeFunctionHasInstance, NativePromise, [promise]) !== true) return false;
+    const chained = apply<Promise<string>>(nativePromiseThen, promise, [(value: string) => value]);
+    if (apply(nativeFunctionHasInstance, NativePromise, [chained]) !== true) return false;
+    const stream = new NativeReadableStream<Uint8Array>();
+    if (apply(nativeFunctionHasInstance, NativeReadableStream, [stream]) !== true) return false;
 
     const date = new NativeDate('2026-01-02T03:04:05Z');
     if (apply(nativeFunctionHasInstance, NativeDate, [date]) !== true) return false;
@@ -273,6 +348,14 @@ export function securityArrayPush<Value>(values: Value[], value: Value): void {
   apply(nativeArrayPush, values, [value]);
 }
 
+export function securityArraySort<Value>(
+  values: Value[],
+  compare: (left: Value, right: Value) => number,
+): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeArraySort, values, [compare]);
+}
+
 export function securityStringIncludes(value: string, search: string): boolean {
   assertResponseSecurityIntrinsics();
   return apply(nativeStringIncludes, value, [search]);
@@ -293,9 +376,13 @@ export function securityStringTrim(value: string): string {
   return apply(nativeStringTrim, value, []);
 }
 
-export function securityStringIndexOf(value: string, search: string): number {
+export function securityStringIndexOf(value: string, search: string, fromIndex?: number): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringIndexOf, value, [search]);
+  return apply(
+    nativeStringIndexOf,
+    value,
+    fromIndex === undefined ? [search] : [search, fromIndex],
+  );
 }
 
 export function securityStringSlice(value: string, start: number, end?: number): string {
@@ -308,9 +395,17 @@ export function securityStringToLowerCase(value: string): string {
   return apply(nativeStringToLowerCase, value, []);
 }
 
-export function securityStringStartsWith(value: string, search: string): boolean {
+export function securityStringStartsWith(
+  value: string,
+  search: string,
+  position?: number,
+): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringStartsWith, value, [search]);
+  return apply(
+    nativeStringStartsWith,
+    value,
+    position === undefined ? [search] : [search, position],
+  );
 }
 
 export function securityStringCharCodeAt(value: string, index: number): number {
@@ -346,6 +441,26 @@ export function securityRegExpReplace(
   return replaceRegExp(value, expression, replacement);
 }
 
+export function securityRegExpReplaceMatches(
+  value: string,
+  expression: RegExp,
+  replacement: (match: RegExpExecArray) => string,
+): string {
+  assertResponseSecurityIntrinsics();
+  expression.lastIndex = 0;
+  let result = '';
+  let consumed = 0;
+  let match: RegExpExecArray | null;
+  while ((match = apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value])) !== null) {
+    const matched = match[0];
+    result += apply<string>(nativeStringSlice, value, [consumed, match.index]);
+    result += replacement(match);
+    consumed = match.index + matched.length;
+    if (matched.length === 0) expression.lastIndex = match.index + 1;
+  }
+  return result + apply<string>(nativeStringSlice, value, [consumed]);
+}
+
 function replaceRegExp(value: string, expression: RegExp, replacement: string): string {
   expression.lastIndex = 0;
   let result = '';
@@ -364,6 +479,24 @@ function replaceRegExp(value: string, expression: RegExp, replacement: string): 
 export function securityObjectKeys(value: object): string[] {
   assertResponseSecurityIntrinsics();
   return apply(nativeObjectKeys, NativeObject, [value]);
+}
+
+export function securityHeadersForEach(
+  headers: Headers,
+  callback: (value: string, name: string) => void,
+): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeHeadersForEach, headers, [callback]);
+}
+
+export function securityHeadersGet(headers: Headers, name: string): string | null {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeHeadersGet, headers, [name]);
+}
+
+export function createSecurityHeaders(init?: unknown): Headers {
+  assertResponseSecurityIntrinsics();
+  return new NativeHeaders(init as HeadersInit | undefined);
 }
 
 export function createSecurityNullRecord<Value = unknown>(): Record<PropertyKey, Value> {
@@ -401,6 +534,24 @@ export function securityMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value
   apply(nativeMapSet, map, [key, value]);
 }
 
+export function securityMapForEach<Key, Value>(
+  map: Map<Key, Value>,
+  callback: (value: Value, key: Key) => void,
+): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeMapForEach, map, [callback]);
+}
+
+export function securityIsMap(value: unknown): value is Map<unknown, unknown> {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeFunctionHasInstance, NativeMap, [value]);
+}
+
+export function securityIsHeaders(value: unknown): value is Headers {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeFunctionHasInstance, NativeHeaders, [value]);
+}
+
 export function createSecuritySet<Value>(): Set<Value> {
   assertResponseSecurityIntrinsics();
   return new NativeSet<Value>();
@@ -426,6 +577,11 @@ export function securityNumberIsFinite(value: unknown): boolean {
   return apply(nativeNumberIsFinite, NativeNumber, [value]);
 }
 
+export function securityNumberParseInt(value: string, radix: number): number {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeNumberParseInt, NativeNumber, [value, radix]);
+}
+
 export function securityMathFloor(value: number): number {
   assertResponseSecurityIntrinsics();
   return apply(nativeMathFloor, NativeMath, [value]);
@@ -434,6 +590,38 @@ export function securityMathFloor(value: number): number {
 export function securityEncodeURIComponent(value: string): string {
   assertResponseSecurityIntrinsics();
   return apply(nativeEncodeURIComponent, undefined, [value]);
+}
+
+export function securityEncodeUri(value: string): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeEncodeUri, undefined, [value]);
+}
+
+export function securityStringFromCodePoint(value: number): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeStringFromCodePoint, NativeString, [value]);
+}
+
+export interface SecurityUrlSnapshot {
+  hash: string;
+  href: string;
+  origin: string;
+  pathname: string;
+  protocol: string;
+  search: string;
+}
+
+export function securityUrlSnapshot(value: string, base?: string): SecurityUrlSnapshot {
+  assertResponseSecurityIntrinsics();
+  const url = base === undefined ? new NativeURL(value) : new NativeURL(value, base);
+  return {
+    hash: apply(nativeUrlHashGet, url, []),
+    href: apply(nativeUrlHrefGet, url, []),
+    origin: apply(nativeUrlOriginGet, url, []),
+    pathname: apply(nativeUrlPathnameGet, url, []),
+    protocol: apply(nativeUrlProtocolGet, url, []),
+    search: apply(nativeUrlSearchGet, url, []),
+  };
 }
 
 export function securityIsDate(value: unknown): value is Date {
@@ -476,6 +664,68 @@ export function securityBufferToString(value: Buffer, encoding?: BufferEncoding)
 export function securityTextEncode(value: string): Uint8Array {
   assertResponseSecurityIntrinsics();
   return apply(nativeTextEncoderEncode, textEncoder, [value]);
+}
+
+export function securityPromiseResolve<Value>(value: Value | PromiseLike<Value>): Promise<Value> {
+  assertResponseSecurityIntrinsics();
+  return apply(nativePromiseResolve, NativePromise, [value]);
+}
+
+export function securityPromiseThen<Value, Result>(
+  promise: Promise<Value>,
+  fulfilled: (value: Value) => Result | PromiseLike<Result>,
+  rejected?: (reason: unknown) => Result | PromiseLike<Result>,
+): Promise<Result> {
+  assertResponseSecurityIntrinsics();
+  return apply(
+    nativePromiseThen,
+    promise,
+    rejected === undefined ? [fulfilled] : [fulfilled, rejected],
+  );
+}
+
+export function securityPromiseRace<Value>(promises: readonly Promise<Value>[]): Promise<Value> {
+  assertResponseSecurityIntrinsics();
+  return new NativePromise<Value>((resolve, reject) => {
+    for (let index = 0; index < promises.length; index += 1) {
+      apply(nativePromiseThen, promises[index]!, [resolve, reject]);
+    }
+  });
+}
+
+export function securityIsPromise(value: unknown): value is Promise<unknown> {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeFunctionHasInstance, NativePromise, [value]);
+}
+
+export function createSecurityReadableStream<Value>(
+  source: UnderlyingDefaultSource<Value>,
+): ReadableStream<Value> {
+  assertResponseSecurityIntrinsics();
+  return new NativeReadableStream<Value>(source);
+}
+
+export function securityStreamEnqueue<Value>(
+  controller: ReadableStreamDefaultController<Value>,
+  value: Value,
+): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeControllerEnqueue, controller, [value]);
+}
+
+export function securityStreamClose<Value>(
+  controller: ReadableStreamDefaultController<Value>,
+): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeControllerClose, controller, []);
+}
+
+export function securityStreamError<Value>(
+  controller: ReadableStreamDefaultController<Value>,
+  error: unknown,
+): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeControllerError, controller, [error]);
 }
 
 export function securityRandomBytes(size: number): Buffer {

@@ -9,6 +9,39 @@ import {
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 import { finalizeServerResponse } from './response-posture.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
+import {
+  createSecurityNullRecord,
+  createSecuritySet,
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityArrayPush,
+  securityHeadersGet,
+  securityIsHeaders,
+  securityIsMap,
+  securityMapForEach,
+  securityNumberIsInteger,
+  securityObjectKeys,
+  securityRegExpReplace,
+  securitySetHas,
+  securitySetAdd,
+  securityString,
+  securityStringCharCodeAt,
+  securityStringIncludes,
+  securityStringReplaceAll,
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringToLowerCase,
+  securityStringTrim,
+  securityTextEncode,
+  securityUrlSnapshot,
+} from './response-security-intrinsics.js';
+import {
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectIs,
+  witnessReflectApply,
+} from './security-witness-intrinsics.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
@@ -77,7 +110,7 @@ export function replayMutationWireBody(
   body: string,
   options: ReplayMutationWireBodyOptions,
 ): FrameworkWireBody {
-  if (options.reason.trim() === '') {
+  if (securityStringTrim(options.reason) === '') {
     throw new TypeError('replayMutationWireBody() requires a non-empty audit reason.');
   }
   return frameworkWireBody(body);
@@ -159,7 +192,7 @@ export interface RoutePageResponse extends ServerResponseBase<
 function markRouteResponseOutcome<Response extends object>(
   response: Response,
 ): Response & { routeResponse: true } {
-  Object.defineProperty(response, 'routeResponse', {
+  witnessDefineProperty(response, 'routeResponse', {
     configurable: false,
     enumerable: false,
     value: true,
@@ -189,16 +222,28 @@ export type HeaderSource =
  */
 export function isHeaderSource(value: unknown): value is HeaderSource {
   if (typeof value !== 'object' || value === null) return false;
-
-  if ('get' in value) return typeof value.get === 'function';
-
-  const iterator = (value as { [Symbol.iterator]?: unknown })[Symbol.iterator];
-  if (typeof iterator === 'function') {
-    return !Array.isArray(value) || value.every(isHeaderTuple);
+  if (securityIsHeaders(value)) return true;
+  if (securityIsMap(value)) {
+    let valid = true;
+    securityMapForEach(value, (header, name) => {
+      if (typeof name !== 'string' || typeof header !== 'string') valid = false;
+    });
+    return valid;
   }
-
-  const entries = Object.entries(value);
-  return entries.length > 0 && entries.every(([, header]) => isHeaderRecordValue(header));
+  if (securityArrayIsArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      if (!isHeaderTuple(stableOwnDataValue(value, index))) return false;
+    }
+    return value.length > 0;
+  }
+  const get = stableOwnDataValue(value, 'get');
+  if (typeof get === 'function') return true;
+  const names = securityObjectKeys(value);
+  if (names.length === 0) return false;
+  for (let index = 0; index < names.length; index += 1) {
+    if (!isHeaderRecordValue(stableOwnDataValue(value, names[index]!))) return false;
+  }
+  return true;
 }
 
 /**
@@ -215,16 +260,38 @@ export function isHeaderSource(value: unknown): value is HeaderSource {
  * @internal
  */
 export function readHeader(headers: HeaderSource, name: string): string | undefined {
-  if ('get' in headers && typeof headers.get === 'function') {
-    return headers.get(name) ?? undefined;
+  if (securityIsHeaders(headers)) {
+    return securityHeadersGet(headers, name) ?? undefined;
+  }
+  if (securityIsMap(headers)) {
+    const wanted = securityStringToLowerCase(name);
+    let found: string | undefined;
+    securityMapForEach(headers, (value, key) => {
+      if (
+        found === undefined &&
+        typeof key === 'string' &&
+        typeof value === 'string' &&
+        securityStringToLowerCase(key) === wanted
+      ) {
+        found = value;
+      }
+    });
+    return found;
+  }
+  const get = stableOwnDataValue(headers, 'get');
+  if (typeof get === 'function') {
+    const value = witnessReflectApply<unknown>(get, headers, [name]);
+    return typeof value === 'string' ? value : undefined;
   }
 
   const existingName = findHeaderName(headers, name);
-  if (existingName === undefined || Symbol.iterator in headers) return existingName;
+  if (existingName === undefined) return undefined;
+
+  if (securityArrayIsArray(headers)) return existingName;
 
   const recordHeaders = headers as Record<string, readonly string[] | string | undefined>;
-  const value = recordHeaders[existingName];
-  if (Array.isArray(value)) return value.join(', ');
+  const value = stableOwnDataValue(recordHeaders, existingName);
+  if (securityArrayIsArray(value)) return securityArrayJoin(snapshotStringArray(value), ', ');
   return typeof value === 'string' ? value : undefined;
 }
 
@@ -235,40 +302,64 @@ export function appendResponseHeader(
 ): void {
   const existingName = findHeaderName(headers, name);
   const targetName = existingName ?? name;
-  if (name.toLowerCase() !== 'set-cookie') {
-    headers[targetName] = Array.isArray(value) ? [...value] : value;
+  if (securityStringToLowerCase(name) !== 'set-cookie') {
+    headers[targetName] = securityArrayIsArray(value) ? snapshotStringArray(value) : value;
     return;
   }
 
-  const nextValues = Array.isArray(value) ? value : [value];
+  const nextValues = securityArrayIsArray(value) ? snapshotStringArray(value) : [value];
   const existing = existingName === undefined ? undefined : headers[existingName];
   if (existing === undefined) {
-    headers[targetName] = [...nextValues];
+    headers[targetName] = snapshotStringArray(nextValues);
     return;
   }
 
-  headers[targetName] = [...(Array.isArray(existing) ? existing : [existing]), ...nextValues];
+  const merged: string[] = [];
+  const existingValues = securityArrayIsArray(existing) ? existing : [existing];
+  for (let index = 0; index < existingValues.length; index += 1) {
+    securityArrayPush(merged, existingValues[index]!);
+  }
+  for (let index = 0; index < nextValues.length; index += 1) {
+    securityArrayPush(merged, nextValues[index]!);
+  }
+  headers[targetName] = merged;
 }
 
 export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: Headers): Headers {
-  return Object.fromEntries(
-    Object.entries(headers).map(([name, value]) => [
-      name,
-      Array.isArray(value) ? [...value] : value,
-    ]),
-  ) as Headers;
+  const clone: ResponseHeaders = createSecurityNullRecord<ResponseHeaderValue>();
+  const names = securityObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = stableOwnDataValue(headers, name);
+    if (typeof value !== 'string' && !securityArrayIsArray(value)) {
+      throw new TypeError(`Kovo response header ${name} must be a string or string array.`);
+    }
+    clone[name] = securityArrayIsArray(value) ? snapshotStringArray(value) : value;
+  }
+  return clone as Headers;
 }
 
 export function mergeResponseHeaders(
   ...sources: readonly (ResponseHeaders | undefined)[]
 ): ResponseHeaders {
-  const headers: ResponseHeaders = {};
+  const headers: ResponseHeaders = createSecurityNullRecord<ResponseHeaderValue>();
 
-  for (const source of sources) {
+  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    const source = sources[sourceIndex];
     if (!source) continue;
 
-    for (const [name, value] of Object.entries(source)) {
-      appendResponseHeader(headers, name, value);
+    const names = securityObjectKeys(source);
+    for (let index = 0; index < names.length; index += 1) {
+      const name = names[index]!;
+      const value = stableOwnDataValue(source, name);
+      if (typeof value !== 'string' && !securityArrayIsArray(value)) {
+        throw new TypeError(`Kovo response header ${name} must be a string or string array.`);
+      }
+      appendResponseHeader(
+        headers,
+        name,
+        typeof value === 'string' ? value : snapshotStringArray(value),
+      );
     }
   }
 
@@ -319,13 +410,13 @@ export function mergeResponseHeaders(
  * Every header is applied only when the route response did not already set it
  * (case-insensitively), so an author opt-out is always preserved.
  */
-export const DOCUMENT_ISOLATION_HEADERS: Readonly<Record<string, string>> = {
+export const DOCUMENT_ISOLATION_HEADERS: Readonly<Record<string, string>> = witnessFreeze({
   'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
   'Origin-Agent-Cluster': '?1',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'DENY',
-};
+});
 
 /**
  * SPEC §6.6 (runtime defense-in-depth): the HSTS value applied to document responses
@@ -377,10 +468,7 @@ export function shouldEmitDocumentHsts(secureRequest: boolean): boolean {
  */
 export const respond = {
   file(body: Exclude<RouteResponseBody, ReadableStream<Uint8Array>>, options: RouteFileOptions) {
-    return routeResponseOutcome(body, {
-      ...options,
-      disposition: 'attachment',
-    });
+    return routeResponseOutcome(body, options, 'attachment');
   },
   /**
    * Serve a stored upload by its (server-generated, opaque) storage key. KV428 (SPEC §6.6/§9.1):
@@ -401,9 +489,21 @@ export const respond = {
     key: string,
     options: RouteStoredFileOptions = {},
   ) {
+    const storedDisposition = stableOwnDataValue(options, 'disposition');
+    const storedFilename = stableOwnDataValue(options, 'filename');
+    if (
+      storedDisposition !== undefined &&
+      storedDisposition !== 'attachment' &&
+      storedDisposition !== 'inline'
+    ) {
+      throw new TypeError('respond.storedFile() disposition must be attachment or inline.');
+    }
+    if (storedFilename !== undefined && typeof storedFilename !== 'string') {
+      throw new TypeError('respond.storedFile() filename must be a string.');
+    }
     const object = await storage.get(key);
     if (object === undefined) return undefined;
-    const disposition = options.disposition ?? 'attachment';
+    const disposition = storedDisposition ?? 'attachment';
     const sniffed = sniffUploadBytes(object.body);
     if (disposition === 'inline' && !sniffed.inlineSafe) {
       throw new InlineUnverifiedUploadError(
@@ -411,7 +511,7 @@ export const respond = {
           'known-passive type. Serve as an attachment, or rasterize/re-encode the bytes.',
       );
     }
-    const filename = options.filename ?? object.metadata?.filename;
+    const filename = storedFilename ?? object.metadata?.filename;
     return routeResponseOutcome(object.body, {
       // Server truth: the served type is the SNIFFED type, never the stored (possibly-client) type.
       contentType: sniffed.contentType,
@@ -421,7 +521,23 @@ export const respond = {
     });
   },
   stream(body: RouteResponseBody, options: RouteStreamOptions) {
-    const disposition = options.disposition ?? 'attachment';
+    const rawDisposition = stableOwnDataValue(options, 'disposition');
+    const declaredContentType = stableOwnDataValue(options, 'contentType');
+    const verifiedSafe = stableOwnDataValue(options, 'verifiedSafe');
+    if (
+      rawDisposition !== undefined &&
+      rawDisposition !== 'attachment' &&
+      rawDisposition !== 'inline'
+    ) {
+      throw new TypeError('respond.stream() disposition must be attachment or inline.');
+    }
+    if (typeof declaredContentType !== 'string') {
+      throw new TypeError('respond.stream() contentType must be a string.');
+    }
+    if (verifiedSafe !== undefined && typeof verifiedSafe !== 'boolean') {
+      throw new TypeError('respond.stream() verifiedSafe must be a boolean.');
+    }
+    const disposition = rawDisposition ?? 'attachment';
     // KV428 (SPEC §6.6/§9.1): inline rendering is a branded opt-in over verified-safe bytes. For an
     // in-memory body we deep-sniff and refuse unless the bytes are a known-passive type; an
     // un-bufferable stream cannot be sniffed, so it requires the explicit `verifiedSafe` brand
@@ -430,21 +546,27 @@ export const respond = {
     // type. Authors override the sniffed contentType via `verifiedSafe: true` (audited risk).
     const contentType =
       disposition === 'inline'
-        ? assertInlineBody(body, options.contentType, options.verifiedSafe ?? false)
-        : options.contentType;
-    return routeResponseOutcome(body, {
-      ...options,
-      contentType,
+        ? assertInlineBody(body, declaredContentType, verifiedSafe ?? false)
+        : declaredContentType;
+    return routeResponseOutcome(
+      body,
+      {
+        contentType,
+        etag: stableOwnDataValue(options, 'etag'),
+        filename: stableOwnDataValue(options, 'filename'),
+        headers: stableOwnDataValue(options, 'headers'),
+      },
       disposition,
-    });
+    );
   },
 };
 
 export const routeOutcomeResponse = wireEmitter(
   'server.wire.route-outcome-response',
   function (outcome: RouteResponseOutcome, request: unknown): RoutePageResponse {
-    const headers = routeOutcomeHeaders(outcome);
-    if (outcome.etag && requestHeader(request, 'if-none-match') === outcome.etag) {
+    const snapshot = snapshotRouteResponseOutcome(outcome);
+    const headers = routeOutcomeHeaders(snapshot);
+    if (snapshot.etag && requestHeader(request, 'if-none-match') === snapshot.etag) {
       return {
         body: '',
         headers,
@@ -453,7 +575,7 @@ export const routeOutcomeResponse = wireEmitter(
     }
 
     const response: RoutePageResponse = {
-      body: outcome.body,
+      body: snapshot.body,
       headers,
       status: 200,
     };
@@ -527,10 +649,12 @@ export const redirectLocationHeaderValue = wireEmitter(
   function (value: ResponseHeaderValue, blessed: boolean): string {
     assertNoSecretEgressValue(value, 'redirect Location header');
     if (blessed) {
-      const location = Array.isArray(value) ? (value[0] ?? '/') : value;
+      const location = securityArrayIsArray(value) ? (value[0] ?? '/') : value;
       return redirectLocationHeader(location);
     }
-    const text = Array.isArray(value) ? value.join(', ') : String(value);
+    const text = securityArrayIsArray(value)
+      ? securityArrayJoin(snapshotStringArray(value), ', ')
+      : securityString(value);
     drainRuntimeSinkSecurityEvent({
       action: 'neutralize',
       code: 'KV236',
@@ -540,7 +664,7 @@ export const redirectLocationHeaderValue = wireEmitter(
       sink: 'Location',
       value: {
         length: text.length,
-        preview: text.slice(0, 80),
+        preview: securityStringSlice(text, 0, 80),
         redacted: true,
       },
     });
@@ -561,7 +685,7 @@ export function methodNotAllowedWebResponse(
     {
       body: 'Method Not Allowed',
       headers: {
-        Allow: allowedMethods.join(', '),
+        Allow: securityArrayJoin(snapshotStringArray(allowedMethods), ', '),
         'Content-Type': 'text/plain; charset=utf-8',
       },
       status: 405,
@@ -624,7 +748,7 @@ function assertInlineBody(
 
 /** Buffer an in-memory body to bytes for sniffing; `undefined` for an un-bufferable stream. */
 function inlineBodyBytes(body: RouteResponseBody): Uint8Array | undefined {
-  if (typeof body === 'string') return new TextEncoder().encode(body);
+  if (typeof body === 'string') return securityTextEncode(body);
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
   if (body instanceof Uint8Array) return body;
   return undefined; // ReadableStream — not bufferable without consuming it.
@@ -632,17 +756,39 @@ function inlineBodyBytes(body: RouteResponseBody): Uint8Array | undefined {
 
 function routeResponseOutcome(
   body: RouteResponseBody,
-  options: RouteFileOptions & { disposition: 'attachment' | 'inline' },
+  options: object,
+  forcedDisposition?: 'attachment' | 'inline',
 ): RouteResponseOutcome {
-  const contentDisposition = options.filename
-    ? `${options.disposition}; filename="${contentDispositionFilename(options.filename)}"`
-    : options.disposition;
+  const contentType = stableOwnDataValue(options, 'contentType');
+  const disposition = forcedDisposition ?? stableOwnDataValue(options, 'disposition');
+  const filename = stableOwnDataValue(options, 'filename');
+  const etag = stableOwnDataValue(options, 'etag');
+  const rawHeaders = stableOwnDataValue(options, 'headers');
+  if (typeof contentType !== 'string') {
+    throw new TypeError('respond.file()/stream() requires a string contentType.');
+  }
+  if (disposition !== 'attachment' && disposition !== 'inline') {
+    throw new TypeError('respond.file()/stream() requires attachment or inline disposition.');
+  }
+  if (filename !== undefined && typeof filename !== 'string') {
+    throw new TypeError('respond.file()/stream() filename must be a string.');
+  }
+  if (etag !== undefined && typeof etag !== 'string') {
+    throw new TypeError('respond.file()/stream() etag must be a string.');
+  }
+  const headers =
+    rawHeaders === undefined
+      ? undefined
+      : snapshotStringHeaderRecord(rawHeaders, 'respond.file()/stream() headers');
+  const contentDisposition = filename
+    ? `${disposition}; filename="${contentDispositionFilename(filename)}"`
+    : disposition;
   return markRouteResponseOutcome({
     body,
     contentDisposition,
-    contentType: options.contentType,
-    ...(options.etag === undefined ? {} : { etag: options.etag }),
-    ...(options.headers === undefined ? {} : { headers: options.headers }),
+    contentType,
+    ...(etag === undefined ? {} : { etag }),
+    ...(headers === undefined ? {} : { headers }),
   });
 }
 
@@ -659,44 +805,56 @@ const routeOutcomeHeaders = wireEmitter(
   },
 );
 
-const RESERVED_ROUTE_RESPONSE_HEADERS = new Set([
-  'content-disposition',
-  'content-type',
-  'etag',
-  'set-cookie',
-  'x-content-type-options',
-]);
+const RESERVED_ROUTE_RESPONSE_HEADERS = reservedRouteResponseHeaders();
+
+function reservedRouteResponseHeaders(): Set<string> {
+  const reserved = createSecuritySet<string>();
+  securitySetAdd(reserved, 'content-disposition');
+  securitySetAdd(reserved, 'content-type');
+  securitySetAdd(reserved, 'etag');
+  securitySetAdd(reserved, 'set-cookie');
+  securitySetAdd(reserved, 'x-content-type-options');
+  return reserved;
+}
 
 function safeRouteOutcomeHeaders(
   headers: Record<string, string> | undefined,
 ): Record<string, string> {
   if (headers === undefined) return {};
-  const safeHeaders: Record<string, string> = {};
-  for (const [name, value] of Object.entries(headers)) {
-    if (RESERVED_ROUTE_RESPONSE_HEADERS.has(name.toLowerCase())) continue;
+  const safeHeaders: Record<string, string> = createSecurityNullRecord<string>();
+  const names = securityObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = stableOwnDataValue(headers, name);
+    if (typeof value !== 'string') {
+      throw new TypeError(`Kovo route outcome header ${name} must be a string.`);
+    }
+    if (securitySetHas(RESERVED_ROUTE_RESPONSE_HEADERS, securityStringToLowerCase(name))) {
+      continue;
+    }
     safeHeaders[name] = value;
   }
   return safeHeaders;
 }
 
 function escapeHeaderValue(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  return securityStringReplaceAll(securityStringReplaceAll(value, '\\', '\\\\'), '"', '\\"');
 }
 
 function replaceControlOrDelete(value: string): string {
   let result = '';
   for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
+    const code = securityStringCharCodeAt(value, i);
     result += code <= 0x1f || code === 0x7f ? '_' : value[i];
   }
   return result;
 }
 
 function contentDispositionFilename(value: string): string {
-  const normalized = replaceControlOrDelete(value)
-    .replace(/[/\\]+/g, '_')
-    .trim();
-  const safe = normalized.length > 0 ? normalized.slice(0, 255) : 'download';
+  const normalized = securityStringTrim(
+    securityRegExpReplace(replaceControlOrDelete(value), /[/\\]+/g, '_'),
+  );
+  const safe = normalized.length > 0 ? securityStringSlice(normalized, 0, 255) : 'download';
   return escapeHeaderValue(safe);
 }
 
@@ -712,20 +870,30 @@ function requestHeader(request: unknown, name: string): string | undefined {
 
 function sanitizeRedirectLocation(target: string, options: RedirectLocationOptions): string {
   if (hasHeaderControlCharacter(target)) return '/';
-  if (target.includes('\\')) return '/';
-  if (target.startsWith('/') && !target.startsWith('//') && !target.startsWith('/\\')) {
+  if (securityStringIncludes(target, '\\')) return '/';
+  if (
+    securityStringStartsWith(target, '/') &&
+    !securityStringStartsWith(target, '//') &&
+    !securityStringStartsWith(target, '/\\')
+  ) {
     return target;
   }
 
   const origin = absoluteRedirectOrigin(target);
   if (origin === undefined) return '/';
-  if (!redirectOriginAllowed(origin, options.allowlist)) return '/';
+  const rawAllowlist = stableOwnDataValue(options, 'allowlist');
+  if (rawAllowlist !== undefined && !securityArrayIsArray(rawAllowlist)) {
+    throw new TypeError('Redirect Location allowlist must be an array.');
+  }
+  const allowlist =
+    rawAllowlist === undefined ? undefined : snapshotRedirectAllowlist(rawAllowlist);
+  if (!redirectOriginAllowed(origin, allowlist)) return '/';
   return target;
 }
 
 function absoluteRedirectOrigin(target: string): string | undefined {
   try {
-    const url = new URL(target);
+    const url = securityUrlSnapshot(target);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
     return url.origin;
   } catch {
@@ -739,24 +907,33 @@ function redirectOriginAllowed(
 ): boolean {
   if (allowlist === undefined) return false;
   let allowed = false;
-  for (const entry of allowlist) {
+  for (let index = 0; index < allowlist.length; index += 1) {
+    const entry = allowlist[index]!;
+    if (typeof entry !== 'object' || entry === null) {
+      throw new TypeError('Redirect Location allowlist entries must be objects.');
+    }
     if (normalizedRedirectAllowlistOrigin(entry) === origin) allowed = true;
   }
   return allowed;
 }
 
 function normalizedRedirectAllowlistOrigin(entry: RedirectLocationAllowlistEntry): string {
-  if (hasHeaderControlCharacter(entry.reason) || entry.reason.trim().length === 0) {
+  const reason = stableOwnDataValue(entry, 'reason');
+  const origin = stableOwnDataValue(entry, 'origin');
+  if (typeof reason !== 'string' || typeof origin !== 'string') {
+    throw new TypeError('Redirect Location allowlist entries require string origin and reason.');
+  }
+  if (hasHeaderControlCharacter(reason) || securityStringTrim(reason).length === 0) {
     throw new TypeError('Redirect Location allowlist entries require a non-empty rationale.');
   }
-  if (hasHeaderControlCharacter(entry.origin)) {
+  if (hasHeaderControlCharacter(origin)) {
     throw new TypeError('Redirect Location allowlist origins must not contain control characters.');
   }
-  let url: URL;
+  let url: ReturnType<typeof securityUrlSnapshot>;
   try {
-    url = new URL(entry.origin);
+    url = securityUrlSnapshot(origin);
   } catch {
-    throw new TypeError(`Invalid Redirect Location allowlist origin: ${entry.origin}`);
+    throw new TypeError(`Invalid Redirect Location allowlist origin: ${origin}`);
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new TypeError('Redirect Location allowlist origins must use http: or https:.');
@@ -769,38 +946,192 @@ function normalizedRedirectAllowlistOrigin(entry: RedirectLocationAllowlistEntry
 
 function hasHeaderControlCharacter(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
+    const code = securityStringCharCodeAt(value, index);
     if (code <= 0x1f || code === 0x7f) return true;
   }
   return false;
 }
 
 function findHeaderName(headers: HeaderSource, name: string): string | undefined {
-  const wanted = name.toLowerCase();
-  if (Symbol.iterator in headers) {
-    for (const [key, value] of headers) {
-      if (key.toLowerCase() === wanted) return value;
+  const wanted = securityStringToLowerCase(name);
+  if (securityIsHeaders(headers)) {
+    return securityHeadersGet(headers, name) === null ? undefined : name;
+  }
+  if (securityIsMap(headers)) {
+    let found: string | undefined;
+    securityMapForEach(headers, (value, key) => {
+      if (
+        found === undefined &&
+        typeof key === 'string' &&
+        typeof value === 'string' &&
+        securityStringToLowerCase(key) === wanted
+      ) {
+        found = value;
+      }
+    });
+    return found;
+  }
+  if (securityArrayIsArray(headers)) {
+    for (let index = 0; index < headers.length; index += 1) {
+      const tuple = stableOwnDataValue(headers, index);
+      if (isHeaderTuple(tuple)) {
+        const key = stableOwnDataValue(tuple, 0);
+        const value = stableOwnDataValue(tuple, 1);
+        if (
+          typeof key === 'string' &&
+          typeof value === 'string' &&
+          securityStringToLowerCase(key) === wanted
+        ) {
+          return value;
+        }
+      }
     }
-
     return undefined;
   }
-
-  return Object.keys(headers).find((candidate) => candidate.toLowerCase() === wanted);
+  const names = securityObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const candidate = names[index]!;
+    if (securityStringToLowerCase(candidate) === wanted) return candidate;
+  }
+  return undefined;
 }
 
 function isHeaderRecordValue(value: unknown): boolean {
   return (
     value === undefined ||
     typeof value === 'string' ||
-    (Array.isArray(value) && value.every((entry) => typeof entry === 'string'))
+    (securityArrayIsArray(value) && isStringArray(value))
   );
 }
 
 function isHeaderTuple(value: unknown): value is readonly [string, string] {
+  if (!securityArrayIsArray(value) || value.length !== 2) return false;
   return (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    typeof value[0] === 'string' &&
-    typeof value[1] === 'string'
+    typeof stableOwnDataValue(value, 0) === 'string' &&
+    typeof stableOwnDataValue(value, 1) === 'string'
   );
+}
+
+function stableOwnDataValue(value: object, property: PropertyKey): unknown {
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`Kovo response input ${String(property)} must be stable.`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`Kovo response input ${String(property)} must be an own data property.`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`Kovo response input ${String(property)} changed during validation.`);
+  }
+  return before.value;
+}
+
+function snapshotDenseArray<Value>(values: readonly Value[], label: string): Value[] {
+  if (!securityArrayIsArray(values)) throw new TypeError(`${label} must be an array.`);
+  const length = stableOwnDataValue(values, 'length');
+  if (typeof length !== 'number' || !securityNumberIsInteger(length) || length < 0) {
+    throw new TypeError(`${label} length must be a non-negative integer.`);
+  }
+  const snapshot: Value[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`${label} must be a dense own-data array.`);
+    }
+    securityArrayPush(snapshot, descriptor.value as Value);
+  }
+  return snapshot;
+}
+
+function isStringArray(value: readonly unknown[]): value is readonly string[] {
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function snapshotStringArray(values: readonly unknown[]): string[] {
+  const snapshot = snapshotDenseArray(values, 'Kovo response header values');
+  const strings: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const value = snapshot[index];
+    if (typeof value !== 'string') {
+      throw new TypeError('Kovo response header values must contain only strings.');
+    }
+    securityArrayPush(strings, value);
+  }
+  return strings;
+}
+
+function snapshotRedirectAllowlist(values: readonly unknown[]): RedirectLocationAllowlistEntry[] {
+  const snapshot = snapshotDenseArray(values, 'Redirect Location allowlist');
+  const entries: RedirectLocationAllowlistEntry[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const value = snapshot[index];
+    if (typeof value !== 'object' || value === null) {
+      throw new TypeError('Redirect Location allowlist entries must be objects.');
+    }
+    const reason = stableOwnDataValue(value, 'reason');
+    const origin = stableOwnDataValue(value, 'origin');
+    if (typeof reason !== 'string' || typeof origin !== 'string') {
+      throw new TypeError('Redirect Location allowlist entries require string origin and reason.');
+    }
+    securityArrayPush(entries, { origin, reason });
+  }
+  return entries;
+}
+
+function snapshotStringHeaderRecord(value: unknown, label: string): Record<string, string> {
+  if (typeof value !== 'object' || value === null || securityArrayIsArray(value)) {
+    throw new TypeError(`${label} must be a plain header record.`);
+  }
+  const snapshot: Record<string, string> = createSecurityNullRecord<string>();
+  const names = securityObjectKeys(value);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const header = stableOwnDataValue(value, name);
+    if (typeof header !== 'string') {
+      throw new TypeError(`${label}.${name} must be a string.`);
+    }
+    snapshot[name] = header;
+  }
+  return snapshot;
+}
+
+function snapshotRouteResponseOutcome(outcome: RouteResponseOutcome): RouteResponseOutcome {
+  if (typeof outcome !== 'object' || outcome === null) {
+    throw new TypeError('Kovo route response outcome must be an object.');
+  }
+  const body = stableOwnDataValue(outcome, 'body');
+  const contentDisposition = stableOwnDataValue(outcome, 'contentDisposition');
+  const contentType = stableOwnDataValue(outcome, 'contentType');
+  const etag = stableOwnDataValue(outcome, 'etag');
+  const rawHeaders = stableOwnDataValue(outcome, 'headers');
+  if (typeof contentDisposition !== 'string' || typeof contentType !== 'string') {
+    throw new TypeError('Kovo route response outcome content controls must be strings.');
+  }
+  if (etag !== undefined && typeof etag !== 'string') {
+    throw new TypeError('Kovo route response outcome etag must be a string.');
+  }
+  const headers =
+    rawHeaders === undefined
+      ? undefined
+      : snapshotStringHeaderRecord(rawHeaders, 'Kovo route response outcome headers');
+  return {
+    body: body as RouteResponseBody,
+    contentDisposition,
+    contentType,
+    ...(etag === undefined ? {} : { etag }),
+    ...(headers === undefined ? {} : { headers }),
+    routeResponse: true,
+  };
 }
