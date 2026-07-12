@@ -1,6 +1,7 @@
 import {
   createPostgresAppRuntimeDb,
   declareSecretReadCapability,
+  postgresSchemaModule,
   type AccessDecision,
   type CsrfOptions,
   usePostgresSystemDb,
@@ -20,6 +21,11 @@ import * as schema from '../schema.js';
 import type { AppDb, AppReadonlyDb } from '../db.js';
 import type { AppRequest, AppSession } from '../auth.js';
 
+// Vite represents ESM live bindings as namespace accessors. Normalize that genuine namespace once
+// through the boot-pinned framework helper so runtime DDL/RLS and Better Auth share one immutable
+// schema identity (SPEC §6.6/§10.3); ordinary authored getters remain rejected by the runtime.
+const appRuntimeSchema = postgresSchemaModule(schema);
+
 const SEED_CONTACTS =
   'INSERT INTO contacts (id, name, email, company) VALUES ' +
   "('c1', 'Ada Lovelace', 'ada@example.com', 'Analytical Engines'), " +
@@ -32,7 +38,7 @@ const SEED_CONTACTS =
  * The CLI imports this object to derive the same roles/seed/policies as runtime boot.
  */
 export const appRuntimeDbOptions = {
-  schema,
+  schema: appRuntimeSchema,
   seedSql: SEED_CONTACTS,
 } satisfies KovoPostgresAppRuntimeOptions;
 
@@ -96,7 +102,7 @@ function authAdapterDb(): KovoPostgresSystemDb {
 
 function createAuthAdapter(): ReturnType<typeof drizzleAdapter> {
   return usePostgresSystemDb(authAdapterDb(), (db) =>
-    drizzleAdapter(db, { provider: 'pg', schema: schema.authSchema }),
+    drizzleAdapter(db, { provider: 'pg', schema: appRuntimeSchema.authSchema }),
   );
 }
 

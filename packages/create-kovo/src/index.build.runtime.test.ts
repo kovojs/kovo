@@ -186,6 +186,57 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     }
   }, 180_000);
 
+  it('pins the generated Postgres ESM schema namespace for production consumers', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-schema-namespace-'));
+
+    try {
+      writeKovoProject(root, { name: 'Schema Namespace Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src/schema-namespace-proof.test.ts'),
+        [
+          "import { describe, expect, it } from 'vitest';",
+          "import { appRuntimeDbOptions } from './_kovo/app-runtime-db.js';",
+          "import * as schema from './schema.js';",
+          '',
+          "describe('generated Postgres schema namespace', () => {",
+          "  it('normalizes Vite live bindings into one immutable own-data snapshot', () => {",
+          "    expect(typeof Object.getOwnPropertyDescriptor(schema, 'contacts')?.get).toBe('function');",
+          '    expect(Object.isFrozen(appRuntimeDbOptions.schema)).toBe(true);',
+          '    expect(Object.getPrototypeOf(appRuntimeDbOptions.schema)).toBe(null);',
+          "    expect(Object.getOwnPropertyDescriptor(appRuntimeDbOptions.schema, 'contacts')).toMatchObject({ value: schema.contacts });",
+          "    expect(Object.getOwnPropertyDescriptor(appRuntimeDbOptions.schema, 'authSchema')).toMatchObject({ value: schema.authSchema });",
+          '  });',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'vitest.schema-namespace.config.ts'),
+        "export default { test: { environment: 'node' } };\n",
+        'utf8',
+      );
+
+      execFileSync(
+        resolveBin('vitest'),
+        [
+          '--config',
+          'vitest.schema-namespace.config.ts',
+          '--run',
+          'src/schema-namespace-proof.test.ts',
+        ],
+        {
+          cwd: root,
+          env: withRepoBinOnPath(),
+          stdio: 'pipe',
+        },
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('serves the generated app through kovo dev (redirect + login + styles)', async () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });

@@ -25,6 +25,7 @@ import {
   drainPostgresPostureCheckOptOutFacts,
   __testPostgresRuntimeInternals,
   migratePostgresAppDb,
+  postgresSchemaModule,
   usePostgresSystemDb,
   type KovoPostgresAppRuntimeOptions,
   type KovoPostgresRuntimeDb,
@@ -364,6 +365,71 @@ describe('createPostgresAppRuntimeDb', () => {
       }),
     ).toThrow(/Postgres runtime schema must not be a Proxy/);
     expect(triggered).toBe(0);
+  });
+
+  it('rejects ordinary schema accessors without invoking them', () => {
+    let getterHits = 0;
+    const accessorSchema = Object.defineProperty({}, 'notes', {
+      enumerable: true,
+      get() {
+        getterHits += 1;
+        return notes;
+      },
+    });
+
+    expect(() => createPostgresAppRuntimeDb({ driver: 'pglite', schema: accessorSchema })).toThrow(
+      /Postgres runtime schema properties must be own data/,
+    );
+    expect(getterHits).toBe(0);
+  });
+
+  it('normalizes one stable ESM namespace snapshot and rejects a changing live binding', () => {
+    let stableHits = 0;
+    const stableNamespace = Object.create(null) as Record<PropertyKey, unknown>;
+    Object.defineProperty(stableNamespace, Symbol.toStringTag, {
+      configurable: false,
+      enumerable: false,
+      value: 'Module',
+      writable: false,
+    });
+    Object.defineProperty(stableNamespace, 'notes', {
+      configurable: false,
+      enumerable: true,
+      get() {
+        stableHits += 1;
+        return notes;
+      },
+    });
+    Object.preventExtensions(stableNamespace);
+
+    const snapshot = postgresSchemaModule(stableNamespace);
+    expect(stableHits).toBe(2);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.getPrototypeOf(snapshot)).toBe(null);
+    expect(Object.getOwnPropertyDescriptor(snapshot, 'notes')).toMatchObject({ value: notes });
+
+    let changingHits = 0;
+    const changingNamespace = Object.create(null) as Record<PropertyKey, unknown>;
+    Object.defineProperty(changingNamespace, Symbol.toStringTag, {
+      configurable: false,
+      enumerable: false,
+      value: 'Module',
+      writable: false,
+    });
+    Object.defineProperty(changingNamespace, 'notes', {
+      configurable: false,
+      enumerable: true,
+      get() {
+        changingHits += 1;
+        return changingHits === 1 ? notes : labels;
+      },
+    });
+    Object.preventExtensions(changingNamespace);
+
+    expect(() => postgresSchemaModule(changingNamespace)).toThrow(
+      /Postgres schema module namespace export notes changed while it was snapshotted/,
+    );
+    expect(changingHits).toBe(2);
   });
 
   it('does not dispatch a late PgDialect method while committing a custom RLS predicate', async () => {

@@ -59,6 +59,7 @@ import {
   witnessFreeze,
   witnessGetPrototypeOf,
   witnessGetOwnPropertyDescriptor,
+  witnessObjectIs,
   witnessOwnKeys,
   witnessReflectApply,
   witnessMapGet,
@@ -81,6 +82,7 @@ import {
 } from './task-queue.js';
 
 const postgresIsProxy = nodeUtilTypes.isProxy;
+const postgresModuleNamespaceTag = Symbol.toStringTag;
 const DEFAULT_DATA_DIR = '.kovo/pglite';
 const DEFAULT_ADMIN_ROLE = 'kovo_admin';
 const DEFAULT_READER_ROLE = 'kovo_reader';
@@ -474,6 +476,92 @@ function postgresOwnDataEntries(values: object): [string, unknown][] {
     appendPostgresValue(output, [key, descriptor.value]);
   }
   return output;
+}
+
+/**
+ * Capture a genuine ESM schema namespace as one immutable own-data record.
+ *
+ * Vite represents ESM live bindings as accessors, while the Postgres runtime deliberately rejects
+ * ordinary accessor-backed schema objects. This validating constructor accepts only the
+ * null-prototype `Module` namespace shape, verifies each live binding is stable while captured,
+ * and returns the exact snapshot shared by runtime DDL/RLS and adapter construction
+ * (SPEC §6.6/§10.3).
+ *
+ * @param namespace - A namespace produced by `import * as schema from './schema.js'`.
+ * @returns A frozen null-prototype record containing own data properties for every schema export.
+ */
+export function postgresSchemaModule<Schema extends object>(namespace: Schema): Readonly<Schema> {
+  if (typeof namespace !== 'object' || namespace === null) {
+    throw new TypeError('Postgres schema module namespace must be an object.');
+  }
+  if (postgresIsProxy(namespace)) {
+    throw new TypeError('Postgres schema module namespace must not be a Proxy.');
+  }
+  if (witnessGetPrototypeOf(namespace) !== null) {
+    throw new TypeError('Postgres schema module namespace must be a genuine ESM namespace.');
+  }
+
+  const tag = witnessGetOwnPropertyDescriptor(namespace, postgresModuleNamespaceTag);
+  if (
+    tag === undefined ||
+    !('value' in tag) ||
+    tag.value !== 'Module' ||
+    tag.configurable !== false ||
+    tag.enumerable !== false ||
+    tag.writable !== false
+  ) {
+    throw new TypeError('Postgres schema module namespace must carry the immutable Module tag.');
+  }
+
+  const snapshot = witnessCreateNullRecord<unknown>();
+  const keys = witnessOwnKeys(namespace);
+  const keyCount = postgresDenseArrayLength(keys, 'Postgres schema module namespace keys');
+  for (let index = 0; index < keyCount; index += 1) {
+    const key = postgresDenseArrayValue(keys, index, 'Postgres schema module namespace keys');
+    if (key === postgresModuleNamespaceTag) continue;
+    if (typeof key !== 'string') {
+      throw new TypeError('Postgres schema module namespace must not expose extra symbols.');
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(namespace, key);
+    if (descriptor === undefined || descriptor.enumerable !== true) {
+      throw new TypeError(`Postgres schema module namespace export ${key} must be enumerable.`);
+    }
+
+    let exportValue: unknown;
+    if ('value' in descriptor) {
+      exportValue = descriptor.value;
+    } else {
+      if (typeof descriptor.get !== 'function' || descriptor.set !== undefined) {
+        throw new TypeError(
+          `Postgres schema module namespace export ${key} must be a read-only live binding.`,
+        );
+      }
+      let repeated: unknown;
+      try {
+        // oxlint-disable-next-line typescript/unbound-method -- Invoked with the namespace receiver through the pinned witness.
+        exportValue = witnessReflectApply(descriptor.get, namespace, []);
+        // oxlint-disable-next-line typescript/unbound-method -- Repeated with the same receiver to reject a changing live binding.
+        repeated = witnessReflectApply(descriptor.get, namespace, []);
+      } catch {
+        throw new TypeError(
+          `Postgres schema module namespace export ${key} could not be snapshotted.`,
+        );
+      }
+      if (!witnessObjectIs(exportValue, repeated)) {
+        throw new TypeError(
+          `Postgres schema module namespace export ${key} changed while it was snapshotted.`,
+        );
+      }
+    }
+
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: true,
+      value: exportValue,
+      writable: true,
+    });
+  }
+  return witnessFreeze(snapshot) as Readonly<Schema>;
 }
 
 function postgresOwnDataSnapshot<Value extends object>(value: Value, label: string): Value {
