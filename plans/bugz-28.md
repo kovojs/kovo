@@ -11,18 +11,21 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |     4 | C1-C4 |
-| High     |     6 | H1-H6 |
+| High     |     7 | H1-H7 |
 | Medium   |     4 | M1-M4 |
 
 ## Critical
 
 - [ ] **C1 - A late `Array.prototype.map` override can mint an authenticated raw-SQL recipe.**
-      `packages/core/src/internal/sql-safety.ts`
-  - A selective override replaced Kovo's private pinned chunks with `DELETE ...`; the managed SQL
-    snapshot returned `ok: true` with attacker SQL and no values.
+      `packages/core/src/internal/sql-safety.ts`, `packages/drizzle/src/runtime.ts`
+  - Selective overrides replaced Kovo's private pinned chunks, identifier text, and `staticSql`
+    template text with `DELETE ...`. An own empty `Symbol.iterator` on `sql.join` parts also made
+    metadata omit a nested `sql.raw` while the pinned recipe retained it; every managed snapshot
+    returned `ok: true` with attacker SQL and no values.
   - **Acceptance:** construction and rendering must traverse dense own-data entries through
-    boot-pinned controls, never app-mutable array iterators/prototypes; the real managed execution
-    path must retain the original parameterized statement under hostile import order and late poison.
+    one shared snapshot and boot-pinned controls, never app-mutable iterators/prototypes; raw-chunk
+    metadata and executable recipe must derive from the same facts, and real managed execution must
+    retain the original parameterized statement under hostile import order and late poison.
 
 - [ ] **C2 - Mutable egress classification intrinsics can waive private-network SSRF policy.**
       `packages/server/src/{egress,egress-undici}.ts`
@@ -102,6 +105,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** live and emitted target lexing use boot-pinned, semantically checked operations;
     encoded separators, dot segments, slash/backslash aliases, and absolute forms stay rejected under
     hostile import order and late poison while canonical targets retain their configured authority.
+
+- [ ] **H7 - Mutable redirect string controls reopen Better Auth protocol-relative redirects.**
+      `packages/better-auth/src/internal/credential.ts`
+  - A selective late `String.prototype.startsWith` override made `redirectPath` return
+    `//evil.example/phish` instead of its same-origin fallback; the mutation then emits that result as
+    its post-login redirect.
+  - **Acceptance:** control-character, backslash, leading-slash, and authority checks use boot-pinned,
+    semantically checked operations over the exact emitted bytes; hostile import-order and late-poison
+    regressions keep absolute, protocol-relative, backslash, and control-bearing targets on fallback.
 
 ## Medium
 
