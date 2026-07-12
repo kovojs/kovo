@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |    16 | C1-C16 |
+| Critical |    17 | C1-C17 |
 | High     |    25 | H1-H25 |
 | Medium   |     9 | M1-M9 |
 
@@ -177,6 +177,17 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 33-test wire-JSON/TCB/query-HTML matrix passes; the independent serializer
     replacement proof now emits only the classified `{ count: 1 }` truth.
 
+- [ ] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
+      `packages/server/src/task-queue.ts`
+  - Replacing `Date.now` and `Math.random` with constants made two distinct memory-queue enqueues
+    receive the same job id, so the second task silently replaced the first queued task and args.
+    The same replacements repeated a lease token after expiry/reaping; a stale worker using the same
+    owner then successfully marked the later lease complete.
+  - **Acceptance:** job ids and per-claim lease fences use boot-pinned, semantically verified
+    cryptographic entropy with at least 128 random bits; queue lookup, iteration, coalescing, claim,
+    heartbeat, completion, retry, and reaping use exact pinned controls, and neither late nor
+    import-order poison can overwrite a sibling job or reuse expired worker authority.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -300,9 +311,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     different privileged definition. The real runner parsed the ordinary job with the sibling
     schema, skipped the named task, and executed the privileged task body once.
   - **Acceptance:** task registry construction/lookup, claim filters, per-task concurrency,
-    scheduling registration and lineage, queue identities, and lease transitions use boot-pinned,
-    semantically checked exact-key and collection controls; late/import-order poison cannot
-    cross-bind definitions, jobs, principal context, or completion state.
+    scheduling registration/lineage, and runner settlement use boot-pinned, semantically checked
+    exact-key and collection controls; late/import-order poison cannot cross-bind definitions,
+    jobs, principal context, or completion state.
 
 - [x] **H16 - Mutable guard redirect controls reopen protocol-relative login targets.**
       `packages/server/src/guards.ts`
@@ -403,7 +414,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the same Node/browser matrix plus inline-loader parity passes; both independent
     protocol-relative and backslash-authority proofs route to `/` under late intrinsic replacement.
 
-- [ ] **H25 - The shipped inline loader can mint predictable mutation replay identifiers.**
+- [x] **H25 - The shipped inline loader can mint predictable mutation replay identifiers.**
       `packages/browser/src/{inline-loader-build,inline-loader,mutation-response}.ts`
   - The emitted `ci` helper falls back from `crypto.randomUUID` to `Date.now` plus a realm-local
     counter, violating the normative 128-bit cryptographic `Kovo-Idem` floor whenever random UUIDs
@@ -412,6 +423,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** modular and emitted mutation submission share boot-pinned, semantically checked
     cryptographic sources, require at least 128 random bits, fail closed without one, and never use a
     clock/counter fallback; late/import-order crypto replacement cannot repeat or predict the token.
+  - **Evidence:** 100 focused modular/generated-loader tests, inline artifact parity, and the browser
+    dist+dts build pass; the four shipped inline variants retain pinned 128-bit bytes after live
+    crypto replacement and reject hostile constant sources instead of consulting a clock.
 
 ## Medium
 
@@ -505,8 +519,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: H15, H17-H22, and H25 are active response/
-deferred/mutation/client output, task, schema, and replay-token fixes.
+The remediation pass remains intentionally non-zero: C17, H15, and H17-H22 are active response/
+deferred/mutation/client output, task, and schema fixes.
 Integrated
 evidence is
 green at
