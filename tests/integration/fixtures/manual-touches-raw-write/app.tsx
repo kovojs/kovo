@@ -1,11 +1,25 @@
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  type KovoFixtureReaderRequest,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 const cart = domain('cart');
 
-async function readCartCount(db: KovoFixtureRequest['db']): Promise<{ count: number }> {
+async function readCartCountFromReader(
+  db: KovoFixtureReaderRequest['db'],
+): Promise<{ count: number }> {
+  const rows = await db.rawRead<{ count: number }>(
+    staticSql`select count(*)::int as count from cart_items`,
+    { reads: ['cart_items'] },
+  );
+  return { count: rows[0]?.count ?? 0 };
+}
+
+async function readCartCountFromWriter(db: KovoFixtureRequest['db']): Promise<{ count: number }> {
   const rows = await db.query<{ count: number }>(
     staticSql`select count(*)::int as count from cart_items`,
   );
@@ -14,8 +28,8 @@ async function readCartCount(db: KovoFixtureRequest['db']): Promise<{ count: num
 
 const cartQuery = query('cart', {
   async load(_input, context) {
-    const request = context?.request as KovoFixtureRequest;
-    return readCartCount(request.db);
+    const request = context?.request as KovoFixtureReaderRequest;
+    return readCartCountFromReader(request.db);
   },
   reads: [cart],
 });
@@ -42,8 +56,8 @@ const addOpaqueCartItem = mutation('manual-touches-raw-write/add', {
 });
 
 const home = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const cartState = await readCartCount(request.db);
+  page: async (_context, request: KovoFixtureReaderRequest) => {
+    const cartState = await readCartCountFromReader(request.db);
     return `${renderQueryScript({ name: 'cart', value: cartState })}
     <main>
       <kovo-fragment target="cart-count">${renderCartCount(cartState.count)}</kovo-fragment>
@@ -65,7 +79,7 @@ const app = createApp({
       return {
         fragmentRenderers: [
           {
-            render: async () => renderCartCount((await readCartCount(db)).count),
+            render: async () => renderCartCount((await readCartCountFromWriter(db)).count),
             target: 'cart-count',
           },
         ],
@@ -77,9 +91,19 @@ const app = createApp({
 
 export default defineFixture({
   app,
+  routeReads: { '/': ['cart'] },
   schema: 'create table cart_items (product_id text primary key)',
   touchGraph: {
     [addOpaqueCartItem.key]: {
+      reads: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'manual-touches-raw-write/app.tsx:73',
+          source: 'cart_items',
+          via: 'cart_items',
+        },
+      ],
       touches: [
         {
           domain: 'cart',

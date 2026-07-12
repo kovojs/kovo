@@ -1,10 +1,22 @@
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  type KovoFixtureReaderRequest,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 const cart = domain('cart');
 
-async function cartCount(db: KovoFixtureRequest['db']): Promise<number> {
+async function cartCountReader(db: KovoFixtureReaderRequest['db']): Promise<number> {
+  const rows = await db.rawRead<{ count: number }>(
+    staticSql`select count(*)::int as count from cart_items`,
+    { reads: ['cart_items'] },
+  );
+  return rows[0]?.count ?? 0;
+}
+
+async function cartCountWriter(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ count: number }>(
     staticSql`select count(*)::int as count from cart_items`,
   );
@@ -44,9 +56,9 @@ const smuggleAuditWrite = mutation('touch-graph-runtime-crosscheck/smuggle', {
 });
 
 const home = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `
+  page: async (_context, request: KovoFixtureReaderRequest) => `
     <main>
-      <kovo-fragment target="cart-count">${renderCartCount(await cartCount(request.db))}</kovo-fragment>
+      <kovo-fragment target="cart-count">${renderCartCount(await cartCountReader(request.db))}</kovo-fragment>
       <form method="post" action="/_m/touch-graph-runtime-crosscheck/add" enhance data-mutation="touch-graph-runtime-crosscheck/add" kovo-deps="cart">
         <input type="hidden" name="productId" value="p1">
         <button type="submit">Add item</button>
@@ -63,7 +75,7 @@ const app = createApp({
       const db = (request as unknown as KovoFixtureRequest).db;
       return {
         fragmentRenderers: [
-          { render: async () => renderCartCount(await cartCount(db)), target: 'cart-count' },
+          { render: async () => renderCartCount(await cartCountWriter(db)), target: 'cart-count' },
         ],
         redirectTo: '/',
       };
@@ -72,7 +84,7 @@ const app = createApp({
       const db = (request as unknown as KovoFixtureRequest).db;
       return {
         fragmentRenderers: [
-          { render: async () => renderCartCount(await cartCount(db)), target: 'cart-count' },
+          { render: async () => renderCartCount(await cartCountWriter(db)), target: 'cart-count' },
         ],
         redirectTo: '/',
       };
@@ -82,12 +94,22 @@ const app = createApp({
 
 export default defineFixture({
   app,
+  routeReads: { '/': ['cart'] },
   schema: [
     'create table cart_items (product_id text primary key)',
     'create table audit_log (product_id text not null)',
   ],
   touchGraph: {
     [addCartItem.key]: {
+      reads: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'touch-graph-runtime-crosscheck/app.tsx:77',
+          source: 'cart_items',
+          via: 'cart_items',
+        },
+      ],
       touches: [
         {
           domain: 'cart',
@@ -99,6 +121,15 @@ export default defineFixture({
       unresolved: [],
     },
     [smuggleAuditWrite.key]: {
+      reads: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'touch-graph-runtime-crosscheck/app.tsx:86',
+          source: 'cart_items',
+          via: 'cart_items',
+        },
+      ],
       touches: [
         {
           domain: 'cart',

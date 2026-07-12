@@ -233,6 +233,15 @@ describe('@kovojs/test PGlite harness integration', () => {
         db,
         touchGraph: {
           'cart.addItem': {
+            reads: [
+              {
+                domain: 'cart',
+                keys: null,
+                site: 'cart.domain.ts:2',
+                source: 'cart_items',
+                via: 'cart_items',
+              },
+            ],
             touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
             unresolved: [],
           },
@@ -444,6 +453,15 @@ describe('@kovojs/test PGlite harness integration', () => {
         request: { session: { user: { id: 'u1' } } },
         touchGraph: {
           'order.cancel': {
+            reads: [
+              {
+                domain: 'order',
+                keys: 'arg:id',
+                site: 'order.domain.ts:2',
+                source: 'orders',
+                via: 'orders',
+              },
+            ],
             touches: [
               { domain: 'order', keys: 'arg:id', site: 'order.domain.ts:1', via: 'orders' },
             ],

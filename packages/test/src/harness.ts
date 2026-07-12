@@ -6,6 +6,7 @@ import type {
   QueryDefinition,
   Schema,
 } from '@kovojs/server';
+import { kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle } from '@kovojs/server/internal/execution';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
@@ -13,10 +14,20 @@ import {
   loadHarnessPage,
 } from './harness-operations.js';
 import type { PageAssertion } from './page.js';
-import { createDbVerifier } from './verifier.js';
+import { createDbVerifier, type DbVerifier } from './verifier.js';
 import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 import type { DbVerificationConfig as InternalDbVerificationConfig } from './verifier-observation.js';
-import { createManagedTestFixtureDispatchProxy } from './adapter-security.js';
+import {
+  createManagedTestFixtureDelegatingProxy,
+  createManagedTestFixtureDispatchProxy,
+} from './adapter-security.js';
+import {
+  verifierApply,
+  verifierDefineProperty,
+  verifierGetOwnPropertyDescriptor,
+  verifierNullRecord,
+  verifierTypeError,
+} from './verifier-security-intrinsics.js';
 
 // SPEC.md §11: the harness verification API returns `DbVerificationDiagnostic`s
 // and the `page()` API returns a `PageAssertion`, so both documented types are
@@ -129,6 +140,7 @@ export function createKovoTestHarness<Db>(
     : typeof options.db === 'object' && options.db !== null
       ? (createManagedTestFixtureDispatchProxy(options.db) as Db)
       : options.db;
+  const mutationDb = verifier ? lifecycleMutationDb(options.db, db, verifier) : db;
 
   return {
     db,
@@ -142,7 +154,14 @@ export function createKovoTestHarness<Db>(
       input: unknown,
       execOptions?: KovoTestExecOptions<Request>,
     ) {
-      return executeHarnessMutation(mutation, input, db, options.request, verifier, execOptions);
+      return executeHarnessMutation(
+        mutation,
+        input,
+        mutationDb,
+        options.request,
+        verifier,
+        execOptions,
+      );
     },
     async page(path) {
       return loadHarnessPage(options.pages, path, db, verifier);
@@ -154,4 +173,27 @@ export function createKovoTestHarness<Db>(
       return verifier?.diagnostics() ?? [];
     },
   };
+}
+
+function lifecycleMutationDb<Db>(raw: Db, wrapped: Db, verifier: DbVerifier): Db {
+  if (typeof raw !== 'object' || raw === null || typeof wrapped !== 'object' || wrapped === null) {
+    return wrapped;
+  }
+  const shell = verifierNullRecord();
+  let hasCapability = false;
+  const bridgeCapability = (property: symbol): void => {
+    const descriptor = verifierGetOwnPropertyDescriptor(raw, property);
+    if (descriptor === undefined) return;
+    if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw verifierTypeError('Harness DB capability hooks must be stable own data functions.');
+    }
+    const capability = descriptor.value;
+    verifierDefineProperty(shell, property, {
+      value: (...args: unknown[]) => verifier.wrap(verifierApply<unknown>(capability, raw, args)),
+    });
+    hasCapability = true;
+  };
+  bridgeCapability(kovoReadonlyDbHandle);
+  bridgeCapability(kovoDeclaredWriteDbHandle);
+  return hasCapability ? (createManagedTestFixtureDelegatingProxy(shell, wrapped) as Db) : wrapped;
 }

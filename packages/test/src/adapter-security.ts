@@ -43,6 +43,24 @@ export function createManagedTestFixtureDispatchProxy<Target extends object>(
   );
 }
 
+/** @internal Test-fixture proxy whose private capability shell delegates ordinary DB access. */
+export function createManagedTestFixtureDelegatingProxy<Target extends object>(
+  target: Target,
+  delegate: object,
+): Target {
+  return createFrameworkManagedSqlDispatchProxy(
+    target,
+    {
+      get(value, property, receiver) {
+        return verifierGetOwnPropertyDescriptor(value, property) === undefined
+          ? verifierReflectGet(delegate, property, delegate)
+          : verifierReflectGet(value, property, receiver);
+      },
+    },
+    'test-fixture',
+  );
+}
+
 export interface AdapterDeclaredWritePolicy {
   readonly dialect?: 'postgres' | 'sqlite';
   readonly tables: readonly string[];

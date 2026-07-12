@@ -1,14 +1,18 @@
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, query, route } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  type KovoFixtureReaderRequest,
+} from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');
 
 const goodReadset = query('readset-good', {
   async load(_input, context) {
-    const request = context?.request as KovoFixtureRequest;
-    const rows = await request.db.query<{ name: string }>(
+    const request = context?.request as KovoFixtureReaderRequest;
+    const rows = await request.db.rawRead<{ name: string }>(
       staticSql`select name from products order by id limit 1`,
+      { reads: ['products'] },
     );
     return { name: rows[0]?.name ?? null };
   },
@@ -17,11 +21,14 @@ const goodReadset = query('readset-good', {
 
 const badReadset = query('readset-bad', {
   async load(_input, context) {
-    const request = context?.request as KovoFixtureRequest;
-    const rows = await request.db.query<{ event: string }>({
-      text: 'select event from audit_log where event = $1 order by event limit 1',
-      values: ['private-audit'],
-    });
+    const request = context?.request as KovoFixtureReaderRequest;
+    const rows = await request.db.rawRead<{ event: string }>(
+      {
+        text: 'select event from audit_log where event = $1 order by event limit 1',
+        values: ['private-audit'],
+      },
+      { reads: ['audit_log'] },
+    );
     return { event: rows[0]?.event ?? null };
   },
   reads: [product],

@@ -1,7 +1,10 @@
 import { createApp, domain, query, route, s, type Schema } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  type KovoFixtureReaderRequest,
+} from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');
 
@@ -12,11 +15,14 @@ const projectionOutput = s.object({
 
 const matchingProjection = query('projection-good', {
   async load(_input, context) {
-    const request = context?.request as KovoFixtureRequest;
-    const rows = await request.db.query<{ label: string; stock: number }>({
-      text: "select name || ' (' || sku || ')' as label, stock from products where id = $1",
-      values: ['p1'],
-    });
+    const request = context?.request as KovoFixtureReaderRequest;
+    const rows = await request.db.rawRead<{ label: string; stock: number }>(
+      {
+        text: "select name || ' (' || sku || ')' as label, stock from products where id = $1",
+        values: ['p1'],
+      },
+      { reads: ['products'] },
+    );
     return rows[0] ?? { label: 'missing', stock: 0 };
   },
   output: projectionOutput,
@@ -25,11 +31,14 @@ const matchingProjection = query('projection-good', {
 
 const driftProjection = query('projection-drift', {
   async load(_input, context) {
-    const request = context?.request as KovoFixtureRequest;
-    const rows = await request.db.query<{ label: string; stock: string }>({
-      text: "select name || ' (' || sku || ')' as label, 'drift' as stock from products where id = $1",
-      values: ['p1'],
-    });
+    const request = context?.request as KovoFixtureReaderRequest;
+    const rows = await request.db.rawRead<{ label: string; stock: string }>(
+      {
+        text: "select name || ' (' || sku || ')' as label, 'drift' as stock from products where id = $1",
+        values: ['p1'],
+      },
+      { reads: ['products'] },
+    );
     return rows[0] ?? { label: 'missing', stock: '0' };
   },
   output: projectionOutput as unknown as Schema<{ label: string; stock: string }>,
@@ -37,7 +46,7 @@ const driftProjection = query('projection-drift', {
 });
 
 const home = route('/', {
-  async page(_params, request: KovoFixtureRequest) {
+  async page(_params, request: KovoFixtureReaderRequest) {
     const result = await runQuery(matchingProjection, {}, request);
     if (!result.ok) throw new Error(`Projection query failed: ${result.error.code}`);
 
@@ -60,6 +69,7 @@ export default defineFixture({
     queries: [matchingProjection, driftProjection],
     routes: [home],
   }),
+  routeReads: { '/': ['product'] },
   schema: [
     'create table products (id text primary key, sku text not null, name text not null, stock integer not null)',
   ],

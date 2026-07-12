@@ -3,19 +3,42 @@
 // declared and fail loudly naming the MISSING domain when one is omitted.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  type KovoFixtureReaderRequest,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 const cart = domain('cart');
 const product = domain('product');
 
-async function cartCount(db: KovoFixtureRequest['db']): Promise<number> {
+async function cartCountReader(db: KovoFixtureReaderRequest['db']): Promise<number> {
+  const rows = await db.rawRead<{ count: number }>(
+    staticSql`select count(*)::int as count from cart_items`,
+    { reads: ['cart_items'] },
+  );
+  return rows[0]?.count ?? 0;
+}
+
+async function cartCountWriter(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ count: number }>(
     staticSql`select count(*)::int as count from cart_items`,
   );
   return rows[0]?.count ?? 0;
 }
 
-async function productStock(db: KovoFixtureRequest['db']): Promise<number> {
+async function productStockReader(db: KovoFixtureReaderRequest['db']): Promise<number> {
+  const rows = await db.rawRead<{ stock: number }>(
+    {
+      text: 'select stock from products where id = $1',
+      values: ['p1'],
+    },
+    { reads: ['products'] },
+  );
+  return rows[0]?.stock ?? 0;
+}
+
+async function productStockWriter(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ stock: number }>({
     text: 'select stock from products where id = $1',
     values: ['p1'],
@@ -72,9 +95,9 @@ const addPartial = mutation('multi-domain-write/add-partial', {
 });
 
 const home = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => `<main>
-    <kovo-fragment target="cart-count">${renderCart(await cartCount(request.db))}</kovo-fragment>
-    <kovo-fragment target="product-stock">${renderStock(await productStock(request.db))}</kovo-fragment>
+  page: async (_context, request: KovoFixtureReaderRequest) => `<main>
+    <kovo-fragment target="cart-count">${renderCart(await cartCountReader(request.db))}</kovo-fragment>
+    <kovo-fragment target="product-stock">${renderStock(await productStockReader(request.db))}</kovo-fragment>
     <form method="post" action="/_m/multi-domain-write/add-both" enhance data-mutation="multi-domain-write/add-both" kovo-deps="cart product">
       <button type="submit">Add both</button>
     </form>
@@ -89,8 +112,11 @@ const app = createApp({
       const db = (request as unknown as KovoFixtureRequest).db;
       return {
         fragmentRenderers: [
-          { render: async () => renderCart(await cartCount(db)), target: 'cart-count' },
-          { render: async () => renderStock(await productStock(db)), target: 'product-stock' },
+          { render: async () => renderCart(await cartCountWriter(db)), target: 'cart-count' },
+          {
+            render: async () => renderStock(await productStockWriter(db)),
+            target: 'product-stock',
+          },
         ],
         redirectTo: '/',
       };
@@ -99,7 +125,7 @@ const app = createApp({
       const db = (request as unknown as KovoFixtureRequest).db;
       return {
         fragmentRenderers: [
-          { render: async () => renderCart(await cartCount(db)), target: 'cart-count' },
+          { render: async () => renderCart(await cartCountWriter(db)), target: 'cart-count' },
         ],
         redirectTo: '/',
       };
@@ -109,6 +135,7 @@ const app = createApp({
 
 export default defineFixture({
   app,
+  routeReads: { '/': ['cart', 'product'] },
   schema: [
     'create table cart_items (id integer primary key generated always as identity, product_id text not null)',
     'create table products (id text primary key, stock integer not null)',
@@ -116,6 +143,22 @@ export default defineFixture({
   seed: (db) => db.exec(staticSql`insert into products (id, stock) values ('p1', 5)`),
   touchGraph: {
     [addBoth.key]: {
+      reads: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'multi-domain-write/app.tsx:117',
+          source: 'cart_items',
+          via: 'cart_items',
+        },
+        {
+          domain: 'product',
+          keys: null,
+          site: 'multi-domain-write/app.tsx:120',
+          source: 'products',
+          via: 'products',
+        },
+      ],
       touches: [
         { domain: 'cart', keys: null, site: 'multi-domain-write/app.tsx:31', via: 'cart_items' },
         { domain: 'product', keys: null, site: 'multi-domain-write/app.tsx:32', via: 'products' },
@@ -124,6 +167,15 @@ export default defineFixture({
     },
     [addPartial.key]: {
       // product is intentionally OMITTED — the runtime cross-check must catch it.
+      reads: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'multi-domain-write/app.tsx:130',
+          source: 'cart_items',
+          via: 'cart_items',
+        },
+      ],
       touches: [
         { domain: 'cart', keys: null, site: 'multi-domain-write/app.tsx:45', via: 'cart_items' },
       ],

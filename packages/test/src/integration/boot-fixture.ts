@@ -8,7 +8,7 @@
 // the fixture handler with a per-request `db`. Everything else (client modules,
 // Vite internals) falls through to Vite.
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import path from 'node:path';
 
@@ -20,9 +20,31 @@ import { isFixtureDescriptor } from './define-fixture.js';
 import { kovoFixtureCompilerPlugin } from './fixture-compiler-plugin.js';
 import {
   createFixtureInstance,
+  type FixtureAppPreparer,
   type FixtureInstance,
   type FixtureRequestHandlerFactory,
+  type PreparedFixtureApp,
 } from './fixture-instance.js';
+import {
+  verifierApply,
+  verifierDefineProperty,
+  verifierFreeze,
+  verifierGetOwnPropertyDescriptor,
+  verifierNullRecord,
+  verifierReflectGet,
+  verifierStringSlice,
+  verifierStringStartsWith,
+  verifierUrlPathname,
+} from '../verifier-security-intrinsics.js';
+import { registerFrameworkSqlSnapshotter } from '../verifier-snapshots.js';
+
+const nativeDecodeURIComponent = globalThis.decodeURIComponent;
+const nativePathExtname = path.extname;
+const nativePathIsAbsolute = path.isAbsolute;
+const nativePathJoin = path.join;
+const nativePathRelative = path.relative;
+const nativePathResolve = path.resolve;
+const nativePathSeparator = path.sep;
 
 /** A booted fixture server: its `origin`, the live `db`, a per-test `reset`, and `close`. */
 export interface BootedFixture {
@@ -46,15 +68,21 @@ export interface BootFixtureOptions {
   host?: string;
 }
 
-const STATIC_MIME: Record<string, string> = {
-  '.css': 'text/css; charset=utf-8',
-  '.ico': 'image/x-icon',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.woff2': 'font/woff2',
-};
+const STATIC_MIME = verifierNullRecord<string>();
+function defineStaticMime(extension: string, mime: string): void {
+  verifierDefineProperty(STATIC_MIME, extension, {
+    enumerable: true,
+    value: mime,
+  });
+}
+defineStaticMime('.css', 'text/css; charset=utf-8');
+defineStaticMime('.ico', 'image/x-icon');
+defineStaticMime('.js', 'text/javascript; charset=utf-8');
+defineStaticMime('.json', 'application/json; charset=utf-8');
+defineStaticMime('.png', 'image/png');
+defineStaticMime('.svg', 'image/svg+xml');
+defineStaticMime('.woff2', 'font/woff2');
+verifierFreeze(STATIC_MIME);
 
 /**
  * Boot a single-file fixture app and serve it on an ephemeral port.
@@ -68,7 +96,7 @@ export async function bootFixture(
 ): Promise<BootedFixture> {
   const entry = options.entry ?? '/app.tsx';
   const host = options.host ?? '127.0.0.1';
-  const distAssetsDir = path.join(fixtureDir, 'dist');
+  const distAssetsDir = pathJoin(fixtureDir, 'dist');
 
   const vite = await createViteServer({
     appType: 'custom',
@@ -86,6 +114,7 @@ export async function bootFixture(
   });
 
   let instance: FixtureInstance;
+  let unregisterSqlSnapshotter = (): void => {};
   try {
     // SPEC §6.6 rule 6: establish both security roots in this exact `ssr.noExternal`
     // module graph before Vite evaluates any authored fixture dependency. A native test-runner
@@ -100,7 +129,18 @@ export async function bootFixture(
       );
     }
     assertCompilerSecurityIntrinsics();
+    const coreSqlModule = await vite.ssrLoadModule('@kovojs/core/internal/sql-safety');
+    const snapshotManagedSqlStatement = (coreSqlModule as { snapshotManagedSqlStatement?: unknown })
+      .snapshotManagedSqlStatement;
+    if (typeof snapshotManagedSqlStatement !== 'function') {
+      throw new TypeError(
+        'Fixture server could not establish @kovojs/core SQL snapshot bridging in the fixture SSR graph.',
+      );
+    }
+    unregisterSqlSnapshotter = registerFrameworkSqlSnapshotter(snapshotManagedSqlStatement);
     const serverModule = await vite.ssrLoadModule('@kovojs/server');
+    const executionModule = await vite.ssrLoadModule('@kovojs/server/internal/execution');
+    const appShellModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
     const module = await vite.ssrLoadModule(entry);
     const descriptor = (module as { default?: unknown }).default;
     if (!isFixtureDescriptor(descriptor)) {
@@ -115,8 +155,10 @@ export async function bootFixture(
       );
     }
     const createRequestHandler = fixtureRequestHandlerFactory(serverModule);
-    instance = await createFixtureInstance(descriptor, createRequestHandler);
+    const prepareApp = fixtureAppPreparer(appShellModule, executionModule);
+    instance = await createFixtureInstance(descriptor, createRequestHandler, prepareApp);
   } catch (error) {
+    unregisterSqlSnapshotter();
     await vite.close();
     throw error;
   }
@@ -147,6 +189,7 @@ export async function bootFixture(
     origin: `http://${host}:${port}`,
     async close() {
       await closeHttpServer(server);
+      unregisterSqlSnapshotter();
       await vite.close();
       await instance.close();
     },
@@ -165,28 +208,200 @@ function fixtureRequestHandlerFactory(serverModule: unknown): FixtureRequestHand
   return createRequestHandler as FixtureRequestHandlerFactory;
 }
 
+function fixtureAppPreparer(serverModule: unknown, executionModule: unknown): FixtureAppPreparer {
+  const deriveClosedKovoApp = (serverModule as { deriveClosedKovoApp?: unknown })
+    .deriveClosedKovoApp;
+  if (typeof deriveClosedKovoApp !== 'function') {
+    throw new TypeError(
+      'Fixture server could not load @kovojs/server deriveClosedKovoApp from the fixture SSR graph.',
+    );
+  }
+  const createDispatchProxy = (
+    executionModule as { createFrameworkManagedSqlDispatchProxy?: unknown }
+  ).createFrameworkManagedSqlDispatchProxy;
+  const managedDb = (executionModule as { managedDb?: unknown }).managedDb;
+  const readonlyHook = (executionModule as { kovoReadonlyDbHandle?: unknown }).kovoReadonlyDbHandle;
+  const declaredWriteHook = (executionModule as { kovoDeclaredWriteDbHandle?: unknown })
+    .kovoDeclaredWriteDbHandle;
+  if (
+    typeof createDispatchProxy !== 'function' ||
+    typeof managedDb !== 'function' ||
+    typeof readonlyHook !== 'symbol' ||
+    typeof declaredWriteHook !== 'symbol'
+  ) {
+    throw new TypeError(
+      'Fixture server could not establish managed DB capability bridging in the fixture SSR graph.',
+    );
+  }
+
+  return (app, db, capabilities): PreparedFixtureApp => {
+    const bridgeDispatch = (target: object): object =>
+      verifierApply<object>(createDispatchProxy, undefined, [
+        target,
+        {
+          get(value: object, property: PropertyKey, receiver: unknown) {
+            return verifierReflectGet(value, property, receiver);
+          },
+        },
+        'test-fixture',
+      ]);
+
+    // Keep the cross-SSR capability hooks off the authored/seed-retainable DB object entirely.
+    // A private null-prototype shell lets the foreign server realm resolve sealed own hooks while
+    // every ordinary adapter property still dispatches through the verifier-wrapped delegate.
+    const rootShell = verifierNullRecord();
+    verifierDefineProperty(rootShell, readonlyHook, {
+      value: () => {
+        const verifiedReader = bridgeDispatch(capabilities.readonly());
+        const policyReader = verifierApply<object>(managedDb, undefined, [
+          verifiedReader,
+          'read',
+          verifierFreeze({
+            rawRead: verifierFreeze({
+              dialectLabel: 'PGlite integration fixture',
+              executeMethod: 'query',
+              normalizeTableName: normalizePgliteFixtureTableName,
+            }),
+          }),
+        ]);
+        const rawRead = verifierReflectGet(policyReader, 'rawRead', policyReader);
+        if (typeof rawRead !== 'function') {
+          throw new TypeError('Fixture reader bridge could not resolve its rawRead policy method.');
+        }
+        // `ssr.noExternal` can instantiate more than one server security module. Keep the
+        // policy-enforced method as an own adapter capability so a second managedDb() layer
+        // preserves it from the engine-readonly hook without relying on a foreign WeakSet brand.
+        const readerShell = verifierNullRecord();
+        verifierDefineProperty(readerShell, 'rawRead', {
+          configurable: true,
+          value: (...args: unknown[]) => verifierApply(rawRead, policyReader, args),
+        });
+        return verifierApply<object>(createDispatchProxy, undefined, [
+          readerShell,
+          {
+            get(value: object, property: PropertyKey, receiver: unknown) {
+              return verifierGetOwnPropertyDescriptor(value, property) === undefined
+                ? verifierReflectGet(verifiedReader, property, verifiedReader)
+                : verifierReflectGet(value, property, receiver);
+            },
+          },
+          'test-fixture',
+        ]);
+      },
+    });
+    verifierDefineProperty(rootShell, declaredWriteHook, {
+      value: (policy: unknown) => bridgeDispatch(capabilities.declaredWrite(policy)),
+    });
+    const bridgedDb = verifierApply<object>(createDispatchProxy, undefined, [
+      rootShell,
+      {
+        get(value: object, property: PropertyKey, receiver: unknown) {
+          return verifierGetOwnPropertyDescriptor(value, property) === undefined
+            ? verifierReflectGet(db, property, db)
+            : verifierReflectGet(value, property, receiver);
+        },
+      },
+      'test-fixture',
+    ]);
+    return verifierFreeze({
+      app: verifierApply(deriveClosedKovoApp, undefined, [
+        app,
+        {
+          db: () => bridgedDb,
+        },
+      ]),
+      managesDb: true,
+    });
+  };
+}
+
+function normalizePgliteFixtureTableName(table: string): string {
+  return table;
+}
+
 async function tryServeBuiltAsset(
   rawUrl: string,
   distDir: string,
   res: import('node:http').ServerResponse,
 ): Promise<boolean> {
-  const pathname = decodeURIComponent(new URL(rawUrl, 'http://x').pathname);
-  if (!pathname.startsWith('/assets/')) return false;
-  const filePath = path.join(distDir, pathname);
-  if (!filePath.startsWith(distDir)) return false;
+  const pathname = decodeURIComponentControl(verifierUrlPathname(rawUrl, 'http://x'));
+  if (!verifierStringStartsWith(pathname, '/assets/')) return false;
+  const assetsRoot = pathResolve(distDir, 'assets');
+  const requestedPath = pathResolve(assetsRoot, verifierStringSlice(pathname, '/assets/'.length));
+  if (!pathContains(assetsRoot, requestedPath)) return false;
 
   try {
+    // Canonical containment rejects a symlinked dist root, a symlinked assets root, and symlinks
+    // under dist/assets. Each trust tier must remain a strict descendant of the one above it.
+    const canonicalFixture = await realpath(pathResolve(distDir, '..'));
+    const canonicalDist = await realpath(distDir);
+    if (
+      canonicalDist !== pathResolve(canonicalFixture, 'dist') ||
+      !pathContains(canonicalFixture, canonicalDist)
+    ) {
+      return false;
+    }
+    const canonicalRoot = await realpath(assetsRoot);
+    if (
+      canonicalRoot !== pathResolve(canonicalDist, 'assets') ||
+      !pathContains(canonicalDist, canonicalRoot)
+    ) {
+      return false;
+    }
+    const filePath = await realpath(requestedPath);
+    if (!pathContains(canonicalRoot, filePath)) return false;
     const info = await stat(filePath);
     if (!info.isFile()) return false;
     res.writeHead(200, {
       'cache-control': 'public, max-age=31536000, immutable',
-      'content-type': STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream',
+      'content-type': staticMime(pathExtname(filePath)),
+      'x-content-type-options': 'nosniff',
     });
     createReadStream(filePath).pipe(res);
     return true;
   } catch {
     return false;
   }
+}
+
+function staticMime(extension: string): string {
+  const descriptor = verifierGetOwnPropertyDescriptor(STATIC_MIME, extension);
+  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : 'application/octet-stream';
+}
+
+function pathContains(root: string, candidate: string): boolean {
+  const relative = pathRelative(root, candidate);
+  return (
+    !pathIsAbsolute(relative) &&
+    relative !== '..' &&
+    !verifierStringStartsWith(relative, `..${nativePathSeparator}`)
+  );
+}
+
+function decodeURIComponentControl(value: string): string {
+  return verifierApply<string>(nativeDecodeURIComponent, undefined, [value]);
+}
+
+function pathExtname(value: string): string {
+  return verifierApply<string>(nativePathExtname, path, [value]);
+}
+
+function pathIsAbsolute(value: string): boolean {
+  return verifierApply<boolean>(nativePathIsAbsolute, path, [value]);
+}
+
+function pathJoin(...values: string[]): string {
+  return verifierApply<string>(nativePathJoin, path, values);
+}
+
+function pathRelative(from: string, to: string): string {
+  return verifierApply<string>(nativePathRelative, path, [from, to]);
+}
+
+function pathResolve(...values: string[]): string {
+  return verifierApply<string>(nativePathResolve, path, values);
 }
 
 function listen(server: Server, host: string): Promise<number> {

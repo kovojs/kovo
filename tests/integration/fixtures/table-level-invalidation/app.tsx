@@ -1,5 +1,9 @@
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  type KovoFixtureReaderRequest,
+  type KovoFixtureRequest,
+} from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');
 
@@ -9,7 +13,22 @@ interface ProductPanelResult extends Record<string, unknown> {
   stock: number;
 }
 
-async function readProductPanel(
+async function readProductPanelFromReader(
+  db: KovoFixtureReaderRequest['db'],
+  id: string,
+  label: string,
+): Promise<ProductPanelResult> {
+  const rows = await db.rawRead<ProductPanelResult>(
+    {
+      text: 'select id, name as label, stock from products where id = $1',
+      values: [id],
+    },
+    { reads: ['products'] },
+  );
+  return rows[0] ?? { id, label, stock: 0 };
+}
+
+async function readProductPanelFromWriter(
   db: KovoFixtureRequest['db'],
   id: string,
   label: string,
@@ -25,8 +44,8 @@ const productQuery = query('product', {
   args: s.object({ id: s.string(), label: s.string() }),
   instanceKey: (input) => `product:${input.id}`,
   async load(input: { id: string; label: string }, context) {
-    const request = context?.request as KovoFixtureRequest;
-    return readProductPanel(request.db, input.id, input.label);
+    const request = context?.request as KovoFixtureReaderRequest;
+    return readProductPanelFromReader(request.db, input.id, input.label);
   },
   reads: [product],
 });
@@ -62,9 +81,9 @@ const bulkRestock = mutation('table-level-invalidation/restock', {
 });
 
 const home = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const p1 = await readProductPanel(request.db, 'p1', 'Pen');
-    const p2 = await readProductPanel(request.db, 'p2', 'Notebook');
+  page: async (_context, request: KovoFixtureReaderRequest) => {
+    const p1 = await readProductPanelFromReader(request.db, 'p1', 'Pen');
+    const p2 = await readProductPanelFromReader(request.db, 'p2', 'Notebook');
 
     return `${renderInitialQueryScript('product', 'product:p1', p1)}
     ${renderInitialQueryScript('product', 'product:p2', p2)}
@@ -90,11 +109,11 @@ const app = createApp({
       return {
         fragmentRenderers: [
           {
-            render: async () => renderPanel(await readProductPanel(db, 'p1', 'Pen')),
+            render: async () => renderPanel(await readProductPanelFromWriter(db, 'p1', 'Pen')),
             target: 'product-p1',
           },
           {
-            render: async () => renderPanel(await readProductPanel(db, 'p2', 'Notebook')),
+            render: async () => renderPanel(await readProductPanelFromWriter(db, 'p2', 'Notebook')),
             target: 'product-p2',
           },
         ],
@@ -106,6 +125,7 @@ const app = createApp({
 
 export default defineFixture({
   app,
+  routeReads: { '/': ['product'] },
   schema:
     'create table products (id text primary key, name text not null, category text not null, stock integer not null)',
   seed: async (db) => {
@@ -120,6 +140,15 @@ export default defineFixture({
   },
   touchGraph: {
     [bulkRestock.key]: {
+      reads: [
+        {
+          domain: 'product',
+          keys: null,
+          site: 'table-level-invalidation/app.tsx:111',
+          source: 'products',
+          via: 'products',
+        },
+      ],
       touches: [
         {
           domain: 'product',

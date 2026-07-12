@@ -5,7 +5,11 @@ import {
   isSqlHandleLike,
   isSqlHandleProperty,
 } from '@kovojs/core/internal/sql-safety';
-import { createFrameworkManagedSqlDispatchProxy } from '@kovojs/server/internal/execution';
+import {
+  createFrameworkManagedSqlDispatchProxy,
+  kovoDeclaredWriteDbHandle,
+  kovoReadonlyDbHandle,
+} from '@kovojs/server/internal/execution';
 import { observeSqlEngineSideEffects, tableObservationSnapshots } from './sql-observer.js';
 import {
   assertObservedReadsCovered,
@@ -31,12 +35,15 @@ import {
   verifierDenseArraySnapshot,
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
+  verifierGetPrototypeOf,
+  verifierIsExtensible,
   verifierObjectKeys,
   verifierReflectGet,
   verifierSet,
   verifierSetAdd,
   verifierSetValues,
   verifierString,
+  verifierTypeError,
   verifierWeakMap,
   verifierWeakMapGet,
   verifierWeakMapSet,
@@ -172,12 +179,24 @@ export function createDbVerifier(
       // SPEC.md §11.4: verification observes calls that cross the harness
       // DB seam. A raw handle captured before wrap() never reaches this proxy;
       // tests must pass and use the wrapped harness DB handle instead.
-      const proxy = createFrameworkManagedSqlDispatchProxy(
+      let proxy!: Record<PropertyKey, unknown>;
+      proxy = createFrameworkManagedSqlDispatchProxy(
         db as Record<string, unknown>,
         {
           get(target, prop, receiver) {
             if (prop === '__kovoObserved') return recorder.observed;
             const value = verifierReflectGet(target, prop, receiver);
+
+            if (
+              (prop === kovoReadonlyDbHandle || prop === kovoDeclaredWriteDbHandle) &&
+              typeof value === 'function'
+            ) {
+              return cachedMethod(target, prop, value, methodCache, () => () => {
+                throw verifierTypeError(
+                  'Kovo DB verifier adapter capability hooks are reserved for the framework lifecycle.',
+                );
+              });
+            }
 
             if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
               return wrapSqlHandle(
@@ -255,6 +274,14 @@ export function createDbVerifier(
                 )
               : value;
           },
+          getOwnPropertyDescriptor(target, prop) {
+            return safeReflectedOwnDescriptor(target, prop, () =>
+              verifierReflectGet(proxy, prop, proxy),
+            );
+          },
+          getPrototypeOf() {
+            return null;
+          },
         },
         'test-fixture',
       );
@@ -275,7 +302,8 @@ function wrapSqlHandle<Handle extends object>(
   const cached = verifierWeakMapGet(proxyCache, handle);
   if (cached) return cached as Handle;
 
-  const proxy = createFrameworkManagedSqlDispatchProxy(handle as Record<PropertyKey, unknown>, {
+  let proxy!: Handle;
+  proxy = createFrameworkManagedSqlDispatchProxy(handle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const value = verifierReflectGet(target, prop, receiver);
 
@@ -340,6 +368,12 @@ function wrapSqlHandle<Handle extends object>(
           )
         : value;
     },
+    getOwnPropertyDescriptor(target, prop) {
+      return safeReflectedOwnDescriptor(target, prop, () => verifierReflectGet(proxy, prop, proxy));
+    },
+    getPrototypeOf() {
+      return null;
+    },
   }) as Handle;
 
   verifierWeakMapSet(proxyCache, handle, proxy);
@@ -383,42 +417,105 @@ function wrapPreparedSqlStatement<Statement extends object>(
   const cached = verifierWeakMapGet(proxyCache, statementHandle);
   if (cached) return cached as Statement;
 
-  const proxy = createFrameworkManagedSqlDispatchProxy(
-    statementHandle as Record<PropertyKey, unknown>,
-    {
-      get(target, prop, receiver) {
-        const value = verifierReflectGet(target, prop, receiver);
+  let proxy!: Statement;
+  proxy = createFrameworkManagedSqlDispatchProxy(statementHandle as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = verifierReflectGet(target, prop, receiver);
 
-        if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
-          return cachedMethod(target, prop, value, methodCache, () =>
-            observablePreparedSqlMethod(
-              executionTarget,
-              target,
-              value,
-              statement,
-              config,
-              recorder,
-            ),
-          );
-        }
+      if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
+        return cachedMethod(target, prop, value, methodCache, () =>
+          observablePreparedSqlMethod(executionTarget, target, value, statement, config, recorder),
+        );
+      }
 
-        return typeof value === 'function'
-          ? cachedMethod(
-              target,
-              prop,
-              value,
-              methodCache,
-              () =>
-                (...args: unknown[]) =>
-                  verifierApply(value, target, args),
-            )
-          : value;
-      },
+      return typeof value === 'function'
+        ? cachedMethod(
+            target,
+            prop,
+            value,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                verifierApply(value, target, args),
+          )
+        : value;
     },
-  ) as Statement;
+    getOwnPropertyDescriptor(target, prop) {
+      return safeReflectedOwnDescriptor(target, prop, () => verifierReflectGet(proxy, prop, proxy));
+    },
+    getPrototypeOf() {
+      return null;
+    },
+  }) as Statement;
 
   verifierWeakMapSet(proxyCache, statementHandle, proxy);
   return proxy;
+}
+
+function safeReflectedOwnDescriptor(
+  target: object,
+  property: PropertyKey,
+  read: () => unknown,
+): PropertyDescriptor | undefined {
+  const located = inheritedPropertyDescriptor(target, property);
+  if (located === undefined) return undefined;
+  const { descriptor, own } = located;
+
+  if (!('value' in descriptor)) {
+    if (!own) return undefined;
+    if (descriptor.configurable !== true) {
+      throw verifierTypeError(
+        `Kovo DB verifier cannot expose non-configurable accessor property ${verifierString(property)}.`,
+      );
+    }
+    return verifierFreeze({
+      configurable: true,
+      enumerable: descriptor.enumerable === true,
+      get: read,
+    });
+  }
+
+  const value = read();
+  if (!own) {
+    if (!verifierIsExtensible(target)) {
+      throw verifierTypeError(
+        `Kovo DB verifier cannot pin inherited authority property ${verifierString(property)} on a non-extensible adapter.`,
+      );
+    }
+    return verifierFreeze({
+      configurable: true,
+      enumerable: descriptor.enumerable === true,
+      value,
+      writable: false,
+    });
+  }
+  if (descriptor.configurable !== true && value !== descriptor.value) {
+    throw verifierTypeError(
+      `Kovo DB verifier cannot expose non-configurable authority property ${verifierString(property)}.`,
+    );
+  }
+  return verifierFreeze({
+    configurable: descriptor.configurable === true,
+    enumerable: descriptor.enumerable === true,
+    value,
+    writable: descriptor.writable === true,
+  });
+}
+
+function inheritedPropertyDescriptor(
+  target: object,
+  property: PropertyKey,
+): { descriptor: PropertyDescriptor; own: boolean } | undefined {
+  let owner: object | null = target;
+  for (let depth = 0; owner !== null && depth < 64; depth += 1) {
+    const descriptor = verifierGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) return { descriptor, own: owner === target };
+    owner = verifierGetPrototypeOf(owner);
+  }
+  if (owner !== null) {
+    throw verifierTypeError('Kovo DB verifier adapter prototype chain exceeds the bounded limit.');
+  }
+  return undefined;
 }
 
 function observablePreparedSqlMethod(

@@ -6,7 +6,7 @@
 // writes only the app and (optionally) its schema/seed. SPEC §11 frames this as a
 // framework-owned suite: fixtures exercise framework public APIs end-to-end, not
 // app wiring.
-import type { KovoApp } from '@kovojs/server';
+import type { KovoApp, Reader } from '@kovojs/server';
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 
 import type { PgliteTestDb } from '../pglite.js';
@@ -21,6 +21,11 @@ export interface KovoFixtureRequest {
   db: PgliteTestDb;
 }
 
+/** Framework-threaded read request used by verification-enabled route pages and query loaders. */
+export interface KovoFixtureReaderRequest {
+  db: Reader<PgliteTestDb>;
+}
+
 /**
  * A fixture's app: either a ready `KovoApp` (handlers read `request.db`) or a
  * factory that receives the freshly-created `db` for the current test. The factory
@@ -32,6 +37,11 @@ export type FixtureAppFactory = KovoApp | ((context: { db: PgliteTestDb }) => Ko
 export interface FixtureDefinition {
   /** The Kovo app under test, or a factory over the per-test `db`. */
   app: FixtureAppFactory;
+  /**
+   * Exact route pathnames and the domains their page render is allowed to read while integration
+   * verification is enabled. Missing paths default to an empty read set (SPEC §11.2).
+   */
+  routeReads?: Readonly<Record<string, readonly string[]>>;
   /** SQL DDL run once per test before seeding (string or ordered statements). */
   schema?: string | readonly string[];
   /** Populate the database before each test, after `schema` has run. */

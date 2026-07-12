@@ -146,6 +146,15 @@ describe('@kovojs/test SQLite harness integration', () => {
         db,
         touchGraph: {
           'cart.addItem': {
+            reads: [
+              {
+                domain: 'cart',
+                keys: null,
+                site: 'cart.domain.ts:2',
+                source: 'cart_items',
+                via: 'cart_items',
+              },
+            ],
             touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
             unresolved: [],
           },

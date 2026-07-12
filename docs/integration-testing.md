@@ -67,9 +67,24 @@ export default defineFixture({
 });
 ```
 
+When a fixture enables `touchGraph` plus `verification`, direct database reads during route-page
+rendering are default-deny. Declare the exact path and allowed domains; query-channel reads continue
+to use each query's own `reads` declaration.
+
+```tsx
+export default defineFixture({
+  app,
+  routeReads: { '/': ['todo'] },
+  touchGraph,
+  verification: { domainByTable: { todo: 'todo' } },
+});
+```
+
 Handlers read the per-request database off the request: a query loader gets it from
 `context.request.db`, a mutation handler from its `request` argument, a route page
-from its `request` argument. Type the request as `KovoFixtureRequest`.
+from its `request` argument. In verification-enabled fixtures, type query and route-page requests as
+`KovoFixtureReaderRequest`; their `db` exposes the framework `Reader` capability. Mutation handlers
+use `KovoFixtureRequest` for the declared writer capability.
 
 ### Interactive components (mutation → morph)
 

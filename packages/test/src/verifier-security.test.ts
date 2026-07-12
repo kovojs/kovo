@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/unbound-method -- Adversarial tests deliberately replace late realm methods. */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle } from '@kovojs/server/internal/execution';
 import { describe, expect, it } from 'vitest';
 
 import { createFakeDb, expectedDiagnostic } from './test-fixtures.js';
@@ -198,6 +199,143 @@ describe('@kovojs/test verifier shared-realm security', () => {
 
     expect(actualTables).toEqual(['audit_log']);
     expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'audit'));
+  });
+
+  it('C204 keeps reflected root and nested SQL descriptors inside observation', () => {
+    const writes: string[] = [];
+    const nestedStatements: unknown[] = [];
+    const nested = {
+      query(statement: unknown) {
+        nestedStatements.push(statement);
+        return [];
+      },
+    };
+    const raw = {
+      pglite: nested,
+      write(table: string) {
+        writes.push(table);
+      },
+    };
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { audit_log: 'audit', products: 'product' } },
+    );
+    const db = verifier.wrap(raw);
+
+    const writeDescriptor = Object.getOwnPropertyDescriptor(db, 'write');
+    const pgliteDescriptor = Object.getOwnPropertyDescriptor(db, 'pglite');
+    expect(writeDescriptor).toBeDefined();
+    expect(pgliteDescriptor).toBeDefined();
+    if (writeDescriptor === undefined || !('value' in writeDescriptor)) return;
+    if (pgliteDescriptor === undefined || !('value' in pgliteDescriptor)) return;
+    expect(writeDescriptor.value).not.toBe(raw.write);
+    expect(pgliteDescriptor.value).toBe(db.pglite);
+    expect(pgliteDescriptor.value).not.toBe(nested);
+    expect(Object.getPrototypeOf(pgliteDescriptor.value as object)).toBeNull();
+
+    nativeReflectApply(writeDescriptor.value as Function, db, ['audit_log']);
+    const queryDescriptor = Object.getOwnPropertyDescriptor(
+      pgliteDescriptor.value as object,
+      'query',
+    );
+    expect(queryDescriptor).toBeDefined();
+    if (queryDescriptor === undefined || !('value' in queryDescriptor)) return;
+    expect(queryDescriptor.value).not.toBe(nested.query);
+    nativeReflectApply(queryDescriptor.value as Function, pgliteDescriptor.value, [
+      { text: 'select * from products', values: [] },
+    ]);
+
+    expect(writes).toEqual(['audit_log']);
+    expect(nestedStatements).toHaveLength(1);
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'audit'));
+    expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('KV407', 'product'));
+  });
+
+  it('C204 does not vend adapter capability hooks through reflected descriptors', () => {
+    const raw = {
+      [kovoDeclaredWriteDbHandle]() {
+        return raw;
+      },
+      [kovoReadonlyDbHandle]() {
+        return raw;
+      },
+    };
+    const db = createDbVerifier({}, { domainByTable: {} }).wrap(raw);
+
+    for (const capability of [kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle]) {
+      const descriptor = Object.getOwnPropertyDescriptor(db, capability);
+      expect(descriptor).toBeDefined();
+      if (descriptor === undefined || !('value' in descriptor)) continue;
+      expect(descriptor.value).not.toBe(raw[capability]);
+      expect(() => nativeReflectApply(descriptor.value as Function, db, [{}])).toThrow(
+        /reserved for the framework lifecycle/u,
+      );
+    }
+  });
+
+  it('C204 keeps reflected prepared-statement execution inside observation', () => {
+    const executions: unknown[][] = [];
+    const rawRun = (...args: unknown[]) => {
+      executions.push(args);
+      return { changes: 1 };
+    };
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { audit_log: 'audit' }, sqlDialect: 'sqlite' },
+    );
+    const db = verifier.wrap({
+      sqlite: {
+        prepare() {
+          return { run: rawRun };
+        },
+      },
+    });
+
+    const prepared = db.sqlite.prepare({
+      text: 'delete from audit_log where id = ?',
+      values: ['event-1'],
+    });
+    const descriptor = Object.getOwnPropertyDescriptor(prepared, 'run');
+    expect(descriptor).toBeDefined();
+    if (descriptor === undefined || !('value' in descriptor)) return;
+    expect(descriptor.value).not.toBe(rawRun);
+    nativeReflectApply(descriptor.value as Function, prepared, []);
+
+    expect(executions).toEqual([[]]);
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'audit'));
+  });
+
+  it('C204 pins inherited methods as safe data without evaluating inherited accessors', () => {
+    let getterReads = 0;
+    const methodPrototype = {
+      write(table: string) {
+        return table;
+      },
+    };
+    const accessorPrototype = Object.defineProperty({}, 'query', {
+      configurable: true,
+      get() {
+        getterReads += 1;
+        return () => [];
+      },
+    });
+    const methodDb = createDbVerifier({}, { domainByTable: { audit_log: 'audit' } }).wrap(
+      Object.create(methodPrototype) as typeof methodPrototype,
+    );
+    const accessorDb = createDbVerifier({}, { domainByTable: {} }).wrap(
+      Object.create(accessorPrototype) as { query(): unknown[] },
+    );
+
+    const methodDescriptor = Object.getOwnPropertyDescriptor(methodDb, 'write');
+    expect(methodDescriptor).toMatchObject({ configurable: true, writable: false });
+    expect(methodDescriptor).toHaveProperty('value');
+    expect(
+      methodDescriptor && 'value' in methodDescriptor ? methodDescriptor.value : undefined,
+    ).not.toBe(methodPrototype.write);
+    expect(Object.getOwnPropertyDescriptor(accessorDb, 'query')).toBeUndefined();
+    expect(getterReads).toBe(0);
+    expect(Object.getPrototypeOf(methodDb)).toBeNull();
+    expect(Object.getPrototypeOf(accessorDb)).toBeNull();
   });
 
   it('pins AsyncLocalStorage.run so capture evidence cannot be erased', async () => {

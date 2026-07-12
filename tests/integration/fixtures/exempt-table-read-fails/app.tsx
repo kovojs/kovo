@@ -1,16 +1,22 @@
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, query, route } from '@kovojs/server';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import {
+  defineFixture,
+  type KovoFixtureReaderRequest,
+} from '@kovojs/test/internal/integration/define';
 
 const audit = domain('audit');
 
 const auditQuery = query('audit-read', {
   async load(_input, context) {
-    const request = context?.request as KovoFixtureRequest;
-    const rows = await request.db.query<{ event: string }>({
-      text: 'select event from audit_log where $1::boolean order by event limit 1',
-      values: [true],
-    });
+    const request = context?.request as KovoFixtureReaderRequest;
+    const rows = await request.db.rawRead<{ event: string }>(
+      {
+        text: 'select event from audit_log where $1::boolean order by event limit 1',
+        values: [true],
+      },
+      { reads: ['audit_log'] },
+    );
     return { event: rows[0]?.event ?? null };
   },
   reads: [audit],

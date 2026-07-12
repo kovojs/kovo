@@ -9,6 +9,7 @@ export type {
   FixtureAppFactory,
   FixtureDefinition,
   KovoFixtureDescriptor,
+  KovoFixtureReaderRequest,
   KovoFixtureRequest,
 } from './define-fixture.js';
 

@@ -21,10 +21,12 @@ const NativePromise = globalThis.Promise;
 const NativeProxy = globalThis.Proxy;
 const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
+const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
+const NativeURL = globalThis.URL;
 const NativeWeakMap = globalThis.WeakMap;
 
 const nativeReflectApply = NativeReflect.apply;
@@ -46,6 +48,7 @@ const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+const nativeObjectIsExtensible = NativeObject.isExtensible;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
 const nativeAsyncFunctionPrototype = apply<object>(nativeObjectGetPrototypeOf, NativeObject, [
@@ -74,6 +77,8 @@ const nativeWeakMapHas = NativeWeakMap.prototype.has;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeMapSize = stableOwnGetter(NativeMap.prototype, 'size');
 const nativeSetSize = stableOwnGetter(NativeSet.prototype, 'size');
+const nativeRequestUrl = stableOwnGetter(NativeRequest.prototype, 'url');
+const nativeUrlPathname = stableOwnGetter(NativeURL.prototype, 'pathname');
 const nativeAsyncStorageGetStore = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'getStore');
 const nativeAsyncStorageRun = stableOwnFunction(NativeAsyncLocalStorage.prototype, 'run');
 
@@ -145,6 +150,8 @@ function capturedControlsAreSound(): boolean {
       [target, 'safe'],
     );
     const response = new NativeResponse('safe', { status: 201 });
+    const request = new NativeRequest('https://example.test/safe?value=1');
+    const url = new NativeURL('https://example.test/safe?value=1');
     return (
       proxy.safe === 7 &&
       apply(nativeUtilIsProxy, NodeUtilTypes, [proxy]) === true &&
@@ -156,6 +163,8 @@ function capturedControlsAreSound(): boolean {
       apply(nativeSetHas, set, ['safe']) === true &&
       apply(nativeArrayJoin, array, [',']) === 'a,b' &&
       apply(nativeJsonStringify, NativeJSON, [{ safe: 7 }]) === '{"safe":7}' &&
+      apply(nativeRequestUrl, request, []) === 'https://example.test/safe?value=1' &&
+      apply(nativeUrlPathname, url, []) === '/safe' &&
       response.status === 201 &&
       observedScope === scope &&
       descriptor !== undefined &&
@@ -198,6 +207,11 @@ export function verifierProxy<T extends object>(target: T, handler: ProxyHandler
 export function verifierResponse(body?: BodyInit | null, init?: ResponseInit): Response {
   assertVerifierSecurityIntrinsics();
   return new NativeResponse(body, init);
+}
+
+export function verifierTypeError(message: string): TypeError {
+  assertVerifierSecurityIntrinsics();
+  return new NativeTypeError(message);
 }
 
 export function verifierWeakMap<K extends object, V>(): WeakMap<K, V> {
@@ -339,6 +353,11 @@ export function verifierGetOwnPropertyDescriptor(
 export function verifierGetPrototypeOf(value: object): object | null {
   assertVerifierSecurityIntrinsics();
   return apply(nativeObjectGetPrototypeOf, NativeObject, [value]);
+}
+
+export function verifierIsExtensible(value: object): boolean {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeObjectIsExtensible, NativeObject, [value]) === true;
 }
 
 export function verifierIsAsyncFunction(value: unknown): value is Function {
@@ -507,6 +526,17 @@ export function verifierStringTrim(value: string): string {
 export function verifierRegExpExec(pattern: RegExp, value: string): RegExpExecArray | null {
   assertVerifierSecurityIntrinsics();
   return apply(nativeRegExpExec, pattern, [value]);
+}
+
+export function verifierRequestUrl(request: Request): string {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeRequestUrl, request, []);
+}
+
+export function verifierUrlPathname(input: string, base?: string): string {
+  assertVerifierSecurityIntrinsics();
+  const url = base === undefined ? new NativeURL(input) : new NativeURL(input, base);
+  return apply(nativeUrlPathname, url, []);
 }
 
 export function verifierPromiseResolve<T>(value: T | PromiseLike<T>): Promise<T> {
