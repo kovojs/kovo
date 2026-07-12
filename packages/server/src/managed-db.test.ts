@@ -2670,12 +2670,61 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       "SELECT pg_catalog.set_config('kovo.principal', $1, true)",
       'SELECT "set_config"(\'kovo.principal\', $1, true)',
       'SELECT "pg_catalog"."set_config"(\'kovo.principal\', $1, true)',
+      'SELECT U&"set_con\\0066ig"(\'kovo.principal\', $1, true)',
+      'SELECT pg_catalog.U&"set_con\\0066ig"(\'kovo.principal\', $1, true)',
+      'SELECT U&"pg_c\\0061talog".U&"set_con\\+000066ig"(\'kovo.principal\', $1, true)',
+      "SELECT U&\"set_con!0066ig\" UESCAPE '!'('kovo.principal', $1, true)",
+      'SELECT /* adjacent */ U&"set_con\\0066ig" /* call */ (\'kovo.principal\', $1, true)',
+      'SELECT U&"caf\\00e9"',
       'VACUUM',
     ]) {
       expect(() => scoped.query(statement, ['victim'])).toThrow(/KV414/);
     }
 
     expect(log).toEqual([]);
+  });
+
+  it('rejects Unicode-escaped set_config before it can replace the scoped Postgres principal', async () => {
+    const client = new PGlite();
+    await client.waitReady;
+    try {
+      await client.exec(
+        [
+          'CREATE ROLE kovo_writer',
+          'CREATE TABLE scoped_notes (id text PRIMARY KEY, owner_id text NOT NULL, title text NOT NULL)',
+          `INSERT INTO scoped_notes VALUES ('n1', 'u1', 'One'), ('n2', 'u2', 'Two')`,
+          'ALTER TABLE scoped_notes ENABLE ROW LEVEL SECURITY',
+          'ALTER TABLE scoped_notes FORCE ROW LEVEL SECURITY',
+          `CREATE POLICY owner_scope ON scoped_notes TO kovo_writer USING (owner_id = current_setting('kovo.principal', true)) WITH CHECK (owner_id = current_setting('kovo.principal', true))`,
+          'GRANT SELECT, UPDATE ON scoped_notes TO kovo_writer',
+        ].join('; '),
+      );
+
+      const scoped = createPostgresScopedClient(client, {
+        principal: 'u1',
+        role: 'kovo_writer',
+      }) as typeof client;
+      await expect(
+        scoped.query(
+          `UPDATE scoped_notes SET title = 'blocked' WHERE owner_id = 'u2' RETURNING id`,
+        ),
+      ).resolves.toMatchObject({ rows: [] });
+
+      await expect(
+        scoped.transaction(async (tx) => {
+          await tx.query(String.raw`SELECT U&"set_con\0066ig"('kovo.principal', 'u2', true)`);
+          return tx.query(
+            `UPDATE scoped_notes SET title = 'cross-owner' WHERE owner_id = 'u2' RETURNING id`,
+          );
+        }),
+      ).rejects.toThrow(/KV414/);
+
+      await expect(
+        client.query(`SELECT title FROM scoped_notes WHERE id = 'n2'`),
+      ).resolves.toMatchObject({ rows: [{ title: 'Two' }] });
+    } finally {
+      await client.close();
+    }
   });
 
   it('allows only the single-statement app Postgres command allowlist', async () => {

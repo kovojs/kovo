@@ -1281,6 +1281,14 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
       index = quoted.endIndex;
       continue;
     }
+    if ((char === 'U' || char === 'u') && next === '&' && sql.charAt(index + 2) === '"') {
+      return {
+        ok: false,
+        // SPEC §10.3: PostgreSQL resolves escapes inside U&"..." before function lookup, so an
+        // escaped set_config spelling must not bypass the transaction-scoped principal choke.
+        reason: 'Unicode-escaped identifiers are not allowed in app SQL',
+      };
+    }
     if (char === '$') {
       const tagMatch = /^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/u.exec(sql.slice(index));
       if (tagMatch !== null) {
