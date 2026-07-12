@@ -954,7 +954,8 @@ export async function renderNoJsMutationResponse<
   return csrf === false ? mutationResponseWithoutBrowserState(response) : response;
 }
 
-function mutationResponseWithoutBrowserState<Response extends MutationEndpointResponse>(
+/** @internal Final browser-state choke for csrf-exempt and pre-verification mutation responses. */
+export function mutationResponseWithoutBrowserState<Response extends { headers: ResponseHeaders }>(
   response: Response,
 ): Response {
   let removed = false;

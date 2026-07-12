@@ -188,11 +188,12 @@ export async function resolveKovoLifecycleRequest<
     }
     case 'endpoint': {
       assertWebRequest(request, options.surface);
+      const clientIpRequest = requestMetadataWithoutAmbientAuthority(request);
       const endpointRequest = endpointRequestWithoutSession(request, {
         stripAuthorization: options.stripAuthorization === true,
       });
       if (options.clientIp !== undefined) {
-        const clientIp = options.clientIp(endpointRequest);
+        const clientIp = options.clientIp(clientIpRequest);
         if (clientIp !== undefined && clientIp !== '') {
           Object.defineProperty(endpointRequest, 'clientIp', {
             configurable: true,

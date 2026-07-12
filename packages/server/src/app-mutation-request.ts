@@ -1,5 +1,6 @@
 import {
   renderMutationEndpointResponse,
+  mutationResponseWithoutBrowserState,
   type MutationDefinition,
   type MutationFail,
 } from './mutation.js';
@@ -48,7 +49,9 @@ export async function handleAppMutationRequest(
   if (!mutation) {
     const errorShellRequest = requestMetadataWithoutAmbientAuthority(request);
     return serverResponseToWebResponse(
-      await renderAppErrorDocumentResponse(app, errorShellRequest, 404),
+      mutationResponseWithoutBrowserState(
+        await renderAppErrorDocumentResponse(app, errorShellRequest, 404),
+      ),
       errorShellRequest,
     );
   }

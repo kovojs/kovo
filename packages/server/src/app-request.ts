@@ -27,6 +27,7 @@ import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import { schemaMaxUploadBytes, type Schema } from './schema.js';
+import { mutationResponseWithoutBrowserState } from './mutation.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
@@ -129,8 +130,11 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     }
     const errorShellRequest =
       match.kind === 'mutation' ? requestMetadataWithoutAmbientAuthority(request) : request;
+    const errorShellResponse = await renderAppErrorDocumentResponse(app, errorShellRequest, 500);
     return routeResponseToWebResponse(
-      await renderAppErrorDocumentResponse(app, errorShellRequest, 500),
+      match.kind === 'mutation'
+        ? mutationResponseWithoutBrowserState(errorShellResponse)
+        : errorShellResponse,
       errorShellRequest,
     );
   }
@@ -155,7 +159,11 @@ export async function handleAppStartupErrorResponse(
   const errorShellRequest =
     match.kind === 'mutation' ? requestMetadataWithoutAmbientAuthority(request) : request;
   return routeResponseToWebResponse(
-    await renderAppErrorDocumentResponse(app, errorShellRequest, 500),
+    match.kind === 'mutation'
+      ? mutationResponseWithoutBrowserState(
+          await renderAppErrorDocumentResponse(app, errorShellRequest, 500),
+        )
+      : await renderAppErrorDocumentResponse(app, errorShellRequest, 500),
     errorShellRequest,
   );
 }

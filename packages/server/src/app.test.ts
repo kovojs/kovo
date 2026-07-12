@@ -7,6 +7,7 @@ import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/do
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
 import { appRateLimitKeyCounts } from './app-load-shed.js';
+import { handleAppStartupErrorResponse } from './app-request.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { csrfToken } from './csrf.js';
@@ -907,7 +908,13 @@ describe('server createApp request shell', () => {
               cookie: request.headers.get('cookie'),
               signature: request.headers.get('x-machine-signature'),
             });
-            return trustedHtml('<main>missing mutation</main>');
+            return {
+              body: trustedHtml('<main>missing mutation</main>'),
+              headers: {
+                'Clear-Site-Data': '"cookies"',
+                'Set-Cookie': 'sid=attacker; Path=/',
+              },
+            };
           },
         },
       }),
@@ -926,6 +933,8 @@ describe('server createApp request shell', () => {
     );
 
     expect(response.status).toBe(404);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(response.headers.get('clear-site-data')).toBeNull();
     expect(shellViews).toEqual([
       { authorization: null, body: null, cookie: null, signature: null },
     ]);
@@ -945,7 +954,13 @@ describe('server createApp request shell', () => {
               request.headers.get('cookie'),
               request.headers.get('x-machine-signature'),
             ]);
-            return trustedHtml('<main>server error</main>');
+            return {
+              body: trustedHtml('<main>server error</main>'),
+              headers: {
+                'Clear-Site-Data': '"cookies"',
+                'Set-Cookie': 'sid=attacker; Path=/',
+              },
+            };
           },
         },
         mutations: [
@@ -967,7 +982,43 @@ describe('server createApp request shell', () => {
     );
 
     expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(response.headers.get('clear-site-data')).toBeNull();
     expect(shellViews).toEqual([[null, null]]);
+  });
+
+  it('strips browser-state output from mutation startup error shells', async () => {
+    const app = createApp({
+      errorShells: {
+        serverError() {
+          return {
+            body: trustedHtml('<main>startup error</main>'),
+            headers: {
+              'Clear-Site-Data': '"cookies"',
+              'Set-Cookie': 'sid=attacker; Path=/',
+            },
+          };
+        },
+      },
+      mutations: [
+        mutation('machine/startup', {
+          csrf: false,
+          handler: () => ({ ok: true }),
+          input: s.object({}),
+        }),
+      ],
+    });
+
+    const response = await handleAppStartupErrorResponse(
+      app,
+      new Request('https://example.test/_m/machine/startup', { method: 'POST' }),
+      new Error('startup failed'),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(response.headers.get('clear-site-data')).toBeNull();
+    await expect(response.text()).resolves.toContain('<main>startup error</main>');
   });
 
   it('reports failing error shells and falls back to stable no-internals documents', async () => {
