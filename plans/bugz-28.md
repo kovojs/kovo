@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     6 | C1-C6 |
-| High     |    10 | H1-H10 |
+| Critical |     8 | C1-C8 |
+| High     |    11 | H1-H11 |
 | Medium   |     4 | M1-M4 |
 
 ## Critical
@@ -49,13 +49,12 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 234-test matrix rejects real forged equal-length signatures and stale events
     under Math/Number/String/RegExp poison while preserving a valid HMAC control.
 
-- [ ] **C5 - A mutable typed-array iterator can make unequal secrets compare equal.**
+- [x] **C5 - A mutable typed-array iterator can make unequal secrets compare equal.**
       `packages/core/src/secret.ts`
   - Replacing `Uint8Array.prototype[Symbol.iterator]` with an empty iterator made `Secret.equals()`
     accept any same-kind unequal secret; mutable encoder/view controls affected the compared bytes.
-  - **Acceptance:** secret encoding, view extraction, and constant-time byte comparison use
-    boot-pinned, semantically checked controls with indexed traversal; unequal string/byte secrets
-    remain unequal under hostile import order and late poison while equal controls pass.
+  - **Evidence:** the 87-test scalar route/handler/secret matrix passes with captured encoders/views,
+    indexed constant-time comparison, unequal string/byte poison regressions, and equal controls.
 
 - [ ] **C6 - A mutable CSRF token parser can substitute a cached victim token.**
       `packages/server/src/csrf.ts`
@@ -65,6 +64,20 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** token minting/parsing, base64url validation, byte conversion, active-key lookup,
     and purpose selection use boot-pinned, semantically checked exact-byte operations; cached-token
     substitution rejects under hostile import order and late poison while genuine rotation works.
+
+- [x] **C7 - Mutable route normalization can select a different route authority.**
+      `packages/core/src/internal/route-pattern.ts`
+  - After warming the route cache, a selective late `String.prototype.replace` rewrote request
+    `/public` to canonical `/admin`; mutable encoding also admitted authority-forming href bytes.
+  - **Evidence:** the 87-test scalar matrix keeps `/public` bound to its original route under poison,
+    pins encoding controls, and emits null-prototype parameter records.
+
+- [x] **C8 - Mutable module-reference parsing can swap a privileged handler export.**
+      `packages/core/src/internal/module-ref.ts`, `packages/browser/src/{handler-context,handlers}.ts`
+  - Poisoned split/slice/last-index operations replaced compiler-authored `#pass` with a different
+    privileged export in the same otherwise allowed module.
+  - **Evidence:** the 87-test scalar matrix pins exact module/export bytes and proves only `pass`
+    executes under late and import-order poison controls.
 
 ## High
 
@@ -146,6 +159,13 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** cookie token/octet validation, prefix/floor decisions, parsing, attribute maps,
     and serialization use boot-pinned, semantically checked operations; semicolon/control injection
     and forged forwarded attributes fail closed under hostile import order and late poison.
+
+- [x] **H11 - Mutable dynamic-import URL controls escape compiler module authority.**
+      `packages/browser/src/{dynamic-import-url,dom-like}.ts`
+  - Poisoned String/RegExp/URL getters admitted same-origin non-`/c/` source paths or made missing
+    manifest entries appear allowed, enabling import outside the compiler-declared module set.
+  - **Evidence:** the 87-test scalar matrix rejects `/admin/upload` and missing `/c/` modules under
+    poison while preserving the exact genuine manifest entry.
 
 ## Medium
 
