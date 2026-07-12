@@ -11,7 +11,7 @@ import {
   isProvenPrincipal,
 } from './auth-principal.js';
 import { guards } from './guards.js';
-import { kovoReadonlyDbHandle, type KovoReadonlyDbCapable, type Reader } from './managed-db.js';
+import { managedDb, type Reader } from './managed-db.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
 import type { KovoPostgresAppRuntimeOptions } from './postgres-runtime.js';
 
@@ -181,10 +181,7 @@ export async function createPostgresTestRuntime(
       if (guardResult !== true) {
         throw new Error('asAdmin(id, fn) could not establish the admin role guard.');
       }
-      const scopedDb = runtime.db(
-        request,
-      ) as unknown as KovoReadonlyDbCapable<KovoPostgresTestAdminDb>;
-      return await callback(scopedDb[kovoReadonlyDbHandle]());
+      return await callback(managedDb(runtime.db(request), 'read'));
     },
     async asSystem<Result>(
       reason: string,

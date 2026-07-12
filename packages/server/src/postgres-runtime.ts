@@ -18,12 +18,10 @@ import {
 import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
 import { egressDecodeURIComponent, egressUrl, egressUrlUsername } from './egress-intrinsics.js';
 import {
-  createAuthorizationCensusDb,
   createDeclaredWriteDb,
+  createFrameworkAuthorizationCensusDb,
   createPostgresReadonlyClient,
   createPostgresScopedClient,
-  kovoDeclaredWriteDbHandle,
-  kovoReadonlyDbHandle,
   readonlyDb,
   type PostgresReadonlyClientOptions,
   type PostgresScopedClientOptions,
@@ -2449,26 +2447,24 @@ function createRequestScopedDb(
   scope: PostgresRequestScope = {},
   request?: unknown,
 ): KovoPostgresRuntimeDb {
-  const governedDb = createAuthorizationCensusDb(db, {
-    dialectLabel: client.label,
-    metadata,
-    normalizeTableName: normalizePolicyTable,
-    tableNames: pgTablePolicyNames,
-  });
-  witnessDefineProperty(governedDb, kovoReadonlyDbHandle, {
-    configurable: true,
-    value: () => createRequestScopedReadonlyDb(client, config, metadata, scope, request),
-  });
-  witnessDefineProperty(governedDb, kovoDeclaredWriteDbHandle, {
-    configurable: true,
-    value: (policy: DeclaredWritePolicy) =>
+  let governedDb: KovoPostgresRuntimeDb;
+  governedDb = createFrameworkAuthorizationCensusDb(
+    db,
+    {
+      dialectLabel: client.label,
+      metadata,
+      normalizeTableName: normalizePolicyTable,
+      tableNames: pgTablePolicyNames,
+    },
+    () => createRequestScopedReadonlyDb(client, config, metadata, scope, request),
+    (policy: DeclaredWritePolicy) =>
       createDeclaredWriteDb(governedDb, policy, {
         dialectLabel: client.label,
         governedColumns: metadata,
         normalizeTableName: normalizePolicyTable,
         tableNames: pgTablePolicyNames,
       }),
-  });
+  );
   return governedDb;
 }
 

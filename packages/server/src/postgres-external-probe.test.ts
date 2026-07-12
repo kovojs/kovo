@@ -16,9 +16,7 @@ import {
   createPostgresReadonlyClient,
   createPostgresScopedClient,
   drainCrossOwnerReadAuditFacts,
-  kovoReadonlyDbHandle,
-  type KovoReadonlyDbCapable,
-  type Reader,
+  managedDb,
 } from './managed-db.js';
 import {
   checkPostgresAppDbPosture,
@@ -26,7 +24,6 @@ import {
   migratePostgresAppDb,
   provisionPostgresAppDb,
   type KovoPostgresAppRuntimeOptions,
-  type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
@@ -482,10 +479,7 @@ async function expectCrossOwnerRead(databaseUrl: string, adminDatabaseUrl: strin
   try {
     await runtime.ready;
     const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
-    const writer = runtime.db(request) as unknown as KovoReadonlyDbCapable<
-      Reader<KovoPostgresRuntimeDb>
-    >;
-    const readDb = writer[kovoReadonlyDbHandle]();
+    const readDb = managedDb(runtime.db(request), 'read');
     expect(() =>
       readDb.crossOwnerRead(sql`SELECT id, title FROM ${probeNotes} ORDER BY id`, {
         reads: ['kovo_ext_probe_notes'],

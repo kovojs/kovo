@@ -9,12 +9,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { role } from '../../better-auth/src/guards.js';
 import {
   drainCrossOwnerReadAuditFacts,
-  kovoReadonlyDbHandle,
-  type KovoReadonlyDbCapable,
-  type Reader,
+  managedDb,
 } from './managed-db.js';
 import { explainGuard } from './guards.js';
-import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
+import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
 
 const notes = pgTable(
   'kovo_better_auth_notes',
@@ -61,10 +59,7 @@ describe('@kovojs/better-auth role guard runtime integration', () => {
     try {
       await runtime.ready;
       const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
-      const writer = runtime.db(request) as unknown as KovoReadonlyDbCapable<
-        Reader<KovoPostgresRuntimeDb>
-      >;
-      const readDb = writer[kovoReadonlyDbHandle]();
+      const readDb = managedDb(runtime.db(request), 'read');
 
       expect(() =>
         readDb.crossOwnerRead(sql`SELECT id, title FROM ${notes} ORDER BY id`, {
