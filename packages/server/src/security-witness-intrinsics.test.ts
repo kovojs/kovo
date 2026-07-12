@@ -7,10 +7,12 @@ import {
   createWitnessWeakSet,
   witnessFreeze,
   witnessIsArray,
+  witnessJsonStringifyPrimitive,
   witnessRegExpTest,
   witnessStringReplaceAll,
   witnessStringStartsWith,
   witnessStringToLowerCase,
+  witnessSortStrings,
   witnessWeakMapGet,
   witnessWeakMapSet,
   witnessWeakSetAdd,
@@ -24,6 +26,8 @@ describe('server security witness intrinsics', () => {
     const originalWeakMapGet = WeakMap.prototype.get;
     const originalObjectCreate = Object.create;
     const originalIsArray = Array.isArray;
+    const originalArraySort = Array.prototype.sort;
+    const originalJsonStringify = JSON.stringify;
     const originalReplaceAll = String.prototype.replaceAll;
     const originalStartsWith = String.prototype.startsWith;
     const originalToLowerCase = String.prototype.toLowerCase;
@@ -37,6 +41,10 @@ describe('server security witness intrinsics', () => {
       WeakMap.prototype.get = () => ({ forged: true });
       Object.create = (() => ({})) as typeof Object.create;
       Array.isArray = () => false;
+      Array.prototype.sort = function () {
+        return this;
+      };
+      JSON.stringify = () => 'forged';
       String.prototype.replaceAll = () => '<script>poisoned</script>';
       String.prototype.startsWith = () => true;
       String.prototype.toLowerCase = () => 'poisoned';
@@ -66,6 +74,12 @@ describe('server security witness intrinsics', () => {
       expect(Object.isFrozen(witnessFreeze({ proof: true }))).toBe(true);
       expect(witnessIsArray([])).toBe(true);
       expect(witnessIsArray({})).toBe(false);
+      const strings = ['z', 'a', 'aa'];
+      witnessSortStrings(strings);
+      expect(strings[0]).toBe('a');
+      expect(strings[1]).toBe('aa');
+      expect(strings[2]).toBe('z');
+      expect(witnessJsonStringifyPrimitive('a"b')).toBe('"a\\"b"');
       expect(witnessStringReplaceAll('a-b-a', 'a', 'x')).toBe('x-b-x');
       expect(witnessStringStartsWith('kovo-control', 'kovo-')).toBe(true);
       expect(witnessStringStartsWith('app-control', 'kovo-')).toBe(false);
@@ -75,6 +89,8 @@ describe('server security witness intrinsics', () => {
       WeakMap.prototype.get = originalWeakMapGet;
       Object.create = originalObjectCreate;
       Array.isArray = originalIsArray;
+      Array.prototype.sort = originalArraySort;
+      JSON.stringify = originalJsonStringify;
       String.prototype.replaceAll = originalReplaceAll;
       String.prototype.startsWith = originalStartsWith;
       String.prototype.toLowerCase = originalToLowerCase;

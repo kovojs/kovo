@@ -16,10 +16,12 @@ const NativeSet = globalThis.Set;
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
+const NativeJSON = globalThis.JSON;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectGet = NativeReflect.get;
 const nativeReflectOwnKeys = NativeReflect.ownKeys;
 const nativeArrayIsArray = NativeArray.isArray;
+const nativeArraySort = NativeArray.prototype.sort;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapHas = NativeWeakMap.prototype.has;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
@@ -61,6 +63,7 @@ const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeJsonStringify = NativeJSON.stringify;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -70,6 +73,13 @@ function capturedControlsAreSound(): boolean {
   try {
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
+    const sorted = ['z', 'a', 'aa'];
+    apply(nativeArraySort, sorted, []);
+    if (sorted[0] !== 'a' || sorted[1] !== 'aa' || sorted[2] !== 'z') return false;
+    if (apply(nativeJsonStringify, NativeJSON, ['a"b']) !== '"a\\"b"') return false;
+    if (apply(nativeJsonStringify, NativeJSON, [42]) !== '42') return false;
+    if (apply(nativeJsonStringify, NativeJSON, [null]) !== 'null') return false;
+    if (apply(nativeJsonStringify, NativeJSON, [undefined]) !== undefined) return false;
     const key = {};
     const other = {};
     const value = {};
@@ -439,6 +449,18 @@ export function witnessString(value: unknown): string {
 export function witnessIsArray(value: unknown): value is unknown[] {
   assertSecurityWitnessIntrinsics();
   return apply(nativeArrayIsArray, NativeArray, [value]);
+}
+
+export function witnessSortStrings(values: string[]): void {
+  assertSecurityWitnessIntrinsics();
+  apply(nativeArraySort, values, []);
+}
+
+export function witnessJsonStringifyPrimitive(
+  value: string | number | boolean | null | undefined,
+): string | undefined {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeJsonStringify, NativeJSON, [value]);
 }
 
 export function witnessStringReplaceAll(
