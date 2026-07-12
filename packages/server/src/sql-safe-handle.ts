@@ -488,17 +488,17 @@ function snapshotManagedBuilderArgumentGraph(
 
   const prototype = witnessGetPrototypeOf(value);
   const kinds = nativeDrizzleEntityKindsFromPrototype(prototype);
+  if (witnessSetSize(kinds) === 0 && plainSqlWrapperSurface(value)) {
+    throw new Error(
+      'KV422: managed SQL builders reject custom SQLWrapper objects; use Kovo SQL constructors so executable provenance can be snapshotted (SPEC §6.6/§10.2).',
+    );
+  }
   const structural =
     witnessIsArray(value) ||
     prototype === intrinsicObjectPrototype ||
     prototype === null ||
     witnessSetSize(kinds) > 0;
   if (!structural) {
-    if (plainSqlWrapperSurface(value)) {
-      throw new Error(
-        'KV422: managed SQL builders reject custom SQLWrapper prototypes; use Kovo SQL constructors so executable provenance can be snapshotted (SPEC §6.6/§10.2).',
-      );
-    }
     return value;
   }
 
