@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    58 | C1-C58 |
+| Critical |    59 | C1-C59 |
 | High     |    31 | H1-H31 |
 | Medium   |     9 | M1-M9  |
 
@@ -684,6 +684,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     skip a secret source or turn an opaque expression into a safe verdict, while proven public
     expressions remain unboxed.
 
+- [ ] **C59 - Mutable managed-builder traversal admits unreviewed raw SQL at the database sink.**
+      `packages/server/src/sql-safe-handle.ts`
+  - After `managedDb(raw, 'write')` installed the KV422 choke, a late `Array.prototype.map`
+    replacement returned the original builder arguments without invoking the raw-SQL classifier. A
+    genuine untrusted `@kovojs/drizzle` `sql.raw('(select classified from secrets)')` carrier reached
+    the underlying builder instead of throwing before the sink.
+  - **Acceptance:** builder arguments/callback results, native Drizzle carrier provenance,
+    descriptor traversal, ambiguous-method statement detection, and direct write/read table
+    classification use boot-pinned collection, reflection, string, and RegExp controls over exact
+    snapshots; late/import-order mutation cannot skip nested raw SQL or change the classified bytes
+    delivered to the adapter, while reviewed parameterized/static/trusted carriers remain usable.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1114,7 +1126,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C58, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C59, H20, H27,
 and H31 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
