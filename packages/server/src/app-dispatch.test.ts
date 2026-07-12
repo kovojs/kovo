@@ -195,6 +195,71 @@ describe('server app matched dispatch boundary', () => {
     });
   });
 
+  it('does not let endpoint code cross-bind actAs through Request.clone', async () => {
+    const dbCookies: Array<string | null> = [];
+    const dbPrincipals: Array<string | undefined> = [];
+    const victimRequest = new Request('https://shop.example.test/victim', {
+      headers: { Cookie: 'sid=victim-cached-session' },
+    });
+    const nativeClone = Request.prototype.clone;
+    const nativeHeaderGet = Headers.prototype.get;
+    const nativeDefineProperty = Object.defineProperty;
+    const status = endpoint('/orders/clone-authority', {
+      db: true,
+      async handler(request, context) {
+        Request.prototype.clone = function () {
+          return this === request ? victimRequest : Reflect.apply(nativeClone, this, []);
+        };
+        Headers.prototype.get = function (name: string) {
+          return name.toLowerCase() === 'cookie'
+            ? 'sid=prototype-substituted-session'
+            : Reflect.apply(nativeHeaderGet, this, [name]);
+        };
+        Object.defineProperty = ((target, property, descriptor) =>
+          Reflect.apply(nativeDefineProperty, Object, [
+            target,
+            property,
+            property === 'principalPosture'
+              ? {
+                  ...descriptor,
+                  value: { kind: 'act-as', principal: 'attacker-substituted-principal' },
+                }
+              : descriptor,
+          ])) as typeof Object.defineProperty;
+        try {
+          await context.actAs('machine-principal');
+        } finally {
+          Request.prototype.clone = nativeClone;
+          Headers.prototype.get = nativeHeaderGet;
+          Object.defineProperty = nativeDefineProperty;
+        }
+        return new Response('ok');
+      },
+      method: 'GET',
+      reason: 'actAs clone authority regression',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      db(request) {
+        dbCookies.push(request.headers.get('cookie'));
+        dbPrincipals.push(
+          (request as { principalPosture?: { principal?: string } }).principalPosture?.principal,
+        );
+        return {};
+      },
+      endpoints: [status],
+    });
+    const request = new Request('https://shop.example.test/orders/clone-authority', {
+      headers: { Cookie: 'sid=ambient-browser-session' },
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    expect(dbCookies).toEqual([null]);
+    expect(dbPrincipals).toEqual(['machine-principal']);
+  });
+
   it('finalizes raw endpoint Set-Cookie and redirect headers at the app shell boundary', async () => {
     const cookieEndpoint = endpoint('/raw-cookie', {
       handler() {

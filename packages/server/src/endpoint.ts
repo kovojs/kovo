@@ -5,7 +5,8 @@ import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './aut
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
 import { markEndpointSelfVerifying, markEndpointVerifierExecuted } from './endpoint-auth-proof.js';
-import { requestVerifierInput } from './app-load-shed.js';
+import { pinRequestIngressSurface, requestVerifierInput } from './app-load-shed.js';
+import { requestClone } from './request-body-intrinsics.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
@@ -14,6 +15,7 @@ import {
 } from './response-posture.js';
 import {
   createWitnessWeakMap,
+  witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessReflectApply,
@@ -602,8 +604,9 @@ function requestWithEndpointPrincipalPosture(
   request: EndpointRequest,
   principalPosture: NonRequestPrincipalPosture,
 ): EndpointDbProviderRequest {
-  const next = request.clone() as EndpointDbProviderRequest;
-  Object.defineProperty(next, 'principalPosture', {
+  const next = requestClone(request) as EndpointDbProviderRequest;
+  pinRequestIngressSurface(next);
+  witnessDefineProperty(next, 'principalPosture', {
     configurable: true,
     enumerable: false,
     value: principalPosture,
