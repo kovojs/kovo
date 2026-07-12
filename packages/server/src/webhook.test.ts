@@ -34,6 +34,45 @@ function sign(body: string): string {
 }
 
 describe('server webhook primitive', () => {
+  it('strips ambient authorization before direct webhook verification and handling', async () => {
+    const verifierViews: Array<[string | null, string | null, string | null]> = [];
+    const handlerViews: Array<[string | null, string | null, string | null]> = [];
+    const machineWebhook = webhook('/webhooks/machine', {
+      handler(_input, context) {
+        handlerViews.push([
+          context.request.headers.get('authorization'),
+          context.request.headers.get('proxy-authorization'),
+          context.request.headers.get('x-machine-signature'),
+        ]);
+      },
+      input: s.object({ id: s.string() }),
+      verify: customVerifier('machine-signature', (request) => {
+        verifierViews.push([
+          request.headers.get('authorization'),
+          request.headers.get('proxy-authorization'),
+          request.headers.get('x-machine-signature'),
+        ]);
+        return request.headers.get('x-machine-signature') === 'sig_accepted';
+      }),
+    });
+    const request = new Request('https://example.test/webhooks/machine', {
+      body: JSON.stringify({ id: 'evt_1' }),
+      headers: {
+        Authorization: 'Basic victim-browser-credential',
+        'Content-Type': 'application/json',
+        'Proxy-Authorization': 'Basic victim-proxy-credential',
+        'X-Machine-Signature': 'sig_accepted',
+      },
+      method: 'POST',
+    });
+
+    const result = await runWebhook(machineWebhook, request);
+
+    expect(result.response.status).toBe(200);
+    expect(verifierViews).toEqual([[null, null, 'sig_accepted']]);
+    expect(handlerViews).toEqual([[null, null, 'sig_accepted']]);
+  });
+
   it('types webhook transaction db as transaction-scoped without a public transaction opener', () => {
     type TxDb = {
       $client: { execute(statement: unknown): unknown };

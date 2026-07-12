@@ -312,6 +312,54 @@ describe('no-JS mutation responses', () => {
     expect(handlerCalls).toBe(1);
   });
 
+  it('strips browser-state headers from csrf:false no-JS replay while preserving redirect proof', async () => {
+    type ReplayResponse = import('./mutation-wire.js').MutationEndpointReplayResponse;
+    let replayed: ReplayResponse | undefined;
+    const replayStore: import('./replay.js').MutationReplayStore<ReplayResponse> = {
+      get() {
+        return replayed;
+      },
+      reserve() {
+        if (replayed !== undefined) return undefined;
+        return {
+          commit(response) {
+            replayed = response;
+          },
+        };
+      },
+      set(_scope, _idem, response) {
+        replayed = response;
+      },
+    };
+    const handler = vi.fn((input: { productId: string }) => input);
+    const machineMutation = mutation('machine/nojs-replay-browser-state', {
+      input: s.object({ productId: s.string() }),
+      handler,
+    });
+    const request = {
+      idem: 'idem_exempt_nojs_browser_state',
+      rawInput: { productId: 'p1' },
+      redirectTo: '/done',
+      replayStore,
+      request: {},
+    };
+
+    const first = await renderNoJsMutationResponse(machineMutation, request);
+    expect(first.status).toBe(303);
+    if (replayed === undefined) throw new Error('expected committed replay response');
+    replayed.headers['Set-Cookie'] = 'sid=stale; Path=/';
+    replayed.headers['Clear-Site-Data'] = '"cookies", "storage"';
+
+    const second = await renderNoJsMutationResponse(machineMutation, request);
+
+    expect(second.status).toBe(303);
+    expect(second.headers.Location).toBe('/done');
+    expect(second.headers['Set-Cookie']).toBeUndefined();
+    expect(second.headers['Clear-Site-Data']).toBeUndefined();
+    expect(isBlessedRedirectResponse(second)).toBe(true);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
   it('M4: anonymous no-JS submissions share the CSRF-cookie replay scope and normalized fingerprint', async () => {
     const anonymous = anonymousNoJsCsrfRequest('auth/reset');
     const replayStore = createMemoryMutationReplayStore();

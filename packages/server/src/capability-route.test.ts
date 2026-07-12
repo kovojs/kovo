@@ -627,7 +627,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
       endpoints: [
         createStorageDownloadEndpoint({
           basePath: '/downloads',
-          scope: (request) => request.headers.get('x-tenant') ?? undefined,
+          scope: (request) => request.headers.get('x-machine-tenant') ?? undefined,
           secret: SECRET,
           storage,
         }),
@@ -645,13 +645,15 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     const handler = createRequestHandler(app);
 
     const document = await handler(
-      new Request('https://app.example/', { headers: { 'x-tenant': 'tenant_1' } }),
+      new Request('https://app.example/', { headers: { 'x-machine-tenant': 'tenant_1' } }),
     );
     const href = (await document.text()).match(/href="([^"]+)"/)?.[1];
 
     expect(href?.startsWith('/downloads/receipts/scoped.txt?')).toBe(true);
     const response = await handler(
-      new Request(`https://app.example${href}`, { headers: { 'x-tenant': 'tenant_1' } }),
+      new Request(`https://app.example${href}`, {
+        headers: { 'x-machine-tenant': 'tenant_1' },
+      }),
     );
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('tenant-download');

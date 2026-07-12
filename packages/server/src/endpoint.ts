@@ -4,6 +4,7 @@ import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './acc
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
+import { markEndpointSelfVerifying, markEndpointVerifierExecuted } from './endpoint-auth-proof.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
@@ -305,6 +306,7 @@ export function pinEndpointSelfVerifyingAuth<
     );
   }
   pinnedEndpointAuth.set(declaration, { ...snapshot, selfVerifying: true });
+  markEndpointSelfVerifying(declaration);
   return declaration;
 }
 
@@ -335,6 +337,7 @@ export function copyEndpointAuthSnapshot<Declaration extends object>(
     writable: false,
   });
   pinnedEndpointAuth.set(target, snapshot);
+  if (snapshot.selfVerifying === true) markEndpointSelfVerifying(target);
   return target;
 }
 
@@ -512,7 +515,9 @@ export async function runEndpoint(
   request: Request,
   options: EndpointRunOptions = {},
 ): Promise<Response> {
-  const endpointRequest = endpointRequestWithoutSession(request);
+  const endpointRequest = endpointRequestWithoutSession(request, {
+    stripAuthorization: definition.csrf?.exempt === true,
+  });
   const accessFailure = await runEndpointAccessDecision(definition, endpointRequest);
   if (accessFailure) return accessFailure;
 
@@ -523,7 +528,7 @@ export async function runEndpoint(
           createEndpointDbContext(endpointRequest, definition, options),
         )
       : await (definition.handler as EndpointHandler)(endpointRequest);
-  assertEndpointResponsePosture(definition, response);
+  assertEndpointResponsePosture(definition, response, { request });
   return response;
 }
 
@@ -538,10 +543,13 @@ export async function runEndpointAccessDecision(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   request: Request,
 ): Promise<Response | undefined> {
+  const endpointRequest = endpointRequestWithoutSession(request, {
+    stripAuthorization: definition.csrf?.exempt === true,
+  });
   const guardFailure = await runAccessDecisionGuards(
     accessDecisionFor(definition),
     undefined,
-    request,
+    endpointRequest,
   );
   return guardFailure === null ? undefined : endpointAccessGuardFailureResponse(guardFailure);
 }
@@ -619,7 +627,9 @@ export async function runEndpointAuth(
 
   let verified = false;
   try {
-    const authRequest = endpointRequestWithoutSession(request.clone());
+    const authRequest = endpointRequestWithoutSession(request.clone(), {
+      stripAuthorization: definition.csrf?.exempt === true,
+    });
     verified = await auth.verify({
       headers: authRequest.headers,
       payload: new Uint8Array(await authRequest.arrayBuffer()),
@@ -628,7 +638,9 @@ export async function runEndpointAuth(
     verified = false;
   }
 
-  return verified ? undefined : endpointAuthFailureResponse();
+  if (!verified) return endpointAuthFailureResponse();
+  markEndpointVerifierExecuted(definition, request);
+  return undefined;
 }
 
 /**

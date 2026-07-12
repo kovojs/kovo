@@ -239,8 +239,8 @@ describe('central response posture finalization', () => {
     expect('session' in endpointRequest).toBe(false);
   });
 
-  it('strips browser Authorization only for stricter csrf-exempt mutation views', () => {
-    const request = new Request('https://example.test/_m/machine/run', {
+  it('strips browser Authorization and Proxy-Authorization from strict csrf-exempt views', () => {
+    const request = new Request('https://example.test/machine/run', {
       headers: {
         Authorization: 'Basic victim-browser-credential',
         'Cf-Connecting-Ip': '203.0.113.10',
@@ -266,6 +266,7 @@ describe('central response posture finalization', () => {
     expect(mutationRequest.headers.get('x-forwarded-for')).toBeNull();
     expect(mutationRequest.headers.get('x-machine-signature')).toBe('kept');
     expect(mutationRequest.clone().headers.get('authorization')).toBeNull();
+    expect(mutationRequest.clone().headers.get('proxy-authorization')).toBeNull();
   });
 
   it('exposes only value-free URL and client-IP metadata to predispatch callbacks', () => {

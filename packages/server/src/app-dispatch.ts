@@ -105,6 +105,7 @@ export async function dispatchMatchedAppRequest({
 
     const endpointRequest = await resolveKovoLifecycleRequest(request, {
       clientIp: (req) => resolveRequestClientIp(app, req),
+      stripAuthorization: match.endpoint.csrf?.exempt === true,
       surface: 'endpoint',
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
@@ -128,7 +129,7 @@ export async function dispatchMatchedAppRequest({
           mutationOptions,
         })
       ).response;
-      assertEndpointResponsePosture(match.endpoint, response);
+      assertEndpointResponsePosture(match.endpoint, response, { request: endpointRequest });
       return finalizeRawWebResponse(response, request, match.endpoint.response);
     }
     return finalizeRawWebResponse(

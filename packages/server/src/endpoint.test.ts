@@ -178,7 +178,8 @@ describe('server endpoints', () => {
         verify: customVerifier(
           'static-token',
           (request) =>
-            request.headers instanceof Headers && request.headers.get('x-token') === 'accepted',
+            request.headers instanceof Headers &&
+            request.headers.get('x-machine-token') === 'accepted',
         ),
       },
       csrf: false,
@@ -194,7 +195,7 @@ describe('server endpoints', () => {
         customEndpoint,
         new Request('https://example.test/machine/custom', {
           body: 'payload',
-          headers: { 'x-token': 'accepted' },
+          headers: { 'x-machine-token': 'accepted' },
           method: 'POST',
         }),
       ),
@@ -204,7 +205,7 @@ describe('server endpoints', () => {
       customEndpoint,
       new Request('https://example.test/machine/custom', {
         body: 'payload',
-        headers: { 'x-token': 'bad' },
+        headers: { 'x-machine-token': 'bad' },
         method: 'POST',
       }),
     );
@@ -367,12 +368,16 @@ describe('server endpoints', () => {
     // unsoundness mutations reject at compile time via KV418.
     let seenCookie: string | null = 'unset';
     let seenCookieViaClone: string | null = 'unset';
+    let seenAuthorization: string | null = 'unset';
+    let seenProxyAuthorization: string | null = 'unset';
     let seenSignature = '';
     const signedWebhook = endpoint('/webhooks/signed', {
       csrf: false,
       csrfJustification: 'signed webhook validates raw body',
       async handler(request) {
         seenCookie = request.headers.get('cookie');
+        seenAuthorization = request.headers.get('authorization');
+        seenProxyAuthorization = request.headers.get('proxy-authorization');
         // A handler must not be able to recover the cookie via request.clone() either.
         seenCookieViaClone = request.clone().headers.get('cookie');
         seenSignature = request.headers.get('x-signature') ?? '';
@@ -384,7 +389,12 @@ describe('server endpoints', () => {
     });
     const request = new Request('https://example.test/webhooks/signed', {
       body: '{"event":"ok"}',
-      headers: { Cookie: 'sid=victim-session-secret', 'x-signature': 'sig_abc' },
+      headers: {
+        Authorization: 'Basic victim-browser-credential',
+        Cookie: 'sid=victim-session-secret',
+        'Proxy-Authorization': 'Basic victim-proxy-credential',
+        'x-signature': 'sig_abc',
+      },
       method: 'POST',
     });
 
@@ -396,7 +406,91 @@ describe('server endpoints', () => {
     // endpoint's explicit machine credential (x-signature) survives untouched.
     expect(seenCookie).toBeNull();
     expect(seenCookieViaClone).toBeNull();
+    expect(seenAuthorization).toBeNull();
+    expect(seenProxyAuthorization).toBeNull();
     expect(seenSignature).toBe('sig_abc');
+  });
+
+  it('requires an executed verifier receipt before a csrf-exempt endpoint emits browser state', async () => {
+    const verified = endpoint('/machine/browser-state', {
+      auth: {
+        kind: 'custom',
+        name: 'machine-browser-state',
+        verify: customVerifier(
+          'machine-browser-state',
+          (request) => request.headers.get('x-machine-signature') === 'accepted',
+        ),
+      },
+      csrf: false,
+      csrfJustification: 'signed machine request establishes browser state',
+      handler: () =>
+        new Response('ok', {
+          headers: {
+            'Clear-Site-Data': '"cookies"',
+            'Set-Cookie': 'sid=machine; Path=/',
+          },
+        }),
+      method: 'POST',
+      reason: 'executed endpoint verifier receipt test',
+      response: {
+        ...rawTextResponse,
+        reservedHeaders: ['Clear-Site-Data', 'Set-Cookie'],
+      },
+    });
+    const unverifiedRequest = new Request('https://example.test/machine/browser-state', {
+      headers: { 'X-Machine-Signature': 'accepted' },
+      method: 'POST',
+    });
+
+    await expect(runEndpoint(verified, unverifiedRequest)).rejects.toThrow(
+      /Set-Cookie and Clear-Site-Data requires an executable non-ambient verifier/u,
+    );
+
+    const verifiedRequest = new Request('https://example.test/machine/browser-state', {
+      headers: { 'X-Machine-Signature': 'accepted' },
+      method: 'POST',
+    });
+    await expect(runEndpointAuth(verified, verifiedRequest)).resolves.toBeUndefined();
+    await expect(runEndpoint(verified, verifiedRequest)).resolves.toMatchObject({ status: 200 });
+  });
+
+  it.each([
+    { auth: undefined, name: 'missing auth' },
+    { auth: { kind: 'custom' as const, name: 'claimed-only' }, name: 'name-only auth' },
+  ])('rejects csrf-exempt browser-state output with $name', async ({ auth }) => {
+    const unsafe = endpoint('/machine/unsafe-browser-state', {
+      ...(auth === undefined ? {} : { auth }),
+      csrf: false,
+      csrfJustification: 'negative browser-state posture fixture',
+      handler: () =>
+        new Response('ok', {
+          headers: {
+            'Clear-Site-Data': '"cookies", "storage"',
+            'Set-Cookie': 'sid=attacker; Path=/',
+          },
+        }),
+      method: 'POST',
+      reason: 'negative browser-state posture fixture',
+      response: {
+        ...rawTextResponse,
+        reservedHeaders: ['Clear-Site-Data', 'Set-Cookie'],
+      },
+    });
+
+    if (auth !== undefined) {
+      const authFailure = await runEndpointAuth(
+        unsafe,
+        new Request('https://example.test/machine/unsafe-browser-state', { method: 'POST' }),
+      );
+      expect(authFailure?.status).toBe(401);
+    }
+
+    await expect(
+      runEndpoint(
+        unsafe,
+        new Request('https://example.test/machine/unsafe-browser-state', { method: 'POST' }),
+      ),
+    ).rejects.toThrow(/executable non-ambient verifier/u);
   });
 
   it('verifies raw endpoint response posture when runtime verification is enabled', async () => {
@@ -569,12 +663,11 @@ describe('server endpoints', () => {
       }
 
       const declared = endpoint('/machine/reserved/declared', {
-        csrf: false,
-        csrfJustification: 'runtime reserved header declaration test',
         handler: () =>
           new Response('ok', {
             headers: {
               'Cache-Control': 'no-store',
+              'Clear-Site-Data': '"cookies"',
               'Content-Security-Policy': "default-src 'self'",
               'Kovo-Reauth': '/login',
               Location: '/login',
@@ -585,7 +678,13 @@ describe('server endpoints', () => {
         reason: 'runtime reserved header declaration test',
         response: {
           ...rawTextResponse,
-          reservedHeaders: ['Content-Security-Policy', 'Kovo-*', 'Location', 'Set-Cookie'],
+          reservedHeaders: [
+            'Clear-Site-Data',
+            'Content-Security-Policy',
+            'Kovo-*',
+            'Location',
+            'Set-Cookie',
+          ],
         },
       });
 

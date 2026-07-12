@@ -4,6 +4,7 @@ import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import { invalidate } from './change-record.js';
+import { csrfToken } from './csrf.js';
 import { domain, tag } from './domain.js';
 import { guards } from './guards.js';
 import { assignDerivedMutationKey } from './internal/wire.js';
@@ -38,6 +39,31 @@ declare module '@kovojs/core' {
       items: Array<{ id: string; name: string }>;
     };
   }
+}
+
+function protectedMutationFixture<Input extends Record<string, unknown>>(
+  key: string,
+  input: Input,
+): {
+  csrf: {
+    secret: string;
+    sessionId(request: { sessionId: string }): string;
+  };
+  rawInput: Input & { 'kovo-csrf': string };
+  request: { sessionId: string };
+} {
+  const request = { sessionId: 'protected-mutation-test-session' };
+  const csrf = {
+    secret: 'protected-mutation-test-secret-0123456789abcdef',
+    sessionId(value: typeof request) {
+      return value.sessionId;
+    },
+  };
+  return {
+    csrf,
+    rawInput: { ...input, 'kovo-csrf': csrfToken(request, csrf, { mutation: key }) },
+    request,
+  };
 }
 
 describe('server mutation lifecycle', () => {
@@ -866,7 +892,11 @@ describe('server mutation lifecycle', () => {
 
   it('forwards committed mutation Set-Cookie headers in enhanced responses', async () => {
     // B3: raw single-string overload removed; use typed (name, value, options) builder.
-    const signIn = mutation('auth/sign-in', {
+    const protectedRequest = protectedMutationFixture('auth/sign-in', {
+      email: 'ada@example.test',
+    });
+    const signIn = defineMutation('auth/sign-in', {
+      csrf: protectedRequest.csrf,
       input: s.object({ email: s.string() }),
       handler(input, _request, context) {
         context.setCookie?.('kovo_session', 's1', {
@@ -888,8 +918,8 @@ describe('server mutation lifecycle', () => {
     await expect(
       renderMutationResponse(signIn, {
         buildToken: 'mutation-test-build',
-        rawInput: { email: 'ada@example.test' },
-        request: {},
+        rawInput: protectedRequest.rawInput,
+        request: protectedRequest.request,
       }),
     ).resolves.toEqual({
       body: '',
@@ -911,7 +941,9 @@ describe('server mutation lifecycle', () => {
 
   it('forwards committed mutation Set-Cookie headers in no-JS PRG responses', async () => {
     // B3: raw single-string overload removed; use typed (name, value, options) builder.
-    const signOut = mutation('auth/sign-out', {
+    const protectedRequest = protectedMutationFixture('auth/sign-out', {});
+    const signOut = defineMutation('auth/sign-out', {
+      csrf: protectedRequest.csrf,
       input: s.object({}),
       handler(_input, _request, context) {
         context.setCookie?.('kovo_session', '', {
@@ -925,9 +957,9 @@ describe('server mutation lifecycle', () => {
 
     await expect(
       renderNoJsMutationResponse(signOut, {
-        rawInput: {},
+        rawInput: protectedRequest.rawInput,
         redirectTo: '/login',
-        request: {},
+        request: protectedRequest.request,
       }),
     ).resolves.toEqual({
       body: '',
@@ -942,7 +974,11 @@ describe('server mutation lifecycle', () => {
 
   it('does not leak mutation Set-Cookie headers when the handler returns a typed failure', async () => {
     // B3: raw single-string overload removed; use typed (name, value, options) builder.
-    const signIn = mutation('auth/sign-in', {
+    const protectedRequest = protectedMutationFixture('auth/sign-in', {
+      email: 'ada@example.test',
+    });
+    const signIn = defineMutation('auth/sign-in', {
+      csrf: protectedRequest.csrf,
       errors: {
         INVALID_CREDENTIALS: s.object({}),
       },
@@ -955,8 +991,8 @@ describe('server mutation lifecycle', () => {
 
     await expect(
       renderMutationResponse(signIn, {
-        rawInput: { email: 'ada@example.test' },
-        request: {},
+        rawInput: protectedRequest.rawInput,
+        request: protectedRequest.request,
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="error"><output role="alert" data-error-code="INVALID_CREDENTIALS">{}</output></kovo-fragment>',
@@ -972,7 +1008,11 @@ describe('server mutation lifecycle', () => {
   // B3 (SPEC §9.1.1:846): the raw single-string setCookie overload is removed;
   // only the typed (name, value, options) builder is exposed.
   it('B3: setCookie typed builder sets cookies correctly via (name, value, options)', async () => {
-    const signIn = mutation('auth/sign-in', {
+    const protectedRequest = protectedMutationFixture('auth/sign-in', {
+      email: 'ada@example.test',
+    });
+    const signIn = defineMutation('auth/sign-in', {
+      csrf: protectedRequest.csrf,
       input: s.object({ email: s.string() }),
       handler(input, _request, context) {
         context.setCookie?.('kovo_session', 's1', { httpOnly: true, path: '/', sameSite: 'lax' });
@@ -982,8 +1022,8 @@ describe('server mutation lifecycle', () => {
 
     const result = await renderMutationResponse(signIn, {
       buildToken: 'mutation-test-build',
-      rawInput: { email: 'ada@example.test' },
-      request: {},
+      rawInput: protectedRequest.rawInput,
+      request: protectedRequest.request,
     });
     // Typed builder correctly serializes the cookie.
     const setCookieHeader = Array.isArray(result.headers['Set-Cookie'])

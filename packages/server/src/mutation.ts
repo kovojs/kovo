@@ -26,7 +26,12 @@ import {
   type ResolvedGuardFailure,
 } from './guards.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
-import { appendResponseHeader, type ResponseHeaders } from './response.js';
+import {
+  appendResponseHeader,
+  blessRedirectResponse,
+  isBlessedRedirectResponse,
+  type ResponseHeaders,
+} from './response.js';
 import {
   mutationWireRequestFromHeaders,
   type BufferedMutationWireResponse,
@@ -774,13 +779,14 @@ export async function renderMutationResponse<
     ...optionalReplayPolicy(enhancedMutationReplayPolicy(deliveryMode)),
   });
 
-  return renderMutationWireLifecycleResponse({
+  const response = await renderMutationWireLifecycleResponse({
     csrfReauthResponse: () => staleSessionEnhancedCsrfReauthResponse(definition, csrf, wireRequest),
     definition,
     lifecycle,
     registryFacts: mutationRuntimeRegistryFacts(definition, wireRequest.liveTargetRenderers ?? []),
     wireRequest,
   });
+  return csrf === false ? mutationResponseWithoutBrowserState(response) : response;
 }
 
 /**
@@ -939,12 +945,32 @@ export async function renderNoJsMutationResponse<
     ...optionalReplayPolicy(noJsMutationReplayPolicy(deliveryMode)),
   });
 
-  return renderNoJsMutationLifecycleResponse({
+  const response = await renderNoJsMutationLifecycleResponse({
     csrfReauthResponse: () => staleSessionNoJsCsrfReauthResponse(definition, csrf, noJsRequest),
     definition,
     lifecycle,
     noJsRequest,
   });
+  return csrf === false ? mutationResponseWithoutBrowserState(response) : response;
+}
+
+function mutationResponseWithoutBrowserState<Response extends MutationEndpointResponse>(
+  response: Response,
+): Response {
+  let removed = false;
+  const headers: ResponseHeaders = {};
+  for (const [name, value] of Object.entries(response.headers)) {
+    const lower = name.toLowerCase();
+    if (lower === 'set-cookie' || lower === 'clear-site-data') {
+      removed = true;
+      continue;
+    }
+    headers[name] = Array.isArray(value) ? [...value] : value;
+  }
+  if (!removed) return response;
+
+  const sanitized = { ...response, headers } as Response;
+  return isBlessedRedirectResponse(response) ? blessRedirectResponse(sanitized) : sanitized;
 }
 
 function isMutationFail(value: unknown): value is MutationFail {

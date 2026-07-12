@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { trustedHtml } from '@kovojs/browser';
-import { hmacSignature } from '@kovojs/core';
+import { customVerifier, hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
@@ -534,6 +534,76 @@ describe('server app matched dispatch boundary', () => {
     expect(response.status).toBe(202);
     // The exempt handler can no longer ride the victim's ambient browser cookie.
     expect(seenCookie).toBeNull();
+  });
+
+  it('strips ambient authorization through verifier, handler, and DB while preserving signed machine auth', async () => {
+    const verifierViews: Array<[string | null, string | null, string | null]> = [];
+    const handlerViews: Array<[string | null, string | null, string | null]> = [];
+    const dbViews: Array<[string | null, string | null, string | null]> = [];
+    const verifier = customVerifier('machine-browser-state', (request) => {
+      verifierViews.push([
+        request.headers.get('authorization'),
+        request.headers.get('proxy-authorization'),
+        request.headers.get('x-machine-signature'),
+      ]);
+      return request.headers.get('x-machine-signature') === 'sig_accepted';
+    });
+    const machine = endpoint('/machine/browser-state', {
+      auth: { kind: 'custom', name: 'machine-browser-state', verify: verifier },
+      csrf: false,
+      csrfJustification: 'signed machine request establishes browser state',
+      db: true,
+      async handler(request, context) {
+        handlerViews.push([
+          request.headers.get('authorization'),
+          request.headers.get('proxy-authorization'),
+          request.headers.get('x-machine-signature'),
+        ]);
+        await context.actAs('machine-principal');
+        return new Response('ok', {
+          headers: {
+            'Cache-Control': 'no-store',
+            'Clear-Site-Data': '"cookies"',
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Set-Cookie': 'sid=machine; Path=/',
+          },
+        });
+      },
+      method: 'POST',
+      reason: 'signed machine browser-state integration test',
+      response: {
+        ...rawTextResponse,
+        reservedHeaders: ['Clear-Site-Data', 'Set-Cookie'],
+      },
+    });
+    const app = createApp({
+      db(request) {
+        dbViews.push([
+          request.headers.get('authorization'),
+          request.headers.get('proxy-authorization'),
+          request.headers.get('x-machine-signature'),
+        ]);
+        return {};
+      },
+      endpoints: [machine],
+    });
+    const request = new Request('https://shop.example.test/machine/browser-state', {
+      headers: {
+        Authorization: 'Basic victim-browser-credential',
+        'Proxy-Authorization': 'Basic victim-proxy-credential',
+        'X-Machine-Signature': 'sig_accepted',
+      },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    expect(verifierViews).toEqual([[null, null, 'sig_accepted']]);
+    expect(handlerViews).toEqual([[null, null, 'sig_accepted']]);
+    expect(dbViews).toEqual([[null, null, 'sig_accepted']]);
+    expect(response.headers.get('clear-site-data')).toBe('"cookies"');
+    expect(response.headers.get('set-cookie')).toContain('sid=machine');
   });
 
   it('enforces executable endpoint auth before CSRF or handler dispatch', async () => {

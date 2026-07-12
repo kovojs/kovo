@@ -25,6 +25,7 @@ import {
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
+import { endpointBrowserStateAuthExecuted } from './endpoint-auth-proof.js';
 import type {
   EndpointDeclaration,
   EndpointMethod,
@@ -106,6 +107,7 @@ export interface EndpointLifecyclePolicy extends Pick<
   RequestLifecycleOptions<Request, never, never>,
   'clientIp' | 'onError'
 > {
+  stripAuthorization?: boolean;
   surface: 'endpoint';
 }
 
@@ -186,7 +188,9 @@ export async function resolveKovoLifecycleRequest<
     }
     case 'endpoint': {
       assertWebRequest(request, options.surface);
-      const endpointRequest = endpointRequestWithoutSession(request);
+      const endpointRequest = endpointRequestWithoutSession(request, {
+        stripAuthorization: options.stripAuthorization === true,
+      });
       if (options.clientIp !== undefined) {
         const clientIp = options.clientIp(endpointRequest);
         if (clientIp !== undefined && clientIp !== '') {
@@ -413,7 +417,9 @@ function frameworkPeerAddress(request: Request): string | undefined {
 export function assertEndpointResponsePosture(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   response: Response,
+  options: { request?: Request } = {},
 ): void {
+  assertEndpointBrowserStateResponsePosture(definition, response, options.request);
   if (!shouldVerifyEndpointResponsePosture()) {
     return;
   }
@@ -460,6 +466,25 @@ export function assertEndpointResponsePosture(
   assertEndpointReservedHeaders(definition, response, failures);
   if (failures.length === 0) return;
   throw endpointPostureError(definition, failures);
+}
+
+function assertEndpointBrowserStateResponsePosture(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  response: Response,
+  request: Request | undefined,
+): void {
+  if (definition.csrf?.exempt !== true) return;
+  const browserStateHeaders = ['Set-Cookie', 'Clear-Site-Data'].filter((header) =>
+    response.headers.has(header),
+  );
+  if (browserStateHeaders.length === 0) return;
+  if (endpointBrowserStateAuthExecuted(definition, request)) return;
+
+  throw endpointPostureError(definition, [
+    `${browserStateHeaders.join(
+      ' and ',
+    )} requires an executable non-ambient verifier or a framework-owned self-verifying handler on a csrf:false endpoint`,
+  ]);
 }
 
 function shouldVerifyEndpointResponsePosture(): boolean {
@@ -678,7 +703,7 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
     'sessionProvider',
     'surface',
   ]),
-  endpoint: new Set(['clientIp', 'onError', 'surface']),
+  endpoint: new Set(['clientIp', 'onError', 'stripAuthorization', 'surface']),
   mutation: new Set([
     'clientIp',
     'csrf',
@@ -796,6 +821,7 @@ function endpointReservedHeader(header: string): string | undefined {
   const lower = header.toLowerCase();
   if (lower.startsWith('kovo-')) return 'Kovo-*';
   if (lower === 'set-cookie') return 'Set-Cookie';
+  if (lower === 'clear-site-data') return 'Clear-Site-Data';
   if (lower === 'location') return 'Location';
   if (ENDPOINT_SECURITY_HEADERS.has(lower)) return header;
   return undefined;

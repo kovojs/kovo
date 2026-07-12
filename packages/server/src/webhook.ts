@@ -13,6 +13,7 @@ import { runMutation, type RunMutationOptions } from './mutation.js';
 import {
   endpointRequestWithoutSession,
   pinEndpointAuth,
+  pinEndpointSelfVerifyingAuth,
   type EndpointDeclaration,
   type EndpointAuthDeclaration,
   type EndpointMethod,
@@ -424,6 +425,7 @@ export function webhook<
     access,
   );
   pinEndpointAuth(declaration, auth);
+  if (definition.verify !== 'none') pinEndpointSelfVerifyingAuth(declaration);
 
   return declaration;
 }
@@ -488,7 +490,7 @@ export async function runWebhook<
   request: Request,
   options: RunWebhookOptions = {},
 ): Promise<WebhookRunResult<WebhookInputFor<InputSchema>, Value>> {
-  const endpointRequest = endpointRequestWithoutSession(request);
+  const endpointRequest = endpointRequestWithoutSession(request, { stripAuthorization: true });
   const rawBody = new Uint8Array(await endpointRequest.arrayBuffer());
   // L10-1 (SPEC §9.1:860-862): verification is fail-closed. An app-authored
   // `verify()`/`payload`/`tolerance.timestamp` callback (core/src/verifier.ts) may

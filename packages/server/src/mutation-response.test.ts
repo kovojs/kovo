@@ -13,6 +13,7 @@ import {
 import { renderComponentMutationFailure } from './component-render.js';
 import { domain } from './domain.js';
 import { renderedHtml } from './html.js';
+import { csrfToken } from './csrf.js';
 import { createMemoryMutationReplayStore } from './replay.js';
 import { query } from './query.js';
 import { s } from './schema.js';
@@ -146,7 +147,13 @@ describe('server mutation primitives', () => {
   });
 
   it('preserves multiple mutation Set-Cookie headers when merged with wire headers', async () => {
-    const setCookies = mutation('cookies/set-many', {
+    const request = { sessionId: 'session-1' };
+    const csrf = {
+      secret: 'protected-cookie-mutation-secret-0123456789abcdef',
+      sessionId: (value: typeof request) => value.sessionId,
+    };
+    const setCookies = defineMutation('cookies/set-many', {
+      csrf,
       input: s.object({ id: s.string() }),
       handler(input, _request, context) {
         context.setCookie('session', 's1');
@@ -157,9 +164,12 @@ describe('server mutation primitives', () => {
 
     const response = await renderMutationEndpointResponse(setCookies, {
       headers: { 'Kovo-Fragment': 'true' },
-      rawInput: { id: 'p1' },
+      rawInput: {
+        id: 'p1',
+        'kovo-csrf': csrfToken(request, csrf, { mutation: 'cookies/set-many' }),
+      },
       redirectTo: '/done',
-      request: {},
+      request,
     });
 
     expect(response.status).toBe(200);
@@ -893,6 +903,51 @@ describe('server mutation primitives', () => {
 
     expect(first).toEqual(second);
     expect(first.status).toBe(200);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('strips browser-state headers from csrf:false enhanced replay responses at the final choke', async () => {
+    type ReplayResponse = import('./mutation-wire.js').MutationEndpointReplayResponse;
+    let replayed: ReplayResponse | undefined;
+    const replayStore: import('./replay.js').MutationReplayStore<ReplayResponse> = {
+      get() {
+        return replayed;
+      },
+      reserve() {
+        if (replayed !== undefined) return undefined;
+        return {
+          commit(response) {
+            replayed = response;
+          },
+        };
+      },
+      set(_scope, _idem, response) {
+        replayed = response;
+      },
+    };
+    const handler = vi.fn((input: { productId: string }) => input);
+    const machineMutation = mutation('machine/replay-browser-state', {
+      input: s.object({ productId: s.string() }),
+      handler,
+    });
+    const request = {
+      idem: 'idem_exempt_browser_state',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 'machine-replay-scope' },
+    };
+
+    const first = await renderMutationResponse(machineMutation, request);
+    expect(first.status).toBe(200);
+    if (replayed === undefined) throw new Error('expected committed replay response');
+    replayed.headers['Set-Cookie'] = 'sid=stale; Path=/';
+    replayed.headers['Clear-Site-Data'] = '"cookies", "storage"';
+
+    const second = await renderMutationResponse(machineMutation, request);
+
+    expect(second.status).toBe(200);
+    expect(second.headers['Set-Cookie']).toBeUndefined();
+    expect(second.headers['Clear-Site-Data']).toBeUndefined();
     expect(handler).toHaveBeenCalledOnce();
   });
 
