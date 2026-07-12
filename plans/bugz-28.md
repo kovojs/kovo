@@ -115,7 +115,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the same 77-test matrix passes; the independent post-construction secret swap now
     receives the uniform 404 and cannot read the victim object.
 
-- [ ] **C12 - Mutable FormData traversal can substitute a cached victim CSRF token.**
+- [x] **C12 - Mutable FormData traversal can substitute a cached victim CSRF token.**
       `packages/server/src/{untrusted-request-body,schema}.ts`
   - A real cross-origin-safe POST containing only `v1.attacker.attacker` was parsed after a selective
     late `FormData.prototype.entries` override substituted a cached genuine victim token. The
@@ -125,6 +125,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     FormData identity and traversal, recursive tagging/reveal, and record construction use
     boot-pinned, semantically checked exact-value controls; late/import-order poison cannot replace
     CSRF or schema input bytes while genuine JSON/form/multipart parsing remains intact.
+  - **Evidence:** the 255-test request/body/schema/CSRF/dispatch matrix passes; the independent
+    cached-token substitution proof now rejects the forged body, with exact JSON/urlencoded/
+    multipart byte parsing and hostile import-order regressions covered.
 
 - [x] **C13 - Colliding nested PostgreSQL savepoints can commit writes from a failed scope.**
       `packages/server/src/postgres-runtime.ts`
@@ -465,8 +468,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C12, H15, and H17-H24 are active
-request-carrier, response/deferred/mutation/client output, task, and browser-navigation fixes.
+The remediation pass remains intentionally non-zero: H15 and H17-H24 are active response/deferred/
+mutation/client output, task, and browser-navigation fixes.
 Integrated
 evidence is
 green at
