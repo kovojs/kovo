@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    63 | C1-C63 |
+| Critical |    64 | C1-C64 |
 | High     |    32 | H1-H32 |
 | Medium   |     9 | M1-M9  |
 
@@ -744,6 +744,20 @@ This is an active closure ledger; `SPEC.md` remains normative.
     blocking result, and a malformed/throwing validator fails the compile closed rather than
     yielding a partial green result.
 
+- [ ] **C64 - Mutable request-stream reads substitute authenticated mutation body bytes.**
+      `packages/server/src/app-load-shed.ts`
+  - The pre-dispatch limited-body reader called live `ReadableStream.getReader`, reader
+    `read`/`cancel`, collection, typed-array, and Promise controls before the hardened request parser.
+    A selective late reader substitution changed an oversized body into `safe` (413 became 200);
+    more critically, it replaced an invalid submitted CSRF token with a cached genuine victim token
+    plus `action=delete-account`, and the real protected mutation handler executed.
+  - **Acceptance:** request body acquisition, stream locking, chunk reads, byte accounting,
+    cancellation/error propagation, typed-array reconstruction, and the exact `Request` handed to
+    parsing use boot-pinned semantically checked controls over one immutable byte snapshot;
+    late/import-order mutation cannot substitute/truncate/expand bytes, bypass 413, or turn an
+    invalid CSRF mutation into handler execution, while genuine bounded streaming bodies retain
+    backpressure and cancellation behavior.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1186,7 +1200,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C63, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C64, H20, H27,
 and H31-H32 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
