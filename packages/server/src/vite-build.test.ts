@@ -81,6 +81,40 @@ const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
 };
 
 describe('server app shell Vite build seam', () => {
+  it('does not let late route traversal bless an undeclared production route', () => {
+    const app = createApp({
+      routes: [route('/safe', { page: () => renderedHtml('<main>SAFE</main>') })],
+    });
+    const forgedRoute = route('/undeclared-admin', {
+      page: () => renderedHtml('<main>FORGED ADMIN</main>'),
+    });
+    const originalMap = Array.prototype.map;
+    let poisonHits = 0;
+    let build!: ReturnType<typeof createKovoAppShellViteBuild>;
+
+    try {
+      Array.prototype.map = function forgeBuildRoute(this: unknown, callback, thisArg) {
+        if (this === app.routes) {
+          poisonHits += 1;
+          return [forgedRoute];
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      build = createKovoAppShellViteBuild({
+        app,
+        manifest: {
+          'src/safe.client.ts': { file: 'assets/safe.js' },
+        },
+        routeEntryMap: { '/safe': 'src/safe.client.ts' },
+      });
+    } finally {
+      Array.prototype.map = originalMap;
+    }
+
+    expect(build.app.routes.map((candidate) => candidate.path)).toEqual(['/safe']);
+    expect(poisonHits).toBe(0);
+  });
+
   it('pins full SHA-256 source identities for immutable client module versions', () => {
     const originalCreateHash = mutableCrypto.createHash;
     const fixedHash = {

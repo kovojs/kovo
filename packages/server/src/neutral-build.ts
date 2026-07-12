@@ -1,7 +1,14 @@
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { clientModulePath } from '@kovojs/core/internal/client-module-url';
+
 import type { KovoApp } from './app-types.js';
+import {
+  buildOwnDataProperty,
+  buildSecuritySourceLiteral,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
 import { versionedClientModuleHref, type VersionedClientModuleInput } from './client-modules.js';
 import { stylesheetSourceFile, stylesheetSourcePath, type StylesheetAsset } from './hints.js';
 import { exportStaticApp } from './static-export.js';
@@ -18,8 +25,15 @@ import {
 } from './vite-build.js';
 import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 import { normalizedDistFile, type KovoAppShellRouteEntryMap } from './vite-manifest.js';
+import { witnessReflectApply } from './security-witness-intrinsics.js';
 
 const neutralBuildVersion = 'kovo-neutral-build/v1';
+const nativePathDirname = path.dirname;
+const nativePathIsAbsolute = path.isAbsolute;
+const nativePathJoin = path.join;
+const nativePathRelative = path.relative;
+const nativePathResolve = path.resolve;
+const neutralPathSeparator = path.sep;
 
 /**
  * Inputs for writing Kovo's platform-neutral deployment artifact.
@@ -110,6 +124,53 @@ export interface KovoNeutralBuild {
   version: typeof neutralBuildVersion;
 }
 
+function neutralOptionsObject(value: unknown): object {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Neutral build options must be an own-data object.');
+  }
+  return value;
+}
+
+function requiredNeutralOption(options: object, property: PropertyKey): unknown {
+  const field = buildOwnDataProperty(
+    options,
+    property,
+    `neutral build options.${String(property)}`,
+  );
+  if (!field.present || field.value === undefined) {
+    throw new TypeError(`Neutral build option ${String(property)} is required.`);
+  }
+  return field.value;
+}
+
+function optionalNeutralOption(options: object, property: PropertyKey): unknown {
+  const field = buildOwnDataProperty(
+    options,
+    property,
+    `neutral build options.${String(property)}`,
+  );
+  return field.present ? field.value : undefined;
+}
+
+function snapshotNeutralBuildStylesheetCss(
+  value: readonly { css: string; href: string }[] | undefined,
+): readonly { css: string; href: string }[] {
+  if (value === undefined) return [];
+  const source = snapshotBuildArray(value, 'neutral build stylesheet CSS');
+  const snapshot: { css: string; href: string }[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const entry = source[index];
+    if (typeof entry !== 'object' || entry === null) {
+      throw new TypeError(`Neutral build stylesheet CSS entry ${index} must be an object.`);
+    }
+    snapshot[snapshot.length] = {
+      css: requiredNeutralString(entry, 'css', `neutral build stylesheet CSS ${index}.css`),
+      href: requiredNeutralString(entry, 'href', `neutral build stylesheet CSS ${index}.href`),
+    };
+  }
+  return snapshotBuildArray(snapshot, 'pinned neutral build stylesheet CSS');
+}
+
 /**
  * Write Kovo's platform-neutral deployment artifact.
  *
@@ -122,39 +183,67 @@ export interface KovoNeutralBuild {
 export async function writeKovoNeutralBuild(
   options: WriteKovoNeutralBuildOptions,
 ): Promise<KovoNeutralBuild> {
-  const outDir = resolvedFileSystemPath(options.outDir);
-  const clientDir = path.join(outDir, 'client');
-  const serverDir = path.join(outDir, 'server');
-  const manifestFilePath =
-    options.manifestFile === undefined ? undefined : resolvedFileSystemPath(options.manifestFile);
-  const stylesheetSourceRoot =
-    options.stylesheetSourceRoot === undefined
-      ? undefined
-      : resolvedFileSystemPath(options.stylesheetSourceRoot);
-  const manifestDistDir =
-    manifestFilePath === undefined ? undefined : path.dirname(path.dirname(manifestFilePath));
-  const registeredClientModules = registeredClientModuleBuildArtifacts(
-    options.app.clientModules.entries(),
+  const source = neutralOptionsObject(options);
+  const app = requiredNeutralOption(source, 'app') as KovoApp;
+  const outDir = resolvedFileSystemPath(requiredNeutralOption(source, 'outDir') as string | URL);
+  const base = optionalNeutralOption(source, 'base') as string | undefined;
+  const clientModules = optionalNeutralOption(source, 'clientModules') as
+    | readonly KovoAppShellCompiledClientModule[]
+    | undefined;
+  const manifestFile = optionalNeutralOption(source, 'manifestFile') as string | URL | undefined;
+  const routeEntryMap = optionalNeutralOption(source, 'routeEntryMap') as
+    | KovoAppShellRouteEntryMap
+    | undefined;
+  const serverHandlerSource = optionalNeutralOption(source, 'serverHandlerSource') as
+    | string
+    | undefined;
+  const stylesheetSourceRootOption = optionalNeutralOption(source, 'stylesheetSourceRoot') as
+    | string
+    | URL
+    | undefined;
+  const buildStylesheetCss = snapshotNeutralBuildStylesheetCss(
+    optionalNeutralOption(source, 'buildStylesheetCss') as
+      | readonly { css: string; href: string }[]
+      | undefined,
   );
+  const clientDir = neutralPathJoin(outDir, 'client');
+  const serverDir = neutralPathJoin(outDir, 'server');
+  const manifestFilePath =
+    manifestFile === undefined ? undefined : resolvedFileSystemPath(manifestFile);
+  const stylesheetSourceRoot =
+    stylesheetSourceRootOption === undefined
+      ? undefined
+      : resolvedFileSystemPath(stylesheetSourceRootOption);
+  const manifestDistDir =
+    manifestFilePath === undefined
+      ? undefined
+      : neutralPathDirname(neutralPathDirname(manifestFilePath));
+  const registeredClientModules = registeredClientModuleBuildArtifacts(app.clientModules.entries());
   const appShellBuild =
     manifestFilePath === undefined
       ? createKovoAppShellViteBuild({
-          app: options.app,
-          ...(options.base === undefined ? {} : { base: options.base }),
-          ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-          ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+          app,
+          ...(base === undefined ? {} : { base }),
+          ...(clientModules === undefined ? {} : { clientModules }),
+          ...(routeEntryMap === undefined ? {} : { routeEntryMap }),
         })
       : await createKovoAppShellViteBuildFromManifestFile({
-          app: options.app,
-          ...(options.base === undefined ? {} : { base: options.base }),
-          ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+          app,
+          ...(base === undefined ? {} : { base }),
+          ...(clientModules === undefined ? {} : { clientModules }),
           manifestFile: manifestFilePath,
-          ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+          ...(routeEntryMap === undefined ? {} : { routeEntryMap }),
         });
-  const buildClientModules = [...appShellBuild.clientModules, ...registeredClientModules];
+  const buildClientModules = concatenateNeutralBuildArrays(
+    appShellBuild.clientModules,
+    registeredClientModules,
+    'neutral build client modules',
+  );
   const buildWithRegisteredClientModules = {
-    ...appShellBuild,
+    app: appShellBuild.app,
+    assets: snapshotBuildArray(appShellBuild.assets, 'neutral build assets'),
     clientModules: buildClientModules,
+    routeHints: snapshotBuildArray(appShellBuild.routeHints, 'neutral build route hints'),
   };
 
   await mkdir(clientDir, { recursive: true });
@@ -162,9 +251,8 @@ export async function writeKovoNeutralBuild(
     outDir: clientDir,
     staticExport: false,
   });
-  const serverHandlerSource = options.serverHandlerSource;
   const serverHandlerPath =
-    serverHandlerSource === undefined ? undefined : path.join(serverDir, 'handler.mjs');
+    serverHandlerSource === undefined ? undefined : neutralPathJoin(serverDir, 'handler.mjs');
   if (serverHandlerSource !== undefined && serverHandlerPath !== undefined) {
     await mkdir(serverDir, { recursive: true });
     await writeFile(serverHandlerPath, serverHandlerSource, 'utf8');
@@ -173,36 +261,37 @@ export async function writeKovoNeutralBuild(
   await materializeNeutralStylesheetAssets({
     app: appShellBuild.app,
     assets: appShellBuild.assets,
-    buildStylesheetCss: options.buildStylesheetCss ?? [],
+    buildStylesheetCss,
     manifestDistDir,
     rootDir: clientDir,
     stylesheetSourceRoot,
   });
 
-  const manifestPath = path.join(outDir, 'manifest.json');
-  const routesPath = path.join(outDir, 'routes.json');
-  const metaPath = path.join(outDir, 'meta.json');
+  const manifestPath = neutralPathJoin(outDir, 'manifest.json');
+  const routesPath = neutralPathJoin(outDir, 'routes.json');
+  const metaPath = neutralPathJoin(outDir, 'meta.json');
   const staticOutput = await writeNeutralStaticOutput({
     app: buildWithRegisteredClientModules.app,
     assets: buildWithRegisteredClientModules.assets,
-    base: options.base,
+    base,
     manifestDistDir,
     outDir,
   });
   const publicAssetDir = await writeNeutralPublicAssets(
     manifestDistDir,
-    path.join(outDir, 'public'),
+    neutralPathJoin(outDir, 'public'),
   );
   if (staticOutput !== undefined) {
     await materializeNeutralStylesheetAssets({
       app: buildWithRegisteredClientModules.app,
       assets: buildWithRegisteredClientModules.assets,
-      buildStylesheetCss: options.buildStylesheetCss ?? [],
+      buildStylesheetCss,
       manifestDistDir,
       rootDir: staticOutput.dir,
       stylesheetSourceRoot,
     });
   }
+  const tasks = neutralBuildTasks(buildWithRegisteredClientModules.app);
   const neutral: KovoNeutralBuild = {
     clientDir,
     clientModules: buildWithRegisteredClientModules.clientModules,
@@ -215,17 +304,15 @@ export async function writeKovoNeutralBuild(
     serverDir,
     ...(serverHandlerPath === undefined ? {} : { serverHandlerPath }),
     staticAssets: buildWithRegisteredClientModules.assets,
-    tasks: buildWithRegisteredClientModules.app.tasks.map((task) => ({ key: task.key })),
+    tasks,
     ...(staticOutput === undefined ? {} : { staticOutput }),
-    staticOnly: neutralBuildIsStaticOnly(buildWithRegisteredClientModules.app, staticOutput),
+    staticOnly: neutralBuildIsStaticOnly(buildWithRegisteredClientModules.app, staticOutput, tasks),
     version: neutralBuildVersion,
   };
 
   await writeJson(manifestPath, {
     assets: buildWithRegisteredClientModules.assets,
-    clientModules: buildWithRegisteredClientModules.clientModules.map(
-      ({ source: _source, ...module }) => module,
-    ),
+    clientModules: neutralBuildClientModuleMetadata(buildWithRegisteredClientModules.clientModules),
     routeHints: buildWithRegisteredClientModules.routeHints,
     tasks: neutral.tasks,
     version: neutralBuildVersion,
@@ -247,19 +334,133 @@ export async function writeKovoNeutralBuild(
 function registeredClientModuleBuildArtifacts(
   modules: readonly VersionedClientModuleInput[],
 ): KovoAppShellBuiltClientModule[] {
-  return modules.map((module) => {
+  const source = snapshotBuildArray(modules, 'registered client modules');
+  const builtModules: KovoAppShellBuiltClientModule[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const module = snapshotRegisteredClientModule(source[index]!, index);
     const href = versionedClientModuleHref(module.path, module.version);
-    const url = new URL(href, 'https://kovo.local');
+    const pathname = clientModulePath(href);
     const built: KovoAppShellBuiltClientModule = {
-      file: normalizedDistFile(url.pathname),
+      file: normalizedDistFile(pathname),
       href,
-      path: url.pathname,
+      path: pathname,
       source: module.source,
       version: module.version,
     };
-    if (module.contentType !== undefined) return { ...built, contentType: module.contentType };
-    return built;
-  });
+    builtModules[builtModules.length] =
+      module.contentType === undefined ? built : { ...built, contentType: module.contentType };
+  }
+  return builtModules;
+}
+
+function snapshotRegisteredClientModule(
+  value: VersionedClientModuleInput,
+  index: number,
+): VersionedClientModuleInput {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError(`Registered client module ${index} must be an object.`);
+  }
+  const path = requiredNeutralString(value, 'path', `registered client module ${index}.path`);
+  const source = requiredNeutralString(value, 'source', `registered client module ${index}.source`);
+  const version = requiredNeutralString(
+    value,
+    'version',
+    `registered client module ${index}.version`,
+  );
+  const contentType = optionalNeutralString(
+    value,
+    'contentType',
+    `registered client module ${index}.contentType`,
+  );
+  return {
+    ...(contentType === undefined ? {} : { contentType }),
+    path,
+    source,
+    version,
+  };
+}
+
+function neutralBuildClientModuleMetadata(
+  modules: readonly KovoAppShellBuiltClientModule[],
+): readonly Omit<KovoAppShellBuiltClientModule, 'source'>[] {
+  const source = snapshotBuildArray(modules, 'neutral build client module metadata');
+  const metadata: Omit<KovoAppShellBuiltClientModule, 'source'>[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const module = source[index];
+    if (typeof module !== 'object' || module === null) {
+      throw new TypeError(`Neutral build client module ${index} must be an object.`);
+    }
+    const contentType = optionalNeutralString(
+      module,
+      'contentType',
+      `neutral build client module ${index}.contentType`,
+    );
+    metadata[metadata.length] = {
+      ...(contentType === undefined ? {} : { contentType }),
+      file: requiredNeutralString(module, 'file', `neutral build client module ${index}.file`),
+      href: requiredNeutralString(module, 'href', `neutral build client module ${index}.href`),
+      path: requiredNeutralString(module, 'path', `neutral build client module ${index}.path`),
+      version: requiredNeutralString(
+        module,
+        'version',
+        `neutral build client module ${index}.version`,
+      ),
+    };
+  }
+  return snapshotBuildArray(metadata, 'pinned neutral build client module metadata');
+}
+
+function neutralBuildTasks(app: KovoApp): readonly { key: string }[] {
+  const source = snapshotBuildArray(app.tasks, 'neutral build tasks');
+  const tasks: { key: string }[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const declaration = source[index];
+    if (typeof declaration !== 'object' || declaration === null) {
+      throw new TypeError(`Neutral build task ${index} must be an object.`);
+    }
+    tasks[tasks.length] = {
+      key: requiredNeutralString(declaration, 'key', `neutral build task ${index}.key`),
+    };
+  }
+  return snapshotBuildArray(tasks, 'pinned neutral build tasks');
+}
+
+function requiredNeutralString(value: object, property: PropertyKey, label: string): string {
+  const field = buildOwnDataProperty(value, property, label);
+  if (!field.present || typeof field.value !== 'string') {
+    throw new TypeError(`${label} must be a string.`);
+  }
+  return field.value;
+}
+
+function optionalNeutralString(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): string | undefined {
+  const field = buildOwnDataProperty(value, property, label);
+  if (!field.present || field.value === undefined) return undefined;
+  if (typeof field.value !== 'string') {
+    throw new TypeError(`${label} must be a string.`);
+  }
+  return field.value;
+}
+
+function concatenateNeutralBuildArrays<Value>(
+  first: readonly Value[],
+  second: readonly Value[],
+  label: string,
+): readonly Value[] {
+  const pinnedFirst = snapshotBuildArray(first, `${label} first`);
+  const pinnedSecond = snapshotBuildArray(second, `${label} second`);
+  const combined: Value[] = [];
+  for (let index = 0; index < pinnedFirst.length; index += 1) {
+    combined[combined.length] = pinnedFirst[index]!;
+  }
+  for (let index = 0; index < pinnedSecond.length; index += 1) {
+    combined[combined.length] = pinnedSecond[index]!;
+  }
+  return snapshotBuildArray(combined, label);
 }
 
 interface NeutralStaticOutputOptions {
@@ -281,7 +482,7 @@ async function writeNeutralStaticOutput({
     return undefined;
   }
 
-  const staticDir = path.join(outDir, 'static');
+  const staticDir = neutralPathJoin(outDir, 'static');
   const routePlan = staticExportRoutePlan(app);
 
   try {
@@ -296,26 +497,36 @@ async function writeNeutralStaticOutput({
       onNonExportable: 'skip',
       outDir: staticDir,
     });
-    if (result.artifacts.length === 0) {
+    const artifacts = snapshotBuildArray(result.artifacts, 'neutral static export artifacts');
+    if (artifacts.length === 0) {
       await rmNeutralStaticOutput(staticDir);
       return undefined;
     }
 
-    const diagnosticRoutePaths = new Set(
-      result.diagnostics.map((diagnostic) => diagnostic.routePath),
-    );
-    const manifestPath = path.join(staticDir, 'kovo-static-manifest.json');
+    const diagnostics = snapshotBuildArray(result.diagnostics, 'neutral static export diagnostics');
+    const targets = snapshotBuildArray(routePlan.targets, 'neutral static export route targets');
+    const routeDocuments: StaticExportRouteTarget[] = [];
+    for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
+      const target = targets[targetIndex]!;
+      let hasDiagnostic = false;
+      for (let diagnosticIndex = 0; diagnosticIndex < diagnostics.length; diagnosticIndex += 1) {
+        if (diagnostics[diagnosticIndex]!.routePath === target.routePath) {
+          hasDiagnostic = true;
+          break;
+        }
+      }
+      if (!hasDiagnostic) routeDocuments[routeDocuments.length] = target;
+    }
+    const manifestPath = neutralPathJoin(staticDir, 'kovo-static-manifest.json');
     await writeJson(manifestPath, {
       version: neutralBuildVersion,
     });
     return {
-      complete: result.diagnostics.length === 0,
-      diagnostics: result.diagnostics,
+      complete: diagnostics.length === 0,
+      diagnostics,
       dir: staticDir,
       manifestPath,
-      routeDocuments: routePlan.targets.filter(
-        (target) => !diagnosticRoutePaths.has(target.routePath),
-      ),
+      routeDocuments: snapshotBuildArray(routeDocuments, 'neutral static route documents'),
     };
   } catch {
     await rmNeutralStaticOutput(staticDir);
@@ -326,12 +537,14 @@ async function writeNeutralStaticOutput({
 function neutralBuildIsStaticOnly(
   app: KovoApp,
   staticOutput: KovoNeutralBuild['staticOutput'] | undefined,
+  tasks: readonly { key: string }[],
 ): boolean {
   return (
     staticOutput?.complete === true &&
-    app.endpoints.length === 0 &&
-    app.mutations.length === 0 &&
-    app.queries.length === 0
+    snapshotBuildArray(app.endpoints, 'neutral build endpoints').length === 0 &&
+    snapshotBuildArray(app.mutations, 'neutral build mutations').length === 0 &&
+    snapshotBuildArray(app.queries, 'neutral build queries').length === 0 &&
+    tasks.length === 0
   );
 }
 
@@ -339,17 +552,32 @@ function neutralBuildRouteEntries(
   app: KovoApp,
   staticOutput: KovoNeutralBuild['staticOutput'] | undefined,
 ): unknown[] {
-  return app.routes.map((route) => {
-    const diagnostics =
-      staticOutput?.diagnostics.filter((diagnostic) => diagnostic.routePath === route.path) ?? [];
-    const staticPaths =
-      staticOutput?.routeDocuments
-        .filter((document) => document.routePath === route.path)
-        .map((document) => document.path) ?? [];
+  const routes = snapshotBuildArray(app.routes, 'neutral build routes');
+  const allDiagnostics = snapshotBuildArray(
+    staticOutput?.diagnostics ?? [],
+    'neutral build route diagnostics',
+  );
+  const routeDocuments = snapshotBuildArray(
+    staticOutput?.routeDocuments ?? [],
+    'neutral build route documents',
+  );
+  const entries: unknown[] = [];
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const route = routes[routeIndex]!;
+    const diagnostics: StaticExportDiagnostic[] = [];
+    const staticPaths: string[] = [];
+    for (let index = 0; index < allDiagnostics.length; index += 1) {
+      const diagnostic = allDiagnostics[index]!;
+      if (diagnostic.routePath === route.path) diagnostics[diagnostics.length] = diagnostic;
+    }
+    for (let index = 0; index < routeDocuments.length; index += 1) {
+      const document = routeDocuments[index]!;
+      if (document.routePath === route.path) staticPaths[staticPaths.length] = document.path;
+    }
     const policy =
       staticPaths.length === 0 ? 'dynamic' : diagnostics.length === 0 ? 'static' : 'mixed';
 
-    return {
+    entries[entries.length] = {
       export: {
         ...(diagnostics.length === 0 ? {} : { diagnostics }),
         policy,
@@ -357,17 +585,24 @@ function neutralBuildRouteEntries(
       },
       path: route.path,
     };
-  });
+  }
+  return entries;
 }
 
 function neutralStaticExportAssets(
   assets: readonly KovoNeutralBuild['staticAssets'][number][],
   manifestDistDir: string,
 ): StaticExportAssetInput[] {
-  return assets.map((asset) => ({
-    path: asset.path,
-    source: viteDistSourcePath(manifestDistDir, asset.file),
-  }));
+  const source = snapshotBuildArray(assets, 'neutral static export assets');
+  const pinned: StaticExportAssetInput[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const asset = source[index]!;
+    pinned[pinned.length] = {
+      path: asset.path,
+      source: viteDistSourcePath(manifestDistDir, asset.file),
+    };
+  }
+  return pinned;
 }
 
 async function rmNeutralStaticOutput(staticDir: string): Promise<void> {
@@ -383,7 +618,7 @@ async function copyNeutralStaticAssets(
 
   for (const asset of assets) {
     const outputPath = neutralClientOutputPath(clientDir, asset.path);
-    await mkdir(path.dirname(outputPath), { recursive: true });
+    await mkdir(neutralPathDirname(outputPath), { recursive: true });
     await copyFile(viteDistSourcePath(manifestDistDir, asset.file), outputPath);
   }
 }
@@ -405,7 +640,7 @@ async function copyNeutralPublicAssetEntries(
   outRoot: string,
   relativeDir: string,
 ): Promise<boolean> {
-  const sourceDir = path.join(sourceRoot, relativeDir);
+  const sourceDir = neutralPathJoin(sourceRoot, relativeDir);
   const entries = await readdir(sourceDir, { withFileTypes: true }).catch((error) => {
     if (isNodeError(error) && error.code === 'ENOENT') return [];
     throw error;
@@ -413,10 +648,10 @@ async function copyNeutralPublicAssetEntries(
   let copied = false;
 
   for (const entry of entries) {
-    const relativePath = path.join(relativeDir, entry.name);
+    const relativePath = neutralPathJoin(relativeDir, entry.name);
     if (skipNeutralPublicAsset(relativePath, entry)) continue;
 
-    const sourcePath = path.join(sourceRoot, relativePath);
+    const sourcePath = neutralPathJoin(sourceRoot, relativePath);
     const outputPath = neutralClientOutputPath(outRoot, relativePath);
     if (entry.isDirectory()) {
       copied = (await copyNeutralPublicAssetEntries(sourceRoot, outRoot, relativePath)) || copied;
@@ -424,7 +659,7 @@ async function copyNeutralPublicAssetEntries(
     }
     if (!entry.isFile()) continue;
 
-    await mkdir(path.dirname(outputPath), { recursive: true });
+    await mkdir(neutralPathDirname(outputPath), { recursive: true });
     await copyFile(sourcePath, outputPath);
     copied = true;
   }
@@ -433,7 +668,7 @@ async function copyNeutralPublicAssetEntries(
 }
 
 function skipNeutralPublicAsset(relativePath: string, entry: { name: string }): boolean {
-  const normalized = relativePath.replaceAll(path.sep, '/');
+  const normalized = relativePath.replaceAll(neutralPathSeparator, '/');
   if (normalized === '.vite' || normalized.startsWith('.vite/')) return true;
   if (normalized === 'assets' || normalized.startsWith('assets/')) return true;
   if (normalized === 'c' || normalized.startsWith('c/')) return true;
@@ -481,10 +716,12 @@ async function materializeNeutralStylesheetAssets({
       viteCss || cssChunks.length > 0 || localSourceFile === undefined
         ? ''
         : await readRequiredStylesheet(localSourceFile, assetPath);
-    const mergedCss = dedupeCssChunks([...cssChunks, localCss, viteCss]).join('\n');
+    const mergedCss = dedupeCssChunks(
+      concatenateNeutralBuildArrays(cssChunks, [localCss, viteCss], 'neutral stylesheet chunks'),
+    ).join('\n');
     if (!mergedCss) continue;
 
-    await mkdir(path.dirname(outputPath), { recursive: true });
+    await mkdir(neutralPathDirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${mergedCss}${mergedCss.endsWith('\n') ? '' : '\n'}`, 'utf8');
   }
 }
@@ -517,9 +754,12 @@ function stylesheetCssByPath(
   for (const route of app.routes) {
     for (const asset of route.stylesheets ?? []) addStylesheetDeclarationCss(cssByPath, asset);
   }
-  const cssAssetPaths = assets
-    .map((asset) => asset.path)
-    .filter((assetPath) => assetPath.endsWith('.css'));
+  const pinnedAssets = snapshotBuildArray(assets, 'neutral stylesheet build assets');
+  const cssAssetPaths: string[] = [];
+  for (let index = 0; index < pinnedAssets.length; index += 1) {
+    const assetPath = pinnedAssets[index]!.path;
+    if (assetPath.endsWith('.css')) cssAssetPaths[cssAssetPaths.length] = assetPath;
+  }
   for (const asset of buildStylesheetCss) {
     addStylesheetCss(
       cssByPath,
@@ -568,9 +808,13 @@ function stylesheetSourceFileFromRoot(
 ): string | undefined {
   const sourcePath = stylesheetSourcePath(asset);
   if (sourcePath === undefined || stylesheetSourceRoot === undefined) return undefined;
-  const sourceFile = path.resolve(stylesheetSourceRoot, sourcePath);
-  const relativeToRoot = path.relative(stylesheetSourceRoot, sourceFile);
-  if (relativeToRoot === '' || relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
+  const sourceFile = neutralPathResolve(stylesheetSourceRoot, sourcePath);
+  const relativeToRoot = neutralPathRelative(stylesheetSourceRoot, sourceFile);
+  if (
+    relativeToRoot === '' ||
+    relativeToRoot.startsWith('..') ||
+    neutralPathIsAbsolute(relativeToRoot)
+  ) {
     throw new Error(
       `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${sourcePath}' outside stylesheetSourceRoot '${stylesheetSourceRoot}'. SPEC §9.5 static export writes referenced static assets with route documents.`,
     );
@@ -651,14 +895,21 @@ async function readRequiredStylesheet(fileName: string, assetPath: string): Prom
 }
 
 function dedupeCssChunks(chunks: readonly string[]): string[] {
-  const seen = new Set<string>();
+  const source = snapshotBuildArray(chunks, 'neutral stylesheet CSS chunks');
   const deduped: string[] = [];
 
-  for (const chunk of chunks) {
+  for (let index = 0; index < source.length; index += 1) {
+    const chunk = source[index]!;
     const css = chunk.trim();
-    if (!css || seen.has(css)) continue;
-    seen.add(css);
-    deduped.push(css);
+    if (!css) continue;
+    let seen = false;
+    for (let seenIndex = 0; seenIndex < deduped.length; seenIndex += 1) {
+      if (deduped[seenIndex] === css) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) deduped[deduped.length] = css;
   }
 
   return deduped;
@@ -670,13 +921,13 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 
 function neutralClientOutputPath(clientDir: string, urlPath: string): string {
   const relativePath = urlPath.startsWith('/') ? urlPath.slice(1) : urlPath;
-  const outputPath = path.resolve(clientDir, relativePath);
-  const relativeToClient = path.relative(clientDir, outputPath);
+  const outputPath = neutralPathResolve(clientDir, relativePath);
+  const relativeToClient = neutralPathRelative(clientDir, outputPath);
 
   if (
     relativeToClient === '' ||
     relativeToClient.startsWith('..') ||
-    path.isAbsolute(relativeToClient)
+    neutralPathIsAbsolute(relativeToClient)
   ) {
     throw new Error(`Neutral build asset must stay within the client directory: ${urlPath}`);
   }
@@ -685,6 +936,26 @@ function neutralClientOutputPath(clientDir: string, urlPath: string): string {
 }
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await mkdir(neutralPathDirname(filePath), { recursive: true });
+  await writeFile(filePath, `${buildSecuritySourceLiteral(value)}\n`, 'utf8');
+}
+
+function neutralPathDirname(value: string): string {
+  return witnessReflectApply(nativePathDirname, path, [value]);
+}
+
+function neutralPathIsAbsolute(value: string): boolean {
+  return witnessReflectApply(nativePathIsAbsolute, path, [value]);
+}
+
+function neutralPathJoin(...values: string[]): string {
+  return witnessReflectApply(nativePathJoin, path, values);
+}
+
+function neutralPathRelative(from: string, to: string): string {
+  return witnessReflectApply(nativePathRelative, path, [from, to]);
+}
+
+function neutralPathResolve(...values: string[]): string {
+  return witnessReflectApply(nativePathResolve, path, values);
 }

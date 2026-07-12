@@ -1,13 +1,15 @@
-import type { VersionedClientModuleInput } from './client-modules.js';
+import { clientModulePath } from '@kovojs/core/internal/client-module-url';
+
 import { assertNoBlockingAppDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
-import type { KovoApp } from './app-types.js';
+import type { AppRouteDeclaration, KovoApp } from './app-types.js';
 import {
   buildOwnDataProperty,
   buildSecuritySha256Hex,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
+import type { VersionedClientModuleInput } from './client-modules.js';
 import type { PageHintOptions } from './hints.js';
 import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
 import type { KovoAppShellVitePluginStaticExportOptions } from './vite-static-export-options.js';
@@ -151,30 +153,39 @@ export interface KovoAppShellBuild {
  * Exported only for in-repo build/host config, not app authors.
  */
 export function createKovoAppShellBuild(options: KovoAppShellBuildOptions): KovoAppShellBuild {
-  assertKovoAppShellBuildApp(options.app);
-  assertNoBlockingAppDiagnostics(options.app);
-  const manifestOptions = viteManifestOptions(options.base);
-  const routeHints = buildRouteHints(options.manifest, options.routeEntries, manifestOptions);
-  const app =
-    routeHints.length === 0
-      ? options.app
-      : deriveClosedKovoApp(options.app, {
-          routes: options.app.routes.map((routeDeclaration) => {
-            const built = routeHints.find((entry) => entry.routePath === routeDeclaration.path);
-            return built
-              ? {
-                  ...routeDeclaration,
-                  ...mergePageHints(routeDeclaration, built.hints),
-                }
-              : routeDeclaration;
-          }),
-        });
-  const clientModules = registerCompiledClientModules(options.app, options.clientModules ?? []);
-  const assets = options.manifest
-    ? kovoAppShellViteManifestAssets(options.manifest, manifestOptions)
-    : [];
+  const source = buildOptionsObject(options, 'app-shell build options');
+  const sourceApp = requiredBuildOption(source, 'app', 'app-shell build options.app') as KovoApp;
+  const base = optionalBuildOption(source, 'base', 'app-shell build options.base') as
+    | string
+    | undefined;
+  const clientModules = optionalBuildOption(
+    source,
+    'clientModules',
+    'app-shell build options.clientModules',
+  ) as readonly KovoAppShellCompiledClientModule[] | undefined;
+  const manifest = optionalBuildOption(source, 'manifest', 'app-shell build options.manifest') as
+    | KovoAppShellViteManifest
+    | undefined;
+  const routeEntries = optionalBuildOption(
+    source,
+    'routeEntries',
+    'app-shell build options.routeEntries',
+  ) as readonly KovoAppShellRouteBuildEntry[] | undefined;
 
-  return { app, assets, clientModules, routeHints };
+  assertKovoAppShellBuildApp(sourceApp);
+  assertNoBlockingAppDiagnostics(sourceApp);
+  const sourceRoutes = snapshotBuildArray(sourceApp.routes, 'app-shell build routes');
+  const manifestOptions = viteManifestOptions(base);
+  const routeHints = buildRouteHints(manifest, routeEntries, manifestOptions);
+  const derivedRoutes = buildRoutesWithHints(sourceRoutes, routeHints);
+  const builtApp =
+    routeHints.length === 0
+      ? sourceApp
+      : deriveClosedKovoApp(sourceApp, { routes: derivedRoutes } as Partial<KovoApp>);
+  const builtClientModules = registerCompiledClientModules(sourceApp, clientModules ?? []);
+  const assets = manifest ? kovoAppShellViteManifestAssets(manifest, manifestOptions) : [];
+
+  return { app: builtApp, assets, clientModules: builtClientModules, routeHints };
 }
 
 function assertKovoAppShellBuildApp(app: KovoApp): void {
@@ -185,6 +196,26 @@ function assertKovoAppShellBuildApp(app: KovoApp): void {
   );
 }
 
+function buildOptionsObject(value: unknown, label: string): object {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError(`${label} must be an own-data object.`);
+  }
+  return value;
+}
+
+function requiredBuildOption(options: object, property: PropertyKey, label: string): unknown {
+  const field = buildOwnDataProperty(options, property, label);
+  if (!field.present || field.value === undefined) {
+    throw new TypeError(`${label} is required.`);
+  }
+  return field.value;
+}
+
+function optionalBuildOption(options: object, property: PropertyKey, label: string): unknown {
+  const field = buildOwnDataProperty(options, property, label);
+  return field.present ? field.value : undefined;
+}
+
 /**
  * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Builds an app shell
  * from an in-memory manifest and route entry map.
@@ -193,19 +224,41 @@ function assertKovoAppShellBuildApp(app: KovoApp): void {
 export function createKovoAppShellViteBuild(
   options: KovoAppShellViteBuildOptions,
 ): KovoAppShellBuild {
+  const source = buildOptionsObject(options, 'app-shell Vite build options');
+  const app = requiredBuildOption(source, 'app', 'app-shell Vite build options.app') as KovoApp;
+  assertKovoAppShellBuildApp(app);
+  const base = optionalBuildOption(source, 'base', 'app-shell Vite build options.base') as
+    | string
+    | undefined;
+  const clientModules = optionalBuildOption(
+    source,
+    'clientModules',
+    'app-shell Vite build options.clientModules',
+  ) as readonly KovoAppShellCompiledClientModule[] | undefined;
+  const manifest = optionalBuildOption(
+    source,
+    'manifest',
+    'app-shell Vite build options.manifest',
+  ) as KovoAppShellViteManifest | undefined;
+  const routeEntryMap = optionalBuildOption(
+    source,
+    'routeEntryMap',
+    'app-shell Vite build options.routeEntryMap',
+  ) as KovoAppShellRouteEntryMap | undefined;
+  const routes = snapshotBuildArray(app.routes, 'app-shell Vite route declarations');
   const routeEntries =
-    options.routeEntryMap === undefined
+    routeEntryMap === undefined
       ? undefined
-      : kovoAppShellViteRouteEntries(options.routeEntryMap, {
-          ...(options.manifest === undefined ? {} : { manifest: options.manifest }),
-          routes: options.app.routes,
+      : kovoAppShellViteRouteEntries(routeEntryMap, {
+          ...(manifest === undefined ? {} : { manifest }),
+          routes,
         });
 
   return createKovoAppShellBuild({
-    app: options.app,
-    ...(options.base === undefined ? {} : { base: options.base }),
-    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    ...(options.manifest === undefined ? {} : { manifest: options.manifest }),
+    app,
+    ...(base === undefined ? {} : { base }),
+    ...(clientModules === undefined ? {} : { clientModules }),
+    ...(manifest === undefined ? {} : { manifest }),
     ...(routeEntries === undefined ? {} : { routeEntries }),
   });
 }
@@ -218,12 +271,36 @@ export function createKovoAppShellViteBuild(
 export function createKovoAppShellViteBuildFromBundle(
   options: KovoAppShellViteBundleBuildOptions,
 ): KovoAppShellBuild {
+  const source = buildOptionsObject(options, 'app-shell Vite bundle build options');
+  const app = requiredBuildOption(
+    source,
+    'app',
+    'app-shell Vite bundle build options.app',
+  ) as KovoApp;
+  const bundle = requiredBuildOption(
+    source,
+    'bundle',
+    'app-shell Vite bundle build options.bundle',
+  ) as KovoAppShellViteOutputBundle;
+  const base = optionalBuildOption(source, 'base', 'app-shell Vite bundle build options.base') as
+    | string
+    | undefined;
+  const clientModules = optionalBuildOption(
+    source,
+    'clientModules',
+    'app-shell Vite bundle build options.clientModules',
+  ) as readonly KovoAppShellCompiledClientModule[] | undefined;
+  const routeEntryMap = optionalBuildOption(
+    source,
+    'routeEntryMap',
+    'app-shell Vite bundle build options.routeEntryMap',
+  ) as KovoAppShellRouteEntryMap | undefined;
   return createKovoAppShellViteBuild({
-    app: options.app,
-    ...(options.base === undefined ? {} : { base: options.base }),
-    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifest: kovoAppShellViteManifestFromBundle(options.bundle),
-    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+    app,
+    ...(base === undefined ? {} : { base }),
+    ...(clientModules === undefined ? {} : { clientModules }),
+    manifest: kovoAppShellViteManifestFromBundle(bundle),
+    ...(routeEntryMap === undefined ? {} : { routeEntryMap }),
   });
 }
 
@@ -235,12 +312,45 @@ export function createKovoAppShellViteBuildFromBundle(
 export async function createKovoAppShellViteBuildFromManifestFile(
   options: KovoAppShellViteManifestFileBuildOptions,
 ): Promise<KovoAppShellBuild> {
-  return createKovoAppShellViteBuild({
-    app: options.app,
-    ...(options.base === undefined ? {} : { base: options.base }),
-    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
-    manifest: await kovoAppShellViteManifestFromFile(options.manifestFile),
-    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+  const source = buildOptionsObject(options, 'app-shell Vite manifest build options');
+  const app = requiredBuildOption(
+    source,
+    'app',
+    'app-shell Vite manifest build options.app',
+  ) as KovoApp;
+  const manifestFile = requiredBuildOption(
+    source,
+    'manifestFile',
+    'app-shell Vite manifest build options.manifestFile',
+  ) as string | URL;
+  const base = optionalBuildOption(source, 'base', 'app-shell Vite manifest build options.base') as
+    | string
+    | undefined;
+  const clientModules = optionalBuildOption(
+    source,
+    'clientModules',
+    'app-shell Vite manifest build options.clientModules',
+  ) as readonly KovoAppShellCompiledClientModule[] | undefined;
+  const routeEntryMap = optionalBuildOption(
+    source,
+    'routeEntryMap',
+    'app-shell Vite manifest build options.routeEntryMap',
+  ) as KovoAppShellRouteEntryMap | undefined;
+  assertKovoAppShellBuildApp(app);
+  const routes = snapshotBuildArray(app.routes, 'app-shell Vite manifest route declarations');
+  const routeEntries =
+    routeEntryMap === undefined
+      ? undefined
+      : kovoAppShellViteRouteEntries(routeEntryMap, { routes });
+  const pinnedClientModules =
+    clientModules === undefined ? undefined : snapshotCompiledClientModules(clientModules);
+  const manifest = await kovoAppShellViteManifestFromFile(manifestFile);
+  return createKovoAppShellBuild({
+    app,
+    ...(base === undefined ? {} : { base }),
+    ...(pinnedClientModules === undefined ? {} : { clientModules: pinnedClientModules }),
+    manifest,
+    ...(routeEntries === undefined ? {} : { routeEntries }),
   });
 }
 
@@ -248,13 +358,72 @@ function buildRouteHints(
   manifest: KovoAppShellViteManifest | undefined,
   routeEntries: readonly KovoAppShellRouteBuildEntry[] | undefined,
   options: KovoAppShellViteManifestHintOptions,
-): KovoAppShellRouteBuildHints[] {
-  if (!manifest || !routeEntries || routeEntries.length === 0) return [];
+): readonly KovoAppShellRouteBuildHints[] {
+  if (!manifest || !routeEntries) return [];
+  const entries = snapshotBuildArray(routeEntries, 'app-shell route hint entries');
+  const hints: KovoAppShellRouteBuildHints[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (typeof entry !== 'object' || entry === null) {
+      throw new TypeError(`App-shell route hint entry ${index} must be an object.`);
+    }
+    const routePath = buildOwnDataProperty(
+      entry,
+      'routePath',
+      `app-shell route hint entry ${index}.routePath`,
+    );
+    const routeManifestEntries = buildOwnDataProperty(
+      entry,
+      'entries',
+      `app-shell route hint entry ${index}.entries`,
+    );
+    if (!routePath.present || typeof routePath.value !== 'string') {
+      throw new TypeError(`App-shell route hint entry ${index}.routePath must be a string.`);
+    }
+    if (!routeManifestEntries.present) {
+      throw new TypeError(`App-shell route hint entry ${index}.entries must be an array.`);
+    }
+    const pinnedManifestEntries = snapshotBuildArray(
+      routeManifestEntries.value as readonly string[],
+      `app-shell route hint entry ${index}.entries`,
+    );
+    hints[hints.length] = {
+      hints: kovoAppShellViteManifestHints(manifest, pinnedManifestEntries, options),
+      routePath: routePath.value,
+    };
+  }
 
-  return routeEntries.map((entry) => ({
-    hints: kovoAppShellViteManifestHints(manifest, entry.entries, options),
-    routePath: entry.routePath,
-  }));
+  return snapshotBuildArray(hints, 'built app-shell route hints');
+}
+
+function buildRoutesWithHints(
+  routes: readonly AppRouteDeclaration[],
+  routeHints: readonly KovoAppShellRouteBuildHints[],
+): readonly AppRouteDeclaration[] {
+  if (routeHints.length === 0) return routes;
+
+  const pinnedRoutes = snapshotBuildArray(routes, 'app-shell build routes');
+  const pinnedHints = snapshotBuildArray(routeHints, 'app-shell build route hints');
+  const derived: AppRouteDeclaration[] = [];
+  for (let routeIndex = 0; routeIndex < pinnedRoutes.length; routeIndex += 1) {
+    const routeDeclaration = pinnedRoutes[routeIndex]!;
+    let built: KovoAppShellRouteBuildHints | undefined;
+    for (let hintIndex = 0; hintIndex < pinnedHints.length; hintIndex += 1) {
+      const candidate = pinnedHints[hintIndex]!;
+      if (candidate.routePath === routeDeclaration.path) {
+        built = candidate;
+        break;
+      }
+    }
+    derived[derived.length] =
+      built === undefined
+        ? routeDeclaration
+        : {
+            ...routeDeclaration,
+            ...mergePageHints(routeDeclaration, built.hints),
+          };
+  }
+  return snapshotBuildArray(derived, 'derived app-shell build routes');
 }
 
 function registerCompiledClientModules(
@@ -285,12 +454,12 @@ function registerCompiledClientModules(
       ...registryModule,
       version,
     });
-    const url = new URL(href, 'https://kovo.local');
+    const pathname = clientModulePath(href);
 
     const built: KovoAppShellBuiltClientModule = {
-      file: normalizedDistFile(url.pathname),
+      file: normalizedDistFile(pathname),
       href,
-      path: url.pathname,
+      path: pathname,
       source: module.source,
       version,
     };

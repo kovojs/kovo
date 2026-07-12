@@ -667,6 +667,52 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('does not let late task traversal omit durable-task deployment authority', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-task-intrinsics-'));
+    const sendReceipt = task('receipt/send', {
+      input: s.object({ orderId: s.string() }),
+      async run() {},
+    });
+    const app = createApp({
+      routes: [
+        route('/', {
+          page() {
+            return renderedHtml('<main>Home</main>');
+          },
+        }),
+      ],
+      tasks: [sendReceipt],
+    });
+    const originalMap = Array.prototype.map;
+    let poisonHits = 0;
+
+    try {
+      Array.prototype.map = function omitDurableTasks(this: unknown, callback, thisArg) {
+        if (this === app.tasks) {
+          poisonHits += 1;
+          return [];
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+
+      const build = await writeKovoNeutralBuild({ app, outDir: join(root, '.kovo') });
+
+      expect(build.tasks).toEqual([{ key: 'receipt/send' }]);
+      expect(build.staticOnly).toBe(false);
+      await expect(readJson(join(root, '.kovo/manifest.json'))).resolves.toMatchObject({
+        tasks: [{ key: 'receipt/send' }],
+      });
+      await expect(readJson(join(root, '.kovo/meta.json'))).resolves.toMatchObject({
+        staticOnly: false,
+        tasks: [{ key: 'receipt/send' }],
+      });
+      expect(poisonHits).toBe(0);
+    } finally {
+      Array.prototype.map = originalMap;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails closed when node runner-only mode is selected before an emitted runner entrypoint exists', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-runner-only-'));
 
