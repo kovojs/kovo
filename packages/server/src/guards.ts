@@ -335,6 +335,76 @@ export type SessionProvider<RawRequest, SessionValue> = (
   | null
   | undefined;
 
+interface SnapshottedSessionProviderEnvelope<SessionValue> {
+  readonly setCookies: readonly string[];
+  readonly value: SessionValue | null | undefined;
+}
+
+const MAX_SESSION_PROVIDER_SET_COOKIES = 256;
+
+/**
+ * Reconstruct an untrusted provider envelope from exact own data descriptors (SPEC §6.6 C9).
+ * The provider runs in application code in the shared server realm: inherited fields, accessors,
+ * sparse arrays, and late Array prototype replacements are not session or response authority.
+ */
+function snapshotSessionProviderEnvelope<SessionValue>(
+  result: SessionProviderResult<SessionValue> | SessionValue | null | undefined,
+): SnapshottedSessionProviderEnvelope<SessionValue> | undefined {
+  if ((typeof result !== 'object' && typeof result !== 'function') || result === null) {
+    return undefined;
+  }
+
+  const valueDescriptor = witnessGetOwnPropertyDescriptor(result, 'value');
+  const cookiesDescriptor = witnessGetOwnPropertyDescriptor(result, 'setCookies');
+  if (cookiesDescriptor === undefined) return undefined;
+  if (
+    valueDescriptor === undefined ||
+    !('value' in valueDescriptor) ||
+    !('value' in cookiesDescriptor) ||
+    !witnessIsArray(cookiesDescriptor.value)
+  ) {
+    throw new TypeError(
+      'Session provider envelopes require own data properties `value` and dense string `setCookies`.',
+    );
+  }
+
+  const source = cookiesDescriptor.value;
+  const lengthDescriptor = witnessGetOwnPropertyDescriptor(source, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number' ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > MAX_SESSION_PROVIDER_SET_COOKIES ||
+    lengthDescriptor.value % 1 !== 0
+  ) {
+    throw new TypeError('Session provider `setCookies` must be a bounded dense string array.');
+  }
+
+  const setCookies: string[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(source, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Session provider `setCookies` must be a bounded dense string array.');
+    }
+    witnessDefineProperty(setCookies, index, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+
+  return witnessFreeze({
+    setCookies: witnessFreeze(setCookies),
+    value: valueDescriptor.value as SessionValue | null | undefined,
+  });
+}
+
 /**
  * @internal Type guard distinguishing the additive `{ value, setCookies }` provider result
  * (part-3 I2) from a plain `SessionValue`. A `SessionValue` could itself be an object with a
@@ -346,13 +416,11 @@ export type SessionProvider<RawRequest, SessionValue> = (
 export function isSessionProviderResult<SessionValue>(
   result: SessionProviderResult<SessionValue> | SessionValue | null | undefined,
 ): result is SessionProviderResult<SessionValue> {
-  return (
-    typeof result === 'object' &&
-    result !== null &&
-    'value' in result &&
-    'setCookies' in result &&
-    Array.isArray((result as { setCookies?: unknown }).setCookies)
-  );
+  try {
+    return snapshotSessionProviderEnvelope(result) !== undefined;
+  } catch {
+    return false;
+  }
 }
 
 /** A function that resolves the app database/transaction handle for a request. */
@@ -539,8 +607,15 @@ export const guards = {
   all<Request, RefinedRequest extends Request = Request>(
     ...items: Guard<Request, RefinedRequest>[]
   ): Guard<Request, RefinedRequest> {
+    const executable = executableGuardAccessDecision(items) as
+      | readonly Guard<Request, RefinedRequest>[]
+      | undefined;
+    if (executable === undefined) {
+      throw new TypeError('guards.all(...) requires one or more dense executable guards.');
+    }
     const guard: Guard<Request, RefinedRequest> = async (request: Request) => {
-      for (const item of items) {
+      for (let index = 0; index < executable.length; index += 1) {
+        const item = executable[index]!;
         const result = await item(request);
         // Propagate the first denial (intent object) or bare `false` as-is so the
         // §6.5 status mapping stays owned by the render path, not flattened here.
@@ -549,15 +624,25 @@ export const guards = {
 
       return true;
     };
-    return stampGuardAudit(
-      guard,
-      items.flatMap((item) => {
-        const facts = explainGuard(item);
-        return facts.length === 0
-          ? [{ kind: 'opaque' as const, name: item.name || 'anonymous' }]
-          : facts;
-      }),
-    );
+    const auditFacts: GuardAuditFact[] = [];
+    for (let index = 0; index < executable.length; index += 1) {
+      const item = executable[index]!;
+      const facts = explainGuard(item);
+      if (facts.length === 0) {
+        appendGuardAuditFact(auditFacts, {
+          kind: 'opaque',
+          name: item.name || 'anonymous',
+        });
+        continue;
+      }
+      for (let factIndex = 0; factIndex < facts.length; factIndex += 1) {
+        const descriptor = witnessGetOwnPropertyDescriptor(facts as object, factIndex);
+        if (descriptor !== undefined && 'value' in descriptor) {
+          appendGuardAuditFact(auditFacts, descriptor.value as GuardAuditFact);
+        }
+      }
+    }
+    return stampGuardAudit(guard, auditFacts);
   },
   authed<Request extends SessionRequestLike>(): Guard<Request, AuthenticatedRequest<Request>> {
     return stampGuardAudit(
@@ -755,6 +840,15 @@ function stampGuardAudit<Request, RefinedRequest extends Request = Request>(
   return guard;
 }
 
+function appendGuardAuditFact(target: GuardAuditFact[], fact: GuardAuditFact): void {
+  witnessDefineProperty(target, target.length, {
+    configurable: true,
+    enumerable: true,
+    value: fact,
+    writable: true,
+  });
+}
+
 function freezeGuardAuditFact(fact: GuardAuditFact): GuardAuditFact {
   if (fact.kind === 'owns') {
     return witnessFreeze({
@@ -858,7 +952,8 @@ export async function runGuardChain<Request>(
       status: 422,
     };
   }
-  for (const item of executable) {
+  for (let index = 0; index < executable.length; index += 1) {
+    const item = executable[index]!;
     const failure = await runGuard(item, request);
     if (failure) return failure;
   }
@@ -879,7 +974,9 @@ export async function runAccessDecisionGuards<Request>(
   request: Request,
 ): Promise<ResolvedGuardFailure | null> {
   const decision = snapshotAccessDecision(access);
-  if (Array.isArray(decision)) return runGuardChain(decision, request);
+  if (witnessIsArray(decision)) {
+    return runGuardChain(decision as readonly Guard<Request>[], request);
+  }
   if (decision !== undefined) return null;
   return runGuard(fallbackGuard, request);
 }
@@ -903,13 +1000,16 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     // rolling/refresh provider's fresh Set-Cookie headers reach the response; a plain
     // SessionValue return keeps working unchanged.
     let sessionValue: SessionValue | null;
-    if (isSessionProviderResult<SessionValue>(resolved)) {
-      sessionValue = resolved.value ?? null;
+    const envelope = snapshotSessionProviderEnvelope<SessionValue>(resolved);
+    if (envelope !== undefined) {
+      sessionValue = envelope.value ?? null;
       if (options.onSessionSetCookie) {
-        for (const cookie of resolved.setCookies ?? []) options.onSessionSetCookie(cookie);
+        for (let index = 0; index < envelope.setCookies.length; index += 1) {
+          options.onSessionSetCookie(envelope.setCookies[index]!);
+        }
       }
     } else {
-      sessionValue = resolved ?? null;
+      sessionValue = (resolved as SessionValue | null | undefined) ?? null;
     }
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
   }
@@ -1308,7 +1408,13 @@ function rateLimitKey<Request extends SessionRequestLike>(
     // `req.clientIp` (see ClientIpRequestLike) from the trusted source the coarse limiter uses —
     // never a raw header read here. Namespace with an `ip:` prefix so an IP can never collide with
     // a session id bucket.
-    const clientIp = (request as ClientIpRequestLike).clientIp;
+    const clientIpDescriptor = isObjectLike(request)
+      ? witnessGetOwnPropertyDescriptor(request, 'clientIp')
+      : undefined;
+    const clientIp =
+      clientIpDescriptor !== undefined && 'value' in clientIpDescriptor
+        ? clientIpDescriptor.value
+        : undefined;
     if (clientIp !== undefined && clientIp !== '') {
       return `ip:${requestStateRequiredRateLimitKey(clientIp, "guards.rateLimit({ per: 'ip' })")}`;
     }

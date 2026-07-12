@@ -24,6 +24,7 @@ import {
   guardAuditName,
   guards,
   runAccessDecisionGuards,
+  runGuardChain,
   type Guard,
 } from './guards.js';
 import { renderedHtml } from './html.js';
@@ -44,6 +45,39 @@ function sign(body: string): string {
 }
 
 describe('structured access metadata', () => {
+  it('executes dense guard snapshots without mutable Array classifiers or iterators', async () => {
+    // SPEC §6.6 C9/§10.2: the audited guard list and the enforced list are one exact object.
+    // Mutable realm intrinsics cannot reinterpret that private list as empty/public after audit.
+    const deny = guard('deny-hostile-array-intrinsics', () => ({ kind: 'forbidden' as const }));
+    const all = guards.all(deny);
+    const nativeIsArray = Array.isArray;
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    let allResult: ReturnType<typeof all>;
+    let chainResult: ReturnType<typeof runGuardChain>;
+    let accessResult: ReturnType<typeof runAccessDecisionGuards>;
+
+    try {
+      Array.isArray = () => false;
+      Array.prototype[Symbol.iterator] = function* () {};
+      allResult = all({});
+      chainResult = runGuardChain([deny], {});
+      accessResult = runAccessDecisionGuards([deny], undefined, {});
+    } finally {
+      Array.isArray = nativeIsArray;
+      Array.prototype[Symbol.iterator] = nativeIterator;
+    }
+
+    await expect(allResult).resolves.toMatchObject({ kind: 'forbidden' });
+    await expect(chainResult).resolves.toMatchObject({
+      auth: 'unauthorized',
+      code: 'UNAUTHORIZED',
+    });
+    await expect(accessResult).resolves.toMatchObject({
+      auth: 'unauthorized',
+      code: 'UNAUTHORIZED',
+    });
+  });
+
   it('defines public, verified machine, and executable guard access decisions', () => {
     const publicDecision = publicAccess('marketing page');
     const machineDecision = verifiedAccess;

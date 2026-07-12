@@ -68,4 +68,29 @@ describe("guards.rateLimit({ per: 'ip' }) (capability-gaps §3; SPEC §9.5:935 /
     const guard = guards.rateLimit<IpRequest>({ per: 'ip', max: 5 });
     expect(() => guard({})).toThrow(/cannot derive a client IP/);
   });
+
+  it('rejects inherited clientIp authority instead of letting prototype rotation reset buckets', () => {
+    // SPEC §9.5: only the request shell may attach the trustworthy client-IP dimension. An
+    // inherited value is application-controlled ambient state, not framework-resolved authority.
+    const guard = guards.rateLimit<IpRequest>({ per: 'ip', max: 1 });
+    const existing = Object.getOwnPropertyDescriptor(Object.prototype, 'clientIp');
+    try {
+      Object.defineProperty(Object.prototype, 'clientIp', {
+        configurable: true,
+        value: '198.51.100.1',
+        writable: true,
+      });
+      expect(() => guard({})).toThrow(/cannot derive a client IP/);
+
+      Object.defineProperty(Object.prototype, 'clientIp', {
+        configurable: true,
+        value: '198.51.100.2',
+        writable: true,
+      });
+      expect(() => guard({})).toThrow(/cannot derive a client IP/);
+    } finally {
+      if (existing === undefined) delete (Object.prototype as { clientIp?: unknown }).clientIp;
+      else Object.defineProperty(Object.prototype, 'clientIp', existing);
+    }
+  });
 });

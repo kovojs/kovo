@@ -177,6 +177,51 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
     expect(guards.role<typeof request>('admin')(request)).toBe(true);
   });
 
+  it('ignores inherited session-provider envelope authority and forged refresh cookies', async () => {
+    // SPEC §6.5/§6.6 C9: a provider envelope crosses a trust boundary. Only exact own data
+    // fields may select its principal or response cookies; Object.prototype is never authority.
+    const existingValue = Object.getOwnPropertyDescriptor(Object.prototype, 'value');
+    const existingSetCookies = Object.getOwnPropertyDescriptor(Object.prototype, 'setCookies');
+    const forwarded: string[] = [];
+    const victim = { user: { id: 'victim', roles: ['member'] } };
+    let attachedSession: unknown;
+    let adminDecision: unknown;
+
+    try {
+      Object.defineProperty(Object.prototype, 'value', {
+        configurable: true,
+        value: { user: { id: 'attacker', roles: ['admin'] } },
+        writable: true,
+      });
+      Object.defineProperty(Object.prototype, 'setCookies', {
+        configurable: true,
+        value: ['sid=forged-admin-session; Path=/; HttpOnly'],
+        writable: true,
+      });
+
+      const request = await resolveLifecycleRequest(
+        {},
+        {
+          onSessionSetCookie: (cookie) => forwarded.push(cookie),
+          sessionProvider: () => victim,
+        },
+      );
+
+      attachedSession = request.session;
+      adminDecision = guards.role<typeof request>('admin')(request);
+    } finally {
+      if (existingValue === undefined) delete (Object.prototype as { value?: unknown }).value;
+      else Object.defineProperty(Object.prototype, 'value', existingValue);
+      if (existingSetCookies === undefined) {
+        delete (Object.prototype as { setCookies?: unknown }).setCookies;
+      } else Object.defineProperty(Object.prototype, 'setCookies', existingSetCookies);
+    }
+
+    expect(attachedSession).toBe(victim);
+    expect(adminDecision).toEqual({ kind: 'forbidden', payload: {} });
+    expect(forwarded).toEqual([]);
+  });
+
   it('keys authorization principal from session.user.id rather than session.id', async () => {
     expect(guards.authed<Req>()({ session: { id: 'session_1', user: { id: 'user_1' } } })).toBe(
       true,
