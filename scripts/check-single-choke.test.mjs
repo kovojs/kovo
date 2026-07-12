@@ -206,6 +206,29 @@ export function leak(handle) {
     );
   });
 
+  it('enrolls the secret-read inspector and test-only managed handle composition points', () => {
+    const result = runDefaultFixture({
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/secret-read-boundary.ts': `
+export function pinRelationalReadQuery(handle) {
+  const target = frameworkManagedDbRawTarget(handle) ?? handle;
+  return inspect(target);
+}
+`,
+      'packages/server/src/testing.ts': `
+export function asAdmin(runtime) {
+  return managedDb(runtime.db(), 'read');
+}
+`,
+    });
+
+    expect(result.findings).toEqual([]);
+  });
+
   it('accepts endpoint ctx.actAs DB scope construction as an audited framework composition point', () => {
     const result = runFixture({
       'packages/server/src/sql-safe-handle.ts': `

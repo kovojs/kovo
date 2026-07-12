@@ -37,6 +37,9 @@ export const defaultAllowedDriverFiles = [
 export const defaultAllowedRawTargetFiles = [
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/managed-db.ts',
+  // SPEC §6.6/§10.3: the secret-read membrane unwraps only to pin relational query metadata and
+  // then returns a newly boxed result surface; the raw target never crosses the boundary.
+  'packages/server/src/secret-read-boundary.ts',
   'packages/server/src/task-queue.ts',
   'packages/server/src/mutation.ts',
 ];
@@ -186,6 +189,9 @@ function isAllowedManagedHandleFactoryFile(filePath) {
     // SPEC §10.3/§11.2: the public SQLite starter wrapper composes the same managed DB read/write
     // boundaries as Postgres while keeping low-level adapter hooks internal.
     filePath === 'packages/server/src/sqlite-runtime.ts' ||
+    // The test-only public subpath composes the same managed read handle after establishing an
+    // explicit admin guard and table-scoped cross-owner posture (SPEC §10.3 DEC-G).
+    filePath === 'packages/server/src/testing.ts' ||
     filePath === 'packages/server/src/webhook.ts'
   );
 }

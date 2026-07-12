@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkFilesystemBoundary, filesystemBoundaryFile } from './check-filesystem-boundary.mjs';
+import {
+  checkFilesystemBoundary,
+  defaultAllowedToolingFiles,
+  filesystemBoundaryFile,
+} from './check-filesystem-boundary.mjs';
 
 function runFixture(files, overrides = {}) {
   return checkFilesystemBoundary({
@@ -72,5 +76,11 @@ export function escape(root: string, key: string) {
     });
 
     expect(result.findings).toEqual([]);
+  });
+
+  it('keeps the static-analysis Stats intrinsic in the tooling-only inventory', () => {
+    expect(defaultAllowedToolingFiles).toContain(
+      'packages/server/src/internal/data-plane-static-analysis-intrinsics.ts',
+    );
   });
 });

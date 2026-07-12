@@ -30,7 +30,12 @@ export const defaultPublicEntrypointFiles = [
 
 export const defaultCommandExecutionRoots = productionSourceRoots;
 
-export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts'];
+export const defaultCommandExecutionSinkFiles = [
+  'packages/server/src/command.ts',
+  'packages/server/src/command-intrinsics.ts',
+];
+export const defaultCommandPrimitiveFiles = ['packages/server/src/command.ts'];
+export const defaultCommandIntrinsicsPath = 'packages/server/src/command-intrinsics.ts';
 
 export const defaultCommandExecutionToolingRationales = {
   'packages/cli/src/bin.ts':
@@ -175,6 +180,8 @@ export function checkSinkPolicyGate(options = {}) {
   const commandExecutionRoots = options.commandExecutionRoots ?? defaultCommandExecutionRoots;
   const commandExecutionSinkFiles =
     options.commandExecutionSinkFiles ?? defaultCommandExecutionSinkFiles;
+  const commandPrimitiveFiles = options.commandPrimitiveFiles ?? defaultCommandPrimitiveFiles;
+  const commandIntrinsicsPath = options.commandIntrinsicsPath ?? defaultCommandIntrinsicsPath;
   const commandExecutionToolingRationales =
     options.commandExecutionToolingRationales ?? defaultCommandExecutionToolingRationales;
   const dynamicCodeExecutionSinkFiles =
@@ -301,6 +308,7 @@ export function checkSinkPolicyGate(options = {}) {
   }
 
   const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
+  const commandPrimitiveFileSet = new Set(commandPrimitiveFiles);
   const commandExecutionToolingFileSet = new Set(Object.keys(commandExecutionToolingRationales));
   for (const [filePath, rationale] of Object.entries(commandExecutionToolingRationales)) {
     if (typeof rationale !== 'string' || rationale.trim().length < 20) {
@@ -338,8 +346,14 @@ export function checkSinkPolicyGate(options = {}) {
     if (deserializationFiles.includes(filePath)) {
       findings.push(...deserializationSinkFindings(filePath, text));
     }
-    if (commandExecutionSinkFileSet.has(filePath)) {
-      findings.push(...commandPrimitiveInvariantFindings(filePath, text));
+    if (commandPrimitiveFileSet.has(filePath)) {
+      findings.push(
+        ...commandPrimitiveInvariantFindings(filePath, text, {
+          intrinsicsText: exists(commandIntrinsicsPath)
+            ? readText(commandIntrinsicsPath)
+            : undefined,
+        }),
+      );
     }
     if (rootedFileServeSinkFileSet.has(filePath)) {
       findings.push(...rootedFileServeInvariantFindings(filePath, text));
@@ -1755,8 +1769,9 @@ export function logChannelNeutralizerInvariantFindings(filePath, text) {
   return findings;
 }
 
-export function commandPrimitiveInvariantFindings(filePath, text) {
+export function commandPrimitiveInvariantFindings(filePath, text, options = {}) {
   const source = stripComments(text);
+  const intrinsicsSource = stripComments(options.intrinsicsText ?? '');
   const findings = [];
 
   if (
@@ -1775,7 +1790,9 @@ export function commandPrimitiveInvariantFindings(filePath, text) {
   }
   const readsExplicitAllowlist =
     /\bcommandAllowlists\s*\.get\s*\(\s*options\s*\?\.\s*allow\s*\)/.test(source) ||
-    /\bwitnessWeakMapGet\s*\(\s*commandAllowlists\s*,\s*options\s*\.\s*allow\s*\)/.test(source);
+    /\bwitnessWeakMapGet\s*\(\s*commandAllowlists\s*,\s*(?:options\s*\.\s*allow|configuredAllow)(?:\s+as\s+CommandAllowlist)?\s*\)/.test(
+      source,
+    );
   if (!readsExplicitAllowlist) {
     findings.push(
       `${filePath}: cmd() must require an explicit commandAllowlist before minting Command values`,
@@ -1794,16 +1811,34 @@ export function commandPrimitiveInvariantFindings(filePath, text) {
       `${filePath}: runCommand() must re-check the registered command execution witness`,
     );
   }
-  if (
-    !/\bexecFile\s*\(\s*command\s*\.\s*program\s*,\s*\[\s*\.\.\.\s*command\s*\.\s*argv\s*\]\s*,\s*execOptions\s*,/.test(
+  const directExec =
+    /\bexecFile\s*\(\s*command\s*\.\s*program\s*,\s*\[\s*\.\.\.\s*command\s*\.\s*argv\s*\]\s*,\s*execOptions\s*,/.test(
       source,
-    )
-  ) {
+    );
+  const delegatedExec =
+    /\breturn\s+commandExecFile\s*\(\s*program\s*,\s*argv\s*,\s*execOptions\s*\)/.test(source) &&
+    /\bcommandExecFile\b[\s\S]*?from\s*['"]\.\/command-intrinsics\.js['"]/.test(source) &&
+    /\bconst\s+nativeExecFile\s*=\s*builtinExecFile\b/.test(intrinsicsSource) &&
+    /\bexport\s+function\s+commandExecFile\s*\([^)]*program\s*:\s*string[^)]*argv\s*:\s*string\[\][^)]*options\s*:\s*PinnedCommandExecOptions[^)]*\)/.test(
+      intrinsicsSource,
+    ) &&
+    /\bnativeExecFile\s*\(\s*program\s*,\s*exactArgv\s+as\s+string\[\]\s*,\s*options\s*,/.test(
+      intrinsicsSource,
+    );
+  if (!directExec && !delegatedExec) {
     findings.push(
       `${filePath}: runCommand() must execute the minted program/argv through execFile with explicit options`,
     );
   }
-  if (!/\bshell\s*:\s*false\b/.test(source)) {
+  if (
+    !/\bshell\s*:\s*false\b/.test(source) &&
+    !(
+      delegatedExec &&
+      /\breturn\s+commandFreeze\s*\(\s*\{[\s\S]{0,1000}?\bshell\s*:\s*false\b/.test(
+        intrinsicsSource,
+      )
+    )
+  ) {
     findings.push(`${filePath}: runCommand() execFile options must set shell: false`);
   }
 

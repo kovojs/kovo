@@ -293,6 +293,56 @@ describe('sink-policy gate', () => {
     );
   });
 
+  it('accepts the boot-pinned command intrinsic split and still rejects a shell regression', () => {
+    const commandSource = `
+      import { commandExecFile } from './command-intrinsics.js';
+      const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
+      const commandAllowlists = createWitnessWeakMap();
+      export function cmd(program, options) {
+        const configuredAllow = options.allow;
+        const allowedPrograms = witnessWeakMapGet(commandAllowlists, configuredAllow);
+        if (!witnessSetHas(allowedPrograms as Set<string>, program)) throw new TypeError();
+        return blessSink(COMMAND_EXEC_FILE_SINK, program);
+      }
+      export function isCommand(value) {
+        return isBlessedSink(COMMAND_EXEC_FILE_SINK, value);
+      }
+      export function runCommand(command) {
+        const program = command.program;
+        const argv = [...command.argv];
+        const execOptions = commandExecOptions();
+        return commandExecFile(program, argv, execOptions);
+      }
+    `;
+    const intrinsicsSource = `
+      import { execFile as builtinExecFile } from 'node:child_process';
+      const nativeExecFile = builtinExecFile;
+      interface PinnedCommandExecOptions { shell: false }
+      export function commandExecFile(
+        program: string,
+        argv: string[],
+        options: PinnedCommandExecOptions,
+      ) {
+        const exactArgv = argv;
+        nativeExecFile(program, exactArgv as string[], options, () => {});
+      }
+      export function commandPinnedExecOptions() { return commandFreeze({ shell: false }); }
+    `;
+
+    expect(
+      commandPrimitiveInvariantFindings('packages/server/src/command.ts', commandSource, {
+        intrinsicsText: intrinsicsSource,
+      }),
+    ).toEqual([]);
+    expect(
+      commandPrimitiveInvariantFindings('packages/server/src/command.ts', commandSource, {
+        intrinsicsText: intrinsicsSource.replace('shell: false });', 'shell: true });'),
+      }),
+    ).toContain(
+      'packages/server/src/command.ts: runCommand() execFile options must set shell: false',
+    );
+  });
+
   it('asserts rootedFiles keeps constructor-owned root and witness checks', () => {
     expect(
       rootedFileServeInvariantFindings(

@@ -22,6 +22,9 @@ export const defaultAllowedRuntimeFiles = [
 
 export const defaultAllowedToolingFiles = [
   'packages/server/src/build.ts',
+  // Static-analysis tooling captures only `Stats.prototype.isDirectory`; all app/runtime file
+  // reads still route through the core filesystem boundary (SPEC §2/§11.4).
+  'packages/server/src/internal/data-plane-static-analysis-intrinsics.ts',
   'packages/server/src/internal/data-plane-static-analysis.ts',
   'packages/server/src/neutral-build.ts',
   'packages/server/src/vite.ts',
