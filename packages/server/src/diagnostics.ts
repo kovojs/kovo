@@ -51,6 +51,7 @@ const diagnosticHeadersControlsSound = diagnosticHeaderControlsAreSound();
 const nativeAtob = globalThis.atob;
 const NativeBlob = Blob;
 const NativeError = Error;
+const NativeObject = Object;
 const NativeEvalError = EvalError;
 const NativeRangeError = RangeError;
 const NativeReferenceError = ReferenceError;
@@ -64,8 +65,8 @@ const NativeURL = URL;
 const NativeURLSearchParams = URLSearchParams;
 const nativeFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 const nativeErrorStackDescriptor = witnessGetOwnPropertyDescriptor(new NativeError(), 'stack');
-const nativeObjectCreate = Object.create;
-const nativeObjectPrototype = Object.prototype;
+const nativeObjectCreate = NativeObject.create;
+const nativeObjectPrototype = NativeObject.prototype;
 const nativeErrorPrototypeNames = new Map<object, string>([
   [NativeError.prototype, 'Error'],
   [NativeEvalError.prototype, 'EvalError'],
@@ -502,7 +503,7 @@ function sanitizeDiagnosticValue(
       if (key === 'name' || key === 'message' || key === 'stack') continue;
       const descriptor = witnessGetOwnPropertyDescriptor(value, key);
       if (!descriptor) continue;
-      if (typeof key === 'symbol') {
+      if (typeof key !== 'string') {
         changed = true;
         continue;
       }
@@ -538,7 +539,7 @@ function sanitizeDiagnosticValue(
       if (key === 'length') continue;
       const descriptor = witnessGetOwnPropertyDescriptor(value, key);
       if (!descriptor) continue;
-      if (typeof key === 'symbol') {
+      if (typeof key !== 'string') {
         changed = true;
         continue;
       }
@@ -581,7 +582,7 @@ function sanitizeDiagnosticValue(
     const key = keys[index]!;
     const descriptor = witnessGetOwnPropertyDescriptor(value, key);
     if (!descriptor) continue;
-    if (typeof key === 'symbol') {
+    if (typeof key !== 'string') {
       changed = true;
       continue;
     }

@@ -354,9 +354,9 @@ export function requestStateExactCompositeKey(first: unknown, second: unknown): 
 export function requestStateIsSingleLeadingSlashPath(value: string): boolean {
   assertRequestStateIntrinsics();
   return (
-    apply(nativeStringStartsWith, value, ['/']) &&
-    !apply(nativeStringStartsWith, value, ['//']) &&
-    !apply(nativeStringStartsWith, value, ['/\\'])
+    apply<boolean>(nativeStringStartsWith, value, ['/']) &&
+    !apply<boolean>(nativeStringStartsWith, value, ['//']) &&
+    !apply<boolean>(nativeStringStartsWith, value, ['/\\'])
   );
 }
 

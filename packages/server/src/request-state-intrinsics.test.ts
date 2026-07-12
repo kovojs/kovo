@@ -120,7 +120,7 @@ describe('request-state intrinsic membrane', () => {
       },
     });
     const request = () => new Request('https://example.test/protected');
-    expect(preDispatchLoadShedResponse(app, request(), 'route')).toBeUndefined();
+    expect(preDispatchLoadShedResponse(app, request(), 'other')).toBeUndefined();
 
     const guard = guards.rateLimit<Record<string, never>>({
       key: () => 'client-a',
@@ -154,7 +154,7 @@ describe('request-state intrinsic membrane', () => {
       Map.prototype.delete = () => true;
       Map.prototype.forEach = () => undefined;
 
-      appStatus = preDispatchLoadShedResponse(app, request(), 'route')?.status;
+      appStatus = preDispatchLoadShedResponse(app, request(), 'other')?.status;
       const guardResult = guard({});
       guardKind = typeof guardResult === 'object' ? guardResult.kind : undefined;
     } finally {
