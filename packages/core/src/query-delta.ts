@@ -10,6 +10,7 @@ import {
   securityMapGet,
   securityMapHas,
   securityMapSet,
+  securityNullRecord,
   securityObjectKeys,
   securityOwnArrayEntry,
   securitySet,
@@ -93,6 +94,47 @@ function isRecordShape(value: unknown): boolean {
   return typeof value === 'object' && value !== null && !securityIsArray(value);
 }
 
+function snapshotOwnDataRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!isRecordShape(value)) return undefined;
+  const snapshot = securityNullRecord<unknown>();
+  const keys = snapshotDenseArray<string>(securityObjectKeys(value as object));
+  if (keys === undefined) return undefined;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = securityGetOwnPropertyDescriptor(value as object, key);
+    if (descriptor === undefined || !('value' in descriptor)) return undefined;
+    securityDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return snapshot;
+}
+
+function snapshotDenseArray<Value>(value: unknown): Value[] | undefined {
+  if (!securityIsArray(value)) return undefined;
+  const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
+  if (lengthDescriptor === undefined || !('value' in lengthDescriptor)) return undefined;
+  const length = lengthDescriptor.value;
+  if (typeof length !== 'number' || length < 0 || length > 0xffff_ffff || length % 1 !== 0) {
+    return undefined;
+  }
+  const snapshot: Value[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(value as readonly Value[], index);
+    if (!entry.ok) return undefined;
+    snapshot[index] = entry.value;
+  }
+  return snapshot;
+}
+
+function recordValue(record: Record<string, unknown>, key: string): unknown {
+  const descriptor = securityGetOwnPropertyDescriptor(record, key);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+}
+
 function rowKey(row: JsonValue, keyField: string): string | undefined {
   if (!isPlainObject(row)) return undefined;
   const descriptor = securityGetOwnPropertyDescriptor(row, keyField);
@@ -126,38 +168,42 @@ export function buildQueryDelta(
   affectedKeysByDomain: ReadonlyMap<string, ReadonlySet<string>>,
   listMeta: readonly QueryDeltaListMeta[],
 ): QueryDelta | undefined {
-  if (!isPlainObject(value) || listMeta.length === 0) return undefined;
+  const valueSnapshot = snapshotOwnDataRecord(value);
+  const metaSnapshot = snapshotDenseArray<QueryDeltaListMeta>(listMeta);
+  if (valueSnapshot === undefined || metaSnapshot === undefined || metaSnapshot.length === 0) {
+    return undefined;
+  }
 
-  const lists: { [path: string]: QueryListDelta } = {};
+  const lists = securityNullRecord<QueryListDelta>();
   const collectionPaths = securitySet<string>();
 
-  for (let metaIndex = 0; metaIndex < listMeta.length; metaIndex += 1) {
-    const metaEntry = securityOwnArrayEntry(listMeta, metaIndex);
-    if (!metaEntry.ok) return undefined;
-    const meta = metaEntry.value;
-    const affected = securityMapGet(affectedKeysByDomain, meta.domain);
+  for (let metaIndex = 0; metaIndex < metaSnapshot.length; metaIndex += 1) {
+    const metaRecord = snapshotOwnDataRecord(metaSnapshot[metaIndex]);
+    if (metaRecord === undefined) return undefined;
+    const domain = recordValue(metaRecord, 'domain');
+    const keyField = recordValue(metaRecord, 'key');
+    const path = recordValue(metaRecord, 'path');
+    if (typeof domain !== 'string' || typeof keyField !== 'string' || typeof path !== 'string') {
+      return undefined;
+    }
+    const affected = securityMapGet(affectedKeysByDomain, domain);
     // No explicit keys for this collection's domain ⇒ the whole collection could
     // have changed ⇒ a scoped delta is not sound. Fall back to full.
     if (affected === undefined || securitySetValues(affected).length === 0) return undefined;
 
-    const collectionDescriptor = securityGetOwnPropertyDescriptor(value, meta.path);
-    if (
-      collectionDescriptor === undefined ||
-      !('value' in collectionDescriptor) ||
-      !securityIsArray(collectionDescriptor.value)
-    ) {
+    const collectionDescriptor = securityGetOwnPropertyDescriptor(valueSnapshot, path);
+    if (collectionDescriptor === undefined || !('value' in collectionDescriptor)) {
       return undefined;
     }
-    const collection = collectionDescriptor.value as JsonValue[];
-    securitySetAdd(collectionPaths, meta.path);
+    const collection = snapshotDenseArray<JsonValue>(collectionDescriptor.value);
+    if (collection === undefined) return undefined;
+    securitySetAdd(collectionPaths, path);
 
     const upsert: JsonValue[] = [];
     const present = securitySet<string>();
     for (let rowIndex = 0; rowIndex < collection.length; rowIndex += 1) {
-      const rowEntry = securityOwnArrayEntry(collection, rowIndex);
-      if (!rowEntry.ok) return undefined;
-      const row = rowEntry.value;
-      const key = rowKey(row, meta.key);
+      const row = collection[rowIndex]!;
+      const key = rowKey(row, keyField);
       if (key === undefined) return undefined; // unkeyed row ⇒ cannot scope ⇒ full
       securitySetAdd(present, key);
       if (securitySetHas(affected, key)) upsert[upsert.length] = row;
@@ -170,11 +216,11 @@ export function buildQueryDelta(
       if (!securitySetHas(present, keyEntry.value)) remove[remove.length] = keyEntry.value;
     }
 
-    securityDefineProperty(lists, meta.path, {
+    securityDefineProperty(lists, path, {
       configurable: true,
       enumerable: true,
       value: {
-        key: meta.key,
+        key: keyField,
         ...(upsert.length > 0 ? { upsert } : {}),
         ...(remove.length > 0 ? { remove } : {}),
       },
@@ -182,14 +228,14 @@ export function buildQueryDelta(
     });
   }
 
-  const set: { [field: string]: JsonValue } = {};
-  const valueKeys = securityObjectKeys(value);
+  const set = securityNullRecord<JsonValue>();
+  const valueKeys = securityObjectKeys(valueSnapshot);
   for (let fieldIndex = 0; fieldIndex < valueKeys.length; fieldIndex += 1) {
     const fieldEntry = securityOwnArrayEntry(valueKeys, fieldIndex);
     if (!fieldEntry.ok) return undefined;
     const field = fieldEntry.value;
     if (securitySetHas(collectionPaths, field)) continue;
-    const fieldDescriptor = securityGetOwnPropertyDescriptor(value, field);
+    const fieldDescriptor = securityGetOwnPropertyDescriptor(valueSnapshot, field);
     if (fieldDescriptor === undefined || !('value' in fieldDescriptor)) return undefined;
     securityDefineProperty(set, field, {
       configurable: true,
@@ -244,15 +290,23 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
   // SPEC §847: a malformed/shape-skewed envelope is a delta-miss, not a silent
   // no-op apply. Throwing routes the caller to onDeltaMiss → full refetch
   // (browser/src/query-apply.ts) instead of swallowing corrupted truth as success.
-  if (!isRecordShape(delta)) {
+  // SPEC §6.6/§9.1.1: the wire delta is authority-bearing truth. Snapshot its exact own-data
+  // envelope once so inherited pollution and time-varying Proxy traps cannot add a later operation.
+  const deltaSnapshot = snapshotOwnDataRecord(delta);
+  if (deltaSnapshot === undefined) {
     throw new QueryDeltaApplyError('cannot apply a non-object query delta envelope');
   }
-  if (delta.set !== undefined && !isRecordShape(delta.set)) {
+  const rawSet = recordValue(deltaSnapshot, 'set');
+  const set = rawSet === undefined ? undefined : snapshotOwnDataRecord(rawSet);
+  if (rawSet !== undefined && set === undefined) {
     throw new QueryDeltaApplyError('query delta "set" is not a plain object');
   }
-  if (delta.lists !== undefined && !isRecordShape(delta.lists)) {
+  const rawLists = recordValue(deltaSnapshot, 'lists');
+  const lists = rawLists === undefined ? undefined : snapshotOwnDataRecord(rawLists);
+  if (rawLists !== undefined && lists === undefined) {
     throw new QueryDeltaApplyError('query delta "lists" is not a plain object');
   }
+  const listRecord = lists ?? securityNullRecord<unknown>();
 
   const next: { [key: string]: JsonValue } = cloneJsonValue(base);
 
@@ -264,9 +318,9 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
   // (the keys of `delta.lists`) are reconciled by identity below and MUST NEVER be
   // deleted by this rule — they are not part of the whole-object `set`. This
   // mirrors buildQueryDelta, which emits `set` as exactly value-minus-collectionPaths.
-  if (delta.set) {
+  if (set !== undefined) {
     const listPaths = securitySet<string>();
-    const listPathKeys = securityObjectKeys(delta.lists ?? {});
+    const listPathKeys = securityObjectKeys(listRecord);
     for (let index = 0; index < listPathKeys.length; index += 1) {
       const pathEntry = securityOwnArrayEntry(listPathKeys, index);
       if (!pathEntry.ok) throw new QueryDeltaApplyError('query delta list paths are unstable');
@@ -277,19 +331,19 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
       const fieldEntry = securityOwnArrayEntry(nextFields, index);
       if (!fieldEntry.ok) throw new QueryDeltaApplyError('query delta base fields are unstable');
       const field = fieldEntry.value;
-      if (!securityHasOwn(delta.set, field) && !securitySetHas(listPaths, field)) {
+      if (!securityHasOwn(set, field) && !securitySetHas(listPaths, field)) {
         delete next[field];
       }
     }
     // part-4 L2-protopollution-1: assign as an OWN data property. Bracket assignment of a
     // `__proto__` field from the wire/DB would invoke the prototype setter (rebinding the value
     // object's prototype + dropping the field) instead of replacing the field wholesale (§9.1.1).
-    const setFields = securityObjectKeys(delta.set);
+    const setFields = securityObjectKeys(set);
     for (let index = 0; index < setFields.length; index += 1) {
       const fieldEntry = securityOwnArrayEntry(setFields, index);
       if (!fieldEntry.ok) throw new QueryDeltaApplyError('query delta set fields are unstable');
       const field = fieldEntry.value;
-      const valueDescriptor = securityGetOwnPropertyDescriptor(delta.set, field);
+      const valueDescriptor = securityGetOwnPropertyDescriptor(set, field);
       if (valueDescriptor === undefined || !('value' in valueDescriptor)) {
         throw new QueryDeltaApplyError(`query delta set field "${field}" is unstable`);
       }
@@ -302,12 +356,12 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
     }
   }
 
-  const listFields = securityObjectKeys(delta.lists ?? {});
+  const listFields = securityObjectKeys(listRecord);
   for (let index = 0; index < listFields.length; index += 1) {
     const pathEntry = securityOwnArrayEntry(listFields, index);
     if (!pathEntry.ok) throw new QueryDeltaApplyError('query delta list fields are unstable');
     const path = pathEntry.value;
-    const listDescriptor = securityGetOwnPropertyDescriptor(delta.lists ?? {}, path);
+    const listDescriptor = securityGetOwnPropertyDescriptor(listRecord, path);
     if (listDescriptor === undefined || !('value' in listDescriptor)) {
       throw new QueryDeltaApplyError(`query delta list field "${path}" is unstable`);
     }
@@ -332,46 +386,57 @@ function reconcileList(
   listDelta: QueryListDelta,
   path: string,
 ): JsonValue[] {
-  if (!securityIsArray(baseList)) {
+  const baseRows = snapshotDenseArray<JsonValue>(baseList);
+  if (baseRows === undefined) {
     throw new QueryDeltaApplyError(`query delta targets non-array base collection "${path}"`);
+  }
+  const listSnapshot = snapshotOwnDataRecord(listDelta);
+  if (listSnapshot === undefined) {
+    throw new QueryDeltaApplyError(`query delta list operation for "${path}" is unstable`);
+  }
+  const keyField = recordValue(listSnapshot, 'key');
+  if (typeof keyField !== 'string') {
+    throw new QueryDeltaApplyError(`query delta list operation for "${path}" is missing its key`);
+  }
+  const rawRemove = recordValue(listSnapshot, 'remove');
+  const remove = rawRemove === undefined ? [] : snapshotDenseArray<string>(rawRemove);
+  if (remove === undefined) {
+    throw new QueryDeltaApplyError(`query delta remove list for "${path}" is not an array`);
+  }
+  const rawUpsert = recordValue(listSnapshot, 'upsert');
+  const upsert = rawUpsert === undefined ? [] : snapshotDenseArray<JsonValue>(rawUpsert);
+  if (upsert === undefined) {
+    throw new QueryDeltaApplyError(`query delta upsert list for "${path}" is not an array`);
+  }
+  const prepend = recordValue(listSnapshot, 'prepend');
+  if (prepend !== undefined && typeof prepend !== 'boolean') {
+    throw new QueryDeltaApplyError(`query delta prepend flag for "${path}" is unstable`);
   }
 
   const removeSet = securitySet<string>();
-  const remove = listDelta.remove ?? [];
-  if (!securityIsArray(remove)) {
-    throw new QueryDeltaApplyError(`query delta remove list for "${path}" is not an array`);
-  }
   for (let index = 0; index < remove.length; index += 1) {
-    const entry = securityOwnArrayEntry(remove, index);
-    if (!entry.ok || typeof entry.value !== 'string') {
+    const entry = remove[index];
+    if (typeof entry !== 'string') {
       throw new QueryDeltaApplyError(`query delta remove list for "${path}" is unstable`);
     }
-    securitySetAdd(removeSet, entry.value);
+    securitySetAdd(removeSet, entry);
   }
   const upsertByKey = securityMap<string, JsonValue>();
-  const upsert = listDelta.upsert ?? [];
-  if (!securityIsArray(upsert)) {
-    throw new QueryDeltaApplyError(`query delta upsert list for "${path}" is not an array`);
-  }
+  const upsertEntries: { key: string; row: JsonValue }[] = [];
   for (let index = 0; index < upsert.length; index += 1) {
-    const entry = securityOwnArrayEntry(upsert, index);
-    if (!entry.ok) {
-      throw new QueryDeltaApplyError(`query delta upsert list for "${path}" is unstable`);
-    }
-    const row = entry.value as JsonValue;
-    const key = rowKey(row, listDelta.key);
+    const row = upsert[index]!;
+    const key = rowKey(row, keyField);
     if (key === undefined) {
-      throw new QueryDeltaApplyError(`query delta upsert row missing key "${listDelta.key}"`);
+      throw new QueryDeltaApplyError(`query delta upsert row missing key "${keyField}"`);
     }
+    upsertEntries[index] = { key, row };
     securityMapSet(upsertByKey, key, row);
   }
 
   const kept: JsonValue[] = [];
-  for (let index = 0; index < baseList.length; index += 1) {
-    const entry = securityOwnArrayEntry(baseList, index);
-    if (!entry.ok) throw new QueryDeltaApplyError(`query delta base list "${path}" is unstable`);
-    const row = entry.value as JsonValue;
-    const key = rowKey(row, listDelta.key);
+  for (let index = 0; index < baseRows.length; index += 1) {
+    const row = baseRows[index]!;
+    const key = rowKey(row, keyField);
     if (key !== undefined && securitySetHas(removeSet, key)) continue;
     if (key !== undefined && securityMapHas(upsertByKey, key)) {
       kept[kept.length] = securityMapGet(upsertByKey, key) as JsonValue;
@@ -382,14 +447,11 @@ function reconcileList(
   }
   // New rows (upserts whose key was not already present), in wire order.
   const added: JsonValue[] = [];
-  for (let index = 0; index < upsert.length; index += 1) {
-    const entry = securityOwnArrayEntry(upsert, index);
-    if (!entry.ok) throw new QueryDeltaApplyError(`query delta upsert list "${path}" is unstable`);
-    const row = entry.value as JsonValue;
-    const key = rowKey(row, listDelta.key);
-    if (key !== undefined && securityMapHas(upsertByKey, key)) {
-      added[added.length] = row;
-      securityMapDelete(upsertByKey, key);
+  for (let index = 0; index < upsertEntries.length; index += 1) {
+    const entry = upsertEntries[index]!;
+    if (securityMapHas(upsertByKey, entry.key)) {
+      added[added.length] = entry.row;
+      securityMapDelete(upsertByKey, entry.key);
     }
   }
 
@@ -397,8 +459,8 @@ function reconcileList(
   // at the FRONT of the held list (load older), otherwise new rows append (load
   // more). Matched rows already reconciled in place above either way.
   const result: JsonValue[] = [];
-  const first = listDelta.prepend ? added : kept;
-  const second = listDelta.prepend ? kept : added;
+  const first = prepend === true ? added : kept;
+  const second = prepend === true ? kept : added;
   for (let index = 0; index < first.length; index += 1) {
     const entry = securityOwnArrayEntry(first, index);
     if (!entry.ok) throw new QueryDeltaApplyError(`query delta result for "${path}" is unstable`);

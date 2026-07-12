@@ -175,6 +175,125 @@ describe('applyQueryDelta', () => {
     expect(callHits).toBe(0);
   });
 
+  it('ignores inherited delta envelope fields', () => {
+    const base: JsonValue = { items: [{ id: 'p1', role: 'user' }] };
+    const inheritedLists = {
+      items: { key: 'id', upsert: [{ id: 'p1', role: 'admin' }] },
+    };
+    const descriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'lists');
+    let next: JsonValue;
+
+    try {
+      Object.defineProperty(Object.prototype, 'lists', {
+        configurable: true,
+        value: inheritedLists,
+      });
+      next = applyQueryDelta(base, {});
+    } finally {
+      if (descriptor === undefined) {
+        delete (Object.prototype as Record<string, unknown>).lists;
+      } else {
+        Object.defineProperty(Object.prototype, 'lists', descriptor);
+      }
+    }
+
+    expect(next!).toEqual(base);
+  });
+
+  it('reconciles without mutable collection iteration or keyed dispatch', () => {
+    const base: JsonValue = { items: [{ id: 'p1', role: 'user' }] };
+    const delta: QueryDelta = {
+      lists: { items: { key: 'id', upsert: [{ id: 'p1', role: 'member' }] } },
+    };
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    const nativeMapGet = Map.prototype.get;
+    const nativeMapHas = Map.prototype.has;
+    const nativeMapSet = Map.prototype.set;
+    const nativeMapDelete = Map.prototype.delete;
+    const nativeSetAdd = Set.prototype.add;
+    const nativeSetHas = Set.prototype.has;
+    const speciesDescriptor = Object.getOwnPropertyDescriptor(Array, Symbol.species);
+    let mutableDispatchHits = 0;
+    let next: JsonValue;
+
+    try {
+      Array.prototype[Symbol.iterator] = function mutableIterator() {
+        mutableDispatchHits += 1;
+        return Reflect.apply(nativeIterator, this, []);
+      };
+      Map.prototype.get = function mutableMapGet(key) {
+        mutableDispatchHits += 1;
+        return Reflect.apply(nativeMapGet, this, [key]);
+      };
+      Map.prototype.has = function mutableMapHas(key) {
+        mutableDispatchHits += 1;
+        return Reflect.apply(nativeMapHas, this, [key]);
+      };
+      Map.prototype.set = function mutableMapSet(key, value) {
+        mutableDispatchHits += 1;
+        return Reflect.apply(nativeMapSet, this, [key, value]);
+      };
+      Map.prototype.delete = function mutableMapDelete(key) {
+        mutableDispatchHits += 1;
+        return Reflect.apply(nativeMapDelete, this, [key]);
+      };
+      Set.prototype.add = function mutableSetAdd(value) {
+        mutableDispatchHits += 1;
+        return Reflect.apply(nativeSetAdd, this, [value]);
+      };
+      Set.prototype.has = function mutableSetHas(value) {
+        mutableDispatchHits += 1;
+        return Reflect.apply(nativeSetHas, this, [value]);
+      };
+      Object.defineProperty(Array, Symbol.species, {
+        configurable: true,
+        get() {
+          mutableDispatchHits += 1;
+          return Array;
+        },
+      });
+      next = applyQueryDelta(base, delta);
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+      Map.prototype.get = nativeMapGet;
+      Map.prototype.has = nativeMapHas;
+      Map.prototype.set = nativeMapSet;
+      Map.prototype.delete = nativeMapDelete;
+      Set.prototype.add = nativeSetAdd;
+      Set.prototype.has = nativeSetHas;
+      if (speciesDescriptor !== undefined) {
+        Object.defineProperty(Array, Symbol.species, speciesDescriptor);
+      }
+    }
+
+    expect(next!).toEqual({ items: [{ id: 'p1', role: 'member' }] });
+    expect(mutableDispatchHits).toBe(0);
+  });
+
+  it('snapshots a Proxy-backed upsert list once before keyed reconciliation', () => {
+    const publicRow: JsonValue = { id: 'p1', role: 'member' };
+    const substitutedRow: JsonValue = { id: 'p1', role: 'admin' };
+    let rowDescriptorReads = 0;
+    const upsert = new Proxy([publicRow], {
+      getOwnPropertyDescriptor(target, property) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
+        if (property !== '0' || descriptor === undefined || !('value' in descriptor)) {
+          return descriptor;
+        }
+        rowDescriptorReads += 1;
+        return {
+          ...descriptor,
+          value: rowDescriptorReads === 1 ? publicRow : substitutedRow,
+        };
+      },
+    });
+
+    expect(applyQueryDelta({ items: [] }, { lists: { items: { key: 'id', upsert } } })).toEqual({
+      items: [publicRow],
+    });
+    expect(rowDescriptorReads).toBe(1);
+  });
+
   it('never drops a tracked list path even when it is absent from set', () => {
     // `set` carries only non-collection fields; the `items` list survives via
     // `delta.lists` reconciliation and must not be treated as a dropped field.
