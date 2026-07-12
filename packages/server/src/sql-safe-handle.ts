@@ -139,7 +139,7 @@ const pinnedSqliteTransactionClients = createWitnessWeakMap<object, SqliteTransa
 let sqliteSavepointId = 0;
 
 const READ_SQL_BUILDER_FAST_PATH_METHODS = createWitnessSet<PropertyKey>();
-for (const method of ['$count', '$with', 'select', 'selectDistinct']) {
+for (const method of ['$count', '$with', 'select', 'selectDistinct', 'selectDistinctOn']) {
   witnessSetAdd(READ_SQL_BUILDER_FAST_PATH_METHODS, method);
 }
 const WRITE_SQL_BUILDER_FAST_PATH_METHODS = createWitnessSet<PropertyKey>();
@@ -148,6 +148,7 @@ for (const method of [
   '$with',
   'select',
   'selectDistinct',
+  'selectDistinctOn',
   'delete',
   'insert',
   'update',
@@ -160,6 +161,7 @@ const SQL_SNAPSHOT_FAILURE_MESSAGE =
 const frameworkManagedDbRawTargets = createWitnessWeakMap<object, object>();
 const managedSqlExecutionPolicies = createWitnessWeakSet<object>();
 const frameworkCanonicalNativeSqlValues = createWitnessWeakSet<object>();
+const relationalManagedSqlTargets = createWitnessWeakSet<object>();
 
 /**
  * Mint the module-private execution policy required by {@link wrapManagedDbForSqlSafety}.
@@ -279,15 +281,65 @@ function wrapDbAdapter(
         );
       }
 
+      if (
+        writePolicy !== undefined &&
+        (prop === 'batch' || prop === 'refreshMaterializedView')
+      ) {
+        throw new Error(
+          `KV422: managed DB method ${describeSqlMethod(prop)} is not exposed because Kovo cannot bind its full statement/table set to the declared SQL policy (SPEC §10.2/§10.3).`,
+        );
+      }
+
       const value = witnessReflectGet(target, prop, receiver);
 
       if (isNestedSqlHandleProperty(prop) && typeof value === 'object' && value !== null) {
         return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
       }
 
+      if (
+        writePolicy !== undefined &&
+        strictSqlTarget &&
+        typeof value === 'object' &&
+        value !== null
+      ) {
+        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
+      }
+
       if (prop === 'sql' && typeof value === 'function' && isManagedDbAdapterLike(target)) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
           guardedSqlMethod(target, value, mode, writePolicy),
+        );
+      }
+
+      if (
+        writePolicy !== undefined &&
+        typeof value === 'function' &&
+        isRelationalManagedSqlTarget(target) &&
+        isRelationalManagedSqlMethod(prop)
+      ) {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          (...args: unknown[]) => {
+            const callArgs =
+              prop === 'findMany' || prop === 'findFirst'
+                ? guardedSqlBuilderArguments(args)
+                : snapshotDenseSqlMethodArguments(args);
+            const result = witnessReflectApply<unknown>(value, target, callArgs);
+            if (
+              isRecord(result) &&
+              (isManagedDbAdapterLike(result) || isSqlHandleLike(result))
+            ) {
+              witnessWeakSetAdd(relationalManagedSqlTargets, result);
+              return wrapDbAdapter(
+                result,
+                mode,
+                proxyCache,
+                methodCache,
+                writePolicy,
+                true,
+              );
+            }
+            return result;
+          },
         );
       }
 
@@ -336,7 +388,16 @@ function wrapDbAdapter(
             isWriteSqlBuilderEntry(prop, writePolicy),
           );
         }
-        return guardedUnknownSqlMethod(target, prop, value, mode, writePolicy, strictSqlTarget);
+        return guardedUnknownSqlMethod(
+          target,
+          prop,
+          value,
+          mode,
+          proxyCache,
+          methodCache,
+          writePolicy,
+          strictSqlTarget,
+        );
       });
     },
   });
@@ -1585,25 +1646,40 @@ function guardedUnknownSqlMethod(
   prop: PropertyKey,
   value: Function,
   mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
   strictSqlTarget: boolean,
 ): Function {
   return (...args: unknown[]) => {
     const snappedArgs = snapshotAmbiguousSqlMethodArguments(
+      target,
       prop,
       args,
       mode,
       writePolicy,
       strictSqlTarget,
     );
-    return wrapReadonlyEngineResult(
+    const result = wrapReadonlyEngineResult(
       () => witnessReflectApply(value, target, snappedArgs),
       writePolicy,
     );
+    return isRecord(result) &&
+      (isManagedDbAdapterLike(result) || isSqlHandleLike(result))
+      ? wrapDbAdapter(
+          result,
+          mode,
+          proxyCache,
+          methodCache,
+          writePolicy,
+          strictSqlTarget,
+        )
+      : result;
   };
 }
 
 function snapshotAmbiguousSqlMethodArguments(
+  target: object,
   prop: PropertyKey,
   args: readonly unknown[],
   mode: SqlSafetyMode,
@@ -1634,35 +1710,53 @@ function snapshotAmbiguousSqlMethodArguments(
     return changed ? snappedArgs : args;
   }
   if (writePolicy === undefined || !strictSqlTarget) return args;
-  if (!isSqlCapabilityMethodName(prop)) return args;
+  if (isRelationalManagedSqlTarget(target) && isRelationalManagedSqlMethod(prop)) return args;
 
   throw new Error(
     `KV422: unknown managed DB method ${describeSqlMethod(prop)} is not a proven SQL builder/read capability and did not receive a recognizable SQL carrier (SPEC §10.2/§10.3).`,
   );
 }
 
-function isSqlCapabilityMethodName(prop: PropertyKey): boolean {
-  if (typeof prop !== 'string') return true;
-  const lower = asciiLower(prop);
-  const tokens = [
-    'sql',
-    'query',
-    'execute',
-    'statement',
-    'prepare',
-    'insert',
-    'update',
-    'delete',
-    'run',
-    'exec',
-    'all',
-    'get',
-    'values',
-  ] as const;
-  for (let index = 0; index < tokens.length; index += 1) {
-    if (intrinsicStringIncludes(lower, tokens[index]!)) return true;
+function snapshotDenseSqlMethodArguments(args: readonly unknown[]): readonly unknown[] {
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(args, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new Error(
+        'KV422: managed SQL method received a sparse or accessor-backed argument list (SPEC §6.6/§10.2).',
+      );
+    }
+    appendSqlSafetyValue(snapshot, descriptor.value);
+  }
+  return snapshot;
+}
+
+function isRelationalManagedSqlTarget(target: object): boolean {
+  if (witnessWeakSetHas(relationalManagedSqlTargets, target)) return true;
+  const tableConfig = witnessGetOwnPropertyDescriptor(target, 'tableConfig');
+  if (tableConfig !== undefined && 'value' in tableConfig && isRecord(tableConfig.value)) {
+    witnessWeakSetAdd(relationalManagedSqlTargets, target);
+    return true;
   }
   return false;
+}
+
+function isRelationalManagedSqlMethod(prop: PropertyKey): boolean {
+  return (
+    prop === 'all' ||
+    prop === 'catch' ||
+    prop === 'execute' ||
+    prop === 'finally' ||
+    prop === 'findFirst' ||
+    prop === 'findMany' ||
+    prop === 'get' ||
+    prop === 'getSQL' ||
+    prop === 'prepare' ||
+    prop === 'sync' ||
+    prop === 'then' ||
+    prop === 'toSQL' ||
+    prop === 'values'
+  );
 }
 
 function describeSqlMethod(prop: PropertyKey): string {
@@ -2242,7 +2336,7 @@ function isNestedSqlHandleProperty(prop: PropertyKey): boolean {
 }
 
 function isManagedRawDriverEscapeProperty(prop: PropertyKey): boolean {
-  return prop === '$client' || prop === 'session';
+  return prop === '$client' || prop === '$primary' || prop === '$replicas' || prop === 'session';
 }
 
 function isSqlStatementCandidate(value: unknown): boolean {

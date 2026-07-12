@@ -26,6 +26,7 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
 
 const NativePromise = globalThis.Promise;
 const nativePromiseThen = witnessReflectGet(NativePromise.prototype, 'then') as Function;
@@ -920,18 +921,19 @@ function readBoundaryForQuery(
 }
 
 function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | undefined {
-  const configValue = optionalOwnDataValue(value, 'config');
-  const tableConfig = optionalOwnDataValue(value, 'tableConfig');
+  const queryTarget = frameworkManagedDbRawTarget(value) ?? value;
+  const configValue = optionalOwnDataValue(queryTarget, 'config');
+  const tableConfig = optionalOwnDataValue(queryTarget, 'tableConfig');
   if ((configValue !== true && !isPlainRecord(configValue)) || !isPlainRecord(tableConfig)) {
     return undefined;
   }
   const config = configValue === true ? witnessCreateNullRecord<unknown>() : configValue;
-  const prepare = optionalInheritedFunctionDataProperty(value, '_prepare');
+  const prepare = optionalInheritedFunctionDataProperty(queryTarget, '_prepare');
   if (prepare === undefined) return undefined;
   // Compile once now. The private prepared object binds the exact config/SQL/mapping that every
   // later terminal below executes, so a retained app config reference cannot split the verdict
   // from a second relational compilation (SPEC §6.6 C9, §10.3).
-  const prepared = witnessReflectApply<unknown>(prepare, value, []);
+  const prepared = witnessReflectApply<unknown>(prepare, queryTarget, []);
   if (!isObjectLike(prepared)) {
     throw new TypeError('Relational query preparation did not return an object.');
   }

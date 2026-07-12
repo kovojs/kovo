@@ -131,17 +131,17 @@ requirePattern(
 );
 requirePattern(
   sqlSafeHandle,
-  /const\s+snapshot\s*=\s*enforceManagedSql\(statement,\s*mode,\s*writePolicy\);[\s\S]{0,180}?value\.call\(target,\s*snapshot,\s*\.\.\.args\)/u,
+  /function\s+guardedSqlMethod\([\s\S]{0,500}?const\s+snapshot\s*=\s*enforceManagedSql\(statement,\s*mode,\s*writePolicy\);[\s\S]{0,300}?witnessReflectApply\(value,\s*target,\s*prependSqlSafetyArgument\(snapshot,\s*args\)\)/u,
   'managed SQL direct execution must pass the frozen snapshot to the driver',
 );
 requirePattern(
   sqlSafeHandle,
-  /const\s+snapshot\s*=\s*enforceManagedSql\(statement,\s*mode,\s*writePolicy\);[\s\S]{0,240}?value\.call\(target,\s*snapshot,\s*\.\.\.args\)/u,
+  /function\s+guardedPrepareMethod\([\s\S]{0,700}?const\s+snapshot\s*=\s*enforceManagedSql\(statement,\s*mode,\s*writePolicy\);[\s\S]{0,350}?witnessReflectApply\(value,\s*target,\s*prependSqlSafetyArgument\(snapshot,\s*args\)\)/u,
   'managed SQL prepare execution must pass the frozen snapshot to the driver',
 );
 rejectPattern(
   sqlSafeHandle,
-  /value\.call\(target,\s*statement,\s*\.\.\.args\)/u,
+  /witnessReflectApply\(value,\s*target,\s*prependSqlSafetyArgument\(statement,\s*args\)\)/u,
   'managed SQL execution must not pass the original mutable statement to the driver',
 );
 

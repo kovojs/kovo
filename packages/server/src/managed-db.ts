@@ -1242,6 +1242,9 @@ function authorizationCensusProxy(
   return new Proxy(value, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
+      if (prop === 'query' && isRecord(item)) {
+        return authorizationCensusRelationalNamespace(item, options);
+      }
       if (typeof item !== 'function') return item;
       if (isDeclaredWriteDrizzleMethod(prop)) {
         return (table: unknown, ...args: unknown[]) => {
@@ -1271,6 +1274,196 @@ function authorizationCensusProxy(
         authorizationCensusProxy(witnessReflectApply(item, target, args), options, builderMode);
     },
   });
+}
+
+function authorizationCensusRelationalNamespace(
+  namespace: Record<PropertyKey, unknown>,
+  options: AuthorizationCensusDbOptions,
+): object {
+  return new Proxy(namespace, {
+    get(target, prop, receiver) {
+      const builder = witnessReflectGet(target, prop, receiver);
+      if (!isRecord(builder)) return builder;
+      const table = optionalOwnDataProperty(builder, 'table');
+      const names =
+        table === undefined
+          ? typeof prop === 'string'
+            ? [prop]
+            : []
+          : options.tableNames(table);
+      if (names.length === 0) {
+        throw new Error(
+          'KV414: relational query table identity is not available to the authorization census (SPEC §10.3 DEC-K).',
+        );
+      }
+      assertAuthorizationCensusTablesAllowed(names, options);
+      return authorizationCensusRelationalBuilder(builder, options);
+    },
+  });
+}
+
+function authorizationCensusRelationalBuilder(
+  builder: Record<PropertyKey, unknown>,
+  options: AuthorizationCensusDbOptions,
+): object {
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      const item = witnessReflectGet(target, prop, receiver);
+      if ((prop !== 'findMany' && prop !== 'findFirst') || typeof item !== 'function') return item;
+      return (...args: unknown[]) => {
+        if (args.length > 1) {
+          throw new TypeError('Relational query methods accept at most one config object.');
+        }
+        const config =
+          args.length === 0
+            ? undefined
+            : snapshotAuthorizationRelationalValue(args[0], 0);
+        assertAuthorizationRelationalConfigAllowed(builder, config, options, 0);
+        return witnessReflectApply(
+          item,
+          target,
+          config === undefined ? [] : [config],
+        );
+      };
+    },
+  });
+}
+
+function assertAuthorizationRelationalConfigAllowed(
+  builder: Record<PropertyKey, unknown>,
+  config: unknown,
+  options: AuthorizationCensusDbOptions,
+  depth: number,
+): void {
+  if (!isRecord(config)) return;
+  if (depth > 32) throw new TypeError('Relational authorization config is too deeply nested.');
+  const withValue = optionalOwnDataProperty(config, 'with');
+  if (withValue === undefined) return;
+  if (!isRecord(withValue)) {
+    throw new TypeError('Relational authorization `with` selections must be own-data records.');
+  }
+  const tableConfig = optionalOwnDataProperty(builder, 'tableConfig');
+  const relations = isRecord(tableConfig)
+    ? optionalOwnDataProperty(tableConfig, 'relations')
+    : undefined;
+  if (!isRecord(relations)) {
+    throw new Error(
+      'KV414: relational authorization metadata is unavailable for a nested selection (SPEC §10.3 DEC-K).',
+    );
+  }
+  const relationKeys = witnessOwnKeys(withValue);
+  for (let index = 0; index < relationKeys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(relationKeys, index);
+    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+      throw new TypeError('Relational authorization selection keys must remain dense.');
+    }
+    const selection = witnessGetOwnPropertyDescriptor(withValue, keyDescriptor.value);
+    if (selection === undefined || !('value' in selection)) {
+      throw new TypeError('Relational authorization selections must use own data properties.');
+    }
+    if (selection.value === false || selection.value === undefined) continue;
+    const relationDescriptor = witnessGetOwnPropertyDescriptor(relations, keyDescriptor.value);
+    if (relationDescriptor === undefined || !('value' in relationDescriptor)) {
+      throw new Error(
+        `KV414: relational authorization metadata is missing for ${String(keyDescriptor.value)} (SPEC §10.3 DEC-K).`,
+      );
+    }
+    const relation = relationDescriptor.value;
+    const targetTable = isRecord(relation)
+      ? optionalOwnDataProperty(relation, 'targetTable')
+      : undefined;
+    if (targetTable === undefined) {
+      throw new Error(
+        `KV414: relational authorization target is missing for ${String(keyDescriptor.value)} (SPEC §10.3 DEC-K).`,
+      );
+    }
+    const targetNames = options.tableNames(targetTable);
+    if (targetNames.length === 0) {
+      throw new Error(
+        `KV414: relational authorization target name is missing for ${String(keyDescriptor.value)} (SPEC §10.3 DEC-K).`,
+      );
+    }
+    assertAuthorizationCensusTablesAllowed(targetNames, options);
+    if (isRecord(selection.value)) {
+      const schema = optionalOwnDataProperty(builder, 'schema');
+      const nestedBuilder = authorizationRelationalBuilderForTable(schema, targetTable);
+      if (nestedBuilder === undefined) {
+        throw new Error(
+          `KV414: relational authorization schema is missing for ${String(keyDescriptor.value)} (SPEC §10.3 DEC-K).`,
+        );
+      }
+      assertAuthorizationRelationalConfigAllowed(
+        nestedBuilder,
+        selection.value,
+        options,
+        depth + 1,
+      );
+    }
+  }
+}
+
+function authorizationRelationalBuilderForTable(
+  schema: unknown,
+  table: unknown,
+): Record<PropertyKey, unknown> | undefined {
+  if (!isRecord(schema)) return undefined;
+  const keys = witnessOwnKeys(schema);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = witnessGetOwnPropertyDescriptor(keys, index);
+    if (key === undefined || !('value' in key)) continue;
+    const entry = witnessGetOwnPropertyDescriptor(schema, key.value);
+    if (entry === undefined || !('value' in entry) || !isRecord(entry.value)) continue;
+    if (optionalOwnDataProperty(entry.value, 'table') === table) {
+      const builder = witnessCreateNullRecord<unknown>();
+      witnessDefineProperty(builder, 'schema', { value: schema });
+      witnessDefineProperty(builder, 'tableConfig', { value: entry.value });
+      return builder;
+    }
+  }
+  return undefined;
+}
+
+function snapshotAuthorizationRelationalValue(value: unknown, depth: number): unknown {
+  if (depth > 64) throw new TypeError('Relational query config is too deeply nested.');
+  if (witnessIsArray(value)) {
+    const clone: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Relational query config arrays must be dense own data.');
+      }
+      witnessDefineProperty(clone, index, {
+        configurable: true,
+        enumerable: true,
+        value: snapshotAuthorizationRelationalValue(descriptor.value, depth + 1),
+        writable: true,
+      });
+    }
+    return witnessFreeze(clone);
+  }
+  if (!isRecord(value)) return value;
+  const prototype = witnessGetPrototypeOf(value);
+  const objectPrototype = witnessGetPrototypeOf({});
+  if (prototype !== null && prototype !== objectPrototype) return value;
+  const clone = witnessCreateNullRecord<unknown>();
+  const keys = witnessOwnKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = witnessGetOwnPropertyDescriptor(keys, index);
+    if (key === undefined || !('value' in key)) {
+      throw new TypeError('Relational query config keys must remain dense.');
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(value, key.value);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Relational query configs cannot contain accessors.');
+    }
+    witnessDefineProperty(clone, key.value, {
+      configurable: true,
+      enumerable: descriptor.enumerable ?? false,
+      value: snapshotAuthorizationRelationalValue(descriptor.value, depth + 1),
+      writable: true,
+    });
+  }
+  return witnessFreeze(clone);
 }
 
 function isAuthorizationCensusReadTableMethod(prop: PropertyKey): boolean {

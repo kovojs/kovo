@@ -11,9 +11,18 @@ import { describe, expect, it } from 'vitest';
 import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
-import { StringChunk, and, asc, count, eq, sql as drizzleSql } from 'drizzle-orm';
+import {
+  StringChunk,
+  and,
+  asc,
+  count,
+  defineRelations,
+  eq,
+  sql as drizzleSql,
+} from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
+import { integer, pgTable, text, withReplicas as withPostgresReplicas } from 'drizzle-orm/pg-core';
 import { getTableConfig, sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
 import {
   KovoReadonlyHandleError,
@@ -1656,6 +1665,50 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     );
     expect(() => handle.insert({ name: 'drafts' }).values()).toThrow(/KV414/);
     expect(log).toEqual(['select:contacts', 'select:reference_tags', 'leftJoin:published_posts']);
+  });
+
+  it('denies unclassified Drizzle relational roots and nested with selections', async () => {
+    const client = new Database(':memory:');
+    try {
+      client.exec(
+        [
+          'create table contacts (id text primary key)',
+          'create table drafts (id text primary key, contact_id text)',
+          "insert into contacts values ('c1')",
+          "insert into drafts values ('d1', 'c1')",
+        ].join(';'),
+      );
+      const contacts = sqliteTable('contacts', { id: sqliteText('id').primaryKey() });
+      const drafts = sqliteTable('drafts', {
+        contactId: sqliteText('contact_id'),
+        id: sqliteText('id').primaryKey(),
+      });
+      const relations = defineRelations({ contacts, drafts }, (r) => ({
+        contacts: { drafts: r.many.drafts() },
+        drafts: {
+          contact: r.one.contacts({ from: r.drafts.contactId, to: r.contacts.id }),
+        },
+      }));
+      const handle = createAuthorizationCensusDb(drizzle({ client, relations }), {
+        dialectLabel: 'SQLite',
+        metadata: {
+          authorizationClassificationsByTable: new Map([['contacts', ['authzPolicy']]]),
+          schemaTableNames: new Set(['contacts', 'drafts']),
+        },
+        normalizeTableName: (table) => table,
+        tableNames: (table) => [getTableConfig(table as typeof contacts).name],
+      });
+
+      expect(() => handle.query.drafts.findMany()).toThrow(
+        /KV414[\s\S]*drafts[\s\S]*no authorization classification/,
+      );
+      expect(() => handle.query.contacts.findMany({ with: { drafts: true } })).toThrow(
+        /KV414[\s\S]*drafts[\s\S]*no authorization classification/,
+      );
+      await expect(handle.query.contacts.findMany()).resolves.toEqual([{ id: 'c1' }]);
+    } finally {
+      client.close();
+    }
   });
 
   // @kovo-security-certifies KV414 postgres-reader-grant-default-deny
@@ -4082,6 +4135,57 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
+  it('denies withReplicas primary and replica raw-handle escapes', async () => {
+    const primary = new PGlite();
+    const replica = new PGlite();
+    try {
+      const replicated = withPostgresReplicas(
+        drizzlePostgres({ client: primary }),
+        [drizzlePostgres({ client: replica })],
+      );
+      const handle = managedDb(replicated, 'write', {
+        sqlWritePolicy: { dialect: 'postgres', tables: ['allowed'], touches: ['allowed'] },
+      });
+
+      expect(() => void handle.$primary).toThrow(/raw driver escape db\.\$primary|KV422/);
+      expect(() => void handle.$replicas).toThrow(/raw driver escape db\.\$replicas|KV422/);
+      expect(() => handle.$primary.execute(drizzleSql.raw('delete from victim_accounts'))).toThrow(
+        /raw driver escape db\.\$primary|KV422/,
+      );
+    } finally {
+      await primary.close();
+      await replica.close();
+    }
+  });
+
+  it('denies raw relational builder sessions on managed read handles', async () => {
+    const client = new Database(':memory:');
+    try {
+      client.exec(
+        [
+          'create table victims (id text primary key)',
+          'create table victim_accounts (id text primary key)',
+          "insert into victims values ('v1')",
+          "insert into victim_accounts values ('a1')",
+        ].join(';'),
+      );
+      const victims = sqliteTable('victims', { id: sqliteText('id').primaryKey() });
+      const relations = defineRelations({ victims }, () => ({}));
+      const handle = managedDb(drizzle({ client, relations }), 'read');
+
+      await expect(handle.query.victims.findMany()).resolves.toEqual([{ id: 'v1' }]);
+      expect(() =>
+        (handle.query.victims as unknown as { session: { run(statement: unknown): unknown } })
+          .session.run(drizzleSql.raw('delete from victim_accounts')),
+      ).toThrow(/raw driver escape db\.session|KV422/);
+      expect(
+        client.prepare('select count(*) as count from victim_accounts').get(),
+      ).toEqual({ count: 1 });
+    } finally {
+      client.close();
+    }
+  });
+
   it('write mode internal transaction probe does not pierce layered raw driver escape denial', () => {
     const inner = managedDb(
       {
@@ -4327,6 +4431,75 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       }),
     ).toThrow(/unknown managed DB method db\.futureStatement/);
     expect(log).toEqual([]);
+  });
+
+  it('write mode default-denies benignly named unknown methods and unsupported SQL families', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        batch(statements: unknown) {
+          log.push('batch');
+          return statements;
+        },
+        futureCapability(options: unknown) {
+          log.push('futureCapability');
+          return options;
+        },
+        refreshMaterializedView(view: unknown) {
+          log.push('refreshMaterializedView');
+          return view;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'postgres',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+
+    expect(() =>
+      (handle as unknown as { futureCapability(options: unknown): unknown }).futureCapability({}),
+    ).toThrow(/unknown managed DB method db\.futureCapability|KV422/);
+    expect(() =>
+      (handle as unknown as { batch(statements: unknown): unknown }).batch([
+        drizzleSql.raw('delete from victim_accounts'),
+      ]),
+    ).toThrow(/managed DB method db\.batch|KV422/);
+    expect(() =>
+      (
+        handle as unknown as { refreshMaterializedView(view: unknown): unknown }
+      ).refreshMaterializedView({ name: 'accounts' }),
+    ).toThrow(/managed DB method db\.refreshMaterializedView|KV422/);
+    expect(log).toEqual([]);
+  });
+
+  it('keeps PostgreSQL selectDistinctOn on the governed builder path', async () => {
+    const client = new PGlite();
+    try {
+      await client.exec(
+        "create table products (id text primary key, label text not null); insert into products values ('p1', 'one')",
+      );
+      const products = pgTable('products', {
+        id: text('id').primaryKey(),
+        label: text('label').notNull(),
+      });
+      const handle = managedDb(drizzlePostgres({ client, schema: { products } }), 'write', {
+        sqlWritePolicy: {
+          dialect: 'postgres',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      });
+
+      await expect(
+        handle.selectDistinctOn([products.id], { id: products.id }).from(products),
+      ).resolves.toEqual([{ id: 'p1' }]);
+    } finally {
+      await client.close();
+    }
   });
 
   it('write mode fails closed for raw escape properties before unknown nested methods', () => {
