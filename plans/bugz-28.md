@@ -10,9 +10,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     1 | C1    |
+| Critical |     2 | C1-C2 |
 | High     |     6 | H1-H6 |
-| Medium   |     2 | M1-M2 |
+| Medium   |     3 | M1-M3 |
 
 ## Critical
 
@@ -23,6 +23,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** construction and rendering must traverse dense own-data entries through
     boot-pinned controls, never app-mutable array iterators/prototypes; the real managed execution
     path must retain the original parameterized statement under hostile import order and late poison.
+
+- [ ] **C2 - Mutable egress classification intrinsics can waive private-network SSRF policy.**
+      `packages/server/src/{egress,egress-undici}.ts`
+  - With the default empty policy, a selective late `Array.prototype.some` override made
+    `evaluateEgress` admit `127.0.0.1`; adjacent mutable host-normalization operations can classify
+    different bytes than the per-hop transport ultimately dials.
+  - **Acceptance:** policy resolution, IP/hostname parsing, CIDR matching, DNS answer traversal, and
+    every Undici redirect/connect hop use boot-pinned, semantically checked controls and bind the
+    classified host bytes to the actual dial; real-fetch poison regressions must keep private and
+    metadata destinations blocked.
 
 ## High
 
@@ -90,6 +100,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     declared Kovo topology.
   - **Acceptance:** mutate only `PUBLIC` and configured roles; any residual external authority must
     fail before revocation and roll back without changing the external role.
+
+- [x] **M3 - Unicode-escaped PostgreSQL identifiers bypass the scoped-client session-control
+      scanner.** `packages/server/src/managed-db.ts`
+  - `U&"set_con\0066ig"` resolved to `set_config`, replaced the transaction principal, and updated
+    another principal's RLS row when the routine ACL was deliberately permissive; default Kovo ACL
+    revocation remains a separate floor.
+  - **Evidence:** focused fake and real-PGlite principal-swap regressions pass; the scanner rejects
+    the entire Unicode-escaped identifier syntax, including schema-qualified, six-digit, custom
+    `UESCAPE`, and comment-adjacent variants, while benign non-ASCII identifiers retain coverage.
 
 ## Latest verification
 
