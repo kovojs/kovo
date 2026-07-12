@@ -191,7 +191,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
           operation: 'task-runner',
           taskJobId: 'job_fail',
           taskKey: 'fail.task',
-          url: 'http://localhost/_kovo/task',
+          url: '/_kovo/task',
         }),
       );
     } finally {
@@ -328,7 +328,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
       }),
       {
         operation: 'task-runtime-startup',
-        request,
+        request: expect.any(Request),
         url: '/needs-startup',
       },
     );

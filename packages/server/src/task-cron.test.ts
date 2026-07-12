@@ -95,6 +95,56 @@ describe('durable recurring task materialization (SPEC §9.6)', () => {
     ]);
   });
 
+  it('pins cron parsing, UTC occurrence matching, and occurrence collection after late poisoning', async () => {
+    const originalDateGetUTCMinutes = Date.prototype.getUTCMinutes;
+    const originalSetAdd = Set.prototype.add;
+    const originalSetHas = Set.prototype.has;
+    const originalStringIncludes = String.prototype.includes;
+    const originalStringSplit = String.prototype.split;
+    const originalStringTrim = String.prototype.trim;
+    const store = new MemoryDurableTaskQueue();
+    const occurrenceStore = new MemoryRecurringTaskOccurrenceStore();
+    const materializer = createRecurringTaskMaterializer({
+      store,
+      occurrenceStore,
+      tasks: [
+        task('security.hourly', {
+          input: s.object({}),
+          cron: '0 * * * *',
+          run() {},
+        }),
+      ],
+    });
+    let result;
+    try {
+      Date.prototype.getUTCMinutes = () => 59;
+      Set.prototype.add = function () {
+        return this;
+      };
+      Set.prototype.has = () => false;
+      String.prototype.includes = () => false;
+      String.prototype.split = () => ['forged'];
+      String.prototype.trim = () => 'forged';
+      result = await materializer.materializeDue({
+        now: new Date('2026-06-30T02:00:00.000Z'),
+      });
+    } finally {
+      Date.prototype.getUTCMinutes = originalDateGetUTCMinutes;
+      Set.prototype.add = originalSetAdd;
+      Set.prototype.has = originalSetHas;
+      String.prototype.includes = originalStringIncludes;
+      String.prototype.split = originalStringSplit;
+      String.prototype.trim = originalStringTrim;
+    }
+
+    expect(result).toEqual({
+      enqueued: 1,
+      occurrences: [new Date('2026-06-30T02:00:00.000Z')],
+    });
+    expect(occurrenceStore.snapshot()).toHaveLength(1);
+    expect(store.snapshot()).toHaveLength(1);
+  });
+
   it('bounds backfill to sixteen occurrences by default', async () => {
     const store = new MemoryDurableTaskQueue();
     const materializer = createRecurringTaskMaterializer({

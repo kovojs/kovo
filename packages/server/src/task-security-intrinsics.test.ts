@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest';
+
+import { s } from './schema.js';
+import { task } from './task.js';
+import { createDurableTaskRunner } from './task-runner.js';
+import { MemoryDurableTaskQueue } from './task-queue.js';
+import {
+  assertTaskSecurityIntrinsics,
+  taskCreateEntropyId,
+  taskDateNow,
+  taskPromiseAll,
+  taskPromiseFinally,
+  taskPromiseThen,
+  taskSetTimeout,
+} from './task-security-intrinsics.js';
+
+describe('durable-task intrinsic membrane (SPEC §9.6/§10.3)', () => {
+  it('keeps exact registry dispatch and cryptographic identities after late poisoning', async () => {
+    const originalDateNow = Date.now;
+    const originalMapGet = Map.prototype.get;
+    const originalMathRandom = Math.random;
+    const originalPromiseThen = Promise.prototype.then;
+    const originalSetTimeout = globalThis.setTimeout;
+    let ordinaryRuns = 0;
+    let privilegedRuns = 0;
+    let ids: string[] = [];
+    let observedClock = 0;
+    let promiseValue = '';
+    let timerRan = false;
+
+    const ordinary = task('ordinary', {
+      input: s.object({}),
+      run() {
+        ordinaryRuns += 1;
+      },
+    });
+    const privileged = task('privileged', {
+      input: s.object({}),
+      run() {
+        privilegedRuns += 1;
+      },
+    });
+    const store = new MemoryDurableTaskQueue();
+    await store.enqueue({ task: ordinary.key, args: {}, runAt: new Date(0) });
+    const runner = createDurableTaskRunner({ store, tasks: [ordinary, privileged] });
+
+    try {
+      Date.now = () => 1;
+      Math.random = () => 0.5;
+      Map.prototype.get = function (key: unknown) {
+        return originalMapGet.call(this, 'privileged') === privileged
+          ? privileged
+          : originalMapGet.call(this, key);
+      };
+      await runner.runOnce(new Date(1));
+      ids = [taskCreateEntropyId('job'), taskCreateEntropyId('job')];
+      observedClock = taskDateNow();
+      Promise.prototype.then = function () {
+        throw new Error('late Promise.then replacement ran');
+      } as typeof Promise.prototype.then;
+      const promised = taskPromiseFinally(
+        taskPromiseThen(taskPromiseAll([Promise.resolve('safe')]), (values) => values[0]!),
+        () => undefined,
+      );
+      Promise.prototype.then = originalPromiseThen;
+      promiseValue = await promised;
+
+      globalThis.setTimeout = (() => {
+        throw new Error('late setTimeout replacement ran');
+      }) as typeof setTimeout;
+      const timerPromise = new Promise<void>((resolve) => {
+        taskSetTimeout(() => {
+          timerRan = true;
+          resolve();
+        }, 0);
+      });
+      globalThis.setTimeout = originalSetTimeout;
+      await timerPromise;
+    } finally {
+      Date.now = originalDateNow;
+      Map.prototype.get = originalMapGet;
+      Math.random = originalMathRandom;
+      Promise.prototype.then = originalPromiseThen;
+      globalThis.setTimeout = originalSetTimeout;
+    }
+
+    expect(ordinaryRuns).toBe(1);
+    expect(privilegedRuns).toBe(0);
+    expect(ids[0]).toMatch(/^job_[0-9a-f]{32}$/u);
+    expect(ids[1]).toMatch(/^job_[0-9a-f]{32}$/u);
+    expect(ids[1]).not.toBe(ids[0]);
+    expect(observedClock).toBeGreaterThan(1);
+    expect(promiseValue).toBe('safe');
+    expect(timerRan).toBe(true);
+  });
+
+  it('is available under ordinary initialization', () => {
+    expect(() => assertTaskSecurityIntrinsics()).not.toThrow();
+  });
+});

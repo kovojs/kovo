@@ -4,6 +4,37 @@ import type {
   DurableTaskSqlExecutor,
   DurableTaskSqlStatement,
 } from './task-queue.js';
+import {
+  taskArrayPush,
+  taskArrayReverse,
+  taskCreateMap,
+  taskCreateSet,
+  taskDateGetTime,
+  taskDateIsDate,
+  taskDateParts,
+  taskDateToISOString,
+  taskDateUtc,
+  taskFloor,
+  taskMapGet,
+  taskMapHas,
+  taskMapSet,
+  taskMin,
+  taskNewDate,
+  taskNumber,
+  taskNumberIsFinite,
+  taskRegExpTest,
+  taskSetAdd,
+  taskSetForEach,
+  taskSetHas,
+  taskSetSize,
+  taskSnapshotCollection,
+  taskStringIncludes,
+  taskStringLastIndexOf,
+  taskStringSlice,
+  taskStringSplit,
+  taskStringStartsWith,
+  taskStringTrim,
+} from './task-security-intrinsics.js';
 
 export const DEFAULT_TASK_CRON_BACKFILL_LIMIT = 16;
 export const KOVO_TASK_CRON_OCCURRENCES_TABLE_SQL: readonly DurableTaskSqlStatement[] = [
@@ -20,8 +51,8 @@ export const KOVO_TASK_CRON_OCCURRENCES_TABLE_SQL: readonly DurableTaskSqlStatem
 ];
 
 export async function ensureRecurringTaskSchema(executor: DurableTaskSqlExecutor): Promise<void> {
-  for (const statement of KOVO_TASK_CRON_OCCURRENCES_TABLE_SQL) {
-    await executor.execute(statement);
+  for (let index = 0; index < KOVO_TASK_CRON_OCCURRENCES_TABLE_SQL.length; index += 1) {
+    await executor.execute(KOVO_TASK_CRON_OCCURRENCES_TABLE_SQL[index]!);
   }
 }
 
@@ -53,14 +84,16 @@ export function createRecurringTaskMaterializer(options: {
 
   return {
     async materializeDue(materializeOptions = {}) {
-      const now = materializeOptions.now ?? (await occurrenceStore.currentTime?.()) ?? new Date();
+      const now = materializeOptions.now ?? (await occurrenceStore.currentTime?.()) ?? taskNewDate();
       const backfillLimit = boundedBackfillLimit(materializeOptions.backfillLimit);
       let enqueued = 0;
       const occurrences: Date[] = [];
 
-      for (const task of tasks) {
+      for (let taskIndex = 0; taskIndex < tasks.length; taskIndex += 1) {
+        const task = tasks[taskIndex]!;
         const due = dueOccurrences(task, now, backfillLimit);
-        for (const occurrence of due) {
+        for (let dueIndex = 0; dueIndex < due.length; dueIndex += 1) {
+          const occurrence = due[dueIndex]!;
           const inserted = await occurrenceStore.reserve(task.key, occurrence);
           if (!inserted) continue;
           const handle = await options.store.enqueue({
@@ -72,7 +105,7 @@ export function createRecurringTaskMaterializer(options: {
           });
           await occurrenceStore.bindJob(task.key, occurrence, handle.id);
           enqueued += 1;
-          occurrences.push(occurrence);
+          taskArrayPush(occurrences, occurrence);
         }
       }
 
@@ -88,33 +121,37 @@ export interface RecurringTaskOccurrenceStore {
 }
 
 export class MemoryRecurringTaskOccurrenceStore implements RecurringTaskOccurrenceStore {
-  private readonly occurrences = new Set<string>();
-  private readonly jobs = new Map<string, string>();
+  private readonly occurrences = taskCreateSet<string>();
+  private readonly jobs = taskCreateMap<string, string>();
 
   async currentTime(): Promise<Date> {
-    return new Date();
+    return taskNewDate();
   }
 
   async reserve(cronName: string, occurrenceTs: Date): Promise<boolean> {
     const key = occurrenceKey(cronName, occurrenceTs);
-    if (this.occurrences.has(key)) return false;
-    this.occurrences.add(key);
+    if (taskSetHas(this.occurrences, key)) return false;
+    taskSetAdd(this.occurrences, key);
     return true;
   }
 
   async bindJob(cronName: string, occurrenceTs: Date, jobId: string): Promise<void> {
-    this.jobs.set(occurrenceKey(cronName, occurrenceTs), jobId);
+    taskMapSet(this.jobs, occurrenceKey(cronName, occurrenceTs), jobId);
   }
 
   snapshot(): readonly { cronName: string; jobId?: string; occurrenceTs: Date }[] {
-    return [...this.occurrences].map((key) => {
-      const [cronName, iso] = splitOccurrenceKey(key);
-      return {
+    const snapshots: { cronName: string; jobId?: string; occurrenceTs: Date }[] = [];
+    taskSetForEach(this.occurrences, (key) => {
+      const keyParts = splitOccurrenceKey(key);
+      const cronName = keyParts[0];
+      const iso = keyParts[1];
+      taskArrayPush(snapshots, {
         cronName,
-        occurrenceTs: new Date(iso),
-        ...(this.jobs.has(key) ? { jobId: this.jobs.get(key)! } : {}),
-      };
+        occurrenceTs: taskNewDate(iso),
+        ...(taskMapHas(this.jobs, key) ? { jobId: taskMapGet(this.jobs, key)! } : {}),
+      });
     });
+    return snapshots;
   }
 }
 
@@ -129,7 +166,7 @@ export class PostgresRecurringTaskOccurrenceStore implements RecurringTaskOccurr
     if (value === undefined) {
       throw new Error('Recurring task materialization could not read the database clock.');
     }
-    return value instanceof Date ? value : new Date(value);
+    return taskDateIsDate(value) ? value : taskNewDate(value);
   }
 
   async reserve(cronName: string, occurrenceTs: Date): Promise<boolean> {
@@ -158,7 +195,7 @@ where cron_name = $1 and occurrence_ts = $2 and job_id is null`,
 }
 
 export function occurrenceKey(cronName: string, occurrenceTs: Date): string {
-  return `cron:${cronName}:${occurrenceTs.toISOString()}`;
+  return `cron:${cronName}:${taskDateToISOString(occurrenceTs)}`;
 }
 
 function dueOccurrences(
@@ -168,7 +205,7 @@ function dueOccurrences(
 ): Date[] {
   const schedule = parseCronExpression(task.cron);
   if (task.catchUp === 'backfill') {
-    return previousOccurrences(schedule, now, backfillLimit).reverse();
+    return taskArrayReverse(previousOccurrences(schedule, now, backfillLimit));
   }
   const occurrence = previousOccurrence(schedule, now);
   return occurrence === undefined ? [] : [occurrence];
@@ -179,14 +216,15 @@ function recurringTasks(
     | Iterable<TaskDefinition<string, any, any>>
     | Record<string, TaskDefinition<string, any, any>>,
 ): (TaskDefinition<string, any, any> & { cron: string })[] {
-  const taskEntries =
-    Symbol.iterator in Object(tasks)
-      ? (tasks as Iterable<TaskDefinition<string, any, any>>)
-      : Object.values(tasks as Record<string, TaskDefinition<string, any, any>>);
-  return [...taskEntries].filter(
-    (task): task is TaskDefinition<string, any, any> & { cron: string } =>
-      typeof task.cron === 'string',
-  );
+  const taskEntries = taskSnapshotCollection(tasks, 'Recurring task registry');
+  const recurring: (TaskDefinition<string, any, any> & { cron: string })[] = [];
+  for (let index = 0; index < taskEntries.length; index += 1) {
+    const task = taskEntries[index]!;
+    if (typeof task.cron === 'string') {
+      taskArrayPush(recurring, task as TaskDefinition<string, any, any> & { cron: string });
+    }
+  }
+  return recurring;
 }
 
 interface CronSchedule {
@@ -204,7 +242,7 @@ export function validateCronExpression(expression: string): void {
 }
 
 function parseCronExpression(expression: string): CronSchedule {
-  const fields = expression.trim().split(/\s+/);
+  const fields = taskStringSplit(taskStringTrim(expression), /\s+/);
   if (fields.length !== 5) {
     throw new TypeError(
       `task({ cron }) expects a five-field cron expression, got "${expression}".`,
@@ -227,25 +265,31 @@ function parseCronField(
   max: number,
   label: string,
 ): ReadonlySet<number> {
-  const values = new Set<number>();
-  for (const part of field.split(',')) {
+  const values = taskCreateSet<number>();
+  const parts = taskStringSplit(field, ',');
+  for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
+    const part = parts[partIndex]!;
     if (part.length === 0) throw invalidCronField(field, label);
-    const [rangePart, stepPart] = part.split('/');
+    const slashParts = taskStringSplit(part, '/');
+    const rangePart = slashParts[0];
+    const stepPart = slashParts[1];
     if (rangePart === undefined || (stepPart !== undefined && stepPart.length === 0)) {
       throw invalidCronField(field, label);
     }
     const step = stepPart === undefined ? 1 : positiveInteger(stepPart, label);
-    const [start, end] =
+    const range =
       rangePart === '*'
         ? [min, max]
-        : rangePart.includes('-')
-          ? rangePart.split('-').map((value) => integer(value, label))
+        : taskStringIncludes(rangePart, '-')
+          ? parseCronRange(rangePart, label)
           : [integer(rangePart, label), stepPart === undefined ? integer(rangePart, label) : max];
+    const start = range[0];
+    const end = range[1];
     if (start === undefined || end === undefined || start < min || end > max || start > end) {
       throw invalidCronField(field, label);
     }
     for (let value = start; value <= end; value += step) {
-      values.add(label === 'day of week' && value === 7 ? 0 : value);
+      taskSetAdd(values, label === 'day of week' && value === 7 ? 0 : value);
     }
   }
   return values;
@@ -254,11 +298,11 @@ function parseCronField(
 function previousOccurrences(schedule: CronSchedule, now: Date, limit: number): Date[] {
   const occurrences: Date[] = [];
   let cursor = floorUtcMinute(now);
-  const earliest = new Date(cursor.getTime() - 366 * 24 * 60 * 60_000);
+  const earliest = taskNewDate(taskDateGetTime(cursor) - 366 * 24 * 60 * 60_000);
 
-  while (occurrences.length < limit && cursor >= earliest) {
-    if (matchesCron(schedule, cursor)) occurrences.push(new Date(cursor));
-    cursor = new Date(cursor.getTime() - 60_000);
+  while (occurrences.length < limit && taskDateGetTime(cursor) >= taskDateGetTime(earliest)) {
+    if (matchesCron(schedule, cursor)) taskArrayPush(occurrences, taskNewDate(cursor));
+    cursor = taskNewDate(taskDateGetTime(cursor) - 60_000);
   }
   return occurrences;
 }
@@ -268,8 +312,9 @@ function previousOccurrence(schedule: CronSchedule, now: Date): Date | undefined
 }
 
 function matchesCron(schedule: CronSchedule, value: Date): boolean {
-  const dayOfMonthMatches = schedule.dayOfMonth.has(value.getUTCDate());
-  const dayOfWeekMatches = schedule.dayOfWeek.has(value.getUTCDay());
+  const parts = taskDateParts(value);
+  const dayOfMonthMatches = taskSetHas(schedule.dayOfMonth as Set<number>, parts.date);
+  const dayOfWeekMatches = taskSetHas(schedule.dayOfWeek as Set<number>, parts.day);
   const dayMatches =
     schedule.dayOfMonthUnrestricted && schedule.dayOfWeekUnrestricted
       ? true
@@ -280,31 +325,26 @@ function matchesCron(schedule: CronSchedule, value: Date): boolean {
           : dayOfMonthMatches || dayOfWeekMatches;
 
   return (
-    schedule.minute.has(value.getUTCMinutes()) &&
-    schedule.hour.has(value.getUTCHours()) &&
-    schedule.month.has(value.getUTCMonth() + 1) &&
+    taskSetHas(schedule.minute as Set<number>, parts.minutes) &&
+    taskSetHas(schedule.hour as Set<number>, parts.hours) &&
+    taskSetHas(schedule.month as Set<number>, parts.month + 1) &&
     dayMatches
   );
 }
 
 function floorUtcMinute(value: Date): Date {
-  return new Date(
-    Date.UTC(
-      value.getUTCFullYear(),
-      value.getUTCMonth(),
-      value.getUTCDate(),
-      value.getUTCHours(),
-      value.getUTCMinutes(),
-    ),
+  const parts = taskDateParts(value);
+  return taskNewDate(
+    taskDateUtc(parts.fullYear, parts.month, parts.date, parts.hours, parts.minutes),
   );
 }
 
 function boundedBackfillLimit(value: number | undefined): number {
   if (value === undefined) return DEFAULT_TASK_CRON_BACKFILL_LIMIT;
-  if (!Number.isFinite(value) || value < 1) {
+  if (!taskNumberIsFinite(value) || value < 1) {
     throw new TypeError('Recurring task backfillLimit must be a positive finite number.');
   }
-  return Math.min(DEFAULT_TASK_CRON_BACKFILL_LIMIT, Math.floor(value));
+  return taskMin(DEFAULT_TASK_CRON_BACKFILL_LIMIT, taskFloor(value));
 }
 
 function positiveInteger(value: string, label: string): number {
@@ -314,8 +354,8 @@ function positiveInteger(value: string, label: string): number {
 }
 
 function integer(value: string, label: string): number {
-  if (!/^\d+$/.test(value)) throw invalidCronField(value, label);
-  return Number(value);
+  if (!taskRegExpTest(/^\d+$/, value)) throw invalidCronField(value, label);
+  return taskNumber(value);
 }
 
 function invalidCronField(field: string, label: string): TypeError {
@@ -325,7 +365,7 @@ function invalidCronField(field: string, label: string): TypeError {
 function isUnrestrictedCronField(field: string, min: number, max: number, label: string): boolean {
   const values = parseCronField(field, min, max, label);
   const normalizedMax = label === 'day of week' ? 6 : max;
-  return values.size === normalizedMax - min + 1;
+  return taskSetSize(values as Set<number>) === normalizedMax - min + 1;
 }
 
 function sqlStatement(text: string, values: readonly unknown[]): DurableTaskSqlStatement {
@@ -334,7 +374,13 @@ function sqlStatement(text: string, values: readonly unknown[]): DurableTaskSqlS
 
 function splitOccurrenceKey(key: string): [string, string] {
   const prefix = 'cron:';
-  const rest = key.startsWith(prefix) ? key.slice(prefix.length) : key;
-  const index = rest.lastIndexOf(':');
-  return [rest.slice(0, index), rest.slice(index + 1)];
+  const rest = taskStringStartsWith(key, prefix) ? taskStringSlice(key, prefix.length) : key;
+  const index = taskStringLastIndexOf(rest, ':');
+  return [taskStringSlice(rest, 0, index), taskStringSlice(rest, index + 1)];
+}
+
+function parseCronRange(value: string, label: string): [number, number] {
+  const values = taskStringSplit(value, '-');
+  if (values.length !== 2) throw invalidCronField(value, label);
+  return [integer(values[0]!, label), integer(values[1]!, label)];
 }

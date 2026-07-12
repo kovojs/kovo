@@ -8,6 +8,59 @@ import {
 import { MemoryDurableTaskQueue } from './task-queue.js';
 
 describe('durable task observability (SPEC §9.6)', () => {
+  it('pins the status source, exact filters, dates, and ordering after late poisoning', async () => {
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    const source = {
+      snapshot: () => [
+        {
+          args: {},
+          attempts: 1,
+          createdAt: now,
+          id: 'ordinary',
+          runAt: now,
+          status: 'ready' as const,
+          task: 'ordinary.task',
+          updatedAt: now,
+        },
+        {
+          args: {},
+          attempts: 1,
+          createdAt: now,
+          id: 'privileged',
+          runAt: now,
+          status: 'dead' as const,
+          task: 'privileged.task',
+          updatedAt: new Date('2026-06-30T10:01:00.000Z'),
+        },
+      ],
+    };
+    const status = createDurableTaskStatus(source);
+    const originalDateGetTime = Date.prototype.getTime;
+    const originalSetHas = Set.prototype.has;
+    const originalArraySlice = Array.prototype.slice;
+    const originalArraySort = Array.prototype.sort;
+    let records;
+    try {
+      source.snapshot = () => [];
+      Date.prototype.getTime = () => 0;
+      Set.prototype.has = () => true;
+      Array.prototype.slice = () => [];
+      Array.prototype.sort = function () {
+        return this;
+      };
+      records = await status.list({ ids: ['ordinary'], task: 'ordinary.task' });
+    } finally {
+      Date.prototype.getTime = originalDateGetTime;
+      Set.prototype.has = originalSetHas;
+      Array.prototype.slice = originalArraySlice;
+      Array.prototype.sort = originalArraySort;
+    }
+
+    expect(records).toEqual([
+      expect.objectContaining({ id: 'ordinary', status: 'ready', task: 'ordinary.task' }),
+    ]);
+  });
+
   it('lists dead-lettered jobs without exposing serialized args or errors by default', async () => {
     const store = new MemoryDurableTaskQueue();
     const handle = await store.enqueue({

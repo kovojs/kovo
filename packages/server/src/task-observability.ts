@@ -1,6 +1,25 @@
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 import { scrubSecretLifecycleValue } from './logging.js';
 import type { TaskHandle } from './task.js';
+import {
+  taskApply,
+  taskArrayPush,
+  taskArraySlice,
+  taskArraySort,
+  taskCreateSet,
+  taskDateGetTime,
+  taskDateIsDate,
+  taskFloor,
+  taskIsArray,
+  taskMax,
+  taskNewDate,
+  taskSetAdd,
+  taskSetForEach,
+  taskSetHas,
+  taskSetSize,
+  taskStableOwnFunction,
+  taskString,
+} from './task-security-intrinsics.js';
 
 /** Persisted durable-task job states visible through the SPEC §9.6 status surface. */
 export type DurableTaskObservedStatus =
@@ -102,59 +121,83 @@ export interface DurableTaskStatusSurface {
 export function createDurableTaskStatus(
   source: DurableTaskStatusSnapshotSource | DurableTaskStatusSqlExecutor,
 ): DurableTaskStatusSurface {
+  const readJobs = createStatusReader(source);
   return {
     async get(handle, options) {
       const id = typeof handle === 'string' ? handle : handle.id;
-      const [job] = await listJobs(source, { ids: [id], limit: 1 });
+      const jobs = await readJobs({ ids: [id], limit: 1 });
+      const job = jobs[0];
       return job === undefined ? undefined : statusRecord(job, options);
     },
     async list(filters = {}) {
-      const jobs = await listJobs(source, filters);
-      return jobs.map((job) => statusRecord(job, filters));
+      const jobs = await readJobs(filters);
+      return mapStatusRecords(jobs, filters);
     },
     async listFailures(filters = {}) {
-      const jobs = await listJobs(source, { ...filters, status: ['failed', 'dead'] });
-      return jobs.map((job) => statusRecord(job, filters));
+      const jobs = await readJobs({ ...filters, status: ['failed', 'dead'] });
+      return mapStatusRecords(jobs, filters);
     },
   };
 }
 
-async function listJobs(
+function createStatusReader(
   source: DurableTaskStatusSnapshotSource | DurableTaskStatusSqlExecutor,
-  filters: DurableTaskStatusFilters,
-): Promise<DurableTaskStatusJob[]> {
-  if (isSqlExecutor(source)) return listSqlJobs(source, filters);
-  return listSnapshotJobs(source.snapshot(), filters);
-}
-
-async function listSqlJobs(
-  executor: DurableTaskStatusSqlExecutor,
-  filters: DurableTaskStatusFilters,
-): Promise<DurableTaskStatusJob[]> {
-  const result = await executor.execute<DurableTaskJobRow>(sqlListJobsStatement(filters));
-  return result.rows.map(jobFromRow);
+): (filters: DurableTaskStatusFilters) => Promise<DurableTaskStatusJob[]> {
+  if (isSqlExecutor(source)) {
+    const execute = taskStableOwnFunction(source, 'execute', 'Durable task status SQL source');
+    return async (filters) => {
+      const result = await taskApply<Promise<DurableTaskStatusSqlResult<DurableTaskJobRow>>>(
+        execute,
+        source,
+        [sqlListJobsStatement(filters)],
+      );
+      const jobs: DurableTaskStatusJob[] = [];
+      for (let index = 0; index < result.rows.length; index += 1) {
+        taskArrayPush(jobs, jobFromRow(result.rows[index]!));
+      }
+      return jobs;
+    };
+  }
+  const snapshot = taskStableOwnFunction(source, 'snapshot', 'Durable task status snapshot source');
+  return async (filters) =>
+    listSnapshotJobs(
+      await taskApply<Promise<readonly DurableTaskStatusJob[]> | readonly DurableTaskStatusJob[]>(
+        snapshot,
+        source,
+        [],
+      ),
+      filters,
+    );
 }
 
 function listSnapshotJobs(
   jobs: readonly DurableTaskStatusJob[],
   filters: DurableTaskStatusFilters,
 ): DurableTaskStatusJob[] {
-  const ids = new Set(filters.ids ?? []);
+  const ids = taskCreateSet<string>();
+  const filterIds = filters.ids ?? [];
+  for (let index = 0; index < filterIds.length; index += 1) taskSetAdd(ids, filterIds[index]!);
   const statuses = statusFilter(filters.status);
-  const offset = Math.max(0, Math.floor(filters.offset ?? 0));
-  const limit = Math.max(0, Math.floor(filters.limit ?? 100));
-
-  return jobs
-    .filter((job) => ids.size === 0 || ids.has(job.id))
-    .filter((job) => filters.task === undefined || job.task === filters.task)
-    .filter((job) => statuses === undefined || statuses.has(job.status))
-    .sort(
-      (a, b) =>
-        b.updatedAt.getTime() - a.updatedAt.getTime() ||
-        b.createdAt.getTime() - a.createdAt.getTime(),
-    )
-    .slice(offset, offset + limit)
-    .map(copyJob);
+  const offset = taskMax(0, taskFloor(filters.offset ?? 0));
+  const limit = taskMax(0, taskFloor(filters.limit ?? 100));
+  const selected: DurableTaskStatusJob[] = [];
+  for (let index = 0; index < jobs.length; index += 1) {
+    const job = jobs[index]!;
+    if (taskSetSize(ids) > 0 && !taskSetHas(ids, job.id)) continue;
+    if (filters.task !== undefined && job.task !== filters.task) continue;
+    if (statuses !== undefined && !taskSetHas(statuses, job.status)) continue;
+    taskArrayPush(selected, job);
+  }
+  taskArraySort(
+    selected,
+    (a, b) =>
+      taskDateGetTime(b.updatedAt) - taskDateGetTime(a.updatedAt) ||
+      taskDateGetTime(b.createdAt) - taskDateGetTime(a.createdAt),
+  );
+  const page = taskArraySlice(selected, offset, offset + limit);
+  const copied: DurableTaskStatusJob[] = [];
+  for (let index = 0; index < page.length; index += 1) taskArrayPush(copied, copyJob(page[index]!));
+  return copied;
 }
 
 function sqlListJobsStatement(filters: DurableTaskStatusFilters): {
@@ -165,29 +208,31 @@ function sqlListJobsStatement(filters: DurableTaskStatusFilters): {
   const values: unknown[] = [];
 
   if (filters.ids !== undefined && filters.ids.length > 0) {
-    values.push([...filters.ids]);
-    clauses.push(`id = any($${values.length}::text[])`);
+    taskArrayPush(values, taskArraySlice(filters.ids));
+    taskArrayPush(clauses, `id = any($${values.length}::text[])`);
   }
   if (filters.task !== undefined) {
-    values.push(filters.task);
-    clauses.push(`task_key = $${values.length}`);
+    taskArrayPush(values, filters.task);
+    taskArrayPush(clauses, `task_key = $${values.length}`);
   }
   const statuses = statusFilter(filters.status);
   if (statuses !== undefined) {
-    values.push([...statuses]);
-    clauses.push(`status = any($${values.length}::text[])`);
+    const statusValues: DurableTaskObservedStatus[] = [];
+    taskSetForEach(statuses, (status) => taskArrayPush(statusValues, status));
+    taskArrayPush(values, statusValues);
+    taskArrayPush(clauses, `status = any($${values.length}::text[])`);
   }
 
-  values.push(Math.max(1, Math.floor(filters.limit ?? 100)));
+  taskArrayPush(values, taskMax(1, taskFloor(filters.limit ?? 100)));
   const limitPlaceholder = `$${values.length}`;
-  values.push(Math.max(0, Math.floor(filters.offset ?? 0)));
+  taskArrayPush(values, taskMax(0, taskFloor(filters.offset ?? 0)));
   const offsetPlaceholder = `$${values.length}`;
 
   return {
     text: `select id, task_key, args, run_at, logical_key, status, attempts, created_at, updated_at,
   leased_until, lease_owner, last_error
 from _kovo_jobs
-${clauses.length === 0 ? '' : `where ${clauses.join(' and ')}`}
+${clauses.length === 0 ? '' : `where ${joinClauses(clauses)}`}
 order by updated_at desc, created_at desc
 limit ${limitPlaceholder} offset ${offsetPlaceholder}`,
     values,
@@ -215,7 +260,7 @@ function statusRecord(
       : {}),
     ...(job.key === undefined ? {} : { key: job.key }),
     ...(options?.includeArgs === true && job.lastError !== undefined
-      ? { lastError: String(scrubSecretLifecycleValue(job.lastError)) }
+      ? { lastError: taskString(scrubSecretLifecycleValue(job.lastError)) }
       : {}),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
     ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
@@ -267,7 +312,7 @@ function copyJob(job: DurableTaskStatusJob): DurableTaskStatusJob {
     ...(job.key === undefined ? {} : { key: job.key }),
     ...(job.lastError === undefined
       ? {}
-      : { lastError: String(scrubSecretLifecycleValue(job.lastError)) }),
+      : { lastError: taskString(scrubSecretLifecycleValue(job.lastError)) }),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
     ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
   };
@@ -277,7 +322,15 @@ function statusFilter(
   status: DurableTaskObservedStatus | readonly DurableTaskObservedStatus[] | undefined,
 ): Set<DurableTaskObservedStatus> | undefined {
   if (status === undefined) return undefined;
-  return new Set(Array.isArray(status) ? status : [status]);
+  const statuses = taskCreateSet<DurableTaskObservedStatus>();
+  if (taskIsArray(status)) {
+    for (let index = 0; index < status.length; index += 1) {
+      taskSetAdd(statuses, status[index] as DurableTaskObservedStatus);
+    }
+  } else {
+    taskSetAdd(statuses, status);
+  }
+  return statuses;
 }
 
 function observedStatus(status: string): DurableTaskObservedStatus {
@@ -301,9 +354,26 @@ function isSqlExecutor(
 }
 
 function dateFrom(value: Date | string): Date {
-  return value instanceof Date ? copyDate(value) : new Date(value);
+  return taskDateIsDate(value) ? copyDate(value) : taskNewDate(value);
 }
 
 function copyDate(value: Date): Date {
-  return new Date(value.getTime());
+  return taskNewDate(taskDateGetTime(value));
+}
+
+function mapStatusRecords(
+  jobs: readonly DurableTaskStatusJob[],
+  filters: Pick<DurableTaskStatusFilters, 'includeArgs'>,
+): DurableTaskStatusRecord[] {
+  const records: DurableTaskStatusRecord[] = [];
+  for (let index = 0; index < jobs.length; index += 1) {
+    taskArrayPush(records, statusRecord(jobs[index]!, filters));
+  }
+  return records;
+}
+
+function joinClauses(clauses: readonly string[]): string {
+  let joined = clauses[0] ?? '';
+  for (let index = 1; index < clauses.length; index += 1) joined += ` and ${clauses[index]!}`;
+  return joined;
 }

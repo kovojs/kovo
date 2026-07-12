@@ -13,6 +13,49 @@ import {
 import { managedDb } from './managed-db.js';
 
 describe('durable task queue store (SPEC §9.6)', () => {
+  it('uses 128-bit cryptographic job and lease identities despite late clock/RNG replacement', async () => {
+    const originalDateNow = Date.now;
+    const originalMathRandom = Math.random;
+    const store = new MemoryDurableTaskQueue();
+    try {
+      Date.now = () => 1;
+      Math.random = () => 0.5;
+      const first = await store.enqueue({ task: 'first', args: {}, runAt: new Date(0) });
+      const second = await store.enqueue({ task: 'second', args: {}, runAt: new Date(0) });
+
+      expect(first.id).toMatch(/^job_[0-9a-f]{32}$/u);
+      expect(second.id).toMatch(/^job_[0-9a-f]{32}$/u);
+      expect(second.id).not.toBe(first.id);
+      expect(store.snapshot()).toHaveLength(2);
+
+      const [firstLease] = await store.claimDue({
+        limit: 1,
+        leaseMs: 1,
+        now: new Date(0),
+        owner: 'stable-owner',
+      });
+      await store.reapExpiredLeases(new Date(2));
+      const [secondLease] = await store.claimDue({
+        limit: 1,
+        leaseMs: 1,
+        now: new Date(2),
+        owner: 'stable-owner',
+      });
+      expect(secondLease?.leaseToken).toMatch(/^lease_[0-9a-f]{32}$/u);
+      expect(secondLease?.leaseToken).not.toBe(firstLease?.leaseToken);
+      expect(
+        await store.markSucceeded(secondLease!.id, {
+          leaseOwner: firstLease?.leaseOwner,
+          leaseToken: firstLease?.leaseToken,
+          now: new Date(2),
+        }),
+      ).toBe(false);
+    } finally {
+      Date.now = originalDateNow;
+      Math.random = originalMathRandom;
+    }
+  });
+
   it('exposes a persistent Postgres-compatible _kovo_jobs schema through statement carriers', async () => {
     const statements: DurableTaskSqlStatement[] = [];
     const executor: DurableTaskSqlExecutor = {

@@ -20,6 +20,37 @@ import type {
   DurableTaskJob,
   DurableTaskQueueStore,
 } from './task-queue.js';
+import {
+  taskArrayPush,
+  taskClearInterval,
+  taskClearTimeout,
+  taskCreateMap,
+  taskCreatePromise,
+  taskDateGetTime,
+  taskDateNow,
+  taskFloor,
+  taskInstanceOf,
+  taskIsArray,
+  taskMapDelete,
+  taskMapForEach,
+  taskMapGet,
+  taskMapSet,
+  taskMapSize,
+  taskMax,
+  taskMin,
+  taskNewDate,
+  taskNumberIsFinite,
+  taskPromiseAll,
+  taskPromiseFinally,
+  taskPromiseRace,
+  taskPromiseResolve,
+  taskPromiseThen,
+  taskSetInterval,
+  taskSetTimeout,
+  taskSnapshotCollection,
+  taskTimerUnref,
+  taskTrunc,
+} from './task-security-intrinsics.js';
 
 export interface DurableTaskRunnerHooks {
   readonly fetch?: typeof globalThis.fetch;
@@ -66,7 +97,7 @@ export class UnknownDurableTaskError extends Error {
 }
 
 export class DurableTaskRunner {
-  private readonly tasks = new Map<string, TaskDefinition<string, any, any>>();
+  private readonly tasks = taskCreateMap<string, TaskDefinition<string, any, any>>();
   private readonly batchSize: number;
   private readonly leaseMs: number;
   private readonly pollIntervalMs: number;
@@ -76,27 +107,28 @@ export class DurableTaskRunner {
   private readonly heartbeatIntervalMs: number;
   private readonly maxInFlight: number;
   private readonly selfRescheduleDelayFloorMs: number;
-  private readonly inFlightByTask = new Map<string, number>();
+  private readonly inFlightByTask = taskCreateMap<string, number>();
   private inFlight = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private stopped = true;
   private draining: Promise<void> | undefined;
 
   constructor(private readonly options: DurableTaskRunnerOptions) {
-    const taskEntries =
-      Symbol.iterator in Object(options.tasks)
-        ? (options.tasks as Iterable<TaskDefinition<string, any, any>>)
-        : Object.values(options.tasks as Record<string, TaskDefinition<string, any, any>>);
-    for (const task of taskEntries) {
-      this.tasks.set(task.key, task);
+    const taskEntries = taskSnapshotCollection(options.tasks, 'Durable task registry');
+    for (let index = 0; index < taskEntries.length; index += 1) {
+      const task = taskEntries[index]!;
+      if (taskMapGet(this.tasks, task.key) !== undefined) {
+        throw new TypeError(`Durable task registry contains duplicate key "${task.key}".`);
+      }
+      taskMapSet(this.tasks, task.key, task);
     }
     this.batchSize = options.batchSize ?? 5;
     this.leaseMs = options.leaseMs ?? 30_000;
     this.hardTimeoutMs = options.hardTimeoutMs ?? 300_000;
-    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? Math.max(100, this.leaseMs / 2);
-    this.maxInFlight = Math.max(
+    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? taskMax(100, this.leaseMs / 2);
+    this.maxInFlight = taskMax(
       1,
-      Math.min(Math.floor(options.maxInFlight ?? this.batchSize), this.batchSize),
+      taskMin(taskFloor(options.maxInFlight ?? this.batchSize), this.batchSize),
     );
     this.pollIntervalMs = options.pollIntervalMs ?? 1000;
     this.owner = options.owner ?? 'kovo-task-runner';
@@ -113,16 +145,20 @@ export class DurableTaskRunner {
   async stop(): Promise<void> {
     this.stopped = true;
     if (this.timer !== undefined) {
-      clearTimeout(this.timer);
+      taskClearTimeout(this.timer);
       this.timer = undefined;
     }
     await this.draining;
   }
 
-  async runOnce(now: Date = new Date()): Promise<DurableTaskJob[]> {
+  async runOnce(now: Date = taskNewDate()): Promise<DurableTaskJob[]> {
     await this.options.store.reapExpiredLeases(now);
     const jobs = await this.claimAvailable(now);
-    await Promise.all(jobs.map((job) => this.runTrackedJob(job)));
+    const running: Promise<void>[] = [];
+    for (let index = 0; index < jobs.length; index += 1) {
+      taskArrayPush(running, this.runTrackedJob(jobs[index]!));
+    }
+    await taskPromiseAll(running);
     return jobs;
   }
 
@@ -130,7 +166,7 @@ export class DurableTaskRunner {
     const claimed: DurableTaskJob[] = [];
     while (claimed.length < this.batchSize && this.inFlight + claimed.length < this.maxInFlight) {
       const taskKeys = this.claimableTaskKeys(claimed);
-      if (this.tasks.size > 0 && taskKeys.length === 0) break;
+      if (taskMapSize(this.tasks) > 0 && taskKeys.length === 0) break;
       const jobs = await this.options.store.claimDue({
         limit: 1,
         leaseMs: this.leaseMs,
@@ -139,61 +175,69 @@ export class DurableTaskRunner {
         ...(taskKeys.length === 0 ? {} : { taskKeys }),
       });
       if (jobs.length === 0) break;
-      claimed.push(jobs[0]!);
+      taskArrayPush(claimed, jobs[0]!);
     }
     return claimed;
   }
 
   private claimableTaskKeys(pending: readonly DurableTaskJob[]): string[] {
-    const pendingByTask = new Map<string, number>();
-    for (const job of pending) {
-      pendingByTask.set(job.task, (pendingByTask.get(job.task) ?? 0) + 1);
+    const pendingByTask = taskCreateMap<string, number>();
+    for (let index = 0; index < pending.length; index += 1) {
+      const job = pending[index]!;
+      taskMapSet(pendingByTask, job.task, (taskMapGet(pendingByTask, job.task) ?? 0) + 1);
     }
     const keys: string[] = [];
-    for (const [key, task] of this.tasks) {
+    taskMapForEach(this.tasks, (task, key) => {
       const cap = taskConcurrency(task);
-      const current = (this.inFlightByTask.get(key) ?? 0) + (pendingByTask.get(key) ?? 0);
-      if (current < cap) keys.push(key);
-    }
+      const current =
+        (taskMapGet(this.inFlightByTask, key) ?? 0) + (taskMapGet(pendingByTask, key) ?? 0);
+      if (current < cap) taskArrayPush(keys, key);
+    });
     return keys;
   }
 
   private async runTrackedJob(job: DurableTaskJob): Promise<void> {
     this.inFlight += 1;
-    this.inFlightByTask.set(job.task, (this.inFlightByTask.get(job.task) ?? 0) + 1);
-    let releaseWhenSettled: Promise<void> = Promise.resolve();
+    taskMapSet(
+      this.inFlightByTask,
+      job.task,
+      (taskMapGet(this.inFlightByTask, job.task) ?? 0) + 1,
+    );
+    let releaseWhenSettled: Promise<void> = taskPromiseResolve(undefined);
     try {
       releaseWhenSettled = (await this.runJob(job)).releaseWhenSettled;
     } finally {
-      void releaseWhenSettled.finally(() => this.releaseInFlight(job.task));
+      void taskPromiseFinally(releaseWhenSettled, () => this.releaseInFlight(job.task));
     }
   }
 
   private releaseInFlight(taskKey: string): void {
     this.inFlight -= 1;
-    const remaining = (this.inFlightByTask.get(taskKey) ?? 1) - 1;
-    if (remaining <= 0) this.inFlightByTask.delete(taskKey);
-    else this.inFlightByTask.set(taskKey, remaining);
+    const remaining = (taskMapGet(this.inFlightByTask, taskKey) ?? 1) - 1;
+    if (remaining <= 0) taskMapDelete(this.inFlightByTask, taskKey);
+    else taskMapSet(this.inFlightByTask, taskKey, remaining);
   }
 
   private scheduleTick(delayMs: number): void {
-    this.timer = setTimeout(() => {
+    this.timer = taskSetTimeout(() => {
       this.timer = undefined;
-      this.draining = this.runOnce()
-        .then(() => undefined)
-        .catch(() => {
+      const drained = taskPromiseThen(
+        this.runOnce(),
+        () => undefined,
+        () => {
           // Individual job failures are persisted by runJob; loop-level errors should not kill the runner.
-        })
-        .finally(() => {
+        },
+      );
+      this.draining = taskPromiseFinally(drained, () => {
           this.draining = undefined;
           if (!this.stopped) this.scheduleTick(this.pollIntervalMs);
-        });
+      });
     }, delayMs);
-    (this.timer as { unref?: () => void }).unref?.();
+    taskTimerUnref(this.timer);
   }
 
   private async runJob(job: DurableTaskJob): Promise<{ releaseWhenSettled: Promise<void> }> {
-    const task = this.tasks.get(job.task);
+    const task = taskMapGet(this.tasks, job.task);
     if (task === undefined) {
       const error = new UnknownDurableTaskError(job.task);
       await this.options.store.markFailed(job.id, error, {
@@ -201,10 +245,10 @@ export class DurableTaskRunner {
         maxAttempts: 1,
       });
       await this.reportError(error, { job, phase: 'unknown-task' });
-      return { releaseWhenSettled: Promise.resolve() };
+      return { releaseWhenSettled: taskPromiseResolve(undefined) };
     }
 
-    let bodySettled: Promise<void> = Promise.resolve();
+    let bodySettled: Promise<void> = taskPromiseResolve(undefined);
     try {
       const args = task.input.parse(job.args);
       const result = await this.runWithDeadline(job, task, args);
@@ -238,22 +282,25 @@ export class DurableTaskRunner {
   ): Promise<{ bodySettled: Promise<void> }> {
     const timeoutMs = taskTimeoutMs(task, this.leaseMs, this.hardTimeoutMs);
     let settled = false;
-    const heartbeat = setInterval(
+    const heartbeat = taskSetInterval(
       () => {
         if (settled) return;
-        const now = new Date();
+        const now = taskNewDate();
         void this.options.store.heartbeat(job.id, {
           ...completionOptions(job),
-          leaseMs: Math.min(this.leaseMs, timeoutMs),
+          leaseMs: taskMin(this.leaseMs, timeoutMs),
           now,
         });
       },
-      Math.min(this.heartbeatIntervalMs, timeoutMs),
+      taskMin(this.heartbeatIntervalMs, timeoutMs),
     );
-    (heartbeat as { unref?: () => void }).unref?.();
+    taskTimerUnref(heartbeat);
 
-    const bodyPromise = Promise.resolve().then(() => task.run(args, this.createContext(job)));
-    const bodySettled = bodyPromise.then(
+    const bodyPromise = taskPromiseThen(taskPromiseResolve(undefined), () =>
+      task.run(args, this.createContext(job)),
+    );
+    const bodySettled = taskPromiseThen(
+      bodyPromise,
       () => undefined,
       () => undefined,
     );
@@ -269,7 +316,7 @@ export class DurableTaskRunner {
       return { bodySettled };
     } finally {
       settled = true;
-      clearInterval(heartbeat);
+      taskClearInterval(heartbeat);
     }
   }
 
@@ -388,15 +435,29 @@ export function durableTaskScheduleInput(input: {
     | ReadonlyArray<TaskDefinition<string, any, any>>;
   readonly selfRescheduleDelayFloorMs?: number | undefined;
 }): DurableTaskEnqueueInput {
-  const registered =
-    typeof (input.registeredTasks as ReadonlyMap<string, TaskDefinition<string, any, any>>).has ===
-    'function'
-      ? (input.registeredTasks as ReadonlyMap<string, TaskDefinition<string, any, any>>).has(
-          input.definition.key,
-        )
-      : (input.registeredTasks as ReadonlyArray<TaskDefinition<string, any, any>>).some(
-          (task) => task.key === input.definition.key,
-        );
+  let registered = false;
+  if (taskIsArray(input.registeredTasks)) {
+    for (let index = 0; index < input.registeredTasks.length; index += 1) {
+      const task = input.registeredTasks[index];
+      if (
+        task !== undefined &&
+        task.key === input.definition.key &&
+        (task === input.definition || task.run === input.definition.run)
+      ) {
+        registered = true;
+        break;
+      }
+    }
+  } else {
+    const task = taskMapGet(
+      input.registeredTasks as Map<string, TaskDefinition<string, any, any>>,
+      input.definition.key,
+    );
+    registered =
+      task !== undefined &&
+      task.key === input.definition.key &&
+      (task === input.definition || task.run === input.definition.run);
+  }
   if (!registered) throw new UnknownDurableTaskError(input.definition.key);
 
   const runAt = scheduleRunAt(input.options);
@@ -434,16 +495,16 @@ class DurableTaskTimeoutError extends Error {
 }
 
 function isDurableTaskTimeoutError(error: unknown): error is DurableTaskTimeoutError {
-  return error instanceof DurableTaskTimeoutError;
+  return taskInstanceOf(error, DurableTaskTimeoutError);
 }
 
 function scheduleRunAt(options: TaskScheduleOptions | undefined): Date {
   if (options?.afterMs !== undefined && options.at !== undefined) {
     throw new TypeError('Task schedule options cannot specify both afterMs and at.');
   }
-  if (options?.afterMs !== undefined) return new Date(Date.now() + options.afterMs);
-  if (options?.at !== undefined) return new Date(options.at);
-  return new Date();
+  if (options?.afterMs !== undefined) return taskNewDate(taskDateNow() + options.afterMs);
+  if (options?.at !== undefined) return taskNewDate(options.at);
+  return taskNewDate();
 }
 
 function completionOptions(job: DurableTaskJob): {
@@ -457,11 +518,11 @@ function completionOptions(job: DurableTaskJob): {
 }
 
 function taskMaxAttempts(task: TaskDefinition<string, any, any>): number {
-  return Math.max(1, Math.trunc(task.retry?.maxAttempts ?? 1));
+  return taskMax(1, taskTrunc(task.retry?.maxAttempts ?? 1));
 }
 
 function retryRunAt(job: DurableTaskJob, task: TaskDefinition<string, any, any>): Date {
-  const attempt = Math.max(1, job.attempts);
+  const attempt = taskMax(1, job.attempts);
   const baseMs = 1000;
   const delayMs =
     task.retry?.backoff === 'linear'
@@ -469,7 +530,7 @@ function retryRunAt(job: DurableTaskJob, task: TaskDefinition<string, any, any>)
       : task.retry?.backoff === 'exponential'
         ? baseMs * 2 ** (attempt - 1)
         : baseMs;
-  return new Date(Date.now() + delayMs);
+  return taskNewDate(taskDateNow() + delayMs);
 }
 
 function taskTimeoutMs(
@@ -478,14 +539,14 @@ function taskTimeoutMs(
   hardTimeoutMs: number,
 ): number {
   const requested = task.timeoutMs ?? leaseMs;
-  if (!Number.isFinite(requested) || requested <= 0) return Math.min(leaseMs, hardTimeoutMs);
-  return Math.max(1, Math.min(Math.trunc(requested), hardTimeoutMs));
+  if (!taskNumberIsFinite(requested) || requested <= 0) return taskMin(leaseMs, hardTimeoutMs);
+  return taskMax(1, taskMin(taskTrunc(requested), hardTimeoutMs));
 }
 
 function taskConcurrency(task: TaskDefinition<string, any, any>): number {
   const concurrency = task.concurrency;
-  if (concurrency === undefined || !Number.isFinite(concurrency)) return Number.POSITIVE_INFINITY;
-  return Math.max(1, Math.trunc(concurrency));
+  if (concurrency === undefined || !taskNumberIsFinite(concurrency)) return Infinity;
+  return taskMax(1, taskTrunc(concurrency));
 }
 
 function generationStatus(
@@ -493,7 +554,7 @@ function generationStatus(
   definition: TaskDefinition<string, any, any>,
 ): { status?: 'dead'; lastError?: string } {
   const nextGeneration = parent.generation + 1;
-  const maxGenerations = Math.max(0, Math.trunc(definition.maxGenerations ?? 64));
+  const maxGenerations = taskMax(0, taskTrunc(definition.maxGenerations ?? 64));
   if (nextGeneration <= maxGenerations) return {};
   return {
     lastError: `Durable task lineage "${parent.lineage}" exceeded maxGenerations ${maxGenerations}.`,
@@ -509,9 +570,9 @@ function selfRescheduleRunAt(
   config: { delayFloorMs: number },
 ): Date {
   if (parent.task !== childTaskKey || options?.afterMs === undefined) return runAt;
-  const floor = Math.max(0, Math.trunc(config.delayFloorMs));
-  const minimum = new Date(Date.now() + floor);
-  return runAt.getTime() >= minimum.getTime() ? runAt : minimum;
+  const floor = taskMax(0, taskTrunc(config.delayFloorMs));
+  const minimum = taskNewDate(taskDateNow() + floor);
+  return taskDateGetTime(runAt) >= taskDateGetTime(minimum) ? runAt : minimum;
 }
 
 async function withTimeout<T>(
@@ -521,13 +582,13 @@ async function withTimeout<T>(
   createTimeoutError: () => Error = () => new Error(message),
 ): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => reject(createTimeoutError()), timeoutMs);
-    (timeout as { unref?: () => void }).unref?.();
+  const timeoutPromise = taskCreatePromise<never>((_, reject) => {
+    timeout = taskSetTimeout(() => reject(createTimeoutError()), timeoutMs);
+    taskTimerUnref(timeout);
   });
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await taskPromiseRace([promise, timeoutPromise]);
   } finally {
-    if (timeout !== undefined) clearTimeout(timeout);
+    if (timeout !== undefined) taskClearTimeout(timeout);
   }
 }

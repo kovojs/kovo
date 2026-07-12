@@ -568,6 +568,36 @@ describe('durable task runner (SPEC §9.6)', () => {
     ]);
   });
 
+  it('rejects a same-key impostor instead of treating its key as registry provenance', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const registeredChild = task('privileged.child', {
+      input: s.object({}),
+      run() {},
+    });
+    const impostor = task('privileged.child', {
+      input: s.object({}),
+      run() {},
+    });
+    const parent = task('ordinary.parent', {
+      input: s.object({}),
+      async run(_, ctx) {
+        await ctx.schedule(impostor, {});
+      },
+    });
+    await store.enqueue({ task: parent.key, args: {} });
+    const runner = createDurableTaskRunner({ store, tasks: [parent, registeredChild] });
+
+    await runner.runOnce(new Date());
+
+    expect(store.snapshot()).toEqual([
+      expect.objectContaining({
+        task: 'ordinary.parent',
+        status: 'dead',
+        lastError: 'No durable task is registered for key "privileged.child".',
+      }),
+    ]);
+  });
+
   it('is stoppable when started as a polling helper', async () => {
     vi.useFakeTimers();
     try {

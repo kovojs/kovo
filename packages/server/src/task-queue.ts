@@ -7,6 +7,33 @@ import type {
 } from './task-observability.js';
 import { scrubSecretLifecycleValue } from './logging.js';
 import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
+import {
+  taskApply,
+  taskArrayPush,
+  taskArraySlice,
+  taskArraySort,
+  taskCreateEntropyId,
+  taskCreateMap,
+  taskCreateSet,
+  taskDateGetTime,
+  taskDateIsDate,
+  taskFloor,
+  taskIsArray,
+  taskIsError,
+  taskIsRecord,
+  taskMapForEach,
+  taskMapGet,
+  taskMapSet,
+  taskMax,
+  taskNewDate,
+  taskNumberIsFinite,
+  taskSetAdd,
+  taskSetHas,
+  taskString,
+  taskStringReplaceAll,
+  taskStringTrim,
+  taskTrunc,
+} from './task-security-intrinsics.js';
 
 export type DurableTaskJobStatus =
   | 'ready'
@@ -125,7 +152,10 @@ export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskStatus
       async execute<Row = Record<string, unknown>>(
         statement: DurableTaskStatusSqlStatement,
       ): Promise<DurableTaskStatusSqlResult<Row>> {
-        const result = await query.call(client, statement.text, [...statement.values]);
+        const result = await taskApply<Promise<unknown>>(query, client, [
+          statement.text,
+          taskArraySlice(statement.values),
+        ]);
         return normalizeSqlResult<Row>(result);
       },
     };
@@ -137,10 +167,10 @@ export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskStatus
       async execute<Row = Record<string, unknown>>(
         statement: DurableTaskStatusSqlStatement,
       ): Promise<DurableTaskStatusSqlResult<Row>> {
-        const result = await execute.call(client, {
+        const result = await taskApply<Promise<unknown>>(execute, client, [{
           text: statement.text,
-          values: [...statement.values],
-        });
+          values: taskArraySlice(statement.values),
+        }]);
         return normalizeSqlResult<Row>(result);
       },
     };
@@ -215,8 +245,8 @@ where status = 'running'`,
 ];
 
 export async function ensureDurableTaskSchema(executor: DurableTaskSqlExecutor): Promise<void> {
-  for (const statement of KOVO_JOBS_TABLE_SQL) {
-    await executor.execute(statement);
+  for (let index = 0; index < KOVO_JOBS_TABLE_SQL.length; index += 1) {
+    await executor.execute(KOVO_JOBS_TABLE_SQL[index]!);
   }
 }
 
@@ -226,9 +256,10 @@ export async function grantDurableTaskWriterRole(
   executor: DurableTaskSqlExecutor,
   role = process.env.KOVO_DB_WRITER_ROLE ?? 'kovo_writer',
 ): Promise<void> {
-  const writerRole = role.trim();
+  const writerRole = taskStringTrim(role);
   if (writerRole === '') return;
-  for (const table of DURABLE_TASK_WRITER_TABLES) {
+  for (let index = 0; index < DURABLE_TASK_WRITER_TABLES.length; index += 1) {
+    const table = DURABLE_TASK_WRITER_TABLES[index]!;
     try {
       await executor.execute({
         text: `grant select, insert, update, delete on ${quoteIdent(table)} to ${quoteIdent(writerRole)}`,
@@ -257,14 +288,14 @@ export async function assertDurableTaskStoreReady(
 }
 
 function quoteIdent(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
+  return `"${taskStringReplaceAll(value, '"', '""')}"`;
 }
 
 export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
   constructor(private readonly executor: DurableTaskSqlExecutor) {}
 
   async enqueue(input: DurableTaskEnqueueInput): Promise<TaskHandle> {
-    const now = new Date();
+    const now = taskNewDate();
     const runAt = input.runAt ?? now;
     const id = createJobId();
     const argsJson = canonicalJsonStringify(scrubSecretLifecycleValue(input.args), {
@@ -319,33 +350,37 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
 
   async cancel(handle: TaskHandle): Promise<boolean> {
     const result = await this.executor.execute(
-      sqlStatement(taskQueueSql.cancelReady, [handle.id, new Date()]),
+      sqlStatement(taskQueueSql.cancelReady, [handle.id, taskNewDate()]),
     );
     return (result.rowCount ?? result.rows.length) > 0;
   }
 
   async claimDue(options: DurableTaskClaimOptions): Promise<DurableTaskJob[]> {
-    const now = options.now ?? new Date();
+    const now = options.now ?? taskNewDate();
     const owner = options.owner ?? 'kovo-runner';
-    const leasedUntil = new Date(now.getTime() + options.leaseMs);
+    const leasedUntil = taskNewDate(taskDateGetTime(now) + options.leaseMs);
     const leaseToken = createLeaseToken();
-    const taskKeys = options.taskKeys?.length ? [...new Set(options.taskKeys)] : null;
+    const taskKeys = dedupeTaskKeys(options.taskKeys);
     const result = await this.executor.execute<DurableTaskJobRow>(
       sqlStatement(taskQueueSql.claimDue, [
         now,
-        Math.max(1, Math.floor(options.limit)),
+        taskMax(1, taskFloor(options.limit)),
         owner,
         leasedUntil,
         leaseToken,
         taskKeys,
       ]),
     );
-    return result.rows.map(jobFromRow);
+    const jobs: DurableTaskJob[] = [];
+    for (let index = 0; index < result.rows.length; index += 1) {
+      taskArrayPush(jobs, jobFromRow(result.rows[index]!));
+    }
+    return jobs;
   }
 
   async heartbeat(id: string, options: DurableTaskHeartbeatOptions): Promise<boolean> {
-    const now = options.now ?? new Date();
-    const leasedUntil = new Date(now.getTime() + Math.max(1, options.leaseMs));
+    const now = options.now ?? taskNewDate();
+    const leasedUntil = taskNewDate(taskDateGetTime(now) + taskMax(1, options.leaseMs));
     const result = await this.executor.execute(
       sqlStatement(taskQueueSql.heartbeat, [
         id,
@@ -394,17 +429,17 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     return (result.rowCount ?? result.rows.length) > 0;
   }
 
-  async reapExpiredLeases(now: Date = new Date()): Promise<number> {
+  async reapExpiredLeases(now: Date = taskNewDate()): Promise<number> {
     const result = await this.executor.execute(sqlStatement(taskQueueSql.reapExpiredLeases, [now]));
     return result.rowCount ?? result.rows.length;
   }
 }
 
 export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
-  private readonly jobs = new Map<string, MutableDurableTaskJob>();
+  private readonly jobs = taskCreateMap<string, MutableDurableTaskJob>();
 
   async enqueue(input: DurableTaskEnqueueInput): Promise<TaskHandle> {
-    const now = new Date();
+    const now = taskNewDate();
     const runAt = input.runAt ?? now;
     const args = assertAndCloneJsonValue(scrubSecretLifecycleValue(input.args), {
       root: 'args',
@@ -417,9 +452,17 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const status = input.status ?? 'ready';
 
     if (input.key !== undefined) {
-      const ready = [...this.jobs.values()].find(
-        (job) => job.status === 'ready' && job.task === input.task && job.key === input.key,
-      );
+      let ready: MutableDurableTaskJob | undefined;
+      taskMapForEach(this.jobs, (job) => {
+        if (
+          ready === undefined &&
+          job.status === 'ready' &&
+          job.task === input.task &&
+          job.key === input.key
+        ) {
+          ready = job;
+        }
+      });
       if (ready !== undefined) {
         if (coalesce === 'debounce') {
           ready.args = args;
@@ -445,57 +488,67 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     };
     if (input.key !== undefined) job.key = input.key;
     if (input.lastError !== undefined) job.lastError = scrubErrorMessage(input.lastError);
-    this.jobs.set(id, job);
+    taskMapSet(this.jobs, id, job);
     return { id, task: input.task };
   }
 
   async cancel(handle: TaskHandle): Promise<boolean> {
-    const job = this.jobs.get(handle.id);
+    const job = taskMapGet(this.jobs, handle.id);
     if (job === undefined || job.status !== 'ready') return false;
-    const now = new Date();
+    const now = taskNewDate();
     job.status = 'cancelled';
     job.updatedAt = now;
     return true;
   }
 
   async claimDue(options: DurableTaskClaimOptions): Promise<DurableTaskJob[]> {
-    const now = options.now ?? new Date();
-    const leaseMs = Math.max(1, options.leaseMs);
+    const now = options.now ?? taskNewDate();
+    const leaseMs = taskMax(1, options.leaseMs);
     const owner = options.owner ?? 'memory-runner';
-    const taskKeys = options.taskKeys === undefined ? undefined : new Set(options.taskKeys);
-    const due = [...this.jobs.values()]
-      .filter(
-        (job) =>
-          job.status === 'ready' &&
-          job.runAt.getTime() <= now.getTime() &&
-          (taskKeys === undefined || taskKeys.has(job.task)),
-      )
-      .sort(
-        (a, b) =>
-          b.priority - a.priority ||
-          a.runAt.getTime() - b.runAt.getTime() ||
-          a.createdAt.getTime() - b.createdAt.getTime(),
-      )
-      .slice(0, Math.max(1, Math.floor(options.limit)));
+    const taskKeys = taskKeySet(options.taskKeys);
+    const dueCandidates: MutableDurableTaskJob[] = [];
+    const nowMs = taskDateGetTime(now);
+    taskMapForEach(this.jobs, (job) => {
+      if (
+        job.status === 'ready' &&
+        taskDateGetTime(job.runAt) <= nowMs &&
+        (taskKeys === undefined || taskSetHas(taskKeys, job.task))
+      ) {
+        taskArrayPush(dueCandidates, job);
+      }
+    });
+    taskArraySort(
+      dueCandidates,
+      (a, b) =>
+        b.priority - a.priority ||
+        taskDateGetTime(a.runAt) - taskDateGetTime(b.runAt) ||
+        taskDateGetTime(a.createdAt) - taskDateGetTime(b.createdAt),
+    );
+    const due = taskArraySlice(dueCandidates, 0, taskMax(1, taskFloor(options.limit)));
 
-    for (const job of due) {
+    for (let index = 0; index < due.length; index += 1) {
+      const job = due[index]!;
       job.status = 'running';
       job.attempts += 1;
       job.leaseOwner = owner;
       job.leaseToken = createLeaseToken();
-      job.leasedUntil = new Date(now.getTime() + leaseMs);
+      job.leasedUntil = taskNewDate(nowMs + leaseMs);
       job.updatedAt = now;
     }
 
-    return due.map(readonlyJob);
+    const claimed: DurableTaskJob[] = [];
+    for (let index = 0; index < due.length; index += 1) {
+      taskArrayPush(claimed, readonlyJob(due[index]!));
+    }
+    return claimed;
   }
 
   async heartbeat(id: string, options: DurableTaskHeartbeatOptions): Promise<boolean> {
-    const job = this.jobs.get(id);
+    const job = taskMapGet(this.jobs, id);
     if (job === undefined || job.status !== 'running') return false;
     if (!leaseMatches(job, options)) return false;
-    const now = options.now ?? new Date();
-    job.leasedUntil = new Date(now.getTime() + Math.max(1, options.leaseMs));
+    const now = options.now ?? taskNewDate();
+    job.leasedUntil = taskNewDate(taskDateGetTime(now) + taskMax(1, options.leaseMs));
     job.updatedAt = now;
     return true;
   }
@@ -504,7 +557,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     id: string,
     options: DurableTaskCompletionOptions | Date = {},
   ): Promise<boolean> {
-    const job = this.jobs.get(id);
+    const job = taskMapGet(this.jobs, id);
     if (job === undefined || job.status !== 'running') return false;
     const normalized = normalizeCompletionOptions(options);
     if (!leaseMatches(job, normalized)) return false;
@@ -521,7 +574,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     error: unknown,
     options: DurableTaskFailureOptions | Date = {},
   ): Promise<boolean> {
-    const job = this.jobs.get(id);
+    const job = taskMapGet(this.jobs, id);
     if (job === undefined || job.status !== 'running') return false;
     const normalized = normalizeFailureOptions(options);
     if (!leaseMatches(job, normalized)) return false;
@@ -537,13 +590,14 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     return true;
   }
 
-  async reapExpiredLeases(now: Date = new Date()): Promise<number> {
+  async reapExpiredLeases(now: Date = taskNewDate()): Promise<number> {
     let reaped = 0;
-    for (const job of this.jobs.values()) {
+    const nowMs = taskDateGetTime(now);
+    taskMapForEach(this.jobs, (job) => {
       if (
         job.status === 'running' &&
         job.leasedUntil !== undefined &&
-        job.leasedUntil.getTime() <= now.getTime()
+        taskDateGetTime(job.leasedUntil) <= nowMs
       ) {
         job.status = 'ready';
         delete job.leasedUntil;
@@ -552,12 +606,14 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
         job.updatedAt = now;
         reaped += 1;
       }
-    }
+    });
     return reaped;
   }
 
   snapshot(): DurableTaskJob[] {
-    return [...this.jobs.values()].map(readonlyJob);
+    const jobs: DurableTaskJob[] = [];
+    taskMapForEach(this.jobs, (job) => taskArrayPush(jobs, readonlyJob(job)));
+    return jobs;
   }
 }
 
@@ -713,10 +769,10 @@ function isSqlClientLike(value: unknown): value is SqlClientLike {
 }
 
 function normalizeSqlResult<Row>(result: unknown): DurableTaskSqlResult<Row> {
-  if (Array.isArray(result)) return { rows: result as readonly Row[] };
+  if (taskIsArray(result)) return { rows: result as readonly Row[] };
   if (!isRecord(result)) return { rows: [] };
 
-  const rows = Array.isArray(result.rows) ? (result.rows as readonly Row[]) : [];
+  const rows = taskIsArray(result.rows) ? (result.rows as readonly Row[]) : [];
   return {
     rows,
     ...(typeof result.rowCount === 'number'
@@ -728,7 +784,7 @@ function normalizeSqlResult<Row>(result: unknown): DurableTaskSqlResult<Row> {
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return (typeof value === 'object' || typeof value === 'function') && value !== null;
+  return taskIsRecord(value);
 }
 
 function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
@@ -753,19 +809,19 @@ function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
 }
 
 function dateFrom(value: Date | string): Date {
-  return value instanceof Date ? copyDate(value) : new Date(value);
+  return taskDateIsDate(value) ? copyDate(value) : taskNewDate(value);
 }
 
 function copyDate(value: Date): Date {
-  return new Date(value.getTime());
+  return taskNewDate(taskDateGetTime(value));
 }
 
 function createJobId(): string {
-  return `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+  return taskCreateEntropyId('job');
 }
 
 function createLeaseToken(): string {
-  return `lease_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+  return taskCreateEntropyId('lease');
 }
 
 function scrubErrorMessage(error: unknown): string {
@@ -773,32 +829,36 @@ function scrubErrorMessage(error: unknown): string {
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
+  if (taskIsError(error)) return error.message;
   if (typeof error === 'string') return error;
   try {
-    const json = JSON.stringify(error);
+    const json = canonicalJsonStringify(error, { root: 'error' });
     if (typeof json === 'string') return json;
   } catch (_jsonError) {
     void _jsonError;
   }
-  return String(error);
+  return taskString(error);
 }
 
 function normalizePriority(value: number | undefined): number {
-  if (value === undefined || !Number.isFinite(value)) return 0;
-  return Math.trunc(value);
+  if (value === undefined || !taskNumberIsFinite(value)) return 0;
+  return taskTrunc(value);
 }
 
 function normalizeNonNegativeInteger(value: number | undefined, fallback: number): number {
-  if (value === undefined || !Number.isFinite(value)) return fallback;
-  return Math.max(0, Math.trunc(value));
+  if (value === undefined || !taskNumberIsFinite(value)) return fallback;
+  return taskMax(0, taskTrunc(value));
 }
 
 function normalizeCompletionOptions(
   options: DurableTaskCompletionOptions | Date,
 ): Required<Pick<DurableTaskCompletionOptions, 'now'>> & Omit<DurableTaskCompletionOptions, 'now'> {
-  if (options instanceof Date) return { now: options };
-  return { ...options, now: options.now ?? new Date() };
+  if (taskDateIsDate(options)) return { now: options };
+  return {
+    ...(options.leaseOwner === undefined ? {} : { leaseOwner: options.leaseOwner }),
+    ...(options.leaseToken === undefined ? {} : { leaseToken: options.leaseToken }),
+    now: options.now ?? taskNewDate(),
+  };
 }
 
 interface NormalizedDurableTaskFailureOptions extends DurableTaskFailureOptions {
@@ -809,16 +869,38 @@ interface NormalizedDurableTaskFailureOptions extends DurableTaskFailureOptions 
 function normalizeFailureOptions(
   options: DurableTaskFailureOptions | Date,
 ): NormalizedDurableTaskFailureOptions {
-  if (options instanceof Date) return { maxAttempts: 1, now: options };
+  if (taskDateIsDate(options)) return { maxAttempts: 1, now: options };
   const maxAttempts =
-    options.maxAttempts === undefined || !Number.isFinite(options.maxAttempts)
+    options.maxAttempts === undefined || !taskNumberIsFinite(options.maxAttempts)
       ? 1
-      : Math.max(1, Math.trunc(options.maxAttempts));
+      : taskMax(1, taskTrunc(options.maxAttempts));
   return {
-    ...options,
+    ...(options.leaseOwner === undefined ? {} : { leaseOwner: options.leaseOwner }),
+    ...(options.leaseToken === undefined ? {} : { leaseToken: options.leaseToken }),
+    ...(options.retryAt === undefined ? {} : { retryAt: options.retryAt }),
     maxAttempts,
-    now: options.now ?? new Date(),
+    now: options.now ?? taskNewDate(),
   };
+}
+
+function taskKeySet(values: readonly string[] | undefined): Set<string> | undefined {
+  if (values === undefined) return undefined;
+  const set = taskCreateSet<string>();
+  for (let index = 0; index < values.length; index += 1) taskSetAdd(set, values[index]!);
+  return set;
+}
+
+function dedupeTaskKeys(values: readonly string[] | undefined): string[] | null {
+  if (values === undefined || values.length === 0) return null;
+  const set = taskCreateSet<string>();
+  const result: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (taskSetHas(set, value)) continue;
+    taskSetAdd(set, value);
+    taskArrayPush(result, value);
+  }
+  return result;
 }
 
 function leaseMatches(

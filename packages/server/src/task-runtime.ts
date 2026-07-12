@@ -20,6 +20,20 @@ import {
 import type { KovoApp } from './app-types.js';
 import type { DurableTaskRunnerErrorContext } from './task-runner.js';
 import { scrubConsoleArgs } from './logging.js';
+import {
+  taskCreateWeakMap,
+  taskInternalRequest,
+  taskInternalUrl,
+  taskIsRecord,
+  taskPromiseFinally,
+  taskPromiseThen,
+  taskSetTimeout,
+  taskSnapshotCollection,
+  taskTimerUnref,
+  taskWeakMapDelete,
+  taskWeakMapGet,
+  taskWeakMapSet,
+} from './task-security-intrinsics.js';
 
 const TASK_CRON_POLL_INTERVAL_MS = 30_000;
 
@@ -28,7 +42,7 @@ export interface AppTaskRuntime {
   ensureStarted(request: Request): Promise<void>;
 }
 
-const appTaskRuntimes = new WeakMap<KovoApp, AppTaskRuntime>();
+const appTaskRuntimes = taskCreateWeakMap<KovoApp, AppTaskRuntime>();
 
 export function createAppTaskRuntime(app: KovoApp): AppTaskRuntime | undefined {
   if (app.tasks.length === 0) return undefined;
@@ -42,14 +56,14 @@ export function createAppTaskRuntime(app: KovoApp): AppTaskRuntime | undefined {
 
 export function registerAppTaskRuntime(app: KovoApp, runtime: AppTaskRuntime | undefined): void {
   if (runtime === undefined) {
-    appTaskRuntimes.delete(app);
+    taskWeakMapDelete(appTaskRuntimes, app);
     return;
   }
-  appTaskRuntimes.set(app, runtime);
+  taskWeakMapSet(appTaskRuntimes, app, runtime);
 }
 
 export function appTaskScheduler(app: KovoApp): TaskScheduler | undefined {
-  return appTaskRuntimes.get(app)?.scheduler;
+  return taskWeakMapGet(appTaskRuntimes, app)?.scheduler;
 }
 
 class DefaultAppTaskRuntime implements AppTaskRuntime {
@@ -57,12 +71,14 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
   private cronTimer: ReturnType<typeof setTimeout> | undefined;
   private runner: DurableTaskRunner | undefined;
   private startPromise: Promise<void> | undefined;
+  private readonly tasks: KovoApp['tasks'];
 
   readonly scheduler: TaskScheduler;
 
   constructor(private readonly app: KovoApp) {
+    this.tasks = taskSnapshotCollection(app.tasks, 'Application durable task registry');
     this.scheduler = {
-      registeredTasks: app.tasks,
+      registeredTasks: this.tasks,
       cancel: async (request, handle) => this.queueForRequest(request).cancel(handle),
       schedule: async (request, input) => this.queueForRequest(request).enqueue(input),
     };
@@ -70,10 +86,14 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
 
   async ensureStarted(request: Request): Promise<void> {
     if (this.runner !== undefined) return;
-    this.startPromise ??= this.start(request).catch((error: unknown) => {
-      this.startPromise = undefined;
-      throw error;
-    });
+    this.startPromise ??= taskPromiseThen(
+      this.start(request),
+      () => undefined,
+      (error: unknown) => {
+        this.startPromise = undefined;
+        throw error;
+      },
+    );
     await this.startPromise;
   }
 
@@ -85,7 +105,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     this.cronMaterializer = createRecurringTaskMaterializer({
       occurrenceStore: new PostgresRecurringTaskOccurrenceStore(executor),
       store,
-      tasks: this.app.tasks,
+      tasks: this.tasks,
     });
     await this.materializeRecurringTasks();
     this.runner = createDurableTaskRunner({
@@ -143,7 +163,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
       owner: `kovo-task-runner:${process.pid}`,
       pollIntervalMs: 100,
       store,
-      tasks: this.app.tasks,
+      tasks: this.tasks,
     });
     this.runner.start();
     this.scheduleCronTick();
@@ -151,15 +171,18 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
 
   private scheduleCronTick(): void {
     if (this.cronMaterializer === undefined || this.cronTimer !== undefined) return;
-    this.cronTimer = setTimeout(() => {
+    this.cronTimer = taskSetTimeout(() => {
       this.cronTimer = undefined;
-      void this.materializeRecurringTasks()
-        .catch(() => {
+      const materialized = taskPromiseThen(
+        this.materializeRecurringTasks(),
+        () => undefined,
+        () => {
           // Runner ticks must survive transient DB errors; the next tick retries materialization.
-        })
-        .finally(() => this.scheduleCronTick());
+        },
+      );
+      void taskPromiseFinally(materialized, () => this.scheduleCronTick());
     }, TASK_CRON_POLL_INTERVAL_MS);
-    (this.cronTimer as { unref?: () => void }).unref?.();
+    taskTimerUnref(this.cronTimer);
   }
 
   private async materializeRecurringTasks(): Promise<void> {
@@ -177,7 +200,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
         request: taskInternalRequest(request),
         taskJobId: context.job.id,
         taskKey: context.task?.key ?? context.job.task,
-        url: new URL('/_kovo/task', request.url).toString(),
+        url: taskInternalUrl(request),
       });
       return;
     }
@@ -223,10 +246,6 @@ async function ensureTaskStoreReady(executor: ReturnType<typeof createDurableTas
   }
 }
 
-function taskInternalRequest(seed: Request): Request {
-  return new Request(new URL('/_kovo/task', seed.url), { method: 'POST' });
-}
-
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
-  return (typeof value === 'object' || typeof value === 'function') && value !== null;
+  return taskIsRecord(value);
 }

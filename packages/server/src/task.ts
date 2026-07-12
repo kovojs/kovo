@@ -1,6 +1,18 @@
-import type { InferSchema, Schema } from './schema.js';
+import { snapshotSchemaForRuntime, type InferSchema, type Schema } from './schema.js';
 import type { NonRequestPrincipalPosture } from './auth-principal.js';
 import { validateCronExpression } from './task-cron.js';
+import {
+  assertTaskSecurityIntrinsics,
+  taskArrayPush,
+  taskCreateSet,
+  taskFreeze,
+  taskIsError,
+  taskNumberIsFinite,
+  taskObjectKeys,
+  taskOptionalOwnDataValue,
+  taskSetAdd,
+  taskSetHas,
+} from './task-security-intrinsics.js';
 
 const UNASSIGNED_DERIVED_TASK_KEY = '\0kovo:unassigned-task-key';
 
@@ -189,6 +201,7 @@ export function task(
   keyOrDefinition: string | Omit<TaskDefinition<any, any, any>, 'key'>,
   maybeDefinition?: Omit<TaskDefinition<any, any, any>, 'key'>,
 ): TaskDefinition<string> {
+  assertTaskSecurityIntrinsics();
   const [key, definition] =
     typeof keyOrDefinition === 'string'
       ? [keyOrDefinition, maybeDefinition]
@@ -197,9 +210,10 @@ export function task(
     throw new TypeError('task(key, definition) requires a definition object.');
   }
   assertKnownTaskDefinitionKeys(definition);
-  assertTaskCronOptions(definition);
-  assertTaskRetryOptions(definition);
-  return { ...definition, key };
+  const snapshot = snapshotTaskDefinition(key, definition);
+  assertTaskCronOptions(snapshot);
+  assertTaskRetryOptions(snapshot);
+  return taskFreeze(snapshot);
 }
 
 /** @internal Compiler-emitted/generated ABI for SPEC §4.1 source-derived task identities. */
@@ -215,12 +229,12 @@ export function assignDerivedTaskKey<Task extends TaskDefinition<string, any, an
       `Cannot assign derived task key "${key}" to task already keyed as "${definition.key}".`,
     );
   }
-  definition.key = key;
-  return definition;
+  return taskFreeze(snapshotTaskDefinition(key, definition)) as Task;
 }
 
 function assertKnownTaskDefinitionKeys(definition: object): void {
-  const known = new Set([
+  const known = taskCreateSet<string>();
+  const knownKeys = [
     'catchUp',
     'concurrency',
     'cron',
@@ -231,10 +245,20 @@ function assertKnownTaskDefinitionKeys(definition: object): void {
     'retry',
     'run',
     'timeoutMs',
-  ]);
-  const unknown = Object.keys(definition).filter((key) => !known.has(key));
+  ];
+  for (let index = 0; index < knownKeys.length; index += 1) {
+    taskSetAdd(known, knownKeys[index]!);
+  }
+  const unknown: string[] = [];
+  const keys = taskObjectKeys(definition);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (!taskSetHas(known, key)) taskArrayPush(unknown, key);
+  }
   if (unknown.length > 0) {
-    throw new TypeError(`Unknown task() definition field: ${unknown.join(', ')}`);
+    let names = unknown[0]!;
+    for (let index = 1; index < unknown.length; index += 1) names += `, ${unknown[index]!}`;
+    throw new TypeError(`Unknown task() definition field: ${names}`);
   }
 }
 
@@ -263,7 +287,7 @@ function assertTaskCronOptions(definition: Omit<TaskDefinition<any, any, any>, '
     try {
       definition.input.parse(definition.cronArgs ?? {});
     } catch (error) {
-      const cause = error instanceof Error ? ` ${error.message}` : '';
+      const cause = taskIsError(error) ? ` ${error.message}` : '';
       throw new TypeError(
         `task({ cronArgs }) must satisfy the task input schema for recurring task "${definition.cron}".${cause}`,
       );
@@ -277,7 +301,54 @@ function assertTaskRetryOptions(definition: Omit<TaskDefinition<any, any, any>, 
   if (backoff !== undefined && backoff !== 'exponential' && backoff !== 'linear') {
     throw new TypeError("task({ retry.backoff }) must be 'exponential' or 'linear'.");
   }
-  if (maxAttempts === undefined || !Number.isFinite(maxAttempts) || maxAttempts < 1) {
+  if (maxAttempts === undefined || !taskNumberIsFinite(maxAttempts) || maxAttempts < 1) {
     throw new TypeError('task({ retry.maxAttempts }) must be a positive finite number.');
   }
+}
+
+function snapshotTaskDefinition(
+  key: string,
+  definition: Omit<TaskDefinition<any, any, any>, 'key'> | TaskDefinition<any, any, any>,
+): TaskDefinition<string> {
+  const input = taskOptionalOwnDataValue(definition, 'input');
+  const run = taskOptionalOwnDataValue(definition, 'run');
+  if ((typeof input !== 'object' && typeof input !== 'function') || input === null) {
+    throw new TypeError('task() requires an input schema object.');
+  }
+  if (typeof run !== 'function') throw new TypeError('task() requires a run function.');
+
+  const retryValue = taskOptionalOwnDataValue(definition, 'retry');
+  let retry: TaskDefinition['retry'];
+  if (retryValue !== undefined) {
+    if ((typeof retryValue !== 'object' && typeof retryValue !== 'function') || retryValue === null) {
+      throw new TypeError('task({ retry }) must be an object.');
+    }
+    const backoff = taskOptionalOwnDataValue(retryValue, 'backoff');
+    const maxAttempts = taskOptionalOwnDataValue(retryValue, 'maxAttempts');
+    retry = taskFreeze({
+      ...(backoff === undefined ? {} : { backoff: backoff as 'exponential' | 'linear' }),
+      ...(maxAttempts === undefined ? {} : { maxAttempts: maxAttempts as number }),
+    });
+  }
+
+  const catchUp = taskOptionalOwnDataValue(definition, 'catchUp');
+  const concurrency = taskOptionalOwnDataValue(definition, 'concurrency');
+  const cron = taskOptionalOwnDataValue(definition, 'cron');
+  const cronArgs = taskOptionalOwnDataValue(definition, 'cronArgs');
+  const maxGenerations = taskOptionalOwnDataValue(definition, 'maxGenerations');
+  const priority = taskOptionalOwnDataValue(definition, 'priority');
+  const timeoutMs = taskOptionalOwnDataValue(definition, 'timeoutMs');
+  return {
+    key,
+    input: snapshotSchemaForRuntime(input as Schema<unknown>, `Durable task "${key}" input`),
+    run: run as TaskDefinition['run'],
+    ...(catchUp === undefined ? {} : { catchUp: catchUp as TaskCronCatchUp }),
+    ...(concurrency === undefined ? {} : { concurrency: concurrency as number }),
+    ...(cron === undefined ? {} : { cron: cron as string }),
+    ...(cronArgs === undefined ? {} : { cronArgs }),
+    ...(maxGenerations === undefined ? {} : { maxGenerations: maxGenerations as number }),
+    ...(priority === undefined ? {} : { priority: priority as number }),
+    ...(retry === undefined ? {} : { retry }),
+    ...(timeoutMs === undefined ? {} : { timeoutMs: timeoutMs as number }),
+  };
 }
