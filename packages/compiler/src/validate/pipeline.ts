@@ -4,6 +4,7 @@ import {
   type DiagnosticFactory,
 } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerArrayLength,
   compilerOwnDataValue,
@@ -242,7 +243,11 @@ export function collectCompilerDiagnostics(context: ValidatorContext): CompilerD
           `Compiler validator ${index} diagnostics[${diagnosticIndex}] must be dense.`,
         );
       }
-      diagnostics[diagnostics.length] = diagnostic as CompilerDiagnostic;
+      compilerArrayAppend(
+        diagnostics,
+        diagnostic as CompilerDiagnostic,
+        'Compiler validation diagnostics',
+      );
     }
   }
   return diagnostics;

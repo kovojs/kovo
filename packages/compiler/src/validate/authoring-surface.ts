@@ -2,6 +2,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
   compilerArrayJoin,
   compilerArrayLength,
   compilerOwnDataValue,
@@ -54,22 +55,30 @@ export function validateAuthoringSurface(
         throw new TypeError(`Authoring-surface module specifiers[${index}] must be dense.`);
       }
       if (isNonPublicKovoSpecifier(specifier.specifier)) {
-        diagnostics[diagnostics.length] = nonPublicKovoImportDiagnostic({
-          fileName: options.fileName,
-          length: specifier.end - specifier.start,
-          source: options.source,
-          specifier: specifier.specifier,
-          start: specifier.start,
-        });
+        compilerArrayAppend(
+          diagnostics,
+          nonPublicKovoImportDiagnostic({
+            fileName: options.fileName,
+            length: specifier.end - specifier.start,
+            source: options.source,
+            specifier: specifier.specifier,
+            start: specifier.start,
+          }),
+          'Authoring-surface diagnostics',
+        );
       }
       if (isAppLocalGeneratedSpecifier(specifier.specifier)) {
-        diagnostics[diagnostics.length] = appLocalGeneratedImportDiagnostic({
-          fileName: options.fileName,
-          length: specifier.end - specifier.start,
-          source: options.source,
-          specifier: specifier.specifier,
-          start: specifier.start,
-        });
+        compilerArrayAppend(
+          diagnostics,
+          appLocalGeneratedImportDiagnostic({
+            fileName: options.fileName,
+            length: specifier.end - specifier.start,
+            source: options.source,
+            specifier: specifier.specifier,
+            start: specifier.start,
+          }),
+          'Authoring-surface diagnostics',
+        );
       }
     }
 
@@ -83,13 +92,17 @@ export function validateAuthoringSurface(
       }
       const call = keyFirstRegistryCall(sourceCall);
       if (call !== null) {
-        diagnostics[diagnostics.length] = keyFirstRegistryIdentityDiagnostic({
-          fileName: options.fileName,
-          length: call.length,
-          primitive: call.primitive,
-          source: options.source,
-          start: call.start,
-        });
+        compilerArrayAppend(
+          diagnostics,
+          keyFirstRegistryIdentityDiagnostic({
+            fileName: options.fileName,
+            length: call.length,
+            primitive: call.primitive,
+            source: options.source,
+            start: call.start,
+          }),
+          'Authoring-surface diagnostics',
+        );
       }
     }
   }
@@ -242,13 +255,17 @@ function appendRenderDiagnostics(
     if (render === undefined) {
       throw new TypeError(`Authoring-surface string renders[${index}] must be dense.`);
     }
-    diagnostics[diagnostics.length] = kv235Diagnostic({
-      fileName,
-      source,
-      start: render.start,
-      length: render.length,
-      ...optionalTagName(render.firstHtmlTagName ?? null),
-    });
+    compilerArrayAppend(
+      diagnostics,
+      kv235Diagnostic({
+        fileName,
+        source,
+        start: render.start,
+        length: render.length,
+        ...optionalTagName(render.firstHtmlTagName ?? null),
+      }),
+      'Authoring-surface diagnostics',
+    );
   }
 }
 
@@ -289,12 +306,16 @@ function appendStringRenders(
       | ComponentModuleModel['renderSourceReturns'][number]
       | undefined;
     if (render === undefined) throw new TypeError(`${label}[${index}] must be dense.`);
-    result[result.length] = {
-      ...(render.firstHtmlTagName ? { firstHtmlTagName: render.firstHtmlTagName } : {}),
-      length: render.end - render.start,
-      source: render.source,
-      start: render.start,
-    };
+    compilerArrayAppend(
+      result,
+      {
+        ...(render.firstHtmlTagName ? { firstHtmlTagName: render.firstHtmlTagName } : {}),
+        length: render.end - render.start,
+        source: render.source,
+        start: render.start,
+      },
+      label,
+    );
   }
 }
 

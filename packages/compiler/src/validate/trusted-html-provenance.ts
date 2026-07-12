@@ -10,6 +10,7 @@ import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
@@ -91,11 +92,10 @@ export const validateTrustedHtmlProvenance = securityClassifier(
           if (provenance === null) {
             // Proven local/static-clean value.
           } else {
-            found[found.length] = rawTrustProvenanceDiagnostic(
-              diagnostics,
-              value,
-              provenance,
-              sink,
+            compilerArrayAppend(
+              found,
+              rawTrustProvenanceDiagnostic(diagnostics, value, provenance, sink),
+              'Trusted HTML provenance diagnostics',
             );
           }
         }
@@ -651,7 +651,7 @@ function mapClassifierInputs<Input, Output>(
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label);
     if (value === undefined) throw new TypeError(`${label}[${index}] must be dense own data.`);
-    output[output.length] = map(value as Input);
+    compilerArrayAppend(output, map(value as Input), label);
   }
   return output;
 }
@@ -665,7 +665,7 @@ function appendClassifierInputs<Value>(
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label);
     if (value === undefined) throw new TypeError(`${label}[${index}] must be dense own data.`);
-    output[output.length] = value as Value;
+    compilerArrayAppend(output, value as Value, label);
   }
 }
 
@@ -1189,28 +1189,33 @@ function objectAssignmentProvenance(
       throw new TypeError(`Object assignment properties[${index}] must be dense own data.`);
     }
     if (ts.isSpreadAssignment(property)) {
-      provenances[provenances.length] =
-        classifyExpression(property.expression, mutationClassifyContext(ctx)) ?? 'unprovable';
+      compilerArrayAppend(
+        provenances,
+        classifyExpression(property.expression, mutationClassifyContext(ctx)) ?? 'unprovable',
+        'Object assignment provenances',
+      );
       continue;
     }
     const name = propertyNameText(property.name);
     if (name === null) {
-      provenances[provenances.length] = 'unprovable';
+      compilerArrayAppend(provenances, 'unprovable', 'Object assignment provenances');
       continue;
     }
     if (name !== targetMember) continue;
     if (ts.isPropertyAssignment(property)) {
-      provenances[provenances.length] = classifyExpression(
-        property.initializer,
-        mutationClassifyContext(ctx),
+      compilerArrayAppend(
+        provenances,
+        classifyExpression(property.initializer, mutationClassifyContext(ctx)),
+        'Object assignment provenances',
       );
     } else if (ts.isShorthandPropertyAssignment(property)) {
-      provenances[provenances.length] = classifyIdentifier(
-        property.name,
-        mutationClassifyContext(ctx),
+      compilerArrayAppend(
+        provenances,
+        classifyIdentifier(property.name, mutationClassifyContext(ctx)),
+        'Object assignment provenances',
       );
     } else {
-      provenances[provenances.length] = 'unprovable';
+      compilerArrayAppend(provenances, 'unprovable', 'Object assignment provenances');
     }
   }
   return firstProvenance(provenances);
@@ -1234,26 +1239,28 @@ function propertyDescriptorProvenance(
       throw new TypeError(`Property descriptor properties[${index}] must be dense own data.`);
     }
     if (ts.isSpreadAssignment(property)) {
-      provenances[provenances.length] = 'unprovable';
+      compilerArrayAppend(provenances, 'unprovable', 'Property descriptor provenances');
       continue;
     }
     const name = propertyNameText(property.name);
     if (name === 'value') {
       if (ts.isPropertyAssignment(property)) {
-        provenances[provenances.length] = classifyExpression(
-          property.initializer,
-          mutationClassifyContext(ctx),
+        compilerArrayAppend(
+          provenances,
+          classifyExpression(property.initializer, mutationClassifyContext(ctx)),
+          'Property descriptor provenances',
         );
       } else if (ts.isShorthandPropertyAssignment(property)) {
-        provenances[provenances.length] = classifyIdentifier(
-          property.name,
-          mutationClassifyContext(ctx),
+        compilerArrayAppend(
+          provenances,
+          classifyIdentifier(property.name, mutationClassifyContext(ctx)),
+          'Property descriptor provenances',
         );
       } else {
-        provenances[provenances.length] = 'unprovable';
+        compilerArrayAppend(provenances, 'unprovable', 'Property descriptor provenances');
       }
     } else if (name === 'get' || name === 'set' || name === null) {
-      provenances[provenances.length] = 'unprovable';
+      compilerArrayAppend(provenances, 'unprovable', 'Property descriptor provenances');
     }
   }
   return firstProvenance(provenances);
@@ -1276,19 +1283,23 @@ function objectDescriptorMapProvenance(
       throw new TypeError(`Descriptor map properties[${index}] must be dense own data.`);
     }
     if (ts.isSpreadAssignment(property)) {
-      provenances[provenances.length] = 'unprovable';
+      compilerArrayAppend(provenances, 'unprovable', 'Descriptor map provenances');
       continue;
     }
     const name = propertyNameText(property.name);
     if (name === null) {
-      provenances[provenances.length] = 'unprovable';
+      compilerArrayAppend(provenances, 'unprovable', 'Descriptor map provenances');
       continue;
     }
     if (name !== targetMember) continue;
     if (ts.isPropertyAssignment(property)) {
-      provenances[provenances.length] = propertyDescriptorProvenance(property.initializer, ctx);
+      compilerArrayAppend(
+        provenances,
+        propertyDescriptorProvenance(property.initializer, ctx),
+        'Descriptor map provenances',
+      );
     } else {
-      provenances[provenances.length] = 'unprovable';
+      compilerArrayAppend(provenances, 'unprovable', 'Descriptor map provenances');
     }
   }
   return firstProvenance(provenances);

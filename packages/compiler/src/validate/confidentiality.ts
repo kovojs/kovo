@@ -1,5 +1,6 @@
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerArrayLength,
   compilerObjectKeys,
@@ -30,17 +31,21 @@ export const validateSecretQueryWire = securityClassifier(
       if (typeof query !== 'string') {
         throw new TypeError(`Component query names[${index}] must be an own string.`);
       }
-      queryNameSnapshot[queryNameSnapshot.length] = query;
+      compilerArrayAppend(queryNameSnapshot, query, 'Confidentiality query-name snapshot');
       const shape = queryShapes
         ? (compilerOwnDataValue(queryShapes, query, 'Component query shapes') as
             | QueryShape
             | undefined)
         : undefined;
       if (requiresClosedQueryShapeFacts(options) && shape === undefined) {
-        missingShapeDiagnostics[missingShapeDiagnostics.length] = diagnostics.at(
-          'KV435',
-          undefined,
-          `query="${query}" missing query-shape fact for production query-wire validation`,
+        compilerArrayAppend(
+          missingShapeDiagnostics,
+          diagnostics.at(
+            'KV435',
+            undefined,
+            `query="${query}" missing query-shape fact for production query-wire validation`,
+          ),
+          'Confidentiality missing-shape diagnostics',
         );
       }
     }
@@ -55,18 +60,26 @@ export const validateSecretQueryWire = securityClassifier(
         | undefined;
       const secretPaths = secretQueryShapePaths(shape);
       for (let pathIndex = 0; pathIndex < secretPaths.length; pathIndex += 1) {
-        result[result.length] = diagnostics.at(
-          'KV435',
-          undefined,
-          `query="${query}" path="${pathForDiagnostic(query, secretPaths[pathIndex]!)}"`,
+        compilerArrayAppend(
+          result,
+          diagnostics.at(
+            'KV435',
+            undefined,
+            `query="${query}" path="${pathForDiagnostic(query, secretPaths[pathIndex]!)}"`,
+          ),
+          'Confidentiality query-wire diagnostics',
         );
       }
       const tablePaths = tableRowQueryShapePaths(shape);
       for (let pathIndex = 0; pathIndex < tablePaths.length; pathIndex += 1) {
-        result[result.length] = diagnostics.at(
-          'KV439',
-          undefined,
-          `query="${query}" path="${pathForDiagnostic(query, tablePaths[pathIndex]!)}"`,
+        compilerArrayAppend(
+          result,
+          diagnostics.at(
+            'KV439',
+            undefined,
+            `query="${query}" path="${pathForDiagnostic(query, tablePaths[pathIndex]!)}"`,
+          ),
+          'Confidentiality query-wire diagnostics',
         );
       }
     }
@@ -167,17 +180,23 @@ function appendDiagnostics(
   target: CompilerDiagnostic[],
   values: readonly CompilerDiagnostic[],
 ): void {
-  for (let index = 0; index < values.length; index += 1) target[target.length] = values[index]!;
+  for (let index = 0; index < values.length; index += 1) {
+    compilerArrayAppend(target, values[index]!, 'Confidentiality diagnostic merge');
+  }
 }
 
 function appendStrings(target: string[], values: readonly string[]): void {
-  for (let index = 0; index < values.length; index += 1) target[target.length] = values[index]!;
+  for (let index = 0; index < values.length; index += 1) {
+    compilerArrayAppend(target, values[index]!, 'Confidentiality string merge');
+  }
 }
 
 function appendShapePath(path: readonly string[], key: string): string[] {
   const result: string[] = [];
-  for (let index = 0; index < path.length; index += 1) result[result.length] = path[index]!;
-  result[result.length] = key;
+  for (let index = 0; index < path.length; index += 1) {
+    compilerArrayAppend(result, path[index]!, 'Confidentiality path');
+  }
+  compilerArrayAppend(result, key, 'Confidentiality path');
   return result;
 }
 

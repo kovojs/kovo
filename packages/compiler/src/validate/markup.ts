@@ -2,6 +2,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { deriveComponentNames } from '../component-names.js';
 import {
+  compilerArrayAppend,
   compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
@@ -116,22 +117,26 @@ export function validateHandAuthoredNavigationSegmentStamps(
         );
       }
       if (!compilerSetHas(navigationSegmentStampAttributes, attribute.name)) continue;
-      found[found.length] = {
-        ...diagnostics.at(
-          'KV235',
-          { start: attribute.start, length: attribute.end - attribute.start },
-          `hand-authored navigation segment stamp ${attribute.name}.`,
-        ),
-        help: compilerArrayJoin(
-          [
-            diagnosticDefinitions.KV235.help,
-            'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-            'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
-            'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
-          ],
-          '\n',
-        ),
-      };
+      compilerArrayAppend(
+        found,
+        {
+          ...diagnostics.at(
+            'KV235',
+            { start: attribute.start, length: attribute.end - attribute.start },
+            `hand-authored navigation segment stamp ${attribute.name}.`,
+          ),
+          help: compilerArrayJoin(
+            [
+              diagnosticDefinitions.KV235.help,
+              'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+              'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
+              'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+            ],
+            '\n',
+          ),
+        },
+        'Markup idref values',
+      );
     }
   }
 
@@ -285,11 +290,9 @@ export function validateAttributeMergeConflicts(
     compilerMapForEach(counts, (count, name) => {
       if (count < 2) return;
       const duplicateAttributes = attributesNamed(element.attributes, name);
-      const attribute = compilerOwnDataValue(
-        duplicateAttributes,
-        0,
-        'Duplicate JSX attributes',
-      ) as JsxAttributeModel | undefined;
+      const attribute = compilerOwnDataValue(duplicateAttributes, 0, 'Duplicate JSX attributes') as
+        | JsxAttributeModel
+        | undefined;
       if (!attribute) return;
 
       if (isBindingAttribute(name)) {
@@ -319,11 +322,9 @@ export function validateAttributeMergeConflicts(
         compilerStringStartsWith(name, 'aria-') ||
         compilerSetHas(primitiveOwnedOverrideAttributes, name)
       ) {
-        const second = compilerOwnDataValue(
-          duplicateAttributes,
-          1,
-          'Duplicate JSX attributes',
-        ) as JsxAttributeModel | undefined;
+        const second = compilerOwnDataValue(duplicateAttributes, 1, 'Duplicate JSX attributes') as
+          | JsxAttributeModel
+          | undefined;
         appendMarkupFact(
           found,
           attributeMergeDiagnostic(diagnostics, 'KV232', name, second ?? attribute),

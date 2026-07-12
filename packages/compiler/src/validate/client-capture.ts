@@ -8,6 +8,7 @@ import {
 
 import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
@@ -124,24 +125,32 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
     if (!clause) continue;
 
     if (clause.name) {
-      bindings[bindings.length] = {
-        importedName: 'default',
-        kind: 'default',
-        localName: clause.name.text,
-        moduleSpecifier,
-        source: 'import',
-      };
+      compilerArrayAppend(
+        bindings,
+        {
+          importedName: 'default',
+          kind: 'default',
+          localName: clause.name.text,
+          moduleSpecifier,
+          source: 'import',
+        },
+        'Client-capture import bindings',
+      );
     }
 
     const named = clause.namedBindings;
     if (named && ts.isNamespaceImport(named)) {
-      bindings[bindings.length] = {
-        importedName: '*',
-        kind: 'namespace',
-        localName: named.name.text,
-        moduleSpecifier,
-        source: 'import',
-      };
+      compilerArrayAppend(
+        bindings,
+        {
+          importedName: '*',
+          kind: 'namespace',
+          localName: named.name.text,
+          moduleSpecifier,
+          source: 'import',
+        },
+        'Client-capture import bindings',
+      );
     } else if (named && ts.isNamedImports(named)) {
       const elementLength = compilerArrayLength(named.elements, 'Client-capture named imports');
       for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
@@ -153,13 +162,17 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
         if (!element) {
           throw new TypeError(`Client-capture named imports[${elementIndex}] must be dense.`);
         }
-        bindings[bindings.length] = {
-          importedName: element.propertyName?.text ?? element.name.text,
-          kind: 'named',
-          localName: element.name.text,
-          moduleSpecifier,
-          source: 'import',
-        };
+        compilerArrayAppend(
+          bindings,
+          {
+            importedName: element.propertyName?.text ?? element.name.text,
+            kind: 'named',
+            localName: element.name.text,
+            moduleSpecifier,
+            source: 'import',
+          },
+          'Client-capture import bindings',
+        );
       }
     }
   }
@@ -179,7 +192,11 @@ function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBind
     if (!binding || typeof binding.name !== 'string') {
       throw new TypeError(`Module-scope capture bindings[${index}] must have an own name.`);
     }
-    bindings[bindings.length] = { localName: binding.name, source: 'module-constant' };
+    compilerArrayAppend(
+      bindings,
+      { localName: binding.name, source: 'module-constant' },
+      'Client-capture module-constant bindings',
+    );
   }
   return bindings;
 }
@@ -199,7 +216,7 @@ function handlerArrowBodies(sourceFile: ts.SourceFile): ts.Node[] {
     ) {
       const expression = node.initializer.expression;
       if (ts.isArrowFunction(expression) && expression.parameters.length === 0) {
-        bodies[bodies.length] = expression.body;
+        compilerArrayAppend(bodies, expression.body, 'Client-capture handler bodies');
       }
     }
     ts.forEachChild(node, visit);
@@ -243,23 +260,31 @@ function classifyCaptures(
           : null;
         const published = publishReason !== null && compilerStringTrim(publishReason).length > 0;
         if (published) {
-          publishFacts[publishFacts.length] = {
-            fileName,
-            localName: binding.localName,
-            moduleSpecifier:
-              binding.source === 'import' ? binding.moduleSpecifier : `${fileName}#module-scope`,
-            reason: publishReason,
-            site: sourceSite(fileName, body.getSourceFile(), node.getStart()),
-            start: node.getStart(),
-          };
+          compilerArrayAppend(
+            publishFacts,
+            {
+              fileName,
+              localName: binding.localName,
+              moduleSpecifier:
+                binding.source === 'import' ? binding.moduleSpecifier : `${fileName}#module-scope`,
+              reason: publishReason,
+              site: sourceSite(fileName, body.getSourceFile(), node.getStart()),
+              start: node.getStart(),
+            },
+            'Client-capture publish facts',
+          );
         }
-        uses[uses.length] = {
-          binding,
-          callee,
-          length: node.getEnd() - node.getStart(),
-          published,
-          start: node.getStart(),
-        };
+        compilerArrayAppend(
+          uses,
+          {
+            binding,
+            callee,
+            length: node.getEnd() - node.getStart(),
+            published,
+            start: node.getStart(),
+          },
+          'Client-capture uses',
+        );
       }
     }
     ts.forEachChild(node, visit);
@@ -393,7 +418,7 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
     const use = allUses[index]!;
     const unsafe =
       use.binding.source === 'module-constant' ? !use.published : !use.callee && !use.published;
-    if (unsafe) unsafeUses[unsafeUses.length] = use;
+    if (unsafe) compilerArrayAppend(unsafeUses, use, 'Unsafe client-capture uses');
     const referenced = use.binding.source === 'import' ? referencedImports : referencedConstants;
     appendUniqueName(referenced, use.binding.localName);
     if (unsafe) {
@@ -414,7 +439,7 @@ function appendUniqueName(names: string[], name: string): void {
   for (let index = 0; index < names.length; index += 1) {
     if (names[index] === name) return;
   }
-  names[names.length] = name;
+  compilerArrayAppend(names, name, 'Client-capture names');
 }
 
 function allowedCaptureNames(
@@ -473,12 +498,16 @@ export function validateClientHandlerSecretCapture(
     if (!use) {
       throw new TypeError(`Unsafe client-capture uses[${index}] must be an own capture fact.`);
     }
-    found[found.length] = diagnostics.at(
-      'KV437',
-      { length: use.length, start: use.start },
-      use.binding.source === 'import'
-        ? `import="${use.binding.localName}" from="${use.binding.moduleSpecifier}" form=${use.binding.kind}`
-        : `moduleConstant="${use.binding.localName}" scope=same-file`,
+    compilerArrayAppend(
+      found,
+      diagnostics.at(
+        'KV437',
+        { length: use.length, start: use.start },
+        use.binding.source === 'import'
+          ? `import="${use.binding.localName}" from="${use.binding.moduleSpecifier}" form=${use.binding.kind}`
+          : `moduleConstant="${use.binding.localName}" scope=same-file`,
+      ),
+      'Client-capture diagnostics',
     );
   }
   return found;

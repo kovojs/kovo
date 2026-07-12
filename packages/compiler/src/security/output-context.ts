@@ -8,6 +8,7 @@ import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
   compilerArrayLength,
   compilerJsonStringify,
   compilerOwnDataValue,
@@ -109,13 +110,13 @@ function validateRawtextElementText(
     const child = outputArrayValue(children, index, 'Direct RAWTEXT child expressions');
     if (!isDynamicExpression(child) || isTrustedBrandCall(model, child, trustedBrandNames))
       continue;
-    found[found.length] = outputContextDiagnostic(
-      diagnostics,
-      `dynamic <${element.tag}> element text`,
-      {
+    compilerArrayAppend(
+      found,
+      outputContextDiagnostic(diagnostics, `dynamic <${element.tag}> element text`, {
         start: child.containerStart,
         length: child.containerEnd - child.containerStart,
-      },
+      }),
+      'RAWTEXT diagnostics',
     );
   }
   return found;
@@ -154,7 +155,7 @@ function directChildExpressions(
         expression.containerStart === container.start &&
         expression.containerEnd === container.end
       ) {
-        found[found.length] = expression;
+        compilerArrayAppend(found, expression, 'Direct RAWTEXT child expressions');
         break;
       }
     }
@@ -222,13 +223,17 @@ export function collectTrustedHtmlOutputContextFacts(
         continue;
       }
 
-      facts[facts.length] = {
-        context: 'trusted-html',
-        ...(attribute.expression ? { expression: attribute.expression } : {}),
-        sink: attribute.name,
-        source: 'server-render',
-        writer: 'trusted raw HTML attribute',
-      };
+      compilerArrayAppend(
+        facts,
+        {
+          context: 'trusted-html',
+          ...(attribute.expression ? { expression: attribute.expression } : {}),
+          sink: attribute.name,
+          source: 'server-render',
+          writer: 'trusted raw HTML attribute',
+        },
+        'Trusted HTML output-context facts',
+      );
     }
   }
 
@@ -273,22 +278,26 @@ function validateElementAttributes(
     }
 
     if (attribute.name === 'data-bind:style') {
-      found[found.length] = outputContextDiagnostic(
-        diagnostics,
-        'dynamic style attribute binding',
-        {
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(diagnostics, 'dynamic style attribute binding', {
           start: attribute.start,
           length: attribute.end - attribute.start,
-        },
+        }),
+        'Element attribute diagnostics',
       );
       continue;
     }
 
     if (attribute.name === 'data-derive-attr' && attribute.value === 'style') {
-      found[found.length] = outputContextDiagnostic(diagnostics, 'arbitrary dynamic CSS text', {
-        start: attribute.start,
-        length: attribute.end - attribute.start,
-      });
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(diagnostics, 'arbitrary dynamic CSS text', {
+          start: attribute.start,
+          length: attribute.end - attribute.start,
+        }),
+        'Element attribute diagnostics',
+      );
       continue;
     }
 
@@ -311,46 +320,54 @@ function validateElementAttributes(
     }
 
     if (isDirectHtmlEventHandlerAttribute(attribute)) {
-      found[found.length] = outputContextDiagnostic(
-        diagnostics,
-        `${attribute.name} is an event-handler sink (on* attribute)`,
-        { start: attribute.start, length: attribute.end - attribute.start },
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(
+          diagnostics,
+          `${attribute.name} is an event-handler sink (on* attribute)`,
+          { start: attribute.start, length: attribute.end - attribute.start },
+        ),
+        'Element attribute diagnostics',
       );
       continue;
     }
 
     // KV236: dynamic event-handler attributes (data-bind:on* or data-derive-attr on*)
     if (isDynamicEventHandlerAttribute(attribute)) {
-      found[found.length] = outputContextDiagnostic(
-        diagnostics,
-        `${attribute.name} is a dynamic event-handler sink (on* attribute)`,
-        { start: attribute.start, length: attribute.end - attribute.start },
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(
+          diagnostics,
+          `${attribute.name} is a dynamic event-handler sink (on* attribute)`,
+          { start: attribute.start, length: attribute.end - attribute.start },
+        ),
+        'Element attribute diagnostics',
       );
       continue;
     }
 
     // KV236: dynamic srcdoc attribute (data-bind:srcdoc or data-derive-attr srcdoc)
     if (isDynamicSrcdocAttribute(attribute)) {
-      found[found.length] = outputContextDiagnostic(
-        diagnostics,
-        `${attribute.name} is a dynamic srcdoc sink`,
-        {
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(diagnostics, `${attribute.name} is a dynamic srcdoc sink`, {
           start: attribute.start,
           length: attribute.end - attribute.start,
-        },
+        }),
+        'Element attribute diagnostics',
       );
       continue;
     }
 
     // KV236: dynamic formaction attribute (data-bind:formaction or data-derive-attr formaction)
     if (isDynamicFormactionAttribute(attribute)) {
-      found[found.length] = outputContextDiagnostic(
-        diagnostics,
-        `${attribute.name} is a dynamic formaction sink`,
-        {
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(diagnostics, `${attribute.name} is a dynamic formaction sink`, {
           start: attribute.start,
           length: attribute.end - attribute.start,
-        },
+        }),
+        'Element attribute diagnostics',
       );
       continue;
     }
@@ -488,13 +505,17 @@ function validateStaticObjectEntrySinks(
     // `onclick`/`onerror` HTML sink while leaving Kovo's `on:click` binding ref and JSX-style
     // `onClick` untouched — identical accept/reject set to a directly-authored attribute.
     if (isDirectHtmlEventHandlerAttribute(synthetic)) {
-      found[found.length] = outputContextDiagnostic(
-        diagnostics,
-        `${synthetic.name} is an event-handler sink (on* attribute)`,
-        {
-          start: span.start,
-          length: span.end - span.start,
-        },
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(
+          diagnostics,
+          `${synthetic.name} is an event-handler sink (on* attribute)`,
+          {
+            start: span.start,
+            length: span.end - span.start,
+          },
+        ),
+        'Static spread diagnostics',
       );
       continue;
     }
@@ -657,9 +678,10 @@ function validateComponentCssText(
       if (option.key !== 'css' && option.key !== 'styles') continue;
       if (!option.staticTemplateValue || !cssTextHasUnsafeUrl(option.staticTemplateValue)) continue;
 
-      found[found.length] = outputContextDiagnostic(
-        diagnostics,
-        `${option.key} contains an unsafe CSS url()`,
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(diagnostics, `${option.key} contains an unsafe CSS url()`),
+        'Component CSS diagnostics',
       );
     }
   }
@@ -762,7 +784,11 @@ function cssUrlValues(cssText: string): string[] {
       index += 1;
     }
 
-    values[values.length] = compilerStringTrim(compilerStringSlice(cssText, start, index));
+    compilerArrayAppend(
+      values,
+      compilerStringTrim(compilerStringSlice(cssText, start, index)),
+      'CSS URL values',
+    );
     cursor = compilerStringIndexOf(cssText, ')', index);
     if (cursor === -1) break;
     cursor += 1;
@@ -797,6 +823,6 @@ function outputArrayValue<Value>(values: readonly Value[], index: number, label:
 function appendOutputItems<Value>(output: Value[], values: readonly Value[], label: string): void {
   const length = compilerArrayLength(values, label);
   for (let index = 0; index < length; index += 1) {
-    output[output.length] = outputArrayValue(values, index, label);
+    compilerArrayAppend(output, outputArrayValue(values, index, label), label);
   }
 }

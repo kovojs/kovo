@@ -571,6 +571,45 @@ export const PayButton = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('cannot erase fail-closed authoring diagnostics through inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if ((value as { code?: unknown } | null)?.code === 'KV235') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      result = compileComponentModule({
+        fileName: 'internal-import.tsx',
+        source: `import { secret } from '@kovojs/core/internal/runtime';\nexport const value = secret;`,
+      });
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+
+    expect(result?.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'KV235' })]),
+    );
+    expect(poisonHits).toBe(0);
+  });
+
   it('cannot suppress required static text escaping through attribute Array.some', () => {
     const nativeSome = Array.prototype.some;
     const nativeApply = Reflect.apply;
@@ -648,18 +687,12 @@ export const ProductCard = component({
   it('cannot inject executable source through inline derive parameter Array.join', () => {
     const nativeJoin = Array.prototype.join;
     const nativeApply = Reflect.apply;
-    const injection =
-      'now, cart) => 0);\nglobalThis.KOVO_DERIVE_INJECTION = true;\n//';
+    const injection = 'now, cart) => 0);\nglobalThis.KOVO_DERIVE_INJECTION = true;\n//';
     let poisonHits = 0;
     let result: ReturnType<typeof compileComponentModule> | undefined;
     try {
       Array.prototype.join = function poisonedInlineDeriveJoin(separator?: string): string {
-        if (
-          this.length === 2 &&
-          this[0] === 'now' &&
-          this[1] === 'cart' &&
-          separator === ', '
-        ) {
+        if (this.length === 2 && this[0] === 'now' && this[1] === 'cart' && separator === ', ') {
           poisonHits += 1;
           return injection;
         }
@@ -751,8 +784,7 @@ export const TrackButton = component({
           return [
             {
               param: {
-                attributeName:
-                  'data-p-id); globalThis.KOVO_HANDLER_BODY_INJECTION = true; //',
+                attributeName: 'data-p-id); globalThis.KOVO_HANDLER_BODY_INJECTION = true; //',
                 expression: 'item.id',
                 type: 'string',
                 value: '{item.id}',
@@ -867,9 +899,7 @@ export const QuestionDetail = component({
       Array.prototype.map = nativeMap;
     }
 
-    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
-      'KOVO_DEP_INJECTION',
-    );
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain('KOVO_DEP_INJECTION');
     expect(poisonHits).toBe(0);
   });
 
@@ -1197,12 +1227,16 @@ export const SaveForm = component({
           typeof second.value === 'string'
         ) {
           poisonHits += 1;
-          return nativeApply(nativeMap, [
-            {
-              name: 'commandfor="cart-drawer" /><img src="x" data-kovo-platform-injection="true" /><button data-rest',
-              value: 'safe',
-            },
-          ], [callback, thisArg]);
+          return nativeApply(
+            nativeMap,
+            [
+              {
+                name: 'commandfor="cart-drawer" /><img src="x" data-kovo-platform-injection="true" /><button data-rest',
+                value: 'safe',
+              },
+            ],
+            [callback, thisArg],
+          );
         }
         return nativeApply(nativeMap, this, [callback, thisArg]);
       };
@@ -1241,7 +1275,9 @@ export const CartButton = component({
         callback: (value: T, index: number, array: T[]) => U,
         thisArg?: unknown,
       ): U[] {
-        const first = this[0] as { name?: unknown; ownership?: unknown; value?: unknown } | undefined;
+        const first = this[0] as
+          | { name?: unknown; ownership?: unknown; value?: unknown }
+          | undefined;
         const callbackSource = nativeApply(nativeFunctionToString, callback, []);
         if (
           first?.name === 'commandfor' &&
@@ -1397,10 +1433,12 @@ export const PrimitiveButton = component({
         callback: (value: T, index: number, array: T[]) => U,
         thisArg?: unknown,
       ): U[] {
-        const first = this[0] as {
-          call?: { end?: unknown; name?: unknown; start?: unknown };
-          lowered?: unknown;
-        } | undefined;
+        const first = this[0] as
+          | {
+              call?: { end?: unknown; name?: unknown; start?: unknown };
+              lowered?: unknown;
+            }
+          | undefined;
         const callbackSource = nativeApply(nativeFunctionToString, callback, []);
         if (
           first?.call?.name === 'href' &&
@@ -1413,8 +1451,7 @@ export const PrimitiveButton = component({
           return [
             {
               end: first.call.end,
-              replacement:
-                '(globalThis.KOVO_NAVIGATION_SOURCE_INJECTION = true, "/products/p1")',
+              replacement: '(globalThis.KOVO_NAVIGATION_SOURCE_INJECTION = true, "/products/p1")',
               start: first.call.start,
             },
           ] as U[];
@@ -1454,7 +1491,9 @@ export const ProductLink = component({
         callback: (value: T, index: number, array: T[]) => U,
         thisArg?: unknown,
       ): U[] {
-        const first = this[0] as { name?: unknown; ownership?: unknown; value?: unknown } | undefined;
+        const first = this[0] as
+          | { name?: unknown; ownership?: unknown; value?: unknown }
+          | undefined;
         const callbackSource = nativeApply(nativeFunctionToString, callback, []);
         if (
           first?.name === 'id' &&

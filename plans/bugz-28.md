@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   237 | C1-C237 |
+| Critical |   249 | C1-C249 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -1828,13 +1828,15 @@ build:dist` passes.
   - **Evidence:** the exact managed raw-read/engine-denial regressions pass in the 158-test managed DB
     matrix; server dist/DTS and the API surface gate pass.
 
-- [ ] **C139 - Mutable SQL-observation collections erase a real read.**
+- [x] **C139 - Mutable SQL-observation collections erase a real read.**
       `packages/test/src/{sql-observer,verifier-observation}.ts`
   - Late `Array.prototype.flatMap` and `Set.prototype.has` replacements erased a genuine
     `SELECT audit_log` observation, so the runtime verifier reported KV407 coverage as green.
   - **Acceptance:** parsing, operation expansion, dedupe, domain/table membership, and recorder append
     use captured controls over exact snapshots; no collection replacement can omit or reclassify a
     database effect.
+  - **Evidence:** exact flatMap/Set and inherited-index-setter proofs preserve the `audit_log` read and
+    KV407 denial; the shared verifier append now commits bounded own-data slots.
 
 - [x] **C140 - Mutable side-effect fingerprints hide trigger and cascade writes.**
       `packages/test/src` engine side-effect verifier
@@ -1846,41 +1848,51 @@ build:dist` passes.
   - **Evidence:** the exact trigger/cascade fingerprint substitutions fail closed in the 158-test
     managed DB matrix; server dist/DTS and the API surface gate pass.
 
-- [ ] **C141 - A query mutates its declared reads after executing an undeclared read.**
+- [x] **C141 - A query mutates its declared reads after executing an undeclared read.**
       `packages/test/src` query harness
   - The loader widened its own `query.reads` after reading an undeclared table; post-load traversal
     accepted the changed declaration and KV407 passed.
   - **Acceptance:** query identity and declared read policy are immutable construction-time snapshots
     shared by execution and post-run verification; loader code cannot alter its authority after use.
+  - **Evidence:** the exact late `query.reads` widening proof still fails KV407 in the complete
+    `@kovojs/test` matrix.
 
-- [ ] **C142 - A query deletes its output schema before result verification.**
+- [x] **C142 - A query deletes its output schema before result verification.**
       `packages/test/src` query harness
   - The loader assigned `query.output = undefined`; post-load lookup then skipped KV410 result-schema
     validation for the already-produced value.
   - **Acceptance:** the exact output schema/verifier is captured before loader execution and always
     validates the returned value; later mutation or property ambiguity rejects rather than disables
     KV410.
+  - **Evidence:** the exact output deletion proof retains its pre-load validator and fails KV410 in
+    the complete `@kovojs/test` matrix.
 
-- [ ] **C143 - Mutable Promise dispatch skips post-handler verification.**
+- [x] **C143 - Mutable Promise dispatch skips post-handler verification.**
       `packages/test/src` verifier harness
   - A targeted late `Promise.prototype.then` replacement recognized the coverage assertion and
     returned the captured result without invoking it, allowing an uncovered operation to resolve.
   - **Acceptance:** handler/loader settlement and every post-execution assertion use boot-pinned
     Promise observation; late then/catch/finally substitution cannot skip success or failure checks.
+  - **Evidence:** the targeted Promise.then replacement receives no verification dispatch and the
+    uncovered read remains rejected in the complete `@kovojs/test` matrix.
 
-- [ ] **C144 - A page mutates its declared reads after rendering.**
+- [x] **C144 - A page mutates its declared reads after rendering.**
       `packages/test/src` page harness
   - `render()` widened its fixture `reads` before the post-render assertion, hiding an undeclared DB
     read and making runtime coverage pass.
   - **Acceptance:** page read policy is one immutable pre-render snapshot used by both execution and
     verification; render code cannot expand authority after the effect.
+  - **Evidence:** the exact page-policy widening proof fails KV407 in the complete `@kovojs/test`
+    matrix.
 
-- [ ] **C145 - A mutation changes its touch-graph scope after writing.**
+- [x] **C145 - A mutation changes its touch-graph scope after writing.**
       `packages/test/src` mutation harness
   - The handler changed caller-owned `touchGraphKey` from a restrictive entry to a permissive entry
     before post-handler coverage, hiding an out-of-scope write.
   - **Acceptance:** mutation identity, touch-graph key, graph entry, domains, and table policy are
     snapshotted before handler execution and remain the sole verification authority.
+  - **Evidence:** the exact late touch-graph-key switch remains bound to the restrictive entry and
+    fails KV402 in the complete `@kovojs/test` matrix.
 
 - [x] **C146 - A late Proxy replacement removes server database membranes.**
       `packages/server/src` managed DB adapters
@@ -1921,13 +1933,15 @@ build:dist` passes.
   - **Evidence:** the exact late then/catch substitution retains the engine denial and KV433 mapping
     in the 158-test managed DB matrix; server dist/DTS and the API surface gate pass.
 
-- [ ] **C150 - A query rewrites its integration-fixture read authority after execution.**
+- [x] **C150 - A query rewrites its integration-fixture read authority after execution.**
       `packages/test/src/integration/fixture-instance.ts`
   - A loader performed an undeclared read, then widened `app.queries`/`query.reads`; post-execution
     live `find`/`map` traversal accepted the changed declaration and let integration verification pass.
   - **Acceptance:** the fixture snapshots the exact query definition, declared reads, loader, and
     verification authority before execution using own-data traversal; later mutation or prototype
     substitution cannot widen coverage.
+  - **Evidence:** the exact app/query mutation plus find/map substitution proof fails KV407 in the
+    integration fixture security suite.
 
 - [x] **C151 - Mutable BroadcastChannel dispatch strips a private wire's principal stamp.**
       `packages/browser/src/broadcast.ts`, generated inline loader
@@ -1940,7 +1954,7 @@ build:dist` passes.
   - **Evidence:** exact modular/generated late and pre-init dispatch substitutions reject 6/6 across
     Chromium, Firefox, and WebKit; full browser and browser-package matrices pass 426/426 and 750/750.
 
-- [ ] **C152 - A mutable Response constructor converts verifier failure into HTTP success.**
+- [x] **C152 - A mutable Response constructor converts verifier failure into HTTP success.**
       `packages/test/src/integration/fixture-instance.ts`
   - A query loader replaced `globalThis.Response` with a constructor that returned status 200.
     `verificationFailureResponse()` then converted a real KV407 response into successful attacker
@@ -1948,14 +1962,18 @@ build:dist` passes.
   - **Acceptance:** integration verification responses use a boot-captured, semantically witnessed
     Response constructor and exact status/body/header snapshot; late global replacement cannot turn
     any verifier failure into success.
+  - **Evidence:** the exact late global Response replacement retains the genuine verifier status and
+    body in the integration fixture security suite.
 
-- [ ] **C153 - A retained seed adapter escapes integration verifier observation.**
+- [x] **C153 - A retained seed adapter escapes integration verifier observation.**
       `packages/test/src/integration/fixture-instance.ts`
   - `seed(rawDb)` retained the unwrapped adapter; a later query used that handle for an undeclared
     product read, while the verifier observed zero operations and returned HTTP 200 despite declaring
     only the cart domain.
   - **Acceptance:** the fixture constructs the verifier before seeding and passes only its wrapped
     adapter; retained setup handles remain observed during later query/page/mutation execution.
+  - **Evidence:** retained seed DB use is captured or revoked, and setup writes do not satisfy runtime
+    coverage; both exact regressions pass in the integration fixture security suite.
 
 - [x] **C154 - Mutable authoring-surface traversal suppresses the KV235 internal-import gate.**
       `packages/compiler/src/validate/authoring-surface.ts`
@@ -1978,7 +1996,7 @@ build:dist` passes.
   - **Evidence:** the exact substitution receives zero calls; the 9-test build-export security-order
     matrix and component/per-route CSS integration controls pass.
 
-- [ ] **C156 - Encoded integration asset traversal discloses a sibling directory.**
+- [x] **C156 - Encoded integration asset traversal discloses a sibling directory.**
       `packages/test/src/integration-server.ts`
   - `tryServeBuiltAsset()` used string-prefix containment. The request
     `/assets/..%2f..%2fdist-secret%2fsecret.txt` normalized into the sibling `dist-secret` directory
@@ -1986,6 +2004,8 @@ build:dist` passes.
   - **Acceptance:** decoded asset paths resolve beneath the exact assets root with separator-aware
     relative containment and pinned URL/path controls; encoded separators, traversal, and prefix
     collisions fail closed before any filesystem read.
+  - **Evidence:** exact encoded-prefix traversal and escaping-symlink requests are denied in the
+    boot-fixture static security suite.
 
 - [x] **C157 - Mutable navigation-stamp classification suppresses KV235.**
       `packages/compiler/src/validate/markup.ts`
@@ -1998,12 +2018,14 @@ build:dist` passes.
   - **Evidence:** the exact private-set replacement receives zero calls and KV235 remains blocking;
     125 compiler/Vite/route tests, compiler dist/DTS, and classifier routing/corpus gates pass.
 
-- [ ] **C158 - Bare page thunks execute outside verifier capture.**
+- [x] **C158 - Bare page thunks execute outside verifier capture.**
       `packages/test/src` page harness
   - A bare page thunk closed over `harness.db`, read the undeclared `products` domain, and resolved
     successfully because `loadHarnessPage()` executed it outside `verifier.capture`.
   - **Acceptance:** every page thunk executes inside verifier capture against an immutable declared
     read policy (empty when none is declared); no page representation can perform an unobserved read.
+  - **Evidence:** the exact bare-thunk database read now fails the empty read policy in the complete
+    `@kovojs/test` matrix.
 
 - [x] **C159 - Residual server Proxy construction removes request security membranes.**
       `packages/server/src/{untrusted-request-body,request-input-provenance,request-carrier,app-load-shed,secret-read-boundary,webhook}.ts`
@@ -2015,13 +2037,15 @@ build:dist` passes.
   - **Evidence:** exact late Proxy regressions retain all six membranes in an 82-test focused matrix;
     FormData stays tagged, writes tracked, body caps enforced, secrets boxed, and webhook scope denied.
 
-- [ ] **C160 - Mutable request URL rewrites post-dispatch verifier authority.**
+- [x] **C160 - Mutable request URL rewrites post-dispatch verifier authority.**
       `packages/test/src/integration/fixture-instance.ts`
   - A query for `/_q/cart` made an undeclared products read, then shadowed `request.url` to
     `/_q/products`; post-dispatch verification re-read the forged URL and accepted the broader policy.
     Mutation touch-graph routing has the same TOCTOU.
   - **Acceptance:** verification snapshots and decodes the exact request route before dispatch with
     pinned URL controls; query and mutation verification consume only that immutable route authority.
+  - **Evidence:** exact post-dispatch query and mutation URL rewrites remain bound to their original
+    verification routes in the integration fixture security suite.
 
 - [x] **C161 - Mutable framework-identity lookup suppresses raw-trust provenance.**
       `packages/core/src/internal/{framework-identity,framework-identity-catalog}.ts`
@@ -2046,12 +2070,14 @@ build:dist` passes.
   - **Evidence:** 27 exact extraction/merge/security regressions pass with zero late collection
     dispatch; core/compiler/server dist builds plus import, API, and classifier gates pass.
 
-- [ ] **C163 - Integration route pages have no declared read policy.**
+- [x] **C163 - Integration route pages have no declared read policy.**
       `packages/test/src/integration/fixture-instance.ts`
   - A `/products` route read the products domain with no declaration and returned HTTP 200 because
     non-query/non-mutation routes skipped read verification entirely.
   - **Acceptance:** fixtures expose an explicit immutable page/route read-policy map with empty-deny
     default; every route-page operation is captured and undeclared reads fail KV407.
+  - **Evidence:** undeclared route reads fail KV407 while the predeclared route read passes in the
+    integration fixture security suite.
 
 - [x] **C164 - Mutable BroadcastChannel subscription bypasses receive principal checks.**
       `packages/browser/src/broadcast.ts`, generated inline loader
@@ -2063,27 +2089,33 @@ build:dist` passes.
   - **Evidence:** exact modular/generated subscription substitutions reject 6/6 across Chromium,
     Firefox, and WebKit; full browser and browser-package matrices pass 432/432 and 750/750.
 
-- [ ] **C165 - Integration route pages can write outside mutation authority.**
+- [x] **C165 - Integration route pages can write outside mutation authority.**
       `packages/test/src/integration/fixture-instance.ts`
   - A non-mutation page wrote the products domain under an empty touch graph and returned HTTP 200;
     the newly explicit route read check still did not assert the no-write invariant from SPEC §11.2.
   - **Acceptance:** every route/page request first asserts zero writes against immutable empty write
     authority, then checks declared reads; page writes fail KV402 before response success.
+  - **Evidence:** the exact route-page write returns a KV402 verification failure in the integration
+    fixture security suite.
 
-- [ ] **C166 - Read-only query and page harnesses ignore writes.**
+- [x] **C166 - Read-only query and page harnesses ignore writes.**
       `packages/test/src` harness and integration query paths
   - Query loaders and object/thunk page renderers called only read-coverage checks; each could write a
     mapped products domain and resolve successfully instead of KV402. Integration `/_q/` was symmetric.
   - **Acceptance:** every read-only execution path asserts zero observed writes before read coverage;
     query, object-page, thunk-page, route-page, and integration query paths share the invariant.
+  - **Evidence:** exact query, object-page, thunk-page, route-page, and integration-query write proofs
+    all fail KV402 in the complete `@kovojs/test` matrix.
 
-- [ ] **C167 - Standalone mutation reads escape declared read coverage.**
+- [x] **C167 - Standalone mutation reads escape declared read coverage.**
       `packages/test/src` mutation verifier
   - `assertMutationReadsCovered()` considered only reads embedded inside write statements
     (`mutationRead === true`). A standalone `request.db.read('products')` inside the same mutation
     capture window bypassed an empty declared read policy and resolved successfully.
   - **Acceptance:** every read observed during mutation capture is mutation-scoped and checked against
     the immutable declared reads; `mutationRead` remains provenance metadata, never an inclusion gate.
+  - **Evidence:** the exact undeclared standalone mutation read fails KV407 while the declared
+    counterpart passes in the complete `@kovojs/test` matrix.
 
 - [x] **C168 - Mutable storage byte copying substitutes validated upload bytes.**
       `packages/core/src/{storage,internal/filesystem-intrinsics}.ts`
@@ -2759,6 +2791,132 @@ build:dist` passes.
   - **Evidence:** the exact `fd00` rewrite/admission, splice-argument, and pre-import regressions pass;
     the 91-test egress/Undici/redirect/bootstrap matrix, server distribution build, filesystem/egress
     source gates, classifier corpus, and security boundary gates are green.
+
+- [x] **C238 - Fresh async contexts launder retained verifier DB authority.**
+      `packages/test/src` harness and integration verifier capture lifecycle
+  - C235 revoked AsyncLocalStorage descendants, but a handler could retain a closure over its
+    request DB, return, and invoke that closure from a fresh context with no ambient store. The
+    verifier treated the absent capture as unrestricted and the adapter wrote after green coverage.
+  - **Acceptance:** harness/query/page/request DB handles and every derived method, builder, prepared,
+    nested, and transaction handle bind to the capture epoch that exposed them; fixture setup uses an
+    isolated setup capture, and request-only handles reject both inherited and fresh post-settlement use.
+  - **Evidence:** fresh-context mutation, query, page, prepared, nested, direct-method, and real PGlite
+    route proofs all fail KV407 before adapter dispatch; all 283 `@kovojs/test` tests and dist/DTS pass.
+
+- [x] **C239 - Reserved verifier adapter hooks cannot compose the managed DB authority boundary.**
+      `packages/{server,test}/src`
+  - The verifier replaced declared-write/read-only adapter hooks with authored-call blockers, but
+    `managedDb()` had no sealed path to invoke the genuine hook. Managed verification therefore
+    threw before the request ran; an adjacent dispatch path also invoked accessor-backed SQL
+    properties while composing policy.
+  - **Acceptance:** verifier adapters register module-private framework hooks whose results remain
+    wrapped and capture-bound, direct/reflected authored access stays blocked, and the verifier
+    proves security-bearing raw properties are data-backed before consulting an adapter get trap.
+  - **Evidence:** declared-write composition records the real inherited SQL write; an accessor-backed
+    SQL method and capability hook both fail before their getters run, direct reflected hooks remain
+    reserved, all 287 `@kovojs/test` tests pass, and server/test dist/DTS builds are green.
+
+- [x] **C240 - Inherited DOM-snapshot setters preserve executable fragment attributes.**
+      `packages/browser/src/navigation-security-intrinsics.ts`
+  - `snapshotIndexedCollection()` assigned DOM `Attr` entries through ordinary array indices. A late
+    inherited index-zero setter swallowed a leading `onclick`, so whole-node response adoption never
+    presented the executable attribute to the sanitizer and retained it on the live element.
+  - **Acceptance:** DOM collections, attribute snapshots, and adjacent mutation-broadcast arrays use
+    boot-pinned verified own-data commits with bounded lengths; inherited setters cannot erase,
+    replace, sparsify, or cross-bind response or broadcast authority.
+  - **Evidence:** the exact leading-`onclick` whole-node adoption exploit now reaches the inherited
+    setter zero times and removes the attribute in Chromium, Firefox, and WebKit.
+
+- [x] **C241 - Inherited Set materialization erases compiler identity denials.**
+      `packages/core/src/internal/security-witness-intrinsics.ts`
+  - The shared security Set enumerator assigned values through inherited numeric setters. A
+    pre-import setter could erase a forbidden TypeScript `SyntaxKind` while framework-identity
+    deny sets initialized, weakening the compiler provenance boundary before its first check.
+  - **Acceptance:** every shared security Set value is committed and verified as own array data;
+    late and pre-import numeric setters cannot erase identity kinds or runtime delta set values.
+  - **Evidence:** exact late and fresh-process pre-import setter proofs receive no Set-value commit
+    and preserve the sole marker; the identity/query-delta/security-witness matrix passes 55 tests.
+
+- [x] **C242 - Inherited entry setters erase query shapes from render-plan tokens.**
+      `packages/core/src/internal/render-plan-token-intrinsics.ts`
+  - A poisoned index-zero setter swallowed the first `{query, shape}` entry before hashing, allowing
+    incompatible query projections to retain one build/render-plan fingerprint.
+  - **Acceptance:** render-plan entries use verified own-data commits before framing and hashing;
+    no inherited setter can omit a query from deploy-skew authority.
+  - **Evidence:** exact `account`-entry suppression receives zero commits and distinct `id`/`role`
+    shapes retain distinct fingerprints; the 60-test core matrix and core dist/DTS build pass.
+
+- [x] **C243 - Inherited capability-map setters resurrect one-time tokens.**
+      `packages/server/src/{capability-intrinsics,capability-url}.ts`
+  - Replay eviction materialized the consumed-token Map through ordinary array assignment. A setter
+    replaced an unexpired `[token, expiry]` with an expired tuple, deleted the replay id, and made the
+    same signed one-time token consumable again.
+  - **Acceptance:** capability Map entries commit through pinned own-data descriptors and are
+    verified before replay eviction can observe them.
+  - **Evidence:** the exact unexpired-entry substitution receives zero capability commits, retains
+    store size one, and rejects a second consume; 76 capability tests pass.
+
+- [x] **C244 - Inherited analyzer arrays replace static proof inputs and results.**
+      `packages/server/src/internal/data-plane-static-analysis{,-intrinsics}.ts`
+  - Static-analysis Promise aggregation and surrounding worker/source/fact collections used ordinary
+    indexed writes, allowing app/plugin prototype setters to replace a rejected analyzer result with
+    a forged safe value after the analyzer ran.
+  - **Acceptance:** analyzer arrays use a boot-validated indexed own-data primitive for inputs,
+    asynchronous results, sources, diagnostics, worker tasks, and fact aggregation.
+  - **Evidence:** the exact Promise input/result substitution receives zero commits and returns the
+    original ordered results; all 16 data-plane static-analysis tests pass.
+
+- [x] **C245 - Indexed prototype pollution cross-binds diagnostic URL parsing.**
+      `packages/server/src/logging-intrinsics.ts`
+  - Node's native URL implementation itself observed a late inherited array setter: parsing
+    `?code=...` produced an attacker replacement query key before Kovo's pinned getters ran, enabling
+    forged log fields and making redaction decisions describe different bytes.
+  - **Acceptance:** logging rejects any indexed property on the Array prototype chain before native
+    URL parsing and commits accepted query keys through pinned verified own-data descriptors.
+  - **Evidence:** the exact query-key substitution now fails the diagnostic URL closed; the 13-test
+    logging/redaction matrix passes.
+
+- [x] **C246 - Query-shape merge keys invoke prototype setters.**
+      `packages/server/src/internal/data-plane-static-analysis{,-intrinsics}.ts`
+  - Output/static query shapes merged into `{}` with bracket assignment, so `__proto__` or an
+    inherited named setter could mutate the proof object's prototype or suppress a security-bearing
+    field before the compiler consumed it.
+  - **Acceptance:** merged shapes are null-prototype records and every field is committed as verified
+    own data through boot-validated controls.
+  - **Evidence:** inherited `role` and literal `__proto__` probes never invoke a setter, preserve exact
+    own values, and keep a null prototype; all 16 data-plane static-analysis tests pass.
+
+- [x] **C247 - Inherited IV-order setters weaken AES-GCM nonce-reuse tracking.**
+      `packages/server/src/confidential-at-rest-intrinsics.ts`
+  - The recent-IV Set stored genuine nonces, but its eviction order used captured `Array.push`, which
+    still invoked inherited index setters. Cross-bound order slots could evict a still-recent nonce
+    and weaken the fail-closed repeat detector when a degraded random source repeated it.
+  - **Acceptance:** every IV order entry commits through a boot-pinned verified own-data descriptor;
+    prototype setters cannot observe or alter the replay window.
+  - **Evidence:** the exact base64url-IV setter receives zero commits while encryption succeeds; all
+    11 confidential-at-rest tests pass.
+
+- [x] **C248 - Core authority arrays remain prototype-visible outside Set materialization.**
+      `packages/core/src`
+  - Framework path/catalog identity, route matching, SQL recipes, HMAC secrets/signatures, storage
+    segments, query shapes/deltas, graph facts, module refs, and XSS sink candidates still appended
+    to fresh arrays with ordinary indexed writes. Selective inherited setters could erase or replace
+    the precise item later classified, hashed, authenticated, or emitted.
+  - **Acceptance:** the core security witness exposes one bounded verified own-data append and every
+    production core append routes through it; no fresh core authority array uses numeric assignment.
+  - **Evidence:** the late/pre-import generic setter proofs pass, the production source census finds
+    no `array[array.length] =` writes under `packages/core/src`, all 304 core tests pass, and core
+    dist/DTS builds are green.
+
+- [x] **C249 - Inherited numeric setters can erase compiler security diagnostics and provenance.**
+      `packages/compiler/src/{compiler-security-intrinsics.ts,security,validate}`
+  - Compiler validation still appended authoring, XSS, confidentiality, client-capture, markup, and
+    provenance facts with ordinary indexed writes. A selective inherited setter could swallow the
+    rejecting fact after classification and let compilation continue without its required error.
+  - **Acceptance:** every production security-validator append uses one bounded, boot-pinned,
+    verified own-data commit; the security/validate source census has no numeric length assignment.
+  - **Evidence:** the exact KV235 diagnostic setter receives zero commits and the diagnostic remains;
+    all 1,032 compiler tests pass, and compiler dist/DTS builds are green.
 
 ## High
 

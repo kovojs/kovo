@@ -291,12 +291,16 @@ export function compilerDefineOwnDataProperty(
   enumerable = true,
 ): void {
   assertCompilerSecurityIntrinsics();
-  apply(nativeObjectDefineProperty, NativeObject, [target, property, {
-    configurable: false,
-    enumerable,
-    value,
-    writable: false,
-  }]);
+  apply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    property,
+    {
+      configurable: false,
+      enumerable,
+      value,
+      writable: false,
+    },
+  ]);
 }
 
 /**
@@ -311,12 +315,30 @@ export function compilerSetOwnDataProperty(
   enumerable = true,
 ): void {
   assertCompilerSecurityIntrinsics();
-  apply(nativeObjectDefineProperty, NativeObject, [target, property, {
-    configurable: true,
-    enumerable,
-    value,
-    writable: true,
-  }]);
+  apply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    property,
+    {
+      configurable: true,
+      enumerable,
+      value,
+      writable: true,
+    },
+  ]);
+}
+
+export function compilerArrayAppend<Value>(target: Value[], value: Value, label: string): void {
+  const length = compilerArrayLength(target, label);
+  compilerSetOwnDataProperty(target, length, value);
+  const committed = getOwnPropertyDescriptor(target, length);
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    !apply(nativeObjectIs, NativeObject, [committed.value, value]) ||
+    compilerArrayLength(target, label) !== length + 1
+  ) {
+    throw new NativeTypeError(`${label} own-data append failed.`);
+  }
 }
 
 /**
