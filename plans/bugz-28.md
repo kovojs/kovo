@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    57 | C1-C57 |
+| Critical |    58 | C1-C58 |
 | High     |    31 | H1-H31 |
 | Medium   |     9 | M1-M9  |
 
@@ -672,6 +672,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     mutable intrinsic runs between authority validation and the final DOM sink, and ambiguous bytes
     fail closed without changing the document.
 
+- [ ] **C58 - Mutable secret-expression iteration releases unboxed confidential database values.**
+      `packages/server/src/secret-read-boundary.ts`
+  - After `createSecretBoxingReadDb()` pinned the generated secret metadata, a late
+    `Array.prototype.every = () => true` replacement made a real derived expression over a secret
+    column classify as safe without visiting that column. With an opaque SQLite result origin, the
+    managed read boundary returned `victim-secret` as an ordinary string instead of a `Secret` box.
+  - **Acceptance:** selected-field traversal, nested SQL-chunk classification, raw SQL text recovery,
+    secret-table detection, and safe-expression grammar decisions use boot-pinned collection,
+    string, and RegExp controls over framework-owned snapshots; late/import-order mutation cannot
+    skip a secret source or turn an opaque expression into a safe verdict, while proven public
+    expressions remain unboxed.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1102,8 +1114,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C57, H20, H27,
-and H31 are active compiler-cache, static-analysis, compiler-Vite, browser authority/output, and
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C58, H20, H27,
+and H31 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
 evidence is
