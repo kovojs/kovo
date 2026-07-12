@@ -6,6 +6,7 @@ import {
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
+  witnessIsArray,
   witnessObjectIs,
   witnessReflectApply,
   witnessSetAdd,
@@ -14,6 +15,12 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import {
+  securityBufferFrom,
+  securityIsUint8Array,
+  securityRegExpTest,
+  securityTextEncode,
+} from './response-security-intrinsics.js';
 
 /** Minimum HMAC root secret bytes accepted by framework signing helpers (SPEC §6.6). */
 export const SIGNING_SECRET_MIN_BYTES = 32;
@@ -88,20 +95,51 @@ export interface SigningKeyRingOptions {
   keys: readonly SigningKey[];
 }
 
-const encoder = new TextEncoder();
-const nativeArrayIsArray = Array.isArray;
-const NativeUint8Array = Uint8Array;
-const NativeBuffer = Buffer;
-const nativeBufferFrom = NativeBuffer.from;
-const nativeRegExpTest = RegExp.prototype.test;
-const nativeTextEncoderEncode = TextEncoder.prototype.encode;
-const hmacControl = createHmac('sha256', 'kovo-intrinsic-control');
-const hashControl = createHash('sha256');
+const nativeCreateHash = createHash;
+const nativeCreateHmac = createHmac;
+const nativeTimingSafeEqual = timingSafeEqual;
+const hmacControl = nativeCreateHmac('sha256', 'kovo-intrinsic-control');
+const hashControl = nativeCreateHash('sha256');
 const nativeHmacUpdate = stableSigningRingProperty(hmacControl, 'update') as Function;
 const nativeHmacDigest = stableSigningRingProperty(hmacControl, 'digest') as Function;
 const nativeHashUpdate = stableSigningRingProperty(hashControl, 'update') as Function;
 const nativeHashDigest = stableSigningRingProperty(hashControl, 'digest') as Function;
 const pinnedSigningKeyRings = createWitnessWeakSet<object>();
+
+if (!signingCryptoControlsAreSound()) {
+  throw new TypeError(
+    'Kovo signing controls are unavailable because the server realm crypto intrinsics were modified before framework initialization.',
+  );
+}
+
+function signingCryptoControlsAreSound(): boolean {
+  try {
+    const hmac = nativeCreateHmac('sha256', 'kovo-intrinsic-control');
+    witnessReflectApply(nativeHmacUpdate, hmac, ['kovo-signing-control-v1']);
+    if (
+      witnessReflectApply<string>(nativeHmacDigest, hmac, ['base64url']) !==
+      'kpvSpivkW8Vnc2FTbhTpVk8tvaevvMT-KPIHfv0WKdo'
+    ) {
+      return false;
+    }
+    const hash = nativeCreateHash('sha256');
+    witnessReflectApply(nativeHashUpdate, hash, ['kovo-signature-v1']);
+    if (
+      witnessReflectApply<string>(nativeHashDigest, hash, ['hex']) !==
+      '2e4dd12b80a9d4d258f4a889471b513d2174653a8877c1e860766072b4ad55f0'
+    ) {
+      return false;
+    }
+    const sameLeft = securityBufferFrom('same');
+    const sameRight = securityBufferFrom('same');
+    const different = securityBufferFrom('diff');
+    return (
+      nativeTimingSafeEqual(sameLeft, sameRight) && !nativeTimingSafeEqual(sameLeft, different)
+    );
+  } catch {
+    return false;
+  }
+}
 
 /** Create a rotation-aware HMAC key ring with exactly one active signing key. */
 export function createSigningKeyRing(options: SigningKeyRingOptions): SigningKeyRing {
@@ -156,7 +194,7 @@ export function isSigningKeyRing(value: unknown): value is SigningKeyRing {
 export function isSigningKeyRingOptions(value: unknown): value is SigningKeyRingOptions {
   if (typeof value !== 'object' || value === null) return false;
   try {
-    return nativeArrayIsArray(stableOwnSigningKeyValue(value, 'keys'));
+    return witnessIsArray(stableOwnSigningKeyValue(value, 'keys'));
   } catch {
     return false;
   }
@@ -198,17 +236,17 @@ function stableSigningRingProperty(source: object, property: PropertyKey): unkno
     const prototype = witnessGetPrototypeOf(owner);
     const after = witnessGetOwnPropertyDescriptor(owner, property);
     if (!sameSigningDataDescriptor(before, after)) {
-      throw new TypeError(`SigningKeyRing.${String(property)} changed while it was pinned.`);
+      throw new TypeError(`SigningKeyRing.${witnessString(property)} changed while it was pinned.`);
     }
     if (before !== undefined) {
       if (!('value' in before)) {
-        throw new TypeError(`SigningKeyRing.${String(property)} must be a data property.`);
+        throw new TypeError(`SigningKeyRing.${witnessString(property)} must be a data property.`);
       }
       return before.value;
     }
     if (witnessGetPrototypeOf(owner) !== prototype) {
       throw new TypeError(
-        `SigningKeyRing.${String(property)} prototype changed while it was pinned.`,
+        `SigningKeyRing.${witnessString(property)} prototype changed while it was pinned.`,
       );
     }
     owner = prototype;
@@ -220,7 +258,9 @@ function stableOwnSigningKeyValue(source: object, property: PropertyKey): unknow
   const before = witnessGetOwnPropertyDescriptor(source, property);
   const after = witnessGetOwnPropertyDescriptor(source, property);
   if (!sameSigningDataDescriptor(before, after) || before === undefined || !('value' in before)) {
-    throw new TypeError(`Signing key ${String(property)} must be a stable own data property.`);
+    throw new TypeError(
+      `Signing key ${witnessString(property)} must be a stable own data property.`,
+    );
   }
   return before.value;
 }
@@ -241,7 +281,7 @@ function sameSigningDataDescriptor(
 }
 
 function stableDenseSigningKeys(value: unknown): readonly SigningKey[] {
-  if (!nativeArrayIsArray(value)) throw new TypeError('SigningKeyRing keys must be a dense array.');
+  if (!witnessIsArray(value)) throw new TypeError('SigningKeyRing keys must be a dense array.');
   const length = witnessGetOwnPropertyDescriptor(value, 'length');
   if (
     length === undefined ||
@@ -336,7 +376,7 @@ function normalizeSigningKey(key: SigningKey, index: number): NormalizedSigningK
   if (state !== 'active' && state !== 'previous' && state !== 'revoked') {
     throw new Error(`SigningKeyRing key "${id}" has invalid state`);
   }
-  if (typeof sourceSecret !== 'string' && !(sourceSecret instanceof NativeUint8Array)) {
+  if (typeof sourceSecret !== 'string' && !securityIsUint8Array(sourceSecret)) {
     throw new Error(`SigningKeyRing key "${id}" has invalid signing material at index ${index}`);
   }
   const secret = normalizeSecret(sourceSecret);
@@ -350,21 +390,26 @@ function normalizeSigningKey(key: SigningKey, index: number): NormalizedSigningK
 }
 
 function normalizeSecret(secret: string | Uint8Array): Buffer {
-  return witnessReflectApply(nativeBufferFrom, NativeBuffer, [secret]);
+  return securityBufferFrom(secret);
 }
 
 function isSafeKeyId(id: string): boolean {
-  return witnessReflectApply(nativeRegExpTest, /^[A-Za-z0-9_-]+$/, [id]);
+  // Captured RegExp.prototype.test would still dispatch through a mutable `.exec`; the response
+  // intrinsic membrane invokes the boot-captured `RegExp.prototype.exec` directly.
+  return securityRegExpTest(/^[A-Za-z0-9_-]+$/, id);
 }
 
 function signWithKey(key: NormalizedSigningKey, input: SigningInput): string {
-  const hmac = createHmac('sha256', derivePurposeKey(key.secret, input.purpose, input.audience));
+  const hmac = nativeCreateHmac(
+    'sha256',
+    derivePurposeKey(key.secret, input.purpose, input.audience),
+  );
   witnessReflectApply(nativeHmacUpdate, hmac, [toBytes(input.payload)]);
   return witnessReflectApply(nativeHmacDigest, hmac, ['base64url']);
 }
 
 function derivePurposeKey(root: Buffer, purpose: string, audience: string): Buffer {
-  const hmac = createHmac('sha256', root);
+  const hmac = nativeCreateHmac('sha256', root);
   witnessReflectApply(nativeHmacUpdate, hmac, ['kovo signing context v1']);
   witnessReflectApply(nativeHmacUpdate, hmac, ['\0']);
   witnessReflectApply(nativeHmacUpdate, hmac, [purpose]);
@@ -375,19 +420,17 @@ function derivePurposeKey(root: Buffer, purpose: string, audience: string): Buff
 
 function toBytes(value: string | Uint8Array): Buffer {
   return typeof value === 'string'
-    ? witnessReflectApply(nativeBufferFrom, NativeBuffer, [
-        witnessReflectApply(nativeTextEncoderEncode, encoder, [value]),
-      ])
-    : witnessReflectApply(nativeBufferFrom, NativeBuffer, [value]);
+    ? securityBufferFrom(securityTextEncode(value))
+    : securityBufferFrom(value);
 }
 
 function secureEqual(left: string, right: string): boolean {
-  return timingSafeEqual(digestComparableSignature(left), digestComparableSignature(right));
+  return nativeTimingSafeEqual(digestComparableSignature(left), digestComparableSignature(right));
 }
 
 function digestComparableSignature(value: string): Buffer {
-  const bytes = witnessReflectApply<Buffer>(nativeBufferFrom, NativeBuffer, [value]);
-  const hash = createHash('sha256');
+  const bytes = securityBufferFrom(value);
+  const hash = nativeCreateHash('sha256');
   witnessReflectApply(nativeHashUpdate, hash, ['kovo-signature-v1']);
   witnessReflectApply(nativeHashUpdate, hash, ['\0']);
   witnessReflectApply(nativeHashUpdate, hash, [witnessString(bytes.byteLength)]);

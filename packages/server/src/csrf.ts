@@ -1,4 +1,3 @@
-import { randomBytes, randomUUID } from 'node:crypto';
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import type { CookieOptions } from './cookies.js';
@@ -19,6 +18,22 @@ import {
   witnessIsArray,
   witnessReflectApply,
 } from './security-witness-intrinsics.js';
+import {
+  createSecurityMap,
+  securityArrayJoin,
+  securityBufferAllocUnsafe,
+  securityBufferFrom,
+  securityBufferToString,
+  securityIsUint8Array,
+  securityJsonStringify,
+  securityMapGet,
+  securityMapSet,
+  securityRandomBytes,
+  securityRandomUuid,
+  securityRegExpTest,
+  securityStringSplit,
+  securityStringStartsWith,
+} from './response-security-intrinsics.js';
 
 const NativeURL = globalThis.URL;
 const nativeRequestMethod = witnessGetOwnPropertyDescriptor(Request.prototype, 'method')?.get;
@@ -236,7 +251,7 @@ export function renderMutationCsrfField<Request>(definition: {
   const context = currentJsxFrameworkContext();
   const csrf = definition.csrf ?? context?.csrf;
   if (!context || !csrf) return '';
-  context.anonymousCsrfBindings ??= new Map();
+  context.anonymousCsrfBindings ??= createSecurityMap();
   const binding = resolveCsrfBinding(context.request as Request, csrf, {
     anonymousCache: context.anonymousCsrfBindings,
     mintAnonymous: true,
@@ -260,7 +275,7 @@ export const KOVO_IDEM_FIELD_NAME = 'Kovo-Idem';
  * bits of cryptographic entropy.
  */
 export function mintIdemToken(): string {
-  return randomUUID();
+  return securityRandomUuid();
 }
 
 /**
@@ -458,12 +473,17 @@ function resolveCsrfBinding<Request>(
 
   const cookie = buildAnonymousCsrfCookieOptions(request, cookieOptions);
   const cacheKey = anonymousCsrfCacheKey(name, cookie);
-  const cached = mintOptions.anonymousCache?.get(cacheKey);
+  const cached =
+    mintOptions.anonymousCache === undefined
+      ? undefined
+      : securityMapGet(mintOptions.anonymousCache, cacheKey);
   if (cached) return cached;
 
-  const anonymousSecret = randomBytes(32).toString('base64url');
+  const anonymousSecret = securityBufferToString(securityRandomBytes(32), 'base64url');
   const value = `anonymous:${anonymousSecret}`;
-  mintOptions.anonymousCache?.set(cacheKey, { value });
+  if (mintOptions.anonymousCache !== undefined) {
+    securityMapSet(mintOptions.anonymousCache, cacheKey, { value });
+  }
   return {
     setCookie: serializeCookie(name, anonymousSecret, cookie),
     value,
@@ -488,13 +508,20 @@ export function resolveCsrfReplayBinding<Request>(
 }
 
 function anonymousCsrfCacheKey(name: string, cookie: CookieOptions): string {
-  return JSON.stringify({
-    maxAge: cookie.maxAge,
-    name,
-    path: cookie.path,
-    sameSite: cookie.sameSite,
-    secure: cookie.secure,
-  });
+  return securityArrayJoin(
+    [
+      serializeCacheKeyPart(cookie.maxAge),
+      serializeCacheKeyPart(name),
+      serializeCacheKeyPart(cookie.path),
+      serializeCacheKeyPart(cookie.sameSite),
+      serializeCacheKeyPart(cookie.secure),
+    ],
+    '\0',
+  );
+}
+
+function serializeCacheKeyPart(value: string | number | boolean | undefined): string {
+  return securityJsonStringify(value) ?? 'undefined';
 }
 
 /**
@@ -503,15 +530,15 @@ function anonymousCsrfCacheKey(name: string, cookie: CookieOptions): string {
  * same regardless of prefix, so any prefixed variant is accepted under the one logical name.
  */
 function readAnonymousCsrfCookie(request: unknown, name: string): string | undefined {
-  for (const candidate of [`__Host-${name}`, `__Secure-${name}`, name]) {
-    const value = readCookieValue(request, candidate);
-    if (value !== undefined) return value;
-  }
-  return undefined;
+  return (
+    readCookieValue(request, `__Host-${name}`) ??
+    readCookieValue(request, `__Secure-${name}`) ??
+    readCookieValue(request, name)
+  );
 }
 
 function readCookieValue(request: unknown, name: string): string | undefined {
-  if (!(request instanceof Request)) return undefined;
+  if (!isNativeRequest(request)) return undefined;
   const value = readUntrustedCookieValue(request, name);
   const revealed = revealUntrustedRequestValue(
     value,
@@ -521,7 +548,7 @@ function readCookieValue(request: unknown, name: string): string | undefined {
 }
 
 function isUsableAnonymousSigningSecret(value: string | undefined): value is string {
-  return value !== undefined && /^[A-Za-z0-9_-]{32,}$/.test(value);
+  return value !== undefined && securityRegExpTest(/^[A-Za-z0-9_-]{32,}$/, value);
 }
 
 function requestIsHttps(request: unknown): boolean {
@@ -532,7 +559,7 @@ const CSRF_MASKED_TOKEN_VERSION = 'v1';
 const CSRF_MAC_BYTES = 32;
 
 function createCsrfToken(binding: string, secret: SigningSecret, audience: string): string {
-  const mac = Buffer.from(
+  const mac = securityBufferFrom(
     signingKeyRingFromSecret(secret).sign({
       audience,
       payload: binding,
@@ -540,17 +567,20 @@ function createCsrfToken(binding: string, secret: SigningSecret, audience: strin
     }).signature,
     'base64url',
   );
-  const mask = randomBytes(CSRF_MAC_BYTES);
+  const mask = securityRandomBytes(CSRF_MAC_BYTES);
   const maskedMac = xorBuffers(mac, mask);
-  return [
-    CSRF_MASKED_TOKEN_VERSION,
-    mask.toString('base64url'),
-    maskedMac.toString('base64url'),
-  ].join('.');
+  return securityArrayJoin(
+    [
+      CSRF_MASKED_TOKEN_VERSION,
+      securityBufferToString(mask, 'base64url'),
+      securityBufferToString(maskedMac, 'base64url'),
+    ],
+    '.',
+  );
 }
 
 function unmaskCsrfToken(token: string): string | undefined {
-  const parts = token.split('.');
+  const parts = securityStringSplit(token, '.');
   if (
     parts.length !== 3 ||
     parts[0] !== CSRF_MASKED_TOKEN_VERSION ||
@@ -563,8 +593,8 @@ function unmaskCsrfToken(token: string): string | undefined {
   let mask: Buffer;
   let maskedMac: Buffer;
   try {
-    mask = Buffer.from(parts[1], 'base64url');
-    maskedMac = Buffer.from(parts[2], 'base64url');
+    mask = securityBufferFrom(parts[1], 'base64url');
+    maskedMac = securityBufferFrom(parts[2], 'base64url');
   } catch {
     return undefined;
   }
@@ -573,15 +603,15 @@ function unmaskCsrfToken(token: string): string | undefined {
     return undefined;
   }
 
-  return xorBuffers(maskedMac, mask).toString('base64url');
+  return securityBufferToString(xorBuffers(maskedMac, mask), 'base64url');
 }
 
 function isBase64UrlSegment(value: string | undefined): value is string {
-  return value !== undefined && value !== '' && /^[A-Za-z0-9_-]+$/.test(value);
+  return value !== undefined && value !== '' && securityRegExpTest(/^[A-Za-z0-9_-]+$/, value);
 }
 
 function xorBuffers(left: Buffer, right: Buffer): Buffer {
-  const output = Buffer.allocUnsafe(left.byteLength);
+  const output = securityBufferAllocUnsafe(left.byteLength);
   for (let index = 0; index < left.byteLength; index += 1) {
     output[index] = left[index]! ^ right[index]!;
   }
@@ -591,20 +621,29 @@ function xorBuffers(left: Buffer, right: Buffer): Buffer {
 /** @internal Return the active CSRF/framework signing key for new tokens and non-CSRF attestations. */
 export function currentSigningSecret(secret: SigningSecret): string {
   if (typeof secret === 'string') return secret;
-  if (secret instanceof Uint8Array) return Buffer.from(secret).toString('base64url');
+  if (securityIsUint8Array(secret)) {
+    return securityBufferToString(securityBufferFrom(secret), 'base64url');
+  }
   if (isSigningKeyRing(secret)) {
     throw new Error('currentSigningSecret cannot expose raw material from a SigningKeyRing');
   }
-  const current = secret.keys.find((key) => key.state === 'active');
+  let current: (typeof secret.keys)[number] | undefined;
+  for (let index = 0; index < secret.keys.length; index += 1) {
+    const key = secret.keys[index]!;
+    if (key.state === 'active') {
+      current = key;
+      break;
+    }
+  }
   if (current === undefined)
     throw new Error('SigningSecret key ring options must include an active key');
   return typeof current.secret === 'string'
     ? current.secret
-    : Buffer.from(current.secret).toString('base64url');
+    : securityBufferToString(securityBufferFrom(current.secret), 'base64url');
 }
 
 function csrfPurpose(binding: string): string {
-  return binding.startsWith('anonymous:') ? 'anonymous-csrf' : 'csrf';
+  return securityStringStartsWith(binding, 'anonymous:') ? 'anonymous-csrf' : 'csrf';
 }
 
 function csrfAudience(options: { field?: string }, audience?: string): string {

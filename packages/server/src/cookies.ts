@@ -1,6 +1,31 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
+import {
+  createSecurityMap,
+  createSecuritySet,
+  securityArrayJoin,
+  securityArrayPush,
+  securityDateToUtcString,
+  securityEncodeURIComponent,
+  securityIsDate,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityNumberIsInteger,
+  securityRegExpTest,
+  securitySetAdd,
+  securitySetHas,
+  securityStringCharCodeAt,
+  securityStringIncludes,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
+  securityStringToLowerCase,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
+
 /**
  * The security class of a cookie, which selects the by-construction attribute floor applied at the
  * single `serializeCookie` sink (SPEC §6.6/§9.1, secure-framework Phase 5). The floor exists so an
@@ -94,7 +119,10 @@ export interface CookieOptions {
  * });
  */
 export function unsafeCookie(downgrade: UnsafeCookieDowngrade): UnsafeCookieDowngrade {
-  if (typeof downgrade.justification !== 'string' || downgrade.justification.trim() === '') {
+  if (
+    typeof downgrade.justification !== 'string' ||
+    securityStringTrim(downgrade.justification) === ''
+  ) {
     throw new Error('unsafeCookie requires a non-empty justification (KV432).');
   }
   return downgrade;
@@ -284,7 +312,9 @@ function applyCookieNamePrefix(
   options: CookieOptions,
 ): string {
   if (!isCredentialClass(cookieClass)) return name;
-  if (name.startsWith('__Host-') || name.startsWith('__Secure-')) return name;
+  if (securityStringStartsWith(name, '__Host-') || securityStringStartsWith(name, '__Secure-')) {
+    return name;
+  }
   if (!effective.secure) return name;
 
   const path = options.path ?? '/';
@@ -312,39 +342,42 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   const floored = applyCookieFloor(name, cookieClass, options);
   const effectiveName = applyCookieNamePrefix(name, cookieClass, floored, options);
 
-  const encodedValue = encodeURIComponent(value);
+  const encodedValue = securityEncodeURIComponent(value);
   const parts = [`${effectiveName}=${encodedValue}`];
 
   if (options.maxAge !== undefined) {
-    if (!Number.isInteger(options.maxAge)) throw new Error('Cookie maxAge must be an integer');
-    parts.push(`Max-Age=${options.maxAge}`);
+    if (!securityNumberIsInteger(options.maxAge)) {
+      throw new Error('Cookie maxAge must be an integer');
+    }
+    securityArrayPush(parts, `Max-Age=${options.maxAge}`);
   }
   if (options.domain !== undefined) {
     assertCookieOctets(options.domain, 'cookie domain');
-    parts.push(`Domain=${options.domain}`);
+    securityArrayPush(parts, `Domain=${options.domain}`);
   }
   // `__Host-`-prefixed cookies require `Path=/`; the floor defaults Path for credential cookies so
   // the prefix contract holds even when the caller omitted it.
   const effectivePath = options.path ?? (isCredential ? '/' : undefined);
   if (effectivePath !== undefined) {
     assertCookieOctets(effectivePath, 'cookie path');
-    parts.push(`Path=${effectivePath}`);
+    securityArrayPush(parts, `Path=${effectivePath}`);
   }
   if (options.expires !== undefined) {
-    const expires =
-      options.expires instanceof Date ? options.expires.toUTCString() : options.expires;
+    const expires = securityIsDate(options.expires)
+      ? securityDateToUtcString(options.expires)
+      : options.expires;
     assertCookieOctets(expires, 'cookie expires');
-    parts.push(`Expires=${expires}`);
+    securityArrayPush(parts, `Expires=${expires}`);
   }
-  if (floored.httpOnly) parts.push('HttpOnly');
-  if (floored.secure) parts.push('Secure');
+  if (floored.httpOnly) securityArrayPush(parts, 'HttpOnly');
+  if (floored.secure) securityArrayPush(parts, 'Secure');
   if (floored.sameSite !== undefined) {
     const sameSite = {
       lax: 'Lax',
       none: 'None',
       strict: 'Strict',
     }[floored.sameSite];
-    parts.push(`SameSite=${sameSite}`);
+    securityArrayPush(parts, `SameSite=${sameSite}`);
   }
   if (options.priority !== undefined) {
     const priority = {
@@ -352,13 +385,13 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
       low: 'Low',
       medium: 'Medium',
     }[options.priority];
-    parts.push(`Priority=${priority}`);
+    securityArrayPush(parts, `Priority=${priority}`);
   }
   // `Partitioned` is a valueless attribute; emit it last so it survives the round-trip
   // through `parseSetCookieHeader` (part-3 I1, SPEC §9.1.1).
-  if (options.partitioned) parts.push('Partitioned');
+  if (options.partitioned) securityArrayPush(parts, 'Partitioned');
 
-  return parts.join('; ');
+  return securityArrayJoin(parts, '; ');
 }
 
 /**
@@ -379,32 +412,35 @@ interface ParsedSetCookieAttribute {
 }
 
 function parseSetCookieHeader(raw: string): ParsedSetCookie | undefined {
-  const segments = raw.split(';');
+  const segments = securityStringSplit(raw, ';');
   const first = segments[0];
   if (first === undefined) return undefined;
-  const eq = first.indexOf('=');
+  const eq = securityStringIndexOf(first, '=');
   if (eq < 0) return undefined;
-  const name = first.slice(0, eq).trim();
-  const value = first.slice(eq + 1).trim();
+  const name = securityStringTrim(securityStringSlice(first, 0, eq));
+  const value = securityStringTrim(securityStringSlice(first, eq + 1));
   if (name === '') return undefined;
 
   const attributes: ParsedSetCookieAttribute[] = [];
-  const byName = new Map<string, ParsedSetCookieAttribute>();
-  for (const segment of segments.slice(1)) {
-    const trimmed = segment.trim();
+  const byName = createSecurityMap<string, ParsedSetCookieAttribute>();
+  for (let index = 1; index < segments.length; index += 1) {
+    const segment = segments[index]!;
+    const trimmed = securityStringTrim(segment);
     if (trimmed === '') continue;
-    const attrEq = trimmed.indexOf('=');
+    const attrEq = securityStringIndexOf(trimmed, '=');
     const attribute =
       attrEq < 0
-        ? { lowerName: trimmed.toLowerCase(), name: trimmed }
+        ? { lowerName: securityStringToLowerCase(trimmed), name: trimmed }
         : {
-            lowerName: trimmed.slice(0, attrEq).trim().toLowerCase(),
-            name: trimmed.slice(0, attrEq).trim(),
-            value: trimmed.slice(attrEq + 1).trim(),
+            lowerName: securityStringToLowerCase(
+              securityStringTrim(securityStringSlice(trimmed, 0, attrEq)),
+            ),
+            name: securityStringTrim(securityStringSlice(trimmed, 0, attrEq)),
+            value: securityStringTrim(securityStringSlice(trimmed, attrEq + 1)),
           };
     if (attribute.name === '') continue;
-    attributes.push(attribute);
-    byName.set(attribute.lowerName, attribute);
+    securityArrayPush(attributes, attribute);
+    securityMapSet(byName, attribute.lowerName, attribute);
   }
   return { attributes, byName, name, value };
 }
@@ -423,11 +459,11 @@ export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture):
 
   const cookieClass = posture.class ?? 'session';
   const { byName } = parsed;
-  const sameSiteRaw = byName.get('samesite')?.value;
+  const sameSiteRaw = securityMapGet(byName, 'samesite')?.value;
   const sameSite = forwardedSameSite(sameSiteRaw);
 
-  const upstreamHttpOnly = byName.has('httponly');
-  const upstreamSecure = byName.has('secure');
+  const upstreamHttpOnly = securityMapHas(byName, 'httponly');
+  const upstreamSecure = securityMapHas(byName, 'secure');
 
   // Re-derive the effective floor. An upstream cookie that already omits HttpOnly/Secure/SameSite is
   // brought UP to the floor; we never downgrade a forwarded credential cookie, so no `unsafe` escape
@@ -441,27 +477,30 @@ export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture):
 
   const parts = [`${parsed.name}=${parsed.value}`];
   // Re-emit preserved attributes in a stable order, applying the floor for HttpOnly/Secure/SameSite.
-  appendForwardedAttribute(parts, byName.get('max-age'), 'Max-Age');
-  appendForwardedAttribute(parts, byName.get('domain'), 'Domain');
-  const path = byName.get('path')?.value ?? '/';
-  parts.push(`Path=${path}`);
-  appendForwardedAttribute(parts, byName.get('expires'), 'Expires');
-  if (floorHttpOnly) parts.push('HttpOnly');
-  if (floorSecure) parts.push('Secure');
+  appendForwardedAttribute(parts, securityMapGet(byName, 'max-age'), 'Max-Age');
+  appendForwardedAttribute(parts, securityMapGet(byName, 'domain'), 'Domain');
+  const path = securityMapGet(byName, 'path')?.value ?? '/';
+  securityArrayPush(parts, `Path=${path}`);
+  appendForwardedAttribute(parts, securityMapGet(byName, 'expires'), 'Expires');
+  if (floorHttpOnly) securityArrayPush(parts, 'HttpOnly');
+  if (floorSecure) securityArrayPush(parts, 'Secure');
   const effectiveSameSite = sameSite ?? (isCredentialClass(cookieClass) ? 'lax' : undefined);
   if (effectiveSameSite !== undefined) {
-    parts.push(`SameSite=${{ lax: 'Lax', none: 'None', strict: 'Strict' }[effectiveSameSite]}`);
+    securityArrayPush(
+      parts,
+      `SameSite=${{ lax: 'Lax', none: 'None', strict: 'Strict' }[effectiveSameSite]}`,
+    );
   }
   appendUnknownForwardedAttributes(parts, parsed.attributes);
   // Preserve Priority and Partitioned after the floor-controlled security attributes (part-3 I1).
-  appendForwardedAttribute(parts, byName.get('priority'), 'Priority');
-  if (byName.has('partitioned')) parts.push('Partitioned');
+  appendForwardedAttribute(parts, securityMapGet(byName, 'priority'), 'Priority');
+  if (securityMapHas(byName, 'partitioned')) securityArrayPush(parts, 'Partitioned');
 
-  return parts.join('; ');
+  return securityArrayJoin(parts, '; ');
 }
 
 function forwardedSameSite(value: string | undefined): 'lax' | 'none' | 'strict' | undefined {
-  const normalized = value?.toLowerCase();
+  const normalized = value === undefined ? undefined : securityStringToLowerCase(value);
   if (normalized === 'lax' || normalized === 'none' || normalized === 'strict') {
     return normalized;
   }
@@ -481,42 +520,50 @@ function appendForwardedAttribute(
   name: string,
 ): void {
   if (attribute?.value === undefined) return;
-  parts.push(`${name}=${attribute.value}`);
+  securityArrayPush(parts, `${name}=${attribute.value}`);
 }
 
-const floorControlledForwardedAttributes = new Set([
-  'domain',
-  'expires',
-  'httponly',
-  'max-age',
-  'partitioned',
-  'path',
-  'priority',
-  'samesite',
-  'secure',
-]);
+const floorControlledForwardedAttributes = createFloorControlledForwardedAttributes();
+
+function createFloorControlledForwardedAttributes(): Set<string> {
+  const values = createSecuritySet<string>();
+  securitySetAdd(values, 'domain');
+  securitySetAdd(values, 'expires');
+  securitySetAdd(values, 'httponly');
+  securitySetAdd(values, 'max-age');
+  securitySetAdd(values, 'partitioned');
+  securitySetAdd(values, 'path');
+  securitySetAdd(values, 'priority');
+  securitySetAdd(values, 'samesite');
+  securitySetAdd(values, 'secure');
+  return values;
+}
 
 function appendUnknownForwardedAttributes(
   parts: string[],
   attributes: readonly ParsedSetCookieAttribute[],
 ): void {
-  for (const attribute of attributes) {
-    if (floorControlledForwardedAttributes.has(attribute.lowerName)) continue;
-    parts.push(
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (securitySetHas(floorControlledForwardedAttributes, attribute.lowerName)) continue;
+    securityArrayPush(
+      parts,
       attribute.value === undefined ? attribute.name : `${attribute.name}=${attribute.value}`,
     );
   }
 }
 
 function assertCookieName(value: string): void {
-  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(value)) {
+  if (!securityRegExpTest(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/, value)) {
     throw new Error('Cookie name must be an HTTP token');
   }
 }
 
 function assertCookieOctets(value: string, label: string): void {
   assertNoHeaderControlCharacters(value, label);
-  if (value.includes(';')) throw new Error(`${label} must not contain semicolons`);
+  if (securityStringIncludes(value, ';')) {
+    throw new Error(`${label} must not contain semicolons`);
+  }
 }
 
 function assertNoHeaderControlCharacters(value: string, label: string): void {
@@ -524,7 +571,7 @@ function assertNoHeaderControlCharacters(value: string, label: string): void {
   // not just CR/LF/NUL. TAB, BEL, and other control bytes outside the printable header
   // grammar must be rejected by throwing — never silently stripped.
   for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
+    const code = securityStringCharCodeAt(value, index);
     if (code <= 0x1f || code === 0x7f) {
       throw new Error(`${label} must not contain control characters`);
     }

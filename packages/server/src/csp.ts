@@ -1,6 +1,20 @@
-import { createHash } from 'node:crypto';
-
 import { escapeAttribute } from './html.js';
+import {
+  createSecuritySet,
+  securityArrayJoin,
+  securityArrayPush,
+  securityJsonStringify,
+  securityMathFloor,
+  securityNumberIsFinite,
+  securityRegExpExec,
+  securityRegExpReplace,
+  securityRegExpTest,
+  securitySetAdd,
+  securitySetHas,
+  securitySha256Base64,
+  securityStringCharCodeAt,
+  securityStringReplaceAll,
+} from './response-security-intrinsics.js';
 
 /** CSP hash metadata for inline scripts/styles generated during document assembly. */
 export interface CspInlineMetadata {
@@ -170,20 +184,30 @@ export function renderDefaultDocumentCsp(
 ): string {
   const allow = config.allowlist ?? {};
   const reporting = resolveCspReporting(config.reporting);
+  const scriptSrc = appendSourceValues(["'self'"], allow.scriptSrc);
+  const styleSrc = appendSourceValues(["'self'"], allow.styleSrc);
+  const imgSrc =
+    allow.imgSrc !== undefined && allow.imgSrc.length > 0
+      ? appendSourceValues(["'self'", 'data:'], allow.imgSrc)
+      : undefined;
+  const connectSrc =
+    allow.connectSrc !== undefined && allow.connectSrc.length > 0
+      ? appendSourceValues(["'self'"], allow.connectSrc)
+      : undefined;
+  const frameSrc =
+    allow.frameSrc !== undefined && allow.frameSrc.length > 0
+      ? appendSourceValues([], allow.frameSrc)
+      : undefined;
   // The allowlist EXTENDS the secure `'self'` base — it never replaces it — and it can
   // only touch the per-fetch directives below. `base-uri`/`object-src`/`form-action`/
   // `frame-ancestors` are assembled by `renderContentSecurityPolicy` from their secure
   // defaults and are intentionally absent from `CspAllowlist`, so they stay locked.
   return renderContentSecurityPolicy(metadata, {
-    scriptSrc: ["'self'", ...(allow.scriptSrc ?? [])],
-    styleSrc: ["'self'", ...(allow.styleSrc ?? [])],
-    ...(allow.imgSrc && allow.imgSrc.length > 0
-      ? { imgSrc: ["'self'", 'data:', ...allow.imgSrc] }
-      : {}),
-    ...(allow.connectSrc && allow.connectSrc.length > 0
-      ? { connectSrc: ["'self'", ...allow.connectSrc] }
-      : {}),
-    ...(allow.frameSrc && allow.frameSrc.length > 0 ? { frameSrc: allow.frameSrc } : {}),
+    scriptSrc,
+    styleSrc,
+    ...(imgSrc === undefined ? {} : { imgSrc }),
+    ...(connectSrc === undefined ? {} : { connectSrc }),
+    ...(frameSrc === undefined ? {} : { frameSrc }),
     ...(reporting === undefined ? {} : { reportTo: reporting.group }),
     // SF (secure-framework Tier 3): Trusted Types is now DEFAULT-ON. Every framework-
     // assembled DOM-write sink — the module-side `morph.ts`/`query-bindings.ts` writes AND
@@ -207,12 +231,13 @@ export function renderCspReportingHeaders(
   const reporting = resolveCspReporting(config.reporting);
   if (reporting === undefined) return undefined;
   const endpoint = relativeReportEndpoint(reporting.endpoint, options.endpointOrigin);
+  const endpointJson = securityJsonStringify(endpoint);
+  const groupJson = securityJsonStringify(reporting.group);
+  if (endpointJson === undefined || groupJson === undefined) {
+    throw new TypeError('Kovo CSP reporting values could not be serialized.');
+  }
   return {
-    'Report-To': JSON.stringify({
-      endpoints: [{ url: endpoint }],
-      group: reporting.group,
-      max_age: reporting.maxAgeSeconds,
-    }),
+    'Report-To': `{"endpoints":[{"url":${endpointJson}}],"group":${groupJson},"max_age":${reporting.maxAgeSeconds}}`,
     'Reporting-Endpoints': `${reporting.group}="${escapeStructuredFieldString(endpoint)}"`,
   };
 }
@@ -227,7 +252,7 @@ export function renderCspReportingHeaders(
  * @returns A `sha256-<base64>` CSP source expression.
  */
 export function cspSha256(value: string): string {
-  return `sha256-${createHash('sha256').update(value).digest('base64')}`;
+  return `sha256-${securitySha256Base64(value)}`;
 }
 
 export function cspHashAttribute(hash: string): string {
@@ -241,10 +266,22 @@ export function emptyCspInlineMetadata(): CspInlineMetadata {
 export function mergeCspInlineMetadata(
   ...metadata: readonly (CspInlineMetadata | undefined)[]
 ): CspInlineMetadata {
-  const styleAttributes = dedupe(metadata.flatMap((item) => item?.styleAttributes ?? []));
+  const scripts: string[] = [];
+  const styles: string[] = [];
+  const rawStyleAttributes: string[] = [];
+  for (let index = 0; index < metadata.length; index += 1) {
+    const item = metadata[index];
+    if (item === undefined) continue;
+    appendSourceValuesInto(scripts, item.scripts);
+    appendSourceValuesInto(styles, item.styles);
+    if (item.styleAttributes !== undefined) {
+      appendSourceValuesInto(rawStyleAttributes, item.styleAttributes);
+    }
+  }
+  const styleAttributes = dedupe(rawStyleAttributes);
   return {
-    scripts: dedupe(metadata.flatMap((item) => item?.scripts ?? [])),
-    styles: dedupe(metadata.flatMap((item) => item?.styles ?? [])),
+    scripts: dedupe(scripts),
+    styles: dedupe(styles),
     ...(styleAttributes.length === 0 ? {} : { styleAttributes }),
   };
 }
@@ -260,12 +297,16 @@ export function hasCspInlineMetadata(metadata: CspInlineMetadata): boolean {
 export function styleAttributeCspInlineMetadata(html: string): CspInlineMetadata {
   const hashes: string[] = [];
   const pattern = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>`]+))/giu;
-  const scannableHtml = html
-    .replaceAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu, '')
-    .replaceAll(/<style\b[^>]*>[\s\S]*?<\/style>/giu, '');
-  for (const match of scannableHtml.matchAll(pattern)) {
+  const withoutScripts = securityRegExpReplace(html, /<script\b[^>]*>[\s\S]*?<\/script>/giu, '');
+  const scannableHtml = securityRegExpReplace(
+    withoutScripts,
+    /<style\b[^>]*>[\s\S]*?<\/style>/giu,
+    '',
+  );
+  let match: RegExpExecArray | null;
+  while ((match = securityRegExpExec(pattern, scannableHtml)) !== null) {
     const rawValue = match[1] ?? match[2] ?? match[3] ?? '';
-    hashes.push(cspSha256(decodeHtmlAttribute(rawValue)));
+    securityArrayPush(hashes, cspSha256(decodeHtmlAttribute(rawValue)));
   }
   const styleAttributes = dedupe(hashes);
   return styleAttributes.length === 0
@@ -294,18 +335,22 @@ export function renderContentSecurityPolicy(
   metadata: CspInlineMetadata,
   options: ContentSecurityPolicyOptions = {},
 ): string {
-  const directives = [
+  const scriptSources = appendSourceValues(
+    appendSourceValues([], options.scriptSrc ?? ["'self'"]),
+    quoteHashes(metadata.scripts),
+  );
+  const styleSources = appendSourceValues(
+    appendSourceValues(
+      appendSourceValues([], options.styleSrc ?? ["'self'"]),
+      quoteHashes(metadata.styles),
+    ),
+    (metadata.styleAttributes?.length ?? 0) === 0 ? [] : ["'unsafe-hashes'"],
+  );
+  appendSourceValuesInto(styleSources, quoteHashes(metadata.styleAttributes ?? []));
+  const candidates: (string | undefined)[] = [
     directive('default-src', options.defaultSrc ?? ["'self'"]),
-    directive('script-src', [
-      ...(options.scriptSrc ?? ["'self'"]),
-      ...quoteHashes(metadata.scripts),
-    ]),
-    directive('style-src', [
-      ...(options.styleSrc ?? ["'self'"]),
-      ...quoteHashes(metadata.styles),
-      ...((metadata.styleAttributes?.length ?? 0) === 0 ? [] : ["'unsafe-hashes'"]),
-      ...quoteHashes(metadata.styleAttributes ?? []),
-    ]),
+    directive('script-src', scriptSources),
+    directive('style-src', styleSources),
     directive('img-src', options.imgSrc),
     directive('connect-src', options.connectSrc),
     directive('frame-src', options.frameSrc),
@@ -331,31 +376,47 @@ export function renderContentSecurityPolicy(
     // admits ONLY Kovo's sole policy (no `'allow-duplicates'`) so an attacker cannot mint a
     // bypassing policy. Other browsers ignore both directives, leaving the cross-browser CSP
     // floor above intact (TT is runtime DiD, not a by-construction proof — SPEC §6.6).
-    ...(options.trustedTypes
-      ? ["require-trusted-types-for 'script'", `trusted-types ${KOVO_TRUSTED_TYPES_POLICY}`]
-      : []),
-  ].filter((item): item is string => item !== undefined);
+  ];
+  if (options.trustedTypes) {
+    securityArrayPush(candidates, "require-trusted-types-for 'script'");
+    securityArrayPush(candidates, `trusted-types ${KOVO_TRUSTED_TYPES_POLICY}`);
+  }
+  const directives: string[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    if (candidate !== undefined) securityArrayPush(directives, candidate);
+  }
 
-  return directives.join('; ');
+  return securityArrayJoin(directives, '; ');
 }
 
 function quoteHashes(hashes: readonly string[]): string[] {
-  return hashes.map((hash) => `'${hash}'`);
+  const quoted: string[] = [];
+  for (let index = 0; index < hashes.length; index += 1) {
+    securityArrayPush(quoted, `'${hashes[index]!}'`);
+  }
+  return quoted;
 }
 
 function decodeHtmlAttribute(value: string): string {
-  return value
-    .replaceAll('&quot;', '"')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&amp;', '&');
+  return securityStringReplaceAll(
+    securityStringReplaceAll(
+      securityStringReplaceAll(securityStringReplaceAll(value, '&quot;', '"'), '&gt;', '>'),
+      '&lt;',
+      '<',
+    ),
+    '&amp;',
+    '&',
+  );
 }
 
 function directive(name: string, values: readonly string[] | undefined): string | undefined {
   if (!values || values.length === 0) return undefined;
   const deduped = dedupe(values);
-  for (const value of deduped) assertSafeCspSourceListValue(name, value);
-  return `${name} ${deduped.join(' ')}`;
+  for (let index = 0; index < deduped.length; index += 1) {
+    assertSafeCspSourceListValue(name, deduped[index]!);
+  }
+  return `${name} ${securityArrayJoin(deduped, ' ')}`;
 }
 
 /**
@@ -370,11 +431,10 @@ function directive(name: string, values: readonly string[] | undefined): string 
  * of these separators, so reject them fail-closed at assembly time with a clear error.
  */
 function assertSafeCspSourceListValue(name: string, value: string): void {
-  if (/[\s;,]/.test(value) || hasCspControlCharacter(value)) {
+  if (securityRegExpTest(/[\s;,]/, value) || hasCspControlCharacter(value)) {
+    const serialized = securityJsonStringify(value) ?? 'undefined';
     throw new Error(
-      `Kovo refused to assemble a Content-Security-Policy: the '${name}' source-list value ${JSON.stringify(
-        value,
-      )} contains a directive separator (';'/','), whitespace, a newline, or a control character. ` +
+      `Kovo refused to assemble a Content-Security-Policy: the '${name}' source-list value ${serialized} contains a directive separator (';'/','), whitespace, a newline, or a control character. ` +
         `Such a value can smuggle or override CSP directives (SPEC §6.6 / bugz-3 L18); CSP allowlist entries must be single source expressions like 'self', a 'sha256-…' hash, a scheme, or an origin.`,
     );
   }
@@ -382,14 +442,38 @@ function assertSafeCspSourceListValue(name: string, value: string): void {
 
 function hasCspControlCharacter(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
+    const code = securityStringCharCodeAt(value, index);
     if (code <= 0x1f || code === 0x7f) return true;
   }
   return false;
 }
 
 function dedupe(values: readonly string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
+  const seen = createSecuritySet<string>();
+  const result: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (value === '' || securitySetHas(seen, value)) continue;
+    securitySetAdd(seen, value);
+    securityArrayPush(result, value);
+  }
+  return result;
+}
+
+function appendSourceValues(
+  base: readonly string[],
+  extra: readonly string[] | undefined,
+): string[] {
+  const result: string[] = [];
+  appendSourceValuesInto(result, base);
+  if (extra !== undefined) appendSourceValuesInto(result, extra);
+  return result;
+}
+
+function appendSourceValuesInto(target: string[], values: readonly string[]): void {
+  for (let index = 0; index < values.length; index += 1) {
+    securityArrayPush(target, values[index]!);
+  }
 }
 
 function resolveCspReporting(config: CspReportingConfig | false | undefined):
@@ -409,12 +493,12 @@ function resolveCspReporting(config: CspReportingConfig | false | undefined):
 
 function normalizeMaxAgeSeconds(value: number | undefined): number {
   if (value === undefined) return 10886400;
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return Math.floor(value);
+  if (!securityNumberIsFinite(value) || value < 0) return 0;
+  return securityMathFloor(value);
 }
 
 function escapeStructuredFieldString(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  return securityStringReplaceAll(securityStringReplaceAll(value, '\\', '\\\\'), '"', '\\"');
 }
 
 function relativeReportEndpoint(endpoint: string, _origin: string | undefined): string {

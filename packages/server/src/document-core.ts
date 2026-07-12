@@ -38,6 +38,18 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
+import {
+  createSecurityNullRecord,
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityArrayPush,
+  securityJsonStringify,
+  securityObjectKeys,
+  securityStringIncludes,
+  securityStringSplit,
+  securityStringToLowerCase,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
 /**
@@ -325,21 +337,24 @@ function assembleDocumentShellParts(
   // hint context so a `metaFromQuery(...)` factory resolves against real data instead
   // of an always-empty `{}` (which previously made every such factory throw → a hard
   // 500 during head render). Map by query name, matching `RouteMetaFactory.queries`.
-  const queryValues = queryValuesByName(options.queries ?? []);
+  const queries = options.queries ?? [];
+  const queryValues = queryValuesByName(queries);
   const hintContext = {
-    ...(Object.keys(queryValues).length > 0 ? { queries: queryValues } : {}),
+    ...(securityObjectKeys(queryValues).length > 0 ? { queries: queryValues } : {}),
     ...(options.metaContext === undefined ? {} : { route: options.metaContext }),
   };
   const hints = renderPageHints(options.hints ?? {}, hintContext);
-  const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
+  const queryScripts: ReturnType<typeof renderDocumentQueryScriptWithCsp>[] = [];
+  for (let index = 0; index < queries.length; index += 1) {
+    securityArrayPush(queryScripts, renderDocumentQueryScriptWithCsp(queries[index]!));
+  }
   const loader =
     options.loader === 'omit' ? undefined : inlineLoaderScript(options.loaderRuntimeHref);
-  const csp = mergeCspInlineMetadata(
-    options.document?.csp,
-    hints.csp,
-    ...(loader === undefined ? [] : [loader.csp]),
-    ...queryScripts.map((query) => query.csp),
-  );
+  let csp = mergeCspInlineMetadata(options.document?.csp, hints.csp);
+  if (loader !== undefined) csp = mergeCspInlineMetadata(csp, loader.csp);
+  for (let index = 0; index < queryScripts.length; index += 1) {
+    csp = mergeCspInlineMetadata(csp, queryScripts[index]!.csp);
+  }
 
   // Stamp the build-token meta tag once per document (SPEC §5.1, §9.1.1,
   // §5.2.1 rule 2(b)). The token is now always non-empty (DEPLOY-3) so we only
@@ -356,6 +371,11 @@ function assembleDocumentShellParts(
       ? `<meta name="kovo-session" content="${escapeAttribute(options.sessionFingerprint)}">`
       : '';
 
+  const renderedQueryScripts: string[] = [];
+  for (let index = 0; index < queryScripts.length; index += 1) {
+    securityArrayPush(renderedQueryScripts, queryScripts[index]!.html);
+  }
+
   return {
     csp,
     document: options.document,
@@ -364,7 +384,7 @@ function assembleDocumentShellParts(
       body: options.body,
       head: `${buildMeta}${sessionMeta}${hints.html}${loader?.html ?? ''}`,
       lang: options.lang ?? options.document?.lang ?? langFromHints(options.hints) ?? 'en',
-      queryScripts: queryScripts.map((query) => query.html),
+      queryScripts: renderedQueryScripts,
     },
   };
 }
@@ -393,7 +413,8 @@ export const renderRouteDocumentResponse = wireEmitter(
       isRouteResponseOutcome(response) ||
       (response.status !== 200 && wrapNonOk !== true) ||
       typeof response.body !== 'string' ||
-      (contentType !== undefined && !contentType.toLowerCase().includes('text/html'))
+      (contentType !== undefined &&
+        !securityStringIncludes(securityStringToLowerCase(contentType), 'text/html'))
     ) {
       // bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a NON-HTML 200
       // route outcome (`respond.file`/`respond.stream`/`respond.storedFile`) was previously
@@ -533,7 +554,10 @@ function routeDocumentResult(
 function deferredChunkPromises(
   chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[],
 ): readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[] | undefined {
-  return chunks.some(isPromiseLike) ? chunks : undefined;
+  for (let index = 0; index < chunks.length; index += 1) {
+    if (isPromiseLike(chunks[index])) return chunks;
+  }
+  return undefined;
 }
 
 function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {
@@ -663,7 +687,10 @@ function documentIsolationHeaders(
   reportingGroup?: string,
 ): Record<string, string> {
   const headers: Record<string, string> = {};
-  for (const [name, value] of Object.entries(DOCUMENT_ISOLATION_HEADERS)) {
+  const isolationHeaderNames = securityObjectKeys(DOCUMENT_ISOLATION_HEADERS);
+  for (let index = 0; index < isolationHeaderNames.length; index += 1) {
+    const name = isolationHeaderNames[index]!;
+    const value = DOCUMENT_ISOLATION_HEADERS[name]!;
     if (findHeaderRecordName(existing, name) !== undefined) continue;
     if (name === 'Cross-Origin-Opener-Policy' && reportingGroup !== undefined) {
       headers[name] = `${value}; report-to="${reportingGroup}"`;
@@ -682,13 +709,16 @@ function permissionsPolicyWithReporting(reportingGroup: string): string {
   // Permissions Policy reporting has no single policy-wide Reporting API parameter.
   // Current browser syntax attaches `report-to` to each feature directive, so keep the
   // denied feature set explicit instead of inventing an unsupported global hook.
-  return [
-    `camera=();report-to=${reportingGroup}`,
-    `microphone=();report-to=${reportingGroup}`,
-    `geolocation=();report-to=${reportingGroup}`,
-    `payment=();report-to=${reportingGroup}`,
-    `usb=();report-to=${reportingGroup}`,
-  ].join(', ');
+  return securityArrayJoin(
+    [
+      `camera=();report-to=${reportingGroup}`,
+      `microphone=();report-to=${reportingGroup}`,
+      `geolocation=();report-to=${reportingGroup}`,
+      `payment=();report-to=${reportingGroup}`,
+      `usb=();report-to=${reportingGroup}`,
+    ],
+    ', ',
+  );
 }
 
 function standardDocumentResult(document: DocumentRenderResult): {
@@ -741,12 +771,17 @@ export const renderErrorDocument = wireEmitter(
   function (options: ErrorDocumentOptions): DocumentRoutePageResponse {
     const title = options.title ?? fallbackTitles[options.status];
     const message = options.message ?? title;
+    const meta: RouteMetaSource[] = [{ title }];
+    const remainingMeta = withoutStaticTitleMeta(routeMetaArray(options.hints?.meta));
+    for (let index = 0; index < remainingMeta.length; index += 1) {
+      securityArrayPush(meta, remainingMeta[index]!);
+    }
     const document = renderDocument({
       body: `<main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main>`,
       ...(options.document === undefined ? {} : { document: options.document }),
       hints: {
         ...options.hints,
-        meta: [{ title }, ...withoutStaticTitleMeta(routeMetaArray(options.hints?.meta))],
+        meta,
       },
       ...(options.lang === undefined ? {} : { lang: options.lang }),
       ...(options.loaderRuntimeHref === undefined
@@ -791,23 +826,24 @@ function renderStructuredDocumentShell(
     lang: parts.lang,
     ...document?.htmlAttrs,
   };
-  return [
+  const shell = [
     '<!doctype html>',
     `<html${renderShellAttributes(htmlAttrs)}>`,
     '<head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    ...(document?.head ?? []),
-    parts.head,
-    parts.queryScripts.join(''),
-    '</head>',
-    `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`,
-    ...(document?.bodyStart ?? []),
-    parts.body,
-    ...(document?.bodyEnd ?? []),
-    '</body>',
-    '</html>',
-  ].join('');
+  ];
+  appendDocumentStrings(shell, document?.head);
+  securityArrayPush(shell, parts.head);
+  securityArrayPush(shell, securityArrayJoin(parts.queryScripts, ''));
+  securityArrayPush(shell, '</head>');
+  securityArrayPush(shell, `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`);
+  appendDocumentStrings(shell, document?.bodyStart);
+  securityArrayPush(shell, parts.body);
+  appendDocumentStrings(shell, document?.bodyEnd);
+  securityArrayPush(shell, '</body>');
+  securityArrayPush(shell, '</html>');
+  return securityArrayJoin(shell, '');
 }
 
 function renderStructuredDeferredDocumentShell(
@@ -818,23 +854,34 @@ function renderStructuredDeferredDocumentShell(
     lang: parts.lang,
     ...document?.htmlAttrs,
   };
+  const close = [] as string[];
+  appendDocumentStrings(close, document?.bodyEnd);
+  securityArrayPush(close, '</body></html>');
+  const shell = [
+    '<!doctype html>',
+    `<html${renderShellAttributes(htmlAttrs)}>`,
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+  ];
+  appendDocumentStrings(shell, document?.head);
+  securityArrayPush(shell, parts.head);
+  securityArrayPush(shell, securityArrayJoin(parts.queryScripts, ''));
+  securityArrayPush(shell, '</head>');
+  securityArrayPush(shell, `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`);
+  appendDocumentStrings(shell, document?.bodyStart);
+  securityArrayPush(shell, parts.body);
   return {
-    closeHtml: [...(document?.bodyEnd ?? []), '</body></html>'].join(''),
-    shell: [
-      '<!doctype html>',
-      `<html${renderShellAttributes(htmlAttrs)}>`,
-      '<head>',
-      '<meta charset="utf-8">',
-      '<meta name="viewport" content="width=device-width, initial-scale=1">',
-      ...(document?.head ?? []),
-      parts.head,
-      parts.queryScripts.join(''),
-      '</head>',
-      `<body${renderShellAttributes(document?.bodyAttrs ?? {})}>`,
-      ...(document?.bodyStart ?? []),
-      parts.body,
-    ].join(''),
+    closeHtml: securityArrayJoin(close, ''),
+    shell: securityArrayJoin(shell, ''),
   };
+}
+
+function appendDocumentStrings(target: string[], values: readonly string[] | undefined): void {
+  if (values === undefined) return;
+  for (let index = 0; index < values.length; index += 1) {
+    securityArrayPush(target, values[index]!);
+  }
 }
 
 function inlineLoaderScript(runtimeHref: string | undefined): {
@@ -844,7 +891,10 @@ function inlineLoaderScript(runtimeHref: string | undefined): {
   const source =
     runtimeHref === undefined
       ? `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`
-      : createInlineKovoLoaderSource(JSON.stringify(runtimeHref), '(url)=>import(url)');
+      : createInlineKovoLoaderSource(
+          securityJsonStringify(runtimeHref) ?? '""',
+          '(url)=>import(url)',
+        );
   const hash = cspSha256(source);
   return {
     csp: { scripts: [hash], styles: [] },
@@ -859,8 +909,9 @@ function inlineLoaderScript(runtimeHref: string | undefined): {
  * derives from the named query value.
  */
 function queryValuesByName(queries: readonly QueryScriptRenderOptions[]): Record<string, unknown> {
-  const byName: Record<string, unknown> = {};
-  for (const query of queries) {
+  const byName = createSecurityNullRecord<unknown>() as Record<string, unknown>;
+  for (let index = 0; index < queries.length; index += 1) {
+    const query = queries[index]!;
     byName[query.name] = query.value;
   }
   return byName;
@@ -889,20 +940,28 @@ function langFromHints(hints: PageHintOptions | undefined): string | undefined {
 
 function arrayFrom<T>(value: T | readonly T[] | undefined): readonly T[] | undefined {
   if (value === undefined) return undefined;
-  return (Array.isArray(value) ? value : [value]) as readonly T[];
+  return (securityArrayIsArray(value) ? value : [value]) as readonly T[];
 }
 
 function routeMetaArray(value: PageHintOptions['meta']): readonly RouteMetaSource[] {
   if (value === undefined) return [];
-  return Array.isArray(value) ? (value as readonly RouteMetaSource[]) : [value as RouteMetaSource];
+  return securityArrayIsArray(value)
+    ? (value as readonly RouteMetaSource[])
+    : [value as RouteMetaSource];
 }
 
 function withoutStaticTitleMeta(metas: readonly RouteMetaSource[]): readonly RouteMetaSource[] {
-  return metas.map((meta) => {
-    if (typeof meta === 'function' || 'resolve' in meta) return meta;
+  const filtered: RouteMetaSource[] = [];
+  for (let index = 0; index < metas.length; index += 1) {
+    const meta = metas[index]!;
+    if (typeof meta === 'function' || 'resolve' in meta) {
+      securityArrayPush(filtered, meta);
+      continue;
+    }
     const { title: _title, ...rest } = meta;
-    return rest;
-  });
+    securityArrayPush(filtered, rest);
+  }
+  return filtered;
 }
 
 function mergeDocumentHeaders(
@@ -911,7 +970,11 @@ function mergeDocumentHeaders(
 ): ResponseHeaders {
   const merged: ResponseHeaders = { ...headers };
 
-  for (const [name, value] of Object.entries(earlyHints)) {
+  const names = securityObjectKeys(earlyHints);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = earlyHints[name];
+    if (value === undefined) continue;
     const existingName = findHeaderRecordName(merged, name);
     if (existingName === undefined) {
       merged[name] = value;
@@ -922,10 +985,17 @@ function mergeDocumentHeaders(
     merged[existingName] =
       existingValue === undefined
         ? value
-        : [...headerValueArray(existingValue), ...headerValueArray(value)].join(', ');
+        : joinHeaderValues(headerValueArray(existingValue), headerValueArray(value));
   }
 
   return merged;
+}
+
+function joinHeaderValues(left: readonly string[], right: readonly string[]): string {
+  const values: string[] = [];
+  appendDocumentStrings(values, left);
+  appendDocumentStrings(values, right);
+  return securityArrayJoin(values, ', ');
 }
 
 function headerValueArray(value: string | readonly string[]): readonly string[] {
@@ -941,18 +1011,32 @@ export function mergeVaryHeader(headers: ResponseHeaders, token: string): Respon
   }
 
   const existing = merged[existingName];
-  const values = (Array.isArray(existing) ? existing.join(', ') : (existing ?? ''))
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
-  if (!values.some((value) => value.toLowerCase() === token.toLowerCase())) {
-    values.push(token);
+  const existingText = securityArrayIsArray(existing)
+    ? securityArrayJoin(existing, ', ')
+    : (existing ?? '');
+  const rawValues = securityStringSplit(existingText, ',');
+  const values: string[] = [];
+  const normalizedToken = securityStringToLowerCase(token);
+  let includesToken = false;
+  for (let index = 0; index < rawValues.length; index += 1) {
+    const value = securityStringTrim(rawValues[index]!);
+    if (value === '') continue;
+    if (securityStringToLowerCase(value) === normalizedToken) includesToken = true;
+    securityArrayPush(values, value);
   }
-  merged[existingName] = values.join(', ');
+  if (!includesToken) {
+    securityArrayPush(values, token);
+  }
+  merged[existingName] = securityArrayJoin(values, ', ');
   return merged;
 }
 
 function findHeaderRecordName(headers: ResponseHeaders, name: string): string | undefined {
-  const normalized = name.toLowerCase();
-  return Object.keys(headers).find((headerName) => headerName.toLowerCase() === normalized);
+  const normalized = securityStringToLowerCase(name);
+  const names = securityObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const headerName = names[index]!;
+    if (securityStringToLowerCase(headerName) === normalized) return headerName;
+  }
+  return undefined;
 }
