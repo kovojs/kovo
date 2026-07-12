@@ -231,7 +231,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     suite and the 21-test Chromium/Firefox/WebKit run, covering error, abort, missing-done,
     post-error terminator laundering, and successful replace/append/prepend controls.
 
-- [ ] **M4 - Case-insensitive filesystem storage collapses case-distinct logical keys, breaking
+- [x] **M4 - Case-insensitive filesystem storage collapses case-distinct logical keys, breaking
       object-exact capability binding.** `packages/core/src/storage.ts:164-285,408-430`,
       `packages/server/src/capability-route.ts:317-350`
   - Memory/S3 use exact string keys, while the filesystem adapter maps the logical key directly to
@@ -246,6 +246,8 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** encode logical UTF-8 keys into case/normalization-stable physical names and store
     plus verify the exact logical key; cover get/stat/stream/put/delete and sidecars, Unicode
     normalization, Windows trailing-dot/space/reserved names, and memory/S3 parity.
+  - **Evidence:** the 22-test storage suite and 38-test source-aliased capability-route suite pass,
+    covering host-equivalent keys, exact sidecar ownership, digest collisions, and every operation.
 
 - [x] **M5 - The public auth name `kovo-capability-url` acts as a forgeable password for a green
       endpoint access audit even though runtime executes no verifier.**
@@ -268,7 +270,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     survives `createApp()` canonicalization and rejects unsigned access as 404; server declaration
     build, API-surface, and security-guarantee gates pass.
 
-- [ ] **M6 - PostgreSQL posture accepts corrupted framework owner policies and unexpected
+- [x] **M6 - PostgreSQL posture accepts corrupted framework owner policies and unexpected
       permissive policies that OR open cross-tenant access.**
       `packages/server/src/postgres-runtime.ts:918-1013,3651-3664`
   - The live posture checks only that expected policy names exist; it ignores schema, roles,
@@ -283,8 +285,10 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** schema-qualify and exactly verify the allowed policy set, roles, command,
     permissiveness, `USING`, and `WITH CHECK`; reject extras. Cover duplicate table names across
     schemas, partitions, PUBLIC, and role membership.
+  - **Evidence:** the 69-test PostgreSQL runtime/fuzzer suite passes, including allow-all policy
+    replacement, extra policy, role/command/permissiveness drift, schema twins, and partitions.
 
-- [ ] **M7 - A CHECK constraint's custom operator hides its SECURITY INVOKER implementation from
+- [x] **M7 - A CHECK constraint's custom operator hides its SECURITY INVOKER implementation from
       PostgreSQL attached-code closure, enabling a secret oracle.**
       `packages/server/src/postgres-runtime.ts:1244-1254,1533-1540`
   - Closure follows `pg_constraint -> pg_proc` but not `pg_constraint -> pg_operator -> pg_proc`;
@@ -299,8 +303,10 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** compute a recursive executable dependency closure including operator `oprcode`
     and intermediary operators/casts across CHECK/domain/exclusion/index/policy expressions; retain
     built-in negative controls and the direct-function control.
+  - **Evidence:** the 69-test PostgreSQL runtime/fuzzer suite proves custom-operator closure across
+    CHECK, index, and policy expressions while the built-in-only control remains green.
 
-- [ ] **M8 - Mutation replay fingerprints omit upload bytes, so different same-metadata files
+- [x] **M8 - Mutation replay fingerprints omit upload bytes, so different same-metadata files
       silently replay the first result under one idempotency token.**
       `packages/server/src/replay.ts:527-577`
   - Upload canonicalization includes only filename, size, and MIME type.
@@ -312,6 +318,8 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** asynchronously digest actual bytes plus field multiplicity/order/metadata under
     request size bounds without consuming handler data; identical bytes replay, any byte change
     conflicts, and digest failure fails closed.
+  - **Evidence:** the 100-test replay/mutation selection passes, including same-metadata byte
+    conflicts, true duplicate replay, field order/multiplicity, digest failure, and pre-CSRF controls.
 
 - [x] **M9 - Render-plan query-shape serialization has chosen-prefix delimiter collisions, so a
       changed projected field set can keep the same fingerprint, client href, and build token.**
@@ -376,7 +384,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
 
 ## Low
 
-- [ ] **L1 - `csrf:false` mutation handlers receive the ambient Cookie header even though Kovo
+- [x] **L1 - `csrf:false` mutation handlers receive the ambient Cookie header even though Kovo
       suppresses session resolution.** `packages/server/src/app-mutation-request.ts:46-65`,
       `packages/server/src/response-posture.ts:287-305`, `packages/core/src/graph.ts:1072-1082`
   - The mutation path omits `sessionProvider` but passes the original request instead of the
@@ -390,8 +398,10 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** give exempt mutations a Cookie/session-neutralized request before body parsing,
     preserve the neutralization through usable clones, and extend KV418/static request provenance to
     raw Cookie reads. Preserve other non-ambient headers and protected-mutation behavior.
+  - **Evidence:** the focused mutation/request-posture selection passes 100 tests; production build
+    fixtures reject raw/dynamic Cookie reads while runtime handlers and clones receive no Cookie.
 
-- [ ] **L2 - The memory replay store drops blessed redirect provenance, so a legitimate duplicate
+- [x] **L2 - The memory replay store drops blessed redirect provenance, so a legitimate duplicate
       no-JS mutation navigates to `/` instead of its stored target.**
       `packages/server/src/mutation/no-js.ts:95-108`, `packages/server/src/replay.ts:584-591`
   - Store cloning copies body/headers/status but not the private redirect witness.
@@ -404,6 +414,8 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** preserve/reconstruct blessing only from a genuinely blessed source response and
     revalidate `Location`; arbitrary durable-store objects must remain unblessed. Cover unsafe
     external targets and multi-value response headers.
+  - **Evidence:** the focused replay/no-JS selection passes 100 tests, preserving genuine redirect
+    proof and multi-value headers while durable lookalikes and unsafe locations remain unblessed.
 
 ## Refuted or merged during this pass
 
