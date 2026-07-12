@@ -32,6 +32,7 @@ import {
 import type {
   ComponentModuleModel,
   JsxAttributeModel,
+  JsxElementModel,
   JsxExpressionModel,
   ObjectLiteralEntry,
   SourceSpan,
@@ -51,14 +52,33 @@ import { executableJavaScriptExpression } from '../javascript-expression.js';
 import {
   compilerArrayJoin,
   compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
   compilerDefineOwnDataProperty,
+  compilerFailClosed,
   compilerJsonStringify,
+  compilerMapGet,
+  compilerMapSet,
+  compilerNumberIsFinite,
+  compilerNumberValue,
+  compilerObjectKeys,
   compilerOwnDataValue,
+  compilerRegExpExec,
+  compilerRegExpReplace,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringEndsWith,
+  compilerStringIncludes,
+  compilerStringIndexOf,
   compilerStringLocaleCompare,
+  compilerStringSlice,
   compilerStringSplit,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
+  compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
@@ -154,14 +174,18 @@ export function lowerStructuralJsx(
   const viewTransitionStamps: ViewTransitionStamp[] = [];
   const deriveExports: string[] = [];
   const stateDerives: StateDeriveFact[] = [];
-  const nameCounts = new Map<string, number>();
+  const nameCounts = compilerCreateMap<string, number>();
   const knownQueries = knownQueryNames(model, options);
-  const boundElementStarts = new Set<number>();
+  const boundElementStarts = compilerCreateSet<number>();
   let needsStylePropertyHelper = false;
 
   lowerPrimitiveSpreads(tree.elements);
   const needsSafeJsxSpreadHelper = lowerDynamicJsxSpreads(tree.elements);
-  diagnostics.push(...lowerPrimitiveComposition(tree.elements, options));
+  appendCompilerFacts(
+    diagnostics,
+    lowerPrimitiveComposition(tree.elements, options),
+    'Primitive composition diagnostics',
+  );
   lowerNavigationLinks(tree.elements, options);
   lowerPlatformBehaviors(model, tree.elements, options, platformSubstitutions, diagnostics);
   lowerHrefAttributes(model, tree.elements, options);
@@ -319,9 +343,21 @@ function hasCompilerEscapeImport(model: ComponentModuleModel, importedName: stri
  */
 function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
   let changed = false;
-  for (const element of elements) {
+  const elementLength = compilerArrayLength(elements, 'Dynamic spread JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Dynamic spread JSX elements',
+    ) as JsxIrElement;
     if (isComponentTag(element.tag)) continue;
-    for (const attribute of element.attributes) {
+    const attributeLength = compilerArrayLength(element.attributes, 'Dynamic spread attributes');
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'Dynamic spread attributes',
+      ) as JsxIrAttribute;
       const source = attribute.source;
       // `lowerPrimitiveSpreads()` has already removed every fully modelled static spread. Any
       // spread that remains here is unresolved or only partially modelled and must cross the
@@ -443,11 +479,21 @@ function lowerViewTransitionNames(
   nameCounts: Map<string, number>,
 ): boolean {
   let needsStylePropertyHelper = false;
-  for (const element of elements) {
+  const elementLength = compilerArrayLength(elements, 'View-transition JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'View-transition JSX elements',
+    ) as JsxIrElement;
     const attribute = attributeByName(element, 'viewTransitionName');
     if (!attribute?.source || !('name' in attribute.source)) continue;
     if (attribute.source.value !== undefined) {
-      stamps.push({ name: attribute.source.value });
+      appendCompilerFact(
+        stamps,
+        { name: attribute.source.value },
+        'View-transition stamps',
+      );
       mergeStyle(
         element,
         `view-transition-name: ${attribute.source.value}`,
@@ -482,23 +528,49 @@ function lowerInlineAttributeDerivesInIr(
   nameCounts: Map<string, number>,
 ): boolean {
   let needsStylePropertyHelper = false;
-  for (const element of elements) {
+  const elementLength = compilerArrayLength(elements, 'Inline derive JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Inline derive JSX elements',
+    ) as JsxIrElement;
     if (
       hasAuthoredAttribute(element, 'data-derive') ||
       hasAuthoredAttribute(element, 'data-derive-attr')
     ) {
       continue;
     }
-    const derives = [...element.attributes]
-      .map((attribute) => {
-        if (!attribute.source || !('name' in attribute.source)) return null;
-        if (attribute.source.name === 'viewTransitionName') return null;
-        if (inlineAttributeDeriveSkippedBySpan(attribute.source, options)) return null;
-        return inlineAttributeDerive(attribute.source, element, componentName, knownQueries);
-      })
-      .filter((derive): derive is InlineAttributeDerive => derive !== null);
-    const forceQueryBindings = derives.filter((derive) => derive.source === 'query').length > 1;
-    for (const derive of derives) {
+    const derives: InlineAttributeDerive[] = [];
+    let queryDeriveCount = 0;
+    const attributeLength = compilerArrayLength(element.attributes, 'Inline derive attributes');
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'Inline derive attributes',
+      ) as JsxIrAttribute;
+      if (!attribute.source || !('name' in attribute.source)) continue;
+      if (attribute.source.name === 'viewTransitionName') continue;
+      if (inlineAttributeDeriveSkippedBySpan(attribute.source, options)) continue;
+      const derive = inlineAttributeDerive(
+        attribute.source,
+        element,
+        componentName,
+        knownQueries,
+      );
+      if (derive === null) continue;
+      appendCompilerFact(derives, derive, 'Inline attribute derives');
+      if (derive.source === 'query') queryDeriveCount += 1;
+    }
+    const forceQueryBindings = queryDeriveCount > 1;
+    const deriveLength = compilerArrayLength(derives, 'Inline attribute derives');
+    for (let deriveIndex = 0; deriveIndex < deriveLength; deriveIndex += 1) {
+      const derive = compilerOwnDataValue(
+        derives,
+        deriveIndex,
+        'Inline attribute derives',
+      ) as InlineAttributeDerive;
       if (derive.attribute.name === 'style') needsStylePropertyHelper = true;
       lowerAttributeDerive(
         derive,
@@ -526,7 +598,7 @@ function lowerAttributeDerive(
   const expression = executableJavaScriptExpression(
     candidate.source === 'state'
       ? deriveExpression(candidate.attribute, candidate.expression)
-      : candidate.expression.trim(),
+      : compilerStringTrim(candidate.expression),
   );
   const deriveInputs = candidate.inputs ?? [candidate.query];
   const deriveParams = candidate.params ?? [deriveParam(candidate)];
@@ -681,18 +753,30 @@ function lowerPrimitiveReactiveAttributes(
   nameCounts: Map<string, number>,
 ): boolean {
   let needsStylePropertyHelper = false;
-  for (const element of elements) {
+  const elementLength = compilerArrayLength(elements, 'Primitive reactive JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Primitive reactive JSX elements',
+    ) as JsxIrElement;
     const entry = primitiveReactiveComponentForTag(model, element.tag);
     if (!entry) continue;
-    const manifest = primitiveReactiveAttrs[entry.primitiveKey];
+    const manifest = compilerOwnDataValue(
+      primitiveReactiveAttrs,
+      entry.primitiveKey,
+      'Primitive reactive manifest',
+    ) as PrimitiveReactiveAttrEntry | undefined;
     if (!manifest) continue;
 
     // Read the control prop from the original parsed element (typed facts), not
     // the mutated IR: the inline-attribute-derive pass may have already rewritten
     // the authored attribute and dropped its source model (SPEC.md §5.2 / hard
     // rule 9 keeps state-path detection on typed parser facts).
-    const control = element.element.attributes.find(
-      (attribute) => attribute.name === entry.controlProp,
+    const control = findSourceAttribute(
+      element.element.attributes,
+      entry.controlProp,
+      'Primitive reactive control attributes',
     );
     // SPEC.md §4.6: accept both state-rooted and single-query-rooted control props
     // so query-driven primitives (e.g. <Switch checked={account.optIn}>) emit
@@ -720,7 +804,19 @@ function lowerPrimitiveReactiveAttributes(
     const condition = primitiveReactiveCondition(element, manifest, controlPath.path);
     if (condition === null) continue;
 
-    for (const [attrName, attr] of Object.entries(manifest.attrs)) {
+    const attrNames = compilerObjectKeys(manifest.attrs);
+    const attrNameLength = compilerArrayLength(attrNames, 'Primitive reactive attribute names');
+    for (let attrIndex = 0; attrIndex < attrNameLength; attrIndex += 1) {
+      const attrName = compilerOwnDataValue(
+        attrNames,
+        attrIndex,
+        'Primitive reactive attribute names',
+      ) as string;
+      const attr = compilerOwnDataValue(
+        manifest.attrs,
+        attrName,
+        'Primitive reactive attributes',
+      ) as PrimitiveReactiveAttr;
       // Idempotency: skip attributes already bound (by this pass on a previous
       // lowering, or by the inline-attribute-derive pass for the control prop
       // itself, e.g. `data-bind:checked`). SPEC.md §4.6 makes primitive-owned
@@ -791,7 +887,19 @@ function lowerPrimitiveNumericReactiveAttributes(
   if (expressions === null) return false;
 
   let emittedStyle = false;
-  for (const [attrName, expression] of Object.entries(expressions)) {
+  const attrNames = compilerObjectKeys(expressions);
+  const attrNameLength = compilerArrayLength(attrNames, 'Numeric reactive attribute names');
+  for (let attrIndex = 0; attrIndex < attrNameLength; attrIndex += 1) {
+    const attrName = compilerOwnDataValue(
+      attrNames,
+      attrIndex,
+      'Numeric reactive attribute names',
+    ) as string;
+    const expression = compilerOwnDataValue(
+      expressions,
+      attrName,
+      'Numeric reactive expressions',
+    ) as string;
     if (hasAttribute(element, stateBindingAttributeName(attrName))) continue;
     if (hasAuthoredAttribute(element, attrName)) continue;
 
@@ -922,36 +1030,53 @@ function numericAttributeExpression(
   root: string,
   fallback: string,
 ): string | null {
-  const attribute = element.element.attributes.find((candidate) => candidate.name === name);
+  const attribute = findSourceAttribute(
+    element.element.attributes,
+    name,
+    'Numeric reactive source attributes',
+  );
   if (!attribute) return fallback;
   const staticValue = numericStaticExpression(attribute);
   if (staticValue !== null) return staticValue;
   if (attribute.expression === undefined) return null;
 
   const roots = rootsForPropertyAccesses(attribute.expressionPropertyAccesses ?? []);
-  if (roots.size === 1 && roots.has(root)) return attribute.expression.trim();
+  if (
+    compilerArrayLength(compilerSetValues(roots, 'Numeric reactive roots'), 'Numeric reactive roots') ===
+      1 &&
+    compilerSetHas(roots, root)
+  ) {
+    return compilerStringTrim(attribute.expression);
+  }
   return null;
 }
 
 function numericStaticExpression(attribute: JsxAttributeModel): string | null {
   if (attribute.value !== undefined) return numericLiteralExpression(attribute.value);
   const value = attribute.expressionStaticValue;
-  if (typeof value === 'number') return JSON.stringify(value);
+  if (typeof value === 'number') return compilerJsonSource(value, 'Numeric static value');
   if (typeof value === 'string') return numericLiteralExpression(value);
   return null;
 }
 
 function numericLiteralExpression(value: string): string | null {
-  const number = Number(value);
-  return Number.isFinite(number) ? JSON.stringify(number) : null;
+  const number = compilerNumberValue(value);
+  return compilerNumberIsFinite(number)
+    ? compilerJsonSource(number, 'Numeric literal value')
+    : null;
 }
 
 function rootsForPropertyAccesses(paths: readonly { path: string }[]): ReadonlySet<string> {
-  return new Set(
-    paths
-      .map((access) => queryNameFromPath(access.path))
-      .filter((root): root is string => root !== null),
-  );
+  const roots = compilerCreateSet<string>();
+  const length = compilerArrayLength(paths, 'Reactive property accesses');
+  for (let index = 0; index < length; index += 1) {
+    const access = compilerOwnDataValue(paths, index, 'Reactive property accesses') as {
+      path: string;
+    };
+    const root = queryNameFromPath(access.path);
+    if (root !== null) compilerSetAdd(roots, root);
+  }
+  return roots;
 }
 
 type ProgressExpressionTarget = 'max-string' | 'state' | 'value-string' | 'width';
@@ -1180,7 +1305,7 @@ function primitiveReactiveValueExpression(
     return value === true ? '""' : 'null';
   }
 
-  return JSON.stringify(String(value));
+  return compilerJsonSource(`${value}`, 'Primitive reactive value');
 }
 
 interface PrimitiveReactiveCondition {
@@ -1206,7 +1331,7 @@ function primitiveReactiveCondition(
   if (discriminatorField === undefined) return null;
   const discriminator = staticAttributeString(element, discriminatorField);
   if (discriminator === null) return null;
-  const discriminatorLiteral = JSON.stringify(discriminator);
+  const discriminatorLiteral = compilerJsonSource(discriminator, 'Primitive discriminator');
 
   if (manifest.controlKind === 'equality') {
     return { kind: 'boolean', truthy: `((${statePath}) === ${discriminatorLiteral})` };
@@ -1242,16 +1367,37 @@ function primitiveReactiveComponentForTag(
   tag: string,
 ): { controlProp: string; primitiveKey: string } | null {
   if (!isComponentTag(tag)) return null;
-  const localName = tag.includes('.') ? tag.slice(0, tag.indexOf('.')) : tag;
-  const namedImport = model.namedImports.find(
-    (entry) => entry.localName === localName && isKovoUiModuleSpecifier(entry.moduleSpecifier),
-  );
+  const dotIndex = compilerStringIndexOf(tag, '.');
+  const localName = dotIndex >= 0 ? compilerStringSlice(tag, 0, dotIndex) : tag;
+  let namedImport: ComponentModuleModel['namedImports'][number] | undefined;
+  const importLength = compilerArrayLength(model.namedImports, 'Primitive reactive imports');
+  for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+    const entry = compilerOwnDataValue(
+      model.namedImports,
+      importIndex,
+      'Primitive reactive imports',
+    ) as ComponentModuleModel['namedImports'][number];
+    if (entry.localName === localName && isKovoUiModuleSpecifier(entry.moduleSpecifier)) {
+      namedImport = entry;
+      break;
+    }
+  }
   if (!namedImport) return null;
-  return primitiveReactiveComponents[namedImport.importedName] ?? null;
+  return (
+    (compilerOwnDataValue(
+      primitiveReactiveComponents,
+      namedImport.importedName,
+      'Primitive reactive component registry',
+    ) as { controlProp: string; primitiveKey: string } | undefined) ?? null
+  );
 }
 
 function staticAttributeString(element: JsxIrElement, name: string): string | null {
-  const attribute = element.element.attributes.find((candidate) => candidate.name === name);
+  const attribute = findSourceAttribute(
+    element.element.attributes,
+    name,
+    'Static source attributes',
+  );
   if (!attribute) return null;
   if (attribute.value !== undefined) return attribute.value;
   return staticStringValue(attribute.expressionStaticValue);
@@ -1262,7 +1408,11 @@ function accordionMultipleExpression(
   modeField: string | undefined,
 ): string | null {
   if (modeField === undefined) return 'false';
-  const mode = element.element.attributes.find((attribute) => attribute.name === modeField);
+  const mode = findSourceAttribute(
+    element.element.attributes,
+    modeField,
+    'Accordion mode attributes',
+  );
   if (!mode) return 'false';
 
   const staticMode = mode.value ?? staticStringValue(mode.expressionStaticValue);
@@ -1280,7 +1430,7 @@ function accordionMultipleExpression(
  * `state`. Mirrors the state-only detection used by inline attribute derives.
  */
 function reactiveStatePath(control: JsxAttributeModel | undefined): string | null {
-  const path = reactiveControlPath(control, new Set());
+  const path = reactiveControlPath(control, compilerCreateSet());
   return path?.root === 'state' ? path.path : null;
 }
 
@@ -1294,21 +1444,28 @@ function reactiveControlPath(
   knownQueries: ReadonlySet<string>,
 ): { path: string; root: string } | null {
   if (!control || control.expression === undefined) return null;
-  const roots = new Set(
-    (control.expressionPropertyAccesses ?? [])
-      .map((access) => queryNameFromPath(access.path))
-      .filter((root): root is string => root !== null),
-  );
-  if (roots.size === 0) return null;
+  const roots = rootsForPropertyAccesses(control.expressionPropertyAccesses ?? []);
+  const rootValues = compilerSetValues(roots, 'Reactive control roots');
+  const rootLength = compilerArrayLength(rootValues, 'Reactive control roots');
+  if (rootLength === 0) return null;
   // State-only: every root is "state"
-  if ([...roots].every((root) => root === 'state')) {
-    return { path: control.expression.trim(), root: 'state' };
+  let stateOnly = true;
+  for (let rootIndex = 0; rootIndex < rootLength; rootIndex += 1) {
+    if (compilerOwnDataValue(rootValues, rootIndex, 'Reactive control roots') !== 'state') {
+      stateOnly = false;
+      break;
+    }
+  }
+  if (stateOnly) {
+    return { path: compilerStringTrim(control.expression), root: 'state' };
   }
   // Single-query: exactly one root and it is a known query, no mixed roots
-  if (roots.size === 1 && !roots.has('state')) {
-    const [root] = roots;
-    if (root !== undefined && knownQueries.has(root)) {
-      return { path: control.expression.trim(), root };
+  if (rootLength === 1 && !compilerSetHas(roots, 'state')) {
+    const root = compilerOwnDataValue(rootValues, 0, 'Reactive control roots') as
+      | string
+      | undefined;
+    if (root !== undefined && compilerSetHas(knownQueries, root)) {
+      return { path: compilerStringTrim(control.expression), root };
     }
   }
   return null;
@@ -1327,11 +1484,17 @@ function lowerInlineTextBindings(
   boundElementStarts: Set<number>,
 ): boolean {
   let escapeApplied = false;
-  for (const element of elements) {
+  const elementLength = compilerArrayLength(elements, 'Inline text JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Inline text JSX elements',
+    ) as JsxIrElement;
     const expression = soleExpressionChild(element);
     const binding = inlineTextBinding(element, expression, knownQueries);
     if (binding && expression) {
-      boundElementStarts.add(element.element.start);
+      compilerSetAdd(boundElementStarts, element.element.start);
       expression.replacement = `{escapeText(${binding})}`;
       escapeApplied = true;
       setJsxIrAttribute(
@@ -1343,20 +1506,24 @@ function lowerInlineTextBindings(
           options,
         ),
       );
-      outputContexts.push(
+      appendCompilerFact(
+        outputContexts,
         outputWriteFact({
           context: 'text',
           expression: binding,
           sink: 'textContent',
-          source: binding.startsWith('state.') ? 'client-state' : 'client-query',
+          source: compilerStringStartsWith(binding, 'state.')
+            ? 'client-state'
+            : 'client-query',
           writer: 'inline text binding',
         }),
+        'Inline text output contexts',
       );
       continue;
     }
     const derive = inlineTextDerive(element, expression, model, componentName);
     if (derive) {
-      boundElementStarts.add(element.element.start);
+      compilerSetAdd(boundElementStarts, element.element.start);
       derive.expressionNode.replacement = `{escapeText(${derive.expression})}`;
       escapeApplied = true;
       const { stampName } = recordStateDerive(
@@ -1379,7 +1546,7 @@ function lowerInlineTextBindings(
     }
     const queryDerive = inlineQueryTextDerive(element, expression, componentName, knownQueries);
     if (!queryDerive) continue;
-    boundElementStarts.add(element.element.start);
+    compilerSetAdd(boundElementStarts, element.element.start);
     queryDerive.expressionNode.replacement = `{escapeText(${queryDerive.expression})}`;
     escapeApplied = true;
     const { stampName } = recordQueryTextDerive(
@@ -1399,19 +1566,30 @@ function lowerInlineTextBindings(
     );
   }
 
-  for (const expression of expressionChildren(elements)) {
+  const expressions = expressionChildren(elements);
+  const expressionLength = compilerArrayLength(expressions, 'Inline mixed text expressions');
+  for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
+    const expression = compilerOwnDataValue(
+      expressions,
+      expressionIndex,
+      'Inline mixed text expressions',
+    ) as JsxIrExpression;
     const binding = inlineMixedTextBinding(expression, model, knownQueries);
     if (binding) {
       expression.replacement = `<span data-bind="${escapeAttribute(binding)}">{escapeText(${binding})}</span>`;
       escapeApplied = true;
-      outputContexts.push(
+      appendCompilerFact(
+        outputContexts,
         outputWriteFact({
           context: 'text',
           expression: binding,
           sink: 'textContent',
-          source: binding.startsWith('state.') ? 'client-state' : 'client-query',
+          source: compilerStringStartsWith(binding, 'state.')
+            ? 'client-state'
+            : 'client-query',
           writer: 'inline mixed text binding',
         }),
+        'Inline mixed text output contexts',
       );
       continue;
     }
@@ -1607,9 +1785,65 @@ function appendCompilerFact<Value>(target: Value[], value: Value, label: string)
   compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
 }
 
+function appendCompilerFacts<Value>(
+  target: Value[],
+  values: readonly Value[],
+  label: string,
+): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    appendCompilerFact(
+      target,
+      compilerOwnDataValue(values, index, label) as Value,
+      label,
+    );
+  }
+}
+
+function compilerSetValues<Value>(set: ReadonlySet<Value>, label: string): Value[] {
+  const values: Value[] = [];
+  compilerSetForEach(set, (value) => appendCompilerFact(values, value, label));
+  return values;
+}
+
+function compilerSetEvery<Value>(
+  set: ReadonlySet<Value>,
+  label: string,
+  predicate: (value: Value) => boolean,
+): boolean {
+  const values = compilerSetValues(set, label);
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    if (!predicate(compilerOwnDataValue(values, index, label) as Value)) return false;
+  }
+  return true;
+}
+
+function compilerSortedStrings(values: readonly string[], label: string): string[] {
+  const length = compilerArrayLength(values, label);
+  const selected = compilerCreateSet<number>();
+  const result: string[] = [];
+  for (let outputIndex = 0; outputIndex < length; outputIndex += 1) {
+    let bestIndex = -1;
+    let best = '';
+    for (let inputIndex = 0; inputIndex < length; inputIndex += 1) {
+      if (compilerSetHas(selected, inputIndex)) continue;
+      const candidate = compilerOwnDataValue(values, inputIndex, label) as string;
+      if (bestIndex === -1 || compilerStringLocaleCompare(candidate, best) < 0) {
+        bestIndex = inputIndex;
+        best = candidate;
+      }
+    }
+    if (bestIndex < 0) compilerFailClosed(`${label} must be dense.`);
+    compilerSetAdd(selected, bestIndex);
+    appendCompilerFact(result, best, label);
+  }
+  return result;
+}
+
 function compilerJsonSource(value: unknown, label: string): string {
   const source = compilerJsonStringify(value);
-  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  if (source === undefined) compilerFailClosed(`${label} must be JSON-serializable.`);
   return source;
 }
 
@@ -1636,7 +1870,7 @@ function mergeStyle(
   }
   insertJsxIrAttributeAtSource(
     element,
-    attributeByName(element, 'viewTransitionName')?.source?.start ?? Number.MAX_SAFE_INTEGER,
+    attributeByName(element, 'viewTransitionName')?.source?.start ?? 9_007_199_254_740_991,
     generatedJsxIrAttribute('style', { kind: 'string', value: merged }, writer, options),
   );
 }
@@ -1657,29 +1891,42 @@ function inlineAttributeDerive(
     return null;
   }
 
-  const queryRoots = new Set(
-    (attribute.expressionPropertyAccesses ?? [])
-      .map((path) => queryNameFromPath(path.path))
-      .filter((query): query is string => query !== null && knownQueries.has(query)),
+  const roots = rootsForPropertyAccesses(attribute.expressionPropertyAccesses ?? []);
+  const rootValues = compilerSetValues(roots, 'Inline attribute roots');
+  const rootLength = compilerArrayLength(rootValues, 'Inline attribute roots');
+  const queryRoots = compilerCreateSet<string>();
+  for (let rootIndex = 0; rootIndex < rootLength; rootIndex += 1) {
+    const root = compilerOwnDataValue(rootValues, rootIndex, 'Inline attribute roots') as string;
+    if (compilerSetHas(knownQueries, root)) compilerSetAdd(queryRoots, root);
+  }
+  const queryRootValues = compilerSetValues(queryRoots, 'Inline attribute query roots');
+  const queryRootLength = compilerArrayLength(
+    queryRootValues,
+    'Inline attribute query roots',
   );
-  const roots = new Set(
-    (attribute.expressionPropertyAccesses ?? [])
-      .map((path) => queryNameFromPath(path.path))
-      .filter((root): root is string => root !== null),
-  );
-  const stateOnly = roots.size > 0 && [...roots].every((root) => root === 'state');
+  const stateOnly =
+    rootLength > 0 &&
+    compilerSetEvery(roots, 'Inline attribute roots', (root) => root === 'state');
   const clockInputs = clockQueryInputsFromRoots(roots, knownQueries);
-  if (queryRoots.size !== 1 && !stateOnly && !clockInputs) return null;
-  if (queryRoots.size > 0 && roots.has('state')) return null;
+  if (queryRootLength !== 1 && !stateOnly && !clockInputs) return null;
+  if (queryRootLength > 0 && compilerSetHas(roots, 'state')) return null;
 
-  const query = stateOnly ? 'state' : clockInputs ? 'now' : [...queryRoots][0];
+  const query = stateOnly
+    ? 'state'
+    : clockInputs
+      ? 'now'
+      : (compilerOwnDataValue(
+          queryRootValues,
+          0,
+          'Inline attribute query roots',
+        ) as string | undefined);
   if (!query) return null;
 
   return {
     attribute,
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attribute.name)}_derive`,
     element,
-    expression: styleObjectExpression ?? attribute.expression.trim(),
+    expression: styleObjectExpression ?? compilerStringTrim(attribute.expression),
     ...(clockInputs ? { inputs: clockInputs, params: clockInputs } : {}),
     query,
     source: stateOnly ? 'state' : 'query',
@@ -1696,20 +1943,44 @@ function inlineViewTransitionNameDerive(
   if (attribute.expression === undefined) return null;
   const styleAttribute = attributeByName(element, 'style')?.source;
   const styleSource = styleAttribute && 'name' in styleAttribute ? styleAttribute : undefined;
-  const propertyAccesses = [
-    ...(attribute.expressionPropertyAccesses ?? []),
-    ...(styleSource?.expressionPropertyAccesses ?? []),
-  ];
-  const roots = new Set(
-    propertyAccesses
-      .map((path) => queryNameFromPath(path.path))
-      .filter((root): root is string => root !== null),
+  const propertyAccesses: { path: string }[] = [];
+  appendCompilerFacts(
+    propertyAccesses,
+    attribute.expressionPropertyAccesses ?? [],
+    'View-transition property accesses',
   );
-  const queryRoots = new Set([...roots].filter((query) => knownQueries.has(query)));
-  const stateOnly = roots.size > 0 && [...roots].every((root) => root === 'state');
+  appendCompilerFacts(
+    propertyAccesses,
+    styleSource?.expressionPropertyAccesses ?? [],
+    'View-transition property accesses',
+  );
+  const roots = rootsForPropertyAccesses(propertyAccesses);
+  const rootValues = compilerSetValues(roots, 'View-transition roots');
+  const rootLength = compilerArrayLength(rootValues, 'View-transition roots');
+  const queryRoots = compilerCreateSet<string>();
+  for (let rootIndex = 0; rootIndex < rootLength; rootIndex += 1) {
+    const root = compilerOwnDataValue(rootValues, rootIndex, 'View-transition roots') as string;
+    if (compilerSetHas(knownQueries, root)) compilerSetAdd(queryRoots, root);
+  }
+  const queryRootValues = compilerSetValues(queryRoots, 'View-transition query roots');
+  const queryRootLength = compilerArrayLength(
+    queryRootValues,
+    'View-transition query roots',
+  );
+  const stateOnly =
+    rootLength > 0 && compilerSetEvery(roots, 'View-transition roots', (root) => root === 'state');
+  const soleQuery =
+    queryRootLength === 1
+      ? (compilerOwnDataValue(
+          queryRootValues,
+          0,
+          'View-transition query roots',
+        ) as string)
+      : undefined;
   const queryOnly =
-    queryRoots.size === 1 && [...roots].every((root) => root === [...queryRoots][0]);
-  const query = stateOnly ? 'state' : queryOnly ? [...queryRoots][0] : null;
+    soleQuery !== undefined &&
+    compilerSetEvery(roots, 'View-transition roots', (root) => root === soleQuery);
+  const query = stateOnly ? 'state' : queryOnly ? soleQuery : null;
   if (!query) return null;
 
   return {
@@ -1788,7 +2059,7 @@ function inlineMixedTextBinding(
   if (isJsxAttributeExpression(expression.expression, model)) return null;
   const element = innermostContainingElement(expression.expression, model);
   if (!element) return null;
-  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+  if (hasAnyBindingAttribute(element.attributes)) return null;
   if (element.childNonWhitespaceCount === 1) return null;
   return path;
 }
@@ -1805,7 +2076,7 @@ function inlineMixedTextDerive(
   if (isJsxAttributeExpression(expression.expression, model)) return null;
   const element = innermostContainingElement(expression.expression, model);
   if (!element) return null;
-  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+  if (hasAnyBindingAttribute(element.attributes)) return null;
   if (element.childNonWhitespaceCount === 1) return null;
   const deriveExpression = reactiveExpressionForJsxExpression(expression.expression, model);
   if (!deriveExpression) return null;
@@ -1829,7 +2100,7 @@ function inlineMixedQueryTextDerive(
   if (isJsxAttributeExpression(expression.expression, model)) return null;
   const element = innermostContainingElement(expression.expression, model);
   if (!element) return null;
-  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+  if (hasAnyBindingAttribute(element.attributes)) return null;
   if (element.childNonWhitespaceCount === 1) return null;
   return {
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
@@ -1845,11 +2116,7 @@ function clockQueryInputsFromAccesses(
   accesses: readonly { path: string }[],
   knownQueries: ReadonlySet<string>,
 ): readonly string[] | null {
-  const roots = new Set(
-    accesses
-      .map((access) => queryNameFromPath(access.path))
-      .filter((root): root is string => root !== null),
-  );
+  const roots = rootsForPropertyAccesses(accesses);
   return clockQueryInputsFromRoots(roots, knownQueries);
 }
 
@@ -1857,9 +2124,28 @@ function clockQueryInputsFromRoots(
   roots: ReadonlySet<string>,
   knownQueries: ReadonlySet<string>,
 ): readonly string[] | null {
-  if (!roots.has('now')) return null;
-  if (![...roots].every((root) => root === 'now' || knownQueries.has(root))) return null;
-  return ['now', ...[...roots].filter((root) => root !== 'now').sort()];
+  if (!compilerSetHas(roots, 'now')) return null;
+  if (
+    !compilerSetEvery(
+      roots,
+      'Clock query roots',
+      (root) => root === 'now' || compilerSetHas(knownQueries, root),
+    )
+  ) {
+    return null;
+  }
+  const queryRoots: string[] = [];
+  const rootValues = compilerSetValues(roots, 'Clock query roots');
+  const rootLength = compilerArrayLength(rootValues, 'Clock query roots');
+  for (let rootIndex = 0; rootIndex < rootLength; rootIndex += 1) {
+    const root = compilerOwnDataValue(rootValues, rootIndex, 'Clock query roots') as string;
+    if (root !== 'now') appendCompilerFact(queryRoots, root, 'Clock query inputs');
+  }
+  const sortedQueries = compilerSortedStrings(queryRoots, 'Clock query inputs');
+  const inputs: string[] = [];
+  appendCompilerFact(inputs, 'now', 'Clock query inputs');
+  appendCompilerFacts(inputs, sortedQueries, 'Clock query inputs');
+  return inputs;
 }
 
 function recordStateDerive(
@@ -1996,20 +2282,57 @@ function emitDerive(options: EmitDeriveOptions): { exportName: string; stampName
 function expressionChildren(elements: readonly JsxIrElement[]): JsxIrExpression[] {
   const result: JsxIrExpression[] = [];
   const visit = (child: JsxIrChild): void => {
-    if (child.kind === 'expression') result.push(child);
-    if (child.kind === 'element') child.children.forEach(visit);
+    if (child.kind === 'expression') appendCompilerFact(result, child, 'Structural expressions');
+    if (child.kind === 'element') {
+      const nestedLength = compilerArrayLength(child.children, 'Structural nested children');
+      for (let nestedIndex = 0; nestedIndex < nestedLength; nestedIndex += 1) {
+        visit(
+          compilerOwnDataValue(
+            child.children,
+            nestedIndex,
+            'Structural nested children',
+          ) as JsxIrChild,
+        );
+      }
+    }
   };
-  elements.forEach((element) => element.children.forEach(visit));
+  const elementLength = compilerArrayLength(elements, 'Structural expression elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Structural expression elements',
+    ) as JsxIrElement;
+    const childLength = compilerArrayLength(element.children, 'Structural element children');
+    for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+      visit(
+        compilerOwnDataValue(
+          element.children,
+          childIndex,
+          'Structural element children',
+        ) as JsxIrChild,
+      );
+    }
+  }
   return result;
 }
 
 function soleExpressionChild(element: JsxIrElement): JsxIrExpression | null {
-  const nonWhitespace = element.children.filter(
-    (child) => child.kind !== 'text' || child.source.trim() !== '',
-  );
-  return nonWhitespace.length === 1 && nonWhitespace[0]?.kind === 'expression'
-    ? nonWhitespace[0]
-    : null;
+  let sole: JsxIrChild | undefined;
+  let count = 0;
+  const length = compilerArrayLength(element.children, 'Sole expression children');
+  for (let index = 0; index < length; index += 1) {
+    const child = compilerOwnDataValue(
+      element.children,
+      index,
+      'Sole expression children',
+    ) as JsxIrChild;
+    if (child.kind === 'text' && compilerStringTrim(child.source) === '') continue;
+    count += 1;
+    if (count > 1) return null;
+    sole = child;
+  }
+  return count === 1 && sole?.kind === 'expression' ? sole : null;
 }
 
 function sourceAttributeToIr(
@@ -2051,7 +2374,29 @@ function structuralWriterConflictDiagnostic(
 }
 
 function attributeByName(element: JsxIrElement, name: string): JsxIrAttribute | undefined {
-  return element.attributes.find((attribute) => attribute.name === name);
+  const length = compilerArrayLength(element.attributes, 'Structural JSX attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Structural JSX attributes',
+    ) as JsxIrAttribute;
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
+}
+
+function findSourceAttribute(
+  attributes: readonly JsxAttributeModel[],
+  name: string,
+  label: string,
+): JsxAttributeModel | undefined {
+  const length = compilerArrayLength(attributes, label);
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(attributes, index, label) as JsxAttributeModel;
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
 }
 
 function hasAttribute(element: JsxIrElement, name: string): boolean {
@@ -2059,9 +2404,16 @@ function hasAttribute(element: JsxIrElement, name: string): boolean {
 }
 
 function hasAuthoredAttribute(element: JsxIrElement, name: string): boolean {
-  return element.attributes.some(
-    (attribute) => attribute.name === name && attribute.ownership === 'author',
-  );
+  const length = compilerArrayLength(element.attributes, 'Structural JSX attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Structural JSX attributes',
+    ) as JsxIrAttribute;
+    if (attribute.name === name && attribute.ownership === 'author') return true;
+  }
+  return false;
 }
 
 function isPrimitiveStateAriaAttribute(name: string): boolean {
@@ -2080,23 +2432,58 @@ function insertJsxIrAttributeAtSource(
   sourceStart: number,
   attribute: JsxIrAttribute,
 ): void {
-  const index = element.attributes.findIndex(
-    (item) => item.source !== undefined && item.source.start > sourceStart,
-  );
-  if (index === -1) {
-    element.attributes.push(attribute);
-  } else {
-    element.attributes.splice(index, 0, attribute);
+  const next: JsxIrAttribute[] = [];
+  let inserted = false;
+  const length = compilerArrayLength(element.attributes, 'Structural JSX attributes');
+  for (let index = 0; index < length; index += 1) {
+    const item = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Structural JSX attributes',
+    ) as JsxIrAttribute;
+    if (!inserted && item.source !== undefined && item.source.start > sourceStart) {
+      appendCompilerFact(next, attribute, 'Structural JSX attributes');
+      inserted = true;
+    }
+    appendCompilerFact(next, item, 'Structural JSX attributes');
   }
+  if (!inserted) appendCompilerFact(next, attribute, 'Structural JSX attributes');
+  element.attributes = next;
   markJsxIrChanged(element);
 }
 
 function hasTextBindingAttribute(element: JsxIrElement): boolean {
-  return element.attributes.some((attribute) => isTextBindingAttributeName(attribute.name));
+  const length = compilerArrayLength(element.attributes, 'Text binding attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Text binding attributes',
+    ) as JsxIrAttribute;
+    if (isTextBindingAttributeName(attribute.name)) return true;
+  }
+  return false;
+}
+
+function hasAnyBindingAttribute(attributes: readonly JsxAttributeModel[]): boolean {
+  const length = compilerArrayLength(attributes, 'Binding source attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'Binding source attributes',
+    ) as JsxAttributeModel;
+    if (isBindingAttributeName(attribute.name)) return true;
+  }
+  return false;
 }
 
 function isBindingAttributeName(name: string): boolean {
-  return name === 'data-bind' || name.startsWith('data-bind:') || name === 'data-bind-list';
+  return (
+    name === 'data-bind' ||
+    compilerStringStartsWith(name, 'data-bind:') ||
+    name === 'data-bind-list'
+  );
 }
 
 function isTextBindingAttributeName(name: string): boolean {
@@ -2112,10 +2499,10 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
     name === 'data-derive' ||
     name === 'data-derive-attr' ||
     name === 'data-bind' ||
-    name.startsWith('data-bind:') ||
-    name.startsWith('data-bind-prop:') ||
-    name.startsWith('data-p-') ||
-    name.startsWith('kovo-')
+    compilerStringStartsWith(name, 'data-bind:') ||
+    compilerStringStartsWith(name, 'data-bind-prop:') ||
+    compilerStringStartsWith(name, 'data-p-') ||
+    compilerStringStartsWith(name, 'kovo-')
   );
 }
 
@@ -2127,44 +2514,78 @@ function inlineAttributeDeriveSkippedBySpan(
     return false;
   }
 
-  return (options.skipInlineAttributeDeriveSpans ?? []).some(
-    (span) =>
-      attribute.expressionStart !== undefined &&
-      attribute.expressionEnd !== undefined &&
+  const spans = options.skipInlineAttributeDeriveSpans ?? [];
+  const length = compilerArrayLength(spans, 'Skipped inline derive spans');
+  for (let index = 0; index < length; index += 1) {
+    const span = compilerOwnDataValue(spans, index, 'Skipped inline derive spans') as SourceSpan;
+    if (
       attribute.expressionStart >= span.start &&
-      attribute.expressionEnd <= span.end,
-  );
+      attribute.expressionEnd <= span.end
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isJsxAttributeExpression(
   expression: { end: number; start: number },
   model: ComponentModuleModel,
 ): boolean {
-  return model.jsxElements.some((element) =>
-    element.attributes.some(
-      (attribute) =>
+  const elementLength = compilerArrayLength(model.jsxElements, 'JSX attribute elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      model.jsxElements,
+      elementIndex,
+      'JSX attribute elements',
+    ) as JsxElementModel;
+    const attributeLength = compilerArrayLength(element.attributes, 'JSX source attributes');
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'JSX source attributes',
+      ) as JsxAttributeModel;
+      if (
         attribute.expressionStart !== undefined &&
         attribute.expressionEnd !== undefined &&
         expression.start >= attribute.expressionStart &&
-        expression.end <= attribute.expressionEnd,
-    ),
-  );
+        expression.end <= attribute.expressionEnd
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function innermostContainingElement(
   expression: { end: number; start: number },
   model: ComponentModuleModel,
 ) {
-  return (
-    model.jsxElements
-      .filter(
-        (element) =>
-          !element.selfClosing &&
-          expression.start >= element.openingEnd &&
-          expression.end <= element.closingStart,
-      )
-      .sort((left, right) => left.end - left.start - (right.end - right.start))[0] ?? null
-  );
+  let best: JsxElementModel | null = null;
+  let bestWidth = 0;
+  const length = compilerArrayLength(model.jsxElements, 'Containing JSX elements');
+  for (let index = 0; index < length; index += 1) {
+    const element = compilerOwnDataValue(
+      model.jsxElements,
+      index,
+      'Containing JSX elements',
+    ) as JsxElementModel;
+    if (
+      element.selfClosing ||
+      expression.start < element.openingEnd ||
+      expression.end > element.closingStart
+    ) {
+      continue;
+    }
+    const width = element.end - element.start;
+    if (best === null || width < bestWidth) {
+      best = element;
+      bestWidth = width;
+    }
+  }
+  return best;
 }
 
 function soleKnownQueryPath(
@@ -2177,16 +2598,27 @@ function soleKnownQueryPath(
 }
 
 function isStateOnlyExpression(paths: readonly { path: string }[]): boolean {
-  const roots = new Set(
-    paths
-      .map((path) => queryNameFromPath(path.path))
-      .filter((root): root is string => root !== null),
+  const roots = rootsForPropertyAccesses(paths);
+  const values = compilerSetValues(roots, 'State expression roots');
+  return (
+    compilerArrayLength(values, 'State expression roots') > 0 &&
+    compilerSetEvery(roots, 'State expression roots', (root) => root === 'state')
   );
-  return roots.size > 0 && [...roots].every((root) => root === 'state');
 }
 
 function stateDeriveSourcePaths(paths: readonly { path: string }[]): readonly string[] {
-  return [...new Set(paths.map((path) => path.path))].sort();
+  const unique = compilerCreateSet<string>();
+  const length = compilerArrayLength(paths, 'State derive source paths');
+  for (let index = 0; index < length; index += 1) {
+    const path = compilerOwnDataValue(paths, index, 'State derive source paths') as {
+      path: string;
+    };
+    compilerSetAdd(unique, path.path);
+  }
+  return compilerSortedStrings(
+    compilerSetValues(unique, 'State derive source paths'),
+    'State derive source paths',
+  );
 }
 
 function viewTransitionNameStyleExpression(
@@ -2197,25 +2629,36 @@ function viewTransitionNameStyleExpression(
   if (styleAttribute?.expression !== undefined) {
     return `[${styleAttribute.expression}, ${transition}].filter(Boolean).join('; ')`;
   }
-  const existing = (styleAttribute?.value ?? '').trim();
-  const separator = existing === '' || existing.endsWith(';') ? '' : ';';
+  const existing = compilerStringTrim(styleAttribute?.value ?? '');
+  const separator = existing === '' || compilerStringEndsWith(existing, ';') ? '' : ';';
   const prefix = existing === '' ? '' : `${existing}${separator} `;
-  return prefix === '' ? transition : `[${JSON.stringify(prefix)}, ${transition}].join('')`;
+  return prefix === ''
+    ? transition
+    : `[${compilerJsonSource(prefix, 'View-transition style prefix')}, ${transition}].join('')`;
 }
 
 function styleObjectDeriveExpression(entries: readonly ObjectLiteralEntry[]): string | null {
-  const parts = entries.flatMap((entry) => {
-    if (entry.value === undefined) return [];
-    return [stylePropertyExpression(cssPropertyName(entry.key), entry.value)];
-  });
-  if (parts.length === 0) return null;
+  const parts: string[] = [];
+  const length = compilerArrayLength(entries, 'Style object entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(entries, index, 'Style object entries') as ObjectLiteralEntry;
+    if (entry.value === undefined) continue;
+    appendCompilerFact(
+      parts,
+      stylePropertyExpression(cssPropertyName(entry.key), entry.value),
+      'Style object derive parts',
+    );
+  }
+  if (compilerArrayLength(parts, 'Style object derive parts') === 0) return null;
 
-  return `[${parts.join(', ')}].filter(Boolean).join('; ')`;
+  return `[${compilerArrayJoin(parts, ', ')}].filter(Boolean).join('; ')`;
 }
 
 function cssPropertyName(name: string): string {
-  if (name.startsWith('--')) return name;
-  return name.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`).toLowerCase();
+  if (compilerStringStartsWith(name, '--')) return name;
+  return compilerStringToLowerCase(
+    compilerRegExpReplace(/[A-Z]/g, name, (match) => `-${compilerStringToLowerCase(match)}`),
+  );
 }
 
 function deriveParam(candidate: InlineAttributeDerive): string {
@@ -2223,13 +2666,15 @@ function deriveParam(candidate: InlineAttributeDerive): string {
 }
 
 function deriveExpression(attribute: JsxAttributeModel, expression: string): string {
-  const trimmed = expression.trim();
-  return booleanPresenceAttributes.has(attribute.name) ? `((${trimmed}) ? "" : null)` : trimmed;
+  const trimmed = compilerStringTrim(expression);
+  return compilerSetHas(booleanPresenceAttributes, attribute.name)
+    ? `((${trimmed}) ? "" : null)`
+    : trimmed;
 }
 
 function nextExportName(baseName: string, nameCounts: Map<string, number>): string {
-  const count = nameCounts.get(baseName) ?? 0;
-  nameCounts.set(baseName, count + 1);
+  const count = compilerMapGet(nameCounts, baseName) ?? 0;
+  compilerMapSet(nameCounts, baseName, count + 1);
   return count === 0 ? baseName : `${baseName}_${count + 1}`;
 }
 
@@ -2238,13 +2683,21 @@ function stateBindingAttributeName(name: string): string {
 }
 
 function derivePrefixInsertionOffset(source: string): number {
-  const leadingWhitespace = /^\s*/.exec(source)?.[0].length ?? 0;
+  const leadingWhitespace = compilerRegExpExec(/^\s*/, source)?.[0].length ?? 0;
   let offset = leadingWhitespace;
   let matchedJsxPragma = false;
 
   while (offset < source.length) {
-    const comment = /^\/\*\*?[\s\S]*?\*\/[ \t]*(?:\r?\n)?/.exec(source.slice(offset));
-    if (!comment || !/@jsx(?:ImportSource|Runtime|Frag)?(?:\s|$)/.test(comment[0])) break;
+    const comment = compilerRegExpExec(
+      /^\/\*\*?[\s\S]*?\*\/[ \t]*(?:\r?\n)?/,
+      compilerStringSlice(source, offset),
+    );
+    if (
+      !comment ||
+      !compilerRegExpTest(/@jsx(?:ImportSource|Runtime|Frag)?(?:\s|$)/, comment[0])
+    ) {
+      break;
+    }
 
     offset += comment[0].length;
     matchedJsxPragma = true;
@@ -2254,28 +2707,29 @@ function derivePrefixInsertionOffset(source: string): number {
 }
 
 function trimTrailingSemicolon(value: string): string {
-  return value.trim().replace(/;$/, '').trim();
+  return compilerStringTrim(
+    compilerRegExpReplace(/;$/, compilerStringTrim(value), ''),
+  );
 }
 
 function isStatePath(path: string): boolean {
-  return path.startsWith('state.');
+  return compilerStringStartsWith(path, 'state.');
 }
 
 function isComponentTag(tag: string): boolean {
-  return tag.includes('.') || /^[A-Z]/.test(tag);
+  return compilerStringIncludes(tag, '.') || compilerRegExpTest(/^[A-Z]/, tag);
 }
 
 function staticStringValue(value: StaticLiteralValue | undefined): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-const booleanPresenceAttributes = new Set([
-  'checked',
-  'disabled',
-  'hidden',
-  'multiple',
-  'open',
-  'readonly',
-  'required',
-  'selected',
-]);
+const booleanPresenceAttributes = compilerCreateSet<string>();
+compilerSetAdd(booleanPresenceAttributes, 'checked');
+compilerSetAdd(booleanPresenceAttributes, 'disabled');
+compilerSetAdd(booleanPresenceAttributes, 'hidden');
+compilerSetAdd(booleanPresenceAttributes, 'multiple');
+compilerSetAdd(booleanPresenceAttributes, 'open');
+compilerSetAdd(booleanPresenceAttributes, 'readonly');
+compilerSetAdd(booleanPresenceAttributes, 'required');
+compilerSetAdd(booleanPresenceAttributes, 'selected');

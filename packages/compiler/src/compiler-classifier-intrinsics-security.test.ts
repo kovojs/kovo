@@ -1240,4 +1240,52 @@ export const CartButton = component({
     expect(lowered).toContain('commandfor="cart-drawer" command="show-modal"');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot replace inline-attribute derive source through structural Array.map', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedInlineAttributeDeriveMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: unknown; source?: { expression?: unknown } } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        const mapped = nativeApply<U[]>(nativeMap, this, [callback, thisArg]);
+        if (
+          first?.name === 'title' &&
+          first.source?.expression === 'state.label' &&
+          nativeApply(nativeIncludes, callbackSource, ['inlineAttributeDerive'])
+        ) {
+          const candidate = mapped[0] as { expression?: string } | null | undefined;
+          if (candidate) {
+            poisonHits += 1;
+            candidate.expression =
+              '(() => { globalThis.KOVO_INLINE_DERIVE_INJECTION = true; return "safe"; })()';
+          }
+        }
+        return mapped;
+      };
+      result = compileComponentModule({
+        fileName: 'safe-button.tsx',
+        source: `
+export const SafeButton = component({
+  state: () => ({ label: 'safe' }),
+  render: (_queries, state) => <button title={state.label}>Safe</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(lowered).not.toContain('KOVO_INLINE_DERIVE_INJECTION');
+    expect(lowered).toContain('state.label');
+    expect(poisonHits).toBe(0);
+  });
 });

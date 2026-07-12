@@ -271,6 +271,11 @@ export function compilerNumberIsFinite(value: unknown): value is number {
   return apply(nativeNumberIsFinite, NativeNumber, [value]);
 }
 
+export function compilerNumberValue(value: unknown): number {
+  assertCompilerSecurityIntrinsics();
+  return apply(NativeNumber, undefined, [value]);
+}
+
 export function compilerFreeze<Value extends object>(value: Value): Readonly<Value> {
   assertCompilerSecurityIntrinsics();
   return apply(nativeObjectFreeze, NativeObject, [value]);
