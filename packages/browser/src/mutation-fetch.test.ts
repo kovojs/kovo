@@ -447,6 +447,23 @@ describe('enhanced mutation fetch', () => {
     expect(String(onError.mock.calls[0]?.[0])).toContain('Malformed JSON in Kovo-Changes header');
   });
 
+  it('rejects inherited response carriers through the modular mutation transport', async () => {
+    const inherited = Object.create({
+      headers: { get: () => null },
+      text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
+    });
+
+    await expect(
+      fetchEnhancedMutation({
+        fetch: async () => inherited,
+        form: { action: '/_m/cart/add', method: 'post' },
+        formData: new FormData(),
+        idem: 'idem_inherited_response',
+        root: new FakeTargetRoot([]),
+      }),
+    ).rejects.toThrow(/invalid response carrier/);
+  });
+
   it('classifies enhanced mutation HTTP failures by ok and status', () => {
     expect(isFailedMutationResponse({ ok: false, text: async () => '' })).toBe(true);
     expect(isFailedMutationResponse({ status: 422, text: async () => '' })).toBe(true);

@@ -317,11 +317,11 @@ describe('browser-runtime security regressions', () => {
     target.textContent = 'CURRENT-SAFE';
     document.body.append(target);
     const originalBase = document.baseURI;
-    const security = createBrowserNavigationSecurityControls();
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(safeHtml, { status: 200 })),
     );
+    const security = createBrowserNavigationSecurityControls();
 
     const recovery = createDocumentLifecycleRecovery({
       acceptHeader: 'text/html',

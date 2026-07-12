@@ -3,6 +3,181 @@ import { describe, expect, it } from 'vitest';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 describe('browser navigation security controls', () => {
+  it('keeps the response transport captured after late global fetch replacement', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('browser fetch control unavailable');
+    }
+    const safeFetch = async () => new Response('SERVER-SAFE');
+    const poisonedFetch = async () => new Response('ATTACKER-SUBSTITUTED');
+    const textDescriptor = Object.getOwnPropertyDescriptor(Response.prototype, 'text');
+    if (!textDescriptor || !('value' in textDescriptor)) {
+      throw new Error('Response.text control unavailable');
+    }
+    Object.defineProperty(globalThis, 'fetch', { ...descriptor, value: safeFetch });
+    const controls = createBrowserNavigationSecurityControls();
+    Object.defineProperty(globalThis, 'fetch', { ...descriptor, value: poisonedFetch });
+    try {
+      const response = await controls.fetchValue('/_q/account', { method: 'GET' });
+      let poisonCalls = 0;
+      Object.defineProperty(Response.prototype, 'text', {
+        ...textDescriptor,
+        value: async () => {
+          poisonCalls += 1;
+          return 'ATTACKER-SUBSTITUTED';
+        },
+      });
+      try {
+        expect(await controls.readResponseText(response)).toBe('SERVER-SAFE');
+        expect(poisonCalls).toBe(0);
+      } finally {
+        Object.defineProperty(Response.prototype, 'text', textDescriptor);
+      }
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', descriptor);
+    }
+  });
+
+  it('snapshots accepted structural response facts before late carrier mutation', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('browser fetch control unavailable');
+    }
+    const headers = {
+      get(name: string) {
+        return name === 'Kovo-Build' ? 'build-server' : null;
+      },
+    };
+    const response = {
+      headers,
+      ok: true,
+      redirected: false,
+      status: 201,
+      text: async () => 'SERVER-SAFE',
+      url: new URL('/safe', location.href).href,
+    };
+    Object.defineProperty(globalThis, 'fetch', {
+      ...descriptor,
+      value: async () => response,
+    });
+    try {
+      const controls = createBrowserNavigationSecurityControls();
+      const accepted = await controls.fetchValue('/_m/account', { method: 'POST' });
+
+      response.status = 599;
+      response.ok = false;
+      response.url = 'https://attacker.example/';
+      response.text = async () => 'ATTACKER-SUBSTITUTED';
+      headers.get = () => 'attacker-build';
+
+      expect(controls.readResponseField(accepted, 'status')).toBe(201);
+      expect(controls.readResponseField(accepted, 'ok')).toBe(true);
+      expect(controls.readResponseField(accepted, 'url')).toBe(
+        new URL('/safe', location.href).href,
+      );
+      expect(controls.readHeader(accepted, 'Kovo-Build')).toBe('build-server');
+      expect(await controls.readResponseText(accepted)).toBe('SERVER-SAFE');
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', descriptor);
+    }
+  });
+
+  it('rejects pre-init accessor fetch controls and inherited response carriers', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('browser fetch control unavailable');
+    }
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      enumerable: descriptor.enumerable,
+      get: () => async () => new Response('ATTACKER'),
+    });
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', descriptor);
+    }
+
+    const inheritedResponse = Object.create({
+      headers: { get: () => 'text/html' },
+      text: async () => 'ATTACKER-INHERITED',
+    });
+    Object.defineProperty(globalThis, 'fetch', {
+      ...descriptor,
+      value: async () => inheritedResponse,
+    });
+    try {
+      const controls = createBrowserNavigationSecurityControls();
+      await expect(controls.fetchValue('/_q/account', { method: 'GET' })).rejects.toThrow(
+        /invalid response carrier/,
+      );
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', descriptor);
+    }
+  });
+
+  it('rejects non-native fetch and response-text promise carriers', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('browser fetch control unavailable');
+    }
+    const foreignThenable = {
+      then(resolve: (value: unknown) => void) {
+        resolve(new Response('ATTACKER'));
+      },
+    };
+    Object.defineProperty(globalThis, 'fetch', {
+      ...descriptor,
+      value: () => foreignThenable,
+    });
+    try {
+      const controls = createBrowserNavigationSecurityControls();
+      await expect(controls.fetchValue('/_q/account', { method: 'GET' })).rejects.toThrow(
+        /non-native promise/,
+      );
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', descriptor);
+    }
+
+    const textThenable = {
+      then(resolve: (value: unknown) => void) {
+        resolve('ATTACKER');
+      },
+    };
+    Object.defineProperty(globalThis, 'fetch', {
+      ...descriptor,
+      value: async () => ({ text: () => textThenable }),
+    });
+    try {
+      const controls = createBrowserNavigationSecurityControls();
+      const response = await controls.fetchValue('/_q/account', { method: 'GET' });
+      await expect(controls.readResponseText(response)).rejects.toThrow(/non-native promise/);
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', descriptor);
+    }
+  });
+
+  it('fails the async boot witness after pre-init Response.text replacement', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Response.prototype, 'text');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('Response.text control unavailable');
+    }
+    Object.defineProperty(Response.prototype, 'text', {
+      ...descriptor,
+      value: async () => 'ATTACKER-SUBSTITUTED',
+    });
+    try {
+      const controls = createBrowserNavigationSecurityControls();
+      await expect(controls.fetchValue('/_q/account', { method: 'GET' })).rejects.toThrow(
+        /changed witnessed response bytes/,
+      );
+    } finally {
+      Object.defineProperty(Response.prototype, 'text', descriptor);
+    }
+  });
+
   it('copies outgoing mutation envelopes to an exact deeply immutable snapshot', () => {
     const controls = createBrowserNavigationSecurityControls();
     const keys = ['account:1'];

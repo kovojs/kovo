@@ -33,6 +33,18 @@ export interface BrowserMutationBroadcastEnvelopeSnapshot {
   readonly type: 'kovo:mutation-response';
 }
 
+/** @internal Private exact response facts bound to one accepted fetch carrier. */
+interface BrowserFetchResponsePlan {
+  readonly body: unknown;
+  readonly headers: readonly (readonly [string, string | undefined])[];
+  readonly ok: unknown;
+  readonly redirected: unknown;
+  readonly status: unknown;
+  readonly textMethod?: Function;
+  readonly textReceiver: object;
+  readonly url: unknown;
+}
+
 /**
  * Boot-pinned browser controls for navigation, mutation decoding, and DOM response commits.
  *
@@ -48,6 +60,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeObject = Object;
   const NativeArray = Array;
   const NativePromise = Promise;
+  const NativeWeakMap = WeakMap;
   const NativeReflect = Reflect;
   const NativeRegExp = RegExp;
   const NativeString = String;
@@ -78,12 +91,16 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const cryptoObject = scope.crypto;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
+  const nativeObjectDefineProperty = NativeObject.defineProperty;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
   const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
   const nativeObjectFreeze = NativeObject.freeze;
   const nativeObjectIsFrozen = NativeObject.isFrozen;
   const nativeArrayIsArray = NativeArray.isArray;
   const nativePromiseThen = NativePromise.prototype.then;
+  const nativeWeakMapGet = valueMethod(NativeWeakMap.prototype, 'get');
+  const nativeWeakMapHas = valueMethod(NativeWeakMap.prototype, 'has');
+  const nativeWeakMapSet = valueMethod(NativeWeakMap.prototype, 'set');
   const nativeRegExpExec = NativeRegExp.prototype.exec;
   const nativeRegExpTest = NativeRegExp.prototype.test;
   const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
@@ -249,6 +266,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     ? stableGetter(broadcastChannelPrototype, 'onmessage')
     : undefined;
   const cryptoRandomUuid = cryptoObject ? stableMethod(cryptoObject, 'randomUUID') : undefined;
+  // C230 / SPEC §6.6/§9.1: Window.fetch is an own data method in the supported engines. Capture
+  // the exact boot value; never reread the mutable global after authored modules can run.
+  const browserFetch = valueMethod(scope, 'fetch');
   const nativeSetTimeout = stableMethod(scope, 'setTimeout');
   const nativeClearTimeout = stableMethod(scope, 'clearTimeout');
   const locationObject = scope.location;
@@ -266,7 +286,18 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const locationAssign = locationObject ? stableMethod(locationObject, 'assign') : undefined;
   const locationReload = locationObject ? stableMethod(locationObject, 'reload') : undefined;
   const locationHrefSetter = locationObject ? stableSetter(locationObject, 'href') : undefined;
+  const fetchResponsePlans = new NativeWeakMap<object, BrowserFetchResponsePlan>();
+  const fetchHeaderNames = [
+    ['content-type', 'content-type'],
+    ['kovo-build', 'Kovo-Build'],
+    ['kovo-changes', 'Kovo-Changes'],
+    ['kovo-session-transition', 'Kovo-Session-Transition'],
+    ['kovo-reauth', 'Kovo-Reauth'],
+    ['location', 'Location'],
+  ] as const;
   const streamReaderPlanWitness = {};
+  let responseControlsReady: Promise<void> | undefined;
+  let responseControlsVerified = false;
   let streamControlsReady: Promise<void> | undefined;
   let streamControlsVerified = false;
   let broadcastControlsReady: Promise<void> | undefined;
@@ -340,6 +371,20 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   function readOwnData(value: object, property: PropertyKey): unknown {
     const found = descriptor(value, property);
     return found && 'value' in found ? found.value : undefined;
+  }
+
+  function fetchResponsePlan(response: object): BrowserFetchResponsePlan | undefined {
+    if (!nativeWeakMapGet) return undefined;
+    return apply<BrowserFetchResponsePlan | undefined>(nativeWeakMapGet, fetchResponsePlans, [
+      response,
+    ]);
+  }
+
+  function rememberFetchResponsePlan(response: object, plan: BrowserFetchResponsePlan): void {
+    if (!nativeWeakMapSet) {
+      throw new TypeError('Kovo navigation response carrier control is unavailable.');
+    }
+    apply(nativeWeakMapSet, fetchResponsePlans, [response, plan]);
   }
 
   function call<Return>(method: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -767,6 +812,39 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     }
     observePromiseRejection(value as Promise<unknown>);
     return await (value as Promise<Value>);
+  }
+
+  async function validateResponseControls(): Promise<void> {
+    if (!NativeResponse || !responseHeaders || !responseStatus || !responseText || !headersGet) {
+      throw new TypeError('Kovo navigation response witness controls are unavailable.');
+    }
+    const response = new NativeResponse('kovo-response-control-async', {
+      headers: { 'Kovo-Build': 'kovo-response-build-async' },
+      status: 203,
+    });
+    const plan = nativeFetchResponsePlan(response);
+    if (
+      !plan ||
+      plan.status !== 203 ||
+      readFetchResponseHeader(plan, 'Kovo-Build') !== 'kovo-response-build-async'
+    ) {
+      throw new TypeError('Kovo navigation response controls did not pass their boot witness.');
+    }
+    const text = await awaitNativePromise<unknown>(apply(responseText, response, []));
+    if (text !== 'kovo-response-control-async') {
+      throw new TypeError('Kovo navigation response controls changed witnessed response bytes.');
+    }
+    responseControlsVerified = true;
+  }
+
+  async function requireResponseControls(): Promise<void> {
+    if (!responseControlsReady) {
+      throw new TypeError('Kovo navigation response controls are unavailable.');
+    }
+    await awaitNativePromise(responseControlsReady);
+    if (!responseControlsVerified) {
+      throw new TypeError('Kovo navigation response controls have not passed their boot witness.');
+    }
   }
 
   function readStreamLocked(stream: object): boolean {
@@ -1613,39 +1691,155 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     }
   }
 
-  function readHeaders(response: object): object | undefined {
-    if (responseHeaders) {
-      try {
-        const value = apply<unknown>(responseHeaders, response, []);
-        if (value !== null && typeof value === 'object') return value;
-      } catch {}
+  function freezeFetchHeaderSnapshot(
+    headers: object | undefined,
+    getHeader: Function | undefined,
+  ): readonly (readonly [string, string | undefined])[] {
+    if (!headers || !getHeader) return apply(nativeObjectFreeze, NativeObject, [[]]);
+    const snapshot: Array<readonly [string, string | undefined]> = [];
+    for (let index = 0; index < fetchHeaderNames.length; index += 1) {
+      const names = fetchHeaderNames[index];
+      if (!names) continue;
+      const value = apply<unknown>(getHeader, headers, [names[1]]);
+      if (value !== null && value !== undefined && typeof value !== 'string') {
+        throw new TypeError('Kovo navigation response header is invalid.');
+      }
+      const entry = apply<readonly [string, string | undefined]>(nativeObjectFreeze, NativeObject, [
+        [names[0], typeof value === 'string' ? value : undefined],
+      ]);
+      apply(nativeObjectDefineProperty, NativeObject, [
+        snapshot,
+        snapshot.length,
+        {
+          configurable: false,
+          enumerable: true,
+          value: entry,
+          writable: false,
+        },
+      ]);
     }
-    const value = readOwnData(response, 'headers');
-    return value !== null && typeof value === 'object' ? value : undefined;
+    return apply(nativeObjectFreeze, NativeObject, [snapshot]);
+  }
+
+  function nativeFetchResponsePlan(response: object): BrowserFetchResponsePlan | undefined {
+    if (
+      !responseBody ||
+      !responseHeaders ||
+      !responseOk ||
+      !responseRedirected ||
+      !responseStatus ||
+      !responseUrl ||
+      !responseText ||
+      !headersGet
+    ) {
+      return undefined;
+    }
+    try {
+      const headers = apply<unknown>(responseHeaders, response, []);
+      if (headers === null || typeof headers !== 'object') return undefined;
+      const plan: BrowserFetchResponsePlan = {
+        body: apply(responseBody, response, []),
+        headers: freezeFetchHeaderSnapshot(headers, headersGet),
+        ok: apply(responseOk, response, []),
+        redirected: apply(responseRedirected, response, []),
+        status: apply(responseStatus, response, []),
+        textMethod: responseText,
+        textReceiver: response,
+        url: apply(responseUrl, response, []),
+      };
+      return apply(nativeObjectFreeze, NativeObject, [plan]);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function ownDataResponseField(response: object, field: PropertyKey): unknown {
+    const found = descriptor(response, field);
+    if (found === undefined) return undefined;
+    if (!('value' in found)) {
+      throw new TypeError('Kovo structural navigation response fields must be own data.');
+    }
+    return found.value;
+  }
+
+  function structuralFetchResponsePlan(response: object): BrowserFetchResponsePlan | undefined {
+    try {
+      const headersValue = ownDataResponseField(response, 'headers');
+      let headerReader: Function | undefined;
+      if (headersValue !== undefined) {
+        if (headersValue === null || typeof headersValue !== 'object') return undefined;
+        if (headersGet) {
+          try {
+            apply(headersGet, headersValue, ['kovo-structural-control']);
+            headerReader = headersGet;
+          } catch {}
+        }
+        headerReader ??= valueMethod(headersValue, 'get');
+        if (!headerReader) return undefined;
+      }
+      const textValue = ownDataResponseField(response, 'text');
+      if (textValue !== undefined && typeof textValue !== 'function') return undefined;
+      const body = ownDataResponseField(response, 'body');
+      if (typeof textValue !== 'function' && (body === null || body === undefined)) {
+        return undefined;
+      }
+      const plan: BrowserFetchResponsePlan = {
+        body,
+        headers: freezeFetchHeaderSnapshot(
+          headersValue !== null && typeof headersValue === 'object' ? headersValue : undefined,
+          headerReader,
+        ),
+        ok: ownDataResponseField(response, 'ok'),
+        redirected: ownDataResponseField(response, 'redirected'),
+        status: ownDataResponseField(response, 'status'),
+        ...(typeof textValue === 'function' ? { textMethod: textValue } : {}),
+        textReceiver: response,
+        url: ownDataResponseField(response, 'url'),
+      };
+      return apply(nativeObjectFreeze, NativeObject, [plan]);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function bindFetchResponseCarrier(response: unknown): object {
+    if (response === null || typeof response !== 'object') {
+      throw new TypeError('Kovo navigation fetch returned an invalid response carrier.');
+    }
+    if (fetchResponsePlan(response)) return response;
+    const plan = nativeFetchResponsePlan(response) ?? structuralFetchResponsePlan(response);
+    if (!plan) {
+      throw new TypeError('Kovo navigation fetch returned an invalid response carrier.');
+    }
+    rememberFetchResponsePlan(response, plan);
+    return response;
+  }
+
+  function readFetchResponseHeader(
+    plan: BrowserFetchResponsePlan,
+    name: string,
+  ): string | undefined {
+    const normalized = lower(name);
+    for (let index = 0; index < plan.headers.length; index += 1) {
+      const entry = plan.headers[index];
+      if (entry?.[0] === normalized) return entry[1];
+    }
+    return undefined;
   }
 
   function readHeader(response: unknown, name: string): string | undefined {
     if (!controlsSound || response === null || typeof response !== 'object') return undefined;
-    const headers = readHeaders(response);
-    if (!headers) return undefined;
-    let value: unknown;
+    const plan = fetchResponsePlan(response);
+    if (plan) return readFetchResponseHeader(plan, name);
+    if (!responseHeaders || !headersGet) return undefined;
     try {
-      if (headersGet) {
-        try {
-          value = apply(headersGet, headers, [name]);
-        } catch {
-          value = undefined;
-        }
-      }
-      if (value === undefined) {
-        const customGet = stableMethod(headers, 'get');
-        if (!customGet) return undefined;
-        value = apply(customGet, headers, [name]);
-      }
+      const headers = apply<unknown>(responseHeaders, response, []);
+      if (headers === null || typeof headers !== 'object') return undefined;
+      const value = apply<unknown>(headersGet, headers, [name]);
+      return typeof value === 'string' ? value : undefined;
     } catch {
       return undefined;
     }
-    return typeof value === 'string' ? value : undefined;
   }
 
   function readResponseField(
@@ -1653,6 +1847,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     field: 'body' | 'ok' | 'redirected' | 'status' | 'url',
   ): unknown {
     if (!controlsSound || response === null || typeof response !== 'object') return undefined;
+    const plan = fetchResponsePlan(response);
+    if (plan) return plan[field];
     const fieldGetter =
       field === 'body'
         ? responseBody
@@ -1668,33 +1864,28 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         return apply(fieldGetter, response, []);
       } catch {}
     }
-    return readOwnData(response, field);
+    return undefined;
   }
 
   async function readResponseText(response: unknown): Promise<string> {
     if (!controlsSound || response === null || typeof response !== 'object') {
       throw new TypeError('Kovo navigation response is invalid.');
     }
-    let method = responseText;
-    if (method) {
+    const plan = fetchResponsePlan(response);
+    let method = plan?.textMethod;
+    let receiver = plan?.textReceiver;
+    if (!method && responseText && responseHeaders) {
       try {
-        const value = await apply<Promise<unknown>>(method, response, []);
-        if (typeof value !== 'string') throw new TypeError('Kovo response text is invalid.');
-        return value;
-      } catch (error) {
-        if (responseHeaders) {
-          try {
-            apply(responseHeaders, response, []);
-            throw error;
-          } catch (brandError) {
-            if (brandError === error) throw error;
-          }
-        }
-      }
+        apply(responseHeaders, response, []);
+        method = responseText;
+        receiver = response;
+      } catch {}
     }
-    method = stableMethod(response, 'text');
-    if (!method) throw new TypeError('Kovo navigation response text is unavailable.');
-    const value = await apply<Promise<unknown>>(method, response, []);
+    if (!method || !receiver) {
+      throw new TypeError('Kovo navigation response text is unavailable.');
+    }
+    const pending = apply<unknown>(method, receiver, []);
+    const value = await awaitNativePromise<unknown>(pending);
     if (typeof value !== 'string') throw new TypeError('Kovo response text is invalid.');
     return value;
   }
@@ -1709,20 +1900,30 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     }
   }
 
-  async function fetchDocument(href: string, accept: string): Promise<unknown> {
-    const currentFetch = scope.fetch;
-    if (!controlsSound || typeof currentFetch !== 'function') {
+  async function fetchWith(
+    fetchControl: Function | undefined,
+    receiver: unknown,
+    input: string,
+    init: object,
+  ): Promise<unknown> {
+    // C230 / SPEC §6.6/§9.1: transport invocation preserves the existing synchronous-start
+    // contract, but no response fact escapes until the boot witness, native Promise brand, and
+    // native/own-data Response carrier plan have all passed.
+    if (!controlsSound || !fetchControl) {
       throw new TypeError('Kovo navigation fetch is unavailable.');
     }
-    return apply<Promise<unknown>>(currentFetch, scope, [href, { headers: { Accept: accept } }]);
+    const pending = apply<unknown>(fetchControl, receiver, [input, init]);
+    await requireResponseControls();
+    const response = await awaitNativePromise<unknown>(pending);
+    return bindFetchResponseCarrier(response);
+  }
+
+  async function fetchDocument(href: string, accept: string): Promise<unknown> {
+    return fetchWith(browserFetch, scope, href, { headers: { Accept: accept } });
   }
 
   async function fetchValue(input: string, init: object): Promise<unknown> {
-    const currentFetch = scope.fetch;
-    if (!controlsSound || typeof currentFetch !== 'function') {
-      throw new TypeError('Kovo navigation fetch is unavailable.');
-    }
-    return apply<Promise<unknown>>(currentFetch, scope, [input, init]);
+    return fetchWith(browserFetch, scope, input, init);
   }
 
   function assignRaw(value: string): boolean {
@@ -1779,15 +1980,20 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     try {
       if (
         typeof nativeReflectApply !== 'function' ||
+        typeof nativeObjectDefineProperty !== 'function' ||
         typeof nativeObjectGetOwnPropertyDescriptor !== 'function' ||
         typeof nativeObjectGetPrototypeOf !== 'function' ||
         typeof nativeObjectFreeze !== 'function' ||
         typeof nativeObjectIsFrozen !== 'function' ||
         typeof nativeArrayIsArray !== 'function' ||
         typeof nativePromiseThen !== 'function' ||
+        typeof nativeWeakMapGet !== 'function' ||
+        typeof nativeWeakMapHas !== 'function' ||
+        typeof nativeWeakMapSet !== 'function' ||
         typeof nativeRegExpExec !== 'function' ||
         typeof nativeRegExpTest !== 'function' ||
         typeof nativeDecodeURIComponent !== 'function' ||
+        typeof browserFetch !== 'function' ||
         !urlHref ||
         !urlOrigin ||
         !urlPathname ||
@@ -1809,6 +2015,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         return false;
       }
       if (apply<number>((left: number, right: number) => left + right, undefined, [2, 3]) !== 5) {
+        return false;
+      }
+      const fetchControlDescriptor = descriptor(scope, 'fetch');
+      if (
+        !fetchControlDescriptor ||
+        !('value' in fetchControlDescriptor) ||
+        fetchControlDescriptor.value !== browserFetch
+      ) {
         return false;
       }
       const control = facts(new NativeURL('/safe?q=1#hash', 'https://kovo.test/base'));
@@ -1848,6 +2062,25 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       ) {
         return false;
       }
+      const weakMapControl = new NativeWeakMap<object, object>();
+      const weakMapKey = {};
+      const weakMapValue = { marker: 'kovo-fetch-response-plan' };
+      if (
+        apply<unknown>(nativeWeakMapSet, weakMapControl, [weakMapKey, weakMapValue]) !==
+          weakMapControl ||
+        apply<unknown>(nativeWeakMapHas, weakMapControl, [weakMapKey]) !== true ||
+        apply<unknown>(nativeWeakMapHas, weakMapControl, [{}]) !== false ||
+        apply<unknown>(nativeWeakMapGet, weakMapControl, [weakMapKey]) !== weakMapValue
+      ) {
+        return false;
+      }
+      let rejectedForeignWeakMapReceiver = false;
+      try {
+        apply(nativeWeakMapGet, {}, [weakMapKey]);
+      } catch {
+        rejectedForeignWeakMapReceiver = true;
+      }
+      if (!rejectedForeignWeakMapReceiver) return false;
       const decoderControl = new NativeTextDecoder();
       const decoderBytes = new NativeUint8Array([
         60, 107, 111, 118, 111, 45, 100, 111, 110, 101, 32, 114, 101, 97, 115, 111, 110, 61, 34,
@@ -2039,6 +2272,46 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         ) {
           return false;
         }
+      }
+      if (NativeResponse) {
+        if (
+          !NativeHeaders ||
+          !headersGet ||
+          !responseBody ||
+          !responseHeaders ||
+          !responseOk ||
+          !responseRedirected ||
+          !responseStatus ||
+          !responseUrl ||
+          !responseText
+        ) {
+          return false;
+        }
+        const responseControl = new NativeResponse('kovo-response-control', {
+          headers: { 'Kovo-Build': 'kovo-response-build' },
+          status: 202,
+        });
+        const responsePlan = nativeFetchResponsePlan(responseControl);
+        if (
+          !responsePlan ||
+          responsePlan.status !== 202 ||
+          responsePlan.ok !== true ||
+          responsePlan.redirected !== false ||
+          responsePlan.url !== '' ||
+          readFetchResponseHeader(responsePlan, 'Kovo-Build') !== 'kovo-response-build'
+        ) {
+          return false;
+        }
+        const textPromise = apply<unknown>(responseText, responseControl, []);
+        if (textPromise === null || typeof textPromise !== 'object') return false;
+        apply(nativePromiseThen, textPromise, [undefined, () => undefined]);
+        let rejectedForeignResponseReceiver = false;
+        try {
+          apply(responseStatus, {}, []);
+        } catch {
+          rejectedForeignResponseReceiver = true;
+        }
+        if (!rejectedForeignResponseReceiver) return false;
       }
       if (NativeDocument && NativeElement && NativeNode && documentObject) {
         if (
@@ -2245,6 +2518,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       'Kovo browser navigation controls are unavailable because realm intrinsics were modified before runtime initialization.',
     );
   }
+  if (NativeResponse) {
+    responseControlsReady = validateResponseControls();
+  } else {
+    responseControlsVerified = true;
+    responseControlsReady = (async () => undefined)();
+  }
+  observePromiseRejection(responseControlsReady);
   streamControlsReady = validateStreamControls();
   observePromiseRejection(streamControlsReady);
   if (NativeDocument && NativeBroadcastChannel) {
@@ -2272,6 +2552,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     decodeComponent,
     decodeText,
     fetchDocument,
+    fetchWith,
     fetchValue,
     hardNavigate,
     hasElementAttribute,

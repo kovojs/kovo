@@ -115,13 +115,17 @@ export async function fetchEnhancedMutation(
   if (streaming) {
     headers['Kovo-Stream'] = 'true';
   }
-  const response = await fetchMutation(formAction, {
+  // SPEC §6.6/§9.1: invoke the injected mutation transport through the same response-carrier
+  // membrane as generated/global fetch. This pins the callable selected for this submit, rejects
+  // foreign promises, and snapshots native or explicit own-data response facts before any sink
+  // decision observes them.
+  const response = (await security.fetchWith(fetchMutation, undefined, formAction, {
     body: formData,
     headers,
     keepalive: !streaming,
     method: security.upper(formMethod ?? 'post'),
     ...definedProps({ onUploadProgress, signal }),
-  });
+  })) as EnhancedMutationResponseLike;
   const sessionTransition = readSessionTransition(response, security);
   // SPEC §9.3 (bugz-25 M6): response headers are observable before the body settles. A slow
   // custom auth response must not leave the old-principal BroadcastChannel alive while text or a

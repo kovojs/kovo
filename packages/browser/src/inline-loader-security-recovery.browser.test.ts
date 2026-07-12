@@ -99,9 +99,9 @@ it('ignores a caller-owned Trusted Types policy cache before generated fragment 
   );
 
   expect(harness.window.document.querySelector('[data-kovo-policy-cache-attack]')).toBeNull();
-  expect(
-    harness.window.document.querySelector('[data-kovo-policy-safe]')?.textContent,
-  ).toBe('SAFE');
+  expect(harness.window.document.querySelector('[data-kovo-policy-safe]')?.textContent).toBe(
+    'SAFE',
+  );
 });
 
 it('fails closed when the Trusted Types factory was replaced before generated install', async () => {
@@ -146,7 +146,9 @@ it('fails closed when the Trusted Types factory was replaced before generated in
     ].join(''),
   );
 
-  expect(harness.window.document.querySelector('[data-kovo-import-order-policy-attack]')).toBeNull();
+  expect(
+    harness.window.document.querySelector('[data-kovo-import-order-policy-attack]'),
+  ).toBeNull();
   expect(harness.window.document.querySelector('[data-kovo-import-order-safe]')?.textContent).toBe(
     'SAFE',
   );
@@ -197,6 +199,107 @@ it.each(['before', 'after'] as const)(
     );
   },
 );
+
+it('fails generated install closed when fetch was changed to an accessor before boot', async () => {
+  const harness = await createFrame('<main>SERVER-SAFE</main>', '');
+  const descriptor = Object.getOwnPropertyDescriptor(harness.window, 'fetch');
+  if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+    throw new Error('frame fetch control unavailable');
+  }
+  Object.defineProperty(harness.window, 'fetch', {
+    configurable: true,
+    enumerable: descriptor.enumerable,
+    get: () => async () => new harness.window.Response('ATTACKER'),
+  });
+  try {
+    await expect(installGeneratedInlineLoader(harness.window)).rejects.toThrow();
+    expect((harness.window as unknown as Record<string, unknown>).__kovo_a).toBeUndefined();
+  } finally {
+    Object.defineProperty(harness.window, 'fetch', descriptor);
+  }
+});
+
+it('keeps generated mutation on the response transport captured at boot', async () => {
+  const harness = await createFrame(
+    [
+      '<main kovo-nav-segment="layout:a" kovo-nav-kind="layout" kovo-nav-name="a">',
+      '<section kovo-fragment-target="account">INITIAL</section>',
+      '<form enhance action="/_m/account" method="post"><button>save</button></form>',
+      '</main>',
+    ].join(''),
+    '<meta name="kovo-build" content="build-a">',
+  );
+  const globalRecord = harness.window as unknown as Record<string, unknown>;
+  const safeFetch = vi.fn(async () => ({
+    headers: responseHeaders('build-a'),
+    ok: true,
+    status: 200,
+    async text() {
+      return '<kovo-fragment target="account"><section kovo-fragment-target="account">MUTATION SERVER SAFE</section></kovo-fragment>';
+    },
+  }));
+  const attackFetch = vi.fn(async () => ({
+    headers: responseHeaders('build-a'),
+    async text() {
+      return '<kovo-fragment target="account"><section kovo-fragment-target="account">ATTACKER</section></kovo-fragment>';
+    },
+  }));
+  globalRecord.fetch = safeFetch;
+
+  await installGeneratedInlineLoader(harness.window);
+  globalRecord.fetch = attackFetch;
+  harness.window.document
+    .querySelector<HTMLFormElement>('form')
+    ?.dispatchEvent(new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() =>
+    expect(
+      harness.window.document.querySelector('[kovo-fragment-target="account"]')?.textContent,
+    ).toBe('MUTATION SERVER SAFE'),
+  );
+
+  expect(safeFetch).toHaveBeenCalledTimes(1);
+  expect(attackFetch).not.toHaveBeenCalled();
+});
+
+it('keeps generated query and live-target recovery on the captured response transport', async () => {
+  const harness = await createFrame(
+    [
+      '<script type="application/json" kovo-query="cart">{"count":1}</script>',
+      '<section kovo-fragment-target="account" kovo-deps="account" kovo-live-component="account" kovo-live-token="tok_account">INITIAL</section>',
+    ].join(''),
+    '<meta name="kovo-build" content="build-a">',
+  );
+  const globalRecord = harness.window as unknown as Record<string, unknown>;
+  const safeFetch = vi.fn(async (input: string) => ({
+    headers: responseHeaders('build-a'),
+    status: 200,
+    async text() {
+      return String(input).includes('/_q/cart')
+        ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+        : '<kovo-fragment target="account"><section kovo-fragment-target="account">LIVE SERVER SAFE</section></kovo-fragment>';
+    },
+  }));
+  const attackFetch = vi.fn(async () => ({
+    headers: responseHeaders('build-a'),
+    status: 200,
+    async text() {
+      return '<kovo-fragment target="account"><section kovo-fragment-target="account">ATTACKER</section></kovo-fragment>';
+    },
+  }));
+  globalRecord.fetch = safeFetch;
+
+  await installGeneratedInlineLoader(harness.window);
+  globalRecord.fetch = attackFetch;
+  harness.window.dispatchEvent(new harness.window.Event('visibilitychange'));
+
+  await vi.waitFor(() => expect(safeFetch).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() =>
+    expect(
+      harness.window.document.querySelector('[kovo-fragment-target="account"]')?.textContent,
+    ).toBe('LIVE SERVER SAFE'),
+  );
+  expect(attackFetch).not.toHaveBeenCalled();
+});
 
 it('retires the old channel and hard-navigates before applying a same-build new-session document', async () => {
   const harness = await createFrame(

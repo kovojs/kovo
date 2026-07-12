@@ -11,9 +11,17 @@ const initialStartViewTransition = (
 ).startViewTransition;
 let inlineLoaderInstalled = false;
 let inlineImportModule: (url: string) => Promise<Record<string, unknown>> = async () => ({});
+let navigationFetchControl = globalThis.fetch as (...args: unknown[]) => unknown;
+const pinnedNavigationTestFetch = (...args: unknown[]) => navigationFetchControl(...args);
 
 function installNavigationLoader(): void {
+  const selectedFetch = globalThis.fetch as (...args: unknown[]) => unknown;
+  if (selectedFetch !== pinnedNavigationTestFetch) navigationFetchControl = selectedFetch;
   if (inlineLoaderInstalled) return;
+  // The production loader intentionally pins its transport at boot. Keep one stable test
+  // transport identity across this file's singleton install while each case swaps only the
+  // delegate selected before calling this helper.
+  vi.stubGlobal('fetch', pinnedNavigationTestFetch);
   installInlineKovoLoader((url) => inlineImportModule(url));
   inlineLoaderInstalled = true;
 }
@@ -103,6 +111,59 @@ afterEach(() => {
 });
 
 describe('browser inline loader enhanced navigation', () => {
+  it('keeps enhanced navigation on the response transport captured at loader boot', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Products</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="ProductGrid">Products</section>',
+      '</main>',
+    ].join('');
+    const safeHtml = [
+      '<!doctype html><html><head>',
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Server safe</title>',
+      '</head><body>',
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="CartView">SERVER SAFE</section>',
+      '</main>',
+      '</body></html>',
+    ].join('');
+    const safeFetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return safeHtml;
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    const attackFetch = vi.fn(async () => ({
+      headers: { get: () => 'text/html' },
+      async text() {
+        return '<!doctype html><html><body><main kovo-nav-segment="layout:attack">ATTACKER</main></body></html>';
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    vi.stubGlobal('fetch', safeFetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    vi.stubGlobal('fetch', attackFetch);
+    dispatchAnchorLikeClick('/cart');
+
+    await vi.waitFor(() => expect(document.title).toBe('Server safe'));
+    expect(document.querySelector('[kovo-nav-segment="page:/cart"]')?.textContent).toBe(
+      'SERVER SAFE',
+    );
+    expect(document.body.textContent).not.toContain('ATTACKER');
+    expect(safeFetch).toHaveBeenCalledTimes(1);
+    expect(attackFetch).not.toHaveBeenCalled();
+  });
+
   it('fetches full documents for eligible anchors and leaves ineligible clicks native', async () => {
     document.head.innerHTML = [
       '<meta name="kovo-build" content="build-a">',
