@@ -27,6 +27,7 @@ describe('server security witness intrinsics', () => {
     const originalReplaceAll = String.prototype.replaceAll;
     const originalStartsWith = String.prototype.startsWith;
     const originalToLowerCase = String.prototype.toLowerCase;
+    const originalRegExpExec = RegExp.prototype.exec;
     const originalRegExpTest = RegExp.prototype.test;
     const originalWeakMapSet = WeakMap.prototype.set;
     const originalWeakSetAdd = WeakSet.prototype.add;
@@ -39,6 +40,7 @@ describe('server security witness intrinsics', () => {
       String.prototype.replaceAll = () => '<script>poisoned</script>';
       String.prototype.startsWith = () => true;
       String.prototype.toLowerCase = () => 'poisoned';
+      RegExp.prototype.exec = () => ['forged'] as unknown as RegExpExecArray;
       RegExp.prototype.test = () => true;
       WeakMap.prototype.set = function () {
         return this;
@@ -76,6 +78,7 @@ describe('server security witness intrinsics', () => {
       String.prototype.replaceAll = originalReplaceAll;
       String.prototype.startsWith = originalStartsWith;
       String.prototype.toLowerCase = originalToLowerCase;
+      RegExp.prototype.exec = originalRegExpExec;
       RegExp.prototype.test = originalRegExpTest;
       WeakMap.prototype.set = originalWeakMapSet;
       WeakSet.prototype.add = originalWeakSetAdd;

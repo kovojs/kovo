@@ -60,7 +60,7 @@ const NativeString = globalThis.String;
 const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
-const nativeRegExpTest = NativeRegExp.prototype.test;
+const nativeRegExpExec = NativeRegExp.prototype.exec;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -201,8 +201,8 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeStringStartsWith, 'kovo-control', ['kovo-']) !== true) return false;
     if (apply(nativeStringStartsWith, 'app-control', ['kovo-']) !== false) return false;
     if (apply(nativeStringToLowerCase, 'KoVo', []) !== 'kovo') return false;
-    if (apply(nativeRegExpTest, /^a+$/, ['aaa']) !== true) return false;
-    if (apply(nativeRegExpTest, /^a+$/, ['a!']) !== false) return false;
+    if (apply<RegExpExecArray | null>(nativeRegExpExec, /^a+$/, ['aaa']) === null) return false;
+    if (apply<RegExpExecArray | null>(nativeRegExpExec, /^a+$/, ['a!']) !== null) return false;
     const frozen = apply<object>(nativeObjectFreeze, NativeObject, [record]);
     if (frozen !== record || apply(nativeObjectIsFrozen, NativeObject, [record]) !== true) {
       return false;
@@ -466,5 +466,5 @@ export function witnessStringToLowerCase(value: string): string {
 
 export function witnessRegExpTest(expression: RegExp, value: string): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeRegExpTest, expression, [value]);
+  return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]) !== null;
 }
