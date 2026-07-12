@@ -1,6 +1,13 @@
 import type { KovoAppShellBuiltClientModule } from './vite-build.js';
+import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
 import { viteDistSourcePath } from './vite-build-assets.js';
 import { writeArtifactOutput } from './output-staging.js';
+import {
+  createSecuritySet,
+  securitySetAdd,
+  securitySetHas,
+} from './response-security-intrinsics.js';
+import { witnessFreeze } from './security-witness-intrinsics.js';
 
 /**
  * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Planned immutable
@@ -30,7 +37,7 @@ export async function writeKovoAppShellViteClientModuleOutput(
   assertNoKovoAppShellViteClientModuleWriteConflicts(writes);
   if (writes.length === 0) return;
 
-  await writeArtifactOutput(root, writes.map(kovoAppShellViteArtifactOutputEntry), {
+  await writeArtifactOutput(root, kovoAppShellViteArtifactOutputEntries(writes), {
     diagnostics: kovoAppShellViteArtifactOutputDiagnostics(),
     stagingPrefix: '.kovo-vite-app-shell-',
   });
@@ -49,7 +56,7 @@ export async function assertWritableKovoAppShellViteClientModuleOutput(
   // SPEC §9.5: plugin-time static export must not publish static-host files
   // until the matching Vite /c/ module output has proved its target boundary.
   assertNoKovoAppShellViteClientModuleWriteConflicts(writes);
-  await writeArtifactOutput(root, writes.map(kovoAppShellViteArtifactOutputEntry), {
+  await writeArtifactOutput(root, kovoAppShellViteArtifactOutputEntries(writes), {
     diagnostics: kovoAppShellViteArtifactOutputDiagnostics(),
     mode: 'dry-run',
     validateTargets: true,
@@ -66,36 +73,66 @@ export function kovoAppShellViteClientModuleOutputPlan(
 ): KovoAppShellViteClientModuleOutputPlanItem[] {
   // SPEC §9.5: build hooks and static export tasks inspect the same immutable
   // /c/ module targets that the Vite app-shell output commit will publish.
-  return kovoAppShellViteClientModuleWrites(root, modules).map((write) => ({
-    path: write.path,
-    targetPath: write.targetPath,
-  }));
+  const writes = kovoAppShellViteClientModuleWrites(root, modules);
+  const plan: KovoAppShellViteClientModuleOutputPlanItem[] = [];
+  for (let index = 0; index < writes.length; index += 1) {
+    const write = writes[index]!;
+    plan[plan.length] = { path: write.path, targetPath: write.targetPath };
+  }
+  return plan;
 }
 
 function kovoAppShellViteClientModuleWrites(
   root: string,
   modules: readonly KovoAppShellBuiltClientModule[],
 ): KovoAppShellViteClientModuleWrite[] {
-  return modules.map((module) => ({
-    path: module.path,
-    source: module.source,
-    targetPath: viteDistSourcePath(root, module.file),
-  }));
+  // SPEC §6.6: module registry review and output staging consume one pinned snapshot. A live
+  // Array.prototype.map or module getter cannot swap executable source after build registration.
+  const sourceModules = snapshotBuildArray(modules, 'built client modules');
+  const writes: KovoAppShellViteClientModuleWrite[] = [];
+  for (let index = 0; index < sourceModules.length; index += 1) {
+    const module = sourceModules[index];
+    if (typeof module !== 'object' || module === null) {
+      throw new TypeError(`Built client module ${index} must be an object.`);
+    }
+    const path = requiredBuiltClientModuleString(module, 'path', index);
+    const source = requiredBuiltClientModuleString(module, 'source', index);
+    const file = requiredBuiltClientModuleString(module, 'file', index);
+    writes[writes.length] = witnessFreeze({
+      path,
+      source,
+      targetPath: viteDistSourcePath(root, file),
+    });
+  }
+  return writes;
+}
+
+function requiredBuiltClientModuleString(
+  module: object,
+  field: 'file' | 'path' | 'source',
+  index: number,
+): string {
+  const property = buildOwnDataProperty(module, field, `built client module ${index}.${field}`);
+  if (!property.present || typeof property.value !== 'string') {
+    throw new TypeError(`Built client module ${index}.${field} must be a string.`);
+  }
+  return property.value;
 }
 
 function assertNoKovoAppShellViteClientModuleWriteConflicts(
   writes: readonly KovoAppShellViteClientModuleWrite[],
 ): void {
-  const seen = new Set<string>();
+  const seen = createSecuritySet<string>();
 
-  for (const write of writes) {
-    if (seen.has(write.targetPath)) {
+  for (let index = 0; index < writes.length; index += 1) {
+    const write = writes[index]!;
+    if (securitySetHas(seen, write.targetPath)) {
       throw new Error(
         `App shell Vite build output cannot write duplicate client module target: ${write.targetPath}`,
       );
     }
 
-    seen.add(write.targetPath);
+    securitySetAdd(seen, write.targetPath);
   }
 }
 
@@ -105,6 +142,16 @@ function kovoAppShellViteArtifactOutputEntry(write: KovoAppShellViteClientModule
     label: write.path,
     targetPath: write.targetPath,
   };
+}
+
+function kovoAppShellViteArtifactOutputEntries(
+  writes: readonly KovoAppShellViteClientModuleWrite[],
+) {
+  const entries: ReturnType<typeof kovoAppShellViteArtifactOutputEntry>[] = [];
+  for (let index = 0; index < writes.length; index += 1) {
+    entries[entries.length] = kovoAppShellViteArtifactOutputEntry(writes[index]!);
+  }
+  return entries;
 }
 
 function kovoAppShellViteArtifactOutputDiagnostics() {

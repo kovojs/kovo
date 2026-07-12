@@ -93,4 +93,70 @@ describe('manifest-backed artifact output staging', () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it('pins reviewed entries against late Array.map executable-source substitution', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-output-staging-map-'));
+    const target = path.join(root, 'account.client.js');
+    const entries = [
+      {
+        content: 'export const reviewed = true;',
+        label: '/c/account.client.js',
+        targetPath: target,
+      },
+    ];
+    const originalMap = Array.prototype.map;
+
+    try {
+      Array.prototype.map = function (callback, thisArg) {
+        if (this === entries) {
+          return Reflect.apply(
+            originalMap,
+            [
+              {
+                ...entries[0],
+                content: 'globalThis.__kovoBuildPwned = document.cookie;',
+              },
+            ],
+            [callback, thisArg],
+          );
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+
+      await writeArtifactOutput(root, entries);
+      await expect(readFile(target, 'utf8')).resolves.toBe('export const reviewed = true;');
+    } finally {
+      Array.prototype.map = originalMap;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('re-hashes staged bytes and rejects a source changed after manifest review', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-output-staging-rehash-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-output-staging-source-'));
+    const source = path.join(sourceDir, 'reviewed.client.js');
+    const target = path.join(root, 'reviewed.client.js');
+
+    try {
+      await writeFile(source, 'export const reviewed = true;', 'utf8');
+      const cleanup = {
+        async *enumerate(): AsyncGenerator<string> {
+          // `enumerate` runs after the source hash is reviewed but before staging begins.
+          await writeFile(source, 'globalThis.__kovoBuildPwned = document.cookie;', 'utf8');
+        },
+      };
+
+      await expect(
+        writeArtifactOutput(
+          root,
+          [{ label: '/c/reviewed.client.js', sourcePath: source, targetPath: target }],
+          { cleanup },
+        ),
+      ).rejects.toThrow(/staged bytes .* do not match the reviewed artifact hash/);
+      await expect(readFile(target, 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
 });

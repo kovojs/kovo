@@ -1,10 +1,23 @@
-import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
 import {
   createFrameworkOutputFileSystemBoundary,
   pathRelativeToRoot,
 } from '@kovojs/core/internal/filesystem';
+
+import {
+  buildOwnDataProperty,
+  buildSecuritySha256Hex,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
+import {
+  createSecuritySet,
+  securityIsUint8Array,
+  securitySetAdd,
+  securitySetHas,
+  securityUint8ArraySlice,
+} from './response-security-intrinsics.js';
+import { witnessFreeze } from './security-witness-intrinsics.js';
 
 /**
  * @internal Manifest-backed artifact staging primitive for build/export output (SPEC.md §9.5).
@@ -61,6 +74,14 @@ export interface WriteArtifactOutputResult {
   stale: readonly string[];
 }
 
+interface PinnedArtifactOutputEntry extends ArtifactOutputEntry {
+  readonly content?: string | Uint8Array;
+  readonly kind?: string;
+  readonly label: string;
+  readonly sourcePath?: string;
+  readonly targetPath: string;
+}
+
 export class ArtifactOutputCheckError extends Error {
   readonly changed: readonly ArtifactOutputManifestEntry[];
   readonly stale: readonly string[];
@@ -85,14 +106,18 @@ export async function writeArtifactOutput(
   const mode = options.mode ?? 'write';
   const resolvedRoot = path.resolve(root);
   const fileSystem = createFrameworkOutputFileSystemBoundary(resolvedRoot);
-  const manifest = await artifactOutputManifest(resolvedRoot, entries, options.diagnostics);
+  // SPEC §6.6 boundary rule: classification, hashing, staging, and commit all consume this one
+  // framework-owned snapshot. Caller arrays, getters, and mutable Uint8Array bytes are never
+  // re-read after the manifest decision.
+  const pinnedEntries = snapshotArtifactOutputEntries(entries);
+  const manifest = await artifactOutputManifest(resolvedRoot, pinnedEntries, options.diagnostics);
   const changed = mode === 'dry-run' ? [] : await changedArtifactOutputEntries(manifest);
   const stale = options.cleanup
     ? await staleArtifactOutputPaths(resolvedRoot, manifest, options.cleanup)
     : [];
 
   if (options.validateTargets) {
-    await validateArtifactOutputTargets(resolvedRoot, entries, manifest, options.diagnostics);
+    await validateArtifactOutputTargets(resolvedRoot, pinnedEntries, manifest, options.diagnostics);
   }
   if (mode === 'dry-run') return { changed, manifest, mode, stale };
   if (mode === 'check') {
@@ -111,22 +136,31 @@ export async function writeArtifactOutput(
     const stagingRoot = await fileSystem.createStagingRoot(options.stagingPrefix);
     const stagingFileSystem = createFrameworkOutputFileSystemBoundary(stagingRoot);
     try {
-      await Promise.all(
-        entries.map((entry, index) =>
-          writeStagedArtifactOutput(
-            entry,
-            path.relative(resolvedRoot, manifest[index]!.targetPath),
-            stagingFileSystem,
-          ),
-        ),
+      for (let index = 0; index < pinnedEntries.length; index += 1) {
+        const entry = pinnedEntries[index]!;
+        await writeStagedArtifactOutput(entry, manifest[index]!.relativePath, stagingFileSystem);
+      }
+      // Re-hash the staged bytes before rename. This closes both mutable-source TOCTOU and any
+      // substituted staging write: the committed bytes must match the reviewed manifest exactly.
+      await assertStagedArtifactOutputMatchesManifest(
+        stagingFileSystem,
+        pinnedEntries,
+        manifest,
+        options.diagnostics,
       );
-      await validateArtifactOutputTargets(resolvedRoot, entries, manifest, options.diagnostics);
+      await validateArtifactOutputTargets(
+        resolvedRoot,
+        pinnedEntries,
+        manifest,
+        options.diagnostics,
+      );
       await commitArtifactOutput(resolvedRoot, stagingRoot, manifest);
     } finally {
       await stagingFileSystem.removeTree();
     }
   }
-  for (const stalePath of stale) {
+  for (let index = 0; index < stale.length; index += 1) {
+    const stalePath = stale[index]!;
     const relativePath = pathRelativeToRoot(resolvedRoot, stalePath);
     if (relativePath !== undefined) await fileSystem.deleteFile(relativePath);
   }
@@ -135,27 +169,111 @@ export async function writeArtifactOutput(
 
 async function artifactOutputManifest(
   root: string,
-  entries: readonly ArtifactOutputEntry[],
+  entries: readonly PinnedArtifactOutputEntry[],
   diagnostics?: ArtifactOutputDiagnostics,
 ): Promise<ArtifactOutputManifestEntry[]> {
-  const seen = new Set<string>();
+  const seen = createSecuritySet<string>();
   const manifest: ArtifactOutputManifestEntry[] = [];
-  for (const entry of entries) {
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
     assertArtifactOutputEntryShape(entry);
     const targetPath = path.resolve(entry.targetPath);
     const relativePath = assertArtifactOutputTarget(root, entry, targetPath, diagnostics);
-    if (seen.has(relativePath)) {
+    if (securitySetHas(seen, relativePath)) {
       throw targetError(entry, `duplicate artifact target '${relativePath}'`, diagnostics);
     }
-    seen.add(relativePath);
-    manifest.push({
+    securitySetAdd(seen, relativePath);
+    manifest[manifest.length] = {
       hash: await artifactOutputHash(entry),
       label: entry.label,
       relativePath,
       targetPath,
-    });
+    };
   }
   return manifest;
+}
+
+function snapshotArtifactOutputEntries(
+  entries: readonly ArtifactOutputEntry[],
+): readonly PinnedArtifactOutputEntry[] {
+  const sourceEntries = snapshotBuildArray(entries, 'artifact output entries');
+  const pinned: PinnedArtifactOutputEntry[] = [];
+  for (let index = 0; index < sourceEntries.length; index += 1) {
+    const raw = sourceEntries[index];
+    if (typeof raw !== 'object' || raw === null) {
+      throw new TypeError(`Artifact output entry ${index} must be an object.`);
+    }
+
+    const label = requiredArtifactOutputString(raw, 'label', index);
+    const targetPath = requiredArtifactOutputString(raw, 'targetPath', index);
+    const kindProperty = buildOwnDataProperty(raw, 'kind', `artifact output entry ${index}.kind`);
+    const contentProperty = buildOwnDataProperty(
+      raw,
+      'content',
+      `artifact output entry ${index}.content`,
+    );
+    const sourcePathProperty = buildOwnDataProperty(
+      raw,
+      'sourcePath',
+      `artifact output entry ${index}.sourcePath`,
+    );
+
+    const entry: PinnedArtifactOutputEntry = {
+      label,
+      targetPath,
+      ...(kindProperty.present && kindProperty.value !== undefined
+        ? { kind: requiredArtifactOutputString(kindProperty.value, `entry ${index}.kind`) }
+        : {}),
+      ...(contentProperty.present && contentProperty.value !== undefined
+        ? { content: snapshotArtifactOutputContent(contentProperty.value, index) }
+        : {}),
+      ...(sourcePathProperty.present && sourcePathProperty.value !== undefined
+        ? {
+            sourcePath: requiredArtifactOutputString(
+              sourcePathProperty.value,
+              `entry ${index}.sourcePath`,
+            ),
+          }
+        : {}),
+    };
+    assertArtifactOutputEntryShape(entry);
+    pinned[pinned.length] = witnessFreeze(entry);
+  }
+  return witnessFreeze(pinned);
+}
+
+function requiredArtifactOutputString(
+  value: object,
+  property: 'label' | 'targetPath',
+  index: number,
+): string;
+function requiredArtifactOutputString(value: unknown, label: string): string;
+function requiredArtifactOutputString(
+  value: unknown,
+  propertyOrLabel: string,
+  index?: number,
+): string {
+  if (index !== undefined) {
+    const property = buildOwnDataProperty(
+      value as object,
+      propertyOrLabel,
+      `artifact output entry ${index}.${propertyOrLabel}`,
+    );
+    if (!property.present || typeof property.value !== 'string') {
+      throw new TypeError(`Artifact output entry ${index} must declare string ${propertyOrLabel}.`);
+    }
+    return property.value;
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError(`Artifact output ${propertyOrLabel} must be a string.`);
+  }
+  return value;
+}
+
+function snapshotArtifactOutputContent(value: unknown, index: number): string | Uint8Array {
+  if (typeof value === 'string') return value;
+  if (securityIsUint8Array(value)) return securityUint8ArraySlice(value, 0);
+  throw new TypeError(`Artifact output entry ${index}.content must be a string or Uint8Array.`);
 }
 
 function assertArtifactOutputEntryShape(entry: ArtifactOutputEntry): void {
@@ -173,12 +291,7 @@ function assertArtifactOutputTarget(
   diagnostics?: ArtifactOutputDiagnostics,
 ): string {
   const relativePath = path.relative(root, targetPath);
-  if (
-    relativePath === '' ||
-    relativePath.startsWith('..') ||
-    path.isAbsolute(relativePath) ||
-    relativePath.split(path.sep).includes('..')
-  ) {
+  if (pathRelativeToRoot(root, targetPath) === undefined) {
     throw targetError(entry, `target '${targetPath}' escapes output root '${root}'`, diagnostics);
   }
   return relativePath;
@@ -200,14 +313,15 @@ async function changedArtifactOutputEntries(
   manifest: readonly ArtifactOutputManifestEntry[],
 ): Promise<ArtifactOutputManifestEntry[]> {
   const changed: ArtifactOutputManifestEntry[] = [];
-  for (const entry of manifest) {
+  for (let index = 0; index < manifest.length; index += 1) {
+    const entry = manifest[index]!;
     const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(entry.targetPath));
     const current = await fileSystem.fileBytes(path.basename(entry.targetPath));
     if (current === undefined) {
-      changed.push(entry);
+      changed[changed.length] = entry;
       continue;
     }
-    if (sha256(current) !== entry.hash) changed.push(entry);
+    if (sha256(current) !== entry.hash) changed[changed.length] = entry;
   }
   return changed;
 }
@@ -217,18 +331,21 @@ async function staleArtifactOutputPaths(
   manifest: readonly ArtifactOutputManifestEntry[],
   cleanup: ArtifactOutputCleanup,
 ): Promise<string[]> {
-  const owned = new Set(manifest.map((entry) => entry.targetPath));
+  const owned = createSecuritySet<string>();
+  for (let index = 0; index < manifest.length; index += 1) {
+    securitySetAdd(owned, manifest[index]!.targetPath);
+  }
   const stale: string[] = [];
   for await (const candidate of cleanup.enumerate(root)) {
     const resolved = path.resolve(candidate);
     if (pathRelativeToRoot(root, resolved) === undefined) continue;
-    if (!owned.has(resolved)) stale.push(resolved);
+    if (!securitySetHas(owned, resolved)) stale[stale.length] = resolved;
   }
   return stale;
 }
 
 async function writeStagedArtifactOutput(
-  entry: ArtifactOutputEntry,
+  entry: PinnedArtifactOutputEntry,
   relativePath: string,
   fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
 ): Promise<void> {
@@ -239,9 +356,28 @@ async function writeStagedArtifactOutput(
   await fileSystem.writeFile(relativePath, entry.content!);
 }
 
+async function assertStagedArtifactOutputMatchesManifest(
+  fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
+  entries: readonly PinnedArtifactOutputEntry[],
+  manifest: readonly ArtifactOutputManifestEntry[],
+  diagnostics?: ArtifactOutputDiagnostics,
+): Promise<void> {
+  for (let index = 0; index < manifest.length; index += 1) {
+    const manifestEntry = manifest[index]!;
+    const bytes = await fileSystem.fileBytes(manifestEntry.relativePath);
+    if (bytes === undefined || sha256(bytes) !== manifestEntry.hash) {
+      throw targetError(
+        entries[index]!,
+        `staged bytes for '${manifestEntry.relativePath}' do not match the reviewed artifact hash`,
+        diagnostics,
+      );
+    }
+  }
+}
+
 async function validateArtifactOutputTargets(
   root: string,
-  sourceEntries: readonly ArtifactOutputEntry[],
+  sourceEntries: readonly PinnedArtifactOutputEntry[],
   manifest: readonly ArtifactOutputManifestEntry[],
   diagnostics?: ArtifactOutputDiagnostics,
 ): Promise<void> {
@@ -259,7 +395,8 @@ async function commitArtifactOutput(
   manifest: readonly ArtifactOutputManifestEntry[],
 ): Promise<void> {
   const fileSystem = createFrameworkOutputFileSystemBoundary(root);
-  for (const entry of manifest) {
+  for (let index = 0; index < manifest.length; index += 1) {
+    const entry = manifest[index]!;
     const relativePath = path.relative(root, entry.targetPath);
     await fileSystem.renameFrom(
       artifactOutputStagedPath(root, stagingRoot, entry.targetPath),
@@ -313,7 +450,7 @@ async function artifactOutputHash(entry: ArtifactOutputEntry): Promise<string> {
 }
 
 function sha256(content: string | Uint8Array): string {
-  return createHash('sha256').update(content).digest('hex');
+  return buildSecuritySha256Hex(content);
 }
 
 function targetError(

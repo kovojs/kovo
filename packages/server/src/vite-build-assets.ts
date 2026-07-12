@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { confinedPath } from '@kovojs/core/internal/filesystem';
+
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
 import {
@@ -129,8 +131,10 @@ export function resolvedFileSystemPath(value: string | URL): string {
  */
 export function viteDistSourcePath(distDir: string | URL, file: string): string {
   const root = resolvedFileSystemPath(distDir);
-  const targetPath = path.resolve(root, normalizedDistFile(file));
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
+  // SPEC §6.6: source-root classification and the returned path share the core filesystem
+  // membrane. Do not re-check containment through mutable String.prototype.startsWith.
+  const targetPath = confinedPath(root, normalizedDistFile(file));
+  if (targetPath !== undefined) return targetPath;
 
   throw new Error(`App shell build asset must stay within the Vite output directory: ${file}`);
 }

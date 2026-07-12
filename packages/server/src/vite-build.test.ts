@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -75,8 +76,56 @@ const staticExportReportingHeaders = {
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
+const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
+  createHash: typeof import('node:crypto').createHash;
+};
 
 describe('server app shell Vite build seam', () => {
+  it('pins full SHA-256 source identities for immutable client module versions', () => {
+    const originalCreateHash = mutableCrypto.createHash;
+    const fixedHash = {
+      digest(encoding?: string) {
+        return encoding === 'hex' ? '0'.repeat(64) : Buffer.alloc(32);
+      },
+      update() {
+        return fixedHash;
+      },
+    };
+
+    try {
+      mutableCrypto.createHash = (() => fixedHash) as unknown as typeof mutableCrypto.createHash;
+      syncBuiltinESMExports();
+
+      const first = createKovoAppShellViteBuild({
+        app: createApp({ routes: [] }),
+        clientModules: [
+          {
+            path: '/c/account.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
+            source: 'export const buildMarker = "first";',
+          },
+        ],
+      });
+      const second = createKovoAppShellViteBuild({
+        app: createApp({ routes: [] }),
+        clientModules: [
+          {
+            path: '/c/account.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
+            source: 'export const buildMarker = "second";',
+          },
+        ],
+      });
+
+      expect(first.clientModules[0]!.version).not.toBe(second.clientModules[0]!.version);
+      expect(first.clientModules[0]!.href).not.toBe(second.clientModules[0]!.href);
+      expect(first.clientModules[0]!.version).toMatch(/-[0-9a-f]{64}$/u);
+    } finally {
+      mutableCrypto.createHash = originalCreateHash;
+      syncBuiltinESMExports();
+    }
+  });
+
   it('wires route-entry hints, compiled modules, output files, and static export assets', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-seam-dist-'));
     const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-seam-export-'));
@@ -569,6 +618,46 @@ export const CartButton = component({
       ).rejects.toThrow(/target '.*blocked\.client\.js' is a directory/);
       await expect(readFile(join(distDir, 'c/ok.client.js'))).rejects.toThrow();
     } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
+
+  it('pins built module entries before Vite client-module output planning', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-client-module-map-dist-'));
+    const modules = [
+      {
+        file: 'c/__v/build-1/account.client.js',
+        href: '/c/__v/build-1/account.client.js',
+        path: '/c/__v/build-1/account.client.js',
+        source: 'export const reviewed = true;',
+        version: 'build-1',
+      },
+    ];
+    const originalMap = Array.prototype.map;
+
+    try {
+      Array.prototype.map = function (callback, thisArg) {
+        if (this === modules) {
+          return Reflect.apply(
+            originalMap,
+            [
+              {
+                ...modules[0],
+                source: 'globalThis.__kovoBuildPwned = document.cookie;',
+              },
+            ],
+            [callback, thisArg],
+          );
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+
+      await writeKovoAppShellViteClientModuleOutput(distDir, modules);
+      await expect(
+        readFile(join(distDir, 'c/__v/build-1/account.client.js'), 'utf8'),
+      ).resolves.toBe('export const reviewed = true;');
+    } finally {
+      Array.prototype.map = originalMap;
       await rm(distDir, { force: true, recursive: true });
     }
   });

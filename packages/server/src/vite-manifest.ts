@@ -1,6 +1,36 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { PageHintOptions } from './hints.js';
+import {
+  buildOwnDataProperty,
+  buildSecurityDecodeURIComponent,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
+import {
+  createSecurityMap,
+  createSecuritySet,
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityArraySort,
+  securityBufferFrom,
+  securityBufferToString,
+  securityJsonParse,
+  securityMapForEach,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityObjectKeys,
+  securityRegExpTest,
+  securityRegExpReplace,
+  securitySetAdd,
+  securitySetHas,
+  securityStringEndsWith,
+  securityStringIncludes,
+  securityStringSplit,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
+import { witnessCreateNullRecord, witnessFreeze } from './security-witness-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 /**
@@ -111,12 +141,21 @@ export function kovoAppShellViteManifestHints(
   entries: readonly string[],
   options: KovoAppShellViteManifestHintOptions = {},
 ): PageHintOptions {
+  const pinnedManifest = kovoAppShellViteManifestFromUnknown(manifest);
+  const pinnedEntries = snapshotBuildArray(entries, 'Vite manifest hint entries');
   const modulepreloads: string[] = [];
   const stylesheets: string[] = [];
-  const visited = new Set<string>();
+  const visited = createSecuritySet<string>();
 
-  for (const entry of entries) {
-    collectManifestHints(manifest, entry, options, visited, modulepreloads, stylesheets);
+  for (let index = 0; index < pinnedEntries.length; index += 1) {
+    collectManifestHints(
+      pinnedManifest,
+      pinnedEntries[index]!,
+      options,
+      visited,
+      modulepreloads,
+      stylesheets,
+    );
   }
 
   const hints: PageHintOptions = {};
@@ -134,20 +173,33 @@ export function kovoAppShellViteRouteEntries(
   routeEntryMap: KovoAppShellRouteEntryMap,
   options: KovoAppShellViteRouteEntryOptions = {},
 ): KovoAppShellRouteBuildEntry[] {
-  const knownRoutes = options.routes
-    ? new Set(options.routes.map((route) => route.path))
+  const manifest = options.manifest
+    ? kovoAppShellViteManifestFromUnknown(options.manifest)
     : undefined;
-  const mapped = new Map<string, string[]>();
+  const routes = options.routes
+    ? snapshotBuildArray(options.routes, 'Vite route declarations')
+    : undefined;
+  const knownRoutes = options.routes ? createSecuritySet<string>() : undefined;
+  if (knownRoutes && routes) {
+    for (let index = 0; index < routes.length; index += 1) {
+      securitySetAdd(knownRoutes, routes[index]!.path);
+    }
+  }
+  const mapped = createSecurityMap<string, string[]>();
 
-  for (const [routePath, rawEntries] of Object.entries(routeEntryMap)) {
-    if (!routePath.startsWith('/')) {
+  const routeEntryPairs = ownRecordEntries(routeEntryMap, 'Vite route entry map');
+  for (let pairIndex = 0; pairIndex < routeEntryPairs.length; pairIndex += 1) {
+    const [routePath, rawEntries] = routeEntryPairs[pairIndex]!;
+    if (!securityStringStartsWith(routePath, '/')) {
       throw new Error(`App shell route build entry must use an absolute route path: ${routePath}`);
     }
-    if (knownRoutes && !knownRoutes.has(routePath)) {
+    if (knownRoutes && !securitySetHas(knownRoutes, routePath)) {
       throw new Error(`App shell route build entry does not match an app route: ${routePath}`);
     }
 
-    const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
+    const entries = securityArrayIsArray(rawEntries)
+      ? snapshotBuildArray(rawEntries, `Vite entries for '${routePath}'`)
+      : [rawEntries];
     if (entries.length === 0) {
       throw new Error(
         `App shell route build entry must include at least one Vite entry: ${routePath}`,
@@ -155,14 +207,18 @@ export function kovoAppShellViteRouteEntries(
     }
 
     const normalizedEntries: string[] = [];
-    for (const entry of entries) {
-      const normalizedEntry = entry.trim();
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      if (typeof entry !== 'string') {
+        throw new Error(`App shell route build entry must be a string: ${routePath}`);
+      }
+      const normalizedEntry = securityStringTrim(entry);
       if (normalizedEntry.length === 0) {
         throw new Error(
           `App shell route build entry must include a non-empty Vite entry: ${routePath}`,
         );
       }
-      if (options.manifest && !resolveManifestChunk(options.manifest, normalizedEntry)) {
+      if (manifest && !resolveManifestChunk(manifest, normalizedEntry)) {
         throw new Error(
           `App shell route build entry is missing from the Vite manifest: ${routePath} -> ${normalizedEntry}`,
         );
@@ -170,25 +226,31 @@ export function kovoAppShellViteRouteEntries(
       addUnique(normalizedEntries, normalizedEntry);
     }
 
-    mapped.set(routePath, normalizedEntries);
+    securityMapSet(mapped, routePath, normalizedEntries);
   }
 
-  if (options.routes) {
+  if (routes) {
     const ordered: KovoAppShellRouteBuildEntry[] = [];
-    const seenRoutePaths = new Set<string>();
-    for (const route of options.routes) {
-      if (seenRoutePaths.has(route.path)) continue;
-      seenRoutePaths.add(route.path);
+    const seenRoutePaths = createSecuritySet<string>();
+    for (let index = 0; index < routes.length; index += 1) {
+      const route = routes[index]!;
+      if (securitySetHas(seenRoutePaths, route.path)) continue;
+      securitySetAdd(seenRoutePaths, route.path);
 
-      const entries = mapped.get(route.path);
-      if (entries) ordered.push({ entries, routePath: route.path });
+      const routeEntries = securityMapGet(mapped, route.path);
+      if (routeEntries) ordered[ordered.length] = { entries: routeEntries, routePath: route.path };
     }
     return ordered;
   }
 
-  return [...mapped.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([routePath, entries]) => ({ entries, routePath }));
+  const result: KovoAppShellRouteBuildEntry[] = [];
+  securityMapForEach(mapped, (entries, routePath) => {
+    result[result.length] = { entries, routePath };
+  });
+  securityArraySort(result, (left, right) =>
+    left.routePath < right.routePath ? -1 : left.routePath > right.routePath ? 1 : 0,
+  );
+  return result;
 }
 
 /**
@@ -200,14 +262,29 @@ export function kovoAppShellViteManifestAssets(
   manifest: KovoAppShellViteManifest,
   options: KovoAppShellViteManifestHintOptions = {},
 ): KovoAppShellBuildAsset[] {
-  const assets = new Map<string, KovoAppShellBuildAsset>();
+  const pinnedManifest = kovoAppShellViteManifestFromUnknown(manifest);
+  const assets = createSecurityMap<string, KovoAppShellBuildAsset>();
 
-  for (const chunk of Object.values(manifest)) {
-    addManifestBuildAsset(assets, chunk.file, options);
-    for (const stylesheet of chunk.css ?? []) addManifestBuildAsset(assets, stylesheet, options);
+  const manifestEntries = ownRecordEntries(pinnedManifest, 'Vite manifest');
+  for (let index = 0; index < manifestEntries.length; index += 1) {
+    const chunk = manifestEntries[index]![1];
+    if (!isRecord(chunk)) throw new Error('App shell Vite build manifest entry must be an object.');
+    const normalizedChunk = chunk as KovoAppShellViteManifestChunk;
+    addManifestBuildAsset(assets, normalizedChunk.file, options);
+    const stylesheets = normalizedChunk.css ?? [];
+    for (let index = 0; index < stylesheets.length; index += 1) {
+      addManifestBuildAsset(assets, stylesheets[index], options);
+    }
   }
 
-  return [...assets.values()].sort((left, right) => left.file.localeCompare(right.file));
+  const result: KovoAppShellBuildAsset[] = [];
+  securityMapForEach(assets, (asset) => {
+    result[result.length] = asset;
+  });
+  securityArraySort(result, (left, right) =>
+    left.file < right.file ? -1 : left.file > right.file ? 1 : 0,
+  );
+  return result;
 }
 
 /**
@@ -248,8 +325,10 @@ export function kovoAppShellViteManifestStylesheetHref(
 ): string {
   let stylesheetHref: string | undefined;
   let stylesheetCount = 0;
-  for (const asset of kovoAppShellViteManifestAssets(manifest, options)) {
-    if (!asset.file.endsWith('.css')) continue;
+  const assets = kovoAppShellViteManifestAssets(manifest, options);
+  for (let index = 0; index < assets.length; index += 1) {
+    const asset = assets[index]!;
+    if (!securityStringEndsWith(asset.file, '.css')) continue;
     stylesheetHref = asset.href;
     stylesheetCount += 1;
   }
@@ -288,16 +367,26 @@ export async function kovoAppShellViteManifestStylesheetHrefFromFile(
 export function kovoAppShellViteManifestFromBundle(
   bundle: KovoAppShellViteOutputBundle,
 ): KovoAppShellViteManifest {
-  const manifestAsset = Object.values(bundle).find(
-    (asset): asset is KovoAppShellViteOutputAsset =>
-      asset.type === 'asset' && asset.fileName.replaceAll('\\', '/') === '.vite/manifest.json',
-  );
+  let manifestAsset: KovoAppShellViteOutputAsset | undefined;
+  const bundleEntries = ownRecordEntries(bundle, 'Vite output bundle');
+  for (let index = 0; index < bundleEntries.length; index += 1) {
+    const asset = bundleEntries[index]![1];
+    if (
+      isRecord(asset) &&
+      asset.type === 'asset' &&
+      typeof asset.fileName === 'string' &&
+      securityRegExpReplace(asset.fileName, /\\/gu, '/') === '.vite/manifest.json'
+    ) {
+      manifestAsset = asset as unknown as KovoAppShellViteOutputAsset;
+      break;
+    }
+  }
   if (!manifestAsset) throw new Error('App shell Vite build requires .vite/manifest.json.');
 
   const source =
     typeof manifestAsset.source === 'string'
       ? manifestAsset.source
-      : Buffer.from(manifestAsset.source).toString('utf8');
+      : securityBufferToString(securityBufferFrom(manifestAsset.source), 'utf8');
 
   return kovoAppShellViteManifestFromSource(source);
 }
@@ -308,20 +397,28 @@ export function kovoAppShellViteManifestFromBundle(
  * Exported only for in-repo build/host config, not app authors.
  */
 export function normalizedDistFile(file: string): string {
-  const pathname = file.replace(/[?#].*$/, '').replace(/^\/+/, '');
-  const segments = pathname.split('/');
+  const withoutQuery = securityRegExpReplace(file, /[?#].*$/u, '');
+  const pathname = securityRegExpReplace(withoutQuery, /^\/+/, '');
+  const segments = securityStringSplit(pathname, '/');
 
-  if (segments.length === 0 || segments.some((segment) => !isSafeDistFileSegment(segment))) {
+  let unsafe = segments.length === 0;
+  for (let index = 0; index < segments.length; index += 1) {
+    if (!isSafeDistFileSegment(segments[index]!)) {
+      unsafe = true;
+      break;
+    }
+  }
+  if (unsafe) {
     throw new Error(`App shell build asset must stay within the Vite output directory: ${file}`);
   }
 
-  return segments.join('/');
+  return securityArrayJoin(segments, '/');
 }
 
 function kovoAppShellViteManifestFromSource(source: string): KovoAppShellViteManifest {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(source);
+    parsed = securityJsonParse(source);
   } catch (error) {
     throw new Error(
       `App shell Vite build manifest must be valid JSON: ${
@@ -341,12 +438,12 @@ function addManifestBuildAsset(
   if (!file || isExternalAssetHref(file)) return;
 
   const normalizedFile = normalizedDistFile(file);
-  if (assets.has(normalizedFile)) return;
+  if (securityMapHas(assets, normalizedFile)) return;
 
   const href = manifestAssetHref(normalizedFile, options.base);
   const url = new URL(href, 'https://kovo.local');
 
-  assets.set(normalizedFile, {
+  securityMapSet(assets, normalizedFile, {
     file: normalizedFile,
     href,
     path: url.pathname,
@@ -362,16 +459,18 @@ function collectManifestHints(
   stylesheets: string[],
 ): void {
   const resolved = resolveManifestChunk(manifest, entry);
-  if (!resolved || visited.has(resolved.key)) return;
-  visited.add(resolved.key);
+  if (!resolved || securitySetHas(visited, resolved.key)) return;
+  securitySetAdd(visited, resolved.key);
 
   const chunk = resolved.chunk;
   if (chunk.file) addUnique(modulepreloads, manifestAssetHref(chunk.file, options.base));
-  for (const stylesheet of chunk.css ?? []) {
-    addUnique(stylesheets, manifestAssetHref(stylesheet, options.base));
+  const chunkStylesheets = chunk.css ?? [];
+  for (let index = 0; index < chunkStylesheets.length; index += 1) {
+    addUnique(stylesheets, manifestAssetHref(chunkStylesheets[index]!, options.base));
   }
-  for (const imported of chunk.imports ?? []) {
-    collectManifestHints(manifest, imported, options, visited, modulepreloads, stylesheets);
+  const imports = chunk.imports ?? [];
+  for (let index = 0; index < imports.length; index += 1) {
+    collectManifestHints(manifest, imports[index]!, options, visited, modulepreloads, stylesheets);
   }
 }
 
@@ -382,7 +481,11 @@ function resolveManifestChunk(
   const direct = manifest[entry];
   if (direct) return { chunk: direct, key: entry };
 
-  for (const [key, chunk] of Object.entries(manifest)) {
+  const entries = ownRecordEntries(manifest, 'Vite manifest');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, rawChunk] = entries[index]!;
+    if (!isRecord(rawChunk)) continue;
+    const chunk = rawChunk as KovoAppShellViteManifestChunk;
     if (chunk.src === entry || chunk.file === entry) return { chunk, key };
   }
 
@@ -396,11 +499,11 @@ function manifestAssetHref(file: string, base = '/'): string {
 
   // SPEC §9.5: Vite build hints and static-export asset copies must describe the
   // same static-host files, so hint hrefs use the shared dist-file boundary.
-  return `${base.replace(/\/?$/, '/')}${normalizedDistFile(file)}`;
+  return `${securityRegExpReplace(base, /\/?$/u, '/')}${normalizedDistFile(file)}`;
 }
 
 function isExternalAssetHref(file: string): boolean {
-  return file.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(file);
+  return securityStringStartsWith(file, '//') || securityRegExpTest(/^[a-z][a-z0-9+.-]*:/i, file);
 }
 
 function resolvedManifestFile(manifestFile: string | URL): string | URL {
@@ -420,13 +523,18 @@ function kovoAppShellViteManifestFromUnknown(value: unknown): KovoAppShellViteMa
     throw new Error('App shell Vite build manifest must be a JSON object.');
   }
 
-  const manifest: KovoAppShellViteManifest = {};
-  for (const [entry, rawChunk] of Object.entries(value)) {
+  // SPEC §6.6: Vite manifest input is a caller-owned carrier. Reconstruct a deep, null-prototype
+  // manifest from own data properties so inherited fields and getters cannot become public assets.
+  const manifest =
+    witnessCreateNullRecord<KovoAppShellViteManifestChunk>() as KovoAppShellViteManifest;
+  const manifestEntries = ownRecordEntries(value, 'Vite manifest');
+  for (let index = 0; index < manifestEntries.length; index += 1) {
+    const [entry, rawChunk] = manifestEntries[index]!;
     if (!isRecord(rawChunk)) {
       throw new Error(`App shell Vite build manifest entry '${entry}' must be a JSON object.`);
     }
 
-    const chunk: KovoAppShellViteManifestChunk = {};
+    const chunk = witnessCreateNullRecord<unknown>() as KovoAppShellViteManifestChunk;
     const file = optionalManifestString(rawChunk, entry, 'file');
     const src = optionalManifestString(rawChunk, entry, 'src');
     const css = optionalManifestStringArray(rawChunk, entry, 'css');
@@ -438,10 +546,10 @@ function kovoAppShellViteManifestFromUnknown(value: unknown): KovoAppShellViteMa
     if (css !== undefined) chunk.css = css;
     if (imports !== undefined) chunk.imports = imports;
     if (isEntry !== undefined) chunk.isEntry = isEntry;
-    manifest[entry] = chunk;
+    manifest[entry] = witnessFreeze(chunk);
   }
 
-  return manifest;
+  return witnessFreeze(manifest);
 }
 
 function optionalManifestString(
@@ -449,9 +557,9 @@ function optionalManifestString(
   entry: string,
   field: string,
 ): string | undefined {
-  const value = chunk[field];
-  if (value === undefined) return undefined;
-  if (typeof value === 'string') return value;
+  const property = buildOwnDataProperty(chunk, field, `Vite manifest '${entry}'.${field}`);
+  if (!property.present || property.value === undefined) return undefined;
+  if (typeof property.value === 'string') return property.value;
 
   throw new Error(
     `App shell Vite build manifest entry '${entry}' field '${field}' must be a string.`,
@@ -463,9 +571,22 @@ function optionalManifestStringArray(
   entry: string,
   field: string,
 ): readonly string[] | undefined {
-  const value = chunk[field];
-  if (value === undefined) return undefined;
-  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+  const property = buildOwnDataProperty(chunk, field, `Vite manifest '${entry}'.${field}`);
+  if (!property.present || property.value === undefined) return undefined;
+  if (securityArrayIsArray(property.value)) {
+    const source = snapshotBuildArray(property.value, `Vite manifest '${entry}'.${field}`);
+    const strings: string[] = [];
+    let valid = true;
+    for (let index = 0; index < source.length; index += 1) {
+      const item = source[index];
+      if (typeof item !== 'string') {
+        valid = false;
+        break;
+      }
+      strings[strings.length] = item;
+    }
+    if (valid) return witnessFreeze(strings);
+  }
 
   throw new Error(
     `App shell Vite build manifest entry '${entry}' field '${field}' must be an array of strings.`,
@@ -477,9 +598,9 @@ function optionalManifestBoolean(
   entry: string,
   field: string,
 ): boolean | undefined {
-  const value = chunk[field];
-  if (value === undefined) return undefined;
-  if (typeof value === 'boolean') return value;
+  const property = buildOwnDataProperty(chunk, field, `Vite manifest '${entry}'.${field}`);
+  if (!property.present || property.value === undefined) return undefined;
+  if (typeof property.value === 'boolean') return property.value;
 
   throw new Error(
     `App shell Vite build manifest entry '${entry}' field '${field}' must be a boolean.`,
@@ -487,7 +608,7 @@ function optionalManifestBoolean(
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !securityArrayIsArray(value);
 }
 
 function isSafeDistFileSegment(segment: string): boolean {
@@ -495,14 +616,36 @@ function isSafeDistFileSegment(segment: string): boolean {
 
   let decoded: string;
   try {
-    decoded = decodeURIComponent(segment);
+    decoded = buildSecurityDecodeURIComponent(segment);
   } catch {
     return false;
   }
 
-  return decoded !== '.' && decoded !== '..' && !decoded.includes('/') && !decoded.includes('\\');
+  return (
+    decoded !== '.' &&
+    decoded !== '..' &&
+    !securityStringIncludes(decoded, '/') &&
+    !securityStringIncludes(decoded, '\\')
+  );
 }
 
 function addUnique(values: string[], value: string): void {
-  if (!values.includes(value)) values.push(value);
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === value) return;
+  }
+  values[values.length] = value;
+}
+
+function ownRecordEntries(value: object, label: string): readonly (readonly [string, unknown])[] {
+  const keys = securityObjectKeys(value);
+  const entries: (readonly [string, unknown])[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const property = buildOwnDataProperty(value, key, `${label}.${key}`);
+    if (!property.present) {
+      throw new TypeError(`Kovo build security boundary could not snapshot ${label}.${key}.`);
+    }
+    entries[entries.length] = witnessFreeze([key, property.value] as const);
+  }
+  return witnessFreeze(entries);
 }

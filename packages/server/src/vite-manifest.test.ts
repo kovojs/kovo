@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { route } from './route.js';
 import { StaticExportError } from './static-export-diagnostics.js';
+import { viteDistSourcePath } from './vite-build-assets.js';
 import {
   kovoAppShellViteManifestAssets,
   kovoAppShellViteManifestAssetsFromFile,
@@ -171,6 +172,47 @@ describe('server app shell Vite manifest planning', () => {
         path: '/static/assets/theme.css',
       },
     ]);
+  });
+
+  it('ignores inherited manifest fields instead of publishing undeclared server files', () => {
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'file');
+    try {
+      Object.defineProperty(Object.prototype, 'file', {
+        configurable: true,
+        enumerable: false,
+        value: 'server/private-config.js',
+      });
+
+      expect(kovoAppShellViteManifestAssets({ 'src/public.client.ts': {} })).toEqual([]);
+    } finally {
+      if (previous === undefined) delete (Object.prototype as { file?: unknown }).file;
+      else Object.defineProperty(Object.prototype, 'file', previous);
+    }
+  });
+
+  it('keeps Vite asset sources under dist despite selective traversal controls', () => {
+    const root = '/workspace/dist';
+    const escaped = '/workspace/server-secret.env';
+    const originalSome = Array.prototype.some;
+    const originalStartsWith = String.prototype.startsWith;
+
+    try {
+      Array.prototype.some = function (callback, thisArg) {
+        if (this.length === 2 && this[0] === '..' && this[1] === 'server-secret.env') return false;
+        return Reflect.apply(originalSome, this, [callback, thisArg]);
+      } as typeof Array.prototype.some;
+      String.prototype.startsWith = function (search, position) {
+        if (String(this) === escaped && search === `${root}/`) return true;
+        return Reflect.apply(originalStartsWith, this, [search, position]);
+      };
+
+      expect(() => viteDistSourcePath(root, '../server-secret.env')).toThrow(
+        'App shell build asset must stay within the Vite output directory',
+      );
+    } finally {
+      Array.prototype.some = originalSome;
+      String.prototype.startsWith = originalStartsWith;
+    }
   });
 
   it('loads Vite manifest files through the shared app-shell validator', async () => {

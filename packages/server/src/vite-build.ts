@@ -1,9 +1,13 @@
-import { createHash } from 'node:crypto';
 import type { VersionedClientModuleInput } from './client-modules.js';
 import { assertNoBlockingAppDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import type { KovoApp } from './app-types.js';
+import {
+  buildOwnDataProperty,
+  buildSecuritySha256Hex,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
 import type { PageHintOptions } from './hints.js';
 import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
 import type { KovoAppShellVitePluginStaticExportOptions } from './vite-static-export-options.js';
@@ -257,7 +261,8 @@ function registerCompiledClientModules(
   app: KovoApp,
   modules: readonly KovoAppShellCompiledClientModule[],
 ): KovoAppShellBuiltClientModule[] {
-  const renderPlanFingerprint = compiledClientModulesRenderPlanFingerprint(modules);
+  const pinnedModules = snapshotCompiledClientModules(modules);
+  const renderPlanFingerprint = compiledClientModulesRenderPlanFingerprint(pinnedModules);
   if (renderPlanFingerprint !== undefined) {
     if (!app.clientModules.setRenderPlanFingerprint) {
       throw new TypeError(
@@ -267,7 +272,9 @@ function registerCompiledClientModules(
     app.clientModules.setRenderPlanFingerprint(renderPlanFingerprint);
   }
 
-  return modules.map((module) => {
+  const builtModules: KovoAppShellBuiltClientModule[] = [];
+  for (let index = 0; index < pinnedModules.length; index += 1) {
+    const module = pinnedModules[index]!;
     const { renderPlanFingerprint: _renderPlanFingerprint, ...registryModule } = module;
     // SPEC §6.6: production client module URLs are immutable and versioned.
     // SPEC §5.2.1: the default version also carries the render-plan fingerprint
@@ -287,10 +294,66 @@ function registerCompiledClientModules(
       source: module.source,
       version,
     };
-    if (module.contentType !== undefined) return { ...built, contentType: module.contentType };
+    builtModules[builtModules.length] =
+      module.contentType === undefined ? built : { ...built, contentType: module.contentType };
+  }
 
-    return built;
-  });
+  return builtModules;
+}
+
+function snapshotCompiledClientModules(
+  modules: readonly KovoAppShellCompiledClientModule[],
+): readonly KovoAppShellCompiledClientModule[] {
+  const sourceModules = snapshotBuildArray(modules, 'compiled client modules');
+  const pinned: KovoAppShellCompiledClientModule[] = [];
+  for (let index = 0; index < sourceModules.length; index += 1) {
+    const raw = sourceModules[index];
+    if (typeof raw !== 'object' || raw === null) {
+      throw new TypeError(`Compiled client module ${index} must be an object.`);
+    }
+    const path = requiredCompiledClientModuleString(raw, 'path', index);
+    const source = requiredCompiledClientModuleString(raw, 'source', index);
+    const contentType = optionalCompiledClientModuleString(raw, 'contentType', index);
+    const renderPlanFingerprint = optionalCompiledClientModuleString(
+      raw,
+      'renderPlanFingerprint',
+      index,
+    );
+    const version = optionalCompiledClientModuleString(raw, 'version', index);
+    pinned[pinned.length] = {
+      path,
+      source,
+      ...(contentType === undefined ? {} : { contentType }),
+      ...(renderPlanFingerprint === undefined ? {} : { renderPlanFingerprint }),
+      ...(version === undefined ? {} : { version }),
+    };
+  }
+  return snapshotBuildArray(pinned, 'pinned compiled client modules');
+}
+
+function requiredCompiledClientModuleString(
+  module: object,
+  field: 'path' | 'source',
+  index: number,
+): string {
+  const property = buildOwnDataProperty(module, field, `compiled client module ${index}.${field}`);
+  if (!property.present || typeof property.value !== 'string') {
+    throw new TypeError(`Compiled client module ${index}.${field} must be a string.`);
+  }
+  return property.value;
+}
+
+function optionalCompiledClientModuleString(
+  module: object,
+  field: 'contentType' | 'renderPlanFingerprint' | 'version',
+  index: number,
+): string | undefined {
+  const property = buildOwnDataProperty(module, field, `compiled client module ${index}.${field}`);
+  if (!property.present || property.value === undefined) return undefined;
+  if (typeof property.value !== 'string') {
+    throw new TypeError(`Compiled client module ${index}.${field} must be a string.`);
+  }
+  return property.value;
 }
 
 function compiledClientModulesRenderPlanFingerprint(
@@ -299,7 +362,8 @@ function compiledClientModulesRenderPlanFingerprint(
   if (modules.length === 0) return undefined;
 
   let fingerprint: string | undefined;
-  for (const module of modules) {
+  for (let index = 0; index < modules.length; index += 1) {
+    const module = modules[index]!;
     if (!module.renderPlanFingerprint) {
       throw new TypeError(
         `Compiled client module ${module.path} is missing renderPlanFingerprint. SPEC §5.2.1 requires the build token to include the compiler render-plan fingerprint.`,
@@ -343,5 +407,7 @@ function mergePageHints<MetaContext>(
 }
 
 function sourceVersion(source: string): string {
-  return createHash('sha256').update(source).digest('hex').slice(0, 12);
+  // SPEC §6.6/§14: immutable executable URLs use the complete collision-resistant source
+  // identity. Truncated cache-busting hashes silently alias distinct deploys.
+  return buildSecuritySha256Hex(source);
 }
