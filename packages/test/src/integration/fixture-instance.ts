@@ -102,6 +102,7 @@ export async function createFixtureInstance(
   const { definition } = descriptor;
   let rawDb: PgliteTestDb;
   let db: PgliteTestDb;
+  let inspectionDb: PgliteTestDb;
   let app: KovoApp;
   let dispatch: (request: Request) => Promise<Response>;
   let queryReadPolicy: QueryReadPolicy;
@@ -121,16 +122,22 @@ export async function createFixtureInstance(
           })
         : null;
     db = verifier ? (verifier.wrap(rawDb) as PgliteTestDb) : rawDb;
+    inspectionDb = verifier
+      ? (createDbVerifier({}, { domainByTable: {} }).wrap(rawDb) as PgliteTestDb)
+      : rawDb;
     // Seal the engine hook functions before fixture-controlled seed/app code can retain and
     // replace the adapter symbols. The factories still wrap every produced target in the verifier.
     const capabilities = fixtureDbCapabilityFactories(rawDb, verifier);
-    // A seed callback may retain its handle for later application code. Keep that capability on
-    // the same wrapped seam used at request time; operations outside capture are setup-only, while
-    // later use is still observed under SPEC §11.2 instead of escaping through the raw adapter.
-    await definition.seed?.(db);
-    const authoredApp =
-      typeof definition.app === 'function' ? definition.app({ db }) : definition.app;
-    const prepared = prepareApp(authoredApp, db, capabilities);
+    // C238 / SPEC §11.2: setup may use the verified handle, but it does so in a short-lived capture.
+    // After setup, the same root is usable only while a request capture is active. A seed/app
+    // closure that retains it therefore cannot launder DB authority into a fresh async context.
+    const setup = async (): Promise<PreparedFixtureApp> => {
+      await definition.seed?.(db);
+      const authoredApp =
+        typeof definition.app === 'function' ? definition.app({ db }) : definition.app;
+      return prepareApp(authoredApp, db, capabilities);
+    };
+    const prepared = verifier ? (await verifier.captureSetup(setup)).result : await setup();
     app = prepared.app;
     appManagesDb = prepared.managesDb;
     queryReadPolicy = verifier ? snapshotQueryReadPolicy(app) : verifierMap();
@@ -145,7 +152,9 @@ export async function createFixtureInstance(
       return app;
     },
     get db() {
-      return db;
+      // The instance's explicit test-inspection handle is not threaded into application requests.
+      // Request/app code receives `db` above, whose verifier requires an active capture.
+      return inspectionDb;
     },
     verificationDiagnostics() {
       return verifier?.diagnostics() ?? [];

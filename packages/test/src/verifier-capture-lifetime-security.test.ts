@@ -283,6 +283,84 @@ describe('@kovojs/test capture lifetime security', () => {
     expect(rawDb.read('audit_log')).toEqual([]);
   });
 
+  it('revokes a handler-retained DB closure even when it is called from a fresh context', async () => {
+    const rawDb = createFakeDb();
+    let retainedWrite!: () => void;
+    const lateMutation = mutation('audit/retain', {
+      csrf: false,
+      input: s.object({ id: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        retainedWrite = () => request.db.write('audit_log', input.id);
+        return input.id;
+      },
+    });
+    const harness = createVerifiedFakeHarness({
+      db: rawDb,
+      touchGraph: {},
+      verification: { domainByTable: { audit_log: 'audit' } },
+    });
+
+    await expect(harness.exec(lateMutation, { id: 'event-1' })).resolves.toMatchObject({
+      ok: true,
+      value: 'event-1',
+    });
+
+    expect(retainedWrite).toThrow(/KV407.*capture.*settled/u);
+    expect(rawDb.read('audit_log')).toEqual([]);
+  });
+
+  it('binds a directly captured DB method to its verifier epoch', async () => {
+    let adapterCalls = 0;
+    const verifier = createDbVerifier({}, { domainByTable: { audit_log: 'audit' } });
+    const db = verifier.wrap({
+      write() {
+        adapterCalls += 1;
+      },
+    });
+    let retainedWrite!: () => void;
+
+    await verifier.capture(() => {
+      retainedWrite = db.write;
+    });
+
+    expect(retainedWrite).toThrow(/KV407.*capture.*settled/u);
+    expect(adapterCalls).toBe(0);
+  });
+
+  it('binds retained nested and prepared handles to the capture that exposed them', async () => {
+    let nestedCalls = 0;
+    let preparedCalls = 0;
+    const verifier = createDbVerifier({}, { domainByTable: { audit_log: 'audit' } });
+    const db = verifier.wrap({
+      prepare() {
+        return {
+          execute() {
+            preparedCalls += 1;
+          },
+        };
+      },
+      session: {
+        close() {
+          nestedCalls += 1;
+        },
+      },
+    });
+    let retainedNested!: () => void;
+    let retainedPrepared!: () => void;
+
+    await verifier.capture(() => {
+      const scopedDb = verifier.bindAuthority(db);
+      const prepared = scopedDb.prepare('delete from audit_log');
+      const session = scopedDb.session;
+      retainedPrepared = () => prepared.execute();
+      retainedNested = () => session.close();
+    });
+
+    expect(retainedPrepared).toThrow(/KV407.*capture.*settled/u);
+    expect(retainedNested).toThrow(/KV407.*capture.*settled/u);
+    expect({ nestedCalls, preparedCalls }).toEqual({ nestedCalls: 0, preparedCalls: 0 });
+  });
+
   it('revokes query loader descendants after read verification', async () => {
     const gate = deferred();
     let readCalls = 0;
@@ -316,6 +394,40 @@ describe('@kovojs/test capture lifetime security', () => {
 
     await expect(detached).rejects.toThrow(/KV407.*capture.*settled/u);
     expect(readCalls).toBe(0);
+  });
+
+  it('revokes query and page DB closures invoked from a fresh context', async () => {
+    const rawDb = createFakeDb();
+    let retainedPageRead!: () => unknown;
+    let retainedQueryRead!: () => unknown;
+    const product = domain('product');
+    const lateQuery = query('product/retain', {
+      load(_input, context: { db: FakeDb }) {
+        retainedQueryRead = () => context.db.read('products');
+        return 'ready';
+      },
+      reads: [product],
+    });
+    const harness = createKovoTestHarness({
+      db: rawDb,
+      pages: {
+        '/products': {
+          reads: ['product'],
+          render({ db }) {
+            retainedPageRead = () => db.read('products');
+            return '<main>ready</main>';
+          },
+        },
+      },
+      touchGraph: {},
+      verification: { domainByTable: { products: 'product' } },
+    });
+
+    await expect(harness.query(lateQuery)).resolves.toBe('ready');
+    await expect(harness.page('/products')).resolves.toMatchObject({ html: '<main>ready</main>' });
+
+    expect(retainedQueryRead).toThrow(/KV407.*capture.*settled/u);
+    expect(retainedPageRead).toThrow(/KV407.*capture.*settled/u);
   });
 
   it('revokes route-page render descendants after page verification', async () => {

@@ -76,6 +76,9 @@ export function createRecordingOperationVerifier(
         if (operations !== observed) throw new Error('Captured read operations were not reused.');
         state.reads = domains;
       },
+      bindAuthority(db) {
+        return db;
+      },
       async capture(callback) {
         const result = await callback();
         captured.push(observed);

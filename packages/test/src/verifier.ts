@@ -86,7 +86,11 @@ export interface DbVerifier {
     domains: readonly string[],
   ): void;
   assertReadsCoveredSince(start: number, domains: readonly string[]): void;
+  bindAuthority<Db>(db: Db): Db;
   capture<T>(
+    callback: () => T | Promise<T>,
+  ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
+  captureSetup<T>(
     callback: () => T | Promise<T>,
   ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
   diagnostics(): DbVerificationDiagnostic[];
@@ -217,10 +221,28 @@ export function createDbVerifier(
     assertReadsCoveredSince(start: number, domains: readonly string[]): void {
       assertObservedReadsCovered(recorder.slice(start), snapshotDomains(domains), configSnapshot);
     },
+    bindAuthority<Db>(db: Db): Db {
+      const bound = recorder.bindAuthority(db);
+      if (typeof bound !== 'object' || bound === null || bound === db) return bound;
+      return createFrameworkManagedSqlDispatchProxy(
+        bound,
+        {
+          get(target, property, receiver) {
+            return verifierReflectGet(target, property, receiver);
+          },
+        },
+        'test-fixture',
+      ) as Db;
+    },
     capture<T>(
       callback: () => T | Promise<T>,
     ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
       return recorder.capture(callback);
+    },
+    captureSetup<T>(
+      callback: () => T | Promise<T>,
+    ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
+      return recorder.captureSetup(callback);
     },
     diagnostics(): DbVerificationDiagnostic[] {
       return diagnosticsForObservations(recorder.observed, touchGraphSnapshot);
@@ -249,89 +271,101 @@ export function createDbVerifier(
               (prop === kovoReadonlyDbHandle || prop === kovoDeclaredWriteDbHandle) &&
               typeof value === 'function'
             ) {
-              return cachedMethod(target, prop, value, methodCache, () => () => {
-                throw verifierTypeError(
-                  'Kovo DB verifier adapter capability hooks are reserved for the framework lifecycle.',
-                );
-              });
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () => () => {
+                  throw verifierTypeError(
+                    'Kovo DB verifier adapter capability hooks are reserved for the framework lifecycle.',
+                  );
+                }),
+              );
             }
 
             if (isDrizzleSelectEntry(prop) && typeof value === 'function') {
-              return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
-                recorder.assertActive();
-                const builder = verifierApply<unknown>(value, target, args);
-                if (typeof builder !== 'object' || builder === null) {
-                  throw verifierTypeError(
-                    `Kovo DB verifier ${verifierString(prop)}() must return a read builder object.`,
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                  recorder.assertActive();
+                  const builder = verifierApply<unknown>(value, target, args);
+                  if (typeof builder !== 'object' || builder === null) {
+                    throw verifierTypeError(
+                      `Kovo DB verifier ${verifierString(prop)}() must return a read builder object.`,
+                    );
+                  }
+                  return wrapDrizzleReadBuilder(
+                    builder,
+                    configSnapshot,
+                    recorder,
+                    readBuilderProxyCache,
+                    methodCache,
+                    derivedReadSourceWitness,
+                    readBuilderRawTargets,
                   );
-                }
-                return wrapDrizzleReadBuilder(
-                  builder,
-                  configSnapshot,
-                  recorder,
-                  readBuilderProxyCache,
-                  methodCache,
-                  derivedReadSourceWitness,
-                  readBuilderRawTargets,
-                );
-              });
+                }),
+              );
             }
 
             if (prop === '$count' && typeof value === 'function') {
-              return cachedMethod(
-                target,
-                prop,
-                value,
-                methodCache,
-                () =>
-                  (table: unknown, ...args: unknown[]) => {
-                    observeRequiredTableOperation('read', table, args, configSnapshot, recorder);
-                    return verifierApply(value, target, [table, ...args]);
-                  },
+              return recorder.bindAuthority(
+                cachedMethod(
+                  target,
+                  prop,
+                  value,
+                  methodCache,
+                  () =>
+                    (table: unknown, ...args: unknown[]) => {
+                      observeRequiredTableOperation('read', table, args, configSnapshot, recorder);
+                      return verifierApply(value, target, [table, ...args]);
+                    },
+                ),
               );
             }
 
             if (prop === '$with' && typeof value === 'function') {
-              return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
-                recorder.assertActive();
-                const builder = verifierApply<unknown>(value, target, args);
-                if (typeof builder !== 'object' || builder === null) {
-                  throw verifierTypeError(
-                    'Kovo DB verifier $with() must return a CTE builder object.',
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                  recorder.assertActive();
+                  const builder = verifierApply<unknown>(value, target, args);
+                  if (typeof builder !== 'object' || builder === null) {
+                    throw verifierTypeError(
+                      'Kovo DB verifier $with() must return a CTE builder object.',
+                    );
+                  }
+                  return wrapDrizzleCteBuilder(
+                    builder,
+                    (queryBuilder) => verifier.wrap(queryBuilder),
+                    cteBuilderProxyCache,
+                    methodCache,
+                    derivedReadSourceWitness,
+                    recorder,
                   );
-                }
-                return wrapDrizzleCteBuilder(
-                  builder,
-                  (queryBuilder) => verifier.wrap(queryBuilder),
-                  cteBuilderProxyCache,
-                  methodCache,
-                  derivedReadSourceWitness,
-                  recorder,
-                );
-              });
+                }),
+              );
             }
 
             if (prop === 'with' && typeof value === 'function') {
-              return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
-                recorder.assertActive();
-                const scopedDb = verifierApply<unknown>(value, target, args);
-                if (typeof scopedDb !== 'object' || scopedDb === null) {
-                  throw verifierTypeError(
-                    'Kovo DB verifier with() must return a DB builder object.',
-                  );
-                }
-                return verifier.wrap(scopedDb);
-              });
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                  recorder.assertActive();
+                  const scopedDb = verifierApply<unknown>(value, target, args);
+                  if (typeof scopedDb !== 'object' || scopedDb === null) {
+                    throw verifierTypeError(
+                      'Kovo DB verifier with() must return a DB builder object.',
+                    );
+                  }
+                  return verifier.wrap(scopedDb);
+                }),
+              );
             }
 
             if (prop === 'query' && typeof value === 'object' && value !== null) {
-              return wrapRelationalNamespace(
-                value,
-                configSnapshot,
-                recorder,
-                relationalNamespaceProxyCache,
-                relationalBuilderProxyCache,
-                methodCache,
+              return recorder.bindAuthority(
+                wrapRelationalNamespace(
+                  value,
+                  configSnapshot,
+                  recorder,
+                  relationalNamespaceProxyCache,
+                  relationalBuilderProxyCache,
+                  methodCache,
+                ),
               );
             }
 
@@ -341,15 +375,17 @@ export function createDbVerifier(
                   `Kovo DB verifier nested SQL handle ${verifierString(prop)} must be an object.`,
                 );
               }
-              return wrapSqlHandle(
-                value,
-                configSnapshot,
-                recorder,
-                sqlHandleProxyCache,
-                methodCache,
-                preparedSqlProxyCache,
-                preparedSqlMethodCache,
-                (transactionDb) => verifier.wrap(transactionDb),
+              return recorder.bindAuthority(
+                wrapSqlHandle(
+                  value,
+                  configSnapshot,
+                  recorder,
+                  sqlHandleProxyCache,
+                  methodCache,
+                  preparedSqlProxyCache,
+                  preparedSqlMethodCache,
+                  (transactionDb) => verifier.wrap(transactionDb),
+                ),
               );
             }
 
@@ -357,7 +393,7 @@ export function createDbVerifier(
               if (typeof value !== 'object' || value === null) {
                 throw verifierTypeError('Kovo DB verifier $primary handle must be an object.');
               }
-              return verifier.wrap(value);
+              return recorder.bindAuthority(verifier.wrap(value));
             }
 
             if (prop === '$replicas') {
@@ -367,25 +403,31 @@ export function createDbVerifier(
             }
 
             if (prop === 'transaction' && typeof value === 'function') {
-              return cachedMethod(target, prop, value, methodCache, () =>
-                verifiedTransactionMethod(
-                  target,
-                  value,
-                  (transactionDb) => verifier.wrap(transactionDb),
-                  recorder,
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () =>
+                  verifiedTransactionMethod(
+                    target,
+                    value,
+                    (transactionDb) => verifier.wrap(transactionDb),
+                    recorder,
+                  ),
                 ),
               );
             }
 
             if (prop === 'read' && typeof value === 'function') {
-              return cachedMethod(target, prop, value, methodCache, () =>
-                observableTableMethod('read', target, value, configSnapshot, recorder),
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () =>
+                  observableTableMethod('read', target, value, configSnapshot, recorder),
+                ),
               );
             }
 
             if (prop === 'write' && typeof value === 'function') {
-              return cachedMethod(target, prop, value, methodCache, () =>
-                observableTableMethod('write', target, value, configSnapshot, recorder),
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () =>
+                  observableTableMethod('write', target, value, configSnapshot, recorder),
+                ),
               );
             }
 
@@ -397,29 +439,33 @@ export function createDbVerifier(
               (prop === 'insert' || prop === 'update' || prop === 'delete') &&
               typeof value === 'function'
             ) {
-              return cachedMethod(
-                target,
-                prop,
-                value,
-                methodCache,
-                () =>
-                  (table: unknown, ...args: unknown[]) => {
-                    observeRequiredTableOperation('write', table, args, configSnapshot, recorder);
-                    const builder = verifierApply<unknown>(value, target, [table, ...args]);
-                    if (typeof builder !== 'object' || builder === null) return builder;
-                    return wrapDrizzleWriteBuilder(
-                      builder,
-                      prop,
-                      prop === 'delete' ? 'base' : 'entry',
-                      writeBuilderContext,
-                    );
-                  },
+              return recorder.bindAuthority(
+                cachedMethod(
+                  target,
+                  prop,
+                  value,
+                  methodCache,
+                  () =>
+                    (table: unknown, ...args: unknown[]) => {
+                      observeRequiredTableOperation('write', table, args, configSnapshot, recorder);
+                      const builder = verifierApply<unknown>(value, target, [table, ...args]);
+                      if (typeof builder !== 'object' || builder === null) return builder;
+                      return wrapDrizzleWriteBuilder(
+                        builder,
+                        prop,
+                        prop === 'delete' ? 'base' : 'entry',
+                        writeBuilderContext,
+                      );
+                    },
+                ),
               );
             }
 
             if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
-              return cachedMethod(target, prop, value, methodCache, () =>
-                observableSqlMethod(target, value, configSnapshot, recorder),
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () =>
+                  observableSqlMethod(target, value, configSnapshot, recorder),
+                ),
               );
             }
 
@@ -428,30 +474,36 @@ export function createDbVerifier(
               typeof value === 'function' &&
               (isDbAdapterLike(target) || isSqlHandleLike(target))
             ) {
-              return cachedMethod(target, prop, value, methodCache, () =>
-                observableSqlMethod(target, value, configSnapshot, recorder),
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () =>
+                  observableSqlMethod(target, value, configSnapshot, recorder),
+                ),
               );
             }
 
             if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(target)) {
-              return cachedMethod(target, prop, value, methodCache, () =>
-                observablePrepareMethod(
-                  target,
-                  value,
-                  configSnapshot,
-                  recorder,
-                  preparedSqlProxyCache,
-                  preparedSqlMethodCache,
-                  (preparedResult) => verifier.wrap(preparedResult),
+              return recorder.bindAuthority(
+                cachedMethod(target, prop, value, methodCache, () =>
+                  observablePrepareMethod(
+                    target,
+                    value,
+                    configSnapshot,
+                    recorder,
+                    preparedSqlProxyCache,
+                    preparedSqlMethodCache,
+                    (preparedResult) => verifier.wrap(preparedResult),
+                  ),
                 ),
               );
             }
 
             return typeof value === 'function'
-              ? cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
-                  recorder.assertActive();
-                  return verifierApply(value, target, args);
-                })
+              ? recorder.bindAuthority(
+                  cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                    recorder.assertActive();
+                    return verifierApply(value, target, args);
+                  }),
+                )
               : value;
           },
           getOwnPropertyDescriptor(target, prop) {

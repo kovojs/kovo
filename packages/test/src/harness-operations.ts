@@ -27,6 +27,7 @@ export interface HarnessOperationVerifier {
     observed: readonly ObservedDbOperation[],
     domains: readonly string[],
   ): void;
+  bindAuthority<Db>(db: Db): Db;
   capture<T>(
     callback: () => T | Promise<T>,
   ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
@@ -83,18 +84,19 @@ export async function executeHarnessMutation<
   }
   const executionDb =
     typeof db === 'object' && db !== null ? createManagedTestFixtureDispatchProxy(db) : db;
-  const request = {
-    ...requestFixture,
-    ...options?.request,
-    db: executionDb,
-  } as unknown as Request;
-  const run = () =>
-    runMutation(
+  const run = () => {
+    const request = {
+      ...requestFixture,
+      ...options?.request,
+      db: verifier?.bindAuthority(executionDb) ?? executionDb,
+    } as unknown as Request;
+    return runMutation(
       mutation,
       input,
       request,
       options?.csrf === undefined ? {} : { csrf: options.csrf },
     );
+  };
 
   if (!verifier) return run();
 
@@ -131,7 +133,10 @@ export async function loadHarnessPage<Db>(
   // SPEC.md §11.2: a route page's loader accesses the same wrapped DB seam as
   // mutation/query execution, so its reads are cross-checked against the
   // declared read set. Without the verifier the render still runs untracked.
-  const runRender = () => verifierApply<string | Promise<string>>(render, page, [{ db }]);
+  const runRender = () =>
+    verifierApply<string | Promise<string>>(render, page, [
+      { db: verifier?.bindAuthority(db) ?? db },
+    ]);
   if (!verifier) return createPageAssertion(await runRender());
 
   const captured = await verifier.capture(runRender);
@@ -158,17 +163,20 @@ export async function executeHarnessQuery<Db>(
       ? verifierStableMethod(output, 'parse')
       : undefined;
 
-  const request = {
-    ...requestFixture,
-    db,
-  };
   // SPEC.md §11.4: harness query execution uses the same wrapped DB seam
   // as mutation execution, so read verification observes loader data access.
   // SPEC §9.4 (MARQUEE): the harness threads its own db as `context.db` to mirror the framework's
   // managed-handle seam. The fixture db is not the read-only proxy here (the harness owns the
   // verifier seam), so it is passed through the public `QueryLoadContext` shape.
-  const loadContext = { db, request } as QueryLoadContext<typeof request, Db>;
-  const load = () => verifierApply(queryLoad, query, [input, loadContext]);
+  const load = () => {
+    const scopedDb = verifier?.bindAuthority(db) ?? db;
+    const request = {
+      ...requestFixture,
+      db: scopedDb,
+    };
+    const loadContext = { db: scopedDb, request } as QueryLoadContext<typeof request, Db>;
+    return verifierApply(queryLoad, query, [input, loadContext]);
+  };
   let result: unknown;
   if (verifier) {
     const captured = await verifier.capture(load);

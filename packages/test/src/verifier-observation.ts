@@ -16,6 +16,7 @@ import {
   verifierAsyncStorageRun,
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
+  verifierGetPrototypeOf,
   verifierIsProxy,
   verifierMap,
   verifierMapGet,
@@ -24,8 +25,11 @@ import {
   verifierObjectKeys,
   verifierPromiseResolve,
   verifierPromiseThen,
+  verifierProxy,
+  verifierReflectGet,
   verifierTypeError,
   verifierWeakMapGet,
+  verifierWeakMap,
   verifierWeakMapSet,
 } from './verifier-security-intrinsics.js';
 import { snapshotObservedOperation, snapshotVerifierSqlStatement } from './verifier-snapshots.js';
@@ -58,7 +62,11 @@ export interface DbObservationOptions {
 export interface ObservationRecorder {
   readonly observed: readonly ObservedDbOperation[];
   assertActive(): void;
+  bindAuthority<Value>(value: Value): Value;
   capture<T>(
+    callback: () => T | Promise<T>,
+  ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
+  captureSetup<T>(
     callback: () => T | Promise<T>,
   ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
   length(): number;
@@ -68,7 +76,10 @@ export interface ObservationRecorder {
 
 interface ObservationScope {
   active: boolean;
+  authorityMethods: WeakMap<Function, Function>;
+  authorityObjects: WeakMap<object, object>;
   observed: ObservedDbOperation[];
+  recordGlobal: boolean;
 }
 
 export interface CachedMethod {
@@ -81,10 +92,69 @@ export function createObservationRecorder(recordOutsideCapture = true): Observat
   const storage = verifierAsyncStorage<ObservationScope>();
   const assertActive = (): void => {
     const scope = verifierAsyncStorageGetStore(storage);
-    if (scope?.active === false) {
+    if (scope?.active === false || (scope === undefined && !recordOutsideCapture)) {
       throw verifierTypeError(
-        'KV407: Kovo DB verifier capture has settled; inherited DB authority is revoked.',
+        'KV407: Kovo DB verifier capture is absent or has settled; request-scoped DB authority is revoked.',
       );
+    }
+  };
+  const assertScopeActive = (scope: ObservationScope): void => {
+    if (!scope.active) {
+      throw verifierTypeError(
+        'KV407: Kovo DB verifier capture has settled; retained DB authority is revoked.',
+      );
+    }
+  };
+  const bindForScope = (value: unknown, scope: ObservationScope): unknown => {
+    if (typeof value === 'function') {
+      const cached = verifierWeakMapGet(scope.authorityMethods, value);
+      if (cached !== undefined) return cached;
+      const wrapped = function boundVerifierAuthority(this: unknown, ...args: unknown[]): unknown {
+        assertScopeActive(scope);
+        return bindForScope(verifierApply(value, this, args), scope);
+      };
+      verifierWeakMapSet(scope.authorityMethods, value, wrapped);
+      return wrapped;
+    }
+    if (value === null || typeof value !== 'object' || !verifierIsProxy(value)) return value;
+    const cached = verifierWeakMapGet(scope.authorityObjects, value);
+    if (cached !== undefined) return cached;
+    const wrapped = verifierProxy(value, {
+      get(target, property, receiver) {
+        assertScopeActive(scope);
+        return bindForScope(verifierReflectGet(target, property, receiver), scope);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        assertScopeActive(scope);
+        return verifierGetOwnPropertyDescriptor(target, property);
+      },
+      getPrototypeOf(target) {
+        assertScopeActive(scope);
+        return verifierGetPrototypeOf(target);
+      },
+    });
+    verifierWeakMapSet(scope.authorityObjects, value, wrapped);
+    return wrapped;
+  };
+  const captureWithScope = async <T>(
+    callback: () => T | Promise<T>,
+    recordGlobal: boolean,
+  ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> => {
+    const scope: ObservationScope = {
+      active: true,
+      authorityMethods: verifierWeakMap(),
+      authorityObjects: verifierWeakMap(),
+      observed: [],
+      recordGlobal,
+    };
+    try {
+      const result = await verifierAsyncStorageRun(storage, scope, callback);
+      return { observed: verifierFreeze(verifierArraySlice(scope.observed)), result };
+    } finally {
+      // AsyncLocalStorage descendants retain the scope object after run() settles. Revoke that
+      // shared object before capture resolves so detached work cannot use inherited verifier
+      // authority after its observations have already been checked (SPEC.md §11.2).
+      scope.active = false;
     }
   };
 
@@ -93,19 +163,19 @@ export function createObservationRecorder(recordOutsideCapture = true): Observat
       return verifierFreeze(verifierArraySlice(observed));
     },
     assertActive,
+    bindAuthority<Value>(value: Value): Value {
+      const scope = verifierAsyncStorageGetStore(storage);
+      return (scope === undefined ? value : bindForScope(value, scope)) as Value;
+    },
     async capture<T>(
       callback: () => T | Promise<T>,
     ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
-      const scope: ObservationScope = { active: true, observed: [] };
-      try {
-        const result = await verifierAsyncStorageRun(storage, scope, callback);
-        return { observed: verifierFreeze(verifierArraySlice(scope.observed)), result };
-      } finally {
-        // AsyncLocalStorage descendants retain the scope object after run() settles. Revoke that
-        // shared object before capture() resolves so detached work cannot use inherited verifier
-        // authority after its observations have already been checked (SPEC.md §11.2).
-        scope.active = false;
-      }
+      return captureWithScope(callback, true);
+    },
+    async captureSetup<T>(
+      callback: () => T | Promise<T>,
+    ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
+      return captureWithScope(callback, false);
     },
     length(): number {
       return observed.length;
@@ -115,7 +185,7 @@ export function createObservationRecorder(recordOutsideCapture = true): Observat
       const scope = verifierAsyncStorageGetStore(storage);
       if (scope === undefined && !recordOutsideCapture) return;
       const snapshot = snapshotObservedOperation(operation);
-      verifierArrayPush(observed, snapshot);
+      if (scope === undefined || scope.recordGlobal) verifierArrayPush(observed, snapshot);
       if (scope !== undefined) verifierArrayPush(scope.observed, snapshot);
     },
     slice(start: number): readonly ObservedDbOperation[] {

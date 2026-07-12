@@ -611,6 +611,37 @@ describe('integration fixture verifier security', () => {
     await expect(instance.db.read('audit_log')).resolves.toEqual([]);
   });
 
+  it('C238 revokes a route-retained DB closure invoked from a fresh context', async () => {
+    let db!: PgliteTestDb;
+    let retainedWrite!: () => Promise<void>;
+    const app = { queries: [] } as unknown as KovoApp;
+    const descriptor: KovoFixtureDescriptor = {
+      __kovoIntegrationFixture: true,
+      definition: {
+        app: ({ db: fixtureDb }) => {
+          db = fixtureDb;
+          return app;
+        },
+        schema: 'create table audit_log (id text primary key)',
+        touchGraph: {},
+        verification: {
+          domainByTable: { audit_log: 'audit' },
+        },
+      },
+    };
+
+    instance = await createFixtureInstance(descriptor, () => async () => {
+      retainedWrite = () => db.write('audit_log', { id: 'event-1' });
+      return new Response('ok');
+    });
+
+    const response = await instance.handle(new Request('http://fixture.local/audit'));
+    expect(response.status).toBe(200);
+
+    expect(retainedWrite).toThrow(/KV407.*capture.*settled/u);
+    await expect(instance.db.read('audit_log')).resolves.toEqual([]);
+  });
+
   it('C166 rejects database writes during a query request', async () => {
     let db!: PgliteTestDb;
     const app = {
