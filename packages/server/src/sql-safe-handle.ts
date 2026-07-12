@@ -740,7 +740,7 @@ function reconstructNativeDrizzlePlaceholder(value: object): Placeholder {
   return witnessFreeze(new Placeholder(descriptor.value));
 }
 
-function reconstructNativeDrizzleColumn(value: object): SQL {
+function reconstructNativeDrizzleColumn(value: object): object {
   const name = witnessGetOwnPropertyDescriptor(value, 'name');
   const table = witnessGetOwnPropertyDescriptor(value, 'table');
   const isAlias = witnessGetOwnPropertyDescriptor(value, 'isAlias');
@@ -769,7 +769,7 @@ function reconstructNativeDrizzleColumn(value: object): SQL {
   return frozenIdentifierSql(parts);
 }
 
-function reconstructNativeDrizzleTable(value: object): SQL {
+function reconstructNativeDrizzleTable(value: object): object {
   return frozenIdentifierSql(nativeDrizzleTableIdentifierParts(value));
 }
 
@@ -795,7 +795,7 @@ function nativeDrizzleTableIdentifierParts(value: object): readonly string[] {
     : witnessFreeze([name.value]);
 }
 
-function frozenIdentifierSql(parts: readonly string[]): SQL {
+function frozenIdentifierSql(parts: readonly string[]): object {
   const chunks: unknown[] = [];
   for (let index = 0; index < parts.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(parts, index);
