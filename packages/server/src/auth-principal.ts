@@ -1,12 +1,9 @@
+import { types as nodeUtilTypes } from 'node:util';
+
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import {
-  createWitnessSet,
   createWitnessWeakSet,
-  witnessDefineProperty,
   witnessFreeze,
-  witnessReflectApply,
-  witnessSetAdd,
-  witnessSetHas,
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
@@ -15,6 +12,17 @@ export type PrincipalPosture =
   | { kind: 'anonymous' }
   | { kind: 'proven'; principal: string }
   | { kind: 'unresolved' };
+
+/**
+ * Package-private, immutable authorization evidence. Built-in guards consume this snapshot rather
+ * than re-reading caller-owned session objects after the principal decision (SPEC §6.5/§6.6).
+ */
+export interface RequestPrincipalSnapshot {
+  readonly kind: PrincipalPosture['kind'];
+  readonly principal: string | undefined;
+  readonly rateLimitKey: string | undefined;
+  readonly roles: readonly string[] | undefined;
+}
 
 declare const nonRequestPrincipalPostureBrand: unique symbol;
 
@@ -57,25 +65,371 @@ type NonRequestPrincipalPostureInput =
       readonly reason: string;
     };
 
-const nativeStringToLowerCase = String.prototype.toLowerCase;
-const nativeStringTrim = String.prototype.trim;
-const unresolvedPrincipalSentinels = createWitnessSet<string>();
-witnessSetAdd(unresolvedPrincipalSentinels, 'anonymous');
-witnessSetAdd(unresolvedPrincipalSentinels, 'unknown');
-witnessSetAdd(unresolvedPrincipalSentinels, 'unresolved');
+/*
+ * Boot-pinned auth carrier controls. Application code shares the server realm, so inherited
+ * fields, accessors, and unregistered Proxy traps are not identity evidence. Keep this membrane
+ * local to the auth boundary so a pre-import replacement is detected before any guard can use it.
+ */
+const NativeArray = globalThis.Array;
+const NativeFunction = globalThis.Function;
+const NativeObject = globalThis.Object;
+const NativeProxy = globalThis.Proxy;
+const NativeReflect = globalThis.Reflect;
+const NativeString = globalThis.String;
+const NativeTypeError = globalThis.TypeError;
+const NativeWeakMap = globalThis.WeakMap;
+const nativeArrayIsArray = NativeArray.isArray;
+const nativeFunctionToString = NativeFunction.prototype.toString;
+const nativeObjectCreate = NativeObject.create;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
+const nativeObjectFreeze = NativeObject.freeze;
+const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectHasOwnProperty = NativeObject.prototype.hasOwnProperty;
+const nativeObjectIs = NativeObject.is;
+const nativeReflectApply = NativeReflect.apply;
+const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeStringTrim = NativeString.prototype.trim;
+const nativeUtilIsProxy = nodeUtilTypes.isProxy;
+const nativeWeakMapGet = NativeWeakMap.prototype.get;
+const nativeWeakMapSet = NativeWeakMap.prototype.set;
+
+function authApply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
+  return nativeReflectApply(fn, receiver, args) as Return;
+}
+
+function authHasOwn(value: object, property: PropertyKey): boolean {
+  return authApply(nativeObjectHasOwnProperty, value, [property]);
+}
+
+function authFunctionShapeIsSound(
+  value: Function,
+  expectedName: string,
+  expectedLength: number,
+): boolean {
+  const name = authApply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, 'name'],
+  );
+  const length = authApply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, 'length'],
+  );
+  if (
+    name === undefined ||
+    !authHasOwn(name, 'value') ||
+    name.value !== expectedName ||
+    length === undefined ||
+    !authHasOwn(length, 'value') ||
+    length.value !== expectedLength
+  ) {
+    return false;
+  }
+  return (
+    authApply<string>(nativeFunctionToString, value, []) ===
+    `function ${expectedName}() { [native code] }`
+  );
+}
+
+function authCarrierControlsAreSound(): boolean {
+  try {
+    const requiredFunctions: readonly [Function, string, number][] = [
+      [nativeReflectApply, 'apply', 3],
+      [nativeArrayIsArray, 'isArray', 1],
+      [nativeObjectCreate, 'create', 2],
+      [nativeObjectDefineProperty, 'defineProperty', 3],
+      [nativeObjectFreeze, 'freeze', 1],
+      [nativeObjectGetOwnPropertyDescriptor, 'getOwnPropertyDescriptor', 2],
+      [nativeObjectHasOwnProperty, 'hasOwnProperty', 1],
+      [nativeObjectIs, 'is', 2],
+      [nativeStringToLowerCase, 'toLowerCase', 0],
+      [nativeStringTrim, 'trim', 0],
+      [nativeWeakMapGet, 'get', 1],
+      [nativeWeakMapSet, 'set', 2],
+      [NativeProxy, 'Proxy', 2],
+      [NativeWeakMap, 'WeakMap', 0],
+      [nativeUtilIsProxy, '', 0],
+      [nativeFunctionToString, 'toString', 0],
+    ];
+    for (let index = 0; index < requiredFunctions.length; index += 1) {
+      const control = requiredFunctions[index]!;
+      if (!authFunctionShapeIsSound(control[0], control[1], control[2])) return false;
+    }
+
+    if (authApply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
+    if (authApply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
+    if (authApply<string>(nativeStringTrim, ' principal ', []) !== 'principal') return false;
+    if (authApply<string>(nativeStringToLowerCase, 'AdMiN', []) !== 'admin') return false;
+
+    const marker = {};
+    const record = authApply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
+      null,
+    ]);
+    authApply(nativeObjectDefineProperty, NativeObject, [record, 'marker', { value: marker }]);
+    const descriptor = authApply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [record, 'marker'],
+    );
+    if (
+      descriptor === undefined ||
+      !authHasOwn(descriptor, 'value') ||
+      !authApply(nativeObjectIs, NativeObject, [descriptor.value, marker])
+    ) {
+      return false;
+    }
+    if (authApply(nativeObjectFreeze, NativeObject, [record]) !== record) return false;
+
+    const plain = {};
+    const proxy = new NativeProxy({}, {});
+    if (authApply(nativeUtilIsProxy, nodeUtilTypes, [plain]) !== false) return false;
+    if (authApply(nativeUtilIsProxy, nodeUtilTypes, [proxy]) !== true) return false;
+
+    const map = new NativeWeakMap<object, object>();
+    authApply(nativeWeakMapSet, map, [plain, marker]);
+    return authApply(nativeWeakMapGet, map, [plain]) === marker;
+  } catch {
+    return false;
+  }
+}
+
+const authCarrierControlsSound = authCarrierControlsAreSound();
+const requestPrincipalSnapshots = new NativeWeakMap<object, RequestPrincipalSnapshot>();
 const nonRequestPrincipalPostures = createWitnessWeakSet<object>();
+
+function assertAuthCarrierControls(): void {
+  if (!authCarrierControlsSound) {
+    throw new NativeTypeError(
+      'Kovo auth principal controls are unavailable because realm intrinsics were modified before framework initialization.',
+    );
+  }
+}
+
+type StableOwnData =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'ambiguous' }
+  | { readonly kind: 'data'; readonly value: unknown };
+
+function sameOwnDataDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if (!authHasOwn(left, 'value') || !authHasOwn(right, 'value')) return false;
+  return (
+    authApply<boolean>(nativeObjectIs, NativeObject, [left.value, right.value]) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
+}
+
+function stableOwnData(value: object, property: PropertyKey): StableOwnData {
+  assertAuthCarrierControls();
+  try {
+    if (authApply(nativeUtilIsProxy, nodeUtilTypes, [value])) return { kind: 'ambiguous' };
+    const before = authApply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [value, property],
+    );
+    const after = authApply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [value, property],
+    );
+    if (!sameOwnDataDescriptor(before, after)) return { kind: 'ambiguous' };
+    return before === undefined ? { kind: 'absent' } : { kind: 'data', value: before.value };
+  } catch {
+    return { kind: 'ambiguous' };
+  }
+}
+
+function authObjectLike(value: unknown): value is object {
+  return (typeof value === 'object' || typeof value === 'function') && value !== null;
+}
+
+function cloneStableRoles(value: unknown): readonly string[] | undefined {
+  assertAuthCarrierControls();
+  if (!authObjectLike(value) || authApply(nativeUtilIsProxy, nodeUtilTypes, [value])) {
+    return undefined;
+  }
+  if (!authApply(nativeArrayIsArray, NativeArray, [value])) return undefined;
+  const length = stableOwnData(value, 'length');
+  if (
+    length.kind !== 'data' ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value > 1_000
+  ) {
+    return undefined;
+  }
+  const roles: string[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = stableOwnData(value, index);
+    if (entry.kind !== 'data' || typeof entry.value !== 'string') return undefined;
+    authApply(nativeObjectDefineProperty, NativeObject, [
+      roles,
+      index,
+      {
+        configurable: true,
+        enumerable: true,
+        value: entry.value,
+        writable: false,
+      },
+    ]);
+  }
+  return authApply(nativeObjectFreeze, NativeObject, [roles]) as readonly string[];
+}
+
+function mintRequestPrincipalSnapshot(
+  kind: PrincipalPosture['kind'],
+  principal?: string,
+  roles?: readonly string[],
+  rateLimitKey?: string,
+): RequestPrincipalSnapshot {
+  const snapshot = authApply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
+    null,
+  ]);
+  authApply(nativeObjectDefineProperty, NativeObject, [snapshot, 'kind', { value: kind }]);
+  authApply(nativeObjectDefineProperty, NativeObject, [
+    snapshot,
+    'principal',
+    { value: principal },
+  ]);
+  authApply(nativeObjectDefineProperty, NativeObject, [
+    snapshot,
+    'rateLimitKey',
+    {
+      value: rateLimitKey,
+    },
+  ]);
+  authApply(nativeObjectDefineProperty, NativeObject, [snapshot, 'roles', { value: roles }]);
+  return authApply(nativeObjectFreeze, NativeObject, [snapshot]) as RequestPrincipalSnapshot;
+}
+
+function snapshotFromSessionValue(sessionValue: unknown): RequestPrincipalSnapshot {
+  if (sessionValue === null || sessionValue === undefined) {
+    return mintRequestPrincipalSnapshot('anonymous');
+  }
+  if (!authObjectLike(sessionValue)) {
+    const rateLimitKey = isProvenPrincipal(sessionValue) ? `session:${sessionValue}` : undefined;
+    return mintRequestPrincipalSnapshot('unresolved', undefined, undefined, rateLimitKey);
+  }
+  if (authApply(nativeUtilIsProxy, nodeUtilTypes, [sessionValue])) {
+    return mintRequestPrincipalSnapshot('unresolved');
+  }
+
+  const sessionId = stableOwnData(sessionValue, 'id');
+  const user = stableOwnData(sessionValue, 'user');
+  if (sessionId.kind === 'ambiguous' || user.kind === 'ambiguous') {
+    return mintRequestPrincipalSnapshot('unresolved');
+  }
+  const sessionRateLimitKey =
+    sessionId.kind === 'data' && isProvenPrincipal(sessionId.value)
+      ? `session:${sessionId.value}`
+      : undefined;
+  if (user.kind !== 'data' || !authObjectLike(user.value)) {
+    const primitiveUserKey =
+      user.kind === 'data' && isProvenPrincipal(user.value) ? `principal:${user.value}` : undefined;
+    return mintRequestPrincipalSnapshot(
+      'unresolved',
+      undefined,
+      undefined,
+      sessionRateLimitKey ?? primitiveUserKey,
+    );
+  }
+  if (authApply(nativeUtilIsProxy, nodeUtilTypes, [user.value])) {
+    return mintRequestPrincipalSnapshot('unresolved', undefined, undefined, sessionRateLimitKey);
+  }
+
+  const id = stableOwnData(user.value, 'id');
+  const roleData = stableOwnData(user.value, 'roles');
+  if (id.kind !== 'data' || !isProvenPrincipal(id.value)) {
+    return mintRequestPrincipalSnapshot('unresolved', undefined, undefined, sessionRateLimitKey);
+  }
+  const roles = roleData.kind === 'data' ? cloneStableRoles(roleData.value) : undefined;
+  return mintRequestPrincipalSnapshot(
+    'proven',
+    id.value,
+    roles,
+    sessionRateLimitKey ?? `principal:${id.value}`,
+  );
+}
+
+function classifyRequestPrincipal(request: object): RequestPrincipalSnapshot {
+  if (authApply(nativeUtilIsProxy, nodeUtilTypes, [request])) {
+    return mintRequestPrincipalSnapshot('unresolved');
+  }
+  const session = stableOwnData(request, 'session');
+  const sessionId = stableOwnData(request, 'sessionId');
+  if (session.kind === 'ambiguous' || sessionId.kind === 'ambiguous') {
+    return mintRequestPrincipalSnapshot('unresolved');
+  }
+  if (session.kind === 'data') {
+    const snapshot = snapshotFromSessionValue(session.value);
+    if (
+      snapshot.kind === 'anonymous' &&
+      sessionId.kind === 'data' &&
+      sessionId.value !== null &&
+      sessionId.value !== undefined
+    ) {
+      return mintRequestPrincipalSnapshot('unresolved');
+    }
+    return snapshot;
+  }
+  return sessionId.kind === 'data' && sessionId.value !== null && sessionId.value !== undefined
+    ? mintRequestPrincipalSnapshot('unresolved')
+    : mintRequestPrincipalSnapshot('anonymous');
+}
+
+/** @internal Return one classify-and-pin snapshot for the lifetime of a request carrier. */
+export function requestPrincipalSnapshot(request: unknown): RequestPrincipalSnapshot {
+  assertAuthCarrierControls();
+  if (!authObjectLike(request)) return mintRequestPrincipalSnapshot('anonymous');
+  const existing = authApply<RequestPrincipalSnapshot | undefined>(
+    nativeWeakMapGet,
+    requestPrincipalSnapshots,
+    [request],
+  );
+  if (existing !== undefined) return existing;
+  const snapshot = classifyRequestPrincipal(request);
+  authApply(nativeWeakMapSet, requestPrincipalSnapshots, [request, snapshot]);
+  return snapshot;
+}
+
+/** @internal Register the sessionProvider outcome on the framework-owned request Proxy. */
+export function registerFrameworkSessionPrincipalSnapshot(
+  carrier: object,
+  sessionValue: unknown,
+): void {
+  assertAuthCarrierControls();
+  authApply(nativeWeakMapSet, requestPrincipalSnapshots, [
+    carrier,
+    snapshotFromSessionValue(sessionValue),
+  ]);
+}
+
+/** @internal Carry already-pinned auth evidence across framework-owned request Proxy layers. */
+export function inheritFrameworkPrincipalSnapshot(carrier: object, source: unknown): void {
+  assertAuthCarrierControls();
+  authApply(nativeWeakMapSet, requestPrincipalSnapshots, [
+    carrier,
+    requestPrincipalSnapshot(source),
+  ]);
+}
 
 /** @internal SPEC §6.5/§6.6: auth decisions must only key on a positively resolved principal. */
 export const isProvenPrincipal = securityClassifier(
   'server.auth.proven-principal',
   function (value: unknown): value is string {
     if (typeof value !== 'string') return false;
-    const trimmed = witnessReflectApply<string>(nativeStringTrim, value, []);
+    assertAuthCarrierControls();
+    const trimmed = authApply<string>(nativeStringTrim, value, []);
     if (trimmed === '' || trimmed !== value) return false;
-    return !witnessSetHas(
-      unresolvedPrincipalSentinels,
-      witnessReflectApply(nativeStringToLowerCase, trimmed, []),
-    );
+    const normalized = authApply<string>(nativeStringToLowerCase, trimmed, []);
+    return normalized !== 'anonymous' && normalized !== 'unknown' && normalized !== 'unresolved';
   },
 );
 
@@ -83,58 +437,10 @@ export const isProvenPrincipal = securityClassifier(
 export const principalPostureFromRequest = securityClassifier(
   'server.auth.request-principal-posture',
   function (request: unknown): PrincipalPosture {
-    if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
-      return { kind: 'anonymous' };
-    }
-
-    const record = request as Record<PropertyKey, unknown>;
-    const candidates: unknown[] = [];
-    let hasUnresolvedCarrier = false;
-
-    if ('session' in record) {
-      const sessionValue = record.session;
-      if (sessionValue === null || sessionValue === undefined) {
-        // Explicit null/undefined is the documented anonymous session-provider outcome.
-      } else if (typeof sessionValue === 'object' || typeof sessionValue === 'function') {
-        hasUnresolvedCarrier = true;
-        const session = sessionValue as Record<PropertyKey, unknown>;
-        const user = session.user;
-        if (typeof user === 'object' || typeof user === 'function') {
-          witnessDefineProperty(candidates, candidates.length, {
-            configurable: true,
-            enumerable: true,
-            value: (user as Record<PropertyKey, unknown>).id,
-            writable: true,
-          });
-        } else if (user !== null && user !== undefined) {
-          witnessDefineProperty(candidates, candidates.length, {
-            configurable: true,
-            enumerable: true,
-            value: user,
-            writable: true,
-          });
-        }
-      } else {
-        hasUnresolvedCarrier = true;
-        witnessDefineProperty(candidates, candidates.length, {
-          configurable: true,
-          enumerable: true,
-          value: sessionValue,
-          writable: true,
-        });
-      }
-    }
-
-    if ('sessionId' in record && record.sessionId !== null && record.sessionId !== undefined) {
-      hasUnresolvedCarrier = true;
-    }
-
-    for (let index = 0; index < candidates.length; index += 1) {
-      const candidate = candidates[index];
-      if (isProvenPrincipal(candidate)) return { kind: 'proven', principal: candidate };
-    }
-
-    return hasUnresolvedCarrier ? { kind: 'unresolved' } : { kind: 'anonymous' };
+    const snapshot = requestPrincipalSnapshot(request);
+    return snapshot.kind === 'proven' && snapshot.principal !== undefined
+      ? { kind: 'proven', principal: snapshot.principal }
+      : { kind: snapshot.kind === 'proven' ? 'unresolved' : snapshot.kind };
   },
 );
 
@@ -165,7 +471,7 @@ export function declareSystemPrincipal(
   audit: NonRequestPrincipalAudit,
 ): NonRequestPrincipalPosture {
   const trimmedReason =
-    typeof reason === 'string' ? witnessReflectApply<string>(nativeStringTrim, reason, []) : '';
+    typeof reason === 'string' ? authApply<string>(nativeStringTrim, reason, []) : '';
   if (typeof reason !== 'string' || trimmedReason === '' || reason !== trimmedReason) {
     throw new TypeError(
       'declareSystemRead/Write(reason) requires a non-empty audited reason (SPEC §10.3 DEC-G).',

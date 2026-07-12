@@ -100,6 +100,12 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
   type Req = {
     session?: { id?: string; user?: { id?: string; roles?: readonly string[] } | null } | null;
   };
+  type RoleReq = {
+    session?: {
+      id?: string;
+      user?: { id?: string; roles: readonly string[] } | null;
+    } | null;
+  };
 
   it('allows built-in auth guards only for a proven session principal', async () => {
     expect(guards.authed<Req>()({ session: { user: { id: 'user_1' } } })).toBe(true);
@@ -121,6 +127,54 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
     } finally {
       Array.prototype.includes = originalIncludes;
     }
+  });
+
+  it('denies inherited or accessor-backed auth authority without invoking it', async () => {
+    const existing = Object.getOwnPropertyDescriptor(Object.prototype, 'session');
+    let roleReads = 0;
+    try {
+      Object.defineProperty(Object.prototype, 'session', {
+        configurable: true,
+        value: { user: { id: 'attacker', roles: ['admin'] } },
+      });
+      const nativeRequest: Request & RoleReq = new Request('https://app.example/admin');
+      expect(guards.authed<Request & RoleReq>()(nativeRequest)).toEqual({
+        kind: 'unauthenticated',
+        payload: {},
+      });
+      expect(guards.role<Request & RoleReq>('admin')(nativeRequest)).toEqual({
+        kind: 'unauthenticated',
+        payload: {},
+      });
+
+      const user = { id: 'user_1' } as { id: string; roles: readonly string[] };
+      Object.defineProperty(user, 'roles', {
+        get() {
+          roleReads += 1;
+          return ['admin'];
+        },
+      });
+      expect(guards.authed<Req>()({ session: { user } })).toBe(true);
+      expect(guards.role<RoleReq>('admin')({ session: { user } })).toEqual({
+        kind: 'forbidden',
+        payload: {},
+      });
+      expect(roleReads).toBe(0);
+    } finally {
+      if (existing === undefined) delete (Object.prototype as { session?: unknown }).session;
+      else Object.defineProperty(Object.prototype, 'session', existing);
+    }
+  });
+
+  it('preserves a provider-minted own session snapshot across framework request layers', async () => {
+    const base: Request & Req = new Request('https://app.example/admin');
+    const lifecycle = await resolveLifecycleRequest(base, {
+      sessionProvider: () => ({ user: { id: 'user_1', roles: ['admin'] } }),
+    });
+    const request = withGuardArgs(lifecycle, { id: 'row_1' });
+
+    expect(guards.authed<typeof request>()(request)).toBe(true);
+    expect(guards.role<typeof request>('admin')(request)).toBe(true);
   });
 
   it('keys authorization principal from session.user.id rather than session.id', async () => {
@@ -1453,6 +1507,32 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
       ok: false,
       status: 403,
     });
+  });
+
+  it('real route/query/mutation runners deny a native Request with only inherited admin session', async () => {
+    const existing = Object.getOwnPropertyDescriptor(Object.prototype, 'session');
+    try {
+      Object.defineProperty(Object.prototype, 'session', {
+        configurable: true,
+        value: { user: { id: 'owner-of-r1', roles: ['admin'] } },
+      });
+      const request: Request & AppReq = new Request('https://app.example/orders/r1');
+
+      await expect(runQuery(orderQuery, { id: 'r1' }, request)).resolves.toMatchObject({
+        auth: 'unauthenticated',
+        ok: false,
+      });
+      await expect(
+        runRoutePage(orderRoute, { params: { id: 'r1' } }, request),
+      ).resolves.toMatchObject({ auth: 'unauthenticated', ok: false });
+      await expect(runMutation(orderMutation, { id: 'r1' }, request)).resolves.toMatchObject({
+        auth: 'unauthenticated',
+        ok: false,
+      });
+    } finally {
+      if (existing === undefined) delete (Object.prototype as { session?: unknown }).session;
+      else Object.defineProperty(Object.prototype, 'session', existing);
+    }
   });
 
   it('renderNoJsMutationResponse (production no-JS path: pre-replay guard) discharges KV414', async () => {

@@ -17,10 +17,11 @@ import {
 import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import {
-  isProvenPrincipal,
+  inheritFrameworkPrincipalSnapshot,
   type NonRequestPrincipalPosture,
   principalPostureFromRequest,
-  provenPrincipalFromRequest,
+  registerFrameworkSessionPrincipalSnapshot,
+  requestPrincipalSnapshot,
 } from './auth-principal.js';
 import { matchRoute, type RouteLike } from './match.js';
 import {
@@ -561,9 +562,7 @@ export const guards = {
   authed<Request extends SessionRequestLike>(): Guard<Request, AuthenticatedRequest<Request>> {
     return stampGuardAudit(
       (request) =>
-        request.session?.user && provenPrincipalFromRequest(request) !== undefined
-          ? true
-          : unauthenticatedGuardFailure(),
+        requestPrincipalSnapshot(request).kind === 'proven' ? true : unauthenticatedGuardFailure(),
       [{ auth: 'session-user', kind: 'authed', name: 'authed' }],
     );
   },
@@ -626,10 +625,11 @@ export const guards = {
   role<Request extends RoleSessionRequestLike>(role: string): Guard<Request> {
     return stampGuardAudit(
       (request) => {
-        if (!request.session?.user || provenPrincipalFromRequest(request) === undefined) {
+        const principal = requestPrincipalSnapshot(request);
+        if (principal.kind !== 'proven') {
           return unauthenticatedGuardFailure();
         }
-        if (!roleListIncludes(request.session.user.roles, role)) return unauthorizedGuardFailure();
+        if (!roleListIncludes(principal.roles, role)) return unauthorizedGuardFailure();
         markPassedRoleGuard(request, role);
         return true;
       },
@@ -668,7 +668,7 @@ export const guards = {
   ): Guard<Request> {
     return stampGuardAudit(
       async (request) => {
-        if (!request.session?.user || provenPrincipalFromRequest(request) === undefined) {
+        if (requestPrincipalSnapshot(request).kind !== 'proven') {
           return unauthenticatedGuardFailure();
         }
         // The query/mutation/route runners merge the validated args / resolved params onto `request`
@@ -1159,6 +1159,8 @@ function requestWithProperty<Request, Key extends string, Value>(
     carrier as unknown as globalThis.Request,
     requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
   );
+  if (key === 'session') registerFrameworkSessionPrincipalSnapshot(carrier, value);
+  else inheritFrameworkPrincipalSnapshot(carrier, request);
   return carrier;
 }
 
@@ -1185,12 +1187,13 @@ export function withoutRequestProperty<Request, Key extends PropertyKey>(
     ownKeys(target) {
       return Reflect.ownKeys(target).filter((property) => property !== key);
     },
-  }) as Request;
+  });
   registerAuthorityNeutralRequestMetadata(
     carrier as unknown as globalThis.Request,
     requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
   );
-  return carrier;
+  inheritFrameworkPrincipalSnapshot(carrier, request);
+  return carrier as Request;
 }
 
 /**
@@ -1343,20 +1346,7 @@ function rateLimitKey<Request extends SessionRequestLike>(
 }
 
 function sessionRateLimitKey(request: unknown): string | undefined {
-  if (!isObjectLike(request) || !('session' in request)) return undefined;
-
-  const sessionValue = request.session;
-  if (isProvenPrincipal(sessionValue)) return `session:${sessionValue}`;
-  if (!isObjectLike(sessionValue)) return undefined;
-
-  const sessionId = sessionValue.id;
-  if (isProvenPrincipal(sessionId)) return `session:${sessionId}`;
-
-  const user = sessionValue.user;
-  if (isProvenPrincipal(user)) return `principal:${user}`;
-  if (isObjectLike(user) && isProvenPrincipal(user.id)) return `principal:${user.id}`;
-
-  return undefined;
+  return requestPrincipalSnapshot(request).rateLimitKey;
 }
 
 function isObjectLike(value: unknown): value is Record<PropertyKey, unknown> {
