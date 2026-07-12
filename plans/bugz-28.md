@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    53 | C1-C53 |
+| Critical |    54 | C1-C54 |
 | High     |    30 | H1-H30 |
 | Medium   |     9 | M1-M9  |
 
@@ -625,6 +625,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the integrated real-export regression emits only the referenced public module and
     runtime; the registered unreferenced admin module and internal token remain absent.
 
+- [ ] **C54 - A mutable webhook verifier pin turns reviewed signed ingress into unsigned execution.**
+      `packages/server/src/webhook.ts`
+  - `webhook()` called the live `Object.defineProperty` to pin `definition.verify`, then retained that
+    same public definition as runtime authority. A selective no-op replacement left the field
+    writable; after declaration it was changed from a rejecting custom verifier to `'none'`. The
+    endpoint still advertised pinned custom auth metadata, but a real unsigned request returned 200
+    and executed the handler.
+  - **Acceptance:** definition fields, verifier identity/configuration, schema, handler, idempotency,
+    replay store, transaction, writes, and access posture are snapshotted through boot-pinned stable
+    own-data controls at declaration; endpoint audit/auth metadata and dispatch consume one private
+    witnessed authority snapshot, and post-construction mutation or late/import-order poison cannot
+    waive verification or change executable/write posture.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1045,8 +1058,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, H20, and H27 are active
-compiler-cache, static-analysis, compiler-Vite, and immutable-output fixes.
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C54, H20, and H27 are
+active compiler-cache, static-analysis, compiler-Vite, webhook-authority, and immutable-output fixes.
 Integrated
 evidence is
 green at
