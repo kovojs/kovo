@@ -104,10 +104,11 @@ export function createDbVerifier(
   const configSnapshot = snapshotDbVerificationConfig(config);
   const recorder = createObservationRecorder(options.recordOutsideCapture !== false);
   const rootProxyCache = verifierWeakMap<object, object>();
+  const replicaCollectionCache = verifierWeakMap<object, object>();
   const sqlHandleProxyCache = verifierWeakMap<object, object>();
   const methodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
 
-  return {
+  const verifier: DbVerifier = {
     assertCovered(touchGraphKey?: string): void {
       assertObservedWritesCovered(
         recorder.observed,
@@ -198,13 +199,31 @@ export function createDbVerifier(
               });
             }
 
-            if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
+            if (isSqlHandleProperty(prop) || prop === 'session') {
+              if (typeof value !== 'object' || value === null) {
+                throw verifierTypeError(
+                  `Kovo DB verifier nested SQL handle ${verifierString(prop)} must be an object.`,
+                );
+              }
               return wrapSqlHandle(
                 value,
                 configSnapshot,
                 recorder,
                 sqlHandleProxyCache,
                 methodCache,
+              );
+            }
+
+            if (prop === '$primary') {
+              if (typeof value !== 'object' || value === null) {
+                throw verifierTypeError('Kovo DB verifier $primary handle must be an object.');
+              }
+              return verifier.wrap(value);
+            }
+
+            if (prop === '$replicas') {
+              return wrapReplicaCollection(value, replicaCollectionCache, (entry) =>
+                verifier.wrap(entry),
               );
             }
 
@@ -290,6 +309,27 @@ export function createDbVerifier(
       return proxy as Db;
     },
   };
+  return verifier;
+}
+
+function wrapReplicaCollection(
+  value: unknown,
+  cache: WeakMap<object, object>,
+  wrap: <Db>(db: Db) => Db,
+): readonly object[] {
+  if (typeof value !== 'object' || value === null) {
+    throw verifierTypeError('Kovo DB verifier $replicas must be a dense array of DB handles.');
+  }
+  const cached = verifierWeakMapGet(cache, value);
+  if (cached !== undefined) return cached as readonly object[];
+  const snapshot = verifierDenseArraySnapshot(value, 'Kovo DB verifier $replicas', (entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw verifierTypeError('Kovo DB verifier $replicas entries must be DB handle objects.');
+    }
+    return wrap(entry);
+  });
+  verifierWeakMapSet(cache, value, snapshot as object);
+  return snapshot;
 }
 
 function wrapSqlHandle<Handle extends object>(

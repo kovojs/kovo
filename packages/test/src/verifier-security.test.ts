@@ -338,6 +338,87 @@ describe('@kovojs/test verifier shared-realm security', () => {
     expect(Object.getPrototypeOf(accessorDb)).toBeNull();
   });
 
+  it('C211 observes the complete nested-driver and replica handle family', async () => {
+    const sqlCalls: unknown[] = [];
+    const tableCalls: string[] = [];
+    const nestedHandle = {
+      exec(statement: unknown) {
+        sqlCalls.push(statement);
+        return [];
+      },
+      query(statement: unknown) {
+        sqlCalls.push(statement);
+        return [];
+      },
+    };
+    const primary = {
+      write(table: string) {
+        tableCalls.push(`primary:${table}`);
+      },
+    };
+    const replica = {
+      read(table: string) {
+        tableCalls.push(`replica:${table}`);
+        return [];
+      },
+    };
+    const raw = {
+      $client: nestedHandle,
+      $primary: primary,
+      $replicas: [replica],
+      session: nestedHandle,
+    };
+    const verifier = createDbVerifier(
+      {},
+      {
+        domainByTable: {
+          audit_log: 'audit',
+          inventory: 'inventory',
+          products: 'product',
+        },
+      },
+    );
+    const db = verifier.wrap(raw);
+
+    await db.session.query({ text: 'select * from products', values: [] });
+    await db.$client.exec({ text: 'delete from audit_log where id = $1', values: ['event-1'] });
+    db.$primary.write('audit_log');
+    db.$replicas[0]!.read('inventory');
+    raw.$replicas.push({ read: () => [] });
+
+    expect(db.session).toBe(db.$client);
+    expect(db.$primary).not.toBe(primary);
+    expect(db.$replicas).toBe(db.$replicas);
+    expect(db.$replicas).not.toBe(raw.$replicas);
+    expect(db.$replicas).toHaveLength(1);
+    expect(Object.isFrozen(db.$replicas)).toBe(true);
+    expect(sqlCalls).toHaveLength(2);
+    expect(tableCalls).toEqual(['primary:audit_log', 'replica:inventory']);
+    expect(verifier.observed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'read', table: 'products' }),
+        expect.objectContaining({ kind: 'write', table: 'audit_log' }),
+        expect.objectContaining({ kind: 'read', table: 'inventory' }),
+      ]),
+    );
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'audit'));
+    expect(() => verifier.assertReadsCovered([])).toThrow(/KV407.*(inventory|product)/u);
+  });
+
+  it('C211 rejects malformed nested-driver carriers before they can escape wrapping', () => {
+    const invalid = createDbVerifier({}, { domainByTable: {} }).wrap({
+      $client: null,
+      $primary: () => undefined,
+      $replicas: [null],
+      session: 'raw-driver',
+    });
+
+    expect(() => invalid.$client).toThrow(/nested SQL handle/u);
+    expect(() => invalid.session).toThrow(/nested SQL handle/u);
+    expect(() => invalid.$primary).toThrow(/\$primary handle/u);
+    expect(() => invalid.$replicas).toThrow(/entries must be DB handle objects/u);
+  });
+
   it('pins AsyncLocalStorage.run so capture evidence cannot be erased', async () => {
     const verifier = createDbVerifier({}, { domainByTable: { audit_log: 'audit' } });
     const db = verifier.wrap(createFakeDb());
