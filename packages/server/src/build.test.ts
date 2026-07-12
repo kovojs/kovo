@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import {
   createServer as createHttpServer,
@@ -1419,6 +1420,104 @@ export default async function handler() {
     } finally {
       Function.prototype.toString = originalFunctionToString;
       delete injectionGlobal.__kovoGeneratedNodeSourceInjection;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits all executable presets from boot-pinned serializers after late source coercion poison', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-all-preset-source-injection-'));
+    const originalJsonStringify = JSON.stringify;
+    const originalFunctionToString = Function.prototype.toString;
+    const originalRegExpToString = RegExp.prototype.toString;
+    const marker = 'KOVO_ALL_PRESET_SOURCE_INJECTION';
+    const injectionGlobal = globalThis as typeof globalThis & {
+      __kovoAllPresetSourceInjection?: boolean;
+    };
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+export default async function handler() {
+  return new Response('safe');
+}
+`,
+      });
+      JSON.stringify = (() =>
+        `(()=>{globalThis.__kovoAllPresetSourceInjection=true;return '${marker}'})()`) as typeof JSON.stringify;
+      Function.prototype.toString = function poisonedFunctionSource() {
+        if (this.name.includes('generated')) {
+          return `function generated() { globalThis.__kovoAllPresetSourceInjection = true; } /* ${marker} */`;
+        }
+        return Reflect.apply(originalFunctionToString, this, []);
+      };
+      RegExp.prototype.toString = function poisonedRegExpSource() {
+        return `/x/;globalThis.__kovoAllPresetSourceInjection=true;/*${marker}*/`;
+      };
+
+      const emitContext = (outDir: string) => ({
+        declaredEnv: [],
+        log() {},
+        outDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      const nodeOut = join(root, 'node');
+      const vercelOut = join(root, 'vercel');
+      const cloudflareOut = join(root, 'cloudflare');
+      await node({ dockerfile: false }).emit!(build, emitContext(nodeOut));
+      await vercel().emit!(build, emitContext(vercelOut));
+      await cloudflare({ compatibilityDate: '2026-06-18', name: 'serializer-proof' }).emit!(
+        build,
+        emitContext(cloudflareOut),
+      );
+
+      const executableSources = await Promise.all([
+        readFile(join(nodeOut, 'server.mjs'), 'utf8'),
+        readFile(join(nodeOut, 'node-adapter.mjs'), 'utf8'),
+        readFile(join(vercelOut, 'functions/kovo.func/index.cjs'), 'utf8'),
+        readFile(join(vercelOut, 'functions/kovo.func/node-adapter.mjs'), 'utf8'),
+        readFile(join(cloudflareOut, 'worker.mjs'), 'utf8'),
+      ]);
+      for (const source of executableSources) expect(source).not.toContain(marker);
+
+      JSON.stringify = originalJsonStringify;
+      Function.prototype.toString = originalFunctionToString;
+      RegExp.prototype.toString = originalRegExpToString;
+      const sha256 = (source: string): string => createHash('sha256').update(source).digest('hex');
+      await expect(readJson(join(nodeOut, 'kovo-artifact-integrity.json'))).resolves.toEqual({
+        algorithm: 'sha256',
+        files: {
+          'node-adapter.mjs': sha256(executableSources[1]!),
+          'server.mjs': sha256(executableSources[0]!),
+        },
+      });
+      await expect(
+        readJson(join(vercelOut, 'functions/kovo.func/kovo-artifact-integrity.json')),
+      ).resolves.toEqual({
+        algorithm: 'sha256',
+        files: {
+          'index.cjs': sha256(executableSources[2]!),
+          'node-adapter.mjs': sha256(executableSources[3]!),
+        },
+      });
+      await expect(readJson(join(cloudflareOut, 'kovo-artifact-integrity.json'))).resolves.toEqual({
+        algorithm: 'sha256',
+        files: { 'worker.mjs': sha256(executableSources[4]!) },
+      });
+      await import(`${pathToFileURL(join(nodeOut, 'server.mjs')).href}?t=${Date.now()}`);
+      await import(
+        `${pathToFileURL(join(vercelOut, 'functions/kovo.func/index.cjs')).href}?t=${Date.now()}`
+      );
+      await import(`${pathToFileURL(join(cloudflareOut, 'worker.mjs')).href}?t=${Date.now()}`);
+      expect(injectionGlobal.__kovoAllPresetSourceInjection).toBeUndefined();
+    } finally {
+      JSON.stringify = originalJsonStringify;
+      Function.prototype.toString = originalFunctionToString;
+      RegExp.prototype.toString = originalRegExpToString;
+      delete injectionGlobal.__kovoAllPresetSourceInjection;
       await rm(root, { force: true, recursive: true });
     }
   });

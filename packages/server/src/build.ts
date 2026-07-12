@@ -1,5 +1,6 @@
 import './security-bootstrap.js';
 
+import { execFileSync } from 'node:child_process';
 import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -11,6 +12,7 @@ import {
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import {
   buildSecurityFunctionSource,
+  buildSecuritySha256Hex,
   buildSecuritySourceLiteral,
 } from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
@@ -33,6 +35,8 @@ const revalidatingAssetHeadersSource = buildSecuritySourceLiteral(
 );
 const documentStaticHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('document'));
 const staticErrorHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('errorDocument'));
+const nativeExecFileSync = execFileSync;
+const nodeExecutablePath = process.execPath;
 
 /**
  * Build-time preset descriptor consumed by `kovo build` and deployment tooling.
@@ -328,8 +332,21 @@ async function emitNodePreset(
     await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
   }
   await cp(build.serverDir, path.join(outDir, 'server'), { recursive: true });
-  await writeFile(path.join(outDir, 'node-adapter.mjs'), nodeAdapterRuntimeSource(), 'utf8');
-  await writeFile(path.join(outDir, 'server.mjs'), nodeServerSource(), 'utf8');
+  const nodeAdapterSource = nodeAdapterRuntimeSource();
+  const serverSource = nodeServerSource();
+  await writeGeneratedJavaScript(
+    path.join(outDir, 'node-adapter.mjs'),
+    nodeAdapterSource,
+    'module',
+  );
+  await writeGeneratedJavaScript(path.join(outDir, 'server.mjs'), serverSource, 'module');
+  await writeJson(path.join(outDir, 'kovo-artifact-integrity.json'), {
+    algorithm: 'sha256',
+    files: {
+      'node-adapter.mjs': generatedArtifactDigest(nodeAdapterSource),
+      'server.mjs': generatedArtifactDigest(serverSource),
+    },
+  });
   await emitNodeRuntimePackage(outDir);
 
   if (options.dockerfile !== false) {
@@ -363,8 +380,21 @@ async function emitVercelPreset(
   await copyPresetStaticFiles(build, path.join(outDir, 'static'));
   await mkdir(functionDir, { recursive: true });
   await copyFile(build.serverHandlerPath, path.join(functionDir, 'handler.mjs'));
-  await writeFile(path.join(functionDir, 'node-adapter.mjs'), nodeAdapterRuntimeSource(), 'utf8');
-  await writeFile(path.join(functionDir, 'index.cjs'), vercelFunctionSource(), 'utf8');
+  const nodeAdapterSource = nodeAdapterRuntimeSource();
+  const functionSource = vercelFunctionSource();
+  await writeGeneratedJavaScript(
+    path.join(functionDir, 'node-adapter.mjs'),
+    nodeAdapterSource,
+    'module',
+  );
+  await writeGeneratedJavaScript(path.join(functionDir, 'index.cjs'), functionSource, 'commonjs');
+  await writeJson(path.join(functionDir, 'kovo-artifact-integrity.json'), {
+    algorithm: 'sha256',
+    files: {
+      'index.cjs': generatedArtifactDigest(functionSource),
+      'node-adapter.mjs': generatedArtifactDigest(nodeAdapterSource),
+    },
+  });
   await writeJson(path.join(functionDir, '.vc-config.json'), {
     handler: 'index.cjs',
     launcherType: 'Nodejs',
@@ -402,7 +432,14 @@ async function emitCloudflarePreset(
   await copyPresetStaticFiles(build, path.join(outDir, 'client'));
   await mkdir(path.join(outDir, 'server'), { recursive: true });
   await copyFile(build.serverHandlerPath, path.join(outDir, 'server/handler.mjs'));
-  await writeFile(path.join(outDir, 'worker.mjs'), cloudflareWorkerSource(), 'utf8');
+  const workerSource = cloudflareWorkerSource();
+  await writeGeneratedJavaScript(path.join(outDir, 'worker.mjs'), workerSource, 'module');
+  await writeJson(path.join(outDir, 'kovo-artifact-integrity.json'), {
+    algorithm: 'sha256',
+    files: {
+      'worker.mjs': generatedArtifactDigest(workerSource),
+    },
+  });
   await writeFile(path.join(outDir, 'wrangler.toml'), wranglerTomlSource(options), 'utf8');
 
   context.log(`Emitted Kovo cloudflare preset output to ${outDir}`);
@@ -561,6 +598,29 @@ function isFrameworkRuntimeClientModule(
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${buildSecuritySourceLiteral(value)}\n`, 'utf8');
+}
+
+type GeneratedJavaScriptFormat = 'commonjs' | 'module';
+
+async function writeGeneratedJavaScript(
+  filePath: string,
+  source: string,
+  format: GeneratedJavaScriptFormat,
+): Promise<void> {
+  try {
+    nativeExecFileSync(nodeExecutablePath, ['--check', `--input-type=${format}`], {
+      encoding: 'utf8',
+      input: source,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch {
+    throw new TypeError(`Kovo refused to emit invalid generated JavaScript for ${filePath}.`);
+  }
+  await writeFile(filePath, source, 'utf8');
+}
+
+function generatedArtifactDigest(source: string): string {
+  return buildSecuritySha256Hex(source);
 }
 
 function vercelBuildOutputConfig(): unknown {

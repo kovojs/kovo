@@ -846,7 +846,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     Selective lookalike pre-import tests must cover input-, size-, receiver-, call-count-, and
     path-specific wrappers plus process restarts.
 
-- [ ] **C70 - Authored runtime poisoning escapes the emitted Node static-file root.**
+- [x] **C70 - Authored runtime poisoning escapes the emitted Node static-file root.**
       `packages/server/src/build.ts` (`nodeServerSource`)
   - The generated Node wrapper continued to use live `globalThis.URL`,
     `String.prototype.startsWith`, decoding, path, collection, header, and body controls after it
@@ -860,8 +860,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     pinned operations, and response emission cannot re-read mutable realm controls. The executable
     two-request regression must keep the outside marker byte-for-byte absent under selective
     constructor, receiver, path, and call-order replacements.
+  - Evidence: `packages/server/src/build.test.ts` real-HTTP poison-first traversal regression and
+    the 30-test preset matrix retain confinement under selective URL/path receiver replacements.
 
-- [ ] **C71 - Mutable source serialization compiles attacker code into deploy artifacts.**
+- [x] **C71 - Mutable source serialization compiles attacker code into deploy artifacts.**
       `packages/{cli,server}/src/{commands/build-export,build,internal/runtime-registry-wire}.ts`
   - Build and preset generators interpolated late `Function.prototype.toString`, `JSON.stringify`,
     and RegExp stringification results directly into executable JavaScript after authored app/config/
@@ -876,8 +878,12 @@ This is an active closure ledger; `SPEC.md` remains normative.
     the complete generated module is parsed before output, and artifact identity binds its exact
     bytes. Selective serializer tests must target each input shape and prove attacker syntax/side
     effects are absent from emitted source and startup across all three presets.
+  - Evidence: `vp test run packages/server/src/{build-security-intrinsics,build}.test.ts --config
+vitest.bugz.config.ts` passes 32 tests; the all-preset late JSON/Function/RegExp poison proof
+    syntax-checks every generated module, validates exact SHA-256 manifests, and imports Node,
+    Vercel, and Cloudflare output without the attacker marker.
 
-- [ ] **C72 - Mutable final Response getters substitute attacker output after rendering.**
+- [x] **C72 - Mutable final Response getters substitute attacker output after rendering.**
       `packages/server/src/{node,build}.ts` (`writeWebResponseToNode`, `nodeAdapterRuntimeSource`)
   - The source and emitted Node/Vercel adapters captured `Headers` but re-read
     `response.headers`, `status`, `statusText`, and `body` through live Response prototype getters
@@ -889,6 +895,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     compression, early hints, status/head, body/null/stream selection, and Node writes only from that
     snapshot. Source and emitted adapters must share the same contract and real-HTTP regressions must
     prove selective getter/body/header substitutions cannot alter any wire byte.
+  - Evidence: source and emitted real-HTTP Response getter poison regressions in
+    `packages/server/src/{node,build}.test.ts` retain status 200, plain safe bytes, and no attacker
+    `Set-Cookie`; the shared Node/Vercel adapter is exercised by the preset matrix.
 
 - [ ] **C73 - Vite plugin evaluation precedes the compiler/data-plane trust root.**
       `packages/server/src/vite.ts` and the supported development runner
@@ -915,7 +924,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     module-graph duplication, and app/server races and prove emitted bytes and blocking diagnostics
     remain exact.
 
-- [ ] **C75 - Mutable Node response writers replace pinned output at the native transport.**
+- [x] **C75 - Mutable Node response writers replace pinned output at the native transport.**
       `packages/server/src/{node,build}.ts`
   - The source and emitted Node/Vercel adapters pinned the Web `Response` fields but invoked live
     `ServerResponse.prototype.writeHead`, `end`, `writeEarlyHints`, and `destroy` controls after the
@@ -926,6 +935,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     interim-header, body, termination, and abort operation only through that pinned transport.
     Source, generated Node, and Vercel real-HTTP regressions must prove selective prototype and
     per-call replacements cannot change any wire byte or convert a failed write into a clean 200.
+  - Evidence: source, emitted Node, and Vercel real-HTTP transport-poison tests in
+    `packages/server/src/{node,build}.test.ts` retain exact safe status/headers/body; the mid-stream
+    failure proof remains an aborted transfer rather than a clean attacker-controlled 200.
 
 - [x] **C76 - Mutable Node request bridging substitutes authenticated network bytes.**
       `packages/server/src/{node,build}.ts`
@@ -1298,7 +1310,7 @@ build:dist` passes.
     list/depth/node/byte ceilings or suppress the corresponding warning, while in-bound results
     retain their wire shape.
 
-- [ ] **H33 - Authored Cloudflare handler initialization can suppress static security headers.**
+- [x] **H33 - Authored Cloudflare handler initialization can suppress static security headers.**
       `packages/server/src/build.ts` (`cloudflareWorkerSource`)
   - The emitted Worker statically imported the authored handler before initializing its wrapper,
     then applied cache/CORP/nosniff/error policy through live URL, String, Headers, Object, and
@@ -1309,6 +1321,9 @@ build:dist` passes.
     without live caller-controlled iteration or setters, and returns an exact response under
     selective late constructor/prototype replacements. The emitted-worker regression must retain
     the full client-module, immutable/revalidating asset, document, and error header matrices.
+  - Evidence: the emitted-worker top-level `Headers.set` poison regression in
+    `packages/server/src/build.test.ts` retains the complete static security-header matrix; the
+    30-test preset suite passes.
 
 - [ ] **H34 - The supported integration runner races fixture evaluation against bootstrap.**
       `packages/test/src/integration/boot-fixture.ts`
@@ -1319,7 +1334,7 @@ build:dist` passes.
     graph before the fixture entry. A poison-first fixture regression must prove app evaluation
     cannot influence captured controls while the normal integration suite retains its behavior.
 
-- [ ] **H35 - Mutable compression classification re-enables compression for secret responses.**
+- [x] **H35 - Mutable compression classification re-enables compression for secret responses.**
       `packages/server/src/node.ts`
   - The final Node adapter cloned the response but classified `Cache-Control`, `Vary: Cookie`,
     content types, and `Accept-Encoding` through live RegExp, String, Array, Map, Number, and Math
@@ -1331,6 +1346,9 @@ build:dist` passes.
     ambiguous values fail closed to no compression. Late and import-order poison regressions must
     retain no compression for private, no-store, no-transform, Set-Cookie, and Vary-Cookie outputs
     while ordinary q-value negotiation remains exact.
+  - Evidence: the 35-test Node adapter suite passes the late collection poison proof plus private,
+    no-store, no-transform, Set-Cookie, Vary-Cookie, malformed q-value, and ordinary negotiation
+    cases.
 
 ## Medium
 
