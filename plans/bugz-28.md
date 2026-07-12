@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    72 | C1-C72 |
-| High     |    33 | H1-H33 |
+| Critical |    74 | C1-C74 |
+| High     |    34 | H1-H34 |
 | Medium   |    10 | M1-M10 |
 
 ## Critical
@@ -890,6 +890,31 @@ This is an active closure ledger; `SPEC.md` remains normative.
     snapshot. Source and emitted adapters must share the same contract and real-HTTP regressions must
     prove selective getter/body/header substitutions cannot alter any wire byte.
 
+- [ ] **C73 - Vite plugin evaluation precedes the compiler/data-plane trust root.**
+      `packages/server/src/vite.ts` and the supported development runner
+  - The Vite plugin did not load compiler and server data-plane intrinsics until its
+    `configResolved` hook. Authored config modules, plugin modules, and every earlier `config` hook
+    therefore ran first and could install selectively honest hash, iterator, reflection, or path
+    impostors before the compiler captured its controls. Loading the server root during request
+    dispatch is later still and cannot repair the already-poisoned compiler instance.
+  - **Acceptance:** the supported Vite development runner establishes the exact compiler and
+    data-plane security profile before evaluating the authored config or any plugin module/hook,
+    including under Vite SSR module instantiation. A real `vp dev` poison-first regression must
+    prove a caller plugin cannot alias an identity, omit an unsafe input, or suppress a blocking
+    diagnostic while ordinary HMR and SSR retain their behavior.
+
+- [ ] **C74 - CLI build/export evaluate authored Vite graphs before exact-graph bootstrap.**
+      `packages/cli/src/commands/{build,build-export}.ts`
+  - Build permitted the authored Vite config/plugins to execute before the server build profile in
+    the `ssr.noExternal` graph. Export additionally loaded the app and server root with
+    `Promise.all`, so the app could win evaluation. A native CLI preload does not protect a separate
+    Vite-instantiated copy of compiler/server modules.
+  - **Acceptance:** build and export disable undeclared config/plugin evaluation where the command
+    does not require it, then sequentially load the complete compiler/server profile inside the
+    exact SSR graph before the app entry. Real CLI poison-first regressions must cover config hooks,
+    module-graph duplication, and app/server races and prove emitted bytes and blocking diagnostics
+    remain exact.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1255,6 +1280,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     selective late constructor/prototype replacements. The emitted-worker regression must retain
     the full client-module, immutable/revalidating asset, document, and error header matrices.
 
+- [ ] **H34 - The supported integration runner races fixture evaluation against bootstrap.**
+      `packages/test/src/integration/boot-fixture.ts`
+  - The fixture app and server root were loaded concurrently through the same `ssr.noExternal`
+    server. An authored fixture could evaluate first and poison the runner's server/compiler
+    controls before their trust root existed, making conformance/security tests order-dependent.
+  - **Acceptance:** load the complete server/compiler profile sequentially in the exact Vite SSR
+    graph before the fixture entry. A poison-first fixture regression must prove app evaluation
+    cannot influence captured controls while the normal integration suite retains its behavior.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -1362,7 +1396,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 ## Latest verification
 
 The remediation pass remains intentionally non-zero: C17-C19, C21-C22, C25, C28, C31-C32, C42,
-C58-C72, H20, H27, H32-H33, and M10 are active compiler-cache, static-analysis, server authority/output,
+C58-C74, H20, H27, H32-H34, and M10 are active compiler-cache, static-analysis, server authority/output,
 and immutable-output fixes. Integrated evidence is green at 97 PostgreSQL, 88 egress, 37
 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158 auth/response, 51 Better Auth,
 86 crypto/replay, 234 output/compiler/core, 87 scalar route/handler/secret, and 18 password tests. A
