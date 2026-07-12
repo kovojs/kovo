@@ -919,4 +919,61 @@ export const TemplateProbe = component({ render: () => <p>Safe</p> });
     );
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot suppress repeatable mutation-form identity diagnostics', () => {
+    const nativeSome = Array.prototype.some;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.some = function poisonedRepeatableFormSome<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): boolean {
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        let hasEnhance = false;
+        let hasMutation = false;
+        let hasKey = false;
+        for (let index = 0; index < this.length; index += 1) {
+          const name = (this[index] as { name?: unknown } | undefined)?.name;
+          if (name === 'enhance') hasEnhance = true;
+          if (name === 'mutation') hasMutation = true;
+          if (name === 'key') hasKey = true;
+        }
+        if (
+          hasEnhance &&
+          hasMutation &&
+          !hasKey &&
+          nativeApply(nativeIncludes, callbackSource, ["attribute.name === 'key'"])
+        ) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeSome, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'product-list.tsx',
+        source: `
+export const addToCart = mutation({ handler() { return null; } });
+export const ProductList = component({
+  render: ({ products }) => (
+    <section>{products.items.map((item) => (
+      <form enhance mutation={addToCart}>
+        <input type="hidden" name="productId" value={item.id} />
+      </form>
+    ))}</section>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toHaveLength(1);
+    expect(result?.loweredSource).not.toContain('action="/_m/');
+    expect(poisonHits).toBe(0);
+  });
 });
