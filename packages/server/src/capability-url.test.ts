@@ -12,6 +12,15 @@ const SECRET = 'capability-url-test-secret-at-least-32-characters-long';
 const OLD_SECRET = 'old-capability-secret-at-least-32-bytes';
 const NEW_SECRET = 'new-capability-secret-at-least-32-bytes';
 
+function rewritePayload(token: string, update: (payload: Record<string, unknown>) => void): string {
+  const dot = token.indexOf('.');
+  const payload = JSON.parse(
+    Buffer.from(token.slice(0, dot), 'base64url').toString('utf8'),
+  ) as Record<string, unknown>;
+  update(payload);
+  return `${Buffer.from(JSON.stringify(payload)).toString('base64url')}${token.slice(dot)}`;
+}
+
 describe('capability-url: sign + constant-time verify before any storage read', () => {
   it('round-trips: a token signed for key+method+scope verifies against the same expected claims', async () => {
     const now = 1_000_000;
@@ -190,6 +199,77 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     const cross = await verifyCapability(SECRET, a.token, { key: 'a', method: 'GET', scope: 'bc' });
     expect(cross.ok).toBe(false);
   });
+
+  it('does not let a late UTF-8 encoder override collapse distinct signed claims', async () => {
+    const originalEncode = TextEncoder.prototype.encode;
+    try {
+      TextEncoder.prototype.encode = function (value = ''): Uint8Array {
+        if (/^\d+:[^|]+\|\d+:GET\|/u.test(value)) return new Uint8Array();
+        return originalEncode.call(this, value);
+      };
+      const { token } = await signCapability(SECRET, { key: 'reports/open.txt' }, 0);
+      const substituted = rewritePayload(token, (payload) => {
+        payload.k = 'reports/restricted.txt';
+      });
+
+      await expect(
+        verifyCapability(
+          SECRET,
+          substituted,
+          { key: 'reports/restricted.txt', method: 'GET' },
+          { now: 1 },
+        ),
+      ).resolves.toEqual({ ok: false, reason: 'bad-signature' });
+    } finally {
+      TextEncoder.prototype.encode = originalEncode;
+    }
+  });
+
+  it('uses the boot-pinned clock when a late Date.now override rolls time backward', async () => {
+    const { token } = await signCapability(SECRET, { expiresIn: 5, key: 'a.pdf' }, 0);
+    const originalNow = Date.now;
+    try {
+      Date.now = () => 0;
+      await expect(
+        verifyCapability(SECRET, token, { key: 'a.pdf', method: 'GET' }),
+      ).resolves.toEqual({ ok: false, reason: 'expired' });
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  it('keeps token parsing pinned after a late JSON parser override', async () => {
+    const { token } = await signCapability(SECRET, { key: 'a.pdf' }, 0);
+    const originalParse = JSON.parse;
+    try {
+      JSON.parse = () => ({ e: Number.MAX_SAFE_INTEGER, k: 'forged', m: 'GET', v: 'v2' });
+      await expect(
+        verifyCapability(SECRET, token, { key: 'a.pdf', method: 'GET' }, { now: 1 }),
+      ).resolves.toMatchObject({ ok: true });
+    } finally {
+      JSON.parse = originalParse;
+    }
+  });
+
+  it('rejects non-canonical and type-confused payload encodings before authorization', async () => {
+    const { token } = await signCapability(SECRET, { key: 'a.pdf' }, 0);
+    const variants = [
+      rewritePayload(token, (payload) => {
+        payload.extra = 'ignored';
+      }),
+      rewritePayload(token, (payload) => {
+        payload.e = 1.5;
+      }),
+      rewritePayload(token, (payload) => {
+        payload.o = 1;
+      }),
+    ];
+    for (const variant of variants) {
+      await expect(
+        verifyCapability(SECRET, variant, { key: 'a.pdf', method: 'GET' }, { now: 1 }),
+      ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    }
+  });
 });
 
 describe('capability-url: one-time tokens via a replay store', () => {
@@ -214,6 +294,38 @@ describe('capability-url: one-time tokens via a replay store', () => {
       { now: 2, replayStore: store },
     );
     expect(second).toEqual({ ok: false, reason: 'replayed' });
+  });
+
+  it('does not let a late Map.has override resurrect a consumed token', async () => {
+    const store = createMemoryCapabilityReplayStore({ now: () => 1 });
+    const { token } = await signCapability(
+      SECRET,
+      { expiresIn: 60_000, key: 'once.pdf', oneTime: true },
+      0,
+    );
+    await expect(
+      verifyCapability(
+        SECRET,
+        token,
+        { key: 'once.pdf', method: 'GET' },
+        { now: 1, replayStore: store },
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    const originalHas = Map.prototype.has;
+    try {
+      Map.prototype.has = () => false;
+      await expect(
+        verifyCapability(
+          SECRET,
+          token,
+          { key: 'once.pdf', method: 'GET' },
+          { now: 2, replayStore: store },
+        ),
+      ).resolves.toEqual({ ok: false, reason: 'replayed' });
+    } finally {
+      Map.prototype.has = originalHas;
+    }
   });
 
   it('a one-time token fails closed when no replay store is provided', async () => {
@@ -246,6 +358,28 @@ describe('capability-url: one-time tokens via a replay store', () => {
     );
     expect(r1.ok).toBe(true);
     expect(r2.ok).toBe(true);
+  });
+
+  it('keeps one-time nonce entropy pinned after a late RNG method override', async () => {
+    const cryptoPrototype = Object.getPrototypeOf(globalThis.crypto) as {
+      getRandomValues: typeof globalThis.crypto.getRandomValues;
+    };
+    const originalGetRandomValues = cryptoPrototype.getRandomValues;
+    try {
+      cryptoPrototype.getRandomValues = function <Value extends ArrayBufferView | null>(
+        value: Value,
+      ): Value {
+        if (value !== null) {
+          new Uint8Array(value.buffer, value.byteOffset, value.byteLength).fill(0);
+        }
+        return value;
+      };
+      const first = await signCapability(SECRET, { key: 'a.pdf', oneTime: true }, 0);
+      const second = await signCapability(SECRET, { key: 'a.pdf', oneTime: true }, 0);
+      expect(first.token).not.toBe(second.token);
+    } finally {
+      cryptoPrototype.getRandomValues = originalGetRandomValues;
+    }
   });
 
   it('evicts one-time replay ids at the signed token expiry', async () => {

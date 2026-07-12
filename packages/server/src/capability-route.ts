@@ -32,13 +32,30 @@
  */
 
 import type { StorageReadCapability } from '@kovojs/core';
-import {
-  createReadOnlyStorageCapability,
-  normalizeStorageKey,
-} from '@kovojs/core/internal/storage';
+import { normalizeStorageKey } from '@kovojs/core/internal/storage';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
 import { verifiedAccess } from './access.js';
+import {
+  capabilityDecodeURIComponent,
+  capabilityDefineProperty,
+  capabilityEncodeURIComponent,
+  capabilityError,
+  capabilityFreeze,
+  capabilityOwnDataValue,
+  capabilityReflectApply,
+  capabilityRequestMethod,
+  capabilityRequestUrl,
+  capabilityStringCharCodeAt,
+  capabilityStringIndexOf,
+  capabilityStringSlice,
+  capabilityStableProperty,
+  capabilityStringToUpperCase,
+  capabilityTypeError,
+  capabilityUrl,
+  capabilityUrlParam,
+  capabilityUrlPathname,
+} from './capability-intrinsics.js';
 import {
   endpoint,
   pinEndpointSelfVerifyingAuth,
@@ -49,12 +66,13 @@ import {
 import {
   DEFAULT_CAPABILITY_TTL_MS,
   signCapability,
+  snapshotReplayStore,
   verifyCapability,
   type CapabilityMethod,
   type CapabilityReplayStore,
   type SignedCapability,
 } from './capability-url.js';
-import type { SigningSecret } from './keyring.js';
+import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 import { respond, serverResponseToWebResponse, type RouteStoredFileOptions } from './response.js';
 
 /** The query-parameter name the token rides in on a capability download URL. */
@@ -148,8 +166,8 @@ export function drainCapabilityMintFacts(): readonly CapabilityMintFact[] {
  */
 function buildCapabilityUrl(basePath: string, key: string, token: string): string {
   const base = normalizeCapabilityBasePath(basePath);
-  const encodedKey = key.split('/').map(encodeURIComponent).join('/');
-  return `${base}/${encodedKey}?${CAPABILITY_TOKEN_PARAM}=${encodeURIComponent(token)}`;
+  const encodedKey = transformCapabilityPathSegments(key, capabilityEncodeURIComponent);
+  return `${base}/${encodedKey}?${CAPABILITY_TOKEN_PARAM}=${capabilityEncodeURIComponent(token)}`;
 }
 
 /**
@@ -167,28 +185,66 @@ export function createSignUrl(options: {
   oneTimeReplayStore?: boolean;
   now?: () => number;
 }): SignUrlContext {
+  const configuredSecret = capabilityOwnDataValue(options, 'secret');
+  const configuredBasePath = capabilityOwnDataValue(options, 'basePath');
+  const defaultScope = capabilityOwnDataValue(options, 'defaultScope');
+  const oneTimeReplayStore = capabilityOwnDataValue(options, 'oneTimeReplayStore');
+  const now = capabilityOwnDataValue(options, 'now');
+  if (
+    (configuredBasePath !== undefined && typeof configuredBasePath !== 'string') ||
+    (defaultScope !== undefined && typeof defaultScope !== 'string') ||
+    (oneTimeReplayStore !== undefined && typeof oneTimeReplayStore !== 'boolean') ||
+    (now !== undefined && typeof now !== 'function')
+  ) {
+    throw capabilityTypeError('ctx.signUrl configuration must use stable values.');
+  }
+  const secret = signingKeyRingFromSecret(configuredSecret as SigningSecret);
   const basePath = normalizeCapabilityBasePath(
-    options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
+    configuredBasePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   );
-  return {
+  return capabilityFreeze({
     async signUrl(signOptions: SignUrlOptions): Promise<SignedUrl> {
+      const sourceKey = capabilityOwnDataValue(signOptions, 'key');
+      const configuredMethod = capabilityOwnDataValue(signOptions, 'method');
+      const configuredScope = capabilityOwnDataValue(signOptions, 'scope');
+      const configuredExpiresIn = capabilityOwnDataValue(signOptions, 'expiresIn');
+      const configuredOneTime = capabilityOwnDataValue(signOptions, 'oneTime');
+      if (
+        typeof sourceKey !== 'string' ||
+        (configuredMethod !== undefined &&
+          configuredMethod !== 'GET' &&
+          configuredMethod !== 'HEAD') ||
+        (configuredScope !== undefined && typeof configuredScope !== 'string') ||
+        (configuredExpiresIn !== undefined && typeof configuredExpiresIn !== 'number') ||
+        (configuredOneTime !== undefined && typeof configuredOneTime !== 'boolean')
+      ) {
+        throw capabilityTypeError('ctx.signUrl options must use stable, typed values.');
+      }
       // Canonicalize-before-sign: normalize the key the same way the storage adapters + the route
       // do, so the signed key is byte-identical to what the sink re-derives from the request path.
-      const key = normalizeStorageKey(signOptions.key);
-      const method = signOptions.method ?? 'GET';
-      const scope = signOptions.scope ?? options.defaultScope;
-      const expiresIn = signOptions.expiresIn ?? DEFAULT_CAPABILITY_TTL_MS;
-      const oneTime = signOptions.oneTime === true;
-      if (oneTime && options.oneTimeReplayStore !== true) {
-        throw new Error(
+      const key = normalizeStorageKey(sourceKey);
+      const method = configuredMethod ?? 'GET';
+      const scope = configuredScope ?? defaultScope;
+      const expiresIn = configuredExpiresIn ?? DEFAULT_CAPABILITY_TTL_MS;
+      const oneTime = configuredOneTime === true;
+      if (oneTime && oneTimeReplayStore !== true) {
+        throw capabilityError(
           'ctx.signUrl({ oneTime: true }) requires a storage download endpoint with a replayStore. ' +
             'One-time capability URLs are unusable without a replay store at the verify sink ' +
             '(SPEC §6.6); pass oneTimeReplayStore: true for an explicit signer bound to such an ' +
             'endpoint, or configure replayStore on createStorageDownloadEndpoint().',
         );
       }
+      let currentTime: number | undefined;
+      if (now !== undefined) {
+        const configuredTime = capabilityReflectApply<unknown>(now, undefined, []);
+        if (typeof configuredTime !== 'number') {
+          throw capabilityTypeError('ctx.signUrl clock must return an epoch-millisecond number.');
+        }
+        currentTime = configuredTime;
+      }
       const signed: SignedCapability = await signCapability(
-        options.secret,
+        secret,
         {
           key,
           method,
@@ -197,7 +253,7 @@ export function createSignUrl(options: {
           expiresIn,
           oneTime,
         },
-        options.now?.(),
+        currentTime,
       );
       // Audit (SPEC §6.6): record every mint of a bearer download URL for `kovo explain
       // --capabilities`. Surfacing informs review; it enforces nothing.
@@ -215,7 +271,7 @@ export function createSignUrl(options: {
         oneTime,
       };
     },
-  };
+  });
 }
 
 /** Options for the framework-owned storage download route. */
@@ -234,6 +290,50 @@ export interface StorageDownloadEndpointOptions {
   now?: () => number;
   /** Disposition/filename forwarded to `respond.storedFile` AFTER verification (server-sniffed type). */
   storedFile?: Pick<RouteStoredFileOptions, 'disposition' | 'filename'>;
+}
+
+function snapshotStorageReadCapability(source: unknown): StorageReadCapability {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw capabilityTypeError('Storage download endpoint requires a storage read capability.');
+  }
+  const get = capabilityStableProperty(source, 'get');
+  const stat = capabilityStableProperty(source, 'stat');
+  const stream = capabilityStableProperty(source, 'stream');
+  if (typeof get !== 'function' || typeof stat !== 'function' || typeof stream !== 'function') {
+    throw capabilityTypeError(
+      'Storage download endpoint requires stable get, stat, and stream methods.',
+    );
+  }
+  return capabilityFreeze({
+    get(key: string): ReturnType<StorageReadCapability['get']> {
+      return capabilityReflectApply(get, source, [key]);
+    },
+    stat(key: string): ReturnType<StorageReadCapability['stat']> {
+      return capabilityReflectApply(stat, source, [key]);
+    },
+    stream(key: string): ReturnType<StorageReadCapability['stream']> {
+      return capabilityReflectApply(stream, source, [key]);
+    },
+  });
+}
+
+function snapshotStoredFileOptions(source: unknown): RouteStoredFileOptions {
+  if (source === undefined) return capabilityFreeze({});
+  if (typeof source !== 'object' || source === null) {
+    throw capabilityTypeError('Storage download storedFile configuration must be an object.');
+  }
+  const disposition = capabilityOwnDataValue(source, 'disposition');
+  const filename = capabilityOwnDataValue(source, 'filename');
+  if (
+    (disposition !== undefined && disposition !== 'attachment' && disposition !== 'inline') ||
+    (filename !== undefined && typeof filename !== 'string')
+  ) {
+    throw capabilityTypeError('Storage download storedFile configuration has invalid values.');
+  }
+  return capabilityFreeze({
+    ...(disposition === undefined ? {} : { disposition }),
+    ...(filename === undefined ? {} : { filename }),
+  });
 }
 
 /**
@@ -265,18 +365,23 @@ function downloadRejected(method = 'GET'): Response {
  * traversal/odd-segment key throws there and is treated as a miss (fail closed, no read).
  */
 export function deriveDownloadKey(pathname: string, basePath: string): string | undefined {
+  if (typeof pathname !== 'string' || typeof basePath !== 'string') return undefined;
   let base: string;
   try {
     base = normalizeCapabilityBasePath(basePath);
   } catch {
     return undefined;
   }
-  if (pathname !== base && !pathname.startsWith(`${base}/`)) return undefined;
-  const rest = pathname.slice(base.length).replace(/^\/+/, '');
+  if (pathname === base || capabilityStringIndexOf(pathname, `${base}/`) !== 0) return undefined;
+  let offset = base.length;
+  while (offset < pathname.length && capabilityStringCharCodeAt(pathname, offset) === 0x2f) {
+    offset += 1;
+  }
+  const rest = capabilityStringSlice(pathname, offset);
   if (rest.length === 0) return undefined;
   let decoded: string;
   try {
-    decoded = rest.split('/').map(decodeURIComponent).join('/');
+    decoded = transformCapabilityPathSegments(rest, capabilityDecodeURIComponent);
   } catch {
     return undefined;
   }
@@ -301,54 +406,86 @@ export function deriveDownloadKey(pathname: string, basePath: string): string | 
 export function createStorageDownloadEndpoint(
   options: StorageDownloadEndpointOptions,
 ): EndpointDeclaration<string, 'GET', 'prefix'> {
+  const sourceStorage = capabilityOwnDataValue(options, 'storage');
+  const configuredSecret = capabilityOwnDataValue(options, 'secret');
+  const configuredBasePath = capabilityOwnDataValue(options, 'basePath');
+  const configuredScopeForRequest = capabilityOwnDataValue(options, 'scope');
+  const configuredReplayStore = capabilityOwnDataValue(options, 'replayStore');
+  const now = capabilityOwnDataValue(options, 'now');
+  const configuredStoredFile = capabilityOwnDataValue(options, 'storedFile');
+  if (
+    (configuredBasePath !== undefined && typeof configuredBasePath !== 'string') ||
+    (configuredScopeForRequest !== undefined && typeof configuredScopeForRequest !== 'function') ||
+    (now !== undefined && typeof now !== 'function')
+  ) {
+    throw capabilityTypeError('Storage download endpoint configuration must use stable values.');
+  }
+  const scopeForRequest = configuredScopeForRequest as
+    | ((request: Request) => string | undefined)
+    | undefined;
+  const secret = signingKeyRingFromSecret(configuredSecret as SigningSecret);
   const basePath = normalizeCapabilityBasePath(
-    options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
+    configuredBasePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   );
-  const storage = createReadOnlyStorageCapability(options.storage);
+  const storage = snapshotStorageReadCapability(sourceStorage);
+  const replayStore =
+    configuredReplayStore === undefined ? undefined : snapshotReplayStore(configuredReplayStore);
+  const storedFile = snapshotStoredFileOptions(configuredStoredFile);
 
   const handler = async (request: Request): Promise<Response> => {
-    const method = request.method.toUpperCase();
-    if (method !== 'GET' && method !== 'HEAD') return downloadRejected(method);
-    const expectedMethod: CapabilityMethod = method;
+    let method = 'GET';
+    let expectedMethod: CapabilityMethod;
+    let key: string;
+    try {
+      method = capabilityStringToUpperCase(capabilityRequestMethod(request));
+      if (method !== 'GET' && method !== 'HEAD') return downloadRejected(method);
+      expectedMethod = method;
 
-    const url = new URL(request.url);
-    const token = url.searchParams.get(CAPABILITY_TOKEN_PARAM);
-    if (token === null || token.length === 0) return downloadRejected(method);
+      const url = capabilityUrl(capabilityRequestUrl(request));
+      const token = capabilityUrlParam(url, CAPABILITY_TOKEN_PARAM);
+      if (token === null || token.length === 0) return downloadRejected(method);
 
-    // Derive the EXPECTED claims FROM THE REQUEST — never from the token. This is the load-bearing
-    // step: the route, not the token, says which object/method/scope is being authorized.
-    const key = deriveDownloadKey(url.pathname, basePath);
-    if (key === undefined) return downloadRejected(method);
-    const scope = options.scope?.(request);
+      // Derive the EXPECTED claims FROM THE REQUEST — never from the token. This is the load-bearing
+      // step: the route, not the token, says which object/method/scope is being authorized.
+      const requestedKey = deriveDownloadKey(capabilityUrlPathname(url), basePath);
+      if (requestedKey === undefined) return downloadRejected(method);
+      key = requestedKey;
+      const scope =
+        scopeForRequest === undefined
+          ? undefined
+          : capabilityReflectApply<unknown>(scopeForRequest, undefined, [request]);
+      if (scope !== undefined && typeof scope !== 'string') return downloadRejected(method);
+      let currentTime: number | undefined;
+      if (now !== undefined) {
+        const configuredTime = capabilityReflectApply<unknown>(now, undefined, []);
+        if (typeof configuredTime !== 'number') return downloadRejected(method);
+        currentTime = configuredTime;
+      }
 
-    // VERIFY BEFORE READ. The storage read below is unreachable unless this passes.
-    const verification = await verifyCapability(
-      options.secret,
-      token,
-      {
-        key,
-        method: expectedMethod,
-        ...(scope === undefined ? {} : { scope }),
-      },
-      {
-        ...(options.now === undefined ? {} : { now: options.now() }),
-        audience: capabilityRouteAudience(basePath),
-        ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
-      },
-    );
-    // Fail closed on ANY rejection. The reason stays server-side (never leaked to the client).
-    if (!verification.ok) return downloadRejected(method);
+      // VERIFY BEFORE READ. The storage read below is unreachable unless this passes.
+      const verification = await verifyCapability(
+        secret,
+        token,
+        {
+          key,
+          method: expectedMethod,
+          ...(scope === undefined ? {} : { scope }),
+        },
+        {
+          ...(currentTime === undefined ? {} : { now: currentTime }),
+          audience: capabilityRouteAudience(basePath),
+          ...(replayStore === undefined ? {} : { replayStore }),
+        },
+      );
+      // Fail closed on ANY rejection. The reason stays server-side (never leaked to the client).
+      if (!verification.ok) return downloadRejected(method);
+    } catch {
+      return downloadRejected(method);
+    }
 
     // Only NOW — after a verifying token — do we touch storage. A HEAD verifies identically but
     // returns no body.
-    const outcome = await respond.storedFile(storage, key, {
-      ...(options.storedFile?.disposition === undefined
-        ? {}
-        : { disposition: options.storedFile.disposition }),
-      ...(options.storedFile?.filename === undefined
-        ? {}
-        : { filename: options.storedFile.filename }),
-    });
+    const outcome = await respond.storedFile(storage, key, storedFile);
     if (outcome === undefined) return downloadRejected(method);
 
     const headers: Record<string, string> = {
@@ -399,20 +536,20 @@ export function createStorageDownloadEndpoint(
       handler,
     }),
   );
-  Object.defineProperty(declaration, 'allowedMethods', {
+  capabilityDefineProperty(declaration, 'allowedMethods', {
     configurable: false,
     enumerable: false,
     value: ['GET', 'HEAD'] satisfies readonly ['GET', 'HEAD'],
   });
-  Object.defineProperty(declaration, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
+  capabilityDefineProperty(declaration, STORAGE_DOWNLOAD_ENDPOINT_INFO, {
     configurable: false,
     enumerable: false,
-    value: {
+    value: capabilityFreeze({
       basePath,
-      oneTimeReplayStore: options.replayStore !== undefined,
-      secret: options.secret,
-      ...(options.scope === undefined ? {} : { scope: options.scope }),
-    } satisfies StorageDownloadEndpointInfo,
+      oneTimeReplayStore: replayStore !== undefined,
+      secret,
+      ...(scopeForRequest === undefined ? {} : { scope: scopeForRequest }),
+    } satisfies StorageDownloadEndpointInfo),
   });
   return declaration;
 }
@@ -422,31 +559,56 @@ function capabilityRouteAudience(basePath: string): string {
 }
 
 function normalizeCapabilityBasePath(basePath: string): string {
-  const normalized = basePath.replace(/\/+$/, '');
-  if (
-    normalized.length === 0 ||
-    hasUrlControlCharacter(basePath) ||
-    !basePath.startsWith('/') ||
-    basePath.startsWith('//') ||
-    basePath.startsWith('/\\') ||
-    basePath.includes('\\') ||
-    basePath.includes('?') ||
-    basePath.includes('#')
-  ) {
-    throw new TypeError(
-      'Capability URL basePath must be a non-root same-origin absolute path without control ' +
-        'characters, query, hash, or backslashes (SPEC §6.6).',
-    );
+  if (typeof basePath !== 'string') throw invalidCapabilityBasePath();
+  let end = basePath.length;
+  while (end > 0 && capabilityStringCharCodeAt(basePath, end - 1) === 0x2f) end -= 1;
+  const normalized = capabilityStringSlice(basePath, 0, end);
+  if (normalized.length === 0 || !isSafeCapabilityBasePath(basePath)) {
+    throw invalidCapabilityBasePath();
   }
   return normalized;
 }
 
-function hasUrlControlCharacter(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 0x1f || code === 0x7f) return true;
+function isSafeCapabilityBasePath(value: string): boolean {
+  if (
+    value.length === 0 ||
+    capabilityStringCharCodeAt(value, 0) !== 0x2f ||
+    capabilityStringCharCodeAt(value, 1) === 0x2f ||
+    capabilityStringCharCodeAt(value, 1) === 0x5c
+  ) {
+    return false;
   }
-  return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = capabilityStringCharCodeAt(value, index);
+    if (code <= 0x1f || code === 0x7f || code === 0x5c || code === 0x3f || code === 0x23) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function invalidCapabilityBasePath(): TypeError {
+  return capabilityTypeError(
+    'Capability URL basePath must be a non-root same-origin absolute path without control ' +
+      'characters, query, hash, or backslashes (SPEC §6.6).',
+  );
+}
+
+function transformCapabilityPathSegments(
+  value: string,
+  transform: (segment: string) => string,
+): string {
+  let result = '';
+  let start = 0;
+  while (start <= value.length) {
+    const separator = capabilityStringIndexOf(value, '/', start);
+    const end = separator === -1 ? value.length : separator;
+    if (start !== 0) result += '/';
+    result += transform(capabilityStringSlice(value, start, end));
+    if (separator === -1) return result;
+    start = separator + 1;
+  }
+  return result;
 }
 
 /** @internal */
@@ -460,5 +622,9 @@ export function storageDownloadEndpointBasePath(
 export function storageDownloadEndpointInfo(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
 ): StorageDownloadEndpointInfo | undefined {
-  return (definition as StorageDownloadEndpointDeclaration)[STORAGE_DOWNLOAD_ENDPOINT_INFO];
+  if (typeof definition !== 'object' || definition === null) return undefined;
+  return capabilityOwnDataValue(
+    definition as StorageDownloadEndpointDeclaration,
+    STORAGE_DOWNLOAD_ENDPOINT_INFO,
+  ) as StorageDownloadEndpointInfo | undefined;
 }

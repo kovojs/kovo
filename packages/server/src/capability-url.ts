@@ -11,10 +11,10 @@
  * proven — by short expiry, narrow scope, and the optional one-time replay store; the token is a
  * bearer credential and must be treated as one.
  *
- * Canonicalization: we sign over a canonical, unambiguous byte string built from the tuple
- * `(method, key, expiry, scope)` with length-prefixed fields, so two different tuples can never
- * produce the same signed bytes (no delimiter-injection / field-confusion). Canonicalize BEFORE
- * signing and verify by re-canonicalizing the *received* fields, never by parsing the signature.
+ * Canonicalization: we sign over a canonical, unambiguous byte string built from the token version,
+ * signing-key id, method, object key, expiry, scope, one-time posture, and nonce. Length-prefixed
+ * fields prevent delimiter injection or field confusion. Canonicalize BEFORE signing and verify by
+ * re-canonicalizing the received fields, never by parsing the signature.
  *
  * The framework route is shipped in `capability-route.ts`: `createStorageDownloadEndpoint` mounts
  * the verify-before-read sink, `ctx.signUrl` mints URLs pointing at that route, and mint facts are
@@ -23,9 +23,40 @@
 
 import { securityClassifier, wireEmitter } from '@kovojs/core/internal/security-markers';
 import { isProvenPrincipal } from './auth-principal.js';
+import {
+  capabilityBase64Url,
+  capabilityDecode,
+  capabilityEncode,
+  capabilityFreeze,
+  capabilityFromBase64Url,
+  capabilityHasRecordPrototype,
+  capabilityIsFinite,
+  capabilityIsSafeInteger,
+  capabilityJsonParse,
+  capabilityJsonQuote,
+  capabilityMapDelete,
+  capabilityMapEntries,
+  capabilityMapHas,
+  capabilityMapSet,
+  capabilityMapSize,
+  capabilityNow,
+  capabilityOwnDataValue,
+  capabilityOwnKeys,
+  capabilityRandomBytes,
+  capabilityReflectApply,
+  capabilityString,
+  capabilityStringCharCodeAt,
+  capabilityStringIndexOf,
+  capabilityStringSlice,
+  capabilityStringToLowerCase,
+  capabilityStringTrim,
+  capabilityStableProperty,
+  capabilityTypeError,
+  createCapabilityMap,
+} from './capability-intrinsics.js';
 import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 
-const TOKEN_VERSION = 'v1';
+const TOKEN_VERSION = 'v2';
 const CAPABILITY_SIGNING_PURPOSE = 'capability-url';
 const DEFAULT_CAPABILITY_AUDIENCE = 'storage-download';
 
@@ -100,65 +131,69 @@ export function createMemoryCapabilityReplayStore(
 ): CapabilityReplayStore & {
   size(): number;
 } {
-  const consumed = new Map<string, number>();
-  const now = options.now ?? Date.now;
+  const consumed = createCapabilityMap<string, number>();
+  const configuredNow = capabilityOwnDataValue(options, 'now');
+  if (configuredNow !== undefined && typeof configuredNow !== 'function') {
+    throw capabilityTypeError('Capability replay-store now must be a function.');
+  }
+  const now = configuredNow ?? capabilityNow;
   const evict = (): void => {
-    const current = now();
-    for (const [id, expiry] of consumed) if (expiry <= current) consumed.delete(id);
+    const current = capabilityReflectApply<number>(now, undefined, []);
+    if (!isValidClock(current)) {
+      throw capabilityTypeError(
+        'Capability replay-store clock must return a non-negative safe integer.',
+      );
+    }
+    const entries = capabilityMapEntries(consumed);
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index]!;
+      if (entry[1] <= current) capabilityMapDelete(consumed, entry[0]);
+    }
   };
-  return {
+  return capabilityFreeze({
     consume(id: string, expiresAt: number): boolean {
       evict();
-      if (consumed.has(id)) return false;
+      if (capabilityMapHas(consumed, id)) return false;
       // Hold the replay id only until the signed token expiry. After that, the expiry check rejects
       // the token before replay lookup, so retaining the id no longer buys security.
-      consumed.set(id, expiresAt);
+      capabilityMapSet(consumed, id, expiresAt);
       return true;
     },
     size(): number {
       evict();
-      return consumed.size;
+      return capabilityMapSize(consumed);
     },
-  };
+  });
 }
-
-const encoder = new TextEncoder();
 
 /**
  * Build the canonical, length-prefixed byte string signed over. Length prefixes make field
  * boundaries unambiguous so `(key="a", scope="bc")` and `(key="ab", scope="c")` never collide.
  */
-function canonicalize(claims: CapabilityClaims): Uint8Array {
+function canonicalizeWithNonce(
+  claims: CapabilityClaims,
+  oneTime: boolean,
+  nonce: string,
+  keyId: string,
+): Uint8Array {
   const fields = [
     TOKEN_VERSION,
+    keyId,
     claims.method,
     claims.key,
-    String(claims.expiry),
+    capabilityString(claims.expiry),
     claims.scope ?? '',
+    oneTime ? '1' : '0',
+    nonce,
   ];
-  const parts = fields.map((f) => {
-    const bytes = encoder.encode(f);
-    return `${bytes.length}:${f}`;
-  });
-  return encoder.encode(parts.join('|'));
-}
-
-function base64url(bytes: Uint8Array): string {
-  let binary = '';
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function fromBase64url(value: string): Uint8Array | null {
-  try {
-    const padded = value.replace(/-/g, '+').replace(/_/g, '/');
-    const binary = atob(padded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  } catch {
-    return null;
+  let canonical = '';
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
+    const bytes = capabilityEncode(field);
+    if (index !== 0) canonical += '|';
+    canonical += `${capabilityString(bytes.length)}:${field}`;
   }
+  return capabilityEncode(canonical);
 }
 
 /**
@@ -174,51 +209,67 @@ export const signCapability = wireEmitter(
   async function (
     secret: SigningSecret,
     options: SignCapabilityOptions,
-    now: number = Date.now(),
+    now: number = capabilityNow(),
   ): Promise<SignedCapability> {
+    const ring = signingKeyRingFromSecret(secret);
+    const key = capabilityOwnDataValue(options, 'key');
+    const configuredMethod = capabilityOwnDataValue(options, 'method');
+    const scope = capabilityOwnDataValue(options, 'scope');
+    const configuredExpiresIn = capabilityOwnDataValue(options, 'expiresIn');
+    const configuredOneTime = capabilityOwnDataValue(options, 'oneTime');
+    const configuredAudience = capabilityOwnDataValue(options, 'audience');
+    const method = configuredMethod ?? 'GET';
+    const expiresIn = configuredExpiresIn ?? DEFAULT_CAPABILITY_TTL_MS;
+    const audience = configuredAudience ?? DEFAULT_CAPABILITY_AUDIENCE;
+    if (
+      typeof key !== 'string' ||
+      key.length === 0 ||
+      (method !== 'GET' && method !== 'HEAD') ||
+      (scope !== undefined && typeof scope !== 'string') ||
+      typeof expiresIn !== 'number' ||
+      !capabilityIsSafeInteger(expiresIn) ||
+      expiresIn <= 0 ||
+      (configuredOneTime !== undefined && typeof configuredOneTime !== 'boolean') ||
+      typeof audience !== 'string' ||
+      audience.length === 0 ||
+      !isValidClock(now) ||
+      !capabilityIsSafeInteger(now + expiresIn)
+    ) {
+      throw capabilityTypeError('Capability signing options must contain valid, bounded claims.');
+    }
     const claims: CapabilityClaims = {
-      key: options.key,
-      method: options.method ?? 'GET',
-      expiry: now + (options.expiresIn ?? DEFAULT_CAPABILITY_TTL_MS),
-      ...(options.scope === undefined ? {} : { scope: options.scope }),
+      key,
+      method,
+      expiry: now + expiresIn,
+      ...(scope === undefined ? {} : { scope }),
     };
-    const oneTime = options.oneTime === true;
+    const oneTime = configuredOneTime === true;
     // A per-token nonce gives one-time tokens a stable replay id even when claims are identical.
-    const nonce = oneTime ? base64url(crypto.getRandomValues(new Uint8Array(12))) : '';
-    const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce);
-    const signed = signingKeyRingFromSecret(secret).sign({
-      audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
+    const nonce = oneTime ? capabilityBase64Url(capabilityRandomBytes(12)) : '';
+    const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce, ring.currentKeyId);
+    const signedResult = ring.sign({
+      audience,
       payload: signedBytes,
       purpose: CAPABILITY_SIGNING_PURPOSE,
     });
-    const payload = {
-      v: TOKEN_VERSION,
-      i: signed.keyId,
-      m: claims.method,
-      k: claims.key,
-      e: claims.expiry,
-      ...(claims.scope === undefined ? {} : { s: claims.scope }),
-      ...(oneTime ? { o: 1, n: nonce } : {}),
-    };
-    const payloadB64 = base64url(encoder.encode(JSON.stringify(payload)));
-    const token = `${payloadB64}.${signed.signature}`;
+    const signedKeyId = capabilityOwnDataValue(signedResult, 'keyId');
+    const signature = capabilityOwnDataValue(signedResult, 'signature');
+    if (
+      typeof signedKeyId !== 'string' ||
+      signedKeyId !== ring.currentKeyId ||
+      !isSafeKeyIdText(signedKeyId) ||
+      typeof signature !== 'string' ||
+      !isCanonicalSignature(signature)
+    ) {
+      throw capabilityTypeError('SigningKeyRing returned an invalid capability signature.');
+    }
+    const payloadB64 = capabilityBase64Url(
+      capabilityEncode(serializeCapabilityPayload(signedKeyId, claims, oneTime, nonce)),
+    );
+    const token = `${payloadB64}.${signature}`;
     return { token, claims, oneTime };
   },
 );
-
-/** Canonical bytes including the one-time flag + nonce so the signature commits to them too. */
-function canonicalizeWithNonce(
-  claims: CapabilityClaims,
-  oneTime: boolean,
-  nonce: string,
-): Uint8Array {
-  const base = canonicalize(claims);
-  const suffix = encoder.encode(`|${oneTime ? '1' : '0'}:${nonce}`);
-  const out = new Uint8Array(base.length + suffix.length);
-  out.set(base, 0);
-  out.set(suffix, base.length);
-  return out;
-}
 
 /**
  * Verify a capability token against the *expected* claims the download route derives from the
@@ -227,8 +278,8 @@ function canonicalizeWithNonce(
  * token for `a.pdf` cannot authorize reading `b.pdf` even if the signature is otherwise valid.
  *
  * Order (fail-closed): parse → re-canonicalize received fields → constant-time signature check →
- * expiry → claim match → (if one-time) burn in the replay store. The signature is checked before
- * the claim comparison, and the comparison is constant-time, so neither leaks a timing oracle.
+ * expiry → claim match → (if one-time) burn in the replay store. The keyring performs the signature
+ * comparison in constant time; authenticated route claims are then compared exactly.
  *
  * @returns `{ ok: true, claims }` only when every check passes; otherwise `{ ok: false, reason }`.
  *          Callers MUST NOT leak `reason` to the client (return a generic 403/404).
@@ -241,88 +292,270 @@ export const verifyCapability = securityClassifier(
     expected: { key: string; method: CapabilityMethod; scope?: string },
     options: { audience?: string; now?: number; replayStore?: CapabilityReplayStore } = {},
   ): Promise<CapabilityVerifyResult> {
-    const now = options.now ?? Date.now();
-    const dot = token.indexOf('.');
-    if (dot <= 0) return { ok: false, reason: 'malformed' };
-    const payloadBytes = fromBase64url(token.slice(0, dot));
-    const signatureBytes = fromBase64url(token.slice(dot + 1));
-    if (!payloadBytes || !signatureBytes) return { ok: false, reason: 'malformed' };
-
-    let payload: {
-      v?: string;
-      m?: string;
-      k?: string;
-      e?: number;
-      i?: string;
-      s?: string;
-      o?: number;
-      n?: string;
-    };
     try {
-      payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+      if (typeof token !== 'string') return { ok: false, reason: 'malformed' };
+      const expectedKey = capabilityOwnDataValue(expected, 'key');
+      const expectedMethod = capabilityOwnDataValue(expected, 'method');
+      const expectedScope = capabilityOwnDataValue(expected, 'scope');
+      const configuredNow = capabilityOwnDataValue(options, 'now');
+      const configuredAudience = capabilityOwnDataValue(options, 'audience');
+      const configuredReplayStore = capabilityOwnDataValue(options, 'replayStore');
+      const now = configuredNow ?? capabilityNow();
+      const audience = configuredAudience ?? DEFAULT_CAPABILITY_AUDIENCE;
+      if (
+        typeof expectedKey !== 'string' ||
+        expectedKey.length === 0 ||
+        (expectedMethod !== 'GET' && expectedMethod !== 'HEAD') ||
+        (expectedScope !== undefined && typeof expectedScope !== 'string') ||
+        typeof now !== 'number' ||
+        !isValidClock(now) ||
+        typeof audience !== 'string' ||
+        audience.length === 0
+      ) {
+        return { ok: false, reason: 'malformed' };
+      }
+
+      const dot = capabilityStringIndexOf(token, '.');
+      if (dot <= 0 || capabilityStringIndexOf(token, '.', dot + 1) !== -1) {
+        return { ok: false, reason: 'malformed' };
+      }
+      const payloadBytes = capabilityFromBase64Url(capabilityStringSlice(token, 0, dot));
+      const signature = capabilityStringSlice(token, dot + 1);
+      if (payloadBytes === undefined || !isCanonicalSignature(signature)) {
+        return { ok: false, reason: 'malformed' };
+      }
+
+      const payload = parseCapabilityPayload(payloadBytes);
+      if (payload === undefined) return { ok: false, reason: 'malformed' };
+      const claims: CapabilityClaims = {
+        key: payload.key,
+        method: payload.method,
+        expiry: payload.expiry,
+        ...(payload.scope === undefined ? {} : { scope: payload.scope }),
+      };
+
+      // Recompute the signature over every received authority field, including key id and replay
+      // posture. The keyring owns the constant-time signature comparison.
+      const verification = signingKeyRingFromSecret(secret).verify({
+        audience,
+        keyId: payload.keyId,
+        payload: canonicalizeWithNonce(claims, payload.oneTime, payload.nonce, payload.keyId),
+        purpose: CAPABILITY_SIGNING_PURPOSE,
+        signature,
+      });
+      if (!verification.ok) return { ok: false, reason: 'bad-signature' };
+
+      if (now >= claims.expiry) return { ok: false, reason: 'expired' };
+
+      if (
+        (expectedScope !== undefined && !isStableProvenPrincipal(expectedScope)) ||
+        (claims.scope !== undefined && !isStableProvenPrincipal(claims.scope))
+      ) {
+        return { ok: false, reason: 'claim-mismatch' };
+      }
+
+      // The token's claims must match what the route is about to do. The route derives `expected`
+      // from the request URL, not from the token — this is what makes the token un-substitutable.
+      if (
+        claims.key !== expectedKey ||
+        claims.method !== expectedMethod ||
+        (claims.scope ?? '') !== (expectedScope ?? '')
+      ) {
+        return { ok: false, reason: 'claim-mismatch' };
+      }
+
+      if (payload.oneTime) {
+        if (configuredReplayStore === undefined) {
+          // A one-time token without a replay store cannot be enforced — fail closed.
+          return { ok: false, reason: 'replayed' };
+        }
+        let replayStore: CapabilityReplayStore;
+        try {
+          replayStore = snapshotReplayStore(configuredReplayStore);
+        } catch {
+          return { ok: false, reason: 'replayed' };
+        }
+        const replayId = `${TOKEN_VERSION}:${claims.key}:${payload.nonce}`;
+        try {
+          const fresh = await replayStore.consume(replayId, claims.expiry);
+          if (fresh !== true) return { ok: false, reason: 'replayed' };
+        } catch {
+          return { ok: false, reason: 'replayed' };
+        }
+      }
+
+      return { ok: true, claims };
     } catch {
       return { ok: false, reason: 'malformed' };
     }
-    if (
-      payload.v !== TOKEN_VERSION ||
-      (payload.m !== 'GET' && payload.m !== 'HEAD') ||
-      typeof payload.k !== 'string' ||
-      typeof payload.e !== 'number' ||
-      (payload.i !== undefined && typeof payload.i !== 'string')
-    ) {
-      return { ok: false, reason: 'malformed' };
-    }
-
-    const claims: CapabilityClaims = {
-      key: payload.k,
-      method: payload.m,
-      expiry: payload.e,
-      ...(payload.s === undefined ? {} : { scope: payload.s }),
-    };
-    const oneTime = payload.o === 1;
-    const nonce = typeof payload.n === 'string' ? payload.n : '';
-
-    // Recompute the signature over the canonicalized *received* fields and compare in constant time.
-    const verification = signingKeyRingFromSecret(secret).verify({
-      audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
-      ...(payload.i === undefined ? {} : { keyId: payload.i }),
-      payload: canonicalizeWithNonce(claims, oneTime, nonce),
-      purpose: CAPABILITY_SIGNING_PURPOSE,
-      signature: base64url(signatureBytes),
-    });
-    if (!verification.ok) {
-      return { ok: false, reason: 'bad-signature' };
-    }
-
-    if (now >= claims.expiry) return { ok: false, reason: 'expired' };
-
-    if (
-      (expected.scope !== undefined && !isProvenPrincipal(expected.scope)) ||
-      (claims.scope !== undefined && !isProvenPrincipal(claims.scope))
-    ) {
-      return { ok: false, reason: 'claim-mismatch' };
-    }
-
-    // The token's claims must match what the route is about to do. The route derives `expected`
-    // from the request URL, not from the token — this is what makes the token un-substitutable.
-    if (
-      claims.key !== expected.key ||
-      claims.method !== expected.method ||
-      (claims.scope ?? '') !== (expected.scope ?? '')
-    ) {
-      return { ok: false, reason: 'claim-mismatch' };
-    }
-
-    if (oneTime) {
-      if (!options.replayStore) {
-        // A one-time token without a replay store cannot be enforced — fail closed.
-        return { ok: false, reason: 'replayed' };
-      }
-      const replayId = `${TOKEN_VERSION}:${claims.key}:${nonce}`;
-      const fresh = await options.replayStore.consume(replayId, claims.expiry);
-      if (!fresh) return { ok: false, reason: 'replayed' };
-    }
-
-    return { ok: true, claims };
   },
 );
+
+interface ParsedCapabilityPayload {
+  readonly keyId: string;
+  readonly method: CapabilityMethod;
+  readonly key: string;
+  readonly expiry: number;
+  readonly scope?: string;
+  readonly oneTime: boolean;
+  readonly nonce: string;
+}
+
+function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | undefined {
+  let source: string;
+  let parsed: unknown;
+  try {
+    source = capabilityDecode(bytes);
+    parsed = capabilityJsonParse(source);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null || !capabilityHasRecordPrototype(parsed)) {
+    return undefined;
+  }
+  const keys = capabilityOwnKeys(parsed);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (typeof key !== 'string' || !isCapabilityPayloadKey(key)) return undefined;
+  }
+  const version = capabilityOwnDataValue(parsed, 'v');
+  const keyId = capabilityOwnDataValue(parsed, 'i');
+  const method = capabilityOwnDataValue(parsed, 'm');
+  const key = capabilityOwnDataValue(parsed, 'k');
+  const expiry = capabilityOwnDataValue(parsed, 'e');
+  const scope = capabilityOwnDataValue(parsed, 's');
+  const oneTimeFlag = capabilityOwnDataValue(parsed, 'o');
+  const nonceValue = capabilityOwnDataValue(parsed, 'n');
+  if (
+    version !== TOKEN_VERSION ||
+    typeof keyId !== 'string' ||
+    !isSafeKeyIdText(keyId) ||
+    (method !== 'GET' && method !== 'HEAD') ||
+    typeof key !== 'string' ||
+    key.length === 0 ||
+    typeof expiry !== 'number' ||
+    !isValidExpiry(expiry) ||
+    (scope !== undefined && typeof scope !== 'string') ||
+    (oneTimeFlag !== undefined && oneTimeFlag !== 1)
+  ) {
+    return undefined;
+  }
+  const oneTime = oneTimeFlag === 1;
+  let nonce = '';
+  if (oneTime) {
+    if (typeof nonceValue !== 'string' || !isCapabilityNonce(nonceValue)) return undefined;
+    nonce = nonceValue;
+  } else if (nonceValue !== undefined) {
+    return undefined;
+  }
+  const claims: CapabilityClaims = {
+    key,
+    method,
+    expiry,
+    ...(scope === undefined ? {} : { scope }),
+  };
+  if (source !== serializeCapabilityPayload(keyId, claims, oneTime, nonce)) return undefined;
+  return capabilityFreeze({
+    keyId,
+    method,
+    key,
+    expiry,
+    ...(scope === undefined ? {} : { scope }),
+    oneTime,
+    nonce,
+  });
+}
+
+function serializeCapabilityPayload(
+  keyId: string,
+  claims: CapabilityClaims,
+  oneTime: boolean,
+  nonce: string,
+): string {
+  let value =
+    `{"v":${capabilityJsonQuote(TOKEN_VERSION)},` +
+    `"i":${capabilityJsonQuote(keyId)},` +
+    `"m":${capabilityJsonQuote(claims.method)},` +
+    `"k":${capabilityJsonQuote(claims.key)},` +
+    `"e":${capabilityString(claims.expiry)}`;
+  if (claims.scope !== undefined) value += `,"s":${capabilityJsonQuote(claims.scope)}`;
+  if (oneTime) value += `,"o":1,"n":${capabilityJsonQuote(nonce)}`;
+  return `${value}}`;
+}
+
+function isCapabilityPayloadKey(value: string): boolean {
+  return (
+    value === 'v' ||
+    value === 'i' ||
+    value === 'm' ||
+    value === 'k' ||
+    value === 'e' ||
+    value === 's' ||
+    value === 'o' ||
+    value === 'n'
+  );
+}
+
+function isCanonicalSignature(value: string): boolean {
+  const bytes = capabilityFromBase64Url(value);
+  return bytes !== undefined && bytes.length === 32 && capabilityBase64Url(bytes) === value;
+}
+
+function isCapabilityNonce(value: string): boolean {
+  const bytes = capabilityFromBase64Url(value);
+  return bytes !== undefined && bytes.length === 12 && capabilityBase64Url(bytes) === value;
+}
+
+function isSafeKeyIdText(value: string): boolean {
+  if (value.length === 0 || value.length > 256) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = capabilityStringCharCodeAt(value, index);
+    if (
+      !(
+        (code >= 0x30 && code <= 0x39) ||
+        (code >= 0x41 && code <= 0x5a) ||
+        (code >= 0x61 && code <= 0x7a) ||
+        code === 0x2d ||
+        code === 0x5f
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidClock(value: number): boolean {
+  return capabilityIsFinite(value) && capabilityIsSafeInteger(value) && value >= 0;
+}
+
+function isValidExpiry(value: number): boolean {
+  return isValidClock(value) && value > 0;
+}
+
+function isStableProvenPrincipal(value: string): boolean {
+  try {
+    if (!isProvenPrincipal(value) || capabilityStringTrim(value) !== value || value === '') {
+      return false;
+    }
+    const normalized = capabilityStringToLowerCase(value);
+    return normalized !== 'anonymous' && normalized !== 'unknown' && normalized !== 'unresolved';
+  } catch {
+    return false;
+  }
+}
+
+export function snapshotReplayStore(source: unknown): CapabilityReplayStore {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw capabilityTypeError('Capability replay store must be an object.');
+  }
+  const consume = capabilityStableProperty(source, 'consume');
+  if (typeof consume !== 'function') {
+    throw capabilityTypeError('Capability replay store must expose a stable consume function.');
+  }
+  return capabilityFreeze({
+    consume(id: string, expiresAt: number): boolean | Promise<boolean> {
+      return capabilityReflectApply(consume, source, [id, expiresAt]);
+    },
+  });
+}

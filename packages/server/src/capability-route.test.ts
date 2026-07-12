@@ -14,8 +14,13 @@ import {
   createStorageDownloadEndpoint,
   deriveDownloadKey,
   drainCapabilityMintFacts,
+  type StorageDownloadEndpointOptions,
 } from './capability-route.js';
-import { createMemoryCapabilityReplayStore, signCapability } from './capability-url.js';
+import {
+  createMemoryCapabilityReplayStore,
+  signCapability,
+  verifyCapability,
+} from './capability-url.js';
 import { runEndpoint } from './endpoint.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
@@ -56,6 +61,13 @@ function recordingStorage(inner: ReturnType<typeof createMemoryStorage>) {
 function downloadUrl(token: string, key = 'receipts/ord_1.pdf'): string {
   const encoded = key.split('/').map(encodeURIComponent).join('/');
   return `https://app.example${BASE}/${encoded}?${CAPABILITY_TOKEN_PARAM}=${encodeURIComponent(token)}`;
+}
+
+function invokeDownloadHandler(
+  route: ReturnType<typeof createStorageDownloadEndpoint>,
+  request: Request,
+): Promise<Response> {
+  return (route.handler as (request: Request) => Promise<Response>)(request);
 }
 
 describe('capability download route: verify-before-read sink', () => {
@@ -168,6 +180,140 @@ describe('capability download route: verify-before-read sink', () => {
     // The object was NEVER read: the verify sink rejected before storage.get.
     expect(reads).toEqual([]);
     expect(await response.text()).not.toContain('B-secret');
+  });
+
+  it('pins the route secret and scope instead of retaining the caller options object', async () => {
+    const storage = await storageWith('private.pdf', 'PRIVATE');
+    const { reads, storage: recording } = recordingStorage(storage);
+    const options: StorageDownloadEndpointOptions = {
+      now: () => 1,
+      scope: () => 'tenant_original',
+      secret: SECRET,
+      storage: recording,
+    };
+    const route = createStorageDownloadEndpoint(options);
+    options.secret = 'attacker-capability-secret-at-least-32-bytes';
+    options.scope = () => 'tenant_attacker';
+
+    const { token } = await signCapability(
+      options.secret,
+      {
+        audience: `storage-download:${BASE}`,
+        key: 'private.pdf',
+        scope: 'tenant_attacker',
+      },
+      0,
+    );
+    const response = await runEndpoint(route, new Request(downloadUrl(token, 'private.pdf')));
+
+    expect(response.status).toBe(404);
+    expect(reads).toEqual([]);
+  });
+
+  it('pins the verification clock so retained config mutation cannot revive an expired token', async () => {
+    const storage = await storageWith('expired.pdf', 'PRIVATE');
+    const { reads, storage: recording } = recordingStorage(storage);
+    const options: StorageDownloadEndpointOptions = {
+      now: () => 100,
+      secret: SECRET,
+      storage: recording,
+    };
+    const route = createStorageDownloadEndpoint(options);
+    options.now = () => 0;
+    const { token } = await signCapability(SECRET, { expiresIn: 5, key: 'expired.pdf' }, 0);
+
+    const response = await runEndpoint(route, new Request(downloadUrl(token, 'expired.pdf')));
+    expect(response.status).toBe(404);
+    expect(reads).toEqual([]);
+  });
+
+  it('pins the replay store so swapping retained config cannot replay a one-time token', async () => {
+    const storage = await storageWith('once.pdf', 'PRIVATE');
+    const options: StorageDownloadEndpointOptions = {
+      now: () => 1,
+      replayStore: createMemoryCapabilityReplayStore({ now: () => 1 }),
+      secret: SECRET,
+      storage,
+    };
+    const route = createStorageDownloadEndpoint(options);
+    const { token } = await signCapability(
+      SECRET,
+      {
+        audience: `storage-download:${BASE}`,
+        expiresIn: 60_000,
+        key: 'once.pdf',
+        oneTime: true,
+      },
+      0,
+    );
+    const first = await runEndpoint(route, new Request(downloadUrl(token, 'once.pdf')));
+    options.replayStore = createMemoryCapabilityReplayStore({ now: () => 1 });
+    const second = await runEndpoint(route, new Request(downloadUrl(token, 'once.pdf')));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(404);
+  });
+
+  it('pins stored-file response posture instead of reading a mutated nested options object', async () => {
+    const storage = await storageWith('download.txt', 'download');
+    const storedFile = { disposition: 'attachment' as const, filename: 'original.txt' };
+    const route = createStorageDownloadEndpoint({ secret: SECRET, storage, storedFile });
+    storedFile.filename = 'mutated.txt';
+    const { url } = await createSignUrl({ secret: SECRET }).signUrl({ key: 'download.txt' });
+
+    const response = await runEndpoint(route, new Request(`https://app.example${url}`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="original.txt"');
+  });
+
+  it('uses pinned request method controls when a late string override tries to turn POST into GET', async () => {
+    const storage = await storageWith('a.pdf', 'PRIVATE');
+    const { reads, storage: recording } = recordingStorage(storage);
+    const route = createStorageDownloadEndpoint({
+      now: () => 1,
+      secret: SECRET,
+      storage: recording,
+    });
+    const { token } = await signCapability(SECRET, { key: 'a.pdf' }, 0);
+    const originalToUpperCase = String.prototype.toUpperCase;
+    try {
+      String.prototype.toUpperCase = () => 'GET';
+      const response = await invokeDownloadHandler(
+        route,
+        new Request(downloadUrl(token, 'a.pdf'), { method: 'POST' }),
+      );
+      expect(response.status).toBe(404);
+      expect(reads).toEqual([]);
+    } finally {
+      String.prototype.toUpperCase = originalToUpperCase;
+    }
+  });
+
+  it('uses the pinned URL pathname getter when late poisoning tries to substitute an object path', async () => {
+    const storage = await storageWith('private.pdf', 'PRIVATE');
+    const { reads, storage: recording } = recordingStorage(storage);
+    const route = createStorageDownloadEndpoint({
+      now: () => 1,
+      secret: SECRET,
+      storage: recording,
+    });
+    const { token } = await signCapability(SECRET, { key: 'private.pdf' }, 0);
+    const pathname = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname');
+    if (pathname === undefined) throw new Error('missing URL pathname descriptor');
+    try {
+      Object.defineProperty(URL.prototype, 'pathname', {
+        ...pathname,
+        get: () => `${BASE}/private.pdf`,
+      });
+      const response = await invokeDownloadHandler(
+        route,
+        new Request(downloadUrl(token, 'public.pdf')),
+      );
+      expect(response.status).toBe(404);
+      expect(reads).toEqual([]);
+    } finally {
+      Object.defineProperty(URL.prototype, 'pathname', pathname);
+    }
   });
 
   it('does not let a case-aliased filesystem key turn an exact capability into another object', async () => {
@@ -424,6 +570,42 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(url).toContain(encodeURIComponent(token));
     expect(key).toBe('receipts/ord_1.pdf');
     expect(oneTime).toBe(false);
+  });
+
+  it('pins signer secret, scope, base path, replay posture, and clock at construction', async () => {
+    const configuration = {
+      basePath: '/downloads',
+      defaultScope: 'tenant_original',
+      now: () => 10,
+      oneTimeReplayStore: true,
+      secret: SECRET,
+    };
+    const signer = createSignUrl(configuration);
+    configuration.basePath = '/attacker';
+    configuration.defaultScope = 'tenant_attacker';
+    configuration.now = () => 20;
+    configuration.oneTimeReplayStore = false;
+    configuration.secret = 'attacker-capability-secret-at-least-32-bytes';
+
+    const signed = await signer.signUrl({ expiresIn: 5, key: 'a.pdf', oneTime: true });
+    expect(signed.url.startsWith('/downloads/a.pdf?')).toBe(true);
+    await expect(
+      verifyCapability(
+        SECRET,
+        signed.token,
+        { key: 'a.pdf', method: 'GET', scope: 'tenant_original' },
+        { audience: 'storage-download:/downloads', now: 16 },
+      ),
+    ).resolves.toMatchObject({ ok: false, reason: 'expired' });
+    const replayStore = createMemoryCapabilityReplayStore({ now: () => 11 });
+    await expect(
+      verifyCapability(
+        SECRET,
+        signed.token,
+        { key: 'a.pdf', method: 'GET', scope: 'tenant_original' },
+        { audience: 'storage-download:/downloads', now: 11, replayStore },
+      ),
+    ).resolves.toMatchObject({ ok: true });
   });
 
   it('rejects unsafe capability URL base paths before minting bearer URLs', () => {
