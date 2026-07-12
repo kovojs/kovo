@@ -67,8 +67,6 @@ export function sanitizeDiagnosticText(
     } catch {
       continue;
     }
-    if (parsed.search === '' && parsed.hash === '') continue;
-
     const safe = sanitizeUrl(requestUrl);
     const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
     replacements.set(requestUrl, safe);

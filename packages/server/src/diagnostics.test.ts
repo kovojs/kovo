@@ -232,6 +232,30 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
     expect(JSON.stringify(onError.mock.calls)).not.toContain(token);
   });
 
+  it('removes credential-bearing absolute header URLs from onError and stderr text', () => {
+    const password = 'DIAGNOSTIC_URL_PASSWORD_MUST_NOT_SURVIVE';
+    const upstream = `https://diagnostic-user:${password}@idp.example/callback`;
+    const request = new Request('https://app.test/fail', {
+      headers: { 'X-Callback-URL': upstream },
+    });
+    const error = new Error(`callback failed at ${upstream}`);
+    const onError = vi.fn();
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      reportServerError(onError, error, { operation: 'app-request', request });
+      reportServerError(undefined, error, { operation: 'app-request', request });
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect((onError.mock.calls[0]?.[0] as Error).message).toBe('callback failed at /callback');
+      expect(JSON.stringify(onError.mock.calls)).not.toContain(password);
+      expect(JSON.stringify(stderr.mock.calls)).not.toContain(password);
+      expect(String(stderr.mock.calls[0]?.[1])).toContain('/callback');
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
   it('descriptor-walks nested diagnostic carriers without invoking app accessors', () => {
     const cookieSecret = 'COOKIE VALUE/QUOTED';
     const sessionSecret = 'SESSION_ID_NESTED_SECRET';

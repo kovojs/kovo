@@ -69,4 +69,12 @@ describe('log-channel neutralization', () => {
       'backend failed for /reset?token&state via /reset?token&state',
     );
   });
+
+  it('removes origin and userinfo from absolute diagnostic URLs without query values', () => {
+    const absolute = 'https://diagnostic-user:DIAGNOSTIC_PASSWORD@idp.example/callback';
+
+    expect(
+      sanitizeDiagnosticText(`provider failed at ${absolute}`, [absolute], sanitizeDiagnosticUrl),
+    ).toBe('provider failed at /callback');
+  });
 });
