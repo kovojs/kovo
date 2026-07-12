@@ -22,7 +22,10 @@ import type {
 import { stampPendingQueries } from './pending.js';
 import { rebaserApplyQueryInterposition } from './query-apply.js';
 import { queryStoreKey } from './query-store.js';
-import { retireSessionTransitionRuntime } from './session-transition.js';
+import {
+  reloadSessionTransitionDocument,
+  retireSessionTransitionPrincipal,
+} from './session-transition.js';
 import type { QueryChunk } from './wire-parser.js';
 
 /** @internal Options for submitting an enhanced mutation with optimistic prediction (SPEC §10.4). */
@@ -120,7 +123,8 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       {
         ...options,
         ...definedProps({ signal }),
-        onSessionTransition: () => retireSessionTransitionRuntime(options),
+        onSessionTransition: () => retireSessionTransitionPrincipal(options),
+        onSessionTransitionReload: reloadSessionTransitionDocument,
       },
       idem,
     );

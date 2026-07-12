@@ -47,7 +47,8 @@ class FakeTargetRoot {
 
 describe('enhanced mutation fetch', () => {
   it('keeps auth-success navigation same-origin after late decode poisoning', async () => {
-    const assign = vi.fn();
+    const lifecycleOrder: string[] = [];
+    const assign = vi.fn(() => lifecycleOrder.push('navigate'));
     const originalLocation = globalThis.location;
     const originalDecodeURIComponent = globalThis.decodeURIComponent;
     Object.defineProperty(globalThis, 'location', {
@@ -79,6 +80,7 @@ describe('enhanced mutation fetch', () => {
         form: { action: '/_m/auth/sign-in' },
         formData,
         idem: 'idem_late_decode',
+        onSessionTransition: () => lifecycleOrder.push('retire'),
         root: new FakeTargetRoot([]),
       });
       Object.defineProperty(globalThis, 'decodeURIComponent', {
@@ -88,6 +90,7 @@ describe('enhanced mutation fetch', () => {
 
       await fetched;
       expect(assign).toHaveBeenCalledWith('/');
+      expect(lifecycleOrder).toEqual(['retire', 'navigate']);
     } finally {
       Object.defineProperty(globalThis, 'decodeURIComponent', {
         configurable: true,

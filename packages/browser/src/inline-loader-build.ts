@@ -963,6 +963,9 @@ function installInlineKovoLoader(im) {
         return bns.readResponseText(response).then((text) => {
           const changes = chg(response);
           if (eaf(response, changes, text)) {
+            // C176 / SPEC §9.3: the accepted empty-auth fallback is a principal transition even
+            // without the explicit header. Retirement must precede a cancellable navigation.
+            retireBroadcast();
             ng(ant(form, body));
             return;
           }

@@ -33,7 +33,10 @@ import type { QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
 import type { ImportHandlerModule } from './handlers.js';
-import { retireSessionTransitionRuntime } from './session-transition.js';
+import {
+  reloadSessionTransitionDocument,
+  retireSessionTransitionPrincipal,
+} from './session-transition.js';
 
 export type {
   EnhancedFormLike,
@@ -199,7 +202,8 @@ export async function submitEnhancedMutation(
   try {
     const fetched = await fetchEnhancedMutation({
       ...options,
-      onSessionTransition: () => retireSessionTransitionRuntime(options),
+      onSessionTransition: () => retireSessionTransitionPrincipal(options),
+      onSessionTransitionReload: reloadSessionTransitionDocument,
       streaming: isStreamingEnhancedMutationForm(options.form),
     });
     if (fetched.sessionTransition) return retiredSessionTransitionResult(fetched);

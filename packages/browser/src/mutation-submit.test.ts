@@ -51,7 +51,10 @@ describe('enhanced mutation submit', () => {
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
-    const reload = vi.fn();
+    const reload = vi.fn(() => {
+      expect(channel.closed).toBe(true);
+      expect(channel.onmessage).toBeNull();
+    });
     const originalLocation = globalThis.location;
     Object.defineProperty(globalThis, 'location', {
       configurable: true,
@@ -138,6 +141,8 @@ describe('enhanced mutation submit', () => {
     'navigates after a successful enhanced auth redirect: $title',
     async ({ expected, response }) => {
       const store = createQueryStore();
+      const channel = new FakeBroadcastChannel();
+      const broadcast = installMutationBroadcast({ channel, store });
       const root = new FakeMorphRoot();
       const assign = vi.fn();
       const originalLocation = globalThis.location;
@@ -160,6 +165,7 @@ describe('enhanced mutation submit', () => {
 
       try {
         const result = await submitEnhancedMutation({
+          broadcast,
           fetch,
           form: { action: '/_m/auth/sign-in', method: 'post' },
           formData: new FormData(),
@@ -183,13 +189,24 @@ describe('enhanced mutation submit', () => {
 
       expect(assign).toHaveBeenCalledWith(expected);
       expect(text).not.toHaveBeenCalled();
+      expect(channel.closed).toBe(false);
+      expect(channel.onmessage).not.toBeNull();
     },
   );
 
   it('navigates after a successful enhanced auth empty-fragment response', async () => {
     const store = createQueryStore();
+    const lifecycleOrder: string[] = [];
+    const channel = new (class extends FakeBroadcastChannel {
+      override close(): void {
+        lifecycleOrder.push('retire');
+        super.close();
+      }
+    })();
+    const broadcast = installMutationBroadcast({ channel, store });
+    const lateMessageHandler = channel.onmessage;
     const root = new FakeMorphRoot();
-    const assign = vi.fn();
+    const assign = vi.fn(() => lifecycleOrder.push('navigate'));
     const originalLocation = globalThis.location;
     Object.defineProperty(globalThis, 'location', {
       configurable: true,
@@ -211,6 +228,7 @@ describe('enhanced mutation submit', () => {
 
     try {
       const result = await submitEnhancedMutation({
+        broadcast,
         fetch,
         form: { action: '/_m/auth/sign-in', method: 'post' },
         formData,
@@ -234,6 +252,17 @@ describe('enhanced mutation submit', () => {
 
     expect(assign).toHaveBeenCalledWith('/dashboard?tab=home');
     expect(text).toHaveBeenCalledTimes(1);
+    expect(lifecycleOrder).toEqual(['retire', 'navigate']);
+    expect(channel.closed).toBe(true);
+    expect(channel.onmessage).toBeNull();
+    lateMessageHandler?.({
+      data: {
+        body: '<kovo-query name="account">{"owner":"old-principal"}</kovo-query>',
+        changes: [],
+        type: 'kovo:mutation-response',
+      },
+    });
+    expect(store.get('account')).toBeUndefined();
   });
 
   it('falls back to the auth sign-in default route after unsafe empty-fragment next values', async () => {

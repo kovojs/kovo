@@ -127,6 +127,17 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('bc.close?.()');
   });
 
+  it('retires the mutation principal before empty-auth fallback navigation', () => {
+    // C176 / SPEC §9.3: navigation can be delayed or cancelled, so the accepted
+    // Kovo-Changes auth fallback must cut the old channel before consulting it.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'if(eaf(res,changes,text)){retireBroadcast();ng(ant(form,body));return;}',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain(
+      'if(eaf(res,changes,text)){ng(ant(form,body));return;}',
+    );
+  });
+
   it('keeps the shipped minified response apply helper tied to the canonical runtime apply helper', () => {
     // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
     expect(inlineKovoLoaderInstallerSource).toBe(inlineKovoLoaderInstallerSource.trim());

@@ -45,7 +45,10 @@ describe('inline loader enhanced submit source', () => {
         location: globalRecord.location,
       };
       const listeners = new Map<string, (event: unknown) => void>();
-      const reload = vi.fn();
+      const reloadRetirementStates: boolean[] = [];
+      const reload = vi.fn(() => {
+        reloadRetirementStates.push(InertBroadcastChannel.instances[0]?.closed === true);
+      });
       const text = vi.fn(async () => '<kovo-query name="account">{"owner":"victim"}</kovo-query>');
       const form = {
         action: '/_m/auth/custom-sign-in',
@@ -112,6 +115,7 @@ describe('inline loader enhanced submit source', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(reload).toHaveBeenCalledOnce();
+        expect(reloadRetirementStates).toEqual([true]);
         expect(text).not.toHaveBeenCalled();
         expect(InertBroadcastChannel.instances).toHaveLength(1);
         expect(InertBroadcastChannel.instances[0]?.closed).toBe(true);
@@ -184,7 +188,13 @@ describe('inline loader enhanced submit source', () => {
 
       for (const { expected, response } of cases) {
         const listeners = new Map<string, (event: unknown) => void>();
-        const assign = vi.fn();
+        const channelIndex = InertBroadcastChannel.instances.length;
+        const navigationRetirementStates: boolean[] = [];
+        const assign = vi.fn(() => {
+          navigationRetirementStates.push(
+            InertBroadcastChannel.instances[channelIndex]?.closed === true,
+          );
+        });
         const preventDefault = vi.fn();
         const text = vi.fn(async () => '<kovo-fragment target="auth">stale</kovo-fragment>');
         const form = {
@@ -221,6 +231,8 @@ describe('inline loader enhanced submit source', () => {
             vi.fn(async () => ({})),
             globalRecord,
           );
+          const runtimeChannel = InertBroadcastChannel.instances[channelIndex];
+          if (!runtimeChannel) throw new Error('inline mutation broadcast unavailable');
           listeners.get('submit')?.({
             preventDefault,
             target: {
@@ -239,6 +251,9 @@ describe('inline loader enhanced submit source', () => {
           expect(preventDefault).toHaveBeenCalledTimes(1);
           expect(assign).toHaveBeenCalledWith(expected);
           expect(text).not.toHaveBeenCalled();
+          expect(navigationRetirementStates).toEqual([false]);
+          expect(runtimeChannel.closed).toBe(false);
+          expect(runtimeChannel.onmessage).not.toBeNull();
         } finally {
           Object.assign(globalRecord, {
             FormData: originals.FormData,
@@ -279,7 +294,13 @@ describe('inline loader enhanced submit source', () => {
 
       for (const { expected, next } of cases) {
         const listeners = new Map<string, (event: unknown) => void>();
-        const assign = vi.fn();
+        const channelIndex = InertBroadcastChannel.instances.length;
+        const navigationRetirementStates: boolean[] = [];
+        const assign = vi.fn(() => {
+          navigationRetirementStates.push(
+            InertBroadcastChannel.instances[channelIndex]?.closed === true,
+          );
+        });
         const preventDefault = vi.fn();
         const text = vi.fn(async () => '');
         const form = {
@@ -329,6 +350,8 @@ describe('inline loader enhanced submit source', () => {
             vi.fn(async () => ({})),
             globalRecord,
           );
+          const runtimeChannel = InertBroadcastChannel.instances[channelIndex];
+          if (!runtimeChannel) throw new Error('inline mutation broadcast unavailable');
           listeners.get('submit')?.({
             preventDefault,
             target: {
@@ -347,6 +370,9 @@ describe('inline loader enhanced submit source', () => {
           expect(preventDefault).toHaveBeenCalledTimes(1);
           expect(assign).toHaveBeenCalledWith(expected);
           expect(text).toHaveBeenCalledTimes(1);
+          expect(navigationRetirementStates).toEqual([true]);
+          expect(runtimeChannel.closed).toBe(true);
+          expect(runtimeChannel.onmessage).toBeNull();
         } finally {
           Object.assign(globalRecord, {
             FormData: originals.FormData,

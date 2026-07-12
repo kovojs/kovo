@@ -58,8 +58,10 @@ export interface FetchEnhancedMutationOptions {
   formData: unknown;
   idem?: string;
   onError?: RuntimeErrorReporter;
-  /** @internal Retire the page-load principal as soon as the response header announces a change. */
+  /** @internal Retire the page-load principal before any transition navigation is attempted. */
   onSessionTransition?: () => void;
+  /** @internal Full-reload sink used only after header-time principal retirement. */
+  onSessionTransitionReload?: () => void;
   onUploadProgress?: (progress: UploadProgress) => void;
   root: TargetCollectorRoot;
   signal?: AbortSignal;
@@ -89,6 +91,7 @@ export async function fetchEnhancedMutation(
   const formData = options.formData;
   const onError = options.onError;
   const onSessionTransition = options.onSessionTransition;
+  const onSessionTransitionReload = options.onSessionTransitionReload;
   const onUploadProgress = options.onUploadProgress;
   const signal = options.signal;
   const streaming = options.streaming === true;
@@ -126,6 +129,7 @@ export async function fetchEnhancedMutation(
   // window. Retire synchronously at header observation and discard all response truth.
   if (sessionTransition) {
     onSessionTransition?.();
+    onSessionTransitionReload?.();
     return {
       body: '',
       changes: [],
@@ -174,10 +178,12 @@ export async function fetchEnhancedMutation(
     !(streaming && responseBody) &&
     isSuccessfulEmptyAuthFragmentResponse(response, changes, body, security)
   ) {
-    followSuccessfulMutationRedirect(
-      resolveAuthMutationNavigationTarget(form, formData, security),
-      security,
-    );
+    const navigationTarget = resolveAuthMutationNavigationTarget(form, formData, security);
+    // C176 / SPEC §9.3: this accepted fallback is itself an auth/session transition even when a
+    // custom endpoint omitted the explicit transition header. Cut the old principal's broadcast
+    // authority synchronously before the navigation sink, which may be delayed or cancelled.
+    onSessionTransition?.();
+    followSuccessfulMutationRedirect(navigationTarget, security);
     return {
       body: '',
       buildToken,
