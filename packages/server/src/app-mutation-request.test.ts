@@ -845,7 +845,9 @@ describe('server app mutation request boundary', () => {
     expect(providerCredentials[0]?.[2]).not.toBe(abortSecret);
     expect(handlerCredentials[0]?.slice(0, 2)).toEqual([null, null]);
     expect(handlerCredentials[0]?.[2]).not.toBe(abortSecret);
-    expect(seen).toEqual(['handler:false:undefined:null:null:kept:p1']);
+    // The pinned lifecycle carrier is intentionally immutable after its one security snapshot;
+    // a handler cannot install a late getter that reopens the original Request authority.
+    expect(seen).toEqual(['handler:false:undefined:null:undefined:kept:p1']);
     expect(request.headers.get('cookie')).toBe('sid=victim-session');
   });
 
