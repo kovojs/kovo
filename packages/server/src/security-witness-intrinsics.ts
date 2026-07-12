@@ -9,6 +9,7 @@
  */
 
 const NativeWeakMap = globalThis.WeakMap;
+const NativeArray = globalThis.Array;
 const NativeWeakSet = globalThis.WeakSet;
 const NativeMap = globalThis.Map;
 const NativeSet = globalThis.Set;
@@ -17,6 +18,7 @@ const NativeReflect = globalThis.Reflect;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectGet = NativeReflect.get;
 const nativeReflectOwnKeys = NativeReflect.ownKeys;
+const nativeArrayIsArray = NativeArray.isArray;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapHas = NativeWeakMap.prototype.has;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
@@ -28,9 +30,11 @@ const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeMapDelete = NativeMap.prototype.delete;
+const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeSetDelete = NativeSet.prototype.delete;
+const nativeSetForEach = NativeSet.prototype.forEach;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -40,7 +44,18 @@ const nativeObjectIs = NativeObject.is;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
 const nativeObjectPrototype = NativeObject.prototype;
+const nativeMapSize = apply<PropertyDescriptor | undefined>(
+  nativeObjectGetOwnPropertyDescriptor,
+  NativeObject,
+  [NativeMap.prototype, 'size'],
+)?.get;
+const nativeSetSize = apply<PropertyDescriptor | undefined>(
+  nativeObjectGetOwnPropertyDescriptor,
+  NativeObject,
+  [NativeSet.prototype, 'size'],
+)?.get;
 const NativeString = globalThis.String;
+const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -48,6 +63,8 @@ function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]
 
 function capturedControlsAreSound(): boolean {
   try {
+    if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
+    if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
     const key = {};
     const other = {};
     const value = {};
@@ -74,6 +91,14 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeMapGet, map, [other]) !== undefined) return false;
     if (apply(nativeMapHas, map, [key]) !== true) return false;
     if (apply(nativeMapHas, map, [other]) !== false) return false;
+    if (typeof nativeMapSize !== 'function' || apply(nativeMapSize, map, []) !== 1) return false;
+    let visitedMapEntry = false;
+    apply(nativeMapForEach, map, [
+      (entryValue: object, entryKey: object): void => {
+        if (entryKey === key && entryValue === value) visitedMapEntry = true;
+      },
+    ]);
+    if (!visitedMapEntry) return false;
     if (apply(nativeMapDelete, map, [key]) !== true) return false;
     if (apply(nativeMapHas, map, [key]) !== false) return false;
 
@@ -81,6 +106,14 @@ function capturedControlsAreSound(): boolean {
     apply(nativeSetAdd, set, [key]);
     if (apply(nativeSetHas, set, [key]) !== true) return false;
     if (apply(nativeSetHas, set, [other]) !== false) return false;
+    if (typeof nativeSetSize !== 'function' || apply(nativeSetSize, set, []) !== 1) return false;
+    let visitedSetEntry = false;
+    apply(nativeSetForEach, set, [
+      (entryValue: object): void => {
+        if (entryValue === key) visitedSetEntry = true;
+      },
+    ]);
+    if (!visitedSetEntry) return false;
     if (apply(nativeSetDelete, set, [key]) !== true) return false;
     if (apply(nativeSetHas, set, [key]) !== false) return false;
 
@@ -155,6 +188,7 @@ function capturedControlsAreSound(): boolean {
     ) {
       return false;
     }
+    if (apply(nativeStringReplaceAll, 'a-b-a', ['a', 'x']) !== 'x-b-x') return false;
     const frozen = apply<object>(nativeObjectFreeze, NativeObject, [record]);
     if (frozen !== record || apply(nativeObjectIsFrozen, NativeObject, [record]) !== true) {
       return false;
@@ -269,6 +303,22 @@ export function witnessMapDelete<Key>(map: Map<Key, unknown>, key: Key): boolean
   return apply(nativeMapDelete, map, [key]);
 }
 
+export function witnessMapForEach<Key, Value>(
+  map: Map<Key, Value>,
+  callback: (value: Value, key: Key) => void,
+): void {
+  assertSecurityWitnessIntrinsics();
+  apply(nativeMapForEach, map, [callback]);
+}
+
+export function witnessMapSize(map: Map<unknown, unknown>): number {
+  assertSecurityWitnessIntrinsics();
+  if (typeof nativeMapSize !== 'function') {
+    throw new TypeError('Kovo security witness Map size control is unavailable.');
+  }
+  return apply(nativeMapSize, map, []);
+}
+
 export function witnessSetHas<Value>(set: Set<Value>, value: Value): boolean {
   assertSecurityWitnessIntrinsics();
   return apply(nativeSetHas, set, [value]);
@@ -282,6 +332,19 @@ export function witnessSetAdd<Value>(set: Set<Value>, value: Value): void {
 export function witnessSetDelete<Value>(set: Set<Value>, value: Value): boolean {
   assertSecurityWitnessIntrinsics();
   return apply(nativeSetDelete, set, [value]);
+}
+
+export function witnessSetSize(set: Set<unknown>): number {
+  assertSecurityWitnessIntrinsics();
+  if (typeof nativeSetSize !== 'function') {
+    throw new TypeError('Kovo security witness Set size control is unavailable.');
+  }
+  return apply(nativeSetSize, set, []);
+}
+
+export function witnessSetForEach<Value>(set: Set<Value>, callback: (value: Value) => void): void {
+  assertSecurityWitnessIntrinsics();
+  apply(nativeSetForEach, set, [callback]);
 }
 
 export function witnessGetOwnPropertyDescriptor(
@@ -352,4 +415,18 @@ export function witnessReflectApply<Return>(
 export function witnessString(value: unknown): string {
   assertSecurityWitnessIntrinsics();
   return apply(NativeString, undefined, [value]);
+}
+
+export function witnessIsArray(value: unknown): value is unknown[] {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeArrayIsArray, NativeArray, [value]);
+}
+
+export function witnessStringReplaceAll(
+  value: string,
+  searchValue: string | RegExp,
+  replaceValue: string | ((substring: string, ...args: unknown[]) => string),
+): string {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeStringReplaceAll, value, [searchValue, replaceValue]);
 }

@@ -5,6 +5,8 @@ import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessFreeze,
+  witnessIsArray,
+  witnessStringReplaceAll,
   witnessWeakMapGet,
   witnessWeakMapSet,
   witnessWeakSetAdd,
@@ -16,12 +18,16 @@ const moduleUrl = new URL('./security-witness-intrinsics.ts', import.meta.url).h
 describe('server security witness intrinsics', () => {
   it('keeps private receipt semantics after evaluated app code poisons ambient prototypes', () => {
     const originalWeakMapGet = WeakMap.prototype.get;
+    const originalIsArray = Array.isArray;
+    const originalReplaceAll = String.prototype.replaceAll;
     const originalWeakMapSet = WeakMap.prototype.set;
     const originalWeakSetAdd = WeakSet.prototype.add;
     const originalWeakSetHas = WeakSet.prototype.has;
     const originalFreeze = Object.freeze;
     try {
       WeakMap.prototype.get = () => ({ forged: true });
+      Array.isArray = () => false;
+      String.prototype.replaceAll = () => '<script>poisoned</script>';
       WeakMap.prototype.set = function () {
         return this;
       };
@@ -43,8 +49,13 @@ describe('server security witness intrinsics', () => {
       expect(witnessWeakSetHas(set, key)).toBe(true);
       expect(witnessWeakSetHas(set, other)).toBe(false);
       expect(Object.isFrozen(witnessFreeze({ proof: true }))).toBe(true);
+      expect(witnessIsArray([])).toBe(true);
+      expect(witnessIsArray({})).toBe(false);
+      expect(witnessStringReplaceAll('a-b-a', 'a', 'x')).toBe('x-b-x');
     } finally {
       WeakMap.prototype.get = originalWeakMapGet;
+      Array.isArray = originalIsArray;
+      String.prototype.replaceAll = originalReplaceAll;
       WeakMap.prototype.set = originalWeakMapSet;
       WeakSet.prototype.add = originalWeakSetAdd;
       WeakSet.prototype.has = originalWeakSetHas;
