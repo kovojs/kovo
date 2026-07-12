@@ -188,9 +188,15 @@ function renderSourceFrame(
 
   for (let index = firstLine; index <= lastLine; index += 1) {
     const lineNumber = leftPadSpaces(securityString(index + 1), width);
-    securityArrayPush(frameLines, `${lineNumber} | ${lines[index] ?? ''}`);
+    const sourceLine = lines[index] ?? '';
+    securityArrayPush(frameLines, `${lineNumber} | ${sourceLine}`);
     if (index === lineIndex) {
-      const markerColumn = start.column < 1 ? 1 : start.column;
+      const markerColumn =
+        start.column < 1
+          ? 1
+          : start.column > sourceLine.length + 1
+            ? sourceLine.length + 1
+            : start.column;
       const requestedMarkerLength = diagnostic.length ?? 1;
       const boundedMarkerLength = requestedMarkerLength > 80 ? 80 : requestedMarkerLength;
       const markerLength = boundedMarkerLength < 1 ? 1 : boundedMarkerLength;
