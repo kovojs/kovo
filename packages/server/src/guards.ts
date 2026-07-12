@@ -11,6 +11,8 @@ import {
 } from './document-core.js';
 import { managedDb, type ManagedDbMode } from './managed-db.js';
 import {
+  authorityMetadataSource,
+  pinnedRequestCarrier,
   registerAuthorityNeutralRequestMetadata,
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
@@ -551,11 +553,7 @@ export interface RateLimitOptions<Request> {
 
 const defaultRateLimitWindowMs = 60_000;
 const defaultRateLimitMaxKeys = 10_000;
-const passedRoleGuardsSymbol: unique symbol = Symbol('kovo.passedRoleGuards');
-
-interface PassedRoleGuardRequest {
-  [passedRoleGuardsSymbol]?: Set<string>;
-}
+const passedRoleGuards = createWitnessWeakMap<object, Set<string>>();
 
 /**
  * Construct a self-naming executable guard. SPEC §10 default-deny access decisions
@@ -803,23 +801,21 @@ export function guardAuditName<Request>(guard: Guard<Request>): string {
 /** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */
 export function requestPassedRoleGuard(request: unknown, role: string): boolean {
   if (!isObjectLike(request)) return false;
-  const roles = (request as PassedRoleGuardRequest)[passedRoleGuardsSymbol];
+  const roles = witnessWeakMapGet(passedRoleGuards, request);
   return roles !== undefined && witnessSetHas(roles, role);
 }
 
 function markPassedRoleGuard(request: unknown, role: string): void {
   if (!isObjectLike(request)) return;
-  const target = request as PassedRoleGuardRequest;
-  let roles = target[passedRoleGuardsSymbol];
+  const metadataSource = authorityMetadataSource(request);
+  let roles =
+    witnessWeakMapGet(passedRoleGuards, request) ??
+    witnessWeakMapGet(passedRoleGuards, metadataSource);
   if (roles === undefined) {
     roles = createWitnessSet();
-    witnessDefineProperty(target, passedRoleGuardsSymbol, {
-      configurable: false,
-      enumerable: false,
-      value: roles,
-      writable: false,
-    });
   }
+  witnessWeakMapSet(passedRoleGuards, request, roles);
+  witnessWeakMapSet(passedRoleGuards, metadataSource, roles);
   witnessSetAdd(roles, role);
 }
 
@@ -1224,43 +1220,16 @@ function requestWithProperty<Request, Key extends string, Value>(
   key: Key,
   value: Value,
 ): Request & Record<Key, Value> {
-  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
-    return { [key]: value } as Request & Record<Key, Value>;
-  }
-
-  const carrier = new Proxy(request as object, {
-    get(target, property) {
-      if (property === key) return value;
-
-      const targetValue = Reflect.get(target, property, target) as unknown;
-      return typeof targetValue === 'function' ? targetValue.bind(target) : targetValue;
-    },
-    getOwnPropertyDescriptor(target, property) {
-      if (property === key) {
-        return {
-          configurable: true,
-          enumerable: true,
-          value,
-          writable: false,
-        };
-      }
-
-      return Reflect.getOwnPropertyDescriptor(target, property);
-    },
-    has(target, property) {
-      return property === key || property in target;
-    },
-    ownKeys(target) {
-      const keys = Reflect.ownKeys(target);
-      return keys.includes(key) ? keys : [...keys, key];
-    },
-  }) as Request & Record<Key, Value>;
+  const carrier = pinnedRequestCarrier(request, [{ key, value }]) as Request & Record<Key, Value>;
   registerAuthorityNeutralRequestMetadata(
     carrier as unknown as globalThis.Request,
     requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
   );
   if (key === 'session') registerFrameworkSessionPrincipalSnapshot(carrier, value);
-  else inheritFrameworkPrincipalSnapshot(carrier, request);
+  else if (isObjectLike(request)) {
+    const requestObject: object = request;
+    inheritFrameworkPrincipalSnapshot(carrier, requestObject);
+  }
   return carrier;
 }
 
@@ -1269,30 +1238,15 @@ export function withoutRequestProperty<Request, Key extends PropertyKey>(
   request: Request,
   key: Key,
 ): Request {
-  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
-    return request;
-  }
-  const carrier = new Proxy(request as object, {
-    get(target, property) {
-      if (property === key) return undefined;
-      const targetValue = Reflect.get(target, property, target) as unknown;
-      return typeof targetValue === 'function' ? targetValue.bind(target) : targetValue;
-    },
-    getOwnPropertyDescriptor(target, property) {
-      return property === key ? undefined : Reflect.getOwnPropertyDescriptor(target, property);
-    },
-    has(target, property) {
-      return property === key ? false : property in target;
-    },
-    ownKeys(target) {
-      return Reflect.ownKeys(target).filter((property) => property !== key);
-    },
-  });
+  const carrier = pinnedRequestCarrier(request, [], [key]);
   registerAuthorityNeutralRequestMetadata(
     carrier as unknown as globalThis.Request,
     requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
   );
-  inheritFrameworkPrincipalSnapshot(carrier, request);
+  if (isObjectLike(request)) {
+    const requestObject: object = request;
+    inheritFrameworkPrincipalSnapshot(carrier, requestObject);
+  }
   return carrier as Request;
 }
 

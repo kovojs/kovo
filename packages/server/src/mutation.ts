@@ -78,9 +78,15 @@ import {
   frameworkManagedDbRawTarget,
   kovoAsyncMutationTransaction,
   runSqliteAsyncTransaction,
-  type AsyncMutationTransactionCapableDb,
 } from './sql-safe-handle.js';
 import { runWithRequestInputProvenance } from './request-input-provenance.js';
+import { pinnedRequestCarrier } from './request-carrier.js';
+import {
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessReflectApply,
+  witnessReflectGet,
+} from './security-witness-intrinsics.js';
 import type {
   MutationContext,
   MutationDefinition,
@@ -173,9 +179,9 @@ type MutationResponseDeliveryMode<Request, Value> =
     };
 
 type TransactionCapableRequestDb = {
-  transaction<Result>(
-    callback: (transactionDb: unknown) => Promise<Result> | Result,
-  ): Promise<Result> | Result;
+  readonly managedTransaction: Function | undefined;
+  readonly target: object;
+  readonly transaction: Function;
 };
 
 /**
@@ -573,16 +579,23 @@ async function runInDefaultTransaction<Request, GuardedRequest, Value>(
     );
   }
 
-  return db.transaction((transactionDb) =>
-    runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
-  );
+  return witnessReflectApply<Promise<Value> | Value>(db.transaction, db.target, [
+    (transactionDb: unknown) =>
+      runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
+  ]);
 }
 
 function transactionCapableRequestDb(request: unknown): TransactionCapableRequestDb | undefined {
   if (!isRecord(request)) return undefined;
-  const db = request.db;
-  if (!isRecord(db) || typeof db.transaction !== 'function') return undefined;
-  return db as TransactionCapableRequestDb;
+  const db = witnessReflectGet(request, 'db', request);
+  if (!isRecord(db)) return undefined;
+  const transaction = optionalPinnedMutationFunction(db, 'transaction');
+  if (transaction === undefined) return undefined;
+  return {
+    managedTransaction: optionalPinnedMutationFunction(db, kovoAsyncMutationTransaction),
+    target: db,
+    transaction,
+  };
 }
 
 function asyncMutationTransaction(
@@ -590,13 +603,16 @@ function asyncMutationTransaction(
 ):
   | (<Result>(callback: (transactionDb: unknown) => Promise<Result>) => Promise<Result>)
   | undefined {
-  const managed = (db as AsyncMutationTransactionCapableDb)[kovoAsyncMutationTransaction];
-  if (typeof managed === 'function') return managed.bind(db);
+  if (db.managedTransaction !== undefined) {
+    const managedTransaction = db.managedTransaction;
+    return <Result>(callback: (transactionDb: unknown) => Promise<Result>) =>
+      witnessReflectApply<Promise<Result>>(managedTransaction, db.target, [callback]);
+  }
 
-  const sqliteProbeTarget = frameworkManagedDbRawTarget(db) ?? db;
+  const sqliteProbeTarget = frameworkManagedDbRawTarget(db.target) ?? db.target;
   if (!canRunSqliteAsyncTransaction(sqliteProbeTarget)) return undefined;
   return <Result>(callback: (transactionDb: unknown) => Promise<Result>) => {
-    const result = runSqliteAsyncTransaction(sqliteProbeTarget, db, callback);
+    const result = runSqliteAsyncTransaction(sqliteProbeTarget, db.target, callback);
     if (result === undefined) {
       throw new Error('Kovo SQLite mutation transaction adapter disappeared during execution.');
     }
@@ -605,8 +621,27 @@ function asyncMutationTransaction(
 }
 
 function requestWithTransactionDb(request: unknown, transactionDb: unknown): unknown {
-  if (!isRecord(request)) return request;
-  return { ...request, db: transactionDb };
+  return pinnedRequestCarrier(request, [{ key: 'db', value: transactionDb }]);
+}
+
+function optionalPinnedMutationFunction(
+  value: object,
+  property: PropertyKey,
+): Function | undefined {
+  const resolved = witnessReflectGet(value, property, value);
+  if (resolved !== undefined) return typeof resolved === 'function' ? resolved : undefined;
+  let current: object | null = value;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor)) {
+        throw new TypeError(`Mutation transaction control ${String(property)} cannot be accessor-backed.`);
+      }
+      return typeof descriptor.value === 'function' ? descriptor.value : undefined;
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  return undefined;
 }
 
 function requestWithTaskScheduling<Request>(
@@ -654,42 +689,10 @@ function requestWithTaskSchedulingProperties<Request>(
   schedule: TaskSchedulingRequest['schedule'],
   cancel: TaskSchedulingRequest['cancel'],
 ): Request & TaskSchedulingRequest {
-  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
-    return { cancel, schedule } as Request & TaskSchedulingRequest;
-  }
-
-  return new Proxy(request as object, {
-    get(target, property) {
-      if (property === 'schedule') return schedule;
-      if (property === 'cancel') return cancel;
-
-      const targetValue = Reflect.get(target, property, target) as unknown;
-      return typeof targetValue === 'function' ? targetValue.bind(target) : targetValue;
-    },
-    getOwnPropertyDescriptor(target, property) {
-      if (property === 'schedule' || property === 'cancel') {
-        return {
-          configurable: true,
-          enumerable: true,
-          value: property === 'schedule' ? schedule : cancel,
-          writable: false,
-        };
-      }
-
-      return Reflect.getOwnPropertyDescriptor(target, property);
-    },
-    has(target, property) {
-      return property === 'schedule' || property === 'cancel' || property in target;
-    },
-    ownKeys(target) {
-      const keys = Reflect.ownKeys(target);
-      return [
-        ...keys,
-        ...(keys.includes('schedule') ? [] : ['schedule']),
-        ...(keys.includes('cancel') ? [] : ['cancel']),
-      ];
-    },
-  }) as Request & TaskSchedulingRequest;
+  return pinnedRequestCarrier(request, [
+    { key: 'schedule', value: schedule },
+    { key: 'cancel', value: cancel },
+  ]) as Request & TaskSchedulingRequest;
 }
 
 function mutationLifecycleOptionsWithSqlPolicy<

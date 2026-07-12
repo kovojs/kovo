@@ -669,6 +669,104 @@ describe('server mutation lifecycle', () => {
     expect(db.rollbacks).toBe(0);
   });
 
+  it('keeps the guard-accepted body bound through lifecycle request wrappers', async () => {
+    const acceptedBody = 'SIGNED-SAFE';
+    const substitutedBody = 'DANGEROUS-SUBSTITUTE';
+    const request = new Request('https://example.test/mutate', {
+      body: acceptedBody,
+      method: 'POST',
+    });
+    const nativeBind = Function.prototype.bind;
+    const nativeText = Request.prototype.text;
+    const guarded = mutation('security/body-carrier-binding', {
+      guard: async (guardRequest: Request) =>
+        (await guardRequest.clone().text()) === acceptedBody,
+      input: s.object({}),
+      handler: async (_input, handlerRequest: Request) => handlerRequest.text(),
+    });
+
+    try {
+      await expect(
+        runMutation(guarded, {}, request, {
+          sessionProvider() {
+            Function.prototype.bind = function (thisArg: unknown, ...args: unknown[]) {
+              if (this === nativeText) return () => Promise.resolve(substitutedBody);
+              return Reflect.apply(nativeBind, this, [thisArg, ...args]);
+            };
+            return null;
+          },
+        }),
+      ).resolves.toMatchObject({ ok: true, value: acceptedBody });
+    } finally {
+      Function.prototype.bind = nativeBind;
+    }
+  });
+
+  it('keeps principal, task, and transaction carriers on one pinned session snapshot', async () => {
+    const victimSession = { user: { id: 'victim', roles: ['member'] } };
+    const attackerSession = { user: { id: 'attacker', roles: ['admin'] } };
+    const followup = task('security/carrier-followup', {
+      input: s.object({ id: s.string() }),
+      run() {
+        return 'done';
+      },
+    });
+    const db = {
+      async transaction<Result>(callback: (tx: { marker: string }) => Promise<Result>) {
+        return callback({ marker: 'transaction' });
+      },
+    };
+    const schedulerSessions: string[] = [];
+    const guarded = mutation('security/session-carrier-binding', {
+      guard: guards.role('member'),
+      input: s.object({}),
+      async handler(_input, request) {
+        const handle = await request.schedule(followup, { id: request.session.user.id });
+        return `${request.session.user.id}:${request.db.marker}:${handle.task}`;
+      },
+    });
+    const nativeReflectGet = Reflect.get;
+    let sessionCarrier: object | undefined;
+
+    try {
+      await expect(
+        runMutation(guarded, {}, {}, {
+          db(request) {
+            sessionCarrier = request as object;
+            Reflect.get = function (
+              target: object,
+              propertyKey: PropertyKey,
+              receiver?: unknown,
+            ): unknown {
+              if (target === sessionCarrier && propertyKey === 'session') return attackerSession;
+              return nativeReflectGet(target, propertyKey, receiver);
+            };
+            return db;
+          },
+          sessionProvider: () => victimSession,
+          taskScheduler: {
+            cancel() {
+              return false;
+            },
+            registeredTasks: [followup],
+            schedule(request, input) {
+              schedulerSessions.push(
+                (request as { session: typeof victimSession }).session.user.id,
+              );
+              return { id: 'job-1', task: input.task };
+            },
+          },
+        }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: 'victim:transaction:security/carrier-followup',
+      });
+    } finally {
+      Reflect.get = nativeReflectGet;
+    }
+    expect(schedulerSessions).toEqual(['victim']);
+  });
+
   it('validates durable task args before scheduling from a mutation handler', async () => {
     const sendReceipt = task('receipt/send-invalid', {
       input: s.object({ orderId: s.string() }),
