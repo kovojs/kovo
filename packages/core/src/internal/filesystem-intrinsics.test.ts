@@ -91,6 +91,26 @@ describe('filesystem intrinsic membrane', () => {
     expect(result.status).toBe(0);
   });
 
+  it('C223 fails closed when Dirent classifiers were poisoned before framework import', () => {
+    const script = `
+      const { Dirent } = await import('node:fs');
+      Dirent.prototype.isFile = () => false;
+      Dirent.prototype.isSymbolicLink = () => false;
+      const intrinsics = await import(${JSON.stringify(`${moduleUrl}?poisoned-dirent-probe`)});
+      try {
+        intrinsics.assertFileSystemIntrinsics();
+      } catch (error) {
+        if (String(error).includes('intrinsics were modified')) process.exit(0);
+      }
+      process.exit(3);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
   it('fails closed when storage codec controls were poisoned before framework import', () => {
     const script = `
       TextEncoder.prototype.encode = () => new Uint8Array();

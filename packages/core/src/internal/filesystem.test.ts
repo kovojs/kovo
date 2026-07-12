@@ -255,6 +255,44 @@ describe('framework filesystem boundary', () => {
     }
   });
 
+  it('C223 binds recursive directory entries and file bytes to observed filesystem identity', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-entry-identity-'));
+    const root = join(base, 'root');
+    const publicDir = join(root, 'public');
+    const parkedPublicDir = join(root, 'public-parked');
+    const outside = join(base, 'outside');
+    try {
+      await mkdir(publicDir, { recursive: true });
+      await mkdir(outside);
+      await writeFile(join(publicDir, 'safe.txt'), 'SAFE', 'utf8');
+      await writeFile(join(outside, 'secret.txt'), 'SECRET', 'utf8');
+      await symlink(join(outside, 'secret.txt'), join(publicDir, 'linked-secret.txt'));
+      const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+
+      const rootEntries = await fileSystem.entries('.');
+      const publicEntry = rootEntries.find((entry) => entry.name === 'public')!;
+      const publicEntries = await fileSystem.entriesOf(publicEntry);
+      const safeEntry = publicEntries.find((entry) => entry.name === 'safe.txt')!;
+      const linkedEntry = publicEntries.find((entry) => entry.name === 'linked-secret.txt')!;
+
+      await expect(fileSystem.fileBytesOf(safeEntry)).resolves.toEqual(
+        new TextEncoder().encode('SAFE'),
+      );
+      expect(linkedEntry.kind).toBe('other');
+      await expect(fileSystem.fileBytesOf(linkedEntry)).rejects.toThrow(/identity-bound result/u);
+
+      await rename(join(publicDir, 'safe.txt'), join(publicDir, 'safe-parked.txt'));
+      await writeFile(join(publicDir, 'safe.txt'), 'ATTACKER', 'utf8');
+      await expect(fileSystem.fileBytesOf(safeEntry)).rejects.toThrow(/entry identity changed/u);
+
+      await rename(publicDir, parkedPublicDir);
+      await mkdir(publicDir);
+      await expect(fileSystem.entriesOf(publicEntry)).rejects.toThrow(/entry identity changed/u);
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
   it('replaces final-component links when copying instead of writing through them', async () => {
     const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-copy-target-'));
     const root = join(base, 'root');

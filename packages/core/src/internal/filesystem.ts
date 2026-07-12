@@ -1,13 +1,17 @@
 import { blessSink, isBlessedSink } from './sink-policy.js';
 import {
+  securityDefineProperty,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
+} from '#security-witness-intrinsics';
+import {
   fileSystemArrayIncludesExact,
   fileSystemAccess,
   fileSystemCloseFileDescriptor,
   fileSystemCopyBytes,
   fileSystemCopyFile,
   fileSystemCreateReadableStream,
-  fileSystemDirentIsDirectory,
-  fileSystemDirentIsFile,
   fileSystemFreeze,
   fileSystemLstat,
   fileSystemLstatSync,
@@ -61,11 +65,14 @@ export interface ConfinedFileSystemReadResult {
   size: number;
 }
 
+const confinedFileSystemEntryBrand: unique symbol = Symbol('kovo.filesystem.confined-entry');
+
 /** @internal Directory entry shape returned by the framework-owned filesystem boundary. */
 export interface ConfinedFileSystemEntry {
-  kind: 'directory' | 'file' | 'other';
-  name: string;
-  relativePath: string;
+  readonly [confinedFileSystemEntryBrand]: true;
+  readonly kind: 'directory' | 'file' | 'other';
+  readonly name: string;
+  readonly relativePath: string;
 }
 
 /** @internal Existing-root filesystem read/write capability with path confinement. */
@@ -91,6 +98,10 @@ export interface FrameworkOutputFileSystemBoundary {
   deleteFile(relativePath: string): Promise<void>;
   ensureDirectory(): Promise<void>;
   entries(relativePath?: string): Promise<readonly ConfinedFileSystemEntry[]>;
+  /** Enumerate a directory only while its captured canonical and device/inode identity survives. */
+  entriesOf(entry: ConfinedFileSystemEntry): Promise<readonly ConfinedFileSystemEntry[]>;
+  /** Read a regular file through its captured identity and an independently witnessed descriptor. */
+  fileBytesOf(entry: ConfinedFileSystemEntry): Promise<Uint8Array>;
   fileBytes(relativePath: string): Promise<Uint8Array | undefined>;
   fileExists(relativePath: string): Promise<boolean>;
   pathForExistingChild(relativePath: string): string | undefined;
@@ -125,6 +136,19 @@ interface FileSystemRootState {
   rootIdentity: PinnedDirectoryIdentity | undefined;
   readonly root: string;
 }
+
+interface ConfinedFileSystemEntryProvenance {
+  readonly canonicalPath: string;
+  readonly identity: FileSystemIdentity;
+  readonly kind: 'directory' | 'file';
+  readonly relativePath: string;
+  readonly rootState: FileSystemRootState;
+}
+
+const confinedFileSystemEntryProvenance = securityWeakMap<
+  ConfinedFileSystemEntry,
+  ConfinedFileSystemEntryProvenance
+>();
 
 type FileSystemRootAccess = 'create' | 'observe' | 'required';
 
@@ -166,6 +190,8 @@ export function createFrameworkOutputFileSystemBoundary(
       await prepareFileSystemRoot(rootState, 'create');
     },
     entries: (relativePath) => confinedDirectoryEntries(rootState, relativePath ?? '.'),
+    entriesOf: (entry) => confinedEntryDirectoryEntries(rootState, entry),
+    fileBytesOf: (entry) => readConfinedEntryFileBytes(rootState, entry),
     fileBytes: (relativePath) => readConfinedFileBytes(rootState, relativePath),
     fileExists: (relativePath) => confinedFileExists(rootState, relativePath),
     pathForExistingChild: (relativePath) => verifiedExistingChildPath(rootState, relativePath),
@@ -910,16 +936,16 @@ function assertSiblingStagingPrefix(prefix: string): void {
 async function confinedDirectoryEntries(
   rootState: FileSystemRootState,
   relativePath: string,
+  expectedDirectory?: ConfinedFileSystemEntryProvenance,
 ): Promise<readonly ConfinedFileSystemEntry[]> {
   if (confinedPath(rootState.root, relativePath) === undefined) return fileSystemFreeze([]);
   if (!(await prepareFileSystemRoot(rootState, 'observe'))) return fileSystemFreeze([]);
   const root = preparedRootPath(rootState);
-  const directoryPath = confinedPath(root, relativePath);
-  if (directoryPath === undefined) return fileSystemFreeze([]);
-  const resolvedDirectory = await safeRealpath(directoryPath);
-  if (resolvedDirectory === undefined || !containsPath(root, resolvedDirectory)) {
-    return fileSystemFreeze([]);
-  }
+  const resolvedDirectory =
+    expectedDirectory === undefined
+      ? await resolvedConfinedDirectory(root, relativePath)
+      : await verifyConfinedEntryProvenance(rootState, expectedDirectory, 'directory');
+  if (resolvedDirectory === undefined) return fileSystemFreeze([]);
   let entries: Dirent[];
   try {
     entries = await fileSystemReadDirectory(resolvedDirectory);
@@ -927,21 +953,218 @@ async function confinedDirectoryEntries(
     if (isMissingPathError(error)) return fileSystemFreeze([]);
     throw error;
   }
+  await revalidatePreparedRoot(rootState);
+  if (expectedDirectory !== undefined) {
+    await verifyConfinedEntryProvenance(rootState, expectedDirectory, 'directory');
+  }
   const output: ConfinedFileSystemEntry[] = [];
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
     const childRelativePath = fileSystemPathJoin(relativePath, entry.name);
-    output[output.length] = fileSystemFreeze({
-      kind: fileSystemDirentIsDirectory(entry)
-        ? 'directory'
-        : fileSystemDirentIsFile(entry)
-          ? 'file'
-          : 'other',
-      name: entry.name,
-      relativePath: childRelativePath,
+    const snapshot = await snapshotConfinedFileSystemEntry(
+      rootState,
+      root,
+      entry.name,
+      childRelativePath,
+    );
+    securityDefineProperty(output, output.length, {
+      configurable: true,
+      enumerable: true,
+      value: snapshot,
+      writable: true,
     });
   }
   return fileSystemFreeze(output);
+}
+
+async function resolvedConfinedDirectory(
+  root: string,
+  relativePath: string,
+): Promise<string | undefined> {
+  const directoryPath = confinedPath(root, relativePath);
+  if (directoryPath === undefined) return undefined;
+  const resolvedDirectory = await safeRealpath(directoryPath);
+  return resolvedDirectory !== undefined && containsPath(root, resolvedDirectory)
+    ? resolvedDirectory
+    : undefined;
+}
+
+async function snapshotConfinedFileSystemEntry(
+  rootState: FileSystemRootState,
+  root: string,
+  name: string,
+  relativePath: string,
+): Promise<ConfinedFileSystemEntry> {
+  const candidate = confinedPath(root, relativePath);
+  if (candidate === undefined) {
+    throw new Error(`Filesystem directory entry '${relativePath}' escapes its root.`);
+  }
+
+  let lexicalStat: Stats;
+  try {
+    lexicalStat = await fileSystemLstat(candidate);
+  } catch (error) {
+    throw confinedEntryIdentityChangedError(candidate, error);
+  }
+  const kind: ConfinedFileSystemEntry['kind'] = fileSystemStatsIsSymbolicLink(lexicalStat)
+    ? 'other'
+    : fileSystemStatsIsDirectory(lexicalStat)
+      ? 'directory'
+      : fileSystemStatsIsFile(lexicalStat)
+        ? 'file'
+        : 'other';
+  const snapshot: ConfinedFileSystemEntry = fileSystemFreeze({
+    [confinedFileSystemEntryBrand]: true,
+    kind,
+    name,
+    relativePath,
+  });
+
+  if (kind === 'directory' || kind === 'file') {
+    const canonicalPath = await safeRealpath(candidate);
+    if (canonicalPath === undefined || !containsPath(root, canonicalPath)) {
+      throw confinedEntryIdentityChangedError(candidate, 'canonical path escaped its root');
+    }
+    let canonicalStat: Stats;
+    try {
+      canonicalStat = await fileSystemStat(canonicalPath);
+    } catch (error) {
+      throw confinedEntryIdentityChangedError(candidate, error);
+    }
+    const identity = fileSystemIdentity(lexicalStat);
+    if (
+      (kind === 'directory'
+        ? !fileSystemStatsIsDirectory(canonicalStat)
+        : !fileSystemStatsIsFile(canonicalStat)) ||
+      !sameFileSystemIdentity(identity, fileSystemIdentity(canonicalStat))
+    ) {
+      throw confinedEntryIdentityChangedError(candidate, 'classification or identity changed');
+    }
+    await revalidatePreparedRoot(rootState);
+    securityWeakMapSet(confinedFileSystemEntryProvenance, snapshot, {
+      canonicalPath,
+      identity,
+      kind,
+      relativePath,
+      rootState,
+    });
+  }
+
+  return snapshot;
+}
+
+async function confinedEntryDirectoryEntries(
+  rootState: FileSystemRootState,
+  entry: ConfinedFileSystemEntry,
+): Promise<readonly ConfinedFileSystemEntry[]> {
+  const provenance = confinedEntryProvenance(rootState, entry, 'directory');
+  return await confinedDirectoryEntries(rootState, provenance.relativePath, provenance);
+}
+
+async function readConfinedEntryFileBytes(
+  rootState: FileSystemRootState,
+  entry: ConfinedFileSystemEntry,
+): Promise<Uint8Array> {
+  const provenance = confinedEntryProvenance(rootState, entry, 'file');
+  const resolved = await verifyConfinedEntryProvenance(rootState, provenance, 'file');
+  const fileDescriptor = await safeOpen(resolved);
+  if (fileDescriptor === undefined) {
+    throw confinedEntryIdentityChangedError(resolved, 'file disappeared before open');
+  }
+  try {
+    const openedStat = await fileSystemStatFileDescriptor(fileDescriptor);
+    if (
+      !fileSystemStatsIsFile(openedStat) ||
+      !sameFileSystemIdentity(provenance.identity, fileSystemIdentity(openedStat))
+    ) {
+      throw confinedEntryIdentityChangedError(resolved, 'opened file identity changed');
+    }
+    await verifyConfinedEntryProvenance(rootState, provenance, 'file');
+    const bytes = await fileSystemReadFileDescriptor(fileDescriptor);
+    const finalStat = await fileSystemStatFileDescriptor(fileDescriptor);
+    if (!sameFileSystemIdentity(provenance.identity, fileSystemIdentity(finalStat))) {
+      throw confinedEntryIdentityChangedError(resolved, 'file identity changed during read');
+    }
+    return fileSystemCopyBytes(bytes);
+  } finally {
+    await fileSystemCloseFileDescriptor(fileDescriptor);
+  }
+}
+
+function confinedEntryProvenance(
+  rootState: FileSystemRootState,
+  entry: ConfinedFileSystemEntry,
+  expectedKind: 'directory' | 'file',
+): ConfinedFileSystemEntryProvenance {
+  const provenance = securityWeakMapGet(confinedFileSystemEntryProvenance, entry);
+  if (
+    provenance === undefined ||
+    provenance.rootState !== rootState ||
+    provenance.kind !== expectedKind
+  ) {
+    throw new TypeError(
+      `Filesystem ${expectedKind} entry must be an identity-bound result from this boundary.`,
+    );
+  }
+  return provenance;
+}
+
+async function verifyConfinedEntryProvenance(
+  rootState: FileSystemRootState,
+  provenance: ConfinedFileSystemEntryProvenance,
+  expectedKind: 'directory' | 'file',
+): Promise<string> {
+  if (provenance.rootState !== rootState || provenance.kind !== expectedKind) {
+    throw new TypeError(`Filesystem ${expectedKind} entry belongs to another boundary.`);
+  }
+  if (!(await prepareFileSystemRoot(rootState, 'required'))) {
+    throw confinedEntryIdentityChangedError(provenance.canonicalPath, 'root disappeared');
+  }
+  const root = preparedRootPath(rootState);
+  const candidate = confinedPath(root, provenance.relativePath);
+  if (candidate === undefined) {
+    throw confinedEntryIdentityChangedError(provenance.canonicalPath, 'path escaped its root');
+  }
+  let lexicalStat: Stats;
+  try {
+    lexicalStat = await fileSystemLstat(candidate);
+  } catch (error) {
+    throw confinedEntryIdentityChangedError(candidate, error);
+  }
+  if (
+    fileSystemStatsIsSymbolicLink(lexicalStat) ||
+    (expectedKind === 'directory'
+      ? !fileSystemStatsIsDirectory(lexicalStat)
+      : !fileSystemStatsIsFile(lexicalStat)) ||
+    !sameFileSystemIdentity(provenance.identity, fileSystemIdentity(lexicalStat))
+  ) {
+    throw confinedEntryIdentityChangedError(candidate, 'lexical entry identity changed');
+  }
+  const canonicalPath = await safeRealpath(candidate);
+  if (canonicalPath === undefined || canonicalPath !== provenance.canonicalPath) {
+    throw confinedEntryIdentityChangedError(candidate, 'canonical path changed');
+  }
+  let canonicalStat: Stats;
+  try {
+    canonicalStat = await fileSystemStat(canonicalPath);
+  } catch (error) {
+    throw confinedEntryIdentityChangedError(candidate, error);
+  }
+  if (
+    (expectedKind === 'directory'
+      ? !fileSystemStatsIsDirectory(canonicalStat)
+      : !fileSystemStatsIsFile(canonicalStat)) ||
+    !sameFileSystemIdentity(provenance.identity, fileSystemIdentity(canonicalStat))
+  ) {
+    throw confinedEntryIdentityChangedError(candidate, 'canonical entry identity changed');
+  }
+  await revalidatePreparedRoot(rootState);
+  return canonicalPath;
+}
+
+function confinedEntryIdentityChangedError(path: string, detail: unknown): Error {
+  const message = detail instanceof Error ? detail.message : String(detail);
+  return new Error(`Filesystem entry identity changed for '${path}': ${message}.`);
 }
 
 async function ensureParentsStayDirectories(root: string, targetPath: string): Promise<void> {

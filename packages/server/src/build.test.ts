@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { Dirent } from 'node:fs';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import {
   createServer as createHttpServer,
   request as nodeHttpRequest,
@@ -401,6 +402,65 @@ describe('server build-time deployment API', () => {
       Array.prototype.join = originalJoin;
       Array.prototype[Symbol.iterator] = originalIterator;
       Array.prototype.push = originalPush;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('C223 does not publish symlinked external secrets after late Dirent replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-public-symlink-'));
+    const originalIsFile = Dirent.prototype.isFile;
+
+    try {
+      const distDir = join(root, 'dist');
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/app.js'), 'export const app = true;');
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/app.ts': {
+            file: 'assets/app.js',
+          },
+        }),
+      );
+      const externalSecret = join(root, 'server-secret.env');
+      await writeFile(externalSecret, 'KOVO_SERVER_SECRET=must-not-publish\n', 'utf8');
+      await symlink(externalSecret, join(distDir, 'public-note.txt'));
+
+      const app = createApp({
+        routes: [
+          route('/poison', {
+            page() {
+              Dirent.prototype.isFile = function () {
+                if (this.name === 'public-note.txt') return true;
+                return Reflect.apply(originalIsFile, this, []);
+              };
+              return renderedHtml('<main>Poison setup</main>');
+            },
+          }),
+          route('/public', {
+            page: () => renderedHtml('<main>Public</main>'),
+          }),
+        ],
+      });
+      const outDir = join(root, '.kovo');
+
+      await expect(
+        writeKovoNeutralBuild({
+          app,
+          manifestFile: join(distDir, '.vite/manifest.json'),
+          outDir,
+        }),
+      ).rejects.toThrow(/symlinks and non-regular filesystem entries are not publishable/u);
+
+      await expect(readFile(join(outDir, 'public/public-note.txt'), 'utf8')).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      await expect(readFile(externalSecret, 'utf8')).resolves.toBe(
+        'KOVO_SERVER_SECRET=must-not-publish\n',
+      );
+    } finally {
+      Dirent.prototype.isFile = originalIsFile;
       await rm(root, { force: true, recursive: true });
     }
   });

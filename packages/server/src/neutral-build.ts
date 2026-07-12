@@ -1,6 +1,11 @@
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 
 import { clientModulePath } from '@kovojs/core/internal/client-module-url';
+import {
+  createFrameworkOutputFileSystemBoundary,
+  type ConfinedFileSystemEntry,
+  type FrameworkOutputFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 
 import type { KovoApp } from './app-types.js';
 import {
@@ -643,38 +648,42 @@ async function writeNeutralPublicAssets(
 ): Promise<string | undefined> {
   if (manifestDistDir === undefined) return undefined;
 
-  await rm(outDir, { force: true, recursive: true });
-  const copied = await copyNeutralPublicAssetEntries(manifestDistDir, outDir, '');
+  const previousOutput = createFrameworkOutputFileSystemBoundary(outDir);
+  await previousOutput.removeTree();
+  const source = createFrameworkOutputFileSystemBoundary(manifestDistDir);
+  const output = createFrameworkOutputFileSystemBoundary(outDir);
+  const copied = await copyNeutralPublicAssetEntries(source, output);
   if (!copied) return undefined;
   return outDir;
 }
 
 async function copyNeutralPublicAssetEntries(
-  sourceRoot: string,
-  outRoot: string,
-  relativeDir: string,
+  source: FrameworkOutputFileSystemBoundary,
+  output: FrameworkOutputFileSystemBoundary,
+  directory?: ConfinedFileSystemEntry,
 ): Promise<boolean> {
-  const sourceDir = neutralPathJoin(sourceRoot, relativeDir);
-  const entries = await readdir(sourceDir, { withFileTypes: true }).catch((error) => {
-    if (isNodeError(error) && error.code === 'ENOENT') return [];
-    throw error;
-  });
+  const entries = snapshotBuildArray(
+    directory === undefined ? await source.entries('.') : await source.entriesOf(directory),
+    'neutral public asset directory entries',
+  );
   let copied = false;
 
-  for (const entry of entries) {
-    const relativePath = neutralPathJoin(relativeDir, entry.name);
-    if (skipNeutralPublicAsset(relativePath, entry)) continue;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (skipNeutralPublicAsset(entry.relativePath, entry)) continue;
 
-    const sourcePath = neutralPathJoin(sourceRoot, relativePath);
-    const outputPath = neutralClientOutputPath(outRoot, relativePath);
-    if (entry.isDirectory()) {
-      copied = (await copyNeutralPublicAssetEntries(sourceRoot, outRoot, relativePath)) || copied;
+    if (entry.kind === 'directory') {
+      copied = (await copyNeutralPublicAssetEntries(source, output, entry)) || copied;
       continue;
     }
-    if (!entry.isFile()) continue;
+    if (entry.kind !== 'file') {
+      throw new Error(
+        `KV229 neutral build refuses public asset '${entry.relativePath}' because symlinks and non-regular filesystem entries are not publishable. SPEC §9.5 static assets must be identity-bound files beneath the build output root.`,
+      );
+    }
 
-    await mkdir(neutralPathDirname(outputPath), { recursive: true });
-    await copyFile(sourcePath, outputPath);
+    const bytes = await source.fileBytesOf(entry);
+    await output.writeFile(entry.relativePath, bytes);
     copied = true;
   }
 

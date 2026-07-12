@@ -9,6 +9,7 @@ import {
   filesystemIntrinsicsFile,
   nodeRuntimePackageBoundaryFindings,
   neutralBuildFile,
+  neutralPublicAssetCopyFindings,
   neutralStylesheetAssemblyFindings,
   presetDiagnosticAggregationFindings,
   presetRetentionPolicyFile,
@@ -27,6 +28,7 @@ function runFixture(files, overrides = {}) {
     allowedRuntimeFiles: [filesystemBoundaryFile],
     allowedToolingFiles: overrides.allowedToolingFiles ?? [],
     exists: (relativePath) => Object.hasOwn(files, relativePath),
+    neutralPublicAssetCopyFiles: overrides.neutralPublicAssetCopyFiles ?? [],
     readText: (relativePath) => files[relativePath] ?? '',
     sourceFiles: Object.keys(files).sort(),
   });
@@ -38,6 +40,7 @@ describe('filesystem boundary gate', () => {
       allowedRuntimeFiles: [filesystemBoundaryFile, filesystemIntrinsicsFile],
       allowedToolingFiles: [],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      neutralPublicAssetCopyFiles: [],
       readText: (relativePath) =>
         relativePath === filesystemIntrinsicsFile
           ? `
@@ -90,6 +93,7 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
       allowedRuntimeFiles: [filesystemBoundaryFile, outputStaging],
       allowedToolingFiles: [],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      neutralPublicAssetCopyFiles: [],
       readText: (relativePath) =>
         relativePath === outputStaging
           ? 'for await (const victim of cleanup.enumerate(root)) deleteFile(victim);'
@@ -107,6 +111,7 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
       allowedRuntimeFiles: [filesystemBoundaryFile],
       allowedToolingFiles: [],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      neutralPublicAssetCopyFiles: [],
       readText: (relativePath) =>
         relativePath === staticExportEndpointBlockerFile
           ? 'const diagnostics = protocol.endpointRefs.map(toDiagnostic);'
@@ -237,6 +242,54 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         expect.stringContaining('path join must snapshot variadic inputs'),
         expect.stringContaining('path resolution must snapshot variadic inputs'),
         expect.stringContaining('boot-pinned isAbsolute'),
+      ]),
+    );
+  });
+
+  it('C223 pins neutral public-asset enumeration, identity, and copy authority', () => {
+    const unsafe = `
+      async function writeNeutralPublicAssets(sourceRoot, outRoot) {
+        await copyNeutralPublicAssetEntries(sourceRoot, outRoot);
+      }
+      async function copyNeutralPublicAssetEntries(sourceRoot, outRoot) {
+        const entries = await readdir(sourceRoot, { withFileTypes: true }).catch(() => []);
+        for (const entry of entries) {
+          if (entry.isDirectory()) continue;
+          if (entry.isFile()) await copyFile(entry.name, outRoot);
+        }
+      }
+      function skipNeutralPublicAsset() {}
+    `;
+    expect(neutralPublicAssetCopyFindings(neutralBuildFile, unsafe)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('raw directory enumeration'),
+        expect.stringContaining('mutable iterator traversal'),
+        expect.stringContaining('mutable Dirent classification'),
+        expect.stringContaining('raw copy sink'),
+        expect.stringContaining('mutable Promise catch'),
+        expect.stringContaining('missing identity-bound file read'),
+      ]),
+    );
+
+    expect(
+      neutralPublicAssetCopyFindings(
+        filesystemBoundaryFile,
+        `
+          interface FrameworkOutputFileSystemBoundary {
+            entriesOf(entry: ConfinedFileSystemEntry): Promise<readonly ConfinedFileSystemEntry[]>;
+            fileBytesOf(entry: ConfinedFileSystemEntry): Promise<Uint8Array>;
+          }
+          async function confinedDirectoryEntries() {
+            for (const entry of entries) output.push(entry);
+          }
+          async function ensureParentsStayDirectories() {}
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('indexed traversal'),
+        expect.stringContaining('private entry provenance'),
+        expect.stringContaining('descriptor stat witness'),
       ]),
     );
   });
@@ -409,6 +462,7 @@ export function escape(root: string, key: string) {
       allowedToolingFiles: ['packages/server/src/build.ts'],
       cloudflareTomlAssemblyFiles: [],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      neutralPublicAssetCopyFiles: [],
       nodeRuntimePackageBoundaryFiles: [],
       presetDiagnosticAggregationFiles: [],
       presetRetentionPolicyFiles: [],

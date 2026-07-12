@@ -77,6 +77,9 @@ export function checkFilesystemBoundary(options = {}) {
   const neutralStylesheetAssemblyFiles = new Set(
     options.neutralStylesheetAssemblyFiles ?? [buildSecurityIntrinsicsFile, neutralBuildFile],
   );
+  const neutralPublicAssetCopyFiles = new Set(
+    options.neutralPublicAssetCopyFiles ?? [filesystemBoundaryFile, neutralBuildFile],
+  );
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
   );
@@ -146,6 +149,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (neutralStylesheetAssemblyFiles.has(filePath)) {
       findings.push(...neutralStylesheetAssemblyFindings(filePath, sourceText));
+    }
+    if (neutralPublicAssetCopyFiles.has(filePath)) {
+      findings.push(...neutralPublicAssetCopyFindings(filePath, sourceText));
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
@@ -392,6 +398,109 @@ export function neutralStylesheetAssemblyFindings(filePath, sourceText) {
     )
   ) {
     findings.push(`${filePath}: neutral stylesheet paths must delegate to boot-pinned controls`);
+  }
+  return findings;
+}
+
+export function neutralPublicAssetCopyFindings(filePath, sourceText) {
+  const findings = [];
+  if (filePath === filesystemBoundaryFile) {
+    const start = sourceText.indexOf('async function confinedDirectoryEntries');
+    const end = sourceText.indexOf('async function ensureParentsStayDirectories', start);
+    if (start < 0 || end < 0) {
+      return [`${filePath}: identity-bound filesystem entry implementation is missing`];
+    }
+    const authoritySource = sourceText.slice(start, end);
+    const scanText = stripCommentsAndStrings(authoritySource);
+    const mutableDirent = /\.\s*(?:isDirectory|isFile|isSymbolicLink)\s*\(/u.exec(scanText);
+    if (mutableDirent !== null) {
+      findings.push(
+        `${filePath}:${lineOf(sourceText, start + mutableDirent.index)}: confined enumeration must not dispatch through mutable Dirent predicates`,
+      );
+    }
+    const mutableTraversal = /\bfor\s*\(\s*const\s+[^)]*\sof\s/u.exec(scanText);
+    if (mutableTraversal !== null) {
+      findings.push(
+        `${filePath}:${lineOf(sourceText, start + mutableTraversal.index)}: confined enumeration must use indexed traversal`,
+      );
+    }
+    const requiredControls = [
+      [
+        'private entry provenance',
+        /\bsecurityWeakMapGet\s*\(\s*confinedFileSystemEntryProvenance\s*,/u,
+      ],
+      [
+        'dense entry commit',
+        /\bsecurityDefineProperty\s*\(\s*output\s*,\s*output\s*\.\s*length\s*,/u,
+      ],
+      ['lexical lstat classification', /\bfileSystemLstat\s*\(\s*candidate\s*\)/u],
+      ['symlink rejection', /\bfileSystemStatsIsSymbolicLink\s*\(\s*lexicalStat\s*\)/u],
+      ['canonical containment', /\bcontainsPath\s*\(\s*root\s*,\s*canonicalPath\s*\)/u],
+      ['identity comparison', /\bsameFileSystemIdentity\s*\(/u],
+      ['descriptor stat witness', /\bfileSystemStatFileDescriptor\s*\(\s*fileDescriptor\s*\)/u],
+      ['descriptor byte read', /\bfileSystemReadFileDescriptor\s*\(\s*fileDescriptor\s*\)/u],
+    ];
+    for (let index = 0; index < requiredControls.length; index += 1) {
+      const [label, pattern] = requiredControls[index];
+      if (!pattern.test(authoritySource)) {
+        findings.push(`${filePath}: identity-bound filesystem entries are missing ${label}`);
+      }
+    }
+    if (
+      !/\bentriesOf\s*\(\s*entry\s*:\s*ConfinedFileSystemEntry\s*\)/u.test(sourceText) ||
+      !/\bfileBytesOf\s*\(\s*entry\s*:\s*ConfinedFileSystemEntry\s*\)/u.test(sourceText)
+    ) {
+      findings.push(
+        `${filePath}: filesystem boundary must expose branded identity-bound entry operations`,
+      );
+    }
+    return findings;
+  }
+
+  const start = sourceText.indexOf('async function writeNeutralPublicAssets');
+  const end = sourceText.indexOf('function skipNeutralPublicAsset', start);
+  if (start < 0 || end < 0) {
+    return [`${filePath}: neutral public-asset copy authority region is missing`];
+  }
+  const authoritySource = sourceText.slice(start, end);
+  const scanText = stripCommentsAndStrings(authoritySource);
+  const mutablePatterns = [
+    ['raw directory enumeration', /\breaddir\s*\(/u],
+    ['mutable iterator traversal', /\bfor\s*\(\s*const\s+[^)]*\sof\s/u],
+    ['mutable Dirent classification', /\.\s*(?:isDirectory|isFile|isSymbolicLink)\s*\(/u],
+    ['raw copy sink', /\bcopyFile\s*\(/u],
+    ['raw directory sink', /\bmkdir\s*\(/u],
+    ['mutable Promise catch', /\.\s*catch\s*\(/u],
+  ];
+  for (let index = 0; index < mutablePatterns.length; index += 1) {
+    const [label, pattern] = mutablePatterns[index];
+    const match = pattern.exec(scanText);
+    if (match !== null) {
+      findings.push(
+        `${filePath}:${lineOf(sourceText, start + match.index)}: post-replay public assets must not use ${label}`,
+      );
+    }
+  }
+  const requiredControls = [
+    [
+      'pinned source boundary',
+      /\bcreateFrameworkOutputFileSystemBoundary\s*\(\s*manifestDistDir\s*\)/u,
+    ],
+    ['pinned output boundary', /\bcreateFrameworkOutputFileSystemBoundary\s*\(\s*outDir\s*\)/u],
+    ['directory entry snapshot', /\bsnapshotBuildArray\s*\(/u],
+    ['identity-bound recursion', /\bsource\s*\.\s*entriesOf\s*\(\s*directory\s*\)/u],
+    ['identity-bound file read', /\bsource\s*\.\s*fileBytesOf\s*\(\s*entry\s*\)/u],
+    [
+      'confined output write',
+      /\boutput\s*\.\s*writeFile\s*\(\s*entry\s*\.\s*relativePath\s*,\s*bytes\s*\)/u,
+    ],
+    ['non-file rejection', /\bentry\s*\.\s*kind\s*!==\s*['"]file['"]/u],
+  ];
+  for (let index = 0; index < requiredControls.length; index += 1) {
+    const [label, pattern] = requiredControls[index];
+    if (!pattern.test(authoritySource)) {
+      findings.push(`${filePath}: post-replay public-asset copy is missing ${label}`);
+    }
   }
   return findings;
 }
