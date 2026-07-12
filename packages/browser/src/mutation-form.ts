@@ -1,5 +1,10 @@
 import type { EventElementLike, EventTargetLike } from './events.js';
 import type { UploadProgress } from './mutation-fetch.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
+// C210 / SPEC §6.6/§9.2: capture native form submission while the framework module graph loads,
+// before authored client code can replace HTMLFormElement.prototype.submit.
+const browserFormSecurity = createBrowserNavigationSecurityControls();
 
 export const enhancedMutationFormSelector = 'form[enhance],form[data-enhance],form[data-mutation]';
 
@@ -22,10 +27,7 @@ export function closestEnhancedMutationForm(
 }
 
 export function fallbackEnhancedMutationSubmit(form: EnhancedFormElementLike): void {
-  if (typeof form.submit === 'function') {
-    form.submit();
-    return;
-  }
+  if (browserFormSecurity.submitForm(form)) return;
 
   form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
   form.setAttribute?.('kovo-error', '');

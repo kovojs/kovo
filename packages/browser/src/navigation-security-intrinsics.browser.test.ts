@@ -321,6 +321,24 @@ describe('browser navigation security controls', () => {
     }
   });
 
+  it('fails closed when native form submission was poisoned before capture', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'submit');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('native form submit unavailable');
+    }
+    Object.defineProperty(HTMLFormElement.prototype, 'submit', {
+      ...descriptor,
+      value() {},
+    });
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+    }
+  });
+
   it('fails closed when stream acquisition or reader semantics were poisoned before capture', async () => {
     const nativeGetReader = ReadableStream.prototype.getReader;
     const nativeStreamCancel = ReadableStream.prototype.cancel;

@@ -262,6 +262,54 @@ it.each([
   },
 );
 
+it('pins deferred-runtime native submit before a late prototype replacement', async () => {
+  const harness = await createFrame(
+    [
+      '<iframe hidden name="kovo-c210-deferred-sink"></iframe>',
+      '<form enhance action="/favicon.ico" method="get" target="kovo-c210-deferred-sink">',
+      '<input name="kovo-c210" value="deferred-runtime">',
+      '<button>send</button>',
+      '</form>',
+    ].join(''),
+    '',
+  );
+  const form = harness.window.document.querySelector<HTMLFormElement>('form');
+  const sink = harness.window.document.querySelector<HTMLIFrameElement>('iframe');
+  if (!form || !sink) throw new Error('missing deferred submit fixture');
+  (harness.window as unknown as Record<string, unknown>).fetch = vi.fn(async () => {
+    throw new Error('mutation fetch failed');
+  });
+  const prototype = harness.window.HTMLFormElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'submit');
+  if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+    throw new Error('native deferred form submit unavailable');
+  }
+  const poisonedSubmit = vi.fn();
+
+  await installGeneratedInlineLoader(harness.window);
+  Object.defineProperty(prototype, 'submit', { ...descriptor, value: poisonedSubmit });
+  try {
+    form.dispatchEvent(
+      new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => {
+      let navigated = false;
+      try {
+        navigated =
+          sink.contentWindow?.location.pathname === '/favicon.ico' &&
+          sink.contentWindow.location.search.includes('kovo-c210=deferred-runtime');
+      } catch {
+        navigated = true;
+      }
+      expect(navigated).toBe(true);
+    });
+    expect(poisonedSubmit).not.toHaveBeenCalled();
+  } finally {
+    Object.defineProperty(prototype, 'submit', descriptor);
+  }
+});
+
 it('keeps complete same-build stream behavior without hard recovery', async () => {
   const harness = await createFrame(
     [

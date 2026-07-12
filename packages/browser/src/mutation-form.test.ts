@@ -78,6 +78,27 @@ describe('enhanced mutation form helpers', () => {
     fallbackEnhancedMutationSubmit(nativeForm);
     expect(submit).toHaveBeenCalledTimes(1);
 
+    let inheritedSubmitReads = 0;
+    const inheritedSubmitForm = new FakeFormElement(
+      { 'data-mutation': 'cart/add' },
+      { action: '/_m/cart/add' },
+    );
+    Object.setPrototypeOf(
+      inheritedSubmitForm,
+      Object.create(FakeFormElement.prototype, {
+        submit: {
+          configurable: true,
+          get() {
+            inheritedSubmitReads += 1;
+            return submit;
+          },
+        },
+      }),
+    );
+    fallbackEnhancedMutationSubmit(inheritedSubmitForm);
+    expect(inheritedSubmitReads).toBe(0);
+    expect(inheritedSubmitForm.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
+
     const syntheticForm = Object.assign(new FakeElement({ 'data-mutation': 'cart/add' }), {
       action: '/_m/cart/add',
     });

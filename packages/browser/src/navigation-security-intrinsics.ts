@@ -61,6 +61,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeNode = scope.Node;
   const NativeDocumentFragment = scope.DocumentFragment;
   const NativeHTMLTemplateElement = scope.HTMLTemplateElement;
+  const NativeHTMLFormElement = scope.HTMLFormElement;
   const NativeHTMLCollection = scope.HTMLCollection;
   const NativeNodeList = scope.NodeList;
   const NativeNamedNodeMap = scope.NamedNodeMap;
@@ -163,6 +164,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const templateContent = NativeHTMLTemplateElement
     ? getter(NativeHTMLTemplateElement.prototype, 'content')
+    : undefined;
+  const htmlFormSubmit = NativeHTMLFormElement
+    ? valueMethod(NativeHTMLFormElement.prototype, 'submit')
     : undefined;
   const htmlCollectionLength = NativeHTMLCollection
     ? getter(NativeHTMLCollection.prototype, 'length')
@@ -565,6 +569,27 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     const method = elementRemoveAttribute ?? stableMethod(element, 'removeAttribute');
     if (!method) throw new TypeError('Kovo DOM remove-attribute control is unavailable.');
     call(method, element, [name]);
+  }
+
+  function submitForm(form: unknown): boolean {
+    if (!controlsSound || form === null || typeof form !== 'object') return false;
+    if (htmlFormSubmit) {
+      try {
+        apply(htmlFormSubmit, form, []);
+        return true;
+      } catch {}
+    }
+
+    // Explicit structural seam for browser-free conformance fakes. Never walk a caller-controlled
+    // prototype after boot: a real HTMLFormElement must use the captured platform method above.
+    const submit = readOwnData(form, 'submit');
+    if (typeof submit !== 'function') return false;
+    try {
+      apply(submit, form, []);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function elementContains(element: object, node: object | null): boolean {
@@ -2017,6 +2042,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       }
       if (NativeDocument && NativeElement && NativeNode && documentObject) {
         if (
+          !NativeHTMLFormElement ||
+          !htmlFormSubmit ||
           !documentCreateElement ||
           !elementSetAttribute ||
           !elementGetAttribute ||
@@ -2064,6 +2091,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         const templateChildControl = apply<unknown>(documentCreateElement, documentObject, [
           'strong',
         ]);
+        const formSubmitControl = apply<unknown>(documentCreateElement, documentObject, ['form']);
         if (
           snapshotControl === null ||
           typeof snapshotControl !== 'object' ||
@@ -2078,10 +2106,22 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           templateControl === null ||
           typeof templateControl !== 'object' ||
           templateChildControl === null ||
-          typeof templateChildControl !== 'object'
+          typeof templateChildControl !== 'object' ||
+          formSubmitControl === null ||
+          typeof formSubmitControl !== 'object'
         ) {
           return false;
         }
+        // C210 / SPEC §6.6/§9.2: prove the exact native fallback method accepts a real detached
+        // form and rejects a forged receiver. Detached submission performs no navigation.
+        apply(htmlFormSubmit, formSubmitControl, []);
+        let rejectedForeignFormReceiver = false;
+        try {
+          apply(htmlFormSubmit, {}, []);
+        } catch {
+          rejectedForeignFormReceiver = true;
+        }
+        if (!rejectedForeignFormReceiver) return false;
         apply(elementSetAttribute, snapshotControl, ['kovo-nav-segment', 'security-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-nav-segment', 'nested-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-fragment-target', 'security-live-target']);
@@ -2277,6 +2317,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     snapshotMutationBroadcastEnvelopeData,
     snapshotMutationBroadcastEnvelope,
     setMutationBroadcastMessageHandler,
+    submitForm,
     postMutationBroadcastEnvelope,
     observePromiseRejection,
     trim,

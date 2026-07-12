@@ -821,10 +821,7 @@ function installInlineKovoLoader(im) {
     }
   };
   const fsb = (form) => {
-    if (typeof form.submit === 'function') {
-      form.submit();
-      return;
-    }
+    if (bns.submitForm(form)) return;
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('kovo-error', '');
   };
@@ -1129,6 +1126,49 @@ export function buildInlineKovoLoaderStubInstallerReadableSource(): string {
 /* SPEC.md §4.4: tiny paint-first bootstrap; imports the full runtime after paint or interaction. */
 function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const doc = document;
+  // C210 / SPEC §6.6/§9.2: pin and witness the real form-submit fallback before deferred runtime
+  // loading gives authored code a chance to replace HTMLFormElement.prototype.submit.
+  const rap = Reflect.apply;
+  const gopd = Object.getOwnPropertyDescriptor;
+  const submitControl = doc.createElement('form');
+  let nativeSubmit;
+  let submitControlsReady = false;
+  try {
+    const submitDescriptor = gopd(globalThis.HTMLFormElement?.prototype, 'submit');
+    nativeSubmit = submitDescriptor && 'value' in submitDescriptor
+      ? submitDescriptor.value
+      : undefined;
+    if (
+      typeof nativeSubmit !== 'function' ||
+      rap((left, right) => left + right, undefined, [2, 3]) !== 5 ||
+      gopd({ marker: 'submit-control' }, 'marker')?.value !== 'submit-control'
+    ) {
+      throw new TypeError('Kovo bootstrap form submit controls are unavailable.');
+    }
+    rap(nativeSubmit, submitControl, []);
+    try {
+      rap(nativeSubmit, {}, []);
+    } catch {
+      submitControlsReady = true;
+    }
+  } catch {}
+  if (!submitControlsReady) {
+    throw new TypeError('Kovo bootstrap form submit controls are unavailable.');
+  }
+  const submitForm = (form) => {
+    try {
+      rap(nativeSubmit, form, []);
+      return true;
+    } catch {}
+    const ownSubmit = gopd(form, 'submit');
+    if (!ownSubmit || !('value' in ownSubmit) || typeof ownSubmit.value !== 'function') return false;
+    try {
+      rap(ownSubmit.value, form, []);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const events = ['click', 'submit'];
   const queued = [];
   const streamQueue = [];
@@ -1224,8 +1264,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const fallback = (item) => {
     if (!item.target?.isConnected) return;
     if (item.type === 'submit') {
-      if (typeof item.target.submit === 'function') item.target.submit();
-      else replay(item);
+      if (!submitForm(item.target)) replay(item);
       return;
     }
     if (item.href) location.assign?.(item.href);

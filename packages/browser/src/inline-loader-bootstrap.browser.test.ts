@@ -26,6 +26,50 @@ function runNextRaf(callbacks: FrameRequestCallback[]): void {
   if (callback) callback(performance.now());
 }
 
+let submitSinkId = 0;
+
+async function nativeSubmitFixture(token: string): Promise<{
+  form: HTMLFormElement;
+  sink: HTMLIFrameElement;
+}> {
+  const sink = document.createElement('iframe');
+  sink.name = `kovo-c210-submit-sink-${submitSinkId++}`;
+  sink.hidden = true;
+  const initialLoad = new Promise<void>((resolve) => {
+    sink.addEventListener('load', () => resolve(), { once: true });
+  });
+  sink.src = 'about:blank';
+  document.body.append(sink);
+  await initialLoad;
+  const form = document.createElement('form');
+  form.setAttribute('enhance', '');
+  form.action = '/favicon.ico';
+  form.method = 'get';
+  form.target = sink.name;
+  const marker = document.createElement('input');
+  marker.name = 'kovo-c210';
+  marker.value = token;
+  form.append(marker);
+  document.body.append(form);
+  return { form, sink };
+}
+
+async function expectNativeSubmit(sink: HTMLIFrameElement, token: string): Promise<void> {
+  await vi.waitFor(() => {
+    let navigated = false;
+    try {
+      navigated =
+        sink.contentWindow?.location.pathname === '/favicon.ico' &&
+        sink.contentWindow.location.search.includes(`kovo-c210=${token}`);
+    } catch {
+      // Firefox gives the favicon response an opaque origin inside the Vitest sandbox. Initial
+      // about:blank is readable, so losing access is itself proof that native submission navigated.
+      navigated = true;
+    }
+    expect(navigated).toBe(true);
+  });
+}
+
 afterEach(() => {
   document.head.innerHTML = initialHead;
   document.body.innerHTML = initialBody;
@@ -202,12 +246,7 @@ describe('browser inline loader bootstrap', () => {
 
   it('falls back to native submit when the early runtime import fails', async () => {
     installRafQueue();
-    const form = document.createElement('form');
-    form.setAttribute('enhance', '');
-    form.action = '/save';
-    const submit = vi.fn();
-    Object.defineProperty(form, 'submit', { value: submit });
-    document.body.append(form);
+    const { form, sink } = await nativeSubmitFixture('runtime-import-rejected');
 
     installInlineKovoBootstrap(
       '/c/__v/runtime/kovo-runtime.client.js',
@@ -218,19 +257,21 @@ describe('browser inline loader bootstrap', () => {
 
     form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
-    await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    await expectNativeSubmit(sink, 'runtime-import-rejected');
   });
 
-  it('falls back to native submit when an imported runtime rejects during installation', async () => {
+  it('retains the explicit structural submit fallback when runtime installation rejects', async () => {
     // C186 control: the successful strict-CSP proof must not erase the bootstrap's availability
     // fallback for a genuinely rejected runtime installer.
     installRafQueue();
-    const form = document.createElement('form');
-    form.setAttribute('enhance', '');
-    form.action = '/save';
+    const trigger = document.createElement('button');
     const submit = vi.fn();
-    Object.defineProperty(form, 'submit', { value: submit });
-    document.body.append(form);
+    const structuralForm = { isConnected: true, submit };
+    trigger.closest = ((selector: string) =>
+      selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+        ? structuralForm
+        : null) as typeof trigger.closest;
+    document.body.append(trigger);
 
     installInlineKovoBootstrap(
       '/c/__v/runtime/kovo-runtime.client.js',
@@ -241,8 +282,59 @@ describe('browser inline loader bootstrap', () => {
       })),
     );
 
-    form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+    trigger.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  });
+
+  it('pins native submit before a late prototype replacement during rejected import fallback', async () => {
+    installRafQueue();
+    const { form, sink } = await nativeSubmitFixture('late-prototype-poison');
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'submit');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('native form submit unavailable');
+    }
+    const poisonedSubmit = vi.fn();
+
+    installInlineKovoBootstrap(
+      '/c/__v/runtime/kovo-runtime.client.js',
+      vi.fn(async () => {
+        throw new Error('load failed');
+      }),
+    );
+    Object.defineProperty(HTMLFormElement.prototype, 'submit', {
+      ...descriptor,
+      value: poisonedSubmit,
+    });
+    try {
+      form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+
+      await expectNativeSubmit(sink, 'late-prototype-poison');
+      expect(poisonedSubmit).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+    }
+  });
+
+  it('rejects bootstrap installation when native submit was poisoned before capture', () => {
+    installRafQueue();
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLFormElement.prototype, 'submit');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('native form submit unavailable');
+    }
+    Object.defineProperty(HTMLFormElement.prototype, 'submit', {
+      ...descriptor,
+      value() {},
+    });
+    try {
+      expect(() =>
+        installInlineKovoBootstrap(
+          '/c/__v/runtime/kovo-runtime.client.js',
+          vi.fn(async () => ({})),
+        ),
+      ).toThrow(/bootstrap form submit controls are unavailable/);
+    } finally {
+      Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+    }
   });
 });
