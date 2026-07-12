@@ -3147,6 +3147,54 @@ describe('createPostgresAppRuntimeDb', () => {
     ]);
   });
 
+  it('keeps nested rollback ownership distinct under late clock and RNG replacement', async () => {
+    const db = new PGlite();
+    const originalNow = Date.now;
+    const originalRandom = Math.random;
+    try {
+      await db.exec('create table nested_rollback_events (value text not null)');
+      const query = async (queryInput: string | { text: string }, values?: unknown[]) => {
+        const text = typeof queryInput === 'string' ? queryInput : queryInput.text;
+        if (text === 'DISCARD ALL') return { rowCount: 0, rows: [] };
+        const result = await db.query(text, values);
+        return { rowCount: result.affectedRows ?? result.rows.length, rows: result.rows };
+      };
+      const client = { query, release() {} };
+      const runtimeClient = __testPostgresRuntimeInternals.createNodePostgresRuntimeClient({
+        connect: async () => client,
+        end: async () => undefined,
+        query,
+      } as never);
+
+      Date.now = () => 1;
+      Math.random = () => 0.5;
+
+      await runtimeClient.transaction(async (transaction) => {
+        try {
+          await transaction.transaction(async (outer) => {
+            await outer.exec("insert into nested_rollback_events values ('outer')");
+            try {
+              await outer.transaction(async (inner) => {
+                await inner.exec("insert into nested_rollback_events values ('inner')");
+                throw new Error('inner failure');
+              });
+            } catch {}
+            await outer.exec("insert into nested_rollback_events values ('after-inner')");
+            throw new Error('outer failure');
+          });
+        } catch {}
+      });
+
+      await expect(db.query('select value from nested_rollback_events')).resolves.toMatchObject({
+        rows: [],
+      });
+    } finally {
+      Date.now = originalNow;
+      Math.random = originalRandom;
+      await db.close();
+    }
+  });
+
   it('requires separate external Postgres URLs for framework admin and system roles', async () => {
     const baseConfig = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
       crossOwnerReadTables: ['kovo_runtime_notes'],

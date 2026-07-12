@@ -2452,6 +2452,8 @@ export const __testPostgresRuntimeInternals = {
 };
 
 class NodePostgresTransactionClient implements RuntimeSqlClient {
+  #savepointSequence = 0;
+
   constructor(private readonly client: PoolClient) {}
 
   async exec(statement: string): Promise<unknown> {
@@ -2469,15 +2471,25 @@ class NodePostgresTransactionClient implements RuntimeSqlClient {
   async transaction<Result>(
     callback: (tx: RuntimeTransactionClient) => Promise<Result>,
   ): Promise<Result> {
-    const savepoint = `kovo_sp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-    await this.client.query(`SAVEPOINT ${quoteIdent(savepoint)}`);
+    // SPEC §10.3 C15: nested rollback authority must not depend on ambient clocks/RNG/string
+    // prototypes. PostgreSQL permits duplicate savepoint names and resolves a rollback to the most
+    // recent one; a caught inner failure could therefore shadow the outer marker and commit writes
+    // that the outer scope believed it rolled back. This JS-private monotonic sequence is unique for
+    // the lifetime of the physical transaction client, and the emitted identifier has fixed SQL
+    // grammar rather than passing through caller-mutable quoting controls.
+    this.#savepointSequence += 1;
+    if (this.#savepointSequence > 1_000_000_000) {
+      throw new Error('Nested PostgreSQL transaction savepoint limit exceeded.');
+    }
+    const savepoint = `kovo_sp_${this.#savepointSequence}`;
+    await this.client.query(`SAVEPOINT ${savepoint}`);
     try {
       const result = await callback(this);
-      await this.client.query(`RELEASE SAVEPOINT ${quoteIdent(savepoint)}`);
+      await this.client.query(`RELEASE SAVEPOINT ${savepoint}`);
       return result;
     } catch (error) {
       await this.client
-        .query(`ROLLBACK TO SAVEPOINT ${quoteIdent(savepoint)}`)
+        .query(`ROLLBACK TO SAVEPOINT ${savepoint}`)
         .catch(() => undefined);
       throw error;
     }

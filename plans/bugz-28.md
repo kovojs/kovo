@@ -126,7 +126,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     boot-pinned, semantically checked exact-value controls; late/import-order poison cannot replace
     CSRF or schema input bytes while genuine JSON/form/multipart parsing remains intact.
 
-- [ ] **C13 - Colliding nested PostgreSQL savepoints can commit writes from a failed scope.**
+- [x] **C13 - Colliding nested PostgreSQL savepoints can commit writes from a failed scope.**
       `packages/server/src/postgres-runtime.ts`
   - Replacing `Date.now` and `Math.random` with constants gave an outer and inner nested transaction
     the same savepoint name. After the inner failure was caught, PostgreSQL retained its duplicate
@@ -136,6 +136,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     collision-free identifier independent of mutable clocks/RNG/string prototypes; savepoint SQL has
     a fixed grammar, and caught inner failures cannot shadow outer release/rollback ownership under
     late or import-order poison.
+  - **Evidence:** the 81-test PostgreSQL/runtime matrix passes; the independent real-PGlite collision
+    proof now leaves the table empty after the outer rollback under constant clock/RNG replacements.
 
 ## High
 
@@ -451,7 +453,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C12-C13, H15, and H17-H24 are active
+The remediation pass remains intentionally non-zero: C12, H15, and H17-H24 are active
 request-carrier, response/deferred/mutation/client output, task, and browser-navigation fixes.
 Integrated
 evidence is
