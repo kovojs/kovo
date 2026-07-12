@@ -117,18 +117,6 @@ function readFragmentElementChunk(
   };
 }
 
-function createRenderedFragmentHtml(html: string) {
-  return {
-    html,
-    toJSON() {
-      return html;
-    },
-    toString() {
-      return html;
-    },
-  };
-}
-
 export function readFragmentChunksFromElements(
   chunks: Iterable<Pick<ElementChunk, 'attrs' | 'content'>>,
 ): FragmentChunk[] {
@@ -140,6 +128,18 @@ export function readFragmentChunksFromElements(
   }
 
   return fragments;
+}
+
+function createRenderedFragmentHtml(html: string): RenderedFragmentHtml {
+  return Object.freeze({
+    html,
+    toJSON() {
+      return html;
+    },
+    toString() {
+      return html;
+    },
+  });
 }
 
 function readStreamTextElementChunk(

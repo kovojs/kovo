@@ -1,7 +1,4 @@
-import {
-  renderedFragmentHtmlContent,
-  type RenderedFragmentHtml,
-} from '@kovojs/core/internal/sink-policy';
+import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
@@ -32,7 +29,7 @@ function fragmentSnapshots(
 ): FragmentSnapshot[] {
   return fragments.map((fragment) => ({
     ...fragment,
-    html: renderedFragmentHtmlContent(fragment.html),
+    html: fragment.html.html,
   }));
 }
 

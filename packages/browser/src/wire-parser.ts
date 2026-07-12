@@ -1,3 +1,5 @@
+import { createRenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
+
 import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
@@ -289,7 +291,7 @@ export function readMutationResponseBodyChunks(
   }
 
   return {
-    fragments: chunks.fragments,
+    fragments: pinScannedFragmentChunks(chunks.fragments),
     queries,
     ...(chunks.texts === undefined ? {} : { texts: decodeStreamTextChunks(chunks.texts) }),
   };
@@ -310,7 +312,9 @@ export function readMutationResponseBodyPrefixChunks(
 
   return {
     chunks: {
-      fragments: readMutationResponseBodyCore(body.slice(0, consumed)).fragments,
+      fragments: pinScannedFragmentChunks(
+        readMutationResponseBodyCore(body.slice(0, consumed)).fragments,
+      ),
       queries,
       ...(elements.texts.length === 0
         ? {}
@@ -318,6 +322,16 @@ export function readMutationResponseBodyPrefixChunks(
     },
     consumed,
   };
+}
+
+function pinScannedFragmentChunks(chunks: readonly FragmentChunk[]): FragmentChunk[] {
+  return chunks.map((chunk) => ({
+    ...chunk,
+    // The shared scanner must also be extractable into the dependency-free inline loader. At the
+    // modular boundary, immediately convert its frozen transport record into the private witnessed
+    // carrier consumed by DOM sinks (SPEC §6.6 / bugz-26 H1).
+    html: createRenderedFragmentHtml(chunk.html.html),
+  }));
 }
 
 function consumedElementEnd(...groups: readonly ElementChunk[][]): number {
