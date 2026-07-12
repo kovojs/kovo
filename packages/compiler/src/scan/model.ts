@@ -69,6 +69,12 @@ export interface MutationHandlerModel {
   body: string;
   bodyEnd: number;
   handlerWriteSinks?: readonly HandlerWriteSinkFact[];
+  /** Static SPEC §6.6/KV418 provenance: the handler can use browser authority. */
+  readsAmbientCookie?: true;
+  /** Collision-resistant identity tying source authority proof to the runtime handler. */
+  authorityFingerprint?: string;
+  /** Source-derived mutation key for graph session-authority facts. */
+  mutationOwner?: HandlerWriteSinkOwner;
   webhookRecordChanges?: readonly WebhookRecordChangeFact[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;

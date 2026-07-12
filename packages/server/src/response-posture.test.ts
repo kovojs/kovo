@@ -234,6 +234,124 @@ describe('central response posture finalization', () => {
     expect(endpointRequest.headers.get('authorization')).toBe('Bearer machine-token');
     expect(endpointRequest.headers.get('x-signature')).toBe('sig_123');
     expect(endpointRequest.clone().headers.get('cookie')).toBeNull();
+    expect(endpointRequest).not.toBe(request);
+    expect('session' in endpointRequest).toBe(false);
+  });
+
+  it('strips browser Authorization only for stricter csrf-exempt mutation views', () => {
+    const request = new Request('https://example.test/_m/machine/run', {
+      headers: {
+        Authorization: 'Basic victim-browser-credential',
+        'Proxy-Authorization': 'Basic victim-proxy-credential',
+        'X-Machine-Signature': 'kept',
+      },
+    });
+
+    const mutationRequest = endpointRequestWithoutSession(request, {
+      stripAuthorization: true,
+    });
+
+    expect(mutationRequest.headers.get('authorization')).toBeNull();
+    expect(mutationRequest.headers.get('proxy-authorization')).toBeNull();
+    expect(mutationRequest.headers.get('x-machine-signature')).toBe('kept');
+    expect(mutationRequest.clone().headers.get('authorization')).toBeNull();
+  });
+
+  it('mirrors abort timing without exposing caller-controlled abort reasons', () => {
+    const immediate = new AbortController();
+    const immediateSecret = { headers: new Headers({ Cookie: 'sid=victim' }) };
+    immediate.abort(immediateSecret);
+    const alreadyAborted = endpointRequestWithoutSession(
+      new Request('https://example.test/webhook', { signal: immediate.signal }),
+    );
+
+    expect(alreadyAborted.signal.aborted).toBe(true);
+    expect(alreadyAborted.signal.reason).not.toBe(immediateSecret);
+    expect(String(alreadyAborted.signal.reason)).not.toContain('sid=victim');
+
+    const later = new AbortController();
+    const neutral = endpointRequestWithoutSession(
+      new Request('https://example.test/webhook', { signal: later.signal }),
+    );
+    const neutralClone = neutral.clone();
+    const laterSecret = { token: 'LATE_ABORT_SECRET' };
+    expect(neutral.signal.aborted).toBe(false);
+
+    later.abort(laterSecret);
+
+    expect(neutral.signal.aborted).toBe(true);
+    expect(neutralClone.signal.aborted).toBe(true);
+    expect(neutral.signal.reason).not.toBe(laterSecret);
+    expect(String(neutral.signal.reason)).not.toContain('LATE_ABORT_SECRET');
+  });
+
+  it('drops raw Request accessors and keeps later accessors and methods bound to the neutral copy', () => {
+    const request = new Request('https://example.test/webhook', {
+      headers: { Cookie: 'sid=victim', 'X-Signature': 'sig_123' },
+    });
+    Object.defineProperties(request, {
+      capture: {
+        configurable: true,
+        get(this: Request) {
+          return this.headers.get('cookie');
+        },
+      },
+      captureMethod: {
+        configurable: true,
+        value(this: Request) {
+          return this.headers.get('cookie');
+        },
+      },
+    });
+
+    const endpointRequest = endpointRequestWithoutSession(request) as Request & {
+      capture?: string | null;
+      captureMethod?: () => string | null;
+    };
+    expect('capture' in endpointRequest).toBe(false);
+    expect('captureMethod' in endpointRequest).toBe(false);
+
+    Object.defineProperties(endpointRequest, {
+      capture: {
+        configurable: true,
+        get(this: Request) {
+          return this.headers.get('cookie');
+        },
+      },
+      captureMethod: {
+        configurable: true,
+        value(this: Request) {
+          return this.headers.get('cookie');
+        },
+      },
+    });
+    expect(Reflect.get(endpointRequest, 'capture')).toBeNull();
+    expect(endpointRequest.captureMethod?.()).toBeNull();
+
+    const prototype = Object.create(Request.prototype, {
+      prototypeCapture: {
+        configurable: true,
+        get(this: Request) {
+          return this.headers.get('cookie');
+        },
+      },
+    }) as Request & { prototypeCapture?: string | null };
+    Object.setPrototypeOf(endpointRequest, prototype);
+    expect(Reflect.get(endpointRequest, 'prototypeCapture')).toBeNull();
+    expect(request.headers.get('cookie')).toBe('sid=victim');
+  });
+
+  it('tees request bodies while producing the authority-neutral copy', async () => {
+    const request = new Request('https://example.test/webhook', {
+      body: 'signed payload',
+      headers: { Cookie: 'sid=victim', 'Content-Type': 'text/plain' },
+      method: 'POST',
+    });
+
+    const endpointRequest = endpointRequestWithoutSession(request);
+
+    await expect(endpointRequest.text()).resolves.toBe('signed payload');
+    await expect(request.text()).resolves.toBe('signed payload');
   });
 
   it('enforces per-surface lifecycle capabilities instead of treating surface as pass-through', async () => {

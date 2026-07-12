@@ -735,6 +735,57 @@ describe('server guard and session primitives', () => {
     expect(global({})).toMatchObject({ kind: 'rateLimited' });
   });
 
+  it('snapshots rate-limit options so later app mutation cannot change audit or enforcement', () => {
+    const options: {
+      max: number;
+      per: 'global' | 'session';
+      windowMs: number;
+    } = { max: 1, per: 'global', windowMs: 60_000 };
+    const guard = guards.rateLimit<{ session?: { id?: string } }>(options);
+
+    options.max = 10_000;
+    options.per = 'session';
+    options.windowMs = 1;
+
+    expect(explainGuard(guard)).toEqual([{ kind: 'rateLimit', name: 'rateLimit', per: 'global' }]);
+    expect(guard({})).toBe(true);
+    expect(guard({})).toMatchObject({ kind: 'rateLimited' });
+  });
+
+  it('keeps audit facts frozen and bound to the exact framework guard identity', () => {
+    const guard = guards.rateLimit<{ clientIp?: string }>({ max: 1, per: 'ip' });
+    const facts = explainGuard(guard);
+    const proxy = new Proxy(guard, {
+      get(target, property, receiver) {
+        if (property === Symbol.for('kovo.guard.audit')) {
+          return [{ kind: 'rateLimit', name: 'rateLimit', per: 'global' }];
+        }
+        return Reflect.get(target, property, receiver) as unknown;
+      },
+    });
+
+    expect(Object.isFrozen(facts)).toBe(true);
+    expect(Object.isFrozen(facts[0])).toBe(true);
+    expect(() => {
+      (facts[0] as { name: string }).name = 'forged';
+    }).toThrow();
+    expect(explainGuard(proxy)).toEqual([]);
+  });
+
+  it('marks an unaudited composite child opaque instead of dropping its authority', () => {
+    type Request = { clientIp?: string };
+    const custom = (_request: Request) => true as const;
+    const composite = guards.all<Request>(
+      custom,
+      guards.rateLimit<Request>({ max: 10, per: 'ip' }),
+    );
+
+    expect(explainGuard(composite)).toEqual([
+      { kind: 'opaque', name: 'custom' },
+      { kind: 'rateLimit', name: 'rateLimit', per: 'ip' },
+    ]);
+  });
+
   it('keys default-scoped rate limiting by the proven session principal', () => {
     const guard = guards.rateLimit<{
       session?: { id?: string; user?: { id?: string } | null };
@@ -1239,7 +1290,7 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
         staticProof: 'not-claimed',
       },
     ]);
-    expect(Object.getOwnPropertySymbols(guard)).toHaveLength(1);
+    expect(Object.getOwnPropertySymbols(guard)).toHaveLength(0);
     expect(Object.keys(guard)).toEqual([]);
     await expect(
       guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),

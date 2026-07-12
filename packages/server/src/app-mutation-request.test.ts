@@ -217,8 +217,17 @@ describe('server app mutation request boundary', () => {
         return input;
       },
     });
+    const providerHeaders: Array<[string | null, string | null, string | null]> = [];
     const app = createApp({
-      db: () => db,
+      db: (request) => {
+        const clone = request.clone();
+        providerHeaders.push([
+          request.headers.get('cookie'),
+          clone.headers.get('cookie'),
+          clone.headers.get('x-machine-signature'),
+        ]);
+        return db;
+      },
       mutations: [addToCart],
       sessionProvider() {
         return { user: { id: 'u1' } };
@@ -228,7 +237,7 @@ describe('server app mutation request boundary', () => {
     form.set('productId', 'p1');
     const request = new Request('https://shop.example.test/_m/cart/add', {
       body: form,
-      headers: { Cookie: 'sid=victim' },
+      headers: { Cookie: 'sid=victim', 'X-Machine-Signature': 'kept' },
       method: 'POST',
     });
 
@@ -237,6 +246,8 @@ describe('server app mutation request boundary', () => {
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe('/cart');
     expect(writes).toEqual(['p1']);
+    expect(providerHeaders).toEqual([[null, null, 'kept']]);
+    expect(request.headers.get('cookie')).toBe('sid=victim');
   });
 
   it('inherits app and source-route stylesheets into enhanced live-target fragments', async () => {
@@ -605,19 +616,52 @@ describe('server app mutation request boundary', () => {
     // guarantee. This defense-in-depth floor backs the by-construction KV418 compile gate: even
     // with an app `sessionProvider` configured, the provider is never invoked and `req.session`
     // is genuinely absent rather than the victim's ambient cookie.
+    const clientIpCookies: Array<string | null> = [];
+    const providerCredentials: Array<[string | null, string | null, unknown]> = [];
+    const handlerCredentials: Array<[string | null, string | null, unknown]> = [];
     const seen: string[] = [];
     let sessionReads = 0;
     const addToCart = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request) {
-        const typed = request as Request & { session?: { user?: { id?: string } } };
-        seen.push(`handler:${'session' in typed}:${typed.session?.user?.id}:${input.productId}`);
+        const typed = request as Request & {
+          capture?: string | null;
+          session?: { user?: { id?: string } };
+        };
+        Object.defineProperty(typed, 'capture', {
+          configurable: true,
+          get(this: Request) {
+            return this.headers.get('cookie');
+          },
+        });
+        seen.push(
+          `handler:${'session' in typed}:${typed.session?.user?.id}:${typed.headers.get('cookie')}:${typed.capture}:${typed.headers.get('x-machine-signature')}:${input.productId}`,
+        );
+        handlerCredentials.push([
+          typed.headers.get('authorization'),
+          typed.headers.get('proxy-authorization'),
+          typed.signal.reason,
+        ]);
         return input;
       },
     });
     const app = createApp({
+      db(request) {
+        providerCredentials.push([
+          request.headers.get('authorization'),
+          request.headers.get('proxy-authorization'),
+          request.signal.reason,
+        ]);
+        return {};
+      },
       mutations: [addToCart],
+      requestLimits: {
+        clientIp(request) {
+          clientIpCookies.push(request.headers.get('cookie'));
+          return '203.0.113.9';
+        },
+      },
       sessionProvider() {
         sessionReads += 1;
         return { user: { id: 'u1' } };
@@ -625,9 +669,19 @@ describe('server app mutation request boundary', () => {
     });
     const form = new FormData();
     form.set('productId', 'p1');
+    const abort = new AbortController();
+    const abortSecret = { headers: new Headers({ Cookie: 'sid=abort-secret' }) };
+    abort.abort(abortSecret);
     const request = new Request('https://shop.example.test/_m/cart/add', {
       body: form,
+      headers: {
+        Authorization: 'Basic victim-browser-credential',
+        Cookie: 'sid=victim-session',
+        'Proxy-Authorization': 'Basic victim-proxy-credential',
+        'X-Machine-Signature': 'kept',
+      },
       method: 'POST',
+      signal: abort.signal,
     });
 
     const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
@@ -635,7 +689,13 @@ describe('server app mutation request boundary', () => {
     expect(response.status).toBe(303);
     // The session provider is never consulted and the handler sees no ambient session.
     expect(sessionReads).toBe(0);
-    expect(seen).toEqual(['handler:false:undefined:p1']);
+    expect(clientIpCookies).toEqual([null]);
+    expect(providerCredentials[0]?.slice(0, 2)).toEqual([null, null]);
+    expect(providerCredentials[0]?.[2]).not.toBe(abortSecret);
+    expect(handlerCredentials[0]?.slice(0, 2)).toEqual([null, null]);
+    expect(handlerCredentials[0]?.[2]).not.toBe(abortSecret);
+    expect(seen).toEqual(['handler:false:undefined:null:null:kept:p1']);
+    expect(request.headers.get('cookie')).toBe('sid=victim-session');
   });
 
   // H1 (high) — SPEC §9.2: malformed/wrong-Content-Type mutation body → 422, before CSRF.

@@ -10,6 +10,10 @@ import {
   stampGuardFailureDocumentSecurityFloor,
 } from './document-core.js';
 import { managedDb, type ManagedDbMode } from './managed-db.js';
+import {
+  registerAuthorityNeutralRequestMetadata,
+  requestForAuthorityNeutralMetadata,
+} from './request-carrier.js';
 import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import {
@@ -80,6 +84,7 @@ export interface Guard<Request, RefinedRequest extends Request = Request> {
 export type GuardAuditFact =
   | AuthedGuardAuditFact
   | NamedGuardAuditFact
+  | OpaqueGuardAuditFact
   | OwnershipGuardAuditFact
   | RateLimitGuardAuditFact
   | RoleGuardAuditFact;
@@ -104,6 +109,11 @@ export interface AuthedGuardAuditFact {
 
 export interface NamedGuardAuditFact {
   kind: 'named';
+  name: string;
+}
+
+export interface OpaqueGuardAuditFact {
+  kind: 'opaque';
   name: string;
 }
 
@@ -145,14 +155,7 @@ export interface OwnershipGuardAuditOptions {
   name?: string;
 }
 
-const guardAuditSymbol: unique symbol = Symbol('kovo.guardAudit');
-
-type GuardWithAudit<Request, RefinedRequest extends Request = Request> = Guard<
-  Request,
-  RefinedRequest
-> & {
-  readonly [guardAuditSymbol]?: readonly GuardAuditFact[];
-};
+const guardAuditFacts = new WeakMap<Function, readonly GuardAuditFact[]>();
 
 /**
  * @internal Framework-resolved guard failure. The intent-based {@link GuardDenial}
@@ -479,7 +482,11 @@ export function guard<Request, RefinedRequest extends Request = Request>(
       writable: false,
     });
   }
-  return stampGuardAudit(namedGuard, [{ kind: 'named', name: trimmed }, ...explainGuard(fn)]);
+  const innerFacts = explainGuard(fn);
+  return stampGuardAudit(namedGuard, [
+    { kind: 'named', name: trimmed },
+    ...(innerFacts.length === 0 ? [{ kind: 'opaque' as const, name: trimmed }] : innerFacts),
+  ]);
 }
 
 /**
@@ -515,7 +522,12 @@ export const guards = {
     };
     return stampGuardAudit(
       guard,
-      items.flatMap((item) => explainGuard(item)),
+      items.flatMap((item) => {
+        const facts = explainGuard(item);
+        return facts.length === 0
+          ? [{ kind: 'opaque' as const, name: item.name || 'anonymous' }]
+          : facts;
+      }),
     );
   },
   authed<Request extends SessionRequestLike>(): Guard<Request, AuthenticatedRequest<Request>> {
@@ -531,26 +543,33 @@ export const guards = {
     options: RateLimitOptions<Request>,
   ): Guard<Request> {
     const counts = new Map<string, { count: number; resetAt: number }>();
+    const rateOptions: RateLimitOptions<Request> = Object.freeze({
+      ...(options.key === undefined ? {} : { key: options.key }),
+      max: options.max,
+      ...(options.maxKeys === undefined ? {} : { maxKeys: options.maxKeys }),
+      ...(options.per === undefined ? {} : { per: options.per }),
+      ...(options.windowMs === undefined ? {} : { windowMs: options.windowMs }),
+    });
 
     return stampGuardAudit(
       (request) => {
         const now = Date.now();
         evictExpiredRateLimits(counts, now);
 
-        const windowMs = options.windowMs ?? defaultRateLimitWindowMs;
-        if (options.max <= 0) return rateLimitFailure(now + windowMs, now);
+        const windowMs = rateOptions.windowMs ?? defaultRateLimitWindowMs;
+        if (rateOptions.max <= 0) return rateLimitFailure(now + windowMs, now);
 
-        const key = rateLimitKey(request, options);
+        const key = rateLimitKey(request, rateOptions);
         const existing = counts.get(key);
 
         if (existing && existing.resetAt > now) {
-          if (existing.count >= options.max) return rateLimitFailure(existing.resetAt, now);
+          if (existing.count >= rateOptions.max) return rateLimitFailure(existing.resetAt, now);
 
           existing.count += 1;
           return true;
         }
 
-        const maxKeys = options.maxKeys ?? defaultRateLimitMaxKeys;
+        const maxKeys = rateOptions.maxKeys ?? defaultRateLimitMaxKeys;
         while (counts.size >= maxKeys) {
           const oldest = counts.keys().next().value;
           if (oldest === undefined) break;
@@ -567,7 +586,7 @@ export const guards = {
         {
           kind: 'rateLimit',
           name: 'rateLimit',
-          per: options.key ? 'custom' : (options.per ?? 'session'),
+          per: rateOptions.key ? 'custom' : (rateOptions.per ?? 'session'),
         },
       ],
     );
@@ -652,7 +671,7 @@ export const guards = {
 export function explainGuard<Request>(
   guard: Guard<Request> | undefined,
 ): readonly GuardAuditFact[] {
-  return guard === undefined ? [] : ((guard as GuardWithAudit<Request>)[guardAuditSymbol] ?? []);
+  return guard === undefined ? [] : (guardAuditFacts.get(guard) ?? []);
 }
 
 /** @internal Project the stable audit name attached to an executable guard. */
@@ -690,13 +709,27 @@ function stampGuardAudit<Request, RefinedRequest extends Request = Request>(
   guard: Guard<Request, RefinedRequest>,
   facts: readonly GuardAuditFact[],
 ): Guard<Request, RefinedRequest> {
-  Object.defineProperty(guard, guardAuditSymbol, {
-    configurable: false,
-    enumerable: false,
-    value: Object.freeze([...facts]),
-    writable: false,
-  });
+  guardAuditFacts.set(guard, Object.freeze(facts.map(freezeGuardAuditFact)));
   return guard;
+}
+
+function freezeGuardAuditFact(fact: GuardAuditFact): GuardAuditFact {
+  if (fact.kind === 'owns') {
+    return Object.freeze({
+      ...fact,
+      principal: Object.freeze({ ...fact.principal }),
+      ...(fact.resourceKey === undefined
+        ? {}
+        : { resourceKey: Object.freeze({ ...fact.resourceKey }) }),
+    });
+  }
+  if (fact.kind === 'role') {
+    return Object.freeze({
+      ...fact,
+      principal: Object.freeze({ ...fact.principal }),
+    });
+  }
+  return Object.freeze({ ...fact });
 }
 
 function normalizePrincipalKeyAudit(
@@ -839,17 +872,6 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
   }
 
-  // SPEC §9.5: attach the framework-resolved trustworthy client IP onto the request BEFORE the guard
-  // chain so `guards.rateLimit({ per: 'ip' })` (and any arg-aware guard) can read `req.clientIp`. The
-  // resolver is the SAME trusted source the coarse limiter uses (app-configured extractor / trusted
-  // proxy headers only); an empty/undefined result is not attached, so per-IP keying fails loud.
-  if (options.clientIp) {
-    const clientIp = options.clientIp(request);
-    if (clientIp !== undefined && clientIp !== '') {
-      lifecycleRequest = requestWithProperty(lifecycleRequest, 'clientIp', clientIp);
-    }
-  }
-
   if (options.principalPosture !== undefined) {
     lifecycleRequest = requestWithProperty(
       lifecycleRequest,
@@ -882,6 +904,16 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
         sqlWritePolicy: options.sqlWritePolicy,
       }),
     );
+  }
+
+  // SPEC §9.5: attach the framework-resolved trustworthy client IP after providers but before the
+  // guard chain. Built-in per-IP rate limiting needs it; app DB providers do not receive an
+  // authorization-capable ambient network identity before a csrf:false request is verified.
+  if (options.clientIp) {
+    const clientIp = options.clientIp(request);
+    if (clientIp !== undefined && clientIp !== '') {
+      lifecycleRequest = requestWithProperty(lifecycleRequest, 'clientIp', clientIp);
+    }
   }
 
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
@@ -1016,7 +1048,7 @@ function requestWithProperty<Request, Key extends string, Value>(
     return { [key]: value } as Request & Record<Key, Value>;
   }
 
-  return new Proxy(request as object, {
+  const carrier = new Proxy(request as object, {
     get(target, property) {
       if (property === key) return value;
 
@@ -1043,6 +1075,42 @@ function requestWithProperty<Request, Key extends string, Value>(
       return keys.includes(key) ? keys : [...keys, key];
     },
   }) as Request & Record<Key, Value>;
+  registerAuthorityNeutralRequestMetadata(
+    carrier as unknown as globalThis.Request,
+    requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
+  );
+  return carrier;
+}
+
+/** @internal Hide a lifecycle-only property before app handler code receives the request. */
+export function withoutRequestProperty<Request, Key extends PropertyKey>(
+  request: Request,
+  key: Key,
+): Request {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    return request;
+  }
+  const carrier = new Proxy(request as object, {
+    get(target, property) {
+      if (property === key) return undefined;
+      const targetValue = Reflect.get(target, property, target) as unknown;
+      return typeof targetValue === 'function' ? targetValue.bind(target) : targetValue;
+    },
+    getOwnPropertyDescriptor(target, property) {
+      return property === key ? undefined : Reflect.getOwnPropertyDescriptor(target, property);
+    },
+    has(target, property) {
+      return property === key ? false : property in target;
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter((property) => property !== key);
+    },
+  }) as Request;
+  registerAuthorityNeutralRequestMetadata(
+    carrier as unknown as globalThis.Request,
+    requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
+  );
+  return carrier;
 }
 
 /**

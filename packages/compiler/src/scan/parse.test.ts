@@ -10,12 +10,14 @@ import {
   jsxElements,
   jsxExpressions,
   mutationHandlers,
+  mutationSessionAuthorityFacts,
   parseComponentModule,
   soleJsxExpressionChild,
   taskRunHandlers,
   webhookRecordChanges,
 } from './parse.js';
 
+// @kovo-security-classifier-corpus kv418-request-authority
 describe('compiler scan parser helpers', () => {
   it('records static module specifiers for package prefix discovery', () => {
     const source = `
@@ -431,6 +433,270 @@ export const save = mutation({ handler(input, request) { return request.db.inser
 `;
 
     expect(mutationHandlers(parseComponentModule('cart.mutation.ts', source))).toEqual([]);
+  });
+
+  it('derives KV418 session-authority facts from raw Cookie header provenance', () => {
+    const source = `
+import { mutation } from '@kovojs/server';
+
+export const direct = mutation('cart/direct', {
+  handler(_input, request) {
+    return request.headers.get('COOKIE');
+  },
+});
+export const authorization = mutation('cart/authorization', {
+  handler(_input, request) {
+    return request.headers.get('AUTHORIZATION');
+  },
+});
+export const proxyAuthorization = mutation('cart/proxy-authorization', {
+  handler(_input, request) {
+    const headers = request.headers;
+    return headers.get('proxy-authorization');
+  },
+});
+export const aliased = mutation('cart/aliased', {
+  handler(_input, request) {
+    const req = request;
+    const headers = req['headers'];
+    const cookieName = 'cookie';
+    return headers.get(cookieName);
+  },
+});
+export const dynamic = mutation('cart/dynamic', {
+  handler(input, request) {
+    return request.headers.get(input.headerName);
+  },
+});
+export const enumerated = mutation('cart/enumerated', {
+  handler(_input, { headers }) {
+    return Object.fromEntries(headers);
+  },
+});
+export const nestedHeaders = mutation('cart/nested-headers', {
+  handler(_input, { headers: { get } }) {
+    return get('cookie');
+  },
+});
+export const destructuredSession = mutation('cart/destructured-session', {
+  handler(_input, { session }) {
+    return session?.user?.id;
+  },
+});
+export const nestedAlias = mutation('cart/nested-alias', {
+  handler(_input, request) {
+    const { headers: { get } } = request;
+    return get('cookie');
+  },
+});
+export const signature = mutation('cart/signature', {
+  handler(_input, request) {
+    const headers = request.headers;
+    return headers.get('x-signature');
+  },
+});
+export const destructuredSignature = mutation('cart/destructured-signature', {
+  handler(_input, { headers }) {
+    return headers.get('x-signature');
+  },
+});
+export const helperEscape = mutation('cart/helper-escape', {
+  handler(_input, request) {
+    return inspectRequest(request);
+  },
+});
+export const cloned = mutation('cart/cloned', {
+  handler(_input, request) {
+    const next = request.clone();
+    return next.headers.get('cookie');
+  },
+});
+export const session = mutation('cart/session', {
+  handler(_input, request) {
+    return request.session?.user?.id;
+  },
+});
+export const dbOnly = mutation('cart/db-only', {
+  handler(input, request) {
+    return request.db.insert(input);
+  },
+});
+export const parenthesized = mutation('cart/parenthesized', {
+  handler: ((_input, request) => request.headers.get('cookie')),
+});
+export const reassignedName = mutation('cart/reassigned-name', {
+  handler(_input, request) {
+    let name = 'x-signature';
+    name = 'cookie';
+    return request.headers.get(name);
+  },
+});
+export const shadowedName = mutation('cart/shadowed-name', {
+  handler(_input, request) {
+    const name = 'x-signature';
+    {
+      const name = 'cookie';
+      return request.headers.get(name);
+    }
+  },
+});
+export const argumentsRead = mutation('cart/arguments-read', {
+  handler(_input, ignored) {
+    return arguments[1].headers.get('cookie');
+  },
+});
+export const restRead = mutation('cart/rest-read', {
+  handler: (...args) => args[1].headers.get('cookie'),
+});
+export const evaluated = mutation('cart/evaluated', {
+  handler(_input, request) {
+    return eval('request.headers.get("cookie")');
+  },
+});
+export const constructed = mutation('cart/constructed', {
+  handler() {
+    return Function('return globalThis.document?.cookie')();
+  },
+});
+export const setsCookie = mutation('cart/sets-cookie', {
+  handler(_input, _request, context) {
+    context.setCookie('sid', 'value');
+  },
+});
+export const forwardsCookie = mutation('cart/forwards-cookie', {
+  handler(_input, _request, { forwardSetCookie }) {
+    forwardSetCookie('sid=value; Secure', { mode: 'same-origin' });
+  },
+});
+export const clearsSiteData = mutation('cart/clears-site-data', {
+  handler(_input, _request, context) {
+    context.setSessionRevocationClearSiteData();
+  },
+});
+export const contextPrototypeEscape = mutation('cart/context-prototype-escape', {
+  handler(_input, _request, context) {
+    context.valueOf().setCookie('sid', 'attacker');
+  },
+});
+export const fakeThisCookie = mutation('cart/fake-this-cookie', {
+  handler(this: void, _input, request) {
+    return request.headers.get('cookie');
+  },
+});
+export const fakeThisCookieSink = mutation('cart/fake-this-cookie-sink', {
+  handler(this: void, _input, _request, context) {
+    context.setCookie('sid', 'attacker');
+  },
+});
+export const inputOnly = mutation('cart/input-only', {
+  handler: (_input) => ({ ok: true }),
+});
+`;
+
+    const facts = mutationSessionAuthorityFacts(parseComponentModule('cart.mutation.ts', source));
+
+    expect(facts.filter((fact) => fact.referencesSession)).toEqual(
+      [
+        'cart/aliased',
+        'cart/arguments-read',
+        'cart/authorization',
+        'cart/clears-site-data',
+        'cart/cloned',
+        'cart/constructed',
+        'cart/context-prototype-escape',
+        'cart/destructured-session',
+        'cart/direct',
+        'cart/dynamic',
+        'cart/enumerated',
+        'cart/evaluated',
+        'cart/fake-this-cookie',
+        'cart/fake-this-cookie-sink',
+        'cart/forwards-cookie',
+        'cart/helper-escape',
+        'cart/nested-alias',
+        'cart/nested-headers',
+        'cart/parenthesized',
+        'cart/proxy-authorization',
+        'cart/reassigned-name',
+        'cart/rest-read',
+        'cart/session',
+        'cart/sets-cookie',
+        'cart/shadowed-name',
+      ].map((name) => ({
+        detail: 'handler reads or may expose ambient request authority',
+        kind: 'mutation',
+        name,
+        referencesSession: true,
+        source: 'session-authority',
+      })),
+    );
+    expect(facts.filter((fact) => !fact.referencesSession).map((fact) => fact.name)).toEqual([
+      'cart/db-only',
+      'cart/destructured-signature',
+      'cart/input-only',
+      'cart/signature',
+    ]);
+  });
+
+  it('marks nonliteral mutation keys as unresolved instead of misassociating authority facts', () => {
+    const source = `
+import { mutation } from '@kovojs/server';
+
+const runtimeKey = 'machine/runtime';
+export const exported = mutation(runtimeKey, {
+  handler(_input, request) {
+    return request.headers.get('cookie');
+  },
+});
+`;
+
+    expect(
+      mutationSessionAuthorityFacts(parseComponentModule('machine.mutation.ts', source)),
+    ).toEqual([
+      {
+        detail: 'handler reads or may expose ambient request authority',
+        kind: 'mutation',
+        name: 'UNRESOLVED',
+        referencesSession: true,
+        source: 'session-authority',
+        unresolvedName: true,
+      },
+    ]);
+  });
+
+  it('fails KV418 authority provenance closed for handlers that are not inline and inspectable', () => {
+    const source = `
+import { mutation } from '@kovojs/server';
+
+const referencedHandler = (_input, request) => request.headers.get('x-signature');
+const sharedOptions = { handler: referencedHandler };
+
+export const referenced = mutation('machine/referenced', { handler: referencedHandler });
+export const shared = mutation('machine/shared', sharedOptions);
+export const spread = mutation('machine/spread', { ...sharedOptions });
+export const inline = mutation('machine/inline', {
+  handler(_input, request) {
+    return request.headers.get('x-signature');
+  },
+});
+`;
+
+    const facts = mutationSessionAuthorityFacts(
+      parseComponentModule('machine.mutation.ts', source),
+    );
+    expect(facts.filter((fact) => fact.referencesSession)).toEqual(
+      ['machine/referenced', 'machine/shared', 'machine/spread'].map((name) => ({
+        detail: 'handler authority cannot be proven statically',
+        kind: 'mutation',
+        name,
+        referencesSession: true,
+        source: 'session-authority',
+      })),
+    );
+    expect(facts.find((fact) => fact.name === 'machine/inline')).toMatchObject({
+      detail: 'handler has no statically observed ambient request authority',
+      referencesSession: false,
+    });
   });
 
   it('records simple destructured mutation handler parameter names', () => {

@@ -207,11 +207,22 @@ function mergeSessionAuthorityFacts(
   callerFacts: readonly CoreGraph.SessionAuthorityFact[],
   derivedFacts: readonly CoreGraph.SessionAuthorityFact[],
 ): CoreGraph.SessionAuthorityFact[] {
-  return mergeFactsByKey(callerFacts, derivedFacts, sessionAuthorityFactKey, compareKindNameFacts);
+  const facts = new Map<string, CoreGraph.SessionAuthorityFact>();
+  for (const fact of [...derivedFacts, ...callerFacts]) {
+    const key = sessionAuthorityFactKey(fact);
+    const previous = facts.get(key);
+    // Session authority is an OR lattice: a source-level negative proves only
+    // that the handler body is clean and must never suppress a positive runtime
+    // guard/session fact for the same mutation. Conversely, a positive handler
+    // fact must override an ordinary derived negative.
+    if (previous?.referencesSession === true && !fact.referencesSession) continue;
+    facts.set(key, fact);
+  }
+  return [...facts.values()].sort(compareKindNameFacts);
 }
 
 function sessionAuthorityFactKey(fact: CoreGraph.SessionAuthorityFact): string {
-  return `${fact.kind}\0${fact.name}`;
+  return `${fact.kind}\0${fact.unresolvedName === true ? 'unresolved:*' : `name:${fact.name}`}`;
 }
 
 function mergeOwnershipPostureFacts(

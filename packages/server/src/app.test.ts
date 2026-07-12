@@ -857,6 +857,86 @@ describe('server createApp request shell', () => {
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
+  it('keeps unverified mutation error-shell requests free of ambient credentials and bodies', async () => {
+    const shellViews: Array<{
+      authorization: string | null;
+      body: ReadableStream<Uint8Array> | null;
+      cookie: string | null;
+      signature: string | null;
+    }> = [];
+    const handler = createRequestHandler(
+      createApp({
+        errorShells: {
+          notFound({ request }) {
+            shellViews.push({
+              authorization: request.headers.get('authorization'),
+              body: request.body,
+              cookie: request.headers.get('cookie'),
+              signature: request.headers.get('x-machine-signature'),
+            });
+            return trustedHtml('<main>missing mutation</main>');
+          },
+        },
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://example.test/_m/not/declared', {
+        body: new URLSearchParams({ value: 'secret-body' }),
+        headers: {
+          Authorization: 'Basic victim-browser-credential',
+          Cookie: 'sid=victim',
+          'X-Machine-Signature': 'kept',
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(shellViews).toEqual([
+      { authorization: null, body: null, cookie: null, signature: 'kept' },
+    ]);
+  });
+
+  it('neutralizes csrf-exempt mutation requests before rendering a 500 shell', async () => {
+    const shellViews: Array<[string | null, string | null]> = [];
+    const dbError = new Error('db failed');
+    const handler = createRequestHandler(
+      createApp({
+        db() {
+          throw dbError;
+        },
+        errorShells: {
+          serverError({ request }) {
+            shellViews.push([
+              request.headers.get('cookie'),
+              request.headers.get('x-machine-signature'),
+            ]);
+            return trustedHtml('<main>server error</main>');
+          },
+        },
+        mutations: [
+          mutation('machine/fail', {
+            csrf: false,
+            input: s.object({ value: s.string() }),
+            handler: (input) => input,
+          }),
+        ],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://example.test/_m/machine/fail', {
+        body: new URLSearchParams({ value: 'x' }),
+        headers: { Cookie: 'sid=victim', 'X-Machine-Signature': 'kept' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(shellViews).toEqual([[null, 'kept']]);
+  });
+
   it('reports failing error shells and falls back to stable no-internals documents', async () => {
     const shellError = new Error('private shell detail');
     const onError = vi.fn();
@@ -919,11 +999,17 @@ describe('server createApp request shell', () => {
     expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     expect(body).not.toContain('private endpoint detail');
     expect(body).not.toContain('private 500 shell detail');
-    expect(onError).toHaveBeenCalledWith(endpointError, {
-      operation: 'app-request',
-      request,
-      url: '/status',
-    });
+    expect(onError).toHaveBeenCalledWith(
+      endpointError,
+      expect.objectContaining({
+        operation: 'app-request',
+        request: expect.any(Request),
+        url: '/status',
+      }),
+    );
+    const diagnosticRequest = onError.mock.calls[0]?.[1].request as Request;
+    expect(diagnosticRequest).not.toBe(request);
+    expect(diagnosticRequest.body).toBeNull();
     expect(onError).not.toHaveBeenCalledWith(shellError, expect.anything());
   });
 
@@ -1140,12 +1226,63 @@ describe('server createApp request shell', () => {
     expect(sideEffects).toBe(0);
   });
 
-  it('preserves request extensions after endpoint body-limit preflight', async () => {
+  it('rejects oversized streamed mutation bodies before lifecycle providers or dispatch', async () => {
+    const db = vi.fn(() => ({}));
+    const mutationHandler = vi.fn((input) => input);
+    const handler = createRequestHandler(
+      createApp({
+        db,
+        mutations: [
+          mutation('machine/stream-write', {
+            csrf: false,
+            input: s.object({ value: s.string() }),
+            handler: mutationHandler,
+          }),
+        ],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: 4,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: false },
+        },
+      }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"value":'));
+        controller.enqueue(new TextEncoder().encode('"oversized"}'));
+        controller.close();
+      },
+    });
+
+    const response = await handler(
+      new Request('https://example.test/_m/machine/stream-write', {
+        body,
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        duplex: 'half',
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe('Payload Too Large');
+    expect(db).not.toHaveBeenCalled();
+    expect(mutationHandler).not.toHaveBeenCalled();
+  });
+
+  it('drops arbitrary request authority extensions after endpoint body-limit preflight', async () => {
     const upload = endpoint('/extension-upload', {
       csrf: false,
       csrfJustification: 'test endpoint uses a non-browser caller',
       handler(request) {
-        return new Response(String((request as Request & { db?: string }).db));
+        const typed = request as Request & { db?: string; session?: { userId: string } };
+        return Response.json({
+          db: typed.db ?? null,
+          hasDb: 'db' in typed,
+          hasSession: 'session' in typed,
+          session: typed.session ?? null,
+        });
       },
       method: 'POST',
       reason: 'request extension preservation test',
@@ -1160,11 +1297,20 @@ describe('server createApp request shell', () => {
       configurable: true,
       value: 'fixture-db',
     });
+    Object.defineProperty(request, 'session', {
+      configurable: true,
+      value: { userId: 'victim' },
+    });
 
     const response = await handler(request);
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('fixture-db');
+    await expect(response.json()).resolves.toEqual({
+      db: null,
+      hasDb: false,
+      hasSession: false,
+      session: null,
+    });
   });
 
   // SPEC §9.5 / §10.3: coarse per-IP mutation limiting runs before replay, parse,
@@ -1529,6 +1675,7 @@ describe('server createApp request shell', () => {
   });
 
   it('dispatches endpoints before routes and strips ambient session from endpoint requests', async () => {
+    const clientIpCookies: Array<string | null> = [];
     const statusEndpoint = endpoint('/status', {
       handler(request) {
         expect('session' in request).toBe(false);
@@ -1541,15 +1688,25 @@ describe('server createApp request shell', () => {
     const handler = createRequestHandler(
       createApp({
         endpoints: [statusEndpoint],
+        requestLimits: {
+          clientIp(request) {
+            clientIpCookies.push(request.headers.get('cookie'));
+            return '203.0.113.10';
+          },
+        },
         routes: [route('/status', { page: () => trustedHtml('route') })],
         sessionProvider: () => ({ user: { id: 'u1' } }),
       }),
     );
 
-    const response = await handler(new Request('https://example.test/status'));
+    const response = await handler(
+      new Request('https://example.test/status', { headers: { Cookie: 'sid=victim' } }),
+    );
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe('endpoint');
+    expect(clientIpCookies.length).toBeGreaterThan(0);
+    expect(clientIpCookies.every((cookie) => cookie === null)).toBe(true);
   });
 
   it('reports endpoint exceptions without leaking internals or rendering the route shell', async () => {
@@ -1602,7 +1759,7 @@ describe('server createApp request shell', () => {
       await expect(response.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('[kovo] app-request failed url=/status?check'),
-        thrown,
+        'Error: private endpoint detail',
       );
     } finally {
       errorSpy.mockRestore();
@@ -1634,9 +1791,7 @@ describe('server createApp request shell', () => {
       request: expect.any(Request),
       url: '/status.json?check',
     });
-    expect(onError.mock.calls[0]?.[1].request.url).toBe(
-      'https://example.test/status.json?check',
-    );
+    expect(onError.mock.calls[0]?.[1].request.url).toBe('https://example.test/status.json?check');
   });
 
   it('resolves session once for a guarded route request', async () => {
@@ -1891,6 +2046,7 @@ describe('server createApp request shell', () => {
   });
 
   it('dispatches mutation POSTs through the reserved app shell path', async () => {
+    const clientIpCookies: Array<string | null> = [];
     const cart = domain('cart');
     const cartQuery = query('cart', {
       load: () => ({ count: 1 }),
@@ -1920,6 +2076,12 @@ describe('server createApp request shell', () => {
           'cart/add': { redirectTo: '/cart' },
         },
         mutations: [addToCart],
+        requestLimits: {
+          clientIp(request) {
+            clientIpCookies.push(request.headers.get('cookie'));
+            return '203.0.113.11';
+          },
+        },
       }),
     );
     const enhancedForm = new FormData();
@@ -1930,6 +2092,7 @@ describe('server createApp request shell', () => {
       new Request('https://example.test/_m/cart/add', {
         body: enhancedForm,
         headers: {
+          Cookie: 'sid=victim',
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge')}`,
           'Kovo-Targets': 'cart=cart',
@@ -1951,12 +2114,15 @@ describe('server createApp request shell', () => {
     const noJs = await handler(
       new Request('https://example.test/_m/cart/add', {
         body: noJsForm,
+        headers: { Cookie: 'sid=victim' },
         method: 'POST',
       }),
     );
     expect(noJs.status).toBe(303);
     expect(noJs.headers.get('location')).toBe('/cart');
     await expect(noJs.text()).resolves.toBe('');
+    expect(clientIpCookies.length).toBeGreaterThan(0);
+    expect(clientIpCookies.every((cookie) => cookie === null)).toBe(true);
   });
 
   it('dispatches enhanced mutation fragments through app live target renderers', async () => {

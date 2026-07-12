@@ -16,6 +16,7 @@ import type {
   lowerStandaloneSourceDerivedRegistryDeclarations,
   QueryShapeFact,
 } from '@kovojs/compiler/internal';
+import { mutationHandlerFingerprintFromRuntimeSource } from '@kovojs/compiler/internal';
 import type {
   AccessDecision,
   Guard,
@@ -33,7 +34,7 @@ import type {
   QueryReadFactLike,
   StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
-import { guardAuditName } from '@kovojs/server/internal/execution';
+import { accessDecisionFor, explainGuard, guardAuditName } from '@kovojs/server/internal/execution';
 import {
   runtimeRegistryWireFactsFromGraph,
   serializeRuntimeRegistryWireModule,
@@ -64,6 +65,9 @@ import { findNearestFile, readJsonRecord } from '../tooling.js';
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
 const execFileAsync = promisify(execFile);
+const nativeFunctionToString = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')
+  ?.value as unknown;
+const nativeReflectApply = Object.getOwnPropertyDescriptor(Reflect, 'apply')?.value as unknown;
 
 function isKovoServerHandlerExternalDependency(id: string): boolean {
   return (
@@ -609,12 +613,14 @@ async function staticBuildCheckGraph(
             components: [] as SourceComponentGraphFacts[],
             routeOutcomes: new Map<string, 'file' | 'stream'>(),
             routePages: [] as SourceRoutePageFacts[],
+            sessionAuthorityFacts: [] as CoreGraph.SessionAuthorityFact[],
           },
         ]
       : await Promise.all([
           staticDataPlaneBuildFacts(files, { cache: options.cache }),
           sourceGraphFactsFromFiles(files, dirname(appModulePath)),
         ]);
+  const reachableSessionAuthorityFacts = await sessionAuthorityFactsFromEntry(appModulePath);
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
   // (`kovo explain --capabilities`) and credential-cookie downgrade (`--cookies`) in the REAL build
   // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
@@ -630,6 +636,10 @@ async function staticBuildCheckGraph(
   const routeOutcomeFacts = routeFileStreamEndpointFacts(
     app.routes,
     sourceGraphFacts.routeOutcomes,
+  );
+  const sessionAuthorityFacts = completeMutationSessionAuthorityFacts(
+    app,
+    reachableSessionAuthorityFacts,
   );
   const updateCoverage = sourceGraphFacts.components.flatMap((component) =>
     component.updateCoverage.map((fact) => ({
@@ -667,6 +677,7 @@ async function staticBuildCheckGraph(
       optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
       pages: app.routes.map(routeCheckFact),
       queries: queryReadSets,
+      ...(sessionAuthorityFacts.length === 0 ? {} : { sessionAuthority: sessionAuthorityFacts }),
       ...(updateCoverage.length === 0 ? {} : { updateCoverage }),
     },
     queryShapeFacts,
@@ -678,17 +689,112 @@ interface SourceGraphFacts {
   components: SourceComponentGraphFacts[];
   routeOutcomes: Map<string, 'file' | 'stream'>;
   routePages: SourceRoutePageFacts[];
+  sessionAuthorityFacts: CoreGraph.SessionAuthorityFact[];
+}
+
+async function sessionAuthorityFactsFromEntry(
+  appModulePath: string,
+): Promise<CoreGraph.SessionAuthorityFact[]> {
+  const root = dirname(appModulePath);
+  const entry = {
+    fileName: basename(appModulePath),
+    source: readFileSync(appModulePath, 'utf8'),
+  };
+  const { mutationSessionAuthorityFacts, parseComponentModule, viteFrameworkIdentityFiles } =
+    await import('@kovojs/compiler/internal');
+  const reachable = new Map<string, BuildCheckSourceFile>([[entry.fileName, entry]]);
+  for (const file of viteFrameworkIdentityFiles(root, entry.fileName, entry.source)) {
+    reachable.set(file.fileName, file);
+  }
+
+  return [...reachable.values()].flatMap((file) => {
+    const extraFiles = viteFrameworkIdentityFiles(root, file.fileName, file.source);
+    return mutationSessionAuthorityFacts(
+      parseComponentModule(
+        file.fileName,
+        file.source,
+        extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+      ),
+    );
+  });
+}
+
+function completeMutationSessionAuthorityFacts(
+  app: KovoApp,
+  sourceFacts: readonly CoreGraph.SessionAuthorityFact[],
+): CoreGraph.SessionAuthorityFact[] {
+  const facts = new Map<string, CoreGraph.SessionAuthorityFact>();
+  for (const fact of sourceFacts) {
+    const key = fact.unresolvedName === true ? 'unresolved:*' : `name:${fact.name}`;
+    const previous = facts.get(key);
+    if (previous?.referencesSession === true && !fact.referencesSession) continue;
+    const handlerFingerprints = fact.referencesSession
+      ? []
+      : [...(previous?.handlerFingerprints ?? []), ...(fact.handlerFingerprints ?? [])].filter(
+          (value, index, values) => values.indexOf(value) === index,
+        );
+    facts.set(key, {
+      ...fact,
+      ...(handlerFingerprints.length === 0 ? {} : { handlerFingerprints }),
+    });
+  }
+
+  const unresolvedAuthority = [...facts.values()].some(
+    (fact) => fact.unresolvedName === true && fact.referencesSession,
+  );
+  for (const mutation of app.mutations) {
+    if (mutation.csrf !== false || unresolvedAuthority) continue;
+    const exactKey = `name:${mutation.key}`;
+    const exact = facts.get(exactKey);
+    if (exact?.referencesSession === true) continue;
+    const handlerFingerprint = runtimeMutationHandlerFingerprint(mutation.handler);
+    const coveredFingerprints = [
+      ...(exact?.handlerFingerprints ?? []),
+      ...(facts.get('unresolved:*')?.handlerFingerprints ?? []),
+    ];
+    if (handlerFingerprint !== undefined && coveredFingerprints.includes(handlerFingerprint)) {
+      continue;
+    }
+    facts.set(exactKey, {
+      detail: 'runtime csrf-exempt handler identity was not covered by the static authority scan',
+      kind: 'mutation',
+      name: mutation.key,
+      referencesSession: true,
+      source: 'session-authority',
+    });
+  }
+
+  return [...facts.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined {
+  if (
+    typeof handler !== 'function' ||
+    typeof nativeFunctionToString !== 'function' ||
+    typeof nativeReflectApply !== 'function'
+  ) {
+    return undefined;
+  }
+  try {
+    const source = nativeReflectApply(nativeFunctionToString, handler, []) as string;
+    return mutationHandlerFingerprintFromRuntimeSource(source);
+  } catch {
+    return undefined;
+  }
 }
 
 async function sourceGraphFactsFromFiles(
   files: readonly BuildCheckSourceFile[],
   root: string,
 ): Promise<SourceGraphFacts> {
-  const [{ compileComponentModule, compileRouteModule }, { viteFrameworkIdentityFiles }] =
-    await Promise.all([import('@kovojs/compiler'), import('@kovojs/compiler/internal')]);
+  const [
+    { compileComponentModule, compileRouteModule },
+    { mutationSessionAuthorityFacts, parseComponentModule, viteFrameworkIdentityFiles },
+  ] = await Promise.all([import('@kovojs/compiler'), import('@kovojs/compiler/internal')]);
   const components: SourceComponentGraphFacts[] = [];
   const routeOutcomes = new Map<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
+  const sessionAuthorityFacts: CoreGraph.SessionAuthorityFact[] = [];
 
   for (const file of files) {
     const extraFiles = viteFrameworkIdentityFiles(root, file.fileName, file.source);
@@ -698,6 +804,15 @@ async function sourceGraphFactsFromFiles(
       source: file.source,
       sourceProvenance: 'app',
     } as const;
+    sessionAuthorityFacts.push(
+      ...mutationSessionAuthorityFacts(
+        parseComponentModule(
+          file.fileName,
+          file.source,
+          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+        ),
+      ),
+    );
     const component = compileComponentModule(componentOptions);
     if (
       component.componentGraphFacts.length > 0 ||
@@ -721,7 +836,7 @@ async function sourceGraphFactsFromFiles(
     }
   }
 
-  return { components, routeOutcomes, routePages };
+  return { components, routeOutcomes, routePages, sessionAuthorityFacts };
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
@@ -768,6 +883,11 @@ function mutationCheckFact(
   mutation: KovoApp['mutations'][number],
   queryReadSets: readonly CoreGraph.QueryReadSet[],
 ): CoreGraph.MutationExplain {
+  const access = accessDecisionGraphFact(accessDecisionFor(mutation));
+  const guards = uniqueSorted([
+    ...(access?.kind === 'guard-chain' ? access.guards : []),
+    ...(mutation.guard === undefined ? [] : [guardAuditName(mutation.guard)]),
+  ]);
   const registry = mutation.registry;
   const touches = (registry?.touches ?? []) as readonly { key: string }[];
   const inferredTouches = (registry?.inferredTouches ?? []) as readonly { domain: string }[];
@@ -778,10 +898,13 @@ function mutationCheckFact(
     ...writes,
     ...inferredWrites,
   ]);
+  const referencesSessionAuthority = mutationGuardReferencesSessionAuthority(mutation);
   return {
+    ...(access === undefined ? {} : { access }),
     csrf: mutation.csrf === false ? 'exempt' : 'checked',
     ...(mutation.csrf === false ? { csrfJustification: 'csrf:false mutation declaration' } : {}),
-    ...(mutation.guard === undefined ? {} : { guards: ['mutation.guard'] }),
+    ...(guards.length === 0 ? {} : { guards }),
+    ...(referencesSessionAuthority ? { session: 'guard-chain-browser-authority' } : {}),
     ...(invalidates.length === 0 ? {} : { invalidates }),
     ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
     key: mutation.key,
@@ -789,6 +912,22 @@ function mutationCheckFact(
       ? {}
       : { writes: uniqueSorted([...writes, ...inferredWrites]) }),
   };
+}
+
+function mutationGuardReferencesSessionAuthority(mutation: KovoApp['mutations'][number]): boolean {
+  const access = accessDecisionFor(mutation);
+  if (Array.isArray(access)) return access.some(guardReferencesSessionAuthority);
+  if (access !== undefined) return false;
+  return mutation.guard !== undefined && guardReferencesSessionAuthority(mutation.guard);
+}
+
+function guardReferencesSessionAuthority(guard: Guard<any, any>): boolean {
+  const facts = explainGuard(guard);
+  const substantive = facts.filter((fact) => fact.kind !== 'named');
+  if (substantive.length === 0) return true;
+  return substantive.some(
+    (fact) => fact.kind !== 'rateLimit' || (fact.per !== 'global' && fact.per !== 'ip'),
+  );
 }
 
 function mutationOptimisticCheckFacts(

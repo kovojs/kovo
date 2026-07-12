@@ -7,6 +7,11 @@ import type {
   KovoApp,
 } from './app-types.js';
 import { appSystemResponse, type AppSystemResponseSurface } from './app-system-response.js';
+import {
+  cloneNativeRequest,
+  createNativeRequest,
+  registerAuthorityNeutralRequestClone,
+} from './request-carrier.js';
 
 export type LoadShedSurface = AppSystemResponseSurface;
 
@@ -73,6 +78,11 @@ const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   windowMs: DEFAULT_WINDOW_MS,
 });
 const requestPeerAddressProperty = '__kovoPeerAddress';
+const readNativeRequestBody = requestIntrinsicGetter<ReadableStream<Uint8Array> | null>('body');
+const readNativeRequestHeaders = requestIntrinsicGetter<Headers>('headers');
+const readNativeRequestMethod = requestIntrinsicGetter<string>('method');
+const readNativeRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
+const readNativeRequestUrl = requestIntrinsicGetter<string>('url');
 
 const rateStates = new WeakMap<KovoApp, AppRateState>();
 
@@ -201,7 +211,7 @@ function requestBodySizeFailure(
 }
 
 function requestContentLength(request: Request): number | undefined {
-  const value = request.headers.get('content-length');
+  const value = readNativeRequestHeaders(request).get('content-length');
   if (value === null) return undefined;
   if (!/^\d+$/.test(value)) return undefined;
   const parsed = Number(value);
@@ -328,7 +338,7 @@ export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: nu
 /** @internal */
 export function requestWithBodyLimit(request: Request, maxBodyBytes: number | false): Request {
   if (maxBodyBytes === false || request.body === null) return request;
-  return new Proxy(request, {
+  const limited = new Proxy(request, {
     get(target, property) {
       if (property === 'arrayBuffer') {
         return async () => readLimitedArrayBuffer(target, maxBodyBytes);
@@ -344,7 +354,7 @@ export function requestWithBodyLimit(request: Request, maxBodyBytes: number | fa
       if (property === 'formData') {
         return async () => {
           const body = await readLimitedArrayBuffer(target, maxBodyBytes);
-          return new Request(target.url, {
+          return createNativeRequest(target.url, {
             body,
             headers: target.headers,
             method: target.method,
@@ -362,6 +372,24 @@ export function requestWithBodyLimit(request: Request, maxBodyBytes: number | fa
       return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as Request;
+  registerAuthorityNeutralRequestClone(
+    limited,
+    () => authorityNeutralBodyLimitedClone(request, maxBodyBytes),
+    request,
+  );
+  return limited;
+}
+
+function authorityNeutralBodyLimitedClone(request: Request, maxBodyBytes: number): Request {
+  const source = cloneNativeRequest(request);
+  if (source.body === null) return source;
+  const init = {
+    body: countedBody(source.body, maxBodyBytes),
+    duplex: 'half',
+  } as RequestInit & { duplex: 'half' };
+  const limited = createNativeRequest(source, init);
+  copyRequestPeerAddress(request, limited);
+  return limited;
 }
 
 /** @internal */
@@ -369,33 +397,39 @@ export async function requestWithVerifiedBodyLimit(
   request: Request,
   maxBodyBytes: number | false,
 ): Promise<Request> {
-  if (maxBodyBytes === false || request.body === null) return request;
+  if (maxBodyBytes === false || readNativeRequestBody(request) === null) return request;
   const body = await readLimitedArrayBuffer(request, maxBodyBytes);
-  const verified = new Request(request.url, {
+  const verified = createNativeRequest(readNativeRequestUrl(request), {
     body,
-    headers: request.headers,
-    method: request.method,
-    signal: request.signal,
+    headers: readNativeRequestHeaders(request),
+    method: readNativeRequestMethod(request),
+    signal: readNativeRequestSignal(request),
   });
-  copyRequestOwnProperties(request, verified);
+  copyRequestPeerAddress(request, verified);
   return verified;
 }
 
-function copyRequestOwnProperties(source: Request, target: Request): void {
-  for (const key of Reflect.ownKeys(source)) {
-    if (Object.prototype.hasOwnProperty.call(target, key)) continue;
-    const descriptor = Object.getOwnPropertyDescriptor(source, key);
-    if (!descriptor) continue;
-    Object.defineProperty(target, key, descriptor);
+function copyRequestPeerAddress(source: Request, target: Request): void {
+  const descriptor = Object.getOwnPropertyDescriptor(source, requestPeerAddressProperty);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    descriptor.enumerable === true ||
+    descriptor.writable === true ||
+    typeof descriptor.value !== 'string'
+  ) {
+    return;
   }
+  Object.defineProperty(target, requestPeerAddressProperty, descriptor);
 }
 
 async function readLimitedArrayBuffer(
   request: Request,
   maxBodyBytes: number,
 ): Promise<ArrayBuffer> {
-  if (request.body === null) return new ArrayBuffer(0);
-  const reader = request.body.getReader();
+  const body = readNativeRequestBody(request);
+  if (body === null) return new ArrayBuffer(0);
+  const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
 
@@ -405,7 +439,7 @@ async function readLimitedArrayBuffer(
     if (value === undefined) continue;
     total += value.byteLength;
     if (total > maxBodyBytes) {
-      await reader.cancel().catch(() => undefined);
+      void reader.cancel().catch(() => undefined);
       throw new RequestBodyLimitExceededError(maxBodyBytes);
     }
     chunks.push(value);
@@ -418,6 +452,15 @@ async function readLimitedArrayBuffer(
     offset += chunk.byteLength;
   }
   return bytes.buffer;
+}
+
+function requestIntrinsicGetter<Value>(property: string): (request: Request) => Value {
+  const descriptor = Object.getOwnPropertyDescriptor(Request.prototype, property);
+  const getter = descriptor ? (Reflect.get(descriptor, 'get') as unknown) : undefined;
+  if (typeof getter !== 'function') {
+    throw new TypeError(`The Web Request implementation lacks a ${property} getter.`);
+  }
+  return (request) => Reflect.apply(getter, request, []) as Value;
 }
 
 function countedBody(

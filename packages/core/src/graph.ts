@@ -189,10 +189,14 @@ export interface AuthPostureFact {
 /** @internal Producer-owned ambient session authority posture for SPEC.md §9.1 / KV418. */
 export interface SessionAuthorityFact {
   detail?: string;
+  /** SHA-256 identities of inline handler syntax proven by this source fact. */
+  handlerFingerprints?: readonly string[];
   kind: 'endpoint' | 'mutation' | 'webhook';
   name: string;
   referencesSession: boolean;
   source?: 'session-authority';
+  /** A source producer found authority use but could not prove the runtime registry name. */
+  unresolvedName?: true;
 }
 
 /** @internal Producer-owned ownership-guard posture for SPEC.md §10.3 / KV414. */
@@ -335,9 +339,10 @@ export interface MutationExplain {
   // synchronizer token is verified before the guard chain; `exempt` is the `csrf: false`
   // opt-out reserved for non-browser/externally-authenticated writes. A `csrf: 'exempt'`
   // mutation MUST NOT reference ambient browser authority (KV418): it cannot read
-  // `req.session` (surfaced here as `session`) or run a session/cookie-derived guard
-  // (`authed`, `role()`, `owns()`), because such a mutation would skip CSRF yet still ride
-  // the victim's ambient cookie — the unsound exemption §9.1 forbids for endpoints.
+  // `req.session` (surfaced here as `session`), read/escape Cookie, Authorization, or
+  // Proxy-Authorization, mutate browser cookies/storage, or run a session/cookie-derived guard
+  // (`authed`, `role()`, `owns()`), because such a mutation would skip CSRF yet still ride or alter
+  // the victim's ambient browser authority — the unsound exemption §9.1 forbids.
   csrf?: 'checked' | 'exempt';
   csrfJustification?: string;
   enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';

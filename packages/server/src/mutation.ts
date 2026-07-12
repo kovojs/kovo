@@ -19,6 +19,7 @@ import {
   guardFailureToResult,
   resolveLifecycleRequest,
   runAccessDecisionGuards,
+  withoutRequestProperty,
   withGuardArgs,
   type Guard,
   type RequestLifecycleOptions,
@@ -445,14 +446,23 @@ async function runMutationWithTrackedInput<
 ): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const manualInvalidations: ChangeRecord[] = [];
   const responseHeaders: ResponseHeaders = {};
+  const csrfExempt = mutationCsrfOptions(definition, options.csrf) === false;
+  function assertBrowserStateMutationAllowed(sink: string): void {
+    if (!csrfExempt) return;
+    throw new Error(
+      `KV418 csrf:false mutation ${definition.key} cannot call ${sink}; browser credential and storage response mutations require CSRF protection.`,
+    );
+  }
   // B3 (SPEC §9.1.1:846): only the typed (name, value, options) builder is exposed;
   // the raw single-string overload has been removed to prevent arbitrary attribute injection.
   function setCookie(name: string, value: string, options?: CookieOptions): void {
+    assertBrowserStateMutationAllowed('context.setCookie()');
     const cookie = serializeCookie(name, value, options);
     appendResponseHeader(responseHeaders, 'Set-Cookie', cookie);
   }
 
   function forwardCookie(rawSetCookie: string, posture: ForwardSetCookiePosture): void {
+    assertBrowserStateMutationAllowed('context.forwardSetCookie()');
     appendResponseHeader(responseHeaders, 'Set-Cookie', forwardSetCookie(rawSetCookie, posture));
   }
 
@@ -475,6 +485,7 @@ async function runMutationWithTrackedInput<
     setCookie,
     forwardSetCookie: forwardCookie,
     setSessionRevocationClearSiteData() {
+      assertBrowserStateMutationAllowed('context.setSessionRevocationClearSiteData()');
       appendResponseHeader(
         responseHeaders,
         'Clear-Site-Data',
@@ -486,8 +497,11 @@ async function runMutationWithTrackedInput<
     setSessionRevocationClearSiteData: () => void;
   };
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
+    const authorityNeutralHandlerRequest = csrfExempt
+      ? (withoutRequestProperty(handlerRequest, 'clientIp') as GuardedRequest)
+      : handlerRequest;
     const scheduledHandlerRequest = requestWithTaskScheduling(
-      handlerRequest,
+      authorityNeutralHandlerRequest,
       options.taskScheduler,
     );
     const handlerValue = await definition.handler(input, scheduledHandlerRequest, context);

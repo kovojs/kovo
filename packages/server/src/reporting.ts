@@ -170,7 +170,7 @@ async function readBoundedReportBody(
         truncated = true;
         const allowed = Math.max(0, value.byteLength - (size - maxBytes));
         if (allowed > 0) chunks.push(decoder.decode(value.slice(0, allowed), { stream: true }));
-        await reader.cancel();
+        void reader.cancel().catch(() => undefined);
         break;
       }
       chunks.push(decoder.decode(value, { stream: true }));

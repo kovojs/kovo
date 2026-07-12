@@ -139,6 +139,44 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
     ],
   },
+  {
+    id: 'kv418-request-authority',
+    marker: '@kovo-security-classifier-corpus kv418-request-authority',
+    testFiles: ['packages/compiler/src/scan/parse.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'direct-alias-dynamic-enumeration',
+        file: 'packages/compiler/src/scan/parse.test.ts',
+        snippets: [
+          "request.headers.get('COOKIE')",
+          'const req = request',
+          'input.headerName',
+          'Object.fromEntries(headers)',
+        ],
+      },
+      {
+        id: 'wrapped-rest-arguments-and-mutable-names',
+        file: 'packages/compiler/src/scan/parse.test.ts',
+        snippets: [
+          "handler: ((_input, request) => request.headers.get('cookie'))",
+          "let name = 'x-signature'",
+          'arguments[1].headers',
+          'handler: (...args)',
+          "const name = 'cookie'",
+        ],
+      },
+      {
+        id: 'uninspectable-handlers-and-unresolved-keys',
+        file: 'packages/compiler/src/scan/parse.test.ts',
+        snippets: [
+          'handler: referencedHandler',
+          '{ ...sharedOptions }',
+          "const runtimeKey = 'machine/runtime'",
+          'unresolvedName: true',
+        ],
+      },
+    ],
+  },
 ];
 
 export function evaluateSecurityClassifierCorpus(options = {}) {

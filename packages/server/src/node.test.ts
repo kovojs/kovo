@@ -14,11 +14,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
+import { resolveRequestClientIp } from './app-load-shed.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { domain } from './domain.js';
 import { mutation } from './mutation.js';
 import { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
 import { query } from './query.js';
+import { endpointRequestWithoutSession, resolveKovoLifecycleRequest } from './response-posture.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 
@@ -88,6 +90,41 @@ describe('server node adapter', () => {
     expect((await handler(makeRequest('203.0.113.10'))).status).toBe(200);
     expect((await handler(makeRequest('203.0.113.11'))).status).toBe(200);
     expect((await handler(makeRequest('203.0.113.10'))).status).toBe(429);
+  });
+
+  it('preserves the Node peer address across authority-neutral endpoint and mutation copies', async () => {
+    const app = createApp({});
+    const makeRequest = () => {
+      const request = Object.assign(Readable.from([]) as IncomingMessage, {
+        headers: { cookie: 'sid=victim', host: 'app.example' },
+        method: 'POST',
+        socket: Object.assign(new EventEmitter() as Socket, {
+          remoteAddress: '203.0.113.42',
+        }),
+        url: '/machine',
+      });
+      return nodeRequestToWebRequest(request);
+    };
+    const clientIp = (request: Request) => resolveRequestClientIp(app, request);
+
+    const endpointRequest = await resolveKovoLifecycleRequest(makeRequest(), {
+      clientIp,
+      surface: 'endpoint',
+    });
+    const mutationRequest = await resolveKovoLifecycleRequest(
+      endpointRequestWithoutSession(makeRequest()),
+      {
+        clientIp,
+        csrf: { mode: 'exempt' },
+        idempotency: { mode: 'none' },
+        surface: 'mutation',
+      },
+    );
+
+    expect(endpointRequest.clientIp).toBe('203.0.113.42');
+    expect(endpointRequest.headers.get('cookie')).toBeNull();
+    expect(mutationRequest.clientIp).toBe('203.0.113.42');
+    expect(mutationRequest.headers.get('cookie')).toBeNull();
   });
 
   it('serves web-standard handlers through node:http with request bodies and early hints', async () => {

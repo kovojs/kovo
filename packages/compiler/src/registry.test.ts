@@ -1420,7 +1420,7 @@ export const ProductGrid = component({
     ]);
   });
 
-  it('merges caller-provided posture facts by key while retaining derived facts', () => {
+  it('merges posture facts by key with positive session authority dominance', () => {
     const derived = deriveAppGraph({
       graph: {
         access: [
@@ -1487,7 +1487,7 @@ export const ProductGrid = component({
       derived.graph.sessionAuthority?.filter(
         (fact) => fact.kind === 'mutation' && fact.name === 'cart/add',
       ),
-    ).toEqual([expect.objectContaining({ detail: 'caller session authority' })]);
+    ).toEqual([expect.objectContaining({ referencesSession: true })]);
     expect(derived.graph.ownershipPosture).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'mutation', name: 'cart/add' }),

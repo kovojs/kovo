@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import * as ts from 'typescript';
 
 import {
@@ -7,6 +9,7 @@ import {
   type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
+import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
 
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import { deriveMutationKey } from '../mutation-names.js';
@@ -650,6 +653,187 @@ export function mutationHandlers(model: ComponentModuleModel): MutationHandlerMo
   return [...model.mutationHandlers];
 }
 
+/**
+ * @internal Producer-owned browser-authority provenance for SPEC §6.6 / KV418. Positive
+ * facts override the ordinary guard/session-derived mutation posture in the build
+ * graph; runtime request neutralization remains the enforcement proof.
+ */
+export function mutationSessionAuthorityFacts(model: ComponentModuleModel): SessionAuthorityFact[] {
+  const facts = new Map<string, SessionAuthorityFact>();
+  const addFact = (
+    owner: HandlerWriteSinkOwner | undefined,
+    referencesSession: boolean,
+    detail: string,
+    handlerFingerprint?: string,
+  ): void => {
+    const ownerName = owner?.value;
+    if (ownerName === undefined) return;
+    const unresolvedName = ownerName === 'UNRESOLVED';
+    const name = unresolvedName ? 'UNRESOLVED' : ownerName;
+    const previous = facts.get(name);
+    if (previous?.referencesSession === true && !referencesSession) return;
+    const handlerFingerprints = referencesSession
+      ? []
+      : [
+          ...(previous?.handlerFingerprints ?? []),
+          ...(handlerFingerprint === undefined ? [] : [handlerFingerprint]),
+        ].filter((value, index, values) => values.indexOf(value) === index);
+    facts.set(name, {
+      detail,
+      ...(handlerFingerprints.length === 0 ? {} : { handlerFingerprints }),
+      kind: 'mutation',
+      name,
+      referencesSession,
+      source: 'session-authority',
+      ...(unresolvedName ? { unresolvedName: true as const } : {}),
+    });
+  };
+
+  for (const handler of model.mutationHandlers) {
+    addFact(
+      handler.mutationOwner,
+      handler.readsAmbientCookie === true,
+      handler.readsAmbientCookie === true
+        ? 'handler reads or may expose ambient request authority'
+        : 'handler has no statically observed ambient request authority',
+      handler.authorityFingerprint,
+    );
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression)) &&
+      isFrameworkExpression(model.sourceFile, node.expression, MUTATION_FACTORY_IDENTITY) &&
+      !mutationHandlerAuthorityIsStaticallyInspectable(node)
+    ) {
+      // An imported/referenced handler, options object, spread, accessor, or dynamic
+      // property can hide a browser-authority read or sink. Keep KV418 fail-closed: authors may
+      // use these shapes for ordinary CSRF-protected mutations, but an exempt mutation
+      // must keep its handler inline so ambient-authority absence is provable.
+      addFact(
+        mutationOwner(model.sourceFile, node),
+        true,
+        'handler authority cannot be proven statically',
+      );
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(model.sourceFile);
+
+  return [...facts.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/** @internal Canonicalize a runtime handler's native source for build/source identity proof. */
+export function mutationHandlerFingerprintFromRuntimeSource(source: string): string | undefined {
+  return (
+    mutationHandlerSourceFingerprint(source, 'expression') ??
+    mutationHandlerSourceFingerprint(source, 'method')
+  );
+}
+
+function mutationHandlerFingerprint(
+  sourceFile: ts.SourceFile,
+  source: string,
+  handler: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration,
+): string | undefined {
+  return mutationHandlerSourceFingerprint(
+    source.slice(handler.getStart(sourceFile), handler.getEnd()),
+    ts.isMethodDeclaration(handler) ? 'method' : 'expression',
+  );
+}
+
+function mutationHandlerSourceFingerprint(
+  source: string,
+  kind: 'expression' | 'method',
+): string | undefined {
+  const wrapped =
+    kind === 'method'
+      ? `const __kovoHandler = { ${source} };`
+      : `const __kovoHandler = (${source});`;
+  const transpiled = ts.transpileModule(wrapped, {
+    compilerOptions: {
+      jsx: ts.JsxEmit.Preserve,
+      module: ts.ModuleKind.ESNext,
+      removeComments: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+    fileName: 'kovo-handler-fingerprint.tsx',
+    reportDiagnostics: true,
+  });
+  if (
+    transpiled.diagnostics?.some(
+      (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+    )
+  ) {
+    return undefined;
+  }
+  const canonicalFile = ts.createSourceFile(
+    'kovo-handler-fingerprint.jsx',
+    transpiled.outputText,
+    ts.ScriptTarget.ESNext,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const statement = canonicalFile.statements.find(ts.isVariableStatement);
+  const declaration = statement?.declarationList.declarations[0];
+  const initializer = declaration?.initializer;
+  if (!initializer) return undefined;
+  const handler =
+    kind === 'method' && ts.isObjectLiteralExpression(initializer)
+      ? initializer.properties.find(ts.isMethodDeclaration)
+      : initializer;
+  if (!handler) return undefined;
+
+  return createHash('sha256').update(canonicalHandlerAst(handler, canonicalFile)).digest('hex');
+}
+
+function canonicalHandlerAst(node: ts.Node, sourceFile: ts.SourceFile): string {
+  const parts: string[] = [];
+  const visit = (current: ts.Node): void => {
+    parts.push(`${current.kind}:`);
+    if (ts.isIdentifier(current)) parts.push(`id=${current.text};`);
+    else if (ts.isStringLiteralLike(current)) parts.push(`string=${JSON.stringify(current.text)};`);
+    else if (ts.isNumericLiteral(current) || ts.isBigIntLiteral(current)) {
+      parts.push(`number=${current.text};`);
+    } else if (
+      ts.isNoSubstitutionTemplateLiteral(current) ||
+      ts.isTemplateHead(current) ||
+      ts.isTemplateMiddle(current) ||
+      ts.isTemplateTail(current)
+    ) {
+      parts.push(`template=${JSON.stringify(current.text)};`);
+    } else if (current.kind === ts.SyntaxKind.RegularExpressionLiteral) {
+      parts.push(`regexp=${current.getText(sourceFile)};`);
+    }
+    for (const child of current.getChildren(sourceFile)) visit(child);
+    parts.push(';');
+  };
+  visit(node);
+  return parts.join('');
+}
+
+function mutationHandlerAuthorityIsStaticallyInspectable(call: ts.CallExpression): boolean {
+  const options = [...call.arguments].find(ts.isObjectLiteralExpression);
+  if (!options) return false;
+
+  let handlerCount = 0;
+  for (const property of options.properties) {
+    if (ts.isSpreadAssignment(property) || propertyNameText(property.name) === null) return false;
+    if (propertyNameText(property.name) !== 'handler') continue;
+    handlerCount += 1;
+    if (ts.isMethodDeclaration(property)) {
+      if (!property.body) return false;
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) return false;
+    const initializer = unwrapExpression(property.initializer);
+    if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return false;
+  }
+
+  return handlerCount > 0;
+}
+
 export function taskRunHandlers(model: ComponentModuleModel): TaskRunHandlerModel[] {
   return [...model.taskRunHandlers];
 }
@@ -1212,18 +1396,633 @@ function mutationHandlerModels(
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
   const owner = mutationOwner(sourceFile, call);
-  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model, parameters }) => {
-    const directDbTargets = mutationDirectDbTargetIdentities(sourceFile, body, parameters);
-    return {
-      ...model,
-      handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
-        owner,
-        resolvedTargetFilter: (identity) =>
-          directDbTargets.has(identity) || looksLikeDbTargetIdentity(identity),
-        surface: 'mutation',
-      }),
+  return handlerPropertyEntries(sourceFile, source, call).map(
+    ({ body, handler, model, parameters }) => {
+      const directDbTargets = mutationDirectDbTargetIdentities(sourceFile, body, parameters);
+      const authorityFingerprint = mutationHandlerFingerprint(sourceFile, source, handler);
+      return {
+        ...model,
+        ...(authorityFingerprint === undefined ? {} : { authorityFingerprint }),
+        handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
+          owner,
+          resolvedTargetFilter: (identity) =>
+            directDbTargets.has(identity) || looksLikeDbTargetIdentity(identity),
+          surface: 'mutation',
+        }),
+        mutationOwner: owner,
+        ...(handlerReadsAmbientCookie(body, parameters)
+          ? { readsAmbientCookie: true as const }
+          : {}),
+      };
+    },
+  );
+}
+
+/**
+ * Trace the handler's second (request) parameter to Headers aliases and classify
+ * Cookie reads. Decisions are AST/provenance-based, never raw source text. A
+ * dynamic header name or an escaped/enumerated Headers carrier fails closed,
+ * while a statically non-Cookie `headers.get("x-signature")` stays green.
+ */
+function handlerReadsAmbientCookie(
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+): boolean {
+  const runtimeParameters =
+    parameters[0] && ts.isIdentifier(parameters[0].name) && parameters[0].name.text === 'this'
+      ? parameters.slice(1)
+      : parameters;
+  if (runtimeParameters[0]?.dotDotDotToken || runtimeParameters[1]?.dotDotDotToken) return true;
+  if (handlerMutatesBrowserState(body, runtimeParameters[2])) return true;
+  if (!ts.isArrowFunction(body.parent) && handlerBodyReferencesArguments(body)) {
+    return true;
+  }
+
+  const requestNames = new Set<string>();
+  const headersNames = new Set<string>();
+  const staticStrings = handlerStaticStrings(body);
+  const requestParameter = runtimeParameters[1];
+  if (requestParameter && requestBindingMayExposeAmbientAuthority(requestParameter.name)) {
+    return true;
+  }
+  if (requestParameter) {
+    collectRequestParameterAuthority(requestParameter.name, requestNames, headersNames);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visitAliases = (node: ts.Node): void => {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        changed =
+          collectAuthorityAlias(node.name, node.initializer, requestNames, headersNames) || changed;
+      }
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        const kind = requestAuthorityExpressionKind(node.right, requestNames, headersNames);
+        if (kind === 'request' && !requestNames.has(node.left.text)) {
+          requestNames.add(node.left.text);
+          changed = true;
+        }
+        if (kind === 'headers' && !headersNames.has(node.left.text)) {
+          headersNames.add(node.left.text);
+          changed = true;
+        }
+      }
+      ts.forEachChild(node, visitAliases);
     };
-  });
+    visitAliases(body);
+  }
+
+  let readsCookie = false;
+  const visitReads = (node: ts.Node): void => {
+    if (readsCookie) return;
+    if (isDynamicHandlerCodeExecution(node)) {
+      readsCookie = true;
+      return;
+    }
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      const receiver = headerMethodReceiver(callee, requestNames, headersNames);
+      if (receiver && (receiver.method === 'get' || receiver.method === 'has')) {
+        const header = staticHeaderName(node.arguments[0], staticStrings);
+        if (header === undefined || !isProvablyNonAmbientMutationHeader(header)) {
+          readsCookie = true;
+          return;
+        }
+      }
+    }
+    if (
+      isHeaderCarrierExpression(node, requestNames, headersNames) &&
+      !isSafeHeaderCarrierUse(node, requestNames, headersNames)
+    ) {
+      readsCookie = true;
+      return;
+    }
+    if (
+      isRequestCarrierExpression(node, requestNames, headersNames) &&
+      !isSafeRequestCarrierUse(node, requestNames, headersNames)
+    ) {
+      readsCookie = true;
+      return;
+    }
+    ts.forEachChild(node, visitReads);
+  };
+  visitReads(body);
+  return readsCookie;
+}
+
+const BROWSER_STATE_MUTATION_SINKS = new Set([
+  'forwardSetCookie',
+  'setCookie',
+  'setSessionRevocationClearSiteData',
+]);
+const SAFE_MUTATION_CONTEXT_MEMBERS = new Set(['fail', 'invalidate']);
+
+function handlerMutatesBrowserState(
+  body: ts.ConciseBody,
+  contextParameter: ts.ParameterDeclaration | undefined,
+): boolean {
+  if (!contextParameter) return false;
+  if (contextParameter.dotDotDotToken) return true;
+
+  const contextNames = new Set<string>();
+  const sinkNames = new Set<string>();
+  if (ts.isIdentifier(contextParameter.name)) {
+    contextNames.add(contextParameter.name.text);
+  } else if (ts.isObjectBindingPattern(contextParameter.name)) {
+    for (const element of contextParameter.name.elements) {
+      if (element.dotDotDotToken) return true;
+      const property =
+        propertyNameText(element.propertyName) ??
+        (ts.isIdentifier(element.name) ? element.name.text : undefined);
+      if (property === undefined) return true;
+      if (BROWSER_STATE_MUTATION_SINKS.has(property)) {
+        if (!ts.isIdentifier(element.name)) return true;
+        sinkNames.add(element.name.text);
+      }
+    }
+  } else {
+    return true;
+  }
+
+  let unsafe = false;
+  const visit = (node: ts.Node): void => {
+    if (unsafe) return;
+    if (ts.isIdentifier(node) && sinkNames.has(node.text)) {
+      if (ts.isBindingElement(node.parent) && node.parent.name === node) return;
+      unsafe = true;
+      return;
+    }
+    if (ts.isExpression(node)) {
+      const member = requestAuthorityMember(node);
+      const receiver = member && unwrapExpression(member.receiver);
+      if (receiver && ts.isIdentifier(receiver) && contextNames.has(receiver.text)) {
+        if (
+          BROWSER_STATE_MUTATION_SINKS.has(member.name) ||
+          !SAFE_MUTATION_CONTEXT_MEMBERS.has(member.name)
+        ) {
+          unsafe = true;
+        }
+        return;
+      }
+    }
+    if (ts.isIdentifier(node) && contextNames.has(node.text)) {
+      const parent = node.parent;
+      if ((ts.isParameter(parent) || ts.isVariableDeclaration(parent)) && parent.name === node) {
+        return;
+      }
+      if (
+        (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+        parent.expression === node &&
+        requestAuthorityMember(parent) !== undefined
+      ) {
+        return;
+      }
+      unsafe = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return unsafe;
+}
+
+function isProvablyNonAmbientMutationHeader(value: string): boolean {
+  const header = value.toLowerCase();
+  return (
+    header === 'accept' ||
+    header === 'content-length' ||
+    header === 'content-type' ||
+    header === 'forwarded' ||
+    header === 'user-agent' ||
+    header === 'x-forwarded-for' ||
+    header === 'x-real-ip' ||
+    header.endsWith('-ip') ||
+    header.includes('signature') ||
+    header.includes('hmac') ||
+    header.startsWith('kovo-') ||
+    header.startsWith('webhook-') ||
+    header.startsWith('x-machine-')
+  );
+}
+
+function isDynamicHandlerCodeExecution(node: ts.Node): boolean {
+  if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return false;
+  const callee = unwrapExpression(node.expression);
+  if (ts.isIdentifier(callee)) return callee.text === 'eval' || callee.text === 'Function';
+  const member = requestAuthorityMember(callee);
+  if (member?.name === 'constructor') return true;
+  if (member?.name !== 'eval' && member?.name !== 'Function') return false;
+  const receiver = unwrapExpression(member.receiver);
+  return (
+    ts.isIdentifier(receiver) &&
+    (receiver.text === 'globalThis' || receiver.text === 'self' || receiver.text === 'window')
+  );
+}
+
+function handlerBodyReferencesArguments(body: ts.ConciseBody): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== body && ts.isFunctionLike(node) && !ts.isArrowFunction(node)) return;
+    if (ts.isIdentifier(node) && node.text === 'arguments') {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return found;
+}
+
+type RequestAuthorityExpressionKind = 'headers' | 'request' | undefined;
+
+function requestBindingMayExposeAmbientAuthority(name: ts.BindingName): boolean {
+  if (ts.isIdentifier(name)) return false;
+  if (!ts.isObjectBindingPattern(name)) return true;
+
+  for (const element of name.elements) {
+    if (element.dotDotDotToken) return true;
+    const property =
+      propertyNameText(element.propertyName) ??
+      (ts.isIdentifier(element.name) ? element.name.text : undefined);
+    if (property === undefined) return true;
+    if (property.toLowerCase() === 'headers') {
+      if (!ts.isIdentifier(element.name)) return true;
+      continue;
+    }
+    if (!NON_AMBIENT_REQUEST_MEMBERS.has(property)) return true;
+  }
+
+  return false;
+}
+
+function collectRequestParameterAuthority(
+  name: ts.BindingName,
+  requestNames: Set<string>,
+  headersNames: Set<string>,
+): void {
+  if (ts.isIdentifier(name)) {
+    requestNames.add(name.text);
+    return;
+  }
+  if (!ts.isObjectBindingPattern(name)) return;
+  for (const element of name.elements) {
+    const property =
+      propertyNameText(element.propertyName) ??
+      (ts.isIdentifier(element.name) ? element.name.text : undefined);
+    if (property?.toLowerCase() === 'headers' && ts.isIdentifier(element.name)) {
+      headersNames.add(element.name.text);
+    }
+  }
+}
+
+function collectAuthorityAlias(
+  name: ts.BindingName,
+  initializer: ts.Expression,
+  requestNames: Set<string>,
+  headersNames: Set<string>,
+): boolean {
+  const kind = requestAuthorityExpressionKind(initializer, requestNames, headersNames);
+  let changed = false;
+  if (ts.isIdentifier(name)) {
+    const target =
+      kind === 'request' ? requestNames : kind === 'headers' ? headersNames : undefined;
+    if (target && !target.has(name.text)) {
+      target.add(name.text);
+      changed = true;
+    }
+    return changed;
+  }
+  if (kind !== 'request' || !ts.isObjectBindingPattern(name)) return false;
+  for (const element of name.elements) {
+    const property =
+      propertyNameText(element.propertyName) ??
+      (ts.isIdentifier(element.name) ? element.name.text : undefined);
+    if (
+      property?.toLowerCase() === 'headers' &&
+      ts.isIdentifier(element.name) &&
+      !headersNames.has(element.name.text)
+    ) {
+      headersNames.add(element.name.text);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function requestAuthorityExpressionKind(
+  expression: ts.Expression,
+  requestNames: ReadonlySet<string>,
+  headersNames: ReadonlySet<string>,
+): RequestAuthorityExpressionKind {
+  const value = unwrapExpression(expression);
+  if (ts.isIdentifier(value)) {
+    if (requestNames.has(value.text)) return 'request';
+    if (headersNames.has(value.text)) return 'headers';
+    return undefined;
+  }
+  if (ts.isCallExpression(value)) {
+    const member = requestAuthorityMember(unwrapExpression(value.expression));
+    if (
+      member?.name === 'clone' &&
+      requestAuthorityExpressionKind(member.receiver, requestNames, headersNames) === 'request'
+    ) {
+      return 'request';
+    }
+  }
+  if (
+    ts.isElementAccessExpression(value) &&
+    requestAuthorityMember(value) === undefined &&
+    requestAuthorityExpressionKind(value.expression, requestNames, headersNames) === 'request'
+  ) {
+    // A computed request member can be `headers`; fail closed when its identity
+    // cannot be proven statically.
+    return 'headers';
+  }
+  const member = requestAuthorityMember(value);
+  return member?.name.toLowerCase() === 'headers' &&
+    requestAuthorityExpressionKind(member.receiver, requestNames, headersNames) === 'request'
+    ? 'headers'
+    : undefined;
+}
+
+function requestAuthorityMember(
+  expression: ts.Expression,
+): { name: string; receiver: ts.Expression } | undefined {
+  if (ts.isPropertyAccessExpression(expression)) {
+    return { name: expression.name.text, receiver: expression.expression };
+  }
+  if (ts.isElementAccessExpression(expression) && expression.argumentExpression) {
+    const argument = unwrapExpression(expression.argumentExpression);
+    if (ts.isStringLiteralLike(argument)) {
+      return { name: argument.text, receiver: expression.expression };
+    }
+  }
+  return undefined;
+}
+
+function headerMethodReceiver(
+  expression: ts.Expression,
+  requestNames: ReadonlySet<string>,
+  headersNames: ReadonlySet<string>,
+): { method: string } | undefined {
+  const member = requestAuthorityMember(expression);
+  if (!member) return undefined;
+  return requestAuthorityExpressionKind(member.receiver, requestNames, headersNames) === 'headers'
+    ? { method: member.name }
+    : undefined;
+}
+
+function isHeaderCarrierExpression(
+  node: ts.Node,
+  requestNames: ReadonlySet<string>,
+  headersNames: ReadonlySet<string>,
+): node is ts.Expression {
+  return (
+    ts.isExpression(node) &&
+    requestAuthorityExpressionKind(node, requestNames, headersNames) === 'headers'
+  );
+}
+
+function isRequestCarrierExpression(
+  node: ts.Node,
+  requestNames: ReadonlySet<string>,
+  headersNames: ReadonlySet<string>,
+): node is ts.Expression {
+  return (
+    ts.isExpression(node) &&
+    requestAuthorityExpressionKind(node, requestNames, headersNames) === 'request'
+  );
+}
+
+const NON_AMBIENT_REQUEST_MEMBERS = new Set([
+  'args',
+  'arrayBuffer',
+  'blob',
+  'body',
+  'bodyUsed',
+  'bytes',
+  'cache',
+  'clone',
+  'credentials',
+  'db',
+  'destination',
+  'formData',
+  'headers',
+  'integrity',
+  'json',
+  'keepalive',
+  'method',
+  'mode',
+  'redirect',
+  'referrer',
+  'referrerPolicy',
+  'signal',
+  'text',
+  'url',
+]);
+
+function isSafeRequestCarrierUse(
+  node: ts.Expression,
+  requestNames: ReadonlySet<string>,
+  headersNames: ReadonlySet<string>,
+): boolean {
+  const parent = node.parent;
+  if (ts.isIdentifier(node) && ts.isPropertyAccessExpression(parent) && parent.name === node) {
+    return true;
+  }
+  if (
+    (ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent)) &&
+    parent.name === node
+  ) {
+    return true;
+  }
+  if (
+    (ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isNonNullExpression(parent)) &&
+    parent.expression === node
+  ) {
+    return true;
+  }
+  if (ts.isVariableDeclaration(parent) && parent.initializer === node) {
+    return !requestBindingMayExposeAmbientAuthority(parent.name);
+  }
+  if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    if (parent.left === node) return true;
+    if (parent.right === node) return ts.isIdentifier(parent.left);
+  }
+  if (
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+  ) {
+    const member = requestAuthorityMember(parent);
+    if (!member || !NON_AMBIENT_REQUEST_MEMBERS.has(member.name)) return false;
+    if (member.name !== 'clone') return true;
+    return (
+      ts.isCallExpression(parent.parent) && unwrapExpression(parent.parent.expression) === parent
+    );
+  }
+  if (ts.isCallExpression(node)) {
+    // `request.clone()` is itself a request carrier; it is safe only while being
+    // aliased or selecting a statically non-ambient member, handled above.
+    return false;
+  }
+  return requestAuthorityExpressionKind(node, requestNames, headersNames) !== 'request';
+}
+
+function isSafeHeaderCarrierUse(
+  node: ts.Expression,
+  requestNames: ReadonlySet<string>,
+  headersNames: ReadonlySet<string>,
+): boolean {
+  const parent = node.parent;
+  if (ts.isIdentifier(node) && ts.isPropertyAccessExpression(parent) && parent.name === node) {
+    return true;
+  }
+  if (
+    (ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent)) &&
+    parent.name === node
+  ) {
+    return true;
+  }
+  if (
+    ts.isBinaryExpression(parent) &&
+    parent.left === node &&
+    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  ) {
+    return true;
+  }
+  if (
+    (ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isNonNullExpression(parent)) &&
+    parent.expression === node
+  ) {
+    return true;
+  }
+  if (ts.isVariableDeclaration(parent) && parent.initializer === node) {
+    return ts.isIdentifier(parent.name);
+  }
+  if (
+    ts.isBinaryExpression(parent) &&
+    parent.right === node &&
+    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  ) {
+    return ts.isIdentifier(parent.left);
+  }
+  const member =
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+      ? requestAuthorityMember(parent)
+      : undefined;
+  if (!member || (member.name !== 'get' && member.name !== 'has')) return false;
+  const call = parent.parent;
+  return (
+    ts.isCallExpression(call) &&
+    unwrapExpression(call.expression) === parent &&
+    requestAuthorityExpressionKind(node, requestNames, headersNames) === 'headers'
+  );
+}
+
+function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string> {
+  const candidates = new Map<string, ts.Expression>();
+  const invalid = new Set<string>();
+  const invalidateBindings = (name: ts.BindingName): void => {
+    const names: string[] = [];
+    collectBindingNames(name, names);
+    for (const binding of names) invalid.add(binding);
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node)) {
+      if (
+        ts.isIdentifier(node.name) &&
+        node.initializer &&
+        ts.isVariableDeclarationList(node.parent) &&
+        (node.parent.flags & ts.NodeFlags.Const) !== 0
+      ) {
+        if (candidates.has(node.name.text)) invalid.add(node.name.text);
+        else candidates.set(node.name.text, node.initializer);
+      } else {
+        invalidateBindings(node.name);
+      }
+    }
+    if (ts.isParameter(node)) invalidateBindings(node.name);
+    if (
+      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+      node.name !== undefined
+    ) {
+      invalid.add(node.name.text);
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      const target = unwrapExpression(node.left);
+      if (ts.isIdentifier(target)) invalid.add(target.text);
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      const target = unwrapExpression(node.operand);
+      if (ts.isIdentifier(target)) invalid.add(target.text);
+    }
+    if (
+      (ts.isForInStatement(node) || ts.isForOfStatement(node)) &&
+      ts.isIdentifier(node.initializer)
+    ) {
+      invalid.add(node.initializer.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+
+  const values = new Map<string, string>();
+  const resolving = new Set<string>();
+  const resolve = (name: string): string | undefined => {
+    if (invalid.has(name)) return undefined;
+    const known = values.get(name);
+    if (known !== undefined) return known;
+    if (resolving.has(name)) return undefined;
+    const initializer = candidates.get(name);
+    if (!initializer) return undefined;
+
+    resolving.add(name);
+    const expression = unwrapExpression(initializer);
+    const value =
+      ts.isStringLiteralLike(expression) || ts.isNoSubstitutionTemplateLiteral(expression)
+        ? expression.text
+        : ts.isIdentifier(expression)
+          ? resolve(expression.text)
+          : undefined;
+    resolving.delete(name);
+    if (value !== undefined) values.set(name, value);
+    return value;
+  };
+
+  for (const name of candidates.keys()) resolve(name);
+  return values;
+}
+
+function staticHeaderName(
+  expression: ts.Expression | undefined,
+  values: ReadonlyMap<string, string>,
+): string | undefined {
+  if (!expression) return undefined;
+  const value = unwrapExpression(expression);
+  if (ts.isStringLiteralLike(value) || ts.isNoSubstitutionTemplateLiteral(value)) return value.text;
+  return ts.isIdentifier(value) ? values.get(value.text) : undefined;
 }
 
 function endpointHandlerModels(
@@ -1243,6 +2042,7 @@ function endpointHandlerModels(
 
 interface HandlerPropertyEntry {
   body: ts.ConciseBody;
+  handler: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration;
   model: MutationHandlerModel;
   parameters: ts.NodeArray<ts.ParameterDeclaration>;
 }
@@ -1255,12 +2055,13 @@ function handlerPropertyEntries(
   const options = [...call.arguments].find(ts.isObjectLiteralExpression);
   if (!options || !ts.isObjectLiteralExpression(options)) return [];
 
-  return options.properties.flatMap((property) => {
+  return options.properties.flatMap<HandlerPropertyEntry>((property) => {
     if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'handler') {
       return property.body
         ? [
             {
               body: property.body,
+              handler: property,
               model: functionBodyModel(sourceFile, source, property.body, property.parameters),
               parameters: property.parameters,
             },
@@ -1272,12 +2073,13 @@ function handlerPropertyEntries(
       return [];
     }
 
-    const initializer = property.initializer;
+    const initializer = unwrapExpression(property.initializer);
     if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return [];
 
     return [
       {
         body: initializer.body,
+        handler: initializer,
         model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
         parameters: initializer.parameters,
       },
@@ -1384,7 +2186,17 @@ function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
 
 function mutationOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
   const [first] = call.arguments;
-  if (first && ts.isStringLiteralLike(first)) return { kind: 'key', value: first.text };
+  const firstValue = first ? unwrapExpression(first) : undefined;
+  if (firstValue && ts.isStringLiteralLike(firstValue)) {
+    return { kind: 'key', value: firstValue.text };
+  }
+  // Object-form declarations derive their key from an exported binding. A
+  // non-literal legacy key is runtime data, so attaching this fact to the export-
+  // derived name would falsely green-light the actual registry key. Preserve an
+  // unresolved owner and let KV418 conservatively apply it to every exempt mutation.
+  if (firstValue && !ts.isObjectLiteralExpression(firstValue)) {
+    return { kind: 'key', value: 'UNRESOLVED' };
+  }
 
   const exported = exportedConstInitializerName(call);
   if ('exportedConstName' in exported) {

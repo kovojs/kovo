@@ -26,7 +26,11 @@ import {
 } from './app-document.js';
 import { matchShellDispatch } from './shell.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
-import { resolveKovoLifecycleRequest } from './response-posture.js';
+import {
+  endpointRequestWithoutSession,
+  requestMetadataWithoutAmbientAuthority,
+  resolveKovoLifecycleRequest,
+} from './response-posture.js';
 import { appTaskScheduler } from './task-runtime.js';
 import { readUntrustedRequestBody, revealUntrustedRequestValue } from './untrusted-request-body.js';
 
@@ -42,9 +46,10 @@ export async function handleAppMutationRequest(
 
   const mutation = app.mutations.find((candidate) => candidate.key === mutationKey);
   if (!mutation) {
+    const errorShellRequest = requestMetadataWithoutAmbientAuthority(request);
     return serverResponseToWebResponse(
-      await renderAppErrorDocumentResponse(app, request, 404),
-      request,
+      await renderAppErrorDocumentResponse(app, errorShellRequest, 404),
+      errorShellRequest,
     );
   }
 
@@ -55,7 +60,13 @@ export async function handleAppMutationRequest(
   // mutation a compile error; this runtime floor makes the exemption sound even if a graph fact
   // is stale or missing, so `req.session` is genuinely absent rather than the victim's cookie.
   const csrfExempt = !mutationRequiresPreBodyCsrf(mutation, app);
-  const mutationRequest = await resolveKovoLifecycleRequest(request, {
+  // Neutralize the Web Request itself before body parsing or lifecycle providers can observe it.
+  // Omitting sessionProvider alone is insufficient: handlers and DB providers can read the raw
+  // Cookie header directly. The proxy also re-wraps every usable clone (SPEC §6.6 / KV418).
+  const authorityNeutralRequest = csrfExempt
+    ? endpointRequestWithoutSession(request, { stripAuthorization: true })
+    : request;
+  const mutationRequest = await resolveKovoLifecycleRequest(authorityNeutralRequest, {
     // SPEC §9.5: attach the trustworthy client IP so a `guards.rateLimit({ per: 'ip' })` on this
     // mutation (e.g. a credential mutation) keys by IP. Reuses the coarse limiter's trusted source
     // (`resolveRequestClientIp`), never a raw header read in the guard.
@@ -164,7 +175,7 @@ export async function handleAppMutationRequest(
     ...(app.onError === undefined ? {} : { onError: app.onError }),
     maxListItems: app.requestLimits.maxQueryListItems,
     ...responseOptions,
-    headers: request.headers,
+    headers: mutationRequest.headers,
     liveTargetRenderers: inheritLiveTargetRendererStylesheets(
       app.liveTargetRenderers,
       inheritedStylesheets,

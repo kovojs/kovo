@@ -2255,6 +2255,37 @@ describe('kovo check', () => {
     expect(result.exitCode).not.toBe(0);
   });
 
+  it('treats duplicate session-authority facts as an order-independent positive lattice', () => {
+    const result = kovoCheck({
+      endpoints: [
+        {
+          csrf: 'exempt',
+          csrfJustification: 'machine endpoint',
+          method: 'POST',
+          name: 'machine/sync',
+          path: '/machine/sync',
+        },
+      ],
+      mutations: [
+        {
+          csrf: 'exempt',
+          csrfJustification: 'machine mutation',
+          key: 'machine/write',
+        },
+      ],
+      sessionAuthority: [
+        { kind: 'endpoint', name: 'machine/sync', referencesSession: false },
+        { kind: 'endpoint', name: 'machine/sync', referencesSession: true },
+        { kind: 'mutation', name: 'machine/write', referencesSession: false },
+        { kind: 'mutation', name: 'machine/write', referencesSession: true },
+      ],
+    });
+
+    expect(result.output).toContain('ERROR KV418 ENDPOINT machine/sync');
+    expect(result.output).toContain('ERROR KV418 MUTATION machine/write');
+    expect(result.exitCode).toBe(1);
+  });
+
   it('audits manual invalidate escape-hatch usage', () => {
     expect(
       kovoCheck({

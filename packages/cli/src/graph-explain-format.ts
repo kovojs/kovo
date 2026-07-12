@@ -1365,22 +1365,33 @@ export function endpointReferencesSessionAuthority(
 ): boolean {
   const kind = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
   const name = endpointName(endpoint);
-  const fact = sessionAuthorityFacts(input).find(
+  const facts = sessionAuthorityFacts(input).filter(
     (candidate) => candidate.kind === kind && candidate.name === name,
   );
-  if (fact === undefined && input.sessionAuthority !== undefined) return true;
-  return fact?.referencesSession === true;
+  if (facts.length === 0 && input.sessionAuthority !== undefined) return true;
+  return facts.some((fact) => fact.referencesSession);
 }
 
 export function mutationReferencesSessionAuthority(
   input: CoreGraph.KovoCheckInput,
   mutation: CoreGraph.MutationExplain,
 ): boolean {
-  const fact = sessionAuthorityFacts(input).find(
+  const facts = sessionAuthorityFacts(input);
+  if (
+    facts.some(
+      (candidate) =>
+        candidate.kind === 'mutation' &&
+        candidate.unresolvedName === true &&
+        candidate.referencesSession,
+    )
+  ) {
+    return true;
+  }
+  const matching = facts.filter(
     (candidate) => candidate.kind === 'mutation' && candidate.name === mutation.key,
   );
-  if (fact === undefined && input.sessionAuthority !== undefined) return true;
-  return fact?.referencesSession === true;
+  if (matching.length === 0 && input.sessionAuthority !== undefined) return true;
+  return matching.some((fact) => fact.referencesSession);
 }
 
 export function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {

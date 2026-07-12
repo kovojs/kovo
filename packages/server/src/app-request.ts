@@ -25,6 +25,7 @@ import {
 } from './app-load-shed.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
+import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import { schemaMaxUploadBytes, type Schema } from './schema.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
@@ -57,7 +58,16 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   }
 
   const maxBodyBytes = requestBodyLimitForMatch(app, match);
-  const loadShed = preDispatchLoadShedResponse(app, request, surface, buildToken, maxBodyBytes);
+  const loadShedRequest = loadShedRequiresNeutralAuthority(app, match, url)
+    ? requestMetadataWithoutAmbientAuthority(request)
+    : request;
+  const loadShed = preDispatchLoadShedResponse(
+    app,
+    loadShedRequest,
+    surface,
+    buildToken,
+    maxBodyBytes,
+  );
   if (loadShed) return loadShed;
 
   if (url.pathname === KOVO_CSP_REPORT_ENDPOINT) {
@@ -67,7 +77,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   let limitedRequest = request;
   try {
     const dispatchRequest =
-      match.kind === 'endpoint'
+      match.kind === 'endpoint' || match.kind === 'mutation'
         ? await requestWithVerifiedBodyLimit(request, maxBodyBytes)
         : request;
     limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
@@ -90,11 +100,24 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     if (match.kind === 'endpoint') {
       return endpointServerErrorResponse(match.endpoint.response);
     }
+    const errorShellRequest =
+      match.kind === 'mutation' ? requestMetadataWithoutAmbientAuthority(request) : request;
     return routeResponseToWebResponse(
-      await renderAppErrorDocumentResponse(app, request, 500),
-      request,
+      await renderAppErrorDocumentResponse(app, errorShellRequest, 500),
+      errorShellRequest,
     );
   }
+}
+
+function loadShedRequiresNeutralAuthority(
+  app: KovoApp,
+  match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
+  url: URL,
+): boolean {
+  if (match.kind === 'endpoint' || url.pathname === KOVO_CSP_REPORT_ENDPOINT) return true;
+  if (match.kind !== 'mutation') return false;
+  const mutation = app.mutations.find((candidate) => candidate.key === match.key);
+  return mutation === undefined || mutation.csrf === false;
 }
 
 export async function handleAppStartupErrorResponse(
@@ -113,9 +136,11 @@ export async function handleAppStartupErrorResponse(
   if (match.kind === 'endpoint') {
     return endpointServerErrorResponse(match.endpoint.response);
   }
+  const errorShellRequest =
+    match.kind === 'mutation' ? requestMetadataWithoutAmbientAuthority(request) : request;
   return routeResponseToWebResponse(
-    await renderAppErrorDocumentResponse(app, request, 500),
-    request,
+    await renderAppErrorDocumentResponse(app, errorShellRequest, 500),
+    errorShellRequest,
   );
 }
 

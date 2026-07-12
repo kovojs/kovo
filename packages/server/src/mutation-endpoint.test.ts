@@ -178,6 +178,53 @@ describe('server mutation endpoint routing', () => {
     await expect(runMutation(fails, { value: 'ok' }, {})).rejects.toBe(thrown);
   });
 
+  it.each([
+    { headers: { 'Kovo-Fragment': 'true' }, name: 'enhanced' },
+    { headers: {}, name: 'no-JS' },
+  ])('blocks login-CSRF Set-Cookie output from $name csrf:false mutations', async (scenario) => {
+    const signIn = mutation(`auth/unsafe-sign-in-${scenario.name}`, {
+      csrf: false,
+      input: s.object({ email: s.string() }),
+      handler(input, _request, context) {
+        context.setCookie('session', 'attacker-session');
+        return input;
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(signIn, {
+      headers: scenario.headers,
+      rawInput: { email: 'attacker@example.test' },
+      redirectTo: '/account',
+      request: {},
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.headers['Set-Cookie']).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: 'forwardSetCookie',
+      run: (context: { forwardSetCookie(raw: string, posture: { mode: 'same-origin' }): void }) =>
+        context.forwardSetCookie('session=attacker; Secure', { mode: 'same-origin' }),
+    },
+    {
+      name: 'setSessionRevocationClearSiteData',
+      run: (context: { setSessionRevocationClearSiteData(): void }) =>
+        context.setSessionRevocationClearSiteData(),
+    },
+  ])('blocks csrf:false browser-state sink $name', async ({ run }) => {
+    const unsafe = mutation('auth/unsafe-browser-state', {
+      csrf: false,
+      input: s.object({}),
+      handler(_input, _request, context) {
+        run(context);
+      },
+    });
+
+    await expect(runMutation(unsafe, {}, {})).rejects.toThrow(/KV418.*csrf:false mutation/);
+  });
+
   it('D1: logs default-config mutation handler exceptions to stderr', async () => {
     const thrown = new Error('handler failed:default');
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -202,7 +249,7 @@ describe('server mutation endpoint routing', () => {
         expect.stringContaining(
           '[kovo] no-js-mutation-handler failed mutation=lifecycle/handler-throw-default-log',
         ),
-        thrown,
+        'Error: handler failed:default',
       );
     } finally {
       errorSpy.mockRestore();

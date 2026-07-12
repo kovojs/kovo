@@ -698,6 +698,326 @@ export default createApp({
     }
   });
 
+  it('raises KV418 when a csrf:false mutation reads the raw Cookie header', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-cookie-authority-'));
+    const appPath = join(root, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `
+import { createApp, guards, mutation, publicAccess, s } from '@kovojs/server';
+
+const unsafe = mutation('auth/unsafe-cookie', {
+  access: publicAccess('machine callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { cookie: request.headers.get('Cookie') };
+  },
+});
+const unsafeAuthorization = mutation('auth/unsafe-authorization', {
+  access: publicAccess('browser Authorization callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { authorization: request.headers.get('Authorization') };
+  },
+});
+const unsafeDynamicCode = mutation('auth/unsafe-dynamic-code', {
+  access: publicAccess('dynamic code callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return eval('request.headers.get("cookie")');
+  },
+});
+const unsafeCookieOutput = mutation('auth/unsafe-cookie-output', {
+  access: publicAccess('cookie-minting callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, _request, context) {
+    context.setCookie('session', 'attacker');
+  },
+});
+const unsafeFakeThis = mutation('auth/unsafe-fake-this', {
+  access: publicAccess('fake this callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(this: void, _input, request) {
+    return request.headers.get('Cookie');
+  },
+});
+const unsafeContextEscape = mutation('auth/unsafe-context-escape', {
+  access: publicAccess('context prototype escape'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, _request, context) {
+    context.valueOf().setCookie('session', 'attacker');
+  },
+});
+const safe = mutation('auth/signed-machine', {
+  access: publicAccess('signed machine callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { signature: request.headers.get('X-Machine-Signature') };
+  },
+});
+const referencedHandler = (_input, request) => ({
+  signature: request.headers.get('X-Machine-Signature'),
+});
+const unproven = mutation('auth/unproven-handler', {
+  access: publicAccess('referenced machine callback'),
+  csrf: false,
+  input: s.object({}),
+  handler: referencedHandler,
+});
+const guarded = mutation('auth/session-guarded', {
+  access: [guards.authed()],
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { signature: request.headers.get('X-Machine-Signature') };
+  },
+});
+export default createApp({
+  mutations: [
+    unsafe,
+    unsafeAuthorization,
+    unsafeDynamicCode,
+    unsafeCookieOutput,
+    unsafeFakeThis,
+    unsafeContextEscape,
+    safe,
+    unproven,
+    guarded,
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-authorization');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-dynamic-code');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie-output');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-fake-this');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-context-escape');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unproven-handler');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/session-guarded');
+      expect(errorOutput).not.toContain('ERROR KV418 MUTATION auth/signed-machine');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
+  it('raises KV418 for a csrf:false Cookie read whose runtime key is nonliteral', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-dynamic-cookie-authority-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `
+import { createApp, mutation, publicAccess, s } from '@kovojs/server';
+
+const runtimeKey = 'auth/runtime-key';
+const dynamicKey = mutation(runtimeKey, {
+  access: publicAccess('dynamic-key machine callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { cookie: request.headers.get('Cookie') };
+  },
+});
+
+export default createApp({ mutations: [dynamicKey] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/runtime-key');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
+  it('fails KV418 closed when a csrf:false handler source is outside build scan coverage', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-cookie-coverage-'));
+    const appRoot = join(root, 'src/server');
+    const appPath = join(appRoot, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      mkdirSync(appRoot, { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        join(root, 'unsafe.mjs'),
+        `
+import { mutation, publicAccess, s } from '@kovojs/server';
+export const outside = mutation('auth/outside-scan', {
+  access: publicAccess('outside-scan callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { cookie: request.headers.get('Cookie') };
+  },
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(appRoot, 'safe-decoy.mjs'),
+        `
+import { mutation, publicAccess, s } from '@kovojs/server';
+export const decoy = mutation('auth/outside-scan', {
+  access: publicAccess('unreachable safe decoy'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { signature: request.headers.get('X-Machine-Signature') };
+  },
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `
+import { createApp } from '@kovojs/server';
+import { outside } from '../../unsafe.mjs';
+export default createApp({ mutations: [outside] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/outside-scan');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
+  it('binds a safe source fact to the actual runtime handler instead of a same-key decoy', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-authority-fingerprint-'));
+    const appPath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules/unsafe-authority-fixture');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      mkdirSync(packageRoot, { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: './index.mjs',
+          name: 'unsafe-authority-fixture',
+          type: 'module',
+        }),
+        'utf8',
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        `
+export function createActual({ mutation, publicAccess, s }) {
+  return mutation('auth/colliding-handler', {
+    access: publicAccess('bare-package callback'),
+    csrf: false,
+    input: s.object({}),
+    handler(_input, request) {
+      return request.headers.get('Cookie');
+    },
+  });
+}
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'safe-decoy.mjs'),
+        `
+import { mutation, publicAccess, s } from '@kovojs/server';
+export const decoy = mutation('auth/colliding-handler', {
+  access: publicAccess('reachable safe decoy'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return request.headers.get('X-Machine-Signature');
+  },
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        `
+import './safe-decoy.mjs';
+import { createApp, mutation, publicAccess, s } from '@kovojs/server';
+import { createActual } from 'unsafe-authority-fixture';
+const actual = createActual({ mutation, publicAccess, s });
+export default createApp({ mutations: [actual] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/colliding-handler');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('does not report guarded build surfaces as UNGUARDED', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-access-facts-'));
     const appPath = join(root, 'app.mjs');

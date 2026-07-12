@@ -49,15 +49,54 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
 
   it('removes every request query value from onError context, Request views, and error text', () => {
     const token = 'CAPABILITY_BEARER_SHOULD_NEVER_LOG';
+    const referrerToken = 'REFERRER_BEARER_SHOULD_NEVER_LOG';
+    const headerToken = 'REFERER_HEADER_SHOULD_NEVER_LOG';
+    const originalUrlToken = 'ORIGINAL_URL_SHOULD_NEVER_LOG';
+    const accessKey = 'ACCESS_KEY_SHOULD_NEVER_LOG';
     const request = new Request(
       `https://app.test/_kovo/storage/a?kovo-cap=${token}&State=oauth&state=duplicate`,
+      {
+        headers: {
+          Authorization: 'Bearer diagnostic-secret',
+          Cookie: 'sid=victim',
+          Referer: `https://idp.test/callback?code=${headerToken}&state=oauth`,
+          'X-Access-Key': accessKey,
+          'X-Original-URL': `/internal?credential=${originalUrlToken}`,
+        },
+        referrer: `https://app.test/reset?token=${referrerToken}&next=account`,
+      },
     );
-    const error = new Error(`storage failed while reading ${request.url}`);
+    Object.defineProperty(request, 'rawCapture', {
+      configurable: true,
+      get(this: Request) {
+        return this.url;
+      },
+    });
+    const error = new Error(
+      `storage failed while reading ${request.url} from ${request.referrer} via ${request.headers.get('referer')} isolated=${token} original=${originalUrlToken} access=${accessKey}`,
+    );
     error.name = `StorageError ${request.url}`;
     Object.defineProperty(error, 'requestUrl', {
       configurable: true,
       enumerable: true,
       value: request.url,
+    });
+    let overriddenRequestGetterReads = 0;
+    Object.defineProperties(request, {
+      signal: {
+        configurable: true,
+        get() {
+          overriddenRequestGetterReads += 1;
+          throw new Error('untrusted signal getter must not run');
+        },
+      },
+      url: {
+        configurable: true,
+        get() {
+          overriddenRequestGetterReads += 1;
+          return 'https://attacker.invalid/?token=GETTER_SECRET';
+        },
+      },
     });
     const onError = vi.fn();
 
@@ -68,14 +107,51 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
     });
 
     expect(onError).toHaveBeenCalledTimes(1);
+    expect(overriddenRequestGetterReads).toBe(0);
     const [reportedError, context] = onError.mock.calls[0]!;
     expect(context.url).toBe('/_kovo/storage/a?kovo-cap&State&state');
     expect(context.request).toBeInstanceOf(Request);
     expect(context.request).not.toBe(request);
-    expect(context.request.url).toBe(
+    expect(context.request.url).toBe('https://app.test/_kovo/storage/a?kovo-cap&State&state');
+    expect(context.request.clone().url).toBe(
       'https://app.test/_kovo/storage/a?kovo-cap&State&state',
     );
-    expect(context.request.clone().url).toBe(
+    expect(context.request.referrer).toBe('https://app.test/reset?token&next');
+    expect(context.request.headers.get('referer')).toBeNull();
+    expect(context.request.headers.get('x-original-url')).toBeNull();
+    expect(context.request.headers.get('cookie')).toBeNull();
+    expect(context.request.headers.get('authorization')).toBeNull();
+    expect(context.request.body).toBeNull();
+    expect(context.request.clone().body).toBeNull();
+    expect('rawCapture' in context.request).toBe(false);
+    Object.defineProperty(context.request, 'capture', {
+      configurable: true,
+      get(this: Request) {
+        return this.url;
+      },
+    });
+    Object.defineProperty(context.request, 'captureMethod', {
+      configurable: true,
+      value(this: Request) {
+        return this.url;
+      },
+    });
+    expect(Reflect.get(context.request, 'capture')).toBe(
+      'https://app.test/_kovo/storage/a?kovo-cap&State&state',
+    );
+    expect((context.request as Request & { captureMethod(): string }).captureMethod()).toBe(
+      'https://app.test/_kovo/storage/a?kovo-cap&State&state',
+    );
+    const prototype = Object.create(Request.prototype, {
+      prototypeCapture: {
+        configurable: true,
+        get(this: Request) {
+          return this.url;
+        },
+      },
+    });
+    Object.setPrototypeOf(context.request, prototype);
+    expect(Reflect.get(context.request, 'prototypeCapture')).toBe(
       'https://app.test/_kovo/storage/a?kovo-cap&State&state',
     );
     expect(reportedError).toBeInstanceOf(Error);
@@ -85,7 +161,184 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
       '/_kovo/storage/a?kovo-cap&State&state',
     );
     expect(JSON.stringify(onError.mock.calls)).not.toContain(token);
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(referrerToken);
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(headerToken);
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(originalUrlToken);
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(accessKey);
     expect(String((reportedError as Error).stack)).not.toContain(token);
+  });
+
+  it('redacts decoded and raw standalone query values and neutralizes abort reasons', () => {
+    const decoded = 'capability/secret';
+    const raw = 'capability%2Fsecret';
+    const abort = new AbortController();
+    const abortSecret = { token: 'ABORT_REASON_SECRET' };
+    abort.abort(abortSecret);
+    const request = new Request(`https://app.test/download?kovo-cap=${raw}`, {
+      signal: abort.signal,
+    });
+    const onError = vi.fn();
+
+    reportServerError(onError, new Error(`decoded=${decoded} raw=${raw}`), {
+      operation: 'app-request',
+      request,
+    });
+
+    const [error, context] = onError.mock.calls[0]!;
+    expect((error as Error).message).toBe('decoded=[redacted] raw=[redacted]');
+    expect(context.request.signal.aborted).toBe(true);
+    expect(context.request.signal.reason).not.toBe(abortSecret);
+    expect(String(context.request.signal.reason)).not.toContain('ABORT_REASON_SECRET');
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(decoded);
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(raw);
+  });
+
+  it('mirrors later diagnostic cancellation without copying its reason', () => {
+    const abort = new AbortController();
+    const request = new Request('https://app.test/clean', { signal: abort.signal });
+    const onError = vi.fn();
+
+    reportServerError(onError, new Error('failed'), {
+      operation: 'app-request',
+      request,
+    });
+    const diagnosticRequest = onError.mock.calls[0]?.[1].request as Request;
+    const secret = { token: 'LATE_DIAGNOSTIC_ABORT_SECRET' };
+    expect(diagnosticRequest.signal.aborted).toBe(false);
+
+    abort.abort(secret);
+
+    expect(diagnosticRequest.signal.aborted).toBe(true);
+    expect(diagnosticRequest.signal.reason).not.toBe(secret);
+    expect(String(diagnosticRequest.signal.reason)).not.toContain(secret.token);
+  });
+
+  it('sanitizes a secret referrer even when the request URL itself is clean', () => {
+    const token = 'CLEAN_URL_REFERRER_SECRET';
+    const request = new Request('https://app.test/clean', {
+      referrer: `https://idp.test/reset?token=${token}`,
+    });
+    const onError = vi.fn();
+
+    reportServerError(onError, new Error(`failed from ${request.referrer}`), {
+      operation: 'app-request',
+      request,
+    });
+
+    const [error, context] = onError.mock.calls[0]!;
+    expect(context.request).not.toBe(request);
+    expect(context.request.referrer).toBe('https://idp.test/reset?token');
+    expect((error as Error).message).toBe('failed from /reset?token');
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(token);
+  });
+
+  it('descriptor-walks nested diagnostic carriers without invoking app accessors', () => {
+    const cookieSecret = 'COOKIE VALUE/QUOTED';
+    const sessionSecret = 'SESSION_ID_NESTED_SECRET';
+    const apiKeySecret = 'API_KEY_V2_NESTED_SECRET';
+    const basicUser = 'diagnostic-user';
+    const basicPassword = 'BASIC_PASSWORD_NESTED_SECRET';
+    const basic = btoa(`${basicUser}:${basicPassword}`);
+    const request = new Request('https://app.test/fail?credentialId=query-secret', {
+      headers: {
+        Authorization: `Basic ${basic}`,
+        Cookie: `sid="${encodeURIComponent(cookieSecret)}"`,
+        'X-Api-Key-V2': apiKeySecret,
+        'X-Session-Id': sessionSecret,
+      },
+    });
+    let getterReads = 0;
+    const nested = {
+      headers: request.headers,
+      map: new Map([['secret', sessionSecret]]),
+      request,
+      set: new Set([apiKeySecret]),
+      url: new URL(`https://app.test/private?sessionId=${sessionSecret}`),
+    } as Record<string, unknown>;
+    Object.defineProperty(nested, 'getter', {
+      enumerable: true,
+      get() {
+        getterReads += 1;
+        return cookieSecret;
+      },
+    });
+    const error = new Error(
+      `cookie=${cookieSecret} session=${sessionSecret} key=${apiKeySecret} user=${basicUser} password=${basicPassword} basic=${basic}`,
+    );
+    Object.defineProperty(error, `credential-${sessionSecret}`, {
+      configurable: true,
+      enumerable: true,
+      value: nested,
+    });
+    Object.defineProperty(error, Symbol(sessionSecret), {
+      configurable: true,
+      enumerable: true,
+      value: apiKeySecret,
+    });
+    const onError = vi.fn();
+
+    reportServerError(onError, error, { operation: 'app-request', request });
+
+    expect(getterReads).toBe(0);
+    const [reported] = onError.mock.calls[0]!;
+    const keys = Reflect.ownKeys(reported as object);
+    expect(keys.some((key) => typeof key === 'symbol')).toBe(false);
+    expect(keys).toContain('credential-[redacted]');
+    const safeNested = (reported as unknown as Record<string, unknown>)[
+      'credential-[redacted]'
+    ] as Record<string, unknown>;
+    expect(safeNested.getter).toBe('[redacted]');
+    expect(safeNested.headers).toBeInstanceOf(Headers);
+    expect([...(safeNested.headers as Headers).entries()]).toEqual([]);
+    expect(safeNested.map).toBe('[redacted]');
+    expect(safeNested.set).toBe('[redacted]');
+    expect(safeNested.url).toBe('[redacted]');
+    expect((safeNested.request as Request).headers.get('cookie')).toBeNull();
+    const serialized = JSON.stringify(onError.mock.calls);
+    for (const secretValue of [
+      cookieSecret,
+      encodeURIComponent(cookieSecret),
+      sessionSecret,
+      apiKeySecret,
+      basic,
+      basicUser,
+      basicPassword,
+    ]) {
+      expect(serialized).not.toContain(secretValue);
+      expect((reported as Error).message).not.toContain(secretValue);
+    }
+  });
+
+  it('uses import-time Web constructors when app code replaces global Request', () => {
+    const NativeRequest = Request;
+    const constructorInputs: unknown[] = [];
+    class CapturingRequest extends NativeRequest {
+      constructor(input: RequestInfo | URL, init?: RequestInit) {
+        constructorInputs.push(input, init);
+        super(input, init);
+      }
+    }
+    const request = new NativeRequest('https://app.test/fail?token=CONSTRUCTOR_SECRET', {
+      headers: { Cookie: 'sid=CONSTRUCTOR_COOKIE_SECRET' },
+    });
+    const onError = vi.fn();
+
+    globalThis.Request = CapturingRequest as typeof Request;
+    try {
+      reportServerError(onError, new Error(`failed at ${request.url}`), {
+        operation: 'app-request',
+        request,
+      });
+    } finally {
+      globalThis.Request = NativeRequest;
+    }
+
+    expect(constructorInputs).toEqual([]);
+    const [reportedError, context] = onError.mock.calls[0]!;
+    expect(context.request).toBeInstanceOf(NativeRequest);
+    expect(context.request.url).toBe('https://app.test/fail?token');
+    expect(context.request.headers.get('cookie')).toBeNull();
+    expect((reportedError as Error).message).not.toContain('CONSTRUCTOR_SECRET');
   });
 
   it('applies the same URL sanitization before default stderr', () => {
@@ -100,6 +353,25 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
       expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(token);
       expect(errorSpy.mock.calls[0]?.[0]).toContain('url=/reset?Token&token');
       expect(String(errorSpy.mock.calls[0]?.[1])).toContain('/reset?Token&token');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('neutralizes control characters at the default stderr sink', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      reportServerError(undefined, new Error('failed\nFORGED\u001b[31m'), {
+        mutationKey: 'save\rFORGED-METADATA',
+        operation: 'mutation-handler',
+      });
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const output = errorSpy.mock.calls[0]!.map(String).join(' ');
+      expect(output).not.toMatch(/[\n\r\u001b]/u);
+      expect(output).toContain('\\u000aFORGED');
+      expect(output).toContain('\\u000dFORGED-METADATA');
+      expect(output).toContain('\\u001b[31m');
     } finally {
       errorSpy.mockRestore();
     }

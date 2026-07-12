@@ -17,6 +17,13 @@ import {
   type WebResponseBody,
 } from './response.js';
 import { forwardSetCookie } from './cookies.js';
+import {
+  authorityNeutralAbortSignal,
+  cloneRequestForAuthorityNeutralization,
+  createNativeHeaders,
+  createNativeRequest,
+  requestForAuthorityNeutralMetadata,
+} from './request-carrier.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
 import type {
   EndpointDeclaration,
@@ -179,20 +186,27 @@ export async function resolveKovoLifecycleRequest<
     }
     case 'endpoint': {
       assertWebRequest(request, options.surface);
-      const lifecycleOptions: RequestLifecycleOptions<Request, never, never> = {};
-      if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
-      if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
-      return resolveLifecycleRequest(
-        endpointRequestWithoutSession(request),
-        lifecycleOptions,
-      ) as unknown as Promise<LifecycleRequest<RawRequest, SessionValue, DbValue>>;
+      const endpointRequest = endpointRequestWithoutSession(request);
+      if (options.clientIp !== undefined) {
+        const clientIp = options.clientIp(endpointRequest);
+        if (clientIp !== undefined && clientIp !== '') {
+          Object.defineProperty(endpointRequest, 'clientIp', {
+            configurable: true,
+            enumerable: true,
+            value: clientIp,
+            writable: false,
+          });
+        }
+      }
+      return endpointRequest as unknown as LifecycleRequest<RawRequest, SessionValue, DbValue>;
     }
     case 'system': {
       assertWebRequest(request, options.surface);
-      return resolveLifecycleRequest(
-        endpointRequestWithoutSession(request),
-        {},
-      ) as unknown as Promise<LifecycleRequest<RawRequest, SessionValue, DbValue>>;
+      return endpointRequestWithoutSession(request) as unknown as LifecycleRequest<
+        RawRequest,
+        SessionValue,
+        DbValue
+      >;
     }
     default:
       return assertNeverLifecyclePolicy(options);
@@ -284,26 +298,104 @@ export const emitToWire = wireEmitter(
   },
 );
 
-/** A request view that carries no app session and no ambient browser Cookie header. */
-export function endpointRequestWithoutSession(request: Request): EndpointRequest {
-  const sanitizedHeaders = endpointHeadersWithoutAmbientAuthority(request.headers);
+const readNativeRequestHeaders = requestIntrinsicGetter<Headers>('headers');
+const readNativeRequestMethod = requestIntrinsicGetter<string>('method');
+const readNativeRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
+const readNativeRequestUrl = requestIntrinsicGetter<string>('url');
+const nativeHeadersEntries = Object.getOwnPropertyDescriptor(Headers.prototype, 'entries')
+  ?.value as unknown;
+const nativeHeadersAppend = Object.getOwnPropertyDescriptor(Headers.prototype, 'append')
+  ?.value as unknown;
+const authorityNeutralRequests = new WeakSet<Request>();
+const browserCredentialNeutralRequests = new WeakSet<Request>();
+const frameworkPeerAddressProperty = '__kovoPeerAddress';
 
-  return new Proxy(request, {
-    get(target, property) {
-      if (property === 'session') return undefined;
-      if (property === 'headers') return sanitizedHeaders;
-      if (property === 'clone') {
-        return () => endpointRequestWithoutSession(target.clone());
-      }
+/** A framework-owned request copy carrying no app session or disallowed browser authority. */
+export function endpointRequestWithoutSession(
+  request: Request,
+  options: { stripAuthorization?: boolean } = {},
+): EndpointRequest {
+  if (
+    authorityNeutralRequests.has(request) &&
+    (!options.stripAuthorization || browserCredentialNeutralRequests.has(request))
+  ) {
+    return request as EndpointRequest;
+  }
 
-      const value = Reflect.get(target, property, target) as unknown;
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-    has(target, property) {
-      if (property === 'session') return false;
-      return property in target;
-    },
-  }) as EndpointRequest;
+  // Clone through the captured Web intrinsic so an app-authored own `clone`,
+  // accessor, prototype, symbol, or method can never retain a reference to the
+  // raw carrier. The first clone tees the body, keeping the incoming Request
+  // usable by downstream framework gates. Reconstructing with a fresh Headers
+  // bag makes Cookie removal effective even on runtimes whose Request header
+  // guard forbids mutating `Cookie` in place.
+  const peerAddress = frameworkPeerAddress(request);
+  const source = cloneRequestForAuthorityNeutralization(request);
+  const sourceHeaders = readNativeRequestHeaders(source);
+  const sanitizedHeaders = endpointHeadersWithoutAmbientAuthority(
+    sourceHeaders,
+    options.stripAuthorization === true,
+  );
+  const neutral = createNativeRequest(source, {
+    headers: sanitizedHeaders,
+    signal: authorityNeutralAbortSignal(readNativeRequestSignal(source)),
+  });
+  if (peerAddress !== undefined) {
+    Object.defineProperty(neutral, frameworkPeerAddressProperty, {
+      configurable: true,
+      value: peerAddress,
+    });
+  }
+  authorityNeutralRequests.add(neutral);
+  if (options.stripAuthorization) browserCredentialNeutralRequests.add(neutral);
+  return neutral as EndpointRequest;
+}
+
+/** Bodyless request metadata for pre-dispatch policy callbacks on neutral surfaces. */
+export function requestMetadataWithoutAmbientAuthority(request: Request): Request {
+  const source = requestForAuthorityNeutralMetadata(request);
+  const headers = readNativeRequestHeaders(source);
+  const method = readNativeRequestMethod(source);
+  const signal = authorityNeutralAbortSignal(readNativeRequestSignal(source));
+  const url = readNativeRequestUrl(source);
+  const neutral = createNativeRequest(url, {
+    headers: endpointHeadersWithoutAmbientAuthority(headers),
+    method,
+    signal,
+  });
+  const peerAddress = frameworkPeerAddress(request);
+  if (peerAddress !== undefined) {
+    Object.defineProperty(neutral, frameworkPeerAddressProperty, {
+      configurable: true,
+      value: peerAddress,
+    });
+  }
+  authorityNeutralRequests.add(neutral);
+  browserCredentialNeutralRequests.add(neutral);
+  return neutral;
+}
+
+function requestIntrinsicGetter<Value>(property: string): (request: Request) => Value {
+  const descriptor = Object.getOwnPropertyDescriptor(Request.prototype, property);
+  const getter = descriptor ? (Reflect.get(descriptor, 'get') as unknown) : undefined;
+  if (typeof getter !== 'function') {
+    throw new TypeError(`The Web Request implementation lacks a ${property} getter.`);
+  }
+  return (request) => Reflect.apply(getter, request, []) as Value;
+}
+
+function frameworkPeerAddress(request: Request): string | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(request, frameworkPeerAddressProperty);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    descriptor.enumerable === true ||
+    descriptor.writable === true ||
+    typeof descriptor.value !== 'string'
+  ) {
+    return undefined;
+  }
+  const value = descriptor.value.trim();
+  return value === '' ? undefined : value;
 }
 
 /** Enforce an endpoint's declared raw response posture when runtime verification is enabled. */
@@ -475,11 +567,47 @@ function isRedirectStatus(status: number): boolean {
 }
 
 const AMBIENT_BROWSER_AUTHORITY_HEADERS: readonly string[] = ['cookie'];
-
-function endpointHeadersWithoutAmbientAuthority(headers: Headers): Headers {
-  const sanitized = new Headers(headers);
+function endpointHeadersWithoutAmbientAuthority(
+  headers: Headers,
+  stripAuthorization = true,
+): Headers {
+  if (stripAuthorization) {
+    const sanitized = createNativeHeaders();
+    if (typeof nativeHeadersEntries !== 'function' || typeof nativeHeadersAppend !== 'function') {
+      throw new TypeError('The Web Headers implementation lacks required intrinsics.');
+    }
+    const entries = Reflect.apply(nativeHeadersEntries, headers, []) as IterableIterator<
+      [string, string]
+    >;
+    for (const [name, value] of entries) {
+      if (isProvablyNonAmbientMachineHeader(name)) {
+        Reflect.apply(nativeHeadersAppend, sanitized, [name, value]);
+      }
+    }
+    return sanitized;
+  }
+  const sanitized = createNativeHeaders(headers);
   for (const name of AMBIENT_BROWSER_AUTHORITY_HEADERS) sanitized.delete(name);
   return sanitized;
+}
+
+function isProvablyNonAmbientMachineHeader(value: string): boolean {
+  const header = value.toLowerCase();
+  return (
+    header === 'accept' ||
+    header === 'content-length' ||
+    header === 'content-type' ||
+    header === 'forwarded' ||
+    header === 'user-agent' ||
+    header === 'x-forwarded-for' ||
+    header === 'x-real-ip' ||
+    header.endsWith('-ip') ||
+    header.includes('signature') ||
+    header.includes('hmac') ||
+    header.startsWith('kovo-') ||
+    header.startsWith('webhook-') ||
+    header.startsWith('x-machine-')
+  );
 }
 
 const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>> = {

@@ -637,11 +637,11 @@ describe('diagnostic registry', () => {
         },
         "KV418": {
           "code": "KV418",
-          "help": "Would lower to: a csrf-exempt endpoint that authenticates by a signature/verifier (e.g. a webhook), not by the session cookie.
-      Blocked reason: this endpoint opts out of CSRF protection (csrf: false) yet depends on the session — it reads req.session or runs a session/cookie-derived guard (authed, role(), owns()). CSRF protection is exactly what keeps cookie-authenticated requests safe, so a session-dependent endpoint that disables it is forgeable.
-      Fixes: keep CSRF protection (remove csrf: false) for any session-authenticated endpoint; or, if the endpoint is a genuine third-party callback, authenticate it by a signature verifier instead of the session and drop the session-derived guard.
-      SPEC §9.1 makes a csrf: false endpoint that depends on the session a compile error.",
-          "message": "csrf-exempt endpoint depends on the session (forgeable).",
+          "help": "Would lower to: a csrf-exempt surface that authenticates by a signature/verifier (e.g. a webhook), not by an ambient browser cookie.
+      Blocked reason: this surface opts out of CSRF protection (csrf: false) yet depends on ambient browser authority or mutates browser credentials — it reads req.session, reads Cookie/Authorization/Proxy-Authorization, escapes an unproven request carrier, runs a session/cookie-derived guard (authed, role(), owns()), or emits Set-Cookie/Clear-Site-Data. Disabling CSRF while retaining inbound or outbound browser authority is forgeable.
+      Fixes: keep CSRF protection (remove csrf: false) for browser credential-dependent writes; or authenticate a genuine machine/third-party callback from an explicit non-ambient custom signature header, remove every browser-authority dependency, and do not mutate browser cookies/storage.
+      SPEC §6.6 and §9.1 make a csrf: false surface that depends on ambient browser authority a compile error.",
+          "message": "csrf-exempt surface uses browser authority (forgeable).",
           "severity": "error",
         },
         "KV419": {
