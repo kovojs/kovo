@@ -924,7 +924,7 @@ describe('createPostgresAppRuntimeDb', () => {
     });
   });
 
-  it('binds the runtime grant to the exact database URL username under late URL replacement', async () => {
+  it('binds the runtime grant to exact URL and SQL identifier bytes under late replacement', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-url-role-'));
     roots.push(dataDir);
     const runtimeDatabaseUrl = 'postgres://victim_runtime_login@127.0.0.1/kovo';
@@ -940,7 +940,15 @@ describe('createPostgresAppRuntimeDb', () => {
         );
       }
     }
+    const nativeReplaceAll = String.prototype.replaceAll;
+    const nativeStringValueOf = String.prototype.valueOf;
     globalThis.URL = PoisonedURL;
+    String.prototype.replaceAll = function (search, replacement) {
+      const value = Reflect.apply(nativeStringValueOf, this, []);
+      return value === 'victim_runtime_login'
+        ? 'attacker_runtime_login'
+        : Reflect.apply(nativeReplaceAll, this, [search, replacement]);
+    };
 
     try {
       await migratePostgresAppDb({
@@ -961,6 +969,7 @@ describe('createPostgresAppRuntimeDb', () => {
       });
     } finally {
       globalThis.URL = NativeURL;
+      String.prototype.replaceAll = nativeReplaceAll;
     }
 
     const privileges = await queryPglite<{

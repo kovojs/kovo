@@ -34,6 +34,7 @@ import {
   type Reader,
 } from './managed-db.js';
 import { requestPassedRoleGuard } from './guards.js';
+import { securityStringReplaceAll } from './response-security-intrinsics.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
 import {
   witnessDefineProperty,
@@ -4494,9 +4495,9 @@ function quoteQualified(schema: string, name: string): string {
 }
 
 function quoteIdent(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
+  return `"${securityStringReplaceAll(value, '"', '""')}"`;
 }
 
 function quoteLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
+  return `'${securityStringReplaceAll(value, "'", "''")}'`;
 }
