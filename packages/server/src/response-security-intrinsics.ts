@@ -41,6 +41,7 @@ const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArrayPush = NativeArray.prototype.push;
 const nativeArraySort = NativeArray.prototype.sort;
 const nativeBufferAllocUnsafe = NativeBuffer.allocUnsafe;
+const nativeBufferConcat = NativeBuffer.concat;
 const nativeBufferFrom = NativeBuffer.from;
 const nativeBufferIsBuffer = NativeBuffer.isBuffer;
 const nativeBufferToString = NativeBuffer.prototype.toString;
@@ -58,6 +59,7 @@ const nativeHeadersDelete = NativeHeaders.prototype.delete;
 const nativeHeadersSet = NativeHeaders.prototype.set;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
+const nativeMapDelete = NativeMap.prototype.delete;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeMathFloor = NativeMath.floor;
@@ -313,6 +315,9 @@ function capturedControlsAreSound(): boolean {
       },
     ]);
     if (!mapSeen) return false;
+    if (apply(nativeMapDelete, map, ['safe']) !== true || apply(nativeMapHas, map, ['safe'])) {
+      return false;
+    }
     const set = new NativeSet<string>();
     apply(nativeSetAdd, set, ['safe']);
     if (apply(nativeSetHas, set, ['safe']) !== true) return false;
@@ -354,6 +359,10 @@ function capturedControlsAreSound(): boolean {
 
     const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, ['safe', 'utf8']);
     if (apply(nativeBufferToString, bytes, ['base64url']) !== 'c2FmZQ') return false;
+    const joinedBytes = apply<Buffer>(nativeBufferConcat, NativeBuffer, [
+      [bytes, apply<Buffer>(nativeBufferFrom, NativeBuffer, ['-joined', 'utf8'])],
+    ]);
+    if (apply(nativeBufferToString, joinedBytes, ['utf8']) !== 'safe-joined') return false;
     const allocated = apply<Buffer>(nativeBufferAllocUnsafe, NativeBuffer, [4]);
     if (allocated.byteLength !== 4) return false;
     const encoded = apply<Uint8Array>(nativeTextEncoderEncode, textEncoder, ['safe']);
@@ -715,6 +724,11 @@ export function createSecurityNullRecord<Value = unknown>(): Record<PropertyKey,
   return apply(nativeObjectCreate, NativeObject, [null]);
 }
 
+export function createSecurityObject<Value extends object>(prototype: object | null): Value {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeObjectCreate, NativeObject, [prototype]);
+}
+
 export function securityGetPrototypeOf(value: object): object | null {
   assertResponseSecurityIntrinsics();
   return apply(nativeObjectGetPrototypeOf, NativeObject, [value]);
@@ -738,6 +752,11 @@ export function securityMapGet<Key, Value>(map: Map<Key, Value>, key: Key): Valu
 export function securityMapHas<Key>(map: Map<Key, unknown>, key: Key): boolean {
   assertResponseSecurityIntrinsics();
   return apply(nativeMapHas, map, [key]);
+}
+
+export function securityMapDelete<Key>(map: Map<Key, unknown>, key: Key): boolean {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeMapDelete, map, [key]);
 }
 
 export function securityMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
@@ -885,6 +904,11 @@ export function securityBufferFrom(
     NativeBuffer,
     encoding === undefined ? [value] : [value, encoding],
   );
+}
+
+export function securityBufferConcat(values: readonly Uint8Array[]): Buffer {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeBufferConcat, NativeBuffer, [values]);
 }
 
 export function securityBufferAllocUnsafe(size: number): Buffer {
