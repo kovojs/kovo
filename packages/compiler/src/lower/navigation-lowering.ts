@@ -9,16 +9,28 @@ import {
   type JsxIrAttribute,
   type JsxIrElement,
 } from '../jsx-ir.js';
-import type { ComponentModuleModel } from '../scan/parse.js';
+import type { ComponentModuleModel, JsxAttributeModel } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
 import { staticHrefAttributeValue } from './navigation.js';
 import type { StructuralJsxLoweringOptions } from './structural-jsx.js';
+import {
+  compilerArrayLength,
+  compilerDefineOwnDataProperty,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+} from '../compiler-security-intrinsics.js';
 
 export function lowerNavigationLinks(
   elements: readonly JsxIrElement[],
   options: StructuralJsxLoweringOptions,
 ): void {
-  for (const link of elements) {
+  const length = compilerArrayLength(elements, 'Link navigation elements');
+  for (let index = 0; index < length; index += 1) {
+    const link = compilerOwnDataValue(
+      elements,
+      index,
+      'Link navigation elements',
+    ) as JsxIrElement;
     if (link.tag !== 'Link') continue;
     const toAttribute = attributeByName(link, 'to');
     if (!toAttribute?.source || !('name' in toAttribute.source)) continue;
@@ -45,7 +57,7 @@ export function lowerNavigationLinks(
         options,
       ),
     );
-    sortHrefFirstForStaticLink(link, Boolean(target));
+    sortHrefFirstForStaticLink(link, target !== null && target !== '');
     markJsxIrChanged(link);
   }
 }
@@ -55,7 +67,13 @@ export function lowerHrefAttributes(
   elements: readonly JsxIrElement[],
   options: StructuralJsxLoweringOptions,
 ): void {
-  for (const element of elements) {
+  const length = compilerArrayLength(elements, 'Href navigation elements');
+  for (let index = 0; index < length; index += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      index,
+      'Href navigation elements',
+    ) as JsxIrElement;
     const attribute = attributeByName(element, 'href');
     if (!attribute?.source || !('name' in attribute.source)) continue;
     const target = staticHrefAttributeValue(model, attribute.source);
@@ -74,7 +92,16 @@ export function lowerHrefAttributes(
 }
 
 function attributeByName(element: JsxIrElement, name: string): JsxIrAttribute | undefined {
-  return element.attributes.find((attribute) => attribute.name === name);
+  const length = compilerArrayLength(element.attributes, 'Navigation IR attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Navigation IR attributes',
+    ) as JsxIrAttribute;
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
 }
 
 function replaceJsxIrAttribute(
@@ -82,12 +109,27 @@ function replaceJsxIrAttribute(
   oldName: string,
   attribute: JsxIrAttribute,
 ): void {
-  const index = element.attributes.findIndex((item) => item.name === oldName);
-  if (index === -1) {
+  const next: JsxIrAttribute[] = [];
+  let replaced = false;
+  const length = compilerArrayLength(element.attributes, 'Navigation IR attributes');
+  for (let index = 0; index < length; index += 1) {
+    const item = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Navigation IR attributes',
+    ) as JsxIrAttribute;
+    appendNavigationIrFact(
+      next,
+      !replaced && item.name === oldName ? attribute : item,
+      'Navigation IR attributes',
+    );
+    if (!replaced && item.name === oldName) replaced = true;
+  }
+  if (!replaced) {
     setJsxIrAttribute(element, attribute);
     return;
   }
-  element.attributes.splice(index, 1, attribute);
+  element.attributes = next;
   markJsxIrChanged(element);
 }
 
@@ -105,9 +147,14 @@ function staticNavigationObjectValue(
 ): Record<string, string | number | boolean | null> | null | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'object' || value === null) return null;
-  return Object.values(value).every((entry) => typeof entry !== 'object' || entry === null)
-    ? (value as Record<string, string | number | boolean | null>)
-    : null;
+  const keys = compilerObjectKeys(value);
+  const length = compilerArrayLength(keys, 'Static Link object keys');
+  for (let index = 0; index < length; index += 1) {
+    const key = compilerOwnDataValue(keys, index, 'Static Link object keys') as string;
+    const entry = compilerOwnDataValue(value, key, 'Static Link object');
+    if (typeof entry === 'object' && entry !== null) return null;
+  }
+  return value as Record<string, string | number | boolean | null>;
 }
 
 function buildStaticHref(
@@ -122,10 +169,27 @@ function sortHrefFirstForStaticLink(element: JsxIrElement, staticHref: boolean):
   if (!staticHref) return;
   const href = attributeByName(element, 'href');
   if (!href) return;
-  element.attributes = [href, ...element.attributes.filter((attribute) => attribute !== href)];
+  const sorted: JsxIrAttribute[] = [];
+  appendNavigationIrFact(sorted, href, 'Navigation IR attributes');
+  const length = compilerArrayLength(element.attributes, 'Navigation IR attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Navigation IR attributes',
+    ) as JsxIrAttribute;
+    if (attribute !== href) {
+      appendNavigationIrFact(sorted, attribute, 'Navigation IR attributes');
+    }
+  }
+  element.attributes = sorted;
   markJsxIrChanged(element);
 }
 
 function staticStringValue(value: StaticLiteralValue | undefined): string | null {
   return typeof value === 'string' ? value : null;
+}
+
+function appendNavigationIrFact<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
 }

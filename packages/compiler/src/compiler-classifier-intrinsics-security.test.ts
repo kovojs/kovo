@@ -1346,4 +1346,61 @@ export const PrimitiveButton = component({
     expect(lowered).toContain('<button id="safe" type="button"');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject JSX through static-navigation replacement projection', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedNavigationReplacementMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as {
+          call?: { end?: unknown; name?: unknown; start?: unknown };
+          lowered?: unknown;
+        } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          first?.call?.name === 'href' &&
+          typeof first.call.start === 'number' &&
+          typeof first.call.end === 'number' &&
+          typeof first.lowered === 'string' &&
+          nativeApply(nativeIncludes, callbackSource, ['replacement'])
+        ) {
+          poisonHits += 1;
+          return [
+            {
+              end: first.call.end,
+              replacement:
+                '(globalThis.KOVO_NAVIGATION_SOURCE_INJECTION = true, "/products/p1")',
+              start: first.call.start,
+            },
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'product-link.tsx',
+        source: `
+const reviewedTarget = href('/products/:id', { params: { id: 'p1' } });
+export const ProductLink = component({
+  render: () => (
+    <a href={reviewedTarget}>Product</a>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(lowered).not.toContain('KOVO_NAVIGATION_SOURCE_INJECTION');
+    expect(lowered).toContain('const reviewedTarget = "/products/p1"');
+    expect(poisonHits).toBe(0);
+  });
 });
