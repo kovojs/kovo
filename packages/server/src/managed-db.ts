@@ -16,7 +16,10 @@
 // proof).
 
 import {
+  createFrameworkManagedSqlDispatchProxy,
+  frameworkManagedSqlDispatchPropertyValue,
   frameworkManagedDbRawTarget,
+  isFrameworkManagedSqlDispatchProxy,
   managedSqlExecutionPolicy,
   wrapManagedDbForSqlSafety,
   type ManagedSqlWritePolicy,
@@ -33,6 +36,8 @@ import { requestInputProvenanceForValue } from './request-input-provenance.js';
 import {
   createWitnessMap,
   createWitnessSet,
+  createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
@@ -48,6 +53,10 @@ import {
   witnessReflectGet,
   witnessSetForEach,
   witnessSetAdd,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 declare const readerDbBrand: unique symbol;
@@ -360,9 +369,9 @@ export const createDeclaredWriteDb = securityClassifier(
   ): Db {
     const [safePolicy, safeOptions, allowed] = snapshotDeclaredWriteBoundary(policy, options);
     const assertSql = assertSqliteDeclaredWriteStatementAllowed;
-    return new Proxy(db as Record<PropertyKey, unknown>, {
-      get(target, prop, receiver) {
-        const value = witnessReflectGet(target, prop, receiver);
+    return createFrameworkManagedSqlDispatchProxy(db as Record<PropertyKey, unknown>, {
+      get(target, prop) {
+        const value = authorizationCensusDataPropertyValue(target, prop);
         if (isDeclaredWriteDirectSqlMethod(prop, safeOptions) && typeof value === 'function') {
           return (statement: unknown, ...args: unknown[]) => {
             assertSql(statement, args, safePolicy, safeOptions, allowed);
@@ -411,6 +420,38 @@ export const createAuthorizationCensusDb = securityClassifier(
       snapshotAuthorizationCensusOptions(options),
       undefined,
     ) as Db;
+  },
+);
+
+/**
+ * Construct the Postgres runtime's census handle with its engine hooks sealed before exposure.
+ * This package-private entrypoint is intentionally absent from every package export barrel: the
+ * public census constructor never accepts or registers engine authority (SPEC §6.6/§10.3 DEC-K).
+ *
+ * @internal
+ */
+export const createFrameworkAuthorizationCensusDb = securityClassifier(
+  'server.managed-db.framework-authorization-census-db',
+  function <Db extends object>(
+    db: Db,
+    options: AuthorizationCensusDbOptions,
+    createReadonly: () => unknown,
+    createDeclaredWrite: (policy: ManagedSqlWritePolicy) => unknown,
+  ): Db {
+    const proxy = authorizationCensusProxy(
+      db,
+      snapshotAuthorizationCensusOptions(options),
+      undefined,
+    ) as Db;
+    witnessWeakMapSet(
+      authorizationCensusFrameworkHooks,
+      proxy,
+      witnessFreeze({
+        declaredWrite: createDeclaredWrite,
+        readonly: createReadonly,
+      }),
+    );
+    return proxy;
   },
 );
 
@@ -1195,6 +1236,14 @@ const publicReadAuditFacts = createBoundedRuntimeAuditCollector<PublicReadAuditF
 const crossOwnerReadAuditFacts = createBoundedRuntimeAuditCollector<CrossOwnerReadAuditFact>();
 const postgresRlsSilentDenyDiagnostics =
   createBoundedRuntimeAuditCollector<PostgresRlsSilentDenyDiagnostic>();
+const authorizationCensusFrameworkHooks = createWitnessWeakMap<
+  object,
+  Readonly<{
+    declaredWrite?: Function;
+    readonly?: Function;
+  }>
+>();
+const frameworkReadonlyCapabilityHandles = createWitnessWeakSet<object>();
 
 /**
  * Declare an audited public-read authorization scope (SPEC §10.3 DEC-F). This does not assert SQL
@@ -1239,15 +1288,15 @@ function authorizationCensusProxy(
   builderMode: 'select' | undefined,
 ): unknown {
   if (!isRecord(value)) return value;
-  return new Proxy(value, {
-    defineProperty(target, prop, descriptor) {
-      return defineAuthorizationCensusFrameworkHook(target, prop, descriptor);
+  return createFrameworkManagedSqlDispatchProxy(value, {
+    defineProperty() {
+      return false;
     },
     deleteProperty() {
       return false;
     },
-    get(target, prop, receiver) {
-      const item = witnessReflectGet(target, prop, receiver);
+    get(target, prop) {
+      const item = authorizationCensusDataPropertyValue(target, prop);
       if (prop === 'query' && isRecord(item)) {
         return authorizationCensusRelationalNamespace(item, options);
       }
@@ -1304,15 +1353,15 @@ function authorizationCensusRelationalNamespace(
   namespace: Record<PropertyKey, unknown>,
   options: AuthorizationCensusDbOptions,
 ): object {
-  return new Proxy(namespace, {
+  return createFrameworkManagedSqlDispatchProxy(namespace, {
     defineProperty() {
       return false;
     },
     deleteProperty() {
       return false;
     },
-    get(target, prop, receiver) {
-      const builder = witnessReflectGet(target, prop, receiver);
+    get(target, prop) {
+      const builder = authorizationCensusDataPropertyValue(target, prop);
       if (!isRecord(builder)) return builder;
       const table = optionalOwnDataProperty(builder, 'table');
       const names =
@@ -1354,15 +1403,15 @@ function authorizationCensusRelationalBuilder(
   builder: Record<PropertyKey, unknown>,
   options: AuthorizationCensusDbOptions,
 ): object {
-  return new Proxy(builder, {
+  return createFrameworkManagedSqlDispatchProxy(builder, {
     defineProperty() {
       return false;
     },
     deleteProperty() {
       return false;
     },
-    get(target, prop, receiver) {
-      const item = witnessReflectGet(target, prop, receiver);
+    get(target, prop) {
+      const item = authorizationCensusDataPropertyValue(target, prop);
       if ((prop !== 'findMany' && prop !== 'findFirst') || typeof item !== 'function') return item;
       return (...args: unknown[]) => {
         if (args.length > 1) {
@@ -1399,33 +1448,6 @@ function authorizationCensusRelationalBuilder(
       return false;
     },
   });
-}
-
-function defineAuthorizationCensusFrameworkHook(
-  target: object,
-  property: PropertyKey,
-  descriptor: PropertyDescriptor,
-): boolean {
-  if (
-    property !== kovoReadonlyDbHandle &&
-    property !== kovoDeclaredWriteDbHandle
-  ) {
-    return false;
-  }
-  if (
-    witnessGetOwnPropertyDescriptor(target, property) !== undefined ||
-    !('value' in descriptor) ||
-    typeof descriptor.value !== 'function'
-  ) {
-    return false;
-  }
-  witnessDefineProperty(target, property, {
-    configurable: descriptor.configurable ?? false,
-    enumerable: descriptor.enumerable ?? false,
-    value: descriptor.value,
-    writable: descriptor.writable ?? false,
-  });
-  return true;
 }
 
 function authorizationCensusProxyDescriptor(
@@ -1476,6 +1498,29 @@ function authorizationDescriptorCarriesCapability(descriptor: PropertyDescriptor
     (descriptor.value !== null &&
       (typeof descriptor.value === 'object' || typeof descriptor.value === 'function'))
   );
+}
+
+function authorizationCensusDataPropertyValue(target: object, property: PropertyKey): unknown {
+  if (isFrameworkManagedSqlDispatchProxy(target)) {
+    return frameworkManagedSqlDispatchPropertyValue(target, property);
+  }
+  let owner: object | null = target;
+  for (let depth = 0; owner !== null && depth < 64; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor)) {
+        throw new Error(
+          `KV414: authorization census property ${String(property)} is accessor-backed and cannot be evaluated across the database authority boundary (SPEC §6.6/§10.3 DEC-K).`,
+        );
+      }
+      return descriptor.value;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  if (owner !== null) {
+    throw new Error('KV414: authorization census prototype chain exceeds the bounded authority limit.');
+  }
+  return undefined;
 }
 
 function assertAuthorizationRelationalConfigAllowed(
@@ -1701,9 +1746,9 @@ function declaredWriteBuilder(
   options: DeclaredWriteDbOptions,
 ): unknown {
   if (!isRecord(builder)) return builder;
-  return new Proxy(builder, {
-    get(target, prop, receiver) {
-      const value = witnessReflectGet(target, prop, receiver);
+  return createFrameworkManagedSqlDispatchProxy(builder, {
+    get(target, prop) {
+      const value = authorizationCensusDataPropertyValue(target, prop);
       if (typeof value !== 'function') return value;
       if (prop === 'values') {
         return (payload: unknown, ...args: unknown[]) => {
@@ -3178,7 +3223,7 @@ function readonlyCapabilityDb<Db extends object>(
   options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions },
   preserveInnerCapabilities = false,
 ): Reader<Db> {
-  return new Proxy(db, {
+  const proxy = new Proxy(db, {
     get(target, prop, receiver) {
       const reject = readonlyCapabilityError;
       if (prop === 'then') return undefined;
@@ -3197,6 +3242,8 @@ function readonlyCapabilityDb<Db extends object>(
         : value;
     },
   }) as Reader<Db>;
+  witnessWeakSetAdd(frameworkReadonlyCapabilityHandles, proxy);
+  return proxy;
 }
 
 function readonlyCapabilityError(prop: string): () => never {
@@ -3627,6 +3674,7 @@ function rawReadExecutionMethod(
   target: object,
   policy: Pick<RawReadPolicyOptions, 'dialectLabel' | 'executeMethod'>,
 ): Function {
+  const executionTarget = frameworkManagedDbRawTarget(target) ?? target;
   const methods =
     policy.executeMethod === undefined
       ? (['all', 'query', 'execute', 'values'] as const)
@@ -3635,7 +3683,8 @@ function rawReadExecutionMethod(
     const descriptor = witnessGetOwnPropertyDescriptor(methods, index);
     if (descriptor === undefined || !('value' in descriptor)) continue;
     try {
-      return inheritedFunctionDataProperty(target, descriptor.value);
+      const method = inheritedFunctionDataProperty(executionTarget, descriptor.value);
+      return (...args: unknown[]) => witnessReflectApply(method, executionTarget, args);
     } catch {
       // Keep looking for the next fixed read method.
     }
@@ -3676,11 +3725,23 @@ export function managedDb<Db>(
 ): Reader<Db> | Writer<Db> {
   const runtimeOptions = snapshotManagedDbOptions(options);
   const readonlyTarget =
-    mode === 'read' ? resolveReadonlyDbTarget(raw) : { fromHook: false, target: raw };
+    mode === 'read'
+      ? resolveReadonlyDbTarget(raw)
+      : { fromHook: false, sealedHook: false, target: raw };
   const target =
     mode === 'read'
       ? readonlyTarget.target
       : declaredWriteDbTarget(raw, runtimeOptions.sqlWritePolicy);
+  if (mode === 'read' && readonlyTarget.sealedHook) {
+    return target as unknown as Reader<Db>;
+  }
+  if (
+    mode === 'read' &&
+    isRecord(target) &&
+    witnessWeakSetHas(frameworkReadonlyCapabilityHandles, target)
+  ) {
+    return target as unknown as Reader<Db>;
+  }
   const safe = wrapManagedDbForSqlSafety(
     target,
     undefined,
@@ -3736,22 +3797,39 @@ function managedReadCapabilityOptions(options: ManagedDbOptions): {
   return witnessFreeze(readOptions);
 }
 
-function resolveReadonlyDbTarget<Db>(raw: Db): { fromHook: boolean; target: Db } {
-  if (!isRecord(raw)) return { fromHook: false, target: raw };
-  const createReadonly = optionalStrictInheritedFunctionDataProperty(raw, kovoReadonlyDbHandle);
-  if (createReadonly === undefined) return { fromHook: false, target: raw };
+function resolveReadonlyDbTarget<Db>(raw: Db): {
+  fromHook: boolean;
+  sealedHook: boolean;
+  target: Db;
+} {
+  if (!isRecord(raw)) return { fromHook: false, sealedHook: false, target: raw };
+  const sealedCreateReadonly = witnessWeakMapGet(
+    authorizationCensusFrameworkHooks,
+    raw,
+  )?.readonly;
+  const createReadonly =
+    sealedCreateReadonly ?? optionalStrictInheritedFunctionDataProperty(raw, kovoReadonlyDbHandle);
+  if (createReadonly === undefined) {
+    return { fromHook: false, sealedHook: false, target: raw };
+  }
   const readTarget = witnessReflectApply<Db>(createReadonly, raw, []);
   if (readTarget === raw) {
     throw new KovoReadonlyHandleError(
       'KV433: adapter read-only DB hook returned the mutable writer handle; managed readers require a dedicated engine read-only handle (SPEC §10.3/§11.2).',
     );
   }
-  return { fromHook: true, target: readTarget };
+  return { fromHook: true, sealedHook: sealedCreateReadonly !== undefined, target: readTarget };
 }
 
 function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy | undefined): Db {
   if (writePolicy === undefined) {
     return raw;
+  }
+  const registeredCreateDeclaredWrite = isRecord(raw)
+    ? witnessWeakMapGet(authorizationCensusFrameworkHooks, raw)?.declaredWrite
+    : undefined;
+  if (registeredCreateDeclaredWrite !== undefined) {
+    return witnessReflectApply<Db>(registeredCreateDeclaredWrite, raw, [writePolicy]);
   }
   const target = frameworkManagedDbRawTarget(raw) ?? raw;
   if (!isRecord(target)) return raw;

@@ -213,9 +213,7 @@ describe('server mutation lifecycle', () => {
       get rows() {
         return rows;
       },
-      get transactionScoped() {
-        return transactionScoped;
-      },
+      transactionScoped,
       async transaction<Result>(callback: (tx: ReturnType<typeof handle>) => Promise<Result>) {
         const transactionRows = [...state.rows];
         const transactionJobs = [...state.jobs];
@@ -739,7 +737,8 @@ describe('server mutation lifecycle', () => {
         victimSession.user.id = 'attacker';
         victimSession.user.roles = ['admin'];
         Array.prototype[Symbol.iterator] = function () {
-          return this === pinnedRoles
+          return this === pinnedRoles ||
+            (Array.isArray(this) && this.length === 1 && this[0] === 'member')
             ? Reflect.apply(nativeArrayIterator, ['admin'], [])
             : Reflect.apply(nativeArrayIterator, this, []);
         };
@@ -758,7 +757,13 @@ describe('server mutation lifecycle', () => {
       input: s.object({}),
       async handler(_input, request) {
         const handle = await request.schedule(followup, { id: request.session.user.id });
-        return `${request.session.user.id}:${[...request.session.user.roles][0]}:${request.session.user.roles.map((role) => role)[0]}:${request.db.marker}:${handle.task}`;
+        const derivedRole = [
+          ...request.session.user.roles
+            .map((role) => role)
+            .filter((role) => role === 'member')
+            .slice(),
+        ][0];
+        return `${request.session.user.id}:${[...request.session.user.roles][0]}:${derivedRole}:${request.db.marker}:${handle.task}`;
       },
     });
     const nativeReflectGet = Reflect.get;
@@ -951,6 +956,7 @@ describe('server mutation lifecycle', () => {
   it('types transaction callbacks with the mutation request shape', async () => {
     interface TxRequest {
       db: {
+        transaction<Result>(callback: (db: TxRequest['db']) => Result): Result;
         txOnly(): void;
         write(table: string): void;
       };
@@ -981,6 +987,9 @@ describe('server mutation lifecycle', () => {
         { productId: 'p1' },
         {
           db: {
+            transaction<Result>(callback: (db: TxRequest['db']) => Result): Result {
+              return callback(this);
+            },
             txOnly() {
               events.push('tx');
             },

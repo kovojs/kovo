@@ -2,6 +2,7 @@ import {
   createWitnessMap,
   createWitnessSet,
   createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessCreateNullRecord,
   witnessCreateWithPrototype,
   witnessDefineProperty,
@@ -20,6 +21,8 @@ import {
   witnessSetHas,
   witnessWeakMapGet,
   witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 const NativeAbortController = AbortController;
@@ -60,6 +63,7 @@ if (intrinsicArrayPrototypeCandidate === null) {
 }
 const intrinsicArrayPrototype = intrinsicArrayPrototypeCandidate;
 const pinnedArrayPrototypeMethods = createWitnessMap<PropertyKey, Function>();
+const pinnedLifecycleArrays = createWitnessWeakSet<object>();
 const pinnedLifecycleArrayConstructor = witnessCreateNullRecord<unknown>();
 witnessDefineProperty(pinnedLifecycleArrayConstructor, Symbol.species, {
   configurable: false,
@@ -205,6 +209,8 @@ function snapshotPinnedLifecycleNode(
 }
 
 function installPinnedLifecycleArraySurface(array: unknown[]): void {
+  if (witnessWeakSetHas(pinnedLifecycleArrays, array)) return;
+  witnessWeakSetAdd(pinnedLifecycleArrays, array);
   witnessDefineProperty(array, 'constructor', {
     configurable: true,
     enumerable: false,
@@ -221,7 +227,10 @@ function installPinnedLifecycleArraySurface(array: unknown[]): void {
     witnessDefineProperty(array, property, {
       configurable: true,
       enumerable: false,
-      value: method,
+      value: (...args: unknown[]) => {
+        const result = witnessReflectApply<unknown>(method, array, args);
+        return witnessIsArray(result) ? pinLifecycleDerivedArray(result) : result;
+      },
       writable: false,
     });
   });
@@ -250,6 +259,25 @@ function installPinnedLifecycleArraySurface(array: unknown[]): void {
     value: () => pinnedLifecycleArrayIterator(array, 'entries'),
     writable: false,
   });
+}
+
+function pinLifecycleDerivedArray(array: unknown[]): readonly unknown[] {
+  if (witnessWeakSetHas(pinnedLifecycleArrays, array)) return array;
+  if (witnessGetPrototypeOf(array) !== intrinsicArrayPrototype) {
+    throw new TypeError('Derived lifecycle arrays must use the intrinsic array prototype.');
+  }
+  const length = ownPinnedArrayLength(array);
+  if (length > MAX_PINNED_LIFECYCLE_NODES) {
+    throw new TypeError('Derived lifecycle arrays exceed the bounded data-tree limit.');
+  }
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(array, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Derived lifecycle arrays must use dense own data elements.');
+    }
+  }
+  installPinnedLifecycleArraySurface(array);
+  return witnessFreeze(array);
 }
 
 function pinnedLifecycleArrayIterator(

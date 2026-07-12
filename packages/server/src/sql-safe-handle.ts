@@ -162,6 +162,34 @@ const frameworkManagedDbRawTargets = createWitnessWeakMap<object, object>();
 const managedSqlExecutionPolicies = createWitnessWeakSet<object>();
 const frameworkCanonicalNativeSqlValues = createWitnessWeakSet<object>();
 const relationalManagedSqlTargets = createWitnessWeakSet<object>();
+const relationalManagedSqlNamespaces = createWitnessWeakSet<object>();
+const frameworkManagedSqlDispatchProxies = createWitnessWeakSet<object>();
+
+/** Create a package-private managed proxy whose framework get trap may be dispatched internally. */
+export function createFrameworkManagedSqlDispatchProxy<Target extends object>(
+  target: Target,
+  handler: ProxyHandler<Target>,
+): Target {
+  const proxy = new Proxy(target, handler);
+  witnessWeakSetAdd(frameworkManagedSqlDispatchProxies, proxy);
+  return proxy;
+}
+
+/** @internal Whether a managed proxy was constructed by the package-private factory above. */
+export function isFrameworkManagedSqlDispatchProxy(value: object): boolean {
+  return witnessWeakSetHas(frameworkManagedSqlDispatchProxies, value);
+}
+
+/** @internal Dispatch a framework-owned managed proxy's already-hardened get trap. */
+export function frameworkManagedSqlDispatchPropertyValue(
+  value: object,
+  property: PropertyKey,
+): unknown {
+  if (!witnessWeakSetHas(frameworkManagedSqlDispatchProxies, value)) {
+    throw new TypeError('Managed SQL property dispatch requires a framework-owned proxy.');
+  }
+  return witnessReflectGet(value, property, value);
+}
 
 /**
  * Mint the module-private execution policy required by {@link wrapManagedDbForSqlSafety}.
@@ -215,7 +243,7 @@ export function wrapManagedDbForSqlSafety<DbValue>(
     proxyCache,
     methodCache,
     writePolicy,
-    writePolicy !== undefined || isManagedDbAdapterLike(db),
+    managedSqlRootIsStrict(db, writePolicy),
   ) as DbValue;
 }
 
@@ -268,7 +296,7 @@ function wrapDbAdapter(
     deleteProperty() {
       return false;
     },
-    get(target, prop, receiver) {
+    get(target, prop) {
       if (prop === kovoAsyncMutationTransaction) {
         if (writePolicy?.capability === 'read') return undefined;
         const transactionControlTarget = frameworkManagedDbRawTarget(target) ?? target;
@@ -296,7 +324,19 @@ function wrapDbAdapter(
         );
       }
 
-      const value = witnessReflectGet(target, prop, receiver);
+      const value = managedSqlDataPropertyValue(target, prop);
+
+      if (prop === 'query' && typeof value === 'object' && value !== null) {
+        witnessWeakSetAdd(relationalManagedSqlNamespaces, value);
+      }
+
+      if (
+        witnessWeakSetHas(relationalManagedSqlNamespaces, target) &&
+        typeof value === 'object' &&
+        value !== null
+      ) {
+        witnessWeakSetAdd(relationalManagedSqlTargets, value);
+      }
 
       if (isNestedSqlHandleProperty(prop) && typeof value === 'object' && value !== null) {
         return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
@@ -308,7 +348,14 @@ function wrapDbAdapter(
         typeof value === 'object' &&
         value !== null
       ) {
-        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
+        return wrapDbAdapter(
+          value,
+          mode,
+          proxyCache,
+          methodCache,
+          writePolicy,
+          true,
+        );
       }
 
       if (prop === 'sql' && typeof value === 'function' && isManagedDbAdapterLike(target)) {
@@ -418,8 +465,14 @@ function wrapDbAdapter(
     preventExtensions() {
       return false;
     },
-    set() {
-      return false;
+    set(target, property, value) {
+      return setManagedSqlDataProperty(
+        target,
+        property,
+        value,
+        writePolicy,
+        strictSqlTarget,
+      );
     },
     setPrototypeOf() {
       return false;
@@ -478,6 +531,69 @@ function managedSqlDescriptorCarriesCapability(descriptor: PropertyDescriptor): 
     !('value' in descriptor) ||
     (descriptor.value !== null &&
       (typeof descriptor.value === 'object' || typeof descriptor.value === 'function'))
+  );
+}
+
+function managedSqlDataPropertyValue(target: object, property: PropertyKey): unknown {
+  const dispatchTarget = frameworkManagedDbRawTarget(target) ?? target;
+  if (witnessWeakSetHas(frameworkManagedSqlDispatchProxies, dispatchTarget)) {
+    return witnessReflectGet(dispatchTarget, property, dispatchTarget);
+  }
+  let owner: object | null = dispatchTarget;
+  for (let depth = 0; owner !== null && depth < 64; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor)) {
+        throw new Error(
+          `KV422: managed DB property ${describeSqlMethod(property)} is accessor-backed and cannot be evaluated across the SQL authority boundary (SPEC §6.6/§10.2/§10.3).`,
+        );
+      }
+      return descriptor.value;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  if (owner !== null) {
+    throw new Error('KV422: managed DB prototype chain exceeds the bounded authority limit.');
+  }
+  return undefined;
+}
+
+function setManagedSqlDataProperty(
+  target: object,
+  property: PropertyKey,
+  value: unknown,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+  strictSqlTarget: boolean,
+): boolean {
+  if (
+    strictSqlTarget ||
+    writePolicy?.capability !== 'write' ||
+    !isManagedSqlPrimitiveState(value)
+  ) {
+    return false;
+  }
+  const mutationTarget = frameworkManagedDbRawTarget(target) ?? target;
+  const descriptor = witnessGetOwnPropertyDescriptor(mutationTarget, property);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    descriptor.writable !== true ||
+    !isManagedSqlPrimitiveState(descriptor.value)
+  ) {
+    return false;
+  }
+  witnessDefineProperty(mutationTarget, property, { ...descriptor, value });
+  return true;
+}
+
+function isManagedSqlPrimitiveState(value: unknown): boolean {
+  return (
+    value === null ||
+    value === undefined ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint' ||
+    typeof value === 'number' ||
+    typeof value === 'string'
   );
 }
 
@@ -1785,16 +1901,39 @@ function snapshotAmbiguousSqlMethodArguments(
   }
   if (writePolicy === undefined || !strictSqlTarget) return args;
   if (isRelationalManagedSqlTarget(target) && isRelationalManagedSqlMethod(prop)) return args;
-  if (!hasStrictManagedSqlSurface(target)) return args;
 
   throw new Error(
     `KV422: unknown managed DB method ${describeSqlMethod(prop)} is not a proven SQL builder/read capability and did not receive a recognizable SQL carrier (SPEC §10.2/§10.3).`,
   );
 }
 
-function hasStrictManagedSqlSurface(target: object): boolean {
+function managedSqlRootIsStrict(
+  target: object,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): boolean {
+  const classificationTarget = frameworkManagedDbRawTarget(target) ?? target;
+  if (writePolicy === undefined) return isManagedDbAdapterLike(classificationTarget);
+  return !isDomainTransactionSurface(classificationTarget);
+}
+
+function isDomainTransactionSurface(target: object): boolean {
+  if (hasDirectManagedSqlAuthoritySurface(target)) return false;
+  let owner: object | null = target;
+  while (owner !== null) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, 'transaction');
+    if (descriptor !== undefined) {
+      return 'value' in descriptor && typeof descriptor.value === 'function';
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  return false;
+}
+
+function hasDirectManagedSqlAuthoritySurface(target: object): boolean {
   const properties = [
-    '$count',
+    '$client',
+    '$primary',
+    '$replicas',
     'all',
     'exec',
     'execute',
@@ -1802,9 +1941,6 @@ function hasStrictManagedSqlSurface(target: object): boolean {
     'prepare',
     'query',
     'run',
-    'select',
-    'selectDistinct',
-    'selectDistinctOn',
     'session',
     'sql',
     'values',
@@ -1812,13 +1948,7 @@ function hasStrictManagedSqlSurface(target: object): boolean {
   for (let index = 0; index < properties.length; index += 1) {
     let owner: object | null = target;
     while (owner !== null) {
-      const descriptor = witnessGetOwnPropertyDescriptor(owner, properties[index]!);
-      if (descriptor !== undefined) {
-        // Accessor-backed SQL-looking controls are ambiguous authority and therefore count as a
-        // strict surface even though the normal sink path will reject or snapshot them separately.
-        if (!('value' in descriptor) || descriptor.value !== undefined) return true;
-        break;
-      }
+      if (witnessGetOwnPropertyDescriptor(owner, properties[index]!) !== undefined) return true;
       owner = witnessGetPrototypeOf(owner);
     }
   }
@@ -2146,7 +2276,7 @@ function wrapTransactionDb(
     proxyCache,
     methodCache,
     writePolicy,
-    writePolicy !== undefined || isManagedDbAdapterLike(tx),
+    managedSqlRootIsStrict(tx, writePolicy),
   );
 }
 

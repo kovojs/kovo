@@ -28,6 +28,7 @@ import {
   KovoReadonlyHandleError,
   createAuthorizationCensusDb,
   createDeclaredWriteDb,
+  createFrameworkAuthorizationCensusDb,
   createPostgresReadonlyClient,
   createPostgresScopedClient,
   kovoDeclaredWriteDbHandle,
@@ -37,7 +38,7 @@ import {
   managedDb,
   readonlyDb,
 } from './managed-db.js';
-import type { Reader, Writer } from './managed-db.js';
+import type { AuthorizationCensusDbOptions, Reader, Writer } from './managed-db.js';
 import {
   kovoAsyncMutationTransaction,
   managedSqlExecutionPolicy,
@@ -1665,6 +1666,103 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     );
     expect(() => handle.insert({ name: 'drafts' }).values()).toThrow(/KV414/);
     expect(log).toEqual(['select:contacts', 'select:reference_tags', 'leftJoin:published_posts']);
+  });
+
+  it('keeps framework engine hooks usable but unreflectable through the authorization census', async () => {
+    const log: string[] = [];
+    const raw = {
+      select() {
+        log.push('writer-select');
+        return { from: () => Promise.resolve([]) };
+      },
+    };
+    const censusOptions: AuthorizationCensusDbOptions = {
+      dialectLabel: 'Postgres',
+      metadata: {
+        authorizationClassificationsByTable: new Map(),
+        schemaTableNames: new Set(),
+      },
+      normalizeTableName: (table) => table,
+      tableNames: () => [],
+    };
+    const readonlyTarget = {
+      select() {
+        log.push('readonly-select');
+        return { from: () => Promise.resolve([]) };
+      },
+    };
+    const publicCensus = createAuthorizationCensusDb(raw, censusOptions);
+    expect(() =>
+      Object.defineProperty(publicCensus, kovoReadonlyDbHandle, {
+        configurable: true,
+        value: () => raw,
+      }),
+    ).toThrow();
+    const governed = createFrameworkAuthorizationCensusDb(
+      raw,
+      censusOptions,
+      () => readonlyTarget,
+      (policy) => {
+        log.push(`declared-write:${policy.tables?.join(',') ?? ''}`);
+        return raw;
+      },
+    );
+
+    expect(Object.getOwnPropertyDescriptor(governed, kovoReadonlyDbHandle)).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(governed, kovoDeclaredWriteDbHandle)).toBeUndefined();
+    expect(Reflect.ownKeys(governed)).not.toContain(kovoReadonlyDbHandle);
+    expect(Reflect.ownKeys(governed)).not.toContain(kovoDeclaredWriteDbHandle);
+
+    const reader = managedDb(governed, 'read') as unknown as {
+      select(): { from(table: string): Promise<unknown[]> };
+    };
+    await expect(reader.select().from('contacts')).resolves.toEqual([]);
+    managedDb(governed, 'write', {
+      sqlWritePolicy: { tables: ['contacts'], touches: ['contact'] },
+    });
+    expect(log).toEqual(['readonly-select', 'declared-write:contacts']);
+  });
+
+  it('rejects accessor-backed census roots and relational controls without invoking them', () => {
+    let accessorExecutions = 0;
+    const victims = Object.defineProperty({}, 'findMany', {
+      configurable: true,
+      get() {
+        accessorExecutions += 1;
+        return () => [];
+      },
+    });
+    const queryNamespace = Object.defineProperty({ victims }, 'futureRelation', {
+      configurable: true,
+      get() {
+        accessorExecutions += 1;
+        return victims;
+      },
+    });
+    const raw = Object.defineProperty({ query: queryNamespace }, 'futureCapability', {
+      configurable: true,
+      get() {
+        accessorExecutions += 1;
+        return () => [];
+      },
+    });
+    const handle = createAuthorizationCensusDb(raw, {
+      dialectLabel: 'Postgres',
+      metadata: {
+        authorizationClassificationsByTable: new Map([
+          ['victims', ['authzPolicy']],
+          ['futureRelation', ['authzPolicy']],
+        ]),
+        schemaTableNames: new Set(['victims', 'futureRelation']),
+      },
+      normalizeTableName: (table) => table,
+      tableNames: () => [],
+    }) as typeof raw;
+
+    expect(() => void handle.futureCapability).toThrow(/KV414[\s\S]*accessor-backed/);
+    expect(() => void handle.query.futureRelation).toThrow(/KV414[\s\S]*accessor-backed/);
+    expect(() => void handle.query.victims.findMany).toThrow(/KV414[\s\S]*accessor-backed/);
+    expect(accessorExecutions).toBe(0);
   });
 
   it('denies unclassified Drizzle relational roots and nested with selections', async () => {
@@ -4247,6 +4345,72 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     } finally {
       client.close();
     }
+  });
+
+  it('rejects accessor-backed managed capabilities recursively before invoking them', () => {
+    let accessorExecutions = 0;
+    const nested = Object.defineProperty({}, 'futureCapability', {
+      configurable: true,
+      get() {
+        accessorExecutions += 1;
+        return () => undefined;
+      },
+    });
+    const raw = Object.defineProperty(
+      {
+        nested,
+        select() {
+          return { from: () => [] };
+        },
+      },
+      'futureCapability',
+      {
+        configurable: true,
+        get() {
+          accessorExecutions += 1;
+          return () => undefined;
+        },
+      },
+    );
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['victims'], touches: ['victim'] },
+    }) as typeof raw;
+
+    expect(() => void handle.futureCapability).toThrow(/KV422[\s\S]*accessor-backed/);
+    expect(() => void handle.nested.futureCapability).toThrow(/KV422[\s\S]*accessor-backed/);
+    expect(accessorExecutions).toBe(0);
+  });
+
+  it('denies strict SQL configuration writes while preserving explicit domain transaction state', () => {
+    const strictRaw = {
+      execute(statement: unknown) {
+        return statement;
+      },
+      securityFlag: true,
+    };
+    const strict = managedDb(strictRaw, 'write', {
+      sqlWritePolicy: { tables: ['victims'], touches: ['victim'] },
+    }) as typeof strictRaw;
+    expect(() => {
+      strict.securityFlag = false;
+    }).toThrow();
+    expect(strictRaw.securityFlag).toBe(true);
+
+    type DomainDb = {
+      count: number;
+      transaction<Result>(callback: (db: DomainDb) => Result): Result;
+    };
+    const domain: DomainDb = {
+      count: 1,
+      transaction<Result>(callback: (db: DomainDb) => Result): Result {
+        return callback(this);
+      },
+    };
+    const governedDomain = managedDb(domain, 'write', {
+      sqlWritePolicy: { tables: [], touches: ['counter'] },
+    });
+    governedDomain.count = 2;
+    expect(domain.count).toBe(2);
   });
 
   it('write mode internal transaction probe does not pierce layered raw driver escape denial', () => {

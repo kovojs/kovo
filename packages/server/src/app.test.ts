@@ -2388,6 +2388,7 @@ describe('server createApp request shell', () => {
       count: number;
       reads: string[];
       select(userId?: string): { count: number };
+      transaction<Result>(callback: (db: AppDb) => Result): Result;
       writes: string[];
     }
 
@@ -2402,6 +2403,9 @@ describe('server createApp request shell', () => {
       select(userId?: string) {
         if (userId) this.reads.push(userId);
         return { count: this.count };
+      },
+      transaction<Result>(callback: (transactionDb: AppDb) => Result) {
+        return callback(this);
       },
       writes: [],
     };
