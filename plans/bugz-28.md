@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    48 | C1-C48 |
+| Critical |    51 | C1-C51 |
 | High     |    30 | H1-H30 |
 | Medium   |     9 | M1-M9  |
 
@@ -549,6 +549,33 @@ This is an active closure ledger; `SPEC.md` remains normative.
     attribute lookup/replacement, and final opening-tag assembly use boot-pinned dense snapshots;
     page/region/layout stamps cannot add or replace post-choke bytes under late/import-order poison.
 
+- [ ] **C49 - Mutable render-tree composition replaces escaped output at a trusted HTML sink.**
+      `packages/server/src/render-tree.ts`
+  - `renderTree()` escaped a literal text node and then concatenated its final parts through the live
+    `Array.prototype.join`. A selective late replacement returned raw event-bearing markup, which the
+    documented `trustedHtml(renderTree(...))` handoff emitted verbatim.
+  - **Acceptance:** AST traversal, asynchronous component settlement, text output, and final
+    composition use boot-pinned exact controls and dense own-data snapshots; no mutable application-
+    realm intrinsic can add or replace bytes after escaping.
+
+- [ ] **C50 - Structural and mutable render registries dispatch unapproved components.**
+      `packages/server/src/render-tree.ts`
+  - The claimed closed registry was only a public structural object containing a public `Map`.
+    Forging that shape or selectively replacing `Map.prototype.get` dispatched an event-bearing
+    component absent from the reviewed registry input.
+  - **Acceptance:** `renderRegistry()` proves component provenance, snapshots stable own-data entries,
+    and mints a module-private registry witness; `renderTree()` dispatches only through that private
+    immutable snapshot and rejects structural forgeries or ambiguous registry input.
+
+- [ ] **C51 - Mutable XML parser controls retag untrusted input as an approved component.**
+      `packages/server/src/render-tree.ts`
+  - A selective late `String.prototype.slice` replacement changed the parsed tag from `evil` to
+    `approved`. The closed registry then rendered the approved component even though those tag bytes
+    never appeared in the untrusted source.
+  - **Acceptance:** source scanning, name/entity decoding, parser state, node construction, and
+    registry lookup consume boot-pinned exact values; late/import-order intrinsic replacement cannot
+    retag, add, or remove source structure before dispatch.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -968,9 +995,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C47-C48,
-H20, and H27-H28 are active compiler-cache, static-analysis, static-export, JSX/route stamp, and
-build-output fixes.
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C47-C51,
+H20, and H27-H28 are active compiler-cache, static-analysis, static-export, JSX/route stamp,
+render-tree, and build-output fixes.
 Integrated
 evidence is
 green at
