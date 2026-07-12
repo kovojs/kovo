@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    65 | C1-C65 |
+| Critical |    66 | C1-C66 |
 | High     |    32 | H1-H32 |
 | Medium   |     9 | M1-M9  |
 
@@ -771,6 +771,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     unreviewed value-position capture, while callee-only and explicitly published values retain the
     documented behavior.
 
+- [ ] **C66 - Mutable output-context lookup suppresses dynamic script RAWTEXT errors.**
+      `packages/compiler/src/security/output-context.ts`
+  - A selective late `Array.prototype.find` replacement hid the matching JSX expression model for
+    a real `<script>{cfg.inline}</script>` child. The compiler then emitted no KV236 diagnostic
+    for query-controlled bytes in JavaScript RAWTEXT, where ordinary HTML text escaping is not a
+    correct encoder.
+  - **Acceptance:** JSX element/expression matching, direct-child and attribute/spread/primitive
+    traversal, trusted-brand identity, URL/style/event/raw-HTML sink classification, and diagnostic
+    collection use boot-pinned collection/string/RegExp controls over one typed model snapshot;
+    late/import-order mutation cannot hide or reclassify a RAWTEXT/output sink, while static literal
+    text and genuine reviewed trusted values retain their documented behavior.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1213,7 +1225,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C65, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C66, H20, H27,
 and H31-H32 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
