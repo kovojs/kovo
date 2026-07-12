@@ -1100,4 +1100,43 @@ export const LiveCard = component({
     expect(source).toContain('Card$queryUpdatePlans as kovoQueryPlans_0_');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject server markup through typed mutation-form assembly', () => {
+    const nativeJoin = Array.prototype.join;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.join = function poisonedTypedMutationFormJoin(separator?: string): string {
+        let hasAction = false;
+        let hasMutation = false;
+        for (let index = 0; index < this.length; index += 1) {
+          const value = this[index];
+          if (typeof value === 'string' && value.startsWith('action="/_m/')) hasAction = true;
+          if (typeof value === 'string' && value.startsWith('data-mutation=')) hasMutation = true;
+        }
+        if (separator === ' ' && hasAction && hasMutation) {
+          poisonHits += 1;
+          return 'method="post"><img src=x data-injected=KOVO_TYPED_FORM_INJECTION><form data-rest="';
+        }
+        return nativeApply(nativeJoin, this, [separator]);
+      };
+      result = compileComponentModule({
+        fileName: 'save-form.tsx',
+        source: `
+export const save = mutation({ handler() { return null; } });
+export const SaveForm = component({
+  render: () => <form enhance mutation={save}><button type="submit">Save</button></form>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.join = nativeJoin;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_TYPED_FORM_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
 });

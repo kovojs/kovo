@@ -1,5 +1,21 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
+import {
+  compilerArrayIsArray,
+  compilerCreateSet,
+  compilerJsonStringify,
+  compilerMapGet,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+  compilerRegExpReplace,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringReplaceAll,
+  compilerStringStartsWith,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   outputContextForAttribute,
@@ -12,16 +28,56 @@ import { deriveMutationKey } from '../mutation-names.js';
 import { escapeAttribute, kebabCase, type SourceReplacement } from '../shared.js';
 import type { MutationInputFieldFact, RegistryFacts } from '../types.js';
 
+function serverEmitAttribute(
+  element: JsxElementModel,
+  name: string,
+): JsxAttributeModel | undefined {
+  const attributes = compilerSnapshotDenseArray(element.attributes, 'Server emit JSX attributes');
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
+}
+
+function joinServerEmitStrings(values: readonly string[], separator: string): string {
+  let output = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) output += separator;
+    output += values[index]!;
+  }
+  return output;
+}
+
+function serverEmitJsonSource(value: unknown, label: string): string {
+  const source = compilerJsonStringify(value);
+  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  return source;
+}
+
+function serverEmitStringSet(values: readonly string[]): ReadonlySet<string> {
+  const set = compilerCreateSet<string>();
+  const snapshot = compilerSnapshotDenseArray(values, 'Server emit string set');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerSetAdd(set, snapshot[index]!);
+  }
+  return set;
+}
+
 export function componentMutationSlotName(
   model: ComponentModuleModel,
   mutationLocalName: string,
 ): string | null {
-  const entries = componentOptionObjectEntries(model, 'mutations');
-  const exact = entries.find((entry) => entry.key === mutationLocalName);
-  if (exact) return exact.key;
-
-  const valueMatch = entries.find((entry) => entry.value === mutationLocalName);
-  if (valueMatch) return valueMatch.key;
+  const entries = compilerSnapshotDenseArray(
+    componentOptionObjectEntries(model, 'mutations'),
+    'Component mutation slots',
+  );
+  for (let index = 0; index < entries.length; index += 1) {
+    if (entries[index]!.key === mutationLocalName) return entries[index]!.key;
+  }
+  for (let index = 0; index < entries.length; index += 1) {
+    if (entries[index]!.value === mutationLocalName) return entries[index]!.key;
+  }
 
   if (entries.length === 1) return entries[0]?.key ?? null;
   return mutationLocalName;
@@ -31,17 +87,21 @@ export function enclosingEnhancedMutationForm(
   model: ComponentModuleModel,
   child: JsxElementModel,
 ): JsxElementModel | null {
-  const forms = model.jsxElements
-    .filter(
-      (element) =>
-        element.tag === 'form' &&
-        child.start >= element.openingEnd &&
-        child.end <= element.closingStart &&
-        enhancedMutationFormBinding(element),
-    )
-    .sort((left, right) => right.start - left.start);
-
-  return forms[0] ?? null;
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Enclosing mutation forms');
+  let form: JsxElementModel | null = null;
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (
+      element.tag === 'form' &&
+      child.start >= element.openingEnd &&
+      child.end <= element.closingStart &&
+      enhancedMutationFormBinding(element) !== null &&
+      (form === null || element.start > form.start)
+    ) {
+      form = element;
+    }
+  }
+  return form;
 }
 
 export function mutationFormErrorProps(
@@ -50,36 +110,39 @@ export function mutationFormErrorProps(
   localName: string,
   slotsParamName: string,
 ): string {
-  const entries = [
-    `"failure": ${slotsParamName}.forms.${localName}.failure`,
-    ...element.attributes.map((attribute) => jsxAttributeObjectEntry(attribute)),
-  ];
-  if (!element.attributes.some((attribute) => attribute.name === 'id')) {
-    const name = staticStringAttributeValue(
-      element.attributes.find((attribute) => attribute.name === 'name'),
-    );
+  const entries = [`"failure": ${slotsParamName}.forms.${localName}.failure`];
+  const attributes = compilerSnapshotDenseArray(element.attributes, 'Mutation error attributes');
+  for (let index = 0; index < attributes.length; index += 1) {
+    entries[entries.length] = jsxAttributeObjectEntry(attributes[index]!);
+  }
+  if (serverEmitAttribute(element, 'id') === undefined) {
+    const name = staticStringAttributeValue(serverEmitAttribute(element, 'name'));
     if (name)
-      entries.push(`"id": ${mutationFormErrorIdExpression(form, localName, name).expression}`);
+      entries[entries.length] =
+        `"id": ${mutationFormErrorIdExpression(form, localName, name).expression}`;
   }
   const children = jsxElementChildrenExpression(element);
-  if (children) entries.push(`"children": ${children}`);
-  return `{ ${entries.filter(Boolean).join(', ')} }`;
+  if (children) entries[entries.length] = `"children": ${children}`;
+  return `{ ${joinServerEmitStrings(entries, ', ')} }`;
 }
 
 export function jsxAttributeObjectEntry(attribute: JsxAttributeModel): string {
-  const key = JSON.stringify(attribute.name);
-  if (attribute.value !== undefined) return `${key}: ${JSON.stringify(attribute.value)}`;
+  const key = serverEmitJsonSource(attribute.name, 'JSX attribute name');
+  if (attribute.value !== undefined)
+    return `${key}: ${serverEmitJsonSource(attribute.value, 'JSX attribute value')}`;
   if (attribute.expression !== undefined) return `${key}: ${attribute.expression}`;
   const staticValue = attribute.expressionStaticValue;
-  if (staticValue !== undefined) return `${key}: ${JSON.stringify(staticValue)}`;
+  if (staticValue !== undefined)
+    return `${key}: ${serverEmitJsonSource(staticValue, 'JSX static attribute value')}`;
   return `${key}: true`;
 }
 
 export function jsxElementChildrenExpression(element: JsxElementModel): string | null {
   if (element.selfClosing || !element.childBody) return null;
-  const childSource = element.childBody.source.trim();
+  const childSource = compilerStringTrim(element.childBody.source);
   if (!childSource) return null;
-  if (!/[<{]/.test(childSource)) return JSON.stringify(childSource);
+  if (!compilerRegExpTest(/[<{]/, childSource))
+    return serverEmitJsonSource(childSource, 'JSX child text');
   return `<>${element.childBody.source}</>`;
 }
 
@@ -89,15 +152,15 @@ export function mutationFormErrorIdExpression(
   fieldName: string,
 ): { expression: string; source: string } {
   const base = `${kebabCase(localName)}-${fieldName}-error`;
-  const keyAttribute = form.attributes.find((attribute) => attribute.name === 'key');
+  const keyAttribute = serverEmitAttribute(form, 'key');
   if (!keyAttribute) {
-    const literal = JSON.stringify(base);
+    const literal = serverEmitJsonSource(base, 'Mutation form error id');
     return { expression: literal, source: literal };
   }
 
   const key = staticAttributeScalar(keyAttribute);
   if (key !== null) {
-    const literal = JSON.stringify(`${base}-${key}`);
+    const literal = serverEmitJsonSource(`${base}-${key}`, 'Mutation form keyed error id');
     return { expression: literal, source: literal };
   }
 
@@ -125,7 +188,7 @@ export function enhancedMutationFormLowering(
 ): EnhancedMutationFormLowering | null {
   if (element.tag !== 'form') return null;
 
-  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  const mutationAttribute = serverEmitAttribute(element, 'mutation');
   if (!mutationAttribute?.expressionBareIdentifierName) return null;
 
   const mutationKey = localMutationKey(
@@ -142,18 +205,22 @@ export function enhancedMutationFormLowering(
     options,
   );
   const multipart = fileFields.length > 0;
-  const enctypeAttribute = element.attributes.find((attribute) => attribute.name === 'enctype');
-  const enctypeConflict =
+  const enctypeAttribute = serverEmitAttribute(element, 'enctype');
+  const conflicts = compilerSnapshotDenseArray(
+    enhancedMutationFormConflicts(element),
+    'Enhanced mutation form conflicts',
+  );
+  if (
     multipart &&
     enctypeAttribute &&
     staticStringAttributeValue(enctypeAttribute) !== 'multipart/form-data'
-      ? [{ attribute: enctypeAttribute }]
-      : [];
-  const conflicts = [...enhancedMutationFormConflicts(element), ...enctypeConflict];
+  ) {
+    conflicts[conflicts.length] = { attribute: enctypeAttribute };
+  }
   if (conflicts.length > 0) {
     return {
       conflicts,
-      generatedAttributeNames: new Set(),
+      generatedAttributeNames: serverEmitStringSet([]),
       importsMutationCsrfField: false,
       outputContexts: [],
       replacements: [],
@@ -161,108 +228,132 @@ export function enhancedMutationFormLowering(
     };
   }
 
-  const methodAttribute = element.attributes.find((attribute) => attribute.name === 'method');
-  const keyAttribute = element.attributes.find((attribute) => attribute.name === 'key');
-  const streamAttribute = element.attributes.find((attribute) => attribute.name === 'stream');
+  const methodAttribute = serverEmitAttribute(element, 'method');
+  const keyAttribute = serverEmitAttribute(element, 'key');
+  const streamAttribute = serverEmitAttribute(element, 'stream');
   const streaming = streamAttribute !== undefined;
   if (!keyAttribute && element.repeatable) return null;
   const generateEnctype = multipart && !enctypeAttribute;
   const preserveRuntimeMutation = !componentRenderSlotsParam(model);
   const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
-  const generatedInMutationSlot = [
-    ...(preserveRuntimeMutation
-      ? [`mutation={${mutationAttribute.expressionBareIdentifierName}}`]
-      : []),
-    ...(methodAttribute ? [] : ['method="post"']),
-    ...(generateEnctype ? ['enctype="multipart/form-data"'] : []),
-    `action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
-    `data-mutation="${escapeAttribute(mutationKey)}"`,
-    ...(streaming ? ['data-mutation-stream="true"'] : []),
-    submittedFormTargetAttribute(targetBase, keyAttribute),
-  ];
-  const replacements = [
+  const generatedInMutationSlot: string[] = [];
+  if (preserveRuntimeMutation) {
+    generatedInMutationSlot[generatedInMutationSlot.length] =
+      `mutation={${mutationAttribute.expressionBareIdentifierName}}`;
+  }
+  if (!methodAttribute) generatedInMutationSlot[generatedInMutationSlot.length] = 'method="post"';
+  if (generateEnctype)
+    generatedInMutationSlot[generatedInMutationSlot.length] = 'enctype="multipart/form-data"';
+  generatedInMutationSlot[generatedInMutationSlot.length] =
+    `action="${escapeAttribute(`/_m/${mutationKey}`)}"`;
+  generatedInMutationSlot[generatedInMutationSlot.length] =
+    `data-mutation="${escapeAttribute(mutationKey)}"`;
+  if (streaming)
+    generatedInMutationSlot[generatedInMutationSlot.length] = 'data-mutation-stream="true"';
+  generatedInMutationSlot[generatedInMutationSlot.length] = submittedFormTargetAttribute(
+    targetBase,
+    keyAttribute,
+  );
+  const replacements: SourceReplacement[] = [
     {
       end: mutationAttribute.end,
-      replacement: generatedInMutationSlot.join(' '),
+      replacement: joinServerEmitStrings(generatedInMutationSlot, ' '),
       start: mutationAttribute.start,
     },
-    ...(streamAttribute
-      ? [
-          {
-            end: streamAttribute.end,
-            replacement: '',
-            start: streamAttribute.leadingStart,
-          },
-        ]
-      : []),
-    ...(keyAttribute ? [submittedFormKeyReplacement(keyAttribute)] : []),
-    ...(preserveRuntimeMutation
-      ? []
-      : [submittedFormCsrfReplacement(element, mutationAttribute.expressionBareIdentifierName)]),
   ];
-  const semanticAttributes = [
-    ...(methodAttribute ? [] : [' method="post"']),
-    ...(generateEnctype ? [' enctype="multipart/form-data"'] : []),
-    ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
-    ` data-mutation="${escapeAttribute(mutationKey)}"`,
-    ...(streaming ? [' data-mutation-stream="true"'] : []),
-  ];
-  const generatedAttributeNames = new Set([
+  if (streamAttribute) {
+    replacements[replacements.length] = {
+      end: streamAttribute.end,
+      replacement: '',
+      start: streamAttribute.leadingStart,
+    };
+  }
+  if (keyAttribute) replacements[replacements.length] = submittedFormKeyReplacement(keyAttribute);
+  if (!preserveRuntimeMutation) {
+    replacements[replacements.length] = submittedFormCsrfReplacement(
+      element,
+      mutationAttribute.expressionBareIdentifierName,
+    );
+  }
+  const semanticAttributes: string[] = [];
+  if (!methodAttribute) semanticAttributes[semanticAttributes.length] = ' method="post"';
+  if (generateEnctype)
+    semanticAttributes[semanticAttributes.length] = ' enctype="multipart/form-data"';
+  semanticAttributes[semanticAttributes.length] =
+    ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`;
+  semanticAttributes[semanticAttributes.length] =
+    ` data-mutation="${escapeAttribute(mutationKey)}"`;
+  if (streaming)
+    semanticAttributes[semanticAttributes.length] = ' data-mutation-stream="true"';
+  const generatedAttributeNameValues = [
     'action',
     'data-mutation',
     'data-mutation-stream',
-    ...(generateEnctype ? ['enctype'] : []),
+  ];
+  if (generateEnctype) generatedAttributeNameValues[generatedAttributeNameValues.length] = 'enctype';
+  const generatedAttributeNameTail = [
     'key',
     'kovo-fragment-target',
     'kovo-key',
     'mutation',
     'stream',
-    ...(methodAttribute ? [] : ['method']),
-  ]);
+  ];
+  for (let index = 0; index < generatedAttributeNameTail.length; index += 1) {
+    generatedAttributeNameValues[generatedAttributeNameValues.length] =
+      generatedAttributeNameTail[index]!;
+  }
+  if (!methodAttribute) generatedAttributeNameValues[generatedAttributeNameValues.length] = 'method';
+  const generatedAttributeNames = serverEmitStringSet(generatedAttributeNameValues);
+  const outputContexts: GeneratedOutputWriteFact[] = [];
+  if (!methodAttribute) {
+    outputContexts[outputContexts.length] = formLoweringOutputContext(
+      'method',
+      'post',
+      'typed mutation form lowering',
+    );
+  }
+  if (generateEnctype) {
+    outputContexts[outputContexts.length] = formLoweringOutputContext(
+      'enctype',
+      'multipart/form-data',
+      'typed mutation file form lowering',
+    );
+  }
+  outputContexts[outputContexts.length] = formLoweringOutputContext(
+    'action',
+    `/_m/${mutationKey}`,
+    'typed mutation form lowering',
+  );
+  outputContexts[outputContexts.length] = formLoweringOutputContext(
+    'data-mutation',
+    mutationKey,
+    'typed mutation form lowering',
+  );
+  if (streaming) {
+    outputContexts[outputContexts.length] = formLoweringOutputContext(
+      'data-mutation-stream',
+      'true',
+      'streaming mutation form lowering',
+    );
+  }
+  outputContexts[outputContexts.length] = formLoweringOutputContext(
+    'kovo-fragment-target',
+    submittedFormTargetExpression(targetBase, keyAttribute),
+    'typed mutation form lowering',
+  );
+  if (keyAttribute) {
+    outputContexts[outputContexts.length] = formLoweringOutputContext(
+      'kovo-key',
+      attributeValueExpression(keyAttribute),
+      'typed mutation form lowering',
+    );
+  }
 
   return {
     conflicts,
     generatedAttributeNames,
     importsMutationCsrfField: !preserveRuntimeMutation,
-    outputContexts: [
-      ...(methodAttribute
-        ? []
-        : [formLoweringOutputContext('method', 'post', 'typed mutation form lowering')]),
-      ...(generateEnctype
-        ? [
-            formLoweringOutputContext(
-              'enctype',
-              'multipart/form-data',
-              'typed mutation file form lowering',
-            ),
-          ]
-        : []),
-      formLoweringOutputContext('action', `/_m/${mutationKey}`, 'typed mutation form lowering'),
-      formLoweringOutputContext('data-mutation', mutationKey, 'typed mutation form lowering'),
-      ...(streaming
-        ? [
-            formLoweringOutputContext(
-              'data-mutation-stream',
-              'true',
-              'streaming mutation form lowering',
-            ),
-          ]
-        : []),
-      formLoweringOutputContext(
-        'kovo-fragment-target',
-        submittedFormTargetExpression(targetBase, keyAttribute),
-        'typed mutation form lowering',
-      ),
-      ...(keyAttribute
-        ? [
-            formLoweringOutputContext(
-              'kovo-key',
-              attributeValueExpression(keyAttribute),
-              'typed mutation form lowering',
-            ),
-          ]
-        : []),
-    ],
+    outputContexts,
     replacements,
     semanticAttributes,
   };
@@ -273,8 +364,16 @@ export function mutationInputFileFieldsForLocalName(
   localName: string,
   options?: { fileName?: string; registryFacts?: RegistryFacts; source?: string },
 ): readonly string[] {
-  const fields = mutationInputFieldsForLocalName(model, localName, options);
-  return fields.filter((field) => field.coercion === 'file').map((field) => field.name);
+  const fields = compilerSnapshotDenseArray(
+    mutationInputFieldsForLocalName(model, localName, options),
+    'Mutation input fields',
+  );
+  const fileFields: string[] = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
+    if (field.coercion === 'file') fileFields[fileFields.length] = field.name;
+  }
+  return fileFields;
 }
 
 function mutationInputFieldsForLocalName(
@@ -283,40 +382,56 @@ function mutationInputFieldsForLocalName(
   options?: { fileName?: string; registryFacts?: RegistryFacts; source?: string },
 ): readonly MutationInputFieldFact[] {
   if (options?.source && options.fileName) {
-    const localMutation = mutationInputFactsFromSource(options.fileName, options.source).get(
+    const localMutation = compilerMapGet(
+      mutationInputFactsFromSource(options.fileName, options.source),
       localName,
     );
     if (localMutation) return localMutation.fields;
   }
 
   const mutationKey = localMutationKey(model, localName, options?.registryFacts, options?.fileName);
-  return mutationKey ? (options?.registryFacts?.mutationInputs?.[mutationKey] ?? []) : [];
+  if (!mutationKey || options?.registryFacts?.mutationInputs === undefined) return [];
+  const fields = compilerOwnDataValue(
+    options.registryFacts.mutationInputs,
+    mutationKey,
+    'Registry mutation input fields',
+  );
+  return compilerArrayIsArray(fields) ? (fields as readonly MutationInputFieldFact[]) : [];
 }
 
 export function importsMutationCsrfField(model: ComponentModuleModel): boolean {
   // Compiler-emitted helper import de-dupe: this checks for the exact internal CSRF helper import
   // already present in lowered output, not a security decision about app-authored source.
-  return model.namedImports.some(
-    (entry) =>
+  const imports = compilerSnapshotDenseArray(model.namedImports, 'Mutation CSRF imports');
+  for (let index = 0; index < imports.length; index += 1) {
+    const entry = imports[index]!;
+    if (
       entry.moduleSpecifier === '@kovojs/server/internal/csrf' &&
-      entry.importedName === 'renderMutationCsrfField',
-  );
+      entry.importedName === 'renderMutationCsrfField'
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function enhancedMutationFormConflicts(
   element: JsxElementModel,
 ): EnhancedMutationFormConflict[] {
-  return element.attributes
-    .filter((attribute) =>
-      [
-        'action',
-        'data-mutation',
-        'data-mutation-stream',
-        'kovo-fragment-target',
-        'kovo-key',
-      ].includes(attribute.name),
-    )
-    .map((attribute) => ({ attribute }));
+  const names = serverEmitStringSet([
+    'action',
+    'data-mutation',
+    'data-mutation-stream',
+    'kovo-fragment-target',
+    'kovo-key',
+  ]);
+  const attributes = compilerSnapshotDenseArray(element.attributes, 'Mutation form conflicts');
+  const conflicts: EnhancedMutationFormConflict[] = [];
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (compilerSetHas(names, attribute.name)) conflicts[conflicts.length] = { attribute };
+  }
+  return conflicts;
 }
 
 export function submittedFormCsrfReplacement(
@@ -341,34 +456,48 @@ export function localMutationKey(
   registryFacts?: RegistryFacts,
   fileName?: string,
 ): string | null {
-  const call = model.calls.find(
-    (candidate) =>
+  const calls = compilerSnapshotDenseArray(model.calls, 'Mutation declaration calls');
+  for (let index = 0; index < calls.length; index += 1) {
+    const candidate = calls[index]!;
+    if (
       candidate.name === 'mutation' &&
       candidate.exportedConstName === localName &&
-      typeof candidate.argumentStaticValues[0] === 'string',
-  );
-  const key = call?.argumentStaticValues[0];
-  if (typeof key === 'string') return key;
+      typeof candidate.argumentStaticValues[0] === 'string'
+    ) {
+      return candidate.argumentStaticValues[0] as string;
+    }
+  }
 
-  const objectFormCall = model.calls.find(
-    (candidate) =>
-      candidate.name === 'mutation' &&
-      candidate.exportedConstName === localName &&
-      candidate.arguments.length === 1 &&
-      candidate.arguments[0]?.trimStart().startsWith('{') === true,
-  );
-  if (objectFormCall && fileName) return deriveMutationKey(fileName, localName);
+  for (let index = 0; index < calls.length; index += 1) {
+    const candidate = calls[index]!;
+    if (candidate.name !== 'mutation' || candidate.exportedConstName !== localName) continue;
+    const args = compilerSnapshotDenseArray(candidate.arguments, 'Mutation call arguments');
+    if (
+      args.length === 1 &&
+      compilerStringStartsWith(compilerRegExpReplace(/^\s+/, args[0]!, ''), '{') &&
+      fileName
+    ) {
+      return deriveMutationKey(fileName, localName);
+    }
+  }
 
-  const registryEntry = Object.entries(registryFacts?.mutations ?? {}).find(
-    ([, typeSource]) => typeSource.trim() === `typeof ${localName}`,
-  );
-  return registryEntry?.[0] ?? null;
+  const mutations = registryFacts?.mutations;
+  if (mutations === undefined) return null;
+  const keys = compilerObjectKeys(mutations);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const typeSource = compilerOwnDataValue(mutations, key, 'Registry mutation type');
+    if (typeof typeSource === 'string' && compilerStringTrim(typeSource) === `typeof ${localName}`) {
+      return key;
+    }
+  }
+  return null;
 }
 
 export function enhancedMutationFormBinding(
   element: JsxElementModel,
 ): { end: number; localName: string; start: number } | null {
-  const mutationAttribute = element.attributes.find((attribute) => attribute.name === 'mutation');
+  const mutationAttribute = serverEmitAttribute(element, 'mutation');
   if (mutationAttribute?.expressionBareIdentifierName) {
     return {
       end: mutationAttribute.end,
@@ -377,12 +506,22 @@ export function enhancedMutationFormBinding(
     };
   }
 
-  const spread = element.spreadAttributes.find(
-    (attribute) =>
+  const spreads = compilerSnapshotDenseArray(
+    element.spreadAttributes,
+    'Mutation form spread attributes',
+  );
+  let spread: (typeof spreads)[number] | undefined;
+  for (let index = 0; index < spreads.length; index += 1) {
+    const attribute = spreads[index]!;
+    if (
       attribute.expressionCallImportedName === 'mutationFormAttributes' &&
       attribute.expressionCallModuleSpecifier === '@kovojs/server' &&
-      attribute.expressionCallArgumentBareIdentifierName,
-  );
+      attribute.expressionCallArgumentBareIdentifierName
+    ) {
+      spread = attribute;
+      break;
+    }
+  }
   if (!spread?.expressionCallArgumentBareIdentifierName) return null;
 
   return {
@@ -460,13 +599,18 @@ export function attributeValueExpression(attribute: JsxAttributeModel): string {
 export function staticAttributeScalar(attribute: JsxAttributeModel): string | null {
   if (attribute.value !== undefined) return attribute.value;
   const staticValue = attribute.expressionStaticValue;
-  if (typeof staticValue === 'string' || typeof staticValue === 'number')
-    return String(staticValue);
+  if (typeof staticValue === 'string') return staticValue;
+  if (typeof staticValue === 'number')
+    return serverEmitJsonSource(staticValue, 'Static numeric attribute');
   return null;
 }
 
 export function escapeTemplateLiteral(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${');
+  return compilerStringReplaceAll(
+    compilerStringReplaceAll(compilerStringReplaceAll(value, '\\', '\\\\'), '`', '\\`'),
+    '${',
+    '\\${',
+  );
 }
 
 export function formLoweringOutputContext(
