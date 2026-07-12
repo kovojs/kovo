@@ -10,9 +10,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    67 | C1-C67 |
+| Critical |    68 | C1-C68 |
 | High     |    32 | H1-H32 |
-| Medium   |     9 | M1-M9  |
+| Medium   |    10 | M1-M10 |
 
 ## Critical
 
@@ -796,6 +796,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
     clone/body-use ordering can make auth approve different bytes from those dispatched, across
     custom and HMAC verifier paths.
 
+- [ ] **C68 - Mutable managed-DB allowlists admit undeclared writes and confidential reads.**
+      `packages/server/src/managed-db.ts`
+  - Selective late and pre-import `Set.prototype.has` replacements bypassed KV406 through the
+    public composed `kovoDeclaredWriteDbHandle` + `managedDb(..., 'write')` path. A real
+    `createSqliteAppRuntimeDb`/better-sqlite3 proof inserted the undeclared victim row; independently,
+    public `readonlyDb.rawRead` plus the real SQLite authorizer returned `victim-secret` from an
+    undeclared owner table instead of rejecting the observed table.
+  - **Acceptance:** declared/observed/owner/admin table sets, normalization, policy/options/hook
+    snapshots, engine-authorizer callbacks, rawRead/crossOwnerRead declarations, and final execution
+    routing use boot-pinned collection/reflection/string controls over framework-owned immutable
+    facts; late/import-order or caller-carrier mutation cannot admit any undeclared table, while
+    fully declared reads/writes retain their existing behavior.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1236,10 +1249,24 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 94-test reporting/app/request-state matrix passes; the independent poisoned
     origin proof now stores only `https://example.test` and omits capability path/query bytes.
 
+- [ ] **M10 - Mutable PostgreSQL SQL scanning admits app principal-control statements.**
+      `packages/server/src/managed-db.ts`
+  - Late and pre-import `RegExp.prototype.test` replacements made the public
+    `createPostgresScopedClient` accept app SQL containing
+    `pg_catalog.set_config('kovo.principal', ...)` after the framework established the request
+    principal. The default real PGlite runtime still denied function execution through its revoked
+    ACL, so this is a scanner-boundary failure with a separate engine defense rather than a proven
+    default principal swap.
+  - **Acceptance:** SQL comment/literal/identifier/statement scanning, command allowlists,
+    transaction-control grammar, and framework-setting rejection use boot-pinned string/RegExp/Set
+    controls over the exact query snapshot; late/import-order mutation cannot admit any spelling or
+    schema qualification of `set_config`/role/session control, while genuine parameterized app SQL
+    remains executable.
+
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C67, H20, H27,
-and H31-H32 are active compiler-cache, static-analysis, browser/server authority/output, and
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C68, H20, H27,
+H31-H32, and M10 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
 evidence is
