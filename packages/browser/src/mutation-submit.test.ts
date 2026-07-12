@@ -143,7 +143,14 @@ describe('enhanced mutation submit', () => {
       const originalLocation = globalThis.location;
       Object.defineProperty(globalThis, 'location', {
         configurable: true,
-        value: { assign },
+        value: {
+          assign,
+          hash: '',
+          href: 'https://kovo.test/cart',
+          origin: 'https://kovo.test',
+          pathname: '/cart',
+          search: '',
+        },
       });
       const text = vi.fn(async () => '<kovo-fragment target="auth">stale</kovo-fragment>');
       const fetch = vi.fn(async () => ({

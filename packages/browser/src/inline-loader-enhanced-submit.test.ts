@@ -73,11 +73,15 @@ describe('inline loader enhanced submit source', () => {
         globalRecord.fetch = vi.fn(async () => ({
           headers: {
             get(name: string) {
-              return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+              const normalized = name.toLowerCase();
+              if (normalized === 'kovo-session-transition') return 'reload';
+              if (normalized === 'kovo-reauth') return '//evil.example/phish';
+              if (normalized === 'location') return 'https://evil.example/phish';
+              return null;
             },
           },
-          ok: true,
-          status: 200,
+          ok: false,
+          status: 401,
           text,
         }));
         globalRecord.location = {
@@ -444,6 +448,118 @@ describe('inline loader enhanced submit source', () => {
           expect(preventDefault).toHaveBeenCalledTimes(1);
           expect(assign).toHaveBeenCalledWith(expected);
         } finally {
+          Object.assign(globalRecord, {
+            FormData: originals.FormData,
+            addEventListener: originals.addEventListener,
+            document: originals.document,
+            fetch: originals.fetch,
+            location: originals.location,
+          });
+          if (originals.importModule === undefined) {
+            delete globalRecord.__kovoInlineImport;
+          } else {
+            globalRecord.__kovoInlineImport = originals.importModule;
+          }
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'keeps inline reauth and auth-success redirects same-origin after late control poisoning through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originalStartsWith = String.prototype.startsWith;
+      const originalDecodeURIComponent = globalThis.decodeURIComponent;
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+
+      for (const variant of ['reauth', 'auth-success'] as const) {
+        const listeners = new Map<string, (event: unknown) => void>();
+        const assign = vi.fn();
+        const form = {
+          action: variant === 'reauth' ? '/_m/cart/add' : '/_m/auth/sign-in',
+          getAttribute(name: string) {
+            return name === 'data-enhance' ? '' : null;
+          },
+          method: 'post',
+        };
+        try {
+          globalRecord.FormData = function FormData() {
+            return {
+              get(name: string) {
+                return name === 'next' && variant === 'auth-success'
+                  ? '/\\evil.example/phish'
+                  : null;
+              },
+            };
+          };
+          globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+            listeners.set(type, listener);
+          };
+          globalRecord.document = { querySelectorAll: () => [] };
+          globalRecord.fetch = vi.fn(async () => ({
+            headers: {
+              get(name: string) {
+                if (variant === 'reauth' && name === 'Kovo-Reauth') {
+                  return '//evil.example/phish';
+                }
+                if (variant === 'auth-success' && name === 'Kovo-Changes') {
+                  return '[{"domain":"auth"}]';
+                }
+                return null;
+              },
+            },
+            ok: true,
+            status: variant === 'reauth' ? 401 : 200,
+            text: async () => '',
+          }));
+          globalRecord.location = {
+            assign,
+            hash: '',
+            href: 'https://kovo.test/cart',
+            origin: 'https://kovo.test',
+            pathname: '/cart',
+            search: '',
+          };
+
+          installSource(vi.fn(async () => ({})), globalRecord);
+          String.prototype.startsWith = function (search: string, position?: number) {
+            if (this.valueOf() === '//evil.example/phish') return search === '/';
+            return Reflect.apply(originalStartsWith, this, [search, position]);
+          };
+          Object.defineProperty(globalThis, 'decodeURIComponent', {
+            configurable: true,
+            value: () => '/',
+          });
+          listeners.get('submit')?.({
+            preventDefault: vi.fn(),
+            target: {
+              closest(selector: string) {
+                return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                  ? form
+                  : null;
+              },
+            },
+            type: 'submit',
+          });
+          await Promise.resolve();
+          await Promise.resolve();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          expect(assign).toHaveBeenCalledWith('/');
+        } finally {
+          String.prototype.startsWith = originalStartsWith;
+          Object.defineProperty(globalThis, 'decodeURIComponent', {
+            configurable: true,
+            value: originalDecodeURIComponent,
+          });
           Object.assign(globalRecord, {
             FormData: originals.FormData,
             addEventListener: originals.addEventListener,

@@ -462,6 +462,79 @@ describe('inline loader enhanced navigation fallback', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'rejects cross-origin HTML after late URL-origin poisoning through %s',
+    async (_name, installSource) => {
+      const originDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')!;
+      const replaceWith = vi.fn();
+      const currentSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'current',
+          'kovo-nav-segment': 'layout:current',
+        },
+        '<main>current</main>',
+      );
+      const attackerSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'attacker',
+          'kovo-nav-segment': 'layout:attacker',
+        },
+        '<main><script>attacker()</script></main>',
+      );
+
+      try {
+        await withEnhancedNavigationHarness(installSource, {
+          currentDocument: createTestShell({ replaceWith, segments: [currentSegment] }),
+          documents: [createTestShell({ segments: [attackerSegment] })],
+          fetch: vi.fn(async () => ({
+            headers: { get: () => 'text/html; charset=utf-8' },
+            text: async () => '<!doctype html><html><body>attacker</body></html>',
+            url: 'https://evil.example/phish',
+          })),
+          href: 'http://app.test/account',
+          async act({ listeners, preventDefault }) {
+            Object.defineProperty(URL.prototype, 'origin', {
+              configurable: true,
+              get() {
+                return 'http://app.test';
+              },
+            });
+            await listeners.get('click')?.({
+              button: 0,
+              defaultPrevented: false,
+              preventDefault,
+              target: {
+                closest(selector: string) {
+                  if (selector === 'a[href]') {
+                    return {
+                      hasAttribute: () => false,
+                      href: 'http://app.test/account',
+                      target: '',
+                    };
+                  }
+                  return null;
+                },
+              },
+              type: 'click',
+            });
+          },
+          async assert({ assign, preventDefault, pushState }) {
+            await vi.waitFor(() =>
+              expect(assign).toHaveBeenCalledWith('http://app.test/account'),
+            );
+            expect(preventDefault).toHaveBeenCalledOnce();
+            expect(replaceWith).not.toHaveBeenCalled();
+            expect(pushState).not.toHaveBeenCalled();
+          },
+        });
+      } finally {
+        Object.defineProperty(URL.prototype, 'origin', originDescriptor);
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'leaves ineligible anchor clicks native through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

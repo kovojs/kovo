@@ -4,7 +4,15 @@ import { readLiveTargetSnapshot } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { definedProps } from './defined-props.js';
-import { sanitizeReauthDirective } from './reauth-directive.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import {
+  sanitizeAuthNavigationTarget,
+  sanitizeReauthDirective,
+} from './reauth-directive.js';
+
+type BrowserNavigationSecurityControls = ReturnType<
+  typeof createBrowserNavigationSecurityControls
+>;
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormLike {
@@ -80,10 +88,24 @@ export async function fetchEnhancedMutation(
   options: FetchEnhancedMutationOptions,
   idem = options.idem ?? refreshFormDataIdem(options.formData) ?? createMutationIdem(),
 ): Promise<FetchedEnhancedMutation> {
+  const security = createBrowserNavigationSecurityControls();
+  const fetchMutation = options.fetch;
+  const form = options.form;
+  const formData = options.formData;
+  const onError = options.onError;
+  const onSessionTransition = options.onSessionTransition;
+  const onUploadProgress = options.onUploadProgress;
+  const signal = options.signal;
+  const streaming = options.streaming === true;
   const targetSnapshot = readLiveTargetSnapshot(options.root);
-  const submittedFormTarget = readSubmittedFormTarget(options.form);
+  const submittedFormTarget = readSubmittedFormTarget(form);
+  const formAction = form.action;
+  const formMethod = form.method;
+  if (typeof fetchMutation !== 'function' || typeof formAction !== 'string') {
+    throw new TypeError('Kovo enhanced mutation transport is invalid.');
+  }
   const headers: Record<string, string> = {
-    Accept: options.streaming
+    Accept: streaming
       ? 'text/vnd.kovo.fragment+html; stream=1'
       : 'text/vnd.kovo.fragment+html',
     'Kovo-Fragment': 'true',
@@ -94,23 +116,23 @@ export async function fetchEnhancedMutation(
   if (submittedFormTarget !== undefined) {
     headers['Kovo-Form-Target'] = submittedFormTarget;
   }
-  if (options.streaming) {
+  if (streaming) {
     headers['Kovo-Stream'] = 'true';
   }
-  const response = await options.fetch(options.form.action, {
-    body: options.formData,
+  const response = await fetchMutation(formAction, {
+    body: formData,
     headers,
-    keepalive: !options.streaming,
-    method: (options.form.method ?? 'post').toUpperCase(),
-    ...definedProps({ onUploadProgress: options.onUploadProgress, signal: options.signal }),
+    keepalive: !streaming,
+    method: security.upper(formMethod ?? 'post'),
+    ...definedProps({ onUploadProgress, signal }),
   });
-  const sessionTransition = readSessionTransition(response);
+  const sessionTransition = readSessionTransition(response, security);
   // SPEC §9.3 (bugz-25 M6): response headers are observable before the body settles. A slow
   // custom auth response must not leave the old-principal BroadcastChannel alive while text or a
   // stream is consumed, because an incoming old-principal envelope would still apply in that
   // window. Retire synchronously at header observation and discard all response truth.
   if (sessionTransition) {
-    options.onSessionTransition?.();
+    onSessionTransition?.();
     return {
       body: '',
       changes: [],
@@ -120,9 +142,10 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
-  const reauth = response.headers?.get('Kovo-Reauth') ?? response.headers?.get('kovo-reauth');
-  if (response.status === 401 && reauth) {
-    followReauthDirective(reauth);
+  const status = responseStatus(response, security, 0);
+  const reauth = security.readHeader(response, 'Kovo-Reauth');
+  if (status === 401 && reauth) {
+    followReauthDirective(reauth, security);
     return {
       body: '',
       changes: [],
@@ -131,9 +154,9 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
-  const redirectLocation = readSuccessfulRedirectLocation(response);
+  const redirectLocation = readSuccessfulRedirectLocation(response, security);
   if (redirectLocation) {
-    followSuccessfulMutationRedirect(redirectLocation);
+    followSuccessfulMutationRedirect(redirectLocation, security);
     return {
       body: '',
       changes: [],
@@ -142,17 +165,26 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
-  const changes = readMutationChangeHeader(response, options.onError);
+  const changesHeader = security.readHeader(response, 'Kovo-Changes');
+  const changes = readMutationChangeHeader(
+    { headers: { get: (name) => (name === 'Kovo-Changes' ? (changesHeader ?? null) : null) } },
+    onError,
+  );
   // SPEC §9.1.1: read build token from response header for delta validation.
   const buildToken =
-    response.headers?.get('Kovo-Build') ?? response.headers?.get('kovo-build') ?? undefined;
-  const body = options.streaming && response.body ? '' : await response.text();
+    security.readHeader(response, 'Kovo-Build') ?? undefined;
+  const responseBody = security.readResponseField(response, 'body') as
+    | ReadableStream<Uint8Array>
+    | null
+    | undefined;
+  const body = streaming && responseBody ? '' : await security.readResponseText(response);
   if (
-    !(options.streaming && response.body) &&
-    isSuccessfulEmptyAuthFragmentResponse(response, changes, body)
+    !(streaming && responseBody) &&
+    isSuccessfulEmptyAuthFragmentResponse(response, changes, body, security)
   ) {
     followSuccessfulMutationRedirect(
-      resolveAuthMutationNavigationTarget(options.form, options.formData),
+      resolveAuthMutationNavigationTarget(form, formData, security),
+      security,
     );
     return {
       body: '',
@@ -170,96 +202,113 @@ export async function fetchEnhancedMutation(
     changes,
     idem,
     response,
-    ...(options.streaming && response.body ? { streamBody: response.body } : {}),
+    ...(streaming && responseBody ? { streamBody: responseBody } : {}),
     targets: targetSnapshot.targets,
   };
 }
 
-function readSessionTransition(response: EnhancedMutationResponseLike): boolean {
-  const value =
-    response.headers?.get('Kovo-Session-Transition') ??
-    response.headers?.get('kovo-session-transition');
-  return value?.trim().toLowerCase() === 'reload';
+function readSessionTransition(
+  response: EnhancedMutationResponseLike,
+  security: BrowserNavigationSecurityControls,
+): boolean {
+  return security.isTrimmedAsciiEqual(
+    security.readHeader(response, 'Kovo-Session-Transition'),
+    'reload',
+  );
 }
 
-function followReauthDirective(location: string): void {
+function followReauthDirective(
+  location: string,
+  security: BrowserNavigationSecurityControls,
+): void {
   // SPEC §6.5: the server's 401 Kovo-Reauth directive is the enhanced
   // mutation equivalent of the no-JS 303 login redirect.
-  const globalLocation = (globalThis as { location?: Location }).location;
-  globalLocation?.assign(sanitizeReauthDirective(location));
+  security.navigateSameOrigin(sanitizeReauthDirective(location));
 }
 
-function followSuccessfulMutationRedirect(location: string): void {
+function followSuccessfulMutationRedirect(
+  location: string,
+  security: BrowserNavigationSecurityControls,
+): void {
   // SPEC §6.3/§9.1: a successful enhanced mutation may complete with a PRG
   // redirect instead of a fragment body, such as auth sign-in/sign-out.
-  const globalLocation = (globalThis as { location?: Location }).location;
-  globalLocation?.assign(location);
+  security.navigateSameOrigin(location);
 }
 
 function readSuccessfulRedirectLocation(
   response: EnhancedMutationResponseLike,
+  security: BrowserNavigationSecurityControls,
 ): string | undefined {
-  const status = response.status ?? 0;
-  const headerLocation =
-    response.headers?.get('Location') ?? response.headers?.get('location') ?? undefined;
+  const status = responseStatus(response, security, 0);
+  const headerLocation = security.readHeader(response, 'Location');
   if (status >= 300 && status < 400 && headerLocation) return headerLocation;
-  if (response.redirected && response.url) return response.url;
+  const redirected = security.readResponseField(response, 'redirected');
+  const url = security.readResponseField(response, 'url');
+  if (redirected === true && typeof url === 'string' && url) return url;
   return undefined;
+}
+
+function responseStatus(
+  response: EnhancedMutationResponseLike,
+  security: BrowserNavigationSecurityControls,
+  fallback: number,
+): number {
+  const value = security.readResponseField(response, 'status');
+  return typeof value === 'number' && value >= 0 && value <= 999 ? value : fallback;
 }
 
 function isSuccessfulEmptyAuthFragmentResponse(
   response: EnhancedMutationResponseLike,
   changes: readonly MutationChangeRecord[],
   body: string,
+  security: BrowserNavigationSecurityControls,
 ): boolean {
-  const status = response.status ?? 200;
+  const status = responseStatus(response, security, 200);
+  const ok = security.readResponseField(response, 'ok');
+  let carriesAuthChange = false;
+  for (let index = 0; index < changes.length; index += 1) {
+    if (changes[index]?.domain === 'auth') {
+      carriesAuthChange = true;
+      break;
+    }
+  }
   return (
     status >= 200 &&
     status < 300 &&
-    response.ok !== false &&
-    body.trim() === '' &&
-    changes.some((change) => change.domain === 'auth')
+    ok !== false &&
+    security.isTrimmedAsciiEqual(body, '') &&
+    carriesAuthChange
   );
 }
 
-function resolveAuthMutationNavigationTarget(form: EnhancedFormLike, formData: unknown): string {
-  const next = safeSameOriginPath(readFormDataString(formData, 'next'));
+function resolveAuthMutationNavigationTarget(
+  form: EnhancedFormLike,
+  formData: unknown,
+  security: BrowserNavigationSecurityControls,
+): string {
+  const next = sanitizeAuthNavigationTarget(readFormDataString(formData, 'next', security));
   if (next) return next;
-  if (form.action.includes('/auth/sign-in')) return '/';
-  return currentPathTarget() ?? '/';
+  const currentUrl = security.currentUrl();
+  const actionUrl = currentUrl ? security.parseUrl(form.action, currentUrl.href) : undefined;
+  if (actionUrl?.pathname === '/_m/auth/sign-in' || actionUrl?.pathname === '/auth/sign-in') {
+    return '/';
+  }
+  return security.currentPathTarget() ?? '/';
 }
 
-function readFormDataString(formData: unknown, name: string): string | undefined {
-  if (
-    formData === null ||
-    typeof formData !== 'object' ||
-    typeof (formData as { get?: unknown }).get !== 'function'
-  ) {
-    return undefined;
-  }
-  const value = (formData as { get(name: string): unknown }).get(name);
+function readFormDataString(
+  formData: unknown,
+  name: string,
+  security?: BrowserNavigationSecurityControls,
+): string | undefined {
+  const value = security
+    ? security.readFormDataValue(formData, name)
+    : formData !== null &&
+        typeof formData === 'object' &&
+        typeof (formData as { get?: unknown }).get === 'function'
+      ? (formData as { get(name: string): unknown }).get(name)
+      : undefined;
   return typeof value === 'string' ? value : undefined;
-}
-
-function safeSameOriginPath(value: string | undefined): string | undefined {
-  if (!value || value[0] !== '/' || value[1] === '/') return undefined;
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(value);
-  } catch {
-    return undefined;
-  }
-  for (let index = 0; index < decoded.length; index += 1) {
-    const code = decoded.charCodeAt(index);
-    if (decoded[index] === '\\' || code <= 0x20 || code === 0x7f) return undefined;
-  }
-  return value;
-}
-
-function currentPathTarget(): string | undefined {
-  const globalLocation = (globalThis as { location?: Location }).location;
-  if (!globalLocation) return undefined;
-  return `${globalLocation.pathname}${globalLocation.search}${globalLocation.hash}`;
 }
 
 function refreshFormDataIdem(formData: unknown): string | undefined {

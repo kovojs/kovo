@@ -46,6 +46,60 @@ class FakeTargetRoot {
 }
 
 describe('enhanced mutation fetch', () => {
+  it('keeps auth-success navigation same-origin after late decode poisoning', async () => {
+    const assign = vi.fn();
+    const originalLocation = globalThis.location;
+    const originalDecodeURIComponent = globalThis.decodeURIComponent;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: {
+        assign,
+        hash: '',
+        href: 'https://kovo.test/login',
+        origin: 'https://kovo.test',
+        pathname: '/login',
+        search: '',
+      },
+    });
+    const formData = new FormData();
+    formData.set('next', '/\\evil.example/phish');
+
+    try {
+      const fetched = fetchEnhancedMutation({
+        fetch: async () => ({
+          headers: {
+            get(name: string) {
+              return name === 'Kovo-Changes' ? '[{"domain":"auth"}]' : null;
+            },
+          },
+          ok: true,
+          status: 200,
+          text: async () => '',
+        }),
+        form: { action: '/_m/auth/sign-in' },
+        formData,
+        idem: 'idem_late_decode',
+        root: new FakeTargetRoot([]),
+      });
+      Object.defineProperty(globalThis, 'decodeURIComponent', {
+        configurable: true,
+        value: () => '/',
+      });
+
+      await fetched;
+      expect(assign).toHaveBeenCalledWith('/');
+    } finally {
+      Object.defineProperty(globalThis, 'decodeURIComponent', {
+        configurable: true,
+        value: originalDecodeURIComponent,
+      });
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+  });
+
   it('retires at the session-transition header without reading buffered response truth', async () => {
     const onSessionTransition = vi.fn();
     const text = vi.fn(async () => '<kovo-query name="account">{"private":true}</kovo-query>');

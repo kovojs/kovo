@@ -114,7 +114,7 @@ describe('inline loader build source', () => {
       `acceptHeader: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)}`,
     );
     expect(inlineKovoLoaderInstallerReadableSource).toContain(
-      'headers: { Accept: options.acceptHeader }',
+      'security.fetchDocument(requestedUrl.href, acceptHeader)',
     );
   });
 

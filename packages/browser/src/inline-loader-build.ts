@@ -26,6 +26,9 @@ const wireResponseScannerSourcePath = fileURLToPath(
 const enhancedNavigationSourcePath = fileURLToPath(
   new URL('./enhanced-navigation.ts', import.meta.url),
 );
+const navigationSecurityIntrinsicsSourcePath = fileURLToPath(
+  new URL('./navigation-security-intrinsics.ts', import.meta.url),
+);
 const documentLifecycleSourcePath = fileURLToPath(
   new URL('./document-lifecycle.ts', import.meta.url),
 );
@@ -65,7 +68,7 @@ const inlineHelperSpecs = {
     rootFunctionNames: ['installEnhancedNavigationRuntime'],
     sourceFileName: 'enhanced-navigation.ts',
     sourcePath: enhancedNavigationSourcePath,
-    sourcePaths: [enhancedNavigationSourcePath],
+    sourcePaths: [navigationSecurityIntrinsicsSourcePath, enhancedNavigationSourcePath],
   },
   documentLifecycle: {
     label: 'document lifecycle',
@@ -127,6 +130,7 @@ function installInlineKovoLoader(im) {
   // capture phase at ancestors, so they are synthesized below from pointerover/out.
   const events = ${JSON.stringify([...delegatedEvents])};
   const doc = document;
+  const bns = createBrowserNavigationSecurityControls();
   let ic = 0;
   const ci = () =>
     crypto.randomUUID?.() ||
@@ -455,7 +459,7 @@ function installInlineKovoLoader(im) {
   const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
   const kb = (root = doc) =>
     root.querySelector?.('meta[name="kovo-build"]')?.getAttribute('content') || '';
-  const bh = (res) => res.headers?.get('Kovo-Build') ?? '';
+  const bh = (res) => bns.readHeader(res, 'Kovo-Build') ?? '';
   const qwk = (name, key) => {
     if (!name) return '';
     return key == null || key === '' ? name : key.startsWith(name + ':') ? key : name + ':' + key;
@@ -584,8 +588,7 @@ function installInlineKovoLoader(im) {
     if (globalThis.history?.scrollRestoration !== undefined) {
       globalThis.history.scrollRestoration = 'auto';
     }
-    if (location.assign) location.assign(href);
-    else location.href = href;
+    bns.navigateSameOrigin(href);
   };
   for (const el of qa(
     doc,
@@ -797,7 +800,7 @@ function installInlineKovoLoader(im) {
     form.setAttribute?.('kovo-error', '');
   };
   const chg = (response) => {
-    const value = response.headers?.get('Kovo-Changes') ?? response.headers?.get('kovo-changes');
+    const value = bns.readHeader(response, 'Kovo-Changes');
     if (!value) return [];
     try {
       const parsed = JSON.parse(value);
@@ -841,9 +844,12 @@ function installInlineKovoLoader(im) {
       type: 'kovo:mutation-response',
     });
   };
+  const rsp = (response, fallback = 0) => {
+    const value = bns.readResponseField(response, 'status');
+    return typeof value === 'number' && value >= 0 && value <= 999 ? value : fallback;
+  };
   const rst = (response) =>
-    (response.headers?.get('Kovo-Session-Transition') ??
-      response.headers?.get('kovo-session-transition') ?? '').trim().toLowerCase() === 'reload';
+    bns.isTrimmedAsciiEqual(bns.readHeader(response, 'Kovo-Session-Transition'), 'reload');
   function retireBroadcast() {
     if (bc) {
       bc.onmessage = null;
@@ -853,43 +859,32 @@ function installInlineKovoLoader(im) {
   }
   const retireSession = () => {
     retireBroadcast();
-    location.reload?.();
+    bns.reload();
   };
-  const badp = (value) => {
-    for (let index = 0; index < value.length; index += 1) {
-      const code = value.charCodeAt(index);
-      if (value[index] === '\\' || code <= 0x20 || code === 0x7f) return true;
+  const ant = (form, body) => {
+    const next = bns.safeSameOriginPath(bns.readFormDataValue(body, 'next'));
+    if (next) return next;
+    const current = bns.currentUrl();
+    const action = current ? bns.parseUrl(form.action || '', current.href) : undefined;
+    if (action?.pathname === '/_m/auth/sign-in' || action?.pathname === '/auth/sign-in') return '/';
+    return bns.currentPathTarget() || '/';
+  };
+  const eaf = (response, changes, text) => {
+    const status = rsp(response, 200);
+    if (status < 200 || status >= 300 || bns.readResponseField(response, 'ok') === false ||
+      !bns.isTrimmedAsciiEqual(text, '')) return false;
+    for (let index = 0; index < changes.length; index += 1) {
+      if (changes[index]?.domain === 'auth') return true;
     }
     return false;
   };
-  const safep = (value) => {
-    if (!value || value[0] !== '/' || value[1] === '/') return '';
-    try {
-      if (badp(decodeURIComponent(value))) return '';
-    } catch {
-      return '';
-    }
-    return value;
-  };
-  const ant = (form, body) => {
-    const next = safep(body.get?.('next'));
-    if (next) return next;
-    if ((form.action || '').includes('/auth/sign-in')) return '/';
-    return (location.pathname || '/') + (location.search || '') + (location.hash || '');
-  };
-  const eaf = (response, changes, text) =>
-    (response.status ?? 200) >= 200 &&
-    (response.status ?? 200) < 300 &&
-    response.ok !== false &&
-    text.trim() === '' &&
-    changes.some((change) => change?.domain === 'auth');
   const sef = (event, form) => {
     event.preventDefault();
     const streaming = form.getAttribute?.('data-mutation-stream') !== null;
     const body = new FormData(form, event.submitter);
-    const formIdem = body.get?.('Kovo-Idem');
+    const formIdem = bns.readFormDataValue(body, 'Kovo-Idem');
     const idem = typeof formIdem === 'string' && formIdem !== '' ? formIdem : ci();
-    fetch(form.action, {
+    bns.fetchValue(form.action, {
       body,
       headers: {
         Accept: streaming
@@ -903,54 +898,51 @@ function installInlineKovoLoader(im) {
         'Kovo-Targets': rt().join('; '),
       },
       keepalive: !streaming,
-      method: (form.method || 'post').toUpperCase(),
+      method: bns.upper(form.method || 'post'),
     })
       .then((response) => {
-        const reauth = response.headers?.get('Kovo-Reauth');
-        if (response.status == 401 && reauth) {
-          try {
-            if (reauth[0] !== '/' || reauth[1] === '/' || badp(decodeURIComponent(reauth))) {
-              throw 0;
-            }
-          } catch {
-            ng('/');
-            return;
-          }
-          ng(reauth);
+        const status = rsp(response);
+        // SPEC §9.3: retirement wins over every redirect/body channel; a response carrying
+        // conflicting metadata cannot keep the old page-load principal alive.
+        if (rst(response)) {
+          retireSession();
           return;
         }
-        const redirect = response.status >= 300 && response.status < 400
-          ? response.headers?.get('Location')
-          : response.redirected && response.url
-            ? response.url
+        const reauth = bns.readHeader(response, 'Kovo-Reauth');
+        if (status === 401 && reauth) {
+          ng(bns.safeSameOriginPath(reauth) || '/');
+          return;
+        }
+        const redirected = bns.readResponseField(response, 'redirected') === true;
+        const responseUrl = bns.readResponseField(response, 'url');
+        const redirect = status >= 300 && status < 400
+          ? bns.readHeader(response, 'Location')
+          : redirected && typeof responseUrl === 'string'
+            ? responseUrl
             : '';
         if (redirect) {
           ng(redirect);
           return;
         }
-        // SPEC §9.3: retire the page-load principal before any fragment/query truth is
-        // consumed or rebroadcast after an in-place session transition.
-        if (rst(response)) {
-          retireSession();
-          return;
-        }
-        if (streaming && response.body) {
+        const responseBody = bns.readResponseField(response, 'body');
+        if (streaming && responseBody) {
           // bugz-26 H6 / SPEC §14: validate the response build before acquiring a reader. A
           // missing/mismatched token must cancel unread bytes and hard-reload with zero apply.
           const responseBuild = bh(response);
           if (kb() && (!responseBuild || responseBuild !== kb())) {
-            return recoverStream(response.body);
+            return recoverStream(responseBody);
           }
-          return asr(response.body);
+          return asr(responseBody);
         }
-        return response.text().then((text) => {
+        return bns.readResponseText(response).then((text) => {
           const changes = chg(response);
           if (eaf(response, changes, text)) {
             ng(ant(form, body));
             return;
           }
           ab(text, bh(response));
-          if ((response.status ?? 200) >= 200 && (response.status ?? 200) < 300 && response.ok !== false) {
+          const completedStatus = rsp(response, 200);
+          if (completedStatus >= 200 && completedStatus < 300 && bns.readResponseField(response, 'ok') !== false) {
             pb(text, changes);
           }
         });

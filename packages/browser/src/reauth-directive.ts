@@ -1,4 +1,7 @@
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
 const FALLBACK_REAUTH_LOCATION = '/';
+const reauthSecurity = createBrowserNavigationSecurityControls();
 
 /**
  * SPEC §6.5: a `Kovo-Reauth` browser navigation target must remain a
@@ -8,23 +11,10 @@ const FALLBACK_REAUTH_LOCATION = '/';
  * @internal
  */
 export function sanitizeReauthDirective(value: string): string {
-  try {
-    const decoded = decodeURIComponent(value);
-    if (isSafeRootRelativePath(value) && isSafeRootRelativePath(decoded)) return value;
-  } catch {}
-
-  return FALLBACK_REAUTH_LOCATION;
+  return reauthSecurity.safeSameOriginPath(value) ?? FALLBACK_REAUTH_LOCATION;
 }
 
-function isSafeRootRelativePath(value: string): boolean {
-  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return false;
-  return isSafeDecodedPath(value);
-}
-
-function isSafeDecodedPath(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 0x20 || code === 0x7f || value[index] === '\\') return false;
-  }
-  return true;
+/** @internal Shared root-relative redirect validator for auth-success and 401 paths. */
+export function sanitizeAuthNavigationTarget(value: unknown): string | undefined {
+  return reauthSecurity.safeSameOriginPath(value);
 }
