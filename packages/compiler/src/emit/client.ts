@@ -3,6 +3,7 @@ import { headlessUiGeneratedHandlerNames } from '../generated/headless-ui-genera
 import {
   compilerArrayJoin,
   compilerCreateSet,
+  compilerJsonStringify,
   compilerOwnDataValue,
   compilerRegExpExec,
   compilerRegExpReplace,
@@ -631,7 +632,7 @@ function emitQueryUpdatePlanExport(
   const deriveExports = derives
     .map(
       (derive) =>
-        `export const ${derive.exportName} = derive(${JSON.stringify(deriveInputs(derive))}, (${deriveParams(derive).join(', ')}) => ${derive.expression});`,
+        `export const ${derive.exportName} = derive(${compilerJsonSource(deriveInputs(derive), 'Client derive inputs')}, (${compilerArrayJoin(deriveParams(derive), ', ')}) => ${derive.expression});`,
     )
     .join('\n');
   const helper = derives.some((derive) => deriveInputs(derive).length > 1)
@@ -647,6 +648,12 @@ function emitQueryUpdatePlanExport(
     .join('\n');
 
   return `${deriveExports}${helper}${deriveExports || helper ? '\n\n' : ''}export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
+}
+
+function compilerJsonSource(value: unknown, label: string): string {
+  const source = compilerJsonStringify(value);
+  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  return source;
 }
 
 function emitDerivePlan(derive: QueryDeriveFact): string {

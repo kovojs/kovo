@@ -603,4 +603,46 @@ export const ProductCard = component({
     );
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject executable source through inline derive parameter Array.join', () => {
+    const nativeJoin = Array.prototype.join;
+    const nativeApply = Reflect.apply;
+    const injection =
+      'now, cart) => 0);\nglobalThis.KOVO_DERIVE_INJECTION = true;\n//';
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.join = function poisonedInlineDeriveJoin(separator?: string): string {
+        if (
+          this.length === 2 &&
+          this[0] === 'now' &&
+          this[1] === 'cart' &&
+          separator === ', '
+        ) {
+          poisonHits += 1;
+          return injection;
+        }
+        return nativeApply(nativeJoin, this, [separator]);
+      };
+      result = compileComponentModule({
+        fileName: 'clock-label.tsx',
+        source: `
+export const ClockLabel = component({
+  queries: { cart: cartQuery },
+  clocks: { ago: { every: '1s' } },
+  render: ({ cart, now }) => (
+    <time title={formatRelative(now.ago, cart.updatedAt)}>Updated</time>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.join = nativeJoin;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_DERIVE_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
 });

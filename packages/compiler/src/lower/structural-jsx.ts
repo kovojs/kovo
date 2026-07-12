@@ -52,6 +52,7 @@ import {
   compilerArrayJoin,
   compilerArrayLength,
   compilerDefineOwnDataProperty,
+  compilerJsonStringify,
   compilerOwnDataValue,
   compilerSetHas,
   compilerSnapshotDenseArray,
@@ -502,8 +503,8 @@ function lowerAttributeDerive(
     nameCounts,
     stampPrefix: candidate.query,
     deriveExports,
-    inputs: JSON.stringify(deriveInputs),
-    params: deriveParams.join(', '),
+    inputs: compilerJsonSource(deriveInputs, 'Inline attribute derive inputs'),
+    params: compilerArrayJoin(deriveParams, ', '),
     expression,
     stateDerive:
       candidate.source === 'state'
@@ -807,7 +808,7 @@ function lowerPrimitiveComputedAttribute(
     nameCounts,
     stampPrefix: root,
     deriveExports,
-    inputs: JSON.stringify([root]),
+    inputs: compilerJsonSource([root], 'Primitive reactive derive inputs'),
     params: root,
     expression,
     stateDerive: isState
@@ -1014,7 +1015,7 @@ function lowerPrimitiveIndeterminateProp(
     nameCounts,
     stampPrefix: root,
     deriveExports,
-    inputs: JSON.stringify([root]),
+    inputs: compilerJsonSource([root], 'Live-property derive inputs'),
     params: root,
     expression: executableExpression,
     stateDerive: isState
@@ -1078,7 +1079,7 @@ function lowerPrimitiveReactiveAttribute(
     nameCounts,
     stampPrefix: root,
     deriveExports,
-    inputs: JSON.stringify([root]),
+    inputs: compilerJsonSource([root], 'Reactive attribute derive inputs'),
     params: root,
     expression,
     stateDerive: isState
@@ -1573,6 +1574,12 @@ function appendCompilerFact<Value>(target: Value[], value: Value, label: string)
   compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
 }
 
+function compilerJsonSource(value: unknown, label: string): string {
+  const source = compilerJsonStringify(value);
+  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  return source;
+}
+
 function mergeStyle(
   element: JsxIrElement,
   style: string,
@@ -1879,8 +1886,8 @@ function recordQueryTextDerive(
     nameCounts,
     stampPrefix: derive.query,
     deriveExports,
-    inputs: JSON.stringify(derive.inputs),
-    params: derive.params.join(', '),
+    inputs: compilerJsonSource(derive.inputs, 'Inline query text derive inputs'),
+    params: compilerArrayJoin(derive.params, ', '),
     expression,
     outputContext: outputWriteFact({
       context: 'text',
@@ -1934,15 +1941,21 @@ interface EmitDeriveOptions {
 function emitDerive(options: EmitDeriveOptions): { exportName: string; stampName: string } {
   const exportName = nextExportName(options.baseName, options.nameCounts);
   const stampName = `${options.stampPrefix}.${exportName}`;
-  options.deriveExports.push(
+  appendCompilerFact(
+    options.deriveExports,
     `export const ${exportName} = derive(${options.inputs}, (${options.params}) => ${options.expression});`,
+    'Structural derive exports',
   );
   if (options.stateDerive && options.stateDerives) {
     const fact = options.stateDerive(exportName);
-    if (fact) options.stateDerives.push(fact);
+    if (fact) appendCompilerFact(options.stateDerives, fact, 'Structural state derives');
   }
   if (options.outputContext && options.outputContexts) {
-    options.outputContexts.push(options.outputContext);
+    appendCompilerFact(
+      options.outputContexts,
+      options.outputContext,
+      'Structural output contexts',
+    );
   }
   return { exportName, stampName };
 }
