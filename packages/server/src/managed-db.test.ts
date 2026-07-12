@@ -1295,6 +1295,26 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       );
       expect(handle.select(splitProjection).from(publicData).get()).toEqual({ label: 'public' });
 
+      const descriptorControl = drizzleSql`${1}`;
+      const rawDescriptor = Object.getOwnPropertyDescriptor(
+        drizzleSql.raw('(select classified from secrets)'),
+        'queryChunks',
+      )!;
+      let queryChunkDescriptorReads = 0;
+      const splitDescriptors = new Proxy(descriptorControl, {
+        getOwnPropertyDescriptor(target, property) {
+          if (property === 'queryChunks') {
+            queryChunkDescriptorReads += 1;
+            if (queryChunkDescriptorReads >= 3) return rawDescriptor;
+          }
+          return Reflect.getOwnPropertyDescriptor(target, property);
+        },
+      });
+      expect(handle.select({ leaked: splitDescriptors }).from(publicData).all()).toEqual([
+        { leaked: 1 },
+      ]);
+      expect(queryChunkDescriptorReads).toBe(1);
+
       const evil = rawDb
         .select({ leaked: drizzleSql.raw('classified').as('leaked') })
         .from(secrets)

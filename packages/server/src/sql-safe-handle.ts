@@ -419,17 +419,110 @@ function guardedSqlBuilderArguments(args: readonly unknown[]): unknown[] {
     if (typeof argument === 'function') {
       appendSqlSafetyValue(guarded, function (this: unknown, ...callbackArgs: unknown[]) {
         const result = witnessReflectApply<unknown>(argument, this, callbackArgs);
-        const canonical = canonicalizeNativeDrizzleCountStar(result);
+        const canonical = canonicalizeNativeDrizzleCountStar(
+          snapshotManagedBuilderArgumentGraph(result),
+        );
         assertNoUnsafeRawSqlBuilderValue(canonical);
         return canonical;
       });
       continue;
     }
-    const canonical = canonicalizeNativeDrizzleCountStar(argument);
+    const canonical = canonicalizeNativeDrizzleCountStar(
+      snapshotManagedBuilderArgumentGraph(argument),
+    );
     assertNoUnsafeRawSqlBuilderValue(canonical);
     appendSqlSafetyValue(guarded, canonical);
   }
   return guarded;
+}
+
+/**
+ * Capture each caller descriptor exactly once before any classifier runs. Classifying an object and
+ * then rereading it for reconstruction would let a Proxy return a benign graph during the verdict
+ * and a different executable graph at the sink. All subsequent classification and reconstruction
+ * consumes only this frozen snapshot (SPEC §6.6 C9/C15, §10.2).
+ */
+function snapshotManagedBuilderArgumentGraph(
+  value: unknown,
+  seen = createWitnessWeakMap<object, unknown>(),
+): unknown {
+  if (!isRecord(value)) return value;
+  const prior = witnessWeakMapGet(seen, value);
+  if (prior !== undefined) return prior;
+
+  if (snapshotManagedSqlRecipe(value) !== undefined) {
+    const pinned = canonicalPinnedDrizzleSql(value);
+    if (pinned === undefined) throw nativeDrizzleProvenanceError();
+    witnessWeakMapSet(seen, value, pinned);
+    return pinned;
+  }
+
+  const prototype = witnessGetPrototypeOf(value);
+  const kinds = nativeDrizzleEntityKindsFromPrototype(prototype);
+  const structural =
+    witnessIsArray(value) ||
+    prototype === intrinsicObjectPrototype ||
+    prototype === null ||
+    witnessSetSize(kinds) > 0;
+  if (!structural) return value;
+
+  const descriptors = witnessGetOwnPropertyDescriptors(value);
+  if (witnessIsArray(value)) {
+    const length = witnessReflectGet(descriptors, 'length') as PropertyDescriptor | undefined;
+    if (
+      length === undefined ||
+      !('value' in length) ||
+      typeof length.value !== 'number' ||
+      length.value < 0 ||
+      length.value % 1 !== 0
+    ) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const snapshot: unknown[] = [];
+    witnessWeakMapSet(seen, value, snapshot);
+    for (let index = 0; index < length.value; index += 1) {
+      const descriptor = witnessReflectGet(descriptors, String(index)) as
+        | PropertyDescriptor
+        | undefined;
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw nativeDrizzleProvenanceError();
+      }
+      witnessDefineProperty(snapshot, index, {
+        configurable: true,
+        enumerable: true,
+        value: snapshotManagedBuilderArgumentGraph(descriptor.value, seen),
+        writable: true,
+      });
+    }
+    return witnessFreeze(snapshot);
+  }
+
+  const snapshot =
+    prototype === intrinsicObjectPrototype || prototype === null
+      ? witnessCreateNullRecord()
+      : witnessCreateWithPrototype<Record<PropertyKey, unknown>>(prototype);
+  witnessWeakMapSet(seen, value, snapshot);
+  const keys = witnessOwnKeys(descriptors);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const property = keyDescriptor.value;
+    const descriptor = witnessReflectGet(descriptors, property) as PropertyDescriptor | undefined;
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new Error(
+        'KV422: managed SQL builder cannot snapshot an accessor-backed argument graph (SPEC §6.6/§10.2).',
+      );
+    }
+    witnessDefineProperty(snapshot, property, {
+      configurable: descriptor.configurable ?? false,
+      enumerable: descriptor.enumerable ?? false,
+      value: snapshotManagedBuilderArgumentGraph(descriptor.value, seen),
+      writable: descriptor.writable ?? false,
+    });
+  }
+  return witnessFreeze(snapshot);
 }
 
 /**
@@ -445,6 +538,7 @@ function canonicalizeNativeDrizzleCountStar(
   seen = createWitnessWeakMap<object, unknown>(),
 ): unknown {
   if (!isRecord(value)) return value;
+  if (witnessWeakSetHas(frameworkCanonicalNativeSqlValues, value)) return value;
   const prior = witnessWeakMapGet(seen, value);
   if (prior !== undefined) return prior;
 
@@ -1307,8 +1401,11 @@ function plainSqlWrapperSurface(value: object): boolean {
 }
 
 function nativeDrizzleEntityKinds(value: object): Set<string> {
+  return nativeDrizzleEntityKindsFromPrototype(witnessGetPrototypeOf(value));
+}
+
+function nativeDrizzleEntityKindsFromPrototype(prototype: object | null): Set<string> {
   const kinds = createWitnessSet<string>();
-  let prototype = witnessGetPrototypeOf(value);
   while (prototype !== null && prototype !== intrinsicObjectPrototype) {
     const constructor = witnessGetOwnPropertyDescriptor(prototype, 'constructor');
     if (constructor && 'value' in constructor && typeof constructor.value === 'function') {
