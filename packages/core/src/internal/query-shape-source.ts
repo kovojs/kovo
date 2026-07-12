@@ -3,6 +3,7 @@ import type * as TypeScript from 'typescript';
 import {
   freezeSecurityValue,
   securityArrayAppend,
+  securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityHasOwn,
   securityIsArray,
@@ -567,7 +568,7 @@ function snapshotQueryShapeArray<Value>(value: readonly Value[], label: string):
   }
   const snapshot: Value[] = [];
   for (let index = 0; index < rawLength; index += 1) {
-    snapshot[index] = queryShapeOwnDataValue(value, index, label) as Value;
+    securityArrayAppend(snapshot, queryShapeOwnDataValue(value, index, label) as Value);
   }
   return freezeSecurityValue(snapshot);
 }
@@ -613,11 +614,22 @@ function appendQueryShapeFacts(
 
 function insertQueryShapeFact(result: QueryShapeFact[], fact: QueryShapeFact): void {
   let index = result.length;
+  securityArrayAppend(result, fact);
   while (index > 0 && compareQueryShapeFact(fact, result[index - 1]!) < 0) {
-    result[index] = result[index - 1]!;
+    securityDefineProperty(result, index, {
+      configurable: true,
+      enumerable: true,
+      value: result[index - 1],
+      writable: true,
+    });
     index -= 1;
   }
-  result[index] = fact;
+  securityDefineProperty(result, index, {
+    configurable: true,
+    enumerable: true,
+    value: fact,
+    writable: true,
+  });
 }
 
 function compareQueryShapeFact(left: QueryShapeFact, right: QueryShapeFact): number {

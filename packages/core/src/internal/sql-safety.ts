@@ -613,7 +613,7 @@ function copyOwnArray<T>(values: readonly T[]): T[] {
   for (let index = 0; index < values.length; index += 1) {
     const entry = ownArrayEntry(values, index);
     if (!entry.ok) throw new TypeError('SQL arrays require dense stable own-data entries.');
-    copy[index] = entry.value;
+    securityArrayAppend(copy, entry.value);
   }
   return copy;
 }

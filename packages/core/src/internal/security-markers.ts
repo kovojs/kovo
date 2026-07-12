@@ -1,3 +1,12 @@
+import {
+  freezeSecurityValue,
+  securityArrayAppend,
+  securityArrayIncludesExact,
+  securityDefineProperty,
+  securityGetOwnPropertyDescriptor,
+  securityObjectKeys,
+} from '#security-witness-intrinsics';
+
 type AnyFunction = (...args: any[]) => any;
 
 /** @internal Fixed retention ceiling for process-local runtime audit observations (SPEC §9.5). */
@@ -31,7 +40,10 @@ export function createBoundedRuntimeAuditCollector<Fact>(
     );
   }
 
-  const retained: (Fact | undefined)[] = new Array(capacity);
+  const retained: (Fact | undefined)[] = [];
+  for (let index = 0; index < capacity; index += 1) {
+    securityArrayAppend(retained, undefined);
+  }
   let head = 0;
   let size = 0;
 
@@ -39,9 +51,16 @@ export function createBoundedRuntimeAuditCollector<Fact>(
     drain(): Fact[] {
       const facts: Fact[] = [];
       for (let index = 0; index < size; index += 1) {
-        facts.push(retained[(head + index) % capacity]!);
+        securityArrayAppend(facts, retained[(head + index) % capacity]!);
       }
-      retained.fill(undefined);
+      for (let index = 0; index < capacity; index += 1) {
+        securityDefineProperty(retained, index, {
+          configurable: true,
+          enumerable: true,
+          value: undefined,
+          writable: true,
+        });
+      }
       head = 0;
       size = 0;
       return facts;
@@ -373,25 +392,50 @@ export const SECURITY_CODE_REGISTRY = {
 } as const satisfies Readonly<Record<string, SecurityCodeRegistryEntry>>;
 
 /** @internal Security codes that paranoid mode must downgrade to advisory findings. */
-export const PARANOID_SECURITY_ADVISORY_CODES: readonly string[] = Object.freeze(
-  Object.values(SECURITY_CODE_REGISTRY)
-    .filter((entry) => {
-      const registryEntry = entry as SecurityCodeRegistryEntry;
-      return (
-        registryEntry.enforcement === 'runtime-choke' ||
-        (registryEntry.enforcement === 'by-construction' && registryEntry.paranoidAdvisory === true)
-      );
-    })
-    .map((entry) => entry.code)
-    .sort(),
-);
+export const PARANOID_SECURITY_ADVISORY_CODES: readonly string[] =
+  collectParanoidSecurityAdvisoryCodes();
+
+function collectParanoidSecurityAdvisoryCodes(): readonly string[] {
+  const codes: string[] = [];
+  const keys = securityObjectKeys(SECURITY_CODE_REGISTRY);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(SECURITY_CODE_REGISTRY, keys[keyIndex]!);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const entry = descriptor.value as SecurityCodeRegistryEntry;
+    if (
+      entry.enforcement !== 'runtime-choke' &&
+      (entry.enforcement !== 'by-construction' || entry.paranoidAdvisory !== true)
+    ) {
+      continue;
+    }
+
+    let insertion = codes.length;
+    securityArrayAppend(codes, entry.code);
+    while (insertion > 0 && codes[insertion - 1]! > entry.code) {
+      securityDefineProperty(codes, insertion, {
+        configurable: true,
+        enumerable: true,
+        value: codes[insertion - 1],
+        writable: true,
+      });
+      insertion -= 1;
+    }
+    securityDefineProperty(codes, insertion, {
+      configurable: true,
+      enumerable: true,
+      value: entry.code,
+      writable: true,
+    });
+  }
+  return freezeSecurityValue(codes);
+}
 
 /** @internal DEC-D1/C5: auth/confidentiality guarantees cannot rest only on build enumeration. */
 export const AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES = ['KV414', 'KV435'] as const;
 
 /** @internal Return whether a code is advisory under KOVO_PARANOID=1. */
 export function isParanoidSecurityAdvisoryCode(code: string): boolean {
-  return PARANOID_SECURITY_ADVISORY_CODES.includes(code);
+  return securityArrayIncludesExact(PARANOID_SECURITY_ADVISORY_CODES, code);
 }
 
 /** @internal Non-structural marker for security-decision functions (SPEC.md §6 honesty boundary). */

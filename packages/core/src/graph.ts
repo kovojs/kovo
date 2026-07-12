@@ -3,6 +3,9 @@ import type { DerivationStatus } from './derivation.js';
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
 import {
   securityArrayAppend,
+  securityGetOwnPropertyDescriptor,
+  securityIsArray,
+  securityObjectKeys,
   securityOwnArrayEntry,
   securitySet,
   securitySetAdd,
@@ -1349,14 +1352,19 @@ export function validateKovoExplainInput(input: unknown): GraphInputValidationEr
     return [{ message: 'input JSON must be an object', path: '$' }];
   }
 
-  for (const field of arrayFields) {
-    if (input[field] !== undefined && !Array.isArray(input[field])) {
-      errors.push({ message: `${field} must be an array`, path: field });
+  for (let index = 0; index < arrayFields.length; index += 1) {
+    const field = securityOwnArrayEntry(arrayFields, index);
+    if (!field.ok) continue;
+    if (input[field.value] !== undefined && !securityIsArray(input[field.value])) {
+      securityArrayAppend(errors, {
+        message: `${field.value} must be an array`,
+        path: field.value,
+      });
     }
   }
 
   if (input.touchGraph !== undefined && !isRecord(input.touchGraph)) {
-    errors.push({ message: 'touchGraph must be an object', path: 'touchGraph' });
+    securityArrayAppend(errors, { message: 'touchGraph must be an object', path: 'touchGraph' });
   }
 
   validateDiagnosticFactCodes(input.diagnostics, 'diagnostics', errors);
@@ -1373,35 +1381,42 @@ function validateDiagnosticFactCodes(
   path: string,
   errors: GraphInputValidationError[],
 ): void {
-  if (!Array.isArray(values)) return;
-
-  values.forEach((value, index) => {
-    if (!isRecord(value) || value.code === undefined) return;
+  if (!securityIsArray(values)) return;
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) continue;
+    const value = entry.value;
+    if (!isRecord(value) || value.code === undefined) continue;
     validateDiagnosticCode(value.code, `${path}[${index}].code`, errors);
-  });
+  }
 }
 
 function validateAttributeMergeDiagnosticCodes(
   components: unknown,
   errors: GraphInputValidationError[],
 ): void {
-  if (!Array.isArray(components)) return;
-
-  components.forEach((component, componentIndex) => {
-    if (!isRecord(component) || !Array.isArray(component.attributeMerges)) return;
-
-    component.attributeMerges.forEach((merge, mergeIndex) => {
-      if (!isRecord(merge) || !Array.isArray(merge.diagnostics)) return;
-
-      merge.diagnostics.forEach((code, codeIndex) => {
+  if (!securityIsArray(components)) return;
+  for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
+    const componentEntry = securityOwnArrayEntry(components, componentIndex);
+    if (!componentEntry.ok) continue;
+    const component = componentEntry.value;
+    if (!isRecord(component) || !securityIsArray(component.attributeMerges)) continue;
+    for (let mergeIndex = 0; mergeIndex < component.attributeMerges.length; mergeIndex += 1) {
+      const mergeEntry = securityOwnArrayEntry(component.attributeMerges, mergeIndex);
+      if (!mergeEntry.ok) continue;
+      const merge = mergeEntry.value;
+      if (!isRecord(merge) || !securityIsArray(merge.diagnostics)) continue;
+      for (let codeIndex = 0; codeIndex < merge.diagnostics.length; codeIndex += 1) {
+        const code = securityOwnArrayEntry(merge.diagnostics, codeIndex);
+        if (!code.ok) continue;
         validateDiagnosticCode(
-          code,
+          code.value,
           `components[${componentIndex}].attributeMerges[${mergeIndex}].diagnostics[${codeIndex}]`,
           errors,
         );
-      });
-    });
-  });
+      }
+    }
+  }
 }
 
 function validateTouchGraphDiagnosticCodes(
@@ -1410,17 +1425,26 @@ function validateTouchGraphDiagnosticCodes(
 ): void {
   if (!isRecord(touchGraph)) return;
 
-  for (const [entryName, entry] of Object.entries(touchGraph)) {
-    if (!isRecord(entry) || !Array.isArray(entry.unresolved)) continue;
-
-    entry.unresolved.forEach((unresolved, index) => {
-      if (!isRecord(unresolved) || unresolved.code === undefined) return;
+  const names = securityObjectKeys(touchGraph);
+  for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+    const nameEntry = securityOwnArrayEntry(names, nameIndex);
+    if (!nameEntry.ok) continue;
+    const entryName = nameEntry.value;
+    const descriptor = securityGetOwnPropertyDescriptor(touchGraph, entryName);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const entry = descriptor.value;
+    if (!isRecord(entry) || !securityIsArray(entry.unresolved)) continue;
+    for (let index = 0; index < entry.unresolved.length; index += 1) {
+      const unresolvedEntry = securityOwnArrayEntry(entry.unresolved, index);
+      if (!unresolvedEntry.ok) continue;
+      const unresolved = unresolvedEntry.value;
+      if (!isRecord(unresolved) || unresolved.code === undefined) continue;
       validateDiagnosticCode(
         unresolved.code,
         `touchGraph.${quotePathSegment(entryName)}.unresolved[${index}].code`,
         errors,
       );
-    });
+    }
   }
 }
 
@@ -1431,14 +1455,14 @@ function validateDiagnosticCode(
 ): void {
   if (isDiagnosticCode(value)) return;
 
-  errors.push({
+  securityArrayAppend(errors, {
     message: `unknown diagnostic code ${JSON.stringify(value)}`,
     path,
   });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !securityIsArray(value);
 }
 
 function quotePathSegment(value: string): string {

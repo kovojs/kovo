@@ -292,7 +292,7 @@ function compileRoutes<Route extends RouteLike>(
   const paths: string[] = [];
   for (let index = 0; index < routes.length; index += 1) {
     const routeEntry = securityOwnArrayEntry(routes, index);
-    if (routeEntry.ok) paths[index] = routeEntry.value.path;
+    if (routeEntry.ok) securityArrayAppend(paths, routeEntry.value.path);
   }
   if (cached && pathsEqual(cached.paths, paths)) {
     return cached.compiled as readonly CompiledRoute<Route>[];
@@ -301,7 +301,7 @@ function compileRoutes<Route extends RouteLike>(
   const compiled: CompiledRoute<Route>[] = [];
   for (let index = 0; index < routes.length; index += 1) {
     const routeEntry = securityOwnArrayEntry(routes, index);
-    if (routeEntry.ok) compiled[index] = compileRoute(routeEntry.value, index);
+    if (routeEntry.ok) securityArrayAppend(compiled, compileRoute(routeEntry.value, index));
   }
   securityWeakMapSet(routeTableCache, routes, { compiled, paths });
   return compiled;

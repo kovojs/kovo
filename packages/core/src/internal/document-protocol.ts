@@ -6,10 +6,15 @@ export const enhancedNavigationDocumentAcceptHeader = `${enhancedNavigationDocum
 
 /** @internal */
 export function acceptsEnhancedNavigationDocument(accept: string | null | undefined): boolean {
-  return (
-    accept
-      ?.split(',')
-      .some((entry) => entry.trim().split(';', 1)[0] === enhancedNavigationDocumentMimeType) ===
-    true
-  );
+  if (accept === null || accept === undefined) return false;
+  const entries = securityStringSplit(accept, ',');
+  for (let index = 0; index < entries.length; index += 1) {
+    const mediaType = securityStringSplit(securityStringTrim(entries[index]!), ';')[0];
+    if (mediaType === enhancedNavigationDocumentMimeType) return true;
+  }
+  return false;
 }
+import {
+  securityStringSplit,
+  securityStringTrim,
+} from './security-witness-intrinsics.js';

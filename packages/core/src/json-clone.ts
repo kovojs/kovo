@@ -1,5 +1,6 @@
 import type { JsonValue } from './json.js';
 import {
+  securityArrayAppend,
   securityApply,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
@@ -50,7 +51,7 @@ export function cloneJsonValue<Value extends JsonValue>(value: Value): Value {
   if (securityIsArray(value)) {
     const next: JsonValue[] = [];
     for (let index = 0; index < value.length; index += 1) {
-      next[index] = cloneJsonValue(value[index] as JsonValue);
+      securityArrayAppend(next, cloneJsonValue(value[index] as JsonValue));
     }
     return next as Value;
   }
@@ -200,7 +201,7 @@ function canonicalizeJsonValue(value: JsonValue): JsonValue {
   if (securityIsArray(value)) {
     const next: JsonValue[] = [];
     for (let index = 0; index < value.length; index += 1) {
-      next[index] = canonicalizeJsonValue(value[index] as JsonValue);
+      securityArrayAppend(next, canonicalizeJsonValue(value[index] as JsonValue));
     }
     return next;
   }

@@ -14,6 +14,39 @@ import {
 const moduleUrl = new URL('./json-clone.ts', import.meta.url).href;
 
 describe('JSON value utilities', () => {
+  it('cannot erase cloned array entries through inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    let clone: JsonValue | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'reviewed-json') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      clone = cloneJsonValue(['reviewed-json']);
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+    expect(clone).toEqual(['reviewed-json']);
+    expect(poisonHits).toBe(0);
+  });
+
   it('clones proxy-backed JSON values without structuredClone', () => {
     const source = new Proxy(
       {

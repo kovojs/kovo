@@ -48,6 +48,27 @@ describe('wire-json core contract', () => {
     }
   });
 
+  it('cannot erase normalized wire entries through inherited numeric setters', () => {
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let setterCalls = 0;
+    let output: string | undefined;
+    try {
+      Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        },
+      });
+      output = stringifyWireValue(['reviewed-wire-value']);
+    } finally {
+      if (previous === undefined) delete (Array.prototype as { 0?: unknown })[0];
+      else Object.defineProperty(Array.prototype, '0', previous);
+    }
+
+    expect(setterCalls).toBe(0);
+    expect(output).toBe('["reviewed-wire-value"]');
+  });
+
   it('pins normalization, serialization, and parsing after late intrinsic replacement', () => {
     const originalStringify = JSON.stringify;
     const originalParse = JSON.parse;

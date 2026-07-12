@@ -102,12 +102,24 @@ export const ACCESSIBLE_SEMANTIC_ATTRIBUTES = SEMANTIC_ATTRIBUTE_MANIFEST.access
 /** @internal */
 export const BEHAVIORAL_SEMANTIC_ATTRIBUTES = SEMANTIC_ATTRIBUTE_MANIFEST.behavioral;
 
-const generatedOnlyAttributeNames = new Set<string>(GENERATED_ONLY_SEMANTIC_ATTRIBUTES);
+const generatedOnlyAttributeNames = securitySet<string>();
+for (let index = 0; index < GENERATED_ONLY_SEMANTIC_ATTRIBUTES.length; index += 1) {
+  securitySetAdd(generatedOnlyAttributeNames, GENERATED_ONLY_SEMANTIC_ATTRIBUTES[index]!);
+}
 
 /** @internal True when a framework-emitted attribute is ignored by render-equivalence. */
 export function isGeneratedOnlySemanticAttribute(name: string): boolean {
-  return (
-    generatedOnlyAttributeNames.has(name) ||
-    GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES.some((prefix) => name.startsWith(prefix))
-  );
+  if (securitySetHas(generatedOnlyAttributeNames, name)) return true;
+  for (let index = 0; index < GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES.length; index += 1) {
+    if (securityStringStartsWith(name, GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES[index]!)) {
+      return true;
+    }
+  }
+  return false;
 }
+import {
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securityStringStartsWith,
+} from './security-witness-intrinsics.js';

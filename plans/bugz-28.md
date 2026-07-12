@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   255 | C1-C255 |
+| Critical |   256 | C1-C256 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2980,6 +2980,17 @@ build:dist` passes.
     primitives; generated code imports only the narrow internal append capability.
   - **Evidence:** the exact build-snapshot setter receives zero commits, generated-source assertions
     reject direct appends, all 18 focused build/MCP tests pass, and CLI dist/DTS builds are green.
+
+- [x] **C256 - Core wire, SQL, graph, query, and marker arrays retain numeric-setter dispatch.**
+      `packages/core/src`
+  - Fresh indexed writes and mutable collection methods remained in client-wire normalization,
+    separated-SQL snapshots, query-shape facts/deltas, graph derivation, route/document policy, and
+    paranoid advisory construction. Selective prototype poison could erase a wire value or reviewed
+    SQL/query fact after its source was accepted.
+  - **Acceptance:** fresh authority arrays use verified own-data commits, insertion sorts overwrite
+    only owned slots, and runtime policy decisions use boot-pinned collection/string controls.
+  - **Evidence:** exact clone and wire-normalization setters receive zero commits and retain original
+    values; all 306 core tests and dist/DTS builds pass.
 
 ## High
 

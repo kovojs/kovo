@@ -126,7 +126,7 @@ function snapshotDenseArray<Value>(value: unknown): Value[] | undefined {
   for (let index = 0; index < length; index += 1) {
     const entry = securityOwnArrayEntry(value as readonly Value[], index);
     if (!entry.ok) return undefined;
-    snapshot[index] = entry.value;
+    securityArrayAppend(snapshot, entry.value);
   }
   return snapshot;
 }
@@ -432,7 +432,7 @@ function reconcileList(
     if (key === undefined) {
       throw new QueryDeltaApplyError(`query delta upsert row missing key "${keyField}"`);
     }
-    upsertEntries[index] = { key, row };
+    securityArrayAppend(upsertEntries, { key, row });
     securityMapSet(upsertByKey, key, row);
   }
 

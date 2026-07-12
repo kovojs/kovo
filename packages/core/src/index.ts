@@ -4,8 +4,11 @@ import { blessSink } from './internal/sink-policy.js';
 import { buildRoutePatternHref } from './internal/route-pattern.js';
 import {
   freezeSecurityValue,
+  securityArrayAppend,
+  securityArrayIncludesExact,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
+  securityIsArray,
   securityObjectKeys,
   securityNullRecord,
   securityWeakSet,
@@ -1194,7 +1197,9 @@ function failureCodeMatches(
 ): boolean {
   if (code === undefined) return true;
   if (typeof failure.code !== 'string') return false;
-  return Array.isArray(code) ? code.includes(failure.code) : failure.code === code;
+  return securityIsArray(code)
+    ? securityArrayIncludesExact(code, failure.code)
+    : failure.code === code;
 }
 
 function renderFailureOutput<Failure>(
@@ -1216,11 +1221,18 @@ function failureOutputAttributes<Failure>(
   failure: Record<string, unknown>,
 ): string {
   const attrs: string[] = [`role="${escapeHtmlAttribute(String(props.role ?? 'alert'))}"`];
-  if (props.id !== undefined) attrs.push(`id="${escapeHtmlAttribute(props.id)}"`);
-  if (props.class !== undefined) attrs.push(`class="${escapeHtmlAttribute(props.class)}"`);
-  if (typeof failure.code === 'string')
-    attrs.push(`data-error-code="${escapeHtmlAttribute(failure.code)}"`);
-  return attrs.length === 0 ? '' : ` ${attrs.join(' ')}`;
+  if (props.id !== undefined) securityArrayAppend(attrs, `id="${escapeHtmlAttribute(props.id)}"`);
+  if (props.class !== undefined) {
+    securityArrayAppend(attrs, `class="${escapeHtmlAttribute(props.class)}"`);
+  }
+  if (typeof failure.code === 'string') {
+    securityArrayAppend(attrs, `data-error-code="${escapeHtmlAttribute(failure.code)}"`);
+  }
+  let rendered = '';
+  for (let index = 0; index < attrs.length; index += 1) {
+    rendered += `${index === 0 ? '' : ' '}${attrs[index] ?? ''}`;
+  }
+  return rendered === '' ? '' : ` ${rendered}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

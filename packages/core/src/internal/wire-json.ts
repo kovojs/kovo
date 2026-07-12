@@ -6,6 +6,7 @@
 import { isSecret, isUntrusted } from '../secret.js';
 import {
   securityApply,
+  securityArrayAppend,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityHasInstance,
@@ -186,13 +187,13 @@ export function jsonSafeWireValue(value: unknown): unknown {
       // JSON.stringify emits array holes as null. Reconstruct that exact value rather than
       // dispatching through caller-controlled Array iteration/map methods.
       if (descriptor === undefined) {
-        out[index] = null;
+        securityArrayAppend(out, null);
         continue;
       }
       if (!('value' in descriptor)) {
         throw new TypeError('Kovo wire JSON arrays must contain stable data properties.');
       }
-      out[index] = jsonSafeWireValue(descriptor.value);
+      securityArrayAppend(out, jsonSafeWireValue(descriptor.value));
     }
     return out;
   }
