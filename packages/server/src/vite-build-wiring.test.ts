@@ -21,7 +21,7 @@ const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
 const testFingerprintVersionPattern = new RegExp(
-  `^/?c/__v/${testRenderPlanFingerprint}-[a-f0-9]{12}/cart\\.client\\.js$`,
+  `^/?c/__v/${testRenderPlanFingerprint}-[a-f0-9]{64}/cart\\.client\\.js$`,
 );
 
 describe('server app shell Vite plugin', () => {
