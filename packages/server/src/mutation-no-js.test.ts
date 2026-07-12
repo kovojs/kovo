@@ -7,6 +7,7 @@ import { csrfToken, KOVO_IDEM_FIELD_NAME, mintCsrfField, type CsrfOptions } from
 import { renderedHtml } from './html.js';
 import { renderMutationEndpointResponse, renderNoJsMutationResponse } from './mutation.js';
 import { createMemoryMutationReplayStore } from './replay.js';
+import { isBlessedRedirectResponse, serverResponseToWebResponse } from './response.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
@@ -342,6 +343,14 @@ describe('no-JS mutation responses', () => {
     const replayed = await submit();
     expect(first).toEqual(replayed);
     expect(first.status).toBe(303);
+    expect(isBlessedRedirectResponse(first)).toBe(true);
+    expect(isBlessedRedirectResponse(replayed)).toBe(true);
+    expect(serverResponseToWebResponse(first, { method: 'POST' }).headers.get('location')).toBe(
+      '/reset-sent',
+    );
+    expect(serverResponseToWebResponse(replayed, { method: 'POST' }).headers.get('location')).toBe(
+      '/reset-sent',
+    );
     expect(handlerCalls).toBe(1);
   });
 

@@ -1,7 +1,9 @@
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import {
+  blessRedirectResponse,
   cloneResponseHeaders,
+  isBlessedRedirectResponse,
   type FrameworkWireBody,
   type ResponseHeaders,
   type ServerResponseBase,
@@ -584,9 +586,16 @@ function fingerprintsMatch(left: string | undefined, right: string | undefined):
 function cloneMutationReplayResponse<Response extends MutationReplayResponse>(
   response: Response,
 ): Response {
-  return {
+  const cloned = {
     body: response.body,
     headers: cloneResponseHeaders(response.headers),
     status: response.status,
   } as Response;
+
+  // SPEC §6.6 boundary rule 5 / §9.1: replay reconstruction may preserve private
+  // redirect provenance only when the response being persisted genuinely owns that witness.
+  // Re-blessing also revalidates the cloned Location value, so a mutable source cannot smuggle
+  // bytes written after its original classification into a later replay sink. Arbitrary durable
+  // store records never pass this identity check and therefore remain fail-closed/unblessed.
+  return isBlessedRedirectResponse(response) ? blessRedirectResponse(cloned) : cloned;
 }

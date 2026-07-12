@@ -7,6 +7,13 @@ import { domain } from './domain.js';
 import { renderMutationResponse as renderMutationResponseBase } from './mutation.js';
 import { query } from './query.js';
 import {
+  blessRedirectResponse,
+  frameworkWireBody,
+  isBlessedRedirectResponse,
+  redirectLocationHeader,
+  serverResponseToWebResponse,
+} from './response.js';
+import {
   canonicalRequestFingerprint,
   createMemoryMutationReplayStore,
   mutationReplayContext,
@@ -77,6 +84,69 @@ function anonymousCsrfRequest(mutationKey: string): {
 }
 
 describe('server mutation replay store', () => {
+  it('preserves genuine redirect provenance and multi-value headers through memory replay clones', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const source = blessRedirectResponse({
+      body: frameworkWireBody(''),
+      headers: {
+        Location: redirectLocationHeader('/after-save'),
+        'Set-Cookie': ['session=one; Path=/; HttpOnly', 'flash=saved; Path=/; HttpOnly'],
+      },
+      status: 303 as const,
+    });
+
+    replayStore.set('session-a', 'idem_redirect', source);
+    const replayed = replayStore.get('session-a', 'idem_redirect');
+
+    if (replayed === undefined) throw new Error('memory replay did not retain redirect response');
+    expect(replayed).not.toBe(source);
+    expect(replayed.headers).not.toBe(source.headers);
+    expect(replayed.headers['Set-Cookie']).not.toBe(source.headers['Set-Cookie']);
+    expect(replayed.headers['Set-Cookie']).toEqual(source.headers['Set-Cookie']);
+    expect(isBlessedRedirectResponse(replayed)).toBe(true);
+
+    const finalized = serverResponseToWebResponse(replayed, { method: 'POST' });
+    expect(finalized.headers.get('location')).toBe('/after-save');
+    expect((finalized.headers as Headers & { getSetCookie(): string[] }).getSetCookie()).toEqual([
+      'session=one; Path=/; HttpOnly',
+      'flash=saved; Path=/; HttpOnly',
+    ]);
+  });
+
+  it('revalidates a genuine redirect source while cloning and leaves durable lookalikes unblessed', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const source = blessRedirectResponse({
+      body: frameworkWireBody(''),
+      headers: { Location: redirectLocationHeader('/safe') },
+      status: 303 as const,
+    });
+    source.headers.Location = 'https://evil.example/phish';
+
+    replayStore.set('session-a', 'idem_mutated_redirect', source);
+    const replayed = replayStore.get('session-a', 'idem_mutated_redirect');
+    if (replayed === undefined) throw new Error('memory replay did not retain redirect response');
+    expect(isBlessedRedirectResponse(replayed)).toBe(true);
+    expect(replayed.headers.Location).toBe('/');
+    expect(serverResponseToWebResponse(replayed, { method: 'POST' }).headers.get('location')).toBe(
+      '/',
+    );
+
+    const durableLookalike: MutationReplayResponse = {
+      body: frameworkWireBody(''),
+      headers: { Location: '/looks-safe-but-has-no-private-witness' },
+      status: 303,
+    };
+    replayStore.set('session-a', 'idem_durable_lookalike', durableLookalike);
+    const clonedLookalike = replayStore.get('session-a', 'idem_durable_lookalike');
+    if (clonedLookalike === undefined) {
+      throw new Error('memory replay did not retain durable-store lookalike');
+    }
+    expect(isBlessedRedirectResponse(clonedLookalike)).toBe(false);
+    expect(
+      serverResponseToWebResponse(clonedLookalike, { method: 'POST' }).headers.get('location'),
+    ).toBe('/');
+  });
+
   it('bounds memory mutation replay records by ttl and entry count', () => {
     vi.useFakeTimers();
     try {
