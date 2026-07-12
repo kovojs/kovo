@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    17 | H1-H17 |
+| High     |    18 | H1-H18 |
 | Medium   |     8 | M1-M8 |
 
 ## Critical
@@ -269,6 +269,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     final system-response header insertion use boot-pinned, semantically checked exact bytes; late
     and import-order poison cannot emit reserved Set-Cookie/content controls or an unapproved target.
 
+- [ ] **H18 - Mutable deferred-stream assembly can replace the complete document.**
+      `packages/server/src/deferred-stream.ts`
+  - A selective late `Array.prototype.join` override targeting the final array made
+    `renderDeferredStream()` replace a safe shell, query/fragment chunks, boundary, cleanup script,
+    and close bytes with a raw event-bearing document while retaining a nominal 200 response.
+  - **Acceptance:** sync/live chunk traversal, priority sorting, boundary collision scanning,
+    fragment/query serialization, CSP hash pairing, final assembly, TextEncoder/controller methods,
+    and promise settlement use boot-pinned, semantically checked controls; late/import-order poison
+    cannot replace/reorder bytes or desynchronize the emitted document from its CSP metadata.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -345,8 +355,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H17, and M7-M8 are active
-capability, request-carrier, response, task/guard, request-limit, and replay fixes. Integrated
+The remediation pass remains intentionally non-zero: C10-C12, H15-H18, and M7-M8 are active
+capability, request-carrier, response/deferred output, task/guard, request-limit, and replay fixes.
+Integrated
 evidence is
 green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
