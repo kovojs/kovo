@@ -189,12 +189,13 @@ This is an active closure ledger; `SPEC.md` remains normative.
     exact logical-key controls, late-poison isolation, and import-order fail-closed coverage.
 
 - [x] **H9 - Mutable document array operations can replace the complete response shell.**
-      `packages/server/src/document-core.ts`
+      `packages/server/src/{document-core,document-structured}.ts`
   - A selective late `Array.prototype.join` override on the final shell array replaced an otherwise
     safe `renderDocument()` result with a raw event-bearing document.
-  - **Evidence:** the 259-test response-security matrix pins document parts, query scripts, CSP
-    hashes/facts, and final shell assembly; the independent whole-document `Array.join` replacement
-    proof retains the original safe shell under late poison and import-order failure controls.
+  - **Evidence:** the 262-test response/document matrix pins structured attributes/nodes, raw-text
+    scripts, document parts, query scripts, CSP hashes/facts, and final shell assembly. Independent
+    whole-document and same-origin-script `Array.join` proofs retain the original safe bytes under
+    late poison and import-order failure controls.
 
 - [x] **H10 - Mutable cookie scalar/collection controls permit raw Set-Cookie attribute injection.**
       `packages/server/src/cookies.ts`
