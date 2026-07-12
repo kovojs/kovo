@@ -384,6 +384,19 @@ describe('createPostgresAppRuntimeDb', () => {
   });
 
   it('normalizes one stable ESM namespace snapshot and rejects a changing live binding', () => {
+    let ordinaryHits = 0;
+    const ordinaryAccessor = Object.defineProperty({}, 'notes', {
+      enumerable: true,
+      get() {
+        ordinaryHits += 1;
+        return notes;
+      },
+    });
+    expect(() => postgresSchemaModule(ordinaryAccessor)).toThrow(
+      /Postgres bundled schema module namespace properties must be own data/,
+    );
+    expect(ordinaryHits).toBe(0);
+
     let stableHits = 0;
     const stableNamespace = Object.create(null) as Record<PropertyKey, unknown>;
     Object.defineProperty(stableNamespace, Symbol.toStringTag, {
@@ -407,6 +420,34 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(Object.getPrototypeOf(snapshot)).toBe(null);
     expect(Object.getOwnPropertyDescriptor(snapshot, 'notes')).toMatchObject({ value: notes });
+
+    let bundledHits = 0;
+    const bundledNamespace = Object.freeze(
+      Object.defineProperties(
+        {},
+        {
+          [Symbol.toStringTag]: {
+            configurable: false,
+            enumerable: false,
+            value: 'Module',
+            writable: false,
+          },
+          notes: {
+            configurable: false,
+            enumerable: true,
+            get() {
+              bundledHits += 1;
+              return notes;
+            },
+          },
+        },
+      ),
+    );
+    const bundledSnapshot = postgresSchemaModule(bundledNamespace);
+    expect(bundledHits).toBe(2);
+    expect(Object.getOwnPropertyDescriptor(bundledSnapshot, 'notes')).toMatchObject({
+      value: notes,
+    });
 
     let changingHits = 0;
     const changingNamespace = Object.create(null) as Record<PropertyKey, unknown>;

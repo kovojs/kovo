@@ -482,10 +482,10 @@ function postgresOwnDataEntries(values: object): [string, unknown][] {
  * Capture a genuine ESM schema namespace as one immutable own-data record.
  *
  * Vite represents ESM live bindings as accessors, while the Postgres runtime deliberately rejects
- * ordinary accessor-backed schema objects. This validating constructor accepts only the
- * null-prototype `Module` namespace shape, verifies each live binding is stable while captured,
- * and returns the exact snapshot shared by runtime DDL/RLS and adapter construction
- * (SPEC §6.6/§10.3).
+ * ordinary accessor-backed schema objects. This validating constructor accepts the immutable
+ * `Module` namespace shape emitted natively or by the production bundler, verifies each live binding
+ * is stable while captured, and returns the exact snapshot shared by runtime DDL/RLS and adapter
+ * construction (SPEC §6.6/§10.3).
  *
  * @param namespace - A namespace produced by `import * as schema from './schema.js'`.
  * @returns A frozen null-prototype record containing own data properties for every schema export.
@@ -497,13 +497,13 @@ export function postgresSchemaModule<Schema extends object>(namespace: Schema): 
   if (postgresIsProxy(namespace)) {
     throw new TypeError('Postgres schema module namespace must not be a Proxy.');
   }
-  if (witnessGetPrototypeOf(namespace) !== null) {
-    throw new TypeError('Postgres schema module namespace must be a genuine ESM namespace.');
-  }
-
   const tag = witnessGetOwnPropertyDescriptor(namespace, postgresModuleNamespaceTag);
+  if (tag === undefined) {
+    // Accessor-backed objects receive no exception without the immutable namespace brand. This
+    // keeps ordinary author objects on the runtime's strict own-data path.
+    return postgresOwnDataSnapshot(namespace, 'Postgres bundled schema module namespace');
+  }
   if (
-    tag === undefined ||
     !('value' in tag) ||
     tag.value !== 'Module' ||
     tag.configurable !== false ||
