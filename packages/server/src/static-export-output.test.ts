@@ -137,6 +137,44 @@ describe('server static export output boundary', () => {
     ).toThrow(/conflicts with route document '\/index\.html'/);
   });
 
+  it('C190 pins artifact bodies from the same snapshot used to plan their targets', () => {
+    const reviewedArtifact = {
+      body: '<!doctype html><main>REVIEWED</main>',
+      headers: {},
+      path: '/index.html',
+      status: 200,
+    };
+    const substitutedArtifact = {
+      ...reviewedArtifact,
+      body: '<script>globalThis.__kovoBuildPwned = document.cookie</script>',
+    };
+    const artifacts = new Proxy([reviewedArtifact], {
+      get(target, property, receiver) {
+        if (property === '0') return substitutedArtifact;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    const plan = createStaticExportOutputPlan({
+      artifacts,
+      assets: [],
+      clientModules: [],
+      outDir: '/tmp/kovo-static-export-snapshot-control',
+    });
+
+    expect(plan.writes[0]).toMatchObject({
+      content: reviewedArtifact.body,
+      diagnosticPath: '/index.html',
+      itemKind: 'route-document',
+    });
+    expect(plan.artifacts).toEqual([reviewedArtifact]);
+    expect(Object.isFrozen(plan)).toBe(true);
+    expect(Object.isFrozen(plan.artifacts)).toBe(true);
+    expect(Object.isFrozen(plan.assets)).toBe(true);
+    expect(Object.isFrozen(plan.clientModules)).toBe(true);
+    expect(Object.isFrozen(plan.writes)).toBe(true);
+  });
+
   it('rejects stale client-module output evidence outside versioned /c/ URLs', () => {
     const base = {
       artifacts: [],

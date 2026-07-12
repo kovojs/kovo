@@ -33,6 +33,7 @@ import {
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import { createStaticExportHeaderSink, staticExportHeaders } from './static-export-headers.js';
 import { staticHostHeaders, type StaticHostHeaderPolicyKind } from './static-host-header-policy.js';
+import { witnessFreeze } from './security-witness-intrinsics.js';
 import {
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
@@ -58,9 +59,9 @@ export interface StaticExportOutputPlanOptions {
 }
 
 interface StaticExportOutputArtifacts {
-  artifacts: readonly StaticExportArtifact[];
-  assets: readonly StaticExportAssetArtifact[];
-  clientModules: readonly StaticExportClientModuleArtifact[];
+  readonly artifacts: readonly StaticExportArtifact[];
+  readonly assets: readonly StaticExportAssetArtifact[];
+  readonly clientModules: readonly StaticExportClientModuleArtifact[];
 }
 
 /**
@@ -68,9 +69,9 @@ interface StaticExportOutputArtifacts {
  * write plan consumed by the atomic output writer.
  */
 export interface StaticExportOutputPlan extends StaticExportOutputArtifacts {
-  outDir: string | URL;
-  root: string;
-  writes: readonly StaticExportPlannedWrite[];
+  readonly outDir: string | URL;
+  readonly root: string;
+  readonly writes: readonly StaticExportPlannedWrite[];
 }
 
 interface StaticExportOutputPlanInput extends StaticExportOutputArtifacts {
@@ -110,10 +111,21 @@ export function staticExportOutputPlan(
 export function createStaticExportOutputPlan(
   plan: StaticExportOutputPlanInput,
 ): StaticExportOutputPlan {
+  // SPEC §6.6: target validation and write selection must consume the same artifact identities.
+  // Snapshot each caller-owned array once before either phase so a Proxy cannot present a reviewed
+  // element through own descriptors and substitute executable bytes on a later index read.
+  const pinnedArtifacts = witnessFreeze({
+    artifacts: snapshotBuildArray(plan.artifacts, 'static-export route artifacts'),
+    assets: snapshotBuildArray(plan.assets, 'static-export assets'),
+    clientModules: snapshotBuildArray(plan.clientModules, 'static-export client modules'),
+  });
   const root = staticExportOutputRoot(plan.outDir);
-  const writes = staticExportPlannedWrites(plan, root);
+  const writes = snapshotBuildArray(
+    staticExportPlannedWrites(pinnedArtifacts, root),
+    'static-export planned writes',
+  );
 
-  return { ...plan, root, writes };
+  return witnessFreeze({ ...pinnedArtifacts, outDir: plan.outDir, root, writes });
 }
 
 /**
