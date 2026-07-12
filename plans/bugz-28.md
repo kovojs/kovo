@@ -374,7 +374,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     boot-pinned, semantically checked controls; late/import-order poison cannot cross-bind module
     bytes, forge an unchanged build token, or alias unversioned/out-of-registry paths.
 
-- [ ] **H21 - Mutable schema-validator traversal can skip every declared refinement.**
+- [x] **H21 - Mutable schema-validator traversal can skip every declared refinement.**
       `packages/server/src/schema.ts`
   - A selective late `Array.prototype[Symbol.iterator]` override returned an empty iterator only for
     the private string-check array. A closed `s.string().email().pattern('^[a-z]+$')` schema then
@@ -383,6 +383,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     collection and shape-budget traversal, file accept/sniff constraints, numeric parsing, and error
     path construction use boot-pinned, semantically checked operations; late/import-order poison
     cannot skip, replace, or reorder any declared validation while genuine inputs remain compatible.
+  - **Evidence:** the 222-test schema/upload/request/mutation/app matrix and merged server dist+dts
+    build pass; the independent empty-iterator proof now raises `Expected email` before the invalid
+    value can reach a mutation handler, with hostile import-order and active/polyglot files covered.
 
 - [x] **H22 - Mutable page-hint assembly can replace escaped hints with raw script.**
       `packages/server/src/hints.ts`
@@ -527,8 +530,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17, H15, and H19-H21 are active mutation/
-client output, task, and schema fixes.
+The remediation pass remains intentionally non-zero: C17, H15, H19, and H20 are active mutation/
+client output and durable-task fixes.
 Integrated
 evidence is
 green at
