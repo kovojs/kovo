@@ -259,7 +259,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the same focused matrix covers upload keys, anonymous CSRF, exact 128-bit no-JS
     identities, and deferred boundaries; the independent constant pre-import source fails closed.
 
-- [ ] **C23 - Mutable static-route planning publishes guarded session content.**
+- [x] **C23 - Mutable static-route planning publishes guarded session content.**
       `packages/server/src/{static-export-route-plan,static-export-replay,static-export}.ts`
   - A selective late array iterator substituted an explicitly public clone only while
     `staticExportRoutePlan()` traversed `app.routes`, then restored normal iteration. Real replay
@@ -271,8 +271,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     final publication share boot-pinned exact identities; planning and replay cannot observe
     different declarations under late/import-order poison, and guarded/session content is never
     emitted to a static host.
+  - **Evidence:** the 134-test integrated build/static-export matrix passes; the independent route
+    iterator proof now throws KV229 before writing guarded account content.
 
-- [ ] **C24 - Mutable artifact staging replaces reviewed immutable client modules.**
+- [x] **C24 - Mutable artifact staging replaces reviewed immutable client modules.**
       `packages/server/src/{output-staging,vite-client-module-output}.ts`
   - The output manifest hashed a reviewed safe client module, but staging later used the live
     `entries.map()` result without hashing the staged bytes. A selective replacement supplied
@@ -282,6 +284,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     changed/stale detection, staging traversal, copy/write, pre-commit revalidation, rename, cleanup,
     filesystem/path controls, and Promise settlement use boot-pinned exact operations; committed
     bytes must match their reviewed manifest hash and cannot be substituted after validation.
+  - **Evidence:** the same matrix passes; the independent staging substitution proof commits only the
+    manifest-reviewed safe client source.
 
 - [ ] **C25 - Mutable compiler-cache hashing authenticates attacker compiler output.**
       `packages/compiler/src/{compile-cache,persistent-compile-cache,vite}.ts`
@@ -297,7 +301,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     atomic temp identities, iteration, and Promise settlement use boot-pinned exact controls;
     late/import-order poison or disk tampering can only produce a cache miss, never trusted code.
 
-- [ ] **C26 - Mutable SRI finalization replaces a safe static document after rendering.**
+- [x] **C26 - Mutable SRI finalization replaces a safe static document after rendering.**
       `packages/server/src/{static-export-sri,static-export}.ts`
   - A route installed a selective late `Array.prototype.map` that stayed inert through safe page
     rendering, then substituted a raw event-bearing document for the private `/index.html` artifact
@@ -307,8 +311,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     parsing, first-party URL resolution, replacement offsets/assembly, final artifact traversal, and
     publication use boot-pinned exact controls; SRI decoration cannot add or replace rendered bytes,
     and the final committed document is bound to the reviewed post-choke artifact.
+  - **Evidence:** the same matrix passes; the independent finalization proof writes the reviewed safe
+    document rather than the post-choke event-bearing substitute.
 
-- [ ] **C27 - Inherited Vite manifest fields publish unlisted server-private files.**
+- [x] **C27 - Inherited Vite manifest fields publish unlisted server-private files.**
       `packages/server/src/{vite-manifest,vite-build-assets,static-export}.ts`
   - A genuine manifest contained only `{ "src/public.client.ts": {} }`, but a late non-enumerable
     `Object.prototype.file = "server/private-config.js"` made manifest validation accept the
@@ -319,6 +325,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     manifest traversal/resolution, dist-path normalization, asset mapping, and public copy inputs use
     boot-pinned own-data controls; inherited/accessor/proxy fields and late/import-order poison cannot
     add a public artifact or disclose an unlisted server/build file.
+  - **Evidence:** the same matrix passes; the independent inherited-field proof emits no private
+    manifest file.
 
 - [ ] **C28 - Mutable static-analysis cache hashing suppresses unsafe SQL findings.**
       `packages/server/src/internal/data-plane-static-analysis.ts`
@@ -418,7 +426,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the focused matrix passes; the independent fabricated-entries proof now renders the
     original empty meta element and cannot introduce a refresh target.
 
-- [ ] **C36 - Mutable replay-response headers publish server-only file bytes as HTML.**
+- [x] **C36 - Mutable replay-response headers publish server-only file bytes as HTML.**
       `packages/server/src/{static-export-response,static-export-replay,static-export}.ts`
   - A route returned a genuine attachment containing a database password, then selectively replaced
     `Headers.prototype.get` so static replay hid only `Content-Disposition` and reported `text/html`.
@@ -428,8 +436,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     content-disposition/type/outcome classification, document-protocol scanning, diagnostics, and
     artifact publication use boot-pinned controls; file/stream/redirect/error outcomes cannot be
     reclassified as a route document under late/import-order poison.
+  - **Evidence:** the same matrix passes; the independent header proof now throws KV229 for the
+    attachment and never writes its secret body.
 
-- [ ] **C37 - Mutable Vite source containment publishes files outside the dist root.**
+- [x] **C37 - Mutable Vite source containment publishes files outside the dist root.**
       `packages/server/src/{vite-manifest,vite-build-assets,static-export}.ts`
   - A normal manifest `file: "../server-secret.env"` is rejected. Selective late `Array.some`
     replacement bypassed unsafe-segment validation and `String.startsWith` replacement forged the
@@ -439,6 +449,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     conversion, relative/absolute containment, source descriptors, and asset copy inputs use boot-
     pinned exact controls; encoded/plain traversal, separator aliases, symlinks, and late/import-
     order poison cannot escape the trusted source root even when the destination remains confined.
+  - **Evidence:** the same matrix passes; the independent traversal proof rejects the sibling secret
+    before any public copy.
 
 - [x] **C38 - Runtime JSX tag strings inject raw element syntax.**
       `packages/server/src/jsx-runtime.ts`
@@ -463,7 +475,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the focused matrix plus core/server dist+DTS and public-API/security gates pass;
     ordinary component strings are escaped and the independent forged descriptor is rejected.
 
-- [ ] **C41 - Mutable static-export diagnostic filtering discards KV426 before publication.**
+- [x] **C41 - Mutable static-export diagnostic filtering discards KV426 before publication.**
       `packages/server/src/{static-export-diagnostics,static-export}.ts`
   - The export gate used the live `Array.prototype.filter` to select error diagnostics. A selective
     replacement returned an empty list for a real KV426 trusted-HTML violation, so export continued
@@ -471,6 +483,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** compiler diagnostic carriers, code/severity lookup, source locations, error
     selection, formatting, and handoff to export use boot-pinned dense own-data snapshots; malformed,
     omitted, inherited, or mutation-obscured diagnostics fail closed before any artifact write.
+  - **Evidence:** the same matrix passes; the independent selective-filter proof retains the exact
+    blocking KV426 diagnostic.
 
 - [ ] **C42 - Mutable compiler-Vite diagnostic filtering emits code despite KV435.**
       `packages/compiler/src/vite.ts`
@@ -588,7 +602,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     source/depth/attribute bounds, and parser exactness coverage; the independent retag proof
     leaves `<evil/>` unknown and emits no registered component output.
 
-- [ ] **C52 - Mutable static-export protocol decoding suppresses server-only markup diagnostics.**
+- [x] **C52 - Mutable static-export protocol decoding suppresses server-only markup diagnostics.**
       `packages/server/src/{static-export-protocol,static-export-document-refs,static-export}.ts`
   - Selective late string/collection replacements hid a browser-decoded `/_m/` mutation target from
     the KV229 scan. Static export then accepted a document whose encoded markup becomes a live
@@ -597,8 +611,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     diagnostic formation, and the publish gate use boot-pinned exact controls; encoded or literal
     server endpoint/deferred markers always prevent every artifact write under late/import-order
     poison.
+  - **Evidence:** the integrated matrix's real export regression keeps encoded `&#47;_m&#47;...`
+    blocked by KV229 and proves no page is written under selective string/set poison.
 
-- [ ] **C53 - Mutable client-module inventory traversal publishes an unreferenced privileged module.**
+- [x] **C53 - Mutable client-module inventory traversal publishes an unreferenced privileged module.**
       `packages/server/src/{static-export-document-refs,static-export-client-modules,static-export}.ts`
   - A selective late `Set.prototype.add` expanded the referenced-module set with a registered but
     unreferenced admin module. Real export wrote that executable module and its internal token into
@@ -606,6 +622,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** registered and referenced module carriers, set membership/insertion, replay,
     source lookup, output targets, and final inventory traversal use boot-pinned dense snapshots;
     export writes exactly the client modules referenced by the accepted document and no others.
+  - **Evidence:** the integrated real-export regression emits only the referenced public module and
+    runtime; the registered unreferenced admin module and internal token remain absent.
 
 ## High
 
@@ -808,10 +826,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     render-plan matrix, core/server dist+dts builds, and import/API/wire-output gates pass. The two
     independent proofs now retain exact public module bytes and distinct fingerprints for projected
     shapes with versus without the privileged field under selective Map/final-join replacement.
-  - **Reopened:** `vite-build.ts::sourceVersion()` still used the live ESM `createHash` binding and
-    mutable hash methods. A synchronized selective replacement made two distinct executable module
-    sources receive the same default version, immutable href, and app build token; source hashing and
-    its build traversal must join the pinned client-module membrane before this item can close.
+  - **Remaining:** the server Vite source-version path now pins full source identity and the
+    independent synchronized-crypto proof produces distinct hrefs. The core/compiler 32-bit FNV
+    collision remains open, so this combined item cannot close yet.
 
 - [x] **H21 - Mutable schema-validator traversal can skip every declared refinement.**
       `packages/server/src/schema.ts`
@@ -900,7 +917,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     delivery accounting consume the same exact byte snapshot; fixed collision regressions produce
     distinct paths without weakening ordinary deterministic builds.
 
-- [ ] **H28 - Mutable static-header storage injects deployable Set-Cookie.**
+- [x] **H28 - Mutable static-header storage injects deployable Set-Cookie.**
       `packages/server/src/{static-export-headers,static-export-output}.ts`
   - The static header sink validated `x-frame-options: DENY`, then committed it through live
     `Map.prototype.set`. A selective replacement stored `set-cookie: kovo_session=attacker-fixed`
@@ -910,6 +927,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     append/set storage, exact map snapshots, sorting/serialization, fallback intersection, and
     sidecar assembly use boot-pinned controls; validation and commit consume the same key/value, and
     late/import-order poison cannot introduce Set-Cookie, Kovo-reserved, or control-bearing headers.
+  - **Evidence:** the integrated matrix passes; the independent Map substitution proof retains the
+    reviewed X-Frame-Options header and emits no Set-Cookie in either artifact metadata or `_headers`.
 
 - [x] **H29 - Inherited client IP state rotates per-IP rate-limit buckets.**
       `packages/server/src/guards.ts`
@@ -1026,8 +1045,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C52-C53,
-H20, and H27-H28 are active compiler-cache, static-analysis, static-export, and build-output fixes.
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, H20, and H27 are active
+compiler-cache, static-analysis, compiler-Vite, and immutable-output fixes.
 Integrated
 evidence is
 green at
