@@ -1,11 +1,26 @@
-import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
+import { execFile as builtinExecFile } from 'node:child_process';
+import {
+  existsSync as builtinExistsSync,
+  mkdirSync as builtinMkdirSync,
+  mkdtempSync as builtinMkdtempSync,
+  readFileSync as builtinReadFileSync,
+  rmSync as builtinRmSync,
+  writeFileSync as builtinWriteFileSync,
+} from 'node:fs';
+import { readFile as builtinReadFile } from 'node:fs/promises';
+import { createRequire as builtinCreateRequire } from 'node:module';
+import { tmpdir as builtinTmpdir } from 'node:os';
+import {
+  basename as builtinBasename,
+  dirname as builtinDirname,
+  extname as builtinExtname,
+  isAbsolute as builtinIsAbsolute,
+  join as builtinJoin,
+  relative as builtinRelative,
+  resolve as builtinResolve,
+} from 'node:path';
+import { pathToFileURL as builtinPathToFileURL } from 'node:url';
+import { promisify as builtinPromisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
@@ -29,15 +44,17 @@ import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@k
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
-import type {
-  DataPlaneSourceFile as BuildCheckSourceFile,
-  QueryReadFactLike,
-  StaticDataPlaneBuildFacts,
+import {
+  buildCheckSourceFiles,
+  buildCompilerQueryShapeFacts,
+  type DataPlaneSourceFile as BuildCheckSourceFile,
+  type QueryReadFactLike,
+  staticDataPlaneBuildFacts,
+  type StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import { accessDecisionFor, explainGuard, guardAuditName } from '@kovojs/server/internal/execution';
 import {
   runtimeRegistryWireFactsFromGraph,
-  serializeRuntimeRegistryWireModule,
   type RuntimeRegistryWireFacts,
 } from '@kovojs/server/internal/runtime-registry-wire';
 
@@ -61,22 +78,62 @@ import {
   stableValue,
 } from '../shared.js';
 import { findNearestFile, readJsonRecord } from '../tooling.js';
+import {
+  buildArrayIsArray,
+  buildArrayJoin,
+  buildCreateMap,
+  buildCreateSet,
+  buildFunctionSource,
+  buildJsonStringify,
+  buildMapGet,
+  buildMapHas,
+  buildMapSet,
+  buildObjectKeys,
+  buildObservePromise,
+  buildOwnDataValue,
+  buildPromiseAll,
+  buildRegExpExec,
+  buildSetAdd,
+  buildSetHas,
+  buildSnapshotDenseArray,
+  buildStringIncludes,
+  buildStringSplit,
+  buildStringStartsWith,
+  buildStringTrimEnd,
+} from './build-security-intrinsics.js';
+
+const execFile = builtinExecFile;
+const existsSync = builtinExistsSync;
+const mkdirSync = builtinMkdirSync;
+const mkdtempSync = builtinMkdtempSync;
+const readFile = builtinReadFile;
+const readFileSync = builtinReadFileSync;
+const rmSync = builtinRmSync;
+const writeFileSync = builtinWriteFileSync;
+const createRequire = builtinCreateRequire;
+const tmpdir = builtinTmpdir;
+const basename = builtinBasename;
+const dirname = builtinDirname;
+const extname = builtinExtname;
+const isAbsolute = builtinIsAbsolute;
+const join = builtinJoin;
+const relative = builtinRelative;
+const resolve = builtinResolve;
+const pathToFileURL = builtinPathToFileURL;
+const promisify = builtinPromisify;
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
 const execFileAsync = promisify(execFile);
-const nativeFunctionToString = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')
-  ?.value as unknown;
-const nativeReflectApply = Object.getOwnPropertyDescriptor(Reflect, 'apply')?.value as unknown;
 
 function isKovoServerHandlerExternalDependency(id: string): boolean {
   return (
     id === '@electric-sql/pglite' ||
-    id.startsWith('@electric-sql/pglite/') ||
+    buildStringStartsWith(id, '@electric-sql/pglite/') ||
     id === '@node-rs/argon2' ||
-    id.startsWith('@node-rs/argon2-') ||
+    buildStringStartsWith(id, '@node-rs/argon2-') ||
     id === 'pg' ||
-    id.startsWith('pg/')
+    buildStringStartsWith(id, 'pg/')
   );
 }
 
@@ -85,7 +142,110 @@ function isKovoServerHandlerModuleSideEffectFree(id: string): boolean {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !buildArrayIsArray(value);
+}
+
+function buildMapDense<Value, Result>(
+  values: readonly Value[],
+  label: string,
+  map: (value: Value, index: number) => Result,
+): Result[] {
+  const source = buildSnapshotDenseArray(values, label);
+  const result: Result[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    result[result.length] = map(source[index]!, index);
+  }
+  return result;
+}
+
+function buildFlatMapDense<Value, Result>(
+  values: readonly Value[],
+  label: string,
+  map: (value: Value, index: number) => readonly Result[],
+): Result[] {
+  const source = buildSnapshotDenseArray(values, label);
+  const result: Result[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const mapped = buildSnapshotDenseArray(map(source[index]!, index), `${label} mapped result`);
+    for (let mappedIndex = 0; mappedIndex < mapped.length; mappedIndex += 1) {
+      result[result.length] = mapped[mappedIndex]!;
+    }
+  }
+  return result;
+}
+
+function buildFilterDense<Value, Narrowed extends Value>(
+  values: readonly Value[],
+  label: string,
+  keep: (value: Value, index: number) => value is Narrowed,
+): Narrowed[];
+function buildFilterDense<Value>(
+  values: readonly Value[],
+  label: string,
+  keep: (value: Value, index: number) => boolean,
+): Value[];
+function buildFilterDense<Value>(
+  values: readonly Value[],
+  label: string,
+  keep: (value: Value, index: number) => boolean,
+): Value[] {
+  const source = buildSnapshotDenseArray(values, label);
+  const result: Value[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    if (keep(source[index]!, index)) result[result.length] = source[index]!;
+  }
+  return result;
+}
+
+function buildSomeDense<Value>(
+  values: readonly Value[],
+  label: string,
+  predicate: (value: Value, index: number) => boolean,
+): boolean {
+  const source = buildSnapshotDenseArray(values, label);
+  for (let index = 0; index < source.length; index += 1) {
+    if (predicate(source[index]!, index)) return true;
+  }
+  return false;
+}
+
+function buildEveryDense<Value>(
+  values: readonly Value[],
+  label: string,
+  predicate: (value: Value, index: number) => boolean,
+): boolean {
+  const source = buildSnapshotDenseArray(values, label);
+  for (let index = 0; index < source.length; index += 1) {
+    if (!predicate(source[index]!, index)) return false;
+  }
+  return true;
+}
+
+function buildFindDense<Value>(
+  values: readonly Value[],
+  label: string,
+  predicate: (value: Value, index: number) => boolean,
+): Value | undefined {
+  const source = buildSnapshotDenseArray(values, label);
+  for (let index = 0; index < source.length; index += 1) {
+    if (predicate(source[index]!, index)) return source[index]!;
+  }
+  return undefined;
+}
+
+function buildJoinStrings(values: readonly string[], separator: string, label: string): string {
+  return buildArrayJoin(buildSnapshotDenseArray(values, label), separator);
+}
+
+function appendDense<Value>(
+  first: readonly Value[],
+  second: readonly Value[],
+  label: string,
+): Value[] {
+  const result = buildSnapshotDenseArray(first, `${label} first values`);
+  const tail = buildSnapshotDenseArray(second, `${label} second values`);
+  for (let index = 0; index < tail.length; index += 1) result[result.length] = tail[index]!;
+  return result;
 }
 
 interface KovoExportOptions {
@@ -185,7 +345,7 @@ function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefine
 }
 
 function buildUsage(): string {
-  return [BUILD_USAGE, ''].join('\n');
+  return buildJoinStrings([BUILD_USAGE, ''], '\n', 'Build usage lines');
 }
 
 export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
@@ -235,14 +395,18 @@ function exportArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { o
 }
 
 function exportUsage(): string {
-  return [EXPORT_USAGE, ''].join('\n');
+  return buildJoinStrings([EXPORT_USAGE, ''], '\n', 'Export usage lines');
 }
 
 export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandResult> {
   try {
-    const loadedConfig = await loadKovoBuildConfig(process.cwd());
-    const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     const resolvedAppModulePath = resolve(options.appModulePath);
+    // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
+    // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
+    const reachableSessionAuthorityFacts =
+      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
+    const loadedConfig = await loadKovoBuildConfig(process.cwd(), resolvedAppModulePath);
+    const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     // plans/fast-kovo-check3.md: start the independent `tsc --noEmit` preflight subprocess here and
     // let it overlap the vite app load below AND the kovo-check security preflight, instead of
     // running it sequentially first (~1.7s cold / ~0.7s warm saved, no correctness change). The
@@ -250,7 +414,11 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     // fail-closed join below; we still `await typeScriptPreflight` there, so its error is never
     // swallowed and ZERO artifacts are emitted on any preflight failure.
     const typeScriptPreflight = runTypeScriptBuildPreflight(resolvedAppModulePath);
-    typeScriptPreflight.catch(() => {});
+    buildObservePromise(
+      typeScriptPreflight,
+      () => {},
+      () => {},
+    );
     // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
     // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
     // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane
@@ -263,36 +431,24 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     // sequential order did — before re-throwing ANY of these failures (a load error, a not-a-KovoApp
     // export, or a security-gate failure). The tsc preflight started above runs concurrently with all
     // of it; deferring these errors past the `await typeScriptPreflight` preserves tsc-error-first.
-    const loadAndCheck = await (async () => {
-      const [loadedBuildApp, buildStylesheetCss] = await withBuildGraphDerivationContext(() =>
-        Promise.all([
-          loadBuildAppModule(resolvedAppModulePath, process.cwd()),
-          kovoBuildStylesheetCss(resolvedAppModulePath),
-        ]),
-      );
-      const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
-      const { deriveClosedKovoApp, writeKovoNeutralBuild } =
-        loadedBuildApp.serverInternalBuildModule;
-      const appModule = loadedBuildApp.appModule;
-      const app = appFromModule(appModule, options.appModulePath);
-      const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
-        cache: options.cache,
-      });
-      return {
-        app,
-        buildStylesheetCss,
-        checkGraph: buildCheck.graph,
-        cloudflare,
-        deriveClosedKovoApp,
-        node,
-        queryShapeFacts: buildCheck.queryShapeFacts,
-        vercel,
-        writeKovoNeutralBuild,
+    let loadAndCheck:
+      | {
+          ok: true;
+          value: Awaited<ReturnType<typeof loadAndCheckBuildApp>>;
+        }
+      | { error: unknown; ok: false };
+    try {
+      loadAndCheck = {
+        ok: true,
+        value: await loadAndCheckBuildApp(
+          resolvedAppModulePath,
+          options,
+          reachableSessionAuthorityFacts,
+        ),
       };
-    })().then(
-      (value) => ({ ok: true as const, value }),
-      (error: unknown) => ({ error, ok: false as const }),
-    );
+    } catch (error) {
+      loadAndCheck = { error, ok: false };
+    }
     // Fail-closed join BEFORE any artifact-emitting step: surface a tsc type error FIRST
     // (tsc-error-first ordering), then re-throw any captured load/check failure. Every
     // artifact-emitting step below (buildKovoClientManifest, writeKovoNeutralBuild, preset.emit,
@@ -373,7 +529,9 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       },
     };
     const presetDiagnostics = await inspectKovoBuildPreset(preset, neutralBuild, presetContext);
-    const blockingDiagnostics = presetDiagnostics.filter(
+    const blockingDiagnostics = buildFilterDense(
+      presetDiagnostics,
+      'Build preset diagnostics',
       (diagnostic) => diagnostic.severity === 'error',
     );
     if (blockingDiagnostics.length > 0) {
@@ -410,6 +568,38 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
   } catch (error) {
     return buildErrorResult(error);
   }
+}
+
+async function loadAndCheckBuildApp(
+  resolvedAppModulePath: string,
+  options: KovoBuildOptions,
+  reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
+) {
+  const [loadedBuildApp, buildStylesheetCss] = await withBuildGraphDerivationContext(() =>
+    buildPromiseAll([
+      loadBuildAppModule(resolvedAppModulePath, process.cwd()),
+      kovoBuildStylesheetCss(resolvedAppModulePath),
+    ]),
+  );
+  const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
+  const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
+  const appModule = loadedBuildApp.appModule;
+  const app = appFromModule(appModule, options.appModulePath);
+  const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
+    cache: options.cache,
+    reachableSessionAuthorityFacts,
+  });
+  return {
+    app,
+    buildStylesheetCss,
+    checkGraph: buildCheck.graph,
+    cloudflare,
+    deriveClosedKovoApp,
+    node,
+    queryShapeFacts: buildCheck.queryShapeFacts,
+    vercel,
+    writeKovoNeutralBuild,
+  };
 }
 
 async function runTypeScriptBuildPreflight(appModulePath: string): Promise<void> {
@@ -468,7 +658,10 @@ async function runTypeScriptBuildPreflight(appModulePath: string): Promise<void>
 async function runKovoBuildCheckPreflight(
   app: KovoApp,
   appModulePath: string,
-  options: { cache: boolean },
+  options: {
+    cache: boolean;
+    reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
+  },
 ): Promise<KovoBuildCheckArtifacts> {
   const artifacts = await buildCheckGraph(app, appModulePath, options);
   const result = kovoCheck(artifacts.graph, { paranoidStaticAdvisory: isParanoidMode() });
@@ -484,11 +677,15 @@ function isParanoidMode(): boolean {
 }
 
 function paranoidBuildCheckMayProceed(output: string): boolean {
-  const errorLines = output.split('\n').filter((line) => line.startsWith('ERROR '));
+  const errorLines = buildFilterDense(
+    buildStringSplit(output, '\n'),
+    'Paranoid build-check output lines',
+    (line) => buildStringStartsWith(line, 'ERROR '),
+  );
   return (
     errorLines.length > 0 &&
-    errorLines.every((line) => {
-      const code = /^ERROR\s+(\S+)/u.exec(line)?.[1];
+    buildEveryDense(errorLines, 'Paranoid build-check error lines', (line) => {
+      const code = buildRegExpExec(/^ERROR\s+(\S+)/u, line)?.[1];
       return code !== undefined && isParanoidSecurityAdvisoryCode(code);
     })
   );
@@ -520,18 +717,22 @@ function writeKovoBuildGraphArtifact(
   // SPEC §5.3: the build-derived graph is a review/debug artifact, not just an
   // in-memory preflight input. Persist it in the neutral build metadata directory
   // so `kovo explain ...` can discover it after an ordinary scaffold build.
-  writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${JSON.stringify(graph, null, 2)}\n`);
+  writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${stringifyBuildValue(graph, 2)}\n`);
 }
 
 function buildCheckFailureOutput(output: string): string {
-  const trimmed = output.trimEnd();
-  const fatalWarnings = trimmed.split('\n').flatMap((line) => buildFatalWarningSummaryLine(line));
+  const trimmed = buildStringTrimEnd(output);
+  const fatalWarnings = buildFlatMapDense(
+    buildStringSplit(trimmed, '\n'),
+    'Build-check failure output lines',
+    (line) => buildFatalWarningSummaryLine(line),
+  );
   if (fatalWarnings.length === 0) return trimmed;
-  return `${fatalWarnings.join('\n')}\n${trimmed}`;
+  return `${buildJoinStrings(fatalWarnings, '\n', 'Build-fatal warning summaries')}\n${trimmed}`;
 }
 
 function buildFatalWarningSummaryLine(line: string): string[] {
-  const match = /^WARN (KV(?:310|311)) (.*)$/.exec(line);
+  const match = buildRegExpExec(/^WARN (KV(?:310|311)) (.*)$/u, line);
   if (!match) return [];
   return [`ERROR BUILD_FATAL ${match[1]} ${match[2]}`];
 }
@@ -539,9 +740,12 @@ function buildFatalWarningSummaryLine(line: string): string[] {
 async function buildCheckGraph(
   app: KovoApp,
   appModulePath: string,
-  options: { cache: boolean },
+  options: {
+    cache: boolean;
+    reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
+  },
 ): Promise<KovoBuildCheckArtifacts> {
-  const [{ accessFactsFromApp }, { deriveAppGraph }] = await Promise.all([
+  const [{ accessFactsFromApp }, { deriveAppGraph }] = await buildPromiseAll([
     import('@kovojs/server/internal/execution'),
     import('@kovojs/compiler/graph'),
   ]);
@@ -555,13 +759,31 @@ async function buildCheckGraph(
     },
     ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
-  const diagnostics = [
-    ...(graph.diagnostics ?? []),
-    ...buildPreflightComponentDiagnostics(staticArtifacts.components ?? []).map(
-      staticDiagnosticFact,
-    ),
-    ...result.diagnostics.map(staticDiagnosticFact),
-  ];
+  const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
+  const existingDiagnostics = buildSnapshotDenseArray(
+    graph.diagnostics ?? [],
+    'Existing static build diagnostics',
+  );
+  for (let index = 0; index < existingDiagnostics.length; index += 1) {
+    diagnostics[diagnostics.length] = existingDiagnostics[index]!;
+  }
+  const componentDiagnostics = buildPreflightComponentDiagnostics(staticArtifacts.components ?? []);
+  const mappedComponentDiagnostics = buildMapDense(
+    componentDiagnostics,
+    'Build component diagnostics',
+    staticDiagnosticFact,
+  );
+  for (let index = 0; index < mappedComponentDiagnostics.length; index += 1) {
+    diagnostics[diagnostics.length] = mappedComponentDiagnostics[index]!;
+  }
+  const derivedDiagnostics = buildMapDense(
+    result.diagnostics,
+    'Derived app-graph diagnostics',
+    staticDiagnosticFact,
+  );
+  for (let index = 0; index < derivedDiagnostics.length; index += 1) {
+    diagnostics[diagnostics.length] = derivedDiagnostics[index]!;
+  }
   if (diagnostics.length > 0) {
     return {
       graph: {
@@ -577,7 +799,11 @@ async function buildCheckGraph(
 function buildPreflightComponentDiagnostics(
   components: NonNullable<KovoBuildCheckArtifacts['components']>,
 ): CompileResult['diagnostics'] {
-  return components.flatMap((component) => component.diagnostics);
+  return buildFlatMapDense(
+    components,
+    'Build preflight components',
+    (component) => component.diagnostics,
+  );
 }
 
 function staticDiagnosticFact(
@@ -595,15 +821,13 @@ function staticDiagnosticFact(
 async function staticBuildCheckGraph(
   app: KovoApp,
   appModulePath: string,
-  options: { cache: boolean },
+  options: {
+    cache: boolean;
+    reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
+  },
 ): Promise<KovoBuildCheckArtifacts> {
-  const [
-    { buildCheckSourceFiles, buildCompilerQueryShapeFacts, staticDataPlaneBuildFacts },
-    { collectCapabilityEscapesFromProject, collectCookieDowngradesFromProject },
-  ] = await Promise.all([
-    import('@kovojs/server/internal/data-plane-static-analysis'),
-    import('@kovojs/drizzle/internal/static'),
-  ]);
+  const { collectCapabilityEscapesFromProject, collectCookieDowngradesFromProject } =
+    await import('@kovojs/drizzle/internal/static');
   const files = buildCheckSourceFiles(appModulePath);
   const [drizzleFacts, sourceGraphFacts] =
     files.length === 0
@@ -611,16 +835,14 @@ async function staticBuildCheckGraph(
           emptyStaticDataPlaneBuildFacts(),
           {
             components: [] as SourceComponentGraphFacts[],
-            routeOutcomes: new Map<string, 'file' | 'stream'>(),
+            routeOutcomes: buildCreateMap<string, 'file' | 'stream'>(),
             routePages: [] as SourceRoutePageFacts[],
-            sessionAuthorityFacts: [] as CoreGraph.SessionAuthorityFact[],
           },
         ]
-      : await Promise.all([
+      : await buildPromiseAll([
           staticDataPlaneBuildFacts(files, { cache: options.cache }),
           sourceGraphFactsFromFiles(files, dirname(appModulePath)),
         ]);
-  const reachableSessionAuthorityFacts = await sessionAuthorityFactsFromEntry(appModulePath);
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
   // (`kovo explain --capabilities`) and credential-cookie downgrade (`--cookies`) in the REAL build
   // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
@@ -632,25 +854,43 @@ async function staticBuildCheckGraph(
     files,
     drizzleFacts,
   ) as readonly QueryShapeFact[];
-  const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
+  const queryReadSets = buildMapDense(app.queries, 'Build app queries', (query) =>
+    queryCheckFact(query, drizzleFacts.queries),
+  );
   const routeOutcomeFacts = routeFileStreamEndpointFacts(
     app.routes,
     sourceGraphFacts.routeOutcomes,
   );
   const sessionAuthorityFacts = completeMutationSessionAuthorityFacts(
     app,
-    reachableSessionAuthorityFacts,
+    options.reachableSessionAuthorityFacts,
   );
-  const updateCoverage = sourceGraphFacts.components.flatMap((component) =>
-    component.updateCoverage.map((fact) => ({
-      component: fact.componentName,
-      ...(fact.detail === undefined ? {} : { detail: fact.detail }),
-      position: fact.position,
-      query: fact.query,
-      ...(fact.source === undefined ? {} : { source: fact.source }),
-      status: fact.status,
-    })),
+  const updateCoverage = buildFlatMapDense(
+    sourceGraphFacts.components,
+    'Source component graph facts',
+    (component) =>
+      buildMapDense(component.updateCoverage, 'Component update-coverage facts', (fact) => ({
+        component: fact.componentName,
+        ...(fact.detail === undefined ? {} : { detail: fact.detail }),
+        position: fact.position,
+        query: fact.query,
+        ...(fact.source === undefined ? {} : { source: fact.source }),
+        status: fact.status,
+      })),
   );
+  const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', endpointCheckFact);
+  for (let index = 0; index < routeOutcomeFacts.length; index += 1) {
+    endpoints[endpoints.length] = routeOutcomeFacts[index]!;
+  }
+  const mutations = buildMapDense(app.mutations, 'Build app mutations', (mutation) =>
+    mutationCheckFact(mutation, queryReadSets),
+  );
+  const optimistic = buildFlatMapDense(
+    app.mutations,
+    'Build app mutations for optimistic coverage',
+    mutationOptimisticCheckFacts,
+  );
+  const pages = buildMapDense(app.routes, 'Build app routes', routeCheckFact);
 
   return {
     components: sourceGraphFacts.components,
@@ -672,10 +912,10 @@ async function staticBuildCheckGraph(
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
       ...(capabilities.length === 0 ? {} : { capabilities }),
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
-      endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
-      mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
-      optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
-      pages: app.routes.map(routeCheckFact),
+      endpoints,
+      mutations,
+      optimistic,
+      pages,
       queries: queryReadSets,
       ...(sessionAuthorityFacts.length === 0 ? {} : { sessionAuthority: sessionAuthorityFacts }),
       ...(updateCoverage.length === 0 ? {} : { updateCoverage }),
@@ -689,7 +929,6 @@ interface SourceGraphFacts {
   components: SourceComponentGraphFacts[];
   routeOutcomes: Map<string, 'file' | 'stream'>;
   routePages: SourceRoutePageFacts[];
-  sessionAuthorityFacts: CoreGraph.SessionAuthorityFact[];
 }
 
 async function sessionAuthorityFactsFromEntry(
@@ -702,81 +941,180 @@ async function sessionAuthorityFactsFromEntry(
   };
   const { mutationSessionAuthorityFacts, parseComponentModule, viteFrameworkIdentityFiles } =
     await import('@kovojs/compiler/internal');
-  const reachable = new Map<string, BuildCheckSourceFile>([[entry.fileName, entry]]);
-  for (const file of viteFrameworkIdentityFiles(root, entry.fileName, entry.source)) {
-    reachable.set(file.fileName, file);
+  const reachable: BuildCheckSourceFile[] = [entry];
+  const identityFiles = buildSnapshotDenseArray(
+    viteFrameworkIdentityFiles(root, entry.fileName, entry.source),
+    'Reachable framework-identity files',
+  );
+  for (let index = 0; index < identityFiles.length; index += 1) {
+    const file = identityFiles[index]!;
+    let existingIndex = -1;
+    for (let candidateIndex = 0; candidateIndex < reachable.length; candidateIndex += 1) {
+      if (reachable[candidateIndex]!.fileName === file.fileName) {
+        existingIndex = candidateIndex;
+        break;
+      }
+    }
+    if (existingIndex < 0) reachable[reachable.length] = file;
+    else reachable[existingIndex] = file;
   }
 
-  return [...reachable.values()].flatMap((file) => {
-    const extraFiles = viteFrameworkIdentityFiles(root, file.fileName, file.source);
-    return mutationSessionAuthorityFacts(
-      parseComponentModule(
-        file.fileName,
-        file.source,
-        extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
-      ),
+  const result: CoreGraph.SessionAuthorityFact[] = [];
+  for (let index = 0; index < reachable.length; index += 1) {
+    const file = reachable[index]!;
+    const extraFiles = buildSnapshotDenseArray(
+      viteFrameworkIdentityFiles(root, file.fileName, file.source),
+      `Framework-identity files for ${file.fileName}`,
     );
-  });
+    const facts = buildSnapshotDenseArray(
+      mutationSessionAuthorityFacts(
+        parseComponentModule(
+          file.fileName,
+          file.source,
+          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+        ),
+      ),
+      `Session-authority facts for ${file.fileName}`,
+    );
+    for (let factIndex = 0; factIndex < facts.length; factIndex += 1) {
+      result[result.length] = facts[factIndex]!;
+    }
+  }
+  return result;
 }
 
 function completeMutationSessionAuthorityFacts(
   app: KovoApp,
   sourceFacts: readonly CoreGraph.SessionAuthorityFact[],
 ): CoreGraph.SessionAuthorityFact[] {
-  const facts = new Map<string, CoreGraph.SessionAuthorityFact>();
-  for (const fact of sourceFacts) {
-    const key = fact.unresolvedName === true ? 'unresolved:*' : `name:${fact.name}`;
-    const previous = facts.get(key);
-    if (previous?.referencesSession === true && !fact.referencesSession) continue;
-    const handlerFingerprints = fact.referencesSession
+  // SPEC §2/§11.4: these facts bind statically inspected authority to the exact runtime
+  // handler. App evaluation precedes this join, so collection prototypes cannot participate.
+  const facts: { fact: CoreGraph.SessionAuthorityFact; key: string }[] = [];
+  const sourceSnapshot = buildSnapshotDenseArray(sourceFacts, 'Static session-authority facts');
+  for (let index = 0; index < sourceSnapshot.length; index += 1) {
+    const fact = sourceSnapshot[index]!;
+    const unresolvedName = buildOwnDataValue(fact, 'unresolvedName', 'Session-authority fact');
+    const name = buildOwnDataValue(fact, 'name', 'Session-authority fact');
+    const referencesSession = buildOwnDataValue(
+      fact,
+      'referencesSession',
+      'Session-authority fact',
+    );
+    if (typeof name !== 'string' || typeof referencesSession !== 'boolean') {
+      throw new TypeError('Session-authority facts require own name/referencesSession values.');
+    }
+    const key = unresolvedName === true ? 'unresolved:*' : `name:${name}`;
+    const factIndex = sessionAuthorityFactIndex(facts, key);
+    const previous = factIndex < 0 ? undefined : facts[factIndex]!.fact;
+    if (previous?.referencesSession === true && referencesSession !== true) continue;
+    const handlerFingerprints = referencesSession
       ? []
-      : [...(previous?.handlerFingerprints ?? []), ...(fact.handlerFingerprints ?? [])].filter(
-          (value, index, values) => values.indexOf(value) === index,
+      : uniqueHandlerFingerprints(
+          previous?.handlerFingerprints ?? [],
+          (buildOwnDataValue(fact, 'handlerFingerprints', 'Session-authority fact') ??
+            []) as readonly string[],
         );
-    facts.set(key, {
+    const merged: CoreGraph.SessionAuthorityFact = {
       ...fact,
       ...(handlerFingerprints.length === 0 ? {} : { handlerFingerprints }),
-    });
+    };
+    if (factIndex < 0) facts[facts.length] = { fact: merged, key };
+    else facts[factIndex] = { fact: merged, key };
   }
 
-  const unresolvedAuthority = [...facts.values()].some(
-    (fact) => fact.unresolvedName === true && fact.referencesSession,
-  );
-  for (const mutation of app.mutations) {
+  let unresolvedAuthority = false;
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = facts[index]!.fact;
+    if (fact.unresolvedName === true && fact.referencesSession) {
+      unresolvedAuthority = true;
+      break;
+    }
+  }
+  const mutations = buildSnapshotDenseArray(app.mutations, 'Build app mutations');
+  for (let index = 0; index < mutations.length; index += 1) {
+    const mutation = mutations[index]!;
     if (mutation.csrf !== false || unresolvedAuthority) continue;
     const exactKey = `name:${mutation.key}`;
-    const exact = facts.get(exactKey);
+    const exactIndex = sessionAuthorityFactIndex(facts, exactKey);
+    const exact = exactIndex < 0 ? undefined : facts[exactIndex]!.fact;
     if (exact?.referencesSession === true) continue;
     const handlerFingerprint = runtimeMutationHandlerFingerprint(mutation.handler);
-    const coveredFingerprints = [
-      ...(exact?.handlerFingerprints ?? []),
-      ...(facts.get('unresolved:*')?.handlerFingerprints ?? []),
-    ];
-    if (handlerFingerprint !== undefined && coveredFingerprints.includes(handlerFingerprint)) {
+    const unresolvedIndex = sessionAuthorityFactIndex(facts, 'unresolved:*');
+    const unresolved = unresolvedIndex < 0 ? undefined : facts[unresolvedIndex]!.fact;
+    const coveredFingerprints = uniqueHandlerFingerprints(
+      exact?.handlerFingerprints ?? [],
+      unresolved?.handlerFingerprints ?? [],
+    );
+    if (
+      handlerFingerprint !== undefined &&
+      handlerFingerprintIsCovered(coveredFingerprints, handlerFingerprint)
+    ) {
       continue;
     }
-    facts.set(exactKey, {
+    const ambientFact: CoreGraph.SessionAuthorityFact = {
       detail: 'runtime csrf-exempt handler identity was not covered by the static authority scan',
       kind: 'mutation',
       name: mutation.key,
       referencesSession: true,
       source: 'session-authority',
-    });
+    };
+    if (exactIndex < 0) facts[facts.length] = { fact: ambientFact, key: exactKey };
+    else facts[exactIndex] = { fact: ambientFact, key: exactKey };
   }
 
-  return [...facts.values()].sort((left, right) => left.name.localeCompare(right.name));
+  const result: CoreGraph.SessionAuthorityFact[] = [];
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = facts[index]!.fact;
+    let insertAt = result.length;
+    while (insertAt > 0 && fact.name < result[insertAt - 1]!.name) {
+      result[insertAt] = result[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    result[insertAt] = fact;
+  }
+  return result;
+}
+
+function sessionAuthorityFactIndex(
+  facts: readonly { fact: CoreGraph.SessionAuthorityFact; key: string }[],
+  key: string,
+): number {
+  for (let index = 0; index < facts.length; index += 1) {
+    if (facts[index]!.key === key) return index;
+  }
+  return -1;
+}
+
+function uniqueHandlerFingerprints(first: readonly string[], second: readonly string[]): string[] {
+  const result: string[] = [];
+  const sources = [first, second] as const;
+  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    const source = buildSnapshotDenseArray(
+      sources[sourceIndex]!,
+      'Session-authority handler fingerprints',
+    );
+    for (let index = 0; index < source.length; index += 1) {
+      const value = source[index];
+      if (typeof value !== 'string') {
+        throw new TypeError('Session-authority handler fingerprints must be strings.');
+      }
+      if (!handlerFingerprintIsCovered(result, value)) result[result.length] = value;
+    }
+  }
+  return result;
+}
+
+function handlerFingerprintIsCovered(fingerprints: readonly string[], candidate: string): boolean {
+  for (let index = 0; index < fingerprints.length; index += 1) {
+    if (fingerprints[index] === candidate) return true;
+  }
+  return false;
 }
 
 function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined {
-  if (
-    typeof handler !== 'function' ||
-    typeof nativeFunctionToString !== 'function' ||
-    typeof nativeReflectApply !== 'function'
-  ) {
-    return undefined;
-  }
+  if (typeof handler !== 'function') return undefined;
   try {
-    const source = nativeReflectApply(nativeFunctionToString, handler, []) as string;
+    const source = buildFunctionSource(handler);
     return mutationHandlerFingerprintFromRuntimeSource(source);
   } catch {
     return undefined;
@@ -787,32 +1125,25 @@ async function sourceGraphFactsFromFiles(
   files: readonly BuildCheckSourceFile[],
   root: string,
 ): Promise<SourceGraphFacts> {
-  const [
-    { compileComponentModule, compileRouteModule },
-    { mutationSessionAuthorityFacts, parseComponentModule, viteFrameworkIdentityFiles },
-  ] = await Promise.all([import('@kovojs/compiler'), import('@kovojs/compiler/internal')]);
+  const [{ compileComponentModule, compileRouteModule }, { viteFrameworkIdentityFiles }] =
+    await buildPromiseAll([import('@kovojs/compiler'), import('@kovojs/compiler/internal')]);
   const components: SourceComponentGraphFacts[] = [];
-  const routeOutcomes = new Map<string, 'file' | 'stream'>();
+  const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
-  const sessionAuthorityFacts: CoreGraph.SessionAuthorityFact[] = [];
 
-  for (const file of files) {
-    const extraFiles = viteFrameworkIdentityFiles(root, file.fileName, file.source);
+  const sourceFiles = buildSnapshotDenseArray(files, 'Build-check source files');
+  for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
+    const file = sourceFiles[fileIndex]!;
+    const extraFiles = buildSnapshotDenseArray(
+      viteFrameworkIdentityFiles(root, file.fileName, file.source),
+      `Framework-identity files for ${file.fileName}`,
+    );
     const componentOptions = {
       ...(extraFiles.length === 0 ? {} : { extraFiles }),
       fileName: file.fileName,
       source: file.source,
       sourceProvenance: 'app',
     } as const;
-    sessionAuthorityFacts.push(
-      ...mutationSessionAuthorityFacts(
-        parseComponentModule(
-          file.fileName,
-          file.source,
-          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
-        ),
-      ),
-    );
     const component = compileComponentModule(componentOptions);
     if (
       component.componentGraphFacts.length > 0 ||
@@ -822,21 +1153,26 @@ async function sourceGraphFactsFromFiles(
       component.taskGraphFacts.length > 0 ||
       component.updateCoverage.length > 0
     ) {
-      components.push(component);
+      components[components.length] = component;
     }
 
     const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
     if (routePage.routePageFacts.length > 0) {
-      routePages.push(routePage);
-      for (const fact of routePage.routePageFacts) {
-        if (fact.outcome !== undefined && !routeOutcomes.has(fact.route)) {
-          routeOutcomes.set(fact.route, fact.outcome.kind);
+      routePages[routePages.length] = routePage;
+      const routePageFacts = buildSnapshotDenseArray(
+        routePage.routePageFacts,
+        `Route page facts for ${file.fileName}`,
+      );
+      for (let factIndex = 0; factIndex < routePageFacts.length; factIndex += 1) {
+        const fact = routePageFacts[factIndex]!;
+        if (fact.outcome !== undefined && !buildMapHas(routeOutcomes, fact.route)) {
+          buildMapSet(routeOutcomes, fact.route, fact.outcome.kind);
         }
       }
     }
   }
 
-  return { components, routeOutcomes, routePages, sessionAuthorityFacts };
+  return { components, routeOutcomes, routePages };
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
@@ -864,17 +1200,37 @@ function queryCheckFact(
   query: KovoApp['queries'][number],
   queryFacts: readonly QueryReadFactLike[],
 ): CoreGraph.QueryReadSet {
-  const fact = queryFacts.find((candidate) => candidate.query === query.key);
-  const factReads = fact?.reads?.filter(isString) ?? [];
-  const declaredReads = (query.reads ?? []) as readonly { key: string }[];
-  const readProvenance = fact?.readProvenance;
+  const fact = buildFindDense(
+    queryFacts,
+    'Static query-read facts',
+    (candidate) => candidate.query === query.key,
+  );
+  const factReads = buildFilterDense(fact?.reads ?? [], 'Static query read domains', isString);
+  const declaredReads = buildSnapshotDenseArray(
+    (query.reads ?? []) as readonly { key: string }[],
+    `Declared reads for ${query.key}`,
+  );
+  const declaredReadKeys = buildMapDense(
+    declaredReads,
+    `Declared read keys for ${query.key}`,
+    (read) => read.key,
+  );
+  const readProvenance =
+    fact?.readProvenance === undefined
+      ? undefined
+      : buildSnapshotDenseArray(fact.readProvenance, `Read provenance for ${query.key}`);
+  const readOnlyDomains = buildFilterDense(
+    fact?.readOnlyDomains ?? [],
+    `Read-only domains for ${query.key}`,
+    isString,
+  );
   return {
-    domains: uniqueSorted([...declaredReads.map((read) => read.key), ...factReads]),
+    domains: uniqueSorted(
+      appendDense(declaredReadKeys, factReads, `Read domains for ${query.key}`),
+    ),
     query: query.key,
     ...(readProvenance !== undefined && readProvenance.length > 0 ? { readProvenance } : {}),
-    ...((fact?.readOnlyDomains?.length ?? 0) > 0
-      ? { readOnlyDomains: uniqueSorted(fact?.readOnlyDomains?.filter(isString) ?? []) }
-      : {}),
+    ...(readOnlyDomains.length > 0 ? { readOnlyDomains: uniqueSorted(readOnlyDomains) } : {}),
     ...(query.guard === undefined ? {} : { guards: ['query.guard'] }),
   };
 }
@@ -884,20 +1240,35 @@ function mutationCheckFact(
   queryReadSets: readonly CoreGraph.QueryReadSet[],
 ): CoreGraph.MutationExplain {
   const access = accessDecisionGraphFact(accessDecisionFor(mutation));
-  const guards = uniqueSorted([
-    ...(access?.kind === 'guard-chain' ? access.guards : []),
-    ...(mutation.guard === undefined ? [] : [guardAuditName(mutation.guard)]),
-  ]);
+  const guards = uniqueSorted(
+    appendDense(
+      access?.kind === 'guard-chain' ? access.guards : [],
+      mutation.guard === undefined ? [] : [guardAuditName(mutation.guard)],
+      `Mutation guards for ${mutation.key}`,
+    ),
+  );
   const registry = mutation.registry;
   const touches = (registry?.touches ?? []) as readonly { key: string }[];
   const inferredTouches = (registry?.inferredTouches ?? []) as readonly { domain: string }[];
-  const writes = uniqueSorted(touches.map((touch) => touch.key));
-  const inferredWrites = uniqueSorted(inferredTouches.map((touch) => touch.domain));
-  const fileFields = mutation.fileFields ?? [];
-  const invalidates = mutationInvalidatedQueryKeys(mutation, queryReadSets, [
-    ...writes,
-    ...inferredWrites,
-  ]);
+  const writes = uniqueSorted(
+    buildMapDense(touches, `Mutation touches for ${mutation.key}`, (touch) => touch.key),
+  );
+  const inferredWrites = uniqueSorted(
+    buildMapDense(
+      inferredTouches,
+      `Inferred mutation touches for ${mutation.key}`,
+      (touch) => touch.domain,
+    ),
+  );
+  const fileFields = buildSnapshotDenseArray<string>(
+    (mutation.fileFields ?? []) as readonly string[],
+    `Mutation file fields for ${mutation.key}`,
+  );
+  const invalidates = mutationInvalidatedQueryKeys(
+    mutation,
+    queryReadSets,
+    appendDense(writes, inferredWrites, `Mutation writes for ${mutation.key}`),
+  );
   const referencesSessionAuthority = mutationGuardReferencesSessionAuthority(mutation);
   return {
     ...(access === undefined ? {} : { access }),
@@ -910,22 +1281,38 @@ function mutationCheckFact(
     key: mutation.key,
     ...(writes.length === 0 && inferredWrites.length === 0
       ? {}
-      : { writes: uniqueSorted([...writes, ...inferredWrites]) }),
+      : {
+          writes: uniqueSorted(
+            appendDense(writes, inferredWrites, `Mutation writes for ${mutation.key}`),
+          ),
+        }),
   };
 }
 
 function mutationGuardReferencesSessionAuthority(mutation: KovoApp['mutations'][number]): boolean {
   const access = accessDecisionFor(mutation);
-  if (Array.isArray(access)) return access.some(guardReferencesSessionAuthority);
+  if (buildArrayIsArray(access)) {
+    return buildSomeDense(
+      access as readonly Guard<any, any>[],
+      `Mutation access guards for ${mutation.key}`,
+      guardReferencesSessionAuthority,
+    );
+  }
   if (access !== undefined) return false;
   return mutation.guard !== undefined && guardReferencesSessionAuthority(mutation.guard);
 }
 
 function guardReferencesSessionAuthority(guard: Guard<any, any>): boolean {
-  const facts = explainGuard(guard);
-  const substantive = facts.filter((fact) => fact.kind !== 'named');
+  const facts = buildSnapshotDenseArray(explainGuard(guard), 'Guard audit facts');
+  const substantive = buildFilterDense(
+    facts,
+    'Substantive guard audit facts',
+    (fact) => fact.kind !== 'named',
+  );
   if (substantive.length === 0) return true;
-  return substantive.some(
+  return buildSomeDense(
+    substantive,
+    'Session-authority guard audit facts',
     (fact) => fact.kind !== 'rateLimit' || (fact.per !== 'global' && fact.per !== 'ip'),
   );
 }
@@ -936,20 +1323,35 @@ function mutationOptimisticCheckFacts(
   const optimistic = mutation.optimistic as Record<string, unknown> | undefined;
   if (optimistic === undefined) return [];
 
-  const optimisticQueries = Object.keys(optimistic)
-    .filter(isString)
-    .map((key) => ({ key }));
-  return uniqueQueries(optimisticQueries).flatMap((query) => {
-    const entry = optimistic[query.key];
-    if (entry === undefined) return [];
-    return [
-      {
-        mutation: mutation.key,
-        query: query.key,
-        status: entry === 'await-fragment' ? 'await-fragment' : 'hand-written',
-      },
-    ];
-  });
+  const optimisticQueryKeys = buildFilterDense(
+    buildObjectKeys(optimistic),
+    `Optimistic query keys for ${mutation.key}`,
+    isString,
+  );
+  const optimisticQueries = buildMapDense(
+    optimisticQueryKeys,
+    `Optimistic queries for ${mutation.key}`,
+    (key) => ({ key }),
+  );
+  return buildFlatMapDense(
+    uniqueQueries(optimisticQueries),
+    `Unique optimistic queries for ${mutation.key}`,
+    (query) => {
+      const entry = buildOwnDataValue(
+        optimistic,
+        query.key,
+        `Optimistic declarations for ${mutation.key}`,
+      );
+      if (entry === undefined) return [];
+      return [
+        {
+          mutation: mutation.key,
+          query: query.key,
+          status: entry === 'await-fragment' ? 'await-fragment' : 'hand-written',
+        },
+      ];
+    },
+  );
 }
 
 function mutationInvalidatedQueryKeys(
@@ -962,38 +1364,92 @@ function mutationInvalidatedQueryKeys(
   const registryQueries = (mutation.registry?.queries ?? []) as readonly { key: string }[];
   const optimistic = mutation.optimistic as Record<string, unknown> | undefined;
   const optimisticQueryKeys =
-    optimistic === undefined ? [] : Object.keys(optimistic).filter(isString);
-  const writtenDomains = new Set(writeDomains);
-  const intersectingQueries =
-    writtenDomains.size === 0
+    optimistic === undefined
       ? []
-      : queryReadSets
-          .filter((query) => query.domains.some((domain) => writtenDomains.has(domain)))
-          .map((query) => query.query);
+      : buildFilterDense(
+          buildObjectKeys(optimistic),
+          `Optimistic invalidations for ${mutation.key}`,
+          isString,
+        );
+  const writtenDomains = buildCreateSet<string>();
+  const writeDomainSnapshot = buildSnapshotDenseArray(
+    writeDomains,
+    `Written domains for ${mutation.key}`,
+  );
+  for (let index = 0; index < writeDomainSnapshot.length; index += 1) {
+    buildSetAdd(writtenDomains, writeDomainSnapshot[index]!);
+  }
+  const intersectingQueries =
+    writeDomainSnapshot.length === 0
+      ? []
+      : buildMapDense(
+          buildFilterDense(
+            queryReadSets,
+            `Mutation invalidation candidates for ${mutation.key}`,
+            (query) =>
+              buildSomeDense(query.domains, `Read domains for ${query.query}`, (domain) =>
+                buildSetHas(writtenDomains, domain),
+              ),
+          ),
+          `Intersecting mutation queries for ${mutation.key}`,
+          (query) => query.query,
+        );
+  const registryQueryKeys = buildMapDense(
+    registryQueries,
+    `Registry queries for ${mutation.key}`,
+    (query) => query.key,
+  );
 
-  return uniqueSorted([
-    ...registryQueries.map((query) => query.key),
-    ...intersectingQueries,
-    ...optimisticQueryKeys,
-  ]);
+  return uniqueSorted(
+    appendDense(
+      appendDense(registryQueryKeys, intersectingQueries, `Invalidations for ${mutation.key}`),
+      optimisticQueryKeys,
+      `Optimistic invalidations for ${mutation.key}`,
+    ),
+  );
 }
 
 function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
-  const seen = new Set<string>();
+  const seen = buildCreateSet<string>();
   const unique: { key: string }[] = [];
-  for (const query of queries) {
-    if (seen.has(query.key)) continue;
-    seen.add(query.key);
-    unique.push(query);
+  const snapshot = buildSnapshotDenseArray(queries, 'Queries to deduplicate');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const query = snapshot[index]!;
+    if (buildSetHas(seen, query.key)) continue;
+    buildSetAdd(seen, query.key);
+    let insertAt = unique.length;
+    while (insertAt > 0 && query.key < unique[insertAt - 1]!.key) {
+      unique[insertAt] = unique[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    unique[insertAt] = query;
   }
-  return unique.sort((left, right) => left.key.localeCompare(right.key));
+  return unique;
 }
 
 function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain {
-  const layoutQueries = Object.values(route.layout?.queries ?? {}) as readonly { key: string }[];
+  const layoutQueryRecord = route.layout?.queries ?? {};
+  const layoutQueryKeys = buildObjectKeys(layoutQueryRecord);
+  const layoutQueries: { key: string }[] = [];
+  for (let index = 0; index < layoutQueryKeys.length; index += 1) {
+    const query = buildOwnDataValue(
+      layoutQueryRecord,
+      layoutQueryKeys[index]!,
+      `Layout queries for ${route.path}`,
+    );
+    if (
+      query &&
+      typeof query === 'object' &&
+      typeof (query as { key?: unknown }).key === 'string'
+    ) {
+      layoutQueries[layoutQueries.length] = query as { key: string };
+    }
+  }
   return {
     ...(route.guard === undefined ? {} : { guards: ['route.guard'] }),
-    queries: uniqueSorted(layoutQueries.map((query) => query.key)),
+    queries: uniqueSorted(
+      buildMapDense(layoutQueries, `Layout query values for ${route.path}`, (query) => query.key),
+    ),
     route: route.path,
   };
 }
@@ -1002,8 +1458,8 @@ function routeFileStreamEndpointFacts(
   routes: readonly KovoApp['routes'][number][],
   outcomeByPath: ReadonlyMap<string, 'file' | 'stream'>,
 ): CoreGraph.EndpointExplain[] {
-  return routes.flatMap((route) => {
-    const outcome = outcomeByPath.get(route.path);
+  return buildFlatMapDense(routes, 'Routes with file/stream outcomes', (route) => {
+    const outcome = buildMapGet(outcomeByPath, route.path);
     if (outcome === undefined) return [];
     return [routeFileStreamEndpointFact(route, outcome)];
   });
@@ -1057,7 +1513,10 @@ function accessDecisionGraphFact(
 
   if (isGuardAccessDecisionValue(access)) {
     if (access.length === 0) return undefined;
-    return { guards: access.map((item) => guardAuditName(item)), kind: 'guard-chain' };
+    return {
+      guards: buildMapDense(access, 'Access-decision guard chain', (item) => guardAuditName(item)),
+      kind: 'guard-chain',
+    };
   }
 
   if (access.kind === 'public') return { kind: 'public', reason: access.reason };
@@ -1066,7 +1525,7 @@ function accessDecisionGraphFact(
 }
 
 function isGuardAccessDecisionValue(access: AccessDecision): access is readonly Guard<any, any>[] {
-  return Array.isArray(access);
+  return buildArrayIsArray(access);
 }
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
@@ -1105,7 +1564,9 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
 function endpointResponseBodyPosture(
   body: KovoApp['endpoints'][number]['response']['body'],
 ): string {
-  return typeof body === 'string' ? body : body.join(',');
+  return typeof body === 'string'
+    ? body
+    : buildJoinStrings(body, ',', 'Endpoint response-body posture');
 }
 
 function endpointCheckAuth(auth: KovoApp['endpoints'][number]['auth']): string {
@@ -1124,7 +1585,11 @@ function endpointWrites(
   endpoint: KovoApp['endpoints'][number],
 ): Pick<CoreGraph.EndpointExplain, 'writes'> {
   if (!isWebhookEndpoint(endpoint)) return {};
-  const writes = endpoint.webhookDefinition.writes?.map((domain) => domain.key) ?? [];
+  const writes = buildMapDense(
+    endpoint.webhookDefinition.writes ?? [],
+    `Webhook writes for ${endpoint.path}`,
+    (domain) => domain.key,
+  );
   return writes.length === 0 ? {} : { writes: uniqueSorted(writes) };
 }
 
@@ -1139,7 +1604,13 @@ function isWebhookEndpoint(
 
 function findBuildTsconfig(appModulePath: string): string | undefined {
   const relativeAppPath = relative(process.cwd(), appModulePath);
-  if (relativeAppPath.split(/[\\/]/).some((part) => part.startsWith('.'))) return undefined;
+  if (
+    buildSomeDense(buildStringSplit(relativeAppPath, /[\\/]/), 'Build app path segments', (part) =>
+      buildStringStartsWith(part, '.'),
+    )
+  ) {
+    return undefined;
+  }
 
   return findNearestFile(dirname(appModulePath), 'tsconfig.json', { stopDir: process.cwd() });
 }
@@ -1149,14 +1620,32 @@ function isString(value: unknown): value is string {
 }
 
 function uniqueSorted(values: readonly string[]): string[] {
-  return [...new Set(values)].sort();
+  const source = buildSnapshotDenseArray(values, 'Strings to deduplicate and sort');
+  const seen = buildCreateSet<string>();
+  const result: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const value = source[index]!;
+    if (buildSetHas(seen, value)) continue;
+    buildSetAdd(seen, value);
+    let insertAt = result.length;
+    while (insertAt > 0 && value < result[insertAt - 1]!) {
+      result[insertAt] = result[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    result[insertAt] = value;
+  }
+  return result;
 }
 
 function execFileErrorOutput(error: unknown): string {
   if (isRecord(error)) {
-    const stdout = typeof error.stdout === 'string' ? error.stdout.trimEnd() : '';
-    const stderr = typeof error.stderr === 'string' ? error.stderr.trimEnd() : '';
-    const output = [stdout, stderr].filter(Boolean).join('\n');
+    const stdout = typeof error.stdout === 'string' ? buildStringTrimEnd(error.stdout) : '';
+    const stderr = typeof error.stderr === 'string' ? buildStringTrimEnd(error.stderr) : '';
+    const output = buildJoinStrings(
+      buildFilterDense([stdout, stderr], 'TypeScript error output', (value) => value.length > 0),
+      '\n',
+      'TypeScript error output lines',
+    );
     if (output) return output;
   }
   return error instanceof Error ? error.message : String(error);
@@ -1174,7 +1663,9 @@ async function inspectKovoBuildPreset(
 const kovoBuildEnvConventions = ['DATABASE_URL'] as const;
 
 function inferredKovoBuildDeclaredEnv(serverHandlerSource: string): readonly string[] {
-  return kovoBuildEnvConventions.filter((name) => serverHandlerSource.includes(name));
+  return buildFilterDense(kovoBuildEnvConventions, 'Kovo build environment conventions', (name) =>
+    buildStringIncludes(serverHandlerSource, name),
+  );
 }
 
 function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string {
@@ -1188,7 +1679,7 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
     { extractAppComponentCss, extractAppRouteCssTargets, extractPackageComponentCss },
     { collectCssAssetManifest, cssRouteDeliveryGate },
     { kovoUiTokenSheetCss },
-  ] = await Promise.all([
+  ] = await buildPromiseAll([
     import('@kovojs/compiler/package-styles'),
     import('@kovojs/compiler/internal'),
     import('@kovojs/headless-ui/internal'),
@@ -1283,7 +1774,10 @@ function selectedConfiguredKovoBuildPreset(preset: KovoPreset): SelectedKovoBuil
   return { name, preset };
 }
 
-async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig> {
+async function loadKovoBuildConfig(
+  root: string,
+  appModulePath: string,
+): Promise<LoadedKovoBuildConfig> {
   const configPath = findKovoBuildConfig(root);
   if (configPath === undefined) return {};
 
@@ -1294,9 +1788,11 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
     logLevel: 'error',
     root,
     server: buildTimeViteServerOptions(),
-    ssr: { noExternal: true },
+    ssr: { noExternal: [/^@kovojs\//] },
   });
   try {
+    const requireFromApp = createRequire(pathToFileURL(appModulePath));
+    await server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server'), root));
     const configModule = await server.ssrLoadModule(`/${basename(configPath)}`);
     const config = kovoBuildConfigFromModule(configModule, configPath);
     return { config, path: configPath };
@@ -1314,10 +1810,11 @@ async function loadBuildAppModule(
   root: string,
 ): Promise<LoadedBuildAppModule> {
   const [{ lowerStandaloneSourceDerivedRegistryDeclarations }, { createServer }] =
-    await Promise.all([import('@kovojs/compiler/internal'), import('vite-plus')]);
+    await buildPromiseAll([import('@kovojs/compiler/internal'), import('vite-plus')]);
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
   const server = await createServer({
     appType: 'custom',
+    configFile: false,
     logLevel: 'error',
     plugins: [
       sourceDerivedRegistryVitePlugin(root, lowerStandaloneSourceDerivedRegistryDeclarations),
@@ -1331,7 +1828,11 @@ async function loadBuildAppModule(
     ssr: { noExternal: [/^@kovojs\//] },
   });
   try {
-    const [serverBuildModule, serverInternalBuildModule] = await Promise.all([
+    // SPEC §6.6 rule 6: the app-resolved server root owns the supported-runner security bootstrap.
+    // Evaluate it before any app module so tree-shaken/runtime-specific controls capture a pristine
+    // framework realm even when the app imports them before the generated handler entry does.
+    await server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server'), root));
+    const [serverBuildModule, serverInternalBuildModule] = await buildPromiseAll([
       server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server/build'), root)),
       server.ssrLoadModule(
         viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
@@ -1499,7 +2000,7 @@ async function buildKovoClientManifest(
     { cssRouteDeliveryGate, dedupeCss },
     { extractAppRouteCssTargets },
     { build },
-  ] = await Promise.all([
+  ] = await buildPromiseAll([
     import('@kovojs/compiler'),
     import('@kovojs/compiler/internal'),
     import('@kovojs/compiler/package-styles'),
@@ -1571,7 +2072,7 @@ async function buildKovoComponentClientModules(
     typeof import('@kovojs/compiler').kovoVitePlugin
   >['getCssAssetManifest'];
 }> {
-  const [{ kovoVitePlugin }, { build }] = await Promise.all([
+  const [{ kovoVitePlugin }, { build }] = await buildPromiseAll([
     import('@kovojs/compiler'),
     import('vite-plus'),
   ]);
@@ -1589,7 +2090,7 @@ async function buildKovoComponentClientModules(
       entryPath,
       [
         '// Compiler scan entry generated by kovo build.',
-        `import ${JSON.stringify(pathToFileURL(appModulePath).href)};`,
+        `import ${stringifyBuildValue(pathToFileURL(appModulePath).href)};`,
         '',
       ].join('\n'),
       'utf8',
@@ -1795,7 +2296,7 @@ async function bundleKovoServerHandler(
   clientModules: readonly KovoAppShellCompiledClientModule[];
   source: string;
 }> {
-  const [{ kovoVitePlugin }, { build }] = await Promise.all([
+  const [{ kovoVitePlugin }, { build }] = await buildPromiseAll([
     import('@kovojs/compiler'),
     import('vite-plus'),
   ]);
@@ -1812,7 +2313,7 @@ async function bundleKovoServerHandler(
   try {
     writeFileSync(
       runtimeRegistryPath,
-      serializeRuntimeRegistryWireModule(options.runtimeRegistry),
+      serializeBuildRuntimeRegistryWireModule(options.runtimeRegistry),
       'utf8',
     );
     writeFileSync(entryPath, kovoServerHandlerEntrySource(appModulePath, stylesheetAssets), 'utf8');
@@ -1845,7 +2346,7 @@ async function bundleKovoServerHandler(
       },
       configFile: false,
       define: {
-        'process.env.NODE_ENV': JSON.stringify('production'),
+        'process.env.NODE_ENV': stringifyBuildValue('production'),
       },
       logLevel: 'silent',
       mode: 'production',
@@ -1987,7 +2488,7 @@ function bundledUndiciRuntimeVitePlugin(): {
     },
     load(id) {
       if (id !== bundledUndiciRuntimeModuleId) return null;
-      return `export { Agent, getGlobalDispatcher, setGlobalDispatcher } from ${JSON.stringify(
+      return `export { Agent, getGlobalDispatcher, setGlobalDispatcher } from ${stringifyBuildValue(
         pathToFileURL(requireFromCli.resolve('undici')).href,
       )};\n`;
     },
@@ -1998,7 +2499,7 @@ function bundledUndiciRuntimeVitePlugin(): {
       );
       if (rewritten === code) return null;
       return {
-        code: `import { Agent, getGlobalDispatcher, setGlobalDispatcher } from ${JSON.stringify(
+        code: `import { Agent, getGlobalDispatcher, setGlobalDispatcher } from ${stringifyBuildValue(
           pathToFileURL(requireFromCli.resolve('undici')).href,
         )};\n${rewritten}`,
         map: null,
@@ -2007,53 +2508,74 @@ function bundledUndiciRuntimeVitePlugin(): {
   };
 }
 
-function kovoServerHandlerEntrySource(
+/** @internal Generated-entry ordering proof for SPEC §6.6 rule 6. */
+export function kovoServerHandlerEntrySource(
   appModulePath: string,
   stylesheetAssets: KovoBuildStylesheetAssets,
 ): string {
-  return [
-    "import './runtime-registry.mjs';",
-    "import { createRequestHandler } from '@kovojs/server';",
-    "import { deriveClosedKovoApp } from '@kovojs/server/internal/app-shell-vite';",
-    `import * as appModule from ${JSON.stringify(pathToFileURL(appModulePath).href)};`,
-    'const app = appModule.default ?? appModule.app;',
-    `const stylesheetAssets = ${JSON.stringify(stylesheetAssets)};`,
-    'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
-    '',
-    'function appWithBuildStylesheetAssets(app, assets) {',
-    '  if (assets.app.length === 0 && Object.keys(assets.fragments).length === 0 && Object.keys(assets.routes).length === 0) return app;',
-    '  return deriveClosedKovoApp(app, {',
-    '    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {',
-    '      const fragmentAssets = assets.fragments[renderer.component] ?? [];',
-    '      if (fragmentAssets.length === 0) return renderer;',
-    '      return { ...renderer, stylesheets: mergeStylesheetAssets([...(renderer.stylesheets ?? []), ...fragmentAssets]) };',
-    '    }),',
-    '    stylesheets: mergeStylesheetAssets([...app.stylesheets, ...assets.app]),',
-    '    routes: app.routes.map((route) => {',
-    '      const routeAssets = assets.routes[route.path] ?? [];',
-    '      if (routeAssets.length === 0) return route;',
-    '      return { ...route, stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]) };',
-    '    }),',
-    '  });',
-    '}',
-    '',
-    'function mergeStylesheetAssets(assets) {',
-    '  const byHref = new Map();',
-    '  const hrefOrder = [];',
-    '  for (const asset of assets) {',
-    "    const href = typeof asset === 'string' ? asset : asset.href;",
-    '    if (!byHref.has(href)) hrefOrder.push(href);',
-    '    const chunks = byHref.get(href) ?? [];',
-    "    if (typeof asset !== 'string' && asset.criticalCss) chunks.push(asset.criticalCss);",
-    '    byHref.set(href, chunks);',
-    '  }',
-    '  return hrefOrder.map((href) => {',
-    '    const criticalCss = (byHref.get(href) ?? []).map((chunk) => chunk.trim()).filter(Boolean).join("\\n");',
-    '    return { ...(criticalCss ? { criticalCss } : {}), href };',
-    '  });',
-    '}',
-    '',
-  ].join('\n');
+  return buildJoinStrings(
+    [
+      "import { createRequestHandler } from '@kovojs/server';",
+      "import './runtime-registry.mjs';",
+      "import { deriveClosedKovoApp } from '@kovojs/server/internal/app-shell-vite';",
+      `import * as appModule from ${stringifyBuildValue(pathToFileURL(appModulePath).href)};`,
+      'const app = appModule.default ?? appModule.app;',
+      `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
+      'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
+      '',
+      'function appWithBuildStylesheetAssets(app, assets) {',
+      '  if (assets.app.length === 0 && Object.keys(assets.fragments).length === 0 && Object.keys(assets.routes).length === 0) return app;',
+      '  return deriveClosedKovoApp(app, {',
+      '    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {',
+      '      const fragmentAssets = assets.fragments[renderer.component] ?? [];',
+      '      if (fragmentAssets.length === 0) return renderer;',
+      '      return { ...renderer, stylesheets: mergeStylesheetAssets([...(renderer.stylesheets ?? []), ...fragmentAssets]) };',
+      '    }),',
+      '    stylesheets: mergeStylesheetAssets([...app.stylesheets, ...assets.app]),',
+      '    routes: app.routes.map((route) => {',
+      '      const routeAssets = assets.routes[route.path] ?? [];',
+      '      if (routeAssets.length === 0) return route;',
+      '      return { ...route, stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]) };',
+      '    }),',
+      '  });',
+      '}',
+      '',
+      'function mergeStylesheetAssets(assets) {',
+      '  const byHref = new Map();',
+      '  const hrefOrder = [];',
+      '  for (const asset of assets) {',
+      "    const href = typeof asset === 'string' ? asset : asset.href;",
+      '    if (!byHref.has(href)) hrefOrder.push(href);',
+      '    const chunks = byHref.get(href) ?? [];',
+      "    if (typeof asset !== 'string' && asset.criticalCss) chunks.push(asset.criticalCss);",
+      '    byHref.set(href, chunks);',
+      '  }',
+      '  return hrefOrder.map((href) => {',
+      '    const criticalCss = (byHref.get(href) ?? []).map((chunk) => chunk.trim()).filter(Boolean).join("\\n");',
+      '    return { ...(criticalCss ? { criticalCss } : {}), href };',
+      '  });',
+      '}',
+      '',
+    ],
+    '\n',
+    'Generated server-handler entry lines',
+  );
+}
+
+/** @internal Serialize the production registry entry with the CLI's boot-captured JSON control. */
+export function serializeBuildRuntimeRegistryWireModule(
+  registry: RuntimeRegistryWireFacts,
+): string {
+  return buildJoinStrings(
+    [
+      `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';`,
+      `registerGeneratedQueryReadRegistry(${stringifyBuildValue(registry.queryReads)});`,
+      `registerGeneratedMutationTouchRegistry(${stringifyBuildValue(registry.mutationTouches)});`,
+      '',
+    ],
+    '\n',
+    'Generated runtime-registry entry lines',
+  );
 }
 
 export async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
@@ -2098,11 +2620,14 @@ export async function runExportCommandStructured(
 }
 
 async function loadExportAppModule(options: KovoExportOptions): Promise<LoadedExportAppModule> {
+  const resolvedAppModulePath = resolve(options.appModulePath);
+  const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
+  const appResolvedServerPath = requireFromApp.resolve('@kovojs/server');
   if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {
-    const { exportStaticApp } = await import('@kovojs/server');
+    const serverModule = await import(pathToFileURL(appResolvedServerPath).href);
     return {
-      appModule: await import(pathToFileURL(resolve(options.appModulePath)).href),
-      exportStaticApp,
+      appModule: await import(pathToFileURL(resolvedAppModulePath).href),
+      exportStaticApp: exportStaticAppFromModule(serverModule),
     };
   }
 
@@ -2110,15 +2635,14 @@ async function loadExportAppModule(options: KovoExportOptions): Promise<LoadedEx
   const root = resolve(options.root ?? process.cwd());
   const server = await createServer({
     appType: 'custom',
+    configFile: false,
     logLevel: 'error',
     root,
     server: buildTimeViteServerOptions(),
   });
   try {
-    const [appModule, serverModule] = await Promise.all([
-      server.ssrLoadModule(options.appModulePath),
-      server.ssrLoadModule(viteSsrModuleId(requireFromCli.resolve('@kovojs/server'), root)),
-    ]);
+    const serverModule = await server.ssrLoadModule(viteSsrModuleId(appResolvedServerPath, root));
+    const appModule = await server.ssrLoadModule(resolvedAppModulePath);
     return {
       appModule,
       close: () => server.close(),
@@ -2303,10 +2827,10 @@ function isKovoApp(value: unknown): value is KovoApp {
   return (
     typeof value === 'object' &&
     value !== null &&
-    Array.isArray((value as { routes?: unknown }).routes) &&
-    Array.isArray((value as { endpoints?: unknown }).endpoints) &&
-    Array.isArray((value as { mutations?: unknown }).mutations) &&
-    Array.isArray((value as { queries?: unknown }).queries) &&
+    buildArrayIsArray((value as { routes?: unknown }).routes) &&
+    buildArrayIsArray((value as { endpoints?: unknown }).endpoints) &&
+    buildArrayIsArray((value as { mutations?: unknown }).mutations) &&
+    buildArrayIsArray((value as { queries?: unknown }).queries) &&
     typeof (value as { clientModules?: { resolve?: unknown } }).clientModules?.resolve ===
       'function'
   );
@@ -2315,9 +2839,13 @@ function isKovoApp(value: unknown): value is KovoApp {
 function staticExportDiagnosticsFromModule(module: unknown): StaticExportCompileDiagnostic[] {
   if (typeof module !== 'object' || module === null) return [];
   const diagnostics = (module as { diagnostics?: unknown }).diagnostics;
-  if (!Array.isArray(diagnostics)) return [];
+  if (!buildArrayIsArray(diagnostics)) return [];
 
-  return diagnostics.filter(isStaticExportCompileDiagnostic);
+  return buildFilterDense(
+    diagnostics,
+    'Static-export compile diagnostics',
+    isStaticExportCompileDiagnostic,
+  );
 }
 
 function isStaticExportCompileDiagnostic(value: unknown): value is StaticExportCompileDiagnostic {
@@ -2345,7 +2873,7 @@ function kovoExportResult(
 
   for (const artifact of result.clientModules) {
     lines.push(
-      `CLIENT-MODULE ${artifact.path} href=${JSON.stringify(artifact.href)} status=${artifact.status} bytes=${byteLength(artifact.body)}`,
+      `CLIENT-MODULE ${artifact.path} href=${stringifyBuildValue(artifact.href)} status=${artifact.status} bytes=${byteLength(artifact.body)}`,
     );
   }
 
@@ -2362,7 +2890,7 @@ function kovoExportResult(
   }
 
   lines.push(
-    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${result.diagnostics.length} outDir=${JSON.stringify(options.outDir)}`,
+    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${result.diagnostics.length} outDir=${stringifyBuildValue(options.outDir)}`,
   );
 
   return {
@@ -2376,7 +2904,11 @@ function exportResultExitCode(result: StaticExportResult, options: KovoExportOpt
   if (result.diagnostics.length === 0) return 0;
   if (
     options.onNonExportable === 'skip' &&
-    result.diagnostics.every((diagnostic) => diagnostic.code === 'KV229')
+    buildEveryDense(
+      result.diagnostics,
+      'Static-export non-exportable diagnostics',
+      (diagnostic) => diagnostic.code === 'KV229',
+    )
   ) {
     return 0;
   }
@@ -2394,14 +2926,29 @@ function kovoBuildResult(options: {
 }): KovoCheckResult {
   const lines = [
     buildOutputVersion,
-    `APP module=${JSON.stringify(options.appModulePath)}`,
-    `NEUTRAL outDir=${JSON.stringify(options.neutralOutDir)}`,
-    ...options.presetDiagnostics.map(presetDiagnosticOutputLine),
-    ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
-    `SUMMARY preset=${options.preset} outDir=${JSON.stringify(options.outDir)} serverOutDir=${JSON.stringify(options.serverOutDir)}`,
+    `APP module=${stringifyBuildValue(options.appModulePath)}`,
+    `NEUTRAL outDir=${stringifyBuildValue(options.neutralOutDir)}`,
   ];
+  const diagnosticLines = buildMapDense(
+    options.presetDiagnostics,
+    'Build result preset diagnostics',
+    presetDiagnosticOutputLine,
+  );
+  const presetLogLines = buildMapDense(
+    options.presetLogs,
+    'Build result preset logs',
+    (message) => `PRESET ${stableText(message)}`,
+  );
+  for (let index = 0; index < diagnosticLines.length; index += 1) {
+    lines[lines.length] = diagnosticLines[index]!;
+  }
+  for (let index = 0; index < presetLogLines.length; index += 1) {
+    lines[lines.length] = presetLogLines[index]!;
+  }
+  lines[lines.length] =
+    `SUMMARY preset=${options.preset} outDir=${stringifyBuildValue(options.outDir)} serverOutDir=${stringifyBuildValue(options.serverOutDir)}`;
 
-  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+  return { exitCode: 0, output: `${buildJoinStrings(lines, '\n', 'Build result lines')}\n` };
 }
 
 function kovoBuildCheckResult(options: {
@@ -2413,14 +2960,32 @@ function kovoBuildCheckResult(options: {
 }): KovoCheckResult {
   const lines = [
     buildOutputVersion,
-    `APP module=${JSON.stringify(options.appModulePath)}`,
-    `NEUTRAL outDir=${JSON.stringify(options.neutralOutDir)}`,
-    ...options.presetDiagnostics.map(presetDiagnosticOutputLine),
-    ...options.presetLogs.map((message) => `PRESET ${stableText(message)}`),
-    `CHECK ok preset=${options.preset} (validate-only; deployable output not emitted)`,
+    `APP module=${stringifyBuildValue(options.appModulePath)}`,
+    `NEUTRAL outDir=${stringifyBuildValue(options.neutralOutDir)}`,
   ];
+  const diagnosticLines = buildMapDense(
+    options.presetDiagnostics,
+    'Build-check result preset diagnostics',
+    presetDiagnosticOutputLine,
+  );
+  const presetLogLines = buildMapDense(
+    options.presetLogs,
+    'Build-check result preset logs',
+    (message) => `PRESET ${stableText(message)}`,
+  );
+  for (let index = 0; index < diagnosticLines.length; index += 1) {
+    lines[lines.length] = diagnosticLines[index]!;
+  }
+  for (let index = 0; index < presetLogLines.length; index += 1) {
+    lines[lines.length] = presetLogLines[index]!;
+  }
+  lines[lines.length] =
+    `CHECK ok preset=${options.preset} (validate-only; deployable output not emitted)`;
 
-  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+  return {
+    exitCode: 0,
+    output: `${buildJoinStrings(lines, '\n', 'Build-check result lines')}\n`,
+  };
 }
 
 class KovoBuildPresetDiagnosticError extends Error {
@@ -2428,8 +2993,14 @@ class KovoBuildPresetDiagnosticError extends Error {
 
   constructor(diagnostics: readonly PresetDiagnostic[]) {
     super(
-      ['kovo build preset inspection failed:', ...diagnostics.map(presetDiagnosticOutputLine)].join(
+      buildJoinStrings(
+        appendDense(
+          ['kovo build preset inspection failed:'],
+          buildMapDense(diagnostics, 'Build preset error diagnostics', presetDiagnosticOutputLine),
+          'Build preset error lines',
+        ),
         '\n',
+        'Build preset error lines',
       ),
     );
     this.diagnostics = diagnostics;
@@ -2439,6 +3010,12 @@ class KovoBuildPresetDiagnosticError extends Error {
 function presetDiagnosticOutputLine(diagnostic: PresetDiagnostic): string {
   const label = diagnostic.severity === 'warning' ? 'WARN' : 'ERROR';
   return `${label} ${diagnostic.code} ${stableText(diagnostic.message)}`;
+}
+
+function stringifyBuildValue(value: unknown, space?: number): string {
+  const serialized = buildJsonStringify(value, space);
+  if (serialized === undefined) throw new TypeError('Kovo build value is not JSON serializable.');
+  return serialized;
 }
 
 function byteLength(value: string): number {
@@ -2454,14 +3031,18 @@ function buildErrorResult(error: unknown): CliCommandResult {
 
 function exportErrorResult(error: unknown): CliCommandResult {
   if (isStaticExportDiagnosticError(error)) {
+    const diagnosticLines = buildMapDense(
+      error.diagnostics,
+      'Static-export error diagnostics',
+      (diagnostic) =>
+        `ERROR ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
+    );
     return {
-      error: [
-        'kovo-export/v1',
-        ...error.diagnostics.map(
-          (diagnostic) =>
-            `ERROR ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
-        ),
-      ].join('\n'),
+      error: buildJoinStrings(
+        appendDense(['kovo-export/v1'], diagnosticLines, 'Static-export error lines'),
+        '\n',
+        'Static-export error lines',
+      ),
       exitCode: 1,
     };
   }
@@ -2478,6 +3059,6 @@ function isStaticExportDiagnosticError(error: unknown): error is {
   return (
     typeof error === 'object' &&
     error !== null &&
-    Array.isArray((error as { diagnostics?: unknown }).diagnostics)
+    buildArrayIsArray((error as { diagnostics?: unknown }).diagnostics)
   );
 }

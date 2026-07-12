@@ -19,6 +19,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { join } from 'node:path';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -868,6 +869,133 @@ export default createApp({
     }
   }, 90_000);
 
+  it('keeps KV418 closed when app evaluation selectively replaces the mutation Array.map', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-mutation-map-poison-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const nativeMap = Array.prototype.map;
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      collectCapabilityEscapesFromProject: () => [],
+      collectCookieDowngradesFromProject: () => [],
+      extractStaticBuildAnalysisFactsFromProject: () => ({
+        massAssignmentFacts: [],
+        ownerDomains: [],
+        queries: [],
+        queryWriteReachability: [],
+        scopeAudits: [],
+        sqlSafetyDiagnostics: [],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    }));
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `
+import { createApp, mutation, publicAccess, s } from '@kovojs/server';
+
+const unsafe = mutation('auth/map-poison', {
+  access: publicAccess('machine callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return request.headers.get('Cookie');
+  },
+});
+const app = createApp({ mutations: [unsafe] });
+const nativeMap = Array.prototype.map;
+const nativeApply = Reflect.apply;
+Array.prototype.map = function poisonedMutationMap(callback, thisArg) {
+  if (this.length === 1 && this[0]?.handler === unsafe.handler) return [];
+  return nativeApply(nativeMap, this, [callback, thisArg]);
+};
+export default app;
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync([
+        'build',
+        appPath,
+        '--out',
+        outDir,
+        '--check',
+        '--no-cache',
+      ]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(1);
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/map-poison');
+      expect(errorOutput).not.toContain('CHECK ok');
+    } finally {
+      Array.prototype.map = nativeMap;
+      vi.doUnmock('@kovojs/drizzle/internal/static');
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
+  it('classifies Cookie authority before app code can replace String.toLowerCase', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-cookie-lowercase-poison-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const nativeToLowerCase = String.prototype.toLowerCase;
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `
+import { createApp, mutation, publicAccess, s } from '@kovojs/server';
+
+const unsafe = mutation('auth/lowercase-poison', {
+  access: publicAccess('machine callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return request.headers.get('Cookie');
+  },
+});
+const nativeToLowerCase = String.prototype.toLowerCase;
+String.prototype.toLowerCase = function poisonedHeaderLowercase() {
+  if (String(this) === 'Cookie') return 'x-machine-signature';
+  return nativeToLowerCase.call(this);
+};
+export default createApp({ mutations: [unsafe] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync([
+        'build',
+        appPath,
+        '--out',
+        outDir,
+        '--check',
+        '--no-cache',
+      ]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(1);
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/lowercase-poison');
+      expect(errorOutput).not.toContain('CHECK ok');
+    } finally {
+      String.prototype.toLowerCase = nativeToLowerCase;
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('raises KV418 for a csrf:false Cookie read whose runtime key is nonliteral', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-dynamic-cookie-authority-'));
     const appPath = join(root, 'app.mjs');
@@ -987,6 +1115,11 @@ export default createApp({ mutations: [outside] });
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const require = createRequire(import.meta.url);
+    const mutableCrypto = require('node:crypto') as {
+      createHash: (typeof import('node:crypto'))['createHash'];
+    };
+    const nativeCreateHash = mutableCrypto.createHash;
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
@@ -1037,15 +1170,31 @@ export const decoy = mutation('auth/colliding-handler', {
         appPath,
         `
 import './safe-decoy.mjs';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { createApp, mutation, publicAccess, s } from '@kovojs/server';
 import { createActual } from 'unsafe-authority-fixture';
+const mutableCrypto = createRequire(import.meta.url)('node:crypto');
+mutableCrypto.createHash = () => ({
+  digest: () => '0'.repeat(64),
+  update() { return this; },
+});
+syncBuiltinESMExports();
 const actual = createActual({ mutation, publicAccess, s });
 export default createApp({ mutations: [actual] });
 `,
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      // SPEC §2/§6.6: the static/runtime handler join must remain exact after evaluated app
+      // code synchronizes a selective builtin replacement into the shared build realm.
+      const exitCode = await mainAsync([
+        'build',
+        appPath,
+        '--out',
+        outDir,
+        '--check',
+        '--no-cache',
+      ]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
       expect(exitCode).toBe(1);
@@ -1053,6 +1202,8 @@ export default createApp({ mutations: [actual] });
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/colliding-handler');
       expect(existsSync(outDir)).toBe(false);
     } finally {
+      mutableCrypto.createHash = nativeCreateHash;
+      syncBuiltinESMExports();
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
@@ -1173,6 +1324,88 @@ export async function search(input, db) {
       expect(errorOutput).toMatch(/ERROR KV422[\s\S]*src\/search\.js/);
       expect(existsSync(join(outDir, '.kovo/graph.json'))).toBe(false);
     } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps KV422 fail-closed when evaluated app code selectively replaces Array.filter', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-static-filter-poison-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const nativeFilter = Array.prototype.filter;
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+const nativeFilter = Array.prototype.filter;
+const nativeApply = Reflect.apply;
+Array.prototype.filter = function poisonedSourceFilter(callback, thisArg) {
+  for (let index = 0; index < this.length; index += 1) {
+    const entry = this[index];
+    if (
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof entry.source === 'string' &&
+      entry.source.includes('sql.raw(input.id)')
+    ) {
+      return [];
+    }
+  }
+  return nativeApply(nativeFilter, this, [callback, thisArg]);
+};
+
+export default createApp({
+  routes: [
+    route('/filter-poison', {
+      access: publicAccess('static analysis filter poisoning fixture'),
+      page: () => '<main>Filter poison</main>',
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'src/search.js'),
+        `
+import { sql } from '@kovojs/drizzle';
+
+export async function unsafe(db, input) {
+  return db.execute(sql.raw(input.id));
+}
+`,
+        'utf8',
+      );
+
+      // SPEC §2/§11.4: build-time app evaluation shares a realm with security analysis.
+      // The complete source census must survive selective ambient prototype replacement.
+      const exitCode = await mainAsync([
+        'build',
+        appPath,
+        '--out',
+        outDir,
+        '--check',
+        '--no-cache',
+      ]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(1);
+      expect(errorOutput).toMatch(/ERROR (?:KV422|KV245)[\s\S]*src\/search\.js/);
+      expect(errorOutput).not.toContain('CHECK ok');
+      expect(existsSync(join(outDir, '.kovo/graph.json'))).toBe(false);
+    } finally {
+      Array.prototype.filter = nativeFilter;
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
@@ -2128,7 +2361,7 @@ export async function resetFixture() {
       expect(stderr).not.toHaveBeenCalled();
 
       const routeCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/routes\/index-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/routes\/index-[a-f0-9]{64}\.css$/.test(href),
       );
       expect(readFileSync(routeCss.filePath, 'utf8')).toContain('auto-css-card');
       for (const asset of neutralClientAssets(outDir, (href) => href === '/assets/styles.css')) {
@@ -2171,16 +2404,16 @@ export async function resetFixture() {
       expect(stderr).not.toHaveBeenCalled();
 
       const baseCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/base-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/base-[a-f0-9]{64}\.css$/.test(href),
       );
       const homeCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/routes\/index-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/routes\/index-[a-f0-9]{64}\.css$/.test(href),
       );
       const loginCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/routes\/login-[a-f0-9]{64}\.css$/.test(href),
       );
       const homeFragmentCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/fragments\/home-panel-home-panel-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/fragments\/home-panel-home-panel-[a-f0-9]{64}\.css$/.test(href),
       );
       expect(readFileSync(baseCss.filePath, 'utf8')).toContain('shared-card');
       expect(readFileSync(homeCss.filePath, 'utf8')).toContain('home-panel');
@@ -2279,8 +2512,8 @@ export async function resetFixture() {
       expect(routeCssSignature(devDocument)).toEqual(staticSignature);
       expect(staticSignature.links).toEqual(
         expect.arrayContaining([
-          expect.stringMatching(/^\/assets\/base-[a-f0-9]{8}\.css$/),
-          expect.stringMatching(/^\/assets\/routes\/index-[a-f0-9]{8}\.css$/),
+          expect.stringMatching(/^\/assets\/base-[a-f0-9]{64}\.css$/),
+          expect.stringMatching(/^\/assets\/routes\/index-[a-f0-9]{64}\.css$/),
         ]),
       );
       expect(staticSignature.links).not.toEqual(
@@ -2317,7 +2550,7 @@ export async function resetFixture() {
       expect(stderr).not.toHaveBeenCalled();
 
       const baseCssAssets = neutralClientAssets(outDir, (href) =>
-        /^\/assets\/base-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/base-[a-f0-9]{64}\.css$/.test(href),
       );
       const baseCss = baseCssAssets.find((asset) =>
         readFileSync(asset.filePath, 'utf8').includes('kv-document-search-'),
@@ -2370,16 +2603,16 @@ export async function resetFixture() {
       expect(stderr).not.toHaveBeenCalled();
 
       const baseCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/base-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/base-[a-f0-9]{64}\.css$/.test(href),
       );
       const homeCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/routes\/index-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/routes\/index-[a-f0-9]{64}\.css$/.test(href),
       );
       const loginCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/routes\/login-[a-f0-9]{64}\.css$/.test(href),
       );
       const homeFragmentCss = neutralClientAsset(outDir, (href) =>
-        /^\/assets\/fragments\/home-panel-home-panel-[a-f0-9]{8}\.css$/.test(href),
+        /^\/assets\/fragments\/home-panel-home-panel-[a-f0-9]{64}\.css$/.test(href),
       );
 
       const serverModule = (await import(

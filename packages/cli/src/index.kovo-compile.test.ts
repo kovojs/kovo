@@ -55,7 +55,7 @@ export const CartBadge = component({
       expect(output).toContain('kovo-compile/v1\n');
       expect(output).toContain(`WRITE component path=${JSON.stringify(outPath)}`);
       const manifest = await readPersistentCompileCacheManifest(persistentCompileCacheDir(root));
-      expect(manifest.version).toBe('kovo-compile-cache/v1');
+      expect(manifest.version).toBe('kovo-compile-cache/v4');
       expect(Object.keys(manifest.entries).length).toBeGreaterThan(0);
 
       stdout.mockClear();
@@ -123,7 +123,7 @@ export const CartBadge = component({
         readPersistentCompileCacheManifest(persistentCompileCacheDir(root)),
       ).resolves.toEqual({
         entries: {},
-        version: 'kovo-compile-cache/v1',
+        version: 'kovo-compile-cache/v4',
       });
     } finally {
       process.chdir(previousCwd);
