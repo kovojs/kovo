@@ -156,7 +156,11 @@ export function assertBuildSecurityIntrinsics(): void {
   }
 }
 
-/** Snapshot a caller-owned dense array through own data descriptors and freeze the copy. */
+/**
+ * Snapshot a caller-owned dense array through own data descriptors and freeze the copy.
+ * SPEC §6.6 permits evaluated app code to share this realm, so even the copy commits must avoid
+ * inherited numeric setters installed before or during build replay.
+ */
 export function snapshotBuildArray<Value>(
   value: readonly Value[],
   label: string,
@@ -181,7 +185,11 @@ export function snapshotBuildArray<Value>(
     if (descriptor === undefined) {
       throw new TypeError(`Kovo build security boundary rejects sparse ${label}.`);
     }
-    snapshot[index] = descriptorDataProperty(descriptor) as Value;
+    commitBuildArrayValue(
+      snapshot,
+      descriptorDataProperty(descriptor) as Value,
+      `${label} snapshot value`,
+    );
   }
   return witnessFreeze(snapshot);
 }

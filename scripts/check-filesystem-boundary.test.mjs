@@ -9,6 +9,7 @@ import {
   filesystemIntrinsicsFile,
   nodeRuntimePackageBoundaryFindings,
   neutralBuildFile,
+  neutralMetadataCommitFindings,
   neutralPublicAssetCopyFindings,
   neutralStylesheetAssemblyFindings,
   presetDiagnosticAggregationFindings,
@@ -290,6 +291,47 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         expect.stringContaining('indexed traversal'),
         expect.stringContaining('private entry provenance'),
         expect.stringContaining('descriptor stat witness'),
+      ]),
+    );
+  });
+
+  it('C228 pins dense neutral metadata snapshots and commits', () => {
+    expect(
+      neutralMetadataCommitFindings(
+        buildSecurityIntrinsicsFile,
+        `
+          function snapshotBuildArray(value) {
+            const snapshot = [];
+            for (let index = 0; index < value.length; index += 1) {
+              snapshot[index] = value[index];
+            }
+            return snapshot;
+          }
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('must not dispatch through inherited numeric setters'),
+        expect.stringContaining('must commit descriptor values through commitBuildArrayValue'),
+      ]),
+    );
+
+    expect(
+      neutralMetadataCommitFindings(
+        neutralBuildFile,
+        `
+          function neutralBuildTasks(app) {
+            const tasks = [];
+            tasks[tasks.length] = { key: app.tasks[0].key };
+            return tasks;
+          }
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('must not dispatch through inherited numeric setters'),
+        expect.stringContaining('missing pinned durable task metadata'),
+        expect.stringContaining('missing pinned route entry metadata'),
       ]),
     );
   });

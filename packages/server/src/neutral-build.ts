@@ -182,10 +182,14 @@ function snapshotNeutralBuildStylesheetCss(
     if (typeof entry !== 'object' || entry === null) {
       throw new TypeError(`Neutral build stylesheet CSS entry ${index} must be an object.`);
     }
-    snapshot[snapshot.length] = {
-      css: requiredNeutralString(entry, 'css', `neutral build stylesheet CSS ${index}.css`),
-      href: requiredNeutralString(entry, 'href', `neutral build stylesheet CSS ${index}.href`),
-    };
+    commitBuildArrayValue(
+      snapshot,
+      {
+        css: requiredNeutralString(entry, 'css', `neutral build stylesheet CSS ${index}.css`),
+        href: requiredNeutralString(entry, 'href', `neutral build stylesheet CSS ${index}.href`),
+      },
+      'neutral build stylesheet CSS snapshot',
+    );
   }
   return snapshotBuildArray(snapshot, 'pinned neutral build stylesheet CSS');
 }
@@ -310,6 +314,8 @@ export async function writeKovoNeutralBuild(
       stylesheetSourceRoot,
     });
   }
+  // SPEC §6.6/§9.5: static replay above executes authored code in this realm. Commit the deployment
+  // authority ledgers below through boot-pinned own-data operations, including their array copies.
   const tasks = neutralBuildTasks(buildWithRegisteredClientModules.app);
   const neutral: KovoNeutralBuild = {
     clientDir,
@@ -366,8 +372,11 @@ function registeredClientModuleBuildArtifacts(
       source: module.source,
       version: module.version,
     };
-    builtModules[builtModules.length] =
-      module.contentType === undefined ? built : { ...built, contentType: module.contentType };
+    commitBuildArrayValue(
+      builtModules,
+      module.contentType === undefined ? built : { ...built, contentType: module.contentType },
+      'registered client module build artifact',
+    );
   }
   return builtModules;
 }
@@ -414,17 +423,21 @@ function neutralBuildClientModuleMetadata(
       'contentType',
       `neutral build client module ${index}.contentType`,
     );
-    metadata[metadata.length] = {
-      ...(contentType === undefined ? {} : { contentType }),
-      file: requiredNeutralString(module, 'file', `neutral build client module ${index}.file`),
-      href: requiredNeutralString(module, 'href', `neutral build client module ${index}.href`),
-      path: requiredNeutralString(module, 'path', `neutral build client module ${index}.path`),
-      version: requiredNeutralString(
-        module,
-        'version',
-        `neutral build client module ${index}.version`,
-      ),
-    };
+    commitBuildArrayValue(
+      metadata,
+      {
+        ...(contentType === undefined ? {} : { contentType }),
+        file: requiredNeutralString(module, 'file', `neutral build client module ${index}.file`),
+        href: requiredNeutralString(module, 'href', `neutral build client module ${index}.href`),
+        path: requiredNeutralString(module, 'path', `neutral build client module ${index}.path`),
+        version: requiredNeutralString(
+          module,
+          'version',
+          `neutral build client module ${index}.version`,
+        ),
+      },
+      'neutral build client module metadata',
+    );
   }
   return snapshotBuildArray(metadata, 'pinned neutral build client module metadata');
 }
@@ -437,9 +450,13 @@ function neutralBuildTasks(app: KovoApp): readonly { key: string }[] {
     if (typeof declaration !== 'object' || declaration === null) {
       throw new TypeError(`Neutral build task ${index} must be an object.`);
     }
-    tasks[tasks.length] = {
-      key: requiredNeutralString(declaration, 'key', `neutral build task ${index}.key`),
-    };
+    commitBuildArrayValue(
+      tasks,
+      {
+        key: requiredNeutralString(declaration, 'key', `neutral build task ${index}.key`),
+      },
+      'neutral build task metadata',
+    );
   }
   return snapshotBuildArray(tasks, 'pinned neutral build tasks');
 }
@@ -534,7 +551,13 @@ async function writeNeutralStaticOutput({
           break;
         }
       }
-      if (!hasDiagnostic) routeDocuments[routeDocuments.length] = target;
+      if (!hasDiagnostic) {
+        commitBuildArrayValue(
+          routeDocuments,
+          target,
+          'neutral static export route document metadata',
+        );
+      }
     }
     const manifestPath = neutralPathJoin(staticDir, 'kovo-static-manifest.json');
     await writeJson(manifestPath, {
@@ -587,23 +610,35 @@ function neutralBuildRouteEntries(
     const staticPaths: string[] = [];
     for (let index = 0; index < allDiagnostics.length; index += 1) {
       const diagnostic = allDiagnostics[index]!;
-      if (diagnostic.routePath === route.path) diagnostics[diagnostics.length] = diagnostic;
+      if (diagnostic.routePath === route.path) {
+        commitBuildArrayValue(diagnostics, diagnostic, 'neutral build route diagnostic metadata');
+      }
     }
     for (let index = 0; index < routeDocuments.length; index += 1) {
       const document = routeDocuments[index]!;
-      if (document.routePath === route.path) staticPaths[staticPaths.length] = document.path;
+      if (document.routePath === route.path) {
+        commitBuildArrayValue(
+          staticPaths,
+          document.path,
+          'neutral build route static path metadata',
+        );
+      }
     }
     const policy =
       staticPaths.length === 0 ? 'dynamic' : diagnostics.length === 0 ? 'static' : 'mixed';
 
-    entries[entries.length] = {
-      export: {
-        ...(diagnostics.length === 0 ? {} : { diagnostics }),
-        policy,
-        ...(staticPaths.length === 0 ? {} : { paths: staticPaths }),
+    commitBuildArrayValue(
+      entries,
+      {
+        export: {
+          ...(diagnostics.length === 0 ? {} : { diagnostics }),
+          policy,
+          ...(staticPaths.length === 0 ? {} : { paths: staticPaths }),
+        },
+        path: route.path,
       },
-      path: route.path,
-    };
+      'neutral build route entry metadata',
+    );
   }
   return entries;
 }
@@ -616,10 +651,14 @@ function neutralStaticExportAssets(
   const pinned: StaticExportAssetInput[] = [];
   for (let index = 0; index < source.length; index += 1) {
     const asset = source[index]!;
-    pinned[pinned.length] = {
-      path: asset.path,
-      source: viteDistSourcePath(manifestDistDir, asset.file),
-    };
+    commitBuildArrayValue(
+      pinned,
+      {
+        path: asset.path,
+        source: viteDistSourcePath(manifestDistDir, asset.file),
+      },
+      'neutral static export asset metadata',
+    );
   }
   return pinned;
 }

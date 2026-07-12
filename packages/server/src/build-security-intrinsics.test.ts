@@ -9,6 +9,7 @@ import {
   buildSecuritySourceLiteral,
   buildSecurityUrlSnapshot,
   commitBuildArrayValue,
+  snapshotBuildArray,
 } from './build-security-intrinsics.js';
 
 const originalJsonStringify = JSON.stringify;
@@ -86,6 +87,8 @@ describe('build source serialization (SPEC §6.6 rule 6)', () => {
     let setterCalls = 0;
     let committed: PropertyDescriptor | undefined;
     let committedLength = -1;
+    let snapshot: readonly string[] = [];
+    const source = ['approved'];
     try {
       Array.prototype.push = () => {
         throw new Error('mutable push must not run');
@@ -99,6 +102,7 @@ describe('build source serialization (SPEC §6.6 rule 6)', () => {
 
       const target: string[] = [];
       commitBuildArrayValue(target, 'approved', 'test artifact');
+      snapshot = snapshotBuildArray(source, 'test source');
       committed = Object.getOwnPropertyDescriptor(target, '0');
       committedLength = target.length;
     } finally {
@@ -109,6 +113,7 @@ describe('build source serialization (SPEC §6.6 rule 6)', () => {
 
     expect(committed?.value).toBe('approved');
     expect(committedLength).toBe(1);
+    expect(snapshot).toEqual(['approved']);
     expect(setterCalls).toBe(0);
   });
 

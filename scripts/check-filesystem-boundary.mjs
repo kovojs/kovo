@@ -22,6 +22,7 @@ export const staticExportReplayContextFile = 'packages/server/src/static-export-
 export const staticExportReplayRequestFile = 'packages/server/src/static-export-request.ts';
 export const buildSecurityIntrinsicsFile = 'packages/server/src/build-security-intrinsics.ts';
 export const neutralBuildFile = 'packages/server/src/neutral-build.ts';
+export const neutralMetadataCommitFiles = [buildSecurityIntrinsicsFile, neutralBuildFile];
 export const presetRetentionPolicyFile = 'packages/server/src/build.ts';
 
 export const defaultAllowedRuntimeFiles = [
@@ -79,6 +80,9 @@ export function checkFilesystemBoundary(options = {}) {
   );
   const neutralPublicAssetCopyFiles = new Set(
     options.neutralPublicAssetCopyFiles ?? [filesystemBoundaryFile, neutralBuildFile],
+  );
+  const neutralMetadataCommitFileSet = new Set(
+    options.neutralMetadataCommitFiles ?? neutralMetadataCommitFiles,
   );
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
@@ -152,6 +156,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (neutralPublicAssetCopyFiles.has(filePath)) {
       findings.push(...neutralPublicAssetCopyFindings(filePath, sourceText));
+    }
+    if (neutralMetadataCommitFileSet.has(filePath)) {
+      findings.push(...neutralMetadataCommitFindings(filePath, sourceText));
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
@@ -398,6 +405,68 @@ export function neutralStylesheetAssemblyFindings(filePath, sourceText) {
     )
   ) {
     findings.push(`${filePath}: neutral stylesheet paths must delegate to boot-pinned controls`);
+  }
+  return findings;
+}
+
+export function neutralMetadataCommitFindings(filePath, sourceText) {
+  const findings = [];
+  const scanText = stripCommentsAndStrings(sourceText);
+
+  if (filePath === buildSecurityIntrinsicsFile) {
+    const mutableSnapshotCommit = /\bsnapshot\s*\[\s*index\s*\]\s*=/u.exec(scanText);
+    if (mutableSnapshotCommit !== null) {
+      findings.push(
+        `${filePath}:${lineOf(sourceText, mutableSnapshotCommit.index)}: build array snapshots must not dispatch through inherited numeric setters`,
+      );
+    }
+    if (
+      !/\bcommitBuildArrayValue\s*\(\s*snapshot\s*,\s*descriptorDataProperty\s*\(/u.test(sourceText)
+    ) {
+      findings.push(
+        `${filePath}: build array snapshots must commit descriptor values through commitBuildArrayValue()`,
+      );
+    }
+    return findings;
+  }
+
+  const mutableDenseCommit = /\b([A-Za-z_$][\w$]*)\s*\[\s*\1\s*\.\s*length\s*\]\s*=/u.exec(
+    scanText,
+  );
+  if (mutableDenseCommit !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableDenseCommit.index)}: neutral build metadata must not dispatch through inherited numeric setters`,
+    );
+  }
+
+  const requiredCommits = [
+    ['stylesheet CSS snapshot', 'snapshot', 'neutral build stylesheet CSS snapshot'],
+    [
+      'registered client module artifact',
+      'builtModules',
+      'registered client module build artifact',
+    ],
+    ['client module metadata', 'metadata', 'neutral build client module metadata'],
+    ['durable task metadata', 'tasks', 'neutral build task metadata'],
+    [
+      'static route document metadata',
+      'routeDocuments',
+      'neutral static export route document metadata',
+    ],
+    ['route diagnostic metadata', 'diagnostics', 'neutral build route diagnostic metadata'],
+    ['route static path metadata', 'staticPaths', 'neutral build route static path metadata'],
+    ['route entry metadata', 'entries', 'neutral build route entry metadata'],
+    ['static export asset metadata', 'pinned', 'neutral static export asset metadata'],
+  ];
+  for (let index = 0; index < requiredCommits.length; index += 1) {
+    const [description, target, label] = requiredCommits[index];
+    const commitPattern = new RegExp(
+      `\\bcommitBuildArrayValue\\s*\\(\\s*${target}\\s*,[\\s\\S]*?['"]${label}['"]\\s*,?\\s*\\)`,
+      'u',
+    );
+    if (!commitPattern.test(sourceText)) {
+      findings.push(`${filePath}: neutral build is missing pinned ${description}`);
+    }
   }
   return findings;
 }

@@ -1057,6 +1057,101 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('C228 keeps durable-task metadata and dynamic preset authority after an inherited index setter', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-task-index-setter-'));
+    const originalZero = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    const nativeDefineProperty = Object.defineProperty;
+    const sendReceipt = task('receipt/send', {
+      input: s.object({ orderId: s.string() }),
+      async run() {},
+    });
+    let poisonRuns = 0;
+    let suppressedTaskCommits = 0;
+
+    try {
+      const app = createApp({
+        db: () => ({
+          async query() {
+            return { rowCount: 0, rows: [] };
+          },
+        }),
+        routes: [
+          route('/poison', {
+            page() {
+              poisonRuns += 1;
+              nativeDefineProperty(Array.prototype, '0', {
+                configurable: true,
+                set(value: unknown) {
+                  if (
+                    typeof value === 'object' &&
+                    value !== null &&
+                    (value as { key?: unknown }).key === 'receipt/send'
+                  ) {
+                    suppressedTaskCommits += 1;
+                    return;
+                  }
+                  nativeDefineProperty(this, '0', {
+                    configurable: true,
+                    enumerable: true,
+                    value,
+                    writable: true,
+                  });
+                },
+              });
+              return renderedHtml('<main>Poison setup</main>');
+            },
+          }),
+        ],
+        tasks: [sendReceipt],
+      });
+      const outDir = join(root, '.kovo');
+      expect(app.diagnostics).toEqual([]);
+      const build = await writeKovoNeutralBuild({
+        app,
+        outDir,
+        serverHandlerSource:
+          'export default async function handler() { return new Response("dynamic"); }\n',
+      });
+      expect(build).toMatchObject({
+        staticOnly: false,
+        tasks: [{ key: 'receipt/send' }],
+      });
+      expect(vercel({ jobRunner: false }).inspect!(build, { declaredEnv: [] })).toEqual([
+        missingJobRunnerError('vercel', 'receipt/send'),
+      ]);
+      const vercelOutDir = join(root, '.vercel/output');
+      await vercel().emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: vercelOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      const functionEmitted = await stat(join(vercelOutDir, 'functions/kovo.func/index.cjs')).then(
+        () => true,
+        () => false,
+      );
+
+      expect(functionEmitted).toBe(true);
+      expect(poisonRuns).toBe(1);
+      expect(build.tasks).toEqual([{ key: 'receipt/send' }]);
+      expect(build.staticOnly).toBe(false);
+      await expect(readJson(join(outDir, 'manifest.json'))).resolves.toMatchObject({
+        tasks: [{ key: 'receipt/send' }],
+      });
+      await expect(readJson(join(outDir, 'meta.json'))).resolves.toMatchObject({
+        staticOnly: false,
+        tasks: [{ key: 'receipt/send' }],
+      });
+      expect(suppressedTaskCommits).toBeGreaterThan(0);
+    } finally {
+      if (originalZero === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalZero);
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails closed when node runner-only mode is selected before an emitted runner entrypoint exists', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-runner-only-'));
 
