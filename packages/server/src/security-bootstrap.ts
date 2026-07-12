@@ -15,6 +15,7 @@ import '@kovojs/core/internal/client-module-url';
 import '@kovojs/core/internal/filesystem';
 import '@kovojs/core/internal/render-plan-token';
 
+import './auth-principal.js';
 import { assertBuildSecurityIntrinsics } from './build-security-intrinsics.js';
 import { assertCapabilityIntrinsics } from './capability-intrinsics.js';
 import './client-module-registry-intrinsics.js';

@@ -68,10 +68,10 @@ type NonRequestPrincipalPostureInput =
 /*
  * Boot-pinned auth carrier controls. Application code shares the server realm, so inherited
  * fields, accessors, and unregistered Proxy traps are not identity evidence. Keep this membrane
- * local to the auth boundary so a pre-import replacement is detected before any guard can use it.
+ * local to the auth boundary; the framework-owned bootstrap evaluates it before authored modules,
+ * so later replacements cannot change the controls guards actually use.
  */
 const NativeArray = globalThis.Array;
-const NativeFunction = globalThis.Function;
 const NativeObject = globalThis.Object;
 const NativeProxy = globalThis.Proxy;
 const NativeReflect = globalThis.Reflect;
@@ -79,7 +79,6 @@ const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
 const NativeWeakMap = globalThis.WeakMap;
 const nativeArrayIsArray = NativeArray.isArray;
-const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
@@ -101,62 +100,8 @@ function authHasOwn(value: object, property: PropertyKey): boolean {
   return authApply(nativeObjectHasOwnProperty, value, [property]);
 }
 
-function authFunctionShapeIsSound(
-  value: Function,
-  expectedName: string,
-  expectedLength: number,
-): boolean {
-  const name = authApply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, 'name'],
-  );
-  const length = authApply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, 'length'],
-  );
-  if (
-    name === undefined ||
-    !authHasOwn(name, 'value') ||
-    name.value !== expectedName ||
-    length === undefined ||
-    !authHasOwn(length, 'value') ||
-    length.value !== expectedLength
-  ) {
-    return false;
-  }
-  return (
-    authApply<string>(nativeFunctionToString, value, []) ===
-    `function ${expectedName}() { [native code] }`
-  );
-}
-
 function authCarrierControlsAreSound(): boolean {
   try {
-    const requiredFunctions: readonly [Function, string, number][] = [
-      [nativeReflectApply, 'apply', 3],
-      [nativeArrayIsArray, 'isArray', 1],
-      [nativeObjectCreate, 'create', 2],
-      [nativeObjectDefineProperty, 'defineProperty', 3],
-      [nativeObjectFreeze, 'freeze', 1],
-      [nativeObjectGetOwnPropertyDescriptor, 'getOwnPropertyDescriptor', 2],
-      [nativeObjectHasOwnProperty, 'hasOwnProperty', 1],
-      [nativeObjectIs, 'is', 2],
-      [nativeStringToLowerCase, 'toLowerCase', 0],
-      [nativeStringTrim, 'trim', 0],
-      [nativeWeakMapGet, 'get', 1],
-      [nativeWeakMapSet, 'set', 2],
-      [NativeProxy, 'Proxy', 2],
-      [NativeWeakMap, 'WeakMap', 0],
-      [nativeUtilIsProxy, '', 0],
-      [nativeFunctionToString, 'toString', 0],
-    ];
-    for (let index = 0; index < requiredFunctions.length; index += 1) {
-      const control = requiredFunctions[index]!;
-      if (!authFunctionShapeIsSound(control[0], control[1], control[2])) return false;
-    }
-
     if (authApply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (authApply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
     if (authApply<string>(nativeStringTrim, ' principal ', []) !== 'principal') return false;
