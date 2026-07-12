@@ -234,6 +234,22 @@ function observeTableIfString(
   observe(kind, name, args, config, recorder);
 }
 
+export function observeRequiredTableOperation(
+  kind: ObservedDbOperation['kind'],
+  table: unknown,
+  args: readonly unknown[],
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+): void {
+  const name = tableNameOf(table);
+  if (name === undefined) {
+    throw new TypeError(
+      'KV407: Kovo DB verifier could not resolve a Drizzle read-builder table to stable physical identity.',
+    );
+  }
+  observe(kind, name, args, config, recorder);
+}
+
 function observe(
   kind: ObservedDbOperation['kind'],
   table: string,

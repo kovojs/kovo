@@ -21,6 +21,7 @@ import {
   cachedMethod,
   createObservationRecorder,
   observeSqlExecution,
+  observeRequiredTableOperation,
   observableSqlMethod,
   observableTableMethod,
   type CachedMethod,
@@ -105,6 +106,11 @@ export function createDbVerifier(
   const recorder = createObservationRecorder(options.recordOutsideCapture !== false);
   const rootProxyCache = verifierWeakMap<object, object>();
   const replicaCollectionCache = verifierWeakMap<object, object>();
+  const readBuilderProxyCache = verifierWeakMap<object, object>();
+  const relationalBuilderProxyCache = verifierWeakMap<object, object>();
+  const relationalNamespaceProxyCache = verifierWeakMap<object, object>();
+  const cteBuilderProxyCache = verifierWeakMap<object, object>();
+  const derivedReadSourceWitness = verifierWeakMap<object, true>();
   const sqlHandleProxyCache = verifierWeakMap<object, object>();
   const methodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
 
@@ -197,6 +203,80 @@ export function createDbVerifier(
                   'Kovo DB verifier adapter capability hooks are reserved for the framework lifecycle.',
                 );
               });
+            }
+
+            if (isDrizzleSelectEntry(prop) && typeof value === 'function') {
+              return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                const builder = verifierApply<unknown>(value, target, args);
+                if (typeof builder !== 'object' || builder === null) {
+                  throw verifierTypeError(
+                    `Kovo DB verifier ${verifierString(prop)}() must return a read builder object.`,
+                  );
+                }
+                return wrapDrizzleReadBuilder(
+                  builder,
+                  configSnapshot,
+                  recorder,
+                  readBuilderProxyCache,
+                  methodCache,
+                  derivedReadSourceWitness,
+                );
+              });
+            }
+
+            if (prop === '$count' && typeof value === 'function') {
+              return cachedMethod(
+                target,
+                prop,
+                value,
+                methodCache,
+                () =>
+                  (table: unknown, ...args: unknown[]) => {
+                    observeRequiredTableOperation('read', table, args, configSnapshot, recorder);
+                    return verifierApply(value, target, [table, ...args]);
+                  },
+              );
+            }
+
+            if (prop === '$with' && typeof value === 'function') {
+              return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                const builder = verifierApply<unknown>(value, target, args);
+                if (typeof builder !== 'object' || builder === null) {
+                  throw verifierTypeError(
+                    'Kovo DB verifier $with() must return a CTE builder object.',
+                  );
+                }
+                return wrapDrizzleCteBuilder(
+                  builder,
+                  verifier,
+                  cteBuilderProxyCache,
+                  methodCache,
+                  derivedReadSourceWitness,
+                );
+              });
+            }
+
+            if (prop === 'with' && typeof value === 'function') {
+              return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                const scopedDb = verifierApply<unknown>(value, target, args);
+                if (typeof scopedDb !== 'object' || scopedDb === null) {
+                  throw verifierTypeError(
+                    'Kovo DB verifier with() must return a DB builder object.',
+                  );
+                }
+                return verifier.wrap(scopedDb);
+              });
+            }
+
+            if (prop === 'query' && typeof value === 'object' && value !== null) {
+              return wrapRelationalNamespace(
+                value,
+                configSnapshot,
+                recorder,
+                relationalNamespaceProxyCache,
+                relationalBuilderProxyCache,
+                methodCache,
+              );
             }
 
             if (isSqlHandleProperty(prop) || prop === 'session') {
@@ -330,6 +410,403 @@ function wrapReplicaCollection(
   });
   verifierWeakMapSet(cache, value, snapshot as object);
   return snapshot;
+}
+
+function wrapDrizzleReadBuilder(
+  builder: object,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  cache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  derivedSources: WeakMap<object, true>,
+): object {
+  const cached = verifierWeakMapGet(cache, builder);
+  if (cached !== undefined) return cached;
+  let proxy!: Record<PropertyKey, unknown>;
+  proxy = createFrameworkManagedSqlDispatchProxy(
+    builder as Record<PropertyKey, unknown>,
+    {
+      get(target, property, receiver) {
+        const value = verifierReflectGet(target, property, receiver);
+        if (property === 'then' && value === undefined) return undefined;
+        if (typeof value !== 'function') return blockedReadBuilderProperty(property);
+
+        if (isDrizzleReadTableMethod(property)) {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            methodCache,
+            () =>
+              (table: unknown, ...args: unknown[]) => {
+                if (
+                  typeof table !== 'object' ||
+                  table === null ||
+                  verifierWeakMapGet(derivedSources, table) !== true
+                ) {
+                  observeRequiredTableOperation('read', table, args, config, recorder);
+                }
+                const result = verifierApply<unknown>(value, target, [table, ...args]);
+                return wrapDrizzleBuilderResult(
+                  result,
+                  config,
+                  recorder,
+                  cache,
+                  methodCache,
+                  derivedSources,
+                  false,
+                );
+              },
+          );
+        }
+
+        if (isDrizzleReadChainMethod(property)) {
+          return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+            const result = verifierApply<unknown>(value, target, args);
+            return wrapDrizzleBuilderResult(
+              result,
+              config,
+              recorder,
+              cache,
+              methodCache,
+              derivedSources,
+              property === 'as',
+            );
+          });
+        }
+
+        if (isDrizzleReadTerminalMethod(property)) {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                verifierApply(value, target, args),
+          );
+        }
+
+        return blockedReadBuilderProperty(property);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return safeReflectedOwnDescriptor(target, property, () =>
+          verifierReflectGet(proxy, property, proxy),
+        );
+      },
+      getPrototypeOf() {
+        return null;
+      },
+    },
+    'test-fixture',
+  );
+  verifierWeakMapSet(cache, builder, proxy);
+  verifierWeakMapSet(derivedSources, proxy, true);
+  return proxy;
+}
+
+function wrapDrizzleBuilderResult(
+  result: unknown,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  cache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  derivedSources: WeakMap<object, true>,
+  derived: boolean,
+): unknown {
+  if (typeof result !== 'object' || result === null) return result;
+  const wrapped = wrapDrizzleReadBuilder(
+    result,
+    config,
+    recorder,
+    cache,
+    methodCache,
+    derivedSources,
+  );
+  if (derived) {
+    verifierWeakMapSet(derivedSources, result, true);
+    verifierWeakMapSet(derivedSources, wrapped, true);
+  }
+  return wrapped;
+}
+
+function wrapRelationalNamespace(
+  namespace: object,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  namespaceCache: WeakMap<object, object>,
+  builderCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+): object {
+  const cached = verifierWeakMapGet(namespaceCache, namespace);
+  if (cached !== undefined) return cached;
+  let proxy!: Record<PropertyKey, unknown>;
+  proxy = createFrameworkManagedSqlDispatchProxy(
+    namespace as Record<PropertyKey, unknown>,
+    {
+      get(target, property, receiver) {
+        const builder = verifierReflectGet(target, property, receiver);
+        if (typeof builder !== 'object' || builder === null) {
+          throw verifierTypeError(
+            `KV407: relational query namespace ${verifierString(property)} must resolve to a builder object.`,
+          );
+        }
+        return wrapRelationalBuilder(
+          builder,
+          relationalTableCarrier(builder, property),
+          config,
+          recorder,
+          builderCache,
+          methodCache,
+        );
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return safeReflectedOwnDescriptor(target, property, () =>
+          verifierReflectGet(proxy, property, proxy),
+        );
+      },
+      getPrototypeOf() {
+        return null;
+      },
+    },
+    'test-fixture',
+  );
+  verifierWeakMapSet(namespaceCache, namespace, proxy);
+  return proxy;
+}
+
+function relationalTableCarrier(builder: object, property: PropertyKey): unknown {
+  const table = verifierGetOwnPropertyDescriptor(builder, 'table');
+  if (table !== undefined) {
+    if (!('value' in table)) {
+      throw verifierTypeError(
+        'KV407: relational query builder table must be an own data property.',
+      );
+    }
+    return table.value;
+  }
+  if (typeof property !== 'string') {
+    throw verifierTypeError('KV407: relational query table identity must be a string property.');
+  }
+  return property;
+}
+
+function wrapRelationalBuilder(
+  builder: object,
+  table: unknown,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  cache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+): object {
+  const cached = verifierWeakMapGet(cache, builder);
+  if (cached !== undefined) return cached;
+  let proxy!: Record<PropertyKey, unknown>;
+  proxy = createFrameworkManagedSqlDispatchProxy(
+    builder as Record<PropertyKey, unknown>,
+    {
+      get(target, property, receiver) {
+        const value = verifierReflectGet(target, property, receiver);
+        if (property === 'then' && value === undefined) return undefined;
+        if (!isRelationalReadMethod(property) || typeof value !== 'function') {
+          return blockedRelationalBuilderProperty(property);
+        }
+        return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+          assertRelationalReadArguments(args);
+          observeRequiredTableOperation('read', table, args, config, recorder);
+          return verifierApply(value, target, args);
+        });
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return safeReflectedOwnDescriptor(target, property, () =>
+          verifierReflectGet(proxy, property, proxy),
+        );
+      },
+      getPrototypeOf() {
+        return null;
+      },
+    },
+    'test-fixture',
+  );
+  verifierWeakMapSet(cache, builder, proxy);
+  return proxy;
+}
+
+function assertRelationalReadArguments(args: readonly unknown[]): void {
+  if (args.length > 1) {
+    throw verifierTypeError('KV407: relational query methods accept at most one config object.');
+  }
+  const config = args[0];
+  if (config === undefined) return;
+  if (typeof config !== 'object' || config === null) {
+    throw verifierTypeError('KV407: relational query config must be an object.');
+  }
+  const withDescriptor = verifierGetOwnPropertyDescriptor(config, 'with');
+  if (withDescriptor === undefined) return;
+  if (!('value' in withDescriptor)) {
+    throw verifierTypeError('KV407: relational query config.with must be an own data property.');
+  }
+  if (withDescriptor.value !== undefined && withDescriptor.value !== false) {
+    throw verifierTypeError(
+      'KV407: runtime verification requires nested relational reads to use explicit query declarations.',
+    );
+  }
+}
+
+function wrapDrizzleCteBuilder(
+  builder: object,
+  verifier: DbVerifier,
+  cache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  derivedSources: WeakMap<object, true>,
+): object {
+  const cached = verifierWeakMapGet(cache, builder);
+  if (cached !== undefined) return cached;
+  let proxy!: Record<PropertyKey, unknown>;
+  proxy = createFrameworkManagedSqlDispatchProxy(
+    builder as Record<PropertyKey, unknown>,
+    {
+      get(target, property, receiver) {
+        const value = verifierReflectGet(target, property, receiver);
+        if (property !== 'as' || typeof value !== 'function') {
+          return blockedReadBuilderProperty(property);
+        }
+        return cachedMethod(
+          target,
+          property,
+          value,
+          methodCache,
+          () =>
+            (query: unknown, ...args: unknown[]) => {
+              if (
+                typeof query !== 'function' &&
+                (typeof query !== 'object' ||
+                  query === null ||
+                  verifierWeakMapGet(derivedSources, query) !== true)
+              ) {
+                throw verifierTypeError(
+                  'KV407: CTE reads must be built through the verifier-wrapped query builder.',
+                );
+              }
+              const safeQuery =
+                typeof query === 'function'
+                  ? (queryBuilder: unknown) =>
+                      verifierApply(query, undefined, [verifier.wrap(queryBuilder)])
+                  : query;
+              const derived = verifierApply<unknown>(value, target, [safeQuery, ...args]);
+              if (typeof derived === 'object' && derived !== null) {
+                verifierWeakMapSet(derivedSources, derived, true);
+              }
+              return derived;
+            },
+        );
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return safeReflectedOwnDescriptor(target, property, () =>
+          verifierReflectGet(proxy, property, proxy),
+        );
+      },
+      getPrototypeOf() {
+        return null;
+      },
+    },
+    'test-fixture',
+  );
+  verifierWeakMapSet(cache, builder, proxy);
+  return proxy;
+}
+
+function blockedReadBuilderProperty(property: PropertyKey): () => never {
+  return () => {
+    throw verifierTypeError(
+      `KV407: Kovo DB verifier blocked unsupported read-builder property ${verifierString(property)}.`,
+    );
+  };
+}
+
+function blockedRelationalBuilderProperty(property: PropertyKey): () => never {
+  return () => {
+    throw verifierTypeError(
+      `KV407: Kovo DB verifier blocked unsupported relational-builder property ${verifierString(property)}.`,
+    );
+  };
+}
+
+function isDrizzleSelectEntry(property: PropertyKey): boolean {
+  return property === 'select' || property === 'selectDistinct' || property === 'selectDistinctOn';
+}
+
+function isDrizzleReadTableMethod(property: PropertyKey): boolean {
+  return (
+    property === 'from' ||
+    property === 'leftJoin' ||
+    property === 'rightJoin' ||
+    property === 'innerJoin' ||
+    property === 'fullJoin' ||
+    property === 'crossJoin' ||
+    property === 'leftJoinLateral' ||
+    property === 'rightJoinLateral' ||
+    property === 'innerJoinLateral' ||
+    property === 'fullJoinLateral' ||
+    property === 'crossJoinLateral'
+  );
+}
+
+function isDrizzleReadChainMethod(property: PropertyKey): boolean {
+  return (
+    property === '$dynamic' ||
+    property === 'as' ||
+    property === 'except' ||
+    property === 'exceptAll' ||
+    property === 'for' ||
+    property === 'groupBy' ||
+    property === 'having' ||
+    property === 'intersect' ||
+    property === 'intersectAll' ||
+    property === 'limit' ||
+    property === 'mapWith' ||
+    property === 'offset' ||
+    property === 'orderBy' ||
+    property === 'union' ||
+    property === 'unionAll' ||
+    property === 'where'
+  );
+}
+
+function isDrizzleReadTerminalMethod(property: PropertyKey): boolean {
+  return (
+    property === 'all' ||
+    property === 'catch' ||
+    property === 'execute' ||
+    property === 'finally' ||
+    property === 'get' ||
+    property === 'getSQL' ||
+    property === 'iterator' ||
+    property === 'prepare' ||
+    property === 'run' ||
+    property === 'sync' ||
+    property === 'then' ||
+    property === 'toSQL' ||
+    property === 'values'
+  );
+}
+
+function isRelationalReadMethod(property: PropertyKey): boolean {
+  return (
+    property === 'all' ||
+    property === 'catch' ||
+    property === 'execute' ||
+    property === 'finally' ||
+    property === 'findFirst' ||
+    property === 'findMany' ||
+    property === 'get' ||
+    property === 'getSQL' ||
+    property === 'prepare' ||
+    property === 'sync' ||
+    property === 'then' ||
+    property === 'toSQL' ||
+    property === 'values'
+  );
 }
 
 function wrapSqlHandle<Handle extends object>(

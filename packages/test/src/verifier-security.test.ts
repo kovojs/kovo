@@ -419,6 +419,157 @@ describe('@kovojs/test verifier shared-realm security', () => {
     expect(() => invalid.$replicas).toThrow(/entries must be DB handle objects/u);
   });
 
+  it('C214 observes select, join, count, and CTE read-builder tables', () => {
+    const tableName = Symbol.for('drizzle:Name');
+    const products = { [tableName]: 'products' };
+    const audit = { [tableName]: 'audit_log' };
+    const inventory = { [tableName]: 'inventory' };
+    const executed: string[] = [];
+    const readBuilder = {
+      execute() {
+        executed.push('execute');
+        return [];
+      },
+      from(_table: unknown) {
+        executed.push('from');
+        return this;
+      },
+      leftJoin(_table: unknown) {
+        executed.push('leftJoin');
+        return this;
+      },
+      where() {
+        executed.push('where');
+        return this;
+      },
+    };
+    const cteBuilder = {
+      as(query: unknown) {
+        const result =
+          typeof query === 'function'
+            ? nativeReflectApply(query, undefined, [{ select: () => readBuilder }])
+            : query;
+        return { alias: 'products_cte', result };
+      },
+    };
+    const raw = {
+      $count(_table: unknown) {
+        executed.push('count');
+        return 1;
+      },
+      $with() {
+        return cteBuilder;
+      },
+      select() {
+        return readBuilder;
+      },
+      with() {
+        return raw;
+      },
+    };
+    const verifier = createDbVerifier(
+      {},
+      {
+        domainByTable: {
+          audit_log: 'audit',
+          inventory: 'inventory',
+          products: 'product',
+        },
+      },
+    );
+    const db = verifier.wrap(raw);
+
+    const safeReadBuilder = db.select();
+    const fromDescriptor = Object.getOwnPropertyDescriptor(safeReadBuilder, 'from');
+    expect(fromDescriptor && 'value' in fromDescriptor).toBe(true);
+    expect(fromDescriptor && 'value' in fromDescriptor ? fromDescriptor.value : null).not.toBe(
+      readBuilder.from,
+    );
+    expect(Object.getPrototypeOf(safeReadBuilder)).toBeNull();
+    safeReadBuilder.from(products).leftJoin(audit).where().execute();
+    db.$count(inventory);
+    expect(() => db.$with('unsafe_cte').as({ getSQL: () => 'select * from audit_log' })).toThrow(
+      /KV407.*verifier-wrapped query builder/u,
+    );
+    const cte = db
+      .$with('products_cte')
+      .as((qb: { select(): typeof readBuilder }) => qb.select().from(products));
+    db.with(cte).select().from(cte).execute();
+
+    expect(executed).toEqual([
+      'from',
+      'leftJoin',
+      'where',
+      'execute',
+      'count',
+      'from',
+      'from',
+      'execute',
+    ]);
+    expect(verifier.observed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'read', table: 'products' }),
+        expect.objectContaining({ kind: 'read', table: 'audit_log' }),
+        expect.objectContaining({ kind: 'read', table: 'inventory' }),
+      ]),
+    );
+    expect(() => verifier.assertReadsCovered(['product', 'audit', 'inventory'])).not.toThrow();
+    expect(() => verifier.assertReadsCovered(['product'])).toThrow(/KV407.*(audit|inventory)/u);
+    expect(() => db.select().from({})).toThrow(/KV407.*stable physical identity/u);
+  });
+
+  it('C214 membranes relational namespaces, reflection, and nested-read configs', () => {
+    const tableName = Symbol.for('drizzle:Name');
+    const products = { [tableName]: 'products' };
+    let findManyCalls = 0;
+    let escapeCalls = 0;
+    const builder = {
+      table: products,
+      escape() {
+        escapeCalls += 1;
+      },
+      findMany() {
+        findManyCalls += 1;
+        return [];
+      },
+    };
+    const raw = { query: { products: builder } };
+    const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
+    const db = verifier.wrap(raw);
+    const namespaceDescriptor = Object.getOwnPropertyDescriptor(db.query, 'products');
+    const safeBuilder = db.query.products;
+    const terminalDescriptor = Object.getOwnPropertyDescriptor(safeBuilder, 'findMany');
+    const escapeDescriptor = Object.getOwnPropertyDescriptor(safeBuilder, 'escape');
+
+    expect(namespaceDescriptor && 'value' in namespaceDescriptor).toBe(true);
+    expect(
+      namespaceDescriptor && 'value' in namespaceDescriptor ? namespaceDescriptor.value : null,
+    ).toBe(safeBuilder);
+    expect(safeBuilder).not.toBe(builder);
+    expect(terminalDescriptor && 'value' in terminalDescriptor).toBe(true);
+    expect(
+      terminalDescriptor && 'value' in terminalDescriptor ? terminalDescriptor.value : null,
+    ).not.toBe(builder.findMany);
+    terminalDescriptor && 'value' in terminalDescriptor
+      ? nativeReflectApply(terminalDescriptor.value as Function, safeBuilder, [])
+      : undefined;
+    expect(findManyCalls).toBe(1);
+    expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('KV407', 'product'));
+
+    expect(() => safeBuilder.findMany({ with: { auditEvents: true } } as never)).toThrow(
+      /KV407.*nested relational reads/u,
+    );
+    expect(findManyCalls).toBe(1);
+    expect(() =>
+      escapeDescriptor && 'value' in escapeDescriptor
+        ? nativeReflectApply(escapeDescriptor.value as Function, safeBuilder, [])
+        : undefined,
+    ).toThrow(/KV407.*unsupported relational-builder/u);
+    expect(escapeCalls).toBe(0);
+    expect(Object.getPrototypeOf(db.query)).toBeNull();
+    expect(Object.getPrototypeOf(safeBuilder)).toBeNull();
+  });
+
   it('pins AsyncLocalStorage.run so capture evidence cannot be erased', async () => {
     const verifier = createDbVerifier({}, { domainByTable: { audit_log: 'audit' } });
     const db = verifier.wrap(createFakeDb());
