@@ -7,6 +7,21 @@ import type {
   SourceSpan,
 } from './scan/parse.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
+import {
+  compilerArrayJoin,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerFailClosed,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSetOwnDataProperty,
+  compilerStringSlice,
+  compilerStringStartsWith,
+} from './compiler-security-intrinsics.js';
 
 export type JsxIrOwnership = 'author' | 'generated' | 'primitive';
 
@@ -95,16 +110,53 @@ export function createJsxIrTree(
   model: ComponentModuleModel,
   options: { fileName: string; source: string },
 ): JsxIrTree {
-  const elements = [...model.jsxElements]
-    .sort((left, right) => left.start - right.start || right.end - left.end)
-    .map((element) => {
-      const irElement: JsxIrElement = {
-        attributes: [
-          ...element.attributes.map((attribute) => jsxIrAttribute(attribute, options, 'author')),
-          ...element.spreadAttributes.map((attribute) =>
-            jsxIrSpreadAttribute(attribute, options, 'author'),
-          ),
-        ],
+  const sourceElements = compilerSortedDenseArray(
+    model.jsxElements,
+    (left, right) => left.start - right.start || right.end - left.end,
+    'JSX IR source elements',
+  );
+  const elements: JsxIrElement[] = [];
+  const sourceElementLength = compilerArrayLength(sourceElements, 'JSX IR source elements');
+  for (let elementIndex = 0; elementIndex < sourceElementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      sourceElements,
+      elementIndex,
+      'JSX IR source elements',
+    ) as JsxElementModel;
+    const attributes: JsxIrAttribute[] = [];
+    const attributeLength = compilerArrayLength(element.attributes, 'JSX IR source attributes');
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'JSX IR source attributes',
+      ) as JsxAttributeModel;
+      appendMutableFact(
+        attributes,
+        jsxIrAttribute(attribute, options, 'author'),
+        'JSX IR attributes',
+      );
+    }
+    const spreadLength = compilerArrayLength(
+      element.spreadAttributes,
+      'JSX IR source spread attributes',
+    );
+    for (let spreadIndex = 0; spreadIndex < spreadLength; spreadIndex += 1) {
+      const spread = compilerOwnDataValue(
+        element.spreadAttributes,
+        spreadIndex,
+        'JSX IR source spread attributes',
+      ) as JsxSpreadAttributeModel;
+      appendMutableFact(
+        attributes,
+        jsxIrSpreadAttribute(spread, options, 'author'),
+        'JSX IR attributes',
+      );
+    }
+    appendMutableFact(
+      elements,
+      {
+        attributes,
         childBody:
           element.selfClosing || element.closingStart <= element.openingEnd
             ? null
@@ -121,23 +173,41 @@ export function createJsxIrTree(
         removed: false,
         selfClosing: element.selfClosing,
         tag: element.tag,
-      };
-      return irElement;
-    });
+      },
+      'JSX IR elements',
+    );
+  }
 
   const { childrenByParent, roots } = assignElementParents(elements);
 
-  const expressionsByContainer = new Map(
-    model.jsxExpressions.map((expression) => [
+  const expressionsByContainer = compilerCreateMap<string, JsxExpressionModel>();
+  const expressionLength = compilerArrayLength(
+    model.jsxExpressions,
+    'JSX IR source expressions',
+  );
+  for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
+    const expression = compilerOwnDataValue(
+      model.jsxExpressions,
+      expressionIndex,
+      'JSX IR source expressions',
+    ) as JsxExpressionModel;
+    compilerMapSet(
+      expressionsByContainer,
       `${expression.containerStart}:${expression.containerEnd}`,
       expression,
-    ]),
-  );
+    );
+  }
 
-  for (const element of elements) {
+  const elementLength = compilerArrayLength(elements, 'JSX IR elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'JSX IR elements',
+    ) as JsxIrElement;
     element.children = childrenForElement(
       element,
-      childrenByParent.get(element) ?? [],
+      compilerMapGet(childrenByParent, element) ?? [],
       expressionsByContainer,
       options,
     );
@@ -146,42 +216,48 @@ export function createJsxIrTree(
   return { elements, roots, source: options.source };
 }
 
+interface JsxIrParentFrame {
+  element: JsxIrElement;
+  previous: JsxIrParentFrame | null;
+}
+
 function assignElementParents(elements: readonly JsxIrElement[]): {
   childrenByParent: Map<JsxIrElement, JsxIrElement[]>;
   roots: JsxIrElement[];
 } {
-  const childrenByParent = new Map<JsxIrElement, JsxIrElement[]>();
+  const childrenByParent = compilerCreateMap<JsxIrElement, JsxIrElement[]>();
   const roots: JsxIrElement[] = [];
-  const stack: JsxIrElement[] = [];
-
-  for (const element of elements) {
-    while (true) {
-      const top = topElement(stack);
-      if (!top || top.element.end > element.element.start) break;
-      stack.pop();
+  let top: JsxIrParentFrame | null = null;
+  const length = compilerArrayLength(elements, 'JSX IR parent elements');
+  for (let index = 0; index < length; index += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      index,
+      'JSX IR parent elements',
+    ) as JsxIrElement;
+    while (top !== null && top.element.element.end <= element.element.start) {
+      top = top.previous;
     }
 
-    const parent = topElement(stack);
+    const parent = top?.element;
     if (parent && contains(parent, element)) {
       element.parent = parent;
-      const children = childrenByParent.get(parent);
+      const children = compilerMapGet(childrenByParent, parent);
       if (children) {
-        children.push(element);
+        appendMutableFact(children, element, 'JSX IR parent children');
       } else {
-        childrenByParent.set(parent, [element]);
+        const firstChild: JsxIrElement[] = [];
+        appendMutableFact(firstChild, element, 'JSX IR parent children');
+        compilerMapSet(childrenByParent, parent, firstChild);
       }
     } else {
-      roots.push(element);
+      appendMutableFact(roots, element, 'JSX IR roots');
     }
 
-    stack.push(element);
+    top = { element, previous: top };
   }
 
   return { childrenByParent, roots };
-}
-
-function topElement(stack: readonly JsxIrElement[]): JsxIrElement | undefined {
-  return stack[stack.length - 1];
 }
 
 export function jsxIrText(source: string, start = 0): JsxIrText {
@@ -217,15 +293,41 @@ export function primitiveJsxIrAttribute(
 }
 
 export function printJsxIrElement(element: JsxIrElement): string {
-  const attributes = [...element.attributes, ...element.generatedAttributes]
-    .filter((attribute) => attribute.value.kind !== 'boolean' || attribute.value.value)
-    .map(printJsxIrAttribute);
+  const attributes: string[] = [];
+  appendPrintedAttributes(attributes, element.attributes, 'JSX IR attributes');
+  appendPrintedAttributes(attributes, element.generatedAttributes, 'JSX IR generated attributes');
+  const attributeLength = compilerArrayLength(attributes, 'Printed JSX IR attributes');
   const open =
-    attributes.length > 0 ? `<${element.tag} ${attributes.join(' ')}` : `<${element.tag}`;
+    attributeLength > 0
+      ? `<${element.tag} ${compilerArrayJoin(attributes, ' ')}`
+      : `<${element.tag}`;
 
   if (element.selfClosing) return `${open} />`;
 
-  return `${open}>${element.children.map(printJsxIrChild).join('')}</${element.closingName ?? element.tag}>`;
+  const children: string[] = [];
+  const childLength = compilerArrayLength(element.children, 'JSX IR children');
+  for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+    const child = compilerOwnDataValue(
+      element.children,
+      childIndex,
+      'JSX IR children',
+    ) as JsxIrChild;
+    appendMutableFact(children, printJsxIrChild(child), 'Printed JSX IR children');
+  }
+  return `${open}>${compilerArrayJoin(children, '')}</${element.closingName ?? element.tag}>`;
+}
+
+function appendPrintedAttributes(
+  target: string[],
+  source: readonly JsxIrAttribute[],
+  label: string,
+): void {
+  const length = compilerArrayLength(source, label);
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(source, index, label) as JsxIrAttribute;
+    if (attribute.value.kind === 'boolean' && !attribute.value.value) continue;
+    appendMutableFact(target, printJsxIrAttribute(attribute), 'Printed JSX IR attributes');
+  }
 }
 
 export function printJsxIrChild(child: JsxIrChild): string {
@@ -240,21 +342,77 @@ export function printJsxIrChild(child: JsxIrChild): string {
 
 export function jsxIrReplacements(tree: JsxIrTree): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
-  const changedRoots = tree.elements
-    .filter((element) => elementOwnChanged(element))
-    .filter((element, _, all) => !all.some((candidate) => contains(candidate, element)));
+  const changedElements: JsxIrElement[] = [];
+  const treeElementLength = compilerArrayLength(tree.elements, 'JSX IR replacement elements');
+  for (let elementIndex = 0; elementIndex < treeElementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      tree.elements,
+      elementIndex,
+      'JSX IR replacement elements',
+    ) as JsxIrElement;
+    if (elementOwnChanged(element)) {
+      appendMutableFact(changedElements, element, 'Changed JSX IR elements');
+    }
+  }
+  const changedRoots: JsxIrElement[] = [];
+  const changedLength = compilerArrayLength(changedElements, 'Changed JSX IR elements');
+  for (let elementIndex = 0; elementIndex < changedLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      changedElements,
+      elementIndex,
+      'Changed JSX IR elements',
+    ) as JsxIrElement;
+    let contained = false;
+    for (let candidateIndex = 0; candidateIndex < changedLength; candidateIndex += 1) {
+      const candidate = compilerOwnDataValue(
+        changedElements,
+        candidateIndex,
+        'Changed JSX IR elements',
+      ) as JsxIrElement;
+      if (contains(candidate, element)) {
+        contained = true;
+        break;
+      }
+    }
+    if (!contained) appendMutableFact(changedRoots, element, 'Changed JSX IR roots');
+  }
 
-  for (const root of changedRoots) {
-    replacements.push({
+  const changedRootLength = compilerArrayLength(changedRoots, 'Changed JSX IR roots');
+  for (let rootIndex = 0; rootIndex < changedRootLength; rootIndex += 1) {
+    const root = compilerOwnDataValue(
+      changedRoots,
+      rootIndex,
+      'Changed JSX IR roots',
+    ) as JsxIrElement;
+    appendMutableFact(replacements, {
       end: root.element.end,
       replacement: root.removed ? '' : printJsxIrElement(root),
       start: root.element.start,
-    });
+    }, 'JSX IR replacements');
   }
 
-  for (const expression of expressionReplacements(tree.roots)) {
-    if (changedRoots.some((root) => containsExpression(root, expression))) continue;
-    replacements.push({
+  const expressions = expressionReplacements(tree.roots);
+  const expressionLength = compilerArrayLength(expressions, 'JSX IR expression replacements');
+  for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
+    const expression = compilerOwnDataValue(
+      expressions,
+      expressionIndex,
+      'JSX IR expression replacements',
+    ) as JsxIrExpression;
+    let contained = false;
+    for (let rootIndex = 0; rootIndex < changedRootLength; rootIndex += 1) {
+      const root = compilerOwnDataValue(
+        changedRoots,
+        rootIndex,
+        'Changed JSX IR roots',
+      ) as JsxIrElement;
+      if (containsExpression(root, expression)) {
+        contained = true;
+        break;
+      }
+    }
+    if (contained) continue;
+    appendMutableFact(replacements, {
       end: expression.expression.containerEnd,
       replacement:
         typeof expression.replacement === 'string'
@@ -263,7 +421,7 @@ export function jsxIrReplacements(tree: JsxIrTree): SourceReplacement[] {
             ? printJsxIrChild(expression.replacement)
             : '',
       start: expression.expression.containerStart,
-    });
+    }, 'JSX IR replacements');
   }
 
   return replacements;
@@ -274,19 +432,33 @@ export function markJsxIrChanged(element: JsxIrElement): void {
 }
 
 export function setJsxIrAttribute(element: JsxIrElement, attribute: JsxIrAttribute): void {
-  const existing = element.attributes.find((item) => item.name === attribute.name);
+  const existing = findJsxIrAttribute(element.attributes, attribute.name);
   if (existing) {
-    Object.assign(existing, attribute);
+    existing.name = attribute.name;
+    existing.ownership = attribute.ownership;
+    existing.provenance = attribute.provenance;
+    existing.value = attribute.value;
+    if (attribute.anchor !== undefined) existing.anchor = attribute.anchor;
+    if (attribute.source !== undefined) existing.source = attribute.source;
     markJsxIrChanged(element);
     return;
   }
-  element.attributes.push(attribute);
+  appendMutableFact(element.attributes, attribute, 'JSX IR attributes');
   markJsxIrChanged(element);
 }
 
 export function removeJsxIrAttribute(element: JsxIrElement, name: string): void {
-  const next = element.attributes.filter((attribute) => attribute.name !== name);
-  if (next.length !== element.attributes.length) {
+  const next: JsxIrAttribute[] = [];
+  const length = compilerArrayLength(element.attributes, 'JSX IR attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'JSX IR attributes',
+    ) as JsxIrAttribute;
+    if (attribute.name !== name) appendMutableFact(next, attribute, 'JSX IR attributes');
+  }
+  if (compilerArrayLength(next, 'JSX IR attributes') !== length) {
     element.attributes = next;
     markJsxIrChanged(element);
   }
@@ -294,7 +466,7 @@ export function removeJsxIrAttribute(element: JsxIrElement, name: string): void 
 
 export function jsxIrAttributeValue(attribute: JsxIrAttribute): string | undefined {
   if (attribute.value.kind === 'string') return attribute.value.value;
-  if (attribute.value.kind === 'number') return String(attribute.value.value);
+  if (attribute.value.kind === 'number') return `${attribute.value.value}`;
   if (attribute.value.kind === 'boolean') return attribute.value.value ? '' : undefined;
   return undefined;
 }
@@ -307,51 +479,103 @@ function childrenForElement(
 ): JsxIrChild[] {
   if (element.selfClosing || !element.childBody) return [];
 
-  const directExpressions = element.element.childExpressionContainers
-    .map((span) => ({ expression: expressionsByContainer.get(`${span.start}:${span.end}`), span }))
-    .filter(
-      (item): item is { expression: JsxExpressionModel; span: SourceSpan } =>
-        item.expression !== undefined &&
-        !directElements.some(
-          (child) => child.element.start >= item.span.start && child.element.end <= item.span.end,
-        ),
+  type PositionedChild = {
+    end: number;
+    kind: 'element' | 'expression';
+    node: JsxIrElement | JsxIrExpression;
+    start: number;
+  };
+  const positioned: PositionedChild[] = [];
+  const directElementLength = compilerArrayLength(directElements, 'Direct JSX IR elements');
+  for (let childIndex = 0; childIndex < directElementLength; childIndex += 1) {
+    const child = compilerOwnDataValue(
+      directElements,
+      childIndex,
+      'Direct JSX IR elements',
+    ) as JsxIrElement;
+    appendMutableFact(
+      positioned,
+      {
+        end: child.element.end,
+        kind: 'element',
+        node: child,
+        start: child.element.start,
+      },
+      'Positioned JSX IR children',
     );
-  const children = [
-    ...directElements.map((child) => ({
-      end: child.element.end,
-      kind: 'element' as const,
-      node: child,
-      start: child.element.start,
-    })),
-    ...directExpressions.map(({ expression, span }) => ({
-      end: span.end,
-      kind: 'expression' as const,
-      node: jsxIrExpression(expression, options),
-      start: span.start,
-    })),
-  ].sort((left, right) => left.start - right.start);
+  }
+  const containerLength = compilerArrayLength(
+    element.element.childExpressionContainers,
+    'JSX IR expression containers',
+  );
+  for (let containerIndex = 0; containerIndex < containerLength; containerIndex += 1) {
+    const span = compilerOwnDataValue(
+      element.element.childExpressionContainers,
+      containerIndex,
+      'JSX IR expression containers',
+    ) as SourceSpan;
+    const expression = compilerMapGet(
+      expressionsByContainer,
+      `${span.start}:${span.end}`,
+    );
+    if (expression === undefined) continue;
+    let nestedInDirectElement = false;
+    for (let childIndex = 0; childIndex < directElementLength; childIndex += 1) {
+      const child = compilerOwnDataValue(
+        directElements,
+        childIndex,
+        'Direct JSX IR elements',
+      ) as JsxIrElement;
+      if (child.element.start >= span.start && child.element.end <= span.end) {
+        nestedInDirectElement = true;
+        break;
+      }
+    }
+    if (nestedInDirectElement) continue;
+    appendMutableFact(
+      positioned,
+      {
+        end: span.end,
+        kind: 'expression',
+        node: jsxIrExpression(expression, options),
+        start: span.start,
+      },
+      'Positioned JSX IR children',
+    );
+  }
+  const children = compilerSortedDenseArray(
+    positioned,
+    (left, right) => left.start - right.start,
+    'Positioned JSX IR children',
+  );
 
   const result: JsxIrChild[] = [];
   let cursor = element.childBody.start;
-  for (const child of children) {
+  const childLength = compilerArrayLength(children, 'Positioned JSX IR children');
+  for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+    const child = compilerOwnDataValue(
+      children,
+      childIndex,
+      'Positioned JSX IR children',
+    ) as PositionedChild;
     if (child.start > cursor) {
-      result.push({
+      appendMutableFact(result, {
         end: child.start,
         kind: 'text',
-        source: options.source.slice(cursor, child.start),
+        source: compilerStringSlice(options.source, cursor, child.start),
         start: cursor,
-      });
+      }, 'JSX IR children');
     }
-    result.push(child.node);
+    appendMutableFact(result, child.node, 'JSX IR children');
     cursor = child.end;
   }
   if (cursor < element.childBody.end) {
-    result.push({
+    appendMutableFact(result, {
       end: element.childBody.end,
       kind: 'text',
-      source: options.source.slice(cursor, element.childBody.end),
+      source: compilerStringSlice(options.source, cursor, element.childBody.end),
       start: cursor,
-    });
+    }, 'JSX IR children');
   }
   return result;
 }
@@ -416,7 +640,7 @@ function attributeValue(attribute: JsxAttributeModel): JsxIrAttributeValue {
 function printJsxIrAttribute(attribute: JsxIrAttribute): string {
   if (attribute.value.kind === 'boolean') return attribute.name;
   if (attribute.value.kind === 'expression') {
-    if (attribute.name.startsWith('...')) return `{${attribute.value.source}}`;
+    if (compilerStringStartsWith(attribute.name, '...')) return `{${attribute.value.source}}`;
     return `${attribute.name}={${attribute.value.source}}`;
   }
   if (attribute.value.kind === 'number') return `${attribute.name}="${attribute.value.value}"`;
@@ -450,11 +674,89 @@ function containsExpression(parent: JsxIrElement, child: JsxIrExpression): boole
 function expressionReplacements(elements: readonly JsxIrElement[]): JsxIrExpression[] {
   const expressions: JsxIrExpression[] = [];
   const visit = (child: JsxIrChild): void => {
-    if (child.kind === 'expression' && child.replacement !== undefined) expressions.push(child);
-    if (child.kind === 'element') child.children.forEach(visit);
+    if (child.kind === 'expression' && child.replacement !== undefined) {
+      appendMutableFact(expressions, child, 'JSX IR expression replacements');
+    }
+    if (child.kind === 'element') {
+      const childLength = compilerArrayLength(child.children, 'JSX IR nested children');
+      for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+        visit(
+          compilerOwnDataValue(
+            child.children,
+            childIndex,
+            'JSX IR nested children',
+          ) as JsxIrChild,
+        );
+      }
+    }
   };
-  elements.forEach((element) => element.children.forEach(visit));
+  const elementLength = compilerArrayLength(elements, 'JSX IR replacement roots');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'JSX IR replacement roots',
+    ) as JsxIrElement;
+    const childLength = compilerArrayLength(element.children, 'JSX IR root children');
+    for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+      visit(
+        compilerOwnDataValue(
+          element.children,
+          childIndex,
+          'JSX IR root children',
+        ) as JsxIrChild,
+      );
+    }
+  }
   return expressions;
+}
+
+function findJsxIrAttribute(
+  attributes: readonly JsxIrAttribute[],
+  name: string,
+): JsxIrAttribute | undefined {
+  const length = compilerArrayLength(attributes, 'JSX IR attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'JSX IR attributes',
+    ) as JsxIrAttribute;
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
+}
+
+function appendMutableFact<Value>(target: Value[], value: Value, label: string): void {
+  compilerSetOwnDataProperty(target, compilerArrayLength(target, label), value);
+}
+
+function compilerSortedDenseArray<Value>(
+  values: readonly Value[],
+  compare: (left: Value, right: Value) => number,
+  label: string,
+): Value[] {
+  const length = compilerArrayLength(values, label);
+  const selected = compilerCreateSet<number>();
+  const result: Value[] = [];
+  for (let outputIndex = 0; outputIndex < length; outputIndex += 1) {
+    let bestIndex = -1;
+    let best: Value | undefined;
+    for (let inputIndex = 0; inputIndex < length; inputIndex += 1) {
+      if (compilerSetHas(selected, inputIndex)) continue;
+      const candidate = compilerOwnDataValue(values, inputIndex, label) as Value;
+      if (bestIndex === -1 || compare(candidate, best as Value) < 0) {
+        bestIndex = inputIndex;
+        best = candidate;
+      }
+    }
+    if (bestIndex === -1 || best === undefined) {
+      compilerFailClosed(`${label} must be a dense array.`);
+    }
+    compilerSetAdd(selected, bestIndex);
+    appendMutableFact(result, best, label);
+  }
+  return result;
 }
 
 function provenance(

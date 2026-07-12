@@ -190,6 +190,11 @@ export function assertCompilerSecurityIntrinsics(): void {
   }
 }
 
+export function compilerFailClosed(message: string): never {
+  assertCompilerSecurityIntrinsics();
+  throw new NativeTypeError(message);
+}
+
 export function compilerArrayIsArray(value: unknown): value is unknown[] {
   assertCompilerSecurityIntrinsics();
   return apply(nativeArrayIsArray, NativeArray, [value]);
@@ -283,6 +288,26 @@ export function compilerDefineOwnDataProperty(
     enumerable,
     value,
     writable: false,
+  }]);
+}
+
+/**
+ * Define or replace a writable own data property without invoking a caller-controlled inherited
+ * setter. Use only for compiler-private mutable working state; emitted/final facts should use the
+ * non-writable `compilerDefineOwnDataProperty` form above.
+ */
+export function compilerSetOwnDataProperty(
+  target: object,
+  property: PropertyKey,
+  value: unknown,
+  enumerable = true,
+): void {
+  assertCompilerSecurityIntrinsics();
+  apply(nativeObjectDefineProperty, NativeObject, [target, property, {
+    configurable: true,
+    enumerable,
+    value,
+    writable: true,
   }]);
 }
 

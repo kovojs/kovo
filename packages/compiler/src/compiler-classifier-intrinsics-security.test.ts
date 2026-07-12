@@ -1190,4 +1190,54 @@ export const CartButton = component({
     expect(lowered).toContain('commandfor="cart-drawer" command="show-modal"');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject JSX through final structural attribute projection', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedFinalJsxAttributeMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: unknown; ownership?: unknown; value?: unknown } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          first?.name === 'commandfor' &&
+          first.ownership === 'generated' &&
+          typeof first.value === 'object' &&
+          nativeApply(nativeIncludes, callbackSource, ['printJsxIrAttribute'])
+        ) {
+          poisonHits += 1;
+          return [
+            'id="safe" /><img src="x" data-kovo-structural-injection="true" /><div data-rest="safe"',
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-button.tsx',
+        source: `
+export const CartButton = component({
+  render: () => (
+    <section>
+      <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(lowered).not.toContain('data-kovo-structural-injection');
+    expect(lowered).toContain('commandfor="cart-drawer" command="show-modal"');
+    expect(poisonHits).toBe(0);
+  });
 });
