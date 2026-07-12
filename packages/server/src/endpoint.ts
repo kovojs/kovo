@@ -71,6 +71,7 @@ type EndpointVerifierRequest = Parameters<WebhookVerifier['verify']>[0];
 
 interface PinnedEndpointAuth {
   auth: EndpointAuthDeclaration | undefined;
+  selfVerifying?: true;
   valid: boolean;
   verify?: (request: EndpointVerifierRequest) => Promise<boolean>;
 }
@@ -279,6 +280,39 @@ export function endpointHasExecutableVerifier(
   declaration: object & { auth?: EndpointAuthDeclaration },
 ): boolean {
   return endpointAuthSnapshotFor(declaration).verify !== undefined;
+}
+
+/**
+ * Mark a framework-owned endpoint whose handler contains its own fail-closed verifier sink.
+ *
+ * The witness stays in the module-private endpoint-auth WeakMap and is copied only by the app
+ * snapshot path. App-authored names, symbols, or structural clones cannot mint it (SPEC §6.6/§9.1).
+ *
+ * @internal
+ */
+export function pinEndpointSelfVerifyingAuth<
+  Declaration extends object & { auth?: EndpointAuthDeclaration },
+>(declaration: Declaration): Declaration {
+  const snapshot = endpointAuthSnapshotFor(declaration);
+  if (
+    !snapshot.valid ||
+    snapshot.auth === undefined ||
+    snapshot.auth.kind === 'none' ||
+    snapshot.verify !== undefined
+  ) {
+    throw new TypeError(
+      'Framework self-verifying endpoint identity requires valid named auth without a separate verifier.',
+    );
+  }
+  pinnedEndpointAuth.set(declaration, { ...snapshot, selfVerifying: true });
+  return declaration;
+}
+
+/** @internal Whether a canonical endpoint carries the private self-verifying handler witness. */
+export function endpointHasSelfVerifyingAuth(
+  declaration: object & { auth?: EndpointAuthDeclaration },
+): boolean {
+  return endpointAuthSnapshotFor(declaration).selfVerifying === true;
 }
 
 /**
@@ -576,7 +610,12 @@ export async function runEndpointAuth(
 ): Promise<Response | undefined> {
   const auth = endpointAuthSnapshotFor(definition);
   if (!auth.valid) return endpointAuthFailureResponse();
-  if (auth.verify === undefined) return undefined;
+  if (auth.verify === undefined) {
+    if (auth.auth === undefined || auth.auth.kind === 'none' || auth.selfVerifying === true) {
+      return undefined;
+    }
+    return endpointAuthFailureResponse();
+  }
 
   let verified = false;
   try {

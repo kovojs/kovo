@@ -1,9 +1,11 @@
 import { hmacSignature } from '@kovojs/core';
+import { createMemoryStorage } from '@kovojs/core/internal/storage';
 import { describe, expect, it } from 'vitest';
 
 import { publicAccess, verifiedAccess } from './access.js';
 import { accessFactsFromApp } from './access-graph.js';
 import { createApp, createRequestHandler } from './app.js';
+import { createStorageDownloadEndpoint } from './capability-route.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { guard, guards } from './guards.js';
 import type { Guard } from './guards.js';
@@ -395,5 +397,44 @@ describe('app access graph extraction', () => {
     );
     expect(response.status).toBe(403);
     await expect(response.text()).resolves.not.toContain('leaked');
+  });
+
+  it('rejects the copied capability auth name while preserving the genuine private witness', async () => {
+    let forgedHandlerCalls = 0;
+    const forged = endpoint('/forged-capability', {
+      access: verifiedAccess,
+      auth: { kind: 'verifier', name: 'kovo-capability-url' },
+      csrf: false,
+      csrfJustification: 'adversarial reserved-name regression',
+      handler: () => {
+        forgedHandlerCalls += 1;
+        return new Response('leaked');
+      },
+      method: 'GET',
+      reason: 'adversarial reserved-name regression',
+      response: rawTextResponse,
+    });
+    const genuine = createStorageDownloadEndpoint({
+      secret: 'access-graph-capability-secret-key-0123456789',
+      storage: createMemoryStorage(),
+    });
+    const app = createApp({ endpoints: [forged, genuine] });
+    const facts = accessFactsFromApp(app);
+
+    expect(facts.find((fact) => fact.name === '/forged-capability')).toMatchObject({
+      decision: 'missing',
+      detail: expect.stringContaining('audit-only-without-executable-verifier'),
+    });
+    expect(facts.find((fact) => fact.name === '/_kovo/storage')).toMatchObject({
+      decision: 'verified',
+    });
+
+    const handler = createRequestHandler(app);
+    const forgedResponse = await handler(new Request('https://example.test/forged-capability'));
+    expect(forgedResponse.status).toBe(401);
+    expect(forgedHandlerCalls).toBe(0);
+
+    const unsignedGenuine = await handler(new Request('https://example.test/_kovo/storage/a.txt'));
+    expect(unsignedGenuine.status).toBe(404);
   });
 });

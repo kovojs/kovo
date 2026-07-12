@@ -10,6 +10,7 @@ import type { AppMutationDeclaration, AppQueryDeclaration, KovoApp } from './app
 import {
   endpointAuthFor,
   endpointHasExecutableVerifier,
+  endpointHasSelfVerifyingAuth,
   type EndpointAuthDeclaration,
   type EndpointDeclaration,
   type EndpointMethod,
@@ -195,11 +196,7 @@ function hasExecutableMachineAuth(
   endpoint: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
 ): boolean {
   if (isWebhookEndpoint(endpoint)) return endpoint.webhookDefinition.verify !== 'none';
-  const auth = endpointAuthFor(endpoint);
-  return (
-    endpointHasExecutableVerifier(endpoint) ||
-    (auth?.kind !== 'none' && auth?.name === 'kovo-capability-url')
-  );
+  return endpointHasExecutableVerifier(endpoint) || endpointHasSelfVerifyingAuth(endpoint);
 }
 
 function compareAccessFact(left: AccessExplainFact, right: AccessExplainFact): number {

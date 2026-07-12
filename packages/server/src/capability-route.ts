@@ -41,6 +41,7 @@ import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/securi
 import { verifiedAccess } from './access.js';
 import {
   endpoint,
+  pinEndpointSelfVerifyingAuth,
   type EndpointDeclaration,
   type EndpointMethod,
   type EndpointMount,
@@ -368,34 +369,36 @@ export function createStorageDownloadEndpoint(
     );
   };
 
-  const declaration = endpoint(basePath, {
-    access: verifiedAccess,
-    method: 'GET',
-    mount: 'prefix',
-    mountJustification:
-      'Framework-owned capability-URL storage download route: one handler serves any stored ' +
-      'object key under this prefix, gated by a per-object signed token verified before any read.',
-    reason:
-      'Capability-URL storage download verify sink (SPEC §6.6): verifyCapability runs before any ' +
-      'storage read so an object is un-dereferenceable without a token minted for that exact object.',
-    // The capability token IS the auth/CSRF defense here: a state-changing verb never reaches this
-    // read-only route (non-GET/HEAD fail closed), and the bearer token gates every read.
-    auth: {
-      kind: 'verifier',
-      name: 'kovo-capability-url',
-    },
-    csrf: false,
-    csrfJustification:
-      'Read-only download gated by a per-request signed capability token (not a cookie/ambient ' +
-      'credential), so there is no CSRF surface; non-GET/HEAD methods fail closed.',
-    response: {
-      appOwnedSafety: true,
-      body: ['bytes', 'text'],
-      cache: 'private',
-      reservedHeaders: ['X-Content-Type-Options'],
-    },
-    handler,
-  });
+  const declaration = pinEndpointSelfVerifyingAuth(
+    endpoint(basePath, {
+      access: verifiedAccess,
+      method: 'GET',
+      mount: 'prefix',
+      mountJustification:
+        'Framework-owned capability-URL storage download route: one handler serves any stored ' +
+        'object key under this prefix, gated by a per-object signed token verified before any read.',
+      reason:
+        'Capability-URL storage download verify sink (SPEC §6.6): verifyCapability runs before any ' +
+        'storage read so an object is un-dereferenceable without a token minted for that exact object.',
+      // The capability token IS the auth/CSRF defense here: a state-changing verb never reaches this
+      // read-only route (non-GET/HEAD fail closed), and the bearer token gates every read.
+      auth: {
+        kind: 'verifier',
+        name: 'kovo-capability-url',
+      },
+      csrf: false,
+      csrfJustification:
+        'Read-only download gated by a per-request signed capability token (not a cookie/ambient ' +
+        'credential), so there is no CSRF surface; non-GET/HEAD methods fail closed.',
+      response: {
+        appOwnedSafety: true,
+        body: ['bytes', 'text'],
+        cache: 'private',
+        reservedHeaders: ['X-Content-Type-Options'],
+      },
+      handler,
+    }),
+  );
   Object.defineProperty(declaration, 'allowedMethods', {
     configurable: false,
     enumerable: false,
