@@ -364,18 +364,22 @@ This is an active closure ledger; `SPEC.md` remains normative.
     and failure/reauth redirects use boot-pinned, semantically checked controls; poison cannot replace
     wire bytes, cross-bind targets, or suppress required build/session transition metadata.
 
-- [x] **H20 - Mutable client-module registry lookup can serve a privileged sibling's code.**
-      `packages/server/src/{client-modules,loader-runtime-client-module}.ts`
+- [ ] **H20 - Mutable client-module and render-plan controls can cross-bind immutable code or
+      collapse build truth.** `packages/server/src/{client-modules,loader-runtime-client-module}.ts`,
+      `packages/core/src/internal/render-plan-token.ts`
   - A selective late `Map.prototype.get` override made the immutable URL registered for
     `/c/public.client.js@v1` return status 200 with the exact source bytes registered for the
     privileged sibling module instead.
+  - A completeness proof after the registry checkpoint selectively replaced the final render-plan
+    `Array.join`; projected shapes with and without an `adminToken` field then produced the same
+    fingerprint, suppressing the required deploy-skew token change.
   - **Acceptance:** module/path/version normalization, exact registry keys, Map/version tracking,
     entries, build-token hash inputs/crypto, URL request parsing, and runtime-href registration use
     boot-pinned, semantically checked controls; late/import-order poison cannot cross-bind module
     bytes, forge an unchanged build token, or alias unversioned/out-of-registry paths.
-  - **Evidence:** the 106-test client-module/static-export/app matrix, core/server dist+dts builds,
-    and import/API/wire-output gates pass; the independent selective Map lookup proof now serves the
-    exact public source bytes at the public immutable href instead of its privileged sibling.
+  - **Partial evidence:** the 106-test client-module/static-export/app matrix, core/server dist+dts
+    builds, and import/API/wire-output gates pass; the independent selective Map lookup proof now
+    serves the exact public source bytes. Render-plan frame/collection/hash controls remain open.
 
 - [x] **H21 - Mutable schema-validator traversal can skip every declared refinement.**
       `packages/server/src/schema.ts`
@@ -533,8 +537,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17, H15, and H19 are active mutation-output
-and durable-task fixes.
+The remediation pass remains intentionally non-zero: C17, H15, H19, and the render-plan remainder of
+H20 are active mutation-output, client-build-token, and durable-task fixes.
 Integrated
 evidence is
 green at
