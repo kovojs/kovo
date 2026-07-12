@@ -30,7 +30,7 @@ import {
 import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
-import { reserveReplayBeforeRun, type MutationReplayStoreOptions } from './replay.js';
+import { reserveReplayBeforeRun } from './replay.js';
 import {
   requestStateExactCompositeKey,
   requestStateIgnorePromiseRejection,
@@ -315,7 +315,7 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
  * `abort()` releases a failed in-flight reservation so the provider can retry.
  */
 export function createMemoryWebhookReplayStore(
-  options: MutationReplayStoreOptions = {},
+  options: { maxEntries?: number; maxPending?: number; ttlMs?: number } = {},
 ): WebhookReplayStore {
   const maxEntries = options.maxEntries ?? 1_000;
   const maxPending = options.maxPending ?? requestStateMax(maxEntries, 256);
