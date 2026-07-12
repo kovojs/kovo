@@ -40,12 +40,12 @@ import {
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
 export async function handleAppRequest(app: KovoApp, request: Request): Promise<Response> {
+  pinRequestIngressSurface(request);
   const appDiagnostics = blockingAppDiagnostics(app);
   if (appDiagnostics.length > 0) {
     return routeResponseToWebResponse(renderDiagnosticDocument(appDiagnostics), request);
   }
 
-  pinRequestIngressSurface(request);
   const method = requestMethod(request);
   const url = requestCreateUrl(requestUrl(request));
   const urlSnapshot = requestUrlSnapshot(url);
