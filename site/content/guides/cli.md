@@ -66,16 +66,21 @@ Every command also accepts `--help` or `-h`; use that for the exact flag surface
 
 ## Start the app with `kovo dev`
 
-Point `kovo dev` at the authored app entry. It loads Kovo's compiler and server controls before it
-loads `vite.config.ts` or any authored plugin, then starts the ordinary Vite server.
+Point `kovo dev` at the authored app entry. It loads Kovo's compiler and server controls, then starts
+the Vite server from a runner-owned config. It does not discover or evaluate `vite.config.ts` by
+default.
 
 ```sh
 kovo dev ./src/app.tsx
 kovo dev ./src/app.tsx --host 127.0.0.1 --port 4173 --strict-port
 ```
 
-Your Vite config still owns ordinary server, build, test, lint, and format settings. The Kovo plugin
-itself is runner-owned in dev so an authored plugin cannot replace its compiler hooks.
+Pass `--config ./vite.config.ts` only when dev needs an authored client transform. The secure config
+surface accepts `server.host`, `server.port`, `server.strictPort`, and client plugins limited to
+`resolveId`, `load`, and `transform`. Build, test, lint, format, and run sections are ignored. Other
+Vite fields and lifecycle hooks fail closed because they can replace the SSR compiler graph. The
+ordinary Vite+ commands still read the complete config for their own build, test, lint, format, and
+task workflows.
 
 ## Build the graph artifact first
 

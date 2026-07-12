@@ -22,7 +22,7 @@ my-app/
 |-- package.json
 |-- scripts/
 |   `-- check-sound-subset.mjs
-|-- vite.config.ts          # Vite+ plus the Kovo plugin
+|-- vite.config.ts          # Vite+ build/test config; kovo dev loads it only with --config
 |-- src/
 |   |-- app.tsx             # createApp(), routes, layout, request shell
 |   |-- app.test.ts         # focused app smoke test
