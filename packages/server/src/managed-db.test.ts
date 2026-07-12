@@ -1257,6 +1257,23 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       chunks[0]!.value[0] = '(select classified from secrets)';
       expect(handle.select({ leaked: witnessed }).from(publicData).all()).toEqual([{ leaked: 1 }]);
 
+      const benign = drizzleSql`${1}`;
+      const dangerousChunks = drizzleSql.raw('(select classified from secrets)').queryChunks;
+      let executablePropertyReads = 0;
+      const splitCarrier = new Proxy(benign, {
+        get(target, property, receiver) {
+          if (property === 'queryChunks') {
+            executablePropertyReads += 1;
+            return dangerousChunks;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      expect(handle.select({ leaked: splitCarrier }).from(publicData).all()).toEqual([
+        { leaked: 1 },
+      ]);
+      expect(executablePropertyReads).toBe(0);
+
       const evil = rawDb
         .select({ leaked: drizzleSql.raw('classified').as('leaked') })
         .from(secrets)

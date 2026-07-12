@@ -21,7 +21,14 @@ import {
   type SqlSafetyMode,
 } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
-import { count as drizzleCount, Param, SQL, StringChunk } from 'drizzle-orm';
+import {
+  count as drizzleCount,
+  Name,
+  Param,
+  Placeholder,
+  SQL,
+  StringChunk,
+} from 'drizzle-orm';
 import {
   classifyStatement,
   UNTABLED_SQL_WRITE,
@@ -56,6 +63,7 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
   witnessWeakSetAdd,
+  witnessWeakSetDelete,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
@@ -73,6 +81,9 @@ if (
   throw new TypeError('Kovo managed SQL symbol controls are unavailable.');
 }
 const nativeSymbolDescription = witnessReflectGet(symbolDescriptionDescriptor, 'get') as Function;
+const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
+const DRIZZLE_TABLE_SCHEMA = Symbol.for('drizzle:Schema');
+const DRIZZLE_TABLE_IS_ALIAS = Symbol.for('drizzle:IsAlias');
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
 export interface ManagedSqlWritePolicy {
@@ -433,6 +444,11 @@ function canonicalizeNativeDrizzleCountStar(
     witnessWeakMapSet(seen, value, pinnedSql);
     return pinnedSql;
   }
+  const structuredSql = canonicalStructuredNativeDrizzleSql(value);
+  if (structuredSql !== undefined) {
+    witnessWeakMapSet(seen, value, structuredSql);
+    return structuredSql;
+  }
 
   if (witnessIsArray(value)) {
     const clone: unknown[] = [];
@@ -548,6 +564,252 @@ function canonicalPinnedDrizzleSql(value: object): object | undefined {
   const aliased = new SQL.Aliased(canonical as SQL, fieldAlias.value);
   witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, aliased);
   return witnessFreeze(aliased);
+}
+
+/**
+ * Rebuild an accepted unbranded Drizzle expression from its descriptor-only graph. Typed Drizzle
+ * predicates such as `eq(column, value)` are ordinary SQL values rather than Kovo-minted recipes,
+ * but the caller object still cannot be forwarded after classification: a Proxy may expose benign
+ * own descriptors and return different executable `queryChunks` through a later property get.
+ * The builder receives only fresh SQL/StringChunk/Param/Name objects constructed from the exact
+ * graph that was classified (SPEC §6.6 C9/C15, §10.2).
+ */
+function canonicalStructuredNativeDrizzleSql(value: object): object | undefined {
+  const kinds = nativeDrizzleEntityKinds(value);
+  if (!witnessSetHas(kinds, 'SQL') && !witnessSetHas(kinds, 'SQL.Aliased')) return undefined;
+  if (nativeDrizzleSqlCarrierVerdict(value) !== 'safe') return undefined;
+  return reconstructNativeDrizzleSql(
+    value,
+    createWitnessWeakMap<object, object>(),
+    createWitnessWeakSet<object>(),
+  );
+}
+
+function reconstructNativeDrizzleSql(
+  value: object,
+  reconstructed: WeakMap<object, object>,
+  active: WeakSet<object>,
+): object {
+  if (witnessWeakSetHas(active, value)) throw nativeDrizzleProvenanceError();
+  const existing = witnessWeakMapGet(reconstructed, value);
+  if (existing !== undefined) return existing;
+  witnessWeakSetAdd(active, value);
+  try {
+    const kinds = nativeDrizzleEntityKinds(value);
+    if (witnessSetHas(kinds, 'SQL')) {
+      const inline = witnessGetOwnPropertyDescriptor(value, 'shouldInlineParams');
+      const chunks = witnessGetOwnPropertyDescriptor(value, 'queryChunks');
+      if (
+        inline === undefined ||
+        !('value' in inline) ||
+        inline.value !== false ||
+        chunks === undefined ||
+        !('value' in chunks) ||
+        !witnessIsArray(chunks.value)
+      ) {
+        throw nativeDrizzleProvenanceError();
+      }
+      const canonicalChunks: unknown[] = [];
+      const statement = new SQL([]);
+      witnessWeakMapSet(reconstructed, value, statement);
+      for (let index = 0; index < chunks.value.length; index += 1) {
+        const descriptor = witnessGetOwnPropertyDescriptor(chunks.value, index);
+        if (descriptor === undefined || !('value' in descriptor)) {
+          throw nativeDrizzleProvenanceError();
+        }
+        appendSqlSafetyValue(
+          canonicalChunks,
+          reconstructNativeDrizzleChunk(descriptor.value, reconstructed, active),
+        );
+      }
+      witnessDefineProperty(statement, 'queryChunks', {
+        value: witnessFreeze(canonicalChunks),
+      });
+      witnessDefineProperty(statement, 'usedTables', { value: witnessFreeze([]) });
+      witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, statement);
+      return witnessFreeze(statement);
+    }
+
+    if (!witnessSetHas(kinds, 'SQL.Aliased')) throw nativeDrizzleProvenanceError();
+    const sqlDescriptor = witnessGetOwnPropertyDescriptor(value, 'sql');
+    const aliasDescriptor = witnessGetOwnPropertyDescriptor(value, 'fieldAlias');
+    const originDescriptor = witnessGetOwnPropertyDescriptor(value, 'origin');
+    const selectionDescriptor = witnessGetOwnPropertyDescriptor(value, 'isSelectionField');
+    if (
+      sqlDescriptor === undefined ||
+      !('value' in sqlDescriptor) ||
+      !isRecord(sqlDescriptor.value) ||
+      aliasDescriptor === undefined ||
+      !('value' in aliasDescriptor) ||
+      typeof aliasDescriptor.value !== 'string' ||
+      originDescriptor === undefined ||
+      !('value' in originDescriptor) ||
+      originDescriptor.value !== undefined ||
+      selectionDescriptor === undefined ||
+      !('value' in selectionDescriptor) ||
+      selectionDescriptor.value !== false
+    ) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const canonicalSql = reconstructNativeDrizzleSql(
+      sqlDescriptor.value,
+      reconstructed,
+      active,
+    );
+    if (!witnessSetHas(nativeDrizzleEntityKinds(canonicalSql), 'SQL')) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const aliased = new SQL.Aliased(canonicalSql as SQL, aliasDescriptor.value);
+    witnessWeakMapSet(reconstructed, value, aliased);
+    witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, aliased);
+    return witnessFreeze(aliased);
+  } finally {
+    witnessWeakSetDelete(active, value);
+  }
+}
+
+function reconstructNativeDrizzleChunk(
+  value: unknown,
+  reconstructed: WeakMap<object, object>,
+  active: WeakSet<object>,
+): unknown {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return witnessFreeze(new Param(value));
+  if (witnessIsArray(value)) {
+    if (witnessWeakSetHas(active, value)) throw nativeDrizzleProvenanceError();
+    witnessWeakSetAdd(active, value);
+    try {
+      const items: unknown[] = [];
+      for (let index = 0; index < value.length; index += 1) {
+        const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+        if (descriptor === undefined || !('value' in descriptor)) {
+          throw nativeDrizzleProvenanceError();
+        }
+        appendSqlSafetyValue(
+          items,
+          reconstructNativeDrizzleChunk(descriptor.value, reconstructed, active),
+        );
+      }
+      return witnessFreeze(items);
+    } finally {
+      witnessWeakSetDelete(active, value);
+    }
+  }
+
+  const kinds = nativeDrizzleEntityKinds(value);
+  if (witnessSetHas(kinds, 'SQL') || witnessSetHas(kinds, 'SQL.Aliased')) {
+    return reconstructNativeDrizzleSql(value, reconstructed, active);
+  }
+  if (witnessSetHas(kinds, 'StringChunk')) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, 'value');
+    if (descriptor === undefined || !('value' in descriptor) || !witnessIsArray(descriptor.value)) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const text: string[] = [];
+    for (let index = 0; index < descriptor.value.length; index += 1) {
+      const item = witnessGetOwnPropertyDescriptor(descriptor.value, index);
+      if (item === undefined || !('value' in item) || typeof item.value !== 'string') {
+        throw nativeDrizzleProvenanceError();
+      }
+      appendSqlSafetyValue(text, item.value);
+    }
+    const chunk = new StringChunk('');
+    witnessDefineProperty(chunk, 'value', { value: witnessFreeze(text) });
+    return witnessFreeze(chunk);
+  }
+  if (witnessSetHas(kinds, 'Param')) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, 'value');
+    if (descriptor === undefined || !('value' in descriptor)) throw nativeDrizzleProvenanceError();
+    const parameter =
+      isRecord(descriptor.value) && witnessSetHas(nativeDrizzleEntityKinds(descriptor.value), 'Placeholder')
+        ? reconstructNativeDrizzlePlaceholder(descriptor.value)
+        : descriptor.value;
+    return witnessFreeze(new Param(parameter));
+  }
+  if (witnessSetHas(kinds, 'Placeholder')) return reconstructNativeDrizzlePlaceholder(value);
+  if (witnessSetHas(kinds, 'Column')) return reconstructNativeDrizzleColumn(value);
+  if (witnessSetHas(kinds, 'Table')) return reconstructNativeDrizzleTable(value);
+  throw nativeDrizzleProvenanceError();
+}
+
+function reconstructNativeDrizzlePlaceholder(value: object): Placeholder {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, 'name');
+  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    throw nativeDrizzleProvenanceError();
+  }
+  return witnessFreeze(new Placeholder(descriptor.value));
+}
+
+function reconstructNativeDrizzleColumn(value: object): SQL {
+  const name = witnessGetOwnPropertyDescriptor(value, 'name');
+  const table = witnessGetOwnPropertyDescriptor(value, 'table');
+  const isAlias = witnessGetOwnPropertyDescriptor(value, 'isAlias');
+  if (
+    name === undefined ||
+    !('value' in name) ||
+    typeof name.value !== 'string' ||
+    table === undefined ||
+    !('value' in table) ||
+    !isRecord(table.value) ||
+    isAlias === undefined ||
+    !('value' in isAlias) ||
+    typeof isAlias.value !== 'boolean'
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  if (isAlias.value) return frozenIdentifierSql([name.value]);
+  const owner = nativeDrizzleTableIdentifierParts(table.value);
+  const parts: string[] = [];
+  for (let index = 0; index < owner.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, index);
+    if (descriptor === undefined || !('value' in descriptor)) throw nativeDrizzleProvenanceError();
+    appendSqlSafetyValue(parts, descriptor.value);
+  }
+  appendSqlSafetyValue(parts, name.value);
+  return frozenIdentifierSql(parts);
+}
+
+function reconstructNativeDrizzleTable(value: object): SQL {
+  return frozenIdentifierSql(nativeDrizzleTableIdentifierParts(value));
+}
+
+function nativeDrizzleTableIdentifierParts(value: object): readonly string[] {
+  const name = witnessGetOwnPropertyDescriptor(value, DRIZZLE_TABLE_NAME);
+  const schema = witnessGetOwnPropertyDescriptor(value, DRIZZLE_TABLE_SCHEMA);
+  const isAlias = witnessGetOwnPropertyDescriptor(value, DRIZZLE_TABLE_IS_ALIAS);
+  if (
+    name === undefined ||
+    !('value' in name) ||
+    typeof name.value !== 'string' ||
+    schema === undefined ||
+    !('value' in schema) ||
+    (schema.value !== undefined && typeof schema.value !== 'string') ||
+    isAlias === undefined ||
+    !('value' in isAlias) ||
+    typeof isAlias.value !== 'boolean'
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  return typeof schema.value === 'string' && !isAlias.value
+    ? witnessFreeze([schema.value, name.value])
+    : witnessFreeze([name.value]);
+}
+
+function frozenIdentifierSql(parts: readonly string[]): SQL {
+  const chunks: unknown[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(parts, index);
+    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+      throw nativeDrizzleProvenanceError();
+    }
+    if (index > 0) appendSqlSafetyValue(chunks, witnessFreeze(new StringChunk('.')));
+    appendSqlSafetyValue(chunks, witnessFreeze(new Name(descriptor.value)));
+  }
+  const statement = new SQL([]);
+  witnessDefineProperty(statement, 'queryChunks', { value: witnessFreeze(chunks) });
+  witnessDefineProperty(statement, 'usedTables', { value: witnessFreeze([]) });
+  witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, statement);
+  return witnessFreeze(statement);
 }
 
 function canonicalNativeDrizzleCountStar(value: object): object | undefined {
