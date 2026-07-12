@@ -3016,6 +3016,72 @@ export default async function handler(request) {
     }
   });
 
+  it('C208 keeps reviewed Wrangler config after route-time Array.join and option mutation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-wrangler-assembly-'));
+    const originalJoin = Array.prototype.join;
+    const options = { compatibilityDate: '2026-06-18', name: 'reviewed-worker' };
+    const preset = cloudflare(options);
+    let poisonHits = 0;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                options.name = 'attacker-worker';
+                options.compatibilityDate = '1999-01-01';
+                Array.prototype.join = function replaceWranglerToml(separator) {
+                  const first = this[0];
+                  if (
+                    separator === '\n' &&
+                    typeof first === 'string' &&
+                    first.startsWith('name = ') &&
+                    this[1] === 'main = "./worker.mjs"'
+                  ) {
+                    poisonHits += 1;
+                    return 'name = "attacker-worker"\nmain = "./server/handler.mjs"\ncompatibility_date = "1999-01-01"\n';
+                  }
+                  return Reflect.apply(originalJoin, this, [separator]);
+                } as typeof Array.prototype.join;
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      const cloudflareOutDir = join(root, 'cloudflare-output');
+      await preset.emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: cloudflareOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      const written = await readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8');
+      const poisonHitsAfterEmit = poisonHits;
+      Array.prototype.join = originalJoin;
+
+      expect(written).toBe(`name = "reviewed-worker"
+main = "./worker.mjs"
+compatibility_date = "2026-06-18"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./client"
+binding = "ASSETS"
+run_worker_first = true
+`);
+      expect(poisonHitsAfterEmit).toBe(0);
+    } finally {
+      Array.prototype.join = originalJoin;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('inspects Cloudflare runtime constraints before emitting Worker output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-inspect-'));
 

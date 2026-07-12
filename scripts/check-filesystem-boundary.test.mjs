@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cloudflareTomlAssemblyFindings,
   checkFilesystemBoundary,
   defaultAllowedToolingFiles,
   filesystemBoundaryFile,
@@ -213,6 +214,38 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
     ).toEqual([]);
   });
 
+  it('C208 pins Cloudflare option values and final Wrangler TOML assembly', () => {
+    expect(
+      cloudflareTomlAssemblyFindings(
+        presetRetentionPolicyFile,
+        `
+          function wranglerTomlSource(options) {
+            return ['main = "./worker.mjs"', ''].join('\n');
+          }
+        `,
+      ),
+    ).toContain(
+      `${presetRetentionPolicyFile}:3: authoritative Wrangler TOML must not assemble through mutable Array.join`,
+    );
+    expect(
+      cloudflareTomlAssemblyFindings(
+        presetRetentionPolicyFile,
+        `
+          function snapshotCloudflarePresetOptions(options) {
+            return buildOwnDataProperty(options, 'name', 'Cloudflare options.name');
+          }
+          function wranglerTomlSource(options) {
+            const lines = snapshotBuildArray(
+              ['main = "./worker.mjs"', ''],
+              'Cloudflare Wrangler TOML lines',
+            );
+            return securityArrayJoin(lines, '\n');
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects raw fs access outside the filesystem boundary', () => {
     const result = runFixture({
       [filesystemBoundaryFile]: 'export const boundary = true;',
@@ -249,6 +282,7 @@ export function escape(root: string, key: string) {
     const result = checkFilesystemBoundary({
       allowedRuntimeFiles: [filesystemBoundaryFile],
       allowedToolingFiles: ['packages/server/src/build.ts'],
+      cloudflareTomlAssemblyFiles: [],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
       presetDiagnosticAggregationFiles: [],
       presetRetentionPolicyFiles: [],

@@ -69,6 +69,9 @@ export function checkFilesystemBoundary(options = {}) {
   const presetDiagnosticAggregationFiles = new Set(
     options.presetDiagnosticAggregationFiles ?? [presetRetentionPolicyFile],
   );
+  const cloudflareTomlAssemblyFiles = new Set(
+    options.cloudflareTomlAssemblyFiles ?? [presetRetentionPolicyFile],
+  );
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
   const exists = options.exists ?? ((relativePath) => existsSync(path.join(root, relativePath)));
@@ -126,6 +129,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (presetDiagnosticAggregationFiles.has(filePath)) {
       findings.push(...presetDiagnosticAggregationFindings(filePath, sourceText));
+    }
+    if (cloudflareTomlAssemblyFiles.has(filePath)) {
+      findings.push(...cloudflareTomlAssemblyFindings(filePath, sourceText));
     }
 
     if (!allowed && usesPathConfinementPrimitive(scanText, importedPathNames)) {
@@ -281,6 +287,31 @@ export function presetDiagnosticAggregationFindings(filePath, sourceText) {
   }
   if (!/\bsecurityPromiseThen\s*\(/u.test(scanText)) {
     findings.push(`${filePath}: async preset inspection must use boot-pinned Promise chaining`);
+  }
+  return findings;
+}
+
+export function cloudflareTomlAssemblyFindings(filePath, sourceText) {
+  const scanText = stripCommentsAndStrings(sourceText);
+  const findings = [];
+  const mutableJoin = /\]\s*\.\s*join\s*\(/u.exec(scanText);
+  if (mutableJoin !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableJoin.index)}: authoritative Wrangler TOML must not assemble through mutable Array.join`,
+    );
+  }
+  if (!/\bfunction\s+snapshotCloudflarePresetOptions\s*\(/u.test(sourceText)) {
+    findings.push(
+      `${filePath}: Cloudflare preset values must snapshot through an own-data options boundary`,
+    );
+  }
+  if (!/\bconst\s+lines\s*=\s*snapshotBuildArray\s*\(/u.test(sourceText)) {
+    findings.push(`${filePath}: authoritative Wrangler TOML must snapshot every reviewed line`);
+  }
+  if (!/\bsecurityArrayJoin\s*\(\s*lines\s*,/u.test(sourceText)) {
+    findings.push(
+      `${filePath}: authoritative Wrangler TOML must use boot-pinned final composition`,
+    );
   }
   return findings;
 }

@@ -11,6 +11,7 @@ import {
 
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import {
+  buildOwnDataProperty,
   buildSecurityFunctionSource,
   buildSecuritySha256Hex,
   buildSecuritySourceLiteral,
@@ -19,6 +20,7 @@ import {
 } from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
 import {
+  securityArrayJoin,
   securityIsPromise,
   securityNumberIsFinite,
   securityPromiseResolve,
@@ -317,13 +319,14 @@ export function vercel(options: VercelPresetOptions = {}): KovoPreset {
  * @experimental
  */
 export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset {
+  const pinnedOptions = snapshotCloudflarePresetOptions(options);
   return {
     emit(build, context) {
-      return emitCloudflarePreset(build, context, options);
+      return emitCloudflarePreset(build, context, pinnedOptions);
     },
     async inspect(build, context) {
       const diagnostics = concatenatePresetDiagnostics(
-        clientModuleRetentionDiagnostics(build, 'cloudflare', options),
+        clientModuleRetentionDiagnostics(build, 'cloudflare', pinnedOptions),
         missingJobRunnerDiagnostics(build, 'cloudflare'),
         'cloudflare preset diagnostics',
       );
@@ -1771,22 +1774,98 @@ function serverHandlerImportsModule(source: string, modulePattern: RegExp): bool
 function wranglerTomlSource(options: CloudflarePresetOptions): string {
   const name = options.name ?? 'kovo-app';
   const compatibilityDate = options.compatibilityDate ?? '2024-09-23';
-  return [
-    `name = ${tomlString(name)}`,
-    'main = "./worker.mjs"',
-    `compatibility_date = ${tomlString(compatibilityDate)}`,
-    'compatibility_flags = ["nodejs_compat"]',
-    '',
-    '[assets]',
-    'directory = "./client"',
-    'binding = "ASSETS"',
-    'run_worker_first = true',
-    '',
-  ].join('\n');
+  // SPEC §6.6: route evaluation precedes preset emission. Pin every reviewed line and compose the
+  // authoritative Wrangler file through the boot-captured join control.
+  const lines = snapshotBuildArray(
+    [
+      `name = ${tomlString(name)}`,
+      'main = "./worker.mjs"',
+      `compatibility_date = ${tomlString(compatibilityDate)}`,
+      'compatibility_flags = ["nodejs_compat"]',
+      '',
+      '[assets]',
+      'directory = "./client"',
+      'binding = "ASSETS"',
+      'run_worker_first = true',
+      '',
+    ],
+    'Cloudflare Wrangler TOML lines',
+  );
+  return securityArrayJoin(lines, '\n');
 }
 
 function tomlString(value: string): string {
   return buildSecuritySourceLiteral(value);
+}
+
+function snapshotCloudflarePresetOptions(
+  options: CloudflarePresetOptions,
+): CloudflarePresetOptions {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Cloudflare preset options must be an own-data object.');
+  }
+
+  const compatibilityDate = optionalCloudflarePresetString(options, 'compatibilityDate');
+  const name = optionalCloudflarePresetString(options, 'name');
+  const retentionProperty = buildOwnDataProperty(
+    options,
+    'retention',
+    'Cloudflare preset options.retention',
+  );
+  const retention =
+    !retentionProperty.present || retentionProperty.value === undefined
+      ? undefined
+      : snapshotDeploySkewRetentionProof(retentionProperty.value);
+  return {
+    ...(compatibilityDate === undefined ? {} : { compatibilityDate }),
+    ...(name === undefined ? {} : { name }),
+    ...(retention === undefined ? {} : { retention }),
+  };
+}
+
+function optionalCloudflarePresetString(
+  options: object,
+  property: 'compatibilityDate' | 'name',
+): string | undefined {
+  const field = buildOwnDataProperty(options, property, `Cloudflare preset options.${property}`);
+  if (!field.present || field.value === undefined) return undefined;
+  if (typeof field.value !== 'string') {
+    throw new TypeError(`Cloudflare preset option ${property} must be a string.`);
+  }
+  return field.value;
+}
+
+function snapshotDeploySkewRetentionProof(value: unknown): DeploySkewRetentionProof {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Cloudflare preset retention proof must be an own-data object.');
+  }
+  const hours = buildOwnDataProperty(value, 'hours', 'Cloudflare retention proof.hours');
+  const immutableClientModules = buildOwnDataProperty(
+    value,
+    'immutableClientModules',
+    'Cloudflare retention proof.immutableClientModules',
+  );
+  const priorTokenQueryReads = buildOwnDataProperty(
+    value,
+    'priorTokenQueryReads',
+    'Cloudflare retention proof.priorTokenQueryReads',
+  );
+  if (!hours.present || typeof hours.value !== 'number') {
+    throw new TypeError('Cloudflare preset retention proof hours must be a number.');
+  }
+  if (!immutableClientModules.present || immutableClientModules.value !== 'retained') {
+    throw new TypeError(
+      'Cloudflare preset retention proof immutableClientModules must be retained.',
+    );
+  }
+  if (!priorTokenQueryReads.present || priorTokenQueryReads.value !== 'retained') {
+    throw new TypeError('Cloudflare preset retention proof priorTokenQueryReads must be retained.');
+  }
+  return {
+    hours: hours.value,
+    immutableClientModules: immutableClientModules.value,
+    priorTokenQueryReads: priorTokenQueryReads.value,
+  };
 }
 
 /**
