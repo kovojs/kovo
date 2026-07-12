@@ -32,13 +32,18 @@ import {
 import {
   assertVerifierSecurityIntrinsics,
   verifierApply,
+  verifierArrayPush,
   verifierArrayJoin,
   verifierDenseArraySnapshot,
+  verifierDefineProperty,
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
   verifierGetPrototypeOf,
   verifierIsExtensible,
+  verifierIsProxy,
+  verifierNullRecord,
   verifierObjectKeys,
+  verifierOwnKeys,
   verifierReflectGet,
   verifierSet,
   verifierSetAdd,
@@ -329,6 +334,7 @@ export function createDbVerifier(
                 recorder,
                 sqlHandleProxyCache,
                 methodCache,
+                (transactionDb) => verifier.wrap(transactionDb),
               );
             }
 
@@ -342,6 +348,14 @@ export function createDbVerifier(
             if (prop === '$replicas') {
               return wrapReplicaCollection(value, replicaCollectionCache, (entry) =>
                 verifier.wrap(entry),
+              );
+            }
+
+            if (prop === 'transaction' && typeof value === 'function') {
+              return cachedMethod(target, prop, value, methodCache, () =>
+                verifiedTransactionMethod(target, value, (transactionDb) =>
+                  verifier.wrap(transactionDb),
+                ),
               );
             }
 
@@ -1356,12 +1370,107 @@ function isRelationalReadMethod(property: PropertyKey): boolean {
   );
 }
 
+// SPEC §11.2: transaction callbacks mint a fresh DB authority (and nested Drizzle transactions
+// mint savepoint authorities). Re-wrap that value before authored code can observe any method.
+function verifiedTransactionMethod(
+  target: object,
+  transaction: Function,
+  wrapDb: (transactionDb: object) => object,
+): (callback: unknown, ...args: unknown[]) => unknown {
+  return (callback: unknown, ...args: unknown[]) => {
+    const safeCallback = verifiedTransactionCallback(callback, wrapDb);
+    return verifierApply(
+      transaction,
+      target,
+      transactionDispatchArguments(safeCallback, snapshotTransactionArguments(args)),
+    );
+  };
+}
+
+function verifiedTransactionCallback(
+  callback: unknown,
+  wrapDb: (transactionDb: object) => object,
+): (transactionDb: unknown, ...args: unknown[]) => unknown {
+  if (typeof callback !== 'function') {
+    throw verifierTypeError('KV407: Kovo DB verifier transaction() requires a callback function.');
+  }
+  return (transactionDb: unknown, ...args: unknown[]) => {
+    if (args.length !== 0) {
+      throw verifierTypeError(
+        'KV407: Kovo DB verifier transaction callback received unsupported authority arguments.',
+      );
+    }
+    if (typeof transactionDb !== 'object' || transactionDb === null) {
+      throw verifierTypeError(
+        'KV407: Kovo DB verifier transaction callback must receive a DB object.',
+      );
+    }
+    return verifierApply(callback, undefined, [wrapDb(transactionDb)]);
+  };
+}
+
+function snapshotTransactionArguments(args: readonly unknown[]): readonly unknown[] {
+  if (args.length > 1) {
+    throw verifierTypeError('KV407: Kovo DB verifier transaction() accepts at most one config.');
+  }
+  const config = args[0];
+  if (config === undefined) return [];
+  if (typeof config !== 'object' || config === null || verifierIsProxy(config)) {
+    throw verifierTypeError('KV407: Kovo DB verifier transaction config must be a stable object.');
+  }
+
+  const snapshot = verifierNullRecord();
+  const keys = verifierOwnKeys(config);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (typeof key !== 'string') {
+      throw verifierTypeError('KV407: Kovo DB verifier transaction config must not use symbols.');
+    }
+    const descriptor = verifierGetOwnPropertyDescriptor(config, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw verifierTypeError(
+        'KV407: Kovo DB verifier transaction config must use own data properties.',
+      );
+    }
+    const value = descriptor.value;
+    if (
+      value !== null &&
+      value !== undefined &&
+      typeof value !== 'bigint' &&
+      typeof value !== 'boolean' &&
+      typeof value !== 'number' &&
+      typeof value !== 'string'
+    ) {
+      throw verifierTypeError(
+        `KV407: Kovo DB verifier transaction config ${key} must be primitive.`,
+      );
+    }
+    verifierDefineProperty(snapshot, key, {
+      enumerable: descriptor.enumerable === true,
+      value,
+    });
+  }
+  return verifierFreeze([verifierFreeze(snapshot)]);
+}
+
+function transactionDispatchArguments(
+  callback: Function,
+  args: readonly unknown[],
+): readonly unknown[] {
+  const dispatch: unknown[] = [callback];
+  for (let index = 0; index < args.length; index += 1) {
+    verifierArrayPush(dispatch, args[index]);
+  }
+  return dispatch;
+}
+
 function wrapSqlHandle<Handle extends object>(
   handle: Handle,
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  wrapDb: (transactionDb: object) => object,
 ): Handle {
   const cached = verifierWeakMapGet(proxyCache, handle);
   if (cached) return cached as Handle;
@@ -1378,20 +1487,28 @@ function wrapSqlHandle<Handle extends object>(
           value,
           methodCache,
           () =>
-            async (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) => {
+            async (callback: unknown, ...args: unknown[]) => {
+              const safeCallback = verifiedTransactionCallback(callback, wrapDb);
+              const safeArgs = snapshotTransactionArguments(args);
               const before = await tableObservationSnapshots(
                 target,
                 verifierObjectKeys(config.domainByTable),
                 config.sqlDialect,
               );
               const start = recorder.length();
-              const result = await verifierApply(value, target, [
-                (tx: object) =>
-                  verifierApply(callback, undefined, [
-                    wrapSqlHandle(tx, config, recorder, proxyCache, methodCache),
-                  ]),
-                ...args,
-              ]);
+              let failed = false;
+              let failure: unknown;
+              let result: unknown;
+              try {
+                result = await verifierApply(
+                  value,
+                  target,
+                  transactionDispatchArguments(safeCallback, safeArgs),
+                );
+              } catch (error) {
+                failed = true;
+                failure = error;
+              }
               await observeSqlEngineSideEffects(
                 target,
                 '<transaction>',
@@ -1400,6 +1517,7 @@ function wrapSqlHandle<Handle extends object>(
                 recorder.slice(start),
                 before,
               );
+              if (failed) throw failure;
               return result;
             },
         );
