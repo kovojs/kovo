@@ -9,6 +9,7 @@ import {
   compilerOwnDataValue,
   compilerRegExpExec,
   compilerRegExpReplace,
+  compilerRegExpTest,
   compilerSetAdd,
   compilerSetHas,
   compilerSnapshotDenseArray,
@@ -678,8 +679,8 @@ function emitStateDeriveExport(deriveFact: StateDeriveFact): string {
 
 function emitHandlerExport(handler: HandlerLowering): string {
   const body = emitHandlerBody(handler);
-  const eventParam = /\bevent\b/.test(body) ? 'event' : '_event';
-  const contextParam = /\bctx\b/.test(body) ? 'ctx' : '_ctx';
+  const eventParam = compilerRegExpTest(/\bevent\b/, body) ? 'event' : '_event';
+  const contextParam = compilerRegExpTest(/\bctx\b/, body) ? 'ctx' : '_ctx';
 
   return `export const ${handler.exportName} = handler((${eventParam}, ${contextParam}) => {\n${indent(body)}\n});`;
 }
@@ -709,71 +710,118 @@ function handlerArrowBodyReplacements(
   params: readonly ElementParam[],
 ): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
-  const paramReplacements = params
-    .map((param) => ({
-      param,
-      sourceExpression: param.expression,
-    }))
-    .filter((entry) => entry.sourceExpression.length > 0)
-    .sort((left, right) => right.sourceExpression.length - left.sourceExpression.length);
+  const paramSnapshot = compilerSnapshotDenseArray(params, 'Client handler element params');
+  const paramEntries: { param: ElementParam; sourceExpression: string }[] = [];
+  for (let index = 0; index < paramSnapshot.length; index += 1) {
+    const param = paramSnapshot[index]!;
+    if (param.expression.length === 0) continue;
+    appendClientValue(
+      paramEntries,
+      { param, sourceExpression: param.expression },
+      'Client handler element param projections',
+    );
+  }
+  const paramReplacements = stableSortedClientValues(
+    paramEntries,
+    (left, right) => right.sourceExpression.length - left.sourceExpression.length,
+    'Client handler element param projections',
+  );
 
-  for (const access of body.propertyAccesses) {
-    const param = paramReplacements.find((entry) => entry.sourceExpression === access.path)?.param;
+  const propertyAccesses = compilerSnapshotDenseArray(
+    body.propertyAccesses,
+    'Client handler property accesses',
+  );
+  for (let index = 0; index < propertyAccesses.length; index += 1) {
+    const access = propertyAccesses[index]!;
+    const param = handlerElementParamForPath(paramReplacements, access.path);
     if (param) {
-      replacements.push({
-        end: access.end,
-        replacement: `ctx.params.${elementParamNameFromAttribute(param.attributeName)}`,
-        start: access.start,
-      });
+      appendClientValue(
+        replacements,
+        {
+          end: access.end,
+          replacement: `ctx.params.${elementParamNameFromAttribute(param.attributeName)}`,
+          start: access.start,
+        },
+        'Client handler source replacements',
+      );
       continue;
     }
 
-    if (access.path === 'state' || access.path.startsWith('state.')) {
-      replacements.push({
-        end: access.start + 'state'.length,
-        replacement: 'ctx.state',
-        start: access.start,
-      });
+    if (access.path === 'state' || compilerStringStartsWith(access.path, 'state.')) {
+      appendClientValue(
+        replacements,
+        {
+          end: access.start + 'state'.length,
+          replacement: 'ctx.state',
+          start: access.start,
+        },
+        'Client handler source replacements',
+      );
     }
   }
 
-  for (const reference of body.references ?? []) {
-    const param = paramReplacements.find(
-      (entry) => entry.sourceExpression === reference.name,
-    )?.param;
+  const references = compilerSnapshotDenseArray(
+    body.references ?? [],
+    'Client handler references',
+  );
+  for (let index = 0; index < references.length; index += 1) {
+    const reference = references[index]!;
+    const param = handlerElementParamForPath(paramReplacements, reference.name);
     if (param) {
-      replacements.push({
-        end: reference.end,
-        replacement: `ctx.params.${elementParamNameFromAttribute(param.attributeName)}`,
-        start: reference.start,
-      });
+      appendClientValue(
+        replacements,
+        {
+          end: reference.end,
+          replacement: `ctx.params.${elementParamNameFromAttribute(param.attributeName)}`,
+          start: reference.start,
+        },
+        'Client handler source replacements',
+      );
       continue;
     }
 
     if (reference.name !== 'state') continue;
-    if (
-      replacements.some(
-        (replacement) => reference.start >= replacement.start && reference.end <= replacement.end,
-      )
-    ) {
-      continue;
+    let alreadyCovered = false;
+    for (let replacementIndex = 0; replacementIndex < replacements.length; replacementIndex += 1) {
+      const replacement = replacements[replacementIndex]!;
+      if (reference.start >= replacement.start && reference.end <= replacement.end) {
+        alreadyCovered = true;
+        break;
+      }
     }
+    if (alreadyCovered) continue;
 
-    replacements.push({
-      end: reference.end,
-      replacement: 'ctx.state',
-      start: reference.start,
-    });
+    appendClientValue(
+      replacements,
+      {
+        end: reference.end,
+        replacement: 'ctx.state',
+        start: reference.start,
+      },
+      'Client handler source replacements',
+    );
   }
 
   return dedupeHandlerReplacements(replacements);
 }
 
+function handlerElementParamForPath(
+  entries: readonly { param: ElementParam; sourceExpression: string }[],
+  path: string,
+): ElementParam | undefined {
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (entry.sourceExpression === path) return entry.param;
+  }
+  return undefined;
+}
+
 function dedupeHandlerReplacements(
   replacements: readonly SourceReplacement[],
 ): SourceReplacement[] {
-  return dedupeBy(replacements, (replacement) =>
-    [replacement.start, replacement.end, replacement.replacement].join(':'),
+  return dedupeBy(
+    replacements,
+    (replacement) => `${replacement.start}:${replacement.end}:${replacement.replacement}`,
   );
 }
 

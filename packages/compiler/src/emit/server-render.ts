@@ -2,6 +2,13 @@ import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/m
 
 import { compilerIrHeader } from '../ir.js';
 import {
+  compilerCreateSet,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
+import {
   outputContextForAttribute,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
@@ -18,7 +25,12 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
-import { emitElementParamTypes, type HandlerLowering, type RegistryFacts } from '../types.js';
+import {
+  emitElementParamTypes,
+  type ElementParam,
+  type HandlerLowering,
+  type RegistryFacts,
+} from '../types.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
   enhancedMutationFormRenderLowering,
@@ -241,7 +253,7 @@ function executionTriggerRenderLowering(
 }
 
 function handlerOutputContexts(handler: HandlerLowering): GeneratedOutputWriteFact[] {
-  return [
+  const contexts: GeneratedOutputWriteFact[] = [
     {
       context: outputContextForAttribute(handler.attributeName),
       expression: handler.attributeValue,
@@ -249,14 +261,19 @@ function handlerOutputContexts(handler: HandlerLowering): GeneratedOutputWriteFa
       source: 'server-render',
       writer: 'event handler lowering',
     },
-    ...handler.params.map((param) => ({
+  ];
+  const params = compilerSnapshotDenseArray(handler.params, 'Server handler parameters');
+  for (let index = 0; index < params.length; index += 1) {
+    const param = params[index]!;
+    contexts[contexts.length] = {
       context: outputContextForAttribute(param.attributeName),
       expression: param.value,
       sink: param.attributeName,
       source: 'server-render' as const,
       writer: 'event handler param lowering',
-    })),
-  ];
+    };
+  }
+  return contexts;
 }
 
 function chainedPrimitiveHandlerPatches(
@@ -321,24 +338,32 @@ function chainedPrimitiveHandlerAttribute(
   primitiveRefs: string,
   handlers: readonly HandlerLowering[],
 ): string {
-  return [
-    `${name}="${escapeAttribute(
-      [
-        ...handlers.map((handler) => handler.attributeValue),
-        ...primitiveRefs.split(/\s+/).filter(Boolean),
-      ].join(' '),
-    )}"`,
-    clientModuleAllowlistAttribute([
-      ...handlers.map((handler) => handler.attributeValue),
-      ...primitiveRefs.split(/\s+/).filter(Boolean),
-    ]),
-    emitElementParamTypes(handlers.flatMap((handler) => handler.params)),
-    ...handlers.flatMap((handler) =>
-      handler.params.map((param) => `${param.attributeName}="${escapeAttribute(param.value)}"`),
-    ),
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Chained primitive handlers');
+  const refValues: string[] = [];
+  const params: ElementParam[] = [];
+  for (let handlerIndex = 0; handlerIndex < handlerSnapshot.length; handlerIndex += 1) {
+    const handler = handlerSnapshot[handlerIndex]!;
+    refValues[refValues.length] = handler.attributeValue;
+    const handlerParams = compilerSnapshotDenseArray(
+      handler.params,
+      'Chained primitive handler parameters',
+    );
+    for (let paramIndex = 0; paramIndex < handlerParams.length; paramIndex += 1) {
+      params[params.length] = handlerParams[paramIndex]!;
+    }
+  }
+  const primitiveTokens = splitDepValue(primitiveRefs);
+  for (let index = 0; index < primitiveTokens.length; index += 1) {
+    refValues[refValues.length] = primitiveTokens[index]!;
+  }
+
+  const parts = [
+    `${name}="${escapeAttribute(joinServerStrings(refValues, ' '))}"`,
+    clientModuleAllowlistAttribute(refValues),
+    emitElementParamTypes(params),
+  ];
+  appendHandlerParamAttributes(parts, params);
+  return joinNonEmptyServerStrings(parts, ' ');
 }
 
 function handlerSourceReplacement(handler: HandlerLowering): SourceReplacement {
@@ -350,25 +375,65 @@ function handlerSourceReplacement(handler: HandlerLowering): SourceReplacement {
 }
 
 function handlerAttributeReplacement(handler: HandlerLowering): string {
-  return [
+  const params = compilerSnapshotDenseArray(handler.params, 'Server handler parameters');
+  const parts = [
     `${handler.attributeName}="${handler.attributeValue}"`,
     clientModuleAllowlistAttribute([handler.attributeValue]),
-    emitElementParamTypes(handler.params),
-    ...handler.params.map((param) => `${param.attributeName}="${escapeAttribute(param.value)}"`),
-  ]
-    .filter(Boolean)
-    .join(' ');
+    emitElementParamTypes(params),
+  ];
+  appendHandlerParamAttributes(parts, params);
+  return joinNonEmptyServerStrings(parts, ' ');
 }
 
 function clientModuleAllowlistAttribute(refValues: readonly string[]): string {
-  const urls = new Set<string>();
-  for (const value of refValues) {
+  const urls = compilerCreateSet<string>();
+  const orderedUrls: string[] = [];
+  const values = compilerSnapshotDenseArray(refValues, 'Client module reference values');
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
     const ref = parseKovoModuleRef(value, 'handler');
-    if (ref?.url.startsWith('/c/')) urls.add(ref.url);
+    if (
+      ref !== null &&
+      compilerStringStartsWith(ref.url, '/c/') &&
+      !compilerSetHas(urls, ref.url)
+    ) {
+      compilerSetAdd(urls, ref.url);
+      orderedUrls[orderedUrls.length] = ref.url;
+    }
   }
-  return urls.size > 0
-    ? `data-kovo-module-allowlist="${escapeAttribute([...urls].join(' '))}"`
+  return orderedUrls.length > 0
+    ? `data-kovo-module-allowlist="${escapeAttribute(joinServerStrings(orderedUrls, ' '))}"`
     : '';
+}
+
+function appendHandlerParamAttributes(
+  target: string[],
+  params: readonly ElementParam[],
+): void {
+  for (let index = 0; index < params.length; index += 1) {
+    const param = params[index]!;
+    target[target.length] = `${param.attributeName}="${escapeAttribute(param.value)}"`;
+  }
+}
+
+function joinNonEmptyServerStrings(values: readonly string[], separator: string): string {
+  let output = '';
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (value.length === 0) continue;
+    if (output.length > 0) output += separator;
+    output += value;
+  }
+  return output;
+}
+
+function joinServerStrings(values: readonly string[], separator: string): string {
+  let output = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) output += separator;
+    output += values[index]!;
+  }
+  return output;
 }
 
 function renderHostStampPatches(

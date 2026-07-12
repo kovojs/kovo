@@ -13,9 +13,13 @@ import {
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
+  compilerRegExpReplace,
   compilerSetAdd,
   compilerSetForEach,
   compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringSplit,
+  compilerStringToUpperCase,
 } from './compiler-security-intrinsics.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
@@ -552,12 +556,15 @@ export interface ElementParam {
 export type ElementParamType = 'boolean' | 'number' | 'string';
 
 export function emitElementParamTypes(params: readonly ElementParam[]): string {
-  const typedParams = params.filter((param) => param.type !== 'string');
-  if (typedParams.length === 0) return '';
-
-  const entries = typedParams
-    .map((param) => `${elementParamNameFromAttribute(param.attributeName)}:${param.type}`)
-    .join(',');
+  const snapshot = compilerSnapshotDenseArray(params, 'Element parameter types');
+  let entries = '';
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const param = snapshot[index]!;
+    if (param.type === 'string') continue;
+    if (entries.length > 0) entries += ',';
+    entries += `${elementParamNameFromAttribute(param.attributeName)}:${param.type}`;
+  }
+  if (entries.length === 0) return '';
   return `kovo-param-types="${entries}"`;
 }
 
@@ -574,15 +581,22 @@ export function elementParamAttributeNameFromPropertyName(name: string): string 
 // `elementParamNameFromAttribute` round-trip used by client emit yields a valid `ctx.params.<name>`.
 export function elementParamAttributeNameFromPath(path: string): string {
   // Drop the binding root (`item.parent.id` → `parent.id`); a single-segment path keeps as-is.
-  const segments = path.split('.');
-  const withoutRoot = segments.length > 1 ? segments.slice(1) : segments;
-  return elementParamAttributeNameFromPropertyName(withoutRoot.join('-'));
+  const segments = compilerStringSplit(path, '.');
+  const first = segments.length > 1 ? 1 : 0;
+  let withoutRoot = '';
+  for (let index = first; index < segments.length; index += 1) {
+    if (index > first) withoutRoot += '-';
+    withoutRoot += segments[index]!;
+  }
+  return elementParamAttributeNameFromPropertyName(withoutRoot);
 }
 
 export function elementParamNameFromAttribute(attributeName: string): string {
-  return attributeName
-    .replace(/^data-p-/, '')
-    .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
+  return compilerRegExpReplace(
+    /-([a-z0-9])/g,
+    compilerRegExpReplace(/^data-p-/, attributeName, ''),
+    (_match, char: string) => compilerStringToUpperCase(char),
+  );
 }
 
 /**

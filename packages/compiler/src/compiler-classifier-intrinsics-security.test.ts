@@ -686,4 +686,105 @@ export const TrackButton = component({
     );
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject client handler source through element-param projection', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeStringIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedElementParamMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { attributeName?: unknown; expression?: unknown } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          first?.attributeName === 'data-p-id' &&
+          first.expression === 'item.id' &&
+          nativeApply(nativeStringIncludes, callbackSource, ['sourceExpression'])
+        ) {
+          poisonHits += 1;
+          return [
+            {
+              param: {
+                attributeName:
+                  'data-p-id); globalThis.KOVO_HANDLER_BODY_INJECTION = true; //',
+                expression: 'item.id',
+                type: 'string',
+                value: '{item.id}',
+              },
+              sourceExpression: 'item.id',
+            },
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'item-button.tsx',
+        source: `
+import { component } from '@kovojs/core';
+import { track } from './analytics';
+export const ItemButton = component({
+  render: ({ item }) => <button onClick={() => track(item.id)}>Track</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_HANDLER_BODY_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
+
+  it('cannot inject server markup through handler-param attribute projection', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeStringIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedHandlerParamAttributeMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { attributeName?: unknown; expression?: unknown } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          first?.attributeName === 'data-p-quantity' &&
+          first.expression === 'item.quantity' &&
+          nativeApply(nativeStringIncludes, callbackSource, ['escapeAttribute'])
+        ) {
+          poisonHits += 1;
+          return [
+            'data-p-quantity="x"><img src=x data-injected=KOVO_PARAM_ATTRIBUTE_INJECTION><button data-p-rest="',
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'quantity-button.tsx',
+        source: `
+import { component } from '@kovojs/core';
+export const QuantityButton = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => state.count += item.quantity}>Add</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_PARAM_ATTRIBUTE_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
 });

@@ -65,6 +65,7 @@ const nativeStringLocaleCompare = NativeString.prototype.localeCompare;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeStatsIsDirectory = BuiltinStats.prototype.isDirectory;
 const nativeStatsIsFile = BuiltinStats.prototype.isFile;
@@ -655,6 +656,11 @@ export function compilerStringStartsWith(value: string, search: string): boolean
 export function compilerStringToLowerCase(value: string): string {
   assertCompilerSecurityIntrinsics();
   return apply(nativeStringToLowerCase, value, []);
+}
+
+export function compilerStringToUpperCase(value: string): string {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeStringToUpperCase, value, []);
 }
 
 export function compilerStringTrim(value: string): string {
