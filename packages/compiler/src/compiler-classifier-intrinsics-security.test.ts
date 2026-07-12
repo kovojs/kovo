@@ -1014,4 +1014,50 @@ export const Card = component({ render: () => <section><span>attacker</span></se
     expect(check?.actual).toContain('attacker');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot replace generated live-target renderer exports', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedLiveTargetExportMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as
+          | { component?: unknown; queryBindings?: unknown; target?: unknown }
+          | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          typeof first?.component === 'string' &&
+          Array.isArray(first.queryBindings) &&
+          typeof first.target === 'string' &&
+          nativeApply(nativeIncludes, callbackSource, ['liveTargetRendererExport'])
+        ) {
+          poisonHits += 1;
+          return ['globalThis.KOVO_LIVE_TARGET_EMIT_INJECTION = true;'] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'live-card.tsx',
+        source: `
+export const LiveCard = component({
+  queries: { product: productQuery },
+  render: ({ product }) => <section>{product.name}</section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_LIVE_TARGET_EMIT_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
 });

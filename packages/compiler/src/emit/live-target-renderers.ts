@@ -1,9 +1,27 @@
 import * as ts from 'typescript';
 
+import {
+  compilerCreateSet,
+  compilerJsonStringify,
+  compilerRegExpReplace,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringSlice,
+} from '../compiler-security-intrinsics.js';
 import type { LiveTargetFact } from '../types.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 
 ensureTypescriptRuntime(ts);
+
+const compilerTsCreateSourceFile = ts.createSourceFile;
+const compilerTsIsCallExpression = ts.isCallExpression;
+const compilerTsIsIdentifier = ts.isIdentifier;
+const compilerTsIsImportDeclaration = ts.isImportDeclaration;
+const compilerTsIsNamedImports = ts.isNamedImports;
+const compilerTsIsPropertyAccessExpression = ts.isPropertyAccessExpression;
+const compilerTsIsStringLiteral = ts.isStringLiteral;
+const compilerTsIsVariableStatement = ts.isVariableStatement;
 
 const liveTargetWireModule = '@kovojs/server/internal/wire';
 const liveTargetWireImports = [
@@ -21,47 +39,58 @@ export interface EmitLiveTargetRendererExportsOptions {
 export function appendLiveTargetRendererExports(
   options: EmitLiveTargetRendererExportsOptions,
 ): string {
-  if (options.liveTargetFacts.length === 0) return options.source;
+  const facts = compilerSnapshotDenseArray(options.liveTargetFacts, 'Live-target renderer facts');
+  if (facts.length === 0) return options.source;
 
   const sourceWithImport = insertLiveTargetRendererImport(options.source);
-  const exports = options.liveTargetFacts
-    .map((fact) =>
-      liveTargetRendererExport(
-        options.componentExpressionForFact?.(fact) ?? options.componentExpression,
-        fact,
-      ),
-    )
-    .join('\n\n');
+  const exports: string[] = [];
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = facts[index]!;
+    exports[exports.length] = liveTargetRendererExport(
+      options.componentExpressionForFact?.(fact) ?? options.componentExpression,
+      fact,
+    );
+  }
 
-  return `${sourceWithImport.trimEnd()}\n\n${exports}\n`;
+  return `${compilerRegExpReplace(/\s+$/g, sourceWithImport, '')}\n\n${joinRendererStrings(exports, '\n\n')}\n`;
 }
 
 function insertLiveTargetRendererImport(source: string): string {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = compilerTsCreateSourceFile(
     'lowered.tsx',
     source,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX,
   );
-  const wireImport = sourceFile.statements.find(
-    (statement) =>
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === liveTargetWireModule,
-  );
-  if (wireImport && ts.isImportDeclaration(wireImport)) {
+  let wireImport: ts.ImportDeclaration | undefined;
+  const statements = compilerSnapshotDenseArray(sourceFile.statements, 'Live-target source statements');
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (
+      compilerTsIsImportDeclaration(statement) &&
+      compilerTsIsStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === liveTargetWireModule
+    ) {
+      wireImport = statement;
+      break;
+    }
+  }
+  if (wireImport) {
     const augmentedSource = augmentLiveTargetRendererImport(source, wireImport);
     if (augmentedSource) return augmentedSource;
   }
 
-  const importDeclarationEnd =
-    sourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ?? 0;
+  let importDeclarationEnd = 0;
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (compilerTsIsImportDeclaration(statement)) importDeclarationEnd = statement.end;
+  }
   const importLine = `import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '${liveTargetWireModule}';\n`;
 
   if (importDeclarationEnd > 0) {
-    const prefix = source.slice(0, importDeclarationEnd);
-    const suffix = source.slice(importDeclarationEnd);
+    const prefix = compilerStringSlice(source, 0, importDeclarationEnd);
+    const suffix = compilerStringSlice(source, importDeclarationEnd);
     return `${prefix}\n${importLine}${suffix}`;
   }
 
@@ -73,20 +102,28 @@ function augmentLiveTargetRendererImport(
   declaration: ts.ImportDeclaration,
 ): string | null {
   const namedBindings = declaration.importClause?.namedBindings;
-  if (!namedBindings || !ts.isNamedImports(namedBindings)) return null;
+  if (!namedBindings || !compilerTsIsNamedImports(namedBindings)) return null;
 
-  const importedNames = new Set(namedBindings.elements.map((element) => element.name.text));
-  const missing = liveTargetWireImports.filter((name) => !importedNames.has(name));
+  const importedNames = compilerCreateSet<string>();
+  const elements = compilerSnapshotDenseArray(namedBindings.elements, 'Live-target named imports');
+  for (let index = 0; index < elements.length; index += 1) {
+    compilerSetAdd(importedNames, elements[index]!.name.text);
+  }
+  const missing: string[] = [];
+  for (let index = 0; index < liveTargetWireImports.length; index += 1) {
+    const name = liveTargetWireImports[index]!;
+    if (!compilerSetHas(importedNames, name)) missing[missing.length] = name;
+  }
   if (missing.length === 0) return source;
 
-  const insertion = `${namedBindings.elements.length > 0 ? ', ' : ''}${missing.join(', ')}`;
+  const insertion = `${elements.length > 0 ? ', ' : ''}${joinRendererStrings(missing, ', ')}`;
   const insertionPoint =
-    namedBindings.elements.length > 0
-      ? namedBindings.elements[namedBindings.elements.length - 1]?.end
+    elements.length > 0
+      ? elements[elements.length - 1]?.end
       : namedBindings.getStart() + 1;
   if (insertionPoint === undefined) return null;
 
-  return `${source.slice(0, insertionPoint)}${insertion}${source.slice(insertionPoint)}`;
+  return `${compilerStringSlice(source, 0, insertionPoint)}${insertion}${compilerStringSlice(source, insertionPoint)}`;
 }
 
 function liveTargetRendererExport(componentExpression: string, fact: LiveTargetFact): string {
@@ -94,27 +131,30 @@ function liveTargetRendererExport(componentExpression: string, fact: LiveTargetF
   const queries = liveTargetRendererQueries(fact);
   const optionLines = [
     `  component: ${componentExpression},`,
-    `  componentId: ${JSON.stringify(fact.component)},`,
-    ...(queries ? [queries] : []),
+    `  componentId: ${rendererJsonSource(fact.component, 'Live-target component id')},`,
   ];
+  if (queries) optionLines[optionLines.length] = queries;
 
   return `export const ${exportName} = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
-${optionLines.join('\n')}
+${joinRendererStrings(optionLines, '\n')}
 }));`;
 }
 
 function liveTargetRendererExportName(componentExpression: string): string {
-  return `${componentExpression.replaceAll(/[^A-Za-z0-9_$]/g, '_')}$liveTargetRenderer`;
+  return `${compilerRegExpReplace(/[^A-Za-z0-9_$]/g, componentExpression, '_')}$liveTargetRenderer`;
 }
 
 function liveTargetRendererQueries(fact: LiveTargetFact): string {
-  const bindings = fact.queryBindings
-    .map(liveTargetRendererQueryBinding)
-    .filter((binding): binding is string => binding !== null);
+  const facts = compilerSnapshotDenseArray(fact.queryBindings, 'Live-target query bindings');
+  const bindings: string[] = [];
+  for (let index = 0; index < facts.length; index += 1) {
+    const binding = liveTargetRendererQueryBinding(facts[index]!);
+    if (binding !== null) bindings[bindings.length] = binding;
+  }
   if (bindings.length === 0) return '';
 
   return `  queries: [
-${bindings.join(',\n')}
+${joinRendererStrings(bindings, ',\n')}
   ],`;
 }
 
@@ -127,11 +167,11 @@ function liveTargetRendererQueryBinding(
     binding.argsExpression && binding.argsParam
       ? `, args: (${binding.argsParam}) => ${binding.argsExpression}`
       : '';
-  return `    { name: ${JSON.stringify(binding.name)}, query: ${binding.queryExpression}${args} }`;
+  return `    { name: ${rendererJsonSource(binding.name, 'Live-target query name')}, query: ${binding.queryExpression}${args} }`;
 }
 
 function isExecutableQueryExpression(expressionSource: string): boolean {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = compilerTsCreateSourceFile(
     'query-binding-expression.ts',
     `const __query = ${expressionSource};`,
     ts.ScriptTarget.Latest,
@@ -139,7 +179,7 @@ function isExecutableQueryExpression(expressionSource: string): boolean {
     ts.ScriptKind.TS,
   );
   const statement = sourceFile.statements[0];
-  if (!statement || !ts.isVariableStatement(statement)) return false;
+  if (!statement || !compilerTsIsVariableStatement(statement)) return false;
   const initializer = statement.declarationList.declarations[0]?.initializer;
   if (!initializer) return false;
 
@@ -147,7 +187,24 @@ function isExecutableQueryExpression(expressionSource: string): boolean {
 }
 
 function isRuntimeQueryReference(expression: ts.Expression): boolean {
-  if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) return true;
-  if (ts.isCallExpression(expression)) return isRuntimeQueryReference(expression.expression);
+  if (compilerTsIsIdentifier(expression) || compilerTsIsPropertyAccessExpression(expression)) {
+    return true;
+  }
+  if (compilerTsIsCallExpression(expression)) return isRuntimeQueryReference(expression.expression);
   return false;
+}
+
+function joinRendererStrings(values: readonly string[], separator: string): string {
+  let output = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) output += separator;
+    output += values[index]!;
+  }
+  return output;
+}
+
+function rendererJsonSource(value: unknown, label: string): string {
+  const source = compilerJsonStringify(value);
+  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  return source;
 }
