@@ -10,6 +10,7 @@ import {
 } from './response.js';
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { formLikeToRecord } from './schema.js';
+import { requestFormDataEntries, requestIsFormData } from './request-body-intrinsics.js';
 import {
   createWitnessMap,
   witnessDefineProperty,
@@ -35,12 +36,7 @@ import {
 } from './request-state-intrinsics.js';
 
 const NativeArrayBuffer = ArrayBuffer;
-const NativeFormData = FormData;
 const NativeUint8Array = Uint8Array;
-const nativeFormDataAppend = witnessGetOwnPropertyDescriptor(FormData.prototype, 'append')
-  ?.value as unknown;
-const nativeFormDataForEach = witnessGetOwnPropertyDescriptor(FormData.prototype, 'forEach')
-  ?.value as unknown;
 const nativeSubtleCrypto = globalThis.crypto.subtle;
 const subtleCryptoPrototype = witnessGetPrototypeOf(nativeSubtleCrypto);
 const nativeSubtleDigest =
@@ -49,20 +45,6 @@ const nativeSubtleDigest =
     : witnessGetOwnPropertyDescriptor(subtleCryptoPrototype, 'digest')?.value;
 if (typeof nativeSubtleDigest !== 'function') {
   throw new TypeError('Kovo replay upload digest controls are unavailable.');
-}
-if (typeof nativeFormDataAppend !== 'function' || typeof nativeFormDataForEach !== 'function') {
-  throw new TypeError('Kovo replay FormData controls are unavailable.');
-}
-const formDataControl = new NativeFormData();
-witnessReflectApply(nativeFormDataAppend, formDataControl, ['kovo-control', 'accepted']);
-let formDataControlSound = false;
-witnessReflectApply(nativeFormDataForEach, formDataControl, [
-  (value: FormDataEntryValue, name: string): void => {
-    if (name === 'kovo-control' && value === 'accepted') formDataControlSound = true;
-  },
-]);
-if (!formDataControlSound) {
-  throw new TypeError('Kovo replay FormData controls failed their semantic check.');
 }
 const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const subtleDigestControl = witnessReflectApply<Promise<ArrayBuffer>>(
@@ -744,22 +726,15 @@ function snapshotReplayRecord(
 }
 
 function isNativeFormData(value: unknown): value is FormData {
-  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
-  try {
-    witnessReflectApply(nativeFormDataForEach as Function, value, [() => undefined]);
-    return true;
-  } catch {
-    return false;
-  }
+  return requestIsFormData(value);
 }
 
 function snapshotFormDataEntries(value: FormData): Array<readonly [string, FormDataEntryValue]> {
   const entries: Array<readonly [string, FormDataEntryValue]> = [];
-  witnessReflectApply(nativeFormDataForEach as Function, value, [
-    (entry: FormDataEntryValue, name: string): void => {
-      appendReplayValue(entries, [name, entry]);
-    },
-  ]);
+  const source = requestFormDataEntries(value);
+  for (let index = 0; index < source.length; index += 1) {
+    appendReplayValue(entries, source[index]!);
+  }
   return entries;
 }
 
