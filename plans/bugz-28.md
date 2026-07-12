@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |    11 | C1-C11 |
+| Critical |    12 | C1-C12 |
 | High     |    16 | H1-H16 |
 | Medium   |     8 | M1-M8 |
 
@@ -110,6 +110,17 @@ This is an active closure ledger; `SPEC.md` remains normative.
     posture, signer defaults, and base-path facts at endpoint/context construction; later mutation,
     getters/proxies, and scalar/URL collection poison cannot replace the authority or make request
     derivation disagree with the exact key read from storage.
+
+- [ ] **C12 - Mutable FormData traversal can substitute a cached victim CSRF token.**
+      `packages/server/src/{untrusted-request-body,schema}.ts`
+  - A real cross-origin-safe POST containing only `v1.attacker.attacker` was parsed after a selective
+    late `FormData.prototype.entries` override substituted a cached genuine victim token. The
+    untrusted carrier wrapped those forged values and `validateCsrfToken()` returned true for the
+    victim session despite never receiving the genuine token bytes.
+  - **Acceptance:** Request/header/body/clone methods, content-type classification, JSON decoding,
+    FormData identity and traversal, recursive tagging/reveal, and record construction use
+    boot-pinned, semantically checked exact-value controls; late/import-order poison cannot replace
+    CSRF or schema input bytes while genuine JSON/form/multipart parsing remains intact.
 
 ## High
 
@@ -323,8 +334,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C11, H15-H16, and M7-M8 are active
-capability, task/guard, request-limit, and replay fixes. Integrated evidence is green at
+The remediation pass remains intentionally non-zero: C10-C12, H15-H16, and M7-M8 are active
+capability, request-carrier, task/guard, request-limit, and replay fixes. Integrated evidence is
+green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
 route/handler/secret, and 18 password tests.
