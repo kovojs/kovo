@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { isSecret, revealSecret } from '@kovojs/core';
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import {
   createSecretBoxingReadDb,
   declareSecretReadCapability,
@@ -119,11 +122,12 @@ describe('secret read boundary', () => {
   });
 
   it('serves proven non-secret projections from a secret table', async () => {
+    const rows = [{ publicLabel: 'public label' }];
     const db = createSecretBoxingReadDb(
       builderDb(
         queryObject(
           'select upper(label) as publicLabel from secrets',
-          [{ publicLabel: 'public label' }],
+          rows,
           {
             publicLabel: { queryChunks: [{ value: ['upper('] }, publicColumn, { value: [')'] }] },
           },
@@ -131,6 +135,7 @@ describe('secret read boundary', () => {
       ),
       metadata(),
       {
+        executeSql: () => rows,
         sqliteColumnOrigins: originClient([{ column: null, name: 'publicLabel', table: null }]),
       },
     );
@@ -271,14 +276,16 @@ describe('secret read boundary', () => {
   });
 
   it('serves aggregates over non-secret tables when SQLite origin is opaque', async () => {
+    const rows = [{ total: 42 }];
     const db = createSecretBoxingReadDb(
       builderDb(
-        queryObject('select sum(amount) as total from metrics', [{ total: 42 }], {
+        queryObject('select sum(amount) as total from metrics', rows, {
           total: { queryChunks: [{ value: ['sum('] }, metricColumn, { value: [')'] }] },
         }),
       ),
       metadata(),
       {
+        executeSql: () => rows,
         sqliteColumnOrigins: originClient([{ column: null, name: 'total', table: null }]),
       },
     );
@@ -305,6 +312,99 @@ describe('secret read boundary', () => {
 
     expect(isSecret(row.topSecret)).toBe(true);
     expect(revealSecret(row.topSecret, 'test')).toBe('z');
+  });
+
+  it('executes the exact SQL carrier classified for an async builder', async () => {
+    let toSqlCalls = 0;
+    let originalThenReached = false;
+    const query = {
+      then(onFulfilled?: (value: unknown) => unknown) {
+        originalThenReached = true;
+        return Promise.resolve(onFulfilled?.([{ leaked: 'victim-secret' }]));
+      },
+      toSQL() {
+        toSqlCalls += 1;
+        return {
+          sql:
+            toSqlCalls === 1
+              ? 'select label as leaked from public_data'
+              : 'select classified as leaked from secrets',
+        };
+      },
+    };
+    const executed: string[] = [];
+    const db = createSecretBoxingReadDb(builderDb(query), metadata(), {
+      executeSql(statement) {
+        executed.push(statement.text);
+        return [{ leaked: 'public-label' }];
+      },
+      sqliteColumnOrigins: originClient([
+        { column: 'label', name: 'leaked', table: 'public_data' },
+      ]),
+    });
+
+    const [row] = await db.select();
+
+    expect(row.leaked).toBe('public-label');
+    expect(toSqlCalls).toBe(1);
+    expect(originalThenReached).toBe(false);
+    expect(executed).toEqual(['select label as leaked from public_data']);
+  });
+
+  it('pins the SQLite origin client before application mutation', async () => {
+    const client = originClient([
+      { column: 'classified', name: 'leaked', table: 'secrets' },
+    ]);
+    const rows = [{ leaked: 'victim-secret' }];
+    const db = createSecretBoxingReadDb(
+      builderDb(queryObject('select classified as leaked from secrets', rows)),
+      metadata(),
+      { executeSql: () => rows, sqliteColumnOrigins: client },
+    );
+    client.prepare = () => ({
+      columns: () => [{ column: 'label', name: 'leaked', table: 'public_data' }],
+    });
+
+    const [row] = await db.select();
+
+    expect(isSecret(row.leaked)).toBe(true);
+    expect(revealSecret(row.leaked, 'test')).toBe('victim-secret');
+  });
+
+  it('boxes every derived value when no exact builder execution path exists', async () => {
+    const db = createSecretBoxingReadDb(
+      builderDb(
+        queryObject('select max(classified) as leaked from secrets', [
+          { leaked: 'victim-secret' },
+        ]),
+      ),
+      metadata(),
+    );
+
+    const [row] = await db.select();
+
+    expect(isSecret(row)).toBe(true);
+    expect(revealSecret(row, 'test')).toEqual({ leaked: 'victim-secret' });
+  });
+
+  it('classifies and boxes a real synchronous SQLite all terminal', () => {
+    const client = new Database(':memory:');
+    try {
+      client.exec(
+        "create table secrets (classified text not null); insert into secrets values ('victim-secret')",
+      );
+      const secrets = sqliteTable('secrets', { classified: text('classified').notNull() });
+      const db = createSecretBoxingReadDb(drizzle({ client }), metadata(), {
+        sqliteColumnOrigins: client,
+      });
+
+      const [row] = db.select({ alias: secrets.classified }).from(secrets).all();
+
+      expect(isSecret(row.alias)).toBe(true);
+      expect(revealSecret(row.alias, 'test')).toBe('victim-secret');
+    } finally {
+      client.close();
+    }
   });
 
   it('refuses raw secret-table reads without a declared capability', () => {

@@ -9,6 +9,7 @@ import {
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
   witnessIsArray,
   witnessMapForEach,
   witnessMapGet,
@@ -28,6 +29,7 @@ import {
 
 const NativePromise = globalThis.Promise;
 const nativePromiseThen = witnessReflectGet(NativePromise.prototype, 'then') as Function;
+const nativePromiseResolve = witnessReflectGet(NativePromise, 'resolve') as Function;
 const nativeFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 
 /** Runtime provenance for a database column participating in read-confidentiality decisions. */
@@ -78,11 +80,21 @@ export interface SecretReadSqliteColumnOrigin {
 /** Minimal SQLite client surface used to ask the driver for result-column origins. */
 export interface SecretReadSqliteColumnOriginClient {
   /** Prepare SQL text so column origin metadata can be inspected before result boxing. */
-  prepare(sql: string): { columns?: () => unknown };
+  prepare(sql: string): {
+    all?: (...params: unknown[]) => unknown;
+    columns?: () => unknown;
+    get?: (...params: unknown[]) => unknown;
+    values?: (...params: unknown[]) => unknown;
+  };
 }
 
 /** Options for the server-owned read-confidentiality boundary wrapper. */
 export interface SecretReadBoundaryOptions {
+  /** Framework adapter executor used to bind an async builder verdict to the exact SQL carrier. */
+  executeSql?: (
+    statement: Readonly<{ params: readonly unknown[]; text: string }>,
+    mode: SecretReadExecutionMode,
+  ) => unknown;
   /** Optional privileged read handle for audited raw secret-read capabilities. */
   privilegedDb?: object;
   /** How to handle raw SQL referencing a secret table without a declared capability. */
@@ -109,6 +121,7 @@ interface SqlCarrier {
 }
 
 interface SecretReadBoundary {
+  boxEveryResultValue: boolean;
   declaredSecretRead: boolean;
   opaqueResultKeys: ReadonlySet<string>;
   rawWholeRowSecret: boolean;
@@ -116,6 +129,14 @@ interface SecretReadBoundary {
   secretColumnKeys: ReadonlySet<string>;
   secretColumnNames: ReadonlySet<string>;
   secretColumnScopeKnown: boolean;
+}
+
+export type SecretReadExecutionMode = 'all' | 'get' | 'values';
+
+interface ExactSecretReadExecution {
+  readonly columns: readonly SecretReadSqliteColumnOrigin[] | undefined;
+  readonly exactColumns: boolean;
+  execute(): unknown;
 }
 
 const declaredSecretReadCapabilities = createWitnessWeakMap<object, DeclaredSecretReadCapability>();
@@ -182,6 +203,7 @@ export function createSecretBoxingReadDb<Db extends object>(
   options: SecretReadBoundaryOptions = {},
 ): Db {
   const pinnedMetadata = snapshotSecretReadMetadata(metadata);
+  const pinnedOptions = snapshotSecretReadBoundaryOptions(options);
   return new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
@@ -194,11 +216,11 @@ export function createSecretBoxingReadDb<Db extends object>(
           args,
           pinnedMetadata,
           isDirectSqlReadMethod(prop),
-          options,
+          pinnedOptions,
         );
         const readTarget =
-          boundary.declaredSecretRead && options.privilegedDb !== undefined
-            ? (options.privilegedDb as Record<PropertyKey, unknown>)
+          boundary.declaredSecretRead && pinnedOptions.privilegedDb !== undefined
+            ? (pinnedOptions.privilegedDb as Record<PropertyKey, unknown>)
             : target;
         const readMethod = witnessReflectGet(readTarget, prop, receiver);
         if (typeof readMethod !== 'function') return readMethod;
@@ -206,11 +228,157 @@ export function createSecretBoxingReadDb<Db extends object>(
           witnessReflectApply(readMethod, readTarget, args),
           pinnedMetadata,
           boundary,
-          options,
+          pinnedOptions,
         );
       };
     },
   }) as Db;
+}
+
+function snapshotSecretReadBoundaryOptions(
+  options: SecretReadBoundaryOptions,
+): SecretReadBoundaryOptions {
+  const rawSecretTableRead = optionalOwnDataValue(options, 'rawSecretTableRead');
+  if (
+    rawSecretTableRead !== undefined &&
+    rawSecretTableRead !== 'engine' &&
+    rawSecretTableRead !== 'throw'
+  ) {
+    throw new TypeError('Secret read raw-table posture must be engine or throw.');
+  }
+  const privilegedDb = optionalOwnDataValue(options, 'privilegedDb');
+  if (privilegedDb !== undefined && !isObjectLike(privilegedDb)) {
+    throw new TypeError('Secret read privilegedDb must be an object handle.');
+  }
+  const originClient = optionalOwnDataValue(options, 'sqliteColumnOrigins');
+  if (originClient !== undefined && !isObjectLike(originClient)) {
+    throw new TypeError('Secret read SQLite origins must be an object handle.');
+  }
+  const executor = optionalOwnDataValue(options, 'executeSql');
+  if (executor !== undefined && typeof executor !== 'function') {
+    throw new TypeError('Secret read exact executor must be a function.');
+  }
+  const snapshot: SecretReadBoundaryOptions = {};
+  if (typeof executor === 'function') {
+    witnessDefineProperty(snapshot, 'executeSql', {
+      value(
+        statement: Readonly<{ params: readonly unknown[]; text: string }>,
+        mode: SecretReadExecutionMode,
+      ) {
+        return witnessReflectApply(executor, options, [statement, mode]);
+      },
+    });
+  }
+  if (privilegedDb !== undefined) {
+    witnessDefineProperty(snapshot, 'privilegedDb', { value: privilegedDb });
+  }
+  if (rawSecretTableRead !== undefined) {
+    witnessDefineProperty(snapshot, 'rawSecretTableRead', { value: rawSecretTableRead });
+  }
+  if (originClient !== undefined) {
+    witnessDefineProperty(snapshot, 'sqliteColumnOrigins', {
+      value: pinSqliteColumnOriginClient(originClient),
+    });
+  }
+  return witnessFreeze(snapshot);
+}
+
+function pinSqliteColumnOriginClient(value: object): SecretReadSqliteColumnOriginClient {
+  const prepare = inheritedFunctionDataProperty(value, 'prepare');
+  return witnessFreeze({
+    prepare(sql: string) {
+      const statement = witnessReflectApply<unknown>(prepare, value, [sql]);
+      if (!isObjectLike(statement)) {
+        throw new TypeError('SQLite prepare did not return a statement object.');
+      }
+      const facade = witnessCreateNullRecord<Function>();
+      const methods = ['all', 'columns', 'get', 'values'] as const;
+      for (let index = 0; index < methods.length; index += 1) {
+        const methodDescriptor = witnessGetOwnPropertyDescriptor(methods, index);
+        if (methodDescriptor === undefined || !('value' in methodDescriptor)) {
+          throw new TypeError('SQLite statement method list integrity failed.');
+        }
+        const method = optionalInheritedFunctionDataProperty(statement, methodDescriptor.value);
+        if (method === undefined) continue;
+        witnessDefineProperty(facade, methodDescriptor.value, {
+          value:
+            methodDescriptor.value === 'columns'
+              ? () => snapshotSqliteColumnOrigins(witnessReflectApply(method, statement, []))
+              : (...params: unknown[]) => witnessReflectApply(method, statement, params),
+        });
+      }
+      return witnessFreeze(facade);
+    },
+  });
+}
+
+function inheritedFunctionDataProperty(value: object, property: PropertyKey): Function {
+  const result = optionalInheritedFunctionDataProperty(value, property);
+  if (result === undefined) {
+    throw new TypeError(`${String(property)} must be an inherited data function.`);
+  }
+  return result;
+}
+
+function optionalInheritedFunctionDataProperty(
+  value: object,
+  property: PropertyKey,
+): Function | undefined {
+  let current: object | null = value;
+  while (current !== null) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor)) {
+        throw new TypeError(`${String(property)} cannot be accessor-backed.`);
+      }
+      return typeof descriptor.value === 'function' ? descriptor.value : undefined;
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  return undefined;
+}
+
+function snapshotSqliteColumnOrigins(
+  value: unknown,
+): readonly SecretReadSqliteColumnOrigin[] | undefined {
+  if (!witnessIsArray(value)) return undefined;
+  const snapshot: SecretReadSqliteColumnOrigin[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined || !('value' in descriptor) || !isObjectLike(descriptor.value)) {
+      throw new TypeError('SQLite column origins must be a dense object array.');
+    }
+    const origin = descriptor.value;
+    const column = optionalOwnDataValue(origin, 'column');
+    const name = optionalOwnDataValue(origin, 'name');
+    const table = optionalOwnDataValue(origin, 'table');
+    const fields = [column, name, table];
+    for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
+      const fieldDescriptor = witnessGetOwnPropertyDescriptor(fields, fieldIndex);
+      if (fieldDescriptor === undefined || !('value' in fieldDescriptor)) {
+        throw new TypeError('SQLite column origin field list integrity failed.');
+      }
+      const item = fieldDescriptor.value;
+      if (item !== undefined && item !== null && typeof item !== 'string') {
+        throw new TypeError('SQLite column origin fields must be strings or null.');
+      }
+    }
+    const pinned = witnessCreateNullRecord<string | null | undefined>();
+    witnessDefineProperty(pinned, 'column', { enumerable: true, value: column });
+    witnessDefineProperty(pinned, 'name', { enumerable: true, value: name });
+    witnessDefineProperty(pinned, 'table', { enumerable: true, value: table });
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: witnessFreeze(pinned),
+      writable: true,
+    });
+  }
+  return witnessFreeze(snapshot);
+}
+
+function isObjectLike(value: unknown): value is object {
+  return (typeof value === 'object' || typeof value === 'function') && value !== null;
 }
 
 /**
@@ -285,6 +453,7 @@ function snapshotSecretReadMetadata(metadata: SecretReadMetadata): SecretReadMet
 function snapshotSecretReadBoundary(boundary: SecretReadBoundary): SecretReadBoundary {
   if (witnessWeakSetHas(pinnedSecretReadBoundaries, boundary as object)) return boundary;
   const snapshot = witnessFreeze({
+    boxEveryResultValue: ownBooleanDataValue(boundary, 'boxEveryResultValue'),
     declaredSecretRead: ownBooleanDataValue(boundary, 'declaredSecretRead'),
     opaqueResultKeys: snapshotStringSet(
       ownDataValue(boundary, 'opaqueResultKeys'),
@@ -378,7 +547,10 @@ export const boxSecretReadRows = securityClassifier(
     if (witnessIsArray(value)) {
       return mapDenseReadArray(value, (entry) => boxSecretReadRows(entry, metadata, boundary));
     }
-    if (value === null || typeof value !== 'object') return value;
+    if (value === null || value === undefined) return value;
+    if (typeof value !== 'object') {
+      return boundary.boxEveryResultValue ? secret(value) : value;
+    }
     if (boundary.rawWholeRowSecret && witnessIsArray((value as { rows?: unknown }).rows)) {
       return {
         ...value,
@@ -410,7 +582,8 @@ export const boxSecretReadRows = securityClassifier(
       const boxedValue =
         item === null || item === undefined
           ? item
-          : witnessSetHas(boundary.secretResultKeys as Set<string>, key) ||
+          : boundary.boxEveryResultValue ||
+              witnessSetHas(boundary.secretResultKeys as Set<string>, key) ||
               witnessSetHas(boundary.opaqueResultKeys as Set<string>, key) ||
               witnessSetHas(secretColumnKeys as Set<string>, key) ||
               witnessSetHas(secretColumnNames as Set<string>, key)
@@ -463,7 +636,8 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
     statement: unknown,
     sql: string,
     metadata: SecretReadMetadata,
-    client: SecretReadSqliteColumnOriginClient,
+    client: SecretReadSqliteColumnOriginClient | undefined,
+    exactColumns?: readonly SecretReadSqliteColumnOrigin[],
   ): SecretReadBoundary {
     const secretResultKeys = createWitnessSet<string>();
     const opaqueResultKeys = createWitnessSet<string>();
@@ -471,7 +645,7 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
     const selectedKeys = selectedResultKeysFromValue(statement);
     const referencesSecretTable = sqlReferencesSecretTable(sql, metadata.secretTableNames);
     const secretBearingCompound = sqlHasCompoundSelect(sql) && referencesSecretTable;
-    const columns = sqliteResultColumns(client, sql);
+    const columns = exactColumns ?? (client === undefined ? undefined : sqliteResultColumns(client, sql));
 
     if (columns === undefined) {
       return referencesSecretTable
@@ -560,21 +734,62 @@ function wrapReadSurface(
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
       if (prop === 'then' && typeof item === 'function') {
+        const carrier = sqlCarrierFromValue(target, []);
+        const exact =
+          carrier === undefined
+            ? undefined
+            : exactSecretReadExecution(target, carrier, 'all', options);
         const boundary = mergeReadBoundaries(
           inheritedBoundary,
-          readBoundaryForQuery(target, metadata, options),
+          readBoundaryForQuery(target, carrier, metadata, options, exact),
         );
         return (
           onFulfilled?: (value: unknown) => unknown,
           onRejected?: (reason: unknown) => unknown,
-        ) =>
-          witnessReflectApply(item, target, [
-            (result: unknown) => onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
+        ) => {
+          if (exact !== undefined) {
+            const settled = witnessReflectApply<Promise<unknown>>(
+              nativePromiseResolve,
+              NativePromise,
+              [exact.execute()],
+            );
+            return witnessReflectApply(nativePromiseThen, settled, [
+              (result: unknown) =>
+                onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
+              onRejected,
+            ]);
+          }
+          const fallback = failClosedExecutionBoundary(boundary);
+          return witnessReflectApply(item, target, [
+            (result: unknown) =>
+              onFulfilled?.(boxSecretReadRows(result, metadata, fallback)),
             onRejected,
           ]);
+        };
       }
       if (typeof item !== 'function') return item;
       return (...args: unknown[]) => {
+        const terminalMode = readBuilderTerminalMode(prop, args);
+        if (terminalMode !== undefined) {
+          const carrier = sqlCarrierFromValue(target, []);
+          const exact =
+            carrier === undefined
+              ? undefined
+              : exactSecretReadExecution(target, carrier, terminalMode, options);
+          const boundary = mergeReadBoundaries(
+            inheritedBoundary,
+            readBoundaryForQuery(target, carrier, metadata, options, exact),
+          );
+          const result =
+            exact === undefined
+              ? witnessReflectApply(item, target, args)
+              : exact.execute();
+          return boxSecretReadExecutionResult(
+            result,
+            metadata,
+            exact === undefined ? failClosedExecutionBoundary(boundary) : boundary,
+          );
+        }
         const boundary = mergeReadBoundaries(
           inheritedBoundary,
           readBoundaryForArgs(args, metadata, false, options),
@@ -592,19 +807,157 @@ function wrapReadSurface(
 
 function readBoundaryForQuery(
   value: unknown,
+  carrier: SqlCarrier | undefined,
   metadata: SecretReadMetadata,
   options: SecretReadBoundaryOptions,
+  exact: ExactSecretReadExecution | undefined,
 ): SecretReadBoundary {
-  const carrier = sqlCarrierFromValue(value, []);
-  if (carrier === undefined || options.sqliteColumnOrigins === undefined) {
-    return emptyReadBoundary();
+  if (carrier === undefined) return failClosedExecutionBoundary(emptyReadBoundary());
+  if (exact?.exactColumns === true) {
+    return sqliteSecretReadBoundaryForStatement(
+      value,
+      carrier.text,
+      metadata,
+      undefined,
+      exact.columns,
+    );
   }
-  return sqliteSecretReadBoundaryForStatement(
-    value,
-    carrier.text,
-    metadata,
-    options.sqliteColumnOrigins,
-  );
+  return options.sqliteColumnOrigins === undefined
+    ? fallbackReadBoundaryForSql(carrier.text, metadata)
+    : sqliteSecretReadBoundaryForStatement(
+        value,
+        carrier.text,
+        metadata,
+        options.sqliteColumnOrigins,
+      );
+}
+
+function readBuilderTerminalMode(
+  property: PropertyKey,
+  args: readonly unknown[],
+): SecretReadExecutionMode | undefined {
+  if (args.length !== 0) return undefined;
+  if (property === 'get') return 'get';
+  if (property === 'values') return 'values';
+  return property === 'all' || property === 'execute' ? 'all' : undefined;
+}
+
+function exactSecretReadExecution(
+  query: unknown,
+  carrier: SqlCarrier,
+  mode: SecretReadExecutionMode,
+  options: SecretReadBoundaryOptions,
+): ExactSecretReadExecution | undefined {
+  if (options.sqliteColumnOrigins !== undefined) {
+    try {
+      const statement = options.sqliteColumnOrigins.prepare(carrier.text);
+      const columnsMethod = optionalInheritedFunctionDataProperty(statement, 'columns');
+      const executionMethod = optionalInheritedFunctionDataProperty(statement, mode);
+      if (executionMethod !== undefined) {
+        const columns =
+          columnsMethod === undefined
+            ? undefined
+            : snapshotSqliteColumnOrigins(
+                witnessReflectApply(columnsMethod, statement, []),
+              );
+        return witnessFreeze({
+          columns,
+          exactColumns: true,
+          execute: () =>
+            mapExactSqliteReadResult(
+              witnessReflectApply(executionMethod, statement, carrier.params),
+              query,
+              columns,
+              mode,
+            ),
+        });
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  if (options.executeSql === undefined) return undefined;
+  const executeSql = options.executeSql;
+  return witnessFreeze({
+    columns: undefined,
+    exactColumns: false,
+    execute: () => executeSql(carrier, mode),
+  });
+}
+
+function mapExactSqliteReadResult(
+  result: unknown,
+  query: unknown,
+  columns: readonly SecretReadSqliteColumnOrigin[] | undefined,
+  mode: SecretReadExecutionMode,
+): unknown {
+  if (columns === undefined || mode === 'values') return result;
+  const selectedKeys = selectedResultKeysFromValue(query);
+  if (selectedKeys.length !== columns.length) return result;
+  if (witnessIsArray(result)) {
+    return mapDenseReadArray(result, (row) =>
+      mapExactSqliteReadRow(row, selectedKeys, columns),
+    );
+  }
+  return mapExactSqliteReadRow(result, selectedKeys, columns);
+}
+
+function mapExactSqliteReadRow(
+  row: unknown,
+  selectedKeys: readonly string[],
+  columns: readonly SecretReadSqliteColumnOrigin[],
+): unknown {
+  if (!isObjectLike(row)) return row;
+  const mapped = witnessCreateNullRecord();
+  for (let index = 0; index < columns.length; index += 1) {
+    const columnDescriptor = witnessGetOwnPropertyDescriptor(columns, index);
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(selectedKeys, index);
+    if (
+      columnDescriptor === undefined ||
+      !('value' in columnDescriptor) ||
+      keyDescriptor === undefined ||
+      !('value' in keyDescriptor)
+    ) {
+      throw new TypeError('SQLite exact read projection must be dense.');
+    }
+    const sourceName = columnDescriptor.value.name;
+    if (typeof sourceName !== 'string') return row;
+    const valueDescriptor = witnessGetOwnPropertyDescriptor(row, sourceName);
+    if (valueDescriptor === undefined || !('value' in valueDescriptor)) return row;
+    witnessDefineProperty(mapped, keyDescriptor.value, {
+      configurable: true,
+      enumerable: true,
+      value: valueDescriptor.value,
+      writable: true,
+    });
+  }
+  return mapped;
+}
+
+function boxSecretReadExecutionResult(
+  result: unknown,
+  metadata: SecretReadMetadata,
+  boundary: SecretReadBoundary,
+): unknown {
+  return result !== null && typeof result === 'object' && isNativePromise(result)
+    ? witnessReflectApply(nativePromiseThen, result, [
+        (value: unknown) => boxSecretReadRows(value, metadata, boundary),
+      ])
+    : boxSecretReadRows(result, metadata, boundary);
+}
+
+function failClosedExecutionBoundary(boundary: SecretReadBoundary): SecretReadBoundary {
+  const empty = emptyReadBoundary();
+  return mergeReadBoundaries(boundary, {
+    boxEveryResultValue: true,
+    declaredSecretRead: empty.declaredSecretRead,
+    opaqueResultKeys: empty.opaqueResultKeys,
+    rawWholeRowSecret: empty.rawWholeRowSecret,
+    secretColumnKeys: empty.secretColumnKeys,
+    secretColumnNames: empty.secretColumnNames,
+    secretColumnScopeKnown: empty.secretColumnScopeKnown,
+    secretResultKeys: empty.secretResultKeys,
+  });
 }
 
 function readBoundaryForArgs(
@@ -678,6 +1031,7 @@ function mergeReadBoundaries(
   right: SecretReadBoundary,
 ): SecretReadBoundary {
   return {
+    boxEveryResultValue: left.boxEveryResultValue || right.boxEveryResultValue,
     declaredSecretRead: left.declaredSecretRead || right.declaredSecretRead,
     opaqueResultKeys: unionSets(left.opaqueResultKeys, right.opaqueResultKeys),
     rawWholeRowSecret: left.rawWholeRowSecret || right.rawWholeRowSecret,
@@ -690,6 +1044,7 @@ function mergeReadBoundaries(
 
 function emptyReadBoundary(): SecretReadBoundary {
   const boundary = witnessFreeze({
+    boxEveryResultValue: false,
     declaredSecretRead: false,
     opaqueResultKeys: createWitnessSet<string>(),
     rawWholeRowSecret: false,
@@ -974,27 +1329,53 @@ function isDirectSqlReadMethod(prop: PropertyKey): boolean {
 }
 
 function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCarrier | undefined {
-  if (typeof value === 'string') return { params, text: value };
-  const toSQL = (value as { toSQL?: unknown }).toSQL;
-  if (typeof toSQL === 'function') {
+  if (typeof value === 'string') {
+    return witnessFreeze({ params: snapshotSqlCarrierParams(params), text: value });
+  }
+  const toSQL = isObjectLike(value)
+    ? optionalInheritedFunctionDataProperty(value, 'toSQL')
+    : undefined;
+  if (toSQL !== undefined && isObjectLike(value)) {
     try {
-      const result = witnessReflectApply<unknown>(toSQL, value, []) as {
-        params?: unknown;
-        sql?: unknown;
-      };
-      if (typeof result?.sql === 'string') {
-        return {
-          params: witnessIsArray(result.params) ? result.params : params,
-          text: result.sql,
-        };
+      const result = witnessReflectApply<unknown>(toSQL, value, []);
+      if (isObjectLike(result)) {
+        const sql = optionalOwnDataValue(result, 'sql');
+        const resultParams = optionalOwnDataValue(result, 'params');
+        if (typeof sql === 'string') {
+          return witnessFreeze({
+            params: snapshotSqlCarrierParams(
+              witnessIsArray(resultParams) ? resultParams : params,
+            ),
+            text: sql,
+          });
+        }
       }
     } catch {
       return undefined;
     }
   }
   const text = sqlTextFromValue(value);
-  if (text !== undefined) return { params, text };
+  if (text !== undefined) {
+    return witnessFreeze({ params: snapshotSqlCarrierParams(params), text });
+  }
   return undefined;
+}
+
+function snapshotSqlCarrierParams(params: readonly unknown[]): readonly unknown[] {
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < params.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(params, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Secret read SQL parameters must be a dense own-data array.');
+    }
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return witnessFreeze(snapshot);
 }
 
 function sqlTextFromValue(value: unknown): string | undefined {

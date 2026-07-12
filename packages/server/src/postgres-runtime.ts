@@ -30,6 +30,10 @@ import {
 } from './managed-db.js';
 import { requestPassedRoleGuard } from './guards.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
+import {
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+} from './security-witness-intrinsics.js';
 import { ensureRecurringTaskSchema } from './task-cron.js';
 import {
   createDurableTaskSqlExecutor,
@@ -2379,9 +2383,28 @@ function createRequestScopedReadonlyDb(
   };
   const readOptions = crossOwnerRead === undefined ? { rawRead } : { crossOwnerRead, rawRead };
   return createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
+    executeSql: async (statement) =>
+      (await readSql.query(statement.text, postgresSecretReadParams(statement.params))).rows,
     privilegedDb: readonlyDb(privilegedReadDb, { rawRead: privilegedRawRead }),
     rawSecretTableRead: 'engine',
   });
+}
+
+function postgresSecretReadParams(values: readonly unknown[]): unknown[] {
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Postgres secret-read parameters must be a dense own-data array.');
+    }
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return snapshot;
 }
 
 class NodePostgresRuntimeClient implements RuntimeSqlClient {
