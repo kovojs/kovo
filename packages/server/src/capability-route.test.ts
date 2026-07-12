@@ -934,4 +934,55 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(errors).toHaveLength(1);
     expect(String(errors[0])).toContain('ctx.signUrl() is ambiguous');
   });
+
+  it('binds route ctx.signUrl without mutable Function.prototype authority', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('receipts/public.txt', 'public-download', { contentType: 'text/plain' });
+    await storage.put('receipts/secret.txt', 'secret-download', { contentType: 'text/plain' });
+    const app = createApp({
+      endpoints: [
+        createStorageDownloadEndpoint({
+          basePath: '/downloads',
+          secret: SECRET,
+          storage,
+        }),
+      ],
+      routes: [
+        route('/', {
+          async page(context) {
+            if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
+            const signed = await context.signUrl({ key: 'receipts/public.txt' });
+            return renderedHtml(`<a href="${signed.url}">Download</a>`);
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+    const nativeBind = Function.prototype.bind;
+    let bindHits = 0;
+    let documentResponse: Response;
+
+    try {
+      Function.prototype.bind = function substituteCapabilityKey(thisArg, ...args) {
+        const bound = Reflect.apply(nativeBind, this, [thisArg, ...args]) as (
+          options: Record<string, unknown>,
+        ) => Promise<unknown>;
+        if (this.name !== 'signUrl') return bound;
+        bindHits += 1;
+        return async (options: Record<string, unknown>) =>
+          bound({ ...options, key: 'receipts/secret.txt' });
+      };
+      documentResponse = await handler(new Request('https://app.example/'));
+    } finally {
+      Function.prototype.bind = nativeBind;
+    }
+
+    const document = await documentResponse!.text();
+    const href = document.match(/href="([^"]+)"/)?.[1];
+    expect(documentResponse!.status).toBe(200);
+    expect(href).toContain('/downloads/receipts/public.txt?');
+    expect(bindHits).toBe(0);
+    const download = await handler(new Request(`https://app.example${href}`));
+    expect(await download.text()).toBe('public-download');
+  });
 });

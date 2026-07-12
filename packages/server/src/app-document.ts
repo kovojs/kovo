@@ -100,8 +100,28 @@ export async function renderAppRouteDocumentResponse({
             oneTimeReplayStore: storageDownloadSigner.oneTimeReplayStore,
           })
         : createUnavailableSignUrl(storageDownloadSigner.message);
+  const signUrlDescriptor =
+    signUrlContext === undefined
+      ? undefined
+      : witnessGetOwnPropertyDescriptor(signUrlContext, 'signUrl');
+  if (
+    signUrlContext !== undefined &&
+    (signUrlDescriptor === undefined ||
+      !('value' in signUrlDescriptor) ||
+      typeof signUrlDescriptor.value !== 'function')
+  ) {
+    throw new TypeError('Kovo route capability signer must expose a stable own function.');
+  }
+  const signUrlMethod = signUrlDescriptor?.value as
+    | ReturnType<typeof createSignUrl>['signUrl']
+    | undefined;
   const signUrl =
-    signUrlContext === undefined ? undefined : signUrlContext.signUrl.bind(signUrlContext);
+    signUrlContext === undefined || signUrlMethod === undefined
+      ? undefined
+      : (options: Parameters<typeof signUrlMethod>[0]) =>
+          witnessReflectApply<ReturnType<typeof signUrlMethod>>(signUrlMethod, signUrlContext, [
+            options,
+          ]);
   const routeInput: RouteRequestInput = {
     params,
     search,
