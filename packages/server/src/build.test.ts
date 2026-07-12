@@ -863,7 +863,7 @@ export default async function handler(request) {
       expect(nodeServer).toContain('const requestTimeoutMs = 30_000;');
       expect(nodeServer).toContain('server.headersTimeout = headersTimeoutMs;');
       expect(nodeServer).toContain('server.requestTimeout = requestTimeoutMs;');
-      expect(nodeServer).toContain("console.error('[kovo] unhandled node server error'");
+      expect(nodeServer).toContain("'[kovo] unhandled node server error'");
 
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
@@ -959,8 +959,7 @@ export default async function handler(request) {
         outDir: join(root, '.kovo'),
         serverHandlerSource: `
 export default async function handler(request) {
-  const url = new URL(request.url);
-  throw new Error('boom from generated handler at ' + url.pathname);
+  throw new Error('boom from generated handler at ' + request.url);
 }
 `,
       });
@@ -986,7 +985,10 @@ export default async function handler(request) {
       };
 
       try {
-        const response = await fetch(`${baseUrl}/boom?x=1`, { method: 'POST' });
+        const response = await fetch(
+          `${baseUrl}/boom?kovo-cap=NODE_CAPABILITY_SHOULD_NEVER_LOG&State=oauth&state=duplicate`,
+          { method: 'POST' },
+        );
         expect(response.status).toBe(500);
         await expect(response.text()).resolves.toBe('Internal Server Error');
       } finally {
@@ -998,11 +1000,14 @@ export default async function handler(request) {
       expect(consoleErrors[0]?.[0]).toBe('[kovo] unhandled node server error');
       expect(consoleErrors[0]?.[1]).toMatchObject({
         method: 'POST',
-        url: '/boom?x=1',
+        url: '/boom?kovo-cap&State&state',
       });
       const loggedError = (consoleErrors[0]?.[1] as { error?: unknown } | undefined)?.error;
-      expect(String(loggedError)).toContain('Error: boom from generated handler at /boom');
+      expect(String(loggedError)).toContain(
+        'Error: boom from generated handler at /boom?kovo-cap&State&state',
+      );
       expect(String(loggedError)).toContain('handler');
+      expect(JSON.stringify(consoleErrors)).not.toContain('NODE_CAPABILITY_SHOULD_NEVER_LOG');
     } finally {
       console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });

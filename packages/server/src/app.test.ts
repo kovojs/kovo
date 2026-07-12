@@ -880,9 +880,9 @@ describe('server createApp request shell', () => {
     expect(body).not.toContain('private shell detail');
     expect(onError).toHaveBeenCalledWith(shellError, {
       operation: 'error-shell',
-      request,
+      request: expect.any(Request),
       status: 404,
-      url: '/missing?from=test',
+      url: '/missing?from',
     });
   });
 
@@ -1576,9 +1576,10 @@ describe('server createApp request shell', () => {
     expect(body).not.toContain('private endpoint detail');
     expect(onError).toHaveBeenCalledWith(thrown, {
       operation: 'app-request',
-      request,
-      url: '/status?check=true',
+      request: expect.any(Request),
+      url: '/status?check',
     });
+    expect(onError.mock.calls[0]?.[1].request.url).toBe('https://example.test/status?check');
   });
 
   it('D1: logs default-config endpoint exceptions to stderr without changing the stable 500', async () => {
@@ -1600,7 +1601,7 @@ describe('server createApp request shell', () => {
       expect(response.status).toBe(500);
       await expect(response.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
       expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[kovo] app-request failed url=/status?check=true'),
+        expect.stringContaining('[kovo] app-request failed url=/status?check'),
         thrown,
       );
     } finally {
@@ -1630,9 +1631,12 @@ describe('server createApp request shell', () => {
     await expect(response.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
     expect(onError).toHaveBeenCalledWith(thrown, {
       operation: 'app-request',
-      request,
-      url: '/status.json?check=true',
+      request: expect.any(Request),
+      url: '/status.json?check',
     });
+    expect(onError.mock.calls[0]?.[1].request.url).toBe(
+      'https://example.test/status.json?check',
+    );
   });
 
   it('resolves session once for a guarded route request', async () => {

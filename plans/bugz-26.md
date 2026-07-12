@@ -329,7 +329,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     including the formerly colliding shapes through compiled hrefs, old document tokens, and new
     server query/mutation response tokens; three declaration builds and API/security gates pass.
 
-- [ ] **M10 - Valid capability bearer query values are logged verbatim when a verified storage read
+- [x] **M10 - Valid capability bearer query values are logged verbatim when a verified storage read
       fails.** `packages/server/src/capability-route.ts:323-350`,
       `packages/server/src/app-request.ts:85-89`, `packages/server/src/diagnostics.ts:68-78`,
       `packages/server/src/vite-dev.ts:1240-1249`, `packages/server/src/build.ts:952-960`
@@ -346,6 +346,9 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     and generated Node logs; preserve pathname plus query-key names only, never values. Cover
     capability, OAuth/reset, encoded, duplicate, and case-variant sensitive parameters, and ensure
     errors cannot reintroduce the raw URL.
+  - **Evidence:** the seven-file source-aliased diagnostics/capability/dev/generated-Node suite
+    passes 193 tests; a valid capability followed by a throwing storage read exposes only
+    `?kovo-cap`, and the server declaration build plus API/single-choke/security gates pass.
 
 - [x] **M11 - `RenderedHtml + string` composition retains every full rendered value forever in a
       process-global marker map.** `packages/server/src/html.ts:32-36,47-52,153-187`

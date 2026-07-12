@@ -8,6 +8,7 @@ import {
 
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
+import { sanitizeDiagnosticText, sanitizeDiagnosticUrl } from './logging.js';
 import {
   staticHostHeaders,
   staticHostImmutableAssetPathPattern,
@@ -914,6 +915,9 @@ import { pipeline } from 'node:stream/promises';
 import { nodeRequestToWebRequest, writeWebResponseToNode } from './node-adapter.mjs';
 import handler from './server/handler.mjs';
 
+const sanitizeDiagnosticUrl = (${sanitizeDiagnosticUrl.toString()});
+const sanitizeDiagnosticText = (${sanitizeDiagnosticText.toString()});
+
 const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
 const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
 const clientModuleHeaders = ${JSON.stringify(staticHostHeaders('clientModule'))};
@@ -928,14 +932,16 @@ const rootedFileCapabilities = new Map();
 
 export function createKovoNodeServer(options = {}) {
   const server = createServer(async (nodeRequest, nodeResponse) => {
+    let diagnosticRequest;
     try {
       if (await maybeServeStatic(nodeRequest, nodeResponse)) return;
 
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
+      diagnosticRequest = request;
       const response = await handler(request);
       await writeWebResponseToNode(response, nodeResponse, request.method);
     } catch (error) {
-      logUnhandledNodeError(error, nodeRequest);
+      logUnhandledNodeError(error, nodeRequest, diagnosticRequest);
       if (nodeResponse.headersSent) {
         nodeResponse.destroy();
       } else {
@@ -949,30 +955,42 @@ export function createKovoNodeServer(options = {}) {
   return server;
 }
 
-function logUnhandledNodeError(error, nodeRequest) {
+function logUnhandledNodeError(error, nodeRequest, webRequest) {
   const method = nodeRequest.method ?? 'UNKNOWN';
-  const url = nodeRequest.url ?? '/';
+  const rawUrl = nodeRequest.url ?? '/';
+  const url = sanitizeDiagnosticUrl(rawUrl);
+  const requestUrls = [rawUrl, webRequest && webRequest.url].filter(
+    (value) => typeof value === 'string',
+  );
   const detail =
     error && typeof error === 'object' && 'stack' in error && typeof error.stack === 'string'
       ? error.stack
       : error;
-  console.error('[kovo] unhandled node server error', scrubConsoleValue({ method, url, error: detail }));
+  console.error(
+    '[kovo] unhandled node server error',
+    scrubConsoleValue({ method, url, error: detail }, requestUrls),
+  );
 }
 
-function scrubConsoleValue(value, seen = new WeakMap()) {
+function scrubConsoleValue(value, requestUrls = [], seen = new WeakMap()) {
   if (isSecretDisplayValue(value)) return '[secret]';
+  if (typeof value === 'string') {
+    return sanitizeDiagnosticText(value, requestUrls, sanitizeDiagnosticUrl);
+  }
   if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
   if (seen.has(value)) return seen.get(value);
   if (Array.isArray(value)) {
     const next = [];
     seen.set(value, next);
-    for (const item of value) next.push(scrubConsoleValue(item, seen));
+    for (const item of value) next.push(scrubConsoleValue(item, requestUrls, seen));
     return next;
   }
   if (!isPlainConsoleObject(value)) return String(value);
   const next = {};
   seen.set(value, next);
-  for (const key of Object.keys(value)) next[key] = scrubConsoleValue(value[key], seen);
+  for (const key of Object.keys(value)) {
+    next[key] = scrubConsoleValue(value[key], requestUrls, seen);
+  }
   return next;
 }
 

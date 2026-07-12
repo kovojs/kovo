@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { StorageReadCapability } from '@kovojs/core';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
@@ -522,6 +522,40 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="custom.txt"');
     expect(await response.text()).toBe('custom-download');
+  });
+
+  it('never exposes a verified bearer to onError when the post-verification storage read fails', async () => {
+    const key = 'receipts/failing.txt';
+    const storage: StorageReadCapability = {
+      async get() {
+        throw new Error('verified storage backend failed');
+      },
+      async stat() {
+        return undefined;
+      },
+      async stream() {
+        return undefined;
+      },
+    };
+    const onError = vi.fn();
+    const app = createApp({
+      endpoints: [createStorageDownloadEndpoint({ basePath: '/downloads', secret: SECRET, storage })],
+      onError,
+    });
+    const { url, token } = await createSignUrl({ basePath: '/downloads', secret: SECRET }).signUrl({
+      key,
+    });
+
+    const response = await createRequestHandler(app)(new Request(`https://app.example${url}`));
+
+    expect(response.status).toBe(500);
+    expect(onError).toHaveBeenCalledTimes(1);
+    const [, context] = onError.mock.calls[0]!;
+    expect(context.url).toBe('/downloads/receipts/failing.txt?kovo-cap');
+    expect(context.request.url).toBe(
+      'https://app.example/downloads/receipts/failing.txt?kovo-cap',
+    );
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(token);
   });
 
   it('mounts ctx.signUrl from the storage endpoint secret even when app CSRF is not configured', async () => {

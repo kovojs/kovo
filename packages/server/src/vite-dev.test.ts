@@ -191,11 +191,13 @@ describe('server app shell Vite dev seam', () => {
 
   it('logs server-side route render exceptions in dev without app onError', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const oauthCode = 'OAUTH_CODE_SHOULD_NEVER_LOG';
+    const state = 'RESET_STATE_SHOULD_NEVER_LOG';
     const app = createApp({
       routes: [
         route('/throws', {
-          page() {
-            throw new Error('render exploded');
+          page(_input, request) {
+            throw new Error(`render exploded at ${request.url}`);
           },
         }),
       ],
@@ -233,7 +235,7 @@ describe('server app shell Vite dev seam', () => {
       });
 
       const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-      const response = await fetch(`${origin}/throws`);
+      const response = await fetch(`${origin}/throws?OAuthCode=${oauthCode}&State=${state}`);
       await response.text();
 
       expect(response.status).toBe(500);
@@ -241,6 +243,9 @@ describe('server app shell Vite dev seam', () => {
         expect.stringContaining('[kovo dev] route-page failed route=/throws'),
         expect.any(Error),
       );
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(oauthCode);
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(state);
+      expect(String(errorSpy.mock.calls[0]?.[1])).toContain('/throws?OAuthCode&State');
     } finally {
       errorSpy.mockRestore();
       await new Promise<void>((resolve, reject) => {

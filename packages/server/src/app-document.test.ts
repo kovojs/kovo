@@ -1054,10 +1054,13 @@ describe('server app document boundary', () => {
     expect(response.body).not.toContain('private shell detail');
     expect(onError).toHaveBeenCalledWith(shellError, {
       operation: 'error-shell',
-      request,
+      request: expect.any(Request),
       status: 404,
-      url: '/missing?from=doc',
+      url: '/missing?from',
     });
+    expect(onError.mock.calls[0]?.[1].request.url).toBe(
+      'https://shop.example.test/missing?from',
+    );
   });
 
   it('renders route notFound outcomes through the configured 404 shell', async () => {
