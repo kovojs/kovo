@@ -12,7 +12,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
 | High     |    21 | H1-H21 |
-| Medium   |     8 | M1-M8 |
+| Medium   |     9 | M1-M9 |
 
 ## Critical
 
@@ -384,9 +384,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
     time reads, TTL, and capacity calculations use boot-pinned, semantically checked controls; late
     and import-order poison cannot hide/cross-bind records, expire fresh truth, or evade either cap.
 
+- [ ] **M9 - Mutable Reporting API URL controls persist credential-bearing paths.**
+      `packages/server/src/reporting.ts`
+  - Replacing the native `URL.prototype.origin` getter after import made a real security report store
+    the complete reset/capability URL, including path and query secrets, in its supposedly redacted
+    aggregate instead of retaining only the genuine origin.
+  - **Acceptance:** request method/body bounds, decode/traversal, URL origin parsing, control/token
+    normalization, report rate/cardinality state, keys, snapshots, and clocks use boot-pinned,
+    semantically checked controls; late/import-order poison cannot persist path/query/userinfo secrets
+    or evade the quiet bounded telemetry posture.
+
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H21, and M7-M8 are active
+The remediation pass remains intentionally non-zero: C10-C12, H15-H21, and M7-M9 are active
 capability, request-carrier, response/deferred/mutation/client output, task/guard, request-limit, and
 replay fixes.
 Integrated
