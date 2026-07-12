@@ -2,6 +2,7 @@ import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 
 import { readAttribute } from './wire-html.js';
 import { readWireElementTokens, type WireAttribute } from './wire-tokenizer.js';
+import { securityArrayAppend } from './security-witness-intrinsics.js';
 
 export interface FragmentChunk {
   html: RenderedFragmentHtml;
@@ -126,7 +127,12 @@ export function readFragmentChunksFromElements(
     const chunk = chunks[index];
     if (!chunk) continue;
     const fragment = readFragmentElementChunk(chunk);
-    if (fragment) fragments[fragments.length] = fragment;
+    if (fragment)
+      securityArrayAppend(
+        fragments,
+        fragment,
+        'Browser packages/browser/src/wire-response-scanner.ts collection',
+      );
   }
 
   return fragments;
@@ -171,7 +177,12 @@ export function readStreamTextChunksFromElements(
     const chunk = chunks[index];
     if (!chunk) continue;
     const text = readStreamTextElementChunk(chunk);
-    if (text) texts[texts.length] = text;
+    if (text)
+      securityArrayAppend(
+        texts,
+        text,
+        'Browser packages/browser/src/wire-response-scanner.ts collection',
+      );
   }
 
   return texts;
@@ -187,12 +198,16 @@ export function readElementChunks(
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (!token) continue;
-    chunks[chunks.length] = {
-      attrs: token.attrs,
-      content: token.content,
-      end: token.end,
-      start: token.start,
-    };
+    securityArrayAppend(
+      chunks,
+      {
+        attrs: token.attrs,
+        content: token.content,
+        end: token.end,
+        start: token.start,
+      },
+      'Browser packages/browser/src/wire-response-scanner.ts collection',
+    );
   }
 
   return chunks;

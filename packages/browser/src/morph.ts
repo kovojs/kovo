@@ -9,7 +9,7 @@ import {
   sanitizeHtmlResponseElementTree,
   setSafeHtmlResponseAttribute,
 } from './response-fragment-apply.js';
-import { securityStringTrim } from './security-witness-intrinsics.js';
+import { securityArrayAppend, securityStringTrim } from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
@@ -99,7 +99,8 @@ export class DomMorphTarget implements MorphTarget {
           }
         }
       }
-      if (!present) insert[insert.length] = node;
+      if (!present)
+        securityArrayAppend(insert, node, 'Browser packages/browser/src/morph.ts collection');
     }
     const scrollTop = this.element.scrollTop;
     const scrollHeight = this.element.scrollHeight;
@@ -578,18 +579,30 @@ function morphDomChildren(
     }
 
     if (!matched || includesDomNode(usedCurrent, matched)) {
-      desiredNodes[desiredNodes.length] = cloneDomChildNode(nextChild, security);
+      securityArrayAppend(
+        desiredNodes,
+        cloneDomChildNode(nextChild, security),
+        'Browser packages/browser/src/morph.ts collection',
+      );
       continue;
     }
 
-    usedCurrent[usedCurrent.length] = matched;
+    securityArrayAppend(usedCurrent, matched, 'Browser packages/browser/src/morph.ts collection');
     if (
       security.readElementTagName(matched) !== undefined &&
       security.readElementTagName(nextChild) !== undefined
     ) {
-      desiredNodes[desiredNodes.length] = morphDomElement(matched as Element, nextChild as Element);
+      securityArrayAppend(
+        desiredNodes,
+        morphDomElement(matched as Element, nextChild as Element),
+        'Browser packages/browser/src/morph.ts collection',
+      );
     } else {
-      desiredNodes[desiredNodes.length] = cloneDomChildNode(nextChild, security);
+      securityArrayAppend(
+        desiredNodes,
+        cloneDomChildNode(nextChild, security),
+        'Browser packages/browser/src/morph.ts collection',
+      );
     }
   }
 

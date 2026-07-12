@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   251 | C1-C251 |
+| Critical |   252 | C1-C252 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2939,6 +2939,17 @@ build:dist` passes.
     assignment.
   - **Evidence:** the exact inherited setter receives zero witness commits; the complete server
     source census is empty and the full 2,390-test server matrix passes.
+
+- [x] **C252 - Browser wire, DOM, sanitizer, and inline-loader arrays remain cross-bindable.**
+      `packages/browser/src`
+  - 39 modular and generated-bootstrap appends still exposed parsed wire tokens, decoded fragments,
+    morph plans, handler queues, sanitizer stacks/attributes, dynamic-import allowlists, and applied
+    target reports to inherited numeric setters before DOM or import sinks consumed them.
+  - **Acceptance:** browser collections use the verified witness append; extracted inline helpers
+    route the same calls through the early boot navigation controls; generated parity stays exact.
+  - **Evidence:** the exact setter receives zero commits, the source census is empty, inline parity
+    and Trusted Types routing pass, all 762 node and 525 three-engine browser tests pass, and browser
+    dist/DTS builds are green.
 
 ## High
 

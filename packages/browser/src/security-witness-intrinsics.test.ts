@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defineSecurityProperties,
   freezeSecurityValue,
+  securityArrayAppend,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapSet,
@@ -13,6 +14,39 @@ import {
 const moduleUrl = new URL('./security-witness-intrinsics.ts', import.meta.url).href;
 
 describe('browser security witness intrinsics', () => {
+  it('commits array entries without invoking inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'reviewed') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      const values: string[] = [];
+      securityArrayAppend(values, 'reviewed', 'Browser witness test values');
+      expect(values).toEqual(['reviewed']);
+      expect(poisonHits).toBe(0);
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+  });
+
   it('keeps captured snapshot and object controls after ambient replacement', () => {
     const originalGet = WeakMap.prototype.get;
     const originalSet = WeakMap.prototype.set;

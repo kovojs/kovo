@@ -1,4 +1,4 @@
-/** Minimal `{ name, value }` shape of a DOM attribute the runtime reads (SPEC §9.1). */
+import { securityArrayAppend } from './security-witness-intrinsics.js'; /** Minimal `{ name, value }` shape of a DOM attribute the runtime reads (SPEC §9.1). */
 export interface DomAttributeLike {
   name: string;
   value: string;
@@ -87,7 +87,7 @@ export function domAttributes(
       typeof attribute.name === 'string' &&
       typeof attribute.value === 'string'
     ) {
-      result[result.length] = attribute;
+      securityArrayAppend(result, attribute, 'Browser packages/browser/src/dom-like.ts collection');
     }
   }
   return result;

@@ -2,6 +2,7 @@ import type { JsonValue } from '@kovojs/core';
 import { domAttributes } from './dom-like.js';
 import type { EventElementLike } from './events.js';
 import {
+  securityArrayAppend,
   securityMap,
   securityMapDelete,
   securityMapForEach,
@@ -189,7 +190,12 @@ export function abortRemovedIslandSignals(
   const next = kovoComponentIds(nextHtml);
   const removed: string[] = [];
   securitySetForEach(kovoComponentIds(currentHtml), (id) => {
-    if (!securitySetHas(next, id)) removed[removed.length] = id;
+    if (!securitySetHas(next, id))
+      securityArrayAppend(
+        removed,
+        id,
+        'Browser packages/browser/src/handler-context.ts collection',
+      );
   });
   const controllers = islandSignalControllersFor(scope);
 

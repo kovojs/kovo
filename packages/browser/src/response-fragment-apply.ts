@@ -3,6 +3,7 @@ import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 import type { FragmentChunk } from './wire-response-scanner.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
+import { securityArrayAppend } from './security-witness-intrinsics.js';
 
 type BrowserNavigationSecurityControls = ReturnType<typeof createBrowserNavigationSecurityControls>;
 
@@ -89,7 +90,11 @@ export function applyResponseFragments<Target>(
   for (let index = 0; index < fragments.length; index += 1) {
     const fragment = fragments[index];
     if (fragment && applyResponseFragment(fragment, options)) {
-      applied[applied.length] = fragment.target;
+      securityArrayAppend(
+        applied,
+        fragment.target,
+        'Browser packages/browser/src/response-fragment-apply.ts collection',
+      );
     }
   }
 
@@ -147,7 +152,11 @@ export function p(
           if (!n) continue;
           const nk = k(n, security);
           if (nk !== null && ex.has(nk)) continue;
-          ins[ins.length] = n;
+          securityArrayAppend(
+            ins,
+            n,
+            'Browser packages/browser/src/response-fragment-apply.ts collection',
+          );
         }
         const top = e.scrollTop;
         const height = e.scrollHeight;
@@ -170,7 +179,11 @@ export function p(
     } else {
       d(e, x.html, security, createHTML);
     }
-    a[a.length] = x.target;
+    securityArrayAppend(
+      a,
+      x.target,
+      'Browser packages/browser/src/response-fragment-apply.ts collection',
+    );
   }
 
   return a;
@@ -193,7 +206,11 @@ function d(
     if (!x) continue;
     if (x.scrollTop) {
       (x as HTMLElement & { s?: number }).s = x.scrollTop;
-      q[q.length] = x;
+      securityArrayAppend(
+        q,
+        x,
+        'Browser packages/browser/src/response-fragment-apply.ts collection',
+      );
     }
   }
 
@@ -398,7 +415,12 @@ function y(v: string, security: HtmlResponseFragmentSecurityControls): string | 
       (u[0] === '"' && u[u.length - 1] === '"') || (u[0] === "'" && u[u.length - 1] === "'")
         ? security.slice(u, 1, -1)
         : u;
-    if (!w(u2, security)) r[r.length] = x;
+    if (!w(u2, security))
+      securityArrayAppend(
+        r,
+        x,
+        'Browser packages/browser/src/response-fragment-apply.ts collection',
+      );
   };
   for (let i = 0; i < v.length; i += 1) {
     const x = v[i];
@@ -497,9 +519,17 @@ function u(c: Element, n: Element, security: HtmlResponseFragmentSecurityControl
       const resolved = match
         ? m(match, nextElement, security)
         : g(security.cloneDomNode(nextElement, true) as Element, security);
-      desired[desired.length] = resolved;
+      securityArrayAppend(
+        desired,
+        resolved,
+        'Browser packages/browser/src/response-fragment-apply.ts collection',
+      );
     } else {
-      desired[desired.length] = security.cloneDomNode(nextNode, true) as ChildNode;
+      securityArrayAppend(
+        desired,
+        security.cloneDomNode(nextNode, true) as ChildNode,
+        'Browser packages/browser/src/response-fragment-apply.ts collection',
+      );
     }
   }
 

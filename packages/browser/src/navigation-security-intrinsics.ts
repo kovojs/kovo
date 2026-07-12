@@ -2568,6 +2568,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   return {
     acquireStreamReader,
     addLifecycleEventListener,
+    appendDenseSecurityValue,
     appendElementChildren,
     cancelReadableStream,
     cancelStreamReader,

@@ -35,11 +35,13 @@ const intrinsicObjectIsFrozen = Object.isFrozen;
 const intrinsicObjectIsExtensible = Object.isExtensible;
 const intrinsicObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const intrinsicObjectGetPrototypeOf = Object.getPrototypeOf;
+const intrinsicObjectDefineProperty = Object.defineProperty;
 const intrinsicObjectDefineProperties = Object.defineProperties;
 const intrinsicObjectCreate = Object.create;
 const intrinsicObjectKeys = Object.keys;
 const intrinsicObjectHasOwnProperty = Object.prototype.hasOwnProperty;
 const intrinsicString = String;
+const intrinsicNumberIsSafeInteger = Number.isSafeInteger;
 const intrinsicStringReplaceAll = String.prototype.replaceAll;
 const intrinsicStringTrim = String.prototype.trim;
 const intrinsicStringSlice = String.prototype.slice;
@@ -301,6 +303,15 @@ function assertHasInstanceIntegrity(): void {
   }
 }
 
+function assertNumberIntegrity(): void {
+  if (
+    invoke(intrinsicNumberIsSafeInteger, IntrinsicNumber, [1]) !== true ||
+    invoke(intrinsicNumberIsSafeInteger, IntrinsicNumber, [1.5]) !== false
+  ) {
+    failIntrinsic('Number.isSafeInteger');
+  }
+}
+
 const capturedSecurityControlsSound = (() => {
   try {
     assertWeakMapIntegrity();
@@ -311,6 +322,7 @@ const capturedSecurityControlsSound = (() => {
     assertDefinePropertiesIntegrity();
     assertStringIntegrity();
     assertHasInstanceIntegrity();
+    assertNumberIntegrity();
     return true;
   } catch {
     return false;
@@ -482,6 +494,45 @@ export function securityGetOwnPropertyDescriptor(
     IntrinsicObject,
     [value, key],
   );
+}
+
+/** Own-data append for browser security and DOM decision collections (SPEC §6.6/§9.1). */
+export function securityArrayAppend<Value>(target: Value[], value: Value, label: string): void {
+  assertCapturedSecurityControls();
+  const length = securityGetOwnPropertyDescriptor(target, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    !invoke(intrinsicNumberIsSafeInteger, IntrinsicNumber, [length.value]) ||
+    length.value < 0 ||
+    length.value >= 1_000_000
+  ) {
+    throw new TypeError(`${label} must have a bounded own array length.`);
+  }
+  const index = length.value;
+  invoke(intrinsicObjectDefineProperty, IntrinsicObject, [
+    target,
+    index,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = securityGetOwnPropertyDescriptor(target, index);
+  const after = securityGetOwnPropertyDescriptor(target, 'length');
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    committed.value !== value ||
+    after === undefined ||
+    !('value' in after) ||
+    after.value !== index + 1
+  ) {
+    throw new TypeError(`${label} own-data append failed.`);
+  }
 }
 
 export function securityNullRecord<Value = unknown>(): Record<string, Value> {

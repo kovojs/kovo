@@ -4,6 +4,7 @@ import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import {
+  securityArrayAppend,
   securityRegExpTest,
   securityStringIndexOf,
   securityStringSlice,
@@ -96,7 +97,7 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
       responseElements.fragments.length > 0 ||
       responseElements.texts.length > 0
     ) {
-      chunks[chunks.length] = chunk;
+      securityArrayAppend(chunks, chunk, 'Browser packages/browser/src/wire-parser.ts collection');
     }
     cursor = nextMarkerStart === -1 ? body.length : nextMarkerStart;
   }
@@ -138,7 +139,8 @@ export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): Q
     const chunk = chunks[index];
     if (!chunk) continue;
     const query = readQueryElementChunk(chunk, onError);
-    if (query) queries[queries.length] = query;
+    if (query)
+      securityArrayAppend(queries, query, 'Browser packages/browser/src/wire-parser.ts collection');
   }
 
   return queries;
@@ -243,7 +245,12 @@ function parseSettlementSet(settles?: string | null): string[] {
   let start = 0;
   for (let index = 0; index <= value.length; index += 1) {
     if (index < value.length && !securityRegExpTest(/\s/u, value[index] ?? '')) continue;
-    if (index > start) tokens[tokens.length] = securityStringSlice(value, start, index);
+    if (index > start)
+      securityArrayAppend(
+        tokens,
+        securityStringSlice(value, start, index),
+        'Browser packages/browser/src/wire-parser.ts collection',
+      );
     start = index + 1;
   }
   return tokens;
@@ -283,13 +290,21 @@ export function readMutationResponseBodyChunks(
   const malformedTexts: string[] = [];
   const chunks = readMutationResponseBodyCore(body, {
     onMalformedFragment(reason) {
-      malformedFragments[malformedFragments.length] = reason;
+      securityArrayAppend(
+        malformedFragments,
+        reason,
+        'Browser packages/browser/src/wire-parser.ts collection',
+      );
     },
     onMalformedQuery(reason) {
       reportRuntimeError(onError, malformedQueryError(reason));
     },
     onMalformedText(reason) {
-      malformedTexts[malformedTexts.length] = reason;
+      securityArrayAppend(
+        malformedTexts,
+        reason,
+        'Browser packages/browser/src/wire-parser.ts collection',
+      );
     },
   });
   const queries: QueryChunk[] = [];
@@ -298,7 +313,8 @@ export function readMutationResponseBodyChunks(
     const chunk = chunks.queries[index];
     if (!chunk) continue;
     const query = readQueryElementChunk(chunk, onError);
-    if (query) queries[queries.length] = query;
+    if (query)
+      securityArrayAppend(queries, query, 'Browser packages/browser/src/wire-parser.ts collection');
   }
   for (let index = 0; index < malformedFragments.length; index += 1) {
     const reason = malformedFragments[index];
@@ -328,7 +344,8 @@ export function readMutationResponseBodyPrefixChunks(
     const chunk = elements.queries[index];
     if (!chunk) continue;
     const query = readQueryElementChunk(chunk, onError);
-    if (query) queries[queries.length] = query;
+    if (query)
+      securityArrayAppend(queries, query, 'Browser packages/browser/src/wire-parser.ts collection');
   }
 
   return {
@@ -353,11 +370,15 @@ function pinScannedFragmentChunks(chunks: readonly FragmentChunk[]): FragmentChu
     // The shared scanner must also be extractable into the dependency-free inline loader. At the
     // modular boundary, immediately convert its exact transport bytes into the private witnessed
     // carrier consumed by DOM sinks (SPEC §6.6 / bugz-26 H1).
-    pinned[pinned.length] = {
-      html: createRenderedFragmentHtml(chunk.html.html),
-      ...(chunk.mode === undefined ? {} : { mode: chunk.mode }),
-      target: chunk.target,
-    };
+    securityArrayAppend(
+      pinned,
+      {
+        html: createRenderedFragmentHtml(chunk.html.html),
+        ...(chunk.mode === undefined ? {} : { mode: chunk.mode }),
+        target: chunk.target,
+      },
+      'Browser packages/browser/src/wire-parser.ts collection',
+    );
   }
   return pinned;
 }
@@ -380,11 +401,15 @@ function decodeStreamTextChunks(chunks: readonly StreamTextChunk[]): StreamTextC
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index];
     if (!chunk) continue;
-    decoded[decoded.length] = {
-      ...(chunk.mode === undefined ? {} : { mode: chunk.mode }),
-      target: chunk.target,
-      text: unescapeHtml(chunk.text),
-    };
+    securityArrayAppend(
+      decoded,
+      {
+        ...(chunk.mode === undefined ? {} : { mode: chunk.mode }),
+        target: chunk.target,
+        text: unescapeHtml(chunk.text),
+      },
+      'Browser packages/browser/src/wire-parser.ts collection',
+    );
   }
   return decoded;
 }

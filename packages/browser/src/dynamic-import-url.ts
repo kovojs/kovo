@@ -1,6 +1,7 @@
 import type { KovoModuleRef } from '@kovojs/core/internal/module-ref';
 
 import {
+  securityArrayAppend,
   applySecurityIntrinsic,
   securityGetOwnPropertyDescriptor,
   securityOwnArrayEntry,
@@ -183,7 +184,12 @@ function documentModulepreloadClientModules(): readonly string[] | undefined {
     const declared = marker.getAttribute?.('data-kovo-module-allowlist');
     if (declared) appendWhitespaceTokens(hrefs, declared);
     const href = marker.getAttribute?.('href');
-    if (!declared && href) hrefs[hrefs.length] = href;
+    if (!declared && href)
+      securityArrayAppend(
+        hrefs,
+        href,
+        'Browser packages/browser/src/dynamic-import-url.ts collection',
+      );
   }
   return hrefs;
 }
@@ -248,7 +254,12 @@ function appendWhitespaceTokens(target: string[], value: string): void {
   let start = 0;
   for (let index = 0; index <= value.length; index += 1) {
     if (index < value.length && !securityRegExpTest(/\s/u, value[index] ?? '')) continue;
-    if (index > start) target[target.length] = securityStringSlice(value, start, index);
+    if (index > start)
+      securityArrayAppend(
+        target,
+        securityStringSlice(value, start, index),
+        'Browser packages/browser/src/dynamic-import-url.ts collection',
+      );
     start = index + 1;
   }
 }

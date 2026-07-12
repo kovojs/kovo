@@ -1,4 +1,5 @@
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import { securityArrayAppend } from './security-witness-intrinsics.js';
 
 export interface EnhancedNavigationRuntimeOptions {
   acceptHeader: string;
@@ -296,7 +297,12 @@ export function installEnhancedNavigationRuntime(
             const preserved: Element[] = [];
             for (let index = 0; index < currentSegments.length; index += 1) {
               const segment = currentSegments[index];
-              if (same[index] && segment) preserved[preserved.length] = segment;
+              if (same[index] && segment)
+                securityArrayAppend(
+                  preserved,
+                  segment,
+                  'Browser packages/browser/src/enhanced-navigation.ts collection',
+                );
             }
             const preservedIds = pi(preserved, preserved.length);
             const changed: boolean[] = [];

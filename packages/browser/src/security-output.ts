@@ -5,6 +5,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 
 import {
+  securityArrayAppend,
   defineSecurityProperties,
   freezeSecurityValue,
   securityGetOwnPropertyDescriptor,
@@ -497,14 +498,22 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
       if (token.closing && token.name === droppedSubtrees[droppedSubtrees.length - 1]) {
         droppedSubtrees.length -= 1;
       } else if (!token.closing && securitySetHas(RICH_HTML_DROP_SUBTREE_TAGS, token.name)) {
-        droppedSubtrees[droppedSubtrees.length] = token.name;
+        securityArrayAppend(
+          droppedSubtrees,
+          token.name,
+          'Browser packages/browser/src/security-output.ts collection',
+        );
       }
       continue;
     }
 
     if (securitySetHas(RICH_HTML_DROP_SUBTREE_TAGS, token.name)) {
       if (!token.closing && !token.selfClosing) {
-        droppedSubtrees[droppedSubtrees.length] = token.name;
+        securityArrayAppend(
+          droppedSubtrees,
+          token.name,
+          'Browser packages/browser/src/security-output.ts collection',
+        );
       }
       continue;
     }
@@ -525,7 +534,11 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
     const attrs = sanitizeRichHtmlAttributes(token.name, token.attributes);
     html += `<${token.name}${attrs}>`;
     if (!token.selfClosing && !securitySetHas(VOID_RICH_HTML_TAGS, token.name)) {
-      stack[stack.length] = token.name;
+      securityArrayAppend(
+        stack,
+        token.name,
+        'Browser packages/browser/src/security-output.ts collection',
+      );
     }
   }
 
@@ -620,7 +633,11 @@ function sanitizeRichHtmlAttributes(tag: string, raw: string): string {
     const value = match[2] ?? match[3] ?? match[4] ?? '';
     const sanitized = sanitizeRichHtmlAttributeValue(tag, name, value);
     if (sanitized === null) continue;
-    attributes[attributes.length] = `${name}="${escapeHtmlAttribute(sanitized)}"`;
+    securityArrayAppend(
+      attributes,
+      `${name}="${escapeHtmlAttribute(sanitized)}"`,
+      'Browser packages/browser/src/security-output.ts collection',
+    );
   }
 
   if (attributes.length === 0) return '';
@@ -793,7 +810,11 @@ function sanitizeCssTransform(value: unknown): string | null {
   let start = 0;
   for (let index = 0; index <= rawParts.length; index += 1) {
     if (index < rawParts.length && rawParts[index] !== ',') continue;
-    parts[parts.length] = securityStringTrim(securityStringSlice(rawParts, start, index));
+    securityArrayAppend(
+      parts,
+      securityStringTrim(securityStringSlice(rawParts, start, index)),
+      'Browser packages/browser/src/security-output.ts collection',
+    );
     start = index + 1;
   }
   if (parts.length < 1 || parts.length > 3) return null;

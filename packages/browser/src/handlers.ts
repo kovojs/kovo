@@ -12,6 +12,7 @@ import {
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import {
+  securityArrayAppend,
   securityRegExpTest,
   securityStringSlice,
   securityWeakMap,
@@ -82,7 +83,7 @@ function withPostCommitQueue<T>(queue: Array<() => void>, run: () => T): T {
   const globalRecord = globalThis as PostCommitGlobal;
   const previous = globalRecord[POST_COMMIT_GLOBAL_KEY];
   globalRecord[POST_COMMIT_GLOBAL_KEY] = (callback) => {
-    queue[queue.length] = callback;
+    securityArrayAppend(queue, callback, 'Browser packages/browser/src/handlers.ts collection');
   };
   try {
     return run();
@@ -195,7 +196,11 @@ function parseHandlerReferences(
     if (index < refs.length && !securityRegExpTest(/\s/u, refs[index] ?? '')) continue;
     if (index > start) {
       const source = securityStringSlice(refs, start, index);
-      parsed[parsed.length] = { ref: assertKovoModuleRef(source, 'handler'), source };
+      securityArrayAppend(
+        parsed,
+        { ref: assertKovoModuleRef(source, 'handler'), source },
+        'Browser packages/browser/src/handlers.ts collection',
+      );
     }
     start = index + 1;
   }

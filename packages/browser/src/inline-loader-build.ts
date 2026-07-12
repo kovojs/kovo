@@ -749,7 +749,7 @@ function installInlineKovoLoader(im) {
       const chunk = chunks.fragments[index];
       if (!chunk) continue;
       const target = chunk.start < textStart ? before : after;
-      target[target.length] = chunk;
+      bns.appendDenseSecurityValue(target, chunk, 'Kovo streaming fragment partition');
     }
     af(readFragmentChunksFromElements(before));
     const appliedTexts = at(readStreamTextChunksFromElements(chunks.texts));
@@ -1781,7 +1781,10 @@ function extractInlineHelperReadableSource({
     },
   }).outputText;
 
-  return transpiled.replace(/^"use strict";\s*/, '').trim();
+  return replaceInlineLoaderIdentifierTokens(
+    transpiled.replace(/^"use strict";\s*/, '').trim(),
+    new Map([['securityArrayAppend', 'bns.appendDenseSecurityValue']]),
+  );
 }
 
 export function assertInlineKovoLoaderInstallerWireParserParity(
@@ -1890,9 +1893,7 @@ function assertInlineKovoLoaderTrustedTypesRoutingForSource({
     ['tts.createHTML(html)'],
   ];
   for (const tokens of requiredTokens) {
-    if (
-      !tokens.some((token) => installerSource.includes(token))
-    ) {
+    if (!tokens.some((token) => installerSource.includes(token))) {
       throw new Error(
         `Inline Kovo loader ${mode} Trusted Types routing is missing ${tokens.join(' or ')}.`,
       );
@@ -2217,7 +2218,12 @@ function collectInlineHelperFunctionDependencies(
       const name = node.text;
       const local = isLocallyBound(name, scopes);
       if (name !== ownName && declarations.has(name) && !local) dependencies.add(name);
-      if (unsupportedTopLevelBindings.has(name) && !declarations.has(name) && !local) {
+      if (
+        name !== 'securityArrayAppend' &&
+        unsupportedTopLevelBindings.has(name) &&
+        !declarations.has(name) &&
+        !local
+      ) {
         throw new Error(
           `Inline Kovo loader ${label} helper ${ownName ?? '<anonymous>'} references top-level binding ${name}, but inline extraction only supports self-contained top-level function declarations.`,
         );

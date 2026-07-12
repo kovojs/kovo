@@ -1,4 +1,4 @@
-/** Parsed attribute metadata for raw Kovo wire elements (SPEC §9.4). */
+import { securityArrayAppend } from './security-witness-intrinsics.js'; /** Parsed attribute metadata for raw Kovo wire elements (SPEC §9.4). */
 export interface WireAttribute {
   end: number;
   hasValue: boolean;
@@ -84,16 +84,20 @@ export function readWireElementTokens(
     }
 
     const attrs = wireStringRange(body, nameEnd, openingEnd);
-    tokens[tokens.length] = {
-      attrs,
-      attributes: readWireAttributes(attrs),
-      closeStart: end.closeStart,
-      content: wireStringRange(body, openingEnd + 1, end.closeStart),
-      end: end.end,
-      openingEnd,
-      start,
-      tagName: wireStringRange(body, start + 1, nameEnd),
-    };
+    securityArrayAppend(
+      tokens,
+      {
+        attrs,
+        attributes: readWireAttributes(attrs),
+        closeStart: end.closeStart,
+        content: wireStringRange(body, openingEnd + 1, end.closeStart),
+        end: end.end,
+        openingEnd,
+        start,
+        tagName: wireStringRange(body, start + 1, nameEnd),
+      },
+      'Browser packages/browser/src/wire-tokenizer.ts collection',
+    );
     offset = end.end;
   }
 
@@ -148,15 +152,19 @@ export function readWireAttributes(attrs: string): WireAttribute[] {
       }
     }
 
-    attributes[attributes.length] = {
-      end: index,
-      hasValue,
-      name,
-      start,
-      value: unescapeHtml(value),
-      ...(valueStart === undefined ? {} : { valueStart }),
-      ...(valueEnd === undefined ? {} : { valueEnd }),
-    };
+    securityArrayAppend(
+      attributes,
+      {
+        end: index,
+        hasValue,
+        name,
+        start,
+        value: unescapeHtml(value),
+        ...(valueStart === undefined ? {} : { valueStart }),
+        ...(valueEnd === undefined ? {} : { valueEnd }),
+      },
+      'Browser packages/browser/src/wire-tokenizer.ts collection',
+    );
   }
 
   return attributes;
