@@ -16,26 +16,22 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Critical
 
-- [ ] **C1 - A late `Array.prototype.map` override can mint an authenticated raw-SQL recipe.**
+- [x] **C1 - A late `Array.prototype.map` override can mint an authenticated raw-SQL recipe.**
       `packages/core/src/internal/sql-safety.ts`, `packages/drizzle/src/runtime.ts`
   - Selective overrides replaced Kovo's private pinned chunks, identifier text, and `staticSql`
     template text with `DELETE ...`. An own empty `Symbol.iterator` on `sql.join` parts also made
     metadata omit a nested `sql.raw` while the pinned recipe retained it; every managed snapshot
     returned `ok: true` with attacker SQL and no values.
-  - **Acceptance:** construction and rendering must traverse dense own-data entries through
-    one shared snapshot and boot-pinned controls, never app-mutable iterators/prototypes; raw-chunk
-    metadata and executable recipe must derive from the same facts, and real managed execution must
-    retain the original parameterized statement under hostile import order and late poison.
+  - **Evidence:** the 234-test core/browser/output matrix passes; independent SQL, identifier,
+    `staticSql`, and custom-iterator exploit proofs now retain safe text or fail closed.
 
-- [ ] **C2 - Mutable egress classification intrinsics can waive private-network SSRF policy.**
+- [x] **C2 - Mutable egress classification intrinsics can waive private-network SSRF policy.**
       `packages/server/src/{egress,egress-undici}.ts`
   - With the default empty policy, a selective late `Array.prototype.some` override made
     `evaluateEgress` admit `127.0.0.1`; adjacent mutable host-normalization operations can classify
     different bytes than the per-hop transport ultimately dials.
-  - **Acceptance:** policy resolution, IP/hostname parsing, CIDR matching, DNS answer traversal, and
-    every Undici redirect/connect hop use boot-pinned, semantically checked controls and bind the
-    classified host bytes to the actual dial; real-fetch poison regressions must keep private and
-    metadata destinations blocked.
+  - **Evidence:** the 88-test egress/Undici/redirect/bootstrap/intrinsic matrix passes, including
+    real fetch, host-swap, forged-cache, late-poison, and import-order fail-closed regressions.
 
 - [ ] **C3 - Mutable path-containment prototypes escape the framework output filesystem root.**
       `packages/core/src/{storage,internal/filesystem}.ts`
@@ -46,56 +42,52 @@ This is an active closure ledger; `SPEC.md` remains normative.
     delete containment decision use boot-pinned, semantically checked operations and exact path bytes;
     a real outside sentinel must remain unchanged under hostile import order and late poison.
 
-- [ ] **C4 - Mutable Math controls can authenticate a forged HMAC signature.**
+- [x] **C4 - Mutable Math controls can authenticate a forged HMAC signature.**
       `packages/core/src/verifier.ts`
   - Setting `Math.max` to return zero made the constant-time equality loop compare no bytes and
     accept an invalid equal-length signature; mutable `Math.floor`/`Math.abs` also defeated timestamp
     tolerance.
-  - **Acceptance:** signature parsing, byte comparison, and replay-tolerance arithmetic use primitive
-    operations or boot-pinned, semantically checked controls; real forged-signature and expired-event
-    regressions remain rejected under hostile import order and late poison while valid controls pass.
+  - **Evidence:** the 234-test matrix rejects real forged equal-length signatures and stale events
+    under Math/Number/String/RegExp poison while preserving a valid HMAC control.
 
 ## High
 
-- [ ] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
+- [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
       `packages/server/src/{html,renderable,route}.ts`,
       `packages/browser/src/security-output.ts`, `packages/core/src/internal/sink-policy.ts`
   - Independent proofs made an array child and scalar emit raw `<img onerror>`, admitted a dynamic
     `x><img ...` attribute name, and classified an original `javascript:` URL as allowed.
-  - **Acceptance:** escape, attribute-name, URL/CSS, rich-HTML, and nested render controls use
-    semantically checked boot-pinned operations; hostile import-order and late-poison regressions
-    fail closed at real output sinks.
+  - **Evidence:** the 234-test output matrix passes; independent scalar, array-child, dynamic-name,
+    and `javascript:` exploit proofs now escape, reject, or neutralize their original bytes.
 
-- [ ] **H2 - PostgreSQL live posture can be fooled by public/temp privilege-oracle shadows.**
+- [x] **H2 - PostgreSQL live posture can be fooled by public/temp privilege-oracle shadows.**
       `packages/server/src/postgres-runtime.ts`
   - A runtime login with real schema/database creation authority installed shadow
     `has_schema_privilege`/`has_database_privilege` functions and obtained a green posture report.
-  - **Acceptance:** one catalog-first, temp-last, repeatable-read read-only transaction owns every
-    posture fact, with qualified catalog/oracle references and query uncertainty failing closed.
+  - **Evidence:** the 97-test PostgreSQL matrix passes with catalog/temp shadows, one-snapshot
+    posture, and forced audit-query failure controls.
 
-- [ ] **H3 - PostgreSQL app DDL executes attacker shadows with provisioner authority.**
+- [x] **H3 - PostgreSQL app DDL executes attacker shadows with provisioner authority.**
       `packages/server/src/postgres-runtime.ts`
   - A pre-existing writer-created `public.lower(text)` intercepted reviewed seed and migration SQL
     when provisioning explicitly placed `public` before `pg_catalog`.
-  - **Acceptance:** catalog lookup stays first while unqualified app object creation still targets
-    `public`; both seed and migration exploits must execute the genuine built-in.
+  - **Evidence:** the 97-test PostgreSQL matrix executes genuine `lower()` in seed and migration
+    exploit controls while proving unqualified app objects still land in `public`.
 
-- [ ] **H4 - No-login PostgreSQL role closure can retain role-administration authority.**
+- [x] **H4 - No-login PostgreSQL role closure can retain role-administration authority.**
       `packages/server/src/postgres-runtime.ts`
   - Reader/writer closure admitted `CREATEROLE`, predefined privileged roles, and `ADMIN OPTION`
     whenever no runtime login role was configured.
-  - **Acceptance:** the complete reader/writer/runtime membership closure is always audited before
-    ACL mutation; any elevated attribute, predefined role, privileged framework role, or admin edge
-    aborts and rolls back provisioning.
+  - **Evidence:** the 97-test PostgreSQL matrix rolls back CREATEROLE, predefined-role, privileged
+    framework-role, and ADMIN OPTION closures with and without an explicit runtime login.
 
-- [ ] **H5 - Post-closure schema and crypto method mutation can replace validation or proof bytes.**
+- [x] **H5 - Post-closure schema and crypto method mutation can replace validation or proof bytes.**
       `packages/server/src/{app-snapshot,schema,app-document,confidential-at-rest,mutation-wire,replay}.ts`,
       `packages/core/src/verifier.ts`
   - Retained custom/composite schema methods could become permissive after `createApp`; adjacent
     late crypto/subtle/cipher method poison could forge output/attestation proofs or observe secrets.
-  - **Acceptance:** app declarations snapshot schema topology and executable identities; every
-    cryptographic proof/encryption operation uses boot-pinned, semantically checked methods and
-    private byte snapshots with post-import hostile regressions.
+  - **Evidence:** app/schema/document (198), crypto/replay/provenance (86), and core verifier/output
+    (234) matrices pass post-closure schema and late cipher/SubtleCrypto/HMAC poison regressions.
 
 - [ ] **H6 - Mutable RegExp/String controls reopen ambiguous reserved Node request targets.**
       `packages/server/src/{node,build}.ts`
@@ -117,19 +109,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Medium
 
-- [ ] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
+- [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
       `packages/server/src/csrf.ts`
   - Replacing `globalThis.Request` after import or selectively mapping `POST` to `GET` through
     `String.prototype.toUpperCase` made a real cross-origin unsafe request skip the Origin floor.
-  - **Acceptance:** pin and self-test Request identity, URL parsing, method classification, and
-    trusted-origin traversal; both late-poison proofs must reject.
+  - **Evidence:** the 158-test auth/CSRF/endpoint/response matrix passes; both independent late
+    Request replacement and selective POST-to-GET proofs now reject the cross-origin request.
 
-- [ ] **M2 - PostgreSQL provisioning rewrites undeclared external-role ACLs instead of rolling back.**
+- [x] **M2 - PostgreSQL provisioning rewrites undeclared external-role ACLs instead of rolling back.**
       `packages/server/src/postgres-runtime.ts`
   - An unsafe reachable shared role was silently stripped of grants, mutating authority outside the
     declared Kovo topology.
-  - **Acceptance:** mutate only `PUBLIC` and configured roles; any residual external authority must
-    fail before revocation and roll back without changing the external role.
+  - **Evidence:** the 97-test PostgreSQL matrix proves residual external authority aborts before
+    revocation and the undeclared role retains its original ACL after rollback.
 
 - [x] **M3 - Unicode-escaped PostgreSQL identifiers bypass the scoped-client session-control
       scanner.** `packages/server/src/managed-db.ts`
@@ -151,6 +143,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The first remediation pass is intentionally non-zero. PostgreSQL H2-H4/M2 are integrated with a
-97-test matrix and focused live/exploit evidence; C1/H1/H5-H6/M1 remain under active
-runtime/compiler checkpoints. A complete fresh sweep of the final integrated tree is still required.
+The remediation pass remains intentionally non-zero: C3, H6-H7, and M4 are active filesystem,
+request-transport, Better Auth, and diagnostics fixes. Integrated evidence is green at 97 PostgreSQL,
+88 egress, 198 app/schema/document, 158 auth/response, 86 crypto/replay, and 234 output/compiler/core
+tests. A complete fresh sweep of the final integrated tree is still required.
