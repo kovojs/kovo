@@ -10,6 +10,53 @@ import {
 } from './response.js';
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { formLikeToRecord } from './schema.js';
+import {
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessIsArray,
+  witnessJsonStringifyPrimitive,
+  witnessObjectKeys,
+  witnessReflectApply,
+  witnessSortStrings,
+} from './security-witness-intrinsics.js';
+
+const NativeArrayBuffer = ArrayBuffer;
+const NativeFormData = FormData;
+const NativeUint8Array = Uint8Array;
+const nativeFormDataAppend = witnessGetOwnPropertyDescriptor(FormData.prototype, 'append')
+  ?.value as unknown;
+const nativeFormDataForEach = witnessGetOwnPropertyDescriptor(FormData.prototype, 'forEach')
+  ?.value as unknown;
+const nativeSubtleCrypto = globalThis.crypto.subtle;
+const subtleCryptoPrototype = witnessGetPrototypeOf(nativeSubtleCrypto);
+const nativeSubtleDigest =
+  subtleCryptoPrototype === null
+    ? undefined
+    : witnessGetOwnPropertyDescriptor(subtleCryptoPrototype, 'digest')?.value;
+if (typeof nativeSubtleDigest !== 'function') {
+  throw new TypeError('Kovo replay upload digest controls are unavailable.');
+}
+if (typeof nativeFormDataAppend !== 'function' || typeof nativeFormDataForEach !== 'function') {
+  throw new TypeError('Kovo replay FormData controls are unavailable.');
+}
+const formDataControl = new NativeFormData();
+witnessReflectApply(nativeFormDataAppend, formDataControl, ['kovo-control', 'accepted']);
+let formDataControlSound = false;
+witnessReflectApply(nativeFormDataForEach, formDataControl, [
+  (value: FormDataEntryValue, name: string): void => {
+    if (name === 'kovo-control' && value === 'accepted') formDataControlSound = true;
+  },
+]);
+if (!formDataControlSound) {
+  throw new TypeError('Kovo replay FormData controls failed their semantic check.');
+}
+const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+const subtleDigestControl = witnessReflectApply<Promise<ArrayBuffer>>(
+  nativeSubtleDigest,
+  nativeSubtleCrypto,
+  ['SHA-256', new NativeUint8Array()],
+).then((digest) => bytesToHex(new NativeUint8Array(digest)) === EMPTY_SHA256);
 
 export type MutationReplayResponse = ServerResponseBase<
   FrameworkWireBody,
@@ -321,17 +368,21 @@ function canonicalReplayInput<Request>(
   if (!csrfBinding) return wireRequest.rawInput;
 
   const field = csrf.field ?? 'kovo-csrf';
-  if (wireRequest.rawInput instanceof FormData) {
+  if (isNativeFormData(wireRequest.rawInput)) {
     let found = false;
     const entries: Array<readonly [string, unknown]> = [];
-    for (const [name, value] of wireRequest.rawInput.entries()) {
+    const rawEntries = snapshotFormDataEntries(wireRequest.rawInput);
+    for (let index = 0; index < rawEntries.length; index += 1) {
+      const entry = rawEntries[index]!;
+      const name = entry[0];
+      const value = entry[1];
       if (name === field) {
         found = true;
-        entries.push([name, `csrf-binding:${csrfBinding}`]);
+        appendReplayValue(entries, [name, `csrf-binding:${csrfBinding}`]);
       } else {
         // Request provenance wrappers are intentionally not coercible. Preserve each value as-is
         // in a module-private carrier; canonicalJson reveals it at the internal fingerprint choke.
-        entries.push([name, value]);
+        appendReplayValue(entries, [name, value]);
       }
     }
     return found ? new ReplayFormDataFingerprintInput(entries) : wireRequest.rawInput;
@@ -557,11 +608,13 @@ async function canonicalJson(value: unknown): Promise<string> {
   if (value instanceof ReplayFormDataFingerprintInput) {
     return canonicalFormDataEntries(value.entries);
   }
-  if (value instanceof FormData) return canonicalFormDataEntries(value.entries());
-  if (isUploadLike(value)) return `upload:${JSON.stringify(await uploadFingerprint(value))}`;
+  if (isNativeFormData(value)) return canonicalFormDataEntries(snapshotFormDataEntries(value));
+  if (isUploadLike(value)) return `upload:${await canonicalJson(await uploadFingerprint(value))}`;
   if (value === undefined) return 'undefined';
   if (value === null || typeof value !== 'object') {
-    const encoded = JSON.stringify(value);
+    const encoded = witnessJsonStringifyPrimitive(
+      value as string | number | boolean | null | undefined,
+    );
     if (encoded === undefined) {
       throw new MutationReplayFingerprintError(
         `Unsupported replay fingerprint value of type ${typeof value}.`,
@@ -569,18 +622,92 @@ async function canonicalJson(value: unknown): Promise<string> {
     }
     return encoded;
   }
-  if (Array.isArray(value)) {
-    const entries: string[] = [];
-    for (const entry of value) entries.push(await canonicalJson(entry));
-    return `[${entries.join(',')}]`;
+  if (witnessIsArray(value)) {
+    const entries = snapshotReplayArray(value);
+    let result = '[';
+    for (let index = 0; index < entries.length; index += 1) {
+      if (index > 0) result += ',';
+      result += await canonicalJson(entries[index]);
+    }
+    return `${result}]`;
   }
-  const fields: string[] = [];
-  for (const key of Object.keys(value).sort()) {
-    fields.push(
-      `${JSON.stringify(key)}:${await canonicalJson((value as Record<string, unknown>)[key])}`,
+  const keys = witnessObjectKeys(value);
+  witnessSortStrings(keys);
+  const fields = snapshotReplayRecord(value, keys);
+  let result = '{';
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
+    if (index > 0) result += ',';
+    result += `${witnessJsonStringifyPrimitive(field[0])!}:${await canonicalJson(field[1])}`;
+  }
+  return `${result}}`;
+}
+
+function snapshotReplayArray(value: unknown[]): unknown[] {
+  const length = witnessGetOwnPropertyDescriptor(value, 'length');
+  if (length === undefined || !('value' in length) || typeof length.value !== 'number') {
+    throw new MutationReplayFingerprintError(
+      'Replay fingerprint arrays require a stable own length.',
     );
   }
-  return `{${fields.join(',')}}`;
+  const entries: unknown[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+    if (descriptor !== undefined && !('value' in descriptor)) {
+      throw new MutationReplayFingerprintError(
+        'Replay fingerprint arrays require stable own data entries.',
+      );
+    }
+    appendReplayValue(entries, descriptor?.value);
+  }
+  return entries;
+}
+
+function snapshotReplayRecord(
+  value: object,
+  keys: readonly string[],
+): Array<readonly [string, unknown]> {
+  const fields: Array<readonly [string, unknown]> = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new MutationReplayFingerprintError(
+        'Replay fingerprint records require stable own data properties.',
+      );
+    }
+    appendReplayValue(fields, [key, descriptor.value]);
+  }
+  return fields;
+}
+
+function isNativeFormData(value: unknown): value is FormData {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
+  try {
+    witnessReflectApply(nativeFormDataForEach as Function, value, [() => undefined]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function snapshotFormDataEntries(value: FormData): Array<readonly [string, FormDataEntryValue]> {
+  const entries: Array<readonly [string, FormDataEntryValue]> = [];
+  witnessReflectApply(nativeFormDataForEach as Function, value, [
+    (entry: FormDataEntryValue, name: string): void => {
+      appendReplayValue(entries, [name, entry]);
+    },
+  ]);
+  return entries;
+}
+
+function appendReplayValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 class ReplayFormDataFingerprintInput {
@@ -588,15 +715,21 @@ class ReplayFormDataFingerprintInput {
 }
 
 async function canonicalFormDataEntries(
-  formEntries: Iterable<readonly [string, unknown]>,
+  formEntries: readonly (readonly [string, unknown])[],
 ): Promise<string> {
-  const entries: string[] = [];
-  for (const [name, entry] of formEntries) {
+  let result = 'formdata:[';
+  for (let index = 0; index < formEntries.length; index += 1) {
+    const formEntry = formEntries[index]!;
+    const name = formEntry[0];
+    const entry = formEntry[1];
+    if (index > 0) result += ',';
     // Embed each child fingerprint as a JSON string so separators inside metadata or field names
     // cannot create an ambiguous chosen-prefix representation.
-    entries.push(JSON.stringify([name, await canonicalJson(entry)]));
+    result += `[${witnessJsonStringifyPrimitive(name)!},${witnessJsonStringifyPrimitive(
+      await canonicalJson(entry),
+    )!}]`;
   }
-  return `formdata:[${entries.join(',')}]`;
+  return `${result}]`;
 }
 
 interface ReplayUploadLike {
@@ -633,7 +766,7 @@ async function uploadFingerprint(value: ReplayUploadLike): Promise<{
       },
     );
   }
-  if (!(bytes instanceof ArrayBuffer) || bytes.byteLength !== value.size) {
+  if (!(bytes instanceof NativeArrayBuffer) || bytes.byteLength !== value.size) {
     throw new MutationReplayFingerprintError(
       'Upload bytes did not match declared metadata while computing replay fingerprint.',
     );
@@ -641,7 +774,14 @@ async function uploadFingerprint(value: ReplayUploadLike): Promise<{
 
   let digest: ArrayBuffer;
   try {
-    digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    if (!(await subtleDigestControl)) {
+      throw new TypeError('Replay upload digest controls failed their semantic check.');
+    }
+    digest = await witnessReflectApply<Promise<ArrayBuffer>>(
+      nativeSubtleDigest,
+      nativeSubtleCrypto,
+      ['SHA-256', bytes],
+    );
   } catch (error) {
     throw new MutationReplayFingerprintError(
       'Unable to digest upload bytes for replay fingerprint.',
@@ -653,7 +793,7 @@ async function uploadFingerprint(value: ReplayUploadLike): Promise<{
 
   return {
     __kovoUpload: true,
-    digest: bytesToHex(new Uint8Array(digest)),
+    digest: bytesToHex(new NativeUint8Array(digest)),
     name: typeof value.name === 'string' ? value.name : null,
     size: value.size,
     type: typeof value.type === 'string' ? value.type : null,
@@ -661,8 +801,12 @@ async function uploadFingerprint(value: ReplayUploadLike): Promise<{
 }
 
 function bytesToHex(bytes: Uint8Array): string {
+  const alphabet = '0123456789abcdef';
   let output = '';
-  for (const byte of bytes) output += byte.toString(16).padStart(2, '0');
+  for (let index = 0; index < bytes.length; index += 1) {
+    const byte = bytes[index]!;
+    output += alphabet[byte >>> 4]! + alphabet[byte & 0x0f]!;
+  }
   return output;
 }
 

@@ -1,29 +1,38 @@
+import {
+  createWitnessWeakMap,
+  witnessGetOwnPropertyDescriptor,
+  witnessReflectApply,
+  witnessReflectGet,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
+
 const NativeAbortController = AbortController;
 const NativeHeaders = Headers;
 const NativeRequest = Request;
-const authorityNeutralCloneFactories = new WeakMap<Request, () => Request>();
-const authorityNeutralMetadataSources = new WeakMap<Request, Request>();
-const nativeRequestClone = Object.getOwnPropertyDescriptor(Request.prototype, 'clone')
+const authorityNeutralCloneFactories = createWitnessWeakMap<Request, () => Request>();
+const authorityNeutralMetadataSources = createWitnessWeakMap<Request, Request>();
+const nativeRequestClone = witnessGetOwnPropertyDescriptor(Request.prototype, 'clone')
   ?.value as unknown;
-const nativeRequestHeaders = Object.getOwnPropertyDescriptor(Request.prototype, 'headers')?.get;
-const nativeHeadersEntries = Object.getOwnPropertyDescriptor(Headers.prototype, 'entries')
+const nativeRequestHeaders = witnessGetOwnPropertyDescriptor(Request.prototype, 'headers')?.get;
+const nativeHeadersEntries = witnessGetOwnPropertyDescriptor(Headers.prototype, 'entries')
   ?.value as unknown;
-const nativeAbortControllerAbort = Object.getOwnPropertyDescriptor(
+const nativeAbortControllerAbort = witnessGetOwnPropertyDescriptor(
   AbortController.prototype,
   'abort',
 )?.value as unknown;
-const nativeAbortControllerSignal = Object.getOwnPropertyDescriptor(
+const nativeAbortControllerSignal = witnessGetOwnPropertyDescriptor(
   AbortController.prototype,
   'signal',
 )?.get;
-const abortSignalAbortedDescriptor = Object.getOwnPropertyDescriptor(
+const abortSignalAbortedDescriptor = witnessGetOwnPropertyDescriptor(
   AbortSignal.prototype,
   'aborted',
 );
 const nativeAbortSignalAborted = abortSignalAbortedDescriptor
-  ? (Reflect.get(abortSignalAbortedDescriptor, 'get') as unknown)
+  ? witnessReflectGet(abortSignalAbortedDescriptor, 'get')
   : undefined;
-const nativeAddEventListener = Object.getOwnPropertyDescriptor(
+const nativeAddEventListener = witnessGetOwnPropertyDescriptor(
   EventTarget.prototype,
   'addEventListener',
 )?.value as unknown;
@@ -33,7 +42,7 @@ export function cloneNativeRequest(request: Request): Request {
   if (typeof nativeRequestClone !== 'function') {
     throw new TypeError('The Web Request implementation lacks a clone method.');
   }
-  return Reflect.apply(nativeRequestClone, request, []) as Request;
+  return witnessReflectApply(nativeRequestClone, request, []);
 }
 
 /** Construct with the import-time Web intrinsic, never a later app-replaced global. */
@@ -49,10 +58,10 @@ export function createNativeHeaders(init?: HeadersInit): Headers {
 /** Test with the import-time Web Request brand intrinsic. */
 export function isNativeRequest(value: unknown): value is Request {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
-  const source = authorityNeutralMetadataSources.get(value as Request) ?? value;
+  const source = witnessWeakMapGet(authorityNeutralMetadataSources, value as Request) ?? value;
   if (typeof nativeRequestHeaders !== 'function') return false;
   try {
-    Reflect.apply(nativeRequestHeaders, source, []);
+    witnessReflectApply(nativeRequestHeaders, source, []);
     return true;
   } catch {
     return false;
@@ -64,7 +73,7 @@ export function isNativeHeaders(value: unknown): value is Headers {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
   if (typeof nativeHeadersEntries !== 'function') return false;
   try {
-    Reflect.apply(nativeHeadersEntries, value, []);
+    witnessReflectApply(nativeHeadersEntries, value, []);
     return true;
   } catch {
     return false;
@@ -76,7 +85,7 @@ export function isNativeAbortSignal(value: unknown): value is AbortSignal {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
   if (typeof nativeAbortSignalAborted !== 'function') return false;
   try {
-    Reflect.apply(nativeAbortSignalAborted, value, []);
+    witnessReflectApply(nativeAbortSignalAborted, value, []);
     return true;
   } catch {
     return false;
@@ -89,18 +98,20 @@ export function registerAuthorityNeutralRequestClone(
   clone: () => Request,
   metadataSource: Request,
 ): void {
-  authorityNeutralCloneFactories.set(carrier, clone);
-  authorityNeutralMetadataSources.set(carrier, metadataSource);
+  witnessWeakMapSet(authorityNeutralCloneFactories, carrier, clone);
+  witnessWeakMapSet(authorityNeutralMetadataSources, carrier, metadataSource);
 }
 
 /** Clone a framework carrier without trusting an app-overridable public method. */
 export function cloneRequestForAuthorityNeutralization(request: Request): Request {
-  return authorityNeutralCloneFactories.get(request)?.() ?? cloneNativeRequest(request);
+  return (
+    witnessWeakMapGet(authorityNeutralCloneFactories, request)?.() ?? cloneNativeRequest(request)
+  );
 }
 
 /** Resolve a genuine carrier for bodyless metadata reads without teeing or consuming its body. */
 export function requestForAuthorityNeutralMetadata(request: Request): Request {
-  return authorityNeutralMetadataSources.get(request) ?? request;
+  return witnessWeakMapGet(authorityNeutralMetadataSources, request) ?? request;
 }
 
 /** Register a framework property/provenance Proxy with its genuine metadata carrier. */
@@ -108,7 +119,7 @@ export function registerAuthorityNeutralRequestMetadata(
   carrier: Request,
   metadataSource: Request,
 ): void {
-  authorityNeutralMetadataSources.set(carrier, metadataSource);
+  witnessWeakMapSet(authorityNeutralMetadataSources, carrier, metadataSource);
 }
 
 /** Mirror cancellation timing while discarding an arbitrary caller-controlled abort reason. */
@@ -123,18 +134,18 @@ export function authorityNeutralAbortSignal(source: AbortSignal): AbortSignal {
   }
 
   const controller = new NativeAbortController();
-  const signal = Reflect.apply(nativeAbortControllerSignal, controller, []) as AbortSignal;
+  const signal = witnessReflectApply<AbortSignal>(nativeAbortControllerSignal, controller, []);
   const abort = (): void => {
-    if (!(Reflect.apply(nativeAbortSignalAborted, signal, []) as boolean)) {
-      Reflect.apply(nativeAbortControllerAbort, controller, []);
+    if (!witnessReflectApply<boolean>(nativeAbortSignalAborted, signal, [])) {
+      witnessReflectApply(nativeAbortControllerAbort, controller, []);
     }
   };
-  if (Reflect.apply(nativeAbortSignalAborted, source, []) as boolean) {
+  if (witnessReflectApply<boolean>(nativeAbortSignalAborted, source, [])) {
     abort();
     return signal;
   }
-  Reflect.apply(nativeAddEventListener, source, ['abort', abort, { once: true }]);
+  witnessReflectApply(nativeAddEventListener, source, ['abort', abort, { once: true }]);
   // Close the check/listen race without ever copying `source.reason`.
-  if (Reflect.apply(nativeAbortSignalAborted, source, []) as boolean) abort();
+  if (witnessReflectApply<boolean>(nativeAbortSignalAborted, source, [])) abort();
   return signal;
 }

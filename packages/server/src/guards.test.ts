@@ -110,6 +110,19 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
     ).toBe(true);
   });
 
+  it('does not escalate roles through a poisoned Array.includes prototype', () => {
+    const originalIncludes = Array.prototype.includes;
+    try {
+      Array.prototype.includes = () => true;
+      const decision = guards.role<
+        Req & { session: { user: { id: string; roles: readonly string[] } } }
+      >('admin')({ session: { user: { id: 'user_1', roles: ['member'] } } });
+      expect(decision).toEqual({ kind: 'forbidden', payload: {} });
+    } finally {
+      Array.prototype.includes = originalIncludes;
+    }
+  });
+
   it('keys authorization principal from session.user.id rather than session.id', async () => {
     expect(guards.authed<Req>()({ session: { id: 'session_1', user: { id: 'user_1' } } })).toBe(
       true,
@@ -944,7 +957,7 @@ describe('server guard and session primitives', () => {
       }),
     ).resolves.toMatchObject({ status: 200 });
 
-    // The lifecycle and token comparison share one pinned session identity.
+    // The closed CSRF posture resolves the session once; lifecycle duplication would repeat it.
     expect(csrfSessionReads).toBe(1);
     expect(parseCalls).toBe(1);
     expect(guardCalls).toBe(1);

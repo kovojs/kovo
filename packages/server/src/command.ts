@@ -1,6 +1,16 @@
 import { execFile } from 'node:child_process';
 
 import { blessSink, isBlessedSink } from '@kovojs/core/internal/sink-policy';
+import {
+  createWitnessSet,
+  createWitnessWeakMap,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 declare const commandBrand: unique symbol;
 declare const commandAllowlistBrand: unique symbol;
@@ -8,7 +18,8 @@ declare const commandAllowlistBrand: unique symbol;
 type CommandExecFileSink = 'server:command-exec-file';
 
 const COMMAND_EXEC_FILE_SINK: CommandExecFileSink = 'server:command-exec-file';
-const commandAllowlists = new WeakMap<CommandAllowlist, ReadonlySet<string>>();
+const commandAllowlists = createWitnessWeakMap<CommandAllowlist, ReadonlySet<string>>();
+const nativeArrayIsArray = Array.isArray;
 
 /** A shell-free command minted by {@link cmd}. */
 export interface Command {
@@ -61,7 +72,7 @@ export function commandAllowlist(
   programs: readonly string[],
   options: { justification: string },
 ): CommandAllowlist {
-  if (!Array.isArray(programs)) {
+  if (!nativeArrayIsArray(programs)) {
     throw new TypeError(
       'Command allowlist programs must be an array of strings (SPEC.md §6.6, KV424).',
     );
@@ -78,21 +89,32 @@ export function commandAllowlist(
     allowWhitespace: true,
   });
 
-  const normalizedPrograms = programs.map((program, index) => {
+  const normalizedPrograms: string[] = [];
+  for (let index = 0; index < programs.length; index += 1) {
+    const program = programs[index]!;
     assertSafeCommandText(program, `allowlist[${index}]`, { rejectWhitespace: true });
-    return program;
-  });
-  const uniquePrograms = new Set(normalizedPrograms);
-  if (uniquePrograms.size !== normalizedPrograms.length) {
-    throw new TypeError(
-      'Command allowlist must not contain duplicate programs (SPEC.md §6.6, KV424).',
-    );
+    witnessDefineProperty(normalizedPrograms, index, {
+      configurable: true,
+      enumerable: true,
+      value: program,
+      writable: true,
+    });
+  }
+  const uniquePrograms = createWitnessSet<string>();
+  for (let index = 0; index < normalizedPrograms.length; index += 1) {
+    const program = normalizedPrograms[index]!;
+    if (witnessSetHas(uniquePrograms, program)) {
+      throw new TypeError(
+        'Command allowlist must not contain duplicate programs (SPEC.md §6.6, KV424).',
+      );
+    }
+    witnessSetAdd(uniquePrograms, program);
   }
 
-  const allowlist = Object.freeze({
+  const allowlist = witnessFreeze({
     justification: options.justification,
   }) as CommandAllowlist;
-  commandAllowlists.set(allowlist, Object.freeze(uniquePrograms));
+  witnessWeakMapSet(commandAllowlists, allowlist, uniquePrograms);
   return allowlist;
 }
 
@@ -106,31 +128,41 @@ export function commandAllowlist(
  */
 export function cmd(program: string, argv: readonly string[], options: CommandOptions): Command {
   assertSafeCommandText(program, 'program', { rejectWhitespace: true });
-  const allowedPrograms = commandAllowlists.get(options?.allow);
+  const allowedPrograms =
+    options !== undefined && typeof options.allow === 'object' && options.allow !== null
+      ? witnessWeakMapGet(commandAllowlists, options.allow)
+      : undefined;
   if (allowedPrograms === undefined) {
     throw new TypeError(
       'Command construction requires commandAllowlist(...) (SPEC.md §6.6, KV424).',
     );
   }
-  if (!allowedPrograms.has(program)) {
+  if (!witnessSetHas(allowedPrograms as Set<string>, program)) {
     throw new TypeError(
       `Command program ${JSON.stringify(program)} is not in the explicit allowlist (SPEC.md §6.6, KV424).`,
     );
   }
-  if (!Array.isArray(argv)) {
+  if (!nativeArrayIsArray(argv)) {
     throw new TypeError('Command argv must be an array of strings (SPEC.md §6.6, KV424).');
   }
 
-  const normalizedArgv = argv.map((arg, index) => {
+  const normalizedArgv: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]!;
     assertSafeCommandText(arg, `argv[${index}]`, { allowEmpty: true });
-    return arg;
-  });
+    witnessDefineProperty(normalizedArgv, index, {
+      configurable: true,
+      enumerable: true,
+      value: arg,
+      writable: true,
+    });
+  }
   const command = {
-    argv: Object.freeze([...normalizedArgv]),
+    argv: witnessFreeze(normalizedArgv),
     program,
   } as Command;
 
-  return blessSink<CommandExecFileSink, Command>(COMMAND_EXEC_FILE_SINK, Object.freeze(command));
+  return blessSink<CommandExecFileSink, Command>(COMMAND_EXEC_FILE_SINK, witnessFreeze(command));
 }
 
 /**

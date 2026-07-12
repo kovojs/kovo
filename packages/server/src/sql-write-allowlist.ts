@@ -11,6 +11,21 @@ import type {
   WithStatement,
   WithStatementBinding,
 } from 'pgsql-ast-parser';
+import {
+  createWitnessSet,
+  createWitnessWeakSet,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectKeys,
+  witnessSetAdd,
+  witnessSetForEach,
+  witnessSetHas,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+  witnessReflectApply,
+} from './security-witness-intrinsics.js';
+
+const nativeArraySort = Array.prototype.sort;
 
 const require = createRequire(import.meta.url);
 let pgsqlAstParser: typeof import('pgsql-ast-parser') | undefined;
@@ -40,7 +55,11 @@ export const parseSqlWriteTables = securityClassifier(
     const verdict = classifyStatement(statement, options);
     if (verdict.kind === 'proven-safe') return [];
     if (verdict.kind === 'unproven') return [UNTABLED_SQL_WRITE];
-    return [...verdict.detail];
+    const targets: ParsedSqlWriteTarget[] = [];
+    for (let index = 0; index < verdict.detail.length; index += 1) {
+      appendSqlClassifierValue(targets, verdict.detail[index]!);
+    }
+    return targets;
   },
 );
 
@@ -74,9 +93,14 @@ export const classifyStatement = securityClassifier(
       };
     }
 
-    return combineStatementVerdicts(
-      parsedStatements.map((parsed) => classifyParsedStatement(parsed, new Set(), options.dialect)),
-    );
+    const verdicts: SqlClassifierVerdict<SqlWriteTargets>[] = [];
+    for (let index = 0; index < parsedStatements.length; index += 1) {
+      appendSqlClassifierValue(
+        verdicts,
+        classifyParsedStatement(parsedStatements[index]!, createWitnessSet(), options.dialect),
+      );
+    }
+    return combineStatementVerdicts(verdicts);
   },
 );
 
@@ -252,13 +276,17 @@ function writeVerdict(
     };
   }
 
-  if (targets.length === 0 || targets.includes(UNTABLED_SQL_WRITE)) {
+  let containsUntabledWrite = false;
+  for (let index = 0; index < targets.length; index += 1) {
+    if (targets[index] === UNTABLED_SQL_WRITE) containsUntabledWrite = true;
+  }
+  if (targets.length === 0 || containsUntabledWrite) {
     return {
       kind: 'unproven',
       reason: 'write statement did not expose a resolvable table target',
     };
   }
-  return { kind: 'proven-unsafe', detail: [...new Set(targets)].sort(compareSqlWriteTargets) };
+  return { kind: 'proven-unsafe', detail: uniqueSortedSqlTargets(targets) };
 }
 
 function classifyReadStatement(
@@ -360,7 +388,12 @@ function withAliases(
   currentAliases: ReadonlySet<string>,
   addedAliases: readonly string[],
 ): ReadonlySet<string> {
-  return new Set([...currentAliases, ...addedAliases]);
+  const aliases = createWitnessSet<string>();
+  witnessSetForEach(currentAliases as Set<string>, (alias) => witnessSetAdd(aliases, alias));
+  for (let index = 0; index < addedAliases.length; index += 1) {
+    witnessSetAdd(aliases, addedAliases[index]!);
+  }
+  return aliases;
 }
 
 function writeTablesForNestedStatements(
@@ -386,31 +419,42 @@ function writeTablesForNestedStatement(
     return verdict.kind === 'proven-unsafe' ? [...verdict.detail] : [];
   }
 
-  return Object.values(value).flatMap((item) =>
-    writeTablesForNestedStatement(item, cteAliases, dialect),
-  );
+  const targets: ParsedSqlWriteTarget[] = [];
+  const keys = witnessObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, keys[index]!);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const nested = writeTablesForNestedStatement(descriptor.value, cteAliases, dialect);
+    for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
+      appendSqlClassifierValue(targets, nested[nestedIndex]!);
+    }
+  }
+  return targets;
 }
 
 function combineStatementVerdicts(
   verdicts: readonly SqlClassifierVerdict<SqlWriteTargets>[],
 ): SqlClassifierVerdict<SqlWriteTargets> {
-  const unproven = verdicts.find((verdict) => verdict.kind === 'unproven');
-  if (unproven) return unproven;
-
-  const unsafeTargets = verdicts.flatMap((verdict) =>
-    verdict.kind === 'proven-unsafe' ? [...verdict.detail] : [],
-  );
+  const unsafeTargets: ParsedSqlWriteTarget[] = [];
+  for (let index = 0; index < verdicts.length; index += 1) {
+    const verdict = verdicts[index]!;
+    if (verdict.kind === 'unproven') return verdict;
+    if (verdict.kind !== 'proven-unsafe') continue;
+    for (let targetIndex = 0; targetIndex < verdict.detail.length; targetIndex += 1) {
+      appendSqlClassifierValue(unsafeTargets, verdict.detail[targetIndex]!);
+    }
+  }
   if (unsafeTargets.length > 0) {
     return {
       kind: 'proven-unsafe',
-      detail: [...new Set(unsafeTargets)].sort(compareSqlWriteTargets),
+      detail: uniqueSortedSqlTargets(unsafeTargets),
     };
   }
 
   return { kind: 'proven-safe' };
 }
 
-const COMMON_PROVEN_PURE_SQL_FUNCTIONS = new Set<string>([
+const COMMON_PROVEN_PURE_SQL_FUNCTIONS = stringSet([
   'abs',
   'avg',
   'coalesce',
@@ -438,8 +482,7 @@ const COMMON_PROVEN_PURE_SQL_FUNCTIONS = new Set<string>([
   'upper',
 ]);
 
-const POSTGRES_PROVEN_PURE_SQL_FUNCTIONS = new Set<string>([
-  ...COMMON_PROVEN_PURE_SQL_FUNCTIONS,
+const POSTGRES_PROVEN_PURE_SQL_FUNCTIONS = extendStringSet(COMMON_PROVEN_PURE_SQL_FUNCTIONS, [
   'current_date',
   'current_time',
   'current_timestamp',
@@ -451,8 +494,7 @@ const POSTGRES_PROVEN_PURE_SQL_FUNCTIONS = new Set<string>([
   'to_jsonb',
 ]);
 
-const SQLITE_PROVEN_PURE_SQL_FUNCTIONS = new Set<string>([
-  ...COMMON_PROVEN_PURE_SQL_FUNCTIONS,
+const SQLITE_PROVEN_PURE_SQL_FUNCTIONS = extendStringSet(COMMON_PROVEN_PURE_SQL_FUNCTIONS, [
   'datetime',
   'json_group_array',
   'json_group_object',
@@ -463,9 +505,11 @@ function unprovenSqlFunctionCalls(
   value: unknown,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): string[] {
-  const calls = new Set<string>();
-  collectUnprovenSqlFunctionCalls(value, dialect, calls, new WeakSet<object>());
-  return [...calls].sort();
+  const calls = createWitnessSet<string>();
+  collectUnprovenSqlFunctionCalls(value, dialect, calls, createWitnessWeakSet<object>());
+  const snapshot: string[] = [];
+  witnessSetForEach(calls, (call) => appendSqlClassifierValue(snapshot, call));
+  return witnessReflectApply(nativeArraySort, snapshot, []);
 }
 
 function collectUnprovenSqlFunctionCalls(
@@ -475,12 +519,12 @@ function collectUnprovenSqlFunctionCalls(
   seen: WeakSet<object>,
 ): void {
   if (!value || typeof value !== 'object') return;
-  if (seen.has(value)) return;
-  seen.add(value);
+  if (witnessWeakSetHas(seen, value)) return;
+  witnessWeakSetAdd(seen, value);
 
   if (isSqlFunctionCall(value)) {
     const name = sqlFunctionName(value.function);
-    if (!isProvenPureSqlFunction(value.function, dialect)) calls.add(name);
+    if (!isProvenPureSqlFunction(value.function, dialect)) witnessSetAdd(calls, name);
   }
 
   for (const child of Object.values(value)) {
@@ -510,11 +554,12 @@ function isProvenPureSqlFunction(
 ): boolean {
   const functionName = name.name.toLowerCase();
   if (name.schema !== undefined && name.schema.toLowerCase() !== 'pg_catalog') return false;
-  if (dialect === 'sqlite') return SQLITE_PROVEN_PURE_SQL_FUNCTIONS.has(functionName);
-  if (dialect === 'postgres') return POSTGRES_PROVEN_PURE_SQL_FUNCTIONS.has(functionName);
+  if (dialect === 'sqlite') return witnessSetHas(SQLITE_PROVEN_PURE_SQL_FUNCTIONS, functionName);
+  if (dialect === 'postgres')
+    return witnessSetHas(POSTGRES_PROVEN_PURE_SQL_FUNCTIONS, functionName);
   return (
-    POSTGRES_PROVEN_PURE_SQL_FUNCTIONS.has(functionName) ||
-    SQLITE_PROVEN_PURE_SQL_FUNCTIONS.has(functionName)
+    witnessSetHas(POSTGRES_PROVEN_PURE_SQL_FUNCTIONS, functionName) ||
+    witnessSetHas(SQLITE_PROVEN_PURE_SQL_FUNCTIONS, functionName)
   );
 }
 
@@ -522,7 +567,7 @@ function sqlFunctionName(name: QName): string {
   return name.schema === undefined ? name.name : `${name.schema}.${name.name}`;
 }
 
-const SQL_STATEMENT_TYPES = new Set<string>([
+const SQL_STATEMENT_TYPES = stringSet([
   'alter enum',
   'alter index',
   'alter sequence',
@@ -570,8 +615,46 @@ const SQL_STATEMENT_TYPES = new Set<string>([
   'with recursive',
 ]);
 
+function stringSet(values: readonly string[]): Set<string> {
+  const set = createWitnessSet<string>();
+  for (let index = 0; index < values.length; index += 1) witnessSetAdd(set, values[index]!);
+  return set;
+}
+
+function extendStringSet(base: Set<string>, values: readonly string[]): Set<string> {
+  const set = createWitnessSet<string>();
+  witnessSetForEach(base, (value) => witnessSetAdd(set, value));
+  for (let index = 0; index < values.length; index += 1) witnessSetAdd(set, values[index]!);
+  return set;
+}
+
+function uniqueSortedSqlTargets(values: readonly ParsedSqlWriteTarget[]): ParsedSqlWriteTarget[] {
+  const seen = createWitnessSet<ParsedSqlWriteTarget>();
+  const snapshot: ParsedSqlWriteTarget[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (witnessSetHas(seen, value)) continue;
+    witnessSetAdd(seen, value);
+    appendSqlClassifierValue(snapshot, value);
+  }
+  return witnessReflectApply(nativeArraySort, snapshot, [compareSqlWriteTargets]);
+}
+
+function appendSqlClassifierValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
 function isStatement(value: object): value is Statement {
-  return 'type' in value && typeof value.type === 'string' && SQL_STATEMENT_TYPES.has(value.type);
+  return (
+    'type' in value &&
+    typeof value.type === 'string' &&
+    witnessSetHas(SQL_STATEMENT_TYPES, value.type)
+  );
 }
 
 function tableName(identifier: QName): string {

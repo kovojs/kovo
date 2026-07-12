@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createHash, createHmac } from 'node:crypto';
 
 import {
   MAX_MUTATION_WIRE_TARGETS,
@@ -238,7 +239,7 @@ describe('mutation wire headers', () => {
       target: 'product-form:p1',
     };
     try {
-      process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-a';
+      process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-a-012345';
       const token = createLiveTargetAttestation(descriptor, { request });
 
       expect(
@@ -251,7 +252,7 @@ describe('mutation wire headers', () => {
         }).liveTargetDescriptors,
       ).toHaveLength(1);
 
-      process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-b';
+      process.env.KOVO_LIVE_TARGET_SECRET = 'live-target-deployment-secret-b-012345';
       expect(
         mutationWireRequestFromHeaders({
           headers: {
@@ -267,6 +268,39 @@ describe('mutation wire headers', () => {
       } else {
         process.env.KOVO_LIVE_TARGET_SECRET = previousSecret;
       }
+    }
+  });
+
+  it('uses captured HMAC and hash methods after evaluated app code poisons crypto prototypes', () => {
+    const hmac = createHmac('sha256', 'control');
+    const hash = createHash('sha256');
+    const hmacPrototype = Object.getPrototypeOf(hmac);
+    const hashPrototype = Object.getPrototypeOf(hash);
+    const originalHmacUpdate = hmacPrototype.update;
+    const originalHashUpdate = hashPrototype.update;
+    const previousSecret = process.env.KOVO_LIVE_TARGET_SECRET;
+    try {
+      hmacPrototype.update = () => {
+        throw new Error('poisoned HMAC update reached');
+      };
+      hashPrototype.update = () => {
+        throw new Error('poisoned hash update reached');
+      };
+      process.env.KOVO_LIVE_TARGET_SECRET = 'captured-live-target-secret-0123456789';
+      const descriptor = { component: 'components/a', props: { id: '1' }, target: 'a' };
+      const token = createLiveTargetAttestation(descriptor, { request: {} });
+      expect(
+        mutationWireRequestFromHeaders({
+          headers: { 'Kovo-Live-Targets': `a#components/a@${token}:{"id":"1"}` },
+          rawInput: {},
+          request: {},
+        }).liveTargetDescriptors,
+      ).toHaveLength(1);
+    } finally {
+      hmacPrototype.update = originalHmacUpdate;
+      hashPrototype.update = originalHashUpdate;
+      if (previousSecret === undefined) delete process.env.KOVO_LIVE_TARGET_SECRET;
+      else process.env.KOVO_LIVE_TARGET_SECRET = previousSecret;
     }
   });
 

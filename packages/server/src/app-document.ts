@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
@@ -11,8 +11,7 @@ import {
   stampCredentialBearingResponseCacheFloor,
 } from './document-core.js';
 import { forwardSetCookie } from './cookies.js';
-import { currentSigningSecret } from './csrf.js';
-import type { SigningSecret } from './keyring.js';
+import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,
@@ -322,9 +321,11 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
  * `principalPostureFromRequest`; unresolved session carriers intentionally do not reach this helper.
  */
 function hmacSessionFingerprint(input: string, secret: SigningSecret | undefined): string {
-  const hmacSecret =
-    secret === undefined ? fallbackBroadcastFingerprintSecret : currentSigningSecret(secret);
-  return createHmac('sha256', hmacSecret).update(input).digest('base64url');
+  return signingKeyRingFromSecret(secret ?? fallbackBroadcastFingerprintSecret).sign({
+    audience: 'broadcast-channel-session-fingerprint',
+    payload: input,
+    purpose: 'session-fingerprint',
+  }).signature;
 }
 
 export async function renderAppErrorDocumentResponse(

@@ -21,7 +21,7 @@ import { mutation } from './mutation.js';
 import { assignDerivedQueryKey, query } from './query.js';
 import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { layout, route } from './route.js';
-import { s } from './schema.js';
+import { s, type Schema } from './schema.js';
 import { stylesheet } from './hints.js';
 import { assignDerivedTaskKey, task } from './task.js';
 import { renderedHtml } from './html.js';
@@ -596,6 +596,57 @@ describe('server createApp request shell', () => {
 
     expect(response.status).toBe(422);
     expect(mutationHandler).not.toHaveBeenCalled();
+  });
+
+  it('pins a top-level custom mutation schema parse identity after createApp', async () => {
+    const mutableSchema: Schema<Record<string, never>> = {
+      parse() {
+        throw new TypeError('strict schema rejects this request');
+      },
+    };
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const handler = createRequestHandler(
+      createApp({
+        mutations: [
+          mutation('account/schema-boundary', {
+            csrf: false,
+            input: mutableSchema,
+            handler: mutationHandler,
+          }),
+        ],
+      }),
+    );
+
+    mutableSchema.parse = () => ({});
+    const response = await handler(
+      new Request('https://example.test/_m/account/schema-boundary', {
+        body: new FormData(),
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).not.toBe(200);
+    expect(mutationHandler).not.toHaveBeenCalled();
+  });
+
+  it('assembles the closed app through captured array and Object traversal controls', () => {
+    const originalIsArray = Array.isArray;
+    const originalKeys = Object.keys;
+    let app: ReturnType<typeof createApp>;
+    try {
+      Array.isArray = () => false;
+      Object.keys = () => [];
+      app = createApp({
+        stylesheets: [{ href: '/captured.css' }],
+        tasks: [task('captured/task', { input: s.object({}), run: () => undefined })],
+      });
+    } finally {
+      Array.isArray = originalIsArray;
+      Object.keys = originalKeys;
+    }
+    expect(app!.stylesheets).toEqual([{ href: '/captured.css' }]);
+    expect(app!.tasks[0]?.key).toBe('captured/task');
+    expect(Object.isFrozen(app!)).toBe(true);
   });
 
   it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {

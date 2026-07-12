@@ -13,6 +13,28 @@ import {
   readUntrustedRequestHeader,
   revealUntrustedRequestValue,
 } from './untrusted-request-body.js';
+import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
+import {
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessReflectApply,
+} from './security-witness-intrinsics.js';
+
+const NativeURL = globalThis.URL;
+const nativeRequestMethod = witnessGetOwnPropertyDescriptor(Request.prototype, 'method')?.get;
+const nativeRequestUrl = witnessGetOwnPropertyDescriptor(Request.prototype, 'url')?.get;
+const nativeUrlOrigin = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
+const nativeStringToUpperCase = String.prototype.toUpperCase;
+if (
+  typeof nativeRequestMethod !== 'function' ||
+  typeof nativeRequestUrl !== 'function' ||
+  typeof nativeUrlOrigin !== 'function' ||
+  witnessReflectApply(nativeStringToUpperCase, 'post', []) !== 'POST' ||
+  witnessReflectApply(nativeUrlOrigin, new NativeURL('https://kovo.invalid/path'), []) !==
+    'https://kovo.invalid'
+) {
+  throw new TypeError('Kovo CSRF request controls were modified before framework initialization.');
+}
 
 /**
  * Anonymous CSRF binding cookie settings for sessionless mutation forms (SPEC §6.6).
@@ -257,7 +279,7 @@ export function renderMutationIdemField(): string {
  */
 function isUnsafeVerb(method: string | undefined): boolean {
   if (method === undefined) return false;
-  const upper = method.toUpperCase();
+  const upper = witnessReflectApply<string>(nativeStringToUpperCase, method, []);
   return upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
 }
 
@@ -277,14 +299,16 @@ function isUnsafeVerb(method: string | undefined): boolean {
  *
  * @returns `true` when the request passes (or the floor does not apply), `false` to reject.
  */
-export function verifyCsrfRequestOriginFloor<Request>(
-  request: Request,
-  options: Pick<CsrfOptions<Request>, 'trustedOrigins'>,
+export function verifyCsrfRequestOriginFloor<RawRequest>(
+  request: RawRequest,
+  options: Pick<CsrfOptions<RawRequest>, 'trustedOrigins'>,
 ): boolean {
-  if (!(request instanceof globalThis.Request)) return true;
-  if (!isUnsafeVerb(request.method)) return true;
+  if (!isNativeRequest(request)) return true;
+  const nativeRequest = requestForAuthorityNeutralMetadata(request);
+  const requestMethod = witnessReflectApply<string>(nativeRequestMethod!, nativeRequest, []);
+  if (!isUnsafeVerb(requestMethod)) return true;
 
-  const originInput = readUntrustedRequestHeader(request, 'origin');
+  const originInput = readUntrustedRequestHeader(nativeRequest, 'origin');
 
   if (originInput === undefined) return false;
   const origin = revealUntrustedRequestValue(
@@ -295,12 +319,24 @@ export function verifyCsrfRequestOriginFloor<Request>(
 
   let requestOrigin: string | undefined;
   try {
-    requestOrigin = new URL(request.url).origin;
+    const requestUrl = witnessReflectApply<string>(nativeRequestUrl!, nativeRequest, []);
+    requestOrigin = witnessReflectApply(nativeUrlOrigin!, new NativeURL(requestUrl), []);
   } catch {
     requestOrigin = undefined;
   }
   if (origin === requestOrigin) return true;
-  if (options.trustedOrigins?.includes(origin)) return true;
+  if (trustedOriginIncludes(options.trustedOrigins, origin)) return true;
+  return false;
+}
+
+function trustedOriginIncludes(origins: readonly string[] | undefined, origin: string): boolean {
+  if (!witnessIsArray(origins)) return false;
+  for (let index = 0; index < origins.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(origins, index);
+    if (descriptor !== undefined && 'value' in descriptor && descriptor.value === origin) {
+      return true;
+    }
+  }
   return false;
 }
 

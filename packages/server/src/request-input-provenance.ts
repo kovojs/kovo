@@ -1,4 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  createWitnessWeakMap,
+  createWitnessWeakSet,
+  witnessReflectGet,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
 
 type PrimitiveValue = bigint | boolean | null | number | string | symbol | undefined;
 
@@ -32,11 +41,11 @@ export function runWithRequestInputProvenance<Input, Result>(
   callback: (trackedInput: Input) => Result,
 ): Result {
   const state: RequestInputProvenanceState = {
-    objectPaths: new WeakMap(),
+    objectPaths: createWitnessWeakMap(),
     primitiveReads: [],
-    privilegedObjects: new WeakSet(),
+    privilegedObjects: createWitnessWeakSet(),
     privilegedPrimitives: [],
-    proxyCache: new WeakMap(),
+    proxyCache: createWitnessWeakMap(),
   };
   const trackedInput = trackRequestInputValue(input, '<input>', state) as Input;
   return requestInputProvenance.run(state, () => callback(trackedInput));
@@ -47,7 +56,7 @@ export function markPrivilegedRequestInputAssignment(value: unknown): void {
   const state = requestInputProvenance.getStore();
   if (state === undefined) return;
   if (isTrackableObject(value)) {
-    state.privilegedObjects.add(value);
+    witnessWeakSetAdd(state.privilegedObjects, value);
     return;
   }
   if (isPrimitiveValue(value)) {
@@ -65,8 +74,8 @@ export function requestInputProvenanceForValue(value: unknown): RequestInputProv
   const state = requestInputProvenance.getStore();
   if (state === undefined) return undefined;
   if (isTrackableObject(value)) {
-    if (state.privilegedObjects.has(value)) return undefined;
-    const path = state.objectPaths.get(value);
+    if (witnessWeakSetHas(state.privilegedObjects, value)) return undefined;
+    const path = witnessWeakMapGet(state.objectPaths, value);
     return path === undefined ? undefined : { path };
   }
   if (!isPrimitiveValue(value)) return undefined;
@@ -89,18 +98,18 @@ function trackRequestInputValue(
     return value;
   }
 
-  const cached = state.proxyCache.get(value);
+  const cached = witnessWeakMapGet(state.proxyCache, value);
   if (cached !== undefined) return cached;
 
   const proxy = new Proxy(value as Record<PropertyKey, unknown>, {
     get(target, property, receiver) {
-      const item = Reflect.get(target, property, receiver);
+      const item = witnessReflectGet(target, property, receiver);
       return trackRequestInputValue(item, pathForProperty(path, property), state);
     },
   });
-  state.proxyCache.set(value, proxy);
-  state.objectPaths.set(value, path);
-  state.objectPaths.set(proxy, path);
+  witnessWeakMapSet(state.proxyCache, value, proxy);
+  witnessWeakMapSet(state.objectPaths, value, path);
+  witnessWeakMapSet(state.objectPaths, proxy, path);
   return proxy;
 }
 

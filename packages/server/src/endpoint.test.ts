@@ -10,6 +10,7 @@ import {
   type EndpointResponsePosture,
   type EndpointRequest,
 } from './endpoint.js';
+import { assertEndpointResponsePosture } from './response-posture.js';
 
 const rawJsonResponse = {
   appOwnedSafety: true,
@@ -452,6 +453,42 @@ describe('server endpoints', () => {
     });
     await expect(runEndpointAuth(verified, verifiedRequest)).resolves.toBeUndefined();
     await expect(runEndpoint(verified, verifiedRequest)).resolves.toMatchObject({ status: 200 });
+  });
+
+  it('still blocks csrf-exempt browser-state output after app code hides Headers membership', () => {
+    const browserStateResponse = new Response('ok', {
+      headers: {
+        'Clear-Site-Data': '"cookies"',
+        'Set-Cookie': 'sid=attacker; Path=/',
+      },
+    });
+    const unsafe = endpoint('/machine/poisoned-browser-state', {
+      csrf: false,
+      csrfJustification: 'machine callback must authenticate before browser state',
+      handler: () => browserStateResponse,
+      method: 'POST',
+      reason: 'browser-state intrinsic poisoning regression',
+      response: {
+        ...rawTextResponse,
+        reservedHeaders: ['Clear-Site-Data', 'Set-Cookie'],
+      },
+    });
+    const originalFilter = Array.prototype.filter;
+    const originalHeadersHas = Headers.prototype.has;
+    let error: unknown;
+    try {
+      Array.prototype.filter = () => [];
+      Headers.prototype.has = () => false;
+      assertEndpointResponsePosture(unsafe, browserStateResponse);
+    } catch (caught) {
+      error = caught;
+    } finally {
+      Array.prototype.filter = originalFilter;
+      Headers.prototype.has = originalHeadersHas;
+    }
+    expect(String(error)).toMatch(
+      /Set-Cookie and Clear-Site-Data requires an executable non-ambient verifier/u,
+    );
   });
 
   it.each([

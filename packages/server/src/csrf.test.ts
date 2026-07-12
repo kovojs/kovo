@@ -741,6 +741,55 @@ describe('CSRF Origin / Sec-Fetch-Site floor', () => {
     );
   });
 
+  it('does not trust a cross-origin caller through poisoned Array.includes', () => {
+    const originalIncludes = Array.prototype.includes;
+    try {
+      Array.prototype.includes = () => true;
+      expect(
+        verifyCsrfRequestOriginFloor(post({ origin: 'https://evil.example.test' }), csrf),
+      ).toBe(false);
+    } finally {
+      Array.prototype.includes = originalIncludes;
+    }
+  });
+
+  it('still recognizes a real unsafe Request after globalThis.Request is replaced', () => {
+    const request = post({ origin: 'https://evil.example.test' });
+    const OriginalRequest = globalThis.Request;
+    try {
+      globalThis.Request = class PoisonedRequest {} as never;
+      expect(verifyCsrfRequestOriginFloor(request, csrf)).toBe(false);
+    } finally {
+      globalThis.Request = OriginalRequest;
+    }
+  });
+
+  it('classifies POST through its captured uppercase control', () => {
+    const request = post({ origin: 'https://evil.example.test' });
+    const originalToUpperCase = String.prototype.toUpperCase;
+    try {
+      String.prototype.toUpperCase = function () {
+        return String(this) === 'POST' ? 'GET' : originalToUpperCase.call(this);
+      };
+      expect(verifyCsrfRequestOriginFloor(request, csrf)).toBe(false);
+    } finally {
+      String.prototype.toUpperCase = originalToUpperCase;
+    }
+  });
+
+  it('pins URL parsing and origin access after global URL replacement', () => {
+    const request = post({ origin: 'https://evil.example.test' });
+    const OriginalURL = globalThis.URL;
+    try {
+      globalThis.URL = class PoisonedURL {
+        origin = 'https://evil.example.test';
+      } as never;
+      expect(verifyCsrfRequestOriginFloor(request, csrf)).toBe(false);
+    } finally {
+      globalThis.URL = OriginalURL;
+    }
+  });
+
   it('allows a same-origin Origin', () => {
     expect(verifyCsrfRequestOriginFloor(post({ origin: 'https://shop.example.test' }), csrf)).toBe(
       true,

@@ -11,6 +11,16 @@ import {
   endpointRequestWithoutSession,
   finalizeServerResponse,
 } from './response-posture.js';
+import {
+  createWitnessWeakMap,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessReflectApply,
+  witnessReflectGet,
+  witnessWeakMapGet,
+  witnessWeakMapHas,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 export type { RedirectLocationAllowlistEntry } from './response.js';
 
@@ -84,7 +94,7 @@ interface PinnedExecutableVerifier {
   verify: (request: EndpointVerifierRequest) => Promise<boolean>;
 }
 
-const pinnedEndpointAuth = new WeakMap<object, PinnedEndpointAuth>();
+const pinnedEndpointAuth = createWitnessWeakMap<object, PinnedEndpointAuth>();
 
 /** A raw HTTP endpoint descriptor: path, method, mount mode, and auth/CSRF declarations. */
 export interface Endpoint<
@@ -257,7 +267,7 @@ export function pinEndpointAuth<Declaration extends object>(
   declaration: Declaration,
   auth: EndpointAuthDeclaration | undefined,
 ): Declaration {
-  if (pinnedEndpointAuth.has(declaration)) return declaration;
+  if (witnessWeakMapHas(pinnedEndpointAuth, declaration)) return declaration;
   const snapshot = snapshotEndpointAuth(auth);
   Object.defineProperty(declaration, 'auth', {
     configurable: false,
@@ -265,7 +275,7 @@ export function pinEndpointAuth<Declaration extends object>(
     value: snapshot.auth,
     writable: false,
   });
-  pinnedEndpointAuth.set(declaration, snapshot);
+  witnessWeakMapSet(pinnedEndpointAuth, declaration, snapshot);
   return declaration;
 }
 
@@ -305,7 +315,7 @@ export function pinEndpointSelfVerifyingAuth<
       'Framework self-verifying endpoint identity requires valid named auth without a separate verifier.',
     );
   }
-  pinnedEndpointAuth.set(declaration, { ...snapshot, selfVerifying: true });
+  witnessWeakMapSet(pinnedEndpointAuth, declaration, { ...snapshot, selfVerifying: true });
   markEndpointSelfVerifying(declaration);
   return declaration;
 }
@@ -328,7 +338,7 @@ export function copyEndpointAuthSnapshot<Declaration extends object>(
   source: object & { auth?: EndpointAuthDeclaration },
   target: Declaration,
 ): Declaration {
-  if (pinnedEndpointAuth.has(target)) return target;
+  if (witnessWeakMapHas(pinnedEndpointAuth, target)) return target;
   const snapshot = endpointAuthSnapshotFor(source);
   Object.defineProperty(target, 'auth', {
     configurable: false,
@@ -336,7 +346,7 @@ export function copyEndpointAuthSnapshot<Declaration extends object>(
     value: snapshot.auth,
     writable: false,
   });
-  pinnedEndpointAuth.set(target, snapshot);
+  witnessWeakMapSet(pinnedEndpointAuth, target, snapshot);
   if (snapshot.selfVerifying === true) markEndpointSelfVerifying(target);
   return target;
 }
@@ -344,12 +354,12 @@ export function copyEndpointAuthSnapshot<Declaration extends object>(
 function endpointAuthSnapshotFor(
   declaration: object & { auth?: EndpointAuthDeclaration },
 ): PinnedEndpointAuth {
-  const pinned = pinnedEndpointAuth.get(declaration);
+  const pinned = witnessWeakMapGet(pinnedEndpointAuth, declaration);
   if (pinned !== undefined) return pinned;
 
   let descriptor: PropertyDescriptor | undefined;
   try {
-    descriptor = Object.getOwnPropertyDescriptor(declaration, 'auth');
+    descriptor = witnessGetOwnPropertyDescriptor(declaration, 'auth');
   } catch {
     throw new TypeError('Endpoint auth declaration must expose a stable own data property.');
   }
@@ -371,7 +381,7 @@ function endpointAuthSnapshotFor(
   } catch {
     // Frozen structural declarations still consume the private authoritative snapshot.
   }
-  pinnedEndpointAuth.set(declaration, snapshot);
+  witnessWeakMapSet(pinnedEndpointAuth, declaration, snapshot);
   return snapshot;
 }
 
@@ -379,10 +389,10 @@ function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): Pinned
   if (auth === undefined) return { auth: undefined, valid: true };
 
   try {
-    const kind = Object.getOwnPropertyDescriptor(auth, 'kind');
+    const kind = witnessGetOwnPropertyDescriptor(auth, 'kind');
     if (kind === undefined || !('value' in kind)) return { auth: undefined, valid: false };
     if (kind.value === 'none') {
-      const justification = Object.getOwnPropertyDescriptor(auth, 'justification');
+      const justification = witnessGetOwnPropertyDescriptor(auth, 'justification');
       if (
         justification === undefined ||
         !('value' in justification) ||
@@ -391,18 +401,18 @@ function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): Pinned
         return { auth: undefined, valid: false };
       }
       return {
-        auth: Object.freeze({ kind: 'none', justification: justification.value }),
+        auth: witnessFreeze({ kind: 'none', justification: justification.value }),
         valid: true,
       };
     }
     if (kind.value !== 'custom' && kind.value !== 'verifier') {
       return { auth: undefined, valid: false };
     }
-    const name = Object.getOwnPropertyDescriptor(auth, 'name');
+    const name = witnessGetOwnPropertyDescriptor(auth, 'name');
     if (name === undefined || !('value' in name) || typeof name.value !== 'string') {
       return { auth: undefined, valid: false };
     }
-    const verifierDescriptor = Object.getOwnPropertyDescriptor(auth, 'verify');
+    const verifierDescriptor = witnessGetOwnPropertyDescriptor(auth, 'verify');
     const verifier =
       verifierDescriptor !== undefined && 'value' in verifierDescriptor
         ? verifierDescriptor.value
@@ -419,7 +429,7 @@ function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): Pinned
       return { auth: undefined, valid: false };
     }
     return {
-      auth: Object.freeze({
+      auth: witnessFreeze({
         kind: kind.value,
         name: name.value,
         ...(executable === undefined ? {} : { verify: executable.verifier }),
@@ -436,7 +446,7 @@ function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): Pinned
 
 function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | undefined {
   if (isFrameworkHmacSignatureVerifier(value)) {
-    const verify = Object.getOwnPropertyDescriptor(value, 'verify')?.value as
+    const verify = witnessGetOwnPropertyDescriptor(value, 'verify')?.value as
       | WebhookVerifier['verify']
       | undefined;
     if (typeof verify !== 'function') return undefined;
@@ -444,7 +454,7 @@ function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | 
       auditName: value.resolved.scheme,
       kind: 'hmac',
       verifier: value,
-      verify: async (request) => Boolean(await Reflect.apply(verify, value, [request])),
+      verify: async (request) => Boolean(await witnessReflectApply(verify, value, [request])),
     };
   }
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
@@ -463,12 +473,12 @@ function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | 
   }
 
   let canonical: WebhookVerifier;
-  canonical = Object.freeze({
+  canonical = witnessFreeze({
     kind: 'custom',
     name,
     scheme,
     async verify(request: EndpointVerifierRequest): Promise<boolean> {
-      return Boolean(await Reflect.apply(verify, canonical, [request]));
+      return Boolean(await witnessReflectApply(verify, canonical, [request]));
     },
   });
   return {
@@ -480,10 +490,10 @@ function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | 
 }
 
 function stableVerifierValue(source: object, property: PropertyKey): unknown {
-  const before = Object.getOwnPropertyDescriptor(source, property);
+  const before = witnessGetOwnPropertyDescriptor(source, property);
   if (before === undefined || !('value' in before)) return undefined;
-  const observed = Reflect.get(source, property, source);
-  const after = Object.getOwnPropertyDescriptor(source, property);
+  const observed = witnessReflectGet(source, property, source);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
   if (!sameVerifierDescriptor(before, after) || !Object.is(observed, before.value)) {
     throw new TypeError('Endpoint verifier fields must be stable own data properties.');
   }

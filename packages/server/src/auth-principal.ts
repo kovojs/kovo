@@ -1,4 +1,15 @@
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import {
+  createWitnessSet,
+  createWitnessWeakSet,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessReflectApply,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
 
 export type PrincipalPosture =
   | { kind: 'anonymous' }
@@ -46,17 +57,25 @@ type NonRequestPrincipalPostureInput =
       readonly reason: string;
     };
 
-const unresolvedPrincipalSentinels = new Set(['anonymous', 'unknown', 'unresolved']);
-const nonRequestPrincipalPostures = new WeakSet<object>();
+const nativeStringToLowerCase = String.prototype.toLowerCase;
+const nativeStringTrim = String.prototype.trim;
+const unresolvedPrincipalSentinels = createWitnessSet<string>();
+witnessSetAdd(unresolvedPrincipalSentinels, 'anonymous');
+witnessSetAdd(unresolvedPrincipalSentinels, 'unknown');
+witnessSetAdd(unresolvedPrincipalSentinels, 'unresolved');
+const nonRequestPrincipalPostures = createWitnessWeakSet<object>();
 
 /** @internal SPEC §6.5/§6.6: auth decisions must only key on a positively resolved principal. */
 export const isProvenPrincipal = securityClassifier(
   'server.auth.proven-principal',
   function (value: unknown): value is string {
     if (typeof value !== 'string') return false;
-    const trimmed = value.trim();
+    const trimmed = witnessReflectApply<string>(nativeStringTrim, value, []);
     if (trimmed === '' || trimmed !== value) return false;
-    return !unresolvedPrincipalSentinels.has(trimmed.toLowerCase());
+    return !witnessSetHas(
+      unresolvedPrincipalSentinels,
+      witnessReflectApply(nativeStringToLowerCase, trimmed, []),
+    );
   },
 );
 
@@ -81,13 +100,28 @@ export const principalPostureFromRequest = securityClassifier(
         const session = sessionValue as Record<PropertyKey, unknown>;
         const user = session.user;
         if (typeof user === 'object' || typeof user === 'function') {
-          candidates.push((user as Record<PropertyKey, unknown>).id);
+          witnessDefineProperty(candidates, candidates.length, {
+            configurable: true,
+            enumerable: true,
+            value: (user as Record<PropertyKey, unknown>).id,
+            writable: true,
+          });
         } else if (user !== null && user !== undefined) {
-          candidates.push(user);
+          witnessDefineProperty(candidates, candidates.length, {
+            configurable: true,
+            enumerable: true,
+            value: user,
+            writable: true,
+          });
         }
       } else {
         hasUnresolvedCarrier = true;
-        candidates.push(sessionValue);
+        witnessDefineProperty(candidates, candidates.length, {
+          configurable: true,
+          enumerable: true,
+          value: sessionValue,
+          writable: true,
+        });
       }
     }
 
@@ -95,7 +129,8 @@ export const principalPostureFromRequest = securityClassifier(
       hasUnresolvedCarrier = true;
     }
 
-    for (const candidate of candidates) {
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index];
       if (isProvenPrincipal(candidate)) return { kind: 'proven', principal: candidate };
     }
 
@@ -129,7 +164,9 @@ export function declareSystemPrincipal(
   reason: unknown,
   audit: NonRequestPrincipalAudit,
 ): NonRequestPrincipalPosture {
-  if (typeof reason !== 'string' || reason.trim() === '' || reason !== reason.trim()) {
+  const trimmedReason =
+    typeof reason === 'string' ? witnessReflectApply<string>(nativeStringTrim, reason, []) : '';
+  if (typeof reason !== 'string' || trimmedReason === '' || reason !== trimmedReason) {
     throw new TypeError(
       'declareSystemRead/Write(reason) requires a non-empty audited reason (SPEC §10.3 DEC-G).',
     );
@@ -148,7 +185,11 @@ export function declareSystemPrincipal(
 export function assertNonRequestPrincipalPosture(
   value: unknown,
 ): asserts value is NonRequestPrincipalPosture {
-  if (typeof value === 'object' && value !== null && nonRequestPrincipalPostures.has(value)) {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    witnessWeakSetHas(nonRequestPrincipalPostures, value)
+  ) {
     return;
   }
   throw new Error(
@@ -173,7 +214,7 @@ export function nonRequestPrincipalPostureDiagnostic(value: NonRequestPrincipalP
 function mintNonRequestPrincipalPosture(
   value: NonRequestPrincipalPostureInput,
 ): NonRequestPrincipalPosture {
-  const minted = Object.freeze(value) as NonRequestPrincipalPosture;
-  nonRequestPrincipalPostures.add(minted);
+  const minted = witnessFreeze(value) as NonRequestPrincipalPosture;
+  witnessWeakSetAdd(nonRequestPrincipalPostures, minted);
   return minted;
 }

@@ -22,6 +22,25 @@ import {
   compileLinearPattern,
   testLinearPattern,
 } from './redos.js';
+import {
+  createWitnessSet,
+  createWitnessWeakMap,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessObjectIs,
+  witnessObjectKeys,
+  witnessReflectApply,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
+
+const nativeArrayIsArray = Array.isArray;
+const nativeObjectCreate = Object.create;
+const nativeObjectPrototype = Object.prototype;
 
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
@@ -42,11 +61,153 @@ type SchemaMetadata =
   | { kind: 'record'; value: Schema<unknown> }
   | { kind: 'stored-file'; maxBytes?: number };
 
-const schemaMetadata = new WeakMap<Schema<unknown>, SchemaMetadata>();
+const schemaMetadata = createWitnessWeakMap<Schema<unknown>, SchemaMetadata>();
+
+/** @internal Pin a schema's executable parse identities for a closed app declaration. */
+export function snapshotSchemaForRuntime<Value>(
+  source: Schema<Value>,
+  label: string,
+): Schema<Value> {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new TypeError(`${label} must expose a stable schema object.`);
+  }
+  const parse = stableSchemaMethod(source, 'parse', label)!;
+  const parseAsync = stableSchemaMethod(source, 'parseAsync', label, true);
+  const snapshot: AsyncSchema<Value> = {
+    parse(input: unknown): Value {
+      return witnessReflectApply(parse, source, [input]);
+    },
+    async parseAsync(input: unknown): Promise<Value> {
+      return parseAsync === undefined
+        ? witnessReflectApply(parse, source, [input])
+        : await witnessReflectApply(parseAsync, source, [input]);
+    },
+  };
+  const metadata = witnessWeakMapGet(schemaMetadata, source as Schema<unknown>);
+  if (metadata !== undefined) {
+    witnessWeakMapSet(schemaMetadata, snapshot as Schema<unknown>, metadata);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function stableSchemaMethod(
+  source: object,
+  property: 'parse' | 'parseAsync',
+  label: string,
+  optional = false,
+): Function | undefined {
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const before = witnessGetOwnPropertyDescriptor(owner, property);
+    const prototype = witnessGetPrototypeOf(owner);
+    const after = witnessGetOwnPropertyDescriptor(owner, property);
+    if (!sameSchemaDataDescriptor(before, after)) {
+      throw new TypeError(`${label}.${property} changed while the schema was closed.`);
+    }
+    if (before !== undefined) {
+      if (!('value' in before) || typeof before.value !== 'function') {
+        throw new TypeError(`${label}.${property} must be a stable data method.`);
+      }
+      return before.value;
+    }
+    if (witnessGetPrototypeOf(owner) !== prototype) {
+      throw new TypeError(`${label}.${property} prototype changed while the schema was closed.`);
+    }
+    owner = prototype;
+  }
+  if (optional) return undefined;
+  throw new TypeError(`${label}.parse must be a stable data method.`);
+}
+
+function sameSchemaDataDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    'value' in left &&
+    'value' in right &&
+    witnessObjectIs(left.value, right.value) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
+}
+
+function snapshotSchemaShape<Shape extends Record<string, Schema<unknown>>>(shape: Shape): Shape {
+  if (typeof shape !== 'object' || shape === null || nativeArrayIsArray(shape)) {
+    throw new TypeError('s.object(shape) requires a stable own-data schema record.');
+  }
+  assertSafeObjectShape(shape);
+  const snapshot: Record<string, Schema<unknown>> = {};
+  const keys = witnessObjectKeys(shape);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const before = witnessGetOwnPropertyDescriptor(shape, key);
+    const after = witnessGetOwnPropertyDescriptor(shape, key);
+    if (!sameSchemaDataDescriptor(before, after) || before === undefined || !('value' in before)) {
+      throw new TypeError(`s.object(shape).${key} must be a stable own data property.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: false,
+      enumerable: true,
+      value: snapshotSchemaForRuntime(before.value as Schema<unknown>, `s.object(shape).${key}`),
+      writable: false,
+    });
+  }
+  return witnessFreeze(snapshot) as Shape;
+}
+
+function appendSchemaArrayValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function arrayEvery<Value>(
+  values: readonly Value[],
+  predicate: (value: Value) => boolean,
+): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+    if (descriptor === undefined || !('value' in descriptor) || !predicate(descriptor.value)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function ownRecordValues(record: Record<string, unknown>): unknown[] {
+  const values: unknown[] = [];
+  const keys = witnessObjectKeys(record);
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(record, keys[index]!);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    appendSchemaArrayValue(values, descriptor.value);
+  }
+  return values;
+}
+
+function recordValuesEvery(
+  record: Record<string, unknown>,
+  predicate: (value: unknown) => boolean,
+): boolean {
+  const keys = witnessObjectKeys(record);
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(record, keys[index]!);
+    if (descriptor === undefined || !('value' in descriptor) || !predicate(descriptor.value)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /** @internal Return the declared upload bytes needed by file schemas nested in this schema. */
 export function schemaMaxUploadBytes(schema: Schema<unknown>): number | undefined {
-  const metadata = schemaMetadata.get(schema);
+  const metadata = witnessWeakMapGet(schemaMetadata, schema);
   if (metadata === undefined) return undefined;
 
   if (metadata.kind === 'file' || metadata.kind === 'stored-file') return metadata.maxBytes;
@@ -55,7 +216,9 @@ export function schemaMaxUploadBytes(schema: Schema<unknown>): number | undefine
   if (metadata.kind === 'object') {
     let total = 0;
     let found = false;
-    for (const child of Object.values(metadata.shape)) {
+    const keys = witnessObjectKeys(metadata.shape);
+    for (let index = 0; index < keys.length; index += 1) {
+      const child = metadata.shape[keys[index]!]!;
       const childMaxBytes = schemaMaxUploadBytes(child);
       if (childMaxBytes === undefined) continue;
       total += childMaxBytes;
@@ -108,8 +271,8 @@ export function isSchemaValidationError(error: unknown): error is SchemaValidati
   return (
     candidate.name === 'SchemaValidationError' &&
     typeof candidate.message === 'string' &&
-    Array.isArray(candidate.issues) &&
-    candidate.issues.every(isValidationIssue)
+    nativeArrayIsArray(candidate.issues) &&
+    arrayEvery(candidate.issues, isValidationIssue)
   );
 }
 
@@ -134,6 +297,7 @@ export function isSchemaValidationError(error: unknown): error is SchemaValidati
  */
 export const s = {
   array<Item>(item: Schema<Item>): Schema<Item[]> {
+    const closedItem = snapshotSchemaForRuntime(item, 's.array(item)');
     // `parseAsync` mirrors `s.object` (SPEC §6): each item flows through
     // `parseSchemaAsync` so a storing item schema (`s.file().store()`) runs its
     // async `storage.put`/`normalizeStorageKey` path. Without it, the runtime's
@@ -142,20 +306,34 @@ export const s = {
     // and no key normalization (data loss + traversal-key passthrough; Part 4 M1).
     const schema: AsyncSchema<Item[]> = {
       parse(input: unknown): Item[] {
-        return arrayValues(input).map((value, index) => {
+        const values = arrayValues(input);
+        const output: Item[] = [];
+        for (let index = 0; index < values.length; index += 1) {
           try {
-            return item.parse(value);
+            witnessDefineProperty(output, index, {
+              configurable: true,
+              enumerable: true,
+              value: closedItem.parse(values[index]),
+              writable: true,
+            });
           } catch (error) {
             throw validationErrorFrom(error, [String(index)]);
           }
-        });
+        }
+        return output;
       },
       async parseAsync(input: unknown): Promise<Item[]> {
         const output: Item[] = [];
 
-        for (const [index, value] of arrayValues(input).entries()) {
+        const values = arrayValues(input);
+        for (let index = 0; index < values.length; index += 1) {
           try {
-            output.push(await parseSchemaAsync(item, value, true));
+            witnessDefineProperty(output, index, {
+              configurable: true,
+              enumerable: true,
+              value: await parseSchemaAsync(closedItem, values[index], true),
+              writable: true,
+            });
           } catch (error) {
             throw validationErrorFrom(error, [String(index)]);
           }
@@ -164,8 +342,11 @@ export const s = {
         return output;
       },
     };
-    schemaMetadata.set(schema, { item: item as Schema<unknown>, kind: 'array' });
-    return schema;
+    witnessWeakMapSet(schemaMetadata, schema, {
+      item: closedItem as Schema<unknown>,
+      kind: 'array',
+    });
+    return witnessFreeze(schema);
   },
   boolean(): Schema<boolean> {
     return {
@@ -177,8 +358,8 @@ export const s = {
 
         if (typeof input === 'string') {
           const value = input.toLowerCase();
-          if (['1', 'on', 'true', 'yes'].includes(value)) return true;
-          if (['0', 'false', 'no', 'off'].includes(value)) return false;
+          if (value === '1' || value === 'on' || value === 'true' || value === 'yes') return true;
+          if (value === '0' || value === 'false' || value === 'no' || value === 'off') return false;
         }
 
         throw validationError('Expected boolean');
@@ -214,25 +395,29 @@ export const s = {
     return new NumberSchemaImpl();
   },
   secret<Value>(schema: Schema<Value>): Schema<Secret<Value>> {
-    return {
+    const closedSchema = snapshotSchemaForRuntime(schema, 's.secret(schema)');
+    return witnessFreeze({
       parse(input: unknown): Secret<Value> {
         input = revealSchemaInput(input);
-        return schema.parse(input) as Secret<Value>;
+        return closedSchema.parse(input) as Secret<Value>;
       },
-    };
+    });
   },
   object<const Shape extends Record<string, Schema<unknown>>>(
     shape: Shape,
   ): Schema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
-    assertSafeObjectShape(shape);
+    const closedShape = snapshotSchemaShape(shape);
     const schema: AsyncSchema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {
       parse(input: unknown): { [Key in keyof Shape]: InferSchema<Shape[Key]> } {
         const record = formLikeToRecord(input);
         const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
 
-        for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
+        const keys = witnessObjectKeys(closedShape);
+        for (let index = 0; index < keys.length; index += 1) {
+          const key = keys[index] as keyof Shape;
+          const fieldSchema = closedShape[key]!;
           try {
-            output[key] = schema.parse(readOwnInputField(record, String(key))) as InferSchema<
+            output[key] = fieldSchema.parse(readOwnInputField(record, String(key))) as InferSchema<
               Shape[keyof Shape]
             >;
           } catch (error) {
@@ -246,10 +431,13 @@ export const s = {
         const record = formLikeToRecord(input);
         const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
 
-        for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
+        const keys = witnessObjectKeys(closedShape);
+        for (let index = 0; index < keys.length; index += 1) {
+          const key = keys[index] as keyof Shape;
+          const fieldSchema = closedShape[key]!;
           try {
             output[key] = (await parseSchemaAsync(
-              schema,
+              fieldSchema,
               readOwnInputField(record, String(key)),
               true,
             )) as InferSchema<Shape[keyof Shape]>;
@@ -261,19 +449,23 @@ export const s = {
         return output as { [Key in keyof Shape]: InferSchema<Shape[Key]> };
       },
     };
-    schemaMetadata.set(schema, { kind: 'object', shape });
-    return schema;
+    witnessWeakMapSet(schemaMetadata, schema, { kind: 'object', shape: closedShape });
+    return witnessFreeze(schema);
   },
   record<Value>(value: Schema<Value>): Schema<Record<string, Value>> {
+    const closedValue = snapshotSchemaForRuntime(value, 's.record(value)');
     const schema: AsyncSchema<Record<string, Value>> = {
       parse(input: unknown): Record<string, Value> {
         const record = recordInput(input);
-        const output = Object.create(null) as Record<string, Value>;
+        const output = nativeObjectCreate(null) as Record<string, Value>;
 
-        for (const [key, field] of Object.entries(record)) {
+        const keys = witnessObjectKeys(record);
+        for (let index = 0; index < keys.length; index += 1) {
+          const key = keys[index]!;
+          const field = readOwnInputField(record, key);
           assertSafeRecordKey(key);
           try {
-            output[key] = value.parse(field);
+            output[key] = closedValue.parse(field);
           } catch (error) {
             throw validationErrorFrom(error, [key]);
           }
@@ -283,12 +475,15 @@ export const s = {
       },
       async parseAsync(input: unknown): Promise<Record<string, Value>> {
         const record = recordInput(input);
-        const output = Object.create(null) as Record<string, Value>;
+        const output = nativeObjectCreate(null) as Record<string, Value>;
 
-        for (const [key, field] of Object.entries(record)) {
+        const keys = witnessObjectKeys(record);
+        for (let index = 0; index < keys.length; index += 1) {
+          const key = keys[index]!;
+          const field = readOwnInputField(record, key);
           assertSafeRecordKey(key);
           try {
-            output[key] = await parseSchemaAsync(value, field, true);
+            output[key] = await parseSchemaAsync(closedValue, field, true);
           } catch (error) {
             throw validationErrorFrom(error, [key]);
           }
@@ -297,28 +492,39 @@ export const s = {
         return output;
       },
     };
-    schemaMetadata.set(schema, { kind: 'record', value: value as Schema<unknown> });
-    return schema;
+    witnessWeakMapSet(schemaMetadata, schema, {
+      kind: 'record',
+      value: closedValue as Schema<unknown>,
+    });
+    return witnessFreeze(schema);
   },
 };
 
 /** @internal Returns top-level mutation input fields that require multipart form encoding. */
 export function mutationInputFileFields(schema: Schema<unknown>): readonly string[] {
-  const metadata = schemaMetadata.get(schema);
+  const metadata = witnessWeakMapGet(schemaMetadata, schema);
   if (metadata?.kind !== 'object') return [];
 
-  return Object.entries(metadata.shape)
-    .filter(([, fieldSchema]) => schemaContainsFile(fieldSchema))
-    .map(([fieldName]) => fieldName);
+  const fields: string[] = [];
+  const keys = witnessObjectKeys(metadata.shape);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (schemaContainsFile(metadata.shape[key]!)) appendSchemaArrayValue(fields, key);
+  }
+  return fields;
 }
 
 function schemaContainsFile(schema: Schema<unknown>): boolean {
-  const metadata = schemaMetadata.get(schema);
+  const metadata = witnessWeakMapGet(schemaMetadata, schema);
   if (!metadata) return false;
   if (metadata.kind === 'file' || metadata.kind === 'stored-file') return true;
   if (metadata.kind === 'array') return schemaContainsFile(metadata.item);
   if (metadata.kind === 'object') {
-    return Object.values(metadata.shape).some((fieldSchema) => schemaContainsFile(fieldSchema));
+    const keys = witnessObjectKeys(metadata.shape);
+    for (let index = 0; index < keys.length; index += 1) {
+      if (schemaContainsFile(metadata.shape[keys[index]!]!)) return true;
+    }
+    return false;
   }
   if (metadata.kind === 'record') return schemaContainsFile(metadata.value);
   return false;
@@ -760,17 +966,17 @@ function isJsonValue(value: unknown): value is JsonValue {
     case 'string':
       return Number.isFinite(value as number) || typeof value !== 'number';
     case 'object':
-      if (Array.isArray(value)) return value.every(isJsonValue);
+      if (nativeArrayIsArray(value)) return arrayEvery(value, isJsonValue);
       if (!isPlainJsonObject(value)) return false;
-      return Object.values(value as Record<string, unknown>).every(isJsonValue);
+      return recordValuesEvery(value as Record<string, unknown>, isJsonValue);
     default:
       return false;
   }
 }
 
 function isPlainJsonObject(value: object): boolean {
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
+  const proto = witnessGetPrototypeOf(value);
+  return proto === nativeObjectPrototype || proto === null;
 }
 
 class FileSchemaImpl implements FileSchema {
@@ -779,8 +985,8 @@ class FileSchemaImpl implements FileSchema {
 
   constructor(options: FileSchemaOptions = {}) {
     this.#maxBytes = options.maxBytes;
-    this.#accept = options.accept;
-    schemaMetadata.set(this, {
+    this.#accept = snapshotFileAcceptance(options.accept);
+    witnessWeakMapSet(schemaMetadata, this, {
       kind: 'file',
       ...(this.#maxBytes === undefined ? {} : { maxBytes: this.#maxBytes }),
     });
@@ -820,7 +1026,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
   constructor(fileOptions: FileSchemaOptions, storageOptions: StoredFileSchemaOptions) {
     this.#fileOptions = fileOptions;
     this.#storageOptions = storageOptions;
-    schemaMetadata.set(this, {
+    witnessWeakMapSet(schemaMetadata, this, {
       kind: 'stored-file',
       ...(fileOptions.maxBytes === undefined ? {} : { maxBytes: fileOptions.maxBytes }),
     });
@@ -872,9 +1078,65 @@ function isUnverifiedAcceptance(
   return (
     typeof accept === 'object' &&
     accept !== null &&
-    !Array.isArray(accept) &&
+    !nativeArrayIsArray(accept) &&
     (accept as UnverifiedAcceptance).unverified === true
   );
+}
+
+function snapshotFileAcceptance(
+  accept: UnverifiedAcceptance | readonly string[] | undefined,
+): UnverifiedAcceptance | readonly string[] | undefined {
+  if (accept === undefined) return undefined;
+  if (nativeArrayIsArray(accept)) {
+    const snapshot: string[] = [];
+    const length = witnessGetOwnPropertyDescriptor(accept, 'length');
+    if (length === undefined || !('value' in length) || length.value > 1_000) {
+      throw new TypeError('s.file().accept(...) requires a bounded dense MIME array.');
+    }
+    for (let index = 0; index < length.value; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(accept, index);
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        typeof descriptor.value !== 'string'
+      ) {
+        throw new TypeError('s.file().accept(...) requires stable MIME string data.');
+      }
+      witnessDefineProperty(snapshot, index, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true,
+      });
+    }
+    return witnessFreeze(snapshot);
+  }
+  if (typeof accept !== 'object' || accept === null) {
+    throw new TypeError('s.file().accept(...) requires a MIME array or audited acceptance.');
+  }
+  const unverified = witnessGetOwnPropertyDescriptor(accept, 'unverified');
+  const justification = witnessGetOwnPropertyDescriptor(accept, 'justification');
+  const types = witnessGetOwnPropertyDescriptor(accept, 'types');
+  if (
+    unverified?.value !== true ||
+    typeof justification?.value !== 'string' ||
+    types === undefined ||
+    !('value' in types)
+  ) {
+    throw new TypeError('s.file().accept.unverified(...) must expose stable audit data.');
+  }
+  return witnessFreeze({
+    justification: justification.value,
+    types: snapshotFileAcceptance(types.value as readonly string[]) as readonly string[],
+    unverified: true as const,
+  });
+}
+
+function stringArrayIncludes(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
 }
 
 function createFileOptions(
@@ -890,7 +1152,7 @@ function createFileOptions(
 function arrayValues(input: unknown): unknown[] {
   input = revealSchemaInput(input);
   if (input === undefined || input === null) return [];
-  return Array.isArray(input) ? input : [input];
+  return nativeArrayIsArray(input) ? input : [input];
 }
 
 function optionalSchema<Value>(
@@ -913,11 +1175,14 @@ function isMissingNumberInput(input: unknown): boolean {
   return input === undefined || input === null || input === '';
 }
 
-const PROTOTYPE_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const PROTOTYPE_POLLUTION_KEYS = createWitnessSet<string>();
+witnessSetAdd(PROTOTYPE_POLLUTION_KEYS, '__proto__');
+witnessSetAdd(PROTOTYPE_POLLUTION_KEYS, 'constructor');
+witnessSetAdd(PROTOTYPE_POLLUTION_KEYS, 'prototype');
 
 function assertSafeObjectShape(shape: Record<string, Schema<unknown>>): void {
-  for (const key of Object.keys(shape)) {
-    if (PROTOTYPE_POLLUTION_KEYS.has(key)) {
+  for (const key of witnessObjectKeys(shape)) {
+    if (witnessSetHas(PROTOTYPE_POLLUTION_KEYS, key)) {
       throw new Error(
         `s.object(): "${key}" is reserved by the prototype-pollution input floor (SPEC §6.6).`,
       );
@@ -926,7 +1191,7 @@ function assertSafeObjectShape(shape: Record<string, Schema<unknown>>): void {
 }
 
 function assertSafeRecordKey(key: string): void {
-  if (!PROTOTYPE_POLLUTION_KEYS.has(key)) return;
+  if (!witnessSetHas(PROTOTYPE_POLLUTION_KEYS, key)) return;
   throw validationError(
     `s.record(): "${key}" is reserved by the prototype-pollution input floor (SPEC §6.6).`,
     [key],
@@ -937,14 +1202,15 @@ function readOwnInputField(record: Record<string, unknown>, key: string): unknow
   // OPP-19 (SPEC §6.6 runtime-DiD): schema decode is shape-bound and must not let inherited
   // properties satisfy declared fields. JSON/form payloads can carry prototype-pollution names, but
   // object schemas project only own, declared fields into the validated value.
-  return Object.hasOwn(record, key) ? record[key] : undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(record, key);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
 function parseFileLikeSync(input: unknown, options: FileSchemaOptions): FileLike {
   const file = parseFileLikeShape(input, options);
   const accept = options.accept;
   if (isUnverifiedAcceptance(accept)) {
-    if (accept.types.length > 0 && !accept.types.includes(file.type)) {
+    if (accept.types.length > 0 && !stringArrayIncludes(accept.types, file.type)) {
       throw validationError(`Expected file type ${accept.types.join(', ')}`);
     }
   } else if (accept && accept.length > 0) {
@@ -974,10 +1240,10 @@ async function parseVerifiedFileLike(
   const sniffed = sniffUploadBytes(bytes);
   const accept = options.accept;
   if (isUnverifiedAcceptance(accept)) {
-    if (accept.types.length > 0 && !accept.types.includes(file.type)) {
+    if (accept.types.length > 0 && !stringArrayIncludes(accept.types, file.type)) {
       throw validationError(`Expected file type ${accept.types.join(', ')}`);
     }
-  } else if (accept && accept.length > 0 && !accept.includes(sniffed.contentType)) {
+  } else if (accept && accept.length > 0 && !stringArrayIncludes(accept, sniffed.contentType)) {
     throw validationError(`Expected file type ${accept.join(', ')}`);
   }
 
@@ -1021,7 +1287,7 @@ export function formLikeToRecord(input: unknown): Record<string, unknown> {
 
 function recordInput(input: unknown): Record<string, unknown> {
   const record = formLikeToRecord(input);
-  if (Array.isArray(record)) throw validationError('Expected record input');
+  if (nativeArrayIsArray(record)) throw validationError('Expected record input');
   return record;
 }
 
@@ -1040,12 +1306,15 @@ function validationError(message: string, path: readonly string[] = []): SchemaV
  */
 function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): SchemaValidationError {
   if (isSchemaValidationError(error)) {
-    return new SchemaValidationError(
-      error.issues.map((issue) => ({
+    const issues: ValidationIssue[] = [];
+    for (let index = 0; index < error.issues.length; index += 1) {
+      const issue = error.issues[index]!;
+      appendSchemaArrayValue(issues, {
         message: issue.message,
         path: [...pathPrefix, ...issue.path],
-      })),
-    );
+      });
+    }
+    return new SchemaValidationError(issues);
   }
 
   throw error;
@@ -1056,9 +1325,11 @@ function isValidationIssue(value: unknown): value is ValidationIssue {
     typeof value === 'object' &&
     value !== null &&
     typeof (value as Partial<ValidationIssue>).message === 'string' &&
-    Array.isArray((value as Partial<ValidationIssue>).path) &&
-    (value as Partial<ValidationIssue>).path?.every((segment) => typeof segment === 'string') ===
-      true
+    nativeArrayIsArray((value as Partial<ValidationIssue>).path) &&
+    arrayEvery(
+      (value as Partial<ValidationIssue>).path as readonly unknown[],
+      (segment) => typeof segment === 'string',
+    )
   );
 }
 
@@ -1091,10 +1362,10 @@ export function configureShapeBudget(budget: Partial<ShapeBudget>): void {
 
 /** Container children to descend; non-plain objects (File/Blob/Date/Map) are leaves. */
 function descendableChildren(value: object): readonly unknown[] | undefined {
-  if (Array.isArray(value)) return value;
-  const proto = Object.getPrototypeOf(value);
-  if (proto === Object.prototype || proto === null) {
-    return Object.values(value as Record<string, unknown>);
+  if (nativeArrayIsArray(value)) return value;
+  const proto = witnessGetPrototypeOf(value);
+  if (proto === nativeObjectPrototype || proto === null) {
+    return ownRecordValues(value as Record<string, unknown>);
   }
   return undefined;
 }
@@ -1166,7 +1437,7 @@ export function entriesToRecord(
   // plain data key, not the accessor that rebinds the prototype and silently drops
   // the value; and keys like `constructor`/`toString` must not be read off the
   // prototype chain (Part 4 SCHEMA-1/SCHEMA-2).
-  const record = Object.create(null) as Record<string, unknown>;
+  const record = nativeObjectCreate(null) as Record<string, unknown>;
 
   for (const [key, value] of entries) {
     appendRecordValue(record, key, value);
@@ -1179,14 +1450,14 @@ function appendRecordValue(record: Record<string, unknown>, key: string, value: 
   // Gate first-vs-repeat on own-keys only. On a null-prototype record this is also
   // correct for inherited names, but `Object.hasOwn` keeps the intent explicit and
   // robust if the record ever carries a prototype (SCHEMA-1/SCHEMA-2).
-  if (!Object.hasOwn(record, key)) {
+  if (witnessGetOwnPropertyDescriptor(record, key) === undefined) {
     record[key] = value;
     return;
   }
 
   const existing = record[key];
-  if (Array.isArray(existing)) {
-    existing.push(value);
+  if (nativeArrayIsArray(existing)) {
+    appendSchemaArrayValue(existing, value);
   } else {
     record[key] = [existing, value];
   }

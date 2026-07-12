@@ -22,6 +22,7 @@ import {
   cloneRequestForAuthorityNeutralization,
   createNativeHeaders,
   createNativeRequest,
+  isNativeRequest,
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
@@ -34,6 +35,30 @@ import type {
   EndpointResponseBody,
   EndpointResponseBodyPosture,
 } from './endpoint.js';
+import {
+  createWitnessSet,
+  createWitnessWeakSet,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectKeys,
+  witnessReflectApply,
+  witnessReflectGet,
+  witnessRegExpTest,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
+
+const nativeStringIncludes = String.prototype.includes;
+const nativeStringStartsWith = String.prototype.startsWith;
+const nativeStringToLowerCase = String.prototype.toLowerCase;
+const NativeResponse = Response;
+const readNativeResponseBody = responseIntrinsicGetter<ReadableStream<Uint8Array> | null>('body');
+const readNativeResponseHeaders = responseIntrinsicGetter<Headers>('headers');
+const readNativeResponseStatus = responseIntrinsicGetter<number>('status');
+const readNativeResponseStatusText = responseIntrinsicGetter<string>('statusText');
 
 export type WireOutputChannel = 'framework-response' | 'raw-endpoint-response';
 
@@ -195,7 +220,7 @@ export async function resolveKovoLifecycleRequest<
       if (options.clientIp !== undefined) {
         const clientIp = options.clientIp(clientIpRequest);
         if (clientIp !== undefined && clientIp !== '') {
-          Object.defineProperty(endpointRequest, 'clientIp', {
+          witnessDefineProperty(endpointRequest, 'clientIp', {
             configurable: true,
             enumerable: true,
             value: clientIp,
@@ -248,12 +273,13 @@ export function finalizeRawWebResponse(
   request: Pick<Request, 'method'>,
   options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] } = {},
 ): Response {
+  const status = readNativeResponseStatus(response);
   return emitToWire(response, 'raw-endpoint-response', {
     method: request.method,
     ...(options.redirectAllowlist === undefined
       ? {}
       : { redirectAllowlist: options.redirectAllowlist }),
-    status: response.status,
+    status,
   });
 }
 
@@ -270,30 +296,32 @@ export const emitToWire = wireEmitter(
     provenance: WireOutputProvenance,
   ): Response {
     if (channel === 'raw-endpoint-response') {
-      if (!(value instanceof Response)) {
+      if (!isNativeResponse(value)) {
         throw new TypeError('emitToWire raw-endpoint-response requires a Web Response.');
       }
+      const headers = readNativeResponseHeaders(value);
+      const status = readNativeResponseStatus(value);
       const finalizedHeaders = finalizeRawResponseHeaders(
         value,
         provenance.redirectAllowlist === undefined
           ? {}
           : { redirectAllowlist: provenance.redirectAllowlist },
       );
-      const suppressBody = provenance.method === 'HEAD' || value.status === 304;
-      if (!suppressBody && finalizedHeaders === value.headers) return value;
+      const suppressBody = provenance.method === 'HEAD' || status === 304;
+      if (!suppressBody && finalizedHeaders === headers) return value;
 
-      return new Response(suppressBody ? null : value.body, {
+      return new NativeResponse(suppressBody ? null : readNativeResponseBody(value), {
         headers: finalizedHeaders,
-        status: value.status,
-        statusText: value.statusText,
+        status,
+        statusText: readNativeResponseStatusText(value),
       });
     }
 
-    if (value instanceof Response) {
+    if (isNativeResponse(value)) {
       throw new TypeError('emitToWire framework-response requires a structured response.');
     }
 
-    return new Response(webResponseBodyToBodyInit(value.body), {
+    return new NativeResponse(webResponseBodyToBodyInit(value.body), {
       headers: finalizeResponseHeaders(value.headers, {
         blessedRedirect: provenance.blessedRedirect ?? false,
         status: provenance.status ?? value.status,
@@ -308,20 +336,85 @@ const readNativeRequestMethod = requestIntrinsicGetter<string>('method');
 const readNativeRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
 const readNativeRequestUrl = requestIntrinsicGetter<string>('url');
 const NativeURL = URL;
-const readNativeUrlOrigin = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')?.get;
-const readNativeUrlPathname = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname')?.get;
-const readNativeUrlSearchParams = Object.getOwnPropertyDescriptor(
+const readNativeUrlOrigin = witnessGetOwnPropertyDescriptor(URL.prototype, 'origin')?.get;
+const readNativeUrlPathname = witnessGetOwnPropertyDescriptor(URL.prototype, 'pathname')?.get;
+const readNativeUrlSearchParams = witnessGetOwnPropertyDescriptor(
   URL.prototype,
   'searchParams',
 )?.get;
-const nativeUrlSearchParamKeys = Object.getOwnPropertyDescriptor(URLSearchParams.prototype, 'keys')
+const nativeHeadersAppend = witnessGetOwnPropertyDescriptor(Headers.prototype, 'append')
   ?.value as unknown;
-const nativeHeadersEntries = Object.getOwnPropertyDescriptor(Headers.prototype, 'entries')
+const nativeHeadersDelete = witnessGetOwnPropertyDescriptor(Headers.prototype, 'delete')
   ?.value as unknown;
-const nativeHeadersAppend = Object.getOwnPropertyDescriptor(Headers.prototype, 'append')
+const nativeHeadersForEach = witnessGetOwnPropertyDescriptor(Headers.prototype, 'forEach')
   ?.value as unknown;
-const authorityNeutralRequests = new WeakSet<Request>();
-const browserCredentialNeutralRequests = new WeakSet<Request>();
+const nativeHeadersGet = witnessGetOwnPropertyDescriptor(Headers.prototype, 'get')
+  ?.value as unknown;
+const nativeHeadersHas = witnessGetOwnPropertyDescriptor(Headers.prototype, 'has')
+  ?.value as unknown;
+const nativeHeadersSet = witnessGetOwnPropertyDescriptor(Headers.prototype, 'set')
+  ?.value as unknown;
+const nativeHeadersGetSetCookie = witnessGetOwnPropertyDescriptor(Headers.prototype, 'getSetCookie')
+  ?.value as unknown;
+const nativeUrlSearchParamsForEach = witnessGetOwnPropertyDescriptor(
+  URLSearchParams.prototype,
+  'forEach',
+)?.value as unknown;
+if (
+  typeof nativeHeadersAppend !== 'function' ||
+  typeof nativeHeadersDelete !== 'function' ||
+  typeof nativeHeadersForEach !== 'function' ||
+  typeof nativeHeadersGet !== 'function' ||
+  typeof nativeHeadersHas !== 'function' ||
+  typeof nativeHeadersSet !== 'function' ||
+  witnessReflectApply(nativeStringToLowerCase, 'SeT-CoOkIe', []) !== 'set-cookie' ||
+  witnessReflectApply(nativeStringStartsWith, 'kovo-control', ['kovo-']) !== true ||
+  witnessReflectApply(nativeStringStartsWith, 'app-control', ['kovo-']) !== false ||
+  witnessReflectApply(nativeStringIncludes, 'private, no-store', ['no-store']) !== true ||
+  witnessReflectApply(nativeStringIncludes, 'public', ['no-store']) !== false
+) {
+  throw new TypeError(
+    'Kovo response-posture Web controls were modified before framework initialization.',
+  );
+}
+const responsePostureHeaderControl = createNativeHeaders();
+witnessReflectApply(nativeHeadersAppend, responsePostureHeaderControl, ['X-Kovo-Control', 'one']);
+witnessReflectApply(nativeHeadersSet, responsePostureHeaderControl, ['X-Kovo-Control', 'two']);
+let responsePostureHeaderVisited = false;
+witnessReflectApply(nativeHeadersForEach, responsePostureHeaderControl, [
+  (value: string, name: string): void => {
+    if (name === 'x-kovo-control' && value === 'two') responsePostureHeaderVisited = true;
+  },
+]);
+if (
+  !responsePostureHeaderVisited ||
+  witnessReflectApply(nativeHeadersHas, responsePostureHeaderControl, ['X-Kovo-Control']) !==
+    true ||
+  witnessReflectApply(nativeHeadersHas, responsePostureHeaderControl, ['Missing']) !== false ||
+  witnessReflectApply(nativeHeadersGet, responsePostureHeaderControl, ['X-Kovo-Control']) !== 'two'
+) {
+  throw new TypeError('Kovo response-posture Headers controls failed their semantic check.');
+}
+witnessReflectApply(nativeHeadersDelete, responsePostureHeaderControl, ['X-Kovo-Control']);
+if (witnessReflectApply(nativeHeadersHas, responsePostureHeaderControl, ['X-Kovo-Control'])) {
+  throw new TypeError('Kovo response-posture Headers delete control failed its semantic check.');
+}
+const responsePostureResponseControl = new NativeResponse(null, {
+  headers: { 'X-Kovo-Control': 'accepted' },
+  status: 201,
+  statusText: 'Created',
+});
+if (
+  readNativeResponseStatus(responsePostureResponseControl) !== 201 ||
+  readNativeResponseStatusText(responsePostureResponseControl) !== 'Created' ||
+  witnessReflectApply(nativeHeadersGet, readNativeResponseHeaders(responsePostureResponseControl), [
+    'X-Kovo-Control',
+  ]) !== 'accepted'
+) {
+  throw new TypeError('Kovo response-posture Response controls failed their semantic check.');
+}
+const authorityNeutralRequests = createWitnessWeakSet<Request>();
+const browserCredentialNeutralRequests = createWitnessWeakSet<Request>();
 const frameworkPeerAddressProperty = '__kovoPeerAddress';
 
 /** A framework-owned request copy carrying no app session or disallowed browser authority. */
@@ -330,8 +423,8 @@ export function endpointRequestWithoutSession(
   options: { stripAuthorization?: boolean } = {},
 ): EndpointRequest {
   if (
-    authorityNeutralRequests.has(request) &&
-    (!options.stripAuthorization || browserCredentialNeutralRequests.has(request))
+    witnessWeakSetHas(authorityNeutralRequests, request) &&
+    (!options.stripAuthorization || witnessWeakSetHas(browserCredentialNeutralRequests, request))
   ) {
     return request as EndpointRequest;
   }
@@ -353,13 +446,13 @@ export function endpointRequestWithoutSession(
     signal: authorityNeutralAbortSignal(readNativeRequestSignal(source)),
   });
   if (peerAddress !== undefined) {
-    Object.defineProperty(neutral, frameworkPeerAddressProperty, {
+    witnessDefineProperty(neutral, frameworkPeerAddressProperty, {
       configurable: true,
       value: peerAddress,
     });
   }
-  authorityNeutralRequests.add(neutral);
-  if (options.stripAuthorization) browserCredentialNeutralRequests.add(neutral);
+  witnessWeakSetAdd(authorityNeutralRequests, neutral);
+  if (options.stripAuthorization) witnessWeakSetAdd(browserCredentialNeutralRequests, neutral);
   return neutral as EndpointRequest;
 }
 
@@ -380,27 +473,46 @@ export function requestMetadataWithoutAmbientAuthority(request: Request): Reques
   });
   const peerAddress = frameworkPeerAddress(request);
   if (peerAddress !== undefined) {
-    Object.defineProperty(neutral, frameworkPeerAddressProperty, {
+    witnessDefineProperty(neutral, frameworkPeerAddressProperty, {
       configurable: true,
       value: peerAddress,
     });
   }
-  authorityNeutralRequests.add(neutral);
-  browserCredentialNeutralRequests.add(neutral);
+  witnessWeakSetAdd(authorityNeutralRequests, neutral);
+  witnessWeakSetAdd(browserCredentialNeutralRequests, neutral);
   return neutral;
 }
 
 function requestIntrinsicGetter<Value>(property: string): (request: Request) => Value {
-  const descriptor = Object.getOwnPropertyDescriptor(Request.prototype, property);
-  const getter = descriptor ? (Reflect.get(descriptor, 'get') as unknown) : undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(Request.prototype, property);
+  const getter = descriptor ? witnessReflectGet(descriptor, 'get') : undefined;
   if (typeof getter !== 'function') {
     throw new TypeError(`The Web Request implementation lacks a ${property} getter.`);
   }
-  return (request) => Reflect.apply(getter, request, []) as Value;
+  return (request) => witnessReflectApply(getter, request, []);
+}
+
+function responseIntrinsicGetter<Value>(property: string): (response: Response) => Value {
+  const descriptor = witnessGetOwnPropertyDescriptor(NativeResponse.prototype, property);
+  const getter = descriptor ? witnessReflectGet(descriptor, 'get') : undefined;
+  if (typeof getter !== 'function') {
+    throw new TypeError(`The Web Response implementation lacks a ${property} getter.`);
+  }
+  return (response) => witnessReflectApply(getter, response, []);
+}
+
+function isNativeResponse(value: unknown): value is Response {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
+  try {
+    readNativeResponseHeaders(value as Response);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function frameworkPeerAddress(request: Request): string | undefined {
-  const descriptor = Object.getOwnPropertyDescriptor(request, frameworkPeerAddressProperty);
+  const descriptor = witnessGetOwnPropertyDescriptor(request, frameworkPeerAddressProperty);
   if (
     descriptor === undefined ||
     !('value' in descriptor) ||
@@ -424,20 +536,25 @@ export function assertEndpointResponsePosture(
   if (!shouldVerifyEndpointResponsePosture()) {
     return;
   }
+  const headers = readNativeResponseHeaders(response);
+  const status = readNativeResponseStatus(response);
   const failures: string[] = [];
-  const cacheControl = response.headers.get('cache-control') ?? '';
-  if (definition.response.cache === 'no-store' && !/\bno-store\b/i.test(cacheControl)) {
+  const cacheControl = nativeHeaderGet(headers, 'cache-control') ?? '';
+  if (
+    definition.response.cache === 'no-store' &&
+    !witnessRegExpTest(/\bno-store\b/i, cacheControl)
+  ) {
     failures.push('declared cache=no-store but response lacks Cache-Control: no-store');
   }
-  if (definition.response.cache === 'private' && !/\bprivate\b/i.test(cacheControl)) {
+  if (definition.response.cache === 'private' && !witnessRegExpTest(/\bprivate\b/i, cacheControl)) {
     failures.push('declared cache=private but response lacks Cache-Control: private');
   }
-  if (definition.response.cache === 'public' && !/\bpublic\b/i.test(cacheControl)) {
+  if (definition.response.cache === 'public' && !witnessRegExpTest(/\bpublic\b/i, cacheControl)) {
     failures.push('declared cache=public but response lacks Cache-Control: public');
   }
   const bodyPosture = endpointResponseBodyPostures(definition.response.body);
-  if (bodyPosture.includes('redirect') && response.status >= 300 && response.status < 400) {
-    const location = response.headers.get('location');
+  if (postureIncludes(bodyPosture, 'redirect') && status >= 300 && status < 400) {
+    const location = nativeHeaderGet(headers, 'location');
     if (
       location !== null &&
       redirectLocationHeader(
@@ -449,22 +566,22 @@ export function assertEndpointResponsePosture(
         'redirect Location must be same-origin or match response.redirectAllowlist with a rationale',
       );
     }
-    assertEndpointReservedHeaders(definition, response, failures);
+    assertEndpointReservedHeaders(definition, headers, failures);
     if (failures.length === 0) return;
     throw endpointPostureError(definition, failures);
   }
   if (
     bodyPosture.length === 1 &&
     bodyPosture[0] === 'redirect' &&
-    (response.status < 300 || response.status >= 400)
+    (status < 300 || status >= 400)
   ) {
     failures.push('declared body=redirect but response status is not 3xx');
   }
-  const contentType = response.headers.get('content-type') ?? '';
+  const contentType = nativeHeaderGet(headers, 'content-type') ?? '';
   if (!endpointResponseBodyMatchesContentType(bodyPosture, contentType)) {
     failures.push(endpointResponseBodyMismatchMessage(definition.response.body));
   }
-  assertEndpointReservedHeaders(definition, response, failures);
+  assertEndpointReservedHeaders(definition, headers, failures);
   if (failures.length === 0) return;
   throw endpointPostureError(definition, failures);
 }
@@ -475,9 +592,14 @@ function assertEndpointBrowserStateResponsePosture(
   request: Request | undefined,
 ): void {
   if (definition.csrf?.exempt !== true) return;
-  const browserStateHeaders = ['Set-Cookie', 'Clear-Site-Data'].filter((header) =>
-    response.headers.has(header),
-  );
+  const headers = readNativeResponseHeaders(response);
+  const browserStateHeaders: string[] = [];
+  if (nativeHeaderHas(headers, 'Set-Cookie')) {
+    appendResponsePostureValue(browserStateHeaders, 'Set-Cookie');
+  }
+  if (nativeHeaderHas(headers, 'Clear-Site-Data')) {
+    appendResponsePostureValue(browserStateHeaders, 'Clear-Site-Data');
+  }
   if (browserStateHeaders.length === 0) return;
   if (endpointBrowserStateAuthExecuted(definition, request)) return;
 
@@ -497,24 +619,38 @@ function finalizeResponseHeaders(
   headers: ResponseHeaders,
   options: { blessedRedirect: boolean; status: number },
 ): Headers {
-  const webHeaders = new Headers();
-  for (const [name, value] of Object.entries(headers)) {
+  const webHeaders = createNativeHeaders();
+  const names = witnessObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(headers, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Response header ${name} must be a stable own data property.`);
+    }
+    const value = descriptor.value;
     assertSafeResponseHeaderName(name);
-    if (isRedirectStatus(options.status) && name.toLowerCase() === 'location') {
+    if (
+      isRedirectStatus(options.status) &&
+      witnessReflectApply(nativeStringToLowerCase, name, []) === 'location'
+    ) {
       const location = redirectLocationHeaderValue(value, options.blessedRedirect);
       assertSafeResponseHeaderValue(name, location);
-      webHeaders.set(name, location);
+      nativeHeaderSet(webHeaders, name, location);
       continue;
     }
 
-    if (Array.isArray(value)) {
-      for (const entry of value) {
+    if (witnessIsArray(value)) {
+      for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+        const entry = value[valueIndex];
+        if (typeof entry !== 'string') {
+          throw new TypeError(`Response header ${name} values must be strings.`);
+        }
         assertSafeResponseHeaderValue(name, entry);
-        webHeaders.append(name, entry);
+        nativeHeaderAppend(webHeaders, name, entry);
       }
     } else {
       assertSafeResponseHeaderValue(name, value);
-      webHeaders.set(name, value);
+      nativeHeaderSet(webHeaders, name, value);
     }
   }
 
@@ -525,25 +661,33 @@ function finalizeRawResponseHeaders(
   response: Response,
   options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] },
 ): Headers {
-  const hasRedirectLocation = isRedirectStatus(response.status) && response.headers.has('location');
-  const setCookies = rawSetCookieHeaders(response.headers);
-  if (!hasRedirectLocation && setCookies.length === 0) return response.headers;
+  const headers = readNativeResponseHeaders(response);
+  const hasRedirectLocation =
+    isRedirectStatus(readNativeResponseStatus(response)) && nativeHeaderHas(headers, 'location');
+  const setCookies = rawSetCookieHeaders(headers);
+  if (!hasRedirectLocation && setCookies.length === 0) return headers;
 
-  const webHeaders = new Headers();
-  response.headers.forEach((value, name) => {
-    if (name.toLowerCase() === 'set-cookie') return;
-    if (hasRedirectLocation && name.toLowerCase() === 'location') {
-      webHeaders.set(
-        name,
-        redirectLocationHeader(value, redirectLocationOptions(options.redirectAllowlist)),
-      );
-      return;
-    }
-    webHeaders.set(name, value);
-  });
+  const webHeaders = createNativeHeaders();
+  witnessReflectApply(nativeHeadersForEach as Function, headers, [
+    (value: string, name: string): void => {
+      const lowerName = lowerCase(name);
+      if (lowerName === 'set-cookie') return;
+      if (hasRedirectLocation && lowerName === 'location') {
+        nativeHeaderSet(
+          webHeaders,
+          name,
+          redirectLocationHeader(value, redirectLocationOptions(options.redirectAllowlist)),
+        );
+        return;
+      }
+      nativeHeaderSet(webHeaders, name, value);
+    },
+  ]);
 
-  for (const cookie of setCookies) {
-    webHeaders.append(
+  for (let index = 0; index < setCookies.length; index += 1) {
+    const cookie = setCookies[index]!;
+    nativeHeaderAppend(
+      webHeaders,
       'Set-Cookie',
       forwardSetCookie(cookie, { class: 'session', source: 'legacy-normalize' }),
     );
@@ -559,17 +703,18 @@ function redirectLocationOptions(
 }
 
 function rawSetCookieHeaders(headers: Headers): string[] {
-  const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };
   const setCookies =
-    typeof withGetSetCookie.getSetCookie === 'function' ? withGetSetCookie.getSetCookie() : [];
+    typeof nativeHeadersGetSetCookie === 'function'
+      ? witnessReflectApply<string[]>(nativeHeadersGetSetCookie, headers, [])
+      : [];
   if (setCookies.length > 0) return setCookies;
 
-  const value = headers.get('set-cookie');
+  const value = nativeHeaderGet(headers, 'set-cookie');
   return value === null ? [] : [value];
 }
 
 function assertSafeResponseHeaderName(name: string): void {
-  if (/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u.test(name)) return;
+  if (witnessRegExpTest(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u, name)) return;
   throw new ResponseHeaderChannelError(diagnosticDefinitions.KV415.message);
 }
 
@@ -603,6 +748,55 @@ function isRedirectStatus(status: number): boolean {
   return status >= 300 && status < 400;
 }
 
+function appendResponsePostureValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function lowerCase(value: string): string {
+  return witnessReflectApply(nativeStringToLowerCase, value, []);
+}
+
+function nativeHeaderAppend(headers: Headers, name: string, value: string): void {
+  witnessReflectApply(nativeHeadersAppend as Function, headers, [name, value]);
+}
+
+function nativeHeaderDelete(headers: Headers, name: string): void {
+  witnessReflectApply(nativeHeadersDelete as Function, headers, [name]);
+}
+
+function nativeHeaderGet(headers: Headers, name: string): string | null {
+  return witnessReflectApply(nativeHeadersGet as Function, headers, [name]);
+}
+
+function nativeHeaderHas(headers: Headers, name: string): boolean {
+  return witnessReflectApply(nativeHeadersHas as Function, headers, [name]);
+}
+
+function nativeHeaderSet(headers: Headers, name: string, value: string): void {
+  witnessReflectApply(nativeHeadersSet as Function, headers, [name, value]);
+}
+
+function postureIncludes(
+  postures: readonly EndpointResponseBody[],
+  expected: EndpointResponseBody,
+): boolean {
+  for (let index = 0; index < postures.length; index += 1) {
+    if (postures[index] === expected) return true;
+  }
+  return false;
+}
+
+function stringWitnessSet(values: readonly string[]): Set<string> {
+  const set = createWitnessSet<string>();
+  for (let index = 0; index < values.length; index += 1) witnessSetAdd(set, values[index]!);
+  return set;
+}
+
 const AMBIENT_BROWSER_AUTHORITY_HEADERS: readonly string[] = ['cookie'];
 function endpointHeadersWithoutAmbientAuthority(
   headers: Headers,
@@ -610,25 +804,29 @@ function endpointHeadersWithoutAmbientAuthority(
 ): Headers {
   if (options.stripAuthorization !== false) {
     const sanitized = createNativeHeaders();
-    if (typeof nativeHeadersEntries !== 'function' || typeof nativeHeadersAppend !== 'function') {
+    if (typeof nativeHeadersAppend !== 'function') {
       throw new TypeError('The Web Headers implementation lacks required intrinsics.');
     }
-    const entries = Reflect.apply(nativeHeadersEntries, headers, []) as IterableIterator<
-      [string, string]
-    >;
-    for (const [name, value] of entries) {
-      if (
-        options.metadataOnly === true
-          ? isRequestMetadataHeader(name)
-          : isProvablyNonAmbientMachineHeader(name)
-      ) {
-        Reflect.apply(nativeHeadersAppend, sanitized, [name, value]);
-      }
+    if (typeof nativeHeadersForEach !== 'function') {
+      throw new TypeError('The Web Headers implementation lacks required traversal intrinsics.');
     }
+    witnessReflectApply(nativeHeadersForEach, headers, [
+      (value: string, name: string): void => {
+        if (
+          options.metadataOnly === true
+            ? isRequestMetadataHeader(name)
+            : isProvablyNonAmbientMachineHeader(name)
+        ) {
+          witnessReflectApply(nativeHeadersAppend, sanitized, [name, value]);
+        }
+      },
+    ]);
     return sanitized;
   }
   const sanitized = createNativeHeaders(headers);
-  for (const name of AMBIENT_BROWSER_AUTHORITY_HEADERS) sanitized.delete(name);
+  for (let index = 0; index < AMBIENT_BROWSER_AUTHORITY_HEADERS.length; index += 1) {
+    nativeHeaderDelete(sanitized, AMBIENT_BROWSER_AUTHORITY_HEADERS[index]!);
+  }
   return sanitized;
 }
 
@@ -636,19 +834,28 @@ function requestMetadataUrl(value: string): string {
   if (
     typeof readNativeUrlOrigin !== 'function' ||
     typeof readNativeUrlPathname !== 'function' ||
-    typeof readNativeUrlSearchParams !== 'function' ||
-    typeof nativeUrlSearchParamKeys !== 'function'
+    typeof readNativeUrlSearchParams !== 'function'
   ) {
     return 'http://kovo.invalid/';
   }
   try {
     const parsed = new NativeURL(value);
-    const origin = Reflect.apply(readNativeUrlOrigin, parsed, []) as string;
-    const pathname = Reflect.apply(readNativeUrlPathname, parsed, []) as string;
-    const searchParams = Reflect.apply(readNativeUrlSearchParams, parsed, []) as URLSearchParams;
-    const keys = [
-      ...(Reflect.apply(nativeUrlSearchParamKeys, searchParams, []) as IterableIterator<string>),
-    ].map(encodeURIComponent);
+    const origin = witnessReflectApply<string>(readNativeUrlOrigin, parsed, []);
+    const pathname = witnessReflectApply<string>(readNativeUrlPathname, parsed, []);
+    const searchParams = witnessReflectApply<URLSearchParams>(
+      readNativeUrlSearchParams,
+      parsed,
+      [],
+    );
+    const keys: string[] = [];
+    if (typeof nativeUrlSearchParamsForEach !== 'function') {
+      throw new TypeError('The Web URLSearchParams implementation lacks traversal intrinsics.');
+    }
+    witnessReflectApply(nativeUrlSearchParamsForEach, searchParams, [
+      (_value: string, key: string): void => {
+        appendResponsePostureValue(keys, encodeURIComponent(key));
+      },
+    ]);
     return `${origin}${pathname}${keys.length === 0 ? '' : `?${keys.join('&')}`}`;
   } catch {
     return 'http://kovo.invalid/';
@@ -656,7 +863,7 @@ function requestMetadataUrl(value: string): string {
 }
 
 function isRequestMetadataHeader(value: string): boolean {
-  const header = value.toLowerCase();
+  const header = lowerCase(value);
   return (
     header === 'accept' ||
     header === 'content-length' ||
@@ -668,7 +875,7 @@ function isRequestMetadataHeader(value: string): boolean {
 }
 
 function isNetworkMetadataHeader(value: string): boolean {
-  const header = value.toLowerCase();
+  const header = lowerCase(value);
   return (
     header === 'cf-connecting-ip' ||
     header === 'fastly-client-ip' ||
@@ -680,23 +887,23 @@ function isNetworkMetadataHeader(value: string): boolean {
 }
 
 function isProvablyNonAmbientMachineHeader(value: string): boolean {
-  const header = value.toLowerCase();
+  const header = lowerCase(value);
   return (
     header === 'accept' ||
     header === 'content-length' ||
     header === 'content-type' ||
     header === 'user-agent' ||
-    header.includes('signature') ||
-    header.includes('hmac') ||
-    header.startsWith('kovo-') ||
-    header.startsWith('webhook-') ||
-    header.startsWith('x-kovo-') ||
-    header.startsWith('x-machine-')
+    witnessReflectApply<boolean>(nativeStringIncludes, header, ['signature']) ||
+    witnessReflectApply<boolean>(nativeStringIncludes, header, ['hmac']) ||
+    witnessReflectApply<boolean>(nativeStringStartsWith, header, ['kovo-']) ||
+    witnessReflectApply<boolean>(nativeStringStartsWith, header, ['webhook-']) ||
+    witnessReflectApply<boolean>(nativeStringStartsWith, header, ['x-kovo-']) ||
+    witnessReflectApply<boolean>(nativeStringStartsWith, header, ['x-machine-'])
   );
 }
 
 const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>> = {
-  document: new Set([
+  document: stringWitnessSet([
     'clientIp',
     'db',
     'onError',
@@ -704,8 +911,8 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
     'sessionProvider',
     'surface',
   ]),
-  endpoint: new Set(['clientIp', 'onError', 'stripAuthorization', 'surface']),
-  mutation: new Set([
+  endpoint: stringWitnessSet(['clientIp', 'onError', 'stripAuthorization', 'surface']),
+  mutation: stringWitnessSet([
     'clientIp',
     'csrf',
     'db',
@@ -716,8 +923,15 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
     'sqlWritePolicy',
     'surface',
   ]),
-  query: new Set(['clientIp', 'db', 'onError', 'principalPosture', 'sessionProvider', 'surface']),
-  system: new Set(['surface']),
+  query: stringWitnessSet([
+    'clientIp',
+    'db',
+    'onError',
+    'principalPosture',
+    'sessionProvider',
+    'surface',
+  ]),
+  system: stringWitnessSet(['surface']),
 };
 
 function assertKnownLifecyclePolicy(options: unknown): void {
@@ -730,8 +944,8 @@ function assertKnownLifecyclePolicy(options: unknown): void {
   }
 
   const allowed = LIFECYCLE_POLICY_KEYS[policy.surface];
-  for (const key of Object.keys(options)) {
-    if (!allowed.has(key)) {
+  for (const key of witnessObjectKeys(options)) {
+    if (!witnessSetHas(allowed as Set<string>, key)) {
       throw new Error(`Lifecycle surface "${policy.surface}" does not accept option "${key}".`);
     }
   }
@@ -751,7 +965,7 @@ function assertWebRequest(
   value: unknown,
   surface: 'endpoint' | 'system',
 ): asserts value is Request {
-  if (value instanceof Request) return;
+  if (isNativeRequest(value)) return;
   throw new Error(`Lifecycle surface "${surface}" requires a Web Request.`);
 }
 
@@ -792,43 +1006,52 @@ function endpointResponseBodyMatchesContentType(
   bodyPosture: readonly EndpointResponseBody[],
   contentType: string,
 ): boolean {
-  const inspected = bodyPosture.filter((body) => body === 'json' || body === 'html');
-  if (inspected.length === 0) return true;
-  if (inspected.includes('json') && /\bjson\b/i.test(contentType)) return true;
-  if (inspected.includes('html') && /\bhtml\b/i.test(contentType)) return true;
-  if (bodyPosture.includes('text') && /\btext\//i.test(contentType)) return true;
+  const inspectJson = postureIncludes(bodyPosture, 'json');
+  const inspectHtml = postureIncludes(bodyPosture, 'html');
+  if (!inspectJson && !inspectHtml) return true;
+  if (inspectJson && witnessRegExpTest(/\bjson\b/i, contentType)) return true;
+  if (inspectHtml && witnessRegExpTest(/\bhtml\b/i, contentType)) return true;
+  if (postureIncludes(bodyPosture, 'text') && witnessRegExpTest(/\btext\//i, contentType)) {
+    return true;
+  }
   return false;
 }
 
 function assertEndpointReservedHeaders(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
-  response: Response,
+  headers: Headers,
   failures: string[],
 ): void {
-  const allowed = new Set(
-    (definition.response.reservedHeaders ?? []).map((header) => header.toLowerCase()),
-  );
-  for (const [header] of response.headers) {
-    const reserved = endpointReservedHeader(header);
-    if (reserved === undefined) continue;
-    if (allowed.has(header.toLowerCase()) || allowed.has(reserved.toLowerCase())) continue;
-    failures.push(
-      `reserved response header ${reserved} was written without response.reservedHeaders declaration`,
-    );
+  const allowed = createWitnessSet<string>();
+  const declared = definition.response.reservedHeaders ?? [];
+  for (let index = 0; index < declared.length; index += 1) {
+    witnessSetAdd(allowed, lowerCase(declared[index]!));
   }
+  witnessReflectApply(nativeHeadersForEach as Function, headers, [
+    (_value: string, header: string) => {
+      const reserved = endpointReservedHeader(header);
+      if (reserved === undefined) return;
+      if (witnessSetHas(allowed, lowerCase(header)) || witnessSetHas(allowed, lowerCase(reserved)))
+        return;
+      appendResponsePostureValue(
+        failures,
+        `reserved response header ${reserved} was written without response.reservedHeaders declaration`,
+      );
+    },
+  ]);
 }
 
 function endpointReservedHeader(header: string): string | undefined {
-  const lower = header.toLowerCase();
-  if (lower.startsWith('kovo-')) return 'Kovo-*';
+  const lower = lowerCase(header);
+  if (witnessReflectApply<boolean>(nativeStringStartsWith, lower, ['kovo-'])) return 'Kovo-*';
   if (lower === 'set-cookie') return 'Set-Cookie';
   if (lower === 'clear-site-data') return 'Clear-Site-Data';
   if (lower === 'location') return 'Location';
-  if (ENDPOINT_SECURITY_HEADERS.has(lower)) return header;
+  if (witnessSetHas(ENDPOINT_SECURITY_HEADERS, lower)) return header;
   return undefined;
 }
 
-const ENDPOINT_SECURITY_HEADERS = new Set([
+const ENDPOINT_SECURITY_HEADERS = stringWitnessSet([
   'content-security-policy',
   'content-security-policy-report-only',
   'cross-origin-embedder-policy',

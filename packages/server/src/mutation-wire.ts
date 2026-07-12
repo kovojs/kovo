@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 import type { Redirect } from '@kovojs/core';
 import { isProvenPrincipal } from './auth-principal.js';
@@ -18,6 +18,40 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
+import {
+  witnessGetPrototypeOf,
+  witnessIsArray,
+  witnessJsonStringifyPrimitive,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectKeys,
+  witnessReflectApply,
+  witnessSortStrings,
+  witnessString,
+} from './security-witness-intrinsics.js';
+
+const NativeBuffer = Buffer;
+const nativeBufferFrom = NativeBuffer.from;
+const hashControl = createHash('sha256');
+const hashPrototype = witnessGetPrototypeOf(hashControl);
+const nativeHashUpdate =
+  hashPrototype === null
+    ? undefined
+    : witnessGetOwnPropertyDescriptor(hashPrototype, 'update')?.value;
+const nativeHashDigest =
+  hashPrototype === null
+    ? undefined
+    : witnessGetOwnPropertyDescriptor(hashPrototype, 'digest')?.value;
+if (typeof nativeHashUpdate !== 'function' || typeof nativeHashDigest !== 'function') {
+  throw new TypeError('Kovo live-target attestation hash controls are unavailable.');
+}
+const hashSemanticControl = createHash('sha256');
+witnessReflectApply(nativeHashUpdate, hashSemanticControl, ['abc']);
+if (
+  witnessReflectApply<string>(nativeHashDigest, hashSemanticControl, ['hex']) !==
+  'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+) {
+  throw new TypeError('Kovo live-target attestation hash controls failed their semantic check.');
+}
 
 /**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). Renderer for a fragment patched
@@ -567,7 +601,11 @@ export function createLiveTargetAttestation<Request>(
 ): string {
   const payload = liveTargetAttestationPayload(descriptor, options);
   if (options.csrf === undefined || options.csrf === false) {
-    return createHmac('sha256', liveTargetAttestationSecret()).update(payload).digest('base64url');
+    return signingKeyRingFromSecret(liveTargetAttestationSecret()).sign({
+      audience: 'mutation-live-target',
+      payload,
+      purpose: 'live-target-attestation',
+    }).signature;
   }
   return signingKeyRingFromSecret(options.csrf.secret).sign({
     audience: 'mutation-live-target',
@@ -627,14 +665,29 @@ function liveTargetAttestationPayload<Request>(
 }
 
 function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
-  return `{${Object.keys(value)
-    .sort()
-    .map(
-      (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
-    )
-    .join(',')}}`;
+  if (value === null || typeof value !== 'object') {
+    return (
+      witnessJsonStringifyPrimitive(value as string | number | boolean | null | undefined) ??
+      'undefined'
+    );
+  }
+  if (witnessIsArray(value)) {
+    let result = '[';
+    for (let index = 0; index < value.length; index += 1) {
+      if (index > 0) result += ',';
+      result += canonicalJson(value[index]);
+    }
+    return `${result}]`;
+  }
+  const keys = witnessObjectKeys(value);
+  witnessSortStrings(keys);
+  let result = '{';
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (index > 0) result += ',';
+    result += `${witnessJsonStringifyPrimitive(key)!}:${canonicalJson((value as Record<string, unknown>)[key])}`;
+  }
+  return `${result}}`;
 }
 
 function secureEqual(left: string, right: string): boolean {
@@ -642,14 +695,14 @@ function secureEqual(left: string, right: string): boolean {
 }
 
 function digestComparableAttestation(value: string): Buffer {
-  const bytes = Buffer.from(value);
-  return createHash('sha256')
-    .update('kovo-live-target-attestation-v1')
-    .update('\0')
-    .update(String(bytes.byteLength))
-    .update('\0')
-    .update(bytes)
-    .digest();
+  const bytes = witnessReflectApply<Buffer>(nativeBufferFrom, NativeBuffer, [value]);
+  const hash = createHash('sha256');
+  witnessReflectApply(nativeHashUpdate, hash, ['kovo-live-target-attestation-v1']);
+  witnessReflectApply(nativeHashUpdate, hash, ['\0']);
+  witnessReflectApply(nativeHashUpdate, hash, [witnessString(bytes.byteLength)]);
+  witnessReflectApply(nativeHashUpdate, hash, ['\0']);
+  witnessReflectApply(nativeHashUpdate, hash, [bytes]);
+  return witnessReflectApply(nativeHashDigest, hash, []);
 }
 
 function parseLiveTargetProps(value: string): Record<string, unknown> | null {
@@ -662,7 +715,7 @@ function parseLiveTargetProps(value: string): Record<string, unknown> | null {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !witnessIsArray(value);
 }
 
 function dedupe(values: readonly string[]): string[] {

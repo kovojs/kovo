@@ -4,7 +4,13 @@ import type { JsonValue, Secret, StorageCapability, StorageReadCapability } from
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
-import { type Schema, entriesToRecord, parseSchemaAsync, s } from './schema.js';
+import {
+  type Schema,
+  entriesToRecord,
+  parseSchemaAsync,
+  s,
+  schemaMaxUploadBytes,
+} from './schema.js';
 import { unsafeRegex } from './redos.js';
 import { testMutation as mutation } from './test-fixtures.js';
 import { accept } from './upload-sniff.js';
@@ -33,6 +39,51 @@ describe('server schemas', () => {
 
     expect(baseFile.parse(file)).toBe(file);
     expect(() => imageFile.parse(file)).toThrow('Expected file <= 10 bytes');
+  });
+
+  it('closes composite schema topology and child parse identities at declaration time', () => {
+    const child: Schema<string> = { parse: (input) => `original:${String(input)}` };
+    const shape = { accountId: child };
+    const objectSchema = s.object(shape);
+    const arraySchema = s.array(child);
+    const recordSchema = s.record(child);
+
+    shape.accountId = { parse: () => 'shape-replaced' };
+    child.parse = () => 'method-replaced';
+
+    expect(objectSchema.parse({ accountId: 'a1' })).toEqual({ accountId: 'original:a1' });
+    expect(arraySchema.parse(['a1'])).toEqual(['original:a1']);
+    expect(recordSchema.parse({ accountId: 'a1' })).toEqual({ accountId: 'original:a1' });
+    expect(Object.isFrozen(objectSchema)).toBe(true);
+  });
+
+  it('uses captured array and Object traversal controls after app prototype poisoning', () => {
+    const originalIsArray = Array.isArray;
+    const originalEntries = Object.entries;
+    const originalValues = Object.values;
+    try {
+      Array.isArray = () => false;
+      Object.entries = () => [];
+      Object.values = () => [];
+      const schema = s.object({
+        avatar: s.file({ maxBytes: 16 }),
+        tags: s.array(s.string()),
+      });
+
+      expect(schemaMaxUploadBytes(schema)).toBe(16);
+      expect(
+        schema.parse({
+          avatar: { arrayBuffer: async () => new ArrayBuffer(0), name: 'a', size: 0, type: '' },
+          tags: ['a'],
+        }),
+      ).toMatchObject({
+        tags: ['a'],
+      });
+    } finally {
+      Array.isArray = originalIsArray;
+      Object.entries = originalEntries;
+      Object.values = originalValues;
+    }
   });
 
   it('wraps schemas as Secret values outside JsonValue client payloads', () => {

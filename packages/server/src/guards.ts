@@ -30,6 +30,24 @@ import {
   type ServerResponseBase,
 } from './response.js';
 import type { Schema } from './schema.js';
+import {
+  createWitnessMap,
+  createWitnessSet,
+  createWitnessWeakMap,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessMapSize,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 /**
  * A guard denial that expresses the user-facing *intent* of a rejection, leaving
@@ -155,7 +173,7 @@ export interface OwnershipGuardAuditOptions {
   name?: string;
 }
 
-const guardAuditFacts = new WeakMap<Function, readonly GuardAuditFact[]>();
+const guardAuditFacts = createWitnessWeakMap<Function, readonly GuardAuditFact[]>();
 
 /**
  * @internal Framework-resolved guard failure. The intent-based {@link GuardDenial}
@@ -542,8 +560,8 @@ export const guards = {
   rateLimit<Request extends SessionRequestLike>(
     options: RateLimitOptions<Request>,
   ): Guard<Request> {
-    const counts = new Map<string, { count: number; resetAt: number }>();
-    const rateOptions: RateLimitOptions<Request> = Object.freeze({
+    const counts = createWitnessMap<string, { count: number; resetAt: number }>();
+    const rateOptions: RateLimitOptions<Request> = witnessFreeze({
       ...(options.key === undefined ? {} : { key: options.key }),
       max: options.max,
       ...(options.maxKeys === undefined ? {} : { maxKeys: options.maxKeys }),
@@ -560,7 +578,7 @@ export const guards = {
         if (rateOptions.max <= 0) return rateLimitFailure(now + windowMs, now);
 
         const key = rateLimitKey(request, rateOptions);
-        const existing = counts.get(key);
+        const existing = witnessMapGet(counts, key);
 
         if (existing && existing.resetAt > now) {
           if (existing.count >= rateOptions.max) return rateLimitFailure(existing.resetAt, now);
@@ -570,13 +588,16 @@ export const guards = {
         }
 
         const maxKeys = rateOptions.maxKeys ?? defaultRateLimitMaxKeys;
-        while (counts.size >= maxKeys) {
-          const oldest = counts.keys().next().value;
+        while (witnessMapSize(counts) >= maxKeys) {
+          let oldest: string | undefined;
+          witnessMapForEach(counts, (_record, candidate) => {
+            if (oldest === undefined) oldest = candidate;
+          });
           if (oldest === undefined) break;
-          counts.delete(oldest);
+          witnessMapDelete(counts, oldest);
         }
 
-        counts.set(key, {
+        witnessMapSet(counts, key, {
           count: 1,
           resetAt: now + windowMs,
         });
@@ -597,7 +618,7 @@ export const guards = {
         if (!request.session?.user || provenPrincipalFromRequest(request) === undefined) {
           return unauthenticatedGuardFailure();
         }
-        if (request.session.user.roles?.includes(role) !== true) return unauthorizedGuardFailure();
+        if (!roleListIncludes(request.session.user.roles, role)) return unauthorizedGuardFailure();
         markPassedRoleGuard(request, role);
         return true;
       },
@@ -671,7 +692,7 @@ export const guards = {
 export function explainGuard<Request>(
   guard: Guard<Request> | undefined,
 ): readonly GuardAuditFact[] {
-  return guard === undefined ? [] : (guardAuditFacts.get(guard) ?? []);
+  return guard === undefined ? [] : (witnessWeakMapGet(guardAuditFacts, guard) ?? []);
 }
 
 /** @internal Project the stable audit name attached to an executable guard. */
@@ -686,7 +707,8 @@ export function guardAuditName<Request>(guard: Guard<Request>): string {
 /** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */
 export function requestPassedRoleGuard(request: unknown, role: string): boolean {
   if (!isObjectLike(request)) return false;
-  return (request as PassedRoleGuardRequest)[passedRoleGuardsSymbol]?.has(role) === true;
+  const roles = (request as PassedRoleGuardRequest)[passedRoleGuardsSymbol];
+  return roles !== undefined && witnessSetHas(roles, role);
 }
 
 function markPassedRoleGuard(request: unknown, role: string): void {
@@ -694,42 +716,51 @@ function markPassedRoleGuard(request: unknown, role: string): void {
   const target = request as PassedRoleGuardRequest;
   let roles = target[passedRoleGuardsSymbol];
   if (roles === undefined) {
-    roles = new Set();
-    Object.defineProperty(target, passedRoleGuardsSymbol, {
+    roles = createWitnessSet();
+    witnessDefineProperty(target, passedRoleGuardsSymbol, {
       configurable: false,
       enumerable: false,
       value: roles,
       writable: false,
     });
   }
-  roles.add(role);
+  witnessSetAdd(roles, role);
 }
 
 function stampGuardAudit<Request, RefinedRequest extends Request = Request>(
   guard: Guard<Request, RefinedRequest>,
   facts: readonly GuardAuditFact[],
 ): Guard<Request, RefinedRequest> {
-  guardAuditFacts.set(guard, Object.freeze(facts.map(freezeGuardAuditFact)));
+  const snapshot: GuardAuditFact[] = [];
+  for (let index = 0; index < facts.length; index += 1) {
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: freezeGuardAuditFact(facts[index]!),
+      writable: true,
+    });
+  }
+  witnessWeakMapSet(guardAuditFacts, guard, witnessFreeze(snapshot));
   return guard;
 }
 
 function freezeGuardAuditFact(fact: GuardAuditFact): GuardAuditFact {
   if (fact.kind === 'owns') {
-    return Object.freeze({
+    return witnessFreeze({
       ...fact,
-      principal: Object.freeze({ ...fact.principal }),
+      principal: witnessFreeze({ ...fact.principal }),
       ...(fact.resourceKey === undefined
         ? {}
-        : { resourceKey: Object.freeze({ ...fact.resourceKey }) }),
+        : { resourceKey: witnessFreeze({ ...fact.resourceKey }) }),
     });
   }
   if (fact.kind === 'role') {
-    return Object.freeze({
+    return witnessFreeze({
       ...fact,
-      principal: Object.freeze({ ...fact.principal }),
+      principal: witnessFreeze({ ...fact.principal }),
     });
   }
-  return Object.freeze({ ...fact });
+  return witnessFreeze({ ...fact });
 }
 
 function normalizePrincipalKeyAudit(
@@ -1034,9 +1065,18 @@ function evictExpiredRateLimits(
   counts: Map<string, { count: number; resetAt: number }>,
   now: number,
 ): void {
-  for (const [key, record] of counts) {
-    if (record.resetAt <= now) counts.delete(key);
+  witnessMapForEach(counts, (record, key) => {
+    if (record.resetAt <= now) witnessMapDelete(counts, key);
+  });
+}
+
+function roleListIncludes(roles: readonly string[] | undefined, role: string): boolean {
+  if (!witnessIsArray(roles)) return false;
+  for (let index = 0; index < roles.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(roles, index);
+    if (descriptor !== undefined && 'value' in descriptor && descriptor.value === role) return true;
   }
+  return false;
 }
 
 function requestWithProperty<Request, Key extends string, Value>(

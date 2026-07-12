@@ -1,6 +1,7 @@
 import type { Schema } from './schema.js';
 import { isSigningKeyRing, SIGNING_SECRET_MIN_BYTES } from './keyring.js';
 import { isSchemaValidationError } from './schema.js';
+import { createWitnessSet, witnessSetAdd, witnessSetHas } from './security-witness-intrinsics.js';
 
 /**
  * Env validation + refuse-to-boot on missing/weak framework secrets (SPEC §6.6, §9.5;
@@ -304,8 +305,7 @@ export function looksLikeCommittedSecret(value: unknown): boolean {
   return estimateEntropyBits(value) >= 80 && distinctRatio(value) >= 0.4;
 }
 
-const WAIVED = new WeakSet<object>();
-const WAIVED_STRINGS = new Set<string>();
+const WAIVED_STRINGS = createWitnessSet<string>();
 
 /**
  * Mark a framework-secret value as an audited committed-secret waiver so
@@ -319,15 +319,13 @@ export function committedSecretWaiver(value: string, options: { justification: s
       'committedSecretWaiver requires a non-empty justification (audited in the committed-secret lint, SPEC §6.6).',
     );
   }
-  WAIVED_STRINGS.add(value);
+  witnessSetAdd(WAIVED_STRINGS, value);
   return value;
 }
 
 function isWaived(value: string): boolean {
-  return WAIVED_STRINGS.has(value);
+  return witnessSetHas(WAIVED_STRINGS, value);
 }
-
-void WAIVED;
 
 /**
  * Estimate Shannon entropy in bits: `length * H` where `H` is the per-character Shannon

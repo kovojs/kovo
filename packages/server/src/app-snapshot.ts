@@ -22,6 +22,7 @@ import {
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import { layout, route, type LayoutDeclaration } from './route.js';
+import { snapshotSchemaForRuntime, type Schema } from './schema.js';
 import type { AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
 import type { CsrfAnonymousCookieOptions, CsrfOptions } from './csrf.js';
 import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
@@ -34,6 +35,7 @@ import {
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessObjectIs,
+  witnessObjectKeys,
   witnessOwnKeys,
   witnessReflectApply,
   witnessReflectGet,
@@ -48,6 +50,10 @@ import {
 import { runWebhook, type WebhookDeclaration } from './webhook.js';
 
 const MAX_APP_REGISTRY_LENGTH = 100_000;
+const nativeArrayIsArray = Array.isArray;
+if (!nativeArrayIsArray([]) || nativeArrayIsArray({})) {
+  throw new TypeError('Kovo app array controls were modified before framework initialization.');
+}
 const EMPTY_OMITTED_PROPERTIES = createWitnessSet<PropertyKey>();
 
 /** One assembly-local identity map keeps nested layout/mutation query references canonical. */
@@ -95,6 +101,7 @@ export function snapshotAppQuery(
 
   const access = accessDecisionFor(object as AppQueryDeclaration & { access?: AccessDecision });
   const record = snapshotOwnDataRecord(object, 'query declaration', omittedProperties('access'));
+  snapshotSchemaProperty(record, 'args', 'query.args');
   snapshotArrayProperty(record, 'reads', 'query.reads');
   snapshotArrayProperty(record, 'delta', 'query.delta');
 
@@ -115,6 +122,8 @@ export function snapshotAppMutation(
 
   const access = accessDecisionFor(object as AppMutationDeclaration & { access?: AccessDecision });
   const record = snapshotOwnDataRecord(object, 'mutation declaration', omittedProperties('access'));
+  snapshotSchemaProperty(record, 'input', 'mutation.input');
+  snapshotSchemaRecordProperty(record, 'errors', 'mutation.errors');
   snapshotArrayProperty(record, 'fileFields', 'mutation.fileFields');
   if (record.registry !== undefined) {
     record.registry = snapshotMutationRegistry(record.registry, context);
@@ -338,7 +347,10 @@ export function snapshotAppCsrfOptions<Request>(
 
   // Resolve byte arrays and declarative key rings now. The resulting key-ring identity is pinned
   // in the frozen aggregate, so later mutation of authoring objects cannot swap signing material.
-  const pinnedSecret = signingKeyRingFromSecret(secret as CsrfOptions<Request>['secret']);
+  const pinnedSecret =
+    typeof secret === 'string'
+      ? secret
+      : signingKeyRingFromSecret(secret as CsrfOptions<Request>['secret']);
   return witnessFreeze({
     ...(anonymousCookie === undefined ? {} : { anonymousCookie }),
     ...(field === undefined ? {} : { field }),
@@ -365,6 +377,7 @@ export function snapshotAppErrorShells(source: AppErrorShellOptions): AppErrorSh
 /** Snapshot a task registry entry, including immutable retry and recurring argument topology. */
 export function snapshotAppTask(source: AppTaskDeclaration, index = 0): AppTaskDeclaration {
   const record = snapshotOwnDataRecord(source, `app.tasks[${index}]`);
+  snapshotSchemaProperty(record, 'input', `app.tasks[${index}].input`);
   if (record.retry !== undefined) {
     record.retry = witnessFreeze(snapshotOwnDataRecord(record.retry, `app.tasks[${index}].retry`));
   }
@@ -510,7 +523,7 @@ function snapshotLayoutQueries(
   context: AppDeclarationSnapshotContext,
 ): Readonly<Record<string, AppQueryDeclaration>> {
   const record = snapshotOwnDataRecord(source, 'layout.queries');
-  for (const key of Object.keys(record)) {
+  for (const key of witnessObjectKeys(record)) {
     record[key] = snapshotAppQuery(record[key] as AppQueryDeclaration, context);
   }
   return witnessFreeze(record) as Readonly<Record<string, AppQueryDeclaration>>;
@@ -571,7 +584,7 @@ function snapshotImmutableTaskData(
   }
   witnessWeakSetAdd(ancestors, value);
   try {
-    if (Array.isArray(value)) {
+    if (nativeArrayIsArray(value)) {
       const values = denseArrayValues(value, label);
       const snapshot: unknown[] = [];
       for (let index = 0; index < values.length; index += 1) {
@@ -604,7 +617,7 @@ function snapshotStylesheetArray(
   const values = denseArrayValues(source, label);
   const snapshot: (string | StylesheetAsset)[] = [];
   for (let index = 0; index < values.length; index += 1) {
-    const value = values[index];
+    const value = values[index]!;
     if (typeof value === 'string') snapshot.push(value);
     else snapshot.push(snapshotStylesheetAsset(value));
   }
@@ -627,14 +640,51 @@ function snapshotArrayProperty(
   label: string,
 ): void {
   const value = record[property];
-  if (value === undefined || !Array.isArray(value)) return;
+  if (value === undefined || !nativeArrayIsArray(value)) return;
   record[property] = witnessFreeze(denseArrayValues(value, label));
+}
+
+function snapshotSchemaProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  record[property] = snapshotSchemaForRuntime(value as Schema<unknown>, label);
+}
+
+function snapshotSchemaRecordProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  const source = requireDeclarationObject(value, label);
+  const snapshot: Record<PropertyKey, Schema<unknown>> = {};
+  for (const key of witnessOwnKeys(source)) {
+    const descriptor = witnessGetOwnPropertyDescriptor(source, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`${label}.${String(key)} must be a stable own data property.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: false,
+      enumerable: descriptor.enumerable === true,
+      value: snapshotSchemaForRuntime(
+        descriptor.value as Schema<unknown>,
+        `${label}.${String(key)}`,
+      ),
+      writable: false,
+    });
+  }
+  record[property] = witnessFreeze(snapshot);
 }
 
 function denseArrayValues<Value>(source: readonly Value[], label: string): Value[] {
   let array = false;
   try {
-    array = Array.isArray(source);
+    array = nativeArrayIsArray(source);
   } catch {
     throw new TypeError(`${label} must be a stable dense array.`);
   }
@@ -742,7 +792,7 @@ function requireDeclarationObject(
   value: unknown,
   label: string,
 ): object & Record<PropertyKey, any> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || nativeArrayIsArray(value)) {
     throw new TypeError(`${label} must be an object declaration.`);
   }
   return value as object & Record<PropertyKey, any>;

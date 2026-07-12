@@ -681,6 +681,46 @@ describe('server mutation response replay', () => {
     await expect(canonicalRequestFingerprint(differentType)).resolves.not.toBe(fingerprint);
   });
 
+  it('keeps distinct replay inputs collision-free after app code poisons canonicalization controls', async () => {
+    const firstItems = ['alpha', 'one'];
+    const secondItems = ['alpha', 'two'];
+    Object.defineProperty(firstItems, Symbol.iterator, {
+      configurable: true,
+      value: function* () {
+        yield 'forged-same';
+      },
+    });
+    Object.defineProperty(secondItems, Symbol.iterator, {
+      configurable: true,
+      value: function* () {
+        yield 'forged-same';
+      },
+    });
+    const originalJoin = Array.prototype.join;
+    const originalSort = Array.prototype.sort;
+    const originalObjectKeys = Object.keys;
+    const originalJsonStringify = JSON.stringify;
+    let firstFingerprint: string;
+    let secondFingerprint: string;
+    try {
+      Array.prototype.join = () => '';
+      Array.prototype.sort = function () {
+        return this;
+      };
+      Object.keys = () => [];
+      JSON.stringify = () => '"forged-same"';
+      firstFingerprint = await canonicalRequestFingerprint({ items: firstItems, quantity: 1 });
+      secondFingerprint = await canonicalRequestFingerprint({ items: secondItems, quantity: 2 });
+    } finally {
+      Array.prototype.join = originalJoin;
+      Array.prototype.sort = originalSort;
+      Object.keys = originalObjectKeys;
+      JSON.stringify = originalJsonStringify;
+    }
+
+    expect(firstFingerprint!).not.toBe(secondFingerprint!);
+  });
+
   it('fails closed before handler execution when upload-byte fingerprinting fails (M8)', async () => {
     const replayStore = createMemoryMutationReplayStore();
     let writes = 0;
@@ -757,7 +797,7 @@ describe('server mutation response replay', () => {
     expect(writes).toBe(0);
   });
 
-  it('fails closed when the SHA-256 upload digest operation rejects (M8)', async () => {
+  it('uses the captured SHA-256 upload digest after app code replaces global crypto (M8)', async () => {
     const digest = vi.fn(async () => {
       throw new Error('simulated digest failure');
     });
@@ -774,8 +814,8 @@ describe('server mutation response replay', () => {
             type: 'text/plain',
           },
         }),
-      ).rejects.toThrow(/Unable to digest upload bytes for replay fingerprint/u);
-      expect(digest).toHaveBeenCalledTimes(1);
+      ).resolves.toContain('c97c29c7a71b392b437ee03fd17f09bb10b75e879466fc0eb757b2c4a78ac938');
+      expect(digest).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }

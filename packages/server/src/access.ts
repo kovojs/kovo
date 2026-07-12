@@ -1,4 +1,16 @@
 import type { Guard } from './guards.js';
+import {
+  createWitnessWeakMap,
+  createWitnessWeakSet,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessWeakMapGet,
+  witnessWeakMapHas,
+  witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
 
 /** A human-justified public access decision. */
 export interface PublicAccess {
@@ -20,19 +32,24 @@ export interface VerifiedMachineAccess {
  */
 export type AccessDecision = readonly Guard<any, any>[] | PublicAccess | VerifiedMachineAccess;
 
-const snapshottedGuardAccessDecisions = new WeakSet<object>();
-const snapshottedStructuredAccessDecisions = new WeakSet<object>();
-const pinnedAccessDecisions = new WeakMap<object, { decision: AccessDecision | undefined }>();
+const snapshottedGuardAccessDecisions = createWitnessWeakSet<object>();
+const snapshottedStructuredAccessDecisions = createWitnessWeakSet<object>();
+const pinnedAccessDecisions = createWitnessWeakMap<
+  object,
+  { decision: AccessDecision | undefined }
+>();
+const nativeArrayIsArray = Array.isArray;
+const nativeNumberIsSafeInteger = Number.isSafeInteger;
 const MAX_ACCESS_GUARD_CHAIN_LENGTH = 256;
 
-const invalidAccessDecision = Object.freeze([undefined]) as unknown as AccessDecision;
-snapshottedGuardAccessDecisions.add(invalidAccessDecision as object);
+const invalidAccessDecision = witnessFreeze([undefined]) as unknown as AccessDecision;
+witnessWeakSetAdd(snapshottedGuardAccessDecisions, invalidAccessDecision as object);
 
 /** @internal Test whether an access decision is an executable guard array. */
 export function isGuardAccessDecision(
   access: AccessDecision | undefined,
 ): access is readonly Guard<any, any>[] {
-  return Array.isArray(access);
+  return nativeArrayIsArray(access);
 }
 
 /**
@@ -57,12 +74,12 @@ export function isExecutableGuardAccessDecision(
 export function executableGuardAccessDecision(
   access: AccessDecision | undefined,
 ): readonly Guard<any, any>[] | undefined {
-  if (!Array.isArray(access)) return undefined;
+  if (!nativeArrayIsArray(access)) return undefined;
   const snapshot = snapshotAccessDecision(access);
-  if (!Array.isArray(snapshot) || snapshot.length === 0) return undefined;
+  if (!nativeArrayIsArray(snapshot) || snapshot.length === 0) return undefined;
 
   for (let index = 0; index < snapshot.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(snapshot, index);
+    const descriptor = witnessGetOwnPropertyDescriptor(snapshot, index);
     if (
       descriptor === undefined ||
       !('value' in descriptor) ||
@@ -91,22 +108,22 @@ export function snapshotAccessDecision(
   access: AccessDecision | undefined,
 ): AccessDecision | undefined {
   if (access === undefined) return undefined;
-  if (Array.isArray(access)) return snapshotGuardAccessDecision(access);
+  if (nativeArrayIsArray(access)) return snapshotGuardAccessDecision(access);
   if (typeof access !== 'object' || access === null) return invalidAccessDecision;
-  if (snapshottedStructuredAccessDecisions.has(access)) return access;
+  if (witnessWeakSetHas(snapshottedStructuredAccessDecisions, access)) return access;
 
   try {
-    const kind = Object.getOwnPropertyDescriptor(access, 'kind');
+    const kind = witnessGetOwnPropertyDescriptor(access, 'kind');
     if (kind === undefined || !('value' in kind)) return invalidAccessDecision;
     if (kind.value === 'public') {
-      const reason = Object.getOwnPropertyDescriptor(access, 'reason');
+      const reason = witnessGetOwnPropertyDescriptor(access, 'reason');
       if (reason === undefined || !('value' in reason) || typeof reason.value !== 'string') {
         return invalidAccessDecision;
       }
-      return markStructuredAccessDecision(Object.freeze({ kind: 'public', reason: reason.value }));
+      return markStructuredAccessDecision(witnessFreeze({ kind: 'public', reason: reason.value }));
     }
     if (kind.value === 'verified-machine-auth') {
-      return markStructuredAccessDecision(Object.freeze({ kind: 'verified-machine-auth' }));
+      return markStructuredAccessDecision(witnessFreeze({ kind: 'verified-machine-auth' }));
     }
   } catch {
     return invalidAccessDecision;
@@ -126,7 +143,7 @@ export function pinAccessDecision<Declaration extends object>(
   declaration: Declaration,
   access: AccessDecision | undefined,
 ): Declaration {
-  if (pinnedAccessDecisions.has(declaration)) return declaration;
+  if (witnessWeakMapHas(pinnedAccessDecisions, declaration)) return declaration;
   const decision = snapshotAccessDecision(access);
   return pinSnapshottedAccessDecision(declaration, decision, access !== undefined);
 }
@@ -135,7 +152,7 @@ export function pinAccessDecision<Declaration extends object>(
 export function accessDecisionFor(
   declaration: object & { access?: AccessDecision },
 ): AccessDecision | undefined {
-  const pinned = pinnedAccessDecisions.get(declaration);
+  const pinned = witnessWeakMapGet(pinnedAccessDecisions, declaration);
   if (pinned !== undefined) return pinned.decision;
 
   const descriptor = ownAccessDescriptor(declaration);
@@ -152,7 +169,7 @@ export function accessDecisionFor(
     // A frozen/sealed structural declaration may already bind `access` non-configurably. The
     // private snapshot is still authoritative for every audit/runtime consumer, while the stable
     // property cannot be replaced. Constructor-created declarations take the physical path above.
-    pinnedAccessDecisions.set(declaration, { decision });
+    witnessWeakMapSet(pinnedAccessDecisions, declaration, { decision });
   }
   return decision;
 }
@@ -162,44 +179,48 @@ function pinSnapshottedAccessDecision<Declaration extends object>(
   decision: AccessDecision | undefined,
   authored: boolean,
 ): Declaration {
-  if (pinnedAccessDecisions.has(declaration)) return declaration;
+  if (witnessWeakMapHas(pinnedAccessDecisions, declaration)) return declaration;
 
   const existing = ownAccessDescriptor(declaration);
-  Object.defineProperty(declaration, 'access', {
+  witnessDefineProperty(declaration, 'access', {
     configurable: false,
     enumerable: existing?.enumerable ?? authored,
     value: decision,
     writable: false,
   });
-  pinnedAccessDecisions.set(declaration, { decision });
+  witnessWeakMapSet(pinnedAccessDecisions, declaration, { decision });
   return declaration;
 }
 
 function snapshotGuardAccessDecision(access: readonly unknown[]): AccessDecision {
-  if (snapshottedGuardAccessDecisions.has(access as object)) {
+  if (witnessWeakSetHas(snapshottedGuardAccessDecisions, access as object)) {
     return access as AccessDecision;
   }
 
   try {
-    const lengthDescriptor = Object.getOwnPropertyDescriptor(access, 'length');
+    const lengthDescriptor = witnessGetOwnPropertyDescriptor(access, 'length');
     if (
       lengthDescriptor === undefined ||
       !('value' in lengthDescriptor) ||
-      !Number.isSafeInteger(lengthDescriptor.value) ||
+      !nativeNumberIsSafeInteger(lengthDescriptor.value) ||
       lengthDescriptor.value < 0 ||
       lengthDescriptor.value > MAX_ACCESS_GUARD_CHAIN_LENGTH
     ) {
       return invalidAccessDecision;
     }
 
-    const snapshot: unknown[] = Array.from({ length: lengthDescriptor.value as number });
-    for (let index = 0; index < snapshot.length; index += 1) {
-      const descriptor = Object.getOwnPropertyDescriptor(access, index);
-      snapshot[index] =
-        descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+    const snapshot: unknown[] = [];
+    for (let index = 0; index < lengthDescriptor.value; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(access, index);
+      witnessDefineProperty(snapshot, index, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined,
+        writable: true,
+      });
     }
-    const frozen = Object.freeze(snapshot);
-    snapshottedGuardAccessDecisions.add(frozen);
+    const frozen = witnessFreeze(snapshot);
+    witnessWeakSetAdd(snapshottedGuardAccessDecisions, frozen);
     return frozen as AccessDecision;
   } catch {
     return invalidAccessDecision;
@@ -209,13 +230,13 @@ function snapshotGuardAccessDecision(access: readonly unknown[]): AccessDecision
 function markStructuredAccessDecision<Decision extends PublicAccess | VerifiedMachineAccess>(
   decision: Decision,
 ): Decision {
-  snapshottedStructuredAccessDecisions.add(decision);
+  witnessWeakSetAdd(snapshottedStructuredAccessDecisions, decision);
   return decision;
 }
 
 function ownAccessDescriptor(declaration: object): PropertyDescriptor | undefined {
   try {
-    return Object.getOwnPropertyDescriptor(declaration, 'access');
+    return witnessGetOwnPropertyDescriptor(declaration, 'access');
   } catch {
     throw new TypeError('Access declaration must expose a stable own data property.');
   }
@@ -225,14 +246,14 @@ function ownAccessDescriptor(declaration: object): PropertyDescriptor | undefine
  * Declare that a surface is intentionally public, with the audit reason attached.
  */
 export function publicAccess(reason: string): PublicAccess {
-  return markStructuredAccessDecision(Object.freeze({ kind: 'public', reason }));
+  return markStructuredAccessDecision(witnessFreeze({ kind: 'public', reason }));
 }
 
 /**
  * Declare that a machine endpoint is covered by its verifier/auth scheme.
  */
 export const verifiedAccess: VerifiedMachineAccess = markStructuredAccessDecision(
-  Object.freeze({
+  witnessFreeze({
     kind: 'verified-machine-auth',
   }),
 );
