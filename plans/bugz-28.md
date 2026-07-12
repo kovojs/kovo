@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    51 | C1-C51 |
+| Critical |    53 | C1-C53 |
 | High     |    30 | H1-H30 |
 | Medium   |     9 | M1-M9  |
 
@@ -530,7 +530,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     independent Fragment-laundering proof now emits an empty script while direct `TrustedHtml`
     remains the explicit reviewed escape.
 
-- [ ] **C47 - Mutable component-root stamp replacement injects raw executable markup.**
+- [x] **C47 - Mutable component-root stamp replacement injects raw executable markup.**
       `packages/server/src/component-root-stamps.ts`
   - A query-backed component root with existing `kovo-c`/`kovo-deps` attributes reached the live
     `String.prototype.replace` used after attribute validation and escaping. A selective replacement
@@ -539,8 +539,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     replacement, target/props serialization, attestation inputs, and final root assembly consume
     boot-pinned dense own-data snapshots; token and visible descriptors bind the same exact values,
     and no late/import-order intrinsic replacement can add bytes after escaping.
+  - **Evidence:** the 130-test component/route/layout stamp matrix and server dist+DTS build pass; the
+    independent post-escape replacement proof retains the reviewed root and emits no attacker bytes.
 
-- [ ] **C48 - Mutable route/layout stamp replacement injects raw executable markup.**
+- [x] **C48 - Mutable route/layout stamp replacement injects raw executable markup.**
       `packages/server/src/route.ts`
   - A compiled route page returned a reviewed rendered root with an existing navigation stamp. The
     route stamp sink called live `String.prototype.replace` after escaping; a selective replacement
@@ -548,6 +550,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** compiled navigation/layout metadata, rendered-root parsing, dependency tokens,
     attribute lookup/replacement, and final opening-tag assembly use boot-pinned dense snapshots;
     page/region/layout stamps cannot add or replace post-choke bytes under late/import-order poison.
+  - **Evidence:** the same matrix and build pass; the independent route-page replacement proof keeps
+    the exact navigation stamp and emits no raw event-bearing markup.
 
 - [ ] **C49 - Mutable render-tree composition replaces escaped output at a trusted HTML sink.**
       `packages/server/src/render-tree.ts`
@@ -575,6 +579,25 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** source scanning, name/entity decoding, parser state, node construction, and
     registry lookup consume boot-pinned exact values; late/import-order intrinsic replacement cannot
     retag, add, or remove source structure before dispatch.
+
+- [ ] **C52 - Mutable static-export protocol decoding suppresses server-only markup diagnostics.**
+      `packages/server/src/{static-export-protocol,static-export-document-refs,static-export}.ts`
+  - Selective late string/collection replacements hid a browser-decoded `/_m/` mutation target from
+    the KV229 scan. Static export then accepted a document whose encoded markup becomes a live
+    server-only form endpoint in the browser.
+  - **Acceptance:** entity decoding, marker extraction/classification, document reference snapshots,
+    diagnostic formation, and the publish gate use boot-pinned exact controls; encoded or literal
+    server endpoint/deferred markers always prevent every artifact write under late/import-order
+    poison.
+
+- [ ] **C53 - Mutable client-module inventory traversal publishes an unreferenced privileged module.**
+      `packages/server/src/{static-export-document-refs,static-export-client-modules,static-export}.ts`
+  - A selective late `Set.prototype.add` expanded the referenced-module set with a registered but
+    unreferenced admin module. Real export wrote that executable module and its internal token into
+    the public output even though no reviewed document referenced it.
+  - **Acceptance:** registered and referenced module carriers, set membership/insertion, replay,
+    source lookup, output targets, and final inventory traversal use boot-pinned dense snapshots;
+    export writes exactly the client modules referenced by the accepted document and no others.
 
 ## High
 
@@ -995,9 +1018,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C47-C51,
-H20, and H27-H28 are active compiler-cache, static-analysis, static-export, JSX/route stamp,
-render-tree, and build-output fixes.
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C49-C53,
+H20, and H27-H28 are active compiler-cache, static-analysis, static-export, render-tree, and
+build-output fixes.
 Integrated
 evidence is
 green at
