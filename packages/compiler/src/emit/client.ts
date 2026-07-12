@@ -14,7 +14,9 @@ import {
   compilerSnapshotDenseArray,
   compilerStringSlice,
   compilerStringSplit,
+  compilerStringLocaleCompare,
   compilerStringTrim,
+  compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
 import {
   runtimeOutputHelpers,
@@ -437,14 +439,22 @@ function emitClockUpdatePlanExport(
   componentName: string,
   clockUpdatePlans: readonly ClockUpdatePlanFact[],
 ): string {
-  if (clockUpdatePlans.length === 0) return '';
+  const plans = compilerSnapshotDenseArray(clockUpdatePlans, 'Client clock update plans');
+  if (plans.length === 0) return '';
 
-  const plan = clockUpdatePlans[0];
+  const plan = plans[0];
   if (!plan) return '';
-
-  const clocks = plan.clocks
-    .map((clock) => `${JSON.stringify(clock.name)}: ${clock.spec}`)
-    .join(', ');
+  const clockSnapshot = compilerSnapshotDenseArray(plan.clocks, 'Client clock definitions');
+  const clockParts: string[] = [];
+  for (let index = 0; index < clockSnapshot.length; index += 1) {
+    const clock = clockSnapshot[index]!;
+    appendClientValue(
+      clockParts,
+      `${compilerJsonSource(clock.name, 'Clock name')}: ${clock.spec}`,
+      'Client clock source entries',
+    );
+  }
+  const clocks = compilerArrayJoin(clockParts, ', ');
 
   return `export const ${componentName}$clockUpdatePlans = [{
   clocks: { ${clocks} },
@@ -465,30 +475,57 @@ export function install${componentName}ClockUpdates(root) {
 // client-safe (callee-only or publishToClient-wrapped). A value-position capture of a server-only
 // import is withheld before this point and its specifier never reaches the bundler.
 function emitClientImportDependencies(imports: readonly ClientImportDependency[]): string {
-  const entriesByModule = new Map<string, ClientImportDependency[]>();
-
-  for (const item of dedupeBy(
-    imports,
-    (entry) => `${entry.moduleSpecifier}\0${entry.importedName}\0${entry.localName}`,
-  )) {
-    const moduleSpecifier = generatedHandlerModuleSpecifier(item);
-    entriesByModule.set(moduleSpecifier, [...(entriesByModule.get(moduleSpecifier) ?? []), item]);
+  const importSnapshot = compilerSnapshotDenseArray(imports, 'Client import dependencies');
+  const normalizedFacts: { item: ClientImportDependency; moduleSpecifier: string }[] = [];
+  for (let index = 0; index < importSnapshot.length; index += 1) {
+    const item = importSnapshot[index]!;
+    appendClientValue(
+      normalizedFacts,
+      { item, moduleSpecifier: generatedHandlerModuleSpecifier(item) },
+      'Normalized client import dependencies',
+    );
   }
-
-  return [...entriesByModule]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([moduleSpecifier, entries]) => {
-      const specifiers = entries
-        .sort((left, right) => left.localName.localeCompare(right.localName))
-        .map((entry) =>
-          entry.importedName === entry.localName
-            ? entry.importedName
-            : `${entry.importedName} as ${entry.localName}`,
-        )
-        .join(', ');
-      return `import { ${specifiers} } from ${JSON.stringify(moduleSpecifier)};\n\n`;
-    })
-    .join('');
+  const normalized = dedupeBy(
+    normalizedFacts,
+    (entry) =>
+      `${entry.moduleSpecifier}\0${entry.item.importedName}\0${entry.item.localName}`,
+  );
+  const entries = stableSortedClientValues(
+    normalized,
+    (left, right) =>
+      compilerStringLocaleCompare(left.moduleSpecifier, right.moduleSpecifier) ||
+      compilerStringLocaleCompare(left.item.localName, right.item.localName) ||
+      compilerStringLocaleCompare(left.item.importedName, right.item.importedName),
+    'Normalized client import dependencies',
+  );
+  const lines: string[] = [];
+  let moduleSpecifier: string | undefined;
+  let specifiers: string[] = [];
+  const flush = (): void => {
+    if (moduleSpecifier === undefined) return;
+    appendClientValue(
+      lines,
+      `import { ${compilerArrayJoin(specifiers, ', ')} } from ${compilerJsonSource(moduleSpecifier, 'Client import module specifier')};\n\n`,
+      'Client import lines',
+    );
+  };
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (moduleSpecifier !== entry.moduleSpecifier) {
+      flush();
+      moduleSpecifier = entry.moduleSpecifier;
+      specifiers = [];
+    }
+    appendClientValue(
+      specifiers,
+      entry.item.importedName === entry.item.localName
+        ? entry.item.importedName
+        : `${entry.item.importedName} as ${entry.item.localName}`,
+      'Client import specifiers',
+    );
+  }
+  flush();
+  return compilerArrayJoin(lines, '');
 }
 
 function clientImportDependenciesManifest(
@@ -592,9 +629,9 @@ function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
   if (
     // Compiler-owned Headless UI helper imports are normalized to the generated helper module.
     // This is emitted dependency hygiene, not app-authored API recognition.
-    item.moduleSpecifier.startsWith('@kovojs/headless-ui/') &&
+    compilerStringStartsWith(item.moduleSpecifier, '@kovojs/headless-ui/') &&
     item.moduleSpecifier !== '@kovojs/headless-ui/generated' &&
-    headlessUiGeneratedHandlerNames.has(item.importedName)
+    compilerSetHas(headlessUiGeneratedHandlerNames, item.importedName)
   ) {
     return '@kovojs/headless-ui/generated';
   }
@@ -603,11 +640,36 @@ function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
 }
 
 function emitClientConstantDependencies(constants: readonly ClientConstantDependency[]): string {
-  const lines = dedupeBy(constants, (entry) => `${entry.name}\0${entry.source}`)
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .map((entry) => `const ${entry.name} = ${entry.source};`);
+  const entries = stableSortedClientValues(
+    dedupeBy(constants, (entry) => `${entry.name}\0${entry.source}`),
+    (left, right) => compilerStringLocaleCompare(left.name, right.name),
+    'Client constant dependencies',
+  );
+  const lines: string[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    appendClientValue(lines, `const ${entry.name} = ${entry.source};`, 'Client constant lines');
+  }
 
-  return lines.length > 0 ? `${lines.join('\n')}\n\n` : '';
+  return lines.length > 0 ? `${compilerArrayJoin(lines, '\n')}\n\n` : '';
+}
+
+function stableSortedClientValues<Value>(
+  values: readonly Value[],
+  compare: (left: Value, right: Value) => number,
+  label: string,
+): Value[] {
+  const sorted = compilerSnapshotDenseArray(values, label);
+  for (let index = 1; index < sorted.length; index += 1) {
+    const value = sorted[index]!;
+    let insertion = index;
+    while (insertion > 0 && compare(sorted[insertion - 1]!, value) > 0) {
+      sorted[insertion] = sorted[insertion - 1]!;
+      insertion -= 1;
+    }
+    sorted[insertion] = value;
+  }
+  return sorted;
 }
 
 function emitStateDeriveExport(deriveFact: StateDeriveFact): string {
@@ -719,34 +781,71 @@ function emitQueryUpdatePlanExport(
   componentName: string,
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
 ): string {
-  if (queryUpdatePlans.length === 0) return '';
+  const plans = compilerSnapshotDenseArray(queryUpdatePlans, 'Client query update plans');
+  if (plans.length === 0) return '';
 
-  const derives = dedupeBy(
-    queryUpdatePlans.flatMap((plan) => [
-      ...(plan.derives ?? []),
-      ...(plan.stamps ?? []).map((stamp) => stamp.derive),
-    ]),
-    (derive) => derive.exportName,
-  );
-  const deriveExports = derives
-    .map(
-      (derive) =>
-        `export const ${derive.exportName} = derive(${compilerJsonSource(deriveInputs(derive), 'Client derive inputs')}, (${compilerArrayJoin(deriveParams(derive), ', ')}) => ${derive.expression});`,
-    )
-    .join('\n');
-  const helper = derives.some((derive) => deriveInputs(derive).length > 1)
+  const deriveCandidates: QueryDeriveFact[] = [];
+  for (let planIndex = 0; planIndex < plans.length; planIndex += 1) {
+    const plan = plans[planIndex]!;
+    if (plan.derives !== undefined) {
+      const planDerives = compilerSnapshotDenseArray(plan.derives, 'Client query derives');
+      for (let index = 0; index < planDerives.length; index += 1) {
+        appendClientValue(deriveCandidates, planDerives[index]!, 'Client derive candidates');
+      }
+    }
+    if (plan.stamps !== undefined) {
+      const stamps = compilerSnapshotDenseArray(plan.stamps, 'Client query stamps');
+      for (let index = 0; index < stamps.length; index += 1) {
+        appendClientValue(deriveCandidates, stamps[index]!.derive, 'Client derive candidates');
+      }
+    }
+  }
+  const derives = dedupeBy(deriveCandidates, (derive) => derive.exportName);
+  const deriveExportParts: string[] = [];
+  let needsDeriveValues = false;
+  for (let index = 0; index < derives.length; index += 1) {
+    const derive = derives[index]!;
+    const inputs = deriveInputs(derive);
+    if (inputs.length > 1) needsDeriveValues = true;
+    appendClientValue(
+      deriveExportParts,
+      `export const ${derive.exportName} = derive(${compilerJsonSource(inputs, 'Client derive inputs')}, (${compilerArrayJoin(deriveParams(derive), ', ')}) => ${derive.expression});`,
+      'Client derive export source',
+    );
+  }
+  const deriveExports = compilerArrayJoin(deriveExportParts, '\n');
+  const helper = needsDeriveValues
     ? `${deriveExports ? '\n\n' : ''}function kovoDeriveValues(inputs, currentInput, currentValue, context) {
   return inputs.map((input) => input === currentInput ? currentValue : context?.queryStore?.get(input));
 }`
     : '';
-  const entries = queryUpdatePlans
-    .map(
-      (plan) =>
-        `  ${JSON.stringify(plan.query)}(root, value, context = {}) {\n    return runQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [${plan.stamps?.map(emitStampPlan).join(', ') ?? ''}], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] }, { queryStore: context.queryStore });\n  },`,
-    )
-    .join('\n');
+  const entryParts: string[] = [];
+  for (let index = 0; index < plans.length; index += 1) {
+    const plan = plans[index]!;
+    const query = compilerJsonSource(plan.query, 'Query update plan name');
+    appendClientValue(
+      entryParts,
+      `  ${query}(root, value, context = {}) {\n    return runQueryUpdatePlan(root, ${query}, value, { bindings: true, derives: [${emitClientFactList(plan.derives, emitDerivePlan, 'Query derive plans')}], stamps: [${emitClientFactList(plan.stamps, emitStampPlan, 'Query stamp plans')}], templateStamps: [${emitClientFactList(plan.templateStamps, emitTemplateStampPlan, 'Query template stamp plans')}] }, { queryStore: context.queryStore });\n  },`,
+      'Client query update entries',
+    );
+  }
+  const entries = compilerArrayJoin(entryParts, '\n');
 
   return `${deriveExports}${helper}${deriveExports || helper ? '\n\n' : ''}export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
+}
+
+function emitClientFactList<Value>(
+  values: readonly Value[] | undefined,
+  emit: (value: Value) => string,
+  label: string,
+): string {
+  if (values === undefined) return '';
+  const snapshot = compilerSnapshotDenseArray(values, label);
+  const emitted: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    appendClientValue(emitted, emit(snapshot[index]!), `${label} source`);
+  }
+  return compilerArrayJoin(emitted, ', ');
 }
 
 function compilerJsonSource(value: unknown, label: string): string {
@@ -756,11 +855,11 @@ function compilerJsonSource(value: unknown, label: string): string {
 }
 
 function emitDerivePlan(derive: QueryDeriveFact): string {
-  return `{ name: ${JSON.stringify(derive.name)}, selector: ${JSON.stringify(derive.selector)}, select(value, root, context) { return ${emitDeriveRun(derive)}; } }`;
+  return `{ name: ${compilerJsonSource(derive.name, 'Query derive name')}, selector: ${compilerJsonSource(derive.selector, 'Query derive selector')}, select(value, root, context) { return ${emitDeriveRun(derive)}; } }`;
 }
 
 function emitStampPlan(stamp: QueryStampFact): string {
-  return `{ attr: ${JSON.stringify(stamp.attr)}, selector: ${JSON.stringify(stamp.selector)}, select(value, root, context) { return ${emitDeriveRun(stamp.derive)}; } }`;
+  return `{ attr: ${compilerJsonSource(stamp.attr, 'Query stamp attribute')}, selector: ${compilerJsonSource(stamp.selector, 'Query stamp selector')}, select(value, root, context) { return ${emitDeriveRun(stamp.derive)}; } }`;
 }
 
 function deriveInputs(derive: QueryDeriveFact): readonly string[] {
@@ -775,7 +874,7 @@ function emitDeriveRun(derive: QueryDeriveFact): string {
   const inputs = deriveInputs(derive);
   return inputs.length === 1
     ? `${derive.exportName}.run(value)`
-    : `${derive.exportName}.run(...kovoDeriveValues(${JSON.stringify(inputs)}, ${JSON.stringify(derive.input)}, value, context))`;
+    : `${derive.exportName}.run(...kovoDeriveValues(${compilerJsonSource(inputs, 'Query derive inputs')}, ${compilerJsonSource(derive.input, 'Query derive input')}, value, context))`;
 }
 
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
@@ -783,7 +882,7 @@ function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
 
   // SPEC §1 and §5.2: list stamp item bodies are generated HTML fragments later parsed with
   // innerHTML, so scalar placeholders must use the shared output-context HTML escaping helper.
-  return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(stamp.listReadPath)}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
+  return `{ key: ${compilerJsonSource(stamp.key, 'Template stamp key')}, list: ${compilerJsonSource(stamp.listReadPath, 'Template stamp list path')}, selector: ${compilerJsonSource(stamp.selector, 'Template stamp selector')}, render(item) {
       const record = item && typeof item === "object" ? item : {};
       const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
       return [${renderSegments.join(', ')}].join("");
@@ -800,19 +899,26 @@ function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
   for (const placeholder of placeholders) {
     if (placeholder.templateStart < cursor) continue;
     if (placeholder.templateStart > cursor) {
-      segments.push(JSON.stringify(stamp.template.slice(cursor, placeholder.templateStart)));
+      segments.push(
+        compilerJsonSource(
+          stamp.template.slice(cursor, placeholder.templateStart),
+          'Template stamp literal',
+        ),
+      );
     }
     segments.push(
       templateStampHtmlEscapeExpression(
-        `read(${JSON.stringify(placeholder.readSegments.map((segment) => segment.name))})`,
+        `read(${compilerJsonSource(placeholder.readSegments.map((segment) => segment.name), 'Template stamp read segments')})`,
       ),
     );
     cursor = placeholder.templateEnd;
   }
 
   if (cursor < stamp.template.length) {
-    segments.push(JSON.stringify(stamp.template.slice(cursor)));
+    segments.push(compilerJsonSource(stamp.template.slice(cursor), 'Template stamp literal'));
   }
 
-  return segments.length > 0 ? segments : [JSON.stringify(stamp.template)];
+  return segments.length > 0
+    ? segments
+    : [compilerJsonSource(stamp.template, 'Template stamp literal')];
 }
