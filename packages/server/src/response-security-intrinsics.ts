@@ -371,6 +371,11 @@ export function createSecurityNullRecord<Value = unknown>(): Record<PropertyKey,
   return apply(nativeObjectCreate, NativeObject, [null]);
 }
 
+export function securityGetPrototypeOf(value: object): object | null {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeObjectGetPrototypeOf, NativeObject, [value]);
+}
+
 export function securityJsonStringify(value: unknown): string | undefined {
   assertResponseSecurityIntrinsics();
   return apply(nativeJsonStringify, NativeJSON, [value]);

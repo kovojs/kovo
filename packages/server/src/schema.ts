@@ -37,6 +37,12 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+import {
+  requestCreateNullRecord,
+  requestFormDataEntries,
+  requestIsFormData,
+} from './request-body-intrinsics.js';
+import { securityArrayIsArray } from './response-security-intrinsics.js';
 
 const nativeArrayIsArray = Array.isArray;
 const nativeObjectCreate = Object.create;
@@ -1277,8 +1283,8 @@ function isFileLike(value: unknown): value is FileLike {
 
 export function formLikeToRecord(input: unknown): Record<string, unknown> {
   input = revealSchemaInput(input);
-  if (input instanceof FormData) {
-    return entriesToRecord(input.entries());
+  if (requestIsFormData(input)) {
+    return entriesToRecord(requestFormDataEntries(input));
   }
 
   if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
@@ -1437,7 +1443,24 @@ export function entriesToRecord(
   // plain data key, not the accessor that rebinds the prototype and silently drops
   // the value; and keys like `constructor`/`toString` must not be read off the
   // prototype chain (Part 4 SCHEMA-1/SCHEMA-2).
-  const record = nativeObjectCreate(null) as Record<string, unknown>;
+  const record = requestCreateNullRecord<unknown>() as Record<string, unknown>;
+
+  if (securityArrayIsArray(entries)) {
+    for (let index = 0; index < entries.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(entries, index);
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        !securityArrayIsArray(descriptor.value) ||
+        descriptor.value.length !== 2 ||
+        typeof descriptor.value[0] !== 'string'
+      ) {
+        throw validationError('Expected stable form/query entry pairs');
+      }
+      appendRecordValue(record, descriptor.value[0], descriptor.value[1]);
+    }
+    return record;
+  }
 
   for (const [key, value] of entries) {
     appendRecordValue(record, key, value);

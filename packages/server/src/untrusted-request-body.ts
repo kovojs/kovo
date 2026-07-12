@@ -1,5 +1,42 @@
 import { isUntrusted, revealUntrusted, untrusted } from '@kovojs/core';
 
+import {
+  requestApply,
+  requestClone,
+  requestCreateFormData,
+  requestCreateNullRecord,
+  requestDecodeURIComponent,
+  requestDecodeUtf8,
+  requestFormData,
+  requestFormDataAppend,
+  requestFormDataEntries,
+  requestFormDataGet,
+  requestFormDataGetAll,
+  requestFormDataValues,
+  requestHeader,
+  requestIsBlob,
+  requestIsFile,
+  requestIsFormData,
+  requestIsPlainRecord,
+  requestIterableIterator,
+  requestJson,
+  requestParseJson,
+  requestReflectGet,
+  requestRegisterFormDataProxy,
+} from './request-body-intrinsics.js';
+import {
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityArrayPush,
+  securityObjectKeys,
+  securityStringSplit,
+  securityStringToLowerCase,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
+import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+
+const formDataIteratorSymbol = Symbol.iterator;
+
 export type UntrustedRequestBodyCarrier = 'json' | 'form';
 
 export type UntrustedRequestBodyFailureReason =
@@ -21,7 +58,7 @@ export type UntrustedJsonBodyResult =
  * remains the platform API; Kovo-owned accessors tag the value before validation reveals it.
  */
 export function readUntrustedRequestHeader(request: Request, name: string): unknown {
-  const value = request.headers.get(name);
+  const value = requestHeader(request, name);
   return value === null ? undefined : untrusted(value);
 }
 
@@ -30,15 +67,21 @@ export function readUntrustedRequestHeader(request: Request, name: string): unkn
  * The returned value must be revealed only by the validation choke that consumes it.
  */
 export function readUntrustedCookieValue(request: Request, name: string): unknown {
-  const header = request.headers.get('cookie');
+  const header = requestHeader(request, 'cookie');
   if (!header) return undefined;
 
-  for (const cookie of header.split(';')) {
-    const [rawName, ...rawValue] = cookie.trim().split('=');
+  const cookies = securityStringSplit(header, ';');
+  for (let cookieIndex = 0; cookieIndex < cookies.length; cookieIndex += 1) {
+    const parts = securityStringSplit(securityStringTrim(cookies[cookieIndex]!), '=');
+    const rawName = parts[0];
     if (rawName !== name) continue;
-    const value = rawValue.join('=');
+    const rawValue: string[] = [];
+    for (let partIndex = 1; partIndex < parts.length; partIndex += 1) {
+      securityArrayPush(rawValue, parts[partIndex]!);
+    }
+    const value = securityArrayJoin(rawValue, '=');
     try {
-      return untrusted(decodeURIComponent(value));
+      return untrusted(requestDecodeURIComponent(value));
     } catch {
       return untrusted(value);
     }
@@ -55,11 +98,11 @@ export function readUntrustedCookieValue(request: Request, name: string): unknow
 export async function readUntrustedRequestBody(
   request: Request,
 ): Promise<UntrustedRequestBodyResult> {
-  const carrier = requestBodyCarrier(request.headers.get('content-type'));
+  const carrier = requestBodyCarrier(requestHeader(request, 'content-type'));
 
   if (carrier === 'json') {
     try {
-      return { carrier, ok: true, value: tagUntrustedRequestValue(await request.json()) };
+      return { carrier, ok: true, value: tagUntrustedRequestValue(await requestJson(request)) };
     } catch {
       return { ok: false, reason: 'invalid-json' };
     }
@@ -67,7 +110,7 @@ export async function readUntrustedRequestBody(
 
   if (carrier === 'form') {
     try {
-      return { carrier, ok: true, value: tagUntrustedRequestValue(await request.formData()) };
+      return { carrier, ok: true, value: tagUntrustedRequestValue(await requestFormData(request)) };
     } catch {
       return { ok: false, reason: 'invalid-form' };
     }
@@ -87,7 +130,7 @@ export function parseUntrustedJsonBodyBytes(rawBody: Uint8Array): UntrustedJsonB
   try {
     return {
       ok: true,
-      value: tagUntrustedRequestValue(JSON.parse(new TextDecoder().decode(rawBody))),
+      value: tagUntrustedRequestValue(requestParseJson(requestDecodeUtf8(rawBody))),
     };
   } catch {
     return { ok: false, reason: 'invalid-json' };
@@ -101,7 +144,7 @@ export function parseUntrustedJsonBodyBytes(rawBody: Uint8Array): UntrustedJsonB
  * to `{}` and fail through the normal synchronizer-token path.
  */
 export async function readCsrfCarrierFromRequest(request: Request): Promise<unknown> {
-  const result = await readUntrustedRequestBody(request.clone());
+  const result = await readUntrustedRequestBody(requestClone(request));
   if (!result.ok) return {};
   if (result.carrier === 'json' && !isObjectLike(result.value)) return {};
   return result.value;
@@ -110,12 +153,15 @@ export async function readCsrfCarrierFromRequest(request: Request): Promise<unkn
 function requestBodyCarrier(
   contentTypeHeader: string | null,
 ): UntrustedRequestBodyCarrier | undefined {
-  const contentType = contentTypeHeader?.toLowerCase() ?? '';
-  if (contentType.includes('application/json')) return 'json';
+  const contentType = contentTypeHeader === null ? '' : contentTypeHeader;
+  const mediaType = securityStringToLowerCase(
+    securityStringTrim(securityStringSplit(contentType, ';')[0] ?? ''),
+  );
+  if (mediaType === 'application/json') return 'json';
   if (
-    contentType === '' ||
-    contentType.includes('multipart/form-data') ||
-    contentType.includes('application/x-www-form-urlencoded')
+    mediaType === '' ||
+    mediaType === 'multipart/form-data' ||
+    mediaType === 'application/x-www-form-urlencoded'
   ) {
     return 'form';
   }
@@ -128,14 +174,22 @@ function isObjectLike(value: unknown): value is object {
 
 /** @internal SPEC §5.2 rule 11 / DEC-D: request input tags are DX provenance, not enforcement. */
 export function tagUntrustedRequestValue(value: unknown): unknown {
-  if (value instanceof FormData) {
+  if (requestIsFormData(value)) {
     return tagUntrustedFormData(value);
   }
-  if (Array.isArray(value)) return value.map((item) => tagUntrustedRequestValue(item));
-  if (isPlainRecord(value)) {
-    const tagged = Object.create(null) as Record<string, unknown>;
-    for (const [key, entry] of Object.entries(value)) {
-      tagged[key] = tagUntrustedRequestValue(entry);
+  if (securityArrayIsArray(value)) {
+    const tagged: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      securityArrayPush(tagged, tagUntrustedRequestValue(stableRecordValue(value, index)));
+    }
+    return tagged;
+  }
+  if (requestIsPlainRecord(value)) {
+    const tagged = requestCreateNullRecord<unknown>() as Record<string, unknown>;
+    const keys = securityObjectKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      tagged[key] = tagUntrustedRequestValue(stableRecordValue(value, key));
     }
     return tagged;
   }
@@ -147,64 +201,105 @@ export function tagUntrustedRequestValue(value: unknown): unknown {
 export function revealUntrustedRequestValue(value: unknown, reason: string): unknown {
   if (isUntrusted(value))
     return revealUntrustedRequestValue(revealUntrusted(value, reason), reason);
-  if (value instanceof FormData) {
-    const revealed = new FormData();
-    for (const [key, entry] of value.entries()) {
+  if (requestIsFormData(value)) {
+    const revealed = requestCreateFormData();
+    const entries = requestFormDataEntries(value);
+    for (let index = 0; index < entries.length; index += 1) {
+      const pair = entries[index]!;
+      const key = pair[0];
+      const entry = pair[1];
       const entryValue = revealUntrustedRequestValue(entry, reason);
-      if (typeof entryValue === 'string' || entryValue instanceof Blob) {
-        revealed.append(key, entryValue);
+      if (typeof entryValue === 'string' || requestIsBlob(entryValue)) {
+        requestFormDataAppend(revealed, key, entryValue);
       }
     }
     return revealed;
   }
-  if (Array.isArray(value)) return value.map((entry) => revealUntrustedRequestValue(entry, reason));
-  if (isPlainRecord(value)) {
-    const revealed: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      revealed[key] = revealUntrustedRequestValue(entry, reason);
+  if (securityArrayIsArray(value)) {
+    const revealed: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      securityArrayPush(
+        revealed,
+        revealUntrustedRequestValue(stableRecordValue(value, index), reason),
+      );
+    }
+    return revealed;
+  }
+  if (requestIsPlainRecord(value)) {
+    const revealed = requestCreateNullRecord<unknown>() as Record<string, unknown>;
+    const keys = securityObjectKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      revealed[key] = revealUntrustedRequestValue(stableRecordValue(value, key), reason);
     }
     return revealed;
   }
   return value;
 }
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+function stableRecordValue(value: object, property: PropertyKey): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError('Kovo request carriers require stable own data properties.');
+  }
+  return descriptor.value;
 }
 
 function tagUntrustedFormData(form: FormData): FormData {
-  return new Proxy(form, {
+  const proxy = new Proxy(form, {
     get(target, property, receiver) {
       if (property === 'get') {
-        return (name: string) => tagUntrustedFormEntry(target.get(name));
+        return (name: string) => tagUntrustedFormEntry(requestFormDataGet(target, name));
       }
       if (property === 'getAll') {
-        return (name: string) => target.getAll(name).map(tagUntrustedFormEntry);
-      }
-      if (property === 'entries' || property === Symbol.iterator) {
-        return function* entries(): IterableIterator<[string, FormDataEntryValue]> {
-          for (const [key, entry] of target.entries()) {
-            yield [key, tagUntrustedFormEntry(entry) as FormDataEntryValue];
+        return (name: string) => {
+          const entries = requestFormDataGetAll(target, name);
+          const tagged: FormDataEntryValue[] = [];
+          for (let index = 0; index < entries.length; index += 1) {
+            securityArrayPush(tagged, tagUntrustedFormEntry(entries[index]!)!);
           }
+          return tagged;
+        };
+      }
+      if (property === 'entries' || property === formDataIteratorSymbol) {
+        return function entries(): IterableIterator<[string, FormDataEntryValue]> {
+          const source = requestFormDataEntries(target);
+          const tagged: [string, FormDataEntryValue][] = [];
+          for (let index = 0; index < source.length; index += 1) {
+            const pair = source[index]!;
+            const key = pair[0];
+            const entry = pair[1];
+            securityArrayPush(tagged, [key, tagUntrustedFormEntry(entry)!]);
+          }
+          return requestIterableIterator(tagged);
         };
       }
       if (property === 'values') {
-        return function* values(): IterableIterator<FormDataEntryValue> {
-          for (const entry of target.values()) {
-            yield tagUntrustedFormEntry(entry) as FormDataEntryValue;
+        return function values(): IterableIterator<FormDataEntryValue> {
+          const source = requestFormDataValues(target);
+          const tagged: FormDataEntryValue[] = [];
+          for (let index = 0; index < source.length; index += 1) {
+            securityArrayPush(tagged, tagUntrustedFormEntry(source[index]!)!);
           }
+          return requestIterableIterator(tagged);
         };
       }
+      if (property === 'append') {
+        return (name: string, value: string | Blob, filename?: string) =>
+          requestFormDataAppend(target, name, value, filename);
+      }
 
-      const member = Reflect.get(target, property, receiver);
-      return typeof member === 'function' ? member.bind(target) : member;
+      const member = requestReflectGet(target, property, receiver);
+      return typeof member === 'function'
+        ? (...args: unknown[]) => requestApply(member, target, args)
+        : member;
     },
   });
+  requestRegisterFormDataProxy(proxy, form);
+  return proxy;
 }
 
 function tagUntrustedFormEntry(entry: FormDataEntryValue | null): FormDataEntryValue | null {
-  if (entry === null || entry instanceof File) return entry;
+  if (entry === null || requestIsFile(entry)) return entry;
   return untrusted(entry) as unknown as FormDataEntryValue;
 }
