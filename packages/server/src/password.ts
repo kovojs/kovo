@@ -55,18 +55,136 @@ export interface CredentialVerifyResult {
   needsRehash: boolean;
 }
 
+const NativeError = globalThis.Error;
+const NativeMap = globalThis.Map;
+const NativeNumber = globalThis.Number;
+const NativeObject = globalThis.Object;
+const NativeRangeError = globalThis.RangeError;
+const NativeReflect = globalThis.Reflect;
+const NativeString = globalThis.String;
+const NativeTypeError = globalThis.TypeError;
+const nativeMapGet = NativeMap.prototype.get;
+const nativeMapSet = NativeMap.prototype.set;
+const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
+const nativeObjectFreeze = NativeObject.freeze;
+const nativeObjectIsFrozen = NativeObject.isFrozen;
+const nativeReflectApply = NativeReflect.apply;
+const nativeRegExpExec = RegExp.prototype.exec;
+const nativeStringIndexOf = NativeString.prototype.indexOf;
+const nativeStringSlice = NativeString.prototype.slice;
+
+function passwordApply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
+  return nativeReflectApply(fn, receiver, args) as Return;
+}
+
+function rawSplitLiteral(value: string, separator: string): string[] {
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor <= value.length) {
+    const match = passwordApply<number>(nativeStringIndexOf, value, [separator, cursor]);
+    if (match < 0) {
+      parts[parts.length] = passwordApply(nativeStringSlice, value, [cursor]);
+      return parts;
+    }
+    parts[parts.length] = passwordApply(nativeStringSlice, value, [cursor, match]);
+    cursor = match + separator.length;
+  }
+  return parts;
+}
+
+function capturedPasswordControlsAreSound(): boolean {
+  try {
+    const parts = rawSplitLiteral('$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$ZGlnZXN0', '$');
+    const map = new NativeMap<string, string>();
+    passwordApply(nativeMapSet, map, ['safe', 'value']);
+    const frozen = passwordApply<object>(nativeObjectFreeze, NativeObject, [{ floor: 19_456 }]);
+    return (
+      parts.length === 6 &&
+      parts[0] === '' &&
+      parts[1] === 'argon2id' &&
+      parts[2] === 'v=19' &&
+      parts[3] === 'm=19456,t=2,p=1' &&
+      parts[4] === 'c2FsdA' &&
+      parts[5] === 'ZGlnZXN0' &&
+      passwordApply(nativeMapGet, map, ['safe']) === 'value' &&
+      passwordApply(nativeMapGet, map, ['other']) === undefined &&
+      passwordApply(nativeNumberIsSafeInteger, NativeNumber, [19_456]) === true &&
+      passwordApply(nativeNumberIsSafeInteger, NativeNumber, [19_456.5]) === false &&
+      passwordApply(NativeNumber, undefined, ['19456']) === 19_456 &&
+      passwordApply(NativeNumber, undefined, ['not-a-number']) !==
+        passwordApply(NativeNumber, undefined, ['not-a-number']) &&
+      passwordApply<RegExpExecArray | null>(nativeRegExpExec, /^[A-Za-z0-9+/]+$/u, [
+        'c2FsdA',
+      ])?.[0] === 'c2FsdA' &&
+      passwordApply<RegExpExecArray | null>(nativeRegExpExec, /^[A-Za-z0-9+/]+$/u, [
+        'not-base64?',
+      ]) === null &&
+      passwordApply(nativeObjectIsFrozen, NativeObject, [frozen]) === true
+    );
+  } catch {
+    return false;
+  }
+}
+
+const capturedPasswordControlsSound = capturedPasswordControlsAreSound();
+
+/** @internal Assert the password sink's boot-pinned scalar and cache controls. */
+export function assertPasswordIntrinsics(): void {
+  if (!capturedPasswordControlsSound) {
+    throw new NativeTypeError(
+      'Kovo password controls are unavailable because server realm intrinsics were modified before framework initialization.',
+    );
+  }
+}
+
+function passwordFreeze<Value extends object>(value: Value): Readonly<Value> {
+  assertPasswordIntrinsics();
+  return passwordApply(nativeObjectFreeze, NativeObject, [value]);
+}
+
+function passwordMapGet<Key, Value>(map: Map<Key, Value>, key: Key): Value | undefined {
+  assertPasswordIntrinsics();
+  return passwordApply(nativeMapGet, map, [key]);
+}
+
+function passwordMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
+  assertPasswordIntrinsics();
+  passwordApply(nativeMapSet, map, [key, value]);
+}
+
+function passwordSplitLiteral(value: string, separator: string): string[] {
+  assertPasswordIntrinsics();
+  return rawSplitLiteral(value, separator);
+}
+
+function passwordRegExpTest(pattern: RegExp, value: string): boolean {
+  assertPasswordIntrinsics();
+  pattern.lastIndex = 0;
+  return passwordApply<RegExpExecArray | null>(nativeRegExpExec, pattern, [value]) !== null;
+}
+
+function passwordNumber(value: string): number {
+  assertPasswordIntrinsics();
+  return passwordApply(NativeNumber, undefined, [value]);
+}
+
+function passwordIsSafeInteger(value: number): boolean {
+  assertPasswordIntrinsics();
+  return passwordApply(nativeNumberIsSafeInteger, NativeNumber, [value]);
+}
+
 /**
  * Default and minimum password hashing parameters. Kovo exposes no bcrypt, scrypt, SHA, or raw
  * Argon2 algorithm knob; the sink always emits argon2id/v=19 PHC strings.
  */
-export const PASSWORD_ARGON2ID_DEFAULTS = Object.freeze({
+export const PASSWORD_ARGON2ID_DEFAULTS = passwordFreeze({
   memoryCost: 19 * 1024,
   timeCost: 2,
   parallelism: 1,
   outputLen: 32,
 });
 
-const PASSWORD_ARGON2ID_MAX = Object.freeze({
+const PASSWORD_ARGON2ID_MAX = passwordFreeze({
   memoryCost: 2 ** 32 - 1,
   timeCost: 2 ** 32 - 1,
   parallelism: 255,
@@ -75,7 +193,6 @@ const PASSWORD_ARGON2ID_MAX = Object.freeze({
 
 const ARGON2ID_ALGORITHM = 2;
 const ARGON2_VERSION_13 = 1;
-const PHC_ARGON2ID_PREFIX = '$argon2id$';
 const PHC_BASE64 = /^[A-Za-z0-9+/]+$/;
 
 /**
@@ -96,7 +213,7 @@ const CREDENTIAL_DECOY_SECRET = 'kovo.credential-verify.decoy';
  * floor constant) so absent-account timing matches present-account timing even when the app
  * configures stronger hashing than the minimum floor.
  */
-const decoyDigestCache = new Map<string, Promise<string>>();
+const decoyDigestCache = new NativeMap<string, Promise<string>>();
 
 function decoyParamKey(params: Argon2Options): string {
   return `m=${params.memoryCost},t=${params.timeCost},p=${params.parallelism},len=${params.outputLen}`;
@@ -109,7 +226,7 @@ function decoyParamKey(params: Argon2Options): string {
  */
 async function getDecoyDigest(params: Argon2Options): Promise<string> {
   const key = decoyParamKey(params);
-  let pending = decoyDigestCache.get(key);
+  let pending = passwordMapGet(decoyDigestCache, key);
   if (!pending) {
     // Set the Promise before awaiting so concurrent callers all receive the same Promise.
     pending = (async () => {
@@ -118,7 +235,7 @@ async function getDecoyDigest(params: Argon2Options): Promise<string> {
       // abandoned mid-flight (a cancelled hash would leave the cache slot unresolved).
       return hash(CREDENTIAL_DECOY_SECRET, params, null);
     })();
-    decoyDigestCache.set(key, pending);
+    passwordMapSet(decoyDigestCache, key, pending);
   }
   return pending;
 }
@@ -146,7 +263,9 @@ export async function hashPassword(
   const { hash } = await loadArgon2();
   const digest = await hash(password, params, options.signal ?? null);
   if (!isArgon2idPasswordDigest(digest)) {
-    throw new Error('Kovo password sink expected @node-rs/argon2 to emit an argon2id PHC digest.');
+    throw new NativeError(
+      'Kovo password sink expected @node-rs/argon2 to emit an argon2id PHC digest.',
+    );
   }
   return digest;
 }
@@ -267,21 +386,21 @@ function resolvePasswordHashOptions(options: PasswordHashOptions): Argon2Options
 
 function integerOption(name: string, value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback;
-  if (!Number.isSafeInteger(value)) {
-    throw new RangeError(`Kovo password ${name} must be a safe integer.`);
+  if (!passwordIsSafeInteger(value)) {
+    throw new NativeRangeError(`Kovo password ${name} must be a safe integer.`);
   }
   return value;
 }
 
 function enforceFloor(name: string, value: number, floor: number): void {
   if (value < floor) {
-    throw new RangeError(`Kovo password ${name} must be >= ${floor}.`);
+    throw new NativeRangeError(`Kovo password ${name} must be >= ${floor}.`);
   }
 }
 
 function enforceMax(name: string, value: number, max: number): void {
   if (value > max) {
-    throw new RangeError(`Kovo password ${name} must be <= ${max}.`);
+    throw new NativeRangeError(`Kovo password ${name} must be <= ${max}.`);
   }
 }
 
@@ -292,24 +411,33 @@ interface ParsedArgon2idDigest {
 }
 
 function parseArgon2idPasswordDigest(digest: string): ParsedArgon2idDigest | undefined {
-  if (!digest.startsWith(PHC_ARGON2ID_PREFIX)) return undefined;
-  const parts = digest.split('$');
+  const parts = passwordSplitLiteral(digest, '$');
   if (parts.length !== 6 || parts[0] !== '' || parts[1] !== 'argon2id') return undefined;
   if (parts[2] !== 'v=19') return undefined;
   if (!isPhcBase64(parts[4]) || !isPhcBase64(parts[5])) return undefined;
 
-  const params = new Map<string, string>();
-  for (const entry of parts[3]!.split(',')) {
-    const [key, value, extra] = entry.split('=');
+  let memoryValue: string | undefined;
+  let timeValue: string | undefined;
+  let parallelismValue: string | undefined;
+  const entries = passwordSplitLiteral(parts[3]!, ',');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, value, extra] = passwordSplitLiteral(entries[index]!, '=');
     if (key === undefined || value === undefined || extra !== undefined) return undefined;
     if (key !== 'm' && key !== 't' && key !== 'p') return undefined;
-    if (params.has(key)) return undefined;
-    params.set(key, value);
+    if (key === 'm') {
+      if (memoryValue !== undefined) return undefined;
+      memoryValue = value;
+    } else if (key === 't') {
+      if (timeValue !== undefined) return undefined;
+      timeValue = value;
+    } else {
+      if (parallelismValue !== undefined) return undefined;
+      parallelismValue = value;
+    }
   }
-  if (params.size !== 3) return undefined;
-  const memoryCost = parsePositiveInt(params.get('m'));
-  const timeCost = parsePositiveInt(params.get('t'));
-  const parallelism = parsePositiveInt(params.get('p'));
+  const memoryCost = parsePositiveInt(memoryValue);
+  const timeCost = parsePositiveInt(timeValue);
+  const parallelism = parsePositiveInt(parallelismValue);
   if (memoryCost === undefined || timeCost === undefined || parallelism === undefined) {
     return undefined;
   }
@@ -317,13 +445,13 @@ function parseArgon2idPasswordDigest(digest: string): ParsedArgon2idDigest | und
 }
 
 function isPhcBase64(value: string | undefined): boolean {
-  return value !== undefined && PHC_BASE64.test(value);
+  return value !== undefined && passwordRegExpTest(PHC_BASE64, value);
 }
 
 function parsePositiveInt(value: string | undefined): number | undefined {
-  if (value === undefined || !/^[1-9][0-9]*$/.test(value)) return undefined;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
+  if (value === undefined || !passwordRegExpTest(/^[1-9][0-9]*$/u, value)) return undefined;
+  const parsed = passwordNumber(value);
+  return passwordIsSafeInteger(parsed) ? parsed : undefined;
 }
 
 function digestNeedsRehash(parsed: ParsedArgon2idDigest, params: Argon2Options): boolean {

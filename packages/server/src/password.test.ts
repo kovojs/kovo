@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type PasswordModule = typeof import('./password.js');
@@ -7,6 +9,7 @@ const argon2Mock = vi.hoisted(() => ({
 }));
 
 let passwordApi: PasswordModule;
+const passwordModuleUrl = new URL('./password.ts', import.meta.url).href;
 
 describe('password primitive: argon2id-only sink', () => {
   beforeEach(async () => {
@@ -84,6 +87,81 @@ describe('password primitive: argon2id-only sink', () => {
     }
   });
 
+  it('rejects a real Argon2i digest after late PHC parser poisoning', async () => {
+    const { hash } = await import('@node-rs/argon2');
+    const digest = await hash('correct horse battery staple', {
+      algorithm: 1,
+      memoryCost: 19 * 1024,
+      outputLen: 32,
+      parallelism: 1,
+      timeCost: 2,
+      version: 1,
+    });
+    expect(digest).toMatch(/^\$argon2i\$/u);
+
+    const originalStartsWith = String.prototype.startsWith;
+    const originalSplit = String.prototype.split;
+    const originalIndexOf = String.prototype.indexOf;
+    try {
+      String.prototype.startsWith = function (search, position) {
+        if (this.valueOf() === digest && search === '$argon2id$') return true;
+        return Reflect.apply(originalStartsWith, this, [search, position]);
+      };
+      String.prototype.split = function (separator, limit) {
+        if (this.valueOf() === digest && separator === '$') {
+          const forged = digest.replace('$argon2i$', '$argon2id$');
+          return Reflect.apply(originalSplit, forged, [separator, limit]);
+        }
+        return Reflect.apply(originalSplit, this, [separator, limit]);
+      };
+      String.prototype.indexOf = function (search, position) {
+        if (this.valueOf() === digest && search === '$') return -1;
+        return Reflect.apply(originalIndexOf, this, [search, position]);
+      };
+
+      expect(isArgon2idPasswordDigest(digest)).toBe(false);
+      await expect(verifyPassword('correct horse battery staple', digest)).resolves.toEqual({
+        ok: false,
+        needsRehash: false,
+      });
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.split = originalSplit;
+      String.prototype.indexOf = originalIndexOf;
+    }
+
+    expect(argon2Mock.verify).not.toHaveBeenCalled();
+  });
+
+  it('preserves exact Argon2id bytes and rehash facts after late scalar poisoning', async () => {
+    const digest = await hashPassword('password', { memoryCost: 19 * 1024 });
+    const parts = digest.split('$');
+    const originalSplit = String.prototype.split;
+    const originalExec = RegExp.prototype.exec;
+    const originalIsSafeInteger = Number.isSafeInteger;
+    let result: Awaited<ReturnType<PasswordModule['verifyPassword']>>;
+    try {
+      String.prototype.split = function (separator, limit) {
+        if (this.valueOf() === digest && separator === '$') return [];
+        return Reflect.apply(originalSplit, this, [separator, limit]);
+      };
+      RegExp.prototype.exec = function (value) {
+        if (value === parts[3] || value === parts[4] || value === parts[5]) return null;
+        return Reflect.apply(originalExec, this, [value]);
+      };
+      Number.isSafeInteger = () => false;
+      result = await verifyPassword('password', digest, { memoryCost: 20 * 1024 });
+    } finally {
+      String.prototype.split = originalSplit;
+      RegExp.prototype.exec = originalExec;
+      Number.isSafeInteger = originalIsSafeInteger;
+    }
+
+    expect(result).toEqual({ ok: true, needsRehash: true });
+    expect(argon2Mock.verify).toHaveBeenCalledTimes(1);
+    expect(argon2Mock.verify.mock.calls[0]?.[0]).toBe(digest);
+  });
+
   it('does not expose legacy algorithm knobs through accepted options', () => {
     const optionKeys = Object.keys(passwordApi.PASSWORD_ARGON2ID_DEFAULTS);
 
@@ -116,6 +194,18 @@ describe('password primitive: argon2id-only sink', () => {
     await expect(hashPassword('password', { parallelism: 256 })).rejects.toThrow(
       'parallelism must be <= 255',
     );
+  });
+
+  it('keeps option integer validation closed after late Number poisoning', async () => {
+    const originalIsSafeInteger = Number.isSafeInteger;
+    try {
+      Number.isSafeInteger = () => true;
+      await expect(hashPassword('password', { memoryCost: Number.NaN })).rejects.toThrow(
+        'memoryCost must be a safe integer',
+      );
+    } finally {
+      Number.isSafeInteger = originalIsSafeInteger;
+    }
   });
 
   it('reports verified digests that need stronger parameter rehashing', async () => {
@@ -191,6 +281,30 @@ describe('password primitive: argon2id-only sink', () => {
     expect(decoyDigest).toMatch(/\$m=65536,t=3,p=2\$/);
   });
 
+  it('keeps the configured decoy cost after late Map cache poisoning', async () => {
+    const forgedFloorDigest = await hashPassword('attacker-controlled-cache-value');
+    argon2Mock.verify.mockClear();
+    const originalGet = Map.prototype.get;
+    try {
+      Map.prototype.get = function (key) {
+        if (key === 'm=65536,t=3,p=2,len=32') return Promise.resolve(forgedFloorDigest);
+        return Reflect.apply(originalGet, this, [key]);
+      };
+      await expect(
+        verifyCredential('candidate', undefined, {
+          memoryCost: 65_536,
+          parallelism: 2,
+          timeCost: 3,
+        }),
+      ).resolves.toEqual({ ok: false, needsRehash: false });
+    } finally {
+      Map.prototype.get = originalGet;
+    }
+
+    expect(argon2Mock.verify).toHaveBeenCalledTimes(1);
+    expect(argon2Mock.verify.mock.calls[0]?.[0]).toMatch(/\$m=65536,t=3,p=2\$/u);
+  });
+
   it('reports stale but valid account digests only after successful credential verification', async () => {
     const digest = await hashPassword('password', { memoryCost: 19 * 1024 });
 
@@ -204,5 +318,23 @@ describe('password primitive: argon2id-only sink', () => {
       ok: false,
       needsRehash: false,
     });
+  });
+
+  it('fails closed when PHC controls were poisoned before module initialization', () => {
+    const script = `
+      String.prototype.indexOf = () => -1;
+      try {
+        const password = await import(${JSON.stringify(`${passwordModuleUrl}?poisoned-password-probe`)});
+        password.assertPasswordIntrinsics();
+      } catch (error) {
+        if (String(error).includes('intrinsics were modified')) process.exit(0);
+      }
+      process.exit(3);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 });
