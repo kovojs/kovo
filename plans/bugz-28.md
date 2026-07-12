@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    23 | H1-H23 |
+| High     |    24 | H1-H24 |
 | Medium   |     9 | M1-M9 |
 
 ## Critical
@@ -332,6 +332,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     fallback, and the emitted inline-loader closure use boot-pinned, semantically checked controls;
     late/import-order poison cannot apply cross-origin or non-HTML bytes to the current document.
 
+- [ ] **H24 - Mutable client reauthentication controls reopen a protocol-relative redirect.**
+      `packages/browser/src/{reauth-directive,mutation-fetch}.ts` and the emitted inline loader
+  - A selective late `String.prototype.startsWith` override made
+    `sanitizeReauthDirective('//evil.example/phish')` return the attacker target instead of `/`;
+    the enhanced 401 path hands that result directly to `location.assign()`.
+  - **Acceptance:** response-header identity/reads, status classification, directive decode and exact
+    path validation, redirect application, auth-success fallback, session transition retirement, and
+    the emitted inline-loader closure use boot-pinned controls; late/import-order poison cannot
+    navigate outside the current origin, suppress required retirement, or consume unclassified bytes.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -422,7 +432,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15, H17-H23, and M9 are active
+The remediation pass remains intentionally non-zero: C10-C12, H15, H17-H24, and M9 are active
 capability, request-carrier, response/deferred/mutation/client output, task, browser navigation, and
 reporting fixes.
 Integrated
