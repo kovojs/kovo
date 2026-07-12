@@ -69,6 +69,7 @@ describe('reference app shell HTTP entry', () => {
       expect(loginPageBody).toContain('<title>Kovo Reference Sign In</title>');
       expect(loginPageBody).toContain('action="/_m/auth/sign-in"');
       const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
+      const loginCsrfCookie = cookiePair(loginPage.headers.get('set-cookie') ?? '');
 
       const loginForm = new URLSearchParams();
       loginForm.set('csrf', loginCsrf);
@@ -79,7 +80,11 @@ describe('reference app shell HTTP entry', () => {
         body: loginForm,
         // SPEC §6.6/§9.1: browsers send a same-origin Origin on unsafe POSTs; the CSRF Origin floor
         // requires it. Node fetch omits it, so the test supplies it (mirrors a real form submit).
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: loginCsrfCookie,
+          Origin: origin,
+        },
         method: 'POST',
         redirect: 'manual',
       });
@@ -187,6 +192,7 @@ describe('reference app shell HTTP entry', () => {
     expect(loginPageBody).toContain('action="/_m/auth/sign-in"');
     expect(loginPageBody).toContain('name="next" value="/admin"');
     const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
+    const loginCsrfCookie = cookiePair(loginPage.headers.get('set-cookie') ?? '');
 
     const failedForm = new URLSearchParams();
     failedForm.set('csrf', loginCsrf);
@@ -196,7 +202,11 @@ describe('reference app shell HTTP entry', () => {
     const failedLogin = await fetch(`${origin}/_m/auth/sign-in`, {
       body: failedForm,
       // SPEC §6.6/§9.1: supply the same-origin Origin header the CSRF floor requires (see above).
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: loginCsrfCookie,
+        Origin: origin,
+      },
       method: 'POST',
       redirect: 'manual',
     });
@@ -212,7 +222,11 @@ describe('reference app shell HTTP entry', () => {
     loginForm.set('next', '/admin');
     const login = await fetch(`${origin}/_m/auth/sign-in`, {
       body: loginForm,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: loginCsrfCookie,
+        Origin: origin,
+      },
       method: 'POST',
       redirect: 'manual',
     });

@@ -6,8 +6,6 @@ import {
   renderRouteHtml,
   route,
   toNodeHandler,
-  type CsrfOptions,
-  type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
@@ -17,13 +15,12 @@ import {
   adminRoute,
   createReferenceAuth,
   createReferenceBetterAuth,
-  referenceAuthCsrf,
   referenceSignIn,
   referenceSignOut,
-  renderReferenceLoginForm,
   type ReferenceAuthBindings,
   type ReferenceRequest,
 } from './app.js';
+import { ReferenceShellLoginForm } from './shell-auth-form.js';
 
 export type ReferenceShellRequest = Request & ReferenceRequest;
 
@@ -32,7 +29,6 @@ export interface ReferenceAppShellOptions {
   onError?: ServerErrorHandler;
 }
 
-export const referenceShellAuthCsrfId = 'reference-shell-login';
 const publicClientModules = createMemoryVersionedClientModuleRegistry();
 
 export const referencePublicClientModuleHref = publicClientModules.put({
@@ -48,14 +44,6 @@ export const referencePublicClientModuleHref = publicClientModules.put({
   ].join('\n'),
   version: 'reference-r7',
 });
-
-const shellReferenceAuthCsrf: CsrfOptions<Request> = {
-  field: referenceAuthCsrf.field,
-  secret: referenceAuthCsrf.secret,
-  sessionId(request) {
-    return referenceAuthCsrf.sessionId(request as ReferenceShellRequest);
-  },
-};
 
 export const referencePublicRoute = route('/', {
   // Unauthenticated landing page — its KV436 access decision is public (SPEC §10.2).
@@ -87,9 +75,9 @@ export const referenceLoginRoute = route('/login', {
     description: 'Sign in to the Kovo reference app.',
     title: 'Kovo Reference Sign In',
   },
-  page(context, request: ReferenceShellRequest) {
+  page(context) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/account';
-    return trustedHtml(`<main>${renderReferenceLoginForm(request, { next })}</main>`);
+    return trustedHtml(`<main>${ReferenceShellLoginForm({ next })}</main>`);
   },
 });
 
@@ -98,24 +86,19 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
   const app = createApp({
     document: { lang: 'en-US' },
     mutationResponses: {
-      [referenceSignIn.key]: ({ rawInput, request }) => {
+      [referenceSignIn.key]: ({ rawInput }) => {
         return {
-          csrf: shellReferenceAuthCsrf,
           redirectTo: (result) => authRedirectTo(result.value),
           renderFailurePage: (failure) =>
-            `<!doctype html><html><body><main>${renderReferenceLoginForm(
-              request as ReferenceShellRequest,
-              {
-                ...(failure.error.code === 'INVALID_CREDENTIALS'
-                  ? { failure: 'INVALID_CREDENTIALS' as const }
-                  : {}),
-                next: nextFromRawInput(rawInput) ?? '/account',
-              },
-            )}</main></body></html>`,
+            `<!doctype html><html><body><main>${ReferenceShellLoginForm({
+              ...(failure.error.code === 'INVALID_CREDENTIALS'
+                ? { failure: 'INVALID_CREDENTIALS' as const }
+                : {}),
+              next: nextFromRawInput(rawInput) ?? '/account',
+            })}</main></body></html>`,
         };
       },
       [referenceSignOut.key]: {
-        csrf: shellReferenceAuthCsrf,
         redirectTo: (result) => authRedirectTo(result.value),
       },
     },
@@ -127,7 +110,7 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
     routes: [referenceLoginRoute, accountRoute, adminRoute],
     sessionProvider: (request) => auth.sessionProvider(request as ReferenceShellRequest),
   });
-  const requestHandler = withReferenceRequestContext(createRequestHandler(app));
+  const requestHandler = createRequestHandler(app);
 
   return {
     app,
@@ -153,21 +136,6 @@ export function createReferencePublicAppShell() {
     nodeHandler: toNodeHandler(requestHandler),
     requestHandler,
   };
-}
-
-function withReferenceRequestContext(handler: RequestHandler): RequestHandler {
-  return (request) => handler(attachReferenceRequestContext(request));
-}
-
-function attachReferenceRequestContext(request: Request): ReferenceShellRequest {
-  Object.defineProperties(request, {
-    authCsrfId: {
-      configurable: true,
-      value: referenceShellAuthCsrfId,
-    },
-  });
-
-  return request as ReferenceShellRequest;
 }
 
 export function routeValueToHtml(value: unknown): string {
