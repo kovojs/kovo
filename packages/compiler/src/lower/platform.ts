@@ -6,6 +6,10 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { escapeAttribute } from '../shared.js';
+import {
+  compilerArrayLength,
+  compilerOwnDataValue,
+} from '../compiler-security-intrinsics.js';
 
 /**
  * @internal A lowered platform-behavior substitution: a provable event handler the compiler
@@ -29,7 +33,11 @@ export function platformElementSubstitution(
   model: ComponentModuleModel,
   element: JsxElementModel,
 ): PlatformElementSubstitution | null {
-  const onClick = element.attributes.find((attribute) => attribute.domEventName === 'click');
+  const onClick = elementAttributeMatching(
+    element,
+    (attribute) => attribute.domEventName === 'click',
+    'Platform event attributes',
+  );
   const action = onClick?.zeroArgArrow?.documentElementAction;
   const substitution = action
     ? platformSubstitutionFromDocumentAction(model, element.tag, action)
@@ -67,24 +75,28 @@ function platformSubstitutionFor(
 
   // FN13 (plans/compiler-refactoring.md): method->action substitutions as data.
   // SPEC §5.2.4: provable dialog handlers lower to platform invoker commands.
-  const dialogActionByMethod: Record<string, string> = {
-    showModal: 'show-modal',
-    close: 'close',
-    requestClose: 'request-close',
-  };
-  const dialogAction = dialogActionByMethod[method];
+  const dialogAction =
+    method === 'showModal'
+      ? 'show-modal'
+      : method === 'close'
+        ? 'close'
+        : method === 'requestClose'
+          ? 'request-close'
+          : undefined;
   if (dialogAction) {
     return hasDialogTarget(model, target)
       ? { action: dialogAction, event: 'click', kind: 'dialog', tag, target }
       : null;
   }
 
-  const popoverActionByMethod: Record<string, string> = {
-    hidePopover: 'hide',
-    showPopover: 'show',
-    togglePopover: 'toggle',
-  };
-  const popoverAction = popoverActionByMethod[method];
+  const popoverAction =
+    method === 'hidePopover'
+      ? 'hide'
+      : method === 'showPopover'
+        ? 'show'
+        : method === 'togglePopover'
+          ? 'toggle'
+          : undefined;
   if (!popoverAction) return null;
 
   return hasPopoverTarget(model, target)
@@ -93,25 +105,68 @@ function platformSubstitutionFor(
 }
 
 function hasDialogTarget(model: ComponentModuleModel, target: string): boolean {
-  return jsxElements(model).some(
-    (element) => element.tag === 'dialog' && hasLiteralId(element, target),
-  );
+  const elements = jsxElements(model);
+  const length = compilerArrayLength(elements, 'Platform JSX elements');
+  for (let index = 0; index < length; index += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      index,
+      'Platform JSX elements',
+    ) as JsxElementModel;
+    if (element.tag === 'dialog' && hasLiteralId(element, target)) return true;
+  }
+  return false;
 }
 
 function hasPopoverTarget(model: ComponentModuleModel, target: string): boolean {
-  return jsxElements(model).some(
-    (element) => hasLiteralId(element, target) && hasPopoverAttribute(element),
-  );
+  const elements = jsxElements(model);
+  const length = compilerArrayLength(elements, 'Platform JSX elements');
+  for (let index = 0; index < length; index += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      index,
+      'Platform JSX elements',
+    ) as JsxElementModel;
+    if (hasLiteralId(element, target) && hasPopoverAttribute(element)) return true;
+  }
+  return false;
 }
 
 function hasLiteralId(element: ReturnType<typeof jsxElements>[number], target: string): boolean {
-  return element.attributes.some(
-    (attribute) => attribute.name === 'id' && attribute.value === target,
+  return (
+    elementAttributeMatching(
+      element,
+      (attribute) => attribute.name === 'id' && attribute.value === target,
+      'Platform target attributes',
+    ) !== undefined
   );
 }
 
 function hasPopoverAttribute(element: ReturnType<typeof jsxElements>[number]): boolean {
-  return element.attributes.some((attribute) => attribute.name === 'popover');
+  return (
+    elementAttributeMatching(
+      element,
+      (attribute) => attribute.name === 'popover',
+      'Platform target attributes',
+    ) !== undefined
+  );
+}
+
+function elementAttributeMatching(
+  element: JsxElementModel,
+  predicate: (attribute: JsxAttributeModel) => boolean,
+  label: string,
+): JsxAttributeModel | undefined {
+  const length = compilerArrayLength(element.attributes, label);
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      label,
+    ) as JsxAttributeModel;
+    if (predicate(attribute)) return attribute;
+  }
+  return undefined;
 }
 
 /** @internal A single lowered platform attribute (name + already-escaped value). */

@@ -361,18 +361,32 @@ function lowerPlatformBehaviors(
   substitutions: PlatformSubstitution[],
   diagnostics: CompilerDiagnostic[],
 ): void {
-  for (const element of elements) {
+  const elementLength = compilerArrayLength(elements, 'Platform behavior JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Platform behavior JSX elements',
+    ) as JsxIrElement;
     const match = platformElementSubstitution(model, element.element);
     if (!match) continue;
 
     removeJsxIrAttribute(element, match.attribute.name);
-    for (const attribute of platformJsxIrAttributes(match.substitution, options)) {
+    const attributes = platformJsxIrAttributes(match.substitution, options);
+    const attributeLength = compilerArrayLength(attributes, 'Platform generated attributes');
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        attributes,
+        attributeIndex,
+        'Platform generated attributes',
+      ) as JsxIrAttribute;
       const existing = attributeByName(element, attribute.name);
       if (
         existing?.ownership === 'author' &&
         jsxIrAttributeValue(existing) !== jsxIrAttributeValue(attribute)
       ) {
-        diagnostics.push(
+        appendCompilerFact(
+          diagnostics,
           structuralWriterConflictDiagnostic(
             options,
             existing,
@@ -380,12 +394,13 @@ function lowerPlatformBehaviors(
             'author JSX',
             attribute.provenance.writer,
           ),
+          'Platform behavior diagnostics',
         );
       }
-      element.attributes.push(attribute);
+      appendCompilerFact(element.attributes, attribute, 'Platform element attributes');
       markJsxIrChanged(element);
     }
-    substitutions.push(match.substitution);
+    appendCompilerFact(substitutions, match.substitution, 'Platform substitutions');
   }
 }
 
@@ -393,9 +408,27 @@ function platformJsxIrAttributes(
   substitution: PlatformSubstitution,
   options: StructuralJsxLoweringOptions,
 ): JsxIrAttribute[] {
-  return platformAttributeList(substitution).map(({ name, value }) =>
-    generatedJsxIrAttribute(name, { kind: 'string', value }, 'platform behavior lowering', options),
-  );
+  const platformAttributes = platformAttributeList(substitution);
+  const attributes: JsxIrAttribute[] = [];
+  const length = compilerArrayLength(platformAttributes, 'Platform attribute facts');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      platformAttributes,
+      index,
+      'Platform attribute facts',
+    ) as { name: string; value: string };
+    appendCompilerFact(
+      attributes,
+      generatedJsxIrAttribute(
+        attribute.name,
+        { kind: 'string', value: attribute.value },
+        'platform behavior lowering',
+        options,
+      ),
+      'Platform generated attributes',
+    );
+  }
+  return attributes;
 }
 
 function lowerViewTransitionNames(

@@ -4,10 +4,16 @@ import { deriveComponentNames } from '../component-names.js';
 import {
   compilerArrayJoin,
   compilerArrayLength,
+  compilerCreateMap,
   compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
   compilerOwnDataValue,
   compilerSetAdd,
   compilerSetHas,
+  compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
@@ -246,57 +252,85 @@ export function validateResidualStamps(
   return dedupeBy(found, diagnosticKey);
 }
 
-const ambiguousRelationshipAttributes = new Set([
-  'aria-activedescendant',
-  'aria-controls',
-  'aria-describedby',
-  'aria-labelledby',
-  'aria-owns',
-  'commandfor',
-  'for',
-  'htmlFor',
-  'popovertarget',
-]);
+const ambiguousRelationshipAttributes = compilerCreateSet<string>();
+compilerSetAdd(ambiguousRelationshipAttributes, 'aria-activedescendant');
+compilerSetAdd(ambiguousRelationshipAttributes, 'aria-controls');
+compilerSetAdd(ambiguousRelationshipAttributes, 'aria-describedby');
+compilerSetAdd(ambiguousRelationshipAttributes, 'aria-labelledby');
+compilerSetAdd(ambiguousRelationshipAttributes, 'aria-owns');
+compilerSetAdd(ambiguousRelationshipAttributes, 'commandfor');
+compilerSetAdd(ambiguousRelationshipAttributes, 'for');
+compilerSetAdd(ambiguousRelationshipAttributes, 'htmlFor');
+compilerSetAdd(ambiguousRelationshipAttributes, 'popovertarget');
 
-const primitiveOwnedOverrideAttributes = new Set(['role', 'data-state']);
+const primitiveOwnedOverrideAttributes = compilerCreateSet<string>();
+compilerSetAdd(primitiveOwnedOverrideAttributes, 'role');
+compilerSetAdd(primitiveOwnedOverrideAttributes, 'data-state');
 
 export function validateAttributeMergeConflicts(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Attribute merge JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Attribute merge JSX elements',
+    ) as JsxElementModel;
+    const counts = countAttributeNames(element.attributes);
 
-  for (const element of jsxElements(model)) {
-    const attrs = element.attributes.map((attribute) => attribute.name);
-    const counts = countValues(attrs);
-
-    for (const [name, count] of counts) {
-      if (count < 2) continue;
-      const duplicateAttributes = element.attributes.filter((item) => item.name === name);
-      const attribute = duplicateAttributes[0];
-      if (!attribute) continue;
+    compilerMapForEach(counts, (count, name) => {
+      if (count < 2) return;
+      const duplicateAttributes = attributesNamed(element.attributes, name);
+      const attribute = compilerOwnDataValue(
+        duplicateAttributes,
+        0,
+        'Duplicate JSX attributes',
+      ) as JsxAttributeModel | undefined;
+      if (!attribute) return;
 
       if (isBindingAttribute(name)) {
-        found.push(attributeMergeDiagnostic(diagnostics, 'KV233', name, attribute));
-        continue;
+        appendMarkupFact(
+          found,
+          attributeMergeDiagnostic(diagnostics, 'KV233', name, attribute),
+          'Attribute merge diagnostics',
+        );
+        return;
       }
 
       if (
-        ambiguousRelationshipAttributes.has(name) ||
-        name.startsWith('data-p-') ||
+        compilerSetHas(ambiguousRelationshipAttributes, name) ||
+        compilerStringStartsWith(name, 'data-p-') ||
         name === 'kovo-c' ||
         name === 'kovo-state'
       ) {
-        found.push(attributeMergeDiagnostic(diagnostics, 'KV231', name, attribute));
-        continue;
+        appendMarkupFact(
+          found,
+          attributeMergeDiagnostic(diagnostics, 'KV231', name, attribute),
+          'Attribute merge diagnostics',
+        );
+        return;
       }
 
-      if (name.startsWith('aria-') || primitiveOwnedOverrideAttributes.has(name)) {
-        found.push(
-          attributeMergeDiagnostic(diagnostics, 'KV232', name, duplicateAttributes[1] ?? attribute),
+      if (
+        compilerStringStartsWith(name, 'aria-') ||
+        compilerSetHas(primitiveOwnedOverrideAttributes, name)
+      ) {
+        const second = compilerOwnDataValue(
+          duplicateAttributes,
+          1,
+          'Duplicate JSX attributes',
+        ) as JsxAttributeModel | undefined;
+        appendMarkupFact(
+          found,
+          attributeMergeDiagnostic(diagnostics, 'KV232', name, second ?? attribute),
+          'Attribute merge diagnostics',
         );
       }
-    }
+    });
   }
 
   return dedupeBy(found, diagnosticKey);
@@ -387,18 +421,45 @@ function componentQueryNames(model: ComponentModuleModel): string[] {
   return componentOptionObjectKeys(model, 'queries');
 }
 
-function countValues(values: readonly string[]): Map<string, number> {
-  const counts = new Map<string, number>();
-
-  for (const value of values) {
-    counts.set(value, (counts.get(value) ?? 0) + 1);
+function countAttributeNames(attributes: readonly JsxAttributeModel[]): Map<string, number> {
+  const counts = compilerCreateMap<string, number>();
+  const length = compilerArrayLength(attributes, 'Attribute merge JSX attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'Attribute merge JSX attributes',
+    ) as JsxAttributeModel;
+    compilerMapSet(counts, attribute.name, (compilerMapGet(counts, attribute.name) ?? 0) + 1);
   }
-
   return counts;
 }
 
+function attributesNamed(
+  attributes: readonly JsxAttributeModel[],
+  name: string,
+): JsxAttributeModel[] {
+  const matches: JsxAttributeModel[] = [];
+  const length = compilerArrayLength(attributes, 'Attribute merge JSX attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'Attribute merge JSX attributes',
+    ) as JsxAttributeModel;
+    if (attribute.name === name) {
+      appendMarkupFact(matches, attribute, 'Duplicate JSX attributes');
+    }
+  }
+  return matches;
+}
+
+function appendMarkupFact<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
+}
+
 function isBindingAttribute(name: string): boolean {
-  return name === 'data-bind' || name.startsWith('data-bind:');
+  return name === 'data-bind' || compilerStringStartsWith(name, 'data-bind:');
 }
 
 function attributeMergeDiagnostic(

@@ -1139,4 +1139,55 @@ export const SaveForm = component({
     );
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject JSX through platform-behavior attribute traversal', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedPlatformAttributeMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: unknown; value?: unknown } | undefined;
+        const second = this[1] as { name?: unknown; value?: unknown } | undefined;
+        if (
+          first?.name === 'commandfor' &&
+          typeof first.value === 'string' &&
+          second?.name === 'command' &&
+          typeof second.value === 'string'
+        ) {
+          poisonHits += 1;
+          return nativeApply(nativeMap, [
+            {
+              name: 'commandfor="cart-drawer" /><img src="x" data-kovo-platform-injection="true" /><button data-rest',
+              value: 'safe',
+            },
+          ], [callback, thisArg]);
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-button.tsx',
+        source: `
+export const CartButton = component({
+  render: () => (
+    <section>
+      <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(lowered).not.toContain('data-kovo-platform-injection');
+    expect(lowered).toContain('commandfor="cart-drawer" command="show-modal"');
+    expect(poisonHits).toBe(0);
+  });
 });
