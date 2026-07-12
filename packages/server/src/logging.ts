@@ -1,22 +1,33 @@
 import { isSecret } from '@kovojs/core';
 
-// eslint-disable-next-line no-control-regex -- KV439 intentionally neutralizes control chars.
-const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/g;
-const SECRET_REDACTION = '[secret]';
+import {
+  loggingCreateError,
+  loggingDiagnosticUrlParts,
+  loggingHasAbsoluteUrlScheme,
+  loggingIsArray,
+  loggingIsError,
+  loggingNeutralizeControlCharacters,
+  loggingReplaceAllLiteral,
+  loggingString,
+} from './logging-intrinsics.js';
+import {
+  createWitnessWeakMap,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessObjectKeys,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
-function visibleControlEscape(char: string): string {
-  return `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`;
-}
+const SECRET_REDACTION = '[secret]';
 
 /**
  * SPEC §6.6 / KV439: log neutralization is a runtime defense-in-depth floor.
  * It keeps request-derived values from forging extra log lines or terminal controls.
  */
 export function neutralizeLogValue(value: unknown): string {
-  return String(scrubSecretLifecycleValue(value)).replace(
-    CONTROL_CHARACTER_PATTERN,
-    visibleControlEscape,
-  );
+  return loggingNeutralizeControlCharacters(loggingString(scrubSecretLifecycleValue(value)));
 }
 
 export function formatLogMessage(strings: TemplateStringsArray, ...values: unknown[]): string {
@@ -35,16 +46,13 @@ export function formatLogMessage(strings: TemplateStringsArray, ...values: unkno
  * same implementation in its outer, pre-handler error boundary.
  */
 export function sanitizeDiagnosticUrl(value: string): string {
-  let url: URL;
-  try {
-    url = new URL(value, 'https://kovo.invalid');
-  } catch {
-    return '/';
+  const url = loggingDiagnosticUrlParts(value);
+  if (url === undefined) return '/';
+  let query = '';
+  for (let index = 0; index < url.encodedQueryKeys.length; index += 1) {
+    query += `${index === 0 ? '?' : '&'}${url.encodedQueryKeys[index]}`;
   }
-
-  const keys: string[] = [];
-  for (const key of url.searchParams.keys()) keys.push(encodeURIComponent(key));
-  return `${url.pathname}${keys.length === 0 ? '' : `?${keys.join('&')}`}`;
+  return `${url.pathname}${query}`;
 }
 
 /**
@@ -58,26 +66,26 @@ export function sanitizeDiagnosticText(
   sanitizeUrl: (value: string) => string,
 ): string {
   let result = value;
-  const replacements = new Map<string, string>();
+  const replacements: Array<readonly [unsafe: string, safe: string]> = [];
 
-  for (const requestUrl of requestUrls) {
-    let parsed: URL;
-    try {
-      parsed = new URL(requestUrl, 'https://kovo.invalid');
-    } catch {
-      continue;
-    }
+  for (let index = 0; index < requestUrls.length; index += 1) {
+    const requestUrl = requestUrls[index]!;
+    const parsed = loggingDiagnosticUrlParts(requestUrl);
+    if (parsed === undefined) continue;
     const safe = sanitizeUrl(requestUrl);
     const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    replacements.set(requestUrl, safe);
-    replacements.set(path, safe);
-    if (/^[a-z][a-z0-9+.-]*:/i.test(requestUrl)) replacements.set(parsed.href, safe);
+    insertDiagnosticReplacement(replacements, requestUrl, safe);
+    insertDiagnosticReplacement(replacements, path, safe);
+    if (loggingHasAbsoluteUrlScheme(requestUrl)) {
+      insertDiagnosticReplacement(replacements, parsed.href, safe);
+    }
   }
 
-  for (const [unsafe, safe] of [...replacements].sort(
-    ([left], [right]) => right.length - left.length,
-  )) {
-    if (unsafe !== '' && unsafe !== safe) result = result.replaceAll(unsafe, safe);
+  for (let index = 0; index < replacements.length; index += 1) {
+    const [unsafe, safe] = replacements[index]!;
+    if (unsafe !== '' && unsafe !== safe) {
+      result = loggingReplaceAllLiteral(result, unsafe, safe);
+    }
   }
   return result;
 }
@@ -88,11 +96,19 @@ export function sanitizeDiagnosticText(
  * secret so ordinary diagnostics retain identity for app onError handlers.
  */
 export function scrubSecretLifecycleValue(value: unknown): unknown {
-  return scrubSecretLifecycleValueInner(value, new WeakMap<object, unknown>());
+  return scrubSecretLifecycleValueInner(value, createWitnessWeakMap<object, unknown>());
 }
 
 export function scrubConsoleArgs(args: readonly unknown[]): unknown[] {
-  return args.map((arg) => scrubSecretLifecycleValue(arg));
+  const scrubbed: unknown[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(args, index);
+    scrubbed[index] =
+      descriptor !== undefined && 'value' in descriptor
+        ? scrubSecretLifecycleValue(descriptor.value)
+        : '[redacted]';
+  }
+  return scrubbed;
 }
 
 function scrubSecretLifecycleValueInner(value: unknown, seen: WeakMap<object, unknown>): unknown {
@@ -100,49 +116,71 @@ function scrubSecretLifecycleValueInner(value: unknown, seen: WeakMap<object, un
   if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
 
   const object = value as object;
-  const existing = seen.get(object);
+  const existing = witnessWeakMapGet(seen, object);
   if (existing !== undefined) return existing;
 
-  if (Array.isArray(value)) {
+  if (loggingIsArray(value)) {
     let changed = false;
     const next: unknown[] = [];
-    seen.set(object, next);
+    witnessWeakMapSet(seen, object, next);
     for (let index = 0; index < value.length; index += 1) {
-      const item = value[index];
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        next[index] = '[redacted]';
+        changed = true;
+        continue;
+      }
+      const item = descriptor.value;
       const scrubbed = scrubSecretLifecycleValueInner(item, seen);
       next[index] = scrubbed;
       if (scrubbed !== item) changed = true;
     }
     if (!changed) {
-      seen.set(object, value);
+      witnessWeakMapSet(seen, object, value);
       return value;
     }
     return next;
   }
 
-  if (value instanceof Error) {
-    const cloned = new Error(value.message);
-    cloned.name = value.name;
-    if (value.stack !== undefined) cloned.stack = value.stack;
-    seen.set(object, cloned);
+  if (loggingIsError(value)) {
+    const messageDescriptor = witnessGetOwnPropertyDescriptor(value, 'message');
+    const nameDescriptor = witnessGetOwnPropertyDescriptor(value, 'name');
+    const stackDescriptor = witnessGetOwnPropertyDescriptor(value, 'stack');
+    const message = ownStringDataProperty(value, 'message') ?? '';
+    const cloned = loggingCreateError(message);
+    const name = ownStringDataProperty(value, 'name');
+    if (name !== undefined) cloned.name = name;
+    const stack = ownStringDataProperty(value, 'stack');
+    if (stack !== undefined) cloned.stack = stack;
+    witnessWeakMapSet(seen, object, cloned);
 
-    let changed = false;
-    if (value.cause !== undefined) {
-      const scrubbedCause = scrubSecretLifecycleValueInner(value.cause, seen);
-      Object.defineProperty(cloned, 'cause', {
+    let changed =
+      isUnsafeStringDescriptor(messageDescriptor) ||
+      isUnsafeStringDescriptor(nameDescriptor) ||
+      isUnsafeStringDescriptor(stackDescriptor);
+    const causeDescriptor = witnessGetOwnPropertyDescriptor(value, 'cause');
+    if (causeDescriptor !== undefined) {
+      const cause = 'value' in causeDescriptor ? causeDescriptor.value : '[redacted]';
+      const scrubbedCause = scrubSecretLifecycleValueInner(cause, seen);
+      witnessDefineProperty(cloned, 'cause', {
         configurable: true,
         enumerable: false,
         value: scrubbedCause,
         writable: true,
       });
-      if (scrubbedCause !== value.cause) changed = true;
+      if (scrubbedCause !== cause || !('value' in causeDescriptor)) changed = true;
     }
     const record = value as unknown as Record<string, unknown>;
-    for (const key of Object.keys(value)) {
-      const current = record[key];
+    const keys = witnessObjectKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const descriptor = witnessGetOwnPropertyDescriptor(record, key);
+      const current =
+        descriptor !== undefined && 'value' in descriptor ? descriptor.value : '[redacted]';
       const scrubbed = scrubSecretLifecycleValueInner(current, seen);
-      if (scrubbed !== current) changed = true;
-      Object.defineProperty(cloned, key, {
+      if (scrubbed !== current || descriptor === undefined || !('value' in descriptor))
+        changed = true;
+      witnessDefineProperty(cloned, key, {
         configurable: true,
         enumerable: true,
         value: scrubbed,
@@ -150,7 +188,7 @@ function scrubSecretLifecycleValueInner(value: unknown, seen: WeakMap<object, un
       });
     }
     if (!changed) {
-      seen.set(object, value);
+      witnessWeakMapSet(seen, object, value);
       return value;
     }
     return cloned;
@@ -159,17 +197,27 @@ function scrubSecretLifecycleValueInner(value: unknown, seen: WeakMap<object, un
   if (!isPlainObject(value)) return value;
 
   const next: Record<string, unknown> = {};
-  seen.set(object, next);
+  witnessWeakMapSet(seen, object, next);
   let changed = false;
   const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    const current = record[key];
+  const keys = witnessObjectKeys(record);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(record, key);
+    const current =
+      descriptor !== undefined && 'value' in descriptor ? descriptor.value : '[redacted]';
     const scrubbed = scrubSecretLifecycleValueInner(current, seen);
-    next[key] = scrubbed;
-    if (scrubbed !== current) changed = true;
+    witnessDefineProperty(next, key, {
+      configurable: true,
+      enumerable: true,
+      value: scrubbed,
+      writable: true,
+    });
+    if (scrubbed !== current || descriptor === undefined || !('value' in descriptor))
+      changed = true;
   }
   if (!changed) {
-    seen.set(object, value);
+    witnessWeakMapSet(seen, object, value);
     return value;
   }
   return next;
@@ -177,6 +225,32 @@ function scrubSecretLifecycleValueInner(value: unknown, seen: WeakMap<object, un
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object') return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  const prototype = witnessGetPrototypeOf(value);
+  return prototype === witnessGetPrototypeOf({}) || prototype === null;
+}
+
+function insertDiagnosticReplacement(
+  replacements: Array<readonly [unsafe: string, safe: string]>,
+  unsafe: string,
+  safe: string,
+): void {
+  let index = replacements.length;
+  while (index > 0 && replacements[index - 1]![0].length < unsafe.length) {
+    replacements[index] = replacements[index - 1]!;
+    index -= 1;
+  }
+  replacements[index] = [unsafe, safe];
+}
+
+function ownStringDataProperty(value: object, property: PropertyKey): string | undefined {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
+}
+
+function isUnsafeStringDescriptor(descriptor: PropertyDescriptor | undefined): boolean {
+  return (
+    descriptor !== undefined && (!('value' in descriptor) || typeof descriptor.value !== 'string')
+  );
 }

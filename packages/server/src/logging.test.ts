@@ -17,6 +17,19 @@ describe('log-channel neutralization', () => {
     );
   });
 
+  it('keeps log-line neutralization closed after late String.replace poisoning', () => {
+    const originalReplace = String.prototype.replace;
+    try {
+      String.prototype.replace = function () {
+        if (this.valueOf() === 'safe\r\nforged=admin') return this.valueOf();
+        return Reflect.apply(originalReplace, this, arguments);
+      };
+      expect(neutralizeLogValue('safe\r\nforged=admin')).toBe('safe\\u000d\\u000aforged=admin');
+    } finally {
+      String.prototype.replace = originalReplace;
+    }
+  });
+
   it('neutralizes interpolated values in formatted log messages', () => {
     expect(formatLogMessage`request failed: ${'/search?q=a\r\nforged=true'}`).toBe(
       'request failed: /search?q=a\\u000d\\u000aforged=true',
@@ -76,5 +89,108 @@ describe('log-channel neutralization', () => {
     expect(
       sanitizeDiagnosticText(`provider failed at ${absolute}`, [absolute], sanitizeDiagnosticUrl),
     ).toBe('provider failed at /callback');
+  });
+
+  it('keeps credential redaction closed after late String.replaceAll poisoning', () => {
+    const absolute =
+      'https://diagnostic-user:DIAGNOSTIC_PASSWORD@idp.example/callback?code=AUTH_CODE#SECRET';
+    const originalReplaceAll = String.prototype.replaceAll;
+    try {
+      String.prototype.replaceAll = function (search, replacement) {
+        if (this.valueOf() === `provider failed at ${absolute}`) return this.valueOf();
+        return Reflect.apply(originalReplaceAll, this, [search, replacement]);
+      };
+      expect(
+        sanitizeDiagnosticText(`provider failed at ${absolute}`, [absolute], sanitizeDiagnosticUrl),
+      ).toBe('provider failed at /callback?code');
+    } finally {
+      String.prototype.replaceAll = originalReplaceAll;
+    }
+  });
+
+  it('keeps nested secrets, accessors, errors, and URL credentials closed under realm poisoning', () => {
+    const token = secret('sk_live_nested_logger_secret');
+    const absolute =
+      'https://diagnostic-user:DIAGNOSTIC_PASSWORD@idp.example/callback?code=AUTH_CODE#SECRET';
+    const error = new Error('provider failed');
+    Object.defineProperty(error, 'cause', { enumerable: false, value: token });
+    Object.defineProperty(error, 'token', { enumerable: true, value: token });
+    const payload: Record<string, unknown> = { error, nested: [token], url: absolute };
+    let accessorReads = 0;
+    Object.defineProperty(payload, 'accessor', {
+      enumerable: true,
+      get() {
+        accessorReads += 1;
+        return token;
+      },
+    });
+
+    const originalArrayIsArray = Array.isArray;
+    const originalArrayMap = Array.prototype.map;
+    const originalArraySort = Array.prototype.sort;
+    const originalMapSet = Map.prototype.set;
+    const originalWeakMapGet = WeakMap.prototype.get;
+    const originalWeakMapSet = WeakMap.prototype.set;
+    const originalObjectDefineProperty = Object.defineProperty;
+    const originalObjectGetPrototypeOf = Object.getPrototypeOf;
+    const originalObjectKeys = Object.keys;
+    const originalRegExpTest = RegExp.prototype.test;
+    const OriginalURL = globalThis.URL;
+    const originalEncodeURIComponent = globalThis.encodeURIComponent;
+    let sanitizedText = '';
+    let sanitizedUrl = '';
+    let scrubbed: unknown;
+    try {
+      Array.isArray = () => false;
+      Array.prototype.map = () => [];
+      Array.prototype.sort = function () {
+        return this;
+      };
+      Map.prototype.set = function () {
+        return this;
+      };
+      WeakMap.prototype.get = () => undefined;
+      WeakMap.prototype.set = function () {
+        return this;
+      };
+      Object.defineProperty = ((value: object) => value) as typeof Object.defineProperty;
+      Object.getPrototypeOf = () => null;
+      Object.keys = () => [];
+      RegExp.prototype.test = () => false;
+      globalThis.URL = class ForgedURL {} as typeof URL;
+      globalThis.encodeURIComponent = () => 'forged';
+
+      sanitizedText = sanitizeDiagnosticText(
+        `provider failed at ${absolute}`,
+        [absolute],
+        sanitizeDiagnosticUrl,
+      );
+      sanitizedUrl = sanitizeDiagnosticUrl(absolute);
+      scrubbed = scrubConsoleArgs([payload])[0];
+    } finally {
+      Array.isArray = originalArrayIsArray;
+      Array.prototype.map = originalArrayMap;
+      Array.prototype.sort = originalArraySort;
+      Map.prototype.set = originalMapSet;
+      WeakMap.prototype.get = originalWeakMapGet;
+      WeakMap.prototype.set = originalWeakMapSet;
+      Object.defineProperty = originalObjectDefineProperty;
+      Object.getPrototypeOf = originalObjectGetPrototypeOf;
+      Object.keys = originalObjectKeys;
+      RegExp.prototype.test = originalRegExpTest;
+      globalThis.URL = OriginalURL;
+      globalThis.encodeURIComponent = originalEncodeURIComponent;
+    }
+
+    expect(sanitizedText).toBe('provider failed at /callback?code');
+    expect(sanitizedUrl).toBe('/callback?code');
+    expect(accessorReads).toBe(0);
+    expect(scrubbed).toMatchObject({
+      accessor: '[redacted]',
+      error: { cause: '[secret]', token: '[secret]' },
+      nested: ['[secret]'],
+      url: absolute,
+    });
+    expect(JSON.stringify(scrubbed)).not.toContain('sk_live_nested_logger_secret');
   });
 });
