@@ -187,6 +187,16 @@ export interface EgressPolicy {
   readonly allowPrivateNetwork: boolean;
 }
 
+// Framework-owned fetches carry their stricter positive-destination policy through native
+// fetch's redirect machinery. AsyncLocalStorage is the non-forgeable per-call signal that lets
+// the global dispatcher distinguish a privileged ctx.fetch hop from ordinary public egress.
+const frameworkEgressPolicyContext = new AsyncLocalStorage<EgressPolicy>();
+
+/** @internal The exact policy pinned for the current framework-owned fetch redirect chain. */
+export function activeFrameworkEgressPolicy(): EgressPolicy | undefined {
+  return frameworkEgressPolicyContext.getStore();
+}
+
 /** Operator-facing config (the `egress` field of `createApp`). */
 export interface EgressOptions {
   /**
@@ -200,7 +210,7 @@ export interface EgressOptions {
    * Exact origin allowlist for framework-owned HTTP egress (`ctx.fetch` and future
    * webhook/agent-tool outbound helpers), e.g. `['https://api.stripe.com']`. This is a
    * positive destination allowlist: Kovo-owned runtime egress fails closed when omitted or
-   * when the request origin is not listed. Private/internal origins also require
+   * when the initial request or any redirect-hop origin is not listed. Private/internal origins also require
    * `allowInternal` because destination intent does not prove the resolved IP is safe.
    */
   allowDestinations?: readonly string[];
@@ -992,10 +1002,40 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       reason: 'missing-floor',
     });
   }
-  const url = urlFromRequestInput(input);
-  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+  let request: Request;
+  try {
+    // SPEC §6.6 rule 5: normalize caller-owned URL/init/Request carriers once. Passing the pinned
+    // Request to native fetch both prevents post-check mutation and preserves native redirect
+    // method, body, header, credential-stripping, referrer, abort, and manual/error semantics.
+    // Calling fetch with only this Request also prevents a nonstandard per-call dispatcher from
+    // bypassing the framework-owned dispatcher on later hops.
+    request = new Request(input, init);
+  } catch {
     throw new EgressBlockedError({
       destination: requestDestination(input),
+      classification: 'special-use',
+      reason: 'destination-allowlist',
+    });
+  }
+  const url = new URL(request.url);
+
+  // The strict dispatcher is load-bearing for redirect hops: net.connect sees only dials, not
+  // every pooled request, and it does not know that this call requires allowDestinations. Refuse
+  // the framework surface when either half of the dual floor is missing or has been replaced.
+  // This import is deliberately after the synchronous Request snapshot above: native fetch pins
+  // caller-owned URL/init carriers before yielding, and the security wrapper must do the same.
+  const { isUndiciFloorInstalled } = await import('./egress-undici.js');
+  if (!isUndiciFloorInstalled()) {
+    throw new EgressBlockedError({
+      destination: request.url,
+      classification: 'special-use',
+      reason: 'missing-floor',
+    });
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new EgressBlockedError({
+      destination: request.url,
       classification: 'special-use',
       reason: 'destination-allowlist',
     });
@@ -1049,7 +1089,10 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       if (blocked) throw blocked;
     }
   }
-  return globalThis.fetch(input, init);
+  // Keep redirect handling inside native fetch. Its HTTP(S)-scheme rejection, 20-hop bound,
+  // 301/302/303 rewrites, 307/308 replay rules, cross-origin credential stripping, and manual/error
+  // modes remain authoritative; the dispatcher below re-runs the pinned policy on every hop.
+  return frameworkEgressPolicyContext.run(policy, () => globalThis.fetch(request));
 }) as typeof globalThis.fetch;
 
 function lookupAllAddresses(host: string): Promise<LookupAddress[]> {
@@ -1062,16 +1105,6 @@ function lookupAllAddresses(host: string): Promise<LookupAddress[]> {
       resolve(addresses);
     });
   });
-}
-
-function urlFromRequestInput(input: RequestInfo | URL): URL | null {
-  try {
-    if (input instanceof URL) return input;
-    if (typeof input === 'string') return new URL(input);
-    return new URL(input.url);
-  } catch {
-    return null;
-  }
 }
 
 function requestDestination(input: RequestInfo | URL): string {

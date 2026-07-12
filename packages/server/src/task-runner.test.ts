@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installNetConnectFloor, resolveEgressPolicy } from './egress.js';
+import { installUndiciFloor } from './egress-undici.js';
 import { mutation, runMutation } from './mutation.js';
 import { query, runQuery } from './query.js';
 import { s } from './schema.js';
@@ -216,15 +217,19 @@ describe('durable task runner (SPEC §9.6)', () => {
     const server = http.createServer((_req, res) => res.end('task-ok'));
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const port = (server.address() as AddressInfo).port;
-    uninstallEgressFloor = installNetConnectFloor(
-      resolveEgressPolicy(
-        {
-          allowDestinations: [`http://127.0.0.1:${port}`],
-          allowInternal: [`127.0.0.1:${port}`],
-        },
-        () => {},
-      ),
+    const policy = resolveEgressPolicy(
+      {
+        allowDestinations: [`http://127.0.0.1:${port}`],
+        allowInternal: [`127.0.0.1:${port}`],
+      },
+      () => {},
     );
+    const uninstallNet = installNetConnectFloor(policy);
+    const uninstallUndici = installUndiciFloor(policy);
+    uninstallEgressFloor = () => {
+      uninstallUndici();
+      uninstallNet();
+    };
     try {
       const store = new MemoryDurableTaskQueue();
       const bodies: string[] = [];

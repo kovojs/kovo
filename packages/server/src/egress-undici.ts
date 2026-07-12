@@ -9,6 +9,7 @@ import {
 } from './egress-undici-runtime.js';
 
 import {
+  activeFrameworkEgressPolicy,
   EgressBlockedError,
   classifyIp,
   evaluateEgress,
@@ -76,12 +77,24 @@ export class EgressGatingDispatcher extends Agent {
     }
     const host = decodeURIComponent(url.hostname).replace(/^\[/, '').replace(/\]$/, '');
     const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80);
+    const protocol =
+      url.protocol === 'http:' || url.protocol === 'https:' ? url.protocol : undefined;
+    const frameworkPolicy = activeFrameworkEgressPolicy();
+    const policy = frameworkPolicy ?? this.#policy;
+    const requireDestinationAllowlist = frameworkPolicy !== undefined;
 
     // Literal IP at dispatch: classify + decide synchronously (catches metadata literals and
     // pooled reuse to a literal private IP without any DNS).
     const literalIp = normalizeFastPathIpLiteral(host);
     if (literalIp !== null) {
-      const blocked = evaluateEgress({ host, port, resolvedIp: literalIp, policy: this.#policy });
+      const blocked = evaluateEgress({
+        host,
+        port,
+        protocol,
+        resolvedIp: literalIp,
+        policy,
+        requireDestinationAllowlist,
+      });
       if (blocked) {
         rejectHandler(handler, blocked);
         return false;
@@ -106,7 +119,14 @@ export class EgressGatingDispatcher extends Agent {
     // the handler ourselves on the deny path.
     const cached = this.#resolutionCache.get(host);
     if (cached && cached.expires > Date.now()) {
-      const blocked = evaluateEgress({ host, port, resolvedIp: cached.ip, policy: this.#policy });
+      const blocked = evaluateEgress({
+        host,
+        port,
+        protocol,
+        resolvedIp: cached.ip,
+        policy,
+        requireDestinationAllowlist,
+      });
       if (blocked) {
         rejectHandler(handler, blocked);
         return false;
@@ -114,13 +134,24 @@ export class EgressGatingDispatcher extends Agent {
       return super.dispatch(options, handler);
     }
 
-    void this.#resolveAndDispatch(host, port, options, handler);
+    void this.#resolveAndDispatch(
+      host,
+      port,
+      protocol,
+      policy,
+      requireDestinationAllowlist,
+      options,
+      handler,
+    );
     return true;
   }
 
   async #resolveAndDispatch(
     host: string,
     port: number,
+    protocol: 'http:' | 'https:' | undefined,
+    policy: EgressPolicy,
+    requireDestinationAllowlist: boolean,
     options: Dispatcher.DispatchOptions,
     handler: Dispatcher.DispatchHandler,
   ): Promise<void> {
@@ -143,7 +174,14 @@ export class EgressGatingDispatcher extends Agent {
     // Fail the whole request CLOSED if ANY resolved IP is non-public/not-allowlisted; never
     // forward on the strength of one passing record.
     for (const { address } of resolved) {
-      const blocked = evaluateEgress({ host, port, resolvedIp: address, policy: this.#policy });
+      const blocked = evaluateEgress({
+        host,
+        port,
+        protocol,
+        resolvedIp: address,
+        policy,
+        requireDestinationAllowlist,
+      });
       if (blocked) {
         rejectHandler(handler, blocked);
         return;

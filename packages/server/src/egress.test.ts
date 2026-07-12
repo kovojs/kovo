@@ -21,6 +21,7 @@ import {
   runWithMetadataAccess,
   type EgressPolicy,
 } from './egress.js';
+import { installUndiciFloor } from './egress-undici.js';
 
 const emptyPolicy = (): EgressPolicy => resolveEgressPolicy(undefined, () => {});
 
@@ -644,6 +645,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
   let server: http.Server;
   let port: number;
   let uninstall: () => void;
+  let uninstallUndici: (() => void) | undefined;
 
   beforeAll(async () => {
     server = http.createServer((_req, res) => res.end('ok'));
@@ -656,6 +658,8 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
   });
 
   afterEach(() => {
+    uninstallUndici?.();
+    uninstallUndici = undefined;
     uninstall?.();
     vi.restoreAllMocks();
     // Keep this net.connect-layer suite on fresh dials; pooled reuse is covered by egress-undici.test.ts.
@@ -675,7 +679,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       reason: 'missing-floor',
     });
 
-    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowDestinations: [] }, () => {}));
+    installFrameworkFetchFloor(resolveEgressPolicy({ allowDestinations: [] }, () => {}));
     await expect(frameworkEgressFetch('https://api.example.com/v1')).rejects.toMatchObject({
       name: EGRESS_BLOCKED_ERROR_NAME,
       reason: 'destination-allowlist',
@@ -683,7 +687,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
   });
 
   it('frameworkEgressFetch allows only explicitly allowlisted destinations', async () => {
-    uninstall = installNetConnectFloor(
+    installFrameworkFetchFloor(
       resolveEgressPolicy(
         {
           allowDestinations: [`http://127.0.0.1:${port}`],
@@ -701,7 +705,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
   });
 
   it('frameworkEgressFetch permits an allowlisted hostname only after resolving it to a public IP', async () => {
-    uninstall = installNetConnectFloor(
+    installFrameworkFetchFloor(
       resolveEgressPolicy({ allowDestinations: ['https://api.service.test'] }, () => {}),
     );
     mockDnsLookup([{ address: '93.184.216.34', family: 4 }]);
@@ -714,7 +718,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
   });
 
   it('frameworkEgressFetch blocks an allowlisted hostname that resolves to a private IP', async () => {
-    uninstall = installNetConnectFloor(
+    installFrameworkFetchFloor(
       resolveEgressPolicy({ allowDestinations: [`http://internal-alias.test:${port}`] }, () => {}),
     );
     mockDnsLookup([{ address: '127.0.0.1', family: 4 }]);
@@ -728,6 +732,11 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  function installFrameworkFetchFloor(policy: EgressPolicy): void {
+    uninstall = installNetConnectFloor(policy);
+    uninstallUndici = installUndiciFloor(policy);
+  }
 
   it('DENIES http.get to a literal loopback IP not in allowInternal', async () => {
     uninstall = installNetConnectFloor(emptyPolicy());
