@@ -177,7 +177,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 33-test wire-JSON/TCB/query-HTML matrix passes; the independent serializer
     replacement proof now emits only the classified `{ count: 1 }` truth.
 
-- [ ] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
+- [x] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
       `packages/server/src/task-queue.ts`
   - Replacing `Date.now` and `Math.random` with constants made two distinct memory-queue enqueues
     receive the same job id, so the second task silently replaced the first queued task and args.
@@ -187,6 +187,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cryptographic entropy with at least 128 random bits; queue lookup, iteration, coalescing, claim,
     heartbeat, completion, retry, and reaping use exact pinned controls, and neither late nor
     import-order poison can overwrite a sibling job or reuse expired worker authority.
+  - **Evidence:** the 64-test durable-task matrix plus server dist/DTS, import, and API gates pass;
+    the independent collision and stale-lease proofs now receive distinct 128-bit crypto identities.
 
 - [ ] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
       `packages/server/src/command.ts`
@@ -338,7 +340,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     Set-Cookie bytes and clearing semantics, two-factor state, redirect bytes, and registry touches;
     failed or cookie-free provider responses remain typed failures under late/import-order poison.
 
-- [ ] **H15 - Mutable task-registry dispatch can execute a privileged sibling task.**
+- [x] **H15 - Mutable task-registry dispatch can execute a privileged sibling task.**
       `packages/server/src/{task-runner,task-queue}.ts`
   - A selective late `Map.prototype.get` override resolved an ordinary queued task key to a
     different privileged definition. The real runner parsed the ordinary job with the sibling
@@ -347,6 +349,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     scheduling registration/lineage, and runner settlement use boot-pinned, semantically checked
     exact-key and collection controls; late/import-order poison cannot cross-bind definitions,
     jobs, principal context, or completion state.
+  - **Evidence:** the same durable-task matrix and adjacent 140-test app/mutation matrix pass; the
+    independent `Map.get` cross-binding proof runs only the exact ordinary task.
 
 - [x] **H16 - Mutable guard redirect controls reopen protocol-relative login targets.**
       `packages/server/src/guards.ts`
@@ -387,7 +391,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     security-test-build, and single-choke gates pass; the independent final-join proof retains the
     safe shell, exact fragment, matching CSP scripts, boundary, and close bytes.
 
-- [ ] **H19 - Mutable mutation-wire assembly can replace an authenticated response body.**
+- [x] **H19 - Mutable mutation-wire assembly can replace an authenticated response body.**
       `packages/server/src/{mutation-wire,mutation/wire-response,mutation/targets}.ts`
   - A selective late `Array.prototype.join` override targeting the final query/fragment chunk array
     replaced a genuine successful mutation delta with an attacker-authored `<kovo-fragment>` carrying
@@ -396,6 +400,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     transition classification, JSON/control escaping, chunk traversal/ordering, final body assembly,
     and failure/reauth redirects use boot-pinned, semantically checked controls; poison cannot replace
     wire bytes, cross-bind targets, or suppress required build/session transition metadata.
+  - **Evidence:** the 194-test mutation/wire/guard matrix and server dist/DTS build pass; the
+    independent final-join proof retains the genuine authenticated query truth.
 
 - [x] **H20 - Mutable client-module and render-plan controls can cross-bind immutable code or
       collapse build truth.** `packages/server/src/{client-modules,loader-runtime-client-module}.ts`,
@@ -582,8 +588,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17-C20, H15, H19, and H26 are active command/
-crypto, response/mutation-output, and durable-task fixes.
+The remediation pass remains intentionally non-zero: C18-C20 and H26 are active command/crypto and
+JSX output-authority fixes.
 Integrated
 evidence is
 green at
