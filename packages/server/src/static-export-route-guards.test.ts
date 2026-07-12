@@ -147,12 +147,77 @@ describe('server static export', () => {
         ],
       });
 
-      await exportStaticApp(app, { outDir });
+      let exportError: unknown;
+      try {
+        await exportStaticApp(app, { outDir });
+      } catch (error) {
+        exportError = error;
+      }
 
       await expect(readFile(path.join(outsideDir, 'index.html'))).rejects.toThrow();
       expect(poisonHits).toBe(0);
+      if (exportError !== undefined) throw exportError;
       await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
         'safe-root',
+      );
+    } finally {
+      nodePath.resolve = originalResolve;
+      syncBuiltinESMExports();
+      await rm(outDir, { force: true, recursive: true });
+      await rm(outsideDir, { force: true, recursive: true });
+    }
+  });
+
+  it('does not let atomic staging re-resolve a pinned export root outside its authority', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-staging-root-safe-'));
+    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-staging-root-outside-'));
+    const nodePath = requireFromTest('node:path') as typeof import('node:path');
+    const originalResolve = nodePath.resolve;
+    const originalRelative = nodePath.relative;
+    let poisonHits = 0;
+
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page() {
+              nodePath.resolve = function (...paths: string[]) {
+                const candidate = paths.length === 1 ? paths[0] : undefined;
+                const stack = new Error().stack ?? '';
+                const directCaller = stack.split('\n')[2] ?? '';
+                if (candidate === outDir && directCaller.includes('writeArtifactOutput')) {
+                  poisonHits += 1;
+                  return outsideDir;
+                }
+                if (
+                  candidate !== undefined &&
+                  candidate.startsWith(`${outDir}${nodePath.sep}`) &&
+                  directCaller.includes('artifactOutputManifest')
+                ) {
+                  poisonHits += 1;
+                  return originalResolve(outsideDir, originalRelative(outDir, candidate));
+                }
+                return Reflect.apply(originalResolve, nodePath, paths);
+              };
+              syncBuiltinESMExports();
+              return renderedHtml('<main>staging-safe-root</main>');
+            },
+          }),
+        ],
+      });
+
+      let exportError: unknown;
+      try {
+        await exportStaticApp(app, { outDir });
+      } catch (error) {
+        exportError = error;
+      }
+
+      await expect(readFile(path.join(outsideDir, 'index.html'))).rejects.toThrow();
+      expect(poisonHits).toBe(0);
+      if (exportError !== undefined) throw exportError;
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
+        'staging-safe-root',
       );
     } finally {
       nodePath.resolve = originalResolve;

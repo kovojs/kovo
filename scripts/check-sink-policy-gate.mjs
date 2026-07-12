@@ -49,7 +49,8 @@ export const defaultCommandExecutionToolingRationales = {
 export const defaultRootedFileServeSinkFiles = ['packages/server/src/file.ts'];
 export const defaultRootedFileServeRawSinkFiles = [
   ...defaultRootedFileServeSinkFiles,
-  'packages/core/src/internal/filesystem.ts',
+  // Private boot-pinned membrane used only by the audited core filesystem boundary.
+  'packages/core/src/internal/filesystem-intrinsics.ts',
 ];
 
 export const defaultDynamicCodeExecutionSinkFiles = [];

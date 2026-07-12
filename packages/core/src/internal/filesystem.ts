@@ -1,36 +1,47 @@
-import { randomUUID } from 'node:crypto';
-import {
-  constants as fsConstants,
-  lstatSync,
-  realpathSync,
-  statSync,
-  type Dirent,
-  type Stats,
-} from 'node:fs';
-import {
-  access,
-  copyFile,
-  lstat,
-  mkdir,
-  mkdtemp,
-  open,
-  readdir,
-  realpath,
-  rename,
-  rm,
-  stat,
-  unlink,
-  writeFile,
-} from 'node:fs/promises';
-import * as path from 'node:path';
-import { Readable } from 'node:stream';
-
 import { blessSink, isBlessedSink } from './sink-policy.js';
 import {
   fileSystemArrayIncludesExact,
+  fileSystemAccess,
+  fileSystemCloseFileDescriptor,
+  fileSystemCopyBytes,
+  fileSystemCopyFile,
+  fileSystemCreateReadableStream,
+  fileSystemDirentIsDirectory,
+  fileSystemDirentIsFile,
+  fileSystemFreeze,
+  fileSystemLstat,
+  fileSystemLstatSync,
+  fileSystemMkdir,
+  fileSystemMkdtemp,
+  fileSystemOpenFileDescriptor,
+  fileSystemPathBasename,
+  fileSystemPathDirname,
+  fileSystemPathIsAbsolute,
+  fileSystemPathJoin,
+  fileSystemPathRelative,
+  fileSystemPathResolve,
+  fileSystemPathSeparator,
+  fileSystemRandomUuid,
+  fileSystemReadDirectory,
+  fileSystemReadFileDescriptor,
+  fileSystemRealpath,
+  fileSystemRealpathSync,
+  fileSystemRemoveTree,
+  fileSystemRename,
+  fileSystemStat,
+  fileSystemStatFileDescriptor,
+  fileSystemStatSync,
+  fileSystemStatsIsDirectory,
+  fileSystemStatsIsFile,
+  fileSystemStatsIsSymbolicLink,
+  fileSystemStringCharCodeAt,
   fileSystemStringIncludes,
   fileSystemStringSplit,
   fileSystemStringStartsWith,
+  fileSystemUnlink,
+  fileSystemWriteFile,
+  type FileSystemDirent as Dirent,
+  type FileSystemStats as Stats,
 } from './filesystem-intrinsics.js';
 
 type FileSystemBoundarySink = 'filesystem-boundary';
@@ -135,14 +146,14 @@ export async function createFrameworkFileSystemBoundary(
     statFile: (relativePath) => statConfinedFile(rootState, relativePath),
     writeFile: (relativePath, body) => writeConfinedFile(rootState, relativePath, body),
   };
-  return blessSink(FILESYSTEM_BOUNDARY_SINK, Object.freeze(boundary));
+  return blessSink(FILESYSTEM_BOUNDARY_SINK, fileSystemFreeze(boundary));
 }
 
 /** @internal Create a path-confined output filesystem capability for a build/export root. */
 export function createFrameworkOutputFileSystemBoundary(
   root: string,
 ): FrameworkOutputFileSystemBoundary {
-  const resolvedRoot = path.resolve(root);
+  const resolvedRoot = fileSystemPathResolve(root);
   const rootState = captureFileSystemRootState(resolvedRoot);
   const stableRoot = rootState.expectedCanonicalRoot;
   const boundary: FrameworkOutputFileSystemBoundary = {
@@ -164,7 +175,7 @@ export function createFrameworkOutputFileSystemBoundary(
     validateFileTarget: (relativePath) => validateConfinedFileTarget(rootState, relativePath),
     writeFile: (relativePath, body) => writeConfinedFile(rootState, relativePath, body),
   };
-  return blessSink(FILESYSTEM_BOUNDARY_SINK, Object.freeze(boundary));
+  return blessSink(FILESYSTEM_BOUNDARY_SINK, fileSystemFreeze(boundary));
 }
 
 /** @internal Test/audit hook for the shared Blessed<Sink> witness substrate. */
@@ -174,25 +185,28 @@ export function isFrameworkFileSystemBoundary(value: unknown): boolean {
 
 /** @internal Resolve a relative child path only when it stays under the root. */
 export function confinedPath(root: string, relativePath: string): string | undefined {
-  if (fileSystemStringIncludes(relativePath, '\0') || path.isAbsolute(relativePath)) {
+  if (fileSystemStringIncludes(relativePath, '\0') || fileSystemPathIsAbsolute(relativePath)) {
     return undefined;
   }
-  const resolvedRoot = path.resolve(root);
-  const candidate = path.resolve(resolvedRoot, relativePath);
+  const resolvedRoot = fileSystemPathResolve(root);
+  const candidate = fileSystemPathResolve(resolvedRoot, relativePath);
   return containsPath(resolvedRoot, candidate) ? candidate : undefined;
 }
 
 /** @internal Return the root-relative form of an already resolved path, or undefined on escape. */
 export function pathRelativeToRoot(root: string, targetPath: string): string | undefined {
-  const resolvedRoot = path.resolve(root);
-  const resolvedTarget = path.resolve(targetPath);
+  const resolvedRoot = fileSystemPathResolve(root);
+  const resolvedTarget = fileSystemPathResolve(targetPath);
   if (!containsPath(resolvedRoot, resolvedTarget) || resolvedTarget === resolvedRoot) {
     return undefined;
   }
-  const relativePath = path.relative(resolvedRoot, resolvedTarget);
+  const relativePath = fileSystemPathRelative(resolvedRoot, resolvedTarget);
   if (
     relativePath === '' ||
-    fileSystemArrayIncludesExact(fileSystemStringSplit(relativePath, path.sep), '..')
+    fileSystemArrayIncludesExact(
+      fileSystemStringSplit(relativePath, fileSystemPathSeparator()),
+      '..',
+    )
   ) {
     return undefined;
   }
@@ -201,11 +215,11 @@ export function pathRelativeToRoot(root: string, targetPath: string): string | u
 
 /** @internal Path containment predicate used by framework filesystem boundary callers. */
 export function containsPath(root: string, targetPath: string): boolean {
-  const resolvedRoot = path.resolve(root);
-  const resolvedTarget = path.resolve(targetPath);
+  const resolvedRoot = fileSystemPathResolve(root);
+  const resolvedTarget = fileSystemPathResolve(targetPath);
   return (
     resolvedTarget === resolvedRoot ||
-    fileSystemStringStartsWith(resolvedTarget, `${resolvedRoot}${path.sep}`)
+    fileSystemStringStartsWith(resolvedTarget, `${resolvedRoot}${fileSystemPathSeparator()}`)
   );
 }
 
@@ -221,7 +235,7 @@ export function containsPath(root: string, targetPath: string): boolean {
  * narrow interval after revalidation; that honest runtime-DiD ceiling is unchanged.
  */
 function captureFileSystemRootState(root: string): FileSystemRootState {
-  const resolvedRoot = path.resolve(root);
+  const resolvedRoot = fileSystemPathResolve(root);
   try {
     const rootIdentity = pinDirectorySync(resolvedRoot, false, 'root');
     return {
@@ -251,7 +265,7 @@ function captureFileSystemRootState(root: string): FileSystemRootState {
   const relativeRoot = descendantRelativePath(anchor.lexicalPath, resolvedRoot);
   return {
     anchor,
-    expectedCanonicalRoot: path.resolve(anchor.canonicalPath, relativeRoot),
+    expectedCanonicalRoot: fileSystemPathResolve(anchor.canonicalPath, relativeRoot),
     failure: undefined,
     preparing: undefined,
     retired: false,
@@ -261,14 +275,14 @@ function captureFileSystemRootState(root: string): FileSystemRootState {
 }
 
 function nearestExistingDirectoryIdentitySync(root: string): PinnedDirectoryIdentity {
-  let candidate = path.dirname(root);
+  let candidate = fileSystemPathDirname(root);
   while (true) {
     try {
       return pinDirectorySync(candidate, true, 'ancestor');
     } catch (error) {
       if (!isAbsentPathError(error)) throw error;
     }
-    const parent = path.dirname(candidate);
+    const parent = fileSystemPathDirname(candidate);
     if (parent === candidate) {
       throw new Error(`Filesystem root '${root}' has no existing directory ancestor.`);
     }
@@ -281,19 +295,19 @@ function pinDirectorySync(
   allowSymbolicLink: boolean,
   role: 'ancestor' | 'root',
 ): PinnedDirectoryIdentity {
-  const lexicalStat = lstatSync(lexicalPath);
-  const lexicalKind = lexicalStat.isSymbolicLink()
+  const lexicalStat = fileSystemLstatSync(lexicalPath);
+  const lexicalKind = fileSystemStatsIsSymbolicLink(lexicalStat)
     ? 'symbolic-link'
-    : lexicalStat.isDirectory()
+    : fileSystemStatsIsDirectory(lexicalStat)
       ? 'directory'
       : undefined;
   if (lexicalKind === undefined || (lexicalKind === 'symbolic-link' && !allowSymbolicLink)) {
     throw new Error(`Filesystem ${role} '${lexicalPath}' must be a non-symbolic-link directory.`);
   }
 
-  const canonicalPath = realpathSync(lexicalPath);
-  const canonicalStat = statSync(canonicalPath);
-  if (!canonicalStat.isDirectory()) {
+  const canonicalPath = fileSystemRealpathSync(lexicalPath);
+  const canonicalStat = fileSystemStatSync(canonicalPath);
+  if (!fileSystemStatsIsDirectory(canonicalStat)) {
     throw new Error(`Filesystem ${role} '${lexicalPath}' does not resolve to a directory.`);
   }
   return {
@@ -364,7 +378,7 @@ async function prepareFileSystemRootParent(state: FileSystemRootState): Promise<
   if (anchor === undefined) {
     throw new Error(`Filesystem root '${state.root}' has no pinned ancestor identity.`);
   }
-  await ensureDescendantDirectories(anchor, path.dirname(state.root), true);
+  await ensureDescendantDirectories(anchor, fileSystemPathDirname(state.root), true);
   await verifyPinnedDirectory(anchor, 'ancestor');
 }
 
@@ -375,42 +389,43 @@ async function ensureDescendantDirectories(
 ): Promise<boolean> {
   await verifyPinnedDirectory(anchor, 'ancestor');
   const relativePath = descendantRelativePath(anchor.lexicalPath, targetPath);
-  const segments = relativePath === '' ? [] : fileSystemStringSplit(relativePath, path.sep);
+  const segments =
+    relativePath === '' ? [] : fileSystemStringSplit(relativePath, fileSystemPathSeparator());
   let current = anchor.lexicalPath;
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index]!;
-    current = path.join(current, segment);
+    current = fileSystemPathJoin(current, segment);
     let currentStat: Stats;
     try {
-      currentStat = await lstat(current);
+      currentStat = await fileSystemLstat(current);
     } catch (error) {
       if (!isAbsentPathError(error)) throw error;
       if (!create) return false;
       try {
-        await mkdir(current);
+        await fileSystemMkdir(current);
       } catch (mkdirError) {
         if (!isAlreadyExistsError(mkdirError)) throw mkdirError;
       }
-      currentStat = await lstat(current);
+      currentStat = await fileSystemLstat(current);
     }
-    if (currentStat.isSymbolicLink()) {
+    if (fileSystemStatsIsSymbolicLink(currentStat)) {
       throw new Error(`Filesystem root component '${current}' is a symbolic link.`);
     }
-    if (!currentStat.isDirectory()) {
+    if (!fileSystemStatsIsDirectory(currentStat)) {
       throw new Error(`Filesystem root component '${current}' is not a directory.`);
     }
   }
 
-  const expectedCanonicalPath = path.resolve(anchor.canonicalPath, relativePath);
-  const canonicalPath = await realpath(targetPath);
+  const expectedCanonicalPath = fileSystemPathResolve(anchor.canonicalPath, relativePath);
+  const canonicalPath = await fileSystemRealpath(targetPath);
   if (canonicalPath !== expectedCanonicalPath) {
     throw rootIdentityChangedError(
       targetPath,
       `resolved to '${canonicalPath}' instead of '${expectedCanonicalPath}'`,
     );
   }
-  const canonicalStat = await stat(canonicalPath);
-  if (!canonicalStat.isDirectory()) {
+  const canonicalStat = await fileSystemStat(canonicalPath);
+  if (!fileSystemStatsIsDirectory(canonicalStat)) {
     throw new Error(`Filesystem root component '${targetPath}' is not a directory.`);
   }
   await verifyPinnedDirectory(anchor, 'ancestor');
@@ -421,19 +436,19 @@ async function pinRootDirectory(
   lexicalPath: string,
   expectedCanonicalPath: string,
 ): Promise<PinnedDirectoryIdentity> {
-  const lexicalStat = await lstat(lexicalPath);
-  if (lexicalStat.isSymbolicLink() || !lexicalStat.isDirectory()) {
+  const lexicalStat = await fileSystemLstat(lexicalPath);
+  if (fileSystemStatsIsSymbolicLink(lexicalStat) || !fileSystemStatsIsDirectory(lexicalStat)) {
     throw new Error(`Filesystem root '${lexicalPath}' must be a non-symbolic-link directory.`);
   }
-  const canonicalPath = await realpath(lexicalPath);
+  const canonicalPath = await fileSystemRealpath(lexicalPath);
   if (canonicalPath !== expectedCanonicalPath) {
     throw rootIdentityChangedError(
       lexicalPath,
       `resolved to '${canonicalPath}' instead of '${expectedCanonicalPath}'`,
     );
   }
-  const canonicalStat = await stat(canonicalPath);
-  if (!canonicalStat.isDirectory()) {
+  const canonicalStat = await fileSystemStat(canonicalPath);
+  if (!fileSystemStatsIsDirectory(canonicalStat)) {
     throw new Error(`Filesystem root '${lexicalPath}' does not resolve to a directory.`);
   }
   return {
@@ -451,16 +466,16 @@ async function verifyPinnedDirectory(
 ): Promise<void> {
   let lexicalStat: Stats;
   try {
-    lexicalStat = await lstat(pinned.lexicalPath);
+    lexicalStat = await fileSystemLstat(pinned.lexicalPath);
   } catch (error) {
     throw rootIdentityChangedError(
       pinned.lexicalPath,
       error instanceof Error ? error.message : String(error),
     );
   }
-  const currentKind = lexicalStat.isSymbolicLink()
+  const currentKind = fileSystemStatsIsSymbolicLink(lexicalStat)
     ? 'symbolic-link'
-    : lexicalStat.isDirectory()
+    : fileSystemStatsIsDirectory(lexicalStat)
       ? 'directory'
       : undefined;
   if (
@@ -473,8 +488,8 @@ async function verifyPinnedDirectory(
   let canonicalPath: string;
   let canonicalStat: Stats;
   try {
-    canonicalPath = await realpath(pinned.lexicalPath);
-    canonicalStat = await stat(canonicalPath);
+    canonicalPath = await fileSystemRealpath(pinned.lexicalPath);
+    canonicalStat = await fileSystemStat(canonicalPath);
   } catch (error) {
     throw rootIdentityChangedError(
       pinned.lexicalPath,
@@ -483,7 +498,7 @@ async function verifyPinnedDirectory(
   }
   if (
     canonicalPath !== pinned.canonicalPath ||
-    !canonicalStat.isDirectory() ||
+    !fileSystemStatsIsDirectory(canonicalStat) ||
     !sameFileSystemIdentity(fileSystemIdentity(canonicalStat), pinned.canonicalIdentity)
   ) {
     throw rootIdentityChangedError(pinned.lexicalPath, `${role} canonical identity was replaced`);
@@ -530,16 +545,16 @@ function verifyPinnedDirectorySync(
 ): void {
   let lexicalStat: Stats;
   try {
-    lexicalStat = lstatSync(pinned.lexicalPath);
+    lexicalStat = fileSystemLstatSync(pinned.lexicalPath);
   } catch (error) {
     throw rootIdentityChangedError(
       pinned.lexicalPath,
       error instanceof Error ? error.message : String(error),
     );
   }
-  const currentKind = lexicalStat.isSymbolicLink()
+  const currentKind = fileSystemStatsIsSymbolicLink(lexicalStat)
     ? 'symbolic-link'
-    : lexicalStat.isDirectory()
+    : fileSystemStatsIsDirectory(lexicalStat)
       ? 'directory'
       : undefined;
   if (
@@ -552,8 +567,8 @@ function verifyPinnedDirectorySync(
   let canonicalPath: string;
   let canonicalStat: Stats;
   try {
-    canonicalPath = realpathSync(pinned.lexicalPath);
-    canonicalStat = statSync(canonicalPath);
+    canonicalPath = fileSystemRealpathSync(pinned.lexicalPath);
+    canonicalStat = fileSystemStatSync(canonicalPath);
   } catch (error) {
     throw rootIdentityChangedError(
       pinned.lexicalPath,
@@ -562,7 +577,7 @@ function verifyPinnedDirectorySync(
   }
   if (
     canonicalPath !== pinned.canonicalPath ||
-    !canonicalStat.isDirectory() ||
+    !fileSystemStatsIsDirectory(canonicalStat) ||
     !sameFileSystemIdentity(fileSystemIdentity(canonicalStat), pinned.canonicalIdentity)
   ) {
     throw rootIdentityChangedError(pinned.lexicalPath, `${role} canonical identity was replaced`);
@@ -577,11 +592,11 @@ async function revalidatePreparedRoot(state: FileSystemRootState): Promise<void>
 }
 
 function descendantRelativePath(ancestorPath: string, descendantPath: string): string {
-  const relativePath = path.relative(ancestorPath, descendantPath);
+  const relativePath = fileSystemPathRelative(ancestorPath, descendantPath);
   if (
     relativePath === '..' ||
-    fileSystemStringStartsWith(relativePath, `..${path.sep}`) ||
-    path.isAbsolute(relativePath)
+    fileSystemStringStartsWith(relativePath, `..${fileSystemPathSeparator()}`) ||
+    fileSystemPathIsAbsolute(relativePath)
   ) {
     throw new Error(
       `Filesystem path '${descendantPath}' is not beneath pinned ancestor '${ancestorPath}'.`,
@@ -616,32 +631,35 @@ async function readConfinedFile(
   const resolved = await safeRealpath(candidate);
   if (resolved === undefined || !containsPath(root, resolved)) return undefined;
 
-  const handle = await safeOpen(resolved);
-  if (handle === undefined) return undefined;
+  const fileDescriptor = await safeOpen(resolved);
+  if (fileDescriptor === undefined) return undefined;
 
-  let streamOwnsHandle = false;
+  let streamOwnsFileDescriptor = false;
   try {
-    const [fileStat, postOpenResolved] = await Promise.all([handle.stat(), safeRealpath(resolved)]);
+    const fileStat = await fileSystemStatFileDescriptor(fileDescriptor);
+    const postOpenResolved = await safeRealpath(resolved);
     if (
-      !fileStat.isFile() ||
+      !fileSystemStatsIsFile(fileStat) ||
       postOpenResolved === undefined ||
       !containsPath(root, postOpenResolved)
     ) {
       return undefined;
     }
 
-    const body =
-      options.body === 'stream'
-        ? (Readable.toWeb(handle.createReadStream()) as ReadableStream<Uint8Array>)
-        : new Uint8Array(await handle.readFile());
-    streamOwnsHandle = options.body === 'stream';
+    let body: ReadableStream<Uint8Array> | Uint8Array;
+    if (options.body === 'stream') {
+      body = fileSystemCreateReadableStream(fileDescriptor);
+      streamOwnsFileDescriptor = true;
+    } else {
+      body = fileSystemCopyBytes(await fileSystemReadFileDescriptor(fileDescriptor));
+    }
     return {
       body,
-      fileName: path.basename(postOpenResolved),
+      fileName: fileSystemPathBasename(postOpenResolved),
       size: fileStat.size,
     };
   } finally {
-    if (!streamOwnsHandle) await handle.close();
+    if (!streamOwnsFileDescriptor) await fileSystemCloseFileDescriptor(fileDescriptor);
   }
 }
 
@@ -656,11 +674,11 @@ async function statConfinedFile(
   if (candidate === undefined) return undefined;
   const resolved = await safeRealpath(candidate);
   if (resolved === undefined || !containsPath(root, resolved)) return undefined;
-  const fileStat = await stat(resolved).catch((error: unknown) => {
+  const fileStat = await fileSystemStat(resolved).catch((error: unknown) => {
     if (isMissingPathError(error)) return undefined;
     throw error;
   });
-  if (fileStat === undefined || !fileStat.isFile()) return undefined;
+  if (fileStat === undefined || !fileSystemStatsIsFile(fileStat)) return undefined;
   return { mtime: fileStat.mtime, size: fileStat.size };
 }
 
@@ -692,17 +710,17 @@ async function writeConfinedFile(
   const filePath = confinedPath(root, relativePath);
   if (filePath === undefined) throw new Error('Filesystem path escapes its root.');
   await validateConfinedFileTarget(rootState, relativePath);
-  await mkdir(path.dirname(filePath), { recursive: true });
+  await fileSystemMkdir(fileSystemPathDirname(filePath), true);
   await revalidatePreparedRoot(rootState);
-  const tempPath = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
+  const tempPath = fileSystemPathJoin(
+    fileSystemPathDirname(filePath),
+    `.${fileSystemPathBasename(filePath)}.${process.pid}.${fileSystemRandomUuid()}.tmp`,
   );
   try {
-    await writeFile(tempPath, source, typeof source === 'string' ? 'utf8' : undefined);
+    await fileSystemWriteFile(tempPath, source);
     await revalidatePreparedRoot(rootState);
     await ensureParentsStayDirectories(root, filePath);
-    await rename(tempPath, filePath);
+    await fileSystemRename(tempPath, filePath);
   } catch (error) {
     await removeConfinedTemporaryFile(rootState, tempPath).catch(() => undefined);
     throw error;
@@ -727,18 +745,18 @@ async function deleteConfinedFile(
   // remains outside this runtime-DiD boundary's honest platform ceiling.
   await ensureParentsStayDirectories(root, filePath);
   await revalidatePreparedRoot(rootState);
-  let targetStat: Awaited<ReturnType<typeof lstat>>;
+  let targetStat: Stats;
   try {
-    targetStat = await lstat(filePath);
+    targetStat = await fileSystemLstat(filePath);
   } catch (error) {
     if (isMissingPathError(error)) return;
     throw error;
   }
-  if (targetStat.isDirectory()) {
+  if (fileSystemStatsIsDirectory(targetStat)) {
     throw new Error(`Filesystem target '${filePath}' is a directory.`);
   }
   try {
-    await unlink(filePath);
+    await fileSystemUnlink(filePath);
   } catch (error) {
     if (!isMissingPathError(error)) throw error;
   }
@@ -756,9 +774,9 @@ async function copyFileIntoRoot(
   const root = preparedRootPath(rootState);
   const targetPath = confinedPath(root, relativePath);
   if (targetPath === undefined) throw new Error('Filesystem path escapes its root.');
-  await access(sourcePath, fsConstants.R_OK);
+  await fileSystemAccess(sourcePath);
   await validateConfinedFileTarget(rootState, relativePath);
-  await mkdir(path.dirname(targetPath), { recursive: true });
+  await fileSystemMkdir(fileSystemPathDirname(targetPath), true);
   await revalidatePreparedRoot(rootState);
   await ensureParentsStayDirectories(root, targetPath);
   // SPEC §10.6 filesystem door: copyFile(2) follows an existing final-component symlink and
@@ -766,15 +784,15 @@ async function copyFileIntoRoot(
   // atomically rename it over the directory entry instead, matching writeConfinedFile. The rename
   // replaces a symlink, hardlink, FIFO, or device node without opening that caller-controlled
   // target, so a confined copy cannot mutate an object reachable outside the root.
-  const tempPath = path.join(
-    path.dirname(targetPath),
-    `.${path.basename(targetPath)}.${process.pid}.${randomUUID()}.tmp`,
+  const tempPath = fileSystemPathJoin(
+    fileSystemPathDirname(targetPath),
+    `.${fileSystemPathBasename(targetPath)}.${process.pid}.${fileSystemRandomUuid()}.tmp`,
   );
   try {
-    await copyFile(sourcePath, tempPath);
+    await fileSystemCopyFile(sourcePath, tempPath);
     await revalidatePreparedRoot(rootState);
     await ensureParentsStayDirectories(root, targetPath);
-    await rename(tempPath, targetPath);
+    await fileSystemRename(tempPath, targetPath);
   } catch (error) {
     await removeConfinedTemporaryFile(rootState, tempPath).catch(() => undefined);
     throw error;
@@ -794,10 +812,10 @@ async function renameIntoRoot(
   const targetPath = confinedPath(root, relativePath);
   if (targetPath === undefined) throw new Error('Filesystem path escapes its root.');
   await validateConfinedFileTarget(rootState, relativePath);
-  await mkdir(path.dirname(targetPath), { recursive: true });
+  await fileSystemMkdir(fileSystemPathDirname(targetPath), true);
   await revalidatePreparedRoot(rootState);
   await ensureParentsStayDirectories(root, targetPath);
-  await rename(sourcePath, targetPath);
+  await fileSystemRename(sourcePath, targetPath);
 }
 
 async function validateConfinedFileTarget(
@@ -813,14 +831,14 @@ async function validateConfinedFileTarget(
   if (filePath === undefined) throw new Error('Filesystem path escapes its root.');
   await ensureParentsStayDirectories(root, filePath);
   await revalidatePreparedRoot(rootState);
-  let targetStat: Awaited<ReturnType<typeof lstat>>;
+  let targetStat: Stats;
   try {
-    targetStat = await lstat(filePath);
+    targetStat = await fileSystemLstat(filePath);
   } catch (error) {
     if (isMissingPathError(error)) return;
     throw error;
   }
-  if (!targetStat.isDirectory()) return;
+  if (!fileSystemStatsIsDirectory(targetStat)) return;
   throw new Error(`Filesystem target '${filePath}' is a directory.`);
 }
 
@@ -834,7 +852,7 @@ async function removeConfinedTemporaryFile(
   await ensureParentsStayDirectories(root, tempPath);
   await revalidatePreparedRoot(rootState);
   try {
-    await unlink(tempPath);
+    await fileSystemUnlink(tempPath);
   } catch (error) {
     if (!isMissingPathError(error)) throw error;
   }
@@ -847,7 +865,7 @@ async function removeRootTree(rootState: FileSystemRootState): Promise<void> {
     return;
   }
   await revalidatePreparedRoot(rootState);
-  await rm(preparedRootPath(rootState), { force: true, recursive: true });
+  await fileSystemRemoveTree(preparedRootPath(rootState));
   rootState.retired = true;
 }
 
@@ -855,8 +873,38 @@ async function createSiblingStagingRoot(
   rootState: FileSystemRootState,
   prefix = '.kovo-output-staging-',
 ): Promise<string> {
+  assertSiblingStagingPrefix(prefix);
   await prepareFileSystemRootParent(rootState);
-  return await mkdtemp(path.join(path.dirname(rootState.root), prefix));
+  const siblingParent = fileSystemPathDirname(rootState.root);
+  const stagingPrefix = fileSystemPathJoin(siblingParent, prefix);
+  if (
+    fileSystemPathDirname(stagingPrefix) !== siblingParent ||
+    fileSystemPathBasename(stagingPrefix) !== prefix
+  ) {
+    throw new Error('Filesystem staging prefix must resolve to one sibling filename segment.');
+  }
+  return await fileSystemMkdtemp(stagingPrefix);
+}
+
+function assertSiblingStagingPrefix(prefix: string): void {
+  if (
+    prefix === '' ||
+    prefix === '.' ||
+    prefix === '..' ||
+    fileSystemPathIsAbsolute(prefix) ||
+    fileSystemStringIncludes(prefix, '/') ||
+    fileSystemStringIncludes(prefix, '\\')
+  ) {
+    throw new Error(
+      'Filesystem staging prefix must be a nonempty single filename segment without traversal.',
+    );
+  }
+  for (let index = 0; index < prefix.length; index += 1) {
+    const codePoint = fileSystemStringCharCodeAt(prefix, index);
+    if (codePoint <= 0x1f || codePoint === 0x7f) {
+      throw new Error('Filesystem staging prefix must not contain control bytes.');
+    }
+  }
 }
 
 async function* confinedDirectoryEntries(
@@ -872,16 +920,20 @@ async function* confinedDirectoryEntries(
   if (resolvedDirectory === undefined || !containsPath(root, resolvedDirectory)) return;
   let entries: Dirent[];
   try {
-    entries = await readdir(resolvedDirectory, { withFileTypes: true });
+    entries = await fileSystemReadDirectory(resolvedDirectory);
   } catch (error) {
     if (isMissingPathError(error)) return;
     throw error;
   }
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
-    const childRelativePath = path.join(relativePath, entry.name);
+    const childRelativePath = fileSystemPathJoin(relativePath, entry.name);
     yield {
-      kind: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
+      kind: fileSystemDirentIsDirectory(entry)
+        ? 'directory'
+        : fileSystemDirentIsFile(entry)
+          ? 'file'
+          : 'other',
       name: entry.name,
       relativePath: childRelativePath,
     };
@@ -889,24 +941,26 @@ async function* confinedDirectoryEntries(
 }
 
 async function ensureParentsStayDirectories(root: string, targetPath: string): Promise<void> {
-  const relativeDirectory = pathRelativeToRoot(root, path.dirname(targetPath));
+  const relativeDirectory = pathRelativeToRoot(root, fileSystemPathDirname(targetPath));
   const segments =
-    relativeDirectory === undefined ? [] : fileSystemStringSplit(relativeDirectory, path.sep);
-  let current = path.resolve(root);
+    relativeDirectory === undefined
+      ? []
+      : fileSystemStringSplit(relativeDirectory, fileSystemPathSeparator());
+  let current = fileSystemPathResolve(root);
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index]!;
-    current = path.join(current, segment);
-    let parentStat: Awaited<ReturnType<typeof lstat>>;
+    current = fileSystemPathJoin(current, segment);
+    let parentStat: Stats;
     try {
-      parentStat = await lstat(current);
+      parentStat = await fileSystemLstat(current);
     } catch (error) {
       if (isAbsentPathError(error)) continue;
       throw error;
     }
-    if (parentStat.isSymbolicLink()) {
+    if (fileSystemStatsIsSymbolicLink(parentStat)) {
       throw new Error(`Filesystem parent '${current}' is a symbolic link.`);
     }
-    if (!parentStat.isDirectory()) {
+    if (!fileSystemStatsIsDirectory(parentStat)) {
       throw new Error(`Filesystem parent '${current}' is not a directory.`);
     }
   }
@@ -914,7 +968,7 @@ async function ensureParentsStayDirectories(root: string, targetPath: string): P
 
 async function safeRealpath(filePath: string): Promise<string | undefined> {
   try {
-    return await realpath(filePath);
+    return await fileSystemRealpath(filePath);
   } catch (error) {
     if (isMissingPathError(error)) return undefined;
     throw error;
@@ -923,7 +977,7 @@ async function safeRealpath(filePath: string): Promise<string | undefined> {
 
 async function safeOpen(filePath: string) {
   try {
-    return await open(filePath, fsConstants.O_RDONLY);
+    return await fileSystemOpenFileDescriptor(filePath);
   } catch (error) {
     if (isMissingPathError(error)) return undefined;
     throw error;

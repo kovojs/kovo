@@ -1,3 +1,35 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
+import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
+import {
+  close as closeFileDescriptor,
+  constants as fsConstants,
+  Dirent,
+  fstat as statFileDescriptor,
+  lstatSync,
+  open as openFileDescriptor,
+  read as readFileDescriptorChunk,
+  readFile as readFileDescriptor,
+  readdirSync,
+  realpathSync,
+  statSync,
+  Stats,
+} from 'node:fs';
+import {
+  access,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+
 /**
  * Boot-pinned scalar controls for filesystem and storage confinement.
  *
@@ -11,16 +43,17 @@ const NativeDataView = globalThis.DataView;
 const NativeFunction = globalThis.Function;
 const NativeMap = globalThis.Map;
 const NativeObject = globalThis.Object;
-const NativeReflect = globalThis.Reflect;
-const NativeString = globalThis.String;
-const NativeJSON = globalThis.JSON;
-const NativeTextDecoder = globalThis.TextDecoder;
-const NativeTextEncoder = globalThis.TextEncoder;
-const NativeTypeError = globalThis.TypeError;
-const NativeUint8Array = globalThis.Uint8Array;
+const NativePromise = globalThis.Promise;
 const NativeReadableStream = globalThis.ReadableStream;
 const NativeReadableStreamDefaultController = globalThis.ReadableStreamDefaultController;
 const NativeReadableStreamDefaultReader = globalThis.ReadableStreamDefaultReader;
+const NativeReflect = globalThis.Reflect;
+const NativeString = globalThis.String;
+const NativeTypeError = globalThis.TypeError;
+const NativeUint8Array = globalThis.Uint8Array;
+const NativeJSON = globalThis.JSON;
+const NativeTextDecoder = globalThis.TextDecoder;
+const NativeTextEncoder = globalThis.TextEncoder;
 const NativeTypedArrayPrototype = NativeObject.getPrototypeOf(NativeUint8Array.prototype) as object;
 const nativeReflectApply = NativeReflect.apply;
 const nativeArrayBufferIsView = NativeArrayBuffer.isView;
@@ -66,16 +99,50 @@ const nativeDataViewByteOffsetGetter = NativeObject.getOwnPropertyDescriptor(
   'byteOffset',
 )?.get;
 const nativeUint8ArraySet = NativeUint8Array.prototype.set;
-const nativeReadableStreamDefaultControllerClose =
-  NativeReadableStreamDefaultController.prototype.close;
-const nativeReadableStreamDefaultControllerEnqueue =
+const nativeAccess = access;
+const nativeCloseFileDescriptor = closeFileDescriptor;
+const nativeCopyFile = copyFile;
+const nativeDirentIsDirectory = Dirent.prototype.isDirectory;
+const nativeDirentIsFile = Dirent.prototype.isFile;
+const nativeDirentIsSymbolicLink = Dirent.prototype.isSymbolicLink;
+const nativeLstat = lstat;
+const nativeLstatSync = lstatSync;
+const nativeMkdir = mkdir;
+const nativeMkdtemp = mkdtemp;
+const nativeOpenFileDescriptor = openFileDescriptor;
+const nativePathBasename = path.basename;
+const nativePathDirname = path.dirname;
+const nativePathIsAbsolute = path.isAbsolute;
+const nativePathJoin = path.join;
+const nativePathRelative = path.relative;
+const nativePathResolve = path.resolve;
+const nativePathSeparator = path.sep;
+const nativeReadFileDescriptor = readFileDescriptor;
+const nativeReadFileDescriptorChunk = readFileDescriptorChunk;
+const nativeReadAccessMode = fsConstants.R_OK;
+const nativeReadDirectory = readdir;
+const nativeReadDirectorySync = readdirSync;
+const nativeReadOnlyOpenFlag = fsConstants.O_RDONLY;
+const nativeReadableStreamControllerClose = NativeReadableStreamDefaultController.prototype.close;
+const nativeReadableStreamControllerEnqueue =
   NativeReadableStreamDefaultController.prototype.enqueue;
-const nativeReadableStreamDefaultControllerError =
-  NativeReadableStreamDefaultController.prototype.error;
+const nativeReadableStreamControllerError = NativeReadableStreamDefaultController.prototype.error;
 const nativeReadableStreamGetReader = NativeReadableStream.prototype.getReader;
 const nativeReadableStreamDefaultReaderRead = NativeReadableStreamDefaultReader.prototype.read;
 const nativeReadableStreamDefaultReaderReleaseLock =
   NativeReadableStreamDefaultReader.prototype.releaseLock;
+const nativeRealpath = realpath;
+const nativeRealpathSync = realpathSync;
+const nativeRename = rename;
+const nativeRemove = rm;
+const nativeRandomUuid = randomUUID;
+const nativeStat = stat;
+const nativeStatFileDescriptor = statFileDescriptor;
+const nativeStatsIsDirectory = Stats.prototype.isDirectory;
+const nativeStatsIsFile = Stats.prototype.isFile;
+const nativeStatsIsSymbolicLink = Stats.prototype.isSymbolicLink;
+const nativeStatSync = statSync;
+const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringSplit = NativeString.prototype.split;
@@ -85,6 +152,8 @@ const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
+const nativeUnlink = unlink;
+const nativeWriteFile = writeFile;
 const textDecoder = new NativeTextDecoder();
 const textEncoder = new NativeTextEncoder();
 
@@ -113,9 +182,26 @@ function stableMethod(value: object, property: PropertyKey): Function | undefine
 function capturedControlsAreSound(): boolean {
   try {
     const parts = apply<string[]>(nativeStringSplit, 'safe/file.txt', ['/']);
+    const pathControl = nativePathResolve('kovo-filesystem-control', 'child.txt');
+    const executableDirectory = nativePathDirname(process.execPath);
+    const executableStats = nativeStatSync(process.execPath);
+    const executableDirectoryStats = nativeStatSync(executableDirectory);
+    const executableEntries = nativeReadDirectorySync(executableDirectory, {
+      withFileTypes: true,
+    });
+    let executableEntry: Dirent | undefined;
+    const executableName = nativePathBasename(process.execPath);
+    for (let index = 0; index < executableEntries.length; index += 1) {
+      if (executableEntries[index]!.name === executableName) {
+        executableEntry = executableEntries[index];
+        break;
+      }
+    }
     const map = new NativeMap<string, string>();
     apply(nativeMapSet, map, ['safe', 'value']);
     const encoded = apply<Uint8Array>(nativeTextEncoderEncode, textEncoder, ['Kovo-storage']);
+    const copied = new NativeUint8Array(encoded);
+    const uuidControl = nativeRandomUuid();
     const decoded = apply<string>(nativeTextDecoderDecode, textDecoder, [encoded]);
     const parsed = apply<{ logicalKey?: unknown }>(nativeJsonParse, NativeJSON, [
       '{"logicalKey":"safe/file.txt"}',
@@ -144,8 +230,8 @@ function capturedControlsAreSound(): boolean {
       },
     });
     if (streamController === undefined) return false;
-    apply(nativeReadableStreamDefaultControllerEnqueue, streamController, [bytes]);
-    apply(nativeReadableStreamDefaultControllerClose, streamController, []);
+    apply(nativeReadableStreamControllerEnqueue, streamController, [bytes]);
+    apply(nativeReadableStreamControllerClose, streamController, []);
     const streamReader = apply<ReadableStreamDefaultReader<Uint8Array>>(
       nativeReadableStreamGetReader,
       stream,
@@ -155,6 +241,23 @@ function capturedControlsAreSound(): boolean {
       parts.length === 2 &&
       parts[0] === 'safe' &&
       parts[1] === 'file.txt' &&
+      apply(nativeStringCharCodeAt, 'A\0', [0]) === 0x41 &&
+      apply(nativeStringCharCodeAt, 'A\0', [1]) === 0 &&
+      nativePathBasename(pathControl) === 'child.txt' &&
+      nativePathBasename(nativePathDirname(pathControl)) === 'kovo-filesystem-control' &&
+      nativePathIsAbsolute(pathControl) === true &&
+      nativePathIsAbsolute('child.txt') === false &&
+      nativePathBasename(nativePathJoin('kovo-filesystem-control', 'child.txt')) === 'child.txt' &&
+      nativePathRelative(nativePathDirname(pathControl), pathControl) === 'child.txt' &&
+      (nativePathSeparator === '/' || nativePathSeparator === '\\') &&
+      apply(nativeStatsIsFile, executableStats, []) === true &&
+      apply(nativeStatsIsDirectory, executableStats, []) === false &&
+      apply(nativeStatsIsSymbolicLink, executableStats, []) === false &&
+      apply(nativeStatsIsDirectory, executableDirectoryStats, []) === true &&
+      executableEntry !== undefined &&
+      apply(nativeDirentIsDirectory, executableEntry, []) === false &&
+      (apply(nativeDirentIsFile, executableEntry, []) === true ||
+        apply(nativeDirentIsSymbolicLink, executableEntry, []) === true) &&
       apply(nativeStringIncludes, 'safe/file.txt', ['\0']) === false &&
       apply(nativeStringStartsWith, '../escape.txt', ['../']) === true &&
       apply(nativeStringStartsWith, 'safe/file.txt', ['../']) === false &&
@@ -171,6 +274,36 @@ function capturedControlsAreSound(): boolean {
       apply(nativeMapDelete, map, ['safe']) === true &&
       apply(nativeMapGet, map, ['safe']) === undefined &&
       decoded === 'Kovo-storage' &&
+      copied !== encoded &&
+      copied.length === encoded.length &&
+      copied[0] === encoded[0] &&
+      uuidControl.length === 36 &&
+      typeof nativeAccess === 'function' &&
+      typeof nativeCloseFileDescriptor === 'function' &&
+      typeof nativeCopyFile === 'function' &&
+      typeof nativeLstat === 'function' &&
+      typeof nativeLstatSync === 'function' &&
+      typeof nativeMkdir === 'function' &&
+      typeof nativeMkdtemp === 'function' &&
+      typeof nativeOpenFileDescriptor === 'function' &&
+      typeof nativeReadFileDescriptor === 'function' &&
+      typeof nativeReadFileDescriptorChunk === 'function' &&
+      typeof nativeReadDirectory === 'function' &&
+      typeof NativeReadableStream === 'function' &&
+      typeof nativeReadableStreamControllerClose === 'function' &&
+      typeof nativeReadableStreamControllerEnqueue === 'function' &&
+      typeof nativeReadableStreamControllerError === 'function' &&
+      typeof nativeRealpath === 'function' &&
+      typeof nativeRealpathSync === 'function' &&
+      typeof nativeRename === 'function' &&
+      typeof nativeRemove === 'function' &&
+      typeof nativeStat === 'function' &&
+      typeof nativeStatFileDescriptor === 'function' &&
+      typeof nativeStatSync === 'function' &&
+      typeof nativeUnlink === 'function' &&
+      typeof nativeWriteFile === 'function' &&
+      typeof nativeReadAccessMode === 'number' &&
+      typeof nativeReadOnlyOpenFlag === 'number' &&
       parsed.logicalKey === 'safe/file.txt' &&
       stringified === '{"logicalKey":"safe/file.txt"}' &&
       readMethod !== undefined &&
@@ -192,13 +325,13 @@ function capturedControlsAreSound(): boolean {
       slicedBytes.length === 2 &&
       slicedBytes[0] === 0x56 &&
       slicedBytes[1] === 0x4f &&
-      apply(nativeTypedArrayBufferGetter, bytes, []) === buffer &&
-      apply(nativeTypedArrayByteLengthGetter, bytes, []) === 3 &&
-      apply(nativeTypedArrayByteOffsetGetter, bytes, []) === 0 &&
-      apply(nativeDataViewBufferGetter, dataView, []) === buffer &&
-      apply(nativeDataViewByteLengthGetter, dataView, []) === 2 &&
-      apply(nativeDataViewByteOffsetGetter, dataView, []) === 1 &&
-      apply(nativeArrayBufferByteLengthGetter, buffer, []) === 3
+      apply(nativeTypedArrayBufferGetter!, bytes, []) === buffer &&
+      apply(nativeTypedArrayByteLengthGetter!, bytes, []) === 3 &&
+      apply(nativeTypedArrayByteOffsetGetter!, bytes, []) === 0 &&
+      apply(nativeDataViewBufferGetter!, dataView, []) === buffer &&
+      apply(nativeDataViewByteLengthGetter!, dataView, []) === 2 &&
+      apply(nativeDataViewByteOffsetGetter!, dataView, []) === 1 &&
+      apply(nativeArrayBufferByteLengthGetter!, buffer, []) === 3
     );
   } catch {
     return false;
@@ -278,14 +411,14 @@ export function fileSystemReadableStreamEnqueue<Value>(
   value: Value,
 ): void {
   assertFileSystemIntrinsics();
-  apply(nativeReadableStreamDefaultControllerEnqueue, controller, [value]);
+  apply(nativeReadableStreamControllerEnqueue, controller, [value]);
 }
 
 export function fileSystemReadableStreamClose<Value>(
   controller: ReadableStreamDefaultController<Value>,
 ): void {
   assertFileSystemIntrinsics();
-  apply(nativeReadableStreamDefaultControllerClose, controller, []);
+  apply(nativeReadableStreamControllerClose, controller, []);
 }
 
 export function fileSystemReadableStreamError<Value>(
@@ -293,7 +426,7 @@ export function fileSystemReadableStreamError<Value>(
   error: unknown,
 ): void {
   assertFileSystemIntrinsics();
-  apply(nativeReadableStreamDefaultControllerError, controller, [error]);
+  apply(nativeReadableStreamControllerError, controller, [error]);
 }
 
 export function fileSystemReadableStreamGetReader(
@@ -378,6 +511,9 @@ function copyArrayBufferRegion(
   return copy;
 }
 
+export type FileSystemDirent = Dirent;
+export type FileSystemStats = Stats;
+
 export function fileSystemArrayIncludesExact<T>(values: readonly T[], expected: T): boolean {
   assertFileSystemIntrinsics();
   return apply(nativeArrayIncludes, values, [expected]);
@@ -448,9 +584,311 @@ export function fileSystemObjectValues(value: object): unknown[] {
   return apply(nativeObjectValues, NativeObject, [value]);
 }
 
+export function fileSystemAccess(filePath: string): Promise<void> {
+  assertFileSystemIntrinsics();
+  return nativeAccess(filePath, nativeReadAccessMode);
+}
+
+export function fileSystemCloseFileDescriptor(fileDescriptor: number): Promise<void> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<void>((resolve, reject) => {
+    apply(nativeCloseFileDescriptor, undefined, [
+      fileDescriptor,
+      (error: Error | null) => {
+        if (error === null) resolve();
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+export function fileSystemCopyFile(sourcePath: string, targetPath: string): Promise<void> {
+  assertFileSystemIntrinsics();
+  return nativeCopyFile(sourcePath, targetPath);
+}
+
+const FILE_SYSTEM_STREAM_CHUNK_SIZE = 64 * 1024;
+
+export function fileSystemCreateReadableStream(fileDescriptor: number): ReadableStream<Uint8Array> {
+  assertFileSystemIntrinsics();
+  let activePull: Promise<void> | undefined;
+  let cancelled = false;
+  let closePromise: Promise<void> | undefined;
+
+  const closeOnce = (): Promise<void> => {
+    closePromise ??= fileSystemCloseFileDescriptor(fileDescriptor);
+    return closePromise;
+  };
+
+  const pullChunk = async (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+  ): Promise<void> => {
+    const chunk = new NativeUint8Array(FILE_SYSTEM_STREAM_CHUNK_SIZE);
+    try {
+      const bytesRead = await readFileDescriptorStreamChunk(
+        fileDescriptor,
+        chunk,
+        FILE_SYSTEM_STREAM_CHUNK_SIZE,
+      );
+      if (cancelled) return;
+      if (bytesRead === 0) {
+        await closeOnce();
+        if (!cancelled) apply(nativeReadableStreamControllerClose, controller, []);
+        return;
+      }
+      if (bytesRead < 0 || bytesRead > FILE_SYSTEM_STREAM_CHUNK_SIZE) {
+        throw new NativeTypeError('Kovo filesystem stream returned an invalid byte count.');
+      }
+      let output = chunk;
+      if (bytesRead !== FILE_SYSTEM_STREAM_CHUNK_SIZE) {
+        output = new NativeUint8Array(bytesRead);
+        for (let index = 0; index < bytesRead; index += 1) output[index] = chunk[index]!;
+      }
+      apply(nativeReadableStreamControllerEnqueue, controller, [output]);
+    } catch (error) {
+      try {
+        await closeOnce();
+      } catch {
+        // The original read/close failure remains the stream error.
+      }
+      if (!cancelled) apply(nativeReadableStreamControllerError, controller, [error]);
+    }
+  };
+
+  return new NativeReadableStream<Uint8Array>({
+    async cancel() {
+      cancelled = true;
+      if (activePull !== undefined) {
+        try {
+          await activePull;
+        } catch {
+          // pullChunk reports its own stream error and releases the descriptor.
+        }
+      }
+      await closeOnce();
+    },
+    async pull(controller) {
+      const operation = pullChunk(controller);
+      activePull = operation;
+      try {
+        await operation;
+      } finally {
+        if (activePull === operation) activePull = undefined;
+      }
+    },
+  });
+}
+
+export function fileSystemDirentIsDirectory(value: Dirent): boolean {
+  assertFileSystemIntrinsics();
+  return apply(nativeDirentIsDirectory, value, []);
+}
+
+export function fileSystemDirentIsFile(value: Dirent): boolean {
+  assertFileSystemIntrinsics();
+  return apply(nativeDirentIsFile, value, []);
+}
+
+export function fileSystemDirentIsSymbolicLink(value: Dirent): boolean {
+  assertFileSystemIntrinsics();
+  return apply(nativeDirentIsSymbolicLink, value, []);
+}
+
+export function fileSystemLstat(filePath: string): Promise<Stats> {
+  assertFileSystemIntrinsics();
+  return nativeLstat(filePath);
+}
+
+export function fileSystemLstatSync(filePath: string): Stats {
+  assertFileSystemIntrinsics();
+  return nativeLstatSync(filePath);
+}
+
+export function fileSystemMkdir(directoryPath: string, recursive = false): Promise<unknown> {
+  assertFileSystemIntrinsics();
+  return recursive ? nativeMkdir(directoryPath, { recursive: true }) : nativeMkdir(directoryPath);
+}
+
+export function fileSystemMkdtemp(prefix: string): Promise<string> {
+  assertFileSystemIntrinsics();
+  return nativeMkdtemp(prefix);
+}
+
+export function fileSystemOpenFileDescriptor(filePath: string): Promise<number> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<number>((resolve, reject) => {
+    apply(nativeOpenFileDescriptor, undefined, [
+      filePath,
+      nativeReadOnlyOpenFlag,
+      (error: Error | null, fileDescriptor: number) => {
+        if (error === null) resolve(fileDescriptor);
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+export function fileSystemRandomUuid(): string {
+  assertFileSystemIntrinsics();
+  return nativeRandomUuid();
+}
+
+export function fileSystemReadDirectory(directoryPath: string): Promise<Dirent[]> {
+  assertFileSystemIntrinsics();
+  return nativeReadDirectory(directoryPath, { withFileTypes: true });
+}
+
+export function fileSystemReadFileDescriptor(fileDescriptor: number): Promise<Uint8Array> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<Uint8Array>((resolve, reject) => {
+    apply(nativeReadFileDescriptor, undefined, [
+      fileDescriptor,
+      (error: Error | null, bytes: Buffer) => {
+        if (error === null) resolve(bytes);
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+function readFileDescriptorStreamChunk(
+  fileDescriptor: number,
+  buffer: Uint8Array,
+  length: number,
+): Promise<number> {
+  return new NativePromise<number>((resolve, reject) => {
+    apply(nativeReadFileDescriptorChunk, undefined, [
+      fileDescriptor,
+      buffer,
+      0,
+      length,
+      null,
+      (error: Error | null, bytesRead: number) => {
+        if (error === null) resolve(bytesRead);
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+export function fileSystemRealpath(filePath: string): Promise<string> {
+  assertFileSystemIntrinsics();
+  return nativeRealpath(filePath);
+}
+
+export function fileSystemRealpathSync(filePath: string): string {
+  assertFileSystemIntrinsics();
+  return nativeRealpathSync(filePath);
+}
+
+export function fileSystemRename(sourcePath: string, targetPath: string): Promise<void> {
+  assertFileSystemIntrinsics();
+  return nativeRename(sourcePath, targetPath);
+}
+
+export function fileSystemRemoveTree(directoryPath: string): Promise<void> {
+  assertFileSystemIntrinsics();
+  return nativeRemove(directoryPath, { force: true, recursive: true });
+}
+
+export function fileSystemStat(filePath: string): Promise<Stats> {
+  assertFileSystemIntrinsics();
+  return nativeStat(filePath);
+}
+
+export function fileSystemStatFileDescriptor(fileDescriptor: number): Promise<Stats> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<Stats>((resolve, reject) => {
+    apply(nativeStatFileDescriptor, undefined, [
+      fileDescriptor,
+      (error: Error | null, stats: Stats) => {
+        if (error === null) resolve(stats);
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+export function fileSystemStatsIsDirectory(value: Stats): boolean {
+  assertFileSystemIntrinsics();
+  return apply(nativeStatsIsDirectory, value, []);
+}
+
+export function fileSystemStatsIsFile(value: Stats): boolean {
+  assertFileSystemIntrinsics();
+  return apply(nativeStatsIsFile, value, []);
+}
+
+export function fileSystemStatsIsSymbolicLink(value: Stats): boolean {
+  assertFileSystemIntrinsics();
+  return apply(nativeStatsIsSymbolicLink, value, []);
+}
+
+export function fileSystemStatSync(filePath: string): Stats {
+  assertFileSystemIntrinsics();
+  return nativeStatSync(filePath);
+}
+
+export function fileSystemCopyBytes(value: Uint8Array): Uint8Array {
+  assertFileSystemIntrinsics();
+  return new NativeUint8Array(value);
+}
+
+export function fileSystemUnlink(filePath: string): Promise<void> {
+  assertFileSystemIntrinsics();
+  return nativeUnlink(filePath);
+}
+
+export function fileSystemWriteFile(filePath: string, source: string | Uint8Array): Promise<void> {
+  assertFileSystemIntrinsics();
+  return typeof source === 'string'
+    ? nativeWriteFile(filePath, source, 'utf8')
+    : nativeWriteFile(filePath, source);
+}
+
+export function fileSystemPathBasename(value: string): string {
+  assertFileSystemIntrinsics();
+  return nativePathBasename(value);
+}
+
+export function fileSystemPathDirname(value: string): string {
+  assertFileSystemIntrinsics();
+  return nativePathDirname(value);
+}
+
+export function fileSystemPathIsAbsolute(value: string): boolean {
+  assertFileSystemIntrinsics();
+  return nativePathIsAbsolute(value);
+}
+
+export function fileSystemPathJoin(...values: string[]): string {
+  assertFileSystemIntrinsics();
+  return nativePathJoin(...values);
+}
+
+export function fileSystemPathRelative(from: string, to: string): string {
+  assertFileSystemIntrinsics();
+  return nativePathRelative(from, to);
+}
+
+export function fileSystemPathResolve(...values: string[]): string {
+  assertFileSystemIntrinsics();
+  return nativePathResolve(...values);
+}
+
+export function fileSystemPathSeparator(): string {
+  assertFileSystemIntrinsics();
+  return nativePathSeparator;
+}
+
 export function fileSystemStringEndsWith(value: string, suffix: string): boolean {
   assertFileSystemIntrinsics();
   return apply(nativeStringEndsWith, value, [suffix]);
+}
+
+export function fileSystemStringCharCodeAt(value: string, index: number): number {
+  assertFileSystemIntrinsics();
+  return apply(nativeStringCharCodeAt, value, [index]);
 }
 
 export function fileSystemStringIncludes(value: string, search: string): boolean {

@@ -10,9 +10,14 @@ export const repoRoot = findRepoRoot();
 
 export const defaultSourceRoots = ['packages/core/src', 'packages/server/src'];
 export const filesystemBoundaryFile = 'packages/core/src/internal/filesystem.ts';
+export const filesystemIntrinsicsFile = 'packages/core/src/internal/filesystem-intrinsics.ts';
 
 export const defaultAllowedRuntimeFiles = [
   filesystemBoundaryFile,
+  // The boundary's boot-pinned intrinsic membrane captures every node:fs/node:path operation,
+  // Stats/Dirent predicate, temp-name source, and numeric-fd control; it never exposes a second
+  // application-facing filesystem door.
+  filesystemIntrinsicsFile,
   'packages/server/src/file.ts',
   'packages/server/src/output-staging.ts',
   'packages/server/src/static-export-output-targets.ts',
@@ -57,9 +62,23 @@ export function checkFilesystemBoundary(options = {}) {
     const importedPathNames = pathPrimitiveImportNames(sourceText);
 
     for (const match of rawFileSystemImports(sourceText)) {
+      if (filePath === filesystemBoundaryFile) {
+        findings.push(
+          `${filePath}:${lineOf(sourceText, match.index)}: raw ${match.moduleName} controls must be boot-pinned in ${filesystemIntrinsicsFile}`,
+        );
+        continue;
+      }
       if (!allowed) {
         findings.push(
           `${filePath}:${lineOf(sourceText, match.index)}: raw ${match.moduleName} access must route through ${filesystemBoundaryFile}`,
+        );
+      }
+    }
+
+    if (filePath === filesystemBoundaryFile) {
+      for (const match of rawLateBoundBoundaryImports(sourceText)) {
+        findings.push(
+          `${filePath}:${lineOf(sourceText, match.index)}: raw ${match.moduleName} controls must be boot-pinned in ${filesystemIntrinsicsFile}`,
         );
       }
     }
@@ -93,6 +112,14 @@ function* rawFileSystemImports(sourceText) {
     /\b(?:import\s+(?:[^'"]+\s+from\s+)?|await\s+import\s*\(\s*)['"](?<moduleName>node:fs(?:\/promises)?|fs(?:\/promises)?)['"]/gu;
   for (const match of sourceText.matchAll(regex)) {
     yield { index: match.index ?? 0, moduleName: match.groups?.moduleName ?? 'node:fs' };
+  }
+}
+
+function* rawLateBoundBoundaryImports(sourceText) {
+  const regex =
+    /\b(?:import\s+(?:[^'"]+\s+from\s+)?|await\s+import\s*\(\s*)['"](?<moduleName>node:(?:crypto|path|stream))['"]/gu;
+  for (const match of sourceText.matchAll(regex)) {
+    yield { index: match.index ?? 0, moduleName: match.groups?.moduleName ?? 'node:path' };
   }
 }
 

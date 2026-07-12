@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import {
   createFrameworkOutputFileSystemBoundary,
   pathRelativeToRoot,
@@ -7,6 +5,11 @@ import {
 
 import {
   buildOwnDataProperty,
+  buildSecurityPathBasename,
+  buildSecurityPathDirname,
+  buildSecurityPathJoin,
+  buildSecurityPathRelative,
+  buildSecurityPathResolve,
   buildSecuritySha256Hex,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
@@ -104,7 +107,7 @@ export async function writeArtifactOutput(
   options: WriteArtifactOutputOptions = {},
 ): Promise<WriteArtifactOutputResult> {
   const mode = options.mode ?? 'write';
-  const resolvedRoot = path.resolve(root);
+  const resolvedRoot = buildSecurityPathResolve(root);
   const fileSystem = createFrameworkOutputFileSystemBoundary(resolvedRoot);
   // SPEC §6.6 boundary rule: classification, hashing, staging, and commit all consume this one
   // framework-owned snapshot. Caller arrays, getters, and mutable Uint8Array bytes are never
@@ -177,7 +180,7 @@ async function artifactOutputManifest(
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
     assertArtifactOutputEntryShape(entry);
-    const targetPath = path.resolve(entry.targetPath);
+    const targetPath = buildSecurityPathResolve(entry.targetPath);
     const relativePath = assertArtifactOutputTarget(root, entry, targetPath, diagnostics);
     if (securitySetHas(seen, relativePath)) {
       throw targetError(entry, `duplicate artifact target '${relativePath}'`, diagnostics);
@@ -290,7 +293,7 @@ function assertArtifactOutputTarget(
   targetPath: string,
   diagnostics?: ArtifactOutputDiagnostics,
 ): string {
-  const relativePath = path.relative(root, targetPath);
+  const relativePath = buildSecurityPathRelative(root, targetPath);
   if (pathRelativeToRoot(root, targetPath) === undefined) {
     throw targetError(entry, `target '${targetPath}' escapes output root '${root}'`, diagnostics);
   }
@@ -315,8 +318,10 @@ async function changedArtifactOutputEntries(
   const changed: ArtifactOutputManifestEntry[] = [];
   for (let index = 0; index < manifest.length; index += 1) {
     const entry = manifest[index]!;
-    const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(entry.targetPath));
-    const current = await fileSystem.fileBytes(path.basename(entry.targetPath));
+    const fileSystem = createFrameworkOutputFileSystemBoundary(
+      buildSecurityPathDirname(entry.targetPath),
+    );
+    const current = await fileSystem.fileBytes(buildSecurityPathBasename(entry.targetPath));
     if (current === undefined) {
       changed[changed.length] = entry;
       continue;
@@ -337,7 +342,7 @@ async function staleArtifactOutputPaths(
   }
   const stale: string[] = [];
   for await (const candidate of cleanup.enumerate(root)) {
-    const resolved = path.resolve(candidate);
+    const resolved = buildSecurityPathResolve(candidate);
     if (pathRelativeToRoot(root, resolved) === undefined) continue;
     if (!securitySetHas(owned, resolved)) stale[stale.length] = resolved;
   }
@@ -397,7 +402,7 @@ async function commitArtifactOutput(
   const fileSystem = createFrameworkOutputFileSystemBoundary(root);
   for (let index = 0; index < manifest.length; index += 1) {
     const entry = manifest[index]!;
-    const relativePath = path.relative(root, entry.targetPath);
+    const relativePath = buildSecurityPathRelative(root, entry.targetPath);
     await fileSystem.renameFrom(
       artifactOutputStagedPath(root, stagingRoot, entry.targetPath),
       relativePath,
@@ -413,7 +418,7 @@ async function assertArtifactOutputParents(
 ): Promise<void> {
   const fileSystem = createFrameworkOutputFileSystemBoundary(root);
   try {
-    await fileSystem.validateFileTarget(path.relative(root, targetPath));
+    await fileSystem.validateFileTarget(buildSecurityPathRelative(root, targetPath));
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : String(error);
     const message = rawMessage.replace(/^Filesystem parent/u, 'output parent');
@@ -426,22 +431,24 @@ async function assertArtifactOutputTargetIsNotDirectory(
   targetPath: string,
   diagnostics?: ArtifactOutputDiagnostics,
 ): Promise<void> {
-  const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(targetPath));
+  const fileSystem = createFrameworkOutputFileSystemBoundary(buildSecurityPathDirname(targetPath));
   try {
-    await fileSystem.validateFileTarget(path.basename(targetPath));
+    await fileSystem.validateFileTarget(buildSecurityPathBasename(targetPath));
   } catch {
     throw targetError(entry, `target '${targetPath}' is a directory`, diagnostics);
   }
 }
 
 function artifactOutputStagedPath(root: string, stagingRoot: string, targetPath: string): string {
-  return path.join(stagingRoot, path.relative(root, targetPath));
+  return buildSecurityPathJoin(stagingRoot, buildSecurityPathRelative(root, targetPath));
 }
 
 async function artifactOutputHash(entry: ArtifactOutputEntry): Promise<string> {
   if (entry.sourcePath !== undefined) {
-    const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(entry.sourcePath));
-    const bytes = await fileSystem.fileBytes(path.basename(entry.sourcePath));
+    const fileSystem = createFrameworkOutputFileSystemBoundary(
+      buildSecurityPathDirname(entry.sourcePath),
+    );
+    const bytes = await fileSystem.fileBytes(buildSecurityPathBasename(entry.sourcePath));
     if (bytes === undefined)
       throw new Error(`Artifact source '${entry.sourcePath}' was not found.`);
     return sha256(bytes);
