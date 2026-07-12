@@ -367,6 +367,7 @@ function grantShapeCases(): readonly GrantShapeCase[] {
   cases.push(inheritancePropagationTriggerCase());
   cases.push(attachedRewriteRuleCase());
   cases.push(attachedCheckConstraintCase());
+  cases.push(attachedCheckOperatorCase());
   cases.push(attachedDefaultExpressionCase());
   cases.push(attachedIndexExpressionCase());
 
@@ -989,6 +990,52 @@ function attachedCheckConstraintCase(): GrantShapeCase {
         cleanupSql: [
           `ALTER TABLE kovo_fuzzer_notes DROP CONSTRAINT IF EXISTS ${quoteIdent(constraintName)}`,
           `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}(text) CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        sql: 'SELECT false AS unsafe',
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function attachedCheckOperatorCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    expectedIssueSubstring:
+      'CHECK/domain constraint function reaching app-authored routine public.kovo_fuzzer_attached_operator_',
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'attached-code:check-constraint:invoker-operator',
+    objectClass: 'definer-function',
+    probeKind: 'privilege',
+    rlsState: 'force-rls-policy',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const functionName = `kovo_fuzzer_attached_operator_${ctx.index}`;
+      const constraintName = `kovo_fuzzer_attached_operator_${ctx.index}`;
+      await execMany(ctx.client, [
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}(left_value text, right_value text)`,
+          'RETURNS boolean LANGUAGE SQL IMMUTABLE SECURITY INVOKER',
+          'AS $$ SELECT true $$',
+        ].join(' '),
+        [
+          'CREATE OPERATOR public.#=# (',
+          `LEFTARG = text, RIGHTARG = text, FUNCTION = ${quoteIdent(functionName)}`,
+          ')',
+        ].join(' '),
+        [
+          `ALTER TABLE kovo_fuzzer_notes ADD CONSTRAINT ${quoteIdent(constraintName)}`,
+          'CHECK ("secretNote" OPERATOR(public.#=#) title) NOT VALID',
+        ].join(' '),
+      ]);
+      return {
+        cleanupSql: [
+          `ALTER TABLE kovo_fuzzer_notes DROP CONSTRAINT IF EXISTS ${quoteIdent(constraintName)}`,
+          'DROP OPERATOR IF EXISTS public.#=# (text, text)',
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}(text, text) CASCADE`,
         ],
         probeRole: 'kovo_writer',
         sql: 'SELECT false AS unsafe',

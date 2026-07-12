@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 import { PGlite } from '@electric-sql/pglite';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
@@ -123,6 +124,8 @@ type PgColumn = PgTableConfig['columns'][number];
 type PgForeignKey = PgTableConfig['foreignKeys'][number];
 
 const POSTGRES_POLICY_DIALECT = new PgDialect();
+const postgresRuntimeRequire = createRequire(import.meta.url);
+let postgresPolicySqlParser: typeof import('pgsql-ast-parser') | undefined;
 
 interface DeclaredWritePolicy {
   tables?: readonly string[];
@@ -138,7 +141,29 @@ interface AuthzPolicyPredicate {
 interface ProtectedPostgresTable {
   kind: 'authzPolicy' | 'owner' | 'ownerVia';
   predicate: string;
+  schemaName: string;
   tableName: string;
+}
+
+interface PostgresPolicyRow {
+  cmd: string;
+  permissive: string;
+  policyname: string;
+  qual: string | null;
+  roles: string[];
+  schemaname: string;
+  tablename: string;
+  with_check: string | null;
+}
+
+interface ExpectedPostgresPolicy {
+  cmd: 'ALL' | 'SELECT';
+  issueCode: string;
+  name: string;
+  permissive: 'PERMISSIVE';
+  qual: string;
+  roles: readonly string[];
+  withCheck: string | null;
 }
 
 interface PostgresCatalogRelation {
@@ -195,6 +220,7 @@ interface PostgresReachableSequenceRow {
   sequence_name: string;
   sequence_schema: string;
   table_name: string;
+  table_schema: string;
 }
 
 interface PostgresAttachedCodeRow {
@@ -915,129 +941,47 @@ async function checkRuntimeDbPosture(
     });
   }
 
-  for (const [tableName, owner] of input.metadata.ownerSourcesByTable) {
+  // SPEC §10.3 (C10): policy posture is an exact catalog allowlist, not the
+  // presence of a familiar name. A same-named allow-all/PUBLIC policy or an
+  // additional permissive policy changes the effective OR-composed RLS boundary.
+  for (const protectedTable of resolveProtectedPostgresTables(
+    input.schemaTables,
+    input.metadata,
+  ).values()) {
     const rls = await safeQuery<{ relforcerowsecurity: boolean; relrowsecurity: boolean }>(
       client,
-      'SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = $1',
-      [tableName],
+      [
+        'SELECT c.relrowsecurity, c.relforcerowsecurity',
+        'FROM pg_class c',
+        'JOIN pg_namespace n ON n.oid = c.relnamespace',
+        'WHERE n.nspname = $1 AND c.relname = $2',
+        "AND c.relkind IN ('r', 'p')",
+      ].join(' '),
+      [protectedTable.schemaName, protectedTable.tableName],
     );
     const row = rls?.rows[0];
     if (row?.relrowsecurity !== true || row.relforcerowsecurity !== true) {
       issues.push({
         code: 'KV433_FORCE_RLS',
-        detail: `${tableName} must have row-level security enabled and forced`,
+        detail: `${protectedTable.schemaName}.${protectedTable.tableName} must have row-level security enabled and forced`,
       });
     }
-    const policy = await safeQuery(
-      client,
-      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
-      [tableName, 'kovo_owner_scope'],
+    issues.push(
+      ...(await postgresProtectedPolicyPostureIssues(client, protectedTable, input.config)),
     );
-    if ((policy?.rows.length ?? 0) === 0) {
-      issues.push({
-        code: 'KV433_OWNER_POLICY',
-        detail: `${tableName} is missing kovo_owner_scope for ${owner.columnName}`,
-      });
-    }
-    const systemPolicy = await safeQuery(
-      client,
-      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
-      [tableName, 'kovo_system_scope'],
-    );
-    if ((systemPolicy?.rows.length ?? 0) === 0) {
-      issues.push({
-        code: 'KV433_SYSTEM_POLICY',
-        detail: `${tableName} is missing kovo_system_scope for audited system posture`,
-      });
-    }
-  }
-
-  for (const [tableName, ownerVia] of input.metadata.ownerViaSourcesByTable) {
-    const policy = await safeQuery(
-      client,
-      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
-      [tableName, 'kovo_owner_scope'],
-    );
-    if ((policy?.rows.length ?? 0) === 0) {
-      issues.push({
-        code: 'KV433_OWNER_VIA_POLICY',
-        detail: `${tableName} is missing owner-via policy through ${ownerVia.parentTable}`,
-      });
-    }
-    const systemPolicy = await safeQuery(
-      client,
-      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
-      [tableName, 'kovo_system_scope'],
-    );
-    if ((systemPolicy?.rows.length ?? 0) === 0) {
-      issues.push({
-        code: 'KV433_SYSTEM_POLICY',
-        detail: `${tableName} is missing kovo_system_scope for audited system posture`,
-      });
-    }
-  }
-
-  const authzPolicyPredicates = customAuthzPolicyPredicatesByTable(input.schemaTables);
-  for (const [tableName] of authzPolicyPredicates) {
-    const rls = await safeQuery<{ relforcerowsecurity: boolean; relrowsecurity: boolean }>(
-      client,
-      'SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = $1',
-      [tableName],
-    );
-    const row = rls?.rows[0];
-    if (row?.relrowsecurity !== true || row.relforcerowsecurity !== true) {
-      issues.push({
-        code: 'KV433_FORCE_RLS',
-        detail: `${tableName} custom authzPolicy must have row-level security enabled and forced`,
-      });
-    }
-    const policy = await safeQuery(
-      client,
-      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
-      [tableName, 'kovo_authz_policy'],
-    );
-    if ((policy?.rows.length ?? 0) === 0) {
-      issues.push({
-        code: 'KV433_AUTHZ_POLICY',
-        detail: `${tableName} is missing kovo_authz_policy for its custom authzPolicy predicate`,
-      });
-    }
-    const systemPolicy = await safeQuery(
-      client,
-      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
-      [tableName, 'kovo_system_scope'],
-    );
-    if ((systemPolicy?.rows.length ?? 0) === 0) {
-      issues.push({
-        code: 'KV433_SYSTEM_POLICY',
-        detail: `${tableName} is missing kovo_system_scope for audited system posture`,
-      });
-    }
-  }
-
-  for (const tableName of input.config.crossOwnerReadTables) {
-    const policy = await safeQuery(
-      client,
-      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
-      [tableName, 'kovo_admin_scope'],
-    );
-    if ((policy?.rows.length ?? 0) === 0) {
-      issues.push({
-        code: 'KV433_ADMIN_POLICY',
-        detail: `${tableName} is missing kovo_admin_scope for crossOwnerRead`,
-      });
-    }
   }
 
   for (const table of input.schemaTables) {
-    const tableName = getTableConfig(table).name;
+    const tableConfig = getTableConfig(table);
+    const tableName = tableConfig.name;
+    const tableReference = quoteQualified(tableSchemaName(tableConfig), tableName);
     const secretColumns = input.metadata.secretColumnNamesByTable.get(tableName) ?? new Set();
     for (const column of secretColumns) {
       for (const role of [input.config.readerRole, input.config.writerRole]) {
         const grant = await safeQuery<{ can_select: boolean }>(
           client,
           ["SELECT has_column_privilege($1, $2, $3, 'SELECT') AS can_select"].join(' '),
-          [role, tableName, column],
+          [role, tableReference, column],
         );
         if (grant === undefined) {
           issues.push({
@@ -1071,6 +1015,159 @@ async function checkRuntimeDbPosture(
   };
 }
 
+async function postgresProtectedPolicyPostureIssues(
+  client: RuntimeSqlClient,
+  table: ProtectedPostgresTable,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<KovoPostgresPostureIssue[]> {
+  const policies = await safeQuery<PostgresPolicyRow>(
+    client,
+    [
+      'SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check',
+      'FROM pg_policies',
+      'WHERE schemaname = $1 AND tablename = $2',
+      'ORDER BY policyname',
+    ].join(' '),
+    [table.schemaName, table.tableName],
+  );
+  if (policies === undefined) {
+    return [
+      {
+        code: 'KV433_POLICY_SET',
+        detail: `could not enumerate the exact RLS policy set for ${table.schemaName}.${table.tableName}`,
+      },
+    ];
+  }
+
+  const primaryPolicyName = table.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope';
+  const primaryIssueCode =
+    table.kind === 'authzPolicy'
+      ? 'KV433_AUTHZ_POLICY'
+      : table.kind === 'ownerVia'
+        ? 'KV433_OWNER_VIA_POLICY'
+        : 'KV433_OWNER_POLICY';
+  const expected: ExpectedPostgresPolicy[] = [
+    {
+      cmd: 'ALL',
+      issueCode: primaryIssueCode,
+      name: primaryPolicyName,
+      permissive: 'PERMISSIVE',
+      qual: table.predicate,
+      roles: [config.readerRole, config.writerRole],
+      withCheck: table.predicate,
+    },
+    {
+      cmd: 'ALL',
+      issueCode: 'KV433_SYSTEM_POLICY',
+      name: 'kovo_system_scope',
+      permissive: 'PERMISSIVE',
+      qual: 'true',
+      roles: [config.systemRole],
+      withCheck: 'true',
+    },
+  ];
+  if (config.crossOwnerReadTables.has(table.tableName)) {
+    expected.push({
+      cmd: 'SELECT',
+      issueCode: 'KV433_ADMIN_POLICY',
+      name: 'kovo_admin_scope',
+      permissive: 'PERMISSIVE',
+      qual: 'true',
+      roles: [config.adminRole],
+      withCheck: null,
+    });
+  }
+
+  const issues: KovoPostgresPostureIssue[] = [];
+  const actualByName = new Map(policies.rows.map((policy) => [policy.policyname, policy]));
+  for (const expectedPolicy of expected) {
+    const actual = actualByName.get(expectedPolicy.name);
+    if (actual === undefined || !postgresPolicyMatchesExpected(actual, expectedPolicy)) {
+      issues.push({
+        code: expectedPolicy.issueCode,
+        detail:
+          actual === undefined
+            ? `${table.schemaName}.${table.tableName} is missing ${expectedPolicy.name}`
+            : `${table.schemaName}.${table.tableName} ${expectedPolicy.name} has unexpected permissiveness, roles, command, USING, or WITH CHECK shape`,
+      });
+    }
+  }
+
+  const expectedNames = new Set(expected.map((policy) => policy.name));
+  const unexpected = policies.rows
+    .filter((policy) => !expectedNames.has(policy.policyname))
+    .map((policy) => policy.policyname)
+    .sort();
+  if (unexpected.length > 0) {
+    issues.push({
+      code: 'KV433_POLICY_SET',
+      detail: `${table.schemaName}.${table.tableName} has unexpected RLS policies outside the exact Kovo allowlist: ${unexpected.join(', ')}`,
+    });
+  }
+  return issues;
+}
+
+function postgresPolicyMatchesExpected(
+  actual: PostgresPolicyRow,
+  expected: ExpectedPostgresPolicy,
+): boolean {
+  const actualQual = canonicalPostgresPolicyExpression(actual.qual);
+  const expectedQual = canonicalPostgresPolicyExpression(expected.qual);
+  const actualWithCheck = canonicalPostgresPolicyExpression(actual.with_check);
+  const expectedWithCheck = canonicalPostgresPolicyExpression(expected.withCheck);
+  return (
+    actual.permissive === expected.permissive &&
+    actual.cmd === expected.cmd &&
+    sameStringSet(actual.roles, expected.roles) &&
+    actualQual !== undefined &&
+    actualQual === expectedQual &&
+    actualWithCheck !== undefined &&
+    actualWithCheck === expectedWithCheck
+  );
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  const normalizedLeft = [...new Set(left)].sort();
+  const normalizedRight = [...new Set(right)].sort();
+  return (
+    normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((value, index) => value === normalizedRight[index])
+  );
+}
+
+function canonicalPostgresPolicyExpression(expression: string | null): string | null | undefined {
+  if (expression === null) return null;
+  try {
+    postgresPolicySqlParser ??= postgresRuntimeRequire(
+      'pgsql-ast-parser',
+    ) as typeof import('pgsql-ast-parser');
+    const [statement] = postgresPolicySqlParser.parse(`SELECT 1 WHERE ${expression}`);
+    if (statement?.type !== 'select' || statement.where === undefined) return undefined;
+    return JSON.stringify(normalizePostgresPolicyAst(statement.where));
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizePostgresPolicyAst(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizePostgresPolicyAst);
+  if (value === null || typeof value !== 'object') return value;
+  const record = value as Record<string, unknown>;
+  const castTarget = record.to as { name?: unknown } | undefined;
+  const operand = record.operand as { type?: unknown } | undefined;
+  // PostgreSQL deparsing adds implicit `::text` casts around string literals.
+  // Removing only that catalog-added representation difference keeps predicate
+  // comparison structural and fail-closed without whitespace/parenthesis tricks.
+  if (record.type === 'cast' && castTarget?.name === 'text' && operand?.type === 'string') {
+    return normalizePostgresPolicyAst(record.operand);
+  }
+  const normalized: Record<string, unknown> = {};
+  for (const key of Object.keys(record).sort()) {
+    if (record[key] !== undefined) normalized[key] = normalizePostgresPolicyAst(record[key]);
+  }
+  return normalized;
+}
+
 async function auditPostgresReachableClosure(
   client: RuntimeSqlClient,
   input: {
@@ -1081,12 +1178,13 @@ async function auditPostgresReachableClosure(
 ): Promise<KovoPostgresPostureIssue[]> {
   const issues: KovoPostgresPostureIssue[] = [];
   const protectedTables = resolveProtectedPostgresTables(input.schemaTables, input.metadata);
-  const protectedTableNames = new Set([
-    ...protectedTables.keys(),
-    ...input.config.crossOwnerReadTables,
-  ]);
-  const allowlistedTables = postgresReachabilityAllowlist(input.schemaTables, input.metadata);
-  const allowlistedSequences = await postgresProtectedSerialSequences(client, protectedTableNames);
+  const protectedRelations = new Set(
+    [...protectedTables.values()].map((table) =>
+      postgresRelationKey(table.schemaName, table.tableName),
+    ),
+  );
+  const allowlistedRelations = postgresReachabilityAllowlist(input.schemaTables, input.metadata);
+  const allowlistedSequences = await postgresProtectedSerialSequences(client, protectedRelations);
   if (allowlistedSequences === undefined) {
     issues.push({
       code: 'KV433_REACHABILITY_AUDIT',
@@ -1117,9 +1215,8 @@ async function auditPostgresReachableClosure(
   const reachable = reachableRelationsFromRows(reachableRows.rows);
 
   for (const relation of reachable.values()) {
-    const declaredPublicRelation = publicRelations.get(
-      postgresRelationKey(relation.schema, relation.table),
-    );
+    const relationKey = postgresRelationKey(relation.schema, relation.table);
+    const declaredPublicRelation = publicRelations.get(relationKey);
     if (declaredPublicRelation !== undefined) {
       if (relation.relkind === 'v' || relation.relkind === 'm' || relation.relkind === 'f') {
         continue;
@@ -1131,16 +1228,18 @@ async function auditPostgresReachableClosure(
       continue;
     }
     if (relation.relkind === 'r' || relation.relkind === 'p') {
-      if (FRAMEWORK_INTERNAL_REACHABLE_TABLES.has(relation.table)) continue;
-      if (allowlistedTables.has(relation.table)) continue;
-      if (!protectedTableNames.has(relation.table)) {
+      if (relation.schema === 'public' && FRAMEWORK_INTERNAL_REACHABLE_TABLES.has(relation.table)) {
+        continue;
+      }
+      if (allowlistedRelations.has(relationKey)) continue;
+      if (!protectedRelations.has(relationKey)) {
         issues.push({
           code: 'KV433_REACHABLE_TABLE',
           detail: `${relation.schema}.${relation.table} is reachable by an app role but is not a Kovo-protected table`,
         });
         continue;
       }
-      const policy = await postgresHasLiveKovoPolicy(client, relation.table);
+      const policy = await postgresHasLiveKovoPolicy(client, relation.schema, relation.table);
       if (relation.relrowsecurity !== true || relation.relforcerowsecurity !== true || !policy) {
         issues.push({
           code: 'KV433_REACHABLE_TABLE',
@@ -1154,8 +1253,8 @@ async function auditPostgresReachableClosure(
         ...(await auditPostgresReachableView(
           client,
           relation,
-          protectedTableNames,
-          allowlistedTables,
+          protectedRelations,
+          allowlistedRelations,
         )),
       );
       continue;
@@ -1212,85 +1311,93 @@ async function auditPostgresAttachedCode(
   }
   if (writeClosure.size === 0) return [];
 
+  // SPEC §10.3 (C10/C13): expression attachment is a recursive executable
+  // dependency graph. In particular, CHECK/index/policy expressions depend on
+  // pg_operator first; stopping at direct pg_proc edges misses its oprcode.
   const attachedRows = await safeQuery<PostgresAttachedCodeRow>(
     client,
     [
-      "SELECT CASE WHEN trigger.tgconstraint <> 0 THEN 'CONSTRAINT trigger'",
-      "WHEN (trigger.tgtype & 64) <> 0 THEN 'INSTEAD OF trigger'",
-      "ELSE 'DML trigger' END AS mechanism,",
-      'rel_ns.nspname AS relation_schema, rel.relname AS relation_name,',
-      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
-      'FROM pg_trigger trigger',
-      'JOIN pg_class rel ON rel.oid = trigger.tgrelid',
+      'WITH RECURSIVE attached_roots(mechanism, relation_oid, classid, objid) AS (',
+      "  SELECT 'rewrite rule', rewrite.ev_class, 'pg_rewrite'::regclass, rewrite.oid",
+      '  FROM pg_rewrite rewrite',
+      '  JOIN pg_class rewrite_rel ON rewrite_rel.oid = rewrite.ev_class',
+      '  JOIN pg_namespace rewrite_ns ON rewrite_ns.oid = rewrite_rel.relnamespace',
+      "  WHERE rewrite_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      '  UNION ALL',
+      "  SELECT CASE WHEN constraint_row.contype = 'c' THEN 'CHECK/domain constraint function'",
+      "    ELSE 'constraint expression function' END,",
+      "    constraint_row.conrelid, 'pg_constraint'::regclass, constraint_row.oid",
+      '  FROM pg_constraint constraint_row',
+      '  JOIN pg_class constraint_rel ON constraint_rel.oid = constraint_row.conrelid',
+      '  JOIN pg_namespace constraint_ns ON constraint_ns.oid = constraint_rel.relnamespace',
+      '  WHERE constraint_row.conrelid <> 0',
+      "  AND constraint_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      '  UNION ALL',
+      "  SELECT 'CHECK/domain constraint function', attr.attrelid,",
+      "    'pg_constraint'::regclass, constraint_row.oid",
+      '  FROM pg_attribute attr',
+      '  JOIN pg_class domain_rel ON domain_rel.oid = attr.attrelid',
+      '  JOIN pg_namespace domain_ns ON domain_ns.oid = domain_rel.relnamespace',
+      '  JOIN pg_constraint constraint_row ON constraint_row.contypid = attr.atttypid',
+      '  WHERE attr.attnum > 0 AND attr.attisdropped = false',
+      "  AND domain_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      '  UNION ALL',
+      "  SELECT 'default/generated expression function', attrdef.adrelid,",
+      "    'pg_attrdef'::regclass, attrdef.oid",
+      '  FROM pg_attrdef attrdef',
+      '  JOIN pg_class attrdef_rel ON attrdef_rel.oid = attrdef.adrelid',
+      '  JOIN pg_namespace attrdef_ns ON attrdef_ns.oid = attrdef_rel.relnamespace',
+      "  WHERE attrdef_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      '  UNION ALL',
+      "  SELECT 'index/predicate expression function', index_row.indrelid,",
+      "    'pg_class'::regclass, index_row.indexrelid",
+      '  FROM pg_index index_row',
+      '  JOIN pg_class index_table ON index_table.oid = index_row.indrelid',
+      '  JOIN pg_namespace index_ns ON index_ns.oid = index_table.relnamespace',
+      "  WHERE index_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      '  UNION ALL',
+      "  SELECT 'RLS policy expression function', policy.polrelid,",
+      "    'pg_policy'::regclass, policy.oid",
+      '  FROM pg_policy policy',
+      '  JOIN pg_class policy_rel ON policy_rel.oid = policy.polrelid',
+      '  JOIN pg_namespace policy_ns ON policy_ns.oid = policy_rel.relnamespace',
+      "  WHERE policy_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      '),',
+      'executable_dependencies(mechanism, relation_oid, classid, objid) AS (',
+      '  SELECT roots.mechanism, roots.relation_oid, dep.refclassid, dep.refobjid',
+      '  FROM attached_roots roots',
+      '  JOIN pg_depend dep ON dep.classid = roots.classid AND dep.objid = roots.objid',
+      "  WHERE dep.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass,",
+      "    'pg_cast'::regclass, 'pg_type'::regclass)",
+      '  UNION',
+      '  SELECT closure.mechanism, closure.relation_oid, dep.refclassid, dep.refobjid',
+      '  FROM executable_dependencies closure',
+      '  JOIN pg_depend dep ON dep.classid = closure.classid AND dep.objid = closure.objid',
+      "  WHERE closure.classid IN ('pg_operator'::regclass, 'pg_cast'::regclass, 'pg_type'::regclass)",
+      "  AND dep.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass,",
+      "    'pg_cast'::regclass, 'pg_type'::regclass)",
+      '),',
+      'attached_routines(mechanism, relation_oid, routine_oid) AS (',
+      "  SELECT CASE WHEN trigger.tgconstraint <> 0 THEN 'CONSTRAINT trigger'",
+      "    WHEN (trigger.tgtype & 64) <> 0 THEN 'INSTEAD OF trigger'",
+      "    ELSE 'DML trigger' END, trigger.tgrelid, trigger.tgfoid",
+      '  FROM pg_trigger trigger',
+      '  WHERE trigger.tgisinternal = false',
+      '  UNION',
+      '  SELECT DISTINCT mechanism, relation_oid, objid',
+      '  FROM executable_dependencies',
+      "  WHERE classid = 'pg_proc'::regclass",
+      ')',
+      'SELECT routines.mechanism, rel_ns.nspname AS relation_schema,',
+      'rel.relname AS relation_name, proc_ns.nspname AS routine_schema,',
+      'proc.proname AS routine_name',
+      'FROM attached_routines routines',
+      'JOIN pg_class rel ON rel.oid = routines.relation_oid',
       'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
-      'JOIN pg_proc proc ON proc.oid = trigger.tgfoid',
-      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
-      'WHERE trigger.tgisinternal = false',
-      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      "AND proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'UNION ALL',
-      "SELECT 'rewrite rule' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
-      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
-      'FROM pg_rewrite rewrite',
-      'JOIN pg_class rel ON rel.oid = rewrite.ev_class',
-      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
-      "JOIN pg_depend dep ON dep.classid = 'pg_rewrite'::regclass AND dep.objid = rewrite.oid",
-      "  AND dep.refclassid = 'pg_proc'::regclass",
-      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
+      'JOIN pg_proc proc ON proc.oid = routines.routine_oid',
       'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
       "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
       "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'UNION ALL',
-      "SELECT 'CHECK/domain constraint function' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
-      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
-      'FROM pg_constraint constraint_row',
-      'JOIN pg_class rel ON rel.oid = constraint_row.conrelid',
-      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
-      "JOIN pg_depend dep ON dep.classid = 'pg_constraint'::regclass AND dep.objid = constraint_row.oid",
-      "  AND dep.refclassid = 'pg_proc'::regclass",
-      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
-      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
-      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'UNION ALL',
-      "SELECT 'CHECK/domain constraint function' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
-      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
-      'FROM pg_attribute attr',
-      'JOIN pg_class rel ON rel.oid = attr.attrelid',
-      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
-      'JOIN pg_constraint constraint_row ON constraint_row.contypid = attr.atttypid',
-      "JOIN pg_depend dep ON dep.classid = 'pg_constraint'::regclass AND dep.objid = constraint_row.oid",
-      "  AND dep.refclassid = 'pg_proc'::regclass",
-      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
-      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
-      'WHERE attr.attnum > 0 AND attr.attisdropped = false',
-      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      "AND proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'UNION ALL',
-      "SELECT 'default/generated expression function' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
-      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
-      'FROM pg_attrdef attrdef',
-      'JOIN pg_class rel ON rel.oid = attrdef.adrelid',
-      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
-      "JOIN pg_depend dep ON dep.classid = 'pg_attrdef'::regclass AND dep.objid = attrdef.oid",
-      "  AND dep.refclassid = 'pg_proc'::regclass",
-      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
-      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
-      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'UNION ALL',
-      "SELECT 'index/predicate expression function' AS mechanism, table_ns.nspname AS relation_schema, table_rel.relname AS relation_name,",
-      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
-      'FROM pg_index index_row',
-      'JOIN pg_class index_rel ON index_rel.oid = index_row.indexrelid',
-      'JOIN pg_class table_rel ON table_rel.oid = index_row.indrelid',
-      'JOIN pg_namespace table_ns ON table_ns.oid = table_rel.relnamespace',
-      "JOIN pg_depend dep ON dep.classid = 'pg_class'::regclass AND dep.objid = index_rel.oid",
-      "  AND dep.refclassid = 'pg_proc'::regclass",
-      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
-      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
-      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      "AND table_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
       'ORDER BY relation_schema, relation_name, mechanism, routine_schema, routine_name',
     ].join(' '),
   );
@@ -1398,13 +1505,13 @@ function postgresRelationIsWritable(relation: PostgresReachableRelation): boolea
 async function auditPostgresReachableView(
   client: RuntimeSqlClient,
   relation: PostgresReachableRelation,
-  protectedTableNames: ReadonlySet<string>,
-  allowlistedTables: ReadonlySet<string>,
+  protectedRelations: ReadonlySet<string>,
+  allowlistedRelations: ReadonlySet<string>,
 ): Promise<KovoPostgresPostureIssue[]> {
   const issues: KovoPostgresPostureIssue[] = [];
   const dependencies = await postgresViewDependencies(client, relation.schema, relation.table);
   const protectedDependencies = dependencies.filter((dependency) =>
-    protectedTableNames.has(dependency.table_name),
+    protectedRelations.has(postgresRelationKey(dependency.table_schema, dependency.table_name)),
   );
   if (!postgresViewIsSecurityInvoker(relation)) {
     issues.push({
@@ -1424,9 +1531,11 @@ async function auditPostgresReachableView(
     return issues;
   }
   for (const dependency of dependencies) {
+    const dependencyKey = postgresRelationKey(dependency.table_schema, dependency.table_name);
     if (
-      !allowlistedTables.has(dependency.table_name) &&
-      !(await postgresBaseTableHasProtectedPosture(client, dependency))
+      !allowlistedRelations.has(dependencyKey) &&
+      (!protectedRelations.has(dependencyKey) ||
+        !(await postgresBaseTableHasProtectedPosture(client, dependency)))
     ) {
       issues.push({
         code: 'KV433_REACHABLE_VIEW',
@@ -1693,17 +1802,18 @@ async function auditPostgresUnexpectedPrivileges(
 
 async function postgresProtectedSerialSequences(
   client: RuntimeTransactionClient,
-  protectedTableNames: ReadonlySet<string>,
+  protectedRelations: ReadonlySet<string>,
 ): Promise<ReadonlySet<string> | undefined> {
   const rows = await safeQuery<PostgresReachableSequenceRow>(
     client,
     [
       'SELECT DISTINCT seq_ns.nspname AS sequence_schema, seq.relname AS sequence_name',
-      ', tbl.relname AS table_name',
+      ', tbl_ns.nspname AS table_schema, tbl.relname AS table_name',
       'FROM pg_class seq',
       'JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace',
       'JOIN pg_depend dep ON dep.classid = $1::regclass AND dep.objid = seq.oid',
       'JOIN pg_class tbl ON tbl.oid = dep.refobjid',
+      'JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace',
       "WHERE seq.relkind = 'S'",
       "AND dep.deptype IN ('a', 'i')",
     ].join(' '),
@@ -1713,7 +1823,9 @@ async function postgresProtectedSerialSequences(
     ? undefined
     : new Set(
         rows.rows
-          .filter((row) => protectedTableNames.has(row.table_name))
+          .filter((row) =>
+            protectedRelations.has(postgresRelationKey(row.table_schema, row.table_name)),
+          )
           .map((row) => postgresRelationKey(row.sequence_schema, row.sequence_name)),
       );
 }
@@ -3277,7 +3389,10 @@ async function applyPostgresWriterSequencePrivileges(
 ): Promise<void> {
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
   const writableTables = postgresWriterWritableTableNames(tables, metadata, protectedTables);
-  const sequences = await postgresProtectedSerialSequences(client, writableTables);
+  const sequences = await postgresProtectedSerialSequences(
+    client,
+    postgresDeclaredRelationKeys(tables, writableTables),
+  );
   if (sequences === undefined) return;
   for (const sequence of sequences) {
     const [schema, name] = sequence.split('.', 2);
@@ -3325,7 +3440,14 @@ async function applyPostgresPrivilegedRolePrivileges(
       );
     }
   }
-  const sequences = await postgresProtectedSerialSequences(client, new Set(protectedTables.keys()));
+  const sequences = await postgresProtectedSerialSequences(
+    client,
+    new Set(
+      [...protectedTables.values()].map((table) =>
+        postgresRelationKey(table.schemaName, table.tableName),
+      ),
+    ),
+  );
   if (sequences === undefined) return;
   for (const sequence of sequences) {
     const [schema, name] = sequence.split('.', 2);
@@ -3356,6 +3478,18 @@ function postgresWriterWritableTableNames(
   return writableTables;
 }
 
+function postgresDeclaredRelationKeys(
+  tables: readonly PgTable[],
+  tableNames: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set(
+    tables
+      .map((table) => getTableConfig(table))
+      .filter((config) => tableNames.has(config.name))
+      .map((config) => postgresRelationKey(tableSchemaName(config), config.name)),
+  );
+}
+
 function postgresCrossOwnerReadableTableNames(
   tables: readonly PgTable[],
   metadata: KovoRuntimeDbMetadata,
@@ -3371,18 +3505,31 @@ function resolveProtectedPostgresTables(
   tables: readonly PgTable[],
   metadata: KovoRuntimeDbMetadata,
 ): ReadonlyMap<string, ProtectedPostgresTable> {
-  const tableNames = new Set(tables.map((table) => getTableConfig(table).name));
+  const tableConfigs = new Map<string, PgTableConfig>();
+  for (const table of tables) {
+    const config = getTableConfig(table);
+    const previous = tableConfigs.get(config.name);
+    if (previous !== undefined && tableSchemaName(previous) !== tableSchemaName(config)) {
+      throw new Error(
+        `KV414: duplicate Postgres table name ${config.name} across schemas is ambiguous in Kovo metadata (SPEC §10.3).`,
+      );
+    }
+    tableConfigs.set(config.name, config);
+  }
   const protectedTables = new Map<string, ProtectedPostgresTable>();
   for (const [tableName, owner] of metadata.ownerSourcesByTable) {
-    if (!tableNames.has(tableName)) continue;
+    const tableConfig = tableConfigs.get(tableName);
+    if (tableConfig === undefined) continue;
     protectedTables.set(tableName, {
       kind: 'owner',
       predicate: `${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true)`,
+      schemaName: tableSchemaName(tableConfig),
       tableName,
     });
   }
   for (const [tableName, ownerVia] of metadata.ownerViaSourcesByTable) {
-    if (!tableNames.has(tableName)) continue;
+    const tableConfig = tableConfigs.get(tableName);
+    if (tableConfig === undefined) continue;
     const predicate = ownerPredicateForTable(metadata, ownerVia.parentTable, {
       parentKeyColumnName: ownerVia.parentKeyColumnName,
       parentMatchExpression: `${quoteIdent(tableName)}.${quoteIdent(ownerVia.fkColumnName)}`,
@@ -3396,13 +3543,17 @@ function resolveProtectedPostgresTables(
     protectedTables.set(tableName, {
       kind: 'ownerVia',
       predicate,
+      schemaName: tableSchemaName(tableConfig),
       tableName,
     });
   }
   for (const { predicate, tableName } of customAuthzPolicyPredicatesByTable(tables).values()) {
+    const tableConfig = tableConfigs.get(tableName);
+    if (tableConfig === undefined) continue;
     protectedTables.set(tableName, {
       kind: 'authzPolicy',
       predicate,
+      schemaName: tableSchemaName(tableConfig),
       tableName,
     });
   }
@@ -3459,8 +3610,8 @@ async function applyPostgresRlsPolicies(
 ): Promise<void> {
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
   for (const protectedTable of protectedTables.values()) {
-    const { predicate, tableName } = protectedTable;
-    const table = quoteIdent(tableName);
+    const { predicate, schemaName, tableName } = protectedTable;
+    const table = quoteQualified(schemaName, tableName);
     await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
     await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
     await client.exec(`DROP POLICY IF EXISTS kovo_owner_scope ON ${table}`);
@@ -3610,6 +3761,18 @@ function postgresReachabilityAllowlist(
   metadata: KovoRuntimeDbMetadata,
 ): ReadonlySet<string> {
   const allowlisted = new Set<string>();
+  const tableConfigs = new Map(
+    tables.map((table) => {
+      const config = getTableConfig(table);
+      return [config.name, config] as const;
+    }),
+  );
+  const addDeclaredTable = (tableName: string): void => {
+    const config = tableConfigs.get(tableName);
+    if (config !== undefined) {
+      allowlisted.add(postgresRelationKey(tableSchemaName(config), config.name));
+    }
+  };
   const protectedAuthzPolicyTables = new Set(customAuthzPolicyPredicatesByTable(tables).keys());
   for (const [tableName, classifications] of metadata.authorizationClassificationsByTable) {
     if (
@@ -3620,11 +3783,11 @@ function postgresReachabilityAllowlist(
           (classification === 'authzPolicy' && !protectedAuthzPolicyTables.has(tableName)),
       )
     ) {
-      allowlisted.add(tableName);
+      addDeclaredTable(tableName);
     }
   }
   for (const tableName of customAuthzPolicyDependencyTableNames(tables)) {
-    allowlisted.add(tableName);
+    addDeclaredTable(tableName);
   }
   return allowlisted;
 }
@@ -3650,16 +3813,17 @@ async function postgresCatalogRelation(
 
 async function postgresHasLiveKovoPolicy(
   client: RuntimeTransactionClient,
+  schema: string,
   table: string,
 ): Promise<boolean> {
   const result = await safeQuery(
     client,
     [
       'SELECT 1 FROM pg_policies',
-      'WHERE tablename = $1',
+      'WHERE schemaname = $1 AND tablename = $2',
       "AND policyname IN ('kovo_owner_scope', 'kovo_authz_policy', 'kovo_admin_scope')",
     ].join(' '),
-    [table],
+    [schema, table],
   );
   return (result?.rows.length ?? 0) > 0;
 }
@@ -3677,7 +3841,7 @@ async function postgresBaseTableHasProtectedPosture(
   ) {
     return false;
   }
-  return postgresHasLiveKovoPolicy(client, relation.table_name);
+  return postgresHasLiveKovoPolicy(client, relation.table_schema, relation.table_name);
 }
 
 function postgresViewIsSecurityInvoker(relation: PostgresCatalogRelation): boolean {

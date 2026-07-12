@@ -325,6 +325,268 @@ describe('createPostgresAppRuntimeDb', () => {
     ]);
   });
 
+  it('refuses a same-named allow-all owner policy after proving cross-tenant access', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-owner-policy-shape-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'DROP POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+        [
+          'CREATE POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+          'FOR ALL TO kovo_reader, kovo_writer',
+          'USING (true) WITH CHECK (true)',
+        ].join(' '),
+      ].join('; '),
+    );
+    await usingPgliteRole(dataDir, 'kovo_reader', async (client) => {
+      await client.exec("SET LOCAL kovo.principal = 'u1'");
+      await expect(
+        client.query('SELECT id FROM public.kovo_runtime_notes ORDER BY id'),
+      ).resolves.toMatchObject({ rows: [{ id: 'n1' }, { id: 'n2' }] });
+    });
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_OWNER_POLICY',
+        detail: expect.stringContaining('unexpected permissiveness, roles, command, USING'),
+      }),
+    );
+  });
+
+  it('refuses a same-named system policy broadened to PUBLIC after proving cross-tenant access', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-system-policy-shape-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'DROP POLICY kovo_system_scope ON public.kovo_runtime_notes',
+        [
+          'CREATE POLICY kovo_system_scope ON public.kovo_runtime_notes',
+          'FOR ALL TO PUBLIC USING (true) WITH CHECK (true)',
+        ].join(' '),
+      ].join('; '),
+    );
+    await usingPgliteRole(dataDir, 'kovo_reader', async (client) => {
+      await client.exec("SET LOCAL kovo.principal = 'u1'");
+      await expect(
+        client.query('SELECT id FROM public.kovo_runtime_notes ORDER BY id'),
+      ).resolves.toMatchObject({ rows: [{ id: 'n1' }, { id: 'n2' }] });
+    });
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(expect.objectContaining({ code: 'KV433_SYSTEM_POLICY' }));
+  });
+
+  it('refuses every policy outside the exact Kovo allowlist, including an extra PUBLIC policy', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-extra-policy-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE POLICY attacker_open ON public.kovo_runtime_notes',
+        'FOR ALL TO PUBLIC USING (true) WITH CHECK (true)',
+      ].join(' '),
+    );
+    await usingPgliteRole(dataDir, 'kovo_reader', async (client) => {
+      await client.exec("SET LOCAL kovo.principal = 'u1'");
+      await expect(
+        client.query('SELECT id FROM public.kovo_runtime_notes ORDER BY id'),
+      ).resolves.toMatchObject({ rows: [{ id: 'n1' }, { id: 'n2' }] });
+    });
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_POLICY_SET',
+        detail: expect.stringContaining('attacker_open'),
+      }),
+    );
+  });
+
+  it('refuses expected policy names with substituted role, command, or permissiveness', async () => {
+    const variants = [
+      {
+        label: 'role',
+        setup: [
+          'CREATE ROLE kovo_policy_parent NOLOGIN',
+          'GRANT kovo_policy_parent TO kovo_reader, kovo_writer',
+          'DROP POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+          [
+            'CREATE POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+            'FOR ALL TO kovo_policy_parent',
+            'USING ("ownerId" = current_setting(\'kovo.principal\', true))',
+            'WITH CHECK ("ownerId" = current_setting(\'kovo.principal\', true))',
+          ].join(' '),
+        ],
+      },
+      {
+        label: 'command',
+        setup: [
+          'DROP POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+          [
+            'CREATE POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+            'FOR SELECT TO kovo_reader, kovo_writer',
+            'USING ("ownerId" = current_setting(\'kovo.principal\', true))',
+          ].join(' '),
+        ],
+      },
+      {
+        label: 'restrictive',
+        setup: [
+          'DROP POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+          [
+            'CREATE POLICY kovo_owner_scope ON public.kovo_runtime_notes AS RESTRICTIVE',
+            'FOR ALL TO kovo_reader, kovo_writer',
+            'USING ("ownerId" = current_setting(\'kovo.principal\', true))',
+            'WITH CHECK ("ownerId" = current_setting(\'kovo.principal\', true))',
+          ].join(' '),
+        ],
+      },
+    ] as const;
+
+    for (const variant of variants) {
+      const dataDir = mkdtempSync(join(tmpdir(), `kovo-postgres-runtime-policy-${variant.label}-`));
+      roots.push(dataDir);
+      const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+      try {
+        await runtime.ready;
+      } finally {
+        await runtime.close();
+      }
+      await execPglite(dataDir, variant.setup.join('; '));
+
+      const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+      expect(report.ok, variant.label).toBe(false);
+      expect(report.issues, variant.label).toContainEqual(
+        expect.objectContaining({ code: 'KV433_OWNER_POLICY' }),
+      );
+    }
+  });
+
+  it('does not treat a reachable same-named table in another schema as protected', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-schema-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE SCHEMA shadow',
+        [
+          'CREATE TABLE shadow.kovo_runtime_notes (',
+          'id text PRIMARY KEY, "ownerId" text NOT NULL, "secretNote" text NOT NULL, title text NOT NULL',
+          ')',
+        ].join(' '),
+        'ALTER TABLE shadow.kovo_runtime_notes ENABLE ROW LEVEL SECURITY',
+        'ALTER TABLE shadow.kovo_runtime_notes FORCE ROW LEVEL SECURITY',
+        [
+          'CREATE POLICY kovo_owner_scope ON shadow.kovo_runtime_notes',
+          'FOR ALL TO kovo_reader USING (true) WITH CHECK (true)',
+        ].join(' '),
+        [
+          'CREATE POLICY kovo_system_scope ON shadow.kovo_runtime_notes',
+          'FOR ALL TO kovo_system USING (true) WITH CHECK (true)',
+        ].join(' '),
+        [
+          'INSERT INTO shadow.kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES',
+          "('shadow-1', 'u1', 'shadow-s1', 'Shadow one'),",
+          "('shadow-2', 'u2', 'shadow-s2', 'Shadow two')",
+        ].join(' '),
+        'GRANT USAGE ON SCHEMA shadow TO kovo_reader',
+        'GRANT SELECT ON TABLE shadow.kovo_runtime_notes TO kovo_reader',
+      ].join('; '),
+    );
+
+    await usingPgliteRole(dataDir, 'kovo_reader', async (client) => {
+      await client.exec("SET LOCAL kovo.principal = 'u1'");
+      await expect(
+        client.query('SELECT id FROM shadow.kovo_runtime_notes ORDER BY id'),
+      ).resolves.toMatchObject({ rows: [{ id: 'shadow-1' }, { id: 'shadow-2' }] });
+    });
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_REACHABLE_TABLE',
+        detail: expect.stringContaining('shadow.kovo_runtime_notes'),
+      }),
+    );
+  });
+
+  it('audits the exact policy set on a partitioned protected table root', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-partition-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        [
+          'CREATE TABLE public.kovo_runtime_notes (',
+          'id text NOT NULL, "ownerId" text NOT NULL, "secretNote" text NOT NULL, title text NOT NULL',
+          ') PARTITION BY LIST ("ownerId")',
+        ].join(' '),
+        [
+          'CREATE TABLE public.kovo_runtime_notes_u1 PARTITION OF public.kovo_runtime_notes',
+          "FOR VALUES IN ('u1')",
+        ].join(' '),
+        [
+          'CREATE TABLE public.kovo_runtime_notes_u2 PARTITION OF public.kovo_runtime_notes',
+          "FOR VALUES IN ('u2')",
+        ].join(' '),
+      ].join('; '),
+    );
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+    const clean = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(clean.ok).toBe(true);
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE POLICY partition_open ON public.kovo_runtime_notes',
+        'FOR ALL TO PUBLIC USING (true) WITH CHECK (true)',
+      ].join(' '),
+    );
+    const drifted = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(drifted.ok).toBe(false);
+    expect(drifted.issues).toContainEqual(expect.objectContaining({ code: 'KV433_POLICY_SET' }));
+  });
+
   it('keeps database tables outside the app schema default-denied until they are declared', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-default-deny-'));
     roots.push(dataDir);
@@ -1231,6 +1493,94 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('recursively refuses a SECURITY INVOKER function hidden behind a CHECK operator', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-check-operator-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        [
+          'CREATE FUNCTION public.kovo_runtime_invoker_operator(left_value text, right_value text)',
+          'RETURNS boolean LANGUAGE SQL IMMUTABLE SECURITY INVOKER',
+          'AS $$ SELECT true $$',
+        ].join(' '),
+        [
+          'CREATE OPERATOR public.#=# (',
+          'LEFTARG = text, RIGHTARG = text, FUNCTION = public.kovo_runtime_invoker_operator',
+          ')',
+        ].join(' '),
+        [
+          'ALTER TABLE public.kovo_runtime_notes ADD CONSTRAINT kovo_runtime_operator_check',
+          'CHECK ("secretNote" OPERATOR(public.#=#) title) NOT VALID',
+        ].join(' '),
+        [
+          'CREATE INDEX kovo_runtime_operator_index ON public.kovo_runtime_notes',
+          '((title OPERATOR(public.#=#) "ownerId"))',
+        ].join(' '),
+        [
+          'CREATE POLICY kovo_runtime_operator_policy ON public.kovo_runtime_notes',
+          'AS RESTRICTIVE FOR SELECT TO kovo_reader',
+          'USING (title OPERATOR(public.#=#) "ownerId")',
+        ].join(' '),
+      ].join('; '),
+    );
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining(
+            'CHECK/domain constraint function reaching app-authored routine public.kovo_runtime_invoker_operator',
+          ),
+        }),
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining(
+            'index/predicate expression function reaching app-authored routine public.kovo_runtime_invoker_operator',
+          ),
+        }),
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining(
+            'RLS policy expression function reaching app-authored routine public.kovo_runtime_invoker_operator',
+          ),
+        }),
+      ]),
+    );
+  });
+
+  it('allows CHECK expressions whose executable dependency closure is built-in only', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-check-builtins-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'ALTER TABLE public.kovo_runtime_notes ADD CONSTRAINT kovo_runtime_builtin_check',
+        'CHECK (length(title) > 0 AND "ownerId" <> \'\') NOT VALID',
+      ].join(' '),
+    );
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
   it('allows framework/internal FK triggers on app-role-reachable tables', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-fk-triggers-'));
     roots.push(dataDir);
@@ -2117,6 +2467,49 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('refuses a same-named admin policy broadened to PUBLIC', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-admin-policy-shape-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      crossOwnerReadTables: ['kovo_runtime_notes'],
+      dataDir,
+      driver: 'pglite',
+      schema,
+      seedSql,
+    });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'DROP POLICY kovo_admin_scope ON public.kovo_runtime_notes',
+        [
+          'CREATE POLICY kovo_admin_scope ON public.kovo_runtime_notes',
+          'FOR SELECT TO PUBLIC USING (true)',
+        ].join(' '),
+      ].join('; '),
+    );
+    await usingPgliteRole(dataDir, 'kovo_reader', async (client) => {
+      await client.exec("SET LOCAL kovo.principal = 'u1'");
+      await expect(
+        client.query('SELECT id FROM public.kovo_runtime_notes ORDER BY id'),
+      ).resolves.toMatchObject({ rows: [{ id: 'n1' }, { id: 'n2' }] });
+    });
+
+    const report = await checkPostgresAppDbPosture({
+      crossOwnerReadTables: ['kovo_runtime_notes'],
+      dataDir,
+      driver: 'pglite',
+      schema,
+    });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(expect.objectContaining({ code: 'KV433_ADMIN_POLICY' }));
   });
 
   it('uses engine roles, not kovo.role GUCs, for admin and system RLS scope', async () => {
