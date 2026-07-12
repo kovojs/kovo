@@ -18,7 +18,7 @@ source-only concern was insufficient.
 
 ## Critical
 
-- [ ] **C1 - Mutable collection prototypes can forge Kovo's private security witnesses.**
+- [x] **C1 - Mutable collection prototypes can forge Kovo's private security witnesses.**
       `packages/browser/src/security-output.ts`, `packages/core/src/internal/{sink-policy,sql-safety}.ts`,
       `packages/core/src/verifier.ts`, and server access/auth/request/SQL proof modules
   - Selective `WeakSet.prototype.has` and `WeakMap.prototype.has/get` overrides made an ordinary
@@ -29,40 +29,38 @@ source-only concern was insufficient.
     proof-currency failure.
   - **SPEC:** sections 5.2, 6.6, 9.1, and 10.2 require private, non-copyable proof and exact
     classify-then-consume behavior.
-  - **Acceptance:** every authority-bearing Map/Set/WeakMap/WeakSet operation must use boot-pinned,
-    semantically checked intrinsics (including import-order hostile controls), and a regression
-    census must reject new ambient witness calls. Forged positives must fail closed across output,
-    guards, endpoints, request views, SQL, verifier, app, and command surfaces.
+  - **Evidence:** the 234-test core/browser/output census plus 158 auth/response, 86 runtime-crypto,
+    and 19 SQL-classifier tests pass late/import-order poison controls across every named witness.
 
 ## High
 
-- [ ] **H1 - Node SSR trusts an app-installed `globalThis.TrustedHTML` constructor.**
+- [x] **H1 - Node SSR trusts an app-installed `globalThis.TrustedHTML` constructor.**
       `packages/browser/src/security-output.ts`
   - On a platform with no native Trusted Types constructor, installing a late class with hostile
     `Symbol.hasInstance` made a plain object raw HTML and produced a real `<svg onload>` response.
-  - **Acceptance:** capture the genuine platform constructor and `Function@@hasInstance` before app
-    evaluation; an absent native constructor remains absent, and late/fake constructors stay escaped.
+  - **Evidence:** the 234-test matrix keeps absent native Trusted Types absent and escapes late/fake
+    constructors through pinned platform identity controls.
 
-- [ ] **H2 - Nested rendered-output sinks re-read mutable public `.html` fields.**
+- [x] **H2 - Nested rendered-output sinks re-read mutable public `.html` fields.**
       `packages/server/src/{html,renderable,app-document,component-render,deferred-region,route}.ts`
   - Poisoning ambient `Object.freeze` while minting a genuine `RenderedHtml`, then replacing its
     public field, left the direct snapshot sink safe but nested JSX emitted the attacker replacement.
-  - **Acceptance:** pin a validated freeze intrinsic and consume only module-private byte snapshots
-    at every nested/document/fragment sink; public mutation cannot alter emitted bytes.
+  - **Evidence:** the 234-test output/JSX/HTML matrix consumes private immutable bytes through nested,
+    fragment, and document sinks under wrapper and freeze mutation controls.
 
-- [ ] **H3 - KV418 treats inline handlers with mutable module/global captures as authority-free.**
+- [x] **H3 - KV418 treats inline handlers with mutable module/global captures as authority-free.**
       `packages/compiler/src/scan/parse.ts`
   - A normal GET cached victim authority in module scope; a real production build accepted a
     `csrf:false` handler closing over it, and a tokenless cross-origin POST committed the victim write.
-  - **Acceptance:** fail closed on every free capture unless recursively proven handler-local and
-    immutable; preserve direct non-ambient machine-header controls and bind proof to runtime handler.
+  - **Evidence:** the 193-test compiler/browser/core/server matrix plus KV418 real-build fixtures reject
+    every free capture unless recursively proven handler-local and immutable.
 
-- [ ] **H4 - `createApp()` retains mutable CSRF verification authority after app closure.**
+- [x] **H4 - `createApp()` retains mutable CSRF verification authority after app closure.**
       `packages/server/src/{app,app-snapshot,csrf}.ts`
   - Mutating the retained secret, session-id callback, and `trustedOrigins` changed an identical
     forged victim-cookie mutation from 422/no calls to 303/handler execution.
-  - **Acceptance:** descriptor-snapshot and freeze secret/keyring posture, callbacks, field,
-    anonymous-cookie options, and trusted origins so form minting and verification share one closed fact.
+  - **Evidence:** the 198 app/schema/document and 158 auth/CSRF matrices pass retained secret/keyring,
+    callback, field, cookie-option, and trusted-origin mutation regressions.
 
 - [x] **H5 - Better Auth browser credential mutations admitted a forged `csrf:false` posture.**
       `packages/better-auth/src/{credential-options,mutations}.ts`
@@ -96,12 +94,12 @@ source-only concern was insufficient.
 
 ## Medium
 
-- [ ] **M1 - PostgreSQL posture ignores future-object authority from schema/database ACLs.**
+- [x] **M1 - PostgreSQL posture ignores future-object authority from schema/database ACLs.**
       `packages/server/src/postgres-runtime.ts`
   - Writer/PUBLIC/custom-member schema `CREATE`, database `CREATE`, and default database `TEMP`
     remained green. Shared roles then created unprotected cross-principal relations or new schemas.
-  - **Acceptance:** provision and audit effective privilege closure, ownership, PUBLIC, and transitive
-    membership for every non-system schema plus database CREATE/TEMP; retain only required CONNECT/USAGE.
+  - **Evidence:** the 97-test PostgreSQL matrix audits and provisions schema/database CREATE/TEMP,
+    ownership, PUBLIC, and transitive closure while retaining only declared CONNECT/USAGE authority.
 
 - [x] **M2 - Unexpected Better Auth errors can carry submitted plaintext passwords to diagnostics.**
       `packages/better-auth/src/{mutations,session}.ts`
@@ -149,6 +147,6 @@ source-only concern was insufficient.
 
 ## Latest verification
 
-The first fresh post-`bugz-26` pass intentionally ended non-zero and produced C1, H1-H4, H7, and
-M1-M3. Fixed items above have focused evidence; C1/H1-H4/H7/M1 remain open until their worker commits
-are integrated and independently rerun. A second complete fresh sweep is required after that merge.
+The first fresh post-`bugz-26` pass intentionally ended non-zero. Every item except H7 is integrated
+with focused evidence; H7 remains open with the broader raw-target intrinsic closure tracked in
+`bugz-28` H6. A complete fresh sweep is required after that merge.
