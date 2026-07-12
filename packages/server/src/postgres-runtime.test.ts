@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
-import { pgTable, serial, text } from 'drizzle-orm/pg-core';
+import { PgDialect, pgTable, serial, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -116,6 +117,7 @@ const fkChildren = pgTable(
 );
 
 const schema = { labels, notes };
+const postgresRuntimeTestRequire = createRequire(import.meta.url);
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedPostureCheckOnBootOption =
   // @ts-expect-error SPEC §10.3: disabling boot posture checks requires postureCheck.justification.
@@ -181,6 +183,20 @@ const teamSeedSql = [
     "('d1', 'team-a', 'Alpha'), ('d2', 'team-b', 'Beta')",
   ].join(' '),
 ];
+
+const primordialPolicyPredicate = sql`"ownerId" = current_setting('kovo.principal', true)`;
+const primordialPolicyNotes = pgTable(
+  'kovo_runtime_primordial_policy_notes',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('ownerId').notNull(),
+  },
+  kovo({
+    authzPolicy: primordialPolicyPredicate,
+    domain: 'runtime-primordial-policy-notes',
+    key: 'id',
+  }),
+);
 
 const parameterizedPolicyDocuments = pgTable(
   'kovo_runtime_parameterized_policy_documents',
@@ -349,6 +365,121 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(triggered).toBe(0);
   });
 
+  it('does not dispatch a late PgDialect method while committing a custom RLS predicate', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-dialect-primordial-'));
+    roots.push(dataDir);
+    const nativeSqlToQuery = PgDialect.prototype.sqlToQuery;
+    let triggered = 0;
+    PgDialect.prototype.sqlToQuery = function (statement: unknown) {
+      if (statement === primordialPolicyPredicate) {
+        triggered += 1;
+        PgDialect.prototype.sqlToQuery = nativeSqlToQuery;
+        return { params: [], sql: 'true' };
+      }
+      return Reflect.apply(nativeSqlToQuery, this, [statement]);
+    } as typeof PgDialect.prototype.sqlToQuery;
+
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: { primordialPolicyNotes },
+      seedSql: [
+        'INSERT INTO kovo_runtime_primordial_policy_notes (id, "ownerId") VALUES ' +
+          "('n1', 'u1'), ('n2', 'u2')",
+      ],
+    });
+    try {
+      await runtime.ready;
+      await expect(
+        runtime
+          .db({ principalPosture: actAsRuntimePrincipal('u1') })
+          .select({ id: primordialPolicyNotes.id })
+          .from(primordialPolicyNotes)
+          .orderBy(primordialPolicyNotes.id),
+      ).resolves.toEqual([{ id: 'n1' }]);
+      expect(triggered).toBe(0);
+    } finally {
+      PgDialect.prototype.sqlToQuery = nativeSqlToQuery;
+      await runtime.close();
+    }
+
+    const committedPolicy = await queryPglite<{ qual: string; with_check: string }>(
+      dataDir,
+      [
+        'SELECT qual, with_check FROM pg_policies',
+        "WHERE schemaname = 'public' AND tablename = 'kovo_runtime_primordial_policy_notes'",
+        "AND policyname = 'kovo_authz_policy'",
+      ].join(' '),
+    );
+    expect(committedPolicy.rows).toHaveLength(1);
+    expect(committedPolicy.rows[0]?.qual).toContain('"ownerId"');
+    expect(committedPolicy.rows[0]?.qual).toContain(
+      "current_setting('kovo.principal'::text, true)",
+    );
+    expect(committedPolicy.rows[0]?.with_check).toBe(committedPolicy.rows[0]?.qual);
+  });
+
+  it('does not dispatch a late PGlite transaction method for privileged policy DDL', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-driver-transaction-'));
+    roots.push(dataDir);
+    const nativeTransaction = PGlite.prototype.transaction;
+    let transactionTriggered = 0;
+    let ddlTriggered = 0;
+    PGlite.prototype.transaction = function (
+      callback: (tx: {
+        exec: (statement: string, ...args: unknown[]) => Promise<unknown>;
+      }) => Promise<unknown>,
+      ...args: unknown[]
+    ) {
+      transactionTriggered += 1;
+      PGlite.prototype.transaction = nativeTransaction;
+      const wrapped = async (tx: {
+        exec: (statement: string, ...args: unknown[]) => Promise<unknown>;
+      }): Promise<unknown> => {
+        const nativeExec = tx.exec;
+        tx.exec = function (statement: string, ...execArgs: unknown[]) {
+          if (statement.startsWith('CREATE POLICY kovo_owner_scope')) {
+            ddlTriggered += 1;
+            tx.exec = nativeExec;
+            return Reflect.apply(nativeExec, tx, [
+              'CREATE POLICY kovo_owner_scope ON "public"."kovo_runtime_notes" ' +
+                'FOR ALL TO "kovo_reader", "kovo_writer" USING (true) WITH CHECK (true)',
+              ...execArgs,
+            ]);
+          }
+          return Reflect.apply(nativeExec, tx, [statement, ...execArgs]);
+        };
+        return callback(tx);
+      };
+      return Reflect.apply(nativeTransaction, this, [wrapped, ...args]);
+    } as typeof PGlite.prototype.transaction;
+
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: { notes },
+      seedSql: [
+        'INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES ' +
+          "('n1', 'u1', 's1', 'One'), ('n2', 'u2', 's2', 'Two')",
+      ],
+    });
+    try {
+      await runtime.ready;
+      await expect(
+        runtime
+          .db({ principalPosture: actAsRuntimePrincipal('u1') })
+          .select({ id: notes.id })
+          .from(notes)
+          .orderBy(notes.id),
+      ).resolves.toEqual([{ id: 'n1' }]);
+      expect(transactionTriggered).toBe(0);
+      expect(ddlTriggered).toBe(0);
+    } finally {
+      PGlite.prototype.transaction = nativeTransaction;
+      await runtime.close();
+    }
+  });
+
   it('refuses production boot on in-process PGlite', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-prod-pglite-'));
     roots.push(dataDir);
@@ -455,6 +586,58 @@ describe('createPostgresAppRuntimeDb', () => {
         detail: expect.stringContaining('unexpected permissiveness, roles, command, USING'),
       }),
     );
+  });
+
+  it('does not dispatch a late parser method while comparing committed policy ASTs', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-parser-primordial-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema: { notes } });
+    await runtime.ready;
+    await runtime.close();
+
+    await execPglite(
+      dataDir,
+      [
+        'DROP POLICY kovo_owner_scope ON kovo_runtime_notes',
+        'CREATE POLICY kovo_owner_scope ON kovo_runtime_notes ' +
+          'FOR ALL TO kovo_reader, kovo_writer USING (true) WITH CHECK (true)',
+      ].join('; '),
+    );
+    const baseline = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema: { notes },
+    });
+    expect(baseline.ok).toBe(false);
+
+    const parser = postgresRuntimeTestRequire('pgsql-ast-parser') as {
+      parse: (sqlText: string, options?: unknown) => unknown;
+    };
+    const nativeParse = parser.parse;
+    let triggered = 0;
+    parser.parse = function (sqlText: string, options?: unknown): unknown {
+      if (sqlText === 'SELECT 1 WHERE true' && triggered < 2) {
+        triggered += 1;
+        if (triggered === 2) parser.parse = nativeParse;
+        return Reflect.apply(nativeParse, parser, [
+          `SELECT 1 WHERE "ownerId" = current_setting('kovo.principal', true)`,
+          options,
+        ]);
+      }
+      return Reflect.apply(nativeParse, parser, [sqlText, options]);
+    };
+    try {
+      const report = await checkPostgresAppDbPosture({
+        dataDir,
+        driver: 'pglite',
+        schema: { notes },
+      });
+      expect(triggered).toBe(0);
+      expect(report.ok).toBe(false);
+      expect(report.issues).toContainEqual(expect.objectContaining({ code: 'KV433_OWNER_POLICY' }));
+    } finally {
+      parser.parse = nativeParse;
+    }
   });
 
   it('refuses a same-named system policy broadened to PUBLIC after proving cross-tenant access', async () => {
@@ -979,6 +1162,61 @@ describe('createPostgresAppRuntimeDb', () => {
       expect(marker.rows).toEqual([{ marker: null }]);
     } finally {
       Array.prototype.map = nativeMap;
+    }
+  });
+
+  it('does not dispatch late Hash methods while enforcing applied migration checksums', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-hash-primordial-'));
+    roots.push(dataDir);
+    const reviewedSql =
+      'CREATE TABLE kovo_runtime_notes (id text PRIMARY KEY, "ownerId" text NOT NULL, "secretNote" text NOT NULL, title text NOT NULL)';
+    const changedSql = `${reviewedSql} /* changed after apply */`;
+    await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [{ id: '001_reviewed', sql: reviewedSql }],
+      schema: { notes },
+    });
+    await expect(
+      migratePostgresAppDb({
+        dataDir,
+        driver: 'pglite',
+        migrations: [{ id: '001_reviewed', sql: changedSql }],
+        schema: { notes },
+      }),
+    ).rejects.toThrow(/MIGRATION_CHECKSUM/);
+
+    const ledger = await queryPglite<{ checksum: string }>(
+      dataDir,
+      "SELECT checksum FROM kovo_migrations WHERE id = '001_reviewed'",
+    );
+    const storedChecksum = ledger.rows[0]?.checksum;
+    expect(typeof storedChecksum).toBe('string');
+    const hashPrototype = Object.getPrototypeOf(createHash('sha256')) as {
+      digest: (encoding: 'hex') => string;
+    };
+    const nativeDigest = hashPrototype.digest;
+    let triggered = 0;
+    hashPrototype.digest = function (encoding: 'hex'): string {
+      if (encoding === 'hex' && triggered < 2) {
+        triggered += 1;
+        if (triggered === 2) hashPrototype.digest = nativeDigest;
+        return storedChecksum as string;
+      }
+      return Reflect.apply(nativeDigest, this, [encoding]);
+    };
+    try {
+      await expect(
+        migratePostgresAppDb({
+          dataDir,
+          driver: 'pglite',
+          migrations: [{ id: '001_reviewed', sql: changedSql }],
+          schema: { notes },
+        }),
+      ).rejects.toThrow(/MIGRATION_CHECKSUM/);
+      expect(triggered).toBe(0);
+    } finally {
+      hashPrototype.digest = nativeDigest;
     }
   });
 
@@ -2519,7 +2757,7 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(result.rows).toEqual([{ schema_name: 'public', value: 'reviewed ddl' }]);
   });
 
-  it('fails posture closed when the pinned creation-authority query errors', async () => {
+  it('ignores a late PGlite transaction shim during creation-authority posture checks', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-posture-query-error-'));
     roots.push(dataDir);
     const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
@@ -2537,9 +2775,11 @@ describe('createPostgresAppRuntimeDb', () => {
       transaction<Result>(callback: (tx: TestTransaction) => Promise<Result>): Promise<Result>;
     };
     const originalTransaction = prototype.transaction;
+    let triggered = 0;
     prototype.transaction = async function <Result>(
       callback: (tx: TestTransaction) => Promise<Result>,
     ) {
+      triggered += 1;
       return originalTransaction.call(this, (tx) =>
         callback({
           exec: (statement) => tx.exec(statement),
@@ -2554,13 +2794,9 @@ describe('createPostgresAppRuntimeDb', () => {
     };
     try {
       const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
-      expect(report.ok).toBe(false);
-      expect(report.issues).toContainEqual(
-        expect.objectContaining({
-          code: 'KV433_REACHABILITY_AUDIT',
-          detail: expect.stringContaining('could not enumerate effective'),
-        }),
-      );
+      expect(triggered).toBe(0);
+      expect(report.ok).toBe(true);
+      expect(report.issues).toEqual([]);
     } finally {
       prototype.transaction = originalTransaction;
     }

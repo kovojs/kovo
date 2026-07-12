@@ -50,8 +50,10 @@ import {
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
+  witnessGetPrototypeOf,
   witnessGetOwnPropertyDescriptor,
   witnessOwnKeys,
+  witnessReflectApply,
   witnessMapGet,
   witnessMapForEach,
   witnessMapHas,
@@ -166,8 +168,98 @@ type PgColumn = PgTableConfig['columns'][number];
 type PgForeignKey = PgTableConfig['foreignKeys'][number];
 
 const POSTGRES_POLICY_DIALECT = new PgDialect();
+const postgresPolicySqlToQuery = capturePostgresPolicySqlToQuery();
 const postgresRuntimeRequire = createRequire(import.meta.url);
-let postgresPolicySqlParser: typeof import('pgsql-ast-parser') | undefined;
+const postgresPolicySqlParser = postgresRuntimeRequire(
+  'pgsql-ast-parser',
+) as typeof import('pgsql-ast-parser');
+const postgresPolicyParse = capturePostgresPolicyParse();
+const postgresHashMethodSource = createHash('sha256');
+const postgresHashUpdate = capturePostgresCallable(
+  postgresHashMethodSource,
+  'update',
+  'Postgres migration hash update',
+) as ReturnType<typeof createHash>['update'];
+const postgresHashDigest = capturePostgresCallable(
+  postgresHashMethodSource,
+  'digest',
+  'Postgres migration hash digest',
+) as ReturnType<typeof createHash>['digest'];
+const postgresPgliteClose = capturePostgresCallable(PGlite.prototype, 'close', 'PGlite close');
+const postgresPgliteExec = capturePostgresCallable(PGlite.prototype, 'exec', 'PGlite exec');
+const postgresPgliteQuery = capturePostgresCallable(PGlite.prototype, 'query', 'PGlite query');
+const postgresPgliteTransaction = capturePostgresCallable(
+  PGlite.prototype,
+  'transaction',
+  'PGlite transaction',
+);
+
+function capturePostgresPolicySqlToQuery(): PgDialect['sqlToQuery'] {
+  const descriptor = witnessGetOwnPropertyDescriptor(PgDialect.prototype, 'sqlToQuery');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'function'
+  ) {
+    throw new TypeError('Postgres policy SQL renderer must be an own-data method.');
+  }
+  return descriptor.value as PgDialect['sqlToQuery'];
+}
+
+function capturePostgresPolicyParse(): typeof postgresPolicySqlParser.parse {
+  const descriptor = witnessGetOwnPropertyDescriptor(postgresPolicySqlParser, 'parse');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'function'
+  ) {
+    throw new TypeError('Postgres policy AST parser must be an own-data method.');
+  }
+  return descriptor.value as typeof postgresPolicySqlParser.parse;
+}
+
+function capturePostgresCallable(target: object, property: PropertyKey, label: string): Function {
+  let owner: object | null = target;
+  while (owner !== null) {
+    if (postgresIsProxy(owner)) throw new TypeError(`${label} owner must not be a Proxy.`);
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError(`${label} must be an own-data method.`);
+      }
+      return descriptor.value;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  throw new TypeError(`${label} is unavailable.`);
+}
+
+function capturePostgresOwnCallable(
+  target: object,
+  property: PropertyKey,
+  label: string,
+): Function {
+  if (postgresIsProxy(target)) throw new TypeError(`${label} owner must not be a Proxy.`);
+  const descriptor = witnessGetOwnPropertyDescriptor(target, property);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'function'
+  ) {
+    throw new TypeError(`${label} must be a fresh own-data method.`);
+  }
+  return descriptor.value;
+}
+
+function postgresSha256(value: string): string {
+  const hash = createHash('sha256');
+  witnessReflectApply(postgresHashUpdate, hash, [value]);
+  return witnessReflectApply<string>(postgresHashDigest, hash, ['hex']);
+}
+
+if (postgresSha256('kovo') !== 'b8bf1c0dec7311f45820565ff15a657a416c158950db5206552f6198b868b52f') {
+  throw new TypeError('Postgres migration SHA-256 controls failed their known-vector proof.');
+}
 
 function postgresDenseArrayLength(values: readonly unknown[], label = 'Postgres array'): number {
   if (postgresIsProxy(values)) {
@@ -1612,10 +1704,11 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
 function canonicalPostgresPolicyExpression(expression: string | null): string | null | undefined {
   if (expression === null) return null;
   try {
-    postgresPolicySqlParser ??= postgresRuntimeRequire(
-      'pgsql-ast-parser',
-    ) as typeof import('pgsql-ast-parser');
-    const statements = postgresPolicySqlParser.parse(`SELECT 1 WHERE ${expression}`);
+    const statements = witnessReflectApply<ReturnType<typeof postgresPolicyParse>>(
+      postgresPolicyParse,
+      postgresPolicySqlParser,
+      [`SELECT 1 WHERE ${expression}`],
+    );
     const statement =
       postgresDenseArrayLength(statements, 'Parsed Postgres policy statements') === 0
         ? undefined
@@ -2785,7 +2878,7 @@ function createPgliteRuntimeClient(
   config: ResolvedPostgresRuntimeConfig,
   relations: AnyRelations,
 ): CreatedRuntimeClient {
-  const client = new PGlite(config.dataDir);
+  const client = pinPostgresPgliteInstance(new PGlite(config.dataDir));
   return {
     close: () => client.close(),
     drizzleInternalDb: (capability) => {
@@ -2816,6 +2909,78 @@ function createPgliteRuntimeClient(
       ),
     sql: client,
   };
+}
+
+function pinPostgresPgliteInstance(client: PGlite): PGlite {
+  if (postgresIsProxy(client)) throw new TypeError('PGlite client must not be a Proxy.');
+  defineCapturedPostgresMethod(client, 'close', postgresPgliteClose, client);
+  defineCapturedPostgresMethod(client, 'exec', postgresPgliteExec, client);
+  defineCapturedPostgresMethod(client, 'query', postgresPgliteQuery, client);
+  witnessDefineProperty(client, 'transaction', {
+    configurable: false,
+    enumerable: false,
+    value: <Result>(
+      callback: (tx: RuntimeTransactionClient) => Promise<Result>,
+      ...args: unknown[]
+    ): Promise<Result> => invokeCapturedPgliteTransaction(client, callback, args),
+    writable: false,
+  });
+  return client;
+}
+
+function defineCapturedPostgresMethod(
+  target: object,
+  property: PropertyKey,
+  method: Function,
+  receiver: object,
+): void {
+  witnessDefineProperty(target, property, {
+    configurable: false,
+    enumerable: false,
+    value: (...args: unknown[]) => witnessReflectApply(method, receiver, args),
+    writable: false,
+  });
+}
+
+function invokeCapturedPgliteTransaction<Result>(
+  receiver: object,
+  callback: (tx: RuntimeTransactionClient) => Promise<Result>,
+  trailingArgs: readonly unknown[],
+): Promise<Result> {
+  if (typeof callback !== 'function') {
+    throw new TypeError('PGlite transaction callback must be callable.');
+  }
+  const invocationArgs: unknown[] = [
+    async (transaction: unknown): Promise<Result> =>
+      callback(pinPostgresPgliteTransactionClient(transaction)),
+  ];
+  appendPostgresDenseValues(
+    invocationArgs,
+    trailingArgs,
+    'PGlite transaction invocation arguments',
+  );
+  return witnessReflectApply<Promise<Result>>(postgresPgliteTransaction, receiver, invocationArgs);
+}
+
+function pinPostgresPgliteTransactionClient(transaction: unknown): RuntimeTransactionClient {
+  if (!isRecord(transaction) || postgresIsProxy(transaction)) {
+    throw new TypeError('PGlite transaction client must be a non-Proxy object.');
+  }
+  const exec = capturePostgresOwnCallable(transaction, 'exec', 'PGlite transaction exec');
+  const query = capturePostgresOwnCallable(transaction, 'query', 'PGlite transaction query');
+  const facade = witnessCreateNullRecord<unknown>();
+  defineCapturedPostgresMethod(facade, 'exec', exec, transaction);
+  defineCapturedPostgresMethod(facade, 'query', query, transaction);
+  witnessDefineProperty(facade, 'transaction', {
+    configurable: false,
+    enumerable: false,
+    value: <Result>(
+      callback: (tx: RuntimeTransactionClient) => Promise<Result>,
+      ...args: unknown[]
+    ): Promise<Result> => invokeCapturedPgliteTransaction(transaction, callback, args),
+    writable: false,
+  });
+  return witnessFreeze(facade) as unknown as RuntimeTransactionClient;
 }
 
 function createNodePostgresRuntimeClient(
@@ -4603,7 +4768,7 @@ function normalizePostgresMigrations(
 }
 
 function postgresMigrationChecksum(sqlText: string): string {
-  return createHash('sha256').update(sqlText).digest('hex');
+  return postgresSha256(sqlText);
 }
 
 async function applyPostgresDefaultDenyPrivileges(
@@ -5340,7 +5505,9 @@ function renderCustomAuthzPolicyPredicate(tableName: string, authzPolicy: unknow
   }
   let query: { params?: unknown[]; sql?: unknown };
   try {
-    query = POSTGRES_POLICY_DIALECT.sqlToQuery(authzPolicy as SQL);
+    query = witnessReflectApply(postgresPolicySqlToQuery, POSTGRES_POLICY_DIALECT, [
+      authzPolicy as SQL,
+    ]);
   } catch (cause) {
     const reason =
       cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : 'unknown error';
