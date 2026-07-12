@@ -9,6 +9,7 @@ import type {
   BetterAuthSignUpEmailLike,
 } from './contracts.js';
 import {
+  betterAuthArrayAppend,
   betterAuthApply,
   betterAuthCharacterCodeAt,
   betterAuthGetOwnPropertyDescriptor,
@@ -149,11 +150,11 @@ function splitFoldedSetCookie(folded: string): string[] {
     }
     if (next === nameStart || betterAuthCharacterCodeAt(folded, next) !== 0x3d) continue;
     const cookie = betterAuthTrim(betterAuthSlice(folded, lastIndex, index));
-    if (cookie !== '') cookies[cookies.length] = cookie;
+    if (cookie !== '') betterAuthArrayAppend(cookies, cookie, 'Better Auth Set-Cookie values');
     lastIndex = index + 1;
   }
   const tail = betterAuthTrim(betterAuthSlice(folded, lastIndex));
-  if (tail !== '') cookies[cookies.length] = tail;
+  if (tail !== '') betterAuthArrayAppend(cookies, tail, 'Better Auth Set-Cookie values');
   return cookies;
 }
 
@@ -179,7 +180,7 @@ function copySetCookieValues(value: unknown): string[] {
     ) {
       return [];
     }
-    result[index] = descriptor.value;
+    betterAuthArrayAppend(result, descriptor.value, 'Better Auth Set-Cookie snapshot');
   }
   return result;
 }

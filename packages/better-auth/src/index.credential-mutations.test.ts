@@ -496,6 +496,41 @@ describe('Expires-in-past clearing cookie is not session-establishing (part-3 I3
 // comma-FOLDED multi-cookie header into separate cookies WITHOUT splitting inside an
 // `Expires` date that itself contains a comma.
 describe('getBetterAuthSetCookie comma-folded fallback (part-3 L13-3)', () => {
+  it('does not erase cookie values through inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    let cookies: string[] | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'sid=reviewed; Path=/; HttpOnly') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      cookies = getBetterAuthSetCookie({
+        get: () => 'sid=reviewed; Path=/; HttpOnly, csrf=token; Path=/',
+      } as unknown as Headers);
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+    expect(cookies).toEqual(['sid=reviewed; Path=/; HttpOnly', 'csrf=token; Path=/']);
+    expect(poisonHits).toBe(0);
+  });
+
   function headersWithFoldedSetCookie(folded: string): Headers {
     // A Headers shim with no getSetCookie(): forces the fallback path. The real
     // platform Headers always exposes getSetCookie(), so this models a degraded runtime.

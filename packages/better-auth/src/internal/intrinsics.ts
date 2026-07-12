@@ -10,6 +10,7 @@ const nativeDateNow = NativeDate.now;
 const nativeDateParse = NativeDate.parse;
 const nativeNumberIsNaN = NativeNumber.isNaN;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeReflectApply = NativeReflect.apply;
 const nativeRegExpExec = RegExp.prototype.exec;
@@ -128,6 +129,36 @@ export function betterAuthGetOwnPropertyDescriptor(
 ): PropertyDescriptor | undefined {
   assertBetterAuthIntrinsics();
   return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+}
+
+export function betterAuthArrayAppend<Value>(target: Value[], value: Value, label: string): void {
+  assertBetterAuthIntrinsics();
+  const length = betterAuthGetOwnPropertyDescriptor(target, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    !apply(nativeNumberIsSafeInteger, NativeNumber, [length.value]) ||
+    length.value < 0 ||
+    length.value >= 100_000
+  ) {
+    throw new TypeError(`${label} must have a bounded own array length.`);
+  }
+  const index = length.value;
+  apply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    index,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = betterAuthGetOwnPropertyDescriptor(target, index);
+  if (committed === undefined || !('value' in committed) || committed.value !== value) {
+    throw new TypeError(`${label} own-data append failed.`);
+  }
 }
 
 export function betterAuthIndexOf(value: string, search: string, position = 0): number {

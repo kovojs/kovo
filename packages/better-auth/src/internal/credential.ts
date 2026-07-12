@@ -17,6 +17,7 @@ import type {
   BetterAuthResponseLike,
 } from './contracts.js';
 import {
+  betterAuthArrayAppend,
   betterAuthApply,
   betterAuthCharacterCodeAt,
   betterAuthDateNow,
@@ -364,7 +365,7 @@ function mergeDomainTouches(
 ): Domain[] {
   const merged: Domain[] = [];
   for (let index = 0; index < defaults.length; index += 1) {
-    merged[index] = defaults[index]!;
+    betterAuthArrayAppend(merged, defaults[index]!, 'Better Auth credential domain touches');
   }
   const additions = overrides ?? [];
   for (let index = 0; index < additions.length; index += 1) {
@@ -376,8 +377,9 @@ function mergeDomainTouches(
         break;
       }
     }
-    if (existing < 0) merged[merged.length] = item;
-    else merged[existing] = item;
+    if (existing < 0) {
+      betterAuthArrayAppend(merged, item, 'Better Auth credential domain touches');
+    } else merged[existing] = item;
   }
   return merged;
 }

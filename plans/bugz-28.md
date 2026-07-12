@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   253 | C1-C253 |
+| Critical |   254 | C1-C254 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2960,6 +2960,16 @@ build:dist` passes.
     descriptors; the production Drizzle census has no numeric length assignment.
   - **Evidence:** the exact template-argument setter receives zero commits and the managed snapshot
     retains `$1` plus its original value; all 866 Drizzle tests and dist/DTS builds pass.
+
+- [x] **C254 - Better Auth cookie and credential-state arrays invoke inherited numeric setters.**
+      `packages/better-auth/src`
+  - Cookie folding/copying and credential domain-touch aggregation committed security state with
+    ordinary indexed writes. A selective inherited setter could erase a rotated session cookie or
+    cross-bind the exact credential domains invalidated after an authentication mutation.
+  - **Acceptance:** Better Auth-owned arrays use one boot-pinned own-data commit and the complete
+    non-test package census has no numeric length assignment.
+  - **Evidence:** the exact cookie-split setter receives zero commits and preserves both cookie
+    values; all 109 Better Auth tests and dist/DTS builds pass.
 
 ## High
 
