@@ -8,6 +8,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
 import { PgDialect, pgTable, serial, text } from 'drizzle-orm/pg-core';
+import { Client, Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -3650,6 +3651,122 @@ describe('createPostgresAppRuntimeDb', () => {
       'DISCARD ALL',
       'release',
     ]);
+  });
+
+  it('does not dispatch a late Pool.query method that forges PostgreSQL posture rows', async () => {
+    const pool = new Pool({
+      connectionString: 'postgres://127.0.0.1:1/kovo_primordial_probe',
+      connectionTimeoutMillis: 50,
+    });
+    const runtimeClient = __testPostgresRuntimeInternals.createNodePostgresRuntimeClient(pool);
+    const nativeQuery = Pool.prototype.query;
+    const nativeEnd = Pool.prototype.end;
+    let triggered = 0;
+    let endTriggered = 0;
+    Pool.prototype.query = function () {
+      triggered += 1;
+      Pool.prototype.query = nativeQuery;
+      return Promise.resolve({
+        rows: [{ relforcerowsecurity: true, relrowsecurity: true }],
+      });
+    } as typeof Pool.prototype.query;
+    Pool.prototype.end = function () {
+      endTriggered += 1;
+      Pool.prototype.end = nativeEnd;
+      return Promise.resolve();
+    } as typeof Pool.prototype.end;
+    try {
+      await expect(
+        runtimeClient.query('SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE false'),
+      ).rejects.toThrow();
+      expect(triggered).toBe(0);
+      await pool.end();
+      expect(endTriggered).toBe(0);
+    } finally {
+      Pool.prototype.query = nativeQuery;
+      Pool.prototype.end = nativeEnd;
+    }
+  });
+
+  it('does not dispatch a late Pool.connect method that substitutes a forged transaction client', async () => {
+    const pool = new Pool({
+      connectionString: 'postgres://127.0.0.1:1/kovo_primordial_connect_probe',
+      connectionTimeoutMillis: 50,
+    });
+    const runtimeClient = __testPostgresRuntimeInternals.createNodePostgresRuntimeClient(pool);
+    const nativeConnect = Pool.prototype.connect;
+    let connectTriggered = 0;
+    let queryTriggered = 0;
+    let releaseTriggered = 0;
+    Pool.prototype.connect = function () {
+      connectTriggered += 1;
+      Pool.prototype.connect = nativeConnect;
+      return Promise.resolve({
+        query() {
+          queryTriggered += 1;
+          return Promise.resolve({ rows: [{ forged: true }] });
+        },
+        release() {
+          releaseTriggered += 1;
+        },
+      });
+    } as typeof Pool.prototype.connect;
+    try {
+      await expect(runtimeClient.transaction(async () => undefined)).rejects.toThrow();
+      expect(connectTriggered).toBe(0);
+      expect(queryTriggered).toBe(0);
+      expect(releaseTriggered).toBe(0);
+    } finally {
+      Pool.prototype.connect = nativeConnect;
+      await pool.end();
+    }
+  });
+
+  it('pins fresh pooled Client query/release controls and rejects accessor release carriers', async () => {
+    const client = new Client() as Client & {
+      _ending: boolean;
+      release(error?: Error | boolean): void;
+    };
+    client._ending = true;
+    let released = 0;
+    Object.defineProperty(client, 'release', {
+      configurable: true,
+      enumerable: false,
+      value: () => {
+        released += 1;
+      },
+      writable: true,
+    });
+    const pinned = __testPostgresRuntimeInternals.pinNodePostgresPoolClient(client as never);
+    const nativeQuery = Client.prototype.query;
+    let queryTriggered = 0;
+    Client.prototype.query = function () {
+      queryTriggered += 1;
+      Client.prototype.query = nativeQuery;
+      return Promise.resolve({ rows: [{ forged: true }] });
+    } as typeof Client.prototype.query;
+    try {
+      await expect(pinned.query('SELECT 1')).rejects.toThrow();
+      expect(queryTriggered).toBe(0);
+      let forgedRelease = 0;
+      pinned.release = () => {
+        forgedRelease += 1;
+      };
+      __testPostgresRuntimeInternals.releasePinnedNodePostgresPoolClient(pinned);
+      expect(released).toBe(1);
+      expect(forgedRelease).toBe(0);
+    } finally {
+      Client.prototype.query = nativeQuery;
+    }
+
+    const accessorClient = new Client() as Client & { release(): void };
+    Object.defineProperty(accessorClient, 'release', {
+      configurable: true,
+      get: () => () => undefined,
+    });
+    expect(() =>
+      __testPostgresRuntimeInternals.pinNodePostgresPoolClient(accessorClient as never),
+    ).toThrow(/fresh own-data method/);
   });
 
   it('keeps nested rollback ownership distinct under late clock and RNG replacement', async () => {

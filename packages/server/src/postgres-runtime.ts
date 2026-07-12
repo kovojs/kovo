@@ -9,7 +9,14 @@ import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle as drizzleNodePg, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle as drizzlePglite, type PgliteDatabase } from 'drizzle-orm/pglite';
-import { Pool, type PoolClient, type PoolConfig, type QueryConfig, type QueryResultRow } from 'pg';
+import {
+  Client,
+  Pool,
+  type PoolClient,
+  type PoolConfig,
+  type QueryConfig,
+  type QueryResultRow,
+} from 'pg';
 
 import {
   declareSystemPrincipal,
@@ -83,6 +90,9 @@ const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
 const postgresSystemDbBrand: unique symbol = Symbol('kovo.postgres-system-db');
 const postgresSystemDbValues = createWitnessWeakMap<KovoPostgresSystemDb, KovoPostgresRuntimeDb>();
+const postgresPinnedNodePools = createWitnessWeakMap<object, true>();
+const postgresPinnedNodeClients = createWitnessWeakMap<object, true>();
+const postgresNodeClientReleaseValues = createWitnessWeakMap<object, Function>();
 const FRAMEWORK_INTERNAL_REACHABLE_TABLES = postgresStringSet([
   '_kovo_jobs',
   '_kovo_task_cron_occurrences',
@@ -192,6 +202,22 @@ const postgresPgliteTransaction = capturePostgresCallable(
   PGlite.prototype,
   'transaction',
   'PGlite transaction',
+);
+const postgresPoolEnd = capturePostgresCallable(Pool.prototype, 'end', 'node-postgres Pool.end');
+const postgresPoolQuery = capturePostgresCallable(
+  Pool.prototype,
+  'query',
+  'node-postgres Pool.query',
+);
+const postgresPoolConnect = capturePostgresCallable(
+  Pool.prototype,
+  'connect',
+  'node-postgres Pool.connect',
+);
+const postgresClientQuery = capturePostgresCallable(
+  Client.prototype,
+  'query',
+  'node-postgres Client.query',
 );
 
 function capturePostgresPolicySqlToQuery(): PgDialect['sqlToQuery'] {
@@ -2983,6 +3009,105 @@ function pinPostgresPgliteTransactionClient(transaction: unknown): RuntimeTransa
   return witnessFreeze(facade) as unknown as RuntimeTransactionClient;
 }
 
+function pinNodePostgresPool(pool: Pool): Pool {
+  if (postgresIsProxy(pool)) throw new TypeError('node-postgres Pool must not be a Proxy.');
+  if (witnessWeakMapGet(postgresPinnedNodePools, pool) === true) return pool;
+  defineCapturedPostgresMethod(pool, 'end', postgresPoolEnd, pool);
+  defineCapturedPostgresMethod(pool, 'query', postgresPoolQuery, pool);
+  witnessDefineProperty(pool, 'connect', {
+    configurable: false,
+    enumerable: false,
+    value: (...args: unknown[]): unknown => invokePinnedNodePostgresConnect(pool, args),
+    writable: false,
+  });
+  witnessWeakMapSet(postgresPinnedNodePools, pool, true);
+  return pool;
+}
+
+function invokePinnedNodePostgresConnect(pool: Pool, args: readonly unknown[]): unknown {
+  const argumentCount = postgresDenseArrayLength(args, 'node-postgres Pool.connect arguments');
+  const firstArgument =
+    argumentCount === 0
+      ? undefined
+      : postgresDenseArrayValue(args, 0, 'node-postgres Pool.connect arguments');
+  if (typeof firstArgument === 'function') {
+    const invocationArgs: unknown[] = [
+      (...callbackArgs: unknown[]): unknown => {
+        const pinnedCallbackArgs: unknown[] = [];
+        appendPostgresDenseValues(
+          pinnedCallbackArgs,
+          callbackArgs,
+          'node-postgres Pool.connect callback arguments',
+        );
+        const rawClient =
+          callbackArgs.length > 1
+            ? postgresDenseArrayValue(
+                callbackArgs,
+                1,
+                'node-postgres Pool.connect callback arguments',
+              )
+            : undefined;
+        if (isRecord(rawClient)) {
+          const client = pinNodePostgresPoolClient(rawClient as unknown as PoolClient);
+          witnessDefineProperty(pinnedCallbackArgs, 1, {
+            configurable: true,
+            enumerable: true,
+            value: client,
+            writable: true,
+          });
+          witnessDefineProperty(pinnedCallbackArgs, 2, {
+            configurable: true,
+            enumerable: true,
+            value: (error?: Error | boolean) => releasePinnedNodePostgresPoolClient(client, error),
+            writable: true,
+          });
+        }
+        return witnessReflectApply(firstArgument, undefined, pinnedCallbackArgs);
+      },
+    ];
+    for (let index = 1; index < argumentCount; index += 1) {
+      appendPostgresValue(
+        invocationArgs,
+        postgresDenseArrayValue(args, index, 'node-postgres Pool.connect arguments'),
+      );
+    }
+    return witnessReflectApply(postgresPoolConnect, pool, invocationArgs);
+  }
+  return (async (): Promise<PoolClient> => {
+    const client = await witnessReflectApply<Promise<PoolClient>>(postgresPoolConnect, pool, args);
+    return pinNodePostgresPoolClient(client);
+  })();
+}
+
+function pinNodePostgresPoolClient(client: PoolClient): PoolClient {
+  if (!isRecord(client) || postgresIsProxy(client)) {
+    throw new TypeError('node-postgres pooled Client must not be a Proxy.');
+  }
+  snapshotNodePostgresPoolClientRelease(client);
+  if (witnessWeakMapGet(postgresPinnedNodeClients, client) !== true) {
+    defineCapturedPostgresMethod(client, 'query', postgresClientQuery, client);
+    witnessWeakMapSet(postgresPinnedNodeClients, client, true);
+  }
+  return client;
+}
+
+function snapshotNodePostgresPoolClientRelease(client: PoolClient): void {
+  const release = capturePostgresOwnCallable(
+    client,
+    'release',
+    'node-postgres pooled Client.release',
+  );
+  witnessWeakMapSet(postgresNodeClientReleaseValues, client, release);
+}
+
+function releasePinnedNodePostgresPoolClient(client: PoolClient, error?: Error | boolean): void {
+  const release = witnessWeakMapGet(postgresNodeClientReleaseValues, client);
+  if (release === undefined) {
+    throw new TypeError('node-postgres pooled Client.release was not captured for this checkout.');
+  }
+  witnessReflectApply(release, client, error === undefined ? [] : [error]);
+}
+
 function createNodePostgresRuntimeClient(
   config: ResolvedPostgresRuntimeConfig,
   relations: AnyRelations,
@@ -2996,7 +3121,9 @@ function createNodePostgresRuntimeClient(
     config.systemDatabaseUrl === undefined
       ? undefined
       : registerEgressDatabaseUrl(config.systemDatabaseUrl);
-  const pool = new Pool({ connectionString: config.databaseUrl } satisfies PoolConfig);
+  const pool = pinNodePostgresPool(
+    new Pool({ connectionString: config.databaseUrl } satisfies PoolConfig),
+  );
   const transactionalClient = new NodePostgresRuntimeClient(pool);
   const adminTransactionalClient = createOptionalNodePostgresRuntimeClient(config.adminDatabaseUrl);
   const systemTransactionalClient = createOptionalNodePostgresRuntimeClient(
@@ -3064,7 +3191,7 @@ function createOptionalNodePostgresRuntimeClient(
   return databaseUrl === undefined
     ? undefined
     : new NodePostgresRuntimeClient(
-        new Pool({ connectionString: databaseUrl } satisfies PoolConfig),
+        pinNodePostgresPool(new Pool({ connectionString: databaseUrl } satisfies PoolConfig)),
       );
 }
 
@@ -3226,6 +3353,9 @@ class NodePostgresRuntimeClient implements RuntimeSqlClient {
     callback: (tx: RuntimeTransactionClient) => Promise<Result>,
   ): Promise<Result> {
     const client = await this.pool.connect();
+    if (witnessWeakMapGet(postgresNodeClientReleaseValues, client) === undefined) {
+      snapshotNodePostgresPoolClientRelease(client);
+    }
     const tx = new NodePostgresTransactionClient(client);
     let result: Result | undefined;
     let primaryError: unknown;
@@ -3238,8 +3368,7 @@ class NodePostgresRuntimeClient implements RuntimeSqlClient {
       await client.query('ROLLBACK').catch(() => undefined);
     }
     const cleanupError = await discardNodePostgresSession(client);
-    if (cleanupError === undefined) client.release();
-    else client.release(cleanupError);
+    releasePinnedNodePostgresPoolClient(client, cleanupError);
     if (primaryError !== undefined) throw primaryError;
     if (cleanupError !== undefined) throw cleanupError;
     return result as Result;
@@ -3260,7 +3389,13 @@ export const __testPostgresRuntimeInternals = {
     return createRuntimeClient(config);
   },
   createNodePostgresRuntimeClient(pool: Pool): RuntimeSqlClient {
-    return new NodePostgresRuntimeClient(pool);
+    return new NodePostgresRuntimeClient(pool instanceof Pool ? pinNodePostgresPool(pool) : pool);
+  },
+  pinNodePostgresPoolClient(client: PoolClient): PoolClient {
+    return pinNodePostgresPoolClient(client);
+  },
+  releasePinnedNodePostgresPoolClient(client: PoolClient, error?: Error | boolean): void {
+    releasePinnedNodePostgresPoolClient(client, error);
   },
   resolvePostgresRuntimeConfig(options: PostgresRuntimeConfigInput): ResolvedPostgresRuntimeConfig {
     return resolvePostgresRuntimeConfig(options);
