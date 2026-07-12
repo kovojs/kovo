@@ -138,6 +138,17 @@ describe('inline loader minified artifact', () => {
     );
   });
 
+  it('retires the expired mutation principal before reauth navigation', () => {
+    // C180 / SPEC §6.5/§9.3: a 401 Kovo-Reauth is an expired-session
+    // transition, and the sanitized login navigation cannot own retirement.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "if(status===401&&reauth){retireBroadcast();ng(bns.safeSameOriginPath(reauth)||'/');return;}",
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain(
+      "if(status===401&&reauth){ng(bns.safeSameOriginPath(reauth)||'/');return;}",
+    );
+  });
+
   it('keeps the shipped minified response apply helper tied to the canonical runtime apply helper', () => {
     // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
     expect(inlineKovoLoaderInstallerSource).toBe(inlineKovoLoaderInstallerSource.trim());

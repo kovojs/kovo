@@ -307,8 +307,17 @@ describe('enhanced mutation submit', () => {
 
   it('follows 401 Kovo-Reauth without applying mutation fragments', async () => {
     const store = createQueryStore();
+    const lifecycleOrder: string[] = [];
+    const channel = new (class extends FakeBroadcastChannel {
+      override close(): void {
+        lifecycleOrder.push('retire');
+        super.close();
+      }
+    })();
+    const broadcast = installMutationBroadcast({ channel, store });
+    const lateMessageHandler = channel.onmessage;
     const root = new FakeMorphRoot();
-    const assign = vi.fn();
+    const assign = vi.fn(() => lifecycleOrder.push('navigate'));
     const originalLocation = globalThis.location;
     Object.defineProperty(globalThis, 'location', {
       configurable: true,
@@ -327,6 +336,7 @@ describe('enhanced mutation submit', () => {
 
     try {
       const result = await submitEnhancedMutation({
+        broadcast,
         fetch,
         form: { action: '/_m/cart/add', method: 'post' },
         formData: new FormData(),
@@ -350,6 +360,17 @@ describe('enhanced mutation submit', () => {
 
     expect(assign).toHaveBeenCalledWith('/login?next=%2Fcart');
     expect(text).not.toHaveBeenCalled();
+    expect(lifecycleOrder).toEqual(['retire', 'navigate']);
+    expect(channel.closed).toBe(true);
+    expect(channel.onmessage).toBeNull();
+    lateMessageHandler?.({
+      data: {
+        body: '<kovo-query name="account">{"owner":"expired-principal"}</kovo-query>',
+        changes: [],
+        type: 'kovo:mutation-response',
+      },
+    });
+    expect(store.get('account')).toBeUndefined();
   });
 
   it.each([
@@ -360,8 +381,11 @@ describe('enhanced mutation submit', () => {
     ['/%0a/login', '/'],
   ])('sanitizes 401 Kovo-Reauth %s before navigation', async (reauth, expected) => {
     const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
-    const assign = vi.fn();
+    const navigationRetirementStates: boolean[] = [];
+    const assign = vi.fn(() => navigationRetirementStates.push(channel.closed));
     const originalLocation = globalThis.location;
     Object.defineProperty(globalThis, 'location', {
       configurable: true,
@@ -379,6 +403,7 @@ describe('enhanced mutation submit', () => {
 
     try {
       await submitEnhancedMutation({
+        broadcast,
         fetch,
         form: { action: '/_m/cart/add', method: 'post' },
         formData: new FormData(),
@@ -393,6 +418,47 @@ describe('enhanced mutation submit', () => {
     }
 
     expect(assign).toHaveBeenCalledWith(expected);
+    expect(navigationRetirementStates).toEqual([true]);
+    expect(channel.closed).toBe(true);
+    expect(channel.onmessage).toBeNull();
+  });
+
+  it('keeps the mutation principal live for a non-401 response with a stray reauth header', async () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
+    const root = new FakeMorphRoot();
+    const body = '<kovo-query name="account">{"owner":"same-principal"}</kovo-query>';
+
+    const result = await submitEnhancedMutation({
+      broadcast,
+      fetch: async () => ({
+        headers: {
+          get(name: string) {
+            return name.toLowerCase() === 'kovo-reauth' ? '/login' : null;
+          },
+        },
+        ok: true,
+        status: 200,
+        text: async () => body,
+      }),
+      form: { action: '/_m/account/update', method: 'post' },
+      formData: new FormData(),
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual(['account']);
+    expect(store.get('account')).toEqual({ owner: 'same-principal' });
+    expect(channel.closed).toBe(false);
+    expect(channel.onmessage).not.toBeNull();
+    expect(channel.messages).toEqual([
+      {
+        body,
+        changes: [],
+        type: 'kovo:mutation-response',
+      },
+    ]);
   });
 
   it('submits enhanced mutation forms with live targets and applies the fragment response', async () => {

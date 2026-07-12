@@ -936,6 +936,9 @@ function installInlineKovoLoader(im) {
         }
         const reauth = bns.readHeader(response, 'Kovo-Reauth');
         if (status === 401 && reauth) {
+          // C180 / SPEC §6.5/§9.3: reauthentication is an expired-principal transition.
+          // Retirement must precede a cancellable navigation to the sanitized login target.
+          retireBroadcast();
           ng(bns.safeSameOriginPath(reauth) || '/');
           return;
         }

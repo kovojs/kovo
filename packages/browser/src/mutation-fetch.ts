@@ -142,6 +142,10 @@ export async function fetchEnhancedMutation(
   const status = responseStatus(response, security, 0);
   const reauth = security.readHeader(response, 'Kovo-Reauth');
   if (status === 401 && reauth) {
+    // C180 / SPEC §6.5/§9.3: Kovo-Reauth means the page-load principal is no longer
+    // authenticated. Cut its origin-wide mutation authority before the login navigation,
+    // which can be delayed or cancelled by the browser.
+    onSessionTransition?.();
     followReauthDirective(reauth, security);
     return {
       body: '',

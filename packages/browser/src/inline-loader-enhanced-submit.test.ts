@@ -415,7 +415,13 @@ describe('inline loader enhanced submit source', () => {
 
       for (const [reauth, expected] of cases) {
         const listeners = new Map<string, (event: unknown) => void>();
-        const assign = vi.fn();
+        const channelIndex = InertBroadcastChannel.instances.length;
+        const navigationRetirementStates: boolean[] = [];
+        const assign = vi.fn(() => {
+          navigationRetirementStates.push(
+            InertBroadcastChannel.instances[channelIndex]?.closed === true,
+          );
+        });
         const preventDefault = vi.fn();
         const form = {
           action: '/_m/cart/add',
@@ -456,6 +462,8 @@ describe('inline loader enhanced submit source', () => {
             vi.fn(async () => ({})),
             globalRecord,
           );
+          const runtimeChannel = InertBroadcastChannel.instances[channelIndex];
+          if (!runtimeChannel) throw new Error('inline mutation broadcast unavailable');
           listeners.get('submit')?.({
             preventDefault,
             target: {
@@ -473,6 +481,9 @@ describe('inline loader enhanced submit source', () => {
 
           expect(preventDefault).toHaveBeenCalledTimes(1);
           expect(assign).toHaveBeenCalledWith(expected);
+          expect(navigationRetirementStates).toEqual([true]);
+          expect(runtimeChannel.closed).toBe(true);
+          expect(runtimeChannel.onmessage).toBeNull();
         } finally {
           Object.assign(globalRecord, {
             FormData: originals.FormData,
@@ -486,6 +497,99 @@ describe('inline loader enhanced submit source', () => {
           } else {
             globalRecord.__kovoInlineImport = originals.importModule;
           }
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'keeps inline mutation authority for non-401 stray reauth headers through %s',
+    async (_name, installSource) => {
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const channelIndex = InertBroadcastChannel.instances.length;
+      const assign = vi.fn();
+      const text = vi.fn(async () => '');
+      const form = {
+        action: '/_m/account/update',
+        getAttribute(name: string) {
+          return name === 'data-enhance' ? '' : null;
+        },
+        method: 'post',
+      };
+
+      try {
+        globalRecord.FormData = function FormData() {
+          return { get: () => null };
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelectorAll() {
+            return [];
+          },
+        };
+        globalRecord.fetch = vi.fn(async () => ({
+          headers: {
+            get(name: string) {
+              return name.toLowerCase() === 'kovo-reauth' ? '/login' : null;
+            },
+          },
+          ok: true,
+          status: 200,
+          text,
+        }));
+        globalRecord.location = {
+          assign,
+          href: 'https://kovo.test/account',
+          origin: 'https://kovo.test',
+        };
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        const runtimeChannel = InertBroadcastChannel.instances[channelIndex];
+        if (!runtimeChannel) throw new Error('inline mutation broadcast unavailable');
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(assign).not.toHaveBeenCalled();
+        expect(text).toHaveBeenCalledOnce();
+        expect(runtimeChannel.closed).toBe(false);
+        expect(runtimeChannel.onmessage).not.toBeNull();
+      } finally {
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          location: originals.location,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
     },
