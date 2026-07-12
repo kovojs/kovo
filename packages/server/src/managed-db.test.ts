@@ -32,6 +32,7 @@ import type { Reader, Writer } from './managed-db.js';
 import {
   kovoAsyncMutationTransaction,
   managedSqlExecutionPolicy,
+  runSqliteAsyncTransaction,
   wrapManagedDbForSqlSafety,
 } from './sql-safe-handle.js';
 import { runQuery } from './query.js';
@@ -4094,6 +4095,31 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         }
       )[kovoAsyncMutationTransaction],
     ).toBeUndefined();
+  });
+
+  it('pins real SQLite frame controls through rollback after prototype poisoning', async () => {
+    // SPEC §6.6 C9/§10.3: BEGIN and its matching COMMIT/ROLLBACK are one authority frame. The
+    // callback cannot replace a shared driver prototype between those transitions.
+    const client = new Database(':memory:');
+    const nativeExec = Database.prototype.exec;
+    try {
+      client.exec('create table rollback_control_proof (id integer primary key)');
+      await expect(
+        runSqliteAsyncTransaction(client, client, async (transactionDb) => {
+          (transactionDb as Database).prepare('insert into rollback_control_proof values (1)').run();
+          Database.prototype.exec = function (statement: string): Database {
+            return Reflect.apply(nativeExec, this, [
+              statement === 'ROLLBACK' ? 'COMMIT' : statement,
+            ]);
+          };
+          throw new Error('handler failure');
+        }),
+      ).rejects.toThrow(/handler failure/u);
+    } finally {
+      Database.prototype.exec = nativeExec;
+    }
+    expect(client.prepare('select id from rollback_control_proof').all()).toEqual([]);
+    client.close();
   });
 
   it('write mode denies unknown methods behind raw driver escape properties before execution', () => {

@@ -84,6 +84,9 @@ if (
   throw new TypeError('Kovo managed SQL symbol controls are unavailable.');
 }
 const nativeSymbolDescription = witnessReflectGet(symbolDescriptionDescriptor, 'get') as Function;
+const NativePromise = globalThis.Promise;
+const nativePromiseResolve = witnessReflectGet(NativePromise, 'resolve') as Function;
+const nativePromiseThen = witnessReflectGet(NativePromise.prototype, 'then') as Function;
 const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
 const DRIZZLE_TABLE_SCHEMA = Symbol.for('drizzle:Schema');
 const DRIZZLE_TABLE_IS_ALIAS = Symbol.for('drizzle:IsAlias');
@@ -1658,8 +1661,9 @@ function guardedTransactionMethod(
 }
 
 type SqliteTransactionClient = {
-  exec(statement: string): unknown;
-  readonly inTransaction?: boolean;
+  readonly exec: Function;
+  readonly inTransaction: PropertyDescriptor;
+  readonly target: Record<PropertyKey, unknown>;
 };
 
 export function runSqliteAsyncTransaction<Result>(
@@ -1670,7 +1674,7 @@ export function runSqliteAsyncTransaction<Result>(
   const client = sqliteTransactionClient(db);
   if (!client) return undefined;
 
-  const queueTarget = (typeof db === 'object' && db !== null ? db : client) as object;
+  const queueTarget = (typeof db === 'object' && db !== null ? db : client.target) as object;
   return runQueuedManagedTransaction(queueTarget, () =>
     runSqliteTransactionControl(client, () => callback(transactionDb)),
   );
@@ -1684,20 +1688,63 @@ function sqliteTransactionClient(db: unknown): SqliteTransactionClient | undefin
   const target = frameworkManagedDbRawTarget(db) ?? db;
   if (!isRecord(target)) return undefined;
 
-  if (isSqliteTransactionClient(target)) return target;
+  const direct = pinSqliteTransactionClient(target);
+  if (direct !== undefined) return direct;
 
-  const client = target.$client;
-  return isSqliteTransactionClient(client) ? client : undefined;
+  const client = strictInheritedDataDescriptor(target, '$client');
+  return client !== undefined && 'value' in client
+    ? pinSqliteTransactionClient(client.value)
+    : undefined;
 }
 
-function isSqliteTransactionClient(value: unknown): value is SqliteTransactionClient {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.exec === 'function' &&
-    typeof value.transaction === 'function' &&
-    typeof value.prepare === 'function' &&
-    'inTransaction' in value
-  );
+function pinSqliteTransactionClient(value: unknown): SqliteTransactionClient | undefined {
+  if (!isRecord(value)) return undefined;
+  try {
+    const exec = strictInheritedDataDescriptor(value, 'exec');
+    const transaction = strictInheritedDataDescriptor(value, 'transaction');
+    const prepare = strictInheritedDataDescriptor(value, 'prepare');
+    const inTransaction = strictInheritedDataDescriptor(value, 'inTransaction', true);
+    if (
+      exec === undefined ||
+      !('value' in exec) ||
+      typeof exec.value !== 'function' ||
+      transaction === undefined ||
+      !('value' in transaction) ||
+      typeof transaction.value !== 'function' ||
+      prepare === undefined ||
+      !('value' in prepare) ||
+      typeof prepare.value !== 'function' ||
+      inTransaction === undefined
+    ) {
+      return undefined;
+    }
+    return witnessFreeze({
+      exec: exec.value,
+      inTransaction: witnessFreeze(inTransaction),
+      target: value,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function strictInheritedDataDescriptor(
+  value: object,
+  property: PropertyKey,
+  allowGetter = false,
+): PropertyDescriptor | undefined {
+  let current: object | null = value;
+  while (current !== null) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      if ('value' in descriptor || (allowGetter && typeof descriptor.get === 'function')) {
+        return descriptor;
+      }
+      throw new TypeError(`SQLite transaction control ${String(property)} must be a data property.`);
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  return undefined;
 }
 
 async function runSqliteTransactionControl<Result>(
@@ -1706,18 +1753,29 @@ async function runSqliteTransactionControl<Result>(
 ): Promise<Result> {
   // SPEC §10.3: better-sqlite3 transactions are synchronous, but mutation handlers may be async.
   // Keep the transaction open across the awaited handler with framework-owned control statements.
-  const nested = client.inTransaction === true;
+  const nested =
+    'get' in client.inTransaction && typeof client.inTransaction.get === 'function'
+      ? witnessReflectApply(client.inTransaction.get, client.target, []) === true
+      : 'value' in client.inTransaction && client.inTransaction.value === true;
   const savepoint = nested ? `kovo_mutation_${++sqliteSavepointId}` : undefined;
 
-  client.exec(savepoint === undefined ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+  witnessReflectApply(client.exec, client.target, [
+    savepoint === undefined ? 'BEGIN' : `SAVEPOINT ${savepoint}`,
+  ]);
   try {
     const result = await callback();
-    client.exec(savepoint === undefined ? 'COMMIT' : `RELEASE ${savepoint}`);
+    witnessReflectApply(client.exec, client.target, [
+      savepoint === undefined ? 'COMMIT' : `RELEASE ${savepoint}`,
+    ]);
     return result;
   } catch (error) {
     try {
-      client.exec(savepoint === undefined ? 'ROLLBACK' : `ROLLBACK TO ${savepoint}`);
-      if (savepoint !== undefined) client.exec(`RELEASE ${savepoint}`);
+      witnessReflectApply(client.exec, client.target, [
+        savepoint === undefined ? 'ROLLBACK' : `ROLLBACK TO ${savepoint}`,
+      ]);
+      if (savepoint !== undefined) {
+        witnessReflectApply(client.exec, client.target, [`RELEASE ${savepoint}`]);
+      }
     } catch (rollbackError) {
       throw new AggregateError(
         [error, rollbackError],
@@ -1732,12 +1790,14 @@ async function runQueuedManagedTransaction<Result>(
   target: object,
   run: () => Promise<Result> | Result,
 ): Promise<Result> {
-  const previous = witnessWeakMapGet(managedTransactionQueue, target) ?? Promise.resolve();
-  const current = previous.then(run);
-  const tail = current.then(
+  const previous =
+    witnessWeakMapGet(managedTransactionQueue, target) ??
+    witnessReflectApply<Promise<void>>(nativePromiseResolve, NativePromise, []);
+  const current = witnessReflectApply<Promise<Result>>(nativePromiseThen, previous, [run]);
+  const tail = witnessReflectApply<Promise<void>>(nativePromiseThen, current, [
     () => undefined,
     () => undefined,
-  );
+  ]);
   witnessWeakMapSet(managedTransactionQueue, target, tail);
 
   try {
