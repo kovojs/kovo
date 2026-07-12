@@ -1,0 +1,99 @@
+import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+
+import {
+  computeRenderPlanFingerprint,
+  encodeRenderPlanFrame,
+} from './render-plan-token.js';
+
+const renderPlanIntrinsicsUrl = new URL('./render-plan-token-intrinsics.ts', import.meta.url).href;
+
+describe('render-plan token security controls', () => {
+  it('keeps exact framing and fingerprints after late collection, string, Buffer, and hash poisoning', () => {
+    const expectedFrame = encodeRenderPlanFrame('名', '🙂');
+    const expected = computeRenderPlanFingerprint({ a: 'field:id', z: 'field:role' });
+    const changed = computeRenderPlanFingerprint({ a: 'field:id', z: 'field:name' });
+    const hashPrototype = Object.getPrototypeOf(createHash('sha256')) as {
+      digest: (...args: unknown[]) => unknown;
+      update: (...args: unknown[]) => unknown;
+    };
+    const originalByteLength = Buffer.byteLength;
+    const originalDigest = hashPrototype.digest;
+    const originalJoin = Array.prototype.join;
+    const originalMap = Array.prototype.map;
+    const originalObjectKeys = Object.keys;
+    const originalSlice = String.prototype.slice;
+    const originalSort = Array.prototype.sort;
+    const originalUpdate = hashPrototype.update;
+    Buffer.byteLength = () => 0;
+    hashPrototype.digest = () => '0'.repeat(64);
+    hashPrototype.update = function () {
+      return this;
+    };
+    Array.prototype.join = () => 'forged';
+    Array.prototype.map = () => [];
+    Array.prototype.sort = function () {
+      return this;
+    };
+    Object.keys = () => ['z'];
+    String.prototype.slice = () => '0000000000000000';
+
+    try {
+      expect(encodeRenderPlanFrame('名', '🙂')).toBe(expectedFrame);
+      expect(computeRenderPlanFingerprint({ z: 'field:role', a: 'field:id' })).toBe(expected);
+      expect(computeRenderPlanFingerprint({ z: 'field:name', a: 'field:id' })).toBe(changed);
+      expect(changed).not.toBe(expected);
+    } finally {
+      String.prototype.slice = originalSlice;
+      Object.keys = originalObjectKeys;
+      Array.prototype.sort = originalSort;
+      Array.prototype.map = originalMap;
+      Array.prototype.join = originalJoin;
+      hashPrototype.update = originalUpdate;
+      hashPrototype.digest = originalDigest;
+      Buffer.byteLength = originalByteLength;
+    }
+  });
+
+  it('rejects accessor-backed query shapes instead of re-reading mutable caller authority', () => {
+    const input = {} as Record<string, string>;
+    Object.defineProperty(input, 'account', {
+      enumerable: true,
+      get: () => 'field:role',
+    });
+    expect(() => computeRenderPlanFingerprint(input)).toThrow(/string data property/);
+  });
+
+  it('fails closed when framing controls were poisoned before their import', async () => {
+    const originalByteLength = Buffer.byteLength;
+    Buffer.byteLength = () => 0;
+    try {
+      const controls = await import(`${renderPlanIntrinsicsUrl}?preimport-frame-poison`);
+      expect(() => controls.renderPlanUtf8ByteLength('safe')).toThrow(
+        /render-plan controls are unavailable/,
+      );
+    } finally {
+      Buffer.byteLength = originalByteLength;
+    }
+  });
+
+  it('fails closed when hash controls were poisoned before their import', async () => {
+    const hashPrototype = Object.getPrototypeOf(createHash('sha256')) as {
+      update: (...args: unknown[]) => unknown;
+    };
+    const originalUpdate = hashPrototype.update;
+    hashPrototype.update = function () {
+      return this;
+    };
+    try {
+      await expect(import(`${renderPlanIntrinsicsUrl}?preimport-hash-poison`)).resolves.toBeDefined();
+      const controls = await import(`${renderPlanIntrinsicsUrl}?preimport-hash-poison`);
+      expect(() => controls.renderPlanHash16(['safe'])).toThrow(
+        /render-plan controls are unavailable/,
+      );
+    } finally {
+      hashPrototype.update = originalUpdate;
+    }
+  });
+});

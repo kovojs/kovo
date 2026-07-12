@@ -1,5 +1,8 @@
-import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
+import {
+  renderPlanHash16,
+  renderPlanOwnStringEntries,
+  renderPlanUtf8ByteLength,
+} from './render-plan-token-intrinsics.ts';
 
 /**
  * The render-plan grammar version folded into every render-plan token so that a
@@ -25,7 +28,7 @@ export const RENDER_PLAN_GRAMMAR_VERSION = 'kovo-render-plan/2';
  * framing contract.
  */
 export function encodeRenderPlanFrame(tag: string, value: string): string {
-  return `${Buffer.byteLength(tag, 'utf8')}:${tag}${Buffer.byteLength(value, 'utf8')}:${value}`;
+  return `${renderPlanUtf8ByteLength(tag)}:${tag}${renderPlanUtf8ByteLength(value)}:${value}`;
 }
 
 /**
@@ -43,18 +46,20 @@ export type RenderPlanFingerprintInput = Record<string, string>;
  * implementation so the two packages cannot drift.
  */
 export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput): string {
-  const entries = Object.keys(input)
-    .sort()
-    .map((name) =>
-      encodeRenderPlanFrame(
-        'query',
-        encodeRenderPlanFrame('name', name) + encodeRenderPlanFrame('shape', input[name] ?? ''),
-      ),
-    )
-    .join('');
-  return createHash('sha256')
-    .update(encodeRenderPlanFrame('grammar', RENDER_PLAN_GRAMMAR_VERSION))
-    .update(encodeRenderPlanFrame('queries', entries))
-    .digest('hex')
-    .slice(0, 16);
+  if (typeof input !== 'object' || input === null) {
+    throw new TypeError('Render-plan fingerprint input must be an object.');
+  }
+  const shapeEntries = renderPlanOwnStringEntries(input);
+  let entries = '';
+  for (let index = 0; index < shapeEntries.length; index += 1) {
+    const [name, shape] = shapeEntries[index]!;
+    entries += encodeRenderPlanFrame(
+      'query',
+      encodeRenderPlanFrame('name', name) + encodeRenderPlanFrame('shape', shape),
+    );
+  }
+  return renderPlanHash16([
+    encodeRenderPlanFrame('grammar', RENDER_PLAN_GRAMMAR_VERSION),
+    encodeRenderPlanFrame('queries', entries),
+  ]);
 }
