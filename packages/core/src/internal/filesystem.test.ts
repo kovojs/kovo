@@ -3,6 +3,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   realpath,
   rename,
@@ -10,6 +11,7 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve, sep } from 'node:path';
 
@@ -20,6 +22,8 @@ import {
   createFrameworkOutputFileSystemBoundary,
   isFrameworkFileSystemBoundary,
 } from './filesystem.js';
+
+const require = createRequire(import.meta.url);
 
 describe('framework filesystem boundary', () => {
   it('reads only files confined under the real root', async () => {
@@ -123,6 +127,129 @@ describe('framework filesystem boundary', () => {
       await expect(readFile(outsideTarget, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
       await fileSystem.writeFile('safe.txt', 'safe');
       await expect(readFile(join(root, 'safe.txt'), 'utf8')).resolves.toBe('safe');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps output writes confined after late filesystem-stat prototype poisoning', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-stat-confinement-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+    await symlink(outside, join(root, 'linked-outside'), 'dir');
+    const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+    const statPrototype = Object.getPrototypeOf(await lstat(root)) as {
+      isDirectory(): boolean;
+      isSymbolicLink(): boolean;
+    };
+    const originalIsDirectory = statPrototype.isDirectory;
+    const originalIsSymbolicLink = statPrototype.isSymbolicLink;
+    let outcome: unknown;
+    try {
+      statPrototype.isSymbolicLink = () => false;
+      statPrototype.isDirectory = () => true;
+      outcome = await fileSystem
+        .writeFile('linked-outside/escaped.txt', 'ESCAPED')
+        .catch((error: unknown) => error);
+    } finally {
+      statPrototype.isDirectory = originalIsDirectory;
+      statPrototype.isSymbolicLink = originalIsSymbolicLink;
+    }
+
+    try {
+      expect(outcome).toBeInstanceOf(Error);
+      await expect(readFile(join(outside, 'escaped.txt'), 'utf8')).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('reads bytes from the validated file handle under late FileHandle method poisoning', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-handle-confinement-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+    await writeFile(join(root, 'safe.txt'), 'inside', 'utf8');
+    await writeFile(join(outside, 'secret.txt'), 'outside secret', 'utf8');
+    const fileSystem = await createFrameworkFileSystemBoundary(root);
+    const controlHandle = await open(join(root, 'safe.txt'));
+    const handlePrototype = Object.getPrototypeOf(controlHandle) as {
+      readFile(...args: unknown[]): Promise<Uint8Array>;
+    };
+    const originalReadFile = handlePrototype.readFile;
+    let poisonHits = 0;
+    let result: Awaited<ReturnType<typeof fileSystem.readFile>>;
+    try {
+      handlePrototype.readFile = async () => {
+        poisonHits += 1;
+        return await readFile(join(outside, 'secret.txt'));
+      };
+      result = await fileSystem.readFile('safe.txt');
+    } finally {
+      handlePrototype.readFile = originalReadFile;
+      await controlHandle.close();
+    }
+
+    try {
+      expect(new TextDecoder().decode(result?.body as Uint8Array)).toBe('inside');
+      expect(poisonHits).toBe(0);
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps output writes confined after late node:path binding replacement', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-path-binding-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+    const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+    const canonicalRoot = fileSystem.root;
+    const relativeEscape = '../outside/escaped.txt';
+    const outsideTarget = join(outside, 'escaped.txt');
+    const mutablePath = require('node:path') as typeof import('node:path');
+    const originalResolve = mutablePath.resolve;
+    let expectedContainmentRoot = root;
+    let poisonHits = 0;
+    let outcome: unknown;
+    try {
+      mutablePath.resolve = ((...parts: string[]) => {
+        if (
+          parts.length === 2 &&
+          (parts[0] === root || parts[0] === canonicalRoot) &&
+          parts[1] === relativeEscape
+        ) {
+          poisonHits += 1;
+          expectedContainmentRoot = parts[0]!;
+          return outsideTarget;
+        }
+        if (parts.length === 1 && parts[0] === outsideTarget) {
+          poisonHits += 1;
+          return join(expectedContainmentRoot, 'forged-inside.txt');
+        }
+        if (parts.length === 1 && parts[0] === outside) {
+          poisonHits += 1;
+          return expectedContainmentRoot;
+        }
+        return originalResolve(...parts);
+      }) as typeof mutablePath.resolve;
+      syncBuiltinESMExports();
+      outcome = await fileSystem.writeFile(relativeEscape, 'ESCAPED').catch((error) => error);
+    } finally {
+      mutablePath.resolve = originalResolve;
+      syncBuiltinESMExports();
+    }
+
+    try {
+      expect(outcome).toBeInstanceOf(Error);
+      expect(poisonHits).toBe(0);
+      await expect(readFile(outsideTarget, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       await rm(base, { force: true, recursive: true });
     }
