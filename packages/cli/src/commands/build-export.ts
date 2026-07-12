@@ -80,6 +80,7 @@ import { findNearestFile, readJsonRecord } from '../tooling.js';
 import {
   buildArrayIsArray,
   buildArrayJoin,
+  buildCreateNullRecord,
   buildCreateMap,
   buildCreateSet,
   buildFunctionSource,
@@ -92,12 +93,14 @@ import {
   buildOwnDataValue,
   buildPromiseAll,
   buildRegExpExec,
+  buildRegExpReplace,
   buildSetAdd,
   buildSetHas,
   buildSnapshotDenseArray,
   buildStringIncludes,
   buildStringSplit,
   buildStringStartsWith,
+  buildStringTrim,
   buildStringTrimEnd,
 } from './build-security-intrinsics.js';
 
@@ -1728,30 +1731,35 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
   const packageResult = extractPackageComponentCss('@kovojs/ui', extractionOptions);
   const appResult = extractAppComponentCss(extractionOptions);
   const appRouteTargets = extractAppRouteCssTargets(extractionOptions);
+  const appCssAssets = buildSnapshotDenseArray(appResult.cssAssets, 'App CSS assets');
+  const routeTargets = buildSnapshotDenseArray(
+    appRouteTargets.routeTargets,
+    'App CSS route targets',
+  );
   const appSplitManifest =
-    appResult.cssAssets.length === 0 || appRouteTargets.routeTargets.length === 0
+    appCssAssets.length === 0 || routeTargets.length === 0
       ? undefined
-      : collectCssAssetManifest(
-          { cssAssets: appResult.cssAssets },
-          { split: { routes: appRouteTargets.routeTargets } },
-        );
+      : collectCssAssetManifest({ cssAssets: appCssAssets }, { split: { routes: routeTargets } });
   if (appSplitManifest)
-    assertKovoBuildCssDelivery(
-      appSplitManifest,
-      appRouteTargets.routeTargets,
-      cssRouteDeliveryGate,
-    );
+    assertKovoBuildCssDelivery(appSplitManifest, routeTargets, cssRouteDeliveryGate);
   const appSplitAssets = stylesheetAssetsFromCssSplitChunks(appSplitManifest?.chunks);
 
   if (!packageResult.css && !appResult.css)
     return { assets: emptyKovoBuildStylesheetAssets(), stylesheetCss: [] };
-  const tokenCss = kovoUiTokenSheetCss.replace(/@theme[^{]*\{[\s\S]*?\n\}/, '').trim();
+  const tokenCss = buildStringTrim(
+    buildRegExpReplace(/@theme[^{]*\{[\s\S]*?\n\}/, kovoUiTokenSheetCss, ''),
+  );
   const monolithAppCss = appSplitManifest ? null : appResult.css;
+  const stylesheetChunks = buildFilterDense(
+    [tokenCss, packageResult.css, monolithAppCss],
+    'Kovo build stylesheet chunks',
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
   return {
     assets: appSplitAssets,
     stylesheetCss: [
       {
-        css: [tokenCss, packageResult.css, monolithAppCss].filter(Boolean).join('\n'),
+        css: buildArrayJoin(stylesheetChunks, '\n'),
         href: '/assets/styles.css',
       },
       ...stylesheetCssFromBuildStylesheetAssets(appSplitAssets),
@@ -1766,19 +1774,22 @@ function assertKovoBuildCssDelivery(
   >[1][],
   cssRouteDeliveryGate: (typeof import('@kovojs/compiler/internal'))['cssRouteDeliveryGate'],
 ): void {
-  const diagnostics = routeTargets.flatMap(
+  const diagnostics = buildFlatMapDense(
+    routeTargets,
+    'CSS delivery route targets',
     (routeTarget) => cssRouteDeliveryGate(manifest, routeTarget).diagnostics,
   );
   if (diagnostics.length === 0) return;
 
-  const details = diagnostics
-    .slice(0, 10)
-    .map(
-      (diagnostic) =>
-        `${diagnostic.route} links ${diagnostic.href} atom ${diagnostic.className} ` +
-        `from ${diagnostic.source}`,
-    )
-    .join('\n');
+  const detailLines: string[] = [];
+  const detailCount = diagnostics.length < 10 ? diagnostics.length : 10;
+  for (let index = 0; index < detailCount; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    detailLines[detailLines.length] =
+      `${diagnostic.route} links ${diagnostic.href} atom ${diagnostic.className} ` +
+      `from ${diagnostic.source}`;
+  }
+  const details = buildArrayJoin(detailLines, '\n');
   const suffix =
     diagnostics.length > 10 ? `\n... ${diagnostics.length - 10} more CSS overship diagnostics` : '';
   throw new Error(`kovo build CSS overship gate failed:\n${details}${suffix}`);
@@ -2082,11 +2093,14 @@ async function buildKovoClientManifest(
     cache: options.cache,
     queryShapeFacts: options.queryShapeFacts,
   });
-  const routeTargets = extractAppRouteCssTargets({
-    fileName: appModulePath,
-    packagePrefixDiscoveryRoot: dirname(appModulePath),
-    source: existsSync(appModulePath) ? readFileSync(appModulePath, 'utf8') : '',
-  }).routeTargets;
+  const routeTargets = buildSnapshotDenseArray(
+    extractAppRouteCssTargets({
+      fileName: appModulePath,
+      packagePrefixDiscoveryRoot: dirname(appModulePath),
+      source: existsSync(appModulePath) ? readFileSync(appModulePath, 'utf8') : '',
+    }).routeTargets,
+    'Client manifest CSS route targets',
+  );
 
   await build({
     appType: 'custom',
@@ -2104,25 +2118,39 @@ async function buildKovoClientManifest(
   const componentBuild = await buildKovoComponentClientModules(appModulePath, root, options);
   const cssAssetManifestOptions =
     routeTargets.length === 0 ? undefined : { split: { routes: routeTargets } };
-  const cssAssetManifests = [
-    viteAssetPlugin.getCssAssetManifest?.(cssAssetManifestOptions),
-    componentBuild.getCssAssetManifest?.(cssAssetManifestOptions),
-  ].filter((manifest) => manifest !== undefined);
-  for (const cssAssetManifest of cssAssetManifests) {
-    if (cssAssetManifest.chunks)
+  const cssAssetManifests = buildFilterDense(
+    [
+      viteAssetPlugin.getCssAssetManifest?.(cssAssetManifestOptions),
+      componentBuild.getCssAssetManifest?.(cssAssetManifestOptions),
+    ],
+    'Client CSS asset manifests',
+    (manifest) => manifest !== undefined,
+  );
+  for (let index = 0; index < cssAssetManifests.length; index += 1) {
+    const cssAssetManifest = cssAssetManifests[index]!;
+    if (cssAssetManifest.chunks) {
       assertKovoBuildCssDelivery(cssAssetManifest, routeTargets, cssRouteDeliveryGate);
+    }
   }
   const appCss = dedupeCss(
-    cssAssetManifests.flatMap((manifest) =>
-      (manifest.stylesheets ?? []).flatMap((asset) =>
+    buildFlatMapDense(cssAssetManifests, 'Client CSS asset manifests', (manifest) =>
+      buildFlatMapDense(manifest.stylesheets ?? [], 'Client CSS manifest stylesheets', (asset) =>
         asset.criticalCss ? [asset.criticalCss] : [],
       ),
     ),
   );
   const splitStylesheetAssets = mergeKovoBuildStylesheetAssets(
-    cssAssetManifests.map((manifest) => stylesheetAssetsFromCssSplitChunks(manifest.chunks)),
+    buildMapDense(cssAssetManifests, 'Client CSS split manifests', (manifest) =>
+      stylesheetAssetsFromCssSplitChunks(manifest.chunks),
+    ),
   );
-  const monolithAppCss = cssAssetManifests.some((manifest) => manifest.chunks) ? null : appCss;
+  const monolithAppCss = buildSomeDense(
+    cssAssetManifests,
+    'Client CSS split manifests',
+    (manifest) => manifest.chunks !== undefined,
+  )
+    ? null
+    : appCss;
 
   return {
     assets: splitStylesheetAssets,
@@ -2229,21 +2257,41 @@ function stylesheetAssetsFromCssSplitChunks(
 ): KovoBuildStylesheetAssets {
   if (!chunks) return emptyKovoBuildStylesheetAssets();
 
+  const base = buildOwnDataValue(
+    chunks,
+    'base',
+    'CSS split chunks',
+  ) as readonly KovoBuildCssSplitChunk[];
+  const fragments = buildOwnDataValue(chunks, 'fragments', 'CSS split chunks') as Readonly<
+    Record<string, readonly KovoBuildCssSplitChunk[]>
+  >;
+  const routes = buildOwnDataValue(chunks, 'routes', 'CSS split chunks') as Readonly<
+    Record<string, readonly KovoBuildCssSplitChunk[]>
+  >;
+
   return {
-    app: buildStylesheetAssets(chunks.base),
-    fragments: Object.fromEntries(
-      Object.entries(chunks.fragments).map(([fragment, assets]) => [
-        fragment,
-        buildStylesheetAssets(assets),
-      ]),
-    ),
-    routes: Object.fromEntries(
-      Object.entries(chunks.routes).map(([route, assets]) => [
-        route,
-        buildStylesheetAssets(assets),
-      ]),
-    ),
+    app: buildStylesheetAssets(base),
+    fragments: stylesheetAssetRecordFromChunks(fragments, 'CSS fragment split chunks'),
+    routes: stylesheetAssetRecordFromChunks(routes, 'CSS route split chunks'),
   };
+}
+
+function stylesheetAssetRecordFromChunks(
+  source: Readonly<Record<string, readonly KovoBuildCssSplitChunk[]>>,
+  label: string,
+): Readonly<Record<string, readonly StylesheetAsset[]>> {
+  if (typeof source !== 'object' || source === null || buildArrayIsArray(source)) {
+    throw new TypeError(`${label} must be an own-data record.`);
+  }
+  const output = buildCreateNullRecord<readonly StylesheetAsset[]>();
+  const keys = buildSnapshotDenseArray(buildObjectKeys(source), `${label} keys`);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    output[key] = buildStylesheetAssets(
+      buildOwnDataValue(source, key, label) as readonly KovoBuildCssSplitChunk[],
+    );
+  }
+  return output;
 }
 
 function emptyKovoBuildStylesheetAssets(): KovoBuildStylesheetAssets {
@@ -2253,34 +2301,188 @@ function emptyKovoBuildStylesheetAssets(): KovoBuildStylesheetAssets {
 function buildStylesheetAssets(
   assets: readonly KovoBuildCssSplitChunk[],
 ): readonly StylesheetAsset[] {
-  return assets.flatMap((asset) =>
-    asset.criticalCss ? [{ criticalCss: asset.criticalCss, href: asset.href }] : [],
+  return buildFlatMapDense(assets, 'CSS split chunk assets', (asset, index) => {
+    const href = buildOwnDataValue(asset, 'href', `CSS split chunk asset[${index}]`);
+    const criticalCss = buildOwnDataValue(asset, 'criticalCss', `CSS split chunk asset[${index}]`);
+    if (typeof href !== 'string') {
+      throw new TypeError(`CSS split chunk asset[${index}].href must be a string.`);
+    }
+    if (criticalCss !== undefined && typeof criticalCss !== 'string') {
+      throw new TypeError(`CSS split chunk asset[${index}].criticalCss must be a string.`);
+    }
+    return criticalCss ? [{ criticalCss, href }] : [];
+  });
+}
+
+function appendBuildDense<Value>(target: Value[], source: readonly Value[], label: string): void {
+  const values = buildSnapshotDenseArray(source, label);
+  for (let index = 0; index < values.length; index += 1) {
+    target[target.length] = values[index]!;
+  }
+}
+
+function appendStylesheetAssetRecordValues(
+  target: StylesheetAsset[],
+  source: Readonly<Record<string, readonly StylesheetAsset[]>>,
+  label: string,
+): void {
+  if (typeof source !== 'object' || source === null || buildArrayIsArray(source)) {
+    throw new TypeError(`${label} must be an own-data record.`);
+  }
+  const keys = buildSnapshotDenseArray(buildObjectKeys(source), `${label} keys`);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    appendBuildDense(
+      target,
+      buildOwnDataValue(source, key, label) as readonly StylesheetAsset[],
+      `${label}.${key}`,
+    );
+  }
+}
+
+function buildStylesheetAssetArray(source: unknown, label: string): readonly StylesheetAsset[] {
+  return buildSnapshotDenseArray(source as readonly StylesheetAsset[], label);
+}
+
+function buildOptionalStylesheetAssetArray(
+  source: unknown,
+  label: string,
+): readonly StylesheetAsset[] {
+  return source === undefined ? [] : buildStylesheetAssetArray(source, label);
+}
+
+function stylesheetAssetRecord(
+  source: unknown,
+  label: string,
+): Readonly<Record<string, readonly StylesheetAsset[]>> {
+  if (typeof source !== 'object' || source === null || buildArrayIsArray(source)) {
+    throw new TypeError(`${label} must be an own-data record.`);
+  }
+  return source as Readonly<Record<string, readonly StylesheetAsset[]>>;
+}
+
+function stylesheetAssetsFromRecord(
+  source: Readonly<Record<string, readonly StylesheetAsset[]>>,
+  key: string,
+  label: string,
+): readonly StylesheetAsset[] {
+  return buildOptionalStylesheetAssetArray(
+    buildOwnDataValue(source, key, label),
+    `${label}.${key}`,
+  );
+}
+
+function exactStylesheetAsset(
+  asset: string | StylesheetAsset,
+  index: number,
+): {
+  criticalCss?: string;
+  href: string;
+} {
+  if (typeof asset === 'string') return { href: asset };
+  const href = buildOwnDataValue(asset, 'href', `Stylesheet asset[${index}]`);
+  const criticalCss = buildOwnDataValue(asset, 'criticalCss', `Stylesheet asset[${index}]`);
+  if (typeof href !== 'string') {
+    throw new TypeError(`Stylesheet asset[${index}].href must be a string.`);
+  }
+  if (criticalCss !== undefined && typeof criticalCss !== 'string') {
+    throw new TypeError(`Stylesheet asset[${index}].criticalCss must be a string.`);
+  }
+  return criticalCss === undefined ? { href } : { criticalCss, href };
+}
+
+function buildStylesheetGroups(
+  groups: readonly (readonly StylesheetAsset[])[],
+  label: string,
+): StylesheetAsset[] {
+  return buildFlatMapDense(groups, label, (group) => group);
+}
+
+function buildStylesheetCssAssets(assets: readonly StylesheetAsset[]): KovoBuildStylesheetCss[] {
+  return buildFlatMapDense(assets, 'Build stylesheet CSS assets', (asset, index) => {
+    const exact = exactStylesheetAsset(asset, index);
+    return exact.criticalCss ? [{ css: exact.criticalCss, href: exact.href }] : [];
+  });
+}
+
+function buildStylesheetAssetRecordKeys(
+  source: Readonly<Record<string, readonly StylesheetAsset[]>>,
+  label: string,
+): string[] {
+  return buildSnapshotDenseArray(buildObjectKeys(source), `${label} keys`);
+}
+
+function buildStylesheetAssetRecordIsEmpty(
+  source: Readonly<Record<string, readonly StylesheetAsset[]>>,
+  label: string,
+): boolean {
+  return buildStylesheetAssetRecordKeys(source, label).length === 0;
+}
+
+function buildAppStylesheetGroups(
+  appStylesheets: readonly StylesheetAsset[],
+  buildStylesheets: readonly StylesheetAsset[],
+): StylesheetAsset[] {
+  return buildStylesheetGroups(
+    [
+      buildStylesheetAssetArray(appStylesheets, 'Closed app stylesheets'),
+      buildStylesheetAssetArray(buildStylesheets, 'Build app stylesheets'),
+    ],
+    'Closed app and build stylesheets',
   );
 }
 
 function stylesheetCssFromBuildStylesheetAssets(
   assets: KovoBuildStylesheetAssets,
 ): KovoBuildStylesheetCss[] {
-  return [
-    ...assets.app,
-    ...Object.values(assets.routes).flat(),
-    ...Object.values(assets.fragments).flat(),
-  ].flatMap((asset) => (asset.criticalCss ? [{ css: asset.criticalCss, href: asset.href }] : []));
+  const app = buildStylesheetAssetArray(
+    buildOwnDataValue(assets, 'app', 'Build stylesheet assets'),
+    'Build app stylesheet assets',
+  );
+  const routes = stylesheetAssetRecord(
+    buildOwnDataValue(assets, 'routes', 'Build stylesheet assets'),
+    'Build route stylesheet assets',
+  );
+  const fragments = stylesheetAssetRecord(
+    buildOwnDataValue(assets, 'fragments', 'Build stylesheet assets'),
+    'Build fragment stylesheet assets',
+  );
+  const all: StylesheetAsset[] = [];
+  appendBuildDense(all, app, 'Build app stylesheet assets');
+  appendStylesheetAssetRecordValues(all, routes, 'Build route stylesheet assets');
+  appendStylesheetAssetRecordValues(all, fragments, 'Build fragment stylesheet assets');
+  return buildStylesheetCssAssets(all);
 }
 
 function mergeKovoBuildStylesheetAssets(
   assetSets: readonly KovoBuildStylesheetAssets[],
 ): KovoBuildStylesheetAssets {
-  const routes: Record<string, StylesheetAsset[]> = {};
-  const fragments: Record<string, StylesheetAsset[]> = {};
+  const routes = buildCreateNullRecord<StylesheetAsset[]>();
+  const fragments = buildCreateNullRecord<StylesheetAsset[]>();
+  const appGroups: (readonly StylesheetAsset[])[] = [];
+  const sources = buildSnapshotDenseArray(assetSets, 'Build stylesheet asset sets');
 
-  for (const assets of assetSets) {
-    mergeStylesheetAssetsInto(routes, assets.routes);
-    mergeStylesheetAssetsInto(fragments, assets.fragments);
+  for (let index = 0; index < sources.length; index += 1) {
+    const assets = sources[index]!;
+    const app = buildStylesheetAssetArray(
+      buildOwnDataValue(assets, 'app', `Build stylesheet asset set[${index}]`),
+      `Build stylesheet asset set[${index}].app`,
+    );
+    const sourceRoutes = stylesheetAssetRecord(
+      buildOwnDataValue(assets, 'routes', `Build stylesheet asset set[${index}]`),
+      `Build stylesheet asset set[${index}].routes`,
+    );
+    const sourceFragments = stylesheetAssetRecord(
+      buildOwnDataValue(assets, 'fragments', `Build stylesheet asset set[${index}]`),
+      `Build stylesheet asset set[${index}].fragments`,
+    );
+    appGroups[appGroups.length] = app;
+    mergeStylesheetAssetsInto(routes, sourceRoutes);
+    mergeStylesheetAssetsInto(fragments, sourceFragments);
   }
 
   return {
-    app: mergeStylesheetAssets(assetSets.flatMap((assets) => assets.app)),
+    app: mergeStylesheetAssets(buildStylesheetGroups(appGroups, 'Build app stylesheet groups')),
     fragments,
     routes,
   };
@@ -2290,27 +2492,43 @@ function mergeStylesheetAssetsInto(
   target: Record<string, StylesheetAsset[]>,
   source: Readonly<Record<string, readonly StylesheetAsset[]>>,
 ): void {
-  for (const [key, assets] of Object.entries(source)) {
-    target[key] = mergeStylesheetAssets([...(target[key] ?? []), ...assets]);
+  const keys = buildStylesheetAssetRecordKeys(source, 'Build stylesheet record');
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const existing = buildOptionalStylesheetAssetArray(
+      buildOwnDataValue(target, key, 'Merged stylesheet record'),
+      `Merged stylesheet record.${key}`,
+    );
+    const incoming = stylesheetAssetsFromRecord(source, key, 'Build stylesheet record');
+    target[key] = mergeStylesheetAssets(
+      buildStylesheetGroups([existing, incoming], `Merged stylesheet record.${key}`),
+    );
   }
 }
 
 function mergeStylesheetAssets(assets: readonly (string | StylesheetAsset)[]): StylesheetAsset[] {
-  const byHref = new Map<string, string[]>();
+  const source = buildSnapshotDenseArray(assets, 'Stylesheet merge assets');
+  const byHref = buildCreateMap<string, string[]>();
   const hrefOrder: string[] = [];
-  for (const asset of assets) {
-    const href = typeof asset === 'string' ? asset : asset.href;
-    if (!byHref.has(href)) hrefOrder.push(href);
-    const chunks = byHref.get(href) ?? [];
-    if (typeof asset !== 'string' && asset.criticalCss) chunks.push(asset.criticalCss);
-    byHref.set(href, chunks);
+  for (let index = 0; index < source.length; index += 1) {
+    const asset = exactStylesheetAsset(source[index]!, index);
+    if (!buildMapHas(byHref, asset.href)) hrefOrder[hrefOrder.length] = asset.href;
+    const chunks = buildMapGet(byHref, asset.href) ?? [];
+    if (asset.criticalCss) chunks[chunks.length] = asset.criticalCss;
+    buildMapSet(byHref, asset.href, chunks);
   }
 
-  return hrefOrder.map((href) => {
-    const criticalCss = (byHref.get(href) ?? [])
-      .map((chunk) => chunk.trim())
-      .filter(Boolean)
-      .join('\n');
+  return buildMapDense(hrefOrder, 'Stylesheet href order', (href) => {
+    const criticalCss = buildArrayJoin(
+      buildFilterDense(
+        buildMapDense(buildMapGet(byHref, href) ?? [], 'Stylesheet critical CSS chunks', (chunk) =>
+          buildStringTrim(chunk),
+        ),
+        'Trimmed stylesheet critical CSS chunks',
+        (chunk) => chunk.length > 0,
+      ),
+      '\n',
+    );
     return {
       ...(criticalCss ? { criticalCss } : {}),
       href,
@@ -2318,36 +2536,117 @@ function mergeStylesheetAssets(assets: readonly (string | StylesheetAsset)[]): S
   });
 }
 
-function appWithBuildStylesheetAssets(
+/** @internal Exact closed-app CSS derivation boundary (SPEC §6.6 C9/§10.3). */
+export function appWithBuildStylesheetAssets(
   app: KovoApp,
   assets: KovoBuildStylesheetAssets,
   deriveClosedApp: typeof import('@kovojs/server/internal/build').deriveClosedKovoApp,
 ): KovoApp {
+  const appAssets = buildStylesheetAssetArray(
+    buildOwnDataValue(assets, 'app', 'Build stylesheet assets'),
+    'Build app stylesheet assets',
+  );
+  const fragmentAssets = stylesheetAssetRecord(
+    buildOwnDataValue(assets, 'fragments', 'Build stylesheet assets'),
+    'Build fragment stylesheet assets',
+  );
+  const routeAssets = stylesheetAssetRecord(
+    buildOwnDataValue(assets, 'routes', 'Build stylesheet assets'),
+    'Build route stylesheet assets',
+  );
   if (
-    assets.app.length === 0 &&
-    Object.keys(assets.fragments).length === 0 &&
-    Object.keys(assets.routes).length === 0
+    appAssets.length === 0 &&
+    buildStylesheetAssetRecordIsEmpty(fragmentAssets, 'Build fragment stylesheet assets') &&
+    buildStylesheetAssetRecordIsEmpty(routeAssets, 'Build route stylesheet assets')
   )
     return app;
 
+  const liveTargetRenderers = buildSnapshotDenseArray(
+    buildOwnDataValue(
+      app,
+      'liveTargetRenderers',
+      'Closed app',
+    ) as readonly KovoApp['liveTargetRenderers'][number][],
+    'Closed app live target renderers',
+  );
+  const routes = buildSnapshotDenseArray(
+    buildOwnDataValue(app, 'routes', 'Closed app') as KovoApp['routes'],
+    'Closed app routes',
+  );
+  const appStylesheets = buildStylesheetAssetArray(
+    buildOwnDataValue(app, 'stylesheets', 'Closed app'),
+    'Closed app stylesheets',
+  );
   return deriveClosedApp(app, {
-    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {
-      const fragmentAssets = assets.fragments[renderer.component] ?? [];
-      if (fragmentAssets.length === 0) return renderer;
+    liveTargetRenderers: buildMapDense(
+      liveTargetRenderers,
+      'Closed app live target renderers',
+      (renderer, index) => {
+        const component = buildOwnDataValue(
+          renderer,
+          'component',
+          `Closed app live target renderer[${index}]`,
+        );
+        if (typeof component !== 'string') {
+          throw new TypeError(
+            `Closed app live target renderer[${index}].component must be a string.`,
+          );
+        }
+        const rendererAssets = stylesheetAssetsFromRecord(
+          fragmentAssets,
+          component,
+          'Build fragment stylesheet assets',
+        );
+        if (rendererAssets.length === 0) return renderer;
 
-      return {
-        ...renderer,
-        stylesheets: mergeStylesheetAssets([...(renderer.stylesheets ?? []), ...fragmentAssets]),
-      };
-    }),
-    stylesheets: mergeStylesheetAssets([...app.stylesheets, ...assets.app]),
-    routes: app.routes.map((route) => {
-      const routeAssets = assets.routes[route.path] ?? [];
-      if (routeAssets.length === 0) return route;
+        return {
+          ...renderer,
+          stylesheets: mergeStylesheetAssets(
+            buildStylesheetGroups(
+              [
+                buildOptionalStylesheetAssetArray(
+                  buildOwnDataValue(
+                    renderer,
+                    'stylesheets',
+                    `Closed app live target renderer[${index}]`,
+                  ),
+                  `Closed app live target renderer[${index}].stylesheets`,
+                ),
+                rendererAssets,
+              ],
+              `Closed app live target renderer[${index}] stylesheets`,
+            ),
+          ),
+        };
+      },
+    ),
+    stylesheets: mergeStylesheetAssets(buildAppStylesheetGroups(appStylesheets, appAssets)),
+    routes: buildMapDense(routes, 'Closed app routes', (route, index) => {
+      const path = buildOwnDataValue(route, 'path', `Closed app route[${index}]`);
+      if (typeof path !== 'string') {
+        throw new TypeError(`Closed app route[${index}].path must be a string.`);
+      }
+      const stylesheets = stylesheetAssetsFromRecord(
+        routeAssets,
+        path,
+        'Build route stylesheet assets',
+      );
+      if (stylesheets.length === 0) return route;
 
       return {
         ...route,
-        stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]),
+        stylesheets: mergeStylesheetAssets(
+          buildStylesheetGroups(
+            [
+              buildOptionalStylesheetAssetArray(
+                buildOwnDataValue(route, 'stylesheets', `Closed app route[${index}]`),
+                `Closed app route[${index}].stylesheets`,
+              ),
+              stylesheets,
+            ],
+            `Closed app route[${index}] stylesheets`,
+          ),
+        ),
       };
     }),
   });
@@ -2597,36 +2896,69 @@ export function kovoServerHandlerEntrySource(
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
       '',
       'function appWithBuildStylesheetAssets(app, assets) {',
-      '  if (assets.app.length === 0 && Object.keys(assets.fragments).length === 0 && Object.keys(assets.routes).length === 0) return app;',
+      '  const liveTargetRenderers = [];',
+      '  for (let index = 0; index < app.liveTargetRenderers.length; index += 1) {',
+      '    const renderer = app.liveTargetRenderers[index];',
+      '    const fragmentAssets = assets.fragments[renderer.component] ?? [];',
+      '    liveTargetRenderers[liveTargetRenderers.length] = fragmentAssets.length === 0',
+      '      ? renderer',
+      '      : { ...renderer, stylesheets: mergeStylesheetAssets(concatStylesheetAssets(renderer.stylesheets ?? [], fragmentAssets)) };',
+      '  }',
+      '  const routes = [];',
+      '  for (let index = 0; index < app.routes.length; index += 1) {',
+      '    const route = app.routes[index];',
+      '    const routeAssets = assets.routes[route.path] ?? [];',
+      '    routes[routes.length] = routeAssets.length === 0',
+      '      ? route',
+      '      : { ...route, stylesheets: mergeStylesheetAssets(concatStylesheetAssets(route.stylesheets ?? [], routeAssets)) };',
+      '  }',
       '  return deriveClosedKovoApp(app, {',
-      '    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {',
-      '      const fragmentAssets = assets.fragments[renderer.component] ?? [];',
-      '      if (fragmentAssets.length === 0) return renderer;',
-      '      return { ...renderer, stylesheets: mergeStylesheetAssets([...(renderer.stylesheets ?? []), ...fragmentAssets]) };',
-      '    }),',
-      '    stylesheets: mergeStylesheetAssets([...app.stylesheets, ...assets.app]),',
-      '    routes: app.routes.map((route) => {',
-      '      const routeAssets = assets.routes[route.path] ?? [];',
-      '      if (routeAssets.length === 0) return route;',
-      '      return { ...route, stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]) };',
-      '    }),',
+      '    liveTargetRenderers,',
+      '    stylesheets: mergeStylesheetAssets(concatStylesheetAssets(app.stylesheets, assets.app)),',
+      '    routes,',
       '  });',
       '}',
       '',
+      'function concatStylesheetAssets(left, right) {',
+      '  const result = [];',
+      '  for (let index = 0; index < left.length; index += 1) result[result.length] = left[index];',
+      '  for (let index = 0; index < right.length; index += 1) result[result.length] = right[index];',
+      '  return result;',
+      '}',
+      '',
       'function mergeStylesheetAssets(assets) {',
-      '  const byHref = new Map();',
       '  const hrefOrder = [];',
-      '  for (const asset of assets) {',
+      '  const chunksByHref = [];',
+      '  for (let assetIndex = 0; assetIndex < assets.length; assetIndex += 1) {',
+      '    const asset = assets[assetIndex];',
       "    const href = typeof asset === 'string' ? asset : asset.href;",
-      '    if (!byHref.has(href)) hrefOrder.push(href);',
-      '    const chunks = byHref.get(href) ?? [];',
-      "    if (typeof asset !== 'string' && asset.criticalCss) chunks.push(asset.criticalCss);",
-      '    byHref.set(href, chunks);',
+      '    let hrefIndex = -1;',
+      '    for (let index = 0; index < hrefOrder.length; index += 1) {',
+      '      if (hrefOrder[index] === href) { hrefIndex = index; break; }',
+      '    }',
+      '    if (hrefIndex < 0) {',
+      '      hrefIndex = hrefOrder.length;',
+      '      hrefOrder[hrefIndex] = href;',
+      '      chunksByHref[hrefIndex] = [];',
+      '    }',
+      "    if (typeof asset !== 'string' && asset.criticalCss) {",
+      '      const chunks = chunksByHref[hrefIndex];',
+      '      chunks[chunks.length] = asset.criticalCss;',
+      '    }',
       '  }',
-      '  return hrefOrder.map((href) => {',
-      '    const criticalCss = (byHref.get(href) ?? []).map((chunk) => chunk.trim()).filter(Boolean).join("\\n");',
-      '    return { ...(criticalCss ? { criticalCss } : {}), href };',
-      '  });',
+      '  const result = [];',
+      '  for (let hrefIndex = 0; hrefIndex < hrefOrder.length; hrefIndex += 1) {',
+      '    let criticalCss = "";',
+      '    const chunks = chunksByHref[hrefIndex];',
+      '    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {',
+      '      const chunk = chunks[chunkIndex];',
+      '      if (!chunk) continue;',
+      '      if (criticalCss) criticalCss += "\\n";',
+      '      criticalCss += chunk;',
+      '    }',
+      '    result[result.length] = { ...(criticalCss ? { criticalCss } : {}), href: hrefOrder[hrefIndex] };',
+      '  }',
+      '  return result;',
       '}',
       '',
     ],

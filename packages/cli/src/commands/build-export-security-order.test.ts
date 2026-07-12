@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  appWithBuildStylesheetAssets,
   kovoServerHandlerEntrySource,
   serializeBuildRuntimeRegistryWireModule,
 } from './build-export.js';
@@ -24,6 +25,8 @@ describe('build/export security bootstrap ordering', () => {
     expect(serverImport).toBeGreaterThanOrEqual(0);
     expect(serverImport).toBeLessThan(registryImport);
     expect(registryImport).toBeLessThan(appImport);
+    expect(source).not.toContain('.map(');
+    expect(source).not.toContain('new Map(');
   });
 
   it('does not let a late JSON.stringify replacement inject generated modules', () => {
@@ -95,6 +98,47 @@ describe('build/export security bootstrap ordering', () => {
       Promise.resolve = nativeResolve;
     }
     await expect(pending!).resolves.toEqual(['first', 'second']);
+  });
+
+  it('does not redispatch closed app route authority through a late exact Array.map receiver', () => {
+    const declaredRoute = { path: '/declared', stylesheets: [] };
+    const forgedRoute = { path: '/forged-admin', stylesheets: [] };
+    const app = {
+      liveTargetRenderers: [],
+      routes: [declaredRoute],
+      stylesheets: [],
+    } as never;
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+
+    try {
+      Array.prototype.map = function poisonedClosedRouteMap(this: any[], callback, thisArg) {
+        if (this === (app as { routes: unknown[] }).routes) {
+          poisonHits += 1;
+          return [forgedRoute] as unknown[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      const derived = appWithBuildStylesheetAssets(
+        app,
+        {
+          app: [],
+          fragments: {},
+          routes: {
+            '/declared': [{ href: '/assets/declared.css' }],
+            '/forged-admin': [{ href: '/assets/forged.css' }],
+          },
+        },
+        ((source: object, overrides: object) => ({ ...source, ...overrides })) as never,
+      ) as unknown as { routes: { path: string }[] };
+
+      expect(poisonHits).toBe(0);
+      expect(derived.routes).toHaveLength(1);
+      expect(derived.routes[0]?.path).toBe('/declared');
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
   });
 
   it('keeps a real CLI build blocking after app-first Array.filter poisoning is refused', () => {

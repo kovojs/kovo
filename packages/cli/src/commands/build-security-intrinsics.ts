@@ -33,12 +33,14 @@ const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeRegExpReplace = NativeRegExp.prototype[Symbol.replace];
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
+const nativeStringTrim = NativeString.prototype.trim;
 const nativeStringTrimEnd = NativeString.prototype.trimEnd;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -178,6 +180,11 @@ export function buildCreateMap<Key, Value>(): Map<Key, Value> {
   return new NativeMap<Key, Value>();
 }
 
+export function buildCreateNullRecord<Value>(): Record<PropertyKey, Value> {
+  assertBuildSecurityIntrinsics();
+  return apply(nativeObjectCreate, NativeObject, [null]);
+}
+
 export function buildMapGet<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key): Value | undefined {
   assertBuildSecurityIntrinsics();
   return apply(nativeMapGet, map, [key]);
@@ -218,6 +225,11 @@ export function buildRegExpExec(expression: RegExp, value: string): RegExpExecAr
   return apply(nativeRegExpExec, expression, [value]);
 }
 
+export function buildRegExpReplace(expression: RegExp, value: string, replacement: string): string {
+  assertBuildSecurityIntrinsics();
+  return apply(nativeRegExpReplace, expression, [value, replacement]);
+}
+
 export function buildStringIncludes(value: string, search: string): boolean {
   assertBuildSecurityIntrinsics();
   return apply(nativeStringIncludes, value, [search]);
@@ -243,6 +255,11 @@ export function buildStringSplit(value: string, separator: string): string[] {
 export function buildStringStartsWith(value: string, search: string): boolean {
   assertBuildSecurityIntrinsics();
   return apply(nativeStringStartsWith, value, [search]);
+}
+
+export function buildStringTrim(value: string): string {
+  assertBuildSecurityIntrinsics();
+  return apply(nativeStringTrim, value, []);
 }
 
 export function buildStringTrimEnd(value: string): string {
