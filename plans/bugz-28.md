@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    21 | H1-H21 |
+| High     |    22 | H1-H22 |
 | Medium   |     9 | M1-M9 |
 
 ## Critical
@@ -310,6 +310,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     path construction use boot-pinned, semantically checked operations; late/import-order poison
     cannot skip, replace, or reorder any declared validation while genuine inputs remain compatible.
 
+- [ ] **H22 - Mutable page-hint assembly can replace escaped hints with raw script.**
+      `packages/server/src/hints.ts`
+  - A selective late `Array.prototype.join` override targeting the final hint array replaced a safe
+    compiler-versioned modulepreload with `<script src="/attacker.js"></script>`. The returned raw
+    hint HTML carried no matching CSP metadata and is inserted into the framework document head.
+  - **Acceptance:** stylesheet/module/i18n/speculation inputs, exact URL classification, CSS parsing,
+    dedupe/order maps, escaping, CSP hashes, Early Hints, and final HTML/header assembly use
+    boot-pinned, semantically checked controls; late/import-order poison cannot replace or reorder
+    bytes, admit unsafe URLs/CSS, or desynchronize output from its CSP metadata.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -396,7 +406,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H21, and M7-M9 are active
+The remediation pass remains intentionally non-zero: C10-C12, H15-H22, and M7-M9 are active
 capability, request-carrier, response/deferred/mutation/client output, task/guard, request-limit, and
 replay fixes.
 Integrated
