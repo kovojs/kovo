@@ -1,4 +1,19 @@
 import { diagnosticDefinitions } from './diagnostics.js';
+import {
+  freezeSecurityValue,
+  securityDefineProperty,
+  securityGetOwnPropertyDescriptor,
+  securityGetPrototypeOf,
+  securityHasOwn,
+  securityIsArray,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapHas,
+  securityWeakMapSet,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from '#security-witness-intrinsics';
 import { blessSink, isBlessedSink } from './sink-policy.js';
 
 // SPEC §6.6/§744: brands are defense-in-depth, not the enforcement mechanism, so they MUST NOT be
@@ -14,9 +29,9 @@ type SqlBlessedSink =
 
 const rawSqlChunkBrand = Symbol('kovo.sql.raw-chunk');
 const sqlSafetyMetadataBrand = Symbol('kovo.sql.metadata');
-const managedSqlStatements = new WeakSet<object>();
-const sqlSafetyMetadataByValue = new WeakMap<object, Readonly<SqlSafetyMetadata>>();
-const pinnedSqlCarriers = new WeakMap<object, PinnedSqlCarrier>();
+const managedSqlStatements = securityWeakSet<object>();
+const sqlSafetyMetadataByValue = securityWeakMap<object, Readonly<SqlSafetyMetadata>>();
+const pinnedSqlCarriers = securityWeakMap<object, PinnedSqlCarrier>();
 
 type PinnedSqlChunk =
   | Readonly<{ kind: 'parameter'; value: unknown }>
@@ -125,7 +140,7 @@ export function frameworkTrustedSqlCarrier(
   if (!justification.trim()) {
     throw new Error('frameworkTrustedSqlCarrier requires a non-empty justification.');
   }
-  return Object.freeze(
+  return freezeSecurityValue(
     stampTrustedSql({ text: value.text, values: [...value.values] }, justification),
   );
 }
@@ -163,7 +178,7 @@ export function stampRawSqlChunk<T extends object>(value: T, text?: string): T {
 /** @internal */
 export function sqlSafetyMetadata(value: unknown): SqlSafetyMetadata {
   if (typeof value !== 'object' || value === null) return {};
-  return sqlSafetyMetadataByValue.get(value) ?? {};
+  return securityWeakMapGet(sqlSafetyMetadataByValue, value) ?? {};
 }
 
 /** @internal */
@@ -326,8 +341,8 @@ export function snapshotManagedSqlStatement(
     const redialect =
       statement.dialect === dialect || dialect === undefined
         ? statement
-        : Object.freeze({ ...statement, dialect });
-    managedSqlStatements.add(redialect);
+        : freezeSecurityValue({ ...statement, dialect });
+    securityWeakSetAdd(managedSqlStatements, redialect);
     return {
       ok: true,
       statement: redialect,
@@ -347,7 +362,7 @@ export function snapshotManagedSqlStatement(
         ok: false,
       };
     }
-    const pinned = pinnedSqlCarriers.get(statement);
+    const pinned = securityWeakMapGet(pinnedSqlCarriers, statement);
     if (pinned === undefined) {
       return {
         message:
@@ -390,7 +405,9 @@ export function snapshotManagedSqlStatement(
 
 /** @internal */
 export function isManagedSqlStatement(value: unknown): value is ManagedSqlStatement {
-  return typeof value === 'object' && value !== null && managedSqlStatements.has(value);
+  return (
+    typeof value === 'object' && value !== null && securityWeakSetHas(managedSqlStatements, value)
+  );
 }
 
 function unsafeSqlResult(message: string): SqlStatementValidationResult {
@@ -478,8 +495,8 @@ function snapshotNamedSqlParameters(
     };
   }
   if (value === undefined) return undefined;
-  return Array.isArray(value)
-    ? { ok: true, value: Object.freeze([...value]) }
+  return securityIsArray(value)
+    ? { ok: true, value: freezeSecurityValue([...value]) }
     : {
         ok: false,
         message: `separated SQL carrier .${property} must be an array data property.`,
@@ -498,12 +515,12 @@ function hasCallableOrAccessor(value: object, property: 'submit' | 'then'): bool
   if (!(property in value)) return false;
   let current: object | null = value;
   while (current !== null) {
-    const descriptor = Object.getOwnPropertyDescriptor(current, property);
+    const descriptor = securityGetOwnPropertyDescriptor(current, property);
     if (descriptor !== undefined) {
       if (!('value' in descriptor)) return true;
       return typeof descriptor.value === 'function';
     }
-    current = Object.getPrototypeOf(current);
+    current = securityGetPrototypeOf(current);
   }
   return false;
 }
@@ -512,7 +529,7 @@ function dataPropertyValue(
   record: Record<PropertyKey, unknown>,
   property: 'args' | 'params' | 'queryChunks' | 'sql' | 'text' | 'values',
 ): unknown {
-  const descriptor = Object.getOwnPropertyDescriptor(record, property);
+  const descriptor = securityGetOwnPropertyDescriptor(record, property);
   if (descriptor === undefined) return undefined;
   if (!('value' in descriptor)) return ACCESSOR_OR_PROXY_PROPERTY;
   return descriptor.value;
@@ -526,14 +543,14 @@ function managedSqlSnapshot(
 ): ManagedSqlSnapshotResult {
   if (!options.allowEmptyValues && values.length === 0) return { ok: false };
   if (!options.allowEmptyValues && !hasSqlBindMarker(text)) return { ok: false };
-  const statement = Object.freeze({
+  const statement = freezeSecurityValue({
     dialect,
     provenance: options.provenance,
     sql: text,
     text,
-    values: Object.freeze([...values]),
+    values: freezeSecurityValue([...values]),
   });
-  managedSqlStatements.add(statement);
+  securityWeakSetAdd(managedSqlStatements, statement);
   return {
     ok: true,
     statement,
@@ -546,7 +563,7 @@ function pinSqlCarrier(
 ): void {
   // A witness pins exactly once. Later trustedSql(...) wrapping may add audited authority, but it
   // cannot reinterpret public properties that changed since the original Kovo constructor ran.
-  if (pinnedSqlCarriers.has(value)) return;
+  if (securityWeakMapHas(pinnedSqlCarriers, value)) return;
   const pinned =
     construction === undefined
       ? pinnedSqlCarrierFromCurrentData(value)
@@ -555,7 +572,7 @@ function pinSqlCarrier(
         : construction.kind === 'template'
           ? pinnedSqlTemplate(construction.strings, construction.values)
           : pinnedSqlJoin(construction.parts, construction.separator);
-  if (pinned !== undefined) pinnedSqlCarriers.set(value, pinned);
+  if (pinned !== undefined) securityWeakMapSet(pinnedSqlCarriers, value, pinned);
 }
 
 function pinnedSqlTemplate(
@@ -593,7 +610,7 @@ function pinnedSqlJoin(
 
 function appendPinnedSqlInterpolation(chunks: PinnedSqlChunk[], value: unknown): boolean {
   if (typeof value === 'object' && value !== null) {
-    const nested = pinnedSqlCarriers.get(value);
+    const nested = securityWeakMapGet(pinnedSqlCarriers, value);
     if (nested?.kind === 'recipe') {
       chunks.push(...nested.chunks);
       return true;
@@ -645,7 +662,7 @@ function pinnedDrizzleTableIdentifier(value: object): string | undefined {
 }
 
 function ownDataProperty(value: object, key: PropertyKey): unknown {
-  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  const descriptor = securityGetOwnPropertyDescriptor(value, key);
   return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
@@ -658,16 +675,17 @@ function pinnedSqlCarrierFromCurrentData(value: object): PinnedSqlCarrier | unde
   const text = snapshotSqlText(record);
   if (text.ok) {
     const parameters = snapshotSqlParameters(record);
-    return Object.freeze({
-      kind: 'fixed',
+    return freezeSecurityValue({
+      kind: 'fixed' as const,
       text: text.value,
-      values: Object.freeze(parameters.ok ? [...parameters.value] : []),
+      values: freezeSecurityValue(parameters.ok ? [...parameters.value] : []),
     });
   }
 
   const queryChunks = dataPropertyValue(record, 'queryChunks');
-  if (!Array.isArray(queryChunks)) return undefined;
-  const seen = new WeakSet<object>([value]);
+  if (!securityIsArray(queryChunks)) return undefined;
+  const seen = securityWeakSet<object>();
+  securityWeakSetAdd(seen, value);
   const chunks: PinnedSqlChunk[] = [];
   for (const chunk of queryChunks) {
     if (!appendPinnedQueryChunk(chunks, chunk, seen)) return undefined;
@@ -685,7 +703,7 @@ function appendPinnedQueryChunk(
     return true;
   }
 
-  const pinned = pinnedSqlCarriers.get(chunk);
+  const pinned = securityWeakMapGet(pinnedSqlCarriers, chunk);
   if (pinned?.kind === 'recipe') {
     chunks.push(...pinned.chunks);
     return true;
@@ -693,20 +711,20 @@ function appendPinnedQueryChunk(
   if (pinned?.kind === 'fixed') return false;
 
   const record = chunk as Record<PropertyKey, unknown>;
-  const chunkValue = Object.getOwnPropertyDescriptor(record, 'value')?.value;
-  if (Array.isArray(chunkValue) && chunkValue.every((item) => typeof item === 'string')) {
+  const chunkValue = securityGetOwnPropertyDescriptor(record, 'value')?.value;
+  if (securityIsArray(chunkValue) && chunkValue.every((item) => typeof item === 'string')) {
     chunks.push({ kind: 'text', value: chunkValue.join('') });
     return true;
   }
-  if (typeof chunkValue === 'string' && Object.prototype.hasOwnProperty.call(record, 'brand')) {
+  if (typeof chunkValue === 'string' && securityHasOwn(record, 'brand')) {
     chunks.push({ kind: 'text', value: chunkValue });
     return true;
   }
 
   const nested = dataPropertyValue(record, 'queryChunks');
-  if (Array.isArray(nested)) {
-    if (seen.has(chunk)) return false;
-    seen.add(chunk);
+  if (securityIsArray(nested)) {
+    if (securityWeakSetHas(seen, chunk)) return false;
+    securityWeakSetAdd(seen, chunk);
     for (const item of nested) {
       if (!appendPinnedQueryChunk(chunks, item, seen)) return false;
     }
@@ -719,10 +737,10 @@ function appendPinnedQueryChunk(
 }
 
 function pinnedSqlRecipe(chunks: readonly PinnedSqlChunk[]): PinnedSqlCarrier {
-  return Object.freeze({
-    chunks: Object.freeze(
+  return freezeSecurityValue({
+    chunks: freezeSecurityValue(
       chunks.map((chunk) =>
-        Object.freeze(
+        freezeSecurityValue(
           chunk.kind === 'text'
             ? { kind: 'text' as const, value: chunk.value }
             : { kind: 'parameter' as const, value: chunk.value },
@@ -755,11 +773,11 @@ function hasSqlWrapperSurface(value: object): boolean {
   try {
     let current: object | null = value;
     while (current !== null) {
-      const descriptor = Object.getOwnPropertyDescriptor(current, 'getSQL');
+      const descriptor = securityGetOwnPropertyDescriptor(current, 'getSQL');
       if (descriptor !== undefined) {
         return !('value' in descriptor) || typeof descriptor.value === 'function';
       }
-      current = Object.getPrototypeOf(current) as object | null;
+      current = securityGetPrototypeOf(current);
       if (current === Object.prototype) break;
     }
     return false;
@@ -843,8 +861,8 @@ function isSqlParameterNameStart(char: string | undefined): boolean {
 }
 
 function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): void {
-  const pinned = Object.freeze({ ...sqlSafetyMetadata(value), ...metadata });
-  sqlSafetyMetadataByValue.set(value, pinned);
+  const pinned = freezeSecurityValue({ ...sqlSafetyMetadata(value), ...metadata });
+  securityWeakMapSet(sqlSafetyMetadataByValue, value, pinned);
   stamp(value, sqlSafetyMetadataBrand, pinned);
 }
 
@@ -857,7 +875,7 @@ function isSqlBlessed(sink: SqlBlessedSink, value: object): boolean {
 }
 
 function stamp(value: object, key: symbol, propertyValue: unknown): void {
-  Object.defineProperty(value, key, {
+  securityDefineProperty(value, key, {
     configurable: true,
     enumerable: false,
     value: propertyValue,

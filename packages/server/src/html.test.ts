@@ -7,6 +7,8 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import {
   escapeAttribute,
+  isRenderedHtml,
+  renderedHtml,
   renderHtmlValue,
   safeRuntimeAttribute,
   safeUrlAttribute,
@@ -16,6 +18,46 @@ import {
 // identically. `safeUrlAttribute` mirrors the client's `kovoBoundAttributeValue`
 // scheme-check logic for server SSR (F1 fix in bugs-and-testing-part2.md).
 describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
+  it('pins rendered bytes across hostile collection and freeze prototype replacement', () => {
+    const originalWeakMapGet = WeakMap.prototype.get;
+    const originalWeakMapHas = WeakMap.prototype.has;
+    const originalWeakMapSet = WeakMap.prototype.set;
+    const originalWeakSetAdd = WeakSet.prototype.add;
+    const originalWeakSetHas = WeakSet.prototype.has;
+    const originalFreeze = Object.freeze;
+    let genuine = '';
+    let forgedAccepted = true;
+    let frozen = false;
+    try {
+      WeakMap.prototype.get = () => '<img src=x onerror=forged()>';
+      WeakMap.prototype.has = () => true;
+      WeakMap.prototype.set = function () {
+        return this;
+      };
+      WeakSet.prototype.add = function () {
+        return this;
+      };
+      WeakSet.prototype.has = () => true;
+      Object.freeze = ((value: unknown) => value) as typeof Object.freeze;
+
+      const rendered = renderedHtml('<main>pinned</main>');
+      genuine = renderHtmlValue(rendered);
+      forgedAccepted = isRenderedHtml({ html: '<img src=x onerror=forged()>' });
+      frozen = Object.isFrozen(rendered);
+    } finally {
+      WeakMap.prototype.get = originalWeakMapGet;
+      WeakMap.prototype.has = originalWeakMapHas;
+      WeakMap.prototype.set = originalWeakMapSet;
+      WeakSet.prototype.add = originalWeakSetAdd;
+      WeakSet.prototype.has = originalWeakSetHas;
+      Object.freeze = originalFreeze;
+    }
+
+    expect(genuine).toBe('<main>pinned</main>');
+    expect(forgedAccepted).toBe(false);
+    expect(frozen).toBe(true);
+  });
+
   it('escapes forged rendered and trusted HTML brands as text', () => {
     const renderedPayload = '<img src=x onerror=alert(1)>';
     const forgedRendered = {

@@ -3,6 +3,27 @@ import {
   drainRuntimeSinkSecurityEvent,
   runtimeSinkFamilyForAttribute,
 } from '@kovojs/core/internal/sink-policy';
+
+import {
+  applySecurityIntrinsic,
+  defineSecurityProperties,
+  freezeSecurityValue,
+  securityHasInstance,
+  securityMap,
+  securityMapGet,
+  securityMapSet,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securityString,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapHas,
+  securityWeakMapSet,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 
 /**
@@ -69,14 +90,28 @@ export interface TrustedHtml {
 // SPEC §6.6 honesty boundary: private unique-symbol brands are author-time guardrails, not
 // the security proof. Only objects minted by this owner module and recorded in the WeakSets are
 // recognized by raw HTML / URL sinks.
-const trustedHtmlValues = new WeakSet<object>();
-const trustedUrlValues = new WeakSet<object>();
+const trustedHtmlValues = securityWeakSet<object>();
+const trustedUrlValues = securityWeakSet<object>();
 // SPEC §6.6 rule 5: the public carrier is only an ergonomic view. Raw sinks consume the exact
 // bytes snapshotted when Kovo minted (or first accepted) the capability, never a later read from a
 // mutable `.value` field or foreign TrustedHTML wrapper.
-const trustedHtmlSnapshots = new WeakMap<object, string>();
-const trustedUrlSnapshots = new WeakMap<object, string>();
-const browserTrustedHtmlSnapshots = new WeakMap<object, string>();
+const trustedHtmlSnapshots = securityWeakMap<object, string>();
+const trustedUrlSnapshots = securityWeakMap<object, string>();
+const browserTrustedHtmlSnapshots = securityWeakMap<object, string>();
+
+interface TrustedTypesBrandFactory {
+  isHTML(value: unknown): boolean;
+}
+
+// Capture the platform brand owners before evaluated app code can replace them. A late ambient
+// `globalThis.TrustedHTML` class is never authority for a raw HTML sink. Requiring the platform
+// factory's brand predicate as well as captured ordinary Function@@hasInstance also rejects the
+// common Node/polyfill forgery where an app merely installs a lookalike constructor.
+const importTimeTrustedHtmlConstructor = (globalThis as { TrustedHTML?: unknown }).TrustedHTML;
+const importTimeTrustedTypesFactory = (
+  globalThis as { trustedTypes?: Partial<TrustedTypesBrandFactory> }
+).trustedTypes;
+const importTimeTrustedTypesIsHtml = importTimeTrustedTypesFactory?.isHTML;
 
 /**
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
@@ -91,13 +126,13 @@ export function trustedHtml(
     value: snapshot,
   } as TrustedHtml;
   const stringify = () => snapshot;
-  Object.defineProperties(trusted, {
+  defineSecurityProperties(trusted, {
     [Symbol.toPrimitive]: { value: stringify },
     toString: { value: stringify },
   });
-  trustedHtmlSnapshots.set(trusted, snapshot);
-  trustedHtmlValues.add(trusted);
-  return Object.freeze(trusted);
+  securityWeakMapSet(trustedHtmlSnapshots, trusted, snapshot);
+  securityWeakSetAdd(trustedHtmlValues, trusted);
+  return freezeSecurityValue(trusted);
 }
 
 /**
@@ -125,7 +160,7 @@ export function safeRichHtml(value: string, options?: SafeRichHtmlOptions): Trus
  * allowlist and Kovo's existing URL/event/raw-sink runtime policy.
  */
 export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): string {
-  const allowedTags = new Set(
+  const allowedTags = securitySetOf(
     [...DEFAULT_RICH_HTML_TAGS, ...(options?.allowedTags ?? [])].map((tag) => tag.toLowerCase()),
   );
   return sanitizeRichHtmlFragment(value, allowedTags);
@@ -141,8 +176,8 @@ export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
   return (
     typeof value === 'object' &&
     value !== null &&
-    trustedHtmlValues.has(value) &&
-    trustedHtmlSnapshots.has(value)
+    securityWeakSetHas(trustedHtmlValues, value) &&
+    securityWeakMapHas(trustedHtmlSnapshots, value)
   );
 }
 
@@ -167,11 +202,11 @@ export interface TrustedUrl {
  * brand is visible in source and `kovo explain`.
  */
 export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
-  const snapshot = String(value);
+  const snapshot = securityString(value);
   const trusted = { ...trustedOutputMetadata(metadata), value: snapshot } as TrustedUrl;
-  trustedUrlSnapshots.set(trusted, snapshot);
-  trustedUrlValues.add(trusted);
-  return Object.freeze(trusted);
+  securityWeakMapSet(trustedUrlSnapshots, trusted, snapshot);
+  securityWeakSetAdd(trustedUrlValues, trusted);
+  return freezeSecurityValue(trusted);
 }
 
 /**
@@ -184,8 +219,8 @@ export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
   return (
     typeof value === 'object' &&
     value !== null &&
-    trustedUrlValues.has(value) &&
-    trustedUrlSnapshots.has(value)
+    securityWeakSetHas(trustedUrlValues, value) &&
+    securityWeakMapHas(trustedUrlSnapshots, value)
   );
 }
 
@@ -193,20 +228,33 @@ export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
  * Returns whether a value matches the browser TrustedHTML brand accepted by Kovo.
  */
 export function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTML {
-  const TrustedHTMLCtor = (globalThis as { TrustedHTML?: unknown }).TrustedHTML;
-  return (
-    typeof TrustedHTMLCtor === 'function' &&
-    typeof value === 'object' &&
-    value !== null &&
-    value instanceof TrustedHTMLCtor
-  );
+  if (
+    typeof importTimeTrustedHtmlConstructor !== 'function' ||
+    typeof importTimeTrustedTypesIsHtml !== 'function' ||
+    importTimeTrustedTypesFactory === undefined ||
+    typeof value !== 'object' ||
+    value === null
+  ) {
+    return false;
+  }
+
+  try {
+    return (
+      securityHasInstance(importTimeTrustedHtmlConstructor, value) &&
+      applySecurityIntrinsic<boolean>(importTimeTrustedTypesIsHtml, importTimeTrustedTypesFactory, [
+        value,
+      ]) === true
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Unwraps trusted raw HTML values and safely no-ops untrusted dynamic values.
  */
 export function kovoTrustedHtmlContent(value: unknown): string {
-  if (isKovoTrustedHtml(value)) return trustedHtmlSnapshots.get(value) ?? '';
+  if (isKovoTrustedHtml(value)) return securityWeakMapGet(trustedHtmlSnapshots, value) ?? '';
   if (isBrowserTrustedHtml(value)) return snapshotBrowserTrustedHtml(value);
 
   return '';
@@ -227,7 +275,7 @@ export function kovoEscapeHtml(value: unknown): string {
  * Neutralizes unsafe URL schemes for generated URL-bearing attributes.
  */
 export function kovoSafeUrl(value: unknown): string {
-  if (isKovoTrustedUrl(value)) return trustedUrlSnapshots.get(value) ?? '#';
+  if (isKovoTrustedUrl(value)) return securityWeakMapGet(trustedUrlSnapshots, value) ?? '#';
   const rendered = formatOutputValue(value);
   const decision = decideRuntimeAttributeWrite('href', rendered);
   drainRuntimeSinkSecurityEvent(decision.event);
@@ -277,7 +325,7 @@ export function kovoStyleProperty(name: string, value: unknown): string {
     return `view-transition-name: ${sanitizeCssIdentifier(formatOutputValue(value))}`;
   }
 
-  if (SAFE_LENGTH_PROPERTIES.has(propertyName)) {
+  if (securitySetHas(SAFE_LENGTH_PROPERTIES, propertyName)) {
     const rendered = sanitizeCssLengthPercentage(value);
     return rendered === null ? '' : `${propertyName}: ${rendered}`;
   }
@@ -308,14 +356,14 @@ function formatOutputValue(value: unknown): string {
 }
 
 function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
-  return typeof value === 'string' ? value : String(value);
+  return typeof value === 'string' ? value : securityString(value);
 }
 
 function snapshotBrowserTrustedHtml(value: BrowserTrustedHTML): string {
-  const existing = browserTrustedHtmlSnapshots.get(value);
+  const existing = securityWeakMapGet(browserTrustedHtmlSnapshots, value);
   if (existing !== undefined) return existing;
-  const snapshot = String(value);
-  browserTrustedHtmlSnapshots.set(value, snapshot);
+  const snapshot = securityString(value);
+  securityWeakMapSet(browserTrustedHtmlSnapshots, value, snapshot);
   return snapshot;
 }
 
@@ -389,7 +437,7 @@ const DEFAULT_RICH_HTML_TAGS = [
   'var',
 ] as const;
 
-const RICH_HTML_DROP_SUBTREE_TAGS = new Set([
+const RICH_HTML_DROP_SUBTREE_TAGS = securitySetOf([
   'base',
   'embed',
   'iframe',
@@ -404,7 +452,7 @@ const RICH_HTML_DROP_SUBTREE_TAGS = new Set([
   'template',
 ]);
 
-const GLOBAL_RICH_HTML_ATTRIBUTES = new Set([
+const GLOBAL_RICH_HTML_ATTRIBUTES = securitySetOf([
   'aria-describedby',
   'aria-hidden',
   'aria-label',
@@ -417,20 +465,20 @@ const GLOBAL_RICH_HTML_ATTRIBUTES = new Set([
   'title',
 ]);
 
-const RICH_HTML_ATTRIBUTES_BY_TAG = new Map<string, ReadonlySet<string>>([
-  ['a', new Set(['href', 'rel', 'target'])],
-  ['blockquote', new Set(['cite'])],
-  ['col', new Set(['span'])],
-  ['colgroup', new Set(['span'])],
-  ['img', new Set(['alt', 'height', 'loading', 'src', 'srcset', 'width'])],
-  ['q', new Set(['cite'])],
-  ['td', new Set(['colspan', 'headers', 'rowspan'])],
-  ['th', new Set(['abbr', 'colspan', 'headers', 'rowspan', 'scope'])],
+const RICH_HTML_ATTRIBUTES_BY_TAG = securityMapOf<string, Set<string>>([
+  ['a', securitySetOf(['href', 'rel', 'target'])],
+  ['blockquote', securitySetOf(['cite'])],
+  ['col', securitySetOf(['span'])],
+  ['colgroup', securitySetOf(['span'])],
+  ['img', securitySetOf(['alt', 'height', 'loading', 'src', 'srcset', 'width'])],
+  ['q', securitySetOf(['cite'])],
+  ['td', securitySetOf(['colspan', 'headers', 'rowspan'])],
+  ['th', securitySetOf(['abbr', 'colspan', 'headers', 'rowspan', 'scope'])],
 ]);
 
-const VOID_RICH_HTML_TAGS = new Set(['br', 'col', 'hr', 'img']);
+const VOID_RICH_HTML_TAGS = securitySetOf(['br', 'col', 'hr', 'img']);
 
-function sanitizeRichHtmlFragment(value: string, allowedTags: ReadonlySet<string>): string {
+function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): string {
   let html = '';
   let offset = 0;
   const stack: string[] = [];
@@ -464,18 +512,18 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: ReadonlySet<string
     if (droppedSubtrees.length > 0) {
       if (token.closing && token.name === droppedSubtrees[droppedSubtrees.length - 1]) {
         droppedSubtrees.pop();
-      } else if (!token.closing && RICH_HTML_DROP_SUBTREE_TAGS.has(token.name)) {
+      } else if (!token.closing && securitySetHas(RICH_HTML_DROP_SUBTREE_TAGS, token.name)) {
         droppedSubtrees.push(token.name);
       }
       continue;
     }
 
-    if (RICH_HTML_DROP_SUBTREE_TAGS.has(token.name)) {
+    if (securitySetHas(RICH_HTML_DROP_SUBTREE_TAGS, token.name)) {
       if (!token.closing && !token.selfClosing) droppedSubtrees.push(token.name);
       continue;
     }
 
-    if (!allowedTags.has(token.name)) continue;
+    if (!securitySetHas(allowedTags, token.name)) continue;
 
     if (token.closing) {
       const lastIndex = stack.lastIndexOf(token.name);
@@ -489,7 +537,9 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: ReadonlySet<string
 
     const attrs = sanitizeRichHtmlAttributes(token.name, token.attributes);
     html += `<${token.name}${attrs}>`;
-    if (!token.selfClosing && !VOID_RICH_HTML_TAGS.has(token.name)) stack.push(token.name);
+    if (!token.selfClosing && !securitySetHas(VOID_RICH_HTML_TAGS, token.name)) {
+      stack.push(token.name);
+    }
   }
 
   while (stack.length > 0) {
@@ -566,16 +616,16 @@ function containsLessThanOutsideQuotes(value: string): boolean {
 }
 
 function sanitizeRichHtmlAttributes(tag: string, raw: string): string {
-  const tagAttributes = RICH_HTML_ATTRIBUTES_BY_TAG.get(tag);
+  const tagAttributes = securityMapGet(RICH_HTML_ATTRIBUTES_BY_TAG, tag);
   const attributes: string[] = [];
-  const seen = new Set<string>();
+  const seen = securitySet<string>();
   const pattern = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
   let match: RegExpExecArray | null;
 
   while ((match = pattern.exec(raw)) !== null) {
     const name = (match[1] ?? '').toLowerCase();
-    if (!isAllowedRichHtmlAttribute(name, tagAttributes) || seen.has(name)) continue;
-    seen.add(name);
+    if (!isAllowedRichHtmlAttribute(name, tagAttributes) || securitySetHas(seen, name)) continue;
+    securitySetAdd(seen, name);
 
     const value = match[2] ?? match[3] ?? match[4] ?? '';
     const sanitized = sanitizeRichHtmlAttributeValue(tag, name, value);
@@ -586,12 +636,12 @@ function sanitizeRichHtmlAttributes(tag: string, raw: string): string {
   return attributes.length === 0 ? '' : ` ${attributes.join(' ')}`;
 }
 
-function isAllowedRichHtmlAttribute(
-  name: string,
-  tagAttributes: ReadonlySet<string> | undefined,
-): boolean {
+function isAllowedRichHtmlAttribute(name: string, tagAttributes: Set<string> | undefined): boolean {
   if (name.startsWith('data-')) return true;
-  return GLOBAL_RICH_HTML_ATTRIBUTES.has(name) || tagAttributes?.has(name) === true;
+  return (
+    securitySetHas(GLOBAL_RICH_HTML_ATTRIBUTES, name) ||
+    (tagAttributes !== undefined && securitySetHas(tagAttributes, name))
+  );
 }
 
 function sanitizeRichHtmlAttributeValue(tag: string, name: string, value: string): string | null {
@@ -615,11 +665,11 @@ function sanitizeRichHtmlAttributeValue(tag: string, name: string, value: string
 }
 
 function sanitizeRelList(value: string): string {
-  const allowed = new Set(['nofollow', 'noopener', 'noreferrer']);
+  const allowed = securitySetOf(['nofollow', 'noopener', 'noreferrer']);
   return value
     .split(/\s+/)
     .map((part) => part.toLowerCase())
-    .filter((part, index, parts) => allowed.has(part) && parts.indexOf(part) === index)
+    .filter((part, index, parts) => securitySetHas(allowed, part) && parts.indexOf(part) === index)
     .join(' ');
 }
 
@@ -642,7 +692,7 @@ function sanitizeCssIdentifier(value: string): string {
   return trimmed.replace(/[^-_a-zA-Z0-9]/g, '-').replace(/^-?[^_a-zA-Z]+/, 'kovo-');
 }
 
-const SAFE_LENGTH_PROPERTIES = new Set([
+const SAFE_LENGTH_PROPERTIES = securitySetOf([
   'bottom',
   'height',
   'left',
@@ -661,9 +711,9 @@ function normalizeCssPropertyName(name: string): string {
 }
 
 function sanitizeCssLengthPercentage(value: unknown): string | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+  if (typeof value === 'number') return Number.isFinite(value) ? securityString(value) : null;
 
-  const rendered = String(value).trim();
+  const rendered = securityString(value).trim();
   if (/^-?(?:\d+|\d*\.\d+)(?:%|px|rem|em|vh|vw|vmin|vmax|ch|ex|lh|rlh)?$/.test(rendered)) {
     return rendered;
   }
@@ -672,11 +722,23 @@ function sanitizeCssLengthPercentage(value: unknown): string | null {
 }
 
 function sanitizeCssTransform(value: unknown): string | null {
-  const rendered = String(value).trim();
+  const rendered = securityString(value).trim();
   const match = /^translate(?:3d|X|Y)?\((.*)\)$/.exec(rendered);
   if (!match) return null;
 
   const parts = (match[1] ?? '').split(',').map((part) => part.trim());
   if (parts.length < 1 || parts.length > 3) return null;
   return parts.every((part) => sanitizeCssLengthPercentage(part) !== null) ? rendered : null;
+}
+
+function securitySetOf<T>(values: readonly T[]): Set<T> {
+  const set = securitySet<T>();
+  for (const value of values) securitySetAdd(set, value);
+  return set;
+}
+
+function securityMapOf<K, V>(entries: readonly (readonly [K, V])[]): Map<K, V> {
+  const map = securityMap<K, V>();
+  for (const [key, value] of entries) securityMapSet(map, key, value);
+  return map;
 }

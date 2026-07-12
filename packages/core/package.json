@@ -9,6 +9,9 @@
     "dist"
   ],
   "type": "module",
+  "imports": {
+    "#security-witness-intrinsics": "./src/internal/security-witness-intrinsics.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./generated": "./src/generated.ts",

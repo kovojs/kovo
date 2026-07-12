@@ -1,6 +1,6 @@
 import type { TrustedHtml } from '@kovojs/browser';
 
-import { escapeAttribute, renderedHtml, type RenderedHtml } from './html.js';
+import { escapeAttribute, renderedHtml, renderedHtmlContent, type RenderedHtml } from './html.js';
 import {
   deferredStreamInitialChunkCount,
   type DeferredPriority,
@@ -278,7 +278,9 @@ function rendered(value: MaybePromise<string>): MaybePromise<RenderedHtml> {
 }
 
 function unrendered(value: MaybePromise<RenderedHtml>): MaybePromise<string> {
-  return isPromiseLike(value) ? value.then((html) => html.html) : value.html;
+  return isPromiseLike(value)
+    ? value.then((html) => renderedHtmlContent(html))
+    : renderedHtmlContent(value);
 }
 
 function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {

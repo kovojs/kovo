@@ -1,3 +1,10 @@
+import {
+  freezeSecurityValue,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from '#security-witness-intrinsics';
+
 /** The raw request body a webhook verifier signs over: a string or raw bytes. */
 export type WebhookPayload = string | ArrayBuffer | ArrayBufferView;
 
@@ -120,11 +127,15 @@ export interface StandardWebhooksOptions {
 
 const defaultWebhookToleranceSeconds = 5 * 60;
 const textEncoder = new TextEncoder();
-const frameworkHmacSignatureVerifiers = new WeakSet<object>();
+const frameworkHmacSignatureVerifiers = securityWeakSet<object>();
 
 /** @internal Unforgeable provenance check for framework-constructed HMAC verifiers. */
 export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacSignatureVerifier {
-  return typeof value === 'object' && value !== null && frameworkHmacSignatureVerifiers.has(value);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    securityWeakSetHas(frameworkHmacSignatureVerifiers, value)
+  );
 }
 
 /**
@@ -154,7 +165,7 @@ export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerif
   const config = snapshotHmacSignatureOptions(runtimeOptions);
   const name = runtimeOptions.name ?? 'hmac';
   const scheme = runtimeOptions.scheme ?? `hmac-sha256:${runtimeOptions.encoding}`;
-  const resolved: ResolvedHmacSignatureConfig = Object.freeze({
+  const resolved: ResolvedHmacSignatureConfig = freezeSecurityValue({
     encoding: runtimeOptions.encoding,
     header: runtimeOptions.header,
     kind: 'hmac',
@@ -176,12 +187,12 @@ export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerif
       return verifyHmacSignature(runtimeOptions, request);
     },
   };
-  frameworkHmacSignatureVerifiers.add(verifier);
-  return Object.freeze(verifier);
+  securityWeakSetAdd(frameworkHmacSignatureVerifiers, verifier);
+  return freezeSecurityValue(verifier);
 }
 
 function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignatureOptions {
-  return Object.freeze({
+  return freezeSecurityValue({
     encoding: options.encoding,
     header: options.header,
     ...(options.multiSig === undefined ? {} : { multiSig: options.multiSig }),
@@ -193,7 +204,7 @@ function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignat
     ...(options.tolerance === undefined
       ? {}
       : {
-          tolerance: Object.freeze({
+          tolerance: freezeSecurityValue({
             ...(options.tolerance.header === undefined ? {} : { header: options.tolerance.header }),
             seconds: options.tolerance.seconds,
             ...(options.tolerance.timestamp === undefined
@@ -214,7 +225,7 @@ function snapshotHmacSecrets(
   secret: HmacSignatureOptions['secret'],
 ): HmacSignatureOptions['secret'] {
   if (Array.isArray(secret)) {
-    return Object.freeze((secret as readonly HmacSecret[]).map(snapshotHmacSecret));
+    return freezeSecurityValue((secret as readonly HmacSecret[]).map(snapshotHmacSecret));
   }
   return snapshotHmacSecret(secret as HmacSecret);
 }
@@ -222,7 +233,7 @@ function snapshotHmacSecrets(
 function snapshotHmacSecret(secret: HmacSecret): HmacSecret {
   if (typeof secret === 'string') return secret;
   if (secret instanceof Uint8Array) return copyBytes(secret);
-  return Object.freeze({
+  return freezeSecurityValue({
     ...(secret.encoding === undefined ? {} : { encoding: secret.encoding }),
     value: typeof secret.value === 'string' ? secret.value : copyBytes(secret.value),
   });

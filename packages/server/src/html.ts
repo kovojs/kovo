@@ -13,6 +13,18 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
+import {
+  createWitnessWeakMap,
+  createWitnessWeakSet,
+  witnessFreeze,
+  witnessString,
+  witnessWeakMapGet,
+  witnessWeakMapHas,
+  witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
+
 /**
  * @internal HTML-coercion helper the compiler injects into emitted server modules
  * (SPEC.md §6.x rendering). Escapes `&`/`<`/`>` so interpolated app/DB strings cannot
@@ -35,8 +47,8 @@ export function escapeAttribute(value: string): string {
 const coercedRenderedHtmlPrefix = '\uE000kovo-rendered-html:v2:';
 const coercedRenderedHtmlSuffix = '\uE001';
 const coercedRenderedHtmlSecret = randomBytes(32);
-const renderedHtmlValues = new WeakSet<object>();
-const renderedHtmlSnapshots = new WeakMap<object, string>();
+const renderedHtmlValues = createWitnessWeakSet<object>();
+const renderedHtmlSnapshots = createWitnessWeakMap<object, string>();
 const maxCoercedRenderedHtmlDepth = 32;
 
 /** @internal framework-rendered HTML, distinct from app-authored text strings. */
@@ -49,7 +61,7 @@ export type RenderedHtml = string & {
 
 /** @internal create a branded framework-rendered HTML value. */
 export function renderedHtml(html: string): RenderedHtml {
-  const snapshot = String(html);
+  const snapshot = witnessString(html);
   const rendered = {
     html: snapshot,
     [Symbol.toPrimitive](hint: string) {
@@ -62,9 +74,9 @@ export function renderedHtml(html: string): RenderedHtml {
       return snapshot;
     },
   };
-  renderedHtmlSnapshots.set(rendered, snapshot);
-  renderedHtmlValues.add(rendered);
-  return Object.freeze(rendered) as unknown as RenderedHtml;
+  witnessWeakMapSet(renderedHtmlSnapshots, rendered, snapshot);
+  witnessWeakSetAdd(renderedHtmlValues, rendered);
+  return witnessFreeze(rendered) as unknown as RenderedHtml;
 }
 
 /** @internal true for values produced by the server JSX/runtime HTML renderer. */
@@ -72,8 +84,8 @@ export function isRenderedHtml(value: unknown): value is RenderedHtml {
   return (
     typeof value === 'object' &&
     value !== null &&
-    renderedHtmlValues.has(value) &&
-    renderedHtmlSnapshots.has(value)
+    witnessWeakSetHas(renderedHtmlValues, value) &&
+    witnessWeakMapHas(renderedHtmlSnapshots, value)
   );
 }
 
@@ -81,7 +93,7 @@ export type { FragmentHtml } from '@kovojs/core/internal/sink-policy';
 
 /** @internal Convert framework-rendered JSX or explicit trustedHtml() into fragment wire HTML. */
 export function fragmentHtml(value: RenderedHtml | object): FragmentHtml {
-  if (isRenderedHtml(value)) return createFragmentHtml(renderedHtmlSnapshot(value));
+  if (isRenderedHtml(value)) return createFragmentHtml(renderedHtmlContent(value));
   const trusted = kovoTrustedHtmlContent(value);
   return createFragmentHtml(trusted);
 }
@@ -101,7 +113,7 @@ export function generatedFragmentHtml(html: string): FragmentHtml {
 /** @internal Accept an already-branded/generated/trusted value and mint fragment wire HTML. */
 export function generatedFragmentHtmlValue(value: unknown): FragmentHtml {
   if (isFragmentHtml(value)) return value;
-  if (isRenderedHtml(value)) return createFragmentHtml(renderedHtmlSnapshot(value));
+  if (isRenderedHtml(value)) return createFragmentHtml(renderedHtmlContent(value));
   if (typeof value === 'object' && value !== null) {
     const trusted = kovoTrustedHtmlContent(value);
     if (trusted !== '') return createFragmentHtml(trusted);
@@ -121,7 +133,7 @@ export function renderFragmentHtmlValue(value: FragmentHtml): string {
  */
 export function renderHtmlValue(value: unknown): string {
   if (value === null || value === undefined) return '';
-  if (isRenderedHtml(value)) return renderedHtmlSnapshot(value);
+  if (isRenderedHtml(value)) return renderedHtmlContent(value);
   if (typeof value === 'object') {
     const trustedHtml = kovoTrustedHtmlContent(value);
     if (trustedHtml !== '') return trustedHtml;
@@ -148,7 +160,7 @@ export function renderRouteHtml(value: unknown): string {
 /** @internal escape text while preserving framework-rendered HTML coerced via `+`. */
 export function escapeTextWithRenderedHtml(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
-  if (isRenderedHtml(value)) return coerceRenderedHtml(renderedHtmlSnapshot(value));
+  if (isRenderedHtml(value)) return coerceRenderedHtml(renderedHtmlContent(value));
   if (Array.isArray(value)) return value.map((item) => escapeTextWithRenderedHtml(item)).join('');
 
   // Mirrors renderJsxChildren's scalar coercion so escaped text stays byte-identical for safe values.
@@ -208,8 +220,9 @@ function renderStringWithCoercedRenderedHtml(
   return html;
 }
 
-function renderedHtmlSnapshot(value: RenderedHtml): string {
-  return renderedHtmlSnapshots.get(value as unknown as object) ?? '';
+/** @internal Consume the private construction-time bytes, never the public `.html` view. */
+export function renderedHtmlContent(value: RenderedHtml): string {
+  return witnessWeakMapGet(renderedHtmlSnapshots, value as unknown as object) ?? '';
 }
 
 function coercedRenderedHtmlSignature(payload: string): string {

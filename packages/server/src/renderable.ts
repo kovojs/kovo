@@ -1,7 +1,12 @@
 import type { TrustedHtml } from '@kovojs/browser';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
-import { escapeTextWithRenderedHtml, isRenderedHtml, type RenderedHtml } from './html.js';
+import {
+  escapeTextWithRenderedHtml,
+  isRenderedHtml,
+  renderedHtmlContent,
+  type RenderedHtml,
+} from './html.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
@@ -40,7 +45,7 @@ export type InternalServerRenderable =
 export function renderServerRenderable(children: InternalServerRenderable): MaybePromise<string> {
   if (children === null || children === undefined || typeof children === 'boolean') return '';
   if (isPromiseLike(children)) return children.then((child) => renderServerRenderable(child));
-  if (isRenderedHtml(children)) return children.html;
+  if (isRenderedHtml(children)) return renderedHtmlContent(children);
   if (typeof children === 'object') {
     const trustedHtml = kovoTrustedHtmlContent(children);
     if (trustedHtml !== '') return trustedHtml;

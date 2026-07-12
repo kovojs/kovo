@@ -15,13 +15,24 @@ import {
   renderHtmlValue,
   safeUrlAttribute,
 } from './html.js';
+import {
+  createWitnessSet,
+  createWitnessWeakSet,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectKeys,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
 
 const documentConfigSentinel: unique symbol = Symbol('kovo.document.config');
 const documentNodeSentinel: unique symbol = Symbol('kovo.document.node');
-const documentConfigProofs = new WeakSet<object>();
-const documentNodeProofs = new WeakSet<object>();
+const documentConfigProofs = createWitnessWeakSet<object>();
+const documentNodeProofs = createWitnessWeakSet<object>();
 const invalidAttributeNamePattern = new RegExp(String.raw`[\s"'=<>/\u0000-\u001f\u007f]`, 'u');
-const linkAttributeNames = new Set([
+const linkAttributeNames = witnessSetOf([
   'as',
   'crossorigin',
   'fetchpriority',
@@ -259,7 +270,9 @@ export function InlineStyle(props: {
 }
 
 export function isDocumentConfig(value: unknown): value is DocumentConfig {
-  return typeof value === 'object' && value !== null && documentConfigProofs.has(value);
+  return (
+    typeof value === 'object' && value !== null && witnessWeakSetHas(documentConfigProofs, value)
+  );
 }
 
 /**
@@ -338,19 +351,19 @@ function documentConfig(config: DocumentConfig): DocumentConfig {
 }
 
 function markDocumentNode(node: DocumentNode): DocumentNode {
-  const sealed = Object.freeze({
+  const sealed = witnessFreeze({
     ...node,
     ...(node.attrs === undefined
       ? {}
       : { attrs: snapshotDocumentShellAttributes(node.attrs, 'document node attrs') }),
     ...(node.csp === undefined ? {} : { csp: snapshotCspInlineMetadata(node.csp) }),
   }) as DocumentNode;
-  documentNodeProofs.add(sealed);
+  witnessWeakSetAdd(documentNodeProofs, sealed);
   return sealed;
 }
 
 function sealDocumentConfig(config: DocumentConfig): DocumentConfig {
-  const sealed = Object.freeze({
+  const sealed = witnessFreeze({
     ...config,
     bodyAttrs: snapshotDocumentShellAttributes(config.bodyAttrs, 'document.bodyAttrs'),
     bodyEnd: snapshotDocumentStringArray(config.bodyEnd, 'document.bodyEnd'),
@@ -359,7 +372,7 @@ function sealDocumentConfig(config: DocumentConfig): DocumentConfig {
     head: snapshotDocumentStringArray(config.head, 'document.head'),
     htmlAttrs: snapshotDocumentShellAttributes(config.htmlAttrs, 'document.htmlAttrs'),
   }) as DocumentConfig;
-  documentConfigProofs.add(sealed);
+  witnessWeakSetAdd(documentConfigProofs, sealed);
   return sealed;
 }
 
@@ -369,7 +382,7 @@ function snapshotDocumentStringArray(value: unknown, label: string): readonly st
   }
   const snapshot: string[] = [];
   for (let index = 0; index < value.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
     if (
       descriptor === undefined ||
       !('value' in descriptor) ||
@@ -379,7 +392,7 @@ function snapshotDocumentStringArray(value: unknown, label: string): readonly st
     }
     snapshot.push(descriptor.value);
   }
-  return Object.freeze(snapshot);
+  return witnessFreeze(snapshot);
 }
 
 function snapshotDocumentShellAttributes(value: unknown, label: string): DocumentShellAttributes {
@@ -387,8 +400,8 @@ function snapshotDocumentShellAttributes(value: unknown, label: string): Documen
     throw new TypeError(`${label} must be a plain own-data attribute record (SPEC §9.5).`);
   }
   const snapshot: DocumentShellAttributes = {};
-  for (const key of Object.keys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  for (const key of witnessObjectKeys(value)) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, key);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`${label}.${key} must be a stable own data property (SPEC §9.5).`);
     }
@@ -403,7 +416,7 @@ function snapshotDocumentShellAttributes(value: unknown, label: string): Documen
     }
     snapshot[key] = attribute;
   }
-  return Object.freeze(snapshot);
+  return witnessFreeze(snapshot);
 }
 
 function snapshotCspInlineMetadata(value: unknown): CspInlineMetadata {
@@ -419,7 +432,7 @@ function snapshotCspInlineMetadata(value: unknown): CspInlineMetadata {
     'document.csp.styles',
   );
   const styleAttributes = ownDataValue(value, 'styleAttributes', 'document.csp.styleAttributes');
-  return Object.freeze({
+  return witnessFreeze({
     scripts,
     styles,
     ...(styleAttributes === undefined
@@ -434,7 +447,7 @@ function snapshotCspInlineMetadata(value: unknown): CspInlineMetadata {
 }
 
 function ownDataValue(value: object, property: PropertyKey, label: string): unknown {
-  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
   if (descriptor === undefined) return undefined;
   if (!('value' in descriptor)) {
     throw new TypeError(`${label} must be a stable own data property (SPEC §9.5).`);
@@ -483,7 +496,9 @@ function collectDocumentNodes(value: unknown): DocumentNode[] {
 }
 
 function isDocumentNode(value: unknown): value is DocumentNode {
-  return typeof value === 'object' && value !== null && documentNodeProofs.has(value);
+  return (
+    typeof value === 'object' && value !== null && witnessWeakSetHas(documentNodeProofs, value)
+  );
 }
 
 function renderDocumentChildren(value: unknown): { csp: CspInlineMetadata; html: string } {
@@ -549,12 +564,13 @@ function filterShellAttrs(
   props: DocumentShellAttributes & { children?: never },
   element: 'body' | 'html',
 ): DocumentShellAttributes {
-  const allowed = element === 'html' ? new Set(['class', 'dir', 'lang']) : new Set(['class']);
+  const allowed =
+    element === 'html' ? witnessSetOf(['class', 'dir', 'lang']) : witnessSetOf(['class']);
   const attrs: DocumentShellAttributes = {};
   for (const [name, value] of Object.entries(props)) {
     if (name === 'children' || value === undefined || value === false) continue;
     assertValidAttributeName(name, `<${element}> attribute`);
-    if (!allowed.has(name) && !name.startsWith('data-')) {
+    if (!witnessSetHas(allowed, name) && !name.startsWith('data-')) {
       throw new TypeError(
         `<${element}> attribute "${name}" is not supported by structured document attributes (SPEC.md §9.5, KV424).`,
       );
@@ -567,7 +583,7 @@ function filterShellAttrs(
 function filterLinkAttrs(attributes: Record<string, unknown>): Record<string, unknown> {
   const attrs: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(attributes)) {
-    if (!linkAttributeNames.has(name)) continue;
+    if (!witnessSetHas(linkAttributeNames, name)) continue;
     attrs[name] = value;
   }
   return attrs;
@@ -583,6 +599,12 @@ function assertValidAttributeName(name: string, sink: string): void {
 function assertSafeUrl(value: string, sink: string): void {
   if (!hasUnsafeUrlScheme(value)) return;
   throw new TypeError(`${sink} received an unsafe URL scheme (SPEC.md §4.8, KV236).`);
+}
+
+function witnessSetOf<Value>(values: readonly Value[]): Set<Value> {
+  const set = createWitnessSet<Value>();
+  for (const value of values) witnessSetAdd(set, value);
+  return set;
 }
 
 function sourceText(

@@ -54,6 +54,7 @@ import {
   escapeAttribute,
   isRenderedHtml,
   renderedHtml,
+  renderedHtmlContent,
   renderHtmlValue,
   unwrapCoercedRenderedHtml,
   type RenderedHtml,
@@ -64,6 +65,12 @@ import type {
   CompiledRoutePageMetadata,
 } from './route-ir.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
+import {
+  createWitnessWeakMap,
+  witnessFreeze,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 // Public signatures cannot reference internal subpath types. Keep this type-level
 // mirror local while runtime URL construction consumes `internal/route-pattern`.
@@ -95,9 +102,9 @@ interface LayoutLiveTargetMetadata {
   target: string;
 }
 
-const layoutLiveTargetMetadata = new WeakMap<object, LayoutLiveTargetMetadata>();
-const layoutNavigationSegmentIds = new WeakMap<object, string>();
-const routePageMetadata = new WeakMap<object, CompiledRoutePageMetadata>();
+const layoutLiveTargetMetadata = createWitnessWeakMap<object, LayoutLiveTargetMetadata>();
+const layoutNavigationSegmentIds = createWitnessWeakMap<object, string>();
+const routePageMetadata = createWitnessWeakMap<object, CompiledRoutePageMetadata>();
 let nextLayoutLiveTargetId = 0;
 let nextLayoutNavigationSegmentId = 0;
 
@@ -313,12 +320,12 @@ export function layout<
   );
   if (deps.length > 0) {
     nextLayoutLiveTargetId += 1;
-    layoutLiveTargetMetadata.set(declaration, {
+    witnessWeakMapSet(layoutLiveTargetMetadata, declaration, {
       deps,
       target: `kovo-layout-${nextLayoutLiveTargetId}`,
     });
   }
-  return Object.freeze(declaration);
+  return witnessFreeze(declaration);
 }
 
 /** App-scoped route factory. `createApp()` uses this to contextually type route guards/pages from configured request providers (SPEC §6.4/§9.5). */
@@ -402,8 +409,8 @@ export function route<
   const metadata =
     (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
     fallbackRoutePageMetadata(path, definition);
-  if (metadata) routePageMetadata.set(declaration, metadata);
-  return Object.freeze(declaration);
+  if (metadata) witnessWeakMapSet(routePageMetadata, declaration, metadata);
+  return witnessFreeze(declaration);
 }
 
 function fallbackRoutePageMetadata<Path extends string>(
@@ -456,12 +463,12 @@ function routeRegionSegments(
 }
 
 function layoutNavigationSegmentId(layoutDeclaration: LayoutDeclaration<any, any, any>): string {
-  const existing = layoutNavigationSegmentIds.get(layoutDeclaration);
+  const existing = witnessWeakMapGet(layoutNavigationSegmentIds, layoutDeclaration);
   if (existing) return existing;
 
   nextLayoutNavigationSegmentId += 1;
   const id = `layout:${nextLayoutNavigationSegmentId}`;
-  layoutNavigationSegmentIds.set(layoutDeclaration, id);
+  witnessWeakMapSet(layoutNavigationSegmentIds, layoutDeclaration, id);
   return id;
 }
 
@@ -711,10 +718,10 @@ function getRoutePageMetadata(
   definition: RouteDefinition<any, any, any, any, any, any, any>,
 ): CompiledRoutePageMetadata | undefined {
   const metadata =
-    routePageMetadata.get(definition) ??
+    witnessWeakMapGet(routePageMetadata, definition) ??
     (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
     fallbackRouteDeclarationMetadata(definition);
-  if (metadata) routePageMetadata.set(definition, metadata);
+  if (metadata) witnessWeakMapSet(routePageMetadata, definition, metadata);
   return metadata;
 }
 
@@ -863,14 +870,15 @@ function stampRouteNavigationSegment(
   const rendered = stampableRouteHtml(value);
   if (!segment || !rendered) return value;
 
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(rendered.html);
+  const html = renderedHtmlContent(rendered);
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
   if (!opening) return value;
 
   const tagName = opening[1];
   const attrs = opening[2] ?? '';
   const stampedAttrs = stampRouteNavigationAttributes(attrs, segment);
   const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return renderedHtml(`${stampedOpening}${rendered.html.slice(opening[0].length)}`);
+  return renderedHtml(`${stampedOpening}${html.slice(opening[0].length)}`);
 }
 
 function stampRouteNavigationAttributes(
@@ -901,17 +909,18 @@ function stampLayoutLiveTarget(
 ): unknown {
   const rendered = stampableRouteHtml(value);
   if (!rendered) return value;
-  const metadata = layoutLiveTargetMetadata.get(layoutDeclaration);
+  const metadata = witnessWeakMapGet(layoutLiveTargetMetadata, layoutDeclaration);
   if (!metadata || metadata.deps.length === 0) return value;
 
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(rendered.html);
+  const html = renderedHtmlContent(rendered);
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
   if (!opening) return value;
 
   const tagName = opening[1];
   const attrs = opening[2] ?? '';
   const stampedAttrs = stampLayoutAttributes(attrs, metadata);
   const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return renderedHtml(`${stampedOpening}${rendered.html.slice(opening[0].length)}`);
+  return renderedHtml(`${stampedOpening}${html.slice(opening[0].length)}`);
 }
 
 function stampableRouteHtml(value: unknown): RenderedHtml | undefined {

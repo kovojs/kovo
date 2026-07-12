@@ -1433,6 +1433,7 @@ function handlerReadsAmbientCookie(
       ? parameters.slice(1)
       : parameters;
   if (runtimeParameters[0]?.dotDotDotToken || runtimeParameters[1]?.dotDotDotToken) return true;
+  if (handlerReferencesUnprovenFreeAuthority(body, parameters)) return true;
   if (handlerMutatesBrowserState(body, runtimeParameters[2])) return true;
   if (!ts.isArrowFunction(body.parent) && handlerBodyReferencesArguments(body)) {
     return true;
@@ -1634,6 +1635,227 @@ function handlerBodyReferencesArguments(body: ts.ConciseBody): boolean {
   };
   visit(body);
   return found;
+}
+
+interface HandlerLocalBinding {
+  readonly name: string;
+  readonly scope: ts.Node;
+}
+
+const INERT_FREE_HANDLER_IDENTIFIERS = new Set(['Infinity', 'NaN', 'undefined']);
+
+/**
+ * KV418's compiler proof must describe the executable handler, including closure authority.
+ * Function source text does not encode which lexical cell a free identifier resolves to, so two
+ * byte-identical handlers can have different authority. Fail every module/global/object/function
+ * capture closed; handler-local declarations (including recursively composed literal constants)
+ * remain inspectable by the existing request/header provenance pass.
+ */
+function handlerReferencesUnprovenFreeAuthority(
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+): boolean {
+  const handler = body.parent;
+  const root = ts.isFunctionLike(handler) ? handler : body;
+  const bindings: HandlerLocalBinding[] = [];
+
+  for (const parameter of parameters) {
+    recordHandlerBindingName(bindings, parameter.name, root);
+  }
+  if ((ts.isFunctionExpression(root) || ts.isClassExpression(root)) && root.name !== undefined) {
+    bindings.push({ name: root.name.text, scope: root });
+  }
+
+  const collectBindings = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node)) {
+      recordHandlerBindingName(bindings, node.name, handlerVariableBindingScope(node, root));
+    } else if (ts.isParameter(node) && !parameters.includes(node)) {
+      recordHandlerBindingName(bindings, node.name, node.parent);
+    } else if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
+      recordHandlerBindingName(bindings, node.variableDeclaration.name, node);
+    } else if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isEnumDeclaration(node)) &&
+      node.name !== undefined
+    ) {
+      bindings.push({ name: node.name.text, scope: handlerLexicalBindingScope(node, root) });
+    } else if (
+      (ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
+      node.name !== undefined
+    ) {
+      bindings.push({ name: node.name.text, scope: node });
+    }
+
+    if (node !== root && ts.isFunctionLike(node) && !ts.isArrowFunction(node)) {
+      bindings.push({ name: 'arguments', scope: node });
+    }
+    ts.forEachChild(node, collectBindings);
+  };
+  for (const parameter of parameters) {
+    if (parameter.initializer !== undefined) collectBindings(parameter.initializer);
+  }
+  collectBindings(body);
+
+  let unsafe = false;
+  const visit = (node: ts.Node): void => {
+    if (unsafe) return;
+    if (node.kind === ts.SyntaxKind.ThisKeyword || node.kind === ts.SyntaxKind.SuperKeyword) {
+      unsafe = true;
+      return;
+    }
+    if (
+      ts.isIdentifier(node) &&
+      isRuntimeIdentifierReference(node, root) &&
+      !INERT_FREE_HANDLER_IDENTIFIERS.has(node.text) &&
+      !bindings.some(
+        (binding) => binding.name === node.text && handlerNodeIsWithin(node, binding.scope),
+      )
+    ) {
+      unsafe = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  for (const parameter of parameters) {
+    if (parameter.initializer !== undefined) visit(parameter.initializer);
+  }
+  visit(body);
+  return unsafe;
+}
+
+function recordHandlerBindingName(
+  bindings: HandlerLocalBinding[],
+  name: ts.BindingName,
+  scope: ts.Node,
+): void {
+  if (ts.isIdentifier(name)) {
+    bindings.push({ name: name.text, scope });
+    return;
+  }
+  for (const element of name.elements) {
+    if (ts.isOmittedExpression(element)) continue;
+    recordHandlerBindingName(bindings, element.name, scope);
+  }
+}
+
+function handlerVariableBindingScope(node: ts.VariableDeclaration, root: ts.Node): ts.Node {
+  const list = ts.isVariableDeclarationList(node.parent) ? node.parent : undefined;
+  if (list && (ts.getCombinedNodeFlags(list) & ts.NodeFlags.BlockScoped) === 0) {
+    let current: ts.Node | undefined = node.parent;
+    while (current && current !== root) {
+      if (ts.isFunctionLike(current)) return current;
+      current = current.parent;
+    }
+    return root;
+  }
+
+  let current: ts.Node | undefined = node.parent;
+  while (current && current !== root) {
+    if (
+      ts.isForStatement(current) ||
+      ts.isForInStatement(current) ||
+      ts.isForOfStatement(current) ||
+      ts.isBlock(current) ||
+      ts.isCaseBlock(current) ||
+      ts.isCatchClause(current)
+    ) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return root;
+}
+
+function handlerLexicalBindingScope(node: ts.Node, root: ts.Node): ts.Node {
+  let current: ts.Node | undefined = node.parent;
+  while (current && current !== root) {
+    if (
+      ts.isBlock(current) ||
+      ts.isCaseBlock(current) ||
+      ts.isCatchClause(current) ||
+      ts.isForStatement(current) ||
+      ts.isForInStatement(current) ||
+      ts.isForOfStatement(current)
+    ) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return root;
+}
+
+function handlerNodeIsWithin(node: ts.Node, scope: ts.Node): boolean {
+  let current: ts.Node | undefined = node;
+  while (current !== undefined) {
+    if (current === scope) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function isRuntimeIdentifierReference(node: ts.Identifier, root: ts.Node): boolean {
+  let current: ts.Node | undefined = node.parent;
+  while (current && current !== root) {
+    if (ts.isTypeNode(current)) return false;
+    current = current.parent;
+  }
+
+  const parent = node.parent;
+  if (
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    (ts.isMethodDeclaration(parent) && parent.name === node) ||
+    (ts.isGetAccessorDeclaration(parent) && parent.name === node) ||
+    (ts.isSetAccessorDeclaration(parent) && parent.name === node) ||
+    (ts.isPropertyDeclaration(parent) && parent.name === node) ||
+    (ts.isEnumMember(parent) && parent.name === node) ||
+    (ts.isLabeledStatement(parent) && parent.label === node) ||
+    (ts.isBreakOrContinueStatement(parent) && parent.label === node) ||
+    (ts.isJsxAttribute(parent) && parent.name === node)
+  ) {
+    return false;
+  }
+  if (identifierBelongsToBindingName(node)) return false;
+  if (
+    ((ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isClassDeclaration(parent) ||
+      ts.isClassExpression(parent) ||
+      ts.isEnumDeclaration(parent)) &&
+      parent.name === node) ||
+    (ts.isImportSpecifier(parent) && (parent.name === node || parent.propertyName === node)) ||
+    (ts.isExportSpecifier(parent) && (parent.name === node || parent.propertyName === node))
+  ) {
+    return false;
+  }
+  if (
+    (ts.isJsxOpeningElement(parent) ||
+      ts.isJsxClosingElement(parent) ||
+      ts.isJsxSelfClosingElement(parent)) &&
+    parent.tagName === node
+  ) {
+    return !/^[a-z]/.test(node.text);
+  }
+  return true;
+}
+
+function identifierBelongsToBindingName(node: ts.Identifier): boolean {
+  let current: ts.Node = node;
+  while (true) {
+    const parent = current.parent;
+    if (ts.isBindingElement(parent)) {
+      return parent.name === current || parent.propertyName === current;
+    }
+    if (ts.isObjectBindingPattern(parent) || ts.isArrayBindingPattern(parent)) {
+      current = parent;
+      continue;
+    }
+    if ((ts.isVariableDeclaration(parent) || ts.isParameter(parent)) && parent.name === current) {
+      return true;
+    }
+    return false;
+  }
 }
 
 type RequestAuthorityExpressionKind = 'headers' | 'request' | undefined;

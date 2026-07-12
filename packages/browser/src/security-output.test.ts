@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   setRuntimeSinkSecurityEventHandler,
@@ -196,7 +196,70 @@ describe('runtime output-context helpers', () => {
     expect(kovoTrustedHtmlContent(rich)).toBe('<p>safe</p>');
   });
 
-  it('pins a genuine browser TrustedHTML instance on first acceptance', () => {
+  it('keeps witnesses, snapshots, and sanitizer allowlists pinned after ambient poisoning', () => {
+    const securityPoisonSet = new Set<string>();
+    const originalWeakMapGet = WeakMap.prototype.get;
+    const originalWeakMapHas = WeakMap.prototype.has;
+    const originalWeakMapSet = WeakMap.prototype.set;
+    const originalWeakSetAdd = WeakSet.prototype.add;
+    const originalWeakSetHas = WeakSet.prototype.has;
+    const originalMapGet = Map.prototype.get;
+    const originalMapHas = Map.prototype.has;
+    const originalMapSet = Map.prototype.set;
+    const originalSetAdd = Set.prototype.add;
+    const originalSetHas = Set.prototype.has;
+    const originalFreeze = Object.freeze;
+    let genuine = '';
+    let forged = 'unreached';
+    let sanitized = '';
+    let frozen = false;
+    try {
+      WeakMap.prototype.get = () => '<script>forged-map()</script>';
+      WeakMap.prototype.has = () => true;
+      WeakMap.prototype.set = function () {
+        return this;
+      };
+      WeakSet.prototype.add = function () {
+        return this;
+      };
+      WeakSet.prototype.has = () => true;
+      Map.prototype.get = () => securityPoisonSet;
+      Map.prototype.has = () => true;
+      Map.prototype.set = function () {
+        return this;
+      };
+      Set.prototype.add = function () {
+        return this;
+      };
+      Set.prototype.has = () => true;
+      Object.freeze = ((value: unknown) => value) as typeof Object.freeze;
+
+      const trusted = trustedHtml('<strong>pinned</strong>');
+      genuine = kovoTrustedHtmlContent(trusted);
+      forged = kovoTrustedHtmlContent({ value: '<script>forged()</script>' });
+      sanitized = sanitizeRichHtml('<p onclick="bad()">safe</p><script>bad()</script>');
+      frozen = Object.isFrozen(trusted);
+    } finally {
+      WeakMap.prototype.get = originalWeakMapGet;
+      WeakMap.prototype.has = originalWeakMapHas;
+      WeakMap.prototype.set = originalWeakMapSet;
+      WeakSet.prototype.add = originalWeakSetAdd;
+      WeakSet.prototype.has = originalWeakSetHas;
+      Map.prototype.get = originalMapGet;
+      Map.prototype.has = originalMapHas;
+      Map.prototype.set = originalMapSet;
+      Set.prototype.add = originalSetAdd;
+      Set.prototype.has = originalSetHas;
+      Object.freeze = originalFreeze;
+    }
+
+    expect(genuine).toBe('<strong>pinned</strong>');
+    expect(forged).toBe('');
+    expect(sanitized).toBe('<p>safe</p>');
+    expect(frozen).toBe(true);
+  });
+
+  it('rejects a TrustedHTML constructor installed after framework initialization', () => {
     const previous = Object.getOwnPropertyDescriptor(globalThis, 'TrustedHTML');
     class MutableTrustedHTML {
       readonly [Symbol.toStringTag] = 'TrustedHTML' as const;
@@ -211,13 +274,74 @@ describe('runtime output-context helpers', () => {
     });
     try {
       const browserValue = new MutableTrustedHTML();
-      expect(isBrowserTrustedHtml(browserValue)).toBe(true);
-      expect(kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+      expect(isBrowserTrustedHtml(browserValue)).toBe(false);
+      expect(kovoTrustedHtmlContent(browserValue)).toBe('');
       browserValue.value = '<img src=x onerror=alert(1)>';
-      expect(kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+      expect(kovoTrustedHtmlContent(browserValue)).toBe('');
     } finally {
       if (previous === undefined) delete (globalThis as { TrustedHTML?: unknown }).TrustedHTML;
       else Object.defineProperty(globalThis, 'TrustedHTML', previous);
+    }
+  });
+
+  it('pins a platform-branded TrustedHTML instance captured during module initialization', async () => {
+    const previousConstructor = Object.getOwnPropertyDescriptor(globalThis, 'TrustedHTML');
+    const previousFactory = Object.getOwnPropertyDescriptor(globalThis, 'trustedTypes');
+    class PlatformTrustedHTML {
+      readonly [Symbol.toStringTag] = 'TrustedHTML' as const;
+      value = '<strong>first</strong>';
+      toString(): string {
+        return this.value;
+      }
+    }
+    const factory = {
+      isHTML(value: unknown): boolean {
+        return value instanceof PlatformTrustedHTML;
+      },
+    };
+    Object.defineProperty(globalThis, 'TrustedHTML', {
+      configurable: true,
+      value: PlatformTrustedHTML,
+    });
+    Object.defineProperty(globalThis, 'trustedTypes', { configurable: true, value: factory });
+    vi.resetModules();
+    try {
+      const fresh = await import('./security-output.js');
+      const browserValue = new PlatformTrustedHTML();
+      expect(fresh.isBrowserTrustedHtml(browserValue)).toBe(true);
+      expect(fresh.kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+
+      browserValue.value = '<img src=x onerror=alert(1)>';
+      expect(fresh.kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+
+      class LateFakeTrustedHTML {
+        readonly [Symbol.toStringTag] = 'TrustedHTML' as const;
+        toString(): string {
+          return '<script>late-fake()</script>';
+        }
+      }
+      Object.defineProperty(globalThis, 'TrustedHTML', {
+        configurable: true,
+        value: LateFakeTrustedHTML,
+      });
+      Object.defineProperty(globalThis, 'trustedTypes', {
+        configurable: true,
+        value: { isHTML: () => true },
+      });
+      expect(fresh.isBrowserTrustedHtml(new LateFakeTrustedHTML())).toBe(false);
+      expect(fresh.isBrowserTrustedHtml({ toString: () => '<script>fake()</script>' })).toBe(false);
+    } finally {
+      if (previousConstructor === undefined) {
+        delete (globalThis as { TrustedHTML?: unknown }).TrustedHTML;
+      } else {
+        Object.defineProperty(globalThis, 'TrustedHTML', previousConstructor);
+      }
+      if (previousFactory === undefined) {
+        delete (globalThis as { trustedTypes?: unknown }).trustedTypes;
+      } else {
+        Object.defineProperty(globalThis, 'trustedTypes', previousFactory);
+      }
+      vi.resetModules();
     }
   });
 

@@ -21,7 +21,12 @@ import {
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
-import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
+import {
+  isRenderedHtml,
+  renderedHtmlContent,
+  renderHtmlValue,
+  unwrapCoercedRenderedHtml,
+} from './html.js';
 import {
   appendResponseHeader,
   routeResponseToDocumentResponse,
@@ -41,6 +46,11 @@ import type { KovoApp } from './app-types.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { requestForAuthorityNeutralMetadata } from './request-carrier.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
+import {
+  witnessGetOwnPropertyDescriptor,
+  witnessReflectApply,
+  witnessReflectGet,
+} from './security-witness-intrinsics.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 const fallbackBroadcastFingerprintSecret = randomBytes(32);
@@ -412,12 +422,12 @@ function renderConfiguredErrorShellDocumentResponse(
 }
 
 const readNativeErrorShellRequestUrl = (() => {
-  const descriptor = Object.getOwnPropertyDescriptor(Request.prototype, 'url');
-  const getter = descriptor ? (Reflect.get(descriptor, 'get') as unknown) : undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(Request.prototype, 'url');
+  const getter = descriptor ? witnessReflectGet(descriptor, 'get') : undefined;
   if (typeof getter !== 'function') {
     throw new TypeError('The Web Request implementation lacks a url getter.');
   }
-  return (request: Request): string => Reflect.apply(getter, request, []) as string;
+  return (request: Request): string => witnessReflectApply(getter, request, []);
 })();
 
 function readErrorShellRequestUrl(request: Request): string {
@@ -482,7 +492,7 @@ export function appRequestUrl(url: URL): string {
 
 function renderDefaultRouteValue(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
-  if (isRenderedHtml(value)) return value.html;
+  if (isRenderedHtml(value)) return renderedHtmlContent(value);
   if (typeof value === 'string') return unwrapCoercedRenderedHtml(value);
   return renderHtmlValue(value);
 }

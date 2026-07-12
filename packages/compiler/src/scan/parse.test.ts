@@ -723,6 +723,56 @@ export const inline = mutation('machine/inline', {
     });
   });
 
+  it('fails KV418 closed for free closure/global authority while local literal aliases stay green', () => {
+    const source = `
+import { mutation } from '@kovojs/server';
+
+let cachedCookie = 'sid=victim';
+const moduleLiteralHeader = 'x-signature';
+const mutableState = { cookie: cachedCookie };
+function cachedSession() { return mutableState.cookie; }
+
+export const capturedValue = mutation('machine/captured-value', {
+  handler() { return cachedCookie; },
+});
+export const capturedObject = mutation('machine/captured-object', {
+  handler() { return mutableState.cookie; },
+});
+export const capturedFunction = mutation('machine/captured-function', {
+  handler() { return cachedSession(); },
+});
+export const capturedModuleLiteral = mutation('machine/captured-module-literal', {
+  handler(_input, request) { return request.headers.get(moduleLiteralHeader); },
+});
+export const globalObject = mutation('machine/global-object', {
+  handler() { return globalThis.cachedCookie; },
+});
+export const localLiteralAliases = mutation('machine/local-literal-aliases', {
+  handler(_input, request) {
+    const first = 'x-signature';
+    const second = first;
+    const third = second;
+    return request.headers.get(third);
+  },
+});
+`;
+
+    const facts = mutationSessionAuthorityFacts(
+      parseComponentModule('machine.mutation.ts', source),
+    );
+    expect(facts.filter((fact) => fact.referencesSession).map((fact) => fact.name)).toEqual([
+      'machine/captured-function',
+      'machine/captured-module-literal',
+      'machine/captured-object',
+      'machine/captured-value',
+      'machine/global-object',
+    ]);
+    expect(facts.find((fact) => fact.name === 'machine/local-literal-aliases')).toMatchObject({
+      detail: 'handler has no statically observed ambient request authority',
+      referencesSession: false,
+    });
+  });
+
   it('records simple destructured mutation handler parameter names', () => {
     const source = `
 export const save = mutation({

@@ -1,5 +1,14 @@
 import type { KovoModuleRef } from '@kovojs/core/internal/module-ref';
 
+import {
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from './security-witness-intrinsics.js';
+
 export interface DynamicImportUrlOptions {
   allowedModuleUrls?: readonly string[];
   buildToken?: string;
@@ -7,7 +16,7 @@ export interface DynamicImportUrlOptions {
 
 export type DynamicImportModule<T = Record<string, unknown>> = (url: string) => Promise<T>;
 
-const guardedDynamicImportModules = new WeakSet<object>();
+const guardedDynamicImportModules = securityWeakSet<object>();
 
 /** @internal Runtime allowlist for compiler-emitted client-module import refs (SPEC §5.2.1). */
 export function assertAllowedKovoDynamicImportUrl(
@@ -38,7 +47,7 @@ export function guardKovoDynamicImportModule<T = Record<string, unknown>>(
     assertAllowedKovoDynamicImportUrl(url, options);
     return importModule(url);
   };
-  guardedDynamicImportModules.add(guarded);
+  securityWeakSetAdd(guardedDynamicImportModules, guarded);
   return guarded;
 }
 
@@ -47,7 +56,9 @@ export function assertAllowedKovoDynamicImportRefForModule(
   ref: KovoModuleRef,
   importModule: DynamicImportModule,
 ): void {
-  if (!guardedDynamicImportModules.has(importModule)) assertAllowedKovoDynamicImportRef(ref);
+  if (!securityWeakSetHas(guardedDynamicImportModules, importModule)) {
+    assertAllowedKovoDynamicImportRef(ref);
+  }
 }
 
 /** @internal Avoid a weaker second default-manifest check after an explicit guarded importer. */
@@ -55,7 +66,9 @@ export function assertAllowedKovoDynamicImportUrlForModule(
   url: string,
   importModule: DynamicImportModule,
 ): void {
-  if (!guardedDynamicImportModules.has(importModule)) assertAllowedKovoDynamicImportUrl(url);
+  if (!securityWeakSetHas(guardedDynamicImportModules, importModule)) {
+    assertAllowedKovoDynamicImportUrl(url);
+  }
 }
 
 /** @internal True when a parsed handler/derive ref points at an allowed client module. */
@@ -83,7 +96,7 @@ export function isAllowedKovoDynamicImportUrl(
   // development-only branch above.
   if (manifest.size === 0) return false;
 
-  return manifest.has(canonicalImportUrl(parsed));
+  return securitySetHas(manifest, canonicalImportUrl(parsed));
 }
 
 function isAllowedLocalDevSourceModuleUrl(url: URL): boolean {
@@ -115,17 +128,17 @@ function currentOrigin(): string {
   return globalThis.location?.origin ?? new URL(currentHref()).origin;
 }
 
-function allowedClientModuleUrlManifest(explicit?: readonly string[]): ReadonlySet<string> {
+function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<string> {
   const values = explicit ?? documentModulepreloadClientModules();
-  if (!values || values.length === 0) return new Set();
+  if (!values || values.length === 0) return securitySet();
 
-  const allowed = new Set<string>();
+  const allowed = securitySet<string>();
   for (const value of values) {
     const parsed = parseImportUrl(value);
     if (!parsed) continue;
     if (parsed.origin !== currentOrigin()) continue;
     if (!parsed.pathname.startsWith('/c/')) continue;
-    allowed.add(canonicalImportUrl(parsed));
+    securitySetAdd(allowed, canonicalImportUrl(parsed));
   }
   return allowed;
 }

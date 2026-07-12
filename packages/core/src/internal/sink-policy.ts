@@ -1,3 +1,20 @@
+import {
+  freezeSecurityValue,
+  securityMap,
+  securityMapGet,
+  securityMapSet,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securityString,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from '#security-witness-intrinsics';
+
 /**
  * @internal URL sink facts for server render, browser runtime writes, and compiler
  * output-context classification (SPEC.md §4.8, §5.2 rule 10).
@@ -18,8 +35,8 @@ export const URL_ATTRIBUTE_NAMES = [
 /** @internal URL schemes accepted by Kovo server/client URL sinks (SPEC.md §4.8). */
 export const SAFE_URL_SCHEMES = ['http', 'https', 'mailto', 'tel', 'ftp'] as const;
 
-const urlAttributeNames = new Set<string>(URL_ATTRIBUTE_NAMES);
-const safeUrlSchemes = new Set<string>(SAFE_URL_SCHEMES);
+const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
+const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
 const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
 // eslint-disable-next-line no-control-regex
@@ -27,7 +44,7 @@ const urlSchemeStripPattern = /[\u0000-\u0020\u007f-\u009f]+/g;
 
 /** @internal True when an HTML attribute is URL-bearing and needs scheme checks. */
 export function isUrlAttributeName(name: string): boolean {
-  return urlAttributeNames.has(name.toLowerCase());
+  return securitySetHas(urlAttributeNames, name.toLowerCase());
 }
 
 /**
@@ -41,7 +58,7 @@ export function hasUnsafeUrlScheme(value: string): boolean {
   const match = urlSchemePattern.exec(normalized);
   if (!match) return false;
 
-  return !safeUrlSchemes.has((match[1] ?? '').toLowerCase());
+  return !securitySetHas(safeUrlSchemes, (match[1] ?? '').toLowerCase());
 }
 
 /**
@@ -145,11 +162,11 @@ export const RAW_HTML_SINK_NAMES = [
   'insertadjacenthtml',
 ] as const;
 
-const srcsetAttributeNames = new Set<string>(SRCSET_ATTRIBUTE_NAMES);
-const rawHtmlSinkNames = new Set<string>(RAW_HTML_SINK_NAMES);
-const blessedSinkWitnesses = new Map<string, WeakSet<object>>();
-const fragmentHtmlSnapshots = new WeakMap<object, string>();
-const renderedFragmentHtmlSnapshots = new WeakMap<object, string>();
+const srcsetAttributeNames = securitySetOf<string>(SRCSET_ATTRIBUTE_NAMES);
+const rawHtmlSinkNames = securitySetOf<string>(RAW_HTML_SINK_NAMES);
+const blessedSinkWitnesses = securityMap<string, WeakSet<object>>();
+const fragmentHtmlSnapshots = securityWeakMap<object, string>();
+const renderedFragmentHtmlSnapshots = securityWeakMap<object, string>();
 let runtimeSinkSecurityEventHandler: RuntimeSinkSecurityEventHandler | undefined;
 
 /** @internal Mint a non-forgeable runtime witness for a framework-owned sink capability. */
@@ -157,12 +174,12 @@ export function blessSink<Sink extends string, T extends object>(
   sink: Sink,
   value: T,
 ): T & Blessed<Sink> {
-  let witnesses = blessedSinkWitnesses.get(sink);
+  let witnesses = securityMapGet(blessedSinkWitnesses, sink);
   if (!witnesses) {
-    witnesses = new WeakSet<object>();
-    blessedSinkWitnesses.set(sink, witnesses);
+    witnesses = securityWeakSet<object>();
+    securityMapSet(blessedSinkWitnesses, sink, witnesses);
   }
-  witnesses.add(value);
+  securityWeakSetAdd(witnesses, value);
   return value as T & Blessed<Sink>;
 }
 
@@ -171,11 +188,9 @@ export function isBlessedSink<Sink extends string>(
   sink: Sink,
   value: unknown,
 ): value is Blessed<Sink> & object {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    blessedSinkWitnesses.get(sink)?.has(value) === true
-  );
+  if (typeof value !== 'object' || value === null) return false;
+  const witnesses = securityMapGet(blessedSinkWitnesses, sink);
+  return witnesses !== undefined && securityWeakSetHas(witnesses, value);
 }
 
 /**
@@ -197,7 +212,7 @@ export function isFragmentHtml(value: unknown): value is FragmentHtml {
 
 /** @internal Unwrap server-side fragment HTML for the wire emitter. */
 export function fragmentHtmlContent(value: FragmentHtml): string {
-  return fragmentHtmlSnapshots.get(value) ?? '';
+  return securityWeakMapGet(fragmentHtmlSnapshots, value) ?? '';
 }
 
 /** @internal Mint browser-decoded fragment HTML before it reaches DOM raw-HTML sinks. */
@@ -213,7 +228,7 @@ export function isRenderedFragmentHtml(value: unknown): value is RenderedFragmen
 
 /** @internal Unwrap browser-side fragment HTML for the framework DOM adapter. */
 export function renderedFragmentHtmlContent(value: RenderedFragmentHtml): string {
-  return renderedFragmentHtmlSnapshots.get(value) ?? '';
+  return securityWeakMapGet(renderedFragmentHtmlSnapshots, value) ?? '';
 }
 
 /** @internal Install a test/dev hook for blocked runtime sink events. */
@@ -261,12 +276,12 @@ export function isCssTextAttributeName(name: string): boolean {
 
 /** @internal True when an attribute/property name is raw HTML insertion. */
 export function isRawHtmlSinkName(name: string): boolean {
-  return rawHtmlSinkNames.has(name.toLowerCase());
+  return securitySetHas(rawHtmlSinkNames, name.toLowerCase());
 }
 
 /** @internal True when an attribute/property name is a srcset candidate-list sink. */
 export function isSrcsetAttributeName(name: string): boolean {
-  return srcsetAttributeNames.has(name.toLowerCase());
+  return securitySetHas(srcsetAttributeNames, name.toLowerCase());
 }
 
 /** @internal Classify one dynamic attribute/property sink. */
@@ -496,7 +511,7 @@ function fragmentHtmlObject(
   toJSON(): string;
   toString(): string;
 } {
-  const snapshot = String(html);
+  const snapshot = securityString(html);
   const fragment = {
     html: snapshot,
     toJSON() {
@@ -506,8 +521,14 @@ function fragmentHtmlObject(
       return snapshot;
     },
   };
-  snapshots.set(fragment, snapshot);
-  return Object.freeze(fragment);
+  securityWeakMapSet(snapshots, fragment, snapshot);
+  return freezeSecurityValue(fragment);
+}
+
+function securitySetOf<T>(values: readonly T[]): Set<T> {
+  const set = securitySet<T>();
+  for (const value of values) securitySetAdd(set, value);
+  return set;
 }
 
 function isDevelopmentOrTestRuntime(): boolean {
