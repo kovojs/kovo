@@ -1928,6 +1928,195 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('revokes inherited schema/database creation authority while preserving CONNECT and USAGE', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-create-default-deny-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE kovo_reader',
+        'CREATE ROLE kovo_writer',
+        'CREATE ROLE kovo_runtime_builder',
+        'GRANT kovo_runtime_builder TO kovo_writer',
+        'CREATE SCHEMA kovo_runtime_extension',
+        'GRANT CREATE ON SCHEMA public, kovo_runtime_extension TO kovo_runtime_builder',
+        'GRANT CREATE, TEMPORARY ON DATABASE postgres TO kovo_runtime_builder',
+        'GRANT CREATE ON SCHEMA public TO PUBLIC',
+        'GRANT TEMPORARY ON DATABASE postgres TO PUBLIC',
+      ].join('; '),
+    );
+
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    const privileges = await queryPglite<{
+      builder_can_create_database: boolean;
+      builder_can_create_schema: boolean;
+      builder_can_temp: boolean;
+      public_can_temp: boolean;
+      writer_can_connect: boolean;
+      writer_can_use_schema: boolean;
+    }>(
+      dataDir,
+      [
+        "SELECT has_schema_privilege('kovo_runtime_builder', 'kovo_runtime_extension', 'CREATE') AS builder_can_create_schema,",
+        "has_database_privilege('kovo_runtime_builder', current_database(), 'CREATE') AS builder_can_create_database,",
+        "has_database_privilege('kovo_runtime_builder', current_database(), 'TEMPORARY') AS builder_can_temp,",
+        "EXISTS (SELECT 1 FROM pg_database database CROSS JOIN LATERAL aclexplode(COALESCE(database.datacl, acldefault('d', database.datdba))) acl",
+        "WHERE database.datname = current_database() AND acl.grantee = 0 AND acl.privilege_type = 'TEMPORARY') AS public_can_temp,",
+        "has_database_privilege('kovo_writer', current_database(), 'CONNECT') AS writer_can_connect,",
+        "has_schema_privilege('kovo_writer', 'public', 'USAGE') AS writer_can_use_schema",
+      ].join(' '),
+    );
+    expect(privileges.rows).toEqual([
+      {
+        builder_can_create_database: false,
+        builder_can_create_schema: false,
+        builder_can_temp: false,
+        public_can_temp: false,
+        writer_can_connect: true,
+        writer_can_use_schema: true,
+      },
+    ]);
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
+  it('refuses effective CREATE/TEMP authority for PUBLIC, runtime, writer, members, and owners', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-create-posture-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE kovo_runtime_creator',
+        'CREATE ROLE kovo_runtime_login LOGIN',
+        'GRANT kovo_runtime_creator TO kovo_writer',
+        'GRANT kovo_reader, kovo_writer TO kovo_runtime_login',
+        'CREATE SCHEMA kovo_runtime_member_schema',
+        'CREATE SCHEMA kovo_runtime_login_schema',
+        'CREATE SCHEMA kovo_runtime_owned_schema AUTHORIZATION kovo_writer',
+        'GRANT CREATE ON SCHEMA kovo_runtime_member_schema TO kovo_runtime_creator',
+        'GRANT CREATE ON SCHEMA kovo_runtime_login_schema TO kovo_runtime_login',
+        'GRANT CREATE ON SCHEMA public TO PUBLIC',
+        'GRANT CREATE ON DATABASE postgres TO kovo_writer',
+        'GRANT TEMPORARY ON DATABASE postgres TO PUBLIC',
+      ].join('; '),
+    );
+
+    // TEMP lets an app identity put an attacker-controlled relation first in search_path. The
+    // closure check must refuse that engine authority even when no persistent grant row leaks data.
+    await usingPgliteRole(dataDir, 'kovo_writer', async (client) => {
+      await client.exec(
+        'CREATE TEMP TABLE kovo_runtime_notes (id text, "ownerId" text, "secretNote" text, title text)',
+      );
+      await client.exec(
+        "INSERT INTO kovo_runtime_notes VALUES ('shadow', 'attacker', 'shadow-secret', 'shadow')",
+      );
+      const shadow = await client.query<{ id: string }>('SELECT id FROM kovo_runtime_notes');
+      expect(shadow.rows).toEqual([{ id: 'shadow' }]);
+    });
+
+    const report = await checkPostgresAppDbPosture({
+      dataDir,
+      databaseUrl: 'postgres://kovo_runtime_login@127.0.0.1/kovo',
+      driver: 'pglite',
+      schema,
+    });
+    expect(report.ok).toBe(false);
+    for (const detail of [
+      'PUBLIC has effective CREATE on schema public',
+      'kovo_runtime_creator has effective CREATE on schema kovo_runtime_member_schema',
+      'kovo_runtime_login has effective CREATE on schema kovo_runtime_login_schema',
+      'kovo_writer has effective CREATE on schema kovo_runtime_owned_schema',
+      'kovo_writer has effective CREATE on database postgres',
+      'PUBLIC has effective TEMPORARY on database postgres',
+    ]) {
+      expect(report.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_UNEXPECTED_PRIVILEGE',
+          detail: expect.stringContaining(detail),
+        }),
+      );
+    }
+  });
+
+  it('refuses implicit current-database owner authority', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-database-owner-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(dataDir, 'ALTER DATABASE postgres OWNER TO kovo_writer');
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_UNEXPECTED_PRIVILEGE',
+        detail: expect.stringContaining('kovo_writer has effective CREATE on database postgres'),
+      }),
+    );
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_UNEXPECTED_PRIVILEGE',
+        detail: expect.stringContaining('kovo_writer has effective TEMPORARY on database postgres'),
+      }),
+    );
+  });
+
+  it.each([
+    {
+      expected:
+        'kovo_writer has effective OWNER-CREATE on schema kovo_runtime_owned_before_provision',
+      label: 'schema ownership',
+      setup: [
+        'CREATE ROLE kovo_reader',
+        'CREATE ROLE kovo_writer',
+        'CREATE SCHEMA kovo_runtime_owned_before_provision AUTHORIZATION kovo_writer',
+      ].join('; '),
+    },
+    {
+      expected: 'kovo_writer has effective OWNER-CREATE on database postgres',
+      label: 'database ownership',
+      setup: [
+        'CREATE ROLE kovo_reader',
+        'CREATE ROLE kovo_writer',
+        'ALTER DATABASE postgres OWNER TO kovo_writer',
+      ].join('; '),
+    },
+  ])(
+    'fails provisioning transactionally when an app role has $label',
+    async ({ expected, setup }) => {
+      const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-owned-provision-'));
+      roots.push(dataDir);
+      await execPglite(dataDir, setup);
+      const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+      try {
+        await expect(runtime.ready).rejects.toThrow(
+          new RegExp(`KV433_UNEXPECTED_PRIVILEGE[\\s\\S]*${expected}`),
+        );
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
   it('fails ownerVia whose parent chain cannot resolve to an owner before granting the child table', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-owner-via-bad-'));
     roots.push(dataDir);
