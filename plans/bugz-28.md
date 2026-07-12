@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    68 | C1-C68 |
+| Critical |    69 | C1-C69 |
 | High     |    32 | H1-H32 |
 | Medium   |    10 | M1-M10 |
 
@@ -204,7 +204,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 161-test command/crypto/entropy consumer matrix plus server dist/DTS and
     security gates pass; the independent iterator proof executes only the reviewed `reviewed` argv.
 
-- [x] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
+- [ ] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
       `packages/server/src/confidential-at-rest.ts`
   - Replacing CommonJS `node:crypto.randomBytes` with a constant function and calling
     `syncBuiltinESMExports()` updated the live ESM binding consumed by `encryptAtRest()`. Two distinct
@@ -214,8 +214,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     controls, key/AAD/plaintext byte snapshots, cipher method dispatch, tag/ciphertext assembly, and
     envelope encoding use boot-pinned, semantically verified controls; late synchronized builtins and
     hostile pre-import sources cannot repeat an IV or return a branded non-authenticated envelope.
-  - **Evidence:** the same matrix covers bounded IV replay detection and staged hostile entropy;
-    the independent synchronized-builtin proof now receives distinct 96-bit IVs.
+  - **Reopened evidence:** a selectively honest `randomBytes` wrapper delegates the two 32-byte
+    boot probes but returns a known first 12-byte application IV. The current membrane accepts it
+    and emits the predictable `a2tra2tra2tra2tr` IV; the replay window resets with the process and
+    therefore does not prevent cross-restart nonce reuse under the same key.
 
 - [x] **C20 - A public global bridge exposes the framework's raw-HTML mint.**
       `packages/core/src/index.ts`, `packages/server/src/jsx-runtime.ts`
@@ -231,7 +233,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     import/API/security gates pass; the independent global-mint proof can no longer obtain a generic
     raw-HTML constructor and its attacker markup stays escaped.
 
-- [x] **C21 - Predictable pre-import entropy forges authenticated rendered-HTML markers.**
+- [ ] **C21 - Predictable pre-import entropy forges authenticated rendered-HTML markers.**
       `packages/server/src/html.ts`
   - Replacing CommonJS `node:crypto.randomBytes` with known constant bytes and synchronizing the
     builtin ESM exports before importing the renderer made the private coercion-marker HMAC key
@@ -242,10 +244,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
     HMAC construction, comparison, recursion, and final text/raw assembly use exact pinned controls;
     hostile pre-import or late controls cannot forge a marker while genuine rendered composition
     remains byte-stable and bounded.
-  - **Evidence:** the same focused matrix and build/gates pass; the independent pre-import constant-
-    entropy proof can no longer forge an accepted marker and attacker text remains escaped.
+  - **Reopened evidence:** a selective pre-import `crypto.getRandomValues` delegates the membrane's
+    12-byte control but returns known bytes for the real 32-byte marker key. The current full renderer
+    accepts the resulting forged v2 HMAC marker and emits raw attacker SVG.
 
-- [x] **C22 - Predictable pre-import response entropy collapses upload object authority.**
+- [ ] **C22 - Predictable pre-import response entropy collapses upload object authority.**
       `packages/server/src/{response-security-intrinsics,upload-sniff,csrf,deferred-stream}.ts`
   - The shared response membrane accepted constant `randomBytes` and a constant valid-shaped v4
     `randomUUID` after CommonJS replacement plus `syncBuiltinESMExports()` before import. Two real
@@ -256,8 +259,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
     sources fail closed; every security identity uses the required random-bit floor and runtime
     non-repetition controls, including at least 128 random bits for no-JS idempotency; upload keys,
     anonymous bindings, replay identities, and stream boundaries cannot repeat or become predictable.
-  - **Evidence:** the same focused matrix covers upload keys, anonymous CSRF, exact 128-bit no-JS
-    identities, and deferred boundaries; the independent constant pre-import source fails closed.
+  - **Reopened evidence:** a selectively honest `randomBytes` wrapper delegates both 32-byte boot
+    probes and returns known bytes only for the first real 16-byte request. The current public upload
+    path mints the predictable key
+    `avatars/6b6b6b6b-6b6b-4b6b-ab6b-6b6b6b6b6b6b`; detecting its second repetition is too late to
+    protect the first authority.
 
 - [x] **C23 - Mutable static-route planning publishes guarded session content.**
       `packages/server/src/{static-export-route-plan,static-export-replay,static-export}.ts`
@@ -821,6 +827,22 @@ This is an active closure ledger; `SPEC.md` remains normative.
     facts; late/import-order or caller-carrier mutation cannot admit any undeclared table, while
     fully declared reads/writes retain their existing behavior.
 
+- [ ] **C69 - Finite pre-import self-probes accept selectively honest intrinsic impostors.**
+      `packages/{core,compiler,server}/src/**/*intrinsics*.ts`
+  - Source-text likeness and finite positive/negative vectors are not provenance. Selective wrappers
+    can include the expected native-body strings, delegate only probe inputs, and alter authority
+    inputs by byte value, size, receiver, call count, or path. Current executable proofs reopen
+    rendered-HTML HMAC, GCM IV, and upload entropy guarantees; independent compiler proofs alias
+    SHA-256 cache/module/CSS identities and omit an unsafe source directory while every intrinsic
+    self-check reports sound.
+  - **Acceptance:** establish the compiler/runtime TCB before any app/plugin evaluation or move
+    authority computation to a genuinely isolated pristine service/realm with a fail-closed RPC
+    contract; never accept Function source text or a finite semantic corpus as native provenance.
+    Hash collisions must not authenticate cache entries (store and compare full canonical identity),
+    and the first—not merely the second—entropy/identity result must remain unpredictable and exact.
+    Selective lookalike pre-import tests must cover input-, size-, receiver-, call-count-, and
+    path-specific wrappers plus process restarts.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1280,13 +1302,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C58-C68, H20, H27,
-H32, and M10 are active compiler-cache, static-analysis, server authority/output, and
-immutable-output fixes.
-Integrated
-evidence is
-green at
-97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
-auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
-route/handler/secret, and 18 password tests.
-A complete fresh sweep of the final integrated tree is still required.
+The remediation pass remains intentionally non-zero: C19, C21-C22, C25, C28, C31-C32, C42,
+C58-C69, H20, H27, H32, and M10 are active compiler-cache, static-analysis, server authority/output,
+and immutable-output fixes. Integrated evidence is green at 97 PostgreSQL, 88 egress, 37
+filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158 auth/response, 51 Better Auth,
+86 crypto/replay, 234 output/compiler/core, 87 scalar route/handler/secret, and 18 password tests. A
+complete fresh sweep of the final integrated tree is still required.
