@@ -88,7 +88,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     provider's genuine bare session under inherited pollution, and forwards cookies only from a
     validated framework-shaped envelope.
 
-- [ ] **C10 - Mutable capability-token controls can forge signed storage claims.**
+- [x] **C10 - Mutable capability-token controls can forge signed storage claims.**
       `packages/server/src/capability-url.ts`
   - A selective late `TextEncoder.prototype.encode` override reduced canonical signing payloads to
     empty bytes while preserving the outer JSON payload. A genuine token minted for `public.pdf`
@@ -100,8 +100,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     nonce generation, and replay Map/TTL use boot-pinned, semantically checked controls; late and
     import-order poison cannot substitute key/method/scope/audience, extend expiry, or reuse a
     one-time token, while genuine scoped/rotated tokens retain round-trip behavior.
+  - **Evidence:** the 77-test capability/intrinsic matrix passes; independent signature-byte, clock,
+    and replay-map exploit proofs now reject the forged, expired, and reused tokens.
 
-- [ ] **C11 - A storage download endpoint retains mutable signing authority after construction.**
+- [x] **C11 - A storage download endpoint retains mutable signing authority after construction.**
       `packages/server/src/capability-route.ts`
   - Mutating the original `createStorageDownloadEndpoint(options).secret` from the victim key to an
     attacker key after construction made a newly attacker-signed URL pass the real verify-before-read
@@ -110,6 +112,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     posture, signer defaults, and base-path facts at endpoint/context construction; later mutation,
     getters/proxies, and scalar/URL collection poison cannot replace the authority or make request
     derivation disagree with the exact key read from storage.
+  - **Evidence:** the same 77-test matrix passes; the independent post-construction secret swap now
+    receives the uniform 404 and cannot read the victim object.
 
 - [ ] **C12 - Mutable FormData traversal can substitute a cached victim CSRF token.**
       `packages/server/src/{untrusted-request-body,schema}.ts`
@@ -422,7 +426,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 90-test replay/webhook/request-state matrix passes; independent Map and clock
     poison proofs keep all three committed responses visible and refuse a second reservation.
 
-- [ ] **M9 - Mutable Reporting API URL controls persist credential-bearing paths.**
+- [x] **M9 - Mutable Reporting API URL controls persist credential-bearing paths.**
       `packages/server/src/reporting.ts`
   - Replacing the native `URL.prototype.origin` getter after import made a real security report store
     the complete reset/capability URL, including path and query secrets, in its supposedly redacted
@@ -431,12 +435,13 @@ This is an active closure ledger; `SPEC.md` remains normative.
     normalization, report rate/cardinality state, keys, snapshots, and clocks use boot-pinned,
     semantically checked controls; late/import-order poison cannot persist path/query/userinfo secrets
     or evade the quiet bounded telemetry posture.
+  - **Evidence:** the 94-test reporting/app/request-state matrix passes; the independent poisoned
+    origin proof now stores only `https://example.test` and omits capability path/query bytes.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15, H17-H24, and M9 are active
-capability, request-carrier, response/deferred/mutation/client output, task, browser navigation, and
-reporting fixes.
+The remediation pass remains intentionally non-zero: C12, H15, and H17-H24 are active
+request-carrier, response/deferred/mutation/client output, task, and browser-navigation fixes.
 Integrated
 evidence is
 green at
