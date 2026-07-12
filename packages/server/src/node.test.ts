@@ -757,6 +757,52 @@ describe('toNodeHandler incomplete request transport closure', () => {
 });
 
 describe('responseHeadersToNodeHeaders (B1)', () => {
+  it('pins the final Response fields before authored prototype replacements can substitute output', async () => {
+    const properties = ['body', 'headers', 'status', 'statusText'] as const;
+    const descriptors = new Map(
+      properties.map((property) => [property, Object.getOwnPropertyDescriptor(Response.prototype, property)!]),
+    );
+    const safe = new Response('SAFE-RESPONSE', {
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+      status: 200,
+    });
+    const attacker = new Response('<script>attackerOutput()</script>', {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'set-cookie': 'admin=attacker; Path=/; HttpOnly',
+      },
+      status: 201,
+      statusText: 'ATTACKER',
+    });
+    const server = await serveWithNode(
+      toNodeHandler(async () => {
+        for (const property of properties) {
+          const descriptor = descriptors.get(property)!;
+          Object.defineProperty(Response.prototype, property, {
+            ...descriptor,
+            get(this: Response) {
+              return Reflect.apply(descriptor.get!, this === safe ? attacker : this, []);
+            },
+          });
+        }
+        return safe;
+      }),
+    );
+
+    try {
+      const response = await fetch(server.origin);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('set-cookie')).toBeNull();
+      await expect(response.text()).resolves.toBe('SAFE-RESPONSE');
+    } finally {
+      for (const property of properties) {
+        Object.defineProperty(Response.prototype, property, descriptors.get(property)!);
+      }
+      await server.close();
+    }
+  });
+
   // SPEC §9.4/§9.1.1: multiple Set-Cookie headers must not be collapsed to the last.
   it('preserves multiple Set-Cookie headers as a string array (B1)', async () => {
     const response = new Response(null, { status: 200 });

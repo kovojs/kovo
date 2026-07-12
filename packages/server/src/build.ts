@@ -9,13 +9,30 @@ import {
 } from '@kovojs/browser/internal/inline-loader';
 
 import { resolvedFileSystemPath } from './vite-build-assets.js';
+import {
+  buildSecurityFunctionSource,
+  buildSecuritySourceLiteral,
+} from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
 import {
   staticHostHeaders,
-  staticHostImmutableAssetPathPattern,
+  staticHostImmutableAssetPathPatternFlags,
+  staticHostImmutableAssetPathPatternSource,
 } from './static-host-header-policy.js';
 
-const immutableAssetPathPattern = staticHostImmutableAssetPathPattern;
+const immutableAssetPathPatternSourceLiteral = buildSecuritySourceLiteral(
+  staticHostImmutableAssetPathPatternSource,
+);
+const immutableAssetPathPatternFlagsLiteral = buildSecuritySourceLiteral(
+  staticHostImmutableAssetPathPatternFlags,
+);
+const clientModuleHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('clientModule'));
+const immutableAssetHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('immutableAsset'));
+const revalidatingAssetHeadersSource = buildSecuritySourceLiteral(
+  staticHostHeaders('revalidatingAsset'),
+);
+const documentStaticHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('document'));
+const staticErrorHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('errorDocument'));
 
 /**
  * Build-time preset descriptor consumed by `kovo build` and deployment tooling.
@@ -543,7 +560,7 @@ function isFrameworkRuntimeClientModule(
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await writeFile(filePath, `${buildSecuritySourceLiteral(value)}\n`, 'utf8');
 }
 
 function vercelBuildOutputConfig(): unknown {
@@ -611,6 +628,7 @@ import { pipeline } from 'node:stream/promises';
 
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
+const NativeResponse = globalThis.Response;
 const NativeURL = globalThis.URL;
 const nativeReflectApply = Reflect.apply;
 const nativeObjectDefineProperty = Object.defineProperty;
@@ -624,6 +642,11 @@ const nativeHeadersAppend = NativeHeaders.prototype.append;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
 const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
 const nativeHeadersSet = NativeHeaders.prototype.set;
+const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'body').get;
+const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
+const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
+const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
+const nativeReadableFromWeb = Readable.fromWeb;
 const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
 const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'href').get;
 const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
@@ -818,19 +841,40 @@ function rawRequestTargetHasEncodedPathControl(value) {
 }
 
 export async function writeWebResponseToNode(response, nodeResponse, method = 'GET', options = {}) {
-  const responseHeaders = new NativeHeaders(response.headers);
+  // SPEC §6.6 rule 5: read the complete authored Response exactly once through boot-captured
+  // accessors. The transport never consults its mutable prototype again after this snapshot.
+  const pinnedResponse = snapshotWebResponse(response);
+  const responseHeaders = pinnedResponse.headers;
   if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
     apply(nativeHeadersSet, responseHeaders, ['connection', 'close']);
   }
   const headers = responseHeadersToNodeHeaders(responseHeaders);
 
-  nodeResponse.writeHead(response.status, response.statusText, headers);
-  if (method === 'HEAD' || response.body === null) {
+  nodeResponse.writeHead(pinnedResponse.status, pinnedResponse.statusText, headers);
+  if (method === 'HEAD' || pinnedResponse.body === null) {
     nodeResponse.end();
     return;
   }
 
-  await pipeline(Readable.fromWeb(response.body), nodeResponse);
+  await pipeline(apply(nativeReadableFromWeb, Readable, [pinnedResponse.body]), nodeResponse);
+}
+
+function snapshotWebResponse(response) {
+  const sourceHeaders = apply(nativeResponseHeadersGetter, response, []);
+  const headers = new NativeHeaders();
+  apply(nativeHeadersForEach, sourceHeaders, [(value, name) => {
+    if (name !== 'set-cookie') apply(nativeHeadersSet, headers, [name, value]);
+  }]);
+  const setCookies = apply(nativeHeadersGetSetCookie, sourceHeaders, []);
+  for (let index = 0; index < setCookies.length; index += 1) {
+    apply(nativeHeadersAppend, headers, ['set-cookie', setCookies[index]]);
+  }
+  return {
+    body: apply(nativeResponseBodyGetter, response, []),
+    headers,
+    status: apply(nativeResponseStatusGetter, response, []),
+    statusText: apply(nativeResponseStatusTextGetter, response, []),
+  };
 }
 
 function nodeRequestUrl(nodeRequest, options) {
@@ -928,7 +972,12 @@ function firstHeaderValue(value) {
 }
 
 function vercelFunctionSource(): string {
-  return `let handlerPromise;
+  return `const NativeRegExp = globalThis.RegExp;
+const nativeReflectApply = Reflect.apply;
+const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeStringStartsWith = String.prototype.startsWith;
+const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
+let handlerPromise;
 let nodeAdapterPromise;
 
 module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
@@ -973,61 +1022,152 @@ function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
   nodeResponse.once('close', closeIncompleteRequest);
 }
 function isImmutableStaticAssetPath(pathname) {
-  return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
+  return nativeReflectApply(nativeStringStartsWith, pathname, ['/c/']) ||
+    nativeReflectApply(nativeRegExpExec, immutableAssetPathPattern, [pathname]) !== null;
 }
 `;
 }
 
 function cloudflareWorkerSource(): string {
-  return `import handler from './server/handler.mjs';
-
-const clientModuleHeaders = ${JSON.stringify(staticHostHeaders('clientModule'))};
-const immutableAssetHeaders = ${JSON.stringify(staticHostHeaders('immutableAsset'))};
-const revalidatingAssetHeaders = ${JSON.stringify(staticHostHeaders('revalidatingAsset'))};
-const documentStaticHeaders = ${JSON.stringify(staticHostHeaders('document'))};
-const staticErrorHeaders = ${JSON.stringify(staticHostHeaders('errorDocument'))};
+  return `const NativeHeaders = globalThis.Headers;
+const NativeObject = globalThis.Object;
+const NativeRegExp = globalThis.RegExp;
+const NativeRequest = globalThis.Request;
+const NativeResponse = globalThis.Response;
+const NativeURL = globalThis.URL;
+const nativeReflectApply = Reflect.apply;
+const nativeHeadersAppend = NativeHeaders.prototype.append;
+const nativeHeadersForEach = NativeHeaders.prototype.forEach;
+const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
+const nativeHeadersSet = NativeHeaders.prototype.set;
+const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectIs = NativeObject.is;
+const nativeObjectKeys = NativeObject.keys;
+const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeRequestMethodGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'method').get;
+const nativeRequestUrlGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'url').get;
+const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'body').get;
+const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
+const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
+const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
+const nativeStringStartsWith = String.prototype.startsWith;
+const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
+const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
+const clientModuleHeaders = ${clientModuleHeadersSource};
+const immutableAssetHeaders = ${immutableAssetHeadersSource};
+const revalidatingAssetHeaders = ${revalidatingAssetHeadersSource};
+const documentStaticHeaders = ${documentStaticHeadersSource};
+const staticErrorHeaders = ${staticErrorHeadersSource};
+let handlerPromise;
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-    if (isBodylessMethod(request.method) && env.ASSETS) {
-      const assetResponse = await env.ASSETS.fetch(request);
-      if (assetResponse.status !== 404) {
-        const headers = new Headers(assetResponse.headers);
-        if (assetResponse.status >= 400) {
+    const method = apply(nativeRequestMethodGetter, request, []);
+    const requestUrl = apply(nativeRequestUrlGetter, request, []);
+    const url = new NativeURL(requestUrl);
+    const pathname = apply(nativeUrlPathnameGetter, url, []);
+    const assets = ownDataValue(env, 'ASSETS');
+    if (isBodylessMethod(method) && assets !== undefined) {
+      const assetFetch = ownDataValue(assets, 'fetch');
+      if (typeof assetFetch !== 'function') {
+        throw new TypeError('Kovo Cloudflare ASSETS binding requires an own fetch method.');
+      }
+      const assetResponse = await apply(assetFetch, assets, [request]);
+      const status = apply(nativeResponseStatusGetter, assetResponse, []);
+      if (status !== 404) {
+        const headers = cloneHeaders(apply(nativeResponseHeadersGetter, assetResponse, []));
+        if (status >= 400) {
           applyHeaders(headers, staticErrorHeaders);
-        } else if (url.pathname.startsWith('/c/')) {
+        } else if (stringStartsWith(pathname, '/c/')) {
           applyHeaders(headers, clientModuleHeaders);
-        } else if (isImmutableStaticAssetPath(url.pathname)) {
+        } else if (isImmutableStaticAssetPath(pathname)) {
           applyHeaders(headers, immutableAssetHeaders);
-        } else if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) {
+        } else if (stringStartsWith(pathname, '/assets/')) {
           applyHeaders(headers, revalidatingAssetHeaders);
         } else {
           applyHeaders(headers, documentStaticHeaders);
         }
-        return new Response(assetResponse.body, {
+        return new NativeResponse(apply(nativeResponseBodyGetter, assetResponse, []), {
           headers,
-          status: assetResponse.status,
-          statusText: assetResponse.statusText,
+          status,
+          statusText: apply(nativeResponseStatusTextGetter, assetResponse, []),
         });
       }
     }
 
+    const handler = await loadHandler();
     return handler(request);
   },
 };
+
+function apply(fn, receiver, args) {
+  return nativeReflectApply(fn, receiver, args);
+}
+
+function sameDataDescriptor(left, right) {
+  if (left === undefined || right === undefined) return left === right;
+  return 'value' in left && 'value' in right &&
+    apply(nativeObjectIs, NativeObject, [left.value, right.value]) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable;
+}
+
+function ownDataValue(value, property) {
+  const before = apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  const after = apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  if (!sameDataDescriptor(before, after) || before === undefined || !('value' in before)) {
+    return undefined;
+  }
+  return before.value;
+}
+
+async function importHandler() {
+  const module = await import('./server/handler.mjs');
+  return module.default;
+}
+
+function loadHandler() {
+  handlerPromise ??= importHandler();
+  return handlerPromise;
+}
+
+function cloneHeaders(source) {
+  const headers = new NativeHeaders();
+  const preserveSetCookie = typeof nativeHeadersGetSetCookie === 'function';
+  apply(nativeHeadersForEach, source, [(value, name) => {
+    if (!preserveSetCookie || name !== 'set-cookie') {
+      apply(nativeHeadersSet, headers, [name, value]);
+    }
+  }]);
+  if (preserveSetCookie) {
+    const setCookies = apply(nativeHeadersGetSetCookie, source, []);
+    for (let index = 0; index < setCookies.length; index += 1) {
+      apply(nativeHeadersAppend, headers, ['set-cookie', setCookies[index]]);
+    }
+  }
+  return headers;
+}
 
 function isBodylessMethod(method) {
   return method === 'GET' || method === 'HEAD';
 }
 
 function applyHeaders(headers, policy) {
-  for (const [name, value] of Object.entries(policy)) {
-    headers.set(name, value);
+  const names = apply(nativeObjectKeys, NativeObject, [policy]);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    apply(nativeHeadersSet, headers, [name, ownDataValue(policy, name)]);
   }
 }
+
+function stringStartsWith(value, prefix) {
+  return apply(nativeStringStartsWith, value, [prefix]);
+}
+
 function isImmutableStaticAssetPath(pathname) {
-  return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
+  return stringStartsWith(pathname, '/c/') ||
+    apply(nativeRegExpExec, immutableAssetPathPattern, [pathname]) !== null;
 }
 `;
 }
@@ -1111,7 +1251,7 @@ function wranglerTomlSource(options: CloudflarePresetOptions): string {
 }
 
 function tomlString(value: string): string {
-  return JSON.stringify(value);
+  return buildSecuritySourceLiteral(value);
 }
 
 /**
@@ -1729,13 +1869,17 @@ function generatedNodeDiagnosticFactory(): (
   };
 }
 
+const generatedNodeDiagnosticFactorySource = buildSecurityFunctionSource(
+  generatedNodeDiagnosticFactory,
+);
+
 function nodeServerSource(): string {
-  return `import { readFile, realpath, stat } from 'node:fs/promises';
-import { createServer } from 'node:http';
+  return `import { Buffer } from 'node:buffer';
+import { constants as fsConstants } from 'node:fs';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import { createServer, ServerResponse } from 'node:http';
 import { basename, extname, isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 import {
   armIncompleteNodeRequestClose,
   nodeRequestToWebRequest,
@@ -1743,19 +1887,141 @@ import {
   writeWebResponseToNode,
 } from './node-adapter.mjs';
 
-const createNodeDiagnosticRecord = (${generatedNodeDiagnosticFactory.toString()})();
+const NativeMap = globalThis.Map;
+const NativeObject = globalThis.Object;
+const NativeRegExp = globalThis.RegExp;
+const NativeRequest = globalThis.Request;
+const NativeSet = globalThis.Set;
+const NativeString = globalThis.String;
+const NativeURL = globalThis.URL;
+const nativeReflectApply = Reflect.apply;
+const nativeDecodeURIComponent = globalThis.decodeURIComponent;
+const nativeMapGet = NativeMap.prototype.get;
+const nativeMapSet = NativeMap.prototype.set;
+const nativeObjectCreate = NativeObject.create;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
+const nativeObjectFreeze = NativeObject.freeze;
+const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+const nativeObjectIs = NativeObject.is;
+const nativeObjectKeys = NativeObject.keys;
+const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeRequestUrlGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'url').get;
+const nativeSetHas = NativeSet.prototype.has;
+const nativeStringEndsWith = NativeString.prototype.endsWith;
+const nativeStringIncludes = NativeString.prototype.includes;
+const nativeStringSlice = NativeString.prototype.slice;
+const nativeStringStartsWith = NativeString.prototype.startsWith;
+const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
+const nativeBufferByteLength = Buffer.byteLength;
+const nativeServerResponseDestroy = stablePrototypeFunction(ServerResponse.prototype, 'destroy');
+const nativeServerResponseEnd = stablePrototypeFunction(ServerResponse.prototype, 'end');
+const nativeServerResponseHeadersSentGetter = stablePrototypeGetter(ServerResponse.prototype, 'headersSent');
+const nativeServerResponseWriteHead = stablePrototypeFunction(ServerResponse.prototype, 'writeHead');
+const nativeConsoleError = console.error;
+const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
+const fsFileTypeMask = fsConstants.S_IFMT;
+const fsRegularFileType = fsConstants.S_IFREG;
+const createNodeDiagnosticRecord = (${generatedNodeDiagnosticFactorySource})();
 
-const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
-const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
-const clientModuleHeaders = ${JSON.stringify(staticHostHeaders('clientModule'))};
-const immutableAssetHeaders = ${JSON.stringify(staticHostHeaders('immutableAsset'))};
-const revalidatingAssetHeaders = ${JSON.stringify(staticHostHeaders('revalidatingAsset'))};
-const documentStaticHeaders = ${JSON.stringify(staticHostHeaders('document'))};
-const staticErrorDocumentHeaders = ${JSON.stringify(staticHostHeaders('errorDocument'))};
+const clientRoot = resolve(fileURLToPath(new NativeURL('.', import.meta.url)), 'client');
+const staticRoot = resolve(fileURLToPath(new NativeURL('.', import.meta.url)), 'static');
+const clientModuleHeaders = ${clientModuleHeadersSource};
+const immutableAssetHeaders = ${immutableAssetHeadersSource};
+const revalidatingAssetHeaders = ${revalidatingAssetHeadersSource};
+const documentStaticHeaders = ${documentStaticHeadersSource};
+const staticErrorDocumentHeaders = ${staticErrorHeadersSource};
 const headersTimeoutMs = 10_000;
 const requestTimeoutMs = 30_000;
-const rootedFileCapabilities = new Map();
+const rootedFileCapabilities = new NativeMap();
 let handlerPromise;
+
+function apply(fn, receiver, args) {
+  return nativeReflectApply(fn, receiver, args);
+}
+
+function sameDataDescriptor(left, right) {
+  if (left === undefined || right === undefined) return left === right;
+  return 'value' in left && 'value' in right &&
+    apply(nativeObjectIs, NativeObject, [left.value, right.value]) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable;
+}
+
+function ownDataValue(value, property) {
+  const before = apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  const after = apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  if (!sameDataDescriptor(before, after)) {
+    throw new TypeError('Kovo generated Node data changed while it was inspected.');
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before)) {
+    throw new TypeError('Kovo generated Node data must use own data properties.');
+  }
+  return before.value;
+}
+
+function ownStringOr(value, property, fallback) {
+  const found = ownDataValue(value, property);
+  return typeof found === 'string' ? found : fallback;
+}
+
+function defineData(value, property, entry) {
+  apply(nativeObjectDefineProperty, NativeObject, [value, property, {
+    configurable: true,
+    enumerable: true,
+    value: entry,
+    writable: true,
+  }]);
+}
+
+function stringEndsWith(value, suffix) {
+  return apply(nativeStringEndsWith, value, [suffix]);
+}
+
+function stringIncludes(value, search) {
+  return apply(nativeStringIncludes, value, [search]);
+}
+
+function stringSlice(value, start) {
+  return apply(nativeStringSlice, value, [start]);
+}
+
+function stringStartsWith(value, prefix) {
+  return apply(nativeStringStartsWith, value, [prefix]);
+}
+
+function stablePrototypeFunction(prototype, property) {
+  let owner = prototype;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [owner, property]);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError('Kovo generated Node transport control is unavailable.');
+      }
+      return descriptor.value;
+    }
+    owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+  }
+  throw new TypeError('Kovo generated Node transport control is unavailable.');
+}
+
+function stablePrototypeGetter(prototype, property) {
+  let owner = prototype;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [owner, property]);
+    if (descriptor !== undefined) {
+      if (typeof descriptor.get !== 'function') {
+        throw new TypeError('Kovo generated Node transport getter is unavailable.');
+      }
+      return descriptor.get;
+    }
+    owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+  }
+  throw new TypeError('Kovo generated Node transport getter is unavailable.');
+}
 
 async function importHandler() {
   const module = await import('./server/handler.mjs');
@@ -1776,27 +2042,32 @@ export function createKovoNodeServer(options = {}) {
     let diagnosticRequestUrl;
     try {
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
-      if (isBodylessMethod(nodeRequest.method ?? 'GET')) {
+      const method = ownStringOr(nodeRequest, 'method', 'GET');
+      const rawTarget = ownStringOr(nodeRequest, 'url', '/');
+      const httpVersion = ownStringOr(nodeRequest, 'httpVersion', '1.1');
+      if (isBodylessMethod(method)) {
         armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       }
-      if (await maybeServeStatic(nodeRequest, nodeResponse)) return;
+      if (await maybeServeStatic(rawTarget, method, nodeResponse)) return;
 
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
-      diagnosticRequestUrl = request.url;
+      diagnosticRequestUrl = apply(nativeRequestUrlGetter, request, []);
       const handler = await loadHandler();
       const response = await handler(request);
       armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
-      await writeWebResponseToNode(response, nodeResponse, request.method, {
-        httpVersion: nodeRequest.httpVersion,
+      await writeWebResponseToNode(response, nodeResponse, method, {
+        httpVersion,
       });
     } catch (error) {
       logUnhandledNodeError(error, nodeRequest, diagnosticRequestUrl);
-      if (nodeResponse.headersSent) {
-        nodeResponse.destroy();
+      if (apply(nativeServerResponseHeadersSentGetter, nodeResponse, [])) {
+        apply(nativeServerResponseDestroy, nodeResponse, []);
       } else {
         armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
-        nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
-        nodeResponse.end('Internal Server Error');
+        apply(nativeServerResponseWriteHead, nodeResponse, [500, {
+          'content-type': 'text/plain; charset=utf-8',
+        }]);
+        apply(nativeServerResponseEnd, nodeResponse, ['Internal Server Error']);
       }
     }
   });
@@ -1807,39 +2078,42 @@ export function createKovoNodeServer(options = {}) {
 
 function logUnhandledNodeError(error, nodeRequest, webRequestUrl) {
   try {
-    console.error('[kovo] unhandled node server error', createNodeDiagnosticRecord(error, nodeRequest, webRequestUrl));
+    apply(nativeConsoleError, console, [
+      '[kovo] unhandled node server error',
+      createNodeDiagnosticRecord(error, nodeRequest, webRequestUrl),
+    ]);
   } catch {
     try {
-      console.error('[kovo] unhandled node server error', {
+      apply(nativeConsoleError, console, ['[kovo] unhandled node server error', {
         method: 'UNKNOWN',
         url: '/',
         error: '[redacted]',
-      });
+      }]);
     } catch {}
   }
 }
 
-async function maybeServeStatic(nodeRequest, nodeResponse) {
-  const method = nodeRequest.method ?? 'GET';
+async function maybeServeStatic(rawTarget, method, nodeResponse) {
   if (!isBodylessMethod(method)) return false;
 
-  const pathname = staticPathname(nodeRequest);
+  const pathname = staticPathname(rawTarget);
   if (pathname === undefined) return false;
-  const clientAsset = pathname.startsWith('/c/') || pathname.startsWith('/assets/');
+  const clientModule = stringStartsWith(pathname, '/c/');
+  const clientAsset = clientModule || stringStartsWith(pathname, '/assets/');
   const immutableAsset = clientAsset && isImmutableStaticAssetPath(pathname);
   let relativePath = clientAsset ? staticRelativePath(pathname) : routeDocumentPath(pathname);
   const root = clientAsset ? clientRoot : staticRoot;
 
   if (relativePath === undefined) {
     if (!clientAsset) return false;
-    nodeResponse.writeHead(403, staticErrorHeaders());
-    nodeResponse.end('Forbidden');
+    apply(nativeServerResponseWriteHead, nodeResponse, [403, staticErrorHeaders()]);
+    apply(nativeServerResponseEnd, nodeResponse, ['Forbidden']);
     return true;
   }
 
   let outcome = await serveRootedStaticFile(root, relativePath, {
     ...(clientAsset
-      ? pathname.startsWith('/c/')
+      ? clientModule
         ? clientModuleHeaders
         : immutableAsset
           ? immutableAssetHeaders
@@ -1855,8 +2129,8 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
   }
   if (outcome === undefined) {
     if (!clientAsset) return false;
-    nodeResponse.writeHead(404, staticErrorHeaders());
-    nodeResponse.end('Not Found');
+    apply(nativeServerResponseWriteHead, nodeResponse, [404, staticErrorHeaders()]);
+    apply(nativeServerResponseEnd, nodeResponse, ['Not Found']);
     return true;
   }
 
@@ -1864,16 +2138,17 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
   return true;
 }
 
-function staticPathname(nodeRequest) {
+function staticPathname(rawTarget) {
   try {
-    return new URL(nodeRequest.url ?? '/', 'http://kovo.local').pathname;
+    const parsed = new NativeURL(rawTarget, 'http://kovo.local');
+    return apply(nativeUrlPathnameGetter, parsed, []);
   } catch {
     return undefined;
   }
 }
 
 function routeDocumentPath(pathname) {
-  const cleanPathname = pathname.endsWith('/') ? pathname : pathname + '/';
+  const cleanPathname = stringEndsWith(pathname, '/') ? pathname : pathname + '/';
   return staticRelativePath(cleanPathname + 'index.html');
 }
 
@@ -1881,8 +2156,8 @@ function publicStaticPath(pathname) {
   if (
     pathname === '/_headers' ||
     pathname === '/kovo-static-manifest.json' ||
-    pathname.endsWith('/') ||
-    pathname.endsWith('/index.html')
+    stringEndsWith(pathname, '/') ||
+    stringEndsWith(pathname, '/index.html')
   ) {
     return undefined;
   }
@@ -1891,14 +2166,14 @@ function publicStaticPath(pathname) {
 
 function staticRelativePath(pathname) {
   try {
-    return decodeURIComponent(pathname.slice(1));
+    return apply(nativeDecodeURIComponent, undefined, [stringSlice(pathname, 1)]);
   } catch {
     return undefined;
   }
 }
 
 async function serveRootedStaticFile(root, relativePath, headers) {
-  if (relativePath.includes('\\0')) return undefined;
+  if (stringIncludes(relativePath, '\\0')) return undefined;
   const files = await rootedFileCapability(root);
   if (files === undefined) return undefined;
   return files.serve(relativePath, {
@@ -1910,32 +2185,33 @@ async function serveRootedStaticFile(root, relativePath, headers) {
 }
 
 async function rootedFileCapability(root) {
-  let capability = rootedFileCapabilities.get(root);
+  let capability = apply(nativeMapGet, rootedFileCapabilities, [root]);
   if (capability === undefined) {
-    capability = rootedStaticFiles(root).catch((error) => {
-      if (isMissingStaticRootError(error)) return undefined;
-      throw error;
-    });
-    rootedFileCapabilities.set(root, capability);
+    capability = (async () => {
+      try {
+        return await rootedStaticFiles(root);
+      } catch (error) {
+        if (isMissingStaticRootError(error)) return undefined;
+        throw error;
+      }
+    })();
+    apply(nativeMapSet, rootedFileCapabilities, [root, capability]);
   }
   return capability;
 }
 
 function isMissingStaticRootError(error) {
-  return (
-    error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-  );
+  if (!error || typeof error !== 'object') return false;
+  const code = ownDataValue(error, 'code');
+  return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
 async function rootedStaticFiles(root) {
   const realRoot = await realpath(root);
-  return Object.freeze({
+  return apply(nativeObjectFreeze, NativeObject, [{
     root: realRoot,
     serve: (path, options) => serveRootedStaticFileBytes(realRoot, path, options),
-  });
+  }]);
 }
 
 async function serveRootedStaticFileBytes(realRoot, requestedPath, options) {
@@ -1943,28 +2219,34 @@ async function serveRootedStaticFileBytes(realRoot, requestedPath, options) {
   if (candidate === undefined) return undefined;
   const resolved = await safeRealpath(candidate);
   if (resolved === undefined || !containsPath(realRoot, resolved)) return undefined;
-  const fileStat = await stat(resolved).catch((error) => {
+  let fileStat;
+  try {
+    fileStat = await stat(resolved);
+  } catch (error) {
     if (isMissingStaticRootError(error)) return undefined;
     throw error;
-  });
-  if (fileStat === undefined || !fileStat.isFile()) return undefined;
+  }
+  const mode = ownDataValue(fileStat, 'mode');
+  if (typeof mode !== 'number' || (mode & fsFileTypeMask) !== fsRegularFileType) return undefined;
+  const headers = ownDataValue(options, 'headers');
+  const contentType = ownDataValue(options, 'contentType');
   return {
     body: await readFile(resolved),
     contentDisposition: routeOutcomeContentDisposition(options, resolved),
-    contentType: options.contentType,
-    ...(options.headers === undefined ? {} : { headers: options.headers }),
+    contentType,
+    ...(headers === undefined ? {} : { headers }),
     routeResponse: true,
   };
 }
 
 function rootedStaticCandidate(realRoot, requestedPath) {
-  if (requestedPath.includes('\\0') || isAbsolute(requestedPath)) return undefined;
+  if (stringIncludes(requestedPath, '\\0') || isAbsolute(requestedPath)) return undefined;
   const candidate = resolve(realRoot, requestedPath);
   return containsPath(realRoot, candidate) ? candidate : undefined;
 }
 
 function containsPath(root, target) {
-  return target === root || target.startsWith(root + sep);
+  return target === root || stringStartsWith(target, root + sep);
 }
 
 async function safeRealpath(path) {
@@ -1977,46 +2259,51 @@ async function safeRealpath(path) {
 }
 
 function routeOutcomeContentDisposition(options, resolvedPath) {
-  const disposition = options.disposition ?? 'attachment';
-  const filename = options.filename ?? basename(resolvedPath);
+  const disposition = ownDataValue(options, 'disposition') ?? 'attachment';
+  const filename = ownDataValue(options, 'filename') ?? basename(resolvedPath);
   return filename
     ? disposition + '; filename="' + contentDispositionFilename(filename) + '"'
     : disposition;
 }
 
 function contentDispositionFilename(filename) {
-  return filename.replace(/[\\r\\n"]/g, '_');
+  let safe = '';
+  for (let index = 0; index < filename.length; index += 1) {
+    const character = filename[index];
+    safe += character === '\\r' || character === '\\n' || character === '"' ? '_' : character;
+  }
+  return safe;
 }
 
 async function writeRouteOutcomeToNode(outcome, nodeResponse, method) {
-  const headers = {
-    ...safeRouteOutcomeHeaders(outcome.headers),
-    'content-disposition': outcome.contentDisposition,
-    'content-type': outcome.contentType,
-    'x-content-type-options': 'nosniff',
-    ...(outcome.etag === undefined ? {} : { etag: outcome.etag }),
-  };
-  const contentLength = routeOutcomeContentLength(outcome.body);
-  if (contentLength !== undefined) headers['content-length'] = String(contentLength);
-  nodeResponse.writeHead(200, headers);
+  const headers = safeRouteOutcomeHeaders(ownDataValue(outcome, 'headers'));
+  defineData(headers, 'content-disposition', ownDataValue(outcome, 'contentDisposition'));
+  defineData(headers, 'content-type', ownDataValue(outcome, 'contentType'));
+  defineData(headers, 'x-content-type-options', 'nosniff');
+  const body = ownDataValue(outcome, 'body');
+  defineData(headers, 'content-length', apply(nativeBufferByteLength, Buffer, [body]));
+  apply(nativeServerResponseWriteHead, nodeResponse, [200, headers]);
   if (method === 'HEAD') {
-    nodeResponse.end();
+    apply(nativeServerResponseEnd, nodeResponse, []);
     return;
   }
-  await writeRouteOutcomeBody(outcome.body, nodeResponse);
+  apply(nativeServerResponseEnd, nodeResponse, [body]);
 }
 
 function safeRouteOutcomeHeaders(headers) {
-  if (headers === undefined) return {};
-  const safeHeaders = {};
-  for (const [name, value] of Object.entries(headers)) {
-    if (reservedRouteOutcomeHeaderNames.has(name.toLowerCase())) continue;
-    safeHeaders[name] = value;
+  const safeHeaders = apply(nativeObjectCreate, NativeObject, [null]);
+  if (headers === undefined) return safeHeaders;
+  const names = apply(nativeObjectKeys, NativeObject, [headers]);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    const normalizedName = apply(nativeStringToLowerCase, name, []);
+    if (apply(nativeSetHas, reservedRouteOutcomeHeaderNames, [normalizedName])) continue;
+    defineData(safeHeaders, name, ownDataValue(headers, name));
   }
   return safeHeaders;
 }
 
-const reservedRouteOutcomeHeaderNames = new Set([
+const reservedRouteOutcomeHeaderNames = new NativeSet([
   'content-disposition',
   'content-length',
   'content-type',
@@ -2025,26 +2312,8 @@ const reservedRouteOutcomeHeaderNames = new Set([
   'x-content-type-options',
 ]);
 
-function routeOutcomeContentLength(body) {
-  if (typeof body === 'string') return Buffer.byteLength(body);
-  if (body instanceof Uint8Array || body instanceof ArrayBuffer) return body.byteLength;
-  return undefined;
-}
-
-async function writeRouteOutcomeBody(body, nodeResponse) {
-  if (typeof body === 'string' || body instanceof Uint8Array) {
-    nodeResponse.end(body);
-    return;
-  }
-  if (body instanceof ArrayBuffer) {
-    nodeResponse.end(Buffer.from(body));
-    return;
-  }
-  await pipeline(Readable.fromWeb(body), nodeResponse);
-}
-
 function contentType(filePath) {
-  switch (extname(filePath).toLowerCase()) {
+  switch (apply(nativeStringToLowerCase, extname(filePath), [])) {
     case '.css':
       return 'text/css; charset=utf-8';
     case '.js':
@@ -2071,7 +2340,8 @@ function staticErrorHeaders() {
 }
 
 function isImmutableStaticAssetPath(pathname) {
-  return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
+  return stringStartsWith(pathname, '/c/') ||
+    apply(nativeRegExpExec, immutableAssetPathPattern, [pathname]) !== null;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
@@ -2109,7 +2379,7 @@ async function emitNodeRuntimePackage(outDir: string): Promise<void> {
   };
   await writeFile(
     path.join(outDir, 'package.json'),
-    `${JSON.stringify(runtimePackage, null, 2)}\n`,
+    `${buildSecuritySourceLiteral(runtimePackage)}\n`,
   );
   await copyRuntimeLockfile(outDir);
 }

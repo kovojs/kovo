@@ -45,6 +45,7 @@ export type NodeRequestHandler = (
 
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
+const NativeResponse = globalThis.Response;
 const NativeURL = globalThis.URL;
 const nativeHeadersGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'Headers');
 const nativeRequestGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'Request');
@@ -56,6 +57,14 @@ const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
 const nativeHeadersHas = NativeHeaders.prototype.has;
 const nativeHeadersSet = NativeHeaders.prototype.set;
+const nativeResponseBodyGetter = requiredGetter(NativeResponse.prototype, 'body');
+const nativeResponseHeadersGetter = requiredGetter(NativeResponse.prototype, 'headers');
+const nativeResponseStatusGetter = requiredGetter(NativeResponse.prototype, 'status');
+const nativeResponseStatusTextGetter = requiredGetter(NativeResponse.prototype, 'statusText');
+const nativeReadableFromWeb = Readable.fromWeb;
+const nativePipeline = pipeline;
+const nativeCreateBrotliCompress = createBrotliCompress;
+const nativeCreateGzip = createGzip;
 const nativeUrlHashGetter = requiredGetter(NativeURL.prototype, 'hash');
 const nativeUrlHrefGetter = requiredGetter(NativeURL.prototype, 'href');
 const nativeUrlOriginGetter = requiredGetter(NativeURL.prototype, 'origin');
@@ -220,8 +229,11 @@ export async function writeWebResponseToNode(
   method = 'GET',
   options: WriteWebResponseToNodeOptions = {},
 ): Promise<void> {
-  const compression = responseCompression(response, options, method);
-  const responseHeaders = new NativeHeaders(response.headers);
+  // SPEC §6.6 rule 5: the final transport pins the complete Response once. Authored code may
+  // share this realm, so no status/header/body getter is re-read after this boundary decision.
+  const pinnedResponse = snapshotWebResponse(response);
+  const compression = responseCompression(pinnedResponse, options, method);
+  const responseHeaders = pinnedResponse.headers;
   if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
     setHeader(responseHeaders, 'Connection', 'close');
   }
@@ -231,7 +243,7 @@ export async function writeWebResponseToNode(
     appendVary(responseHeaders, 'Accept-Encoding');
   }
   const headers = responseHeadersToNodeHeaders(responseHeaders);
-  const earlyHints = getHeader(response.headers, 'Link');
+  const earlyHints = getHeader(responseHeaders, 'Link');
 
   if (
     options.earlyHints !== false &&
@@ -244,21 +256,54 @@ export async function writeWebResponseToNode(
     nodeResponse.writeEarlyHints({ link: nodeEarlyHintsLinkValue(earlyHints) });
   }
 
-  nodeResponse.writeHead(response.status, response.statusText, headers);
-  if (method === 'HEAD' || response.body === null) {
+  nodeResponse.writeHead(pinnedResponse.status, pinnedResponse.statusText, headers);
+  if (method === 'HEAD' || pinnedResponse.body === null) {
     nodeResponse.end();
     return;
   }
-  const responseBody = response.body;
-
-  const source = Readable.fromWeb(responseBody as NodeReadableStream<Uint8Array>);
+  const source = witnessReflectApply<Readable>(nativeReadableFromWeb, Readable, [
+    pinnedResponse.body as NodeReadableStream<Uint8Array>,
+  ]);
   // E1 (SPEC §9.5/§9.2): the head is already committed (writeHead above). A source-stream
   // error mid-body must not let the caller append error text onto the partial response —
   // tear the socket so the client sees a truncated/aborted transfer, then reject so the
   // caller's catch knows the write failed (its `headersSent` guard short-circuits).
-  if (compression === 'br') await pipeline(source, createBrotliCompress(), nodeResponse);
-  else if (compression === 'gzip') await pipeline(source, createGzip(), nodeResponse);
-  else await pipeline(source, nodeResponse);
+  if (compression === 'br') {
+    await nativePipeline(source, nativeCreateBrotliCompress(), nodeResponse);
+  } else if (compression === 'gzip') {
+    await nativePipeline(source, nativeCreateGzip(), nodeResponse);
+  } else {
+    await nativePipeline(source, nodeResponse);
+  }
+}
+
+interface PinnedWebResponse {
+  readonly body: ReadableStream<Uint8Array> | null;
+  readonly headers: Headers;
+  readonly status: number;
+  readonly statusText: string;
+}
+
+function snapshotWebResponse(response: Response): PinnedWebResponse {
+  const sourceHeaders = witnessReflectApply<Headers>(nativeResponseHeadersGetter, response, []);
+  const headers = new NativeHeaders();
+  forEachHeader(sourceHeaders, (value, name) => {
+    if (name !== 'set-cookie') setHeader(headers, name, value);
+  });
+  const setCookies = getSetCookieHeaders(sourceHeaders);
+  for (let index = 0; index < setCookies.length; index += 1) {
+    appendHeader(headers, 'set-cookie', setCookies[index]!);
+  }
+  return {
+    body: witnessReflectApply<ReadableStream<Uint8Array> | null>(
+      nativeResponseBodyGetter,
+      response,
+      [],
+    ),
+    headers,
+    status: witnessReflectApply<number>(nativeResponseStatusGetter, response, []),
+    statusText: witnessReflectApply<string>(nativeResponseStatusTextGetter, response, []),
+  };
 }
 
 /**
@@ -454,7 +499,7 @@ function urlSearch(url: URL): string {
 }
 
 function responseCompression(
-  response: Response,
+  response: PinnedWebResponse,
   options: WriteWebResponseToNodeOptions,
   method: string,
 ): 'br' | 'gzip' | undefined {

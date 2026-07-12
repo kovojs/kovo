@@ -33,8 +33,13 @@ export const staticHostHeaderPolicy = Object.freeze({
 
 export type StaticHostHeaderPolicyKind = keyof typeof staticHostHeaderPolicy;
 
-export const staticHostImmutableAssetPathPattern =
-  /^\/assets\/(?:.*\/)?[^/]*-[a-f0-9]{8,}(?:\.[^/.]+)+$/i;
+export const staticHostImmutableAssetPathPatternSource =
+  '^/assets/(?:.*/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+$';
+export const staticHostImmutableAssetPathPatternFlags = 'i';
+export const staticHostImmutableAssetPathPattern = new RegExp(
+  staticHostImmutableAssetPathPatternSource,
+  staticHostImmutableAssetPathPatternFlags,
+);
 
 /**
  * @internal Return a mutable header bag so platform formatters can add transport-local headers.

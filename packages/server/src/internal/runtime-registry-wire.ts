@@ -1,4 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import { buildSecuritySourceLiteral } from '../build-security-intrinsics.js';
 
 /** @internal Runtime mutation-touch fact serialized into dev/prod registry modules. */
 export interface RuntimeRegistryMutationTouchSite {
@@ -80,12 +81,9 @@ export function runtimeRegistryWireFactsFromGraph(
 
 /** @internal Serialize the runtime registry virtual module consumed by dev and production. */
 export function serializeRuntimeRegistryWireModule(registry: RuntimeRegistryWireFacts): string {
-  return [
-    `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';`,
-    `registerGeneratedQueryReadRegistry(${JSON.stringify(registry.queryReads)});`,
-    `registerGeneratedMutationTouchRegistry(${JSON.stringify(registry.mutationTouches)});`,
-    '',
-  ].join('\n');
+  const queryReads = buildSecuritySourceLiteral(registry.queryReads);
+  const mutationTouches = buildSecuritySourceLiteral(registry.mutationTouches);
+  return `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';\nregisterGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
 }
 
 function dedupeRuntimeTouches(

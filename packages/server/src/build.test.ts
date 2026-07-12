@@ -868,7 +868,7 @@ export default async function handler(request) {
       expect(nodeAdapter).toContain("'__kovoPeerAddress'");
       expect(nodeServer).not.toContain('function nodeRequestToWebRequest');
       expect(nodeServer).not.toContain('function responseHeadersToNodeHeaders');
-      expect(nodeServer).toContain('nodeResponse.destroy()');
+      expect(nodeServer).toContain('apply(nativeServerResponseDestroy, nodeResponse, [])');
       expect(nodeServer).toContain('const headersTimeoutMs = 10_000;');
       expect(nodeServer).toContain('const requestTimeoutMs = 30_000;');
       expect(nodeServer).toContain('server.headersTimeout = headersTimeoutMs;');
@@ -1066,15 +1066,14 @@ export default async function handler(request) {
         },
       });
 
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
       const baseUrl = await listen(server);
-
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
 
       try {
         const response = await fetch(
@@ -1102,6 +1101,223 @@ export default async function handler(request) {
       expect(JSON.stringify(consoleErrors)).not.toContain('NODE_CAPABILITY_SHOULD_NEVER_LOG');
     } finally {
       console.error = originalConsoleError;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps emitted Node static-file confinement after an authored handler poisons globals', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-static-intrinsics-'));
+    const poisonGlobal = globalThis as typeof globalThis & {
+      __kovoRestoreNodeStaticPoison?: () => void;
+    };
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+const OriginalURL = globalThis.URL;
+const originalReflectApply = Reflect.apply;
+const originalStartsWith = String.prototype.startsWith;
+const originalSlice = String.prototype.slice;
+
+function restore() {
+  globalThis.URL = OriginalURL;
+  String.prototype.startsWith = originalStartsWith;
+}
+
+export default async function handler() {
+  globalThis.__kovoRestoreNodeStaticPoison = restore;
+  globalThis.URL = function SelectiveURL(input, base) {
+    if (base === 'http://kovo.local' && typeof input === 'string' && input.includes('%2e')) {
+      return { pathname: input };
+    }
+    return new OriginalURL(input, base);
+  };
+  String.prototype.startsWith = function selectiveStartsWith(search, position) {
+    if (
+      typeof search === 'string' &&
+      originalReflectApply(originalSlice, search, [-8]) === '/client/'
+    ) {
+      return true;
+    }
+    return originalReflectApply(originalStartsWith, this, [search, position]);
+  };
+  return new Response('poison armed', {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await mkdir(join(nodeOutDir, 'client', 'assets'), { recursive: true });
+      const secret = 'NODE_STATIC_CONFINEMENT_SECRET';
+      await writeFile(join(nodeOutDir, 'secret.txt'), secret, 'utf8');
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+
+      try {
+        const arm = await fetch(`${baseUrl}/arm`);
+        await expect(arm.text()).resolves.toBe('poison armed');
+        const traversal = await rawHttpExchange(
+          baseUrl,
+          'GET /assets/%2e%2e/%2e%2e/secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n',
+        );
+
+        expect(traversal).not.toContain(secret);
+      } finally {
+        poisonGlobal.__kovoRestoreNodeStaticPoison?.();
+        delete poisonGlobal.__kovoRestoreNodeStaticPoison;
+        await close(server);
+      }
+    } finally {
+      poisonGlobal.__kovoRestoreNodeStaticPoison?.();
+      delete poisonGlobal.__kovoRestoreNodeStaticPoison;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('pins emitted Node Response fields before authored getters can substitute output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-response-intrinsics-'));
+    const poisonGlobal = globalThis as typeof globalThis & {
+      __kovoRestoreNodeResponsePoison?: () => void;
+    };
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+const properties = ['body', 'headers', 'status', 'statusText'];
+const descriptors = new Map(properties.map((property) => [
+  property,
+  Object.getOwnPropertyDescriptor(Response.prototype, property),
+]));
+const safe = new Response('SAFE-EMITTED-RESPONSE', {
+  headers: { 'content-type': 'text/plain; charset=utf-8' },
+  status: 200,
+});
+const attacker = new Response('<script>emittedAttackerOutput()</script>', {
+  headers: {
+    'content-type': 'text/html; charset=utf-8',
+    'set-cookie': 'admin=attacker; Path=/; HttpOnly',
+  },
+  status: 201,
+  statusText: 'ATTACKER',
+});
+
+function restore() {
+  for (const property of properties) {
+    Object.defineProperty(Response.prototype, property, descriptors.get(property));
+  }
+}
+
+export default async function handler() {
+  globalThis.__kovoRestoreNodeResponsePoison = restore;
+  for (const property of properties) {
+    const descriptor = descriptors.get(property);
+    Object.defineProperty(Response.prototype, property, {
+      ...descriptor,
+      get() {
+        return Reflect.apply(descriptor.get, this === safe ? attacker : this, []);
+      },
+    });
+  }
+  return safe;
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+
+      try {
+        const response = await fetch(baseUrl);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('set-cookie')).toBeNull();
+        await expect(response.text()).resolves.toBe('SAFE-EMITTED-RESPONSE');
+      } finally {
+        poisonGlobal.__kovoRestoreNodeResponsePoison?.();
+        delete poisonGlobal.__kovoRestoreNodeResponsePoison;
+        await close(server);
+      }
+    } finally {
+      poisonGlobal.__kovoRestoreNodeResponsePoison?.();
+      delete poisonGlobal.__kovoRestoreNodeResponsePoison;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not serialize attacker source through a late Function.toString replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-source-injection-'));
+    const originalFunctionToString = Function.prototype.toString;
+    const injectionGlobal = globalThis as typeof globalThis & {
+      __kovoGeneratedNodeSourceInjection?: string;
+    };
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+export default async function handler() {
+  return new Response('safe');
+}
+`,
+      });
+      Function.prototype.toString = function selectiveFunctionSource() {
+        if (this.name === 'generatedNodeDiagnosticFactory') {
+          return `function generatedNodeDiagnosticFactory() {
+            globalThis.__kovoGeneratedNodeSourceInjection = 'ATTACKER-CODE-RAN';
+            return () => ({ error: 'forged', method: 'GET', url: '/' });
+          }`;
+        }
+        return Reflect.apply(originalFunctionToString, this, []);
+      };
+
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      Function.prototype.toString = originalFunctionToString;
+      const emittedSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
+      expect(emittedSource).not.toContain('ATTACKER-CODE-RAN');
+
+      await import(`${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`);
+      expect(injectionGlobal.__kovoGeneratedNodeSourceInjection).toBeUndefined();
+    } finally {
+      Function.prototype.toString = originalFunctionToString;
+      delete injectionGlobal.__kovoGeneratedNodeSourceInjection;
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -1146,15 +1362,14 @@ export default async function handler() {
         },
       });
 
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
       const baseUrl = await listen(server);
-
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
 
       try {
         const response = await fetch(`${baseUrl}/boom`, { method: 'POST' });
@@ -1230,14 +1445,14 @@ export default async function handler(request) {
         },
       });
 
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
       const baseUrl = await listen(server);
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
 
       try {
         const response = await fetch(
@@ -1337,14 +1552,14 @@ export default async function handler(request) {
           return build;
         },
       });
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
       const serverModule = (await import(
         `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
       )) as { createKovoNodeServer(): Server };
       const server = serverModule.createKovoNodeServer();
       const baseUrl = await listen(server);
-      console.error = (...args: unknown[]) => {
-        consoleErrors.push(args);
-      };
 
       try {
         const response = await fetch(`${baseUrl}/poison?apiKey=POISON_LOG_SECRET`, {
@@ -1979,7 +2194,7 @@ export default async function handler(request) {
         readFile(join(cloudflareOutDir, 'client/static/index.html'), 'utf8'),
       ).resolves.toContain('Static Route');
       await expect(readFile(join(cloudflareOutDir, 'worker.mjs'), 'utf8')).resolves.toContain(
-        'env.ASSETS',
+        "ownDataValue(env, 'ASSETS')",
       );
 
       const workerModule = (await import(
@@ -2358,6 +2573,74 @@ export default async function handler() {
         },
       ]);
     } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps emitted Cloudflare static security headers after handler-module poisoning', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-static-intrinsics-'));
+    const poisonGlobal = globalThis as typeof globalThis & {
+      __kovoRestoreCloudflareStaticPoison?: () => void;
+    };
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+const originalHeadersSet = Headers.prototype.set;
+const originalReflectApply = Reflect.apply;
+globalThis.__kovoRestoreCloudflareStaticPoison = () => {
+  Headers.prototype.set = originalHeadersSet;
+};
+Headers.prototype.set = function selectiveSet(name, value) {
+  if (name === 'x-content-type-options') return;
+  return originalReflectApply(originalHeadersSet, this, [name, value]);
+};
+
+export default async function handler() {
+  return new Response('dynamic');
+}
+`,
+      });
+      const cloudflareOutDir = join(root, 'cloudflare-output');
+      await cloudflare().emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: cloudflareOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      const workerModule = (await import(
+        `${pathToFileURL(join(cloudflareOutDir, 'worker.mjs')).href}?t=${Date.now()}`
+      )) as {
+        default: {
+          fetch(
+            request: Request,
+            env: { ASSETS?: { fetch(request: Request): Promise<Response> } },
+          ): Promise<Response> | Response;
+        };
+      };
+
+      const arm = await workerModule.default.fetch(new Request('https://worker.test/arm'), {});
+      await expect(arm.text()).resolves.toBe('dynamic');
+      const response = await workerModule.default.fetch(
+        new Request('https://worker.test/assets/app.css'),
+        {
+          ASSETS: {
+            fetch: async () =>
+              new Response('body { color: navy; }', {
+                headers: { 'content-type': 'text/css; charset=utf-8' },
+              }),
+          },
+        },
+      );
+
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    } finally {
+      poisonGlobal.__kovoRestoreCloudflareStaticPoison?.();
+      delete poisonGlobal.__kovoRestoreCloudflareStaticPoison;
       await rm(root, { force: true, recursive: true });
     }
   });

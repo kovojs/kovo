@@ -2,10 +2,18 @@ import { createHash } from 'node:crypto';
 
 import { securityArrayIsArray, securityNumberIsInteger } from './response-security-intrinsics.js';
 import {
+  createWitnessWeakSet,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
+  witnessIsArray,
+  witnessJsonStringifyPrimitive,
+  witnessObjectIs,
+  witnessObjectKeys,
   witnessReflectApply,
+  witnessWeakSetAdd,
+  witnessWeakSetDelete,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -19,6 +27,7 @@ import {
 const NativeResponse = globalThis.Response;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeCreateHash = createHash;
+const nativeFunctionToString = globalThis.Function.prototype.toString;
 const nativeResponseText = stableOwnFunction(NativeResponse.prototype, 'text');
 const nativeResponseStatus = stableOwnGetter(NativeResponse.prototype, 'status');
 
@@ -171,4 +180,114 @@ export function buildSecuritySha256Hex(content: string | Uint8Array): string {
 export function buildSecuritySha384Base64(content: string | Uint8Array): string {
   assertBuildSecurityIntrinsics();
   return rawDigest('sha384', content, 'base64');
+}
+
+/**
+ * Capture reviewed framework function source through the boot-pinned Function control.
+ *
+ * This is an artifact-construction mechanism, never a provenance test (SPEC §6.6 rule 6).
+ */
+export function buildSecurityFunctionSource(value: Function): string {
+  assertBuildSecurityIntrinsics();
+  return witnessReflectApply(nativeFunctionToString, value, []);
+}
+
+/**
+ * Serialize JSON data as an executable source literal without consulting caller prototypes,
+ * accessors, `toJSON`, iterators, or the ambient JSON serializer after app evaluation.
+ */
+export function buildSecuritySourceLiteral(value: unknown): string {
+  assertBuildSecurityIntrinsics();
+  return serializeBuildSourceValue(value, createWitnessWeakSet(), 0);
+}
+
+function serializeBuildSourceValue(
+  value: unknown,
+  ancestors: WeakSet<object>,
+  depth: number,
+): string {
+  if (depth > 100) {
+    throw new TypeError('Kovo generated source data exceeds the depth limit.');
+  }
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    const serialized = witnessJsonStringifyPrimitive(value);
+    if (serialized === undefined) {
+      throw new TypeError('Kovo generated source contains a non-serializable primitive.');
+    }
+    return serialized;
+  }
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    throw new TypeError('Kovo generated source must contain only own JSON data.');
+  }
+  if (witnessWeakSetHas(ancestors, value)) {
+    throw new TypeError('Kovo generated source cannot contain cycles.');
+  }
+  witnessWeakSetAdd(ancestors, value);
+  try {
+    if (witnessIsArray(value)) {
+      const length = stableBuildArrayLength(value);
+      let serialized = '[';
+      for (let index = 0; index < length; index += 1) {
+        if (index > 0) serialized += ',';
+        serialized += serializeBuildSourceValue(
+          stableBuildDataValue(value, index, `generated source array[${index}]`),
+          ancestors,
+          depth + 1,
+        );
+      }
+      return `${serialized}]`;
+    }
+
+    const keys = witnessObjectKeys(value);
+    let serialized = '{';
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      if (index > 0) serialized += ',';
+      serialized += `${witnessJsonStringifyPrimitive(key)!}:${serializeBuildSourceValue(
+        stableBuildDataValue(value, key, `generated source object.${key}`),
+        ancestors,
+        depth + 1,
+      )}`;
+    }
+    return `${serialized}}`;
+  } finally {
+    witnessWeakSetDelete(ancestors, value);
+  }
+}
+
+function stableBuildArrayLength(value: readonly unknown[]): number {
+  const length = stableBuildDataValue(value, 'length', 'generated source array.length');
+  if (!securityNumberIsInteger(length) || (length as number) < 0 || (length as number) > 1_000_000) {
+    throw new TypeError('Kovo generated source array must have a bounded stable length.');
+  }
+  return length as number;
+}
+
+function stableBuildDataValue(value: object, property: PropertyKey, label: string): unknown {
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if (!sameBuildDataDescriptor(before, after) || before === undefined || !('value' in before)) {
+    throw new TypeError(`Kovo generated source requires a stable own data property for ${label}.`);
+  }
+  return before.value;
+}
+
+function sameBuildDataDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    'value' in left &&
+    'value' in right &&
+    witnessObjectIs(left.value, right.value) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
 }
