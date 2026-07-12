@@ -934,6 +934,36 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     });
   });
 
+  it('routes the exact authorized rawRead carrier without live Function.call', () => {
+    const allowed = stampTrustedSql(
+      { text: 'select label from allowed', values: [] },
+      'exact rawRead carrier',
+    );
+    const secret = stampTrustedSql(
+      { text: 'select secret from secrets', values: [] },
+      'attacker substituted rawRead carrier',
+    );
+    const raw = {
+      all(statement: unknown) {
+        return [statement];
+      },
+    };
+    const reader = readonlyDb(raw, { rawRead: sqliteRawReadPolicy(['allowed']) });
+    const nativeCall = Function.prototype.call;
+    let rows: unknown;
+    try {
+      Function.prototype.call = function (thisArg: unknown, ...args: unknown[]) {
+        if (this === raw.all) return Reflect.apply(nativeCall, this, [thisArg, secret]);
+        return Reflect.apply(nativeCall, this, [thisArg, ...args]);
+      };
+      rows = reader.rawRead(allowed, { reads: ['allowed'] });
+    } finally {
+      Function.prototype.call = nativeCall;
+    }
+
+    expect(rows).toEqual([{ text: 'select label from allowed', values: [] }]);
+  });
+
   it('crossOwnerRead reconstructs the admin-client carrier and refuses submit-bearing app values', async () => {
     const observed: unknown[] = [];
     const adminClient = {
@@ -976,6 +1006,16 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       ),
     ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
     expect(observed).toEqual([]);
+    expect(() =>
+      reader.crossOwnerRead(
+        {
+          text: 'select id from orders where id in (select order_id from victim_accounts)',
+          values: [],
+        },
+        declaration,
+      ),
+    ).toThrow(/KV414/u);
+    expect(observed).toEqual([]);
 
     const carrier = { text: 'select id from orders where id = $1', values: ['o1'] };
     await expect(reader.crossOwnerRead(carrier, declaration)).resolves.toEqual([
@@ -983,6 +1023,56 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     ]);
     expect(observed[0]).not.toBe(carrier);
     expect(observed).toEqual([{ text: 'select id from orders where id = $1', values: ['o1'] }]);
+  });
+
+  it('routes the exact authorized crossOwnerRead carrier without live Function.call', () => {
+    const allowed = stampTrustedSql(
+      { text: 'select id from orders', values: [] },
+      'exact cross-owner carrier',
+    );
+    const secret = stampTrustedSql(
+      { text: 'select secret from secrets', values: [] },
+      'attacker substituted cross-owner carrier',
+    );
+    const adminClient = {
+      query(statement: unknown) {
+        return [statement];
+      },
+    };
+    const reader = managedDb(fakeDb([]), 'read', {
+      crossOwnerRead: {
+        adminClient,
+        dialectLabel: 'Postgres',
+        executeMethod: 'query',
+        hasRole: (role) => role === 'admin',
+        normalizeTableName: (table) => table,
+        ownerTables: ['orders'],
+      },
+    }) as unknown as {
+      crossOwnerRead(
+        statement: unknown,
+        declaration: { reads: readonly string[]; reason: string; role: 'admin' },
+      ): unknown;
+    };
+    const nativeCall = Function.prototype.call;
+    let rows: unknown;
+    try {
+      Function.prototype.call = function (thisArg: unknown, ...args: unknown[]) {
+        if (this === adminClient.query) {
+          return Reflect.apply(nativeCall, this, [thisArg, secret]);
+        }
+        return Reflect.apply(nativeCall, this, [thisArg, ...args]);
+      };
+      rows = reader.crossOwnerRead(allowed, {
+        reads: ['orders'],
+        reason: 'support lookup',
+        role: 'admin',
+      });
+    } finally {
+      Function.prototype.call = nativeCall;
+    }
+
+    expect(rows).toEqual([{ text: 'select id from orders', values: [] }]);
   });
 
   it('passes reads through unchanged', async () => {
@@ -1117,6 +1207,62 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain('KV422');
     expect(accepted).toEqual([]);
+  });
+
+  it('cannot hide native Drizzle raw SQL through late Symbol.keyFor replacement', () => {
+    const accepted: unknown[] = [];
+    const raw = {
+      select(projection?: unknown) {
+        accepted.push(projection);
+        return { from: () => [] };
+      },
+    };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+    const nativeKeyFor = Symbol.keyFor;
+    let error: unknown;
+    try {
+      Symbol.keyFor = () => 'app-masked-symbol';
+      try {
+        handle.select({ leaked: sql.raw('(select classified from secrets)') });
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Symbol.keyFor = nativeKeyFor;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('KV422');
+    expect(accepted).toEqual([]);
+  });
+
+  it('reconstructs witnessed SQL and rejects executable subquery wrappers at the real sink', () => {
+    const client = new Database(':memory:');
+    try {
+      client.exec(
+        'create table public_data (label text not null); create table secrets (classified text not null);',
+      );
+      client.exec(
+        "insert into public_data values ('public'); insert into secrets values ('victim-secret');",
+      );
+      const publicData = sqliteTable('public_data', { label: sqliteText('label').notNull() });
+      const secrets = sqliteTable('secrets', { classified: sqliteText('classified').notNull() });
+      const rawDb = drizzle({ client });
+      const handle = managedDb(rawDb, 'write');
+
+      const witnessed = sql`1`;
+      const chunks = witnessed.queryChunks as unknown as { value: string[] }[];
+      chunks[0]!.value[0] = '(select classified from secrets)';
+      expect(handle.select({ leaked: witnessed }).from(publicData).all()).toEqual([{ leaked: 1 }]);
+
+      const evil = rawDb
+        .select({ leaked: drizzleSql.raw('classified').as('leaked') })
+        .from(secrets)
+        .as('evil');
+      expect(() => handle.select().from(evil).all()).toThrow(/KV422/u);
+    } finally {
+      client.close();
+    }
   });
 
   it('rejects untrusted sql.raw fragments across managed Drizzle builder fast paths', () => {
@@ -2547,6 +2693,53 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(writes).toEqual([]);
   });
 
+  it('requires every observed Drizzle table to be declared', () => {
+    const writes: string[] = [];
+    const handle = createDeclaredWriteDb(
+      {
+        insert(table: string) {
+          writes.push(table);
+          return { values: () => undefined };
+        },
+      },
+      { tables: ['allowed'] },
+      {
+        dialectLabel: 'proof',
+        normalizeTableName: (table) => table,
+        tableNames: () => ['allowed', 'victim_accounts'],
+      },
+    );
+
+    expect(() => handle.insert('joined-write').values()).toThrow(/KV406/u);
+    expect(writes).toEqual([]);
+  });
+
+  it('pins declared-write policy and option properties before the first sink', () => {
+    const writes: string[] = [];
+    const tables = ['allowed'];
+    const policy = { tables };
+    const options = {
+      dialectLabel: 'proof',
+      normalizeTableName: (table: string) => table,
+      tableNames: (table: string) => [table],
+    };
+    const handle = createDeclaredWriteDb(
+      {
+        insert(table: string) {
+          writes.push(table);
+          return { values: () => undefined };
+        },
+      },
+      policy,
+      options,
+    );
+    tables[0] = 'victim_accounts';
+    options.tableNames = () => ['allowed'];
+
+    expect(() => handle.insert('victim_accounts').values()).toThrow(/KV406/u);
+    expect(writes).toEqual([]);
+  });
+
   it('real SQLite declared writes and raw reads ignore poisoned Set.has authority', () => {
     const allowed = sqliteTable('allowed', { id: sqliteText('id').primaryKey() });
     const victim = sqliteTable('victim_accounts', {
@@ -2842,6 +3035,85 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
   });
 
+  it('pins the Postgres principal and role options before app code can mutate them', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: string, params?: unknown[]) {
+        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve([]);
+      },
+    };
+    const options = { principal: 'user-1', role: 'kovo_reader' as string | false };
+    const scoped = createPostgresScopedClient(client, options);
+    options.principal = 'victim';
+    options.role = false;
+
+    await expect(scoped.query('select id from contacts')).resolves.toEqual([]);
+    expect(log).toEqual([
+      `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
+      'exec:SET LOCAL ROLE "kovo_reader"',
+      'query:select id from contacts:[]',
+    ]);
+  });
+
+  it('rejects non-callback Postgres transaction overloads before the driver', () => {
+    let reached = false;
+    const scoped = createPostgresScopedClient({
+      transaction(_callback: unknown) {
+        reached = true;
+      },
+    }) as { transaction(callback: unknown): unknown };
+
+    expect(() => scoped.transaction('COMMIT')).toThrow(/require a callback/u);
+    expect(reached).toBe(false);
+  });
+
+  it('does not let late Function.bind replace the scoped Postgres query choke', async () => {
+    const log: string[] = [];
+    const client = {
+      query(statement: string) {
+        log.push(`raw:${statement}`);
+        return Promise.resolve([{ secret: 'victim-secret' }]);
+      },
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+    };
+    const scoped = createPostgresScopedClient(client, { principal: 'user-1', role: false });
+    const nativeBind = Function.prototype.bind;
+    let query: (statement: string) => Promise<unknown>;
+    try {
+      Function.prototype.bind = function (thisArg: unknown, ...args: unknown[]) {
+        if (this.name === 'scopedPostgresQuery') {
+          return Reflect.apply(nativeBind, client.query, [client]);
+        }
+        return Reflect.apply(nativeBind, this, [thisArg, ...args]);
+      };
+      query = scoped.query;
+    } finally {
+      Function.prototype.bind = nativeBind;
+    }
+
+    await expect(query('select id from allowed')).resolves.toEqual([{ secret: 'victim-secret' }]);
+    expect(log).toEqual([
+      'transaction',
+      `raw:SELECT set_config('kovo.principal', $1, true)`,
+      'raw:select id from allowed',
+    ]);
+  });
+
   it('rejects unsafe app SQL before scoped Postgres query execution', async () => {
     const log: string[] = [];
     const client = {
@@ -2870,6 +3142,11 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       'RESET ROLE',
       'SET ROLE kovo_admin',
       'DISCARD ALL',
+      'BEGIN',
+      'COMMIT',
+      'ROLLBACK',
+      'SAVEPOINT attacker',
+      'RELEASE SAVEPOINT attacker',
       'CREATE TABLE stolen (id text)',
       "RESET ROLE; SELECT set_config('kovo.principal', 'victim', true)",
       '/* hidden utility */ SET ROLE kovo_admin',
@@ -2972,7 +3249,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     }
 
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain('unsupported transaction control statement');
+    expect((error as Error).message).toContain('cannot control the framework transaction frame');
     expect(queries).toEqual([]);
   });
 

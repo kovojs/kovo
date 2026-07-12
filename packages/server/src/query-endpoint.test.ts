@@ -394,9 +394,26 @@ describe('query endpoints', () => {
       load: () => ({ payload: 'x'.repeat(1_500_000) }),
       reads: [],
     });
+    const escaped = query('escaped-byte-resource-query', {
+      access: publicAccess('escaped byte ceiling regression'),
+      load: () => ({ payload: '\0'.repeat(700_000) }),
+      reads: [],
+    });
+    class JsonAmplifier {
+      toJSON() {
+        return { payload: 'x'.repeat(10_000_000) };
+      }
+    }
+    const opaque = query('opaque-resource-query', {
+      access: publicAccess('opaque wrapper ceiling regression'),
+      load: () => ({ payload: new JsonAmplifier() as unknown as string }),
+      reads: [],
+    });
 
     await expect(runQuery(deep, {}, {})).rejects.toThrow(/depth ceiling/u);
     await expect(runQuery(wide, {}, {})).rejects.toThrow(/byte ceiling/u);
+    await expect(runQuery(escaped, {}, {})).rejects.toThrow(/byte ceiling/u);
+    await expect(runQuery(opaque, {}, {})).rejects.toThrow(/non-JSON object/u);
   });
 
   it('preserves explicit query list limits below the default ceiling', async () => {

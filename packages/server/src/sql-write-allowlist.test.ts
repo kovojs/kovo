@@ -98,6 +98,25 @@ describe('parseSqlWriteTables', () => {
       Array.prototype.map = nativeMap;
     }
   });
+
+  it('keeps data-modifying CTE verdicts after selective Array.push replacement', () => {
+    const nativePush = Array.prototype.push;
+    try {
+      Array.prototype.push = function <Value>(...values: Value[]): number {
+        const verdict = values[0] as { kind?: unknown } | undefined;
+        if (verdict?.kind === 'proven-unsafe') return this.length;
+        return Reflect.apply(nativePush, this, values) as number;
+      };
+      expect(
+        parseSqlWriteTables(
+          'WITH deleted AS (DELETE FROM victim_accounts RETURNING id) SELECT id FROM deleted',
+          { dialect: 'postgres' },
+        ),
+      ).toEqual(['victim_accounts']);
+    } finally {
+      Array.prototype.push = nativePush;
+    }
+  });
 });
 
 describe('classifyStatement', () => {

@@ -31,6 +31,8 @@ import {
 } from '@kovojs/core/internal/security-markers';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 import {
+  createWitnessMap,
+  createWitnessSet,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
@@ -39,10 +41,13 @@ import {
   witnessIsArray,
   witnessMapForEach,
   witnessMapGet,
+  witnessMapSet,
   witnessOwnKeys,
+  witnessRegExpExec,
   witnessReflectApply,
   witnessReflectGet,
   witnessSetForEach,
+  witnessSetAdd,
 } from './security-witness-intrinsics.js';
 
 declare const readerDbBrand: unique symbol;
@@ -367,7 +372,7 @@ export const createDeclaredWriteDb = securityClassifier(
         if (isDeclaredWriteDrizzleMethod(prop) && typeof value === 'function') {
           return (table: unknown, ...args: unknown[]) => {
             const names = safeOptions.tableNames(table);
-            assertDeclaredWriteTablesAllowed(names, safePolicy, safeOptions, allowed);
+            assertDeclaredWriteTablesAllowed(names, safeOptions, allowed);
             const builder = witnessReflectApply(value, target, prependManagedArgument(table, args));
             return prop === 'delete'
               ? builder
@@ -401,7 +406,11 @@ export const createDeclaredWriteDb = securityClassifier(
 export const createAuthorizationCensusDb = securityClassifier(
   'server.managed-db.authorization-census-db',
   function <Db extends object>(db: Db, options: AuthorizationCensusDbOptions): Db {
-    return authorizationCensusProxy(db, options, undefined) as Db;
+    return authorizationCensusProxy(
+      db,
+      snapshotAuthorizationCensusOptions(options),
+      undefined,
+    ) as Db;
   },
 );
 
@@ -415,14 +424,7 @@ export const createPostgresReadonlyClient = securityClassifier(
     client: Client,
     options: PostgresReadonlyClientOptions = {},
   ): Client {
-    const scopedOptions: PostgresScopedClientOptions = { readOnly: true };
-    if (options.principal !== undefined) scopedOptions.principal = options.principal;
-    if (options.quoteIdentifier !== undefined)
-      scopedOptions.quoteIdentifier = options.quoteIdentifier;
-    if (options.readerRole !== undefined) scopedOptions.role = options.readerRole;
-    if (options.roleSetting !== undefined) scopedOptions.roleSetting = options.roleSetting;
-    if (options.rlsDiagnostics !== undefined) scopedOptions.rlsDiagnostics = options.rlsDiagnostics;
-    return createPostgresScopedClient(client, scopedOptions);
+    return createPostgresScopedClient(client, postgresReadonlyScopedOptions(options));
   },
 );
 
@@ -438,13 +440,20 @@ export const createPostgresScopedClient = securityClassifier(
     client: Client,
     options: PostgresScopedClientOptions = {},
   ): Client {
+    const scopedOptions = snapshotPostgresScopedClientOptions(options);
     return new Proxy(client as Record<PropertyKey, unknown>, {
       get(target, prop, receiver) {
-        if (prop === 'query') return scopedPostgresQuery.bind(undefined, target, options);
-        if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
-        if (prop === 'transaction') return scopedPostgresTransaction(target, options, receiver);
-        const value = Reflect.get(target, prop, receiver);
-        return typeof value === 'function' ? value.bind(target) : value;
+        if (prop === 'query') {
+          return (query: unknown, params?: unknown[], queryOptions?: unknown) =>
+            scopedPostgresQuery(target, scopedOptions, query, params, queryOptions);
+        }
+        if (prop === 'exec') return (query: string) => scopedPostgresExec(scopedOptions, query);
+        if (prop === 'transaction')
+          return scopedPostgresTransaction(target, scopedOptions, receiver);
+        const value = witnessReflectGet(target, prop, receiver);
+        return typeof value === 'function'
+          ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+          : value;
       },
     }) as Client;
   },
@@ -464,17 +473,34 @@ export class KovoReadonlyHandleError extends Error {
 }
 
 function snapshotManagedWritePolicy(policy: ManagedSqlWritePolicy): ManagedSqlWritePolicy {
-  return witnessFreeze({
-    ...(policy.capability === undefined ? {} : { capability: policy.capability }),
-    ...(policy.dialect === undefined ? {} : { dialect: policy.dialect }),
-    ...(policy.engineReadonly === undefined ? {} : { engineReadonly: policy.engineReadonly }),
-    ...(policy.tables === undefined
-      ? {}
-      : { tables: snapshotStringArray(policy.tables, 'declared write tables') }),
-    ...(policy.touches === undefined
-      ? {}
-      : { touches: snapshotStringArray(policy.touches, 'declared write touches') }),
-  });
+  const capability = optionalOwnDataProperty(policy, 'capability');
+  const dialect = optionalOwnDataProperty(policy, 'dialect');
+  const engineReadonly = optionalOwnDataProperty(policy, 'engineReadonly');
+  const tables = optionalOwnDataProperty(policy, 'tables');
+  const touches = optionalOwnDataProperty(policy, 'touches');
+  const snapshot: ManagedSqlWritePolicy = {};
+  if (capability !== undefined) {
+    if (capability !== 'read' && capability !== 'write') {
+      throw new TypeError('managed SQL capability must be read or write.');
+    }
+    snapshot.capability = capability;
+  }
+  if (dialect !== undefined) {
+    if (dialect !== 'postgres' && dialect !== 'sqlite') {
+      throw new TypeError('managed SQL dialect is invalid.');
+    }
+    snapshot.dialect = dialect;
+  }
+  if (engineReadonly !== undefined) {
+    if (typeof engineReadonly !== 'boolean') {
+      throw new TypeError('managed SQL engineReadonly must be boolean.');
+    }
+    snapshot.engineReadonly = engineReadonly;
+  }
+  if (tables !== undefined) snapshot.tables = snapshotStringArray(tables, 'declared write tables');
+  if (touches !== undefined)
+    snapshot.touches = snapshotStringArray(touches, 'declared write touches');
+  return witnessFreeze(snapshot);
 }
 
 function snapshotDeclaredWriteBoundary(
@@ -508,11 +534,260 @@ function snapshotDeclaredWriteOptions(options: DeclaredWriteDbOptions): Declared
       return snapshotStringArray(names, 'observed declared-write table names');
     },
   };
-  if (options.governedColumns !== undefined) runtime.governedColumns = options.governedColumns;
-  if (options.sqliteAuthorizer !== undefined) {
-    runtime.sqliteAuthorizer = snapshotSqliteAuthorizer(options.sqliteAuthorizer);
+  const governedColumns = optionalOwnDataProperty(options, 'governedColumns');
+  const sqliteAuthorizer = optionalOwnDataProperty(options, 'sqliteAuthorizer');
+  if (governedColumns !== undefined) {
+    runtime.governedColumns = snapshotGovernedWriteMetadata(governedColumns);
+  }
+  if (sqliteAuthorizer !== undefined) {
+    runtime.sqliteAuthorizer = snapshotSqliteAuthorizer(
+      sqliteAuthorizer as DeclaredWriteSqliteAuthorizerOptions,
+    );
   }
   return witnessFreeze(runtime);
+}
+
+function snapshotGovernedWriteMetadata(value: unknown): GovernedWriteMetadata {
+  if (!isRecord(value)) throw new TypeError('governed write metadata must be an object.');
+  return witnessFreeze({
+    governedColumnKeysByTable: snapshotStringSetMap(
+      optionalOwnDataProperty(value, 'governedColumnKeysByTable'),
+      'governed column keys',
+    ),
+    governedColumnNamesByTable: snapshotStringSetMap(
+      optionalOwnDataProperty(value, 'governedColumnNamesByTable'),
+      'governed column names',
+    ),
+  });
+}
+
+function snapshotStringSetMap(
+  value: unknown,
+  label: string,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  if (!isRecord(value)) throw new TypeError(`${label} must be a Map.`);
+  const snapshot = createWitnessMap<string, ReadonlySet<string>>();
+  witnessMapForEach(value as unknown as Map<unknown, unknown>, (columns, table) => {
+    if (typeof table !== 'string' || !isRecord(columns)) {
+      throw new TypeError(`${label} must map string tables to string sets.`);
+    }
+    const columnSnapshot = createWitnessSet<string>();
+    witnessSetForEach(columns as unknown as Set<unknown>, (column) => {
+      if (typeof column !== 'string') throw new TypeError(`${label} must contain string columns.`);
+      witnessSetAdd(columnSnapshot, column);
+    });
+    witnessMapSet(snapshot, table, columnSnapshot);
+  });
+  return snapshot;
+}
+
+function snapshotAuthorizationCensusOptions(
+  options: AuthorizationCensusDbOptions,
+): AuthorizationCensusDbOptions {
+  const normalizeTableName = ownFunctionDataProperty(options, 'normalizeTableName');
+  const tableNames = ownFunctionDataProperty(options, 'tableNames');
+  const metadata = optionalOwnDataProperty(options, 'metadata');
+  if (!isRecord(metadata)) throw new TypeError('authorization census metadata must be an object.');
+  const schemaSource = optionalOwnDataProperty(metadata, 'schemaTableNames');
+  const classificationsSource = optionalOwnDataProperty(
+    metadata,
+    'authorizationClassificationsByTable',
+  );
+  const schemaTableNames = createWitnessSet<string>();
+  if (schemaSource !== undefined) {
+    if (!isRecord(schemaSource)) {
+      throw new TypeError('authorization census schemaTableNames must be a Set.');
+    }
+    witnessSetForEach(schemaSource as unknown as Set<unknown>, (table) => {
+      if (typeof table !== 'string') {
+        throw new TypeError('authorization census schema table names must be strings.');
+      }
+      witnessSetAdd(schemaTableNames, table);
+    });
+  }
+  const authorizationClassificationsByTable = createWitnessMap<
+    string,
+    readonly SqliteAuthorizationClassification[]
+  >();
+  if (classificationsSource !== undefined) {
+    if (!isRecord(classificationsSource)) {
+      throw new TypeError('authorization census classifications must be a Map.');
+    }
+    witnessMapForEach(
+      classificationsSource as unknown as Map<unknown, unknown>,
+      (values, table) => {
+        if (typeof table !== 'string') {
+          throw new TypeError('authorization census classification table names must be strings.');
+        }
+        const classifications = snapshotAuthorizationClassifications(values);
+        witnessMapSet(authorizationClassificationsByTable, table, classifications);
+      },
+    );
+  }
+  const runtime: AuthorizationCensusDbOptions = {
+    dialectLabel: ownStringDataProperty(options, 'dialectLabel'),
+    metadata: witnessFreeze({ authorizationClassificationsByTable, schemaTableNames }),
+    normalizeTableName(table) {
+      const normalized = witnessReflectApply<unknown>(normalizeTableName, options, [table]);
+      if (typeof normalized !== 'string') {
+        throw new TypeError('authorization census table normalization must return a string.');
+      }
+      return normalized;
+    },
+    tableNames(table) {
+      return snapshotStringArray(
+        witnessReflectApply(tableNames, options, [table]),
+        'authorization census observed tables',
+      );
+    },
+  };
+  return witnessFreeze(runtime);
+}
+
+function snapshotAuthorizationClassifications(
+  value: unknown,
+): readonly SqliteAuthorizationClassification[] {
+  const source = snapshotStringArray(value, 'authorization census classifications');
+  const snapshot: SqliteAuthorizationClassification[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const classification = source[index]!;
+    if (
+      classification !== 'authzPolicy' &&
+      classification !== 'owned' &&
+      classification !== 'ownedVia' &&
+      classification !== 'public' &&
+      classification !== 'reference'
+    ) {
+      throw new TypeError(`unknown authorization census classification ${classification}.`);
+    }
+    appendManagedValue(snapshot, classification);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotPostgresScopedClientOptions(
+  options: PostgresScopedClientOptions,
+): PostgresScopedClientOptions {
+  const snapshot: PostgresScopedClientOptions = {};
+  const principal = optionalOwnDataProperty(options, 'principal');
+  const quoteIdentifier = optionalOwnDataProperty(options, 'quoteIdentifier');
+  const readOnly = optionalOwnDataProperty(options, 'readOnly');
+  const role = optionalOwnDataProperty(options, 'role');
+  const roleSetting = optionalOwnDataProperty(options, 'roleSetting');
+  const rlsDiagnostics = optionalOwnDataProperty(options, 'rlsDiagnostics');
+  if (principal !== undefined) {
+    if (typeof principal !== 'string') throw new TypeError('Postgres principal must be a string.');
+    snapshot.principal = principal;
+  }
+  if (quoteIdentifier !== undefined) {
+    if (typeof quoteIdentifier !== 'function') {
+      throw new TypeError('Postgres quoteIdentifier must be a function.');
+    }
+    snapshot.quoteIdentifier = (value) => {
+      const quoted = witnessReflectApply<unknown>(quoteIdentifier, options, [value]);
+      if (typeof quoted !== 'string') throw new TypeError('Postgres identifier quoting failed.');
+      return quoted;
+    };
+  }
+  if (readOnly !== undefined) {
+    if (typeof readOnly !== 'boolean') throw new TypeError('Postgres readOnly must be a boolean.');
+    snapshot.readOnly = readOnly;
+  }
+  if (role !== undefined) {
+    if (role !== false && typeof role !== 'string') {
+      throw new TypeError('Postgres role must be a string or false.');
+    }
+    snapshot.role = role;
+  }
+  if (roleSetting !== undefined) {
+    if (typeof roleSetting !== 'string')
+      throw new TypeError('Postgres roleSetting must be a string.');
+    snapshot.roleSetting = roleSetting;
+  }
+  if (rlsDiagnostics !== undefined) {
+    snapshot.rlsDiagnostics = snapshotPostgresRlsDiagnostics(rlsDiagnostics);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function postgresReadonlyScopedOptions(
+  options: PostgresReadonlyClientOptions,
+): PostgresScopedClientOptions {
+  const snapshot: PostgresScopedClientOptions = { readOnly: true };
+  const principal = optionalOwnDataProperty(options, 'principal');
+  const quoteIdentifier = optionalOwnDataProperty(options, 'quoteIdentifier');
+  const readerRole = optionalOwnDataProperty(options, 'readerRole');
+  const roleSetting = optionalOwnDataProperty(options, 'roleSetting');
+  const rlsDiagnostics = optionalOwnDataProperty(options, 'rlsDiagnostics');
+  if (principal !== undefined) {
+    if (typeof principal !== 'string') throw new TypeError('Postgres principal must be a string.');
+    snapshot.principal = principal;
+  }
+  if (quoteIdentifier !== undefined) {
+    if (typeof quoteIdentifier !== 'function') {
+      throw new TypeError('Postgres quoteIdentifier must be a function.');
+    }
+    snapshot.quoteIdentifier = (value) => {
+      const quoted = witnessReflectApply<unknown>(quoteIdentifier, options, [value]);
+      if (typeof quoted !== 'string') throw new TypeError('Postgres identifier quoting failed.');
+      return quoted;
+    };
+  }
+  if (readerRole !== undefined) {
+    if (readerRole !== false && typeof readerRole !== 'string') {
+      throw new TypeError('Postgres readerRole must be a string or false.');
+    }
+    snapshot.role = readerRole;
+  }
+  if (roleSetting !== undefined) {
+    if (typeof roleSetting !== 'string')
+      throw new TypeError('Postgres roleSetting must be a string.');
+    snapshot.roleSetting = roleSetting;
+  }
+  if (rlsDiagnostics !== undefined) {
+    if (!isRecord(rlsDiagnostics))
+      throw new TypeError('Postgres RLS diagnostics must be an object.');
+    snapshot.rlsDiagnostics = rlsDiagnostics;
+  }
+  return snapshotPostgresScopedClientOptions(snapshot);
+}
+
+function snapshotPostgresRlsDiagnostics(value: unknown): PostgresRlsSilentDenyDiagnosticsOptions {
+  if (!isRecord(value)) throw new TypeError('Postgres RLS diagnostics must be an object.');
+  const snapshot: PostgresRlsSilentDenyDiagnosticsOptions = {};
+  const enabled = optionalOwnDataProperty(value, 'enabled');
+  const privilegedClient = optionalOwnDataProperty(value, 'privilegedClient');
+  const tableName = optionalOwnDataProperty(value, 'tableName');
+  if (enabled !== undefined) {
+    if (typeof enabled !== 'boolean')
+      throw new TypeError('RLS diagnostics enabled must be boolean.');
+    snapshot.enabled = enabled;
+  }
+  if (privilegedClient !== undefined) {
+    if (!isRecord(privilegedClient)) {
+      throw new TypeError('RLS diagnostics privilegedClient must be an object.');
+    }
+    const query = optionalStrictInheritedFunctionDataProperty(privilegedClient, 'query');
+    if (query === undefined) {
+      throw new TypeError('RLS diagnostics privilegedClient requires a query method.');
+    }
+    snapshot.privilegedClient = witnessFreeze({
+      query(statement: unknown, params?: unknown[], queryOptions?: unknown) {
+        const args: unknown[] = [];
+        appendManagedValue(args, statement);
+        appendManagedValue(args, params);
+        appendManagedValue(args, queryOptions);
+        return witnessReflectApply(query, privilegedClient, args);
+      },
+    });
+  }
+  if (tableName !== undefined) {
+    if (typeof tableName !== 'string' && typeof tableName !== 'function') {
+      throw new TypeError('RLS diagnostics tableName must be a string or function.');
+    }
+    snapshot.tableName = tableName as string | ((query: unknown) => string | undefined);
+  }
+  return witnessFreeze(snapshot);
 }
 
 function snapshotSqliteAuthorizer(
@@ -588,6 +863,43 @@ function inheritedFunctionDataProperty(value: object, property: PropertyKey): Fu
   throw new TypeError(`${String(property)} function is unavailable.`);
 }
 
+function optionalInheritedFunctionDataProperty(
+  value: object,
+  property: PropertyKey,
+): Function | undefined {
+  try {
+    return inheritedFunctionDataProperty(value, property);
+  } catch {
+    return undefined;
+  }
+}
+
+function optionalStrictInheritedFunctionDataProperty(
+  value: object,
+  property: PropertyKey,
+): Function | undefined {
+  const resolved = optionalStrictInheritedDataProperty(value, property);
+  if (resolved === undefined) return undefined;
+  if (typeof resolved !== 'function') {
+    throw new TypeError(`${String(property)} must resolve to a function data property.`);
+  }
+  return resolved;
+}
+
+function optionalStrictInheritedDataProperty(value: object, property: PropertyKey): unknown {
+  let current: object | null = value;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor))
+        throw new TypeError(`${String(property)} must be a data property.`);
+      return descriptor.value;
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  return undefined;
+}
+
 function ownStringDataProperty(value: object, property: PropertyKey): string {
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);
   if (
@@ -596,6 +908,15 @@ function ownStringDataProperty(value: object, property: PropertyKey): string {
     typeof descriptor.value !== 'string'
   ) {
     throw new TypeError(`${String(property)} must be an own string data property.`);
+  }
+  return descriptor.value;
+}
+
+function optionalOwnDataProperty(value: object, property: PropertyKey): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${String(property)} must be an own data property.`);
   }
   return descriptor.value;
 }
@@ -651,7 +972,6 @@ const assertDeclaredWriteTablesAllowed = securityClassifier(
   'server.managed-db.declared-write-tables',
   function (
     tableNames: readonly string[],
-    policy: ManagedSqlWritePolicy,
     options: DeclaredWriteDbOptions,
     allowed: readonly string[],
   ): void {
@@ -661,18 +981,20 @@ const assertDeclaredWriteTablesAllowed = securityClassifier(
       'observed write tables',
     );
     for (let index = 0; index < normalized.length; index += 1) {
-      if (stringListHas(allowed, normalized[index]!)) return;
+      if (stringListHas(allowed, normalized[index]!)) continue;
+      throw declaredWriteTableDenial(tableNames[index], options);
     }
-
-    throw new Error(
-      [
-        `KV406: ${options.dialectLabel} declared-write wrapper rejected table ${tableNames[0] ?? '<unknown>'} outside the mutation registry tables (SPEC §10.3/§11.2).`,
-        `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ') || '<none>'}`,
-        `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
-      ].join('\n'),
-    );
   },
 );
+
+function declaredWriteTableDenial(
+  table: string | undefined,
+  options: DeclaredWriteDbOptions,
+): Error {
+  return new Error(
+    `KV406: ${options.dialectLabel} declared-write wrapper rejected table ${table ?? '<unknown>'} outside the mutation registry tables (SPEC §10.3/§11.2).`,
+  );
+}
 
 const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
   'server.managed-db.sqlite-declared-write-authorizer',
@@ -813,14 +1135,7 @@ const postgresRlsSilentDenyDiagnostics =
  * intentional row/column authorization posture for a read.
  */
 export function declarePublicRead(options: PublicReadDeclaration): PublicReadDeclaration {
-  const normalized = normalizedPublicReadDeclaration(options);
-  return Object.freeze({
-    ...normalized,
-    ...(normalized.columns ? { columns: Object.freeze([...normalized.columns]) } : {}),
-    ...(isPublicReadRowsScope(normalized.rows)
-      ? { rows: Object.freeze({ ...normalized.rows }) }
-      : {}),
-  });
+  return normalizedPublicReadDeclaration(options);
 }
 
 /**
@@ -859,13 +1174,13 @@ function authorizationCensusProxy(
   if (!isRecord(value)) return value;
   return new Proxy(value, {
     get(target, prop, receiver) {
-      const item = Reflect.get(target, prop, receiver);
+      const item = witnessReflectGet(target, prop, receiver);
       if (typeof item !== 'function') return item;
       if (isDeclaredWriteDrizzleMethod(prop)) {
         return (table: unknown, ...args: unknown[]) => {
           assertAuthorizationCensusTablesAllowed(options.tableNames(table), options);
           return authorizationCensusProxy(
-            Reflect.apply(item, target, [table, ...args]),
+            witnessReflectApply(item, target, prependManagedArgument(table, args)),
             options,
             undefined,
           );
@@ -873,20 +1188,20 @@ function authorizationCensusProxy(
       }
       if (prop === 'select' || prop === 'selectDistinct') {
         return (...args: unknown[]) =>
-          authorizationCensusProxy(Reflect.apply(item, target, args), options, 'select');
+          authorizationCensusProxy(witnessReflectApply(item, target, args), options, 'select');
       }
       if (builderMode === 'select' && isAuthorizationCensusReadTableMethod(prop)) {
         return (table: unknown, ...args: unknown[]) => {
           assertAuthorizationCensusTablesAllowed(options.tableNames(table), options);
           return authorizationCensusProxy(
-            Reflect.apply(item, target, [table, ...args]),
+            witnessReflectApply(item, target, prependManagedArgument(table, args)),
             options,
             builderMode,
           );
         };
       }
       return (...args: unknown[]) =>
-        authorizationCensusProxy(Reflect.apply(item, target, args), options, builderMode);
+        authorizationCensusProxy(witnessReflectApply(item, target, args), options, builderMode);
     },
   });
 }
@@ -954,15 +1269,20 @@ function authorizationCensusLookupNames(
   options: AuthorizationCensusDbOptions,
 ): string[] {
   const normalized = options.normalizeTableName(tableName);
-  const unqualified = tableName.includes('.') ? tableName.split('.').at(-1) : tableName;
-  const normalizedUnqualified =
-    unqualified === undefined ? undefined : options.normalizeTableName(unqualified);
-  return [
-    tableName,
-    normalized,
-    ...(unqualified === undefined ? [] : [unqualified]),
-    ...(normalizedUnqualified === undefined ? [] : [normalizedUnqualified]),
-  ].filter((name, index, names): name is string => name !== '' && names.indexOf(name) === index);
+  let unqualified = '';
+  for (let index = 0; index < tableName.length; index += 1) {
+    unqualified = tableName[index] === '.' ? '' : `${unqualified}${tableName[index]}`;
+  }
+  const normalizedUnqualified = options.normalizeTableName(unqualified);
+  const names: string[] = [];
+  const append = (name: string) => {
+    if (name !== '' && !stringListHas(names, name)) appendManagedValue(names, name);
+  };
+  append(tableName);
+  append(normalized);
+  append(unqualified);
+  append(normalizedUnqualified);
+  return names;
 }
 
 function declaredWriteBuilder(
@@ -974,7 +1294,7 @@ function declaredWriteBuilder(
   if (!isRecord(builder)) return builder;
   return new Proxy(builder, {
     get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
+      const value = witnessReflectGet(target, prop, receiver);
       if (typeof value !== 'function') return value;
       if (prop === 'values') {
         return (payload: unknown, ...args: unknown[]) => {
@@ -985,7 +1305,7 @@ function declaredWriteBuilder(
             verb,
           });
           return wrapDeclaredWriteBuilderResult(
-            Reflect.apply(value, target, [payload, ...args]),
+            witnessReflectApply(value, target, prependManagedArgument(payload, args)),
             verb,
             tableNames,
             options,
@@ -1001,7 +1321,7 @@ function declaredWriteBuilder(
             verb,
           });
           return wrapDeclaredWriteBuilderResult(
-            Reflect.apply(value, target, [payload, ...args]),
+            witnessReflectApply(value, target, prependManagedArgument(payload, args)),
             verb,
             tableNames,
             options,
@@ -1019,7 +1339,7 @@ function declaredWriteBuilder(
             });
           }
           return wrapDeclaredWriteBuilderResult(
-            Reflect.apply(value, target, [config, ...args]),
+            witnessReflectApply(value, target, prependManagedArgument(config, args)),
             verb,
             tableNames,
             options,
@@ -1028,7 +1348,7 @@ function declaredWriteBuilder(
       }
       return (...args: unknown[]) =>
         wrapDeclaredWriteBuilderResult(
-          Reflect.apply(value, target, args),
+          witnessReflectApply(value, target, args),
           verb,
           tableNames,
           options,
@@ -1152,16 +1472,26 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
   if (snapshot.ok) {
     return {
       params: snapshot.statement.values,
-      text: sqlTextFromValue(value) ?? snapshot.statement.text,
+      text: snapshot.statement.text,
     };
   }
   if (snapshot.message !== undefined) throw new Error(snapshot.message);
-  const toSQL = (value as { toSQL?: unknown }).toSQL;
+  const toSQL =
+    typeof value === 'object' && value !== null
+      ? optionalInheritedFunctionDataProperty(value, 'toSQL')
+      : undefined;
   if (typeof toSQL === 'function') {
     try {
-      const result = toSQL.call(value) as { params?: unknown; sql?: unknown };
-      if (typeof result?.sql === 'string') {
-        return { params: Array.isArray(result.params) ? result.params : params, text: result.sql };
+      const result = witnessReflectApply<unknown>(toSQL, value, []);
+      if (isRecord(result)) {
+        const sql = optionalOwnDataProperty(result, 'sql');
+        const resultParams = optionalOwnDataProperty(result, 'params');
+        if (typeof sql === 'string') {
+          return {
+            params: witnessIsArray(resultParams) ? snapshotUnknownArray(resultParams) : params,
+            text: sql,
+          };
+        }
       }
     } catch {
       return undefined;
@@ -1174,49 +1504,80 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
 function sqlTextFromValue(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
   if (value === null || typeof value !== 'object') return undefined;
-  const sql = (value as { sql?: unknown }).sql;
+  const sql = optionalStrictInheritedDataProperty(value, 'sql');
   if (typeof sql === 'string') return sql;
-  const chunks = (value as { queryChunks?: unknown }).queryChunks;
-  if (!Array.isArray(chunks)) return undefined;
+  const chunks = optionalStrictInheritedDataProperty(value, 'queryChunks');
+  if (!witnessIsArray(chunks)) return undefined;
   const text = sqlTextFromChunks(chunks);
   return text || undefined;
 }
 
 function sqlTextFromChunks(chunks: readonly unknown[]): string {
-  return chunks.map(sqlTextFromChunk).join('');
+  let text = '';
+  for (let index = 0; index < chunks.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(chunks, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('SQL chunks must be dense own data properties.');
+    }
+    text += sqlTextFromChunk(descriptor.value);
+  }
+  return text;
 }
 
 function sqlTextFromChunk(chunk: unknown): string {
   if (chunk === undefined) return '';
   if (typeof chunk === 'string') return chunk;
-  if (Array.isArray(chunk)) return `(${chunk.map(sqlTextFromChunk).join(', ')})`;
+  if (witnessIsArray(chunk)) {
+    let text = '(';
+    for (let index = 0; index < chunk.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(chunk, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('nested SQL chunks must be dense own data properties.');
+      }
+      if (index > 0) text += ', ';
+      text += sqlTextFromChunk(descriptor.value);
+    }
+    return `${text})`;
+  }
   if (!isRecord(chunk)) return '';
 
-  const stringChunkValue = chunk.value;
-  if (Array.isArray(stringChunkValue)) {
-    return stringChunkValue.filter((item): item is string => typeof item === 'string').join('');
+  const stringChunkValue = optionalStrictInheritedDataProperty(chunk, 'value');
+  if (witnessIsArray(stringChunkValue)) {
+    let text = '';
+    for (let index = 0; index < stringChunkValue.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(stringChunkValue, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('SQL string chunks must be dense own data properties.');
+      }
+      if (typeof descriptor.value === 'string') text += descriptor.value;
+    }
+    return text;
   }
   if (typeof stringChunkValue === 'string') return quoteSqlIdentifier(stringChunkValue);
 
   const table = drizzleTableIdentifier(chunk);
   if (table !== undefined) return table;
 
-  const nestedChunks = chunk.queryChunks;
-  if (Array.isArray(nestedChunks)) return sqlTextFromChunks(nestedChunks);
+  const nestedChunks = optionalStrictInheritedDataProperty(chunk, 'queryChunks');
+  if (witnessIsArray(nestedChunks)) return sqlTextFromChunks(nestedChunks);
 
-  const columnName = chunk.name;
+  const columnName = optionalStrictInheritedDataProperty(chunk, 'name');
   if (typeof columnName !== 'string') return '';
-  const tableName = drizzleTableIdentifier(chunk.table);
+  const tableName = drizzleTableIdentifier(optionalStrictInheritedDataProperty(chunk, 'table'));
   return tableName === undefined
     ? quoteSqlIdentifier(columnName)
     : `${tableName}.${quoteSqlIdentifier(columnName)}`;
 }
 
 function drizzleTableIdentifier(value: unknown): string | undefined {
-  if (!isRecord(value) || !(DRIZZLE_IS_TABLE_SYMBOL in value)) return undefined;
-  const name = value[DRIZZLE_NAME_SYMBOL];
+  if (
+    !isRecord(value) ||
+    optionalStrictInheritedDataProperty(value, DRIZZLE_IS_TABLE_SYMBOL) !== true
+  )
+    return undefined;
+  const name = optionalStrictInheritedDataProperty(value, DRIZZLE_NAME_SYMBOL);
   if (typeof name !== 'string' || name === '') return undefined;
-  const schema = value[DRIZZLE_SCHEMA_SYMBOL];
+  const schema = optionalStrictInheritedDataProperty(value, DRIZZLE_SCHEMA_SYMBOL);
   return typeof schema === 'string' && schema !== ''
     ? `${quoteSqlIdentifier(schema)}.${quoteSqlIdentifier(name)}`
     : quoteSqlIdentifier(name);
@@ -1281,21 +1642,37 @@ function scopedPostgresTransaction(
   options: PostgresScopedClientOptions,
   receiver: unknown,
 ): unknown {
-  const value = Reflect.get(target, 'transaction', receiver);
+  const value = witnessReflectGet(target, 'transaction', receiver);
   if (typeof value !== 'function') return value;
   return <Result>(callback: (tx: unknown) => Promise<Result> | Result, ...args: unknown[]) => {
-    if (typeof callback !== 'function') return value.call(target, callback, ...args);
-    return value.call(
+    if (typeof callback !== 'function') {
+      throw new KovoReadonlyHandleError(
+        'KV414: Postgres scoped transactions require a callback so the framework can establish the request role frame (SPEC §10.3).',
+      );
+    }
+    const scopedCallback = (tx: unknown): Promise<Result> | Result => {
+      if (!isPostgresTransactionClient(tx)) {
+        return witnessReflectApply(callback, undefined, [tx]) as Result;
+      }
+      return runScopedPostgresTransactionCallback(tx, options, callback);
+    };
+    return witnessReflectApply(
+      value,
       target,
-      (tx: unknown) => {
-        if (!isPostgresTransactionClient(tx)) return callback(tx);
-        return Promise.resolve(runPostgresTransactionControl(tx, options)).then(() =>
-          callback(scopedPostgresTransactionClient(tx, options)),
-        );
-      },
-      ...args,
+      prependManagedArgument(scopedCallback, args),
     ) as Result;
   };
+}
+
+async function runScopedPostgresTransactionCallback<Result>(
+  tx: PostgresTransactionClient,
+  options: PostgresScopedClientOptions,
+  callback: (tx: unknown) => Promise<Result> | Result,
+): Promise<Result> {
+  await runPostgresTransactionControl(tx, options);
+  return witnessReflectApply(callback, undefined, [
+    scopedPostgresTransactionClient(tx, options),
+  ]) as Result;
 }
 
 function scopedPostgresTransactionClient(
@@ -1308,23 +1685,25 @@ function scopedPostgresTransactionClient(
         return (query: unknown, params?: unknown[], queryOptions?: unknown) => {
           const snapshot = postgresQuerySnapshot(query, params);
           assertAppPostgresTextAllowed(snapshot.text);
-          const queryMethod = Reflect.get(target, 'query', receiver);
+          const queryMethod = witnessReflectGet(target, 'query', receiver);
           if (typeof queryMethod !== 'function') {
             throw new KovoReadonlyHandleError(
               'KV433: Postgres scoped transaction client requires a callable query method (SPEC §10.3/§11.2).',
             );
           }
-          return Reflect.apply(
+          return witnessReflectApply(
             queryMethod,
             target,
             postgresQueryExecutionArgs(snapshot, queryOptions),
           );
         };
       }
-      if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
+      if (prop === 'exec') return (query: string) => scopedPostgresExec(options, query);
       if (prop === 'transaction') return scopedPostgresTransaction(target, options, receiver);
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+      const value = witnessReflectGet(target, prop, receiver);
+      return typeof value === 'function'
+        ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+        : value;
     },
   }) as PostgresTransactionClient;
 }
@@ -1338,18 +1717,30 @@ function scopedPostgresQuery(
 ): Promise<unknown> {
   const snapshot = postgresQuerySnapshot(query, params);
   assertAppPostgresTextAllowed(snapshot.text);
-  return postgresTransaction(client, async (tx) => {
+  return executeScopedPostgresQuery(client, options, snapshot, queryOptions);
+}
+
+async function executeScopedPostgresQuery(
+  client: Record<PropertyKey, unknown>,
+  options: PostgresScopedClientOptions,
+  snapshot: PostgresQuerySnapshot,
+  queryOptions: unknown,
+): Promise<unknown> {
+  const result = await postgresTransaction(client, async (tx) => {
     await runPostgresTransactionControl(tx, options);
-    const queryMethod = tx.query.bind(tx);
+    const queryMethod = inheritedFunctionDataProperty(tx, 'query');
     try {
-      return (await queryMethod(...postgresQueryExecutionArgs(snapshot, queryOptions))) as unknown;
+      return await witnessReflectApply<Promise<unknown>>(
+        queryMethod,
+        tx,
+        postgresQueryExecutionArgs(snapshot, queryOptions),
+      );
     } catch (error) {
       throw translatedPostgresWriteDenial(error, snapshot);
     }
-  }).then(async (result) => {
-    await maybeReportPostgresRlsSilentDeny(options, snapshot.diagnosticQuery ?? snapshot, result);
-    return result;
   });
+  await maybeReportPostgresRlsSilentDeny(options, snapshot.diagnosticQuery ?? snapshot, result);
+  return result;
 }
 
 function translatedPostgresWriteDenial(error: unknown, query: unknown): unknown {
@@ -1388,7 +1779,7 @@ function postgresQuerySnapshot(
   query: unknown,
   params: readonly unknown[] | undefined,
 ): PostgresQuerySnapshot {
-  if (typeof query === 'string') return { text: query, values: params ?? [] };
+  if (typeof query === 'string') return { text: query, values: snapshotUnknownArray(params ?? []) };
   const config = plainPostgresQueryConfigSnapshot(query, params);
   if (config !== undefined) return config;
   const snapshot = snapshotManagedSqlStatement(query, 'postgres');
@@ -1416,20 +1807,20 @@ function plainPostgresQueryConfigSnapshot(
   if (typeof text !== 'string') return undefined;
   assertPlainPostgresQueryConfigSafe(query);
   const values = dataPropertyValue(query, 'values');
-  const snapshot = Object.freeze({
+  const snapshot = witnessFreeze({
     text,
-    values: Object.freeze(Array.isArray(values) ? [...values] : [...(params ?? [])]),
+    values: snapshotUnknownArray(witnessIsArray(values) ? values : (params ?? [])),
   });
   return {
-    diagnosticQuery: query,
+    diagnosticQuery: snapshotPostgresQueryConfig(query, snapshot.text, snapshot.values),
     ...snapshot,
   };
 }
 
 function assertPlainPostgresQueryConfigSafe(query: Record<PropertyKey, unknown>): void {
-  for (const property of ['submit', 'then'] as const) {
-    const descriptor = Object.getOwnPropertyDescriptor(query, property);
-    if (descriptor === undefined) continue;
+  const assertSafe = (property: 'submit' | 'then') => {
+    const descriptor = witnessGetOwnPropertyDescriptor(query, property);
+    if (descriptor === undefined) return;
     if ('get' in descriptor && descriptor.get !== undefined) {
       throw new KovoReadonlyHandleError(
         `KV414: Postgres scoped managed clients reject ${property}-bearing SQL carriers before snapshotting driver surface (SPEC §10.3).`,
@@ -1440,7 +1831,56 @@ function assertPlainPostgresQueryConfigSafe(query: Record<PropertyKey, unknown>)
         `KV414: Postgres scoped managed clients reject ${property}-bearing SQL carriers before snapshotting driver surface (SPEC §10.3).`,
       );
     }
+  };
+  assertSafe('submit');
+  assertSafe('then');
+}
+
+function snapshotUnknownArray(values: readonly unknown[]): readonly unknown[] {
+  const snapshot: unknown[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new KovoReadonlyHandleError(
+        'KV414: Postgres query values must be dense own data properties (SPEC §10.3).',
+      );
+    }
+    appendManagedValue(snapshot, descriptor.value);
   }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotPostgresQueryConfig(
+  query: Record<PropertyKey, unknown>,
+  text: string,
+  values: readonly unknown[],
+): Readonly<Record<PropertyKey, unknown>> {
+  const snapshot = witnessCreateNullRecord<unknown>() as Record<PropertyKey, unknown>;
+  let hasText = false;
+  let hasValues = false;
+  const keys = witnessOwnKeys(query);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (key === 'submit' || key === 'then' || key === 'sql') continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(query, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new KovoReadonlyHandleError(
+        'KV414: Postgres query configs must contain only own data properties (SPEC §10.3).',
+      );
+    }
+    const value = key === 'text' ? text : key === 'values' ? values : descriptor.value;
+    if (key === 'text') hasText = true;
+    if (key === 'values') hasValues = true;
+    witnessDefineProperty(snapshot, key, {
+      configurable: false,
+      enumerable: descriptor.enumerable === true,
+      value,
+      writable: false,
+    });
+  }
+  if (!hasText) witnessDefineProperty(snapshot, 'text', { enumerable: true, value: text });
+  if (!hasValues) witnessDefineProperty(snapshot, 'values', { enumerable: true, value: values });
+  return witnessFreeze(snapshot);
 }
 
 function postgresQueryExecutionArgs(
@@ -1448,24 +1888,16 @@ function postgresQueryExecutionArgs(
   queryOptions: unknown,
 ): [unknown, unknown[] | undefined, unknown] {
   if (isRecord(snapshot.diagnosticQuery)) {
-    return [
-      {
-        ...snapshot.diagnosticQuery,
-        text: snapshot.text,
-        values: [...snapshot.values],
-      },
-      undefined,
-      queryOptions,
-    ];
+    return [snapshot.diagnosticQuery, undefined, queryOptions];
   }
-  return [snapshot.text, [...snapshot.values], queryOptions];
+  return [snapshot.text, snapshotUnknownArray(snapshot.values) as unknown[], queryOptions];
 }
 
 function dataPropertyValue(
   record: Record<PropertyKey, unknown>,
   property: 'sql' | 'text' | 'values',
 ): unknown {
-  const descriptor = Object.getOwnPropertyDescriptor(record, property);
+  const descriptor = witnessGetOwnPropertyDescriptor(record, property);
   if (descriptor === undefined || !('value' in descriptor)) return undefined;
   return descriptor.value;
 }
@@ -1582,7 +2014,10 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
   if (statementCount !== 1) return { ok: false, reason: 'expected exactly one SQL statement' };
   const command = firstAsciiSqlWord(cleaned);
   if (command !== undefined && stringListHas(APP_POSTGRES_TRANSACTION_COMMANDS, command)) {
-    return appPostgresTransactionControlShape(cleaned, command);
+    return {
+      ok: false,
+      reason: 'app SQL cannot control the framework transaction frame',
+    };
   }
   if (command === undefined || !stringListHas(APP_POSTGRES_ALLOWED_COMMANDS, command)) {
     return { ok: false, reason: 'statement command is not in the app SQL allowlist' };
@@ -1614,27 +2049,6 @@ function scanSqlDoubleQuotedIdentifier(
     identifier += char;
   }
   return undefined;
-}
-
-function appPostgresTransactionControlShape(
-  cleaned: string,
-  command: string,
-): AppPostgresStatementShape {
-  const tokens = sqlControlTokens(cleaned);
-  if (tokens === undefined || tokens[0] !== command) {
-    return { ok: false, reason: 'unsupported transaction control statement' };
-  }
-  const tail = tokens.length - 1;
-  if (
-    ((command === 'begin' || command === 'commit') &&
-      (tail === 0 || (tail === 1 && (tokens[1] === 'work' || tokens[1] === 'transaction')))) ||
-    (command === 'savepoint' && tail === 1) ||
-    (command === 'release' && (tail === 1 || (tail === 2 && tokens[1] === 'savepoint'))) ||
-    (command === 'rollback' && rollbackControlTokensAreAllowed(tokens))
-  ) {
-    return { command, ok: true };
-  }
-  return { ok: false, reason: 'unsupported transaction control statement' };
 }
 
 function postgresDollarQuoteTag(sql: string, start: number): string | undefined {
@@ -1700,35 +2114,6 @@ function sqlContainsFunctionCall(sql: string, expected: string): boolean {
   return false;
 }
 
-function sqlControlTokens(sql: string): string[] | undefined {
-  const tokens: string[] = [];
-  let index = 0;
-  while (index < sql.length) {
-    if (isSqlWhitespace(sql[index]!)) {
-      index += 1;
-      continue;
-    }
-    if (!isAsciiIdentifierStart(sql[index]!)) return undefined;
-    let token = '';
-    while (index < sql.length && isAsciiIdentifierContinue(sql[index]!)) {
-      token += asciiLowerCharacter(sql[index]!);
-      index += 1;
-    }
-    appendManagedValue(tokens, token);
-  }
-  return tokens;
-}
-
-function rollbackControlTokensAreAllowed(tokens: readonly string[]): boolean {
-  let index = 1;
-  if (tokens[index] === 'work' || tokens[index] === 'transaction') index += 1;
-  if (index === tokens.length) return true;
-  if (tokens[index] !== 'to') return false;
-  index += 1;
-  if (tokens[index] === 'savepoint') index += 1;
-  return index + 1 === tokens.length;
-}
-
 function stringListHas(values: readonly string[], expected: string): boolean {
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === expected) return true;
@@ -1749,6 +2134,17 @@ function snapshotStringArray(value: unknown, label: string): readonly string[] {
       throw new TypeError(`${label}[${index}] must be an own string data property.`);
     }
     appendManagedValue(snapshot, descriptor.value);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotTrimmedStringArray(value: unknown, label: string): readonly string[] {
+  const source = snapshotStringArray(value, label);
+  const snapshot: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const trimmed = trimFrameworkString(source[index]!);
+    if (trimmed === '') throw new TypeError(`${label}[${index}] must not be empty.`);
+    if (!stringListHas(snapshot, trimmed)) appendManagedValue(snapshot, trimmed);
   }
   return witnessFreeze(snapshot);
 }
@@ -1796,6 +2192,35 @@ function asciiLower(value: string): string {
     result += asciiLowerCharacter(value[index]!);
   }
   return result;
+}
+
+function trimFrameworkString(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && isFrameworkWhitespace(value[start]!)) start += 1;
+  while (end > start && isFrameworkWhitespace(value[end - 1]!)) end -= 1;
+  let trimmed = '';
+  for (let index = start; index < end; index += 1) trimmed += value[index];
+  return trimmed;
+}
+
+function stringRange(value: string, start: number, end: number): string {
+  let result = '';
+  for (let index = start; index < end; index += 1) result += value[index];
+  return result;
+}
+
+function isFrameworkWhitespace(value: string): boolean {
+  return (
+    isSqlWhitespace(value) ||
+    value === '\u1680' ||
+    (value >= '\u2000' && value <= '\u200a') ||
+    value === '\u2028' ||
+    value === '\u2029' ||
+    value === '\u202f' ||
+    value === '\u205f' ||
+    value === '\u3000'
+  );
 }
 
 function intrinsicStringIncludes(value: string, search: string): boolean {
@@ -1872,40 +2297,52 @@ function postgresTransaction<Result>(
   client: Record<PropertyKey, unknown>,
   callback: (tx: PostgresTransactionClient) => Promise<Result>,
 ): Promise<Result> {
-  const transaction = client.transaction;
-  if (typeof transaction !== 'function') {
+  let transaction: Function;
+  try {
+    transaction = inheritedFunctionDataProperty(client, 'transaction');
+  } catch {
     throw new KovoReadonlyHandleError(
       'KV433: Postgres read-only client requires a transaction-capable driver handle (SPEC §10.3/§11.2).',
     );
   }
-  return Reflect.apply(transaction, client, [callback]) as Promise<Result>;
+  return witnessReflectApply(transaction, client, [callback]) as Promise<Result>;
 }
 
 async function runPostgresTransactionControl(
   tx: PostgresTransactionClient,
   options: PostgresScopedClientOptions,
 ): Promise<void> {
-  const exec = tx.exec.bind(tx);
-  const query = tx.query.bind(tx);
-  if (options.readOnly === true) await (exec('SET TRANSACTION READ ONLY') as Promise<unknown>);
+  const exec = inheritedFunctionDataProperty(tx, 'exec');
+  const query = inheritedFunctionDataProperty(tx, 'query');
+  if (options.readOnly === true) {
+    await witnessReflectApply<Promise<unknown>>(exec, tx, ['SET TRANSACTION READ ONLY']);
+  }
   if (options.principal !== undefined) {
-    await (query("SELECT set_config('kovo.principal', $1, true)", [
-      options.principal,
-    ]) as Promise<unknown>);
+    await witnessReflectApply<Promise<unknown>>(query, tx, [
+      "SELECT set_config('kovo.principal', $1, true)",
+      [options.principal],
+    ]);
   }
   if (options.roleSetting !== undefined) {
-    await (query("SELECT set_config('kovo.role', $1, true)", [
-      options.roleSetting,
-    ]) as Promise<unknown>);
+    await witnessReflectApply<Promise<unknown>>(query, tx, [
+      "SELECT set_config('kovo.role', $1, true)",
+      [options.roleSetting],
+    ]);
   }
   if (options.role !== false && options.role !== undefined) {
     const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
-    await (exec(`SET LOCAL ROLE ${quote(options.role)}`) as Promise<unknown>);
+    await witnessReflectApply<Promise<unknown>>(exec, tx, [
+      `SET LOCAL ROLE ${quote(options.role)}`,
+    ]);
   }
 }
 
 function quoteSqlIdentifier(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
+  let quoted = '"';
+  for (let index = 0; index < value.length; index += 1) {
+    quoted += value[index] === '"' ? '""' : value[index];
+  }
+  return `${quoted}"`;
 }
 
 async function maybeReportPostgresRlsSilentDeny(
@@ -1991,36 +2428,137 @@ function resolvePostgresRlsDiagnosticTable(
 }
 
 function simpleSingleTableSelectName(query: string): string | undefined {
-  const normalized = query.trim().replace(/;+\s*$/, '');
-  const match =
-    /^select\b[\s\S]*?\bfrom\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)(?:\s+(?:as\s+)?(?:"[^"]+"|[A-Za-z_][\w$]*))?(?:\s+where\b|\s+group\s+by\b|\s+having\b|\s+order\s+by\b|\s+limit\b|\s+offset\b|\s+fetch\b|\s+for\b|\s*$)/iu.exec(
-      normalized,
-    );
+  let normalized = trimFrameworkString(query);
+  let end = normalized.length;
+  while (end > 0 && normalized[end - 1] === ';') {
+    end -= 1;
+    while (end > 0 && isFrameworkWhitespace(normalized[end - 1]!)) end -= 1;
+  }
+  normalized = stringRange(normalized, 0, end);
+  const match = witnessRegExpExec(
+    /^select\b[\s\S]*?\bfrom\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)(?:\s+(?:as\s+)?(?:"[^"]+"|[A-Za-z_][\w$]*))?(?:\s+where\b|\s+group\s+by\b|\s+having\b|\s+order\s+by\b|\s+limit\b|\s+offset\b|\s+fetch\b|\s+for\b|\s*$)/iu,
+    normalized,
+  );
   if (!match) return undefined;
-  const table = match[1]?.replace(/\s*\.\s*/g, '.');
-  if (table === undefined) return undefined;
-  if (/\b(join|,)\b/iu.test(normalized.slice(match.index + match[0].length))) return undefined;
-  return unquoteQualifiedSqlIdentifier(table);
+  const tableDescriptor = witnessGetOwnPropertyDescriptor(match, 1);
+  if (
+    tableDescriptor === undefined ||
+    !('value' in tableDescriptor) ||
+    typeof tableDescriptor.value !== 'string' ||
+    simpleSelectHasMultipleSources(normalized)
+  ) {
+    return undefined;
+  }
+  return unquoteQualifiedSqlIdentifier(tableDescriptor.value);
 }
 
-function unquoteQualifiedSqlIdentifier(value: string): string {
-  return value
-    .split('.')
-    .map((part) => {
-      const trimmed = part.trim();
-      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-        return trimmed.slice(1, -1).replaceAll('""', '"');
+function simpleSelectHasMultipleSources(sql: string): boolean {
+  let sawFrom = false;
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql[index]!;
+    if (char === "'" || char === '"') {
+      const quote = char;
+      for (index += 1; index < sql.length; index += 1) {
+        if (sql[index] !== quote) continue;
+        if (sql[index + 1] === quote) {
+          index += 1;
+          continue;
+        }
+        break;
       }
-      return trimmed;
-    })
-    .join('.');
+      continue;
+    }
+    if (char === '-' && sql[index + 1] === '-') {
+      while (index < sql.length && sql[index] !== '\n' && sql[index] !== '\r') index += 1;
+      continue;
+    }
+    if (char === '/' && sql[index + 1] === '*') {
+      index += 2;
+      while (index < sql.length && !(sql[index] === '*' && sql[index + 1] === '/')) index += 1;
+      index += 1;
+      continue;
+    }
+    if (sawFrom && (char === ',' || char === ';')) return true;
+    if (!isAsciiIdentifierStart(char)) continue;
+    let word = '';
+    while (index < sql.length && isAsciiIdentifierContinue(sql[index]!)) {
+      word += asciiLowerCharacter(sql[index]!);
+      index += 1;
+    }
+    index -= 1;
+    if (word === 'from') {
+      if (sawFrom) return true;
+      sawFrom = true;
+    } else if (word === 'join' || word === 'union' || word === 'intersect' || word === 'except') {
+      return true;
+    }
+  }
+  return !sawFrom;
+}
+
+function unquoteQualifiedSqlIdentifier(value: string): string | undefined {
+  const parts = qualifiedSqlIdentifierParts(value);
+  if (parts === undefined) return undefined;
+  let normalized = '';
+  for (let index = 0; index < parts.length; index += 1) {
+    if (index > 0) normalized += '.';
+    normalized += parts[index];
+  }
+  return normalized;
 }
 
 function quoteQualifiedSqlIdentifier(value: string, quote: (identifier: string) => string): string {
-  return value
-    .split('.')
-    .map((part) => quote(part))
-    .join('.');
+  const parts = qualifiedSqlIdentifierParts(value);
+  if (parts === undefined) throw new TypeError('Postgres diagnostic table name is invalid.');
+  let quoted = '';
+  for (let index = 0; index < parts.length; index += 1) {
+    if (index > 0) quoted += '.';
+    quoted += quote(parts[index]!);
+  }
+  return quoted;
+}
+
+function qualifiedSqlIdentifierParts(value: string): readonly string[] | undefined {
+  const parts: string[] = [];
+  let index = 0;
+  while (index < value.length) {
+    while (index < value.length && isFrameworkWhitespace(value[index]!)) index += 1;
+    let part = '';
+    if (value[index] === '"') {
+      index += 1;
+      let closed = false;
+      while (index < value.length) {
+        if (value[index] === '"') {
+          if (value[index + 1] === '"') {
+            part += '"';
+            index += 2;
+            continue;
+          }
+          index += 1;
+          closed = true;
+          break;
+        }
+        if (value[index] === '.') return undefined;
+        part += value[index];
+        index += 1;
+      }
+      if (!closed) return undefined;
+    } else {
+      if (!isAsciiIdentifierStart(value[index] ?? '')) return undefined;
+      while (index < value.length && isAsciiIdentifierContinue(value[index]!)) {
+        part += value[index];
+        index += 1;
+      }
+    }
+    if (part === '') return undefined;
+    appendManagedValue(parts, part);
+    while (index < value.length && isFrameworkWhitespace(value[index]!)) index += 1;
+    if (index === value.length) break;
+    if (value[index] !== '.' || parts.length >= 2) return undefined;
+    index += 1;
+    if (index === value.length) return undefined;
+  }
+  return witnessFreeze(parts);
 }
 
 /** The mode a managed handle is resolved in: a read-only loader handle, or a read-write handle. */
@@ -2064,10 +2602,15 @@ function snapshotReadonlyCapabilityOptions(options: {
     crossOwnerRead?: CrossOwnerReadPolicyOptions;
     rawRead?: RawReadPolicyOptions;
   } = {};
-  if (options.crossOwnerRead !== undefined) {
-    snapshot.crossOwnerRead = snapshotCrossOwnerReadPolicy(options.crossOwnerRead);
+  const crossOwnerRead = optionalOwnDataProperty(options, 'crossOwnerRead');
+  const rawRead = optionalOwnDataProperty(options, 'rawRead');
+  if (crossOwnerRead !== undefined) {
+    snapshot.crossOwnerRead = snapshotCrossOwnerReadPolicy(
+      crossOwnerRead as CrossOwnerReadPolicyOptions,
+    );
   }
-  if (options.rawRead !== undefined) snapshot.rawRead = snapshotRawReadPolicy(options.rawRead);
+  if (rawRead !== undefined)
+    snapshot.rawRead = snapshotRawReadPolicy(rawRead as RawReadPolicyOptions);
   return witnessFreeze(snapshot);
 }
 
@@ -2081,15 +2624,33 @@ function snapshotRawReadPolicy(policy: RawReadPolicyOptions): RawReadPolicyOptio
       return value;
     },
   };
-  if (policy.ownerTables !== undefined) {
-    snapshot.ownerTables = snapshotStringArray(policy.ownerTables, 'rawRead owner tables');
+  const ownerTables = optionalOwnDataProperty(policy, 'ownerTables');
+  const sqliteAuthorizer = optionalOwnDataProperty(policy, 'sqliteAuthorizer');
+  const executeMethod = optionalOwnDataProperty(policy, 'executeMethod');
+  const executeSql = optionalOwnDataProperty(policy, 'executeSql');
+  if (ownerTables !== undefined) {
+    snapshot.ownerTables = snapshotStringArray(ownerTables, 'rawRead owner tables');
   }
-  if (policy.sqliteAuthorizer !== undefined) {
-    snapshot.sqliteAuthorizer = snapshotSqliteAuthorizer(policy.sqliteAuthorizer);
+  if (sqliteAuthorizer !== undefined) {
+    snapshot.sqliteAuthorizer = snapshotSqliteAuthorizer(
+      sqliteAuthorizer as DeclaredWriteSqliteAuthorizerOptions,
+    );
   }
-  if (policy.executeMethod !== undefined) snapshot.executeMethod = policy.executeMethod;
-  if (policy.executeSql !== undefined) {
-    const execute = policy.executeSql;
+  if (executeMethod !== undefined) {
+    if (
+      executeMethod !== 'all' &&
+      executeMethod !== 'execute' &&
+      executeMethod !== 'query' &&
+      executeMethod !== 'values'
+    ) {
+      throw new TypeError('rawRead executeMethod is invalid.');
+    }
+    snapshot.executeMethod = executeMethod;
+  }
+  if (executeSql !== undefined) {
+    if (typeof executeSql !== 'function')
+      throw new TypeError('rawRead executeSql must be a function.');
+    const execute = executeSql;
     snapshot.executeSql = (statement) => witnessReflectApply(execute, policy, [statement]);
   }
   return witnessFreeze(snapshot);
@@ -2108,19 +2669,49 @@ function snapshotCrossOwnerReadPolicy(
       }
       return value;
     },
-    ownerTables: snapshotStringArray(policy.ownerTables, 'crossOwnerRead owner tables'),
+    ownerTables: snapshotStringArray(
+      optionalOwnDataProperty(policy, 'ownerTables'),
+      'crossOwnerRead owner tables',
+    ),
   };
-  if (policy.adminClient !== undefined) snapshot.adminClient = policy.adminClient;
-  if (policy.executeMethod !== undefined) snapshot.executeMethod = policy.executeMethod;
-  if (policy.executeSql !== undefined) {
-    const execute = policy.executeSql;
+  const adminClient = optionalOwnDataProperty(policy, 'adminClient');
+  const executeMethod = optionalOwnDataProperty(policy, 'executeMethod');
+  const executeSql = optionalOwnDataProperty(policy, 'executeSql');
+  const hasRole = optionalOwnDataProperty(policy, 'hasRole');
+  const principal = optionalOwnDataProperty(policy, 'principal');
+  if (adminClient !== undefined) {
+    if (!isRecord(adminClient))
+      throw new TypeError('crossOwnerRead adminClient must be an object.');
+    snapshot.adminClient = adminClient;
+  }
+  if (executeMethod !== undefined) {
+    if (
+      executeMethod !== 'all' &&
+      executeMethod !== 'execute' &&
+      executeMethod !== 'query' &&
+      executeMethod !== 'values'
+    ) {
+      throw new TypeError('crossOwnerRead executeMethod is invalid.');
+    }
+    snapshot.executeMethod = executeMethod;
+  }
+  if (executeSql !== undefined) {
+    if (typeof executeSql !== 'function') {
+      throw new TypeError('crossOwnerRead executeSql must be a function.');
+    }
+    const execute = executeSql;
     snapshot.executeSql = (statement) => witnessReflectApply(execute, policy, [statement]);
   }
-  if (policy.hasRole !== undefined) {
-    const hasRole = policy.hasRole;
+  if (hasRole !== undefined) {
+    if (typeof hasRole !== 'function')
+      throw new TypeError('crossOwnerRead hasRole must be a function.');
     snapshot.hasRole = (role) => witnessReflectApply(hasRole, policy, [role]);
   }
-  if (policy.principal !== undefined) snapshot.principal = policy.principal;
+  if (principal !== undefined) {
+    if (typeof principal !== 'string')
+      throw new TypeError('crossOwnerRead principal must be a string.');
+    snapshot.principal = principal;
+  }
   return witnessFreeze(snapshot);
 }
 
@@ -2133,17 +2724,19 @@ function readonlyCapabilityDb<Db extends object>(
     get(target, prop, receiver) {
       const reject = readonlyCapabilityError;
       if (prop === 'then') return undefined;
-      if (typeof prop !== 'string') return Reflect.get(target, prop, receiver);
+      if (typeof prop !== 'string') return witnessReflectGet(target, prop, receiver);
       if (stringListHas(DENIED_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
       if (!stringListHas(READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
       if (prop === 'crossOwnerRead')
         return readonlyCrossOwnerRead(target, receiver, options, preserveInnerCapabilities);
       if (prop === 'rawRead')
         return readonlyRawRead(target, receiver, options, preserveInnerCapabilities);
-      const value = Reflect.get(target, prop, receiver);
+      const value = witnessReflectGet(target, prop, receiver);
       if (prop === 'query') return typeof value === 'function' ? reject(prop) : value;
       if (!stringListHas(CALLABLE_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
-      return typeof value === 'function' ? value.bind(target) : value;
+      return typeof value === 'function'
+        ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+        : value;
     },
   }) as Reader<Db>;
 }
@@ -2163,8 +2756,10 @@ function readonlyCrossOwnerRead(
   preserveInnerCapabilities: boolean,
 ): unknown {
   if (options.crossOwnerRead === undefined && preserveInnerCapabilities) {
-    const value = Reflect.get(target, 'crossOwnerRead', receiver);
-    if (typeof value === 'function') return value.bind(target);
+    const value = witnessReflectGet(target, 'crossOwnerRead', receiver);
+    if (typeof value === 'function') {
+      return (...args: unknown[]) => witnessReflectApply(value, target, args);
+    }
   }
   return crossOwnerReadCapability(options.crossOwnerRead);
 }
@@ -2176,8 +2771,10 @@ function readonlyRawRead(
   preserveInnerCapabilities: boolean,
 ): unknown {
   if (options.rawRead === undefined && preserveInnerCapabilities) {
-    const value = Reflect.get(target, 'rawRead', receiver);
-    if (typeof value === 'function') return value.bind(target);
+    const value = witnessReflectGet(target, 'rawRead', receiver);
+    if (typeof value === 'function') {
+      return (...args: unknown[]) => witnessReflectApply(value, target, args);
+    }
   }
   return rawReadCapability(target, options.rawRead);
 }
@@ -2192,19 +2789,21 @@ function rawReadCapability(
         'KV410: rawRead requires a framework-owned read policy; use builder reads unless the adapter wires the declared raw-read escape (SPEC §10.2/§10.3).',
       );
     }
-    assertRawReadDeclaration(declaration);
+    const normalized = normalizedRawReadDeclaration(declaration);
     const carrier = sqlCarrierFromValue(statement, []);
     if (carrier === undefined) {
       throw new Error(
         'KV410: rawRead requires a SQL statement whose table set can be checked against the declared reads (SPEC §10.2/§10.3).',
       );
     }
-    assertRawReadObservedTablesAllowed(carrier.text, declaration, policy);
+    assertRawReadObservedTablesAllowed(carrier.text, normalized, policy);
     if (policy.executeSql !== undefined) {
-      return policy.executeSql(carrier) as Promise<Row[]> | Row[];
+      return witnessReflectApply(policy.executeSql, policy, [carrier]) as Promise<Row[]> | Row[];
     }
     const method = rawReadExecutionMethod(target, policy);
-    return method.call(target, reconstructedDriverCarrier(carrier)) as Promise<Row[]> | Row[];
+    return witnessReflectApply(method, target, [reconstructedDriverCarrier(carrier)]) as
+      | Promise<Row[]>
+      | Row[];
   };
 }
 
@@ -2233,7 +2832,10 @@ function crossOwnerReadCapability(
         'KV414: crossOwnerRead currently supports one simple SELECT ... FROM table statement (SPEC §10.3).',
       );
     }
-    if (policy.hasRole?.(normalized.role) !== true) {
+    if (
+      policy.hasRole === undefined ||
+      witnessReflectApply(policy.hasRole, policy, [normalized.role]) !== true
+    ) {
       throw new KovoReadonlyHandleError(
         'KV414: crossOwnerRead requires a passed guards.role("admin") request guard before the admin read role is enabled (SPEC §10.3).',
       );
@@ -2241,12 +2843,12 @@ function crossOwnerReadCapability(
     assertCrossOwnerReadAllowed(observed, normalized, policy);
     recordCrossOwnerReadAuditFact(normalized, observed, policy);
     if (policy.executeSql !== undefined) {
-      return policy.executeSql(carrier) as Promise<Row[]> | Row[];
+      return witnessReflectApply(policy.executeSql, policy, [carrier]) as Promise<Row[]> | Row[];
     }
     const method = rawReadExecutionMethod(policy.adminClient, policy);
-    return method.call(policy.adminClient, reconstructedDriverCarrier(carrier)) as
-      | Promise<Row[]>
-      | Row[];
+    return witnessReflectApply(method, policy.adminClient, [
+      reconstructedDriverCarrier(carrier),
+    ]) as Promise<Row[]> | Row[];
   };
 }
 
@@ -2260,19 +2862,30 @@ function reconstructedDriverCarrier(carrier: SqlCarrier): {
   );
 }
 
-function assertRawReadDeclaration(declaration: RawReadDeclaration): void {
-  if (
-    !Array.isArray(declaration.reads) ||
-    declaration.reads.length === 0 ||
-    declaration.reads.some((table) => typeof table !== 'string' || table.trim() === '')
-  ) {
+function normalizedRawReadDeclaration(declaration: RawReadDeclaration): RawReadDeclaration {
+  if (!isRecord(declaration)) throw new Error('KV410: rawRead requires a declaration object.');
+  const reads = snapshotTrimmedStringArray(
+    optionalOwnDataProperty(declaration, 'reads'),
+    'rawRead declared reads',
+  );
+  if (reads.length === 0)
     throw new Error('KV410: rawRead requires a non-empty declared reads table set.');
+  const actAsValue = optionalOwnDataProperty(declaration, 'actAs');
+  const publicReadValue = optionalOwnDataProperty(declaration, 'declarePublicRead');
+  let actAs: string | undefined;
+  if (actAsValue !== undefined) {
+    if (typeof actAsValue !== 'string') throw new Error('KV414: rawRead actAs must be a string.');
+    actAs = trimFrameworkString(actAsValue);
+    if (actAs === '') throw new Error('KV414: rawRead actAs scope requires a non-empty principal.');
   }
-  if (declaration.actAs !== undefined && declaration.actAs.trim() === '') {
-    throw new Error('KV414: rawRead actAs scope requires a non-empty principal.');
+  const snapshot: RawReadDeclaration = { reads };
+  if (actAs !== undefined) snapshot.actAs = actAs;
+  if (publicReadValue !== undefined) {
+    snapshot.declarePublicRead = normalizedPublicReadDeclaration(
+      publicReadValue as PublicReadDeclaration,
+    );
   }
-  if (declaration.declarePublicRead !== undefined)
-    normalizedPublicReadDeclaration(declaration.declarePublicRead);
+  return witnessFreeze(snapshot);
 }
 
 function assertRawReadObservedTablesAllowed(
@@ -2374,24 +2987,29 @@ function normalizedPublicReadDeclaration(options: PublicReadDeclaration): Public
       'KV414: rawRead declarePublicRead scope requires a declaration object (SPEC §10.3).',
     );
   }
-  const reason = options.reason;
-  if (typeof reason !== 'string' || reason.trim() === '') {
+  const reasonValue = optionalOwnDataProperty(options, 'reason');
+  if (typeof reasonValue !== 'string') {
     throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
   }
-
-  const normalized: PublicReadDeclaration = { reason: reason.trim() };
-  if (options.rows !== undefined) normalized.rows = normalizedPublicReadRows(options.rows);
-  if (options.columns !== undefined) {
-    normalized.columns = normalizedPublicReadColumns(options.columns);
+  const reason = trimFrameworkString(reasonValue);
+  if (reason === '') {
+    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
   }
-  return normalized;
+  const rows = optionalOwnDataProperty(options, 'rows');
+  const columns = optionalOwnDataProperty(options, 'columns');
+  const normalized: PublicReadDeclaration = { reason };
+  if (rows !== undefined)
+    normalized.rows = normalizedPublicReadRows(rows as PublicReadDeclaration['rows']);
+  if (columns !== undefined)
+    normalized.columns = normalizedPublicReadColumns(columns as readonly string[]);
+  return witnessFreeze(normalized);
 }
 
 function normalizedPublicReadRows(
   rows: PublicReadDeclaration['rows'],
 ): PublicReadRowsScope | string {
   if (typeof rows === 'string') {
-    const predicate = rows.trim();
+    const predicate = trimFrameworkString(rows);
     if (predicate === '') {
       throw new Error(
         'KV414: rawRead declarePublicRead rows scope requires a non-empty predicate.',
@@ -2399,30 +3017,44 @@ function normalizedPublicReadRows(
     }
     return predicate;
   }
-  if (!isPublicReadRowsScope(rows)) {
+  if (!isRecord(rows)) {
     throw new Error(
       'KV414: rawRead declarePublicRead rows scope requires a predicate string or { predicate, table? }.',
     );
   }
-  const predicate = rows.predicate.trim();
+  const predicateValue = optionalOwnDataProperty(rows, 'predicate');
+  const tableValue = optionalOwnDataProperty(rows, 'table');
+  if (typeof predicateValue !== 'string') {
+    throw new Error(
+      'KV414: rawRead declarePublicRead rows scope requires a predicate string or { predicate, table? }.',
+    );
+  }
+  const predicate = trimFrameworkString(predicateValue);
   if (predicate === '') {
     throw new Error('KV414: rawRead declarePublicRead rows scope requires a non-empty predicate.');
   }
-  const table = rows.table?.trim();
-  return table === undefined || table === '' ? { predicate } : { predicate, table };
+  if (tableValue !== undefined && typeof tableValue !== 'string') {
+    throw new Error('KV414: rawRead declarePublicRead rows table must be a string.');
+  }
+  const table = typeof tableValue === 'string' ? trimFrameworkString(tableValue) : undefined;
+  return witnessFreeze(table === undefined || table === '' ? { predicate } : { predicate, table });
 }
 
 function normalizedPublicReadColumns(columns: readonly string[]): readonly string[] {
-  if (
-    !Array.isArray(columns) ||
-    columns.length === 0 ||
-    columns.some((column) => typeof column !== 'string' || column.trim() === '')
-  ) {
+  let snapshot: readonly string[];
+  try {
+    snapshot = snapshotTrimmedStringArray(columns, 'rawRead public columns');
+  } catch {
     throw new Error(
       'KV414: rawRead declarePublicRead columns scope requires a non-empty column list.',
     );
   }
-  return [...new Set(columns.map((column) => column.trim()))];
+  if (snapshot.length === 0) {
+    throw new Error(
+      'KV414: rawRead declarePublicRead columns scope requires a non-empty column list.',
+    );
+  }
+  return snapshot;
 }
 
 function recordPublicReadAuditFact(
@@ -2452,27 +3084,38 @@ function normalizedCrossOwnerReadDeclaration(
   if (!isRecord(declaration)) {
     throw new Error('KV414: crossOwnerRead requires a declaration object (SPEC §10.3).');
   }
-  if (declaration.role !== 'admin') {
+  if (optionalOwnDataProperty(declaration, 'role') !== 'admin') {
     throw new Error('KV414: crossOwnerRead requires role: "admin" (SPEC §10.3).');
   }
-  const reason = declaration.reason;
-  if (typeof reason !== 'string' || reason.trim() === '') {
+  const reasonValue = optionalOwnDataProperty(declaration, 'reason');
+  if (typeof reasonValue !== 'string') {
     throw new Error('KV414: crossOwnerRead requires a non-empty reason.');
   }
-  if (
-    !Array.isArray(declaration.reads) ||
-    declaration.reads.length === 0 ||
-    declaration.reads.some((table) => typeof table !== 'string' || table.trim() === '')
-  ) {
+  const reason = trimFrameworkString(reasonValue);
+  if (reason === '') throw new Error('KV414: crossOwnerRead requires a non-empty reason.');
+  let reads: readonly string[];
+  try {
+    reads = snapshotTrimmedStringArray(
+      optionalOwnDataProperty(declaration, 'reads'),
+      'crossOwnerRead declared reads',
+    );
+  } catch {
     throw new Error('KV414: crossOwnerRead requires a non-empty declared reads table set.');
   }
-  const site = declaration.site?.trim();
-  return {
-    reason: reason.trim(),
-    reads: [...new Set(declaration.reads.map((table) => table.trim()))],
+  if (reads.length === 0) {
+    throw new Error('KV414: crossOwnerRead requires a non-empty declared reads table set.');
+  }
+  const siteValue = optionalOwnDataProperty(declaration, 'site');
+  if (siteValue !== undefined && typeof siteValue !== 'string') {
+    throw new Error('KV414: crossOwnerRead site must be a string.');
+  }
+  const site = typeof siteValue === 'string' ? trimFrameworkString(siteValue) : undefined;
+  return witnessFreeze({
+    reason,
+    reads,
     role: 'admin',
     ...(site === undefined || site === '' ? {} : { site }),
-  };
+  });
 }
 
 function assertCrossOwnerReadAllowed(
@@ -2522,14 +3165,6 @@ function recordCrossOwnerReadAuditFact(
   });
 }
 
-function isPublicReadRowsScope(value: unknown): value is PublicReadRowsScope {
-  return (
-    isRecord(value) &&
-    typeof value.predicate === 'string' &&
-    (value.table === undefined || typeof value.table === 'string')
-  );
-}
-
 function rawReadExecutionMethod(
   target: object,
   policy: Pick<RawReadPolicyOptions, 'dialectLabel' | 'executeMethod'>,
@@ -2538,9 +3173,14 @@ function rawReadExecutionMethod(
     policy.executeMethod === undefined
       ? (['all', 'query', 'execute', 'values'] as const)
       : ([policy.executeMethod] as const);
-  for (const method of methods) {
-    const value = Reflect.get(target, method);
-    if (typeof value === 'function') return value;
+  for (let index = 0; index < methods.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(methods, index);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    try {
+      return inheritedFunctionDataProperty(target, descriptor.value);
+    } catch {
+      // Keep looking for the next fixed read method.
+    }
   }
   throw new KovoReadonlyHandleError(
     `KV410: ${policy.dialectLabel} rawRead could not find an executable read method on the managed DB handle (SPEC §10.2/§10.3).`,
@@ -2576,15 +3216,18 @@ export function managedDb<Db>(
   mode: ManagedDbMode,
   options: ManagedDbOptions = {},
 ): Reader<Db> | Writer<Db> {
+  const runtimeOptions = snapshotManagedDbOptions(options);
   const readonlyTarget =
     mode === 'read' ? resolveReadonlyDbTarget(raw) : { fromHook: false, target: raw };
   const target =
-    mode === 'read' ? readonlyTarget.target : declaredWriteDbTarget(raw, options.sqlWritePolicy);
+    mode === 'read'
+      ? readonlyTarget.target
+      : declaredWriteDbTarget(raw, runtimeOptions.sqlWritePolicy);
   const safe = wrapManagedDbForSqlSafety(
     target,
     undefined,
     managedSqlExecutionPolicy({
-      ...options.sqlWritePolicy,
+      ...runtimeOptions.sqlWritePolicy,
       capability: mode,
       engineReadonly: mode === 'read' && target !== raw,
     }),
@@ -2593,9 +3236,29 @@ export function managedDb<Db>(
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
   return readonlyCapabilityDb(
     safe as unknown as object,
-    managedReadCapabilityOptions(options),
+    managedReadCapabilityOptions(runtimeOptions),
     readonlyTarget.fromHook,
   ) as unknown as Reader<Db>;
+}
+
+function snapshotManagedDbOptions(options: ManagedDbOptions): ManagedDbOptions {
+  const snapshot: ManagedDbOptions = {};
+  const crossOwnerRead = optionalOwnDataProperty(options, 'crossOwnerRead');
+  const rawRead = optionalOwnDataProperty(options, 'rawRead');
+  const sqlWritePolicy = optionalOwnDataProperty(options, 'sqlWritePolicy');
+  if (crossOwnerRead !== undefined) {
+    snapshot.crossOwnerRead = snapshotCrossOwnerReadPolicy(
+      crossOwnerRead as CrossOwnerReadPolicyOptions,
+    );
+  }
+  if (rawRead !== undefined)
+    snapshot.rawRead = snapshotRawReadPolicy(rawRead as RawReadPolicyOptions);
+  if (sqlWritePolicy !== undefined) {
+    if (!isRecord(sqlWritePolicy))
+      throw new TypeError('managed SQL write policy must be an object.');
+    snapshot.sqlWritePolicy = snapshotManagedWritePolicy(sqlWritePolicy as ManagedSqlWritePolicy);
+  }
+  return witnessFreeze(snapshot);
 }
 
 function readonlyDbTarget<Db>(raw: Db): Db {
@@ -2610,18 +3273,16 @@ function managedReadCapabilityOptions(options: ManagedDbOptions): {
     crossOwnerRead?: CrossOwnerReadPolicyOptions;
     rawRead?: RawReadPolicyOptions;
   } = {};
-  if (options.crossOwnerRead !== undefined) {
-    readOptions.crossOwnerRead = snapshotCrossOwnerReadPolicy(options.crossOwnerRead);
-  }
-  if (options.rawRead !== undefined) readOptions.rawRead = snapshotRawReadPolicy(options.rawRead);
+  if (options.crossOwnerRead !== undefined) readOptions.crossOwnerRead = options.crossOwnerRead;
+  if (options.rawRead !== undefined) readOptions.rawRead = options.rawRead;
   return witnessFreeze(readOptions);
 }
 
 function resolveReadonlyDbTarget<Db>(raw: Db): { fromHook: boolean; target: Db } {
   if (!isRecord(raw)) return { fromHook: false, target: raw };
-  const createReadonly = raw[kovoReadonlyDbHandle];
-  if (typeof createReadonly !== 'function') return { fromHook: false, target: raw };
-  const readTarget = createReadonly.call(raw) as Db;
+  const createReadonly = optionalStrictInheritedFunctionDataProperty(raw, kovoReadonlyDbHandle);
+  if (createReadonly === undefined) return { fromHook: false, target: raw };
+  const readTarget = witnessReflectApply<Db>(createReadonly, raw, []);
   if (readTarget === raw) {
     throw new KovoReadonlyHandleError(
       'KV433: adapter read-only DB hook returned the mutable writer handle; managed readers require a dedicated engine read-only handle (SPEC §10.3/§11.2).',
@@ -2636,9 +3297,12 @@ function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy |
   }
   const target = frameworkManagedDbRawTarget(raw) ?? raw;
   if (!isRecord(target)) return raw;
-  const createDeclaredWrite = target[kovoDeclaredWriteDbHandle];
-  if (typeof createDeclaredWrite !== 'function') return raw;
-  return createDeclaredWrite.call(target, writePolicy) as Db;
+  const createDeclaredWrite = optionalStrictInheritedFunctionDataProperty(
+    target,
+    kovoDeclaredWriteDbHandle,
+  );
+  if (createDeclaredWrite === undefined) return raw;
+  return witnessReflectApply<Db>(createDeclaredWrite, target, [writePolicy]);
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {

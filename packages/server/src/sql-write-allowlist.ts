@@ -364,12 +364,24 @@ function writeTablesForWith(
   let aliases = cteAliases;
   const verdicts: SqlClassifierVerdict<SqlWriteTargets>[] = [];
 
-  for (const binding of statement.bind) {
-    verdicts.push(classifyParsedStatement(binding.statement, aliases, dialect));
+  for (let index = 0; index < statement.bind.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(statement.bind, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      appendSqlClassifierValue(verdicts, {
+        kind: 'unproven',
+        reason: 'WITH binding list is not a dense own-data carrier',
+      });
+      continue;
+    }
+    const binding = descriptor.value;
+    appendSqlClassifierValue(
+      verdicts,
+      classifyParsedStatement(binding.statement, aliases, dialect),
+    );
     aliases = withAliases(aliases, [binding.alias.name]);
   }
 
-  verdicts.push(classifyParsedStatement(statement.in, aliases, dialect));
+  appendSqlClassifierValue(verdicts, classifyParsedStatement(statement.in, aliases, dialect));
   return combineStatementVerdicts(verdicts);
 }
 

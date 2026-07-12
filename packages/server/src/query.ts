@@ -1,4 +1,4 @@
-import type { JsonValue } from '@kovojs/core';
+import { isSecret, type JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
@@ -861,7 +861,15 @@ function capQueryListResults(
       return next;
     }
 
-    if (!isPlainRecord(current)) return current;
+    if (!isPlainRecord(current)) {
+      if (isSecret(current)) return current;
+      if (typeof current === 'object' && current !== null) {
+        throw new Error(
+          'KV430: query result contains a non-JSON object outside the framework resource ceiling (SPEC §6.6/§9.5).',
+        );
+      }
+      return current;
+    }
     const existing = witnessWeakMapGet(seen, current);
     if (existing !== undefined) return existing;
     const next = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
@@ -875,7 +883,7 @@ function capQueryListResults(
           'KV430: query result records must contain own data properties (SPEC §9.5).',
         );
       }
-      estimatedBytes += key.length * 3;
+      estimatedBytes += key.length * 6 + 3;
       if (estimatedBytes > MAX_QUERY_RESULT_ESTIMATED_BYTES) {
         throw new Error('KV430: query result exceeded the framework byte ceiling (SPEC §9.5).');
       }
@@ -925,7 +933,7 @@ function queryArrayLength(value: readonly unknown[]): number {
 }
 
 function estimatedQueryValueBytes(value: unknown): number {
-  if (typeof value === 'string') return value.length * 3;
+  if (typeof value === 'string') return value.length * 6 + 2;
   if (typeof value === 'number' || typeof value === 'bigint') return 32;
   if (typeof value === 'boolean') return 5;
   if (value === null || value === undefined) return 4;

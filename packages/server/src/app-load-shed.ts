@@ -119,6 +119,16 @@ const readNativeRequestHeaders = requestIntrinsicGetter<Headers>('headers');
 const readNativeRequestMethod = requestIntrinsicGetter<string>('method');
 const readNativeRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
 const readNativeRequestUrl = requestIntrinsicGetter<string>('url');
+const nativeRequestArrayBuffer = inheritedFunctionDataProperty(
+  NativeRequest.prototype,
+  'arrayBuffer',
+);
+const nativeRequestBlob = inheritedFunctionDataProperty(NativeRequest.prototype, 'blob');
+const nativeRequestClone = inheritedFunctionDataProperty(NativeRequest.prototype, 'clone');
+const nativeRequestFormData = inheritedFunctionDataProperty(NativeRequest.prototype, 'formData');
+const nativeRequestJson = inheritedFunctionDataProperty(NativeRequest.prototype, 'json');
+const nativeRequestText = inheritedFunctionDataProperty(NativeRequest.prototype, 'text');
+const nativeRequestBytes = optionalInheritedFunctionDataProperty(NativeRequest.prototype, 'bytes');
 
 const streamControlRequest = createNativeRequest('https://kovo.invalid/body-control', {
   body: 'control',
@@ -142,7 +152,19 @@ const nativeStreamReaderReleaseLock = inheritedFunctionDataProperty(
 witnessReflectApply(nativeStreamReaderReleaseLock, streamReaderControl, []);
 
 const headersControl = new NativeHeaders({ 'X-Kovo-Control': 'accepted' });
+const nativeHeadersAppend = inheritedFunctionDataProperty(headersControl, 'append');
+const nativeHeadersDelete = inheritedFunctionDataProperty(headersControl, 'delete');
 const nativeHeadersEntries = inheritedFunctionDataProperty(headersControl, 'entries');
+const nativeHeadersForEach = inheritedFunctionDataProperty(headersControl, 'forEach');
+const nativeHeadersGet = inheritedFunctionDataProperty(headersControl, 'get');
+const nativeHeadersHas = inheritedFunctionDataProperty(headersControl, 'has');
+const nativeHeadersKeys = inheritedFunctionDataProperty(headersControl, 'keys');
+const nativeHeadersSet = inheritedFunctionDataProperty(headersControl, 'set');
+const nativeHeadersValues = inheritedFunctionDataProperty(headersControl, 'values');
+const nativeHeadersGetSetCookie = optionalInheritedFunctionDataProperty(
+  headersControl,
+  'getSetCookie',
+);
 const headersIteratorControl = witnessReflectApply<object>(
   nativeHeadersEntries,
   headersControl,
@@ -157,6 +179,10 @@ const nativeTypedArrayBuffer = inheritedAccessorGetter(NativeUint8Array.prototyp
 
 const rateStates = createWitnessWeakMap<KovoApp, AppRateState>();
 const verifiedBodyRequests = createWitnessWeakSet<Request>();
+const pinnedIngressRequests = createWitnessWeakSet<Request>();
+const pinnedIngressHeaders = createWitnessWeakSet<Headers>();
+const pinnedIngressBodyStreams = createWitnessWeakSet<object>();
+const pinnedIngressBodyReaders = createWitnessWeakSet<object>();
 
 export function normalizeAppRequestLimits(
   options: AppRequestLimitOptions | false | undefined,
@@ -308,11 +334,26 @@ function rateLimitFailure(
     { id: `${surface}:global`, key: 'global', limit: scoped.global, scope: 'global' },
   ];
   if (ip !== undefined) {
-    checks.push({ id: 'all:per-ip', key: ip, limit: limits.perIp, scope: 'perIp' });
-    checks.push({ id: `${surface}:per-ip`, key: ip, limit: scoped.perIp, scope: 'perIp' });
+    appendLoadShedValue(checks, {
+      id: 'all:per-ip',
+      key: ip,
+      limit: limits.perIp,
+      scope: 'perIp',
+    });
+    appendLoadShedValue(checks, {
+      id: `${surface}:per-ip`,
+      key: ip,
+      limit: scoped.perIp,
+      scope: 'perIp',
+    });
   }
 
-  for (const check of checks) {
+  for (let index = 0; index < checks.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(checks, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      return { retryAfterSeconds: 1 };
+    }
+    const check = descriptor.value;
     if (check.limit === false) continue;
     const store = appRateBucketStore(state, check.id, check.scope);
     const decision = consumeRateLimit(store, check.key, check.limit, now);
@@ -411,7 +452,7 @@ export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: nu
 /** @internal */
 export function requestWithBodyLimit(request: Request, maxBodyBytes: number | false): Request {
   if (witnessWeakSetHas(verifiedBodyRequests, request)) return request;
-  if (maxBodyBytes === false || request.body === null) return request;
+  if (maxBodyBytes === false || readNativeRequestBody(request) === null) return request;
   const limited = new Proxy(request, {
     get(target, property) {
       if (property === 'arrayBuffer') {
@@ -428,22 +469,29 @@ export function requestWithBodyLimit(request: Request, maxBodyBytes: number | fa
       if (property === 'formData') {
         return async () => {
           const body = await readLimitedArrayBuffer(target, maxBodyBytes);
-          return createNativeRequest(target.url, {
+          const formRequest = createNativeRequest(readNativeRequestUrl(target), {
             body,
-            headers: target.headers,
-            method: target.method,
-          }).formData();
+            headers: readNativeRequestHeaders(target),
+            method: readNativeRequestMethod(target),
+          });
+          return witnessReflectApply(nativeRequestFormData, formRequest, []);
         };
       }
       if (property === 'clone') {
-        return () => requestWithBodyLimit(target.clone(), maxBodyBytes);
+        return () =>
+          requestWithBodyLimit(
+            witnessReflectApply<Request>(nativeRequestClone, target, []),
+            maxBodyBytes,
+          );
       }
       if (property === 'body') {
-        return countedBody(target.body, maxBodyBytes);
+        return countedBody(readNativeRequestBody(target), maxBodyBytes);
       }
 
-      const value = Reflect.get(target, property, target) as unknown;
-      return typeof value === 'function' ? value.bind(target) : value;
+      const value = witnessReflectGet(target, property, target);
+      return typeof value === 'function'
+        ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+        : value;
     },
   }) as Request;
   registerAuthorityNeutralRequestClone(
@@ -456,9 +504,10 @@ export function requestWithBodyLimit(request: Request, maxBodyBytes: number | fa
 
 function authorityNeutralBodyLimitedClone(request: Request, maxBodyBytes: number): Request {
   const source = cloneNativeRequest(request);
-  if (source.body === null) return source;
+  const body = readNativeRequestBody(source);
+  if (body === null) return source;
   const init = {
-    body: countedBody(source.body, maxBodyBytes),
+    body: countedBody(body, maxBodyBytes),
     duplex: 'half',
   } as RequestInit & { duplex: 'half' };
   const limited = createNativeRequest(source, init);
@@ -480,6 +529,7 @@ export async function requestWithVerifiedBodyLimit(
     signal: readNativeRequestSignal(request),
   });
   copyRequestPeerAddress(request, verified);
+  pinRequestIngressSurface(verified);
   witnessWeakSetAdd(verifiedBodyRequests, verified);
   return verified;
 }
@@ -497,26 +547,11 @@ export interface RequestVerifierInput {
  * @internal
  */
 export async function requestVerifierInput(request: Request): Promise<RequestVerifierInput> {
+  pinRequestIngressSurface(request);
   const source = cloneNativeRequest(request);
   const buffer = await readLimitedArrayBuffer(source, 9_007_199_254_740_991);
   const payload = new NativeUint8Array(buffer);
-  const headers = new NativeHeaders(readNativeRequestHeaders(request));
-  const entries = snapshotHeaderEntries(headers);
-  witnessDefineProperty(headers, 'get', {
-    enumerable: true,
-    value(name: string): string | null {
-      if (typeof name !== 'string') return null;
-      const expected = asciiLower(name);
-      for (let index = 0; index < entries.length; index += 1) {
-        const descriptor = witnessGetOwnPropertyDescriptor(entries, index);
-        if (descriptor === undefined || !('value' in descriptor)) return null;
-        const entry = descriptor.value;
-        if (entry[0] === expected) return entry[1];
-      }
-      return null;
-    },
-    writable: false,
-  });
+  const headers = snapshotPinnedHeaders(readNativeRequestHeaders(request));
   return witnessFreeze({
     headers: witnessFreeze(headers),
     payload,
@@ -631,6 +666,122 @@ function inheritedFunctionDataProperty(value: object, property: PropertyKey): Fu
     current = witnessGetPrototypeOf(current);
   }
   throw new TypeError(`The Web platform ${String(property)} method is unavailable.`);
+}
+
+function optionalInheritedFunctionDataProperty(
+  value: object,
+  property: PropertyKey,
+): Function | undefined {
+  let current: object | null = value;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      return 'value' in descriptor && typeof descriptor.value === 'function'
+        ? descriptor.value
+        : undefined;
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  return undefined;
+}
+
+function pinRequestIngressSurface(request: Request): void {
+  if (witnessWeakSetHas(pinnedIngressRequests, request)) return;
+  const headers = readNativeRequestHeaders(request);
+  const body = readNativeRequestBody(request);
+  pinHeadersSurface(headers);
+  pinBodyStreamSurface(body);
+  witnessDefineProperty(request, 'headers', { value: headers });
+  witnessDefineProperty(request, 'body', { value: body });
+  witnessDefineProperty(request, 'method', { value: readNativeRequestMethod(request) });
+  witnessDefineProperty(request, 'signal', { value: readNativeRequestSignal(request) });
+  witnessDefineProperty(request, 'url', { value: readNativeRequestUrl(request) });
+  pinBoundMethod(request, 'arrayBuffer', nativeRequestArrayBuffer);
+  pinBoundMethod(request, 'blob', nativeRequestBlob);
+  pinBoundMethod(request, 'formData', nativeRequestFormData);
+  pinBoundMethod(request, 'json', nativeRequestJson);
+  pinBoundMethod(request, 'text', nativeRequestText);
+  if (nativeRequestBytes !== undefined) pinBoundMethod(request, 'bytes', nativeRequestBytes);
+  witnessDefineProperty(request, 'clone', {
+    value() {
+      const cloned = witnessReflectApply<Request>(nativeRequestClone, request, []);
+      pinRequestIngressSurface(cloned);
+      return cloned;
+    },
+  });
+  witnessWeakSetAdd(pinnedIngressRequests, request);
+}
+
+function pinBoundMethod(target: object, property: PropertyKey, method: Function): void {
+  witnessDefineProperty(target, property, {
+    value(...args: unknown[]) {
+      return witnessReflectApply(method, target, args);
+    },
+  });
+}
+
+function pinBodyStreamSurface(body: ReadableStream<Uint8Array> | null): void {
+  if (body === null || witnessWeakSetHas(pinnedIngressBodyStreams, body)) return;
+  witnessDefineProperty(body, 'getReader', {
+    value(...args: unknown[]) {
+      const reader = witnessReflectApply<object>(nativeStreamGetReader, body, args);
+      pinBodyReaderSurface(reader);
+      return reader;
+    },
+  });
+  witnessWeakSetAdd(pinnedIngressBodyStreams, body);
+}
+
+function pinBodyReaderSurface(reader: object): void {
+  if (witnessWeakSetHas(pinnedIngressBodyReaders, reader)) return;
+  pinBoundMethod(reader, 'read', nativeStreamReaderRead);
+  pinBoundMethod(reader, 'cancel', nativeStreamReaderCancel);
+  pinBoundMethod(reader, 'releaseLock', nativeStreamReaderReleaseLock);
+  witnessWeakSetAdd(pinnedIngressBodyReaders, reader);
+}
+
+function snapshotPinnedHeaders(source: Headers): Headers {
+  const entries = snapshotHeaderEntries(source);
+  const headers = new NativeHeaders();
+  for (let index = 0; index < entries.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(entries, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo received an incomplete header snapshot.');
+    }
+    const entry = descriptor.value;
+    witnessReflectApply(nativeHeadersAppend, headers, [entry[0], entry[1]]);
+  }
+  pinHeadersSurface(headers);
+  return headers;
+}
+
+function pinHeadersSurface(headers: Headers): void {
+  if (witnessWeakSetHas(pinnedIngressHeaders, headers)) return;
+  pinBoundMethod(headers, 'append', nativeHeadersAppend);
+  pinBoundMethod(headers, 'delete', nativeHeadersDelete);
+  pinHeadersIteratorMethod(headers, 'entries', nativeHeadersEntries);
+  pinBoundMethod(headers, 'forEach', nativeHeadersForEach);
+  pinBoundMethod(headers, 'get', nativeHeadersGet);
+  pinBoundMethod(headers, 'has', nativeHeadersHas);
+  pinHeadersIteratorMethod(headers, 'keys', nativeHeadersKeys);
+  pinBoundMethod(headers, 'set', nativeHeadersSet);
+  pinHeadersIteratorMethod(headers, 'values', nativeHeadersValues);
+  pinHeadersIteratorMethod(headers, Symbol.iterator, nativeHeadersEntries);
+  if (nativeHeadersGetSetCookie !== undefined) {
+    pinBoundMethod(headers, 'getSetCookie', nativeHeadersGetSetCookie);
+  }
+  witnessWeakSetAdd(pinnedIngressHeaders, headers);
+}
+
+function pinHeadersIteratorMethod(headers: Headers, property: PropertyKey, method: Function): void {
+  witnessDefineProperty(headers, property, {
+    value(...args: unknown[]) {
+      const iterator = witnessReflectApply<object>(method, headers, args);
+      pinBoundMethod(iterator, 'next', nativeHeadersIteratorNext);
+      witnessDefineProperty(iterator, Symbol.iterator, { value: () => iterator });
+      return iterator;
+    },
+  });
 }
 
 function inheritedAccessorGetter(value: object, property: PropertyKey): Function {

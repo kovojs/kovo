@@ -490,3 +490,8 @@ export function witnessRegExpTest(expression: RegExp, value: string): boolean {
   assertSecurityWitnessIntrinsics();
   return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]) !== null;
 }
+
+export function witnessRegExpExec(expression: RegExp, value: string): RegExpExecArray | null {
+  assertSecurityWitnessIntrinsics();
+  return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]);
+}

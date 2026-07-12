@@ -346,6 +346,74 @@ describe('secret read boundary', () => {
     expect((error as Error).message).toContain('KV435');
   });
 
+  it('does not let a late Array iterator skip raw secret-read classification', () => {
+    const statement = { sql: 'select classified from secrets', values: [] };
+    const db = createSecretBoxingReadDb(readDb([{ classified: 'victim-secret' }]), metadata(), {
+      rawSecretTableRead: 'throw',
+      sqliteColumnOrigins: originClient([{ column: null, name: 'classified', table: null }]),
+    });
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    const empty: unknown[] = [];
+    let error: unknown;
+    try {
+      Array.prototype[Symbol.iterator] = function (): ArrayIterator<unknown> {
+        if (this.length === 1 && this[0] === statement) {
+          return Reflect.apply(nativeIterator, empty, []) as ArrayIterator<unknown>;
+        }
+        return Reflect.apply(nativeIterator, this, []) as ArrayIterator<unknown>;
+      };
+      try {
+        db.all(statement);
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('KV435');
+  });
+
+  it('routes the exact classified SQL args through the secret-read sink', () => {
+    const publicStatement = { sql: 'select label as classified from public_data', values: [] };
+    const secretStatement = { sql: 'select classified from secrets', values: [] };
+    const executed: unknown[] = [];
+    const raw = {
+      all(statement: unknown) {
+        executed.push(statement);
+        return statement === secretStatement
+          ? [{ classified: 'victim-secret' }]
+          : [{ classified: 'public-label' }];
+      },
+    };
+    const db = createSecretBoxingReadDb(raw, metadata(), {
+      sqliteColumnOrigins: originClient([
+        { column: 'label', name: 'classified', table: 'public_data' },
+      ]),
+    });
+    const nativeApply = Reflect.apply;
+    let rows: unknown;
+    try {
+      Reflect.apply = function <Result>(
+        target: Function,
+        receiver: unknown,
+        args: ArrayLike<unknown>,
+      ) {
+        if (target === raw.all && args[0] === publicStatement) {
+          return nativeApply(target, receiver, [secretStatement]) as Result;
+        }
+        return nativeApply(target, receiver, args) as Result;
+      };
+      rows = db.all(publicStatement);
+    } finally {
+      Reflect.apply = nativeApply;
+    }
+
+    expect(rows).toEqual([{ classified: 'public-label' }]);
+    expect(executed).toEqual([publicStatement]);
+  });
+
   it('boxes entire raw declared secret reads', () => {
     const db = createSecretBoxingReadDb(
       readDb([{ classified: 'runtime-secret-value' }]),
@@ -370,6 +438,34 @@ describe('secret read boundary', () => {
 
     expect(isSecret(row)).toBe(true);
     expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
+  });
+
+  it('keeps declared secret-read authority out of attacker carrier property traps', () => {
+    let definitionAttempts = 0;
+    const statement = new Proxy(
+      { toSQL: () => ({ sql: 'select classified from secrets' }) },
+      {
+        defineProperty() {
+          definitionAttempts += 1;
+          return true;
+        },
+      },
+    );
+    declareSecretReadCapability(statement, {
+      columns: ['classified'],
+      justification: 'proxy carrier authority stays in framework storage',
+      source: 'test',
+      table: 'secrets',
+    });
+    const db = createSecretBoxingReadDb(
+      readDb([{ classified: 'runtime-secret-value' }]),
+      metadata(),
+    );
+
+    const [row] = db.all(statement);
+
+    expect(definitionAttempts).toBe(0);
+    expect(isSecret(row)).toBe(true);
   });
 
   it('boxes rawRead results through the same direct read boundary', () => {

@@ -338,6 +338,41 @@ export interface ManagedSqlStatement {
   readonly values: readonly unknown[];
 }
 
+/** @internal Immutable construction chunks for rebuilding a Kovo SQL value at a builder sink. */
+export type ManagedSqlRecipeChunk =
+  | Readonly<{ kind: 'parameter'; value: unknown }>
+  | Readonly<{ kind: 'text'; value: string }>;
+
+/**
+ * Return a private copy of a Kovo-minted SQL carrier's construction recipe. Builder sinks use this
+ * to reconstruct a fresh third-party SQL object instead of forwarding the mutable witnessed object
+ * whose public queryChunks may have changed after construction (SPEC §6.6 C15/§10.2).
+ * @internal
+ */
+export function snapshotManagedSqlRecipe(
+  statement: unknown,
+): readonly ManagedSqlRecipeChunk[] | undefined {
+  if (typeof statement !== 'object' || statement === null) return undefined;
+  const pinned = securityWeakMapGet(pinnedSqlCarriers, statement);
+  if (pinned?.kind !== 'recipe') return undefined;
+  const snapshot: ManagedSqlRecipeChunk[] = [];
+  for (let index = 0; index < pinned.chunks.length; index += 1) {
+    const entry = ownArrayEntry(pinned.chunks, index);
+    if (!entry.ok) throw new TypeError('Pinned SQL recipe chunk integrity failed.');
+    securityDefineProperty(snapshot, snapshot.length, {
+      configurable: true,
+      enumerable: true,
+      value: freezeSecurityValue(
+        entry.value.kind === 'text'
+          ? { kind: 'text' as const, value: entry.value.value }
+          : { kind: 'parameter' as const, value: entry.value.value },
+      ),
+      writable: true,
+    });
+  }
+  return freezeSecurityValue(snapshot);
+}
+
 /** @internal */
 export function validateManagedSqlStatement(statement: unknown): SqlStatementValidationResult {
   const snapshot = snapshotManagedSqlStatement(statement);

@@ -164,6 +164,45 @@ describe('request ingress intrinsic authority', () => {
     }
   });
 
+  it('dispatches the exact accepted body through pinned Request readers', async () => {
+    const handlerBodies: string[] = [];
+    const definition = endpoint('/intrinsics/pinned-body-dispatch', {
+      access: verifiedAccess,
+      auth: {
+        kind: 'custom',
+        name: 'pinned-body-dispatch',
+        verify: customVerifier(
+          'pinned-body-dispatch',
+          ({ payload }) => new TextDecoder().decode(payload) === 'signed-safe',
+        ),
+      },
+      csrf: false,
+      csrfJustification: 'machine pinned body dispatch regression',
+      async handler(request) {
+        handlerBodies.push(await request.text());
+        return new Response('ok');
+      },
+      method: 'POST',
+      reason: 'pinned body dispatch regression',
+      response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+    });
+    const handler = createRequestHandler(createApp({ endpoints: [definition] }));
+    const nativeText = Request.prototype.text;
+    try {
+      Request.prototype.text = async () => 'dangerous';
+      const response = await handler(
+        new Request('https://kovo.local/intrinsics/pinned-body-dispatch', {
+          body: 'signed-safe',
+          method: 'POST',
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(handlerBodies).toEqual(['signed-safe']);
+    } finally {
+      Request.prototype.text = nativeText;
+    }
+  });
+
   it('pins endpoint and webhook verifier headers to the dispatched carrier', async () => {
     const endpointCalls: string[] = [];
     const webhookCalls: string[] = [];
@@ -229,6 +268,66 @@ describe('request ingress intrinsic authority', () => {
         webhookCalls: [],
         webhookStatus: 401,
       });
+    } finally {
+      Headers.prototype.get = nativeGet;
+    }
+  });
+
+  it('dispatches the exact accepted headers through pinned Headers readers', async () => {
+    const endpointCalls: string[] = [];
+    const webhookCalls: string[] = [];
+    const verify = (name: string) =>
+      customVerifier(name, ({ headers }) => headers.get('x-machine-token') === 'accepted');
+    const machineEndpoint = endpoint('/intrinsics/pinned-header-auth', {
+      access: verifiedAccess,
+      auth: { kind: 'custom', name: 'pinned-header-auth', verify: verify('pinned-header-auth') },
+      csrf: false,
+      csrfJustification: 'machine pinned header dispatch regression',
+      handler(request) {
+        endpointCalls.push(request.headers.get('x-machine-token') ?? 'missing');
+        return new Response('ok');
+      },
+      method: 'POST',
+      reason: 'pinned header dispatch regression',
+      response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+    });
+    const machineWebhook = webhook('/intrinsics/pinned-header-webhook', {
+      handler(_input, context) {
+        webhookCalls.push(context.request.headers.get('x-machine-token') ?? 'missing');
+      },
+      input: s.object({ id: s.string() }),
+      verify: verify('pinned-header-webhook'),
+    });
+    const handler = createRequestHandler(
+      createApp({ endpoints: [machineEndpoint, machineWebhook] }),
+    );
+    const nativeGet = Headers.prototype.get;
+    try {
+      Headers.prototype.get = function (name: string) {
+        if (name.toLowerCase() === 'x-machine-token') return 'victim/admin';
+        return Reflect.apply(nativeGet, this, [name]);
+      };
+      const endpointResponse = await handler(
+        new Request('https://kovo.local/intrinsics/pinned-header-auth', {
+          body: 'payload',
+          headers: { 'X-Machine-Token': 'accepted' },
+          method: 'POST',
+        }),
+      );
+      const webhookResponse = await handler(
+        new Request('https://kovo.local/intrinsics/pinned-header-webhook', {
+          body: JSON.stringify({ id: 'evt_accepted' }),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Machine-Token': 'accepted',
+          },
+          method: 'POST',
+        }),
+      );
+      expect(endpointResponse.status).toBe(200);
+      expect(webhookResponse.status).toBe(200);
+      expect(endpointCalls).toEqual(['accepted']);
+      expect(webhookCalls).toEqual(['accepted']);
     } finally {
       Headers.prototype.get = nativeGet;
     }

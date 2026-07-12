@@ -3,6 +3,7 @@ import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import {
   createWitnessMap,
   createWitnessSet,
+  createWitnessWeakMap,
   createWitnessWeakSet,
   witnessCreateNullRecord,
   witnessDefineProperty,
@@ -13,13 +14,21 @@ import {
   witnessMapGet,
   witnessMapSet,
   witnessObjectKeys,
+  witnessReflectApply,
+  witnessReflectGet,
   witnessSetAdd,
   witnessSetForEach,
   witnessSetHas,
   witnessSetSize,
   witnessWeakSetAdd,
   witnessWeakSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+
+const NativePromise = globalThis.Promise;
+const nativePromiseThen = witnessReflectGet(NativePromise.prototype, 'then') as Function;
+const nativeFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 
 /** Runtime provenance for a database column participating in read-confidentiality decisions. */
 export interface SecretReadColumnSource {
@@ -109,7 +118,7 @@ interface SecretReadBoundary {
   secretColumnScopeKnown: boolean;
 }
 
-const kovoDeclaredSecretReadCapability = Symbol('kovoDeclaredSecretReadCapability');
+const declaredSecretReadCapabilities = createWitnessWeakMap<object, DeclaredSecretReadCapability>();
 const pinnedSecretReadMetadata = createWitnessWeakSet<object>();
 const pinnedSecretReadBoundaries = createWitnessWeakSet<object>();
 
@@ -123,23 +132,42 @@ export function declareSecretReadCapability<T extends object>(
   statement: T,
   declaration: DeclaredSecretReadCapability,
 ): T {
-  if (declaration.justification.trim() === '') {
+  const justification = optionalOwnDataValue(declaration, 'justification');
+  const source = optionalOwnDataValue(declaration, 'source');
+  const table = optionalOwnDataValue(declaration, 'table');
+  const columnsValue = optionalOwnDataValue(declaration, 'columns');
+  if (typeof justification !== 'string' || trimSecurityString(justification) === '') {
     throw new Error('KV435: declared secret-read capability requires a justification.');
   }
-  if (declaration.source.trim() === '' || declaration.table.trim() === '') {
+  if (
+    typeof source !== 'string' ||
+    typeof table !== 'string' ||
+    trimSecurityString(source) === '' ||
+    trimSecurityString(table) === ''
+  ) {
     throw new Error('KV435: declared secret-read capability requires a source table.');
   }
-  if (
-    declaration.columns.length === 0 ||
-    declaration.columns.some((column) => column.trim() === '')
-  ) {
+  if (!witnessIsArray(columnsValue) || columnsValue.length === 0) {
     throw new Error('KV435: declared secret-read capability requires at least one secret column.');
   }
-  Object.defineProperty(statement, kovoDeclaredSecretReadCapability, {
-    configurable: false,
-    enumerable: false,
-    value: { ...declaration, columns: [...declaration.columns] },
-  });
+  const columns: string[] = [];
+  for (let index = 0; index < columnsValue.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(columnsValue, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string' ||
+      trimSecurityString(descriptor.value) === ''
+    ) {
+      throw new Error('KV435: declared secret-read capability requires secret column names.');
+    }
+    witnessDefineProperty(columns, columns.length, { value: descriptor.value, writable: true });
+  }
+  witnessWeakMapSet(
+    declaredSecretReadCapabilities,
+    statement,
+    witnessFreeze({ columns: witnessFreeze(columns), justification, source, table }),
+  );
   return statement;
 }
 
@@ -156,9 +184,11 @@ export function createSecretBoxingReadDb<Db extends object>(
   const pinnedMetadata = snapshotSecretReadMetadata(metadata);
   return new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
-      const item = Reflect.get(target, prop, receiver);
+      const item = witnessReflectGet(target, prop, receiver);
       if (typeof item !== 'function') return item;
-      if (!isReadSurfaceMethod(prop)) return item.bind(target);
+      if (!isReadSurfaceMethod(prop)) {
+        return (...args: unknown[]) => witnessReflectApply(item, target, args);
+      }
       return (...args: unknown[]) => {
         const boundary = readBoundaryForArgs(
           args,
@@ -170,10 +200,10 @@ export function createSecretBoxingReadDb<Db extends object>(
           boundary.declaredSecretRead && options.privilegedDb !== undefined
             ? (options.privilegedDb as Record<PropertyKey, unknown>)
             : target;
-        const readMethod = Reflect.get(readTarget, prop, receiver);
+        const readMethod = witnessReflectGet(readTarget, prop, receiver);
         if (typeof readMethod !== 'function') return readMethod;
         return wrapReadSurface(
-          Reflect.apply(readMethod, readTarget, args),
+          witnessReflectApply(readMethod, readTarget, args),
           pinnedMetadata,
           boundary,
           options,
@@ -521,12 +551,14 @@ function wrapReadSurface(
 ): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (witnessIsArray(value)) return boxSecretReadRows(value, metadata, inheritedBoundary);
-  if (value instanceof Promise) {
-    return value.then((result) => boxSecretReadRows(result, metadata, inheritedBoundary));
+  if (isNativePromise(value)) {
+    return witnessReflectApply(nativePromiseThen, value, [
+      (result: unknown) => boxSecretReadRows(result, metadata, inheritedBoundary),
+    ]);
   }
   return new Proxy(value, {
     get(target, prop, receiver) {
-      const item = Reflect.get(target, prop, receiver);
+      const item = witnessReflectGet(target, prop, receiver);
       if (prop === 'then' && typeof item === 'function') {
         const boundary = mergeReadBoundaries(
           inheritedBoundary,
@@ -536,22 +568,24 @@ function wrapReadSurface(
           onFulfilled?: (value: unknown) => unknown,
           onRejected?: (reason: unknown) => unknown,
         ) =>
-          Reflect.apply(item, target, [
+          witnessReflectApply(item, target, [
             (result: unknown) => onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
             onRejected,
           ]);
       }
       if (typeof item !== 'function') return item;
-      return (...args: unknown[]) =>
-        wrapReadSurface(
-          Reflect.apply(item, target, args),
+      return (...args: unknown[]) => {
+        const boundary = mergeReadBoundaries(
+          inheritedBoundary,
+          readBoundaryForArgs(args, metadata, false, options),
+        );
+        return wrapReadSurface(
+          witnessReflectApply(item, target, args),
           metadata,
-          mergeReadBoundaries(
-            inheritedBoundary,
-            readBoundaryForArgs(args, metadata, false, options),
-          ),
+          boundary,
           options,
         );
+      };
     },
   });
 }
@@ -580,7 +614,12 @@ function readBoundaryForArgs(
   options: SecretReadBoundaryOptions,
 ): SecretReadBoundary {
   if (!directSqlRead) return emptyReadBoundary();
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(args, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      return { ...emptyReadBoundary(), rawWholeRowSecret: true };
+    }
+    const arg = descriptor.value;
     const carrier = sqlCarrierFromValue(arg, []);
     const sql = carrier?.text ?? sqlTextFromValue(arg);
     if (sql === undefined) return { ...emptyReadBoundary(), rawWholeRowSecret: true };
@@ -616,9 +655,7 @@ function hasDeclaredSecretReadCapability(
   metadata: SecretReadMetadata,
 ): boolean {
   if (statement === null || typeof statement !== 'object') return false;
-  const declaration = Reflect.get(statement, kovoDeclaredSecretReadCapability) as
-    | DeclaredSecretReadCapability
-    | undefined;
+  const declaration = witnessWeakMapGet(declaredSecretReadCapabilities, statement);
   if (declaration === undefined) return false;
   if (!witnessSetHas(metadata.secretTableNames as Set<string>, declaration.table)) return false;
   const secretColumns = witnessMapGet(
@@ -630,6 +667,10 @@ function hasDeclaredSecretReadCapability(
     if (!witnessSetHas(secretColumns as Set<string>, declaration.columns[index]!)) return false;
   }
   return true;
+}
+
+function isNativePromise(value: object): value is Promise<unknown> {
+  return witnessReflectApply<boolean>(nativeFunctionHasInstance, NativePromise, [value]);
 }
 
 function mergeReadBoundaries(
@@ -674,7 +715,7 @@ function sqliteResultColumns(
     const statement = client.prepare(sql);
     const columns = statement.columns;
     if (typeof columns !== 'function') return undefined;
-    const result = columns.call(statement);
+    const result = witnessReflectApply<unknown>(columns, statement, []);
     return witnessIsArray(result) ? (result as SecretReadSqliteColumnOrigin[]) : undefined;
   } catch {
     return undefined;
@@ -879,6 +920,36 @@ function asciiLowerCharacter(value: string): string {
   return value;
 }
 
+function trimSecurityString(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && isSecurityWhitespace(value[start]!)) start += 1;
+  while (end > start && isSecurityWhitespace(value[end - 1]!)) end -= 1;
+  let trimmed = '';
+  for (let index = start; index < end; index += 1) trimmed += value[index];
+  return trimmed;
+}
+
+function isSecurityWhitespace(value: string): boolean {
+  return (
+    value === ' ' ||
+    value === '\t' ||
+    value === '\n' ||
+    value === '\r' ||
+    value === '\f' ||
+    value === '\v' ||
+    value === '\u00a0' ||
+    value === '\u1680' ||
+    (value >= '\u2000' && value <= '\u200a') ||
+    value === '\u2028' ||
+    value === '\u2029' ||
+    value === '\u202f' ||
+    value === '\u205f' ||
+    value === '\u3000' ||
+    value === '\ufeff'
+  );
+}
+
 function isSqlIdentifierStart(value: string): boolean {
   const lower = asciiLowerCharacter(value);
   return (lower >= 'a' && lower <= 'z') || value === '_';
@@ -907,7 +978,10 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
   const toSQL = (value as { toSQL?: unknown }).toSQL;
   if (typeof toSQL === 'function') {
     try {
-      const result = toSQL.call(value) as { params?: unknown; sql?: unknown };
+      const result = witnessReflectApply<unknown>(toSQL, value, []) as {
+        params?: unknown;
+        sql?: unknown;
+      };
       if (typeof result?.sql === 'string') {
         return {
           params: witnessIsArray(result.params) ? result.params : params,

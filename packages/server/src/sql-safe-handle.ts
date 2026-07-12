@@ -13,6 +13,7 @@ import {
   isPreparedStatementExecutionMethod,
   isSqlHandleLike,
   isSqlHandleProperty,
+  snapshotManagedSqlRecipe,
   snapshotManagedSqlStatement,
   sqlSafetyMetadata,
   validateManagedSqlStatement,
@@ -20,7 +21,7 @@ import {
   type SqlSafetyMode,
 } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
-import { count as drizzleCount } from 'drizzle-orm';
+import { count as drizzleCount, Param, SQL, StringChunk } from 'drizzle-orm';
 import {
   classifyStatement,
   UNTABLED_SQL_WRITE,
@@ -59,6 +60,19 @@ import {
 } from './security-witness-intrinsics.js';
 
 const intrinsicObjectPrototype = witnessGetPrototypeOf({});
+const nativeSymbolKeyFor = Symbol.keyFor;
+const symbolDescriptionDescriptor = witnessGetOwnPropertyDescriptor(
+  Symbol.prototype,
+  'description',
+);
+if (
+  symbolDescriptionDescriptor === undefined ||
+  !('get' in symbolDescriptionDescriptor) ||
+  typeof symbolDescriptionDescriptor.get !== 'function'
+) {
+  throw new TypeError('Kovo managed SQL symbol controls are unavailable.');
+}
+const nativeSymbolDescription = witnessReflectGet(symbolDescriptionDescriptor, 'get') as Function;
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
 export interface ManagedSqlWritePolicy {
@@ -414,6 +428,11 @@ function canonicalizeNativeDrizzleCountStar(
     witnessWeakMapSet(seen, value, canonical);
     return canonical;
   }
+  const pinnedSql = canonicalPinnedDrizzleSql(value);
+  if (pinnedSql !== undefined) {
+    witnessWeakMapSet(seen, value, pinnedSql);
+    return pinnedSql;
+  }
 
   if (witnessIsArray(value)) {
     const clone: unknown[] = [];
@@ -477,6 +496,58 @@ function canonicalizeNativeDrizzleCountStar(
     );
   }
   return clone;
+}
+
+function canonicalPinnedDrizzleSql(value: object): object | undefined {
+  const kinds = nativeDrizzleEntityKinds(value);
+  if (witnessSetHas(kinds, 'SQL')) {
+    if (!validateManagedSqlStatement(value).ok) return undefined;
+    const recipe = snapshotManagedSqlRecipe(value);
+    if (recipe === undefined) return undefined;
+    const chunks: (StringChunk | Param)[] = [];
+    for (let index = 0; index < recipe.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(recipe, index);
+      if (descriptor === undefined || !('value' in descriptor))
+        throw nativeDrizzleProvenanceError();
+      const chunk = descriptor.value;
+      if (chunk.kind === 'text') {
+        const text: string[] = [];
+        appendSqlSafetyValue(text, chunk.value);
+        const stringChunk = new StringChunk('');
+        witnessDefineProperty(stringChunk, 'value', { value: witnessFreeze(text) });
+        witnessFreeze(stringChunk);
+        appendSqlSafetyValue(chunks, stringChunk);
+      } else {
+        appendSqlSafetyValue(chunks, witnessFreeze(new Param(chunk.value)));
+      }
+    }
+    const statement = new SQL([]);
+    witnessDefineProperty(statement, 'queryChunks', { value: witnessFreeze(chunks) });
+    witnessDefineProperty(statement, 'usedTables', { value: witnessFreeze([]) });
+    witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, statement);
+    return witnessFreeze(statement);
+  }
+
+  if (!witnessSetHas(kinds, 'SQL.Aliased')) return undefined;
+  const statement = witnessGetOwnPropertyDescriptor(value, 'sql');
+  const fieldAlias = witnessGetOwnPropertyDescriptor(value, 'fieldAlias');
+  if (
+    statement === undefined ||
+    !('value' in statement) ||
+    !isRecord(statement.value) ||
+    fieldAlias === undefined ||
+    !('value' in fieldAlias) ||
+    typeof fieldAlias.value !== 'string'
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  const canonical = canonicalPinnedDrizzleSql(statement.value);
+  if (canonical === undefined || !witnessSetHas(nativeDrizzleEntityKinds(canonical), 'SQL')) {
+    return undefined;
+  }
+  const aliased = new SQL.Aliased(canonical as SQL, fieldAlias.value);
+  witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, aliased);
+  return witnessFreeze(aliased);
 }
 
 function canonicalNativeDrizzleCountStar(value: object): object | undefined {
@@ -695,12 +766,11 @@ function nativeDrizzleSqlCarrierVerdict(
       witnessSetHas(kinds, 'Param') ||
       witnessSetHas(kinds, 'Placeholder') ||
       witnessSetHas(kinds, 'Column') ||
-      witnessSetHas(kinds, 'Table') ||
-      witnessSetHas(kinds, 'View') ||
-      witnessSetHas(kinds, 'Subquery')
+      witnessSetHas(kinds, 'Table')
     ) {
       return 'safe';
     }
+    if (witnessSetHas(kinds, 'View') || witnessSetHas(kinds, 'Subquery')) return 'unsafe';
 
     // SQL.Aliased and future Drizzle wrappers remain closed by inspecting their own data fields
     // without invoking accessors. This prevents a new non-plain wrapper from restoring the former
@@ -797,10 +867,7 @@ function nativeDrizzleEntityKinds(value: object): Set<string> {
       const keys = witnessOwnKeys(descriptors);
       for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
         const key = keys[keyIndex]!;
-        if (
-          typeof key !== 'symbol' ||
-          (Symbol.keyFor(key) ?? key.description) !== 'drizzle:entityKind'
-        ) {
+        if (typeof key !== 'symbol' || intrinsicSymbolName(key) !== 'drizzle:entityKind') {
           continue;
         }
         const descriptor = witnessReflectGet(descriptors, key) as PropertyDescriptor | undefined;
@@ -812,6 +879,19 @@ function nativeDrizzleEntityKinds(value: object): Set<string> {
     prototype = witnessGetPrototypeOf(prototype);
   }
   return kinds;
+}
+
+function intrinsicSymbolName(value: symbol): string | undefined {
+  const registered = witnessReflectApply<unknown>(nativeSymbolKeyFor, Symbol, [value]);
+  if (registered !== undefined && typeof registered !== 'string') {
+    throw new TypeError('Kovo managed SQL received an invalid registered symbol name.');
+  }
+  if (typeof registered === 'string') return registered;
+  const description = witnessReflectApply<unknown>(nativeSymbolDescription, value, []);
+  if (description !== undefined && typeof description !== 'string') {
+    throw new TypeError('Kovo managed SQL received an invalid symbol description.');
+  }
+  return description as string | undefined;
 }
 
 function guardedSqlMethod(

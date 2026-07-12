@@ -67,6 +67,8 @@ import {
   witnessMapSet,
   witnessObjectIs,
   witnessReflectApply,
+  witnessReflectGet,
+  witnessOwnKeys,
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
@@ -1384,8 +1386,10 @@ function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointR
   return new Proxy(request, {
     get(target, property) {
       if (property === 'db') return tx;
-      const value = Reflect.get(target, property, target) as unknown;
-      return typeof value === 'function' ? value.bind(target) : value;
+      const value = witnessReflectGet(target, property, target);
+      return typeof value === 'function'
+        ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+        : value;
     },
     getOwnPropertyDescriptor(target, property) {
       if (property === 'db') {
@@ -1396,14 +1400,23 @@ function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointR
           writable: false,
         };
       }
-      return Reflect.getOwnPropertyDescriptor(target, property);
+      return witnessGetOwnPropertyDescriptor(target, property);
     },
     has(target, property) {
       return property === 'db' || property in target;
     },
     ownKeys(target) {
-      const keys = Reflect.ownKeys(target);
-      return keys.includes('db') ? keys : [...keys, 'db'];
+      const keys = witnessOwnKeys(target) as (string | symbol)[];
+      for (let index = 0; index < keys.length; index += 1) {
+        if (keys[index] === 'db') return keys;
+      }
+      witnessDefineProperty(keys, keys.length, {
+        configurable: true,
+        enumerable: true,
+        value: 'db',
+        writable: true,
+      });
+      return keys;
     },
   }) as EndpointRequest;
 }
