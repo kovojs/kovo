@@ -645,4 +645,45 @@ export const ClockLabel = component({
     );
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot replace generated client handler exports through Array.map', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedClientHandlerMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { attributeName?: unknown; exportName?: unknown } | undefined;
+        if (
+          typeof first?.attributeName === 'string' &&
+          typeof first.exportName === 'string' &&
+          callback.name === 'emitHandlerExport'
+        ) {
+          poisonHits += 1;
+          return ['globalThis.KOVO_HANDLER_INJECTION = true;'] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'track-button.tsx',
+        source: `
+import { component } from '@kovojs/core';
+import { track } from './analytics';
+export const TrackButton = component({
+  render: () => <button onClick={() => track('click')}>Track</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_HANDLER_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
 });

@@ -2,7 +2,9 @@ import { compilerIrHeader } from '../ir.js';
 import { headlessUiGeneratedHandlerNames } from '../generated/headless-ui-generated-handlers.js';
 import {
   compilerArrayJoin,
+  compilerArrayLength,
   compilerCreateSet,
+  compilerDefineOwnDataProperty,
   compilerJsonStringify,
   compilerOwnDataValue,
   compilerRegExpExec,
@@ -46,33 +48,95 @@ export function emitClientModule(
   componentName: string,
   clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
 ): string {
-  const imports = runtimeGeneratedImportNames(
-    handlers,
-    queryUpdatePlans,
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Client handlers');
+  const stateDeriveSnapshot = compilerSnapshotDenseArray(
     stateDerives,
+    'Client state derives',
+  );
+  const imports = runtimeGeneratedImportNames(
+    handlerSnapshot,
+    queryUpdatePlans,
+    stateDeriveSnapshot,
     clockUpdatePlans,
   );
   const importLine =
-    imports.length > 0
-      ? `import { ${imports.join(', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n`
+    compilerArrayLength(imports, 'Client runtime imports') > 0
+      ? `import { ${compilerArrayJoin(imports, ', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n`
       : '';
   const dependencyImportLines = emitClientImportDependencies(
-    handlers.flatMap((handler) => [...(handler.clientImports ?? [])]),
+    clientHandlerImports(handlerSnapshot),
   );
   const dependencyConstantLines = emitClientConstantDependencies(
-    handlers.flatMap((handler) => [...(handler.clientConstants ?? [])]),
+    clientHandlerConstants(handlerSnapshot),
   );
-  const handlerExports = handlers.length ? handlers.map(emitHandlerExport).join('\n') : '';
-  const stateDeriveExports = stateDerives.map(emitStateDeriveExport).join('\n');
+  const handlerExportParts: string[] = [];
+  for (let index = 0; index < handlerSnapshot.length; index += 1) {
+    appendClientValue(
+      handlerExportParts,
+      emitHandlerExport(handlerSnapshot[index]!),
+      'Client handler exports',
+    );
+  }
+  const handlerExports = compilerArrayJoin(handlerExportParts, '\n');
+  const stateDeriveExportParts: string[] = [];
+  for (let index = 0; index < stateDeriveSnapshot.length; index += 1) {
+    appendClientValue(
+      stateDeriveExportParts,
+      emitStateDeriveExport(stateDeriveSnapshot[index]!),
+      'Client state derive exports',
+    );
+  }
+  const stateDeriveExports = compilerArrayJoin(stateDeriveExportParts, '\n');
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
   const clockPlanExport = emitClockUpdatePlanExport(componentName, clockUpdatePlans);
-  const exports = [handlerExports, stateDeriveExports, queryPlanExport, clockPlanExport]
-    .filter(Boolean)
-    .join('\n\n');
+  const exportParts: string[] = [];
+  if (handlerExports.length > 0)
+    appendClientValue(exportParts, handlerExports, 'Client module export blocks');
+  if (stateDeriveExports.length > 0)
+    appendClientValue(exportParts, stateDeriveExports, 'Client module export blocks');
+  if (queryPlanExport.length > 0)
+    appendClientValue(exportParts, queryPlanExport, 'Client module export blocks');
+  if (clockPlanExport.length > 0)
+    appendClientValue(exportParts, clockPlanExport, 'Client module export blocks');
+  const exports = compilerArrayJoin(exportParts, '\n\n');
 
   return `${compilerIrHeader}
 ${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// no client handlers emitted'}
 `;
+}
+
+function clientHandlerImports(
+  handlers: readonly HandlerLowering[],
+): ClientImportDependency[] {
+  const imports: ClientImportDependency[] = [];
+  for (let handlerIndex = 0; handlerIndex < handlers.length; handlerIndex += 1) {
+    const values = handlers[handlerIndex]!.clientImports;
+    if (values === undefined) continue;
+    const snapshot = compilerSnapshotDenseArray(values, 'Client handler imports');
+    for (let index = 0; index < snapshot.length; index += 1) {
+      appendClientValue(imports, snapshot[index]!, 'Client import dependencies');
+    }
+  }
+  return imports;
+}
+
+function clientHandlerConstants(
+  handlers: readonly HandlerLowering[],
+): ClientConstantDependency[] {
+  const constants: ClientConstantDependency[] = [];
+  for (let handlerIndex = 0; handlerIndex < handlers.length; handlerIndex += 1) {
+    const values = handlers[handlerIndex]!.clientConstants;
+    if (values === undefined) continue;
+    const snapshot = compilerSnapshotDenseArray(values, 'Client handler constants');
+    for (let index = 0; index < snapshot.length; index += 1) {
+      appendClientValue(constants, snapshot[index]!, 'Client constant dependencies');
+    }
+  }
+  return constants;
+}
+
+function appendClientValue<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
 }
 
 export function emitClientModuleImportManifest(
