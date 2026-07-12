@@ -169,7 +169,7 @@ export function jsx(
   const attributes = renderJsxAttributes(type, intrinsicProps, key);
   if (isVoidElement(type)) return renderedHtml(`<${type}${attributes}>`);
 
-  const children = renderJsxElementChildren(type, renderJsxContent(intrinsicProps));
+  const children = renderJsxElementChildren(type, intrinsicProps);
   const afterChildren = type === 'form' ? renderFormAfterChildrenContent(intrinsicProps, key) : '';
   return isPromiseLike(children)
     ? formHelperPromiseThen(children, (html) =>
@@ -603,12 +603,10 @@ function revealSubmittedFormValue(value: unknown): unknown {
   return revealUntrustedRequestValue(value, 'validated mutation form failure input');
 }
 
-function renderJsxContent(props: JsxProps): JsxChild {
+function renderJsxElementChildren(type: string, props: JsxProps): MaybePromise<string> {
   const rawHtml = rawHtmlContent(props);
-  return rawHtml === undefined ? props.children : renderedHtml(rawHtml);
-}
-
-function renderJsxElementChildren(type: string, children: JsxChild): MaybePromise<string> {
+  if (rawHtml !== undefined) return rawHtml;
+  const children = formHelperOwnDataValue(props, 'children') as JsxChild;
   return isExecutableTextElement(type)
     ? renderExecutableElementChildren(type, children)
     : renderJsxChildren(children);
@@ -623,29 +621,24 @@ function renderExecutableElementChildren(type: string, children: JsxChild): Mayb
   if (formHelperIsArray(children)) {
     return renderJsxChildArray(children, (child) => renderExecutableElementChildren(type, child));
   }
-  if (plainExecutableElementText(children)) {
-    drainRuntimeSinkSecurityEvent(
-      runtimeElementSinkEvent(
-        type,
-        'raw-html',
-        executableElementTextValue(children),
-        'element text is executable',
-      ),
-    );
-    return '';
+  if (typeof children === 'object' && children !== null) {
+    const trusted = kovoTrustedHtmlContent(children);
+    if (trusted !== '') return trusted;
   }
-  return renderJsxChildren(children);
+  drainRuntimeSinkSecurityEvent(
+    runtimeElementSinkEvent(
+      type,
+      'raw-html',
+      executableElementTextValue(children),
+      'element text is executable and lacks direct TrustedHtml provenance',
+    ),
+  );
+  return '';
 }
 
 function isExecutableTextElement(type: string): boolean {
   const tag = formHelperStringToLowerCase(type);
   return tag === 'script' || tag === 'style';
-}
-
-function plainExecutableElementText(children: JsxChild): boolean {
-  return (
-    typeof children === 'string' || typeof children === 'number' || typeof children === 'boolean'
-  );
 }
 
 function executableElementTextValue(children: JsxChild): string {

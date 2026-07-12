@@ -4,11 +4,12 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 
 import { describe, expect, it } from 'vitest';
 
+import { trustedHtml } from '@kovojs/browser';
 import { component, FieldError, FormError } from '@kovojs/core';
 
 import { renderedHtml, renderHtmlValue } from './html.js';
 import { currentJsxMutationFormHelperRegistry, runWithJsxRequestContext } from './jsx-context.js';
-import { jsx, type JsxChild } from './jsx-runtime.js';
+import { Fragment, jsx, type JsxChild } from './jsx-runtime.js';
 
 describe('JSX output authority security', () => {
   it('escapes raw strings from runtime-constructed component renderers', async () => {
@@ -110,6 +111,22 @@ describe('JSX output authority security', () => {
     expect(arrayScript).not.toContain(arrayPayload);
     expect(promiseScript).toBe('<script></script>');
     expect(promiseScript).not.toContain(promisePayload);
+  });
+
+  it('does not let nested rendered HTML launder ordinary text into executable elements', async () => {
+    const payload = 'globalThis.renderedChildScriptXss()';
+    const fragment = jsx(Fragment, { children: payload });
+    const componentChild = jsx(() => payload, {});
+
+    expect(renderHtmlValue(jsx('script', { children: fragment as JsxChild }))).toBe(
+      '<script></script>',
+    );
+    expect(renderHtmlValue(jsx('script', { children: componentChild as JsxChild }))).toBe(
+      '<script></script>',
+    );
+    expect(
+      renderHtmlValue(jsx('script', { children: trustedHtml('globalThis.reviewedScript()') })),
+    ).toBe('<script>globalThis.reviewedScript()</script>');
   });
 
   it('pins executable-element and meta-refresh classifiers after late lowercase replacement', () => {

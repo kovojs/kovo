@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    45 | C1-C45 |
+| Critical |    46 | C1-C46 |
 | High     |    29 | H1-H29 |
 | Medium   |     9 | M1-M9  |
 
@@ -511,6 +511,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     carrier; value/session/user/roles and cookie arrays are independently snapshotted and validated,
     inherited/accessor/proxy-unstable or malformed fields fail closed, and only the framework-owned
     settled session snapshot can establish principal authority.
+
+- [x] **C46 - Nested rendered JSX launders ordinary text into executable script bytes.**
+      `packages/server/src/jsx-runtime.ts`
+  - Wrapping an ordinary request string in a harmless rendered `<Fragment>` converted it to generic
+    `RenderedHtml`. The executable-element choke rejected scalar strings but accepted that rendered
+    carrier, emitting `globalThis...` verbatim inside `<script>` without `TrustedHtml` provenance.
+  - **Acceptance:** executable-element recursion distinguishes direct explicit `TrustedHtml` from
+    generic rendered markup at every scalar, array, Promise, fragment, and component boundary;
+    ordinary text cannot gain script/style authority merely by passing through JSX composition.
+  - **Evidence:** the 132-test JSX/component/form/output matrix and server dist+DTS build pass; the
+    independent Fragment-laundering proof now emits an empty script while direct `TrustedHtml`
+    remains the explicit reviewed escape.
 
 ## High
 
