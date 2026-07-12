@@ -194,6 +194,30 @@ describe('reference app shell HTTP entry', () => {
     const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
     const loginCsrfCookie = cookiePair(loginPage.headers.get('set-cookie') ?? '');
 
+    const otherLoginPage = await fetch(`${origin}/login?next=/admin`);
+    const otherLoginBody = await otherLoginPage.text();
+    const otherLoginCsrfCookie = cookiePair(otherLoginPage.headers.get('set-cookie') ?? '');
+    expect(hiddenInputValue(otherLoginBody, 'csrf')).not.toBe(loginCsrf);
+    expect(otherLoginCsrfCookie).not.toBe(loginCsrfCookie);
+    const crossBoundForm = new URLSearchParams({
+      csrf: loginCsrf,
+      email: 'ada@example.com',
+      next: '/admin',
+      password: 'correct',
+    });
+    const crossBoundLogin = await fetch(`${origin}/_m/auth/sign-in`, {
+      body: crossBoundForm,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: otherLoginCsrfCookie,
+        Origin: origin,
+      },
+      method: 'POST',
+      redirect: 'manual',
+    });
+    expect(crossBoundLogin.status).toBe(422);
+    expect(await crossBoundLogin.text()).toContain('data-error-code="CSRF"');
+
     const failedForm = new URLSearchParams();
     failedForm.set('csrf', loginCsrf);
     failedForm.set('email', 'ada@example.com');
