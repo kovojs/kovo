@@ -570,6 +570,7 @@ function installInlineKovoLoader(im) {
     applyStylePromotion: () => ps(),
     document: doc,
     morph: m,
+    onSessionTransition: () => retireBroadcast(),
     queryAll: qa,
     replayScripts: rscr,
     replaceBody: rbd,
@@ -702,15 +703,27 @@ function installInlineKovoLoader(im) {
   const sfail = () => {
     for (const key in se) se[key].setAttribute?.('data-stream-state', 'error');
   };
-  const ax = (chunks, applyQueries) => {
+  const ax = (chunks) => {
     const textStart = chunks.texts[0]?.start ?? 1 / 0;
     af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start < textStart)));
     const appliedTexts = at(readStreamTextChunksFromElements(chunks.texts));
     af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start >= textStart)));
-    aq(chunks.queries, applyQueries);
     return appliedTexts;
   };
-  const cp = (body) => {
+  const streamRecoveryError = {};
+  const recoverStream = async (source) => {
+    try {
+      // Cancellation is best effort and must not let a hostile/stuck underlying source delay the
+      // security recovery. Attach a rejection sink, then hard-reload immediately.
+      source?.cancel?.()?.catch?.(() => {});
+    } catch {}
+    await location.reload?.();
+  };
+  const cp = (body, state) => {
+    if (state.done) {
+      if (body.trim()) throw Error('Streaming mutation emitted bytes after <kovo-done>');
+      return '';
+    }
     const chunks = readMutationResponseElementChunks(body);
     const dones = readElementChunks(body, 'kovo-done');
     let end = 0;
@@ -718,42 +731,59 @@ function installInlineKovoLoader(im) {
       for (const x of group) if (x.end > end) end = x.end;
     }
     if (!end) return body;
+    state.queries.push(...chunks.queries);
     if (!dones.length) {
-      if (!ax(chunks, false)) {
+      if (!ax(chunks)) {
         sfail();
         throw Error('Missing kovo-text target');
       }
       return body.slice(end);
     }
-    const complete = dones.some((x) => (readAttribute(x.attrs, 'reason') ?? 'complete') === 'complete');
-    if (!ax(chunks, complete)) {
+    const firstDone = dones.reduce((first, current) => current.start < first.start ? current : first);
+    const hasPostDoneChunk = [chunks.queries, chunks.fragments, chunks.texts]
+      .some((group) => group.some((chunk) => chunk.start > firstDone.start));
+    const reason = dones
+      .map((x) => readAttribute(x.attrs, 'reason') ?? 'complete')
+      .find((value) => value !== 'complete') ?? (hasPostDoneChunk ? 'invalid' : 'complete');
+    if (!ax(chunks)) {
       sfail();
       throw Error('Missing kovo-text target');
     }
-    for (const x of dones) {
-      const reason = readAttribute(x.attrs, 'reason') ?? 'complete';
-      if (reason && reason !== 'complete') sfail();
+    state.done = true;
+    if (reason === 'complete') {
+      aq(state.queries, true);
+      state.queries.length = 0;
+      return body.slice(end);
     }
-    return body.slice(end);
+    aq(state.queries, false);
+    state.queries.length = 0;
+    sfail();
+    throw Error('Streaming mutation was not confirmed: ' + reason);
   };
   const asr = async (body) => {
     const reader = body.getReader();
     const decoder = new TextDecoder();
+    const state = { done: false, queries: [] };
     let pending = '';
     try {
       while (true) {
         const read = await reader.read();
         if (read.done) break;
-        pending = cp(pending + decoder.decode(read.value, { stream: true }));
+        pending = cp(pending + decoder.decode(read.value, { stream: true }), state);
       }
       pending += decoder.decode();
       if (pending.trim()) {
         sfail();
-        throw Error();
+        throw Error('Streaming mutation ended with an incomplete wire element');
       }
+      if (!state.done) throw Error('Streaming mutation ended without <kovo-done>');
     } catch (error) {
       sfail();
-      throw error;
+      // bugz-26 M3 / SPEC §9.1: partial fragments are not authority. Cancel the reader and
+      // initiate framework-owned hard recovery before the promise rejects; the private sentinel
+      // prevents the generic form fallback from racing a second navigation.
+      await recoverStream(reader);
+      throw streamRecoveryError;
     } finally {
       reader.releaseLock?.();
     }
@@ -814,12 +844,15 @@ function installInlineKovoLoader(im) {
   const rst = (response) =>
     (response.headers?.get('Kovo-Session-Transition') ??
       response.headers?.get('kovo-session-transition') ?? '').trim().toLowerCase() === 'reload';
-  const retireSession = () => {
+  function retireBroadcast() {
     if (bc) {
       bc.onmessage = null;
       bc.close?.();
       bc = undefined;
     }
+  }
+  const retireSession = () => {
+    retireBroadcast();
     location.reload?.();
   };
   const badp = (value) => {
@@ -901,21 +934,30 @@ function installInlineKovoLoader(im) {
           retireSession();
           return;
         }
-        return streaming && response.body
-          ? asr(response.body)
-          : response.text().then((text) => {
-            const changes = chg(response);
-            if (eaf(response, changes, text)) {
-              ng(ant(form, body));
-              return;
-            }
-            ab(text, bh(response));
-            if ((response.status ?? 200) >= 200 && (response.status ?? 200) < 300 && response.ok !== false) {
-              pb(text, changes);
-            }
-          });
+        if (streaming && response.body) {
+          // bugz-26 H6 / SPEC §14: validate the response build before acquiring a reader. A
+          // missing/mismatched token must cancel unread bytes and hard-reload with zero apply.
+          const responseBuild = bh(response);
+          if (kb() && (!responseBuild || responseBuild !== kb())) {
+            return recoverStream(response.body);
+          }
+          return asr(response.body);
+        }
+        return response.text().then((text) => {
+          const changes = chg(response);
+          if (eaf(response, changes, text)) {
+            ng(ant(form, body));
+            return;
+          }
+          ab(text, bh(response));
+          if ((response.status ?? 200) >= 200 && (response.status ?? 200) < 300 && response.ok !== false) {
+            pb(text, changes);
+          }
+        });
       })
-      .catch(() => fsb(form));
+      .catch((error) => {
+        if (error !== streamRecoveryError) fsb(form);
+      });
   };
   const rp = (el) =>
     (el.getAttribute('kovo-param-types') || '').split(/[\s,]+/).reduce((types, entry) => {

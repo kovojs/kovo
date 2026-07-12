@@ -1194,10 +1194,12 @@ describe('inline loader enhanced submit source', () => {
         document: globalRecord.document,
         fetch: globalRecord.fetch,
         importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const formData = { kind: 'missing-target-stream-form-data' };
       const formAttrs = new Map<string, string>();
+      const reload = vi.fn();
       const form = {
         action: '/_m/chat/send',
         getAttribute(name: string) {
@@ -1241,6 +1243,14 @@ describe('inline loader enhanced submit source', () => {
           },
         };
         globalRecord.fetch = vi.fn(async () => ({ body }));
+        globalRecord.location = {
+          hash: '',
+          href: 'https://kovo.test/chat',
+          origin: 'https://kovo.test',
+          pathname: '/chat',
+          reload,
+          search: '',
+        };
 
         installSource(
           vi.fn(async () => ({})),
@@ -1261,8 +1271,9 @@ describe('inline loader enhanced submit source', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(formAttrs.get('data-error-code')).toBe('NETWORK_ERROR');
-        expect(formAttrs.get('kovo-error')).toBe('');
+        expect(reload).toHaveBeenCalledTimes(1);
+        expect(formAttrs.get('data-error-code')).toBeUndefined();
+        expect(formAttrs.get('kovo-error')).toBeUndefined();
       } finally {
         Object.assign(globalRecord, {
           FormData: originals.FormData,
@@ -1271,6 +1282,7 @@ describe('inline loader enhanced submit source', () => {
           addEventListener: originals.addEventListener,
           document: originals.document,
           fetch: originals.fetch,
+          location: originals.location,
         });
         if (originals.importModule === undefined) {
           delete globalRecord.__kovoInlineImport;

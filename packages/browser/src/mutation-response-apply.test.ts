@@ -3,7 +3,7 @@ import {
   renderedFragmentHtmlContent,
   type RenderedFragmentHtml,
 } from '@kovojs/core/internal/sink-policy';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyMutationResponseBodyToRuntime,
@@ -22,6 +22,7 @@ import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest(['/c/markdown.client.js']);
 afterAll(restoreClientModuleManifest);
+afterEach(() => vi.unstubAllGlobals());
 
 type FragmentSnapshot = {
   html: string;
@@ -353,12 +354,12 @@ describe('decoded mutation response apply', () => {
     expect(applied.streams).toEqual(['assistant:a1']);
   });
 
-  it('reverts applied query/fragment truth and signals failure on a non-complete <kovo-done> (I1)', async () => {
+  it('reverts query truth and hard-recovers fragments on a non-complete <kovo-done> (I1)', async () => {
     // I1 (SPEC §9.1:810): a streaming mutation that ends with <kovo-done reason!="complete">
     // applies query truths + fragment morphs PROGRESSIVELY, but the partial is NOT confirmed.
     // The runtime must (1) revert the partially-applied query truth (not leave it committed),
-    // (2) mark the stream-text target failed, and (3) signal failure to the caller (throw) so
-    // the form is marked failed and server truth is refetched — never return a success result.
+    // (2) mark the stream-text target failed, and (3) hard-reload authoritative server truth
+    // before signaling failure to the caller — never return a success result.
     const store = createQueryStore();
     // Seed a pre-stream server truth for `chat` so we can prove the revert restores it.
     store.set('chat', { count: 0 });
@@ -384,6 +385,8 @@ describe('decoded mutation response apply', () => {
         controller.enqueue(encoder.encode('<kovo-query name="chat">{"count":99}</kovo-query>'));
         controller.enqueue(encoder.encode('<kovo-text target="assistant:a1">partial</kovo-text>'));
         controller.enqueue(encoder.encode('<kovo-done reason="error"></kovo-done>'));
+        // A later success marker must never launder the earlier failure terminator.
+        controller.enqueue(encoder.encode('<kovo-done reason="complete"></kovo-done>'));
         controller.close();
       },
     });
@@ -421,6 +424,58 @@ describe('decoded mutation response apply', () => {
     ).rejects.toThrow(/not confirmed/);
     expect(store.get('cart')).toBeUndefined();
     expect(onError).toHaveBeenCalled();
+  });
+
+  it('awaits framework-owned hard recovery before rejecting even when an onError hook is present', async () => {
+    let finishRecovery: (() => void) | undefined;
+    const recovery = new Promise<void>((resolve) => {
+      finishRecovery = resolve;
+    });
+    const reload = vi.fn(() => recovery);
+    vi.stubGlobal('location', { reload });
+    const store = createQueryStore();
+    store.set('chat', { count: 0 });
+    const root = new FakeMorphRoot();
+    const target = new FakeMorphTarget('<section>AUTHORITATIVE</section>');
+    root.targets.set('messages', target);
+    const onError = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(
+            '<kovo-fragment target="messages" mode="append"><article>UNCONFIRMED</article></kovo-fragment>',
+          ),
+        );
+        controller.enqueue(encoder.encode('<kovo-query name="chat">{"count":99}</kovo-query>'));
+        controller.enqueue(encoder.encode('<kovo-done reason="error"></kovo-done>'));
+        controller.close();
+      },
+    });
+
+    let settled = false;
+    const outcome = applyStreamingMutationResponseBodyToRuntime({
+      body,
+      onError,
+      root,
+      store,
+    }).then(
+      () => new Error('unexpected stream success'),
+      (error: unknown) => error,
+    );
+    void outcome.finally(() => {
+      settled = true;
+    });
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(store.get('chat')).toEqual({ count: 0 });
+    expect(onError).toHaveBeenCalled();
+
+    finishRecovery?.();
+    await expect(outcome).resolves.toBeInstanceOf(Error);
+    expect(settled).toBe(true);
   });
 
   it('signals failure when a stream is interrupted with no <kovo-done> terminator (I1)', async () => {

@@ -199,8 +199,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   // interruption; a clean server stream ALWAYS terminates with <kovo-done>) means the response
   // is NOT confirmed: the runtime must not present the partial as success. We snapshot the
   // pre-apply value of every touched query the first time it arrives so we can REVERT the query
-  // truth, and then throw so the caller marks the submitted form failed and refetches server
-  // truth (matching the buffered path's failure handling) instead of returning a success result.
+  // truth, hard-reload server authority, and then reject instead of returning a success result.
   const queryRevertLog = new Map<string, { key?: string; name: string; previousValue: unknown }>();
   const callerBeforeApplyQueries = applyOptions.beforeApplyQueries;
   const trackingApplyOptions: ApplyMutationResponseChunksToRuntimeOptions = {
@@ -292,24 +291,45 @@ export async function applyStreamingMutationResponseBodyToRuntime(
     // I1 + L13-3 (SPEC §9.1:810): every failure path (non-complete done, interrupted stream,
     // mid-stream abort, reader error) converges here. Revert the partially-applied query truths
     // to their pre-stream values so the store keeps no unconfirmed data, abort the stream-text
-    // buffer (marks the stream-text targets failed), report once, and re-throw so the caller
-    // marks the submitted form failed and refetches server truth (fragment morphs are reconciled
-    // by that form-failure refetch). Never return the partial as a success result.
+    // buffer (marks the stream-text targets failed), report once, hard-reload authoritative server
+    // truth, and re-throw. Never return the partial as a success result.
     streamAbortController?.abort();
     revertAppliedQueries(options.store, queryRevertLog);
-    if (streamTextBuffer) {
-      // The buffer's `fail` marks stream-text targets failed AND reports via its onError
-      // (constructed from options.onError), so reporting once here would double-fire.
-      await streamTextBuffer.fail(error);
-    } else {
-      // No stream-text buffer (rootless apply): report the failure directly so the caller
-      // still observes it before the throw.
-      reportRuntimeError(options.onError, error);
+    try {
+      if (streamTextBuffer) {
+        // The buffer's `fail` marks stream-text targets failed AND reports via its onError
+        // (constructed from options.onError), so reporting once here would double-fire.
+        await streamTextBuffer.fail(error);
+      } else {
+        // No stream-text buffer (rootless apply): report the failure directly so the caller
+        // still observes it before the throw.
+        reportRuntimeError(options.onError, error);
+      }
+    } finally {
+      // bugz-26 M3 / SPEC §9.1: fragments are applied progressively and a post-commit stream
+      // failure cannot soundly restore an old DOM snapshot as current server truth. Recovery is
+      // therefore framework-owned and mandatory: start and await a hard reload before rejecting.
+      // This lives below submit/onError so an app error hook cannot accidentally suppress it.
+      await recoverUnconfirmedStreamingMutation();
     }
     throw error;
   } finally {
     reader.releaseLock();
   }
+}
+
+/**
+ * bugz-26 M3 / SPEC §9.1: retire any progressively-applied stream fragments by hard-reloading
+ * authoritative server truth. The structural return type admits an async test/host seam while the
+ * browser Location API remains synchronous; awaiting it keeps the failure boundary ordered.
+ */
+async function recoverUnconfirmedStreamingMutation(): Promise<void> {
+  const location = (
+    globalThis as {
+      location?: { reload?: () => Promise<void> | void };
+    }
+  ).location;
+  await location?.reload?.call(location);
 }
 
 /**
@@ -349,19 +369,21 @@ function revertAppliedQueries(
 }
 
 /**
- * Read the reason of the last `<kovo-done reason="...">` terminator in a streamed mutation body
- * (SPEC §9.1). Returns `undefined` when no done marker is present (an interrupted stream), the
- * reason string otherwise. A missing `reason` attribute is treated as `'complete'` (parity with
- * the inline loader's `reason && reason !== 'complete'` check).
+ * Read the confirmation posture of every `<kovo-done reason="...">` terminator in a streamed
+ * mutation body (SPEC §9.1). Any non-complete reason wins permanently: a later `complete` marker
+ * cannot launder an already-failed stream. Returns `undefined` when no done marker is present (an
+ * interrupted stream). A missing `reason` attribute is treated as `'complete'`.
  */
 function readStreamDoneReason(body: string): string | undefined {
   const pattern = /<kovo-done\b([^>]*)>/gi;
   let match: RegExpExecArray | null;
-  let reason: string | undefined;
+  let sawComplete = false;
   while ((match = pattern.exec(body)) !== null) {
-    reason = readAttribute(match[1] ?? '', 'reason') ?? 'complete';
+    const reason = readAttribute(match[1] ?? '', 'reason') ?? 'complete';
+    if (reason !== 'complete') return reason;
+    sawComplete = true;
   }
-  return reason;
+  return sawComplete ? 'complete' : undefined;
 }
 
 function applyOptionsWithStreamTextBuffer(

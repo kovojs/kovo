@@ -5,6 +5,11 @@ export interface EnhancedNavigationRuntimeOptions {
   applyStylePromotion: () => void;
   document: Document;
   morph: (current: Element, next: Element) => Element | undefined;
+  /**
+   * Retire page-scoped authority (notably the mutation BroadcastChannel) before a fetched
+   * document with a different session fingerprint triggers hard navigation (SPEC §9.3).
+   */
+  onSessionTransition?: () => void;
   queryAll: (root: ParentNode, selector: string) => Element[];
   replayScripts: (root: ParentNode) => void;
   replaceBody: (nextBody: HTMLBodyElement) => HTMLBodyElement;
@@ -29,6 +34,8 @@ export function installEnhancedNavigationRuntime(
 
   const kb = (root: ParentNode = doc) =>
     root.querySelector?.('meta[name="kovo-build"]')?.getAttribute('content') || '';
+  const sessionFingerprint = (root: ParentNode = doc) =>
+    root.querySelector?.('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined;
   const ns = (root: ParentNode) => [...root.querySelectorAll('[kovo-nav-segment]')];
   const nk = (el: Element) =>
     [
@@ -157,6 +164,16 @@ export function installEnhancedNavigationRuntime(
       if (navId !== ni) return;
       const nextBody = nextDoc?.body;
       if (!nextBody || kb() !== kb(nextDoc)) throw Error();
+      // SPEC §9.3: BroadcastChannel is origin-scoped, not principal-scoped. Enhanced navigation
+      // keeps this JavaScript realm alive, so applying a fetched document with a different
+      // `kovo-session` meta would otherwise leave the page-load principal closure installed over
+      // the new principal's DOM. Compare presence as well as value before ANY head/body mutation;
+      // retire the old runtime, then let a hard navigation install a fresh loader and fingerprint.
+      if (sessionFingerprint() !== sessionFingerprint(nextDoc)) {
+        options.onSessionTransition?.();
+        ng(finalUrl.href);
+        return;
+      }
       const currentSegments = ns(doc.body);
       const nextSegments = ns(nextBody);
       if (!nextSegments.length) throw Error();

@@ -113,6 +113,7 @@ function createTestShell({
   documentAttributes = {},
   head = '',
   replaceWith,
+  session,
   segments,
 }: {
   bodyAttributes?: Record<string, string>;
@@ -120,6 +121,7 @@ function createTestShell({
   documentAttributes?: Record<string, string>;
   head?: string;
   replaceWith?: (body: unknown) => void;
+  session?: string;
   segments: TestNavSegment[];
 }) {
   const attrs = (values: Record<string, string>) => ({
@@ -153,6 +155,9 @@ function createTestShell({
     head: createTestHead(head),
     querySelector(selector: string) {
       if (selector === 'meta[name="kovo-build"]') return { getAttribute: () => build };
+      if (selector === 'meta[name="kovo-session"]') {
+        return session === undefined ? null : { getAttribute: () => session };
+      }
       if (selector === 'main,[kovo-nav-segment],h1') return segments[0] ?? null;
       return null;
     },
@@ -302,6 +307,160 @@ async function withEnhancedNavigationHarness(
 }
 
 describe('inline loader enhanced navigation fallback', () => {
+  it.each(inlineSourceInstallCases)(
+    'retires the old broadcast before hard navigation on every session transition through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originalBroadcastChannel = globalRecord.BroadcastChannel;
+
+      class TestBroadcastChannel {
+        closed = false;
+        onmessage: ((event: { data: unknown }) => void) | null = null;
+
+        close(): void {
+          this.closed = true;
+        }
+
+        postMessage(): void {}
+      }
+
+      try {
+        for (const [currentSession, nextSession] of [
+          ['session-a', 'session-b'],
+          ['session-a', undefined],
+          [undefined, 'session-b'],
+        ] as const) {
+          const channels: TestBroadcastChannel[] = [];
+          globalRecord.BroadcastChannel = class extends TestBroadcastChannel {
+            constructor() {
+              super();
+              channels.push(this);
+            }
+          };
+          const currentSegment = new TestNavSegment(
+            {
+              'kovo-nav-kind': 'layout',
+              'kovo-nav-name': 'current',
+              'kovo-nav-segment': 'layout:current',
+            },
+            '<main>current</main>',
+          );
+          const nextSegment = new TestNavSegment(
+            {
+              'kovo-nav-kind': 'layout',
+              'kovo-nav-name': 'next',
+              'kovo-nav-segment': 'layout:next',
+            },
+            '<main>next</main>',
+          );
+          const replaceWith = vi.fn();
+          await withEnhancedNavigationHarness(installSource, {
+            currentDocument: createTestShell({
+              replaceWith,
+              ...(currentSession === undefined ? {} : { session: currentSession }),
+              segments: [currentSegment],
+            }),
+            documents: [
+              createTestShell({
+                ...(nextSession === undefined ? {} : { session: nextSession }),
+                segments: [nextSegment],
+              }),
+            ],
+            fetch: vi.fn(async () => ({
+              headers: { get: () => 'text/html' },
+              text: async () => '<!doctype html><html></html>',
+              url: 'http://app.test/account',
+            })),
+            href: 'http://app.test/account',
+            async assert({ assign, dispatchEvent, pushState }) {
+              await vi.waitFor(() =>
+                expect(assign).toHaveBeenCalledWith('http://app.test/account'),
+              );
+              expect(replaceWith).not.toHaveBeenCalled();
+              expect(pushState).not.toHaveBeenCalled();
+              expect(dispatchEvent).not.toHaveBeenCalledWith(
+                expect.objectContaining({ type: 'kovo:navigate' }),
+              );
+              expect(channels).toHaveLength(1);
+              expect(channels[0]?.closed).toBe(true);
+              expect(channels[0]?.onmessage).toBeNull();
+            },
+          });
+        }
+      } finally {
+        if (originalBroadcastChannel === undefined) delete globalRecord.BroadcastChannel;
+        else globalRecord.BroadcastChannel = originalBroadcastChannel;
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'keeps enhanced navigation and broadcast alive when the session fingerprint is unchanged through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originalBroadcastChannel = globalRecord.BroadcastChannel;
+      const channels: Array<{ closed: boolean; onmessage: unknown }> = [];
+      const replaceWith = vi.fn();
+
+      try {
+        globalRecord.BroadcastChannel = class {
+          closed = false;
+          onmessage: unknown = null;
+
+          constructor() {
+            channels.push(this);
+          }
+
+          close(): void {
+            this.closed = true;
+          }
+
+          postMessage(): void {}
+        };
+        const currentSegment = new TestNavSegment(
+          {
+            'kovo-nav-kind': 'layout',
+            'kovo-nav-name': 'current',
+            'kovo-nav-segment': 'layout:current',
+          },
+          '<main>current</main>',
+        );
+        const nextSegment = new TestNavSegment(
+          {
+            'kovo-nav-kind': 'layout',
+            'kovo-nav-name': 'next',
+            'kovo-nav-segment': 'layout:next',
+          },
+          '<main>next</main>',
+        );
+        await withEnhancedNavigationHarness(installSource, {
+          currentDocument: createTestShell({
+            replaceWith,
+            session: 'session-a',
+            segments: [currentSegment],
+          }),
+          documents: [createTestShell({ session: 'session-a', segments: [nextSegment] })],
+          fetch: vi.fn(async () => ({
+            headers: { get: () => 'text/html' },
+            text: async () => '<!doctype html><html></html>',
+            url: 'http://app.test/account',
+          })),
+          href: 'http://app.test/account',
+          async assert({ assign, pushState }) {
+            await vi.waitFor(() => expect(pushState).toHaveBeenCalled());
+            expect(assign).not.toHaveBeenCalled();
+            expect(replaceWith).toHaveBeenCalled();
+            expect(channels).toHaveLength(1);
+            expect(channels[0]?.closed).toBe(false);
+          },
+        });
+      } finally {
+        if (originalBroadcastChannel === undefined) delete globalRecord.BroadcastChannel;
+        else globalRecord.BroadcastChannel = originalBroadcastChannel;
+      }
+    },
+  );
+
   it.each(inlineSourceInstallCases)(
     'leaves ineligible anchor clicks native through %s',
     async (_name, installSource) => {
