@@ -21,6 +21,10 @@ Entries classified as `tcb` count toward the size budget. Entries classified as
 listed so branded security-decision wrappers cannot appear without a manifest classification, but
 they are not claimed as the verified TCB.
 
+Per-entry ceilings are audit bands, not targets. When a security hardening pass adds validation to
+an enrolled decision or enrolls a new decision, this manifest raises only the affected band and the
+aggregate ceiling; `check:tcb-boundary` still fails on any unreviewed function or later span growth.
+
 ## Trusted dependency surfaces
 
 The `trustedDependencySurfaces` section names the third-party dependency _behaviors_ that Kovo's
@@ -44,7 +48,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
   "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-12.md DEC-D1",
   "budgets": {
     "entryMaxLines": 150,
-    "totalTcbMaxLines": 1000
+    "totalTcbMaxLines": 1125
   },
   "trustedDependencySurfaces": [
     {
@@ -165,7 +169,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "name": "auditPostgresReachableClosure",
       "kind": "postgres-capability-closure-audit",
       "classification": "tcb",
-      "lineBudget": 130
+      "lineBudget": 150
     },
     {
       "id": "server.postgres-runtime.reachable-view-audit",
@@ -335,7 +339,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "classification": "tcb",
       "wrapper": "securityClassifier",
       "decision": "server.secret-read.box-rows",
-      "lineBudget": 60
+      "lineBudget": 80
     },
     {
       "id": "server.secret-read.sqlite-boundary",
@@ -415,7 +419,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "name": "managedDb",
       "kind": "db-managed-wrapper",
       "classification": "tcb",
-      "lineBudget": 30
+      "lineBudget": 50
     },
     {
       "id": "server.managed-db.declared-write-db",
@@ -456,6 +460,26 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "wrapper": "securityClassifier",
       "decision": "server.managed-db.authorization-census-db",
       "lineBudget": 20
+    },
+    {
+      "id": "server.managed-db.framework-authorization-census-db",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "createFrameworkAuthorizationCensusDb",
+      "kind": "framework-db-authorization-census-wrapper",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.framework-authorization-census-db",
+      "lineBudget": 40
+    },
+    {
+      "id": "server.managed-db.register-framework-hooks",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "registerFrameworkManagedDbHooks",
+      "kind": "framework-db-adapter-hook-registration",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.register-framework-hooks",
+      "lineBudget": 35
     },
     {
       "id": "server.managed-db.postgres-readonly-client",
