@@ -2138,16 +2138,54 @@ function generatedNodeDiagnosticFactory(): (
   function neutralizeControls(value: string): string {
     let result = '';
     let cursor = 0;
-    const hex = '0123456789abcdef';
     for (let index = 0; index < value.length; index += 1) {
       const code = charCode(value, index);
       if (!(code <= 0x1f || (code >= 0x7f && code <= 0x9f))) continue;
       result += apply<string>(nativeStringSlice, value, [cursor, index]) + '\\u';
-      result += hex[(code >>> 12) & 0xf] + hex[(code >>> 8) & 0xf];
-      result += hex[(code >>> 4) & 0xf] + hex[code & 0xf];
+      result += hexDigit((code >>> 12) & 0xf) + hexDigit((code >>> 8) & 0xf);
+      result += hexDigit((code >>> 4) & 0xf) + hexDigit(code & 0xf);
       cursor = index + 1;
     }
     return cursor === 0 ? value : result + apply<string>(nativeStringSlice, value, [cursor]);
+  }
+
+  function hexDigit(value: number): string {
+    switch (value) {
+      case 0:
+        return '0';
+      case 1:
+        return '1';
+      case 2:
+        return '2';
+      case 3:
+        return '3';
+      case 4:
+        return '4';
+      case 5:
+        return '5';
+      case 6:
+        return '6';
+      case 7:
+        return '7';
+      case 8:
+        return '8';
+      case 9:
+        return '9';
+      case 10:
+        return 'a';
+      case 11:
+        return 'b';
+      case 12:
+        return 'c';
+      case 13:
+        return 'd';
+      case 14:
+        return 'e';
+      case 15:
+        return 'f';
+      default:
+        throw new TypeError('Kovo diagnostic sanitizer produced an invalid hexadecimal nibble.');
+    }
   }
 
   function sanitizeString(
