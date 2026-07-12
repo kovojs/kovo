@@ -121,6 +121,8 @@ export interface DeclaredWriteSqliteAuthorizerDatabase {
   ): void;
 }
 
+type SqliteAuthorizer = Parameters<DeclaredWriteSqliteAuthorizerDatabase['setAuthorizer']>[0];
+
 /** SQLite engine mechanism options for {@link createDeclaredWriteDb}. */
 export interface DeclaredWriteSqliteAuthorizerOptions {
   constants: DeclaredWriteSqliteAuthorizerConstants;
@@ -351,56 +353,35 @@ export const createDeclaredWriteDb = securityClassifier(
     policy: ManagedSqlWritePolicy,
     options: DeclaredWriteDbOptions,
   ): Db {
-    const runtimePolicy = snapshotManagedWritePolicy(policy);
-    const runtimeOptions = snapshotDeclaredWriteOptions(options);
-    const allowedTables = normalizedStringArray(
-      runtimePolicy.tables ?? [],
-      runtimeOptions.normalizeTableName,
-      'declared write tables',
-    );
+    const [safePolicy, safeOptions, allowed] = snapshotDeclaredWriteBoundary(policy, options);
+    const assertSql = assertSqliteDeclaredWriteStatementAllowed;
     return new Proxy(db as Record<PropertyKey, unknown>, {
       get(target, prop, receiver) {
         const value = witnessReflectGet(target, prop, receiver);
-        if (isDeclaredWriteDirectSqlMethod(prop, runtimeOptions) && typeof value === 'function') {
+        if (isDeclaredWriteDirectSqlMethod(prop, safeOptions) && typeof value === 'function') {
           return (statement: unknown, ...args: unknown[]) => {
-            assertSqliteDeclaredWriteStatementAllowed(
-              statement,
-              args,
-              runtimePolicy,
-              runtimeOptions,
-              allowedTables,
-            );
+            assertSql(statement, args, safePolicy, safeOptions, allowed);
             return witnessReflectApply(value, target, prependManagedArgument(statement, args));
           };
         }
         if (isDeclaredWriteDrizzleMethod(prop) && typeof value === 'function') {
           return (table: unknown, ...args: unknown[]) => {
-            const tableNames = runtimeOptions.tableNames(table);
-            assertDeclaredWriteTablesAllowed(
-              tableNames,
-              runtimePolicy,
-              runtimeOptions,
-              allowedTables,
-            );
+            const names = safeOptions.tableNames(table);
+            assertDeclaredWriteTablesAllowed(names, safePolicy, safeOptions, allowed);
             const builder = witnessReflectApply(value, target, prependManagedArgument(table, args));
             return prop === 'delete'
               ? builder
-              : declaredWriteBuilder(builder, prop, tableNames, runtimeOptions);
+              : declaredWriteBuilder(builder, prop, names, safeOptions);
           };
         }
         if (prop === 'transaction' && typeof value === 'function') {
-          return (callback: (tx: unknown) => unknown, ...args: unknown[]) =>
-            witnessReflectApply(
-              value,
-              target,
-              prependManagedArgument(
-                (tx: unknown) =>
-                  witnessReflectApply(callback, undefined, [
-                    createDeclaredWriteDb(tx as object, runtimePolicy, runtimeOptions),
-                  ]),
-                args,
-              ),
-            );
+          return (callback: (tx: unknown) => unknown, ...args: unknown[]) => {
+            const secured = (tx: unknown) =>
+              witnessReflectApply(callback, undefined, [
+                createDeclaredWriteDb(tx as object, safePolicy, safeOptions),
+              ]);
+            return witnessReflectApply(value, target, prependManagedArgument(secured, args));
+          };
         }
         return typeof value === 'function'
           ? (...args: unknown[]) => witnessReflectApply(value, target, args)
@@ -494,6 +475,20 @@ function snapshotManagedWritePolicy(policy: ManagedSqlWritePolicy): ManagedSqlWr
       ? {}
       : { touches: snapshotStringArray(policy.touches, 'declared write touches') }),
   });
+}
+
+function snapshotDeclaredWriteBoundary(
+  policy: ManagedSqlWritePolicy,
+  options: DeclaredWriteDbOptions,
+): readonly [ManagedSqlWritePolicy, DeclaredWriteDbOptions, readonly string[]] {
+  const safePolicy = snapshotManagedWritePolicy(policy);
+  const safeOptions = snapshotDeclaredWriteOptions(options);
+  const allowed = normalizedStringArray(
+    safePolicy.tables ?? [],
+    safeOptions.normalizeTableName,
+    'declared write tables',
+  );
+  return [safePolicy, safeOptions, allowed];
 }
 
 function snapshotDeclaredWriteOptions(options: DeclaredWriteDbOptions): DeclaredWriteDbOptions {
@@ -689,74 +684,56 @@ const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
     allowed: readonly string[],
   ): void {
     const carrier = sqlCarrierFromValue(statement, params);
-    const sqliteAuthorizer = options.sqliteAuthorizer;
-    if (carrier === undefined || sqliteAuthorizer === undefined) {
+    const authorizer = options.sqliteAuthorizer;
+    if (carrier === undefined || authorizer === undefined) {
       throw new Error(
         'KV406: SQLite declared-write authorizer could not resolve executable SQL text (SPEC §10.3/§11.2).',
       );
     }
-    assertSqliteWriteAuthorizerConstants(sqliteAuthorizer.constants);
-
-    const sqlite = sqliteAuthorizer.openDatabase();
+    assertSqliteWriteAuthorizerConstants(authorizer.constants);
+    const sqlite = authorizer.openDatabase();
     const setAuthorizer = inheritedFunctionDataProperty(sqlite, 'setAuthorizer');
     const prepare = inheritedFunctionDataProperty(sqlite, 'prepare');
     const close = inheritedFunctionDataProperty(sqlite, 'close');
-    if (
-      typeof setAuthorizer !== 'function' ||
-      typeof prepare !== 'function' ||
-      typeof close !== 'function'
-    ) {
-      throw new Error('KV406: SQLite declared-write authorizer methods are unavailable.');
-    }
     try {
-      witnessReflectApply(setAuthorizer, sqlite, [
-        (
-          action: number,
-          objectName: string | null,
-          _columnName: string | null,
-          databaseName: string | null,
-          triggerOrView: string | null,
-        ) => {
-          if (isSqliteDdlAction(action, sqliteAuthorizer.constants)) {
-            return sqliteAuthorizer.constants.SQLITE_DENY;
-          }
-          if (!isSqliteWriteAction(action, sqliteAuthorizer.constants)) {
-            return sqliteAuthorizer.constants.SQLITE_OK;
-          }
-
-          const table = options.normalizeTableName(
-            `${databaseName ?? 'main'}.${objectName ?? '<unknown>'}`,
-          );
-          if (stringListHas(allowed, table)) return sqliteAuthorizer.constants.SQLITE_OK;
-          if (
-            triggerOrView === null &&
-            (objectName === 'sqlite_sequence' || objectName === 'sqlite_stat1')
-          ) {
-            return sqliteAuthorizer.constants.SQLITE_OK;
-          }
-          return sqliteAuthorizer.constants.SQLITE_DENY;
-        },
-      ]);
+      const authorize: SqliteAuthorizer = (action, object, _column, database, trigger) => {
+        if (isSqliteDdlAction(action, authorizer.constants))
+          return authorizer.constants.SQLITE_DENY;
+        if (!isSqliteWriteAction(action, authorizer.constants))
+          return authorizer.constants.SQLITE_OK;
+        const table = options.normalizeTableName(`${database ?? 'main'}.${object ?? '<unknown>'}`);
+        if (stringListHas(allowed, table)) return authorizer.constants.SQLITE_OK;
+        if (trigger === null && (object === 'sqlite_sequence' || object === 'sqlite_stat1')) {
+          return authorizer.constants.SQLITE_OK;
+        }
+        return authorizer.constants.SQLITE_DENY;
+      };
+      witnessReflectApply(setAuthorizer, sqlite, [authorize]);
       witnessReflectApply(prepare, sqlite, [carrier.text]);
     } catch (error) {
-      if (
-        error instanceof Error &&
-        intrinsicStringIncludes(asciiLower(error.message), 'not authorized')
-      ) {
-        throw new Error(
-          [
-            'KV406: SQLite authorizer rejected a declared-write statement outside the mutation registry tables (SPEC §10.3/§11.2).',
-            `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ') || '<none>'}`,
-            `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
-          ].join('\n'),
-        );
-      }
+      if (isSqliteAuthorizationError(error)) throw sqliteDeclaredWriteDenial(policy);
       throw error;
     } finally {
       witnessReflectApply(close, sqlite, []);
     }
   },
 );
+
+function sqliteDeclaredWriteDenial(policy: ManagedSqlWritePolicy): Error {
+  return new Error(
+    [
+      'KV406: SQLite authorizer rejected a declared-write statement outside the mutation registry tables (SPEC §10.3/§11.2).',
+      `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ') || '<none>'}`,
+      `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
+    ].join('\n'),
+  );
+}
+
+function isSqliteAuthorizationError(error: unknown): boolean {
+  return (
+    error instanceof Error && intrinsicStringIncludes(asciiLower(error.message), 'not authorized')
+  );
+}
 
 /**
  * The compile-time mirror of the runtime read-only proxy (SPEC §9.4 KV433). Framework-owned read
@@ -2154,27 +2131,19 @@ function readonlyCapabilityDb<Db extends object>(
 ): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
+      const reject = readonlyCapabilityError;
       if (prop === 'then') return undefined;
-      if (typeof prop === 'string') {
-        if (stringListHas(DENIED_READ_CAPABILITY_PROPERTIES, prop)) {
-          return readonlyCapabilityError(prop);
-        }
-        if (!stringListHas(READ_CAPABILITY_PROPERTIES, prop)) return readonlyCapabilityError(prop);
-        if (prop === 'crossOwnerRead')
-          return readonlyCrossOwnerRead(target, receiver, options, preserveInnerCapabilities);
-        if (prop === 'rawRead')
-          return readonlyRawRead(target, receiver, options, preserveInnerCapabilities);
-        const value = Reflect.get(target, prop, receiver);
-        if (prop === 'query') {
-          if (typeof value === 'function') return readonlyCapabilityError(prop);
-          return value;
-        }
-        if (!stringListHas(CALLABLE_READ_CAPABILITY_PROPERTIES, prop)) {
-          return readonlyCapabilityError(prop);
-        }
-        return typeof value === 'function' ? value.bind(target) : value;
-      }
-      return Reflect.get(target, prop, receiver);
+      if (typeof prop !== 'string') return Reflect.get(target, prop, receiver);
+      if (stringListHas(DENIED_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
+      if (!stringListHas(READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
+      if (prop === 'crossOwnerRead')
+        return readonlyCrossOwnerRead(target, receiver, options, preserveInnerCapabilities);
+      if (prop === 'rawRead')
+        return readonlyRawRead(target, receiver, options, preserveInnerCapabilities);
+      const value = Reflect.get(target, prop, receiver);
+      if (prop === 'query') return typeof value === 'function' ? reject(prop) : value;
+      if (!stringListHas(CALLABLE_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
+      return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as Reader<Db>;
 }
