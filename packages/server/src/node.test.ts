@@ -590,6 +590,77 @@ describe('toNodeHandler incomplete request transport closure', () => {
       await server.close();
     }
   });
+
+  it('rejects encoded mutation path aliases before policy or handler dispatch', async () => {
+    const db = vi.fn(() => ({}));
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const app = createApp({
+      db,
+      mutations: [
+        mutation('a/b', {
+          csrf: false,
+          handler: mutationHandler,
+          input: s.object({}),
+        }),
+      ],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: 1_024,
+        mutations: { global: false, perIp: false },
+        perIp: false,
+        queries: { global: false, perIp: false },
+      },
+    });
+    const server = await serveWithNode(toNodeHandler(createRequestHandler(app)));
+    const credential = 'NODE_ALIAS_CREDENTIAL_MUST_NOT_ECHO';
+    const aliases = [
+      '/_m/a/%2e/b',
+      '/_m/a/%2E/b',
+      '/_m/x/a/%2e%2E/b',
+      '/_m/a/%2f/b',
+      '/_m/a/%5C/b',
+      '/_m/a/./b',
+      '/_m/x/a/../b',
+      'http://proxy.invalid/_m/a/%2e/b',
+    ];
+
+    try {
+      for (const target of aliases) {
+        const wireResponse = await rawHttpExchange(
+          server.origin,
+          mutationWireRequest(target, credential),
+        );
+        expect(wireResponse).toContain('HTTP/1.1 404');
+        expect(wireResponse).toContain('Not Found');
+        expect(wireResponse).toMatch(/cache-control: no-store/i);
+        expect(wireResponse).not.toContain(target);
+        expect(wireResponse).not.toContain(credential);
+      }
+
+      expect(db).not.toHaveBeenCalled();
+      expect(mutationHandler).not.toHaveBeenCalled();
+
+      const canonical = await rawHttpExchange(
+        server.origin,
+        mutationWireRequest('/_m/a/b', credential),
+      );
+      expect(canonical).toContain('HTTP/1.1 303');
+      expect(mutationHandler).toHaveBeenCalledTimes(1);
+      expect(db).toHaveBeenCalledTimes(1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('refuses an encoded reserved mutation target in direct Node request conversion', () => {
+    for (const target of ['/_m/a/%2e/b', 'http://proxy.invalid\\_m\\a\\%2e\\b']) {
+      const request = nodeRequest(target);
+      request.method = 'POST';
+      expect(() => nodeRequestToWebRequest(request)).toThrow(
+        'Reserved mutation request targets must use their canonical raw path.',
+      );
+    }
+  });
 });
 
 describe('responseHeadersToNodeHeaders (B1)', () => {
@@ -932,6 +1003,20 @@ async function rawHttpExchange(origin: string, wireRequest: string): Promise<str
       resolve(Buffer.concat(chunks).toString('utf8'));
     });
   });
+}
+
+function mutationWireRequest(target: string, credential: string): string {
+  return [
+    `POST ${target} HTTP/1.1`,
+    'Host: 127.0.0.1',
+    'Connection: close',
+    `Authorization: Bearer ${credential}`,
+    `Cookie: sid=${credential}`,
+    'Content-Type: application/x-www-form-urlencoded',
+    'Content-Length: 0',
+    '',
+    '',
+  ].join('\r\n');
 }
 
 async function serverHandleForAbort(

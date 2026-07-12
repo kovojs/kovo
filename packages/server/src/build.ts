@@ -611,6 +611,9 @@ import { pipeline } from 'node:stream/promises';
 const bodylessMethods = new Set(['GET', 'HEAD']);
 
 export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
+  if (unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) {
+    throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
+  }
   const method = nodeRequest.method ?? 'GET';
   const headers = nodeHeadersToWebHeaders(nodeRequest);
   const controller = new AbortController();
@@ -652,6 +655,18 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
   return request;
 }
 
+export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
+  if (!unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) return false;
+  armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+  nodeResponse.writeHead(404, {
+    'cache-control': 'no-store',
+    'content-type': 'text/plain; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+  });
+  nodeResponse.end('Not Found');
+  return true;
+}
+
 export function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
   if (nodeRequest.complete || nodeRequest.destroyed || nodeResponse.destroyed) return;
 
@@ -661,6 +676,29 @@ export function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
   };
   nodeResponse.once('finish', closeIncompleteRequest);
   nodeResponse.once('close', closeIncompleteRequest);
+}
+
+function unsafeReservedMutationRequestTarget(rawTarget) {
+  const pathname = rawNodeRequestTargetPathname(rawTarget);
+  const comparablePathname = pathname.replaceAll('\\\\', '/');
+  if (!comparablePathname.startsWith('/_m/')) return false;
+  if (/%(?:2e|2f|5c)/i.test(pathname)) return true;
+  if (pathname.includes('\\\\')) return true;
+  return comparablePathname
+    .slice('/_m/'.length)
+    .split('/')
+    .some((segment) => segment === '.' || segment === '..');
+}
+
+function rawNodeRequestTargetPathname(rawTarget) {
+  const query = rawTarget.search(/[?#]/);
+  const target = query < 0 ? rawTarget : rawTarget.slice(0, query);
+  const scheme = target.indexOf('://');
+  if (scheme < 0) return target;
+  const slash = target.indexOf('/', scheme + 3);
+  const backslash = target.indexOf('\\\\', scheme + 3);
+  const path = slash < 0 ? backslash : backslash < 0 ? slash : Math.min(slash, backslash);
+  return path < 0 ? '/' : target.slice(path);
 }
 
 export async function writeWebResponseToNode(response, nodeResponse, method = 'GET', options = {}) {
@@ -757,8 +795,10 @@ let nodeAdapterPromise;
 
 module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
   try {
+    const { nodeRequestToWebRequest, rejectUnsafeNodeMutationTarget, writeWebResponseToNode } =
+      await loadNodeAdapter();
+    if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
     const handler = await loadHandler();
-    const { nodeRequestToWebRequest, writeWebResponseToNode } = await loadNodeAdapter();
     const request = nodeRequestToWebRequest(nodeRequest, {}, nodeResponse);
     const response = await handler(request);
     armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
@@ -943,6 +983,7 @@ import { pipeline } from 'node:stream/promises';
 import {
   armIncompleteNodeRequestClose,
   nodeRequestToWebRequest,
+  rejectUnsafeNodeMutationTarget,
   writeWebResponseToNode,
 } from './node-adapter.mjs';
 import handler from './server/handler.mjs';
@@ -967,6 +1008,7 @@ export function createKovoNodeServer(options = {}) {
   const server = createServer(async (nodeRequest, nodeResponse) => {
     let diagnosticRequestUrl;
     try {
+      if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
       if (bodylessMethods.has(nodeRequest.method ?? 'GET')) {
         armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       }

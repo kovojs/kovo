@@ -53,6 +53,7 @@ export function toNodeHandler(
 ): NodeRequestHandler {
   return async (nodeRequest, nodeResponse) => {
     try {
+      if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
       const response = await handler(request);
       armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
@@ -89,6 +90,9 @@ export function nodeRequestToWebRequest(
   options: NodeHandlerOptions = {},
   nodeResponse?: ServerResponse,
 ): Request {
+  if (unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) {
+    throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
+  }
   const method = nodeRequest.method ?? 'GET';
   const headers = nodeHeadersToWebHeaders(nodeRequest);
   // E3 (SPEC §9.5): bridge a client disconnect into the Web `Request.signal` so handlers,
@@ -208,6 +212,50 @@ function armIncompleteNodeRequestClose(
   };
   nodeResponse.once('finish', closeIncompleteRequest);
   nodeResponse.once('close', closeIncompleteRequest);
+}
+
+/**
+ * SPEC §6.6/§9.2: WHATWG URL construction normalizes encoded dot segments before the app
+ * dispatcher can compare the raw mutation identity. Reject ambiguous reserved mutation targets at
+ * the Node request-target boundary so an alias cannot inherit another mutation's policy/handler.
+ */
+function rejectUnsafeNodeMutationTarget(
+  nodeRequest: IncomingMessage,
+  nodeResponse: ServerResponse,
+): boolean {
+  if (!unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) return false;
+
+  armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+  nodeResponse.writeHead(404, {
+    'Cache-Control': 'no-store',
+    'Content-Type': 'text/plain; charset=utf-8',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  nodeResponse.end('Not Found');
+  return true;
+}
+
+function unsafeReservedMutationRequestTarget(rawTarget: string): boolean {
+  const pathname = rawNodeRequestTargetPathname(rawTarget);
+  const comparablePathname = pathname.replaceAll('\\', '/');
+  if (!comparablePathname.startsWith('/_m/')) return false;
+  if (/%(?:2e|2f|5c)/i.test(pathname)) return true;
+  if (pathname.includes('\\')) return true;
+  return comparablePathname
+    .slice('/_m/'.length)
+    .split('/')
+    .some((segment) => segment === '.' || segment === '..');
+}
+
+function rawNodeRequestTargetPathname(rawTarget: string): string {
+  const query = rawTarget.search(/[?#]/);
+  const target = query < 0 ? rawTarget : rawTarget.slice(0, query);
+  const scheme = target.indexOf('://');
+  if (scheme < 0) return target;
+  const slash = target.indexOf('/', scheme + 3);
+  const backslash = target.indexOf('\\', scheme + 3);
+  const path = slash < 0 ? backslash : backslash < 0 ? slash : Math.min(slash, backslash);
+  return path < 0 ? '/' : target.slice(path);
 }
 
 function responseCompression(

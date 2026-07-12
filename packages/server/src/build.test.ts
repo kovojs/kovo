@@ -810,6 +810,8 @@ describe('server build-time deployment API', () => {
         },
         serverHandlerSource: `
 export default async function handler(request) {
+  globalThis.__kovoNodeRawTargetHandlerCalls =
+    (globalThis.__kovoNodeRawTargetHandlerCalls ?? 0) + 1;
   const url = new URL(request.url);
   if (url.pathname === '/declared-oversized') {
     return new Response('Payload Too Large', { status: 413 });
@@ -854,6 +856,7 @@ export default async function handler(request) {
       expect(nodeServer).toContain("from './node-adapter.mjs';");
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
       expect(nodeAdapter).toContain('const setCookies = headers.getSetCookie();');
       expect(nodeAdapter).not.toContain('typeof headers.getSetCookie');
@@ -884,8 +887,40 @@ export default async function handler(request) {
       expect(server.headersTimeout).toBe(10_000);
       expect(server.requestTimeout).toBe(30_000);
       const baseUrl = await listen(server);
+      const rawTargetCounter = globalThis as typeof globalThis & {
+        __kovoNodeRawTargetHandlerCalls?: number;
+      };
+      rawTargetCounter.__kovoNodeRawTargetHandlerCalls = 0;
 
       try {
+        for (const target of [
+          '/_m/a/%2e/b',
+          '/_m/a/%2E/b',
+          '/_m/x/a/%2e%2E/b',
+          '/_m/a/%2f/b',
+          '/_m/a/%5C/b',
+          '/_m/a/./b',
+          '/_m/x/a/../b',
+          'http://proxy.invalid/_m/a/%2e/b',
+        ]) {
+          const aliasResponse = await rawHttpExchange(
+            baseUrl,
+            rawMutationRequest(target, 'EMITTED_NODE_ALIAS_CREDENTIAL'),
+          );
+          expect(aliasResponse).toContain('HTTP/1.1 404');
+          expect(aliasResponse).toContain('Not Found');
+          expect(aliasResponse).not.toContain('EMITTED_NODE_ALIAS_CREDENTIAL');
+        }
+        expect(rawTargetCounter.__kovoNodeRawTargetHandlerCalls).toBe(0);
+
+        const canonicalMutationPath = await rawHttpExchange(
+          baseUrl,
+          rawMutationRequest('/_m/a/b', 'EMITTED_NODE_CANONICAL_CREDENTIAL'),
+        );
+        expect(canonicalMutationPath).toContain('HTTP/1.1 200');
+        expect(canonicalMutationPath).toContain('route:/_m/a/b:');
+        expect(rawTargetCounter.__kovoNodeRawTargetHandlerCalls).toBe(1);
+
         const declaredOversized = await rawHttpExchange(
           baseUrl,
           'POST /declared-oversized HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nContent-Length: 1000000\r\n\r\n',
@@ -962,6 +997,7 @@ export default async function handler(request) {
         expect(missingClientModule.headers.get('vary')).toBeNull();
         expect(missingClientModule.headers.get('set-cookie')).toBeNull();
       } finally {
+        delete rawTargetCounter.__kovoNodeRawTargetHandlerCalls;
         await close(server);
       }
     } finally {
@@ -1313,6 +1349,8 @@ export default async function handler(request) {
         },
         serverHandlerSource: `
 export default async function handler(request) {
+  globalThis.__kovoVercelRawTargetHandlerCalls =
+    (globalThis.__kovoVercelRawTargetHandlerCalls ?? 0) + 1;
   const url = new URL(request.url);
   if (url.pathname === '/cookies') {
     const headers = new Headers({ 'content-type': 'text/plain; charset=utf-8' });
@@ -1360,6 +1398,7 @@ export default async function handler(request) {
         'utf8',
       );
       expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(vercelAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
       expect(vercelAdapter).toContain('const setCookies = headers.getSetCookie();');
       expect(vercelAdapter).not.toContain('typeof headers.getSetCookie');
@@ -1372,6 +1411,7 @@ export default async function handler(request) {
       expect(vercelFunction).not.toContain('function nodeRequestToWebRequest');
       expect(vercelFunction).not.toContain('function responseHeadersToNodeHeaders');
       expect(vercelFunction).toContain('nodeResponse.destroy()');
+      expect(vercelFunction).toContain('rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)');
       await expect(
         readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
       ).resolves.toEqual({
@@ -1454,8 +1494,29 @@ export default async function handler(request) {
 
       const server = createHttpServer(functionModule.default);
       const baseUrl = await listen(server);
+      const rawTargetCounter = globalThis as typeof globalThis & {
+        __kovoVercelRawTargetHandlerCalls?: number;
+      };
+      rawTargetCounter.__kovoVercelRawTargetHandlerCalls = 0;
 
       try {
+        const aliasResponse = await rawHttpExchange(
+          baseUrl,
+          rawMutationRequest('/_m/a/%2e/b', 'VERCEL_ALIAS_CREDENTIAL'),
+        );
+        expect(aliasResponse).toContain('HTTP/1.1 404');
+        expect(aliasResponse).toContain('Not Found');
+        expect(aliasResponse).not.toContain('VERCEL_ALIAS_CREDENTIAL');
+        expect(rawTargetCounter.__kovoVercelRawTargetHandlerCalls).toBe(0);
+
+        const canonicalMutationPath = await rawHttpExchange(
+          baseUrl,
+          rawMutationRequest('/_m/a/b', 'VERCEL_CANONICAL_CREDENTIAL'),
+        );
+        expect(canonicalMutationPath).toContain('HTTP/1.1 200');
+        expect(canonicalMutationPath).toContain('vercel:/_m/a/b:');
+        expect(rawTargetCounter.__kovoVercelRawTargetHandlerCalls).toBe(1);
+
         const response = await fetch(`${baseUrl}/hello`, {
           headers: { 'x-from-test': 'function-header' },
         });
@@ -1468,6 +1529,7 @@ export default async function handler(request) {
           'csrf=c1; Path=/; SameSite=Strict',
         ]);
       } finally {
+        delete rawTargetCounter.__kovoVercelRawTargetHandlerCalls;
         await close(server);
       }
     } finally {
@@ -2155,6 +2217,15 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   expect(emittedRequest.headers.get('host')).toBeNull();
   expect(() => emittedRequest.headers.get(':authority')).toThrow();
 
+  for (const target of ['/_m/a/%2e/b', 'http://proxy.invalid\\_m\\a\\%2e\\b']) {
+    const unsafeMutationRequest = adapterParityRequest();
+    unsafeMutationRequest.method = 'POST';
+    unsafeMutationRequest.url = target;
+    expect(() => adapter.nodeRequestToWebRequest(unsafeMutationRequest)).toThrow(
+      'Reserved mutation request targets must use their canonical raw path.',
+    );
+  }
+
   const liveHeaders = await capturedNodeHeaders(liveWriteWebResponseToNode);
   const emittedHeaders = await capturedNodeHeaders(adapter.writeWebResponseToNode);
   expect(emittedHeaders).toEqual(liveHeaders);
@@ -2368,6 +2439,19 @@ async function rawHttpExchange(baseUrl: string, wireRequest: string): Promise<st
       resolve(Buffer.concat(chunks).toString('utf8'));
     });
   });
+}
+
+function rawMutationRequest(target: string, credential: string): string {
+  return [
+    `POST ${target} HTTP/1.1`,
+    'Host: 127.0.0.1',
+    'Connection: close',
+    `Authorization: Bearer ${credential}`,
+    `Cookie: sid=${credential}`,
+    'Content-Length: 0',
+    '',
+    '',
+  ].join('\r\n');
 }
 
 async function waitForConsoleErrorCount(
