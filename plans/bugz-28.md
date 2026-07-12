@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    40 | C1-C40 |
-| High     |    28 | H1-H28 |
+| Critical |    45 | C1-C45 |
+| High     |    29 | H1-H29 |
 | Medium   |     9 | M1-M9  |
 
 ## Critical
@@ -463,6 +463,55 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the focused matrix plus core/server dist+DTS and public-API/security gates pass;
     ordinary component strings are escaped and the independent forged descriptor is rejected.
 
+- [ ] **C41 - Mutable static-export diagnostic filtering discards KV426 before publication.**
+      `packages/server/src/{static-export-diagnostics,static-export}.ts`
+  - The export gate used the live `Array.prototype.filter` to select error diagnostics. A selective
+    replacement returned an empty list for a real KV426 trusted-HTML violation, so export continued
+    and published the raw event-bearing HTML that the diagnostic was meant to block.
+  - **Acceptance:** compiler diagnostic carriers, code/severity lookup, source locations, error
+    selection, formatting, and handoff to export use boot-pinned dense own-data snapshots; malformed,
+    omitted, inherited, or mutation-obscured diagnostics fail closed before any artifact write.
+
+- [ ] **C42 - Mutable compiler-Vite diagnostic filtering emits code despite KV435.**
+      `packages/compiler/src/vite.ts`
+  - A selective late `Array.prototype.filter` removed the real KV435 secret-query error inside the
+    Vite transform gate. The transform returned emitted server/client code instead of throwing, so a
+    confidentiality diagnostic could be bypassed on the production compilation path.
+  - **Acceptance:** compiler results, diagnostic arrays and fields, severity classification,
+    callbacks, error collection, emitted-file traversal, and transform return/throw decisions use one
+    boot-pinned exact snapshot; any ambiguous error diagnostic prevents emitted code from escaping.
+
+- [ ] **C43 - Mutable secret-read metadata returns a declared secret column unboxed.**
+      `packages/server/src/secret-read-boundary.ts`
+  - A selective late `Set.prototype.has` replacement hid the concrete `secrets.classified` origin
+    only while SQLite provenance was classified. `createSecretBoxingReadDb(...).select()` then
+    returned the raw `victim-secret` scalar instead of a runtime `Secret` box.
+  - **Acceptance:** read metadata, query/SQL carriers, SQLite origin descriptors, selected fields,
+    secret table/column membership, boundary merging, row traversal, and boxing consume boot-pinned
+    dense snapshots; ambiguous or poisoned provenance boxes conservatively and never releases raw
+    secret material.
+
+- [ ] **C44 - Mutable guard-chain classifiers and iterators skip every authorization guard.**
+      `packages/server/src/{access,guards}.ts`
+  - Selective private-array iterators made both `guards.all(denyA, denyB)` and `runGuardChain()` run
+    zero guards and return allow. Independently, replacing live `Array.isArray` only for the
+    snapshotted access decision made `runAccessDecisionGuards()` classify a real deny chain as a
+    structured no-guard decision and return allow.
+  - **Acceptance:** composition-time and execution-time guard carriers are dense immutable own-data
+    snapshots; array/classifier decisions, audit projection, exact indexed traversal, await/settle,
+    and denial normalization use boot-pinned controls, and any ambiguous chain denies rather than
+    becoming public access.
+
+- [ ] **C45 - Inherited session-provider envelope fields attach an attacker admin principal.**
+      `packages/server/src/{guards,auth-principal}.ts`
+  - A provider returned a plain victim/member session whose prototype supplied inherited `value`
+    and `setCookies`. The lifecycle misclassified it as an envelope, attached the inherited
+    attacker/admin value, forwarded a forged session cookie, and made the real admin role guard pass.
+  - **Acceptance:** provider settlement and envelope discrimination require a plain exact own-data
+    carrier; value/session/user/roles and cookie arrays are independently snapshotted and validated,
+    inherited/accessor/proxy-unstable or malformed fields fail closed, and only the framework-owned
+    settled session snapshot can establish principal authority.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -767,6 +816,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     sidecar assembly use boot-pinned controls; validation and commit consume the same key/value, and
     late/import-order poison cannot introduce Set-Cookie, Kovo-reserved, or control-bearing headers.
 
+- [ ] **H29 - Inherited client IP state rotates per-IP rate-limit buckets.**
+      `packages/server/src/guards.ts`
+  - With no own `clientIp`, an inherited `Object.prototype.clientIp` was accepted as framework-
+    resolved identity. Changing the inherited value between calls admitted two requests under
+    `max: 1` by assigning each to a fresh bucket.
+  - **Acceptance:** per-IP guards accept only a framework-owned own-data client-IP snapshot attached
+    by the trusted request shell; inherited/accessor/proxy-unstable, blank, or unproven identities
+    fail loud, and late mutation cannot rotate or cross-bind an established bucket.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -859,8 +917,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, H20, and H27-H28
-are active compiler-cache, static-analysis, static-export, and build-output fixes.
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C45, H20, and
+H27-H29 are active compiler-cache, static-analysis, static-export, guard/session, and build-output
+fixes.
 Integrated
 evidence is
 green at
