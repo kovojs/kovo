@@ -399,7 +399,7 @@ function wrapSqlBuilderSafety(
           target,
           guardedSqlBuilderArguments(args),
         );
-        return isRecord(result) && !isPromiseLike(result)
+        return isRecord(result) && !isSqlBuilderTerminalMethod(prop)
           ? wrapSqlBuilderSafety(result, proxyCache, methodCache, secretWriteBoundary)
           : result;
       });
@@ -407,6 +407,20 @@ function wrapSqlBuilderSafety(
   });
   witnessWeakMapSet(proxyCache, builder, proxy);
   return proxy;
+}
+
+function isSqlBuilderTerminalMethod(property: PropertyKey): boolean {
+  return (
+    property === 'all' ||
+    property === 'catch' ||
+    property === 'execute' ||
+    property === 'finally' ||
+    property === 'get' ||
+    property === 'run' ||
+    property === 'then' ||
+    property === 'toSQL' ||
+    property === 'values'
+  );
 }
 
 function guardedSqlBuilderArguments(args: readonly unknown[]): unknown[] {
@@ -453,9 +467,19 @@ function snapshotManagedBuilderArgumentGraph(
   const prior = witnessWeakMapGet(seen, value);
   if (prior !== undefined) return prior;
 
+  const pinnedIdentifier = canonicalPinnedNativeDrizzleIdentifier(value);
+  if (pinnedIdentifier !== undefined) {
+    witnessWeakMapSet(seen, value, pinnedIdentifier);
+    return pinnedIdentifier;
+  }
+
   if (snapshotManagedSqlRecipe(value) !== undefined) {
     const pinned = canonicalPinnedDrizzleSql(value);
-    if (pinned === undefined) throw nativeDrizzleProvenanceError();
+    if (pinned === undefined) {
+      throw new Error(
+        'KV422: sql.raw(...) chunks require trustedSql(..., { justification }) before use in a managed SQL builder (SPEC §6.6/§10.2).',
+      );
+    }
     witnessWeakMapSet(seen, value, pinned);
     return pinned;
   }
@@ -467,7 +491,14 @@ function snapshotManagedBuilderArgumentGraph(
     prototype === intrinsicObjectPrototype ||
     prototype === null ||
     witnessSetSize(kinds) > 0;
-  if (!structural) return value;
+  if (!structural) {
+    if (plainSqlWrapperSurface(value)) {
+      throw new Error(
+        'KV422: managed SQL builders reject custom SQLWrapper prototypes; use Kovo SQL constructors so executable provenance can be snapshotted (SPEC §6.6/§10.2).',
+      );
+    }
+    return value;
+  }
 
   const descriptors = witnessGetOwnPropertyDescriptors(value);
   if (witnessIsArray(value)) {
@@ -562,6 +593,11 @@ function canonicalizeNativeDrizzleCountStar(
   }
   const schemaEntity = canonicalNativeDrizzleSchemaEntity(value, seen);
   if (schemaEntity !== undefined) return schemaEntity;
+  if (witnessSetSize(nativeDrizzleEntityKinds(value)) > 0) {
+    throw new Error(
+      'KV422: unbranded native Drizzle raw SQL/identifier or unsupported entity carriers are not accepted by managed builders; use Kovo SQL constructors (SPEC §6.6/§10.2).',
+    );
+  }
 
   if (witnessIsArray(value)) {
     const clone: unknown[] = [];
@@ -848,6 +884,18 @@ function canonicalPinnedDrizzleSql(value: object): object | undefined {
   const aliased = new SQL.Aliased(canonical as SQL, fieldAlias.value);
   witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, aliased);
   return witnessFreeze(aliased);
+}
+
+function canonicalPinnedNativeDrizzleIdentifier(value: object): object | undefined {
+  const kinds = nativeDrizzleEntityKinds(value);
+  if (!witnessSetHas(kinds, 'Name') || !validateManagedSqlStatement(value).ok) return undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(value, 'value');
+  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    throw nativeDrizzleProvenanceError();
+  }
+  const identifier = new Name(descriptor.value);
+  witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, identifier);
+  return witnessFreeze(identifier);
 }
 
 /**

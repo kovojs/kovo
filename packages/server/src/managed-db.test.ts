@@ -1316,6 +1316,17 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ]);
       expect(queryChunkDescriptorReads).toBe(1);
 
+      class CustomSqlWrapper {
+        getSQL() {
+          return drizzleSql.raw(
+            "exists(select 1 from secrets where classified = 'victim-secret')",
+          );
+        }
+      }
+      expect(() =>
+        handle.select().from(publicData).where(new CustomSqlWrapper()).all(),
+      ).toThrow(/KV422[\s\S]*custom SQLWrapper/u);
+
       const evil = rawDb
         .select({ leaked: drizzleSql.raw('classified').as('leaked') })
         .from(secrets)
