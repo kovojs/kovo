@@ -231,7 +231,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     expect(defaultReportAgain.ok).toBe(true);
     expect(defaultReportAgain.issues).toEqual([]);
 
-    await expectOwnerIsolation(defaultRuntimeUrl, {});
+    await expectOwnerIsolation(defaultRuntimeUrl, {
+      adminDatabaseUrl: defaultAdminUrl,
+      crossOwnerReadTables: ['kovo_ext_probe_notes'],
+    });
     await expectRawRuntimeReconnectHarmless(defaultRuntimeUrl);
     await expectPooledScopeDoesNotLeak(defaultRuntimeUrl, 'kovo_writer');
     await expectSecretColumnsDenied(defaultRuntimeUrl, 'kovo_reader', 'kovo_admin');
@@ -296,7 +299,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
 
 async function expectOwnerIsolation(
   databaseUrl: string,
-  options: Pick<KovoPostgresAppRuntimeOptions, 'readerRole' | 'writerRole'>,
+  options: Pick<
+    KovoPostgresAppRuntimeOptions,
+    'adminDatabaseUrl' | 'crossOwnerReadTables' | 'readerRole' | 'writerRole'
+  >,
 ): Promise<void> {
   const runtime = createPostgresAppRuntimeDb({
     ...options,
@@ -384,6 +390,8 @@ async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: strin
   expect(evolved.posture.issues).toEqual([]);
 
   const runtime = createPostgresAppRuntimeDb({
+    adminDatabaseUrl: adminUrl,
+    crossOwnerReadTables: ['kovo_ext_probe_notes'],
     databaseUrl: runtimeUrl,
     schema: evolvedSchema,
   });

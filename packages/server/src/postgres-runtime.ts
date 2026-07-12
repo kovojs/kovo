@@ -84,6 +84,8 @@ const POSTGRES_CLASSIFIED_ROLE_COLUMNS = new Set([
   'rolbypassrls',
   'rolconfig',
 ]);
+const POSTGRES_SECURITY_SEARCH_PATH_SQL = 'SET LOCAL search_path = pg_catalog, public, pg_temp';
+const POSTGRES_APP_DDL_SEARCH_PATH_SQL = 'SET LOCAL search_path = public, pg_catalog, pg_temp';
 const POSTGRES_REACHABLE_RELATIONS_SQL = [
   'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
   'existing_roles AS (',
@@ -208,6 +210,15 @@ interface PostgresRoleAttributeRow {
   rolname: string;
   rolreplication: boolean;
   rolsuper: boolean;
+}
+
+interface PostgresRoleClosureRow extends PostgresRoleAttributeRow {
+  is_predefined: boolean;
+}
+
+interface PostgresAdminOptionRow {
+  member_role: string;
+  role_name: string;
 }
 
 interface PostgresReachableRoutineRow {
@@ -785,19 +796,9 @@ export async function checkPostgresAppDbPosture(
   const metadata = extractKovoRuntimeDbMetadata(schemaTables);
   const client = createRuntimeClient(config);
   try {
-    if (config.driver === 'node-postgres') {
-      const leastPrivilegeIssue = await runtimeConnectionLeastPrivilegeIssue(client.sql, config);
-      if (leastPrivilegeIssue !== undefined) {
-        return {
-          driver: config.driver,
-          issues: [leastPrivilegeIssue],
-          ok: false,
-          roleTopology: postgresRoleTopologyReport(config.roleTopology),
-        };
-      }
-    }
     const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);
     return await checkRuntimeDbPosture(client.sql, {
+      checkConnectionLeastPrivilege: config.driver === 'node-postgres',
       config,
       metadata,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
@@ -830,12 +831,23 @@ async function initializeRuntimeDb(
       runtimeLoginRole: undefined,
     });
   }
-  if (input.config.driver === 'node-postgres') {
+  if (input.config.driver === 'node-postgres' && !input.config.postureCheckOnBoot) {
     await assertRuntimeConnectionLeastPrivilege(client, input.config);
   }
   if (input.config.postureCheckOnBoot) {
-    const report = await checkRuntimeDbPosture(client, input);
+    const report = await checkRuntimeDbPosture(client, {
+      ...input,
+      checkConnectionLeastPrivilege: input.config.driver === 'node-postgres',
+    });
     if (!report.ok) {
+      if (
+        input.config.driver === 'node-postgres' &&
+        report.issues[0]?.code === 'KV433_RUNTIME_ROLE'
+      ) {
+        throw new Error(
+          `KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR}: ${report.issues[0].detail} (SPEC §10.3).`,
+        );
+      }
       throw new Error(
         [
           'KV433: Postgres app database posture check failed during boot (SPEC §10.3).',
@@ -872,15 +884,25 @@ async function provisionRuntimeDb(
     input.runtimeLoginRole,
   );
   await client.transaction(async (tx) => {
+    // Pin the provisioner before the first role/catalog query. Authored and framework table DDL
+    // temporarily opt into public-first creation below, then immediately restore this catalog-first
+    // path before any security oracle runs (SPEC §10.3 C9/C10).
+    await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
     await ensurePostgresRoleTopology(tx, roleTopology);
-    if (input.applySchemaDdl) await tx.exec(input.schemaDdl);
-    migrationReport = await applyPostgresMigrations(tx, input.migrations);
+    if (input.applySchemaDdl) {
+      await withPostgresAppDdlSearchPath(tx, () => tx.exec(input.schemaDdl));
+    }
+    migrationReport = await withPostgresAppDdlSearchPath(tx, () =>
+      applyPostgresMigrations(tx, input.migrations),
+    );
     if (!input.applySchemaDdl) await assertPostgresSchemaTablesExist(tx, input.schemaTables);
     await tx.exec(
       'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
     );
     await applyPostgresDefaultDenyPrivileges(tx, input.schemaTables, input.config);
-    await provisionPostgresFrameworkTaskStore(tx, input.config);
+    await withPostgresAppDdlSearchPath(tx, () =>
+      provisionPostgresFrameworkTaskStore(tx, input.config),
+    );
     await applyPostgresRlsPolicies(tx, input.schemaTables, input.metadata, input.config);
     await applyPostgresViewSecurityInvoker(tx, input.schemaTables);
     await applyPostgresReaderColumnPrivileges(tx, input.schemaTables, input.metadata, input.config);
@@ -897,17 +919,50 @@ async function provisionRuntimeDb(
       input.metadata,
       input.config,
     );
-    await ensurePostgresSchemaStateTable(tx);
+    await withPostgresAppDdlSearchPath(tx, () => ensurePostgresSchemaStateTable(tx));
     await grantPostgresRuntimeLoginRole(tx, roleTopology);
-    for (const statement of input.config.seedSql) await tx.exec(statement);
+    await withPostgresAppDdlSearchPath(tx, async () => {
+      for (const statement of input.config.seedSql) await tx.exec(statement);
+    });
     await applyPostgresCreationAuthorityDefaultDeny(tx, input.config, input.runtimeLoginRole);
   });
   return migrationReport;
 }
 
+async function withPostgresAppDdlSearchPath<Result>(
+  client: RuntimeTransactionClient,
+  callback: () => Promise<Result>,
+): Promise<Result> {
+  await client.exec(POSTGRES_APP_DDL_SEARCH_PATH_SQL);
+  const result = await callback();
+  await client.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
+  return result;
+}
+
 async function checkRuntimeDbPosture(
   client: RuntimeSqlClient,
   input: {
+    checkConnectionLeastPrivilege?: boolean;
+    config: ResolvedPostgresRuntimeConfig;
+    metadata: KovoRuntimeDbMetadata;
+    runtimeLoginRole?: string;
+    schemaTables: readonly PgTable[];
+  },
+): Promise<KovoPostgresPostureReport> {
+  // SPEC §10.3 (C9/C10): all live posture facts come from one pinned session and one
+  // repeatable-read snapshot. Naming pg_temp last prevents PostgreSQL's implicit-first temporary
+  // schema lookup, while pg_catalog first defeats public/temp catalog and privilege-oracle shadows.
+  return client.transaction(async (tx) => {
+    await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
+    return checkRuntimeDbPostureTransaction(tx, input);
+  });
+}
+
+async function checkRuntimeDbPostureTransaction(
+  client: RuntimeTransactionClient,
+  input: {
+    checkConnectionLeastPrivilege?: boolean;
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
     runtimeLoginRole?: string;
@@ -915,6 +970,17 @@ async function checkRuntimeDbPosture(
   },
 ): Promise<KovoPostgresPostureReport> {
   const issues: KovoPostgresPostureIssue[] = [];
+  if (input.checkConnectionLeastPrivilege === true) {
+    const leastPrivilegeIssue = await runtimeConnectionLeastPrivilegeIssue(client, input.config);
+    if (leastPrivilegeIssue !== undefined) {
+      return {
+        driver: input.config.driver,
+        issues: [leastPrivilegeIssue],
+        ok: false,
+        roleTopology: postgresRoleTopologyReport(input.config.roleTopology),
+      };
+    }
+  }
   const runtimeLoginRole =
     input.config.driver === 'node-postgres'
       ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
@@ -924,6 +990,9 @@ async function checkRuntimeDbPosture(
       ...(await postgresRuntimeLoginPostureIssues(client, input.config, runtimeLoginRole)),
     );
   }
+  issues.push(
+    ...(await postgresAppRoleClosurePostureIssues(client, input.config, runtimeLoginRole)),
+  );
   issues.push(...(await postgresRoleAttributeVersionIssues(client)));
   if (input.config.driver === 'node-postgres') {
     issues.push(
@@ -1017,15 +1086,15 @@ async function checkRuntimeDbPosture(
 }
 
 async function postgresProtectedPolicyPostureIssues(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   table: ProtectedPostgresTable,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<KovoPostgresPostureIssue[]> {
   const policies = await safeQuery<PostgresPolicyRow>(
     client,
     [
-      'SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check',
-      'FROM pg_policies',
+      'SELECT schemaname, tablename, policyname, permissive, roles::text[] AS roles, cmd, qual, with_check',
+      'FROM pg_catalog.pg_policies',
       'WHERE schemaname = $1 AND tablename = $2',
       'ORDER BY policyname',
     ].join(' '),
@@ -1170,7 +1239,7 @@ function normalizePostgresPolicyAst(value: unknown): unknown {
 }
 
 async function auditPostgresReachableClosure(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   input: {
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
@@ -1292,7 +1361,7 @@ async function auditPostgresReachableClosure(
 }
 
 async function auditPostgresAttachedCode(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   reachable: ReadonlyMap<string, PostgresReachableRelation>,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<KovoPostgresPostureIssue[]> {
@@ -1419,7 +1488,7 @@ async function auditPostgresAttachedCode(
 }
 
 async function postgresWritePropagationClosure(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<ReadonlySet<string> | undefined> {
   const closureRows = await safeQuery<PostgresWritePropagationClosureRow>(
@@ -1504,7 +1573,7 @@ function postgresRelationIsWritable(relation: PostgresReachableRelation): boolea
 }
 
 async function auditPostgresReachableView(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   relation: PostgresReachableRelation,
   protectedRelations: ReadonlySet<string>,
   allowlistedRelations: ReadonlySet<string>,
@@ -1616,7 +1685,7 @@ async function provisionPostgresFrameworkTaskStore(
 }
 
 async function auditPostgresReachableRoutines(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
   runtimeLoginRole: string | undefined,
 ): Promise<KovoPostgresPostureIssue[]> {
@@ -1668,7 +1737,7 @@ async function auditPostgresReachableRoutines(
 }
 
 async function postgresAuditedIdentityNames(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
   runtimeLoginRole: string | undefined,
 ): Promise<readonly string[] | undefined> {
@@ -1681,8 +1750,8 @@ async function postgresAuditedIdentityNames(
     client,
     [
       'SELECT DISTINCT role.rolname',
-      'FROM pg_roles login',
-      'JOIN pg_roles role ON role.oid = login.oid OR pg_has_role(login.oid, role.oid, $2)',
+      'FROM pg_catalog.pg_roles login',
+      'JOIN pg_catalog.pg_roles role ON role.oid = login.oid OR pg_catalog.pg_has_role(login.oid, role.oid, $2)',
       'WHERE login.rolname = $1',
       'ORDER BY role.rolname',
     ].join(' '),
@@ -1705,18 +1774,119 @@ async function postgresAppAuthorityIdentityNames(
       'WITH root_names(role_name) AS (SELECT unnest($1::text[])),',
       'existing_roots AS (',
       '  SELECT DISTINCT root.oid',
-      '  FROM pg_roles root',
+      '  FROM pg_catalog.pg_roles root',
       '  JOIN root_names input ON input.role_name = root.rolname',
       ')',
       'SELECT DISTINCT candidate.rolname',
       'FROM existing_roots root',
-      'JOIN pg_roles candidate',
-      "ON candidate.oid = root.oid OR pg_has_role(root.oid, candidate.oid, 'MEMBER')",
+      'JOIN pg_catalog.pg_roles candidate',
+      "ON candidate.oid = root.oid OR pg_catalog.pg_has_role(root.oid, candidate.oid, 'MEMBER')",
       'ORDER BY candidate.rolname',
     ].join(' '),
     [roots],
   );
   return rows?.rows.map((row) => row.rolname);
+}
+
+async function postgresAppRoleClosurePostureIssues(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<KovoPostgresPostureIssue[]> {
+  const auditedIdentities = await postgresAppAuthorityIdentityNames(
+    client,
+    config,
+    runtimeLoginRole,
+  );
+  if (auditedIdentities === undefined) {
+    return [
+      {
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail:
+          'could not enumerate the reader/writer/runtime assumable-role closure from pg_roles/pg_has_role',
+      },
+    ];
+  }
+
+  const roleRows = await safeQuery<PostgresRoleClosureRow>(
+    client,
+    [
+      'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb,',
+      "(role.oid < 16384 OR role.rolname LIKE 'pg\\_%') AS is_predefined",
+      'FROM pg_catalog.pg_roles role',
+      'WHERE role.rolname = ANY($1::text[])',
+      'ORDER BY role.rolname',
+    ].join(' '),
+    [auditedIdentities],
+  );
+  const adminOptionRows = await safeQuery<PostgresAdminOptionRow>(
+    client,
+    [
+      'WITH audited_names(role_name) AS (SELECT unnest($1::text[]))',
+      'SELECT member_role.rolname AS member_role, granted_role.rolname AS role_name',
+      'FROM pg_catalog.pg_auth_members membership',
+      'JOIN pg_catalog.pg_roles member_role ON member_role.oid = membership.member',
+      'JOIN audited_names audited ON audited.role_name = member_role.rolname',
+      'JOIN pg_catalog.pg_roles granted_role ON granted_role.oid = membership.roleid',
+      'WHERE membership.admin_option = true',
+      'ORDER BY member_role.rolname, granted_role.rolname',
+    ].join(' '),
+    [auditedIdentities],
+  );
+  if (roleRows === undefined || adminOptionRows === undefined) {
+    return [
+      {
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail:
+          'could not classify elevated attributes, predefined roles, and ADMIN OPTION across the reader/writer/runtime assumable-role closure',
+      },
+    ];
+  }
+
+  const issues: KovoPostgresPostureIssue[] = [];
+  const frameworkRoles = new Set([
+    config.readerRole,
+    config.writerRole,
+    config.adminRole,
+    config.systemRole,
+  ]);
+  for (const role of roleRows.rows) {
+    if (role.rolname === config.adminRole || role.rolname === config.systemRole) {
+      issues.push({
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `reader/writer/runtime assumable-role closure reaches privileged framework role ${role.rolname}`,
+      });
+    }
+    if (
+      role.is_predefined === true &&
+      // pg_database_owner is a current-database ownership alias, not a grantable ambient
+      // capability. The exact schema/database owner branch in the creation-authority audit below
+      // rejects it with the owned object named, so do not replace that stronger diagnostic here.
+      role.rolname !== 'pg_database_owner' &&
+      !frameworkRoles.has(role.rolname) &&
+      !POSTGRES_BENIGN_PREDEFINED_ROLES.has(role.rolname)
+    ) {
+      issues.push({
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `reader/writer/runtime assumable-role closure includes PostgreSQL predefined role ${role.rolname}; predefined roles are denied unless explicitly classified benign`,
+      });
+    }
+    if (postgresRoleElevatedAttributes(role).length > 0) {
+      issues.push({
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `reader/writer/runtime assumable-role closure includes ${postgresRoleAttributeDetail(
+          role,
+        )}; every reachable role must have no elevated attributes`,
+      });
+    }
+  }
+  for (const row of adminOptionRows.rows) {
+    issues.push({
+      code: 'KV433_RUNTIME_ROLE',
+      detail: `${row.member_role} in the reader/writer/runtime assumable-role closure holds ADMIN OPTION on ${row.role_name}`,
+    });
+  }
+  return issues;
 }
 
 async function postgresUnexpectedCreationAuthorityRows(
@@ -1729,47 +1899,47 @@ async function postgresUnexpectedCreationAuthorityRows(
       'WITH audited_names(role_name) AS (SELECT unnest($1::text[])),',
       'existing_roles AS (',
       '  SELECT DISTINCT role.oid, role.rolname',
-      '  FROM pg_roles role',
+      '  FROM pg_catalog.pg_roles role',
       '  JOIN audited_names audited ON audited.role_name = role.rolname',
       '), unsafe_schema_authority AS (',
       "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
       "  'CREATE'::text AS privilege_type, role.rolname::text AS role_name",
-      '  FROM pg_namespace namespace',
+      '  FROM pg_catalog.pg_namespace namespace',
       '  CROSS JOIN existing_roles role',
       "  WHERE namespace.nspname <> 'information_schema'",
       "  AND namespace.nspname !~ '^pg_'",
-      "  AND has_schema_privilege(role.oid, namespace.oid, 'CREATE')",
+      "  AND pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'CREATE')",
       '), unsafe_schema_ownership AS (',
       "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
       "  'OWNER-CREATE'::text AS privilege_type, role.rolname::text AS role_name",
-      '  FROM pg_namespace namespace',
-      '  JOIN pg_roles owner_role ON owner_role.oid = namespace.nspowner',
+      '  FROM pg_catalog.pg_namespace namespace',
+      '  JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = namespace.nspowner',
       '  CROSS JOIN existing_roles role',
       "  WHERE namespace.nspname <> 'information_schema'",
       "  AND namespace.nspname !~ '^pg_'",
-      "  AND (role.oid = owner_role.oid OR pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
+      "  AND (role.oid = owner_role.oid OR pg_catalog.pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
       '), unsafe_database_authority AS (',
       "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
       '  privilege.privilege_type::text, role.rolname::text AS role_name',
-      '  FROM pg_database database',
+      '  FROM pg_catalog.pg_database database',
       '  CROSS JOIN existing_roles role',
       "  CROSS JOIN (VALUES ('CREATE'), ('TEMPORARY')) AS privilege(privilege_type)",
-      '  WHERE database.datname = current_database()',
-      '  AND has_database_privilege(role.oid, database.oid, privilege.privilege_type)',
+      '  WHERE database.datname = pg_catalog.current_database()',
+      '  AND pg_catalog.has_database_privilege(role.oid, database.oid, privilege.privilege_type)',
       '), unsafe_database_ownership AS (',
       "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
       '  privilege.privilege_type::text, role.rolname::text AS role_name',
-      '  FROM pg_database database',
-      '  JOIN pg_roles owner_role ON owner_role.oid = database.datdba',
+      '  FROM pg_catalog.pg_database database',
+      '  JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = database.datdba',
       '  CROSS JOIN existing_roles role',
       "  CROSS JOIN (VALUES ('OWNER-CREATE'), ('OWNER-TEMPORARY')) AS privilege(privilege_type)",
-      '  WHERE database.datname = current_database()',
-      "  AND (role.oid = owner_role.oid OR pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
+      '  WHERE database.datname = pg_catalog.current_database()',
+      "  AND (role.oid = owner_role.oid OR pg_catalog.pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
       '), public_schema_authority AS (',
       "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
       "  acl.privilege_type::text, 'PUBLIC'::text AS role_name",
-      '  FROM pg_namespace namespace',
-      "  CROSS JOIN LATERAL aclexplode(COALESCE(namespace.nspacl, acldefault('n', namespace.nspowner))) acl",
+      '  FROM pg_catalog.pg_namespace namespace',
+      "  CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(namespace.nspacl, pg_catalog.acldefault('n', namespace.nspowner))) acl",
       "  WHERE namespace.nspname <> 'information_schema'",
       "  AND namespace.nspname !~ '^pg_'",
       '  AND acl.grantee = 0',
@@ -1777,9 +1947,9 @@ async function postgresUnexpectedCreationAuthorityRows(
       '), public_database_authority AS (',
       "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
       "  acl.privilege_type::text, 'PUBLIC'::text AS role_name",
-      '  FROM pg_database database',
-      "  CROSS JOIN LATERAL aclexplode(COALESCE(database.datacl, acldefault('d', database.datdba))) acl",
-      '  WHERE database.datname = current_database()',
+      '  FROM pg_catalog.pg_database database',
+      "  CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(database.datacl, pg_catalog.acldefault('d', database.datdba))) acl",
+      '  WHERE database.datname = pg_catalog.current_database()',
       '  AND acl.grantee = 0',
       "  AND acl.privilege_type IN ('CREATE', 'TEMPORARY')",
       ')',
@@ -1797,7 +1967,7 @@ async function postgresUnexpectedCreationAuthorityRows(
 }
 
 async function auditPostgresUnexpectedPrivileges(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
   runtimeLoginRole: string | undefined,
 ): Promise<KovoPostgresPostureIssue[]> {
@@ -2897,7 +3067,7 @@ async function postgresRoleAttributeRows(
   const result = await client.query<PostgresRoleAttributeRow>(
     [
       'SELECT rolname, rolsuper, rolbypassrls, rolreplication, rolcreaterole, rolcreatedb',
-      'FROM pg_roles WHERE rolname = ANY($1::text[])',
+      'FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[])',
     ].join(' '),
     [roles],
   );
@@ -3260,14 +3430,18 @@ async function assertRuntimeConnectionLeastPrivilege(
   client: RuntimeSqlClient,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
-  const issue = await runtimeConnectionLeastPrivilegeIssue(client, config);
+  const issue = await client.transaction(async (tx) => {
+    await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
+    return runtimeConnectionLeastPrivilegeIssue(tx, config);
+  });
   if (issue !== undefined) {
     throw new Error(`KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR}: ${issue.detail} (SPEC §10.3).`);
   }
 }
 
 async function runtimeConnectionLeastPrivilegeIssue(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<KovoPostgresPostureIssue | undefined> {
   const current = await client.query<{ runtime_login: string }>(
@@ -3418,6 +3592,7 @@ async function applyPostgresCreationAuthorityDefaultDeny(
   config: ResolvedPostgresRuntimeConfig,
   runtimeLoginRole: string | undefined,
 ): Promise<void> {
+  await client.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
   const auditedIdentities = await postgresAppAuthorityIdentityNames(
     client,
     config,
@@ -3428,22 +3603,27 @@ async function applyPostgresCreationAuthorityDefaultDeny(
       'KV433_REACHABILITY_AUDIT: could not enumerate runtime-login/reader/writer assumable-role authority while provisioning (SPEC §10.3).',
     );
   }
-  const authorityRoleAttributes = await postgresRoleAttributeRows(client, auditedIdentities);
-  const identityClosureIsAlreadyUnsafe = authorityRoleAttributes.some(
-    (role) => postgresRoleElevatedAttributes(role).length > 0,
+  const identityIssues = await postgresAppRoleClosurePostureIssues(
+    client,
+    config,
+    runtimeLoginRole,
   );
+  if (identityIssues.length > 0) {
+    throw new Error(
+      [
+        'KV433_RUNTIME_ROLE: Postgres provisioning refuses an unsafe reader/writer/runtime role closure (SPEC §10.3).',
+        ...identityIssues.map((issue) => `${issue.code}: ${issue.detail}`),
+      ].join(' '),
+    );
+  }
 
   // SPEC §10.3 (C9/C10): CREATE/TEMP are graph-expanding privileges. Revoke them from PUBLIC and
-  // every non-privileged role in the app identity closure, then ask the engine whether any effective
-  // authority remains. Ownership is implicit and cannot be removed by REVOKE, so an app-reachable
-  // schema/database owner fails the transaction instead of being mistaken for a clean ACL.
-  // An elevated/superuser closure is separately rejected by live posture and cannot be sanitized by
-  // ACL revocation (a superuser's MEMBER oracle reaches every role). In that already-invalid case,
-  // restrict provisioning mutations to the configured app roles and PUBLIC, then let the posture
-  // report name the elevated identity instead of rewriting unrelated owners/roles.
-  const revocationIdentities = identityClosureIsAlreadyUnsafe
-    ? [config.readerRole, config.writerRole]
-    : auditedIdentities;
+  // only the explicitly configured app identities. Undeclared roles may be shared with another app;
+  // Kovo never rewrites their ACLs. Their authority remains visible through the full closure audit
+  // below and therefore aborts and rolls back provisioning instead.
+  const revocationIdentities = [config.readerRole, config.writerRole, runtimeLoginRole]
+    .filter((role): role is string => role !== undefined && role !== '')
+    .filter((role, index, roles) => roles.indexOf(role) === index);
   const revocationRoles = revocationIdentities.filter(
     (role) => role !== config.adminRole && role !== config.systemRole && !role.startsWith('pg_'),
   );
@@ -3451,7 +3631,7 @@ async function applyPostgresCreationAuthorityDefaultDeny(
   const schemas = await client.query<{ schema_name: string }>(
     [
       'SELECT nspname AS schema_name',
-      'FROM pg_namespace',
+      'FROM pg_catalog.pg_namespace',
       "WHERE nspname <> 'information_schema'",
       "AND nspname !~ '^pg_'",
       'ORDER BY nspname',
@@ -3461,7 +3641,7 @@ async function applyPostgresCreationAuthorityDefaultDeny(
     await client.exec(`REVOKE CREATE ON SCHEMA ${quoteIdent(row.schema_name)} FROM ${grantees}`);
   }
   const database = await client.query<{ database_name: string }>(
-    'SELECT current_database() AS database_name',
+    'SELECT pg_catalog.current_database() AS database_name',
   );
   const databaseName = database.rows[0]?.database_name;
   if (databaseName === undefined) {
@@ -3472,8 +3652,6 @@ async function applyPostgresCreationAuthorityDefaultDeny(
   await client.exec(
     `REVOKE CREATE, TEMPORARY ON DATABASE ${quoteIdent(databaseName)} FROM ${grantees}`,
   );
-
-  if (identityClosureIsAlreadyUnsafe) return;
 
   const remaining = await postgresUnexpectedCreationAuthorityRows(client, auditedIdentities);
   if (remaining === undefined) {

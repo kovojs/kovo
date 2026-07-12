@@ -1928,7 +1928,7 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
-  it('revokes inherited schema/database creation authority while preserving CONNECT and USAGE', async () => {
+  it('revokes configured app-role and PUBLIC creation authority while preserving CONNECT and USAGE', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-create-default-deny-'));
     roots.push(dataDir);
     await execPglite(
@@ -1936,11 +1936,9 @@ describe('createPostgresAppRuntimeDb', () => {
       [
         'CREATE ROLE kovo_reader',
         'CREATE ROLE kovo_writer',
-        'CREATE ROLE kovo_runtime_builder',
-        'GRANT kovo_runtime_builder TO kovo_writer',
         'CREATE SCHEMA kovo_runtime_extension',
-        'GRANT CREATE ON SCHEMA public, kovo_runtime_extension TO kovo_runtime_builder',
-        'GRANT CREATE, TEMPORARY ON DATABASE postgres TO kovo_runtime_builder',
+        'GRANT CREATE ON SCHEMA public, kovo_runtime_extension TO kovo_writer',
+        'GRANT CREATE, TEMPORARY ON DATABASE postgres TO kovo_writer',
         'GRANT CREATE ON SCHEMA public TO PUBLIC',
         'GRANT TEMPORARY ON DATABASE postgres TO PUBLIC',
       ].join('; '),
@@ -1954,18 +1952,18 @@ describe('createPostgresAppRuntimeDb', () => {
     }
 
     const privileges = await queryPglite<{
-      builder_can_create_database: boolean;
-      builder_can_create_schema: boolean;
-      builder_can_temp: boolean;
+      writer_can_create_database: boolean;
+      writer_can_create_schema: boolean;
+      writer_can_temp: boolean;
       public_can_temp: boolean;
       writer_can_connect: boolean;
       writer_can_use_schema: boolean;
     }>(
       dataDir,
       [
-        "SELECT has_schema_privilege('kovo_runtime_builder', 'kovo_runtime_extension', 'CREATE') AS builder_can_create_schema,",
-        "has_database_privilege('kovo_runtime_builder', current_database(), 'CREATE') AS builder_can_create_database,",
-        "has_database_privilege('kovo_runtime_builder', current_database(), 'TEMPORARY') AS builder_can_temp,",
+        "SELECT has_schema_privilege('kovo_writer', 'kovo_runtime_extension', 'CREATE') AS writer_can_create_schema,",
+        "has_database_privilege('kovo_writer', current_database(), 'CREATE') AS writer_can_create_database,",
+        "has_database_privilege('kovo_writer', current_database(), 'TEMPORARY') AS writer_can_temp,",
         "EXISTS (SELECT 1 FROM pg_database database CROSS JOIN LATERAL aclexplode(COALESCE(database.datacl, acldefault('d', database.datdba))) acl",
         "WHERE database.datname = current_database() AND acl.grantee = 0 AND acl.privilege_type = 'TEMPORARY') AS public_can_temp,",
         "has_database_privilege('kovo_writer', current_database(), 'CONNECT') AS writer_can_connect,",
@@ -1974,11 +1972,11 @@ describe('createPostgresAppRuntimeDb', () => {
     );
     expect(privileges.rows).toEqual([
       {
-        builder_can_create_database: false,
-        builder_can_create_schema: false,
-        builder_can_temp: false,
         public_can_temp: false,
         writer_can_connect: true,
+        writer_can_create_database: false,
+        writer_can_create_schema: false,
+        writer_can_temp: false,
         writer_can_use_schema: true,
       },
     ]);
@@ -1986,6 +1984,98 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('rolls provisioning back without rewriting an undeclared assumable role', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-external-authority-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE kovo_reader',
+        'CREATE ROLE kovo_writer',
+        'CREATE ROLE "shared Ω"',
+        'CREATE SCHEMA "tenant Ω"',
+        'GRANT CREATE ON SCHEMA "tenant Ω" TO "shared Ω"',
+        'GRANT CREATE, TEMPORARY ON DATABASE postgres TO "shared Ω"',
+        'GRANT "shared Ω" TO kovo_writer',
+        `CREATE FUNCTION public.has_schema_privilege(oid, oid, text) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT false'`,
+        `CREATE FUNCTION public.has_database_privilege(oid, oid, text) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT false'`,
+        `CREATE FUNCTION public.pg_has_role(oid, oid, text) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT false'`,
+        'ALTER DATABASE postgres SET search_path = public, pg_catalog',
+      ].join('; '),
+    );
+
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await expect(runtime.ready).rejects.toThrow(
+        /KV433_UNEXPECTED_PRIVILEGE[\s\S]*shared Ω has effective/,
+      );
+    } finally {
+      await runtime.close();
+    }
+
+    const rollback = await queryPglite<{
+      can_create: boolean;
+      can_temp: boolean;
+      framework_roles: number;
+      table_count: number;
+    }>(
+      dataDir,
+      [
+        `SELECT pg_catalog.has_schema_privilege('shared Ω', 'tenant Ω', 'CREATE') AS can_create,`,
+        `pg_catalog.has_database_privilege('shared Ω', pg_catalog.current_database(), 'TEMPORARY') AS can_temp,`,
+        `count(*) FILTER (WHERE rolname IN ('kovo_admin', 'kovo_system'))::int AS framework_roles,`,
+        `(SELECT count(*)::int FROM pg_catalog.pg_class WHERE relname = 'kovo_runtime_notes') AS table_count`,
+        `FROM pg_catalog.pg_roles`,
+      ].join(' '),
+    );
+    expect(rollback.rows).toEqual([
+      { can_create: true, can_temp: true, framework_roles: 0, table_count: 0 },
+    ]);
+  });
+
+  it.each([
+    {
+      expected: 'elevated_external\\(CREATEROLE\\)',
+      setup: 'CREATE ROLE elevated_external CREATEROLE; GRANT elevated_external TO kovo_writer',
+    },
+    {
+      expected: 'PostgreSQL predefined role pg_write_all_data',
+      setup: 'GRANT pg_write_all_data TO kovo_writer',
+    },
+    {
+      expected:
+        'kovo_writer in the reader/writer/runtime assumable-role closure holds ADMIN OPTION',
+      setup:
+        'CREATE ROLE delegated_external; GRANT delegated_external TO kovo_writer WITH ADMIN OPTION',
+    },
+  ])('rejects $expected without a separately named runtime login', async ({ expected, setup }) => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-closure-posture-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      ['CREATE ROLE kovo_reader', 'CREATE ROLE kovo_writer', setup].join('; '),
+    );
+
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await expect(runtime.ready).rejects.toThrow(
+        new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*${expected}`),
+      );
+    } finally {
+      await runtime.close();
+    }
+
+    const rollback = await queryPglite<{ framework_roles: number; table_count: number }>(
+      dataDir,
+      [
+        `SELECT count(*) FILTER (WHERE rolname IN ('kovo_admin', 'kovo_system'))::int AS framework_roles,`,
+        `(SELECT count(*)::int FROM pg_catalog.pg_class WHERE relname = 'kovo_runtime_notes') AS table_count`,
+        `FROM pg_catalog.pg_roles`,
+      ].join(' '),
+    );
+    expect(rollback.rows).toEqual([{ framework_roles: 0, table_count: 0 }]);
   });
 
   it('refuses effective CREATE/TEMP authority for PUBLIC, runtime, writer, members, and owners', async () => {
@@ -2050,6 +2140,132 @@ describe('createPostgresAppRuntimeDb', () => {
           detail: expect.stringContaining(detail),
         }),
       );
+    }
+  });
+
+  it('pins live posture to one catalog-first transaction despite public and temporary shadows', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-posture-shadow-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE posture_login LOGIN',
+        'GRANT kovo_reader, kovo_writer TO posture_login',
+        'CREATE ROLE elevated_shadow_role CREATEROLE',
+        'GRANT elevated_shadow_role TO kovo_writer',
+        'GRANT CREATE ON SCHEMA public TO kovo_writer',
+        'GRANT CREATE, TEMPORARY ON DATABASE postgres TO kovo_writer',
+        `CREATE FUNCTION public.has_schema_privilege(oid, oid, text) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT false'`,
+        `CREATE FUNCTION public.has_database_privilege(oid, oid, text) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT false'`,
+        'ALTER DATABASE postgres SET search_path = public, pg_catalog',
+      ].join('; '),
+    );
+
+    type TestTransaction = {
+      exec(statement: string): Promise<unknown>;
+      query<Row>(query: string, params?: unknown[]): Promise<{ rows: Row[] }>;
+    };
+    const prototype = PGlite.prototype as unknown as {
+      query<Row>(query: string, params?: unknown[]): Promise<{ rows: Row[] }>;
+      transaction<Result>(callback: (tx: TestTransaction) => Promise<Result>): Promise<Result>;
+    };
+    const originalQuery = prototype.query;
+    const originalTransaction = prototype.transaction;
+    const directPostureQueries: string[] = [];
+    prototype.query = async function <Row>(query: string, params?: unknown[]) {
+      directPostureQueries.push(query);
+      return originalQuery.call(this, query, params) as Promise<{ rows: Row[] }>;
+    };
+    prototype.transaction = async function <Result>(
+      callback: (tx: TestTransaction) => Promise<Result>,
+    ) {
+      await originalQuery.call(
+        this,
+        `CREATE TEMP VIEW pg_roles AS SELECT * FROM pg_catalog.pg_roles WHERE rolname <> 'elevated_shadow_role'`,
+      );
+      await originalQuery.call(this, 'SET search_path = pg_temp, public, pg_catalog');
+      return originalTransaction.call(this, callback);
+    };
+    try {
+      const report = await checkPostgresAppDbPosture({
+        dataDir,
+        databaseUrl: 'postgres://posture_login@127.0.0.1/kovo',
+        driver: 'pglite',
+        schema,
+      });
+      expect(report.ok).toBe(false);
+      expect(report.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_RUNTIME_ROLE',
+          detail: expect.stringContaining('elevated_shadow_role(CREATEROLE)'),
+        }),
+      );
+      expect(report.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_UNEXPECTED_PRIVILEGE',
+          detail: expect.stringContaining('kovo_writer has effective CREATE on schema public'),
+        }),
+      );
+      expect(
+        directPostureQueries.filter((query) => !query.includes('FROM pg_catalog.pg_type a')),
+      ).toEqual([]);
+    } finally {
+      prototype.query = originalQuery;
+      prototype.transaction = originalTransaction;
+    }
+  });
+
+  it('fails posture closed when the pinned creation-authority query errors', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-posture-query-error-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    type TestTransaction = {
+      exec(statement: string): Promise<unknown>;
+      query<Row>(query: string, params?: unknown[]): Promise<{ rows: Row[] }>;
+    };
+    const prototype = PGlite.prototype as unknown as {
+      transaction<Result>(callback: (tx: TestTransaction) => Promise<Result>): Promise<Result>;
+    };
+    const originalTransaction = prototype.transaction;
+    prototype.transaction = async function <Result>(
+      callback: (tx: TestTransaction) => Promise<Result>,
+    ) {
+      return originalTransaction.call(this, (tx) =>
+        callback({
+          exec: (statement) => tx.exec(statement),
+          query: <Row>(query: string, params?: unknown[]) => {
+            if (query.includes('unsafe_schema_authority')) {
+              throw new Error('forced-creation-authority-audit-failure');
+            }
+            return tx.query<Row>(query, params);
+          },
+        }),
+      );
+    };
+    try {
+      const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+      expect(report.ok).toBe(false);
+      expect(report.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_REACHABILITY_AUDIT',
+          detail: expect.stringContaining('could not enumerate effective'),
+        }),
+      );
+    } finally {
+      prototype.transaction = originalTransaction;
     }
   });
 
@@ -2256,56 +2472,50 @@ describe('createPostgresAppRuntimeDb', () => {
       );
       roots.push(runtimeDataDir);
 
-      const runtimeReport = await migratePostgresAppDb({
-        dataDir: runtimeDataDir,
-        driver: 'pglite',
-        migrations: [
-          {
-            id: '001_runtime_login_schema',
-            sql: [
-              `CREATE ROLE elevated_runtime_login LOGIN ${sqlAttribute}`,
-              runtimeSchemaMigrationSql,
-            ].join('; '),
-          },
-        ],
-        runtimeDatabaseUrl: 'postgres://elevated_runtime_login@127.0.0.1/kovo',
-        schema,
-      });
-      expect(runtimeReport.posture.ok).toBe(false);
-      expect(runtimeReport.posture.issues).toContainEqual(
-        expect.objectContaining({
-          code: 'KV433_RUNTIME_ROLE',
-          detail: expect.stringContaining(`elevated_runtime_login(${label})`),
+      await expect(
+        migratePostgresAppDb({
+          dataDir: runtimeDataDir,
+          driver: 'pglite',
+          migrations: [
+            {
+              id: '001_runtime_login_schema',
+              sql: [
+                `CREATE ROLE elevated_runtime_login LOGIN ${sqlAttribute}`,
+                runtimeSchemaMigrationSql,
+              ].join('; '),
+            },
+          ],
+          runtimeDatabaseUrl: 'postgres://elevated_runtime_login@127.0.0.1/kovo',
+          schema,
         }),
+      ).rejects.toThrow(
+        new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*elevated_runtime_login\\(${label}\\)`),
       );
 
       const assumableDataDir = mkdtempSync(
         join(tmpdir(), `kovo-postgres-runtime-assumable-${label.toLowerCase()}-`),
       );
       roots.push(assumableDataDir);
-      const assumableReport = await migratePostgresAppDb({
-        dataDir: assumableDataDir,
-        driver: 'pglite',
-        migrations: [
-          {
-            id: '001_runtime_login_schema',
-            sql: [
-              'CREATE ROLE provider_runtime_login LOGIN',
-              `CREATE ROLE elevated_assumable_role ${sqlAttribute}`,
-              'GRANT elevated_assumable_role TO provider_runtime_login',
-              runtimeSchemaMigrationSql,
-            ].join('; '),
-          },
-        ],
-        runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
-        schema,
-      });
-      expect(assumableReport.posture.ok).toBe(false);
-      expect(assumableReport.posture.issues).toContainEqual(
-        expect.objectContaining({
-          code: 'KV433_RUNTIME_ROLE',
-          detail: expect.stringContaining(`elevated_assumable_role(${label})`),
+      await expect(
+        migratePostgresAppDb({
+          dataDir: assumableDataDir,
+          driver: 'pglite',
+          migrations: [
+            {
+              id: '001_runtime_login_schema',
+              sql: [
+                'CREATE ROLE provider_runtime_login LOGIN',
+                `CREATE ROLE elevated_assumable_role ${sqlAttribute}`,
+                'GRANT elevated_assumable_role TO provider_runtime_login',
+                runtimeSchemaMigrationSql,
+              ].join('; '),
+            },
+          ],
+          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+          schema,
         }),
+      ).rejects.toThrow(
+        new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*elevated_assumable_role\\(${label}\\)`),
       );
     }
   }, 30_000);
@@ -2328,28 +2538,25 @@ describe('createPostgresAppRuntimeDb', () => {
         join(tmpdir(), `kovo-postgres-runtime-predefined-login-${predefinedRole}-`),
       );
       roots.push(runtimeDataDir);
-      const runtimeReport = await migratePostgresAppDb({
-        dataDir: runtimeDataDir,
-        driver: 'pglite',
-        migrations: [
-          {
-            id: '001_runtime_login_schema',
-            sql: [
-              'CREATE ROLE predefined_runtime_login LOGIN',
-              `GRANT ${predefinedRole} TO predefined_runtime_login`,
-              runtimeSchemaMigrationSql,
-            ].join('; '),
-          },
-        ],
-        runtimeDatabaseUrl: 'postgres://predefined_runtime_login@127.0.0.1/kovo',
-        schema,
-      });
-      expect(runtimeReport.posture.ok, `${predefinedRole} runtime login posture`).toBe(false);
-      expect(runtimeReport.posture.issues).toContainEqual(
-        expect.objectContaining({
-          code: 'KV433_RUNTIME_ROLE',
-          detail: expect.stringContaining(`member of PostgreSQL predefined role ${predefinedRole}`),
+      await expect(
+        migratePostgresAppDb({
+          dataDir: runtimeDataDir,
+          driver: 'pglite',
+          migrations: [
+            {
+              id: '001_runtime_login_schema',
+              sql: [
+                'CREATE ROLE predefined_runtime_login LOGIN',
+                `GRANT ${predefinedRole} TO predefined_runtime_login`,
+                runtimeSchemaMigrationSql,
+              ].join('; '),
+            },
+          ],
+          runtimeDatabaseUrl: 'postgres://predefined_runtime_login@127.0.0.1/kovo',
+          schema,
         }),
+      ).rejects.toThrow(
+        new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*PostgreSQL predefined role ${predefinedRole}`),
       );
 
       // Transitive membership: login → mid role → predefined role must surface in the MEMBER closure.
@@ -2357,30 +2564,27 @@ describe('createPostgresAppRuntimeDb', () => {
         join(tmpdir(), `kovo-postgres-runtime-predefined-assumable-${predefinedRole}-`),
       );
       roots.push(assumableDataDir);
-      const assumableReport = await migratePostgresAppDb({
-        dataDir: assumableDataDir,
-        driver: 'pglite',
-        migrations: [
-          {
-            id: '001_runtime_login_schema',
-            sql: [
-              'CREATE ROLE predefined_provider_login LOGIN',
-              'CREATE ROLE predefined_mid_role',
-              `GRANT ${predefinedRole} TO predefined_mid_role`,
-              'GRANT predefined_mid_role TO predefined_provider_login',
-              runtimeSchemaMigrationSql,
-            ].join('; '),
-          },
-        ],
-        runtimeDatabaseUrl: 'postgres://predefined_provider_login@127.0.0.1/kovo',
-        schema,
-      });
-      expect(assumableReport.posture.ok, `${predefinedRole} assumable posture`).toBe(false);
-      expect(assumableReport.posture.issues).toContainEqual(
-        expect.objectContaining({
-          code: 'KV433_RUNTIME_ROLE',
-          detail: expect.stringContaining(`member of PostgreSQL predefined role ${predefinedRole}`),
+      await expect(
+        migratePostgresAppDb({
+          dataDir: assumableDataDir,
+          driver: 'pglite',
+          migrations: [
+            {
+              id: '001_runtime_login_schema',
+              sql: [
+                'CREATE ROLE predefined_provider_login LOGIN',
+                'CREATE ROLE predefined_mid_role',
+                `GRANT ${predefinedRole} TO predefined_mid_role`,
+                'GRANT predefined_mid_role TO predefined_provider_login',
+                runtimeSchemaMigrationSql,
+              ].join('; '),
+            },
+          ],
+          runtimeDatabaseUrl: 'postgres://predefined_provider_login@127.0.0.1/kovo',
+          schema,
         }),
+      ).rejects.toThrow(
+        new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*PostgreSQL predefined role ${predefinedRole}`),
       );
     }
   }, 30_000);
@@ -2434,21 +2638,16 @@ describe('createPostgresAppRuntimeDb', () => {
     await withPostgresRoleEnv(
       { reader: 'provider_reader', writer: 'provider_writer' },
       async () => {
-        const report = await migratePostgresAppDb({
-          dataDir,
-          driver: 'pglite',
-          migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
-          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
-          schema,
-        });
-        expect(report.posture.ok).toBe(false);
-        expect(report.posture.issues).toContainEqual(
-          expect.objectContaining({
-            code: 'KV433_RUNTIME_ROLE',
-            detail: expect.stringContaining(
-              'runtime login provider_runtime_login holds ADMIN OPTION on provider_reader',
-            ),
+        await expect(
+          migratePostgresAppDb({
+            dataDir,
+            driver: 'pglite',
+            migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
+            runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+            schema,
           }),
+        ).rejects.toThrow(
+          /KV433_RUNTIME_ROLE[\s\S]*provider_runtime_login[\s\S]*holds ADMIN OPTION on provider_reader/,
         );
       },
     );
@@ -2505,23 +2704,15 @@ describe('createPostgresAppRuntimeDb', () => {
       const dataDir = mkdtempSync(join(tmpdir(), `kovo-postgres-runtime-${purpose}-login-`));
       roots.push(dataDir);
 
-      const report = await migratePostgresAppDb({
-        dataDir,
-        driver: 'pglite',
-        migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
-        runtimeDatabaseUrl: `postgres://${role}@127.0.0.1/kovo`,
-        schema,
-      });
-
-      expect(report.posture.ok).toBe(false);
-      expect(report.posture.issues).toContainEqual(
-        expect.objectContaining({
-          code: 'KV433_RUNTIME_ROLE',
-          detail: expect.stringContaining(
-            `runtime login ${role} must not be able to SET ROLE to ${purpose}Role=${role}`,
-          ),
+      await expect(
+        migratePostgresAppDb({
+          dataDir,
+          driver: 'pglite',
+          migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
+          runtimeDatabaseUrl: `postgres://${role}@127.0.0.1/kovo`,
+          schema,
         }),
-      );
+      ).rejects.toThrow(new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*privileged framework role ${role}`));
     }
   });
 
