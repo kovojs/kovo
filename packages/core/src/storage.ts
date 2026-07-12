@@ -5,12 +5,15 @@ import {
   createFileSystemMap,
   fileSystemArrayJoin,
   fileSystemArraySome,
+  fileSystemFreeze,
   fileSystemJsonParse,
   fileSystemJsonStringify,
   fileSystemMapDelete,
   fileSystemMapGet,
   fileSystemMapSet,
   fileSystemObjectValues,
+  fileSystemReflectApply,
+  fileSystemStableMethod,
   fileSystemStringEndsWith,
   fileSystemStringIncludes,
   fileSystemStringSplit,
@@ -399,6 +402,17 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
 export function createReadOnlyStorageCapability(
   storage: StorageReadCapability,
 ): StorageReadCapability {
+  const get = fileSystemStableMethod(storage, 'get', 'storage.get') as StorageReadCapability['get'];
+  const stat = fileSystemStableMethod(
+    storage,
+    'stat',
+    'storage.stat',
+  ) as StorageReadCapability['stat'];
+  const stream = fileSystemStableMethod(
+    storage,
+    'stream',
+    'storage.stream',
+  ) as StorageReadCapability['stream'];
   const denyWrite = async (): Promise<never> => {
     throw new Error(
       'KV433: read-only storage capability cannot write from a query or public GET path ' +
@@ -406,23 +420,28 @@ export function createReadOnlyStorageCapability(
         'audited capability surface.',
     );
   };
-  const readOnly = Object.freeze({
-    get: storage.get.bind(storage),
-    stat: storage.stat.bind(storage),
-    stream: storage.stream.bind(storage),
+  const readOnly = fileSystemFreeze({
+    get(key: string) {
+      return fileSystemReflectApply<ReturnType<StorageReadCapability['get']>>(get, storage, [key]);
+    },
+    stat(key: string) {
+      return fileSystemReflectApply<ReturnType<StorageReadCapability['stat']>>(stat, storage, [
+        key,
+      ]);
+    },
+    stream(key: string) {
+      return fileSystemReflectApply<ReturnType<StorageReadCapability['stream']>>(stream, storage, [
+        key,
+      ]);
+    },
     // Deliberately present only at runtime so `as any` cannot recover known write authority from a
     // read view. The public type omits these methods.
     delete: denyWrite,
     put: denyWrite,
+    store: denyWrite,
+    upload: denyWrite,
   });
-  return new Proxy(readOnly, {
-    get(target, property, receiver) {
-      if (typeof property === 'string' && (property === 'store' || property === 'upload')) {
-        return denyWrite;
-      }
-      return Reflect.get(target, property, receiver);
-    },
-  }) as StorageReadCapability;
+  return readOnly as StorageReadCapability;
 }
 
 /**

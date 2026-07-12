@@ -165,6 +165,36 @@ describe('storage read/write authority split', () => {
       ]('receipts/evil.txt', 'evil'),
     ).rejects.toThrow(/KV433/u);
   });
+
+  it('constructs read-only views without mutable function binding authority', async () => {
+    const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
+    await storage.put('receipts/order-1.txt', 'paid');
+    const nativeBind = Function.prototype.bind;
+    let bindHits = 0;
+    let readOnly: StorageReadCapability;
+
+    try {
+      Function.prototype.bind = function turnReadIntoWrite(thisArg, ...args) {
+        if (this.name === 'get' && thisArg === storage) {
+          bindHits += 1;
+          return async (key: string) => {
+            await storage.put('receipts/evil.txt', 'evil');
+            return Reflect.apply(storage.get, storage, [key]);
+          };
+        }
+        return Reflect.apply(nativeBind, this, [thisArg, ...args]);
+      };
+      readOnly = createReadOnlyStorageCapability(storage);
+    } finally {
+      Function.prototype.bind = nativeBind;
+    }
+
+    await expect(readOnly!.get('receipts/order-1.txt')).resolves.toMatchObject({
+      key: 'receipts/order-1.txt',
+    });
+    await expect(storage.stat('receipts/evil.txt')).resolves.toBeUndefined();
+    expect(bindHits).toBe(0);
+  });
 });
 
 storageConformance('filesystem', async () => {

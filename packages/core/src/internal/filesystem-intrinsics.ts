@@ -20,6 +20,10 @@ const nativeArraySome = NativeArray.prototype.some;
 const nativeMapDelete = NativeMap.prototype.delete;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapSet = NativeMap.prototype.set;
+const nativeObjectFreeze = NativeObject.freeze;
+const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectValues = NativeObject.values;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIncludes = NativeString.prototype.includes;
@@ -37,6 +41,24 @@ function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]
   return nativeReflectApply(fn, receiver, args) as Return;
 }
 
+function stableMethod(value: object, property: PropertyKey): Function | undefined {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [owner, property],
+    );
+    if (descriptor !== undefined) {
+      return 'value' in descriptor && typeof descriptor.value === 'function'
+        ? descriptor.value
+        : undefined;
+    }
+    owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+  }
+  return undefined;
+}
+
 function capturedControlsAreSound(): boolean {
   try {
     const parts = apply<string[]>(nativeStringSplit, 'safe/file.txt', ['/']);
@@ -50,6 +72,14 @@ function capturedControlsAreSound(): boolean {
     const stringified = apply<string | undefined>(nativeJsonStringify, NativeJSON, [
       { logicalKey: 'safe/file.txt' },
     ]);
+    const methodControl = {
+      read(this: { prefix: string }, key: string) {
+        return `${this.prefix}/${key}`;
+      },
+      prefix: 'safe',
+    };
+    const readMethod = stableMethod(methodControl, 'read');
+    const frozen = apply(nativeObjectFreeze, NativeObject, [{ safe: true }]);
     return (
       parts.length === 2 &&
       parts[0] === 'safe' &&
@@ -71,7 +101,10 @@ function capturedControlsAreSound(): boolean {
       apply(nativeMapGet, map, ['safe']) === undefined &&
       decoded === 'Kovo-storage' &&
       parsed.logicalKey === 'safe/file.txt' &&
-      stringified === '{"logicalKey":"safe/file.txt"}'
+      stringified === '{"logicalKey":"safe/file.txt"}' &&
+      readMethod !== undefined &&
+      apply(readMethod, methodControl, ['file.txt']) === 'safe/file.txt' &&
+      apply(nativeObjectIsFrozen, NativeObject, [frozen]) === true
     );
   } catch {
     return false;
@@ -124,6 +157,33 @@ export function fileSystemMapGet<Key, Value>(map: Map<Key, Value>, key: Key): Va
 export function fileSystemMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
   assertFileSystemIntrinsics();
   apply(nativeMapSet, map, [key, value]);
+}
+
+export function fileSystemStableMethod(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): Function {
+  assertFileSystemIntrinsics();
+  const method = stableMethod(value, property);
+  if (method === undefined) {
+    throw new TypeError(`Kovo storage control ${label} must be a stable method.`);
+  }
+  return method;
+}
+
+export function fileSystemReflectApply<Return>(
+  method: Function,
+  receiver: unknown,
+  args: readonly unknown[],
+): Return {
+  assertFileSystemIntrinsics();
+  return apply(method, receiver, args);
+}
+
+export function fileSystemFreeze<Value extends object>(value: Value): Readonly<Value> {
+  assertFileSystemIntrinsics();
+  return apply(nativeObjectFreeze, NativeObject, [value]);
 }
 
 export function fileSystemObjectValues(value: object): unknown[] {
