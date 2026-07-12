@@ -11,6 +11,12 @@ import {
 } from './handler-context.js';
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
+import {
+  securityWeakMap,
+  securityWeakMapDelete,
+  securityWeakMapGet,
+  securityWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
@@ -48,7 +54,7 @@ export function handler<State = unknown, Params = Record<string, ElementParamVal
   return fn;
 }
 
-const delegatedStateQueues = new WeakMap<EventElementLike, Promise<void>>();
+const delegatedStateQueues = securityWeakMap<EventElementLike, Promise<void>>();
 
 /**
  * Well-known global key (shared with `@kovojs/headless-ui`'s `scheduleDeferred`)
@@ -74,7 +80,7 @@ function withPostCommitQueue<T>(queue: Array<() => void>, run: () => T): T {
   const globalRecord = globalThis as PostCommitGlobal;
   const previous = globalRecord[POST_COMMIT_GLOBAL_KEY];
   globalRecord[POST_COMMIT_GLOBAL_KEY] = (callback) => {
-    queue.push(callback);
+    queue[queue.length] = callback;
   };
   try {
     return run();
@@ -92,7 +98,9 @@ function withPostCommitQueue<T>(queue: Array<() => void>, run: () => T): T {
  * flushed. A callback that throws must not prevent the rest from running.
  */
 function drainPostCommitQueue(queue: ReadonlyArray<() => void>): void {
-  for (const callback of queue) {
+  for (let index = 0; index < queue.length; index += 1) {
+    const callback = queue[index];
+    if (callback === undefined) continue;
     try {
       callback();
     } catch {
@@ -112,7 +120,7 @@ export async function dispatchDelegatedEvent(
   if (!element) return;
 
   const stateHost = readElementStateHost(element) ?? element;
-  const previous = delegatedStateQueues.get(stateHost) ?? Promise.resolve();
+  const previous = securityWeakMapGet(delegatedStateQueues, stateHost) ?? Promise.resolve();
   const dispatch = previous
     .catch(() => undefined)
     .then(() =>
@@ -121,11 +129,11 @@ export async function dispatchDelegatedEvent(
   const queued = dispatch
     .catch(() => undefined)
     .finally(() => {
-      if (delegatedStateQueues.get(stateHost) === queued) {
-        delegatedStateQueues.delete(stateHost);
+      if (securityWeakMapGet(delegatedStateQueues, stateHost) === queued) {
+        securityWeakMapDelete(delegatedStateQueues, stateHost);
       }
     });
-  delegatedStateQueues.set(stateHost, queued);
+  securityWeakMapSet(delegatedStateQueues, stateHost, queued);
 
   await dispatch;
 }
@@ -145,9 +153,11 @@ async function dispatchDelegatedEventForElement(
   const postCommitQueue: Array<() => void> = [];
 
   try {
-    for (const { ref, source } of parseHandlerReferences(
-      element.getAttribute(`on:${event.type}`),
-    )) {
+    const references = parseHandlerReferences(element.getAttribute(`on:${event.type}`));
+    for (let index = 0; index < references.length; index += 1) {
+      const reference = references[index];
+      if (reference === undefined) continue;
+      const { ref, source } = reference;
       assertAllowedKovoDynamicImportRefForModule(ref, importModule);
       const mod = await importModule(ref.url);
       const fn = mod[ref.exportName];
@@ -176,10 +186,13 @@ async function dispatchDelegatedEventForElement(
 function parseHandlerReferences(
   refs: string | null,
 ): { ref: KovoModuleRef<'handler'>; source: string }[] {
-  return (
-    refs
-      ?.split(/\s+/)
-      .filter(Boolean)
-      .map((source) => ({ ref: assertKovoModuleRef(source, 'handler'), source })) ?? []
-  );
+  if (refs === null) return [];
+  const sources = refs.split(/\s+/);
+  const parsed: { ref: KovoModuleRef<'handler'>; source: string }[] = [];
+  for (let index = 0; index < sources.length; index += 1) {
+    const source = sources[index];
+    if (!source) continue;
+    parsed[parsed.length] = { ref: assertKovoModuleRef(source, 'handler'), source };
+  }
+  return parsed;
 }

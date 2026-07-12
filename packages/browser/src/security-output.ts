@@ -8,7 +8,11 @@ import {
   applySecurityIntrinsic,
   defineSecurityProperties,
   freezeSecurityValue,
+  securityGetOwnPropertyDescriptor,
   securityHasInstance,
+  securityObjectKeys,
+  securityRegExpExec,
+  securityRegExpTest,
   securityMap,
   securityMapGet,
   securityMapSet,
@@ -16,6 +20,12 @@ import {
   securitySetAdd,
   securitySetHas,
   securityString,
+  securityStringCharCodeAt,
+  securityStringIndexOf,
+  securityStringReplaceAll,
+  securityStringSlice,
+  securityStringToLowerCase,
+  securityStringTrim,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapHas,
@@ -160,9 +170,9 @@ export function safeRichHtml(value: string, options?: SafeRichHtmlOptions): Trus
  * allowlist and Kovo's existing URL/event/raw-sink runtime policy.
  */
 export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): string {
-  const allowedTags = securitySetOf(
-    [...DEFAULT_RICH_HTML_TAGS, ...(options?.allowedTags ?? [])].map((tag) => tag.toLowerCase()),
-  );
+  const allowedTags = securitySet<string>();
+  addNormalizedTags(allowedTags, DEFAULT_RICH_HTML_TAGS);
+  if (options?.allowedTags !== undefined) addNormalizedTags(allowedTags, options.allowedTags);
   return sanitizeRichHtmlFragment(value, allowedTags);
 }
 
@@ -264,11 +274,7 @@ export function kovoTrustedHtmlContent(value: unknown): string {
  * Escapes text for generated HTML-fragment interpolation.
  */
 export function kovoEscapeHtml(value: unknown): string {
-  return formatOutputValue(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return escapeHtmlAttribute(formatOutputValue(value));
 }
 
 /**
@@ -339,10 +345,17 @@ export function kovoStyleProperty(name: string, value: unknown): string {
 }
 
 export function kovoStyleProperties(properties: Record<string, unknown>): string {
-  return Object.entries(properties)
-    .map(([name, value]) => kovoStyleProperty(name, value))
-    .filter(Boolean)
-    .join('; ');
+  const keys = securityObjectKeys(properties);
+  let rendered = '';
+  for (let index = 0; index < keys.length; index += 1) {
+    const name = keys[index];
+    if (name === undefined) continue;
+    const descriptor = securityGetOwnPropertyDescriptor(properties, name);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const declaration = kovoStyleProperty(name, descriptor.value);
+    if (declaration !== '') rendered += `${rendered === '' ? '' : '; '}${declaration}`;
+  }
+  return rendered;
 }
 
 function formatOutputValue(value: unknown): string {
@@ -485,18 +498,18 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
   const droppedSubtrees: string[] = [];
 
   while (offset < value.length) {
-    const tagStart = value.indexOf('<', offset);
+    const tagStart = securityStringIndexOf(value, '<', offset);
     if (tagStart === -1) {
-      html += escapeHtmlText(value.slice(offset));
+      html += escapeHtmlText(securityStringSlice(value, offset));
       break;
     }
 
     if (droppedSubtrees.length === 0) {
-      html += escapeHtmlText(value.slice(offset, tagStart));
+      html += escapeHtmlText(securityStringSlice(value, offset, tagStart));
     }
 
-    if (value.startsWith('<!--', tagStart)) {
-      const commentEnd = value.indexOf('-->', tagStart + 4);
+    if (securityStringIndexOf(value, '<!--', tagStart) === tagStart) {
+      const commentEnd = securityStringIndexOf(value, '-->', tagStart + 4);
       offset = commentEnd === -1 ? value.length : commentEnd + 3;
       continue;
     }
@@ -511,25 +524,28 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
 
     if (droppedSubtrees.length > 0) {
       if (token.closing && token.name === droppedSubtrees[droppedSubtrees.length - 1]) {
-        droppedSubtrees.pop();
+        droppedSubtrees.length -= 1;
       } else if (!token.closing && securitySetHas(RICH_HTML_DROP_SUBTREE_TAGS, token.name)) {
-        droppedSubtrees.push(token.name);
+        droppedSubtrees[droppedSubtrees.length] = token.name;
       }
       continue;
     }
 
     if (securitySetHas(RICH_HTML_DROP_SUBTREE_TAGS, token.name)) {
-      if (!token.closing && !token.selfClosing) droppedSubtrees.push(token.name);
+      if (!token.closing && !token.selfClosing) {
+        droppedSubtrees[droppedSubtrees.length] = token.name;
+      }
       continue;
     }
 
     if (!securitySetHas(allowedTags, token.name)) continue;
 
     if (token.closing) {
-      const lastIndex = stack.lastIndexOf(token.name);
+      const lastIndex = lastArrayIndexOf(stack, token.name);
       if (lastIndex === -1) continue;
       for (let index = stack.length - 1; index >= lastIndex; index -= 1) {
-        const tag = stack.pop();
+        const tag = stack[index];
+        stack.length = index;
         if (tag !== undefined) html += `</${tag}>`;
       }
       continue;
@@ -538,12 +554,15 @@ function sanitizeRichHtmlFragment(value: string, allowedTags: Set<string>): stri
     const attrs = sanitizeRichHtmlAttributes(token.name, token.attributes);
     html += `<${token.name}${attrs}>`;
     if (!token.selfClosing && !securitySetHas(VOID_RICH_HTML_TAGS, token.name)) {
-      stack.push(token.name);
+      stack[stack.length] = token.name;
     }
   }
 
   while (stack.length > 0) {
-    html += `</${stack.pop()}>`;
+    const index = stack.length - 1;
+    const tag = stack[index];
+    stack.length = index;
+    if (tag !== undefined) html += `</${tag}>`;
   }
 
   return html;
@@ -567,10 +586,10 @@ function readHtmlTagToken(value: string, start: number): HtmlTagToken | null {
 
   while (isAsciiWhitespace(value[offset])) offset += 1;
   const nameStart = offset;
-  while (/[A-Za-z0-9:-]/.test(value[offset] ?? '')) offset += 1;
+  while (securityRegExpTest(/[A-Za-z0-9:-]/, value[offset] ?? '')) offset += 1;
   if (offset === nameStart) return null;
 
-  const name = value.slice(nameStart, offset).toLowerCase();
+  const name = securityStringToLowerCase(securityStringSlice(value, nameStart, offset));
   let quote: '"' | "'" | undefined;
   for (; offset < value.length; offset += 1) {
     const char = value[offset];
@@ -583,14 +602,14 @@ function readHtmlTagToken(value: string, start: number): HtmlTagToken | null {
       continue;
     }
     if (char === '>') {
-      const rawInside = value.slice(nameStart + name.length, offset);
+      const rawInside = securityStringSlice(value, nameStart + name.length, offset);
       if (containsLessThanOutsideQuotes(rawInside)) return null;
       return {
         attributes: closing ? '' : rawInside,
         closing,
         end: offset + 1,
         name,
-        selfClosing: /\/\s*$/.test(rawInside),
+        selfClosing: securityRegExpTest(/\/\s*$/, rawInside),
       };
     }
   }
@@ -622,22 +641,28 @@ function sanitizeRichHtmlAttributes(tag: string, raw: string): string {
   const pattern = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
   let match: RegExpExecArray | null;
 
-  while ((match = pattern.exec(raw)) !== null) {
-    const name = (match[1] ?? '').toLowerCase();
+  while ((match = securityRegExpExec(pattern, raw)) !== null) {
+    const name = securityStringToLowerCase(match[1] ?? '');
     if (!isAllowedRichHtmlAttribute(name, tagAttributes) || securitySetHas(seen, name)) continue;
     securitySetAdd(seen, name);
 
     const value = match[2] ?? match[3] ?? match[4] ?? '';
     const sanitized = sanitizeRichHtmlAttributeValue(tag, name, value);
     if (sanitized === null) continue;
-    attributes.push(`${name}="${escapeHtmlAttribute(sanitized)}"`);
+    attributes[attributes.length] = `${name}="${escapeHtmlAttribute(sanitized)}"`;
   }
 
-  return attributes.length === 0 ? '' : ` ${attributes.join(' ')}`;
+  if (attributes.length === 0) return '';
+  let rendered = '';
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute !== undefined) rendered += `${rendered === '' ? '' : ' '}${attribute}`;
+  }
+  return rendered === '' ? '' : ` ${rendered}`;
 }
 
 function isAllowedRichHtmlAttribute(name: string, tagAttributes: Set<string> | undefined): boolean {
-  if (name.startsWith('data-')) return true;
+  if (securityStringSlice(name, 0, 5) === 'data-') return true;
   return (
     securitySetHas(GLOBAL_RICH_HTML_ATTRIBUTES, name) ||
     (tagAttributes !== undefined && securitySetHas(tagAttributes, name))
@@ -666,19 +691,33 @@ function sanitizeRichHtmlAttributeValue(tag: string, name: string, value: string
 
 function sanitizeRelList(value: string): string {
   const allowed = securitySetOf(['nofollow', 'noopener', 'noreferrer']);
-  return value
-    .split(/\s+/)
-    .map((part) => part.toLowerCase())
-    .filter((part, index, parts) => securitySetHas(allowed, part) && parts.indexOf(part) === index)
-    .join(' ');
+  const seen = securitySet<string>();
+  let rendered = '';
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    if (index < value.length && !securityRegExpTest(/\s/u, value[index] ?? '')) continue;
+    if (index > start) {
+      const part = securityStringToLowerCase(securityStringSlice(value, start, index));
+      if (securitySetHas(allowed, part) && !securitySetHas(seen, part)) {
+        securitySetAdd(seen, part);
+        rendered += `${rendered === '' ? '' : ' '}${part}`;
+      }
+    }
+    start = index + 1;
+  }
+  return rendered;
 }
 
 function escapeHtmlText(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return securityStringReplaceAll(
+    securityStringReplaceAll(securityStringReplaceAll(value, '&', '&amp;'), '<', '&lt;'),
+    '>',
+    '&gt;',
+  );
 }
 
 function escapeHtmlAttribute(value: string): string {
-  return escapeHtmlText(value).replace(/"/g, '&quot;');
+  return securityStringReplaceAll(escapeHtmlText(value), '"', '&quot;');
 }
 
 function isAsciiWhitespace(value: string | undefined): boolean {
@@ -686,10 +725,21 @@ function isAsciiWhitespace(value: string | undefined): boolean {
 }
 
 function sanitizeCssIdentifier(value: string): string {
-  const trimmed = value.trim();
-  if (/^-?[_a-zA-Z][-_a-zA-Z0-9]*$/.test(trimmed)) return trimmed;
+  const trimmed = securityStringTrim(value);
+  if (securityRegExpTest(/^-?[_a-zA-Z][-_a-zA-Z0-9]*$/, trimmed)) return trimmed;
 
-  return trimmed.replace(/[^-_a-zA-Z0-9]/g, '-').replace(/^-?[^_a-zA-Z]+/, 'kovo-');
+  let sanitized = '';
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const code = securityStringCharCodeAt(trimmed, index);
+    const safe =
+      code === 0x2d ||
+      code === 0x5f ||
+      (code >= 0x30 && code <= 0x39) ||
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a);
+    sanitized += safe ? (trimmed[index] ?? '') : '-';
+  }
+  return securityRegExpTest(/^-?[_a-zA-Z]/, sanitized) ? sanitized : `kovo-${sanitized}`;
 }
 
 const SAFE_LENGTH_PROPERTIES = securitySetOf([
@@ -706,15 +756,27 @@ const SAFE_LENGTH_PROPERTIES = securitySetOf([
 ]);
 
 function normalizeCssPropertyName(name: string): string {
-  if (name.startsWith('--')) return name;
-  return name.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`).toLowerCase();
+  if (name[0] === '-' && name[1] === '-') return name;
+  let normalized = '';
+  for (let index = 0; index < name.length; index += 1) {
+    const character = name[index] ?? '';
+    const code = securityStringCharCodeAt(name, index);
+    normalized +=
+      code >= 0x41 && code <= 0x5a ? `-${securityStringToLowerCase(character)}` : character;
+  }
+  return securityStringToLowerCase(normalized);
 }
 
 function sanitizeCssLengthPercentage(value: unknown): string | null {
   if (typeof value === 'number') return Number.isFinite(value) ? securityString(value) : null;
 
-  const rendered = securityString(value).trim();
-  if (/^-?(?:\d+|\d*\.\d+)(?:%|px|rem|em|vh|vw|vmin|vmax|ch|ex|lh|rlh)?$/.test(rendered)) {
+  const rendered = securityStringTrim(securityString(value));
+  if (
+    securityRegExpTest(
+      /^-?(?:\d+|\d*\.\d+)(?:%|px|rem|em|vh|vw|vmin|vmax|ch|ex|lh|rlh)?$/,
+      rendered,
+    )
+  ) {
     return rendered;
   }
 
@@ -722,23 +784,73 @@ function sanitizeCssLengthPercentage(value: unknown): string | null {
 }
 
 function sanitizeCssTransform(value: unknown): string | null {
-  const rendered = securityString(value).trim();
-  const match = /^translate(?:3d|X|Y)?\((.*)\)$/.exec(rendered);
+  const rendered = securityStringTrim(securityString(value));
+  const match = securityRegExpExec(/^translate(?:3d|X|Y)?\((.*)\)$/, rendered);
   if (!match) return null;
 
-  const parts = (match[1] ?? '').split(',').map((part) => part.trim());
+  const rawParts = match[1] ?? '';
+  const parts: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= rawParts.length; index += 1) {
+    if (index < rawParts.length && rawParts[index] !== ',') continue;
+    parts[parts.length] = securityStringTrim(securityStringSlice(rawParts, start, index));
+    start = index + 1;
+  }
   if (parts.length < 1 || parts.length > 3) return null;
-  return parts.every((part) => sanitizeCssLengthPercentage(part) !== null) ? rendered : null;
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part === undefined || sanitizeCssLengthPercentage(part) === null) return null;
+  }
+  return rendered;
 }
 
 function securitySetOf<T>(values: readonly T[]): Set<T> {
   const set = securitySet<T>();
-  for (const value of values) securitySetAdd(set, value);
+  for (let index = 0; index < values.length; index += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(values, index);
+    if (descriptor !== undefined && 'value' in descriptor)
+      securitySetAdd(set, descriptor.value as T);
+  }
   return set;
 }
 
 function securityMapOf<K, V>(entries: readonly (readonly [K, V])[]): Map<K, V> {
   const map = securityMap<K, V>();
-  for (const [key, value] of entries) securityMapSet(map, key, value);
+  for (let index = 0; index < entries.length; index += 1) {
+    const entryDescriptor = securityGetOwnPropertyDescriptor(entries, index);
+    if (entryDescriptor === undefined || !('value' in entryDescriptor)) continue;
+    const entry = entryDescriptor.value as readonly [K, V];
+    const keyDescriptor = securityGetOwnPropertyDescriptor(entry, 0);
+    const valueDescriptor = securityGetOwnPropertyDescriptor(entry, 1);
+    if (
+      keyDescriptor !== undefined &&
+      'value' in keyDescriptor &&
+      valueDescriptor !== undefined &&
+      'value' in valueDescriptor
+    ) {
+      securityMapSet(map, keyDescriptor.value as K, valueDescriptor.value as V);
+    }
+  }
   return map;
+}
+
+function addNormalizedTags(target: Set<string>, tags: readonly string[]): void {
+  for (let index = 0; index < tags.length; index += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(tags, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      continue;
+    }
+    securitySetAdd(target, securityStringToLowerCase(descriptor.value));
+  }
+}
+
+function lastArrayIndexOf(values: readonly string[], expected: string): number {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (values[index] === expected) return index;
+  }
+  return -1;
 }

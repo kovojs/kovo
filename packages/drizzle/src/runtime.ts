@@ -1,6 +1,9 @@
 import { sql as drizzleSql, type SQL } from 'drizzle-orm';
 import {
+  invokeSqlConstructor,
+  joinStaticSqlStrings,
   mergeSqlSafetyMetadata,
+  snapshotSqlConstructorArray,
   stampParameterizedSql,
   stampRawSqlChunk,
   stampSqlIdentifier,
@@ -122,11 +125,17 @@ type SqlTag = (<T = unknown>(
  * while still accepting parameterized builders (SPEC §10.2/§10.3 SQL safety).
  */
 export const sql = (<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => {
-  const statement = drizzleSql<T>(strings, ...values);
-  return stampParameterizedSql(statement, mergeSqlSafetyMetadata(values), {
+  const stringSnapshot = snapshotSqlConstructorArray(strings, 'sql template strings');
+  const valueSnapshot = snapshotSqlConstructorArray(values, 'sql template values');
+  const args: unknown[] = [strings];
+  for (let index = 0; index < valueSnapshot.length; index += 1) {
+    args[args.length] = valueSnapshot[index];
+  }
+  const statement = invokeSqlConstructor<SQL<T>>(drizzleSql, undefined, args);
+  return stampParameterizedSql(statement, mergeSqlSafetyMetadata(valueSnapshot), {
     kind: 'template',
-    strings,
-    values,
+    strings: stringSnapshot,
+    values: valueSnapshot,
   });
 }) as unknown as SqlTag;
 
@@ -154,23 +163,28 @@ sql.allow = <T = unknown>(value: string, allow: readonly string[]) => {
 };
 
 sql.join = <T = unknown>(parts: readonly unknown[], separator?: unknown) => {
+  const partSnapshot = snapshotSqlConstructorArray(parts, 'sql.join parts');
   const drizzleSeparator = separator ?? drizzleSql.raw(', ');
   const factory = (
     drizzleSql as unknown as {
       join?: <TResult = unknown>(parts: unknown[], separator?: unknown) => SQL<TResult>;
     }
   ).join;
-  const statement =
-    typeof factory === 'function'
-      ? factory<T>([...parts], drizzleSeparator)
-      : drizzleSql<T>`${parts.reduce<unknown[]>((items, part, index) => {
-          if (index > 0) items.push(drizzleSeparator);
-          items.push(part);
-          return items;
-        }, [])}`;
-  return stampParameterizedSql(statement, mergeSqlSafetyMetadata([...parts, drizzleSeparator]), {
+  if (typeof factory !== 'function') {
+    throw new TypeError('The installed Drizzle version does not expose sql.join().');
+  }
+  const statement = invokeSqlConstructor<SQL<T>>(factory, undefined, [
+    partSnapshot,
+    drizzleSeparator,
+  ]);
+  const metadataInputs: unknown[] = [];
+  for (let index = 0; index < partSnapshot.length; index += 1) {
+    metadataInputs[metadataInputs.length] = partSnapshot[index];
+  }
+  metadataInputs[metadataInputs.length] = drizzleSeparator;
+  return stampParameterizedSql(statement, mergeSqlSafetyMetadata(metadataInputs), {
     kind: 'join',
-    parts,
+    parts: partSnapshot,
     separator,
   });
 };
@@ -186,7 +200,9 @@ export function staticSql<T = unknown>(
   if (values.length > 0) {
     throw new Error('staticSql accepts literal-only SQL text; use sql`...` for parameters.');
   }
-  const text = strings.join('');
+  const text = joinStaticSqlStrings(
+    snapshotSqlConstructorArray(strings, 'staticSql template strings'),
+  );
   return stampStaticSql(drizzleSql.raw(text) as SQL<T>, {}, { kind: 'text', text });
 }
 
@@ -198,15 +214,14 @@ export function trustedSql<TResult = unknown, T extends SQL<TResult> = SQL<TResu
   statement: T,
   options: { justification: string },
 ): T & KovoTrustedSql<TResult> {
-  if (!options.justification.trim()) {
-    throw new Error('trustedSql requires a non-empty justification.');
-  }
   return stampTrustedSql(statement, options.justification);
 }
 
 function quoteSqlIdentifier(identifier: string): string {
-  return identifier
-    .split('.')
-    .map((part) => `"${part.replaceAll('"', '""')}"`)
-    .join('.');
+  let quoted = '"';
+  for (let index = 0; index < identifier.length; index += 1) {
+    const character = identifier[index] ?? '';
+    quoted += character === '.' ? '"."' : character;
+  }
+  return `${quoted}"`;
 }

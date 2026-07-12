@@ -115,6 +115,159 @@ describe('webhook verifier kit', () => {
     expect(await import('./index.js')).not.toHaveProperty('isFrameworkHmacSignatureVerifier');
   });
 
+  it('uses captured validated SubtleCrypto methods after ambient prototype poisoning', async () => {
+    const secretList = ['post-import-secret'];
+    const originalArrayMap = Array.prototype.map;
+    let observedSecretArray = false;
+    let verifier!: HmacSignatureVerifier;
+    try {
+      Array.prototype.map = function () {
+        if (this === secretList) observedSecretArray = true;
+        return [];
+      };
+      verifier = hmacSignature({
+        encoding: 'hex',
+        header: 'x-signature',
+        payload: ({ payload }) => payload,
+        secret: secretList,
+      });
+    } finally {
+      Array.prototype.map = originalArrayMap;
+    }
+    const validSignature = createHmac('sha256', 'post-import-secret').update('body').digest('hex');
+    const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle) as Record<
+      'importKey' | 'sign',
+      unknown
+    >;
+    const importKeyDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'importKey');
+    const signDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'sign');
+    let observedSecret = false;
+    try {
+      Object.defineProperty(subtlePrototype, 'importKey', {
+        ...importKeyDescriptor,
+        value: async (...args: unknown[]) => {
+          const bytes = args[1];
+          if (
+            bytes instanceof Uint8Array &&
+            new TextDecoder().decode(bytes) === 'post-import-secret'
+          ) {
+            observedSecret = true;
+          }
+          return {} as CryptoKey;
+        },
+      });
+      Object.defineProperty(subtlePrototype, 'sign', {
+        ...signDescriptor,
+        value: async () => new Uint8Array(32).buffer,
+      });
+
+      await expect(
+        verifier.verify({ headers: { 'x-signature': validSignature }, payload: 'body' }),
+      ).resolves.toBe(true);
+      await expect(
+        verifier.verify({ headers: { 'x-signature': '00'.repeat(32) }, payload: 'body' }),
+      ).resolves.toBe(false);
+    } finally {
+      if (importKeyDescriptor) {
+        Object.defineProperty(subtlePrototype, 'importKey', importKeyDescriptor);
+      }
+      if (signDescriptor) Object.defineProperty(subtlePrototype, 'sign', signDescriptor);
+    }
+    expect(observedSecretArray).toBe(false);
+    expect(observedSecret).toBe(false);
+  });
+
+  it('rejects forged signatures and stale timestamps after scalar prototype poisoning', async () => {
+    const direct = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: 'scalar-secret',
+    });
+    const timestamp = '1000';
+    const stale = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: ({ payload }) => payload,
+      secret: 'scalar-secret',
+      tolerance: { header: 'x-timestamp', seconds: 10 },
+    });
+    const staleSignature = createHmac('sha256', 'scalar-secret')
+      .update(`${timestamp}.body`)
+      .digest('hex');
+    const validSignature = createHmac('sha256', 'scalar-secret').update('body').digest('hex');
+    const forgedSignature = '0'.repeat(64);
+    const originalMathMax = Math.max;
+    const originalMathFloor = Math.floor;
+    const originalMathAbs = Math.abs;
+    const originalNumberIsFinite = Number.isFinite;
+    const originalNumberIsSafeInteger = Number.isSafeInteger;
+    const originalParseInt = Number.parseInt;
+    const originalSlice = String.prototype.slice;
+    const originalSplit = String.prototype.split;
+    const originalReplace = String.prototype.replace;
+    const originalPadEnd = String.prototype.padEnd;
+    const originalCharCodeAt = String.prototype.charCodeAt;
+    const originalLower = String.prototype.toLowerCase;
+    const originalUpper = String.prototype.toUpperCase;
+    const originalExec = RegExp.prototype.exec;
+    const originalTest = RegExp.prototype.test;
+    let forgedAccepted = true;
+    let staleAccepted = true;
+    let validAccepted = false;
+    try {
+      Math.max = () => 0;
+      Math.floor = () => 1000;
+      Math.abs = () => 0;
+      Number.isFinite = () => true;
+      Number.isSafeInteger = () => true;
+      Number.parseInt = () => 0;
+      String.prototype.slice = () => 'forged';
+      String.prototype.split = () => ['forged'];
+      String.prototype.replace = () => 'forged';
+      String.prototype.padEnd = () => 'forged';
+      String.prototype.charCodeAt = () => 0;
+      String.prototype.toLowerCase = () => 'forged';
+      String.prototype.toUpperCase = () => 'forged';
+      RegExp.prototype.exec = () => null;
+      RegExp.prototype.test = () => true;
+
+      forgedAccepted = await direct.verify({
+        headers: { 'x-signature': forgedSignature },
+        payload: 'body',
+      });
+      validAccepted = await direct.verify({
+        headers: { 'x-signature': validSignature },
+        payload: 'body',
+      });
+      staleAccepted = await stale.verify({
+        headers: { 'x-signature': staleSignature, 'x-timestamp': timestamp },
+        now: 2_000_000,
+        payload: 'body',
+      });
+    } finally {
+      Math.max = originalMathMax;
+      Math.floor = originalMathFloor;
+      Math.abs = originalMathAbs;
+      Number.isFinite = originalNumberIsFinite;
+      Number.isSafeInteger = originalNumberIsSafeInteger;
+      Number.parseInt = originalParseInt;
+      String.prototype.slice = originalSlice;
+      String.prototype.split = originalSplit;
+      String.prototype.replace = originalReplace;
+      String.prototype.padEnd = originalPadEnd;
+      String.prototype.charCodeAt = originalCharCodeAt;
+      String.prototype.toLowerCase = originalLower;
+      String.prototype.toUpperCase = originalUpper;
+      RegExp.prototype.exec = originalExec;
+      RegExp.prototype.test = originalTest;
+    }
+
+    expect(forgedAccepted).toBe(false);
+    expect(staleAccepted).toBe(false);
+    expect(validAccepted).toBe(true);
+  });
+
   it('copies Buffer payloads and direct or wrapped Buffer secrets without shared backing memory', async () => {
     const directSecret = Buffer.from('old-secret');
     const wrappedSecret = Buffer.from('old-secret');

@@ -162,4 +162,62 @@ describe('shared runtime sink policy', () => {
     expect(hasUnsafeCssText('-moz-binding: url("http://example.test/xss.xml#xss")')).toBe(true);
     expect(hasUnsafeCssText('min-height: 120px; overflow: auto')).toBe(false);
   });
+
+  it('keeps sink classification and sanitization pinned after scalar and array prototypes change', () => {
+    const originalReplace = String.prototype.replace;
+    const originalTrim = String.prototype.trim;
+    const originalSlice = String.prototype.slice;
+    const originalCharCodeAt = String.prototype.charCodeAt;
+    const originalToLowerCase = String.prototype.toLowerCase;
+    const originalExec = RegExp.prototype.exec;
+    const originalTest = RegExp.prototype.test;
+    const originalFlatMap = Array.prototype.flatMap;
+    const originalJoin = Array.prototype.join;
+    let urlDecision: ReturnType<typeof decideRuntimeAttributeWrite> | undefined;
+    let eventDecision: ReturnType<typeof decideRuntimeAttributeWrite> | undefined;
+    let cssDecision: ReturnType<typeof decideRuntimeAttributeWrite> | undefined;
+    let srcset: string | null | undefined;
+
+    try {
+      String.prototype.replace = function () {
+        return 'https://forged-safe.test';
+      };
+      String.prototype.trim = function () {
+        return 'https://forged-safe.test';
+      };
+      String.prototype.slice = function () {
+        return 'https://forged-safe.test';
+      };
+      String.prototype.charCodeAt = () => 0;
+      String.prototype.toLowerCase = function () {
+        return 'forged-safe-name';
+      };
+      RegExp.prototype.exec = () => null;
+      RegExp.prototype.test = () => false;
+      Array.prototype.flatMap = () => [];
+      Array.prototype.join = () => 'javascript:alert(1)';
+
+      urlDecision = decideRuntimeAttributeWrite('HREF', 'java\nscript:alert(1)');
+      eventDecision = decideRuntimeAttributeWrite('ONCLICK', 'alert(document.cookie)');
+      cssDecision = decideRuntimeAttributeWrite('STYLE', 'background:url(javascript:alert(1))');
+      srcset = sanitizeRuntimeSrcset(
+        '/safe.png 1x, javascript:alert(1) 2x, https://cdn.test/safe.png 3x',
+      );
+    } finally {
+      String.prototype.replace = originalReplace;
+      String.prototype.trim = originalTrim;
+      String.prototype.slice = originalSlice;
+      String.prototype.charCodeAt = originalCharCodeAt;
+      String.prototype.toLowerCase = originalToLowerCase;
+      RegExp.prototype.exec = originalExec;
+      RegExp.prototype.test = originalTest;
+      Array.prototype.flatMap = originalFlatMap;
+      Array.prototype.join = originalJoin;
+    }
+
+    expect(urlDecision).toMatchObject({ action: 'neutralize', family: 'url', value: '#' });
+    expect(eventDecision).toMatchObject({ action: 'remove', family: 'event-handler' });
+    expect(cssDecision).toMatchObject({ action: 'remove', family: 'css-text' });
+    expect(srcset).toBe('/safe.png 1x, https://cdn.test/safe.png 3x');
+  });
 });

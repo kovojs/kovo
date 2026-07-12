@@ -7,6 +7,7 @@ import {
   renderedHtmlContent,
   type RenderedHtml,
 } from './html.js';
+import { witnessIsArray } from './security-witness-intrinsics.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
@@ -50,13 +51,20 @@ export function renderServerRenderable(children: InternalServerRenderable): Mayb
     const trustedHtml = kovoTrustedHtmlContent(children);
     if (trustedHtml !== '') return trustedHtml;
   }
-  if (Array.isArray(children)) {
-    const rendered = children.map((child) => renderServerRenderable(child));
-    return rendered.some(isPromiseLike)
-      ? Promise.all(rendered.map((value) => Promise.resolve(value))).then((values) =>
-          values.join(''),
-        )
-      : (rendered as string[]).join('');
+  if (witnessIsArray(children)) {
+    const rendered: MaybePromise<string>[] = [];
+    let async = false;
+    for (let index = 0; index < children.length; index += 1) {
+      const value = renderServerRenderable(children[index] as InternalServerRenderable);
+      rendered[index] = value;
+      if (isPromiseLike(value)) async = true;
+    }
+    if (async) return joinRenderedValues(rendered);
+    let joined = '';
+    for (let index = 0; index < rendered.length; index += 1) {
+      joined += rendered[index] as string;
+    }
+    return joined;
   }
 
   // SPEC.md §4.5/§5.2: escape a RAW scalar child (an app-authored `{expr}` with no
@@ -67,6 +75,14 @@ export function renderServerRenderable(children: InternalServerRenderable): Mayb
   // its result, or a value that is itself later re-escaped would double-escape; it uses the
   // string-returning escaper (which also resolves any embedded coerced-rendered-html marker).
   return escapeTextWithRenderedHtml(children);
+}
+
+async function joinRenderedValues(values: readonly MaybePromise<string>[]): Promise<string> {
+  let joined = '';
+  for (let index = 0; index < values.length; index += 1) {
+    joined += await values[index];
+  }
+  return joined;
 }
 
 function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {

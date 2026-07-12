@@ -1,3 +1,9 @@
+import {
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
+} from '#security-witness-intrinsics';
+
 /**
  * @internal Shared route pattern parser, normalizer, matcher, and href builder.
  * SPEC §6.4 makes typed route hrefs/redirects derive from the declared route
@@ -60,10 +66,16 @@ export function routePatternParamNameFromSegment(segment: string): string | unde
 /** @internal Parse and normalize an authored route pattern. */
 export function parseRoutePattern(path: string): RoutePattern {
   const normalizedPath = normalizePathname(path).pathname;
-  const segments = splitPathSegments(normalizedPath).map(parseRoutePatternSegment);
-  const paramNames = segments.flatMap((segment) =>
-    segment.kind === 'param' && segment.name ? [segment.name] : [],
-  );
+  const sourceSegments = splitPathSegments(normalizedPath);
+  const segments: RoutePatternSegment[] = [];
+  const paramNames: string[] = [];
+  for (let index = 0; index < sourceSegments.length; index += 1) {
+    const sourceSegment = sourceSegments[index];
+    if (sourceSegment === undefined) continue;
+    const segment = parseRoutePatternSegment(sourceSegment);
+    segments[segments.length] = segment;
+    if (segment.kind === 'param' && segment.name) paramNames[paramNames.length] = segment.name;
+  }
 
   return {
     hasParams: paramNames.length > 0,
@@ -81,14 +93,19 @@ export function substituteRoutePatternParams(
   const pattern = parseRoutePattern(path);
   if (pattern.segments.length === 0) return '/';
 
-  return `/${pattern.segments
-    .map((segment) => {
-      if (segment.kind === 'static') return segment.value;
-      return encodeURIComponent(
-        routeSearchValueToString(params[segment.name ?? segment.value.slice(1)]),
-      );
-    })
-    .join('/')}`;
+  let rendered = '';
+  for (let index = 0; index < pattern.segments.length; index += 1) {
+    const segment = pattern.segments[index];
+    if (segment === undefined) continue;
+    const value =
+      segment.kind === 'static'
+        ? segment.value
+        : encodeURIComponent(
+            routeSearchValueToString(params[segment.name ?? segment.value.slice(1)]),
+          );
+    rendered += `${index === 0 ? '' : '/'}${value}`;
+  }
+  return `/${rendered}`;
 }
 
 /** @internal Build a typed route href from one shared route pattern contract. */
@@ -154,14 +171,17 @@ export function matchRoute<Route extends RouteLike>(
 ): RouteMatch<Route> | undefined {
   const normalization = normalizePathname(pathname);
   const pathnameSegments = splitPathSegments(normalization.pathname);
-  const candidates = compileRoutes(routes)
-    .flatMap((route) => {
-      const params = matchCompiledRoute(route, pathnameSegments);
-      return params ? [{ params, route }] : [];
-    })
-    .sort((left, right) => compareCompiledRouteSpecificity(left.route, right.route));
-
-  const match = candidates[0];
+  let match: { params: Record<string, string>; route: CompiledRoute<Route> } | undefined;
+  const compiled = compileRoutes(routes);
+  for (let index = 0; index < compiled.length; index += 1) {
+    const route = compiled[index];
+    if (route === undefined) continue;
+    const params = matchCompiledRoute(route, pathnameSegments);
+    if (!params) continue;
+    if (!match || compareCompiledRouteSpecificity(route, match.route) < 0) {
+      match = { params, route };
+    }
+  }
   if (!match) return undefined;
 
   return {
@@ -187,12 +207,12 @@ export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly Rou
       const witnessPath = routeAmbiguityWitness(left, right);
       if (!witnessPath) continue;
 
-      ambiguities.push({
+      ambiguities[ambiguities.length] = {
         code: 'KV228',
         message: `Ambiguous route table: '${left.path}' and '${right.path}' can both match canonical request path '${witnessPath}'.`,
         paths: [left.path, right.path],
         witnessPath,
-      });
+      };
     }
   }
 
@@ -224,19 +244,27 @@ interface CachedRouteTable<Route extends RouteLike = RouteLike> {
   paths: readonly string[];
 }
 
-const routeTableCache = new WeakMap<readonly RouteLike[], CachedRouteTable>();
+const routeTableCache = securityWeakMap<readonly RouteLike[], CachedRouteTable>();
 
 function compileRoutes<Route extends RouteLike>(
   routes: readonly Route[],
 ): readonly CompiledRoute<Route>[] {
-  const cached = routeTableCache.get(routes);
-  const paths = routes.map((route) => route.path);
+  const cached = securityWeakMapGet(routeTableCache, routes);
+  const paths: string[] = [];
+  for (let index = 0; index < routes.length; index += 1) {
+    const route = routes[index];
+    if (route !== undefined) paths[index] = route.path;
+  }
   if (cached && pathsEqual(cached.paths, paths)) {
     return cached.compiled as readonly CompiledRoute<Route>[];
   }
 
-  const compiled = routes.map((route, index) => compileRoute(route, index));
-  routeTableCache.set(routes, { compiled, paths });
+  const compiled: CompiledRoute<Route>[] = [];
+  for (let index = 0; index < routes.length; index += 1) {
+    const route = routes[index];
+    if (route !== undefined) compiled[index] = compileRoute(route, index);
+  }
+  securityWeakMapSet(routeTableCache, routes, { compiled, paths });
   return compiled;
 }
 
@@ -251,7 +279,11 @@ function compileRoute<Route extends RouteLike>(route: Route, index: number): Com
 }
 
 function pathsEqual(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 function compareCompiledRouteSpecificity(left: CompiledRoute, right: CompiledRoute): number {
@@ -325,21 +357,21 @@ function routeAmbiguityWitness(left: CompiledRoute, right: CompiledRoute): strin
 
     if (leftSegment.kind === 'static' && rightSegment.kind === 'static') {
       if (leftSegment.value !== rightSegment.value) return undefined;
-      witnessSegments.push(leftSegment.value);
+      witnessSegments[witnessSegments.length] = leftSegment.value;
       continue;
     }
 
     if (leftSegment.kind === 'static') {
-      witnessSegments.push(leftSegment.value);
+      witnessSegments[witnessSegments.length] = leftSegment.value;
       continue;
     }
 
     if (rightSegment.kind === 'static') {
-      witnessSegments.push(rightSegment.value);
+      witnessSegments[witnessSegments.length] = rightSegment.value;
       continue;
     }
 
-    witnessSegments.push(leftSegment.name ? `:${leftSegment.name}` : ':param');
+    witnessSegments[witnessSegments.length] = leftSegment.name ? `:${leftSegment.name}` : ':param';
   }
 
   return `/${witnessSegments.join('/')}`;
@@ -360,7 +392,7 @@ function removeDotSegments(pathname: string): string {
       if (output.length > 1) output.pop();
       continue;
     }
-    output.push(segment);
+    output[output.length] = segment;
   }
 
   const joined = output.join('/');

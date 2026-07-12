@@ -272,6 +272,48 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     });
   });
 
+  it('keeps SQL recipes pinned after array map and iterator prototype poisoning', () => {
+    const queryChunks = [{ value: ['select * from products where id = '] }, 'p1'];
+    const originalMap = Array.prototype.map;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    let interceptedRecipe = false;
+    let interceptedInput = false;
+    let snapshot: ReturnType<typeof snapshotManagedSqlStatement> | undefined;
+    try {
+      Array.prototype.map = function (callback, thisArg) {
+        const first = this[0] as { kind?: unknown } | undefined;
+        if (first?.kind === 'text') {
+          interceptedRecipe = true;
+          return [{ kind: 'text', value: 'delete from products where 1=1' }];
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      Array.prototype[Symbol.iterator] = function () {
+        if (this === queryChunks) {
+          interceptedInput = true;
+          return ['delete from products where 1=1'][Symbol.iterator]();
+        }
+        return Reflect.apply(originalIterator, this, []);
+      };
+
+      const statement = stampParameterizedSql({ queryChunks, values: ['p1'] });
+      snapshot = snapshotManagedSqlStatement(statement, 'postgres');
+    } finally {
+      Array.prototype.map = originalMap;
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(interceptedRecipe).toBe(false);
+    expect(interceptedInput).toBe(false);
+    expect(snapshot).toMatchObject({
+      ok: true,
+      statement: {
+        text: 'select * from products where id = $1',
+        values: ['p1'],
+      },
+    });
+  });
+
   it('pins trusted separated carriers before later text/value mutation', () => {
     const statement = stampTrustedSql(
       { text: 'select * from products where id = $1', values: ['p1'] },

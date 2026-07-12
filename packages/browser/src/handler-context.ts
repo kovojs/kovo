@@ -1,6 +1,21 @@
 import type { JsonValue } from '@kovojs/core';
 import { domAttributes } from './dom-like.js';
 import type { EventElementLike } from './events.js';
+import {
+  securityMap,
+  securityMapDelete,
+  securityMapForEach,
+  securityMapGet,
+  securityMapSet,
+  securitySet,
+  securitySetAdd,
+  securitySetForEach,
+  securitySetHas,
+  securityWeakMap,
+  securityWeakMapDelete,
+  securityWeakMapGet,
+  securityWeakMapSet,
+} from './security-witness-intrinsics.js';
 import { readAttribute, tagClose } from './wire-html.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -18,21 +33,21 @@ export type IslandSignalScope = object;
 
 export const defaultIslandSignalScope: IslandSignalScope = {};
 
-const islandSignalControllers = new WeakMap<IslandSignalScope, Map<string, AbortController>>();
+const islandSignalControllers = securityWeakMap<IslandSignalScope, Map<string, AbortController>>();
 
 export function createIslandSignalScope(): IslandSignalScope {
   return {};
 }
 
 export function abortIslandSignalScope(scope: IslandSignalScope): void {
-  const controllers = islandSignalControllers.get(scope);
+  const controllers = securityWeakMapGet(islandSignalControllers, scope);
   if (!controllers) return;
 
-  for (const controller of controllers.values()) {
+  securityMapForEach(controllers, (controller, key) => {
     controller.abort();
-  }
-  controllers.clear();
-  islandSignalControllers.delete(scope);
+    securityMapDelete(controllers, key);
+  });
+  securityWeakMapDelete(islandSignalControllers, scope);
 }
 
 export interface DelegatedHandlerContext {
@@ -122,11 +137,11 @@ function createHandlerSignal(element: EventElementLike, scope: IslandSignalScope
   if (!key) return new AbortController().signal;
 
   const controllers = islandSignalControllersFor(scope);
-  const existing = controllers.get(key);
+  const existing = securityMapGet(controllers, key);
   if (existing && !existing.signal.aborted) return existing.signal;
 
   const controller = new AbortController();
-  controllers.set(key, controller);
+  securityMapSet(controllers, key, controller);
   return controller.signal;
 }
 
@@ -146,31 +161,34 @@ export function abortRemovedIslandSignals(
   scope: IslandSignalScope = defaultIslandSignalScope,
 ): string[] {
   const next = kovoComponentIds(nextHtml);
-  const removed = [...kovoComponentIds(currentHtml)].filter((id) => !next.has(id));
+  const removed: string[] = [];
+  securitySetForEach(kovoComponentIds(currentHtml), (id) => {
+    if (!securitySetHas(next, id)) removed[removed.length] = id;
+  });
   const controllers = islandSignalControllersFor(scope);
 
   for (const id of removed) {
-    const controller = controllers.get(id);
+    const controller = securityMapGet(controllers, id);
     if (!controller) continue;
 
     controller.abort();
-    controllers.delete(id);
+    securityMapDelete(controllers, id);
   }
 
   return removed;
 }
 
 function islandSignalControllersFor(scope: IslandSignalScope): Map<string, AbortController> {
-  const existing = islandSignalControllers.get(scope);
+  const existing = securityWeakMapGet(islandSignalControllers, scope);
   if (existing) return existing;
 
-  const controllers = new Map<string, AbortController>();
-  islandSignalControllers.set(scope, controllers);
+  const controllers = securityMap<string, AbortController>();
+  securityWeakMapSet(islandSignalControllers, scope, controllers);
   return controllers;
 }
 
 function kovoComponentIds(html: string): Set<string> {
-  const ids = new Set<string>();
+  const ids = securitySet<string>();
   let offset = 0;
 
   while (offset < html.length) {
@@ -195,7 +213,7 @@ function kovoComponentIds(html: string): Set<string> {
       readAttribute(tag, 'kovo-key'),
       readAttribute(tag, 'id'),
     );
-    if (identity) ids.add(identity);
+    if (identity) securitySetAdd(ids, identity);
     offset = close + 1;
   }
 

@@ -1,5 +1,19 @@
 import type * as TypeScript from 'typescript';
 import {
+  securityMap,
+  securityMapForEach,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securitySetValues,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
+} from '#security-witness-intrinsics';
+import {
   frameworkCatalogExportForModuleSpecifier,
   type FrameworkExportIdentity,
   type FrameworkIdentityModule,
@@ -101,23 +115,23 @@ interface DeclarationIndexEntry {
   readonly start: number;
 }
 
-const declarationIndexCache = new WeakMap<
+const declarationIndexCache = securityWeakMap<
   TypeScript.SourceFile,
   WeakMap<TypeScript.Node, Map<string, readonly DeclarationIndexEntry[]>>
 >();
-const canonicalExpressionCache = new WeakMap<
+const canonicalExpressionCache = securityWeakMap<
   TypeScript.SourceFile,
   WeakMap<TypeScript.Expression, FrameworkExportIdentity | null>
 >();
-const callExpressionSpanCache = new WeakMap<
+const callExpressionSpanCache = securityWeakMap<
   TypeScript.SourceFile,
   Map<string, TypeScript.CallExpression>
 >();
-const expressionSpanCache = new WeakMap<
+const expressionSpanCache = securityWeakMap<
   TypeScript.SourceFile,
   Map<string, TypeScript.Expression>
 >();
-const frameworkIdentityProjectCache = new WeakMap<
+const frameworkIdentityProjectCache = securityWeakMap<
   TypeScript.SourceFile,
   Map<string, TypeScript.SourceFile>
 >();
@@ -199,15 +213,16 @@ export function canonicalFrameworkExportForExpression(
   options: FrameworkIdentityOptions = {},
 ): FrameworkExportIdentity | undefined {
   if (options.legacyGlobals?.length) {
-    return canonicalExpression(ts, sourceFile, expression, options, new Set(), 0);
+    return canonicalExpression(ts, sourceFile, expression, options, securitySet(), 0);
   }
 
   const cacheKey = unwrapExpression(ts, expression);
-  const cached = canonicalExpressionCache.get(sourceFile)?.get(cacheKey);
+  const sourceCache = securityWeakMapGet(canonicalExpressionCache, sourceFile);
+  const cached = sourceCache && securityWeakMapGet(sourceCache, cacheKey);
   if (cached !== undefined) return cached ?? undefined;
 
-  const resolved = canonicalExpression(ts, sourceFile, cacheKey, options, new Set(), 0);
-  canonicalExpressionCacheForSource(sourceFile).set(cacheKey, resolved ?? null);
+  const resolved = canonicalExpression(ts, sourceFile, cacheKey, options, securitySet(), 0);
+  securityWeakMapSet(canonicalExpressionCacheForSource(sourceFile), cacheKey, resolved ?? null);
   return resolved;
 }
 
@@ -298,7 +313,9 @@ function frameworkIdentityExpressionSyntaxKinds(
 function uniqueSyntaxKinds(
   kinds: readonly TypeScript.SyntaxKind[],
 ): readonly TypeScript.SyntaxKind[] {
-  return [...new Set(kinds)];
+  const uniqueKinds = securitySet<TypeScript.SyntaxKind>();
+  for (const kind of kinds) securitySetAdd(uniqueKinds, kind);
+  return securitySetValues(uniqueKinds);
 }
 
 /** @internal Register extra local source files that source-only identity resolution may inspect. */
@@ -307,13 +324,15 @@ export function registerFrameworkIdentityProject(
   files: readonly TypeScript.SourceFile[],
 ): void {
   if (files.length === 0) return;
-  const project = new Map<string, TypeScript.SourceFile>();
-  for (const name of sourceFileLookupNames(sourceFile.fileName)) project.set(name, sourceFile);
-  for (const file of files) {
-    for (const name of sourceFileLookupNames(file.fileName)) project.set(name, file);
+  const project = securityMap<string, TypeScript.SourceFile>();
+  for (const name of sourceFileLookupNames(sourceFile.fileName)) {
+    securityMapSet(project, name, sourceFile);
   }
-  frameworkIdentityProjectCache.set(sourceFile, project);
-  for (const file of files) frameworkIdentityProjectCache.set(file, project);
+  for (const file of files) {
+    for (const name of sourceFileLookupNames(file.fileName)) securityMapSet(project, name, file);
+  }
+  securityWeakMapSet(frameworkIdentityProjectCache, sourceFile, project);
+  for (const file of files) securityWeakMapSet(frameworkIdentityProjectCache, file, project);
 }
 
 /** @internal Return the call expression whose span exactly matches a parser model span. */
@@ -322,7 +341,7 @@ export function callExpressionAtSpan(
   sourceFile: TypeScript.SourceFile,
   span: { readonly end: number; readonly start: number },
 ): TypeScript.CallExpression | undefined {
-  return callExpressionSpanIndex(ts, sourceFile).get(spanCacheKey(span));
+  return securityMapGet(callExpressionSpanIndex(ts, sourceFile), spanCacheKey(span));
 }
 
 /** @internal Return the expression whose span exactly matches a parser model span. */
@@ -331,7 +350,7 @@ export function expressionAtSpan(
   sourceFile: TypeScript.SourceFile,
   span: { readonly end: number; readonly start: number },
 ): TypeScript.Expression | undefined {
-  return expressionSpanIndex(ts, sourceFile).get(spanCacheKey(span));
+  return securityMapGet(expressionSpanIndex(ts, sourceFile), spanCacheKey(span));
 }
 
 function canonicalExpression(
@@ -416,8 +435,8 @@ function declarationIdentity(
 
   if (ts.isVariableDeclaration(declaration)) {
     const key = `var:${declaration.getStart(sourceFile)}`;
-    if (seen.has(key)) return undefined;
-    seen.add(key);
+    if (securitySetHas(seen, key)) return undefined;
+    securitySetAdd(seen, key);
     return declaration.initializer
       ? canonicalExpression(ts, sourceFile, declaration.initializer, options, seen, depth + 1)
       : undefined;
@@ -425,8 +444,8 @@ function declarationIdentity(
 
   if (ts.isBindingElement(declaration)) {
     const key = `binding:${declaration.getStart(sourceFile)}`;
-    if (seen.has(key)) return undefined;
-    seen.add(key);
+    if (securitySetHas(seen, key)) return undefined;
+    securitySetAdd(seen, key);
     const member = propertyNameText(ts, declaration.propertyName ?? declaration.name);
     const variable = enclosingVariableDeclaration(ts, declaration);
     if (!member || !variable?.initializer) return undefined;
@@ -474,8 +493,8 @@ function namespaceMemberIdentity(
       }
       if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
         const key = `namespace-var:${declaration.getStart(sourceFile)}:${member}`;
-        if (seen.has(key)) return undefined;
-        seen.add(key);
+        if (securitySetHas(seen, key)) return undefined;
+        securitySetAdd(seen, key);
         return namespaceMemberIdentity(
           ts,
           sourceFile,
@@ -565,8 +584,8 @@ function objectLiteralMemberIdentity(
 ): FrameworkExportIdentity | undefined {
   if (depth > MAX_RESOLUTION_DEPTH) return undefined;
   const key = `object:${object.getStart(sourceFile)}:${member}`;
-  if (seen.has(key)) return undefined;
-  seen.add(key);
+  if (securitySetHas(seen, key)) return undefined;
+  securitySetAdd(seen, key);
 
   for (let index = object.properties.length - 1; index >= 0; index -= 1) {
     const property = object.properties[index];
@@ -608,8 +627,8 @@ function arrayLiteralMemberIdentity(
   const element = array.elements[index];
   if (element === undefined) return undefined;
   const key = `array:${array.getStart(sourceFile)}:${member}`;
-  if (seen.has(key)) return undefined;
-  seen.add(key);
+  if (securitySetHas(seen, key)) return undefined;
+  securitySetAdd(seen, key);
   return canonicalExpression(ts, sourceFile, element, options, seen, depth + 1);
 }
 
@@ -623,8 +642,8 @@ function callReturnIdentity(
 ): FrameworkExportIdentity | undefined {
   if (depth > MAX_RESOLUTION_DEPTH) return undefined;
   const key = `call:${call.getStart(sourceFile)}`;
-  if (seen.has(key)) return undefined;
-  seen.add(key);
+  if (securitySetHas(seen, key)) return undefined;
+  securitySetAdd(seen, key);
 
   const callee = unwrapExpression(ts, call.expression);
   if (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)) {
@@ -696,8 +715,8 @@ function newExpressionMemberIdentity(
   );
   if (classDeclaration === undefined) return undefined;
   const key = `new-member:${classDeclaration.getStart(sourceFile)}:${member}`;
-  if (seen.has(key)) return undefined;
-  seen.add(key);
+  if (securitySetHas(seen, key)) return undefined;
+  securitySetAdd(seen, key);
   for (const classMember of classDeclaration.members) {
     if (!ts.isPropertyDeclaration(classMember) || classMember.initializer === undefined) continue;
     if (propertyNameText(ts, classMember.name) !== member) continue;
@@ -769,7 +788,10 @@ function declarationInContainerBefore(
   name: string,
   position: number,
 ): TypeScript.Node | undefined {
-  const declarations = declarationIndexForContainer(ts, sourceFile, container).get(name);
+  const declarations = securityMapGet(
+    declarationIndexForContainer(ts, sourceFile, container),
+    name,
+  );
   if (!declarations) return undefined;
 
   let found: TypeScript.Node | undefined;
@@ -785,21 +807,21 @@ function declarationIndexForContainer(
   sourceFile: TypeScript.SourceFile,
   container: TypeScript.Node,
 ): Map<string, readonly DeclarationIndexEntry[]> {
-  let sourceCache = declarationIndexCache.get(sourceFile);
+  let sourceCache = securityWeakMapGet(declarationIndexCache, sourceFile);
   if (!sourceCache) {
-    sourceCache = new WeakMap();
-    declarationIndexCache.set(sourceFile, sourceCache);
+    sourceCache = securityWeakMap();
+    securityWeakMapSet(declarationIndexCache, sourceFile, sourceCache);
   }
 
-  const cached = sourceCache.get(container);
+  const cached = securityWeakMapGet(sourceCache, container);
   if (cached) return cached;
 
-  const index = new Map<string, DeclarationIndexEntry[]>();
+  const index = securityMap<string, DeclarationIndexEntry[]>();
   const add = (name: string, declaration: TypeScript.Node): void => {
-    const bucket = index.get(name);
+    const bucket = securityMapGet(index, name);
     const entry = { declaration, start: declaration.getStart(sourceFile) };
     if (bucket) bucket.push(entry);
-    else index.set(name, [entry]);
+    else securityMapSet(index, name, [entry]);
   };
 
   const visit = (node: TypeScript.Node): void => {
@@ -814,20 +836,33 @@ function declarationIndexForContainer(
   };
 
   ts.forEachChild(container, visit);
-  for (const bucket of index.values()) {
-    bucket.sort((left, right) => left.start - right.start);
-  }
-  sourceCache.set(container, index);
+  securityMapForEach(index, (bucket) => sortDeclarationIndexEntries(bucket));
+  securityWeakMapSet(sourceCache, container, index);
   return index;
+}
+
+function sortDeclarationIndexEntries(entries: DeclarationIndexEntry[]): void {
+  for (let index = 1; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry === undefined) continue;
+    let insertion = index;
+    while (insertion > 0) {
+      const previous = entries[insertion - 1];
+      if (previous === undefined || previous.start <= entry.start) break;
+      entries[insertion] = previous;
+      insertion -= 1;
+    }
+    entries[insertion] = entry;
+  }
 }
 
 function canonicalExpressionCacheForSource(
   sourceFile: TypeScript.SourceFile,
 ): WeakMap<TypeScript.Expression, FrameworkExportIdentity | null> {
-  let sourceCache = canonicalExpressionCache.get(sourceFile);
+  let sourceCache = securityWeakMapGet(canonicalExpressionCache, sourceFile);
   if (!sourceCache) {
-    sourceCache = new WeakMap();
-    canonicalExpressionCache.set(sourceFile, sourceCache);
+    sourceCache = securityWeakMap();
+    securityWeakMapSet(canonicalExpressionCache, sourceFile, sourceCache);
   }
   return sourceCache;
 }
@@ -836,16 +871,18 @@ function callExpressionSpanIndex(
   ts: FrameworkIdentityTypeScript,
   sourceFile: TypeScript.SourceFile,
 ): Map<string, TypeScript.CallExpression> {
-  const cached = callExpressionSpanCache.get(sourceFile);
+  const cached = securityWeakMapGet(callExpressionSpanCache, sourceFile);
   if (cached) return cached;
 
-  const index = new Map<string, TypeScript.CallExpression>();
+  const index = securityMap<string, TypeScript.CallExpression>();
   const visit = (node: TypeScript.Node): void => {
-    if (ts.isCallExpression(node)) index.set(nodeSpanCacheKey(sourceFile, node), node);
+    if (ts.isCallExpression(node)) {
+      securityMapSet(index, nodeSpanCacheKey(sourceFile, node), node);
+    }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  callExpressionSpanCache.set(sourceFile, index);
+  securityWeakMapSet(callExpressionSpanCache, sourceFile, index);
   return index;
 }
 
@@ -853,20 +890,23 @@ function expressionSpanIndex(
   ts: FrameworkIdentityTypeScript,
   sourceFile: TypeScript.SourceFile,
 ): Map<string, TypeScript.Expression> {
-  const cached = expressionSpanCache.get(sourceFile);
+  const cached = securityWeakMapGet(expressionSpanCache, sourceFile);
   if (cached) return cached;
 
-  const index = new Map<string, TypeScript.Expression>();
-  const expressionKinds = new Set(frameworkIdentityExpressionSyntaxKinds(ts));
+  const index = securityMap<string, TypeScript.Expression>();
+  const expressionKinds = securitySet<TypeScript.SyntaxKind>();
+  for (const kind of frameworkIdentityExpressionSyntaxKinds(ts)) {
+    securitySetAdd(expressionKinds, kind);
+  }
   const visit = (node: TypeScript.Node): void => {
     if (isFrameworkIdentityExpressionNode(node, expressionKinds)) {
       const key = nodeSpanCacheKey(sourceFile, node);
-      if (!index.has(key)) index.set(key, node);
+      if (!securityMapHas(index, key)) securityMapSet(index, key, node);
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  expressionSpanCache.set(sourceFile, index);
+  securityWeakMapSet(expressionSpanCache, sourceFile, index);
   return index;
 }
 
@@ -976,8 +1016,8 @@ function localModuleExportIdentity(
   if (!target) return undefined;
 
   const key = `module:${target.fileName}:${exportName}`;
-  if (seen.has(key)) return undefined;
-  seen.add(key);
+  if (securitySetHas(seen, key)) return undefined;
+  securitySetAdd(seen, key);
 
   return exportedIdentity(ts, target, exportName, options, seen, depth + 1);
 }
@@ -1129,12 +1169,12 @@ function resolveProjectSourceFile(
   importingSourceFile: TypeScript.SourceFile,
   specifier: string,
 ): TypeScript.SourceFile | undefined {
-  const project = frameworkIdentityProjectCache.get(importingSourceFile);
+  const project = securityWeakMapGet(frameworkIdentityProjectCache, importingSourceFile);
   if (!project) return undefined;
   const baseDir = directoryName(importingSourceFile.fileName);
   const base = normalizePath(`${baseDir}${baseDir ? '/' : ''}${specifier}`);
   for (const candidate of sourceFileLookupNames(base)) {
-    const file = project.get(candidate);
+    const file = securityMapGet(project, candidate);
     if (file) return file;
   }
   return undefined;
@@ -1231,5 +1271,5 @@ function isFrameworkIdentityExpressionNode(
   node: TypeScript.Node,
   expressionKinds: ReadonlySet<TypeScript.SyntaxKind>,
 ): node is TypeScript.Expression {
-  return expressionKinds.has(node.kind);
+  return securitySetHas(expressionKinds, node.kind);
 }

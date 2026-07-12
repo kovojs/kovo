@@ -16,14 +16,30 @@ import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
+  witnessCreateNullRecord,
   witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessReflectApply,
+  witnessRegExpTest,
   witnessString,
+  witnessStringReplaceAll,
+  witnessStringStartsWith,
+  witnessStringToLowerCase,
+  witnessObjectKeys,
   witnessWeakMapGet,
   witnessWeakMapHas,
   witnessWeakMapSet,
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+
+const intrinsicBufferFrom = Buffer.from;
+const intrinsicBufferToString = Buffer.prototype.toString;
+const hmacMethodProbe = createHmac('sha256', 'kovo-method-probe');
+const intrinsicHmacUpdate = hmacMethodProbe.update;
+const intrinsicHmacDigest = hmacMethodProbe.digest;
+const capturedHtmlCryptoControlsSound = verifyCapturedHtmlCryptoControls();
 
 /**
  * @internal HTML-coercion helper the compiler injects into emitted server modules
@@ -32,7 +48,11 @@ import {
  * authors.
  */
 export function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  return witnessStringReplaceAll(
+    witnessStringReplaceAll(witnessStringReplaceAll(value, '&', '&amp;'), '<', '&lt;'),
+    '>',
+    '&gt;',
+  );
 }
 
 /**
@@ -41,7 +61,7 @@ export function escapeHtml(value: string): string {
  * only for compiler-emitted code and in-repo callers, not app authors.
  */
 export function escapeAttribute(value: string): string {
-  return escapeHtml(value).replaceAll('"', '&quot;');
+  return witnessStringReplaceAll(escapeHtml(value), '"', '&quot;');
 }
 
 const coercedRenderedHtmlPrefix = '\uE000kovo-rendered-html:v2:';
@@ -161,7 +181,13 @@ export function renderRouteHtml(value: unknown): string {
 export function escapeTextWithRenderedHtml(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (isRenderedHtml(value)) return coerceRenderedHtml(renderedHtmlContent(value));
-  if (Array.isArray(value)) return value.map((item) => escapeTextWithRenderedHtml(item)).join('');
+  if (witnessIsArray(value)) {
+    let rendered = '';
+    for (let index = 0; index < value.length; index += 1) {
+      rendered += escapeTextWithRenderedHtml(value[index]);
+    }
+    return rendered;
+  }
 
   // Mirrors renderJsxChildren's scalar coercion so escaped text stays byte-identical for safe values.
   // eslint-disable-next-line @typescript-eslint/no-base-to-string
@@ -178,7 +204,7 @@ function coerceRenderedHtml(html: string): string {
   // coercion forever. Carry the bytes in an authenticated, self-contained marker instead. The
   // per-process HMAC preserves the old non-forgeable capability property while leaving no strong
   // reference behind after the composed string becomes unreachable.
-  const payload = Buffer.from(html, 'utf8').toString('base64url');
+  const payload = capturedBufferToString(capturedBufferFrom(html, 'utf8'), 'base64url');
   const signature = coercedRenderedHtmlSignature(payload);
   return `${coercedRenderedHtmlPrefix}${payload}.${signature}${coercedRenderedHtmlSuffix}`;
 }
@@ -226,7 +252,7 @@ export function renderedHtmlContent(value: RenderedHtml): string {
 }
 
 function coercedRenderedHtmlSignature(payload: string): string {
-  return createHmac('sha256', coercedRenderedHtmlSecret).update(payload).digest('base64url');
+  return capturedHmacDigest(coercedRenderedHtmlSecret, payload, 'base64url');
 }
 
 function decodeCoercedRenderedHtml(marker: string): string | undefined {
@@ -242,10 +268,66 @@ function decodeCoercedRenderedHtml(marker: string): string | undefined {
     return undefined;
   }
 
-  const expected = Buffer.from(coercedRenderedHtmlSignature(payload), 'base64url');
-  const received = Buffer.from(signature, 'base64url');
+  const expected = capturedBufferFrom(coercedRenderedHtmlSignature(payload), 'base64url');
+  const received = capturedBufferFrom(signature, 'base64url');
   if (expected.length !== received.length || !timingSafeEqual(expected, received)) return undefined;
-  return Buffer.from(payload, 'base64url').toString('utf8');
+  return capturedBufferToString(capturedBufferFrom(payload, 'base64url'), 'utf8');
+}
+
+function assertHtmlCryptoControls(): void {
+  if (!capturedHtmlCryptoControlsSound) {
+    throw new TypeError(
+      'Kovo rendered HTML crypto controls were modified before framework initialization.',
+    );
+  }
+}
+
+function capturedBufferFrom(value: string | Uint8Array, encoding?: BufferEncoding): Buffer {
+  assertHtmlCryptoControls();
+  return encoding === undefined
+    ? witnessReflectApply(intrinsicBufferFrom, Buffer, [value])
+    : witnessReflectApply(intrinsicBufferFrom, Buffer, [value, encoding]);
+}
+
+function capturedBufferToString(value: Buffer, encoding: BufferEncoding): string {
+  assertHtmlCryptoControls();
+  return witnessReflectApply(intrinsicBufferToString, value, [encoding]);
+}
+
+function capturedHmacDigest(
+  key: string | Uint8Array,
+  payload: string,
+  encoding: 'base64url' | 'hex',
+): string {
+  assertHtmlCryptoControls();
+  const hmac = createHmac('sha256', key);
+  if (witnessReflectApply(intrinsicHmacUpdate, hmac, [payload]) !== hmac) {
+    throw new TypeError('Kovo rendered HTML HMAC update control failed.');
+  }
+  return witnessReflectApply(intrinsicHmacDigest, hmac, [encoding]);
+}
+
+function verifyCapturedHtmlCryptoControls(): boolean {
+  try {
+    const encoded = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['Kovo', 'utf8']);
+    if (witnessReflectApply(intrinsicBufferToString, encoded, ['hex']) !== '4b6f766f') return false;
+    const decoded = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, [
+      'S292bw',
+      'base64url',
+    ]);
+    if (witnessReflectApply(intrinsicBufferToString, decoded, ['utf8']) !== 'Kovo') return false;
+
+    const hmac = createHmac('sha256', 'kovo-control-key');
+    if (witnessReflectApply(intrinsicHmacUpdate, hmac, ['kovo-control-payload']) !== hmac) {
+      return false;
+    }
+    return (
+      witnessReflectApply(intrinsicHmacDigest, hmac, ['hex']) ===
+      '557d532657c49d16a9f5024f40ed1fdd00fb0b5c53484e258dc5dd4af6b3ad23'
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -293,20 +375,20 @@ const safeAttributeNamePattern = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/;
  * them (SPEC §4.7/§4.8, §5.2 rule 10, §6.6).
  */
 export function isKovoControlAttributeName(name: string): boolean {
-  const lower = name.toLowerCase();
+  const lower = witnessStringToLowerCase(name);
   return (
-    lower.startsWith('on:') ||
-    lower.startsWith('kovo-') ||
-    lower.startsWith('data-kovo-') ||
+    witnessStringStartsWith(lower, 'on:') ||
+    witnessStringStartsWith(lower, 'kovo-') ||
+    witnessStringStartsWith(lower, 'data-kovo-') ||
     // Browser query/update plans. `data-plan` is a framework-authored selector anchor even
     // though plans may also carry an explicit selector.
     lower === 'data-bind' ||
-    lower.startsWith('data-bind:') ||
-    lower.startsWith('data-bind-prop:') ||
+    witnessStringStartsWith(lower, 'data-bind:') ||
+    witnessStringStartsWith(lower, 'data-bind-prop:') ||
     lower === 'data-derive' ||
     lower === 'data-derive-attr' ||
     lower === 'data-plan' ||
-    lower.startsWith('data-p-') ||
+    witnessStringStartsWith(lower, 'data-p-') ||
     // Server JSX and browser enhanced-submit dispatch controls. Keep the bare JSX spellings in
     // the same boundary as their rendered wire forms: a spread must not turn an ordinary form
     // into a mutation/streaming form before the renderer emits the `data-*` attributes.
@@ -318,7 +400,7 @@ export function isKovoControlAttributeName(name: string): boolean {
     lower === 'data-mutation' ||
     lower === 'data-mutation-stream' ||
     lower === 'data-stream' ||
-    lower.startsWith('data-stream-') ||
+    witnessStringStartsWith(lower, 'data-stream-') ||
     // Unprefixed browser behavior/morph metadata. Standard ARIA, URL, id, and presentation
     // attributes remain ordinary HTML and continue through the contextual sink policy.
     lower === 'data-state' ||
@@ -334,12 +416,17 @@ export function isKovoControlAttributeName(name: string): boolean {
  * caller carrier is never re-read after classification (SPEC §6.6 rule 5).
  */
 export function kovoSafeJsxSpread(value: unknown): Record<string, unknown> {
-  const safe = Object.create(null) as Record<string, unknown>;
+  const safe = witnessCreateNullRecord<Record<string, unknown>>();
   if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return safe;
 
-  for (const [name, attributeValue] of Object.entries(value)) {
+  const names = witnessObjectKeys(value);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (name === undefined) continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(value, name);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
     if (isKovoControlAttributeName(name)) continue;
-    safe[name] = attributeValue;
+    safe[name] = descriptor.value;
   }
   return safe;
 }
@@ -351,7 +438,7 @@ export function kovoSafeJsxSpread(value: unknown): Record<string, unknown> {
  * blocked write is observable in dev/test, mirroring the value-side sink policy.
  */
 export function safeRuntimeAttributeName(name: string): boolean {
-  if (safeAttributeNamePattern.test(name)) return true;
+  if (witnessRegExpTest(safeAttributeNamePattern, name)) return true;
   drainRuntimeSinkSecurityEvent(rejectedAttributeNameEvent(name));
   return false;
 }
@@ -418,5 +505,5 @@ export function escapeText(value: unknown): RenderedHtml {
  * compiler-emitted code and in-repo callers, not app authors.
  */
 export function escapeScriptJson(value: string): string {
-  return value.replaceAll('<', '\\u003c');
+  return witnessStringReplaceAll(value, '<', '\\u003c');
 }

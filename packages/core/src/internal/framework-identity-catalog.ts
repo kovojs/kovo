@@ -1,3 +1,11 @@
+import {
+  securityMap,
+  securityMapGet,
+  securityMapSet,
+  securitySet,
+  securitySetAdd,
+} from '#security-witness-intrinsics';
+
 /** @internal Canonical package identity used by compiler/static gates. */
 export type FrameworkIdentityModule =
   | '@kovojs/browser'
@@ -186,24 +194,28 @@ export const frameworkIdentityCatalog = [
   ].map(drizzleOrmSql),
 ] as const satisfies readonly FrameworkIdentityCatalogEntry[];
 
-const moduleSpecifierIndex = new Map<string, Map<string, FrameworkExportIdentity>>();
-const moduleExportIndex = new Map<FrameworkIdentityModule, Set<string>>();
+const moduleSpecifierIndex = securityMap<string, Map<string, FrameworkExportIdentity>>();
+const moduleExportIndex = securityMap<FrameworkIdentityModule, Set<string>>();
 
-for (const entry of frameworkIdentityCatalog) {
-  let exports = moduleExportIndex.get(entry.module);
+for (let index = 0; index < frameworkIdentityCatalog.length; index += 1) {
+  const entry = frameworkIdentityCatalog[index];
+  if (entry === undefined) continue;
+  let exports = securityMapGet(moduleExportIndex, entry.module);
   if (!exports) {
-    exports = new Set();
-    moduleExportIndex.set(entry.module, exports);
+    exports = securitySet();
+    securityMapSet(moduleExportIndex, entry.module, exports);
   }
-  exports.add(entry.exportName);
+  securitySetAdd(exports, entry.exportName);
 
-  for (const specifier of entry.specifiers) {
-    let specifierExports = moduleSpecifierIndex.get(specifier);
+  for (let offset = 0; offset < entry.specifiers.length; offset += 1) {
+    const specifier = entry.specifiers[offset];
+    if (specifier === undefined) continue;
+    let specifierExports = securityMapGet(moduleSpecifierIndex, specifier);
     if (!specifierExports) {
-      specifierExports = new Map();
-      moduleSpecifierIndex.set(specifier, specifierExports);
+      specifierExports = securityMap();
+      securityMapSet(moduleSpecifierIndex, specifier, specifierExports);
     }
-    specifierExports.set(entry.exportName, {
+    securityMapSet(specifierExports, entry.exportName, {
       exportName: entry.exportName,
       module: entry.module,
     });
@@ -216,14 +228,15 @@ export function frameworkCatalogExportForModuleSpecifier(
   exportName: string,
 ): FrameworkExportIdentity | undefined {
   if (!specifier) return undefined;
-  return moduleSpecifierIndex.get(specifier)?.get(exportName);
+  const exports = securityMapGet(moduleSpecifierIndex, specifier);
+  return exports && securityMapGet(exports, exportName);
 }
 
 /** @internal */
 export function frameworkCatalogExportsForModule(
   module: FrameworkIdentityModule,
 ): ReadonlySet<string> {
-  return moduleExportIndex.get(module) ?? new Set();
+  return securityMapGet(moduleExportIndex, module) ?? securitySet();
 }
 
 /** @internal */

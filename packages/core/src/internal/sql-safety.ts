@@ -1,11 +1,15 @@
 import { diagnosticDefinitions } from './diagnostics.js';
 import {
   freezeSecurityValue,
+  securityApply,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityGetPrototypeOf,
   securityHasOwn,
   securityIsArray,
+  securityRegExpTest,
+  securityStringCharCodeAt,
+  securityStringTrim,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapHas,
@@ -112,6 +116,37 @@ export function stampParameterizedSql<T extends object>(
   return value as T & ParameterizedSql;
 }
 
+/** @internal Dense snapshot shared by SQL constructors, metadata, and pinned recipes. */
+export function snapshotSqlConstructorArray<T>(values: readonly T[], label: string): readonly T[] {
+  try {
+    return freezeSecurityValue(copyOwnArray(values));
+  } catch {
+    throw new TypeError(`${label} requires dense stable own-data array entries.`);
+  }
+}
+
+/** @internal Invoke a SQL factory without dispatching through a mutable array iterator. */
+export function invokeSqlConstructor<Return>(
+  factory: Function,
+  receiver: unknown,
+  args: readonly unknown[],
+): Return {
+  return securityApply<Return>(factory, receiver, args);
+}
+
+/** @internal Join a literal template snapshot without mutable Array/String helpers. */
+export function joinStaticSqlStrings(strings: readonly string[]): string {
+  let text = '';
+  for (let index = 0; index < strings.length; index += 1) {
+    const entry = ownArrayEntry(strings, index);
+    if (!entry.ok || typeof entry.value !== 'string') {
+      throw new TypeError('staticSql requires dense stable literal string entries.');
+    }
+    text += entry.value;
+  }
+  return text;
+}
+
 /** @internal */
 export function stampStaticSql<T extends object>(
   value: T,
@@ -126,8 +161,12 @@ export function stampStaticSql<T extends object>(
 
 /** @internal */
 export function stampTrustedSql<T extends object>(value: T, justification: string): T & TrustedSql {
+  const validatedJustification = validateTrustedSqlJustification(justification);
   blessSql('trusted-sql', value);
-  stampSqlSafetyMetadata(value, { ...sqlSafetyMetadata(value), justification });
+  stampSqlSafetyMetadata(value, {
+    ...sqlSafetyMetadata(value),
+    justification: validatedJustification,
+  });
   pinSqlCarrier(value);
   return value as T & TrustedSql;
 }
@@ -137,12 +176,18 @@ export function frameworkTrustedSqlCarrier(
   value: { readonly text: string; readonly values: readonly unknown[] },
   justification: string,
 ): { readonly text: string; readonly values: readonly unknown[] } & TrustedSql {
-  if (!justification.trim()) {
-    throw new Error('frameworkTrustedSqlCarrier requires a non-empty justification.');
-  }
+  validateTrustedSqlJustification(justification);
   return freezeSecurityValue(
-    stampTrustedSql({ text: value.text, values: [...value.values] }, justification),
+    stampTrustedSql({ text: value.text, values: copyOwnArray(value.values) }, justification),
   );
+}
+
+/** @internal Require a source-visible, non-blank trusted-SQL justification. */
+export function validateTrustedSqlJustification(justification: string): string {
+  if (!securityStringTrim(justification)) {
+    throw new Error('trustedSql requires a non-empty justification.');
+  }
+  return justification;
 }
 
 /** @internal */
@@ -183,24 +228,29 @@ export function sqlSafetyMetadata(value: unknown): SqlSafetyMetadata {
 
 /** @internal */
 export function mergeSqlSafetyMetadata(values: readonly unknown[]): SqlSafetyMetadata {
-  return values.reduce<SqlSafetyMetadata>((merged, value) => {
+  let merged: SqlSafetyMetadata = {};
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = ownArrayEntry(values, index);
+    if (!entry.ok) return { ...merged, containsRawChunk: true };
+    const value = entry.value;
     const metadata = sqlSafetyMetadata(value);
-    return {
+    merged = {
       ...merged,
       ...(metadata.containsRawChunk ? { containsRawChunk: true } : {}),
       ...(metadata.justification === undefined ? {} : { justification: metadata.justification }),
     };
-  }, {});
+  }
+  return merged;
 }
 
 /** @internal */
 export function validateSqlIdentifier(identifier: string, allow?: readonly string[]): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_$.]{0,127}$/.test(identifier)) {
+  if (!securityRegExpTest(/^[A-Za-z_][A-Za-z0-9_$.]{0,127}$/, identifier)) {
     throw new Error(
       `KV422: ${diagnosticDefinitions.KV422.message} Invalid SQL identifier ${JSON.stringify(identifier)}.`,
     );
   }
-  if (allow && !allow.includes(identifier)) {
+  if (allow && !arrayIncludesExact(allow, identifier)) {
     throw new Error(
       `KV422: ${diagnosticDefinitions.KV422.message} SQL identifier ${JSON.stringify(identifier)} is outside the declared allowlist.`,
     );
@@ -210,7 +260,7 @@ export function validateSqlIdentifier(identifier: string, allow?: readonly strin
 
 /** @internal */
 export function validateSqlAllow(value: string, allow: readonly string[]): string {
-  if (!allow.includes(value)) {
+  if (!arrayIncludesExact(allow, value)) {
     throw new Error(
       `KV422: ${diagnosticDefinitions.KV422.message} SQL fragment ${JSON.stringify(value)} is outside the declared allowlist.`,
     );
@@ -251,17 +301,17 @@ export function isDbAdapterLike(value: unknown): value is Record<PropertyKey, un
 export function isSqlHandleLike(value: unknown): value is object {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<PropertyKey, unknown>;
-  return [
-    typeof record.prepare === 'function',
-    typeof record.execute === 'function',
-    typeof record.transaction === 'function',
-    typeof record.exec === 'function',
-    typeof record.query === 'function',
-    typeof record.all === 'function',
-    typeof record.get === 'function',
-    typeof record.run === 'function',
-    typeof record.values === 'function',
-  ].some(Boolean);
+  return (
+    typeof record.prepare === 'function' ||
+    typeof record.execute === 'function' ||
+    typeof record.transaction === 'function' ||
+    typeof record.exec === 'function' ||
+    typeof record.query === 'function' ||
+    typeof record.all === 'function' ||
+    typeof record.get === 'function' ||
+    typeof record.run === 'function' ||
+    typeof record.values === 'function'
+  );
 }
 
 /** @internal */
@@ -496,7 +546,7 @@ function snapshotNamedSqlParameters(
   }
   if (value === undefined) return undefined;
   return securityIsArray(value)
-    ? { ok: true, value: freezeSecurityValue([...value]) }
+    ? { ok: true, value: freezeSecurityValue(copyOwnArray(value)) }
     : {
         ok: false,
         message: `separated SQL carrier .${property} must be an array data property.`,
@@ -504,6 +554,53 @@ function snapshotNamedSqlParameters(
 }
 
 const ACCESSOR_OR_PROXY_PROPERTY = Symbol('kovo.sql.accessor-or-proxy-property');
+
+function ownArrayEntry<T>(
+  values: readonly T[],
+  index: number,
+): { ok: true; value: T } | { ok: false } {
+  const descriptor = securityGetOwnPropertyDescriptor(values, index);
+  return descriptor !== undefined && 'value' in descriptor
+    ? { ok: true, value: descriptor.value as T }
+    : { ok: false };
+}
+
+function copyOwnArray<T>(values: readonly T[]): T[] {
+  const copy: T[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = ownArrayEntry(values, index);
+    if (!entry.ok) throw new TypeError('SQL arrays require dense stable own-data entries.');
+    copy[index] = entry.value;
+  }
+  return copy;
+}
+
+function appendOwnArray<T>(target: T[], values: readonly T[]): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = ownArrayEntry(values, index);
+    if (!entry.ok) return false;
+    target[target.length] = entry.value;
+  }
+  return true;
+}
+
+function arrayIncludesExact(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = ownArrayEntry(values, index);
+    if (entry.ok && entry.value === expected) return true;
+  }
+  return false;
+}
+
+function joinedOwnStringArray(values: readonly unknown[]): string | undefined {
+  let joined = '';
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = ownArrayEntry(values, index);
+    if (!entry.ok || typeof entry.value !== 'string') return undefined;
+    joined += entry.value;
+  }
+  return joined;
+}
 
 function unsafeSqlCarrierSurface(value: object): 'submit-bearing' | 'thenable' | undefined {
   if (hasCallableOrAccessor(value, 'submit')) return 'submit-bearing';
@@ -548,7 +645,7 @@ function managedSqlSnapshot(
     provenance: options.provenance,
     sql: text,
     text,
-    values: freezeSecurityValue([...values]),
+    values: freezeSecurityValue(copyOwnArray(values)),
   });
   securityWeakSetAdd(managedSqlStatements, statement);
   return {
@@ -582,8 +679,11 @@ function pinnedSqlTemplate(
   if (strings.length !== values.length + 1) return undefined;
   const chunks: PinnedSqlChunk[] = [];
   for (let index = 0; index < strings.length; index += 1) {
-    chunks.push({ kind: 'text', value: strings[index] ?? '' });
-    if (index < values.length && !appendPinnedSqlInterpolation(chunks, values[index])) {
+    const text = ownArrayEntry(strings, index);
+    if (!text.ok || typeof text.value !== 'string') return undefined;
+    chunks[chunks.length] = { kind: 'text', value: text.value };
+    const value = index < values.length ? ownArrayEntry(values, index) : undefined;
+    if (value !== undefined && (!value.ok || !appendPinnedSqlInterpolation(chunks, value.value))) {
       return undefined;
     }
   }
@@ -598,12 +698,13 @@ function pinnedSqlJoin(
   for (let index = 0; index < parts.length; index += 1) {
     if (index > 0) {
       if (separator === undefined) {
-        chunks.push({ kind: 'text', value: ', ' });
+        chunks[chunks.length] = { kind: 'text', value: ', ' };
       } else if (!appendPinnedSqlInterpolation(chunks, separator)) {
         return undefined;
       }
     }
-    if (!appendPinnedSqlInterpolation(chunks, parts[index])) return undefined;
+    const part = ownArrayEntry(parts, index);
+    if (!part.ok || !appendPinnedSqlInterpolation(chunks, part.value)) return undefined;
   }
   return pinnedSqlRecipe(chunks);
 }
@@ -612,7 +713,7 @@ function appendPinnedSqlInterpolation(chunks: PinnedSqlChunk[], value: unknown):
   if (typeof value === 'object' && value !== null) {
     const nested = securityWeakMapGet(pinnedSqlCarriers, value);
     if (nested?.kind === 'recipe') {
-      chunks.push(...nested.chunks);
+      if (!appendOwnArray(chunks, nested.chunks)) return false;
       return true;
     }
     // Kovo can pin its own recursively composed SQL values. An unpinned SQLWrapper remains useful
@@ -620,12 +721,12 @@ function appendPinnedSqlInterpolation(chunks: PinnedSqlChunk[], value: unknown):
     // rereading a mutable third-party object, so leave the outer carrier unpinned and fail closed.
     const drizzleIdentifier = pinnedDrizzleIdentifier(value);
     if (drizzleIdentifier !== undefined) {
-      chunks.push({ kind: 'text', value: drizzleIdentifier });
+      chunks[chunks.length] = { kind: 'text', value: drizzleIdentifier };
       return true;
     }
     if (nested?.kind === 'fixed' || hasSqlWrapperSurface(value)) return false;
   }
-  chunks.push({ kind: 'parameter', value });
+  chunks[chunks.length] = { kind: 'parameter', value };
   return true;
 }
 
@@ -667,7 +768,12 @@ function ownDataProperty(value: object, key: PropertyKey): unknown {
 }
 
 function quotePinnedSqlIdentifier(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
+  let quoted = '"';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    quoted += character === '"' ? '""' : character;
+  }
+  return `${quoted}"`;
 }
 
 function pinnedSqlCarrierFromCurrentData(value: object): PinnedSqlCarrier | undefined {
@@ -678,7 +784,7 @@ function pinnedSqlCarrierFromCurrentData(value: object): PinnedSqlCarrier | unde
     return freezeSecurityValue({
       kind: 'fixed' as const,
       text: text.value,
-      values: freezeSecurityValue(parameters.ok ? [...parameters.value] : []),
+      values: freezeSecurityValue(parameters.ok ? copyOwnArray(parameters.value) : []),
     });
   }
 
@@ -687,8 +793,9 @@ function pinnedSqlCarrierFromCurrentData(value: object): PinnedSqlCarrier | unde
   const seen = securityWeakSet<object>();
   securityWeakSetAdd(seen, value);
   const chunks: PinnedSqlChunk[] = [];
-  for (const chunk of queryChunks) {
-    if (!appendPinnedQueryChunk(chunks, chunk, seen)) return undefined;
+  for (let index = 0; index < queryChunks.length; index += 1) {
+    const chunk = ownArrayEntry(queryChunks, index);
+    if (!chunk.ok || !appendPinnedQueryChunk(chunks, chunk.value, seen)) return undefined;
   }
   return pinnedSqlRecipe(chunks);
 }
@@ -699,25 +806,25 @@ function appendPinnedQueryChunk(
   seen: WeakSet<object>,
 ): boolean {
   if (typeof chunk !== 'object' || chunk === null) {
-    chunks.push({ kind: 'parameter', value: chunk });
+    chunks[chunks.length] = { kind: 'parameter', value: chunk };
     return true;
   }
 
   const pinned = securityWeakMapGet(pinnedSqlCarriers, chunk);
   if (pinned?.kind === 'recipe') {
-    chunks.push(...pinned.chunks);
-    return true;
+    return appendOwnArray(chunks, pinned.chunks);
   }
   if (pinned?.kind === 'fixed') return false;
 
   const record = chunk as Record<PropertyKey, unknown>;
   const chunkValue = securityGetOwnPropertyDescriptor(record, 'value')?.value;
-  if (securityIsArray(chunkValue) && chunkValue.every((item) => typeof item === 'string')) {
-    chunks.push({ kind: 'text', value: chunkValue.join('') });
+  const rawChunkText = securityIsArray(chunkValue) ? joinedOwnStringArray(chunkValue) : undefined;
+  if (rawChunkText !== undefined) {
+    chunks[chunks.length] = { kind: 'text', value: rawChunkText };
     return true;
   }
   if (typeof chunkValue === 'string' && securityHasOwn(record, 'brand')) {
-    chunks.push({ kind: 'text', value: chunkValue });
+    chunks[chunks.length] = { kind: 'text', value: chunkValue };
     return true;
   }
 
@@ -725,28 +832,34 @@ function appendPinnedQueryChunk(
   if (securityIsArray(nested)) {
     if (securityWeakSetHas(seen, chunk)) return false;
     securityWeakSetAdd(seen, chunk);
-    for (const item of nested) {
-      if (!appendPinnedQueryChunk(chunks, item, seen)) return false;
+    for (let index = 0; index < nested.length; index += 1) {
+      const item = ownArrayEntry(nested, index);
+      if (!item.ok || !appendPinnedQueryChunk(chunks, item.value, seen)) return false;
     }
     return true;
   }
 
   if (hasSqlWrapperSurface(chunk)) return false;
-  chunks.push({ kind: 'parameter', value: chunk });
+  chunks[chunks.length] = { kind: 'parameter', value: chunk };
   return true;
 }
 
 function pinnedSqlRecipe(chunks: readonly PinnedSqlChunk[]): PinnedSqlCarrier {
+  const pinnedChunks: PinnedSqlChunk[] = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const entry = ownArrayEntry(chunks, index);
+    if (!entry.ok) {
+      throw new TypeError('Pinned SQL recipes require dense own-data chunks.');
+    }
+    const chunk = entry.value;
+    pinnedChunks[pinnedChunks.length] = freezeSecurityValue(
+      chunk.kind === 'text'
+        ? { kind: 'text' as const, value: chunk.value }
+        : { kind: 'parameter' as const, value: chunk.value },
+    );
+  }
   return freezeSecurityValue({
-    chunks: freezeSecurityValue(
-      chunks.map((chunk) =>
-        freezeSecurityValue(
-          chunk.kind === 'text'
-            ? { kind: 'text' as const, value: chunk.value }
-            : { kind: 'parameter' as const, value: chunk.value },
-        ),
-      ),
-    ),
+    chunks: freezeSecurityValue(pinnedChunks),
     kind: 'recipe',
   });
 }
@@ -758,11 +871,14 @@ function renderPinnedSqlCarrier(pinned: PinnedSqlCarrier): {
   if (pinned.kind === 'fixed') return { text: pinned.text, values: pinned.values };
   let text = '';
   const values: unknown[] = [];
-  for (const chunk of pinned.chunks) {
+  for (let index = 0; index < pinned.chunks.length; index += 1) {
+    const entry = ownArrayEntry(pinned.chunks, index);
+    if (!entry.ok) throw new TypeError('Pinned SQL recipe chunk integrity failed.');
+    const chunk = entry.value;
     if (chunk.kind === 'text') {
       text += chunk.value;
     } else {
-      values.push(chunk.value);
+      values[values.length] = chunk.value;
       text += `$${values.length}`;
     }
   }
@@ -847,17 +963,39 @@ function skipSqlDoubleQuotedIdentifier(sqlText: string, start: number): number {
 }
 
 function skipSqlLineComment(sqlText: string, start: number): number {
-  const newline = sqlText.indexOf('\n', start + 2);
+  const newline = indexOfSqlToken(sqlText, '\n', start + 2);
   return newline === -1 ? sqlText.length : newline;
 }
 
 function skipSqlBlockComment(sqlText: string, start: number): number {
-  const end = sqlText.indexOf('*/', start + 2);
+  const end = indexOfSqlToken(sqlText, '*/', start + 2);
   return end === -1 ? sqlText.length : end + 1;
 }
 
 function isSqlParameterNameStart(char: string | undefined): boolean {
-  return char !== undefined && /[A-Za-z0-9_]/.test(char);
+  if (char === undefined) return false;
+  const code = securityStringCharCodeAt(char, 0);
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    code === 0x5f ||
+    (code >= 0x61 && code <= 0x7a)
+  );
+}
+
+function indexOfSqlToken(value: string, token: string, start: number): number {
+  const lastStart = value.length - token.length;
+  for (let index = start; index <= lastStart; index += 1) {
+    let matches = true;
+    for (let tokenIndex = 0; tokenIndex < token.length; tokenIndex += 1) {
+      if (value[index + tokenIndex] !== token[tokenIndex]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return index;
+  }
+  return -1;
 }
 
 function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): void {

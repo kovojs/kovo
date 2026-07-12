@@ -1,4 +1,17 @@
 import type { JsonValue } from './json.js';
+import {
+  securityDefineProperty,
+  securityGetOwnPropertyDescriptor,
+  securityGetOwnPropertySymbols,
+  securityGetPrototypeOf,
+  securityIsArray,
+  securityObjectKeys,
+  securityPropertyIsEnumerable,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetDelete,
+  securityWeakSetHas,
+} from '#security-witness-intrinsics';
 
 const textEncoder = new TextEncoder();
 
@@ -17,8 +30,12 @@ type JsonPathSegment = number | string;
  * rejects proxies with DataCloneError even when the value behind them is JSON.
  */
 export function cloneJsonValue<Value extends JsonValue>(value: Value): Value {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneJsonValue(item)) as Value;
+  if (securityIsArray(value)) {
+    const next: JsonValue[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      next[index] = cloneJsonValue(value[index] as JsonValue);
+    }
+    return next as Value;
   }
 
   if (value === null || typeof value !== 'object') {
@@ -27,8 +44,11 @@ export function cloneJsonValue<Value extends JsonValue>(value: Value): Value {
 
   const next: Record<string, JsonValue> = {};
   const record = value as Record<string, JsonValue>;
-  for (const key of Object.keys(value)) {
-    Object.defineProperty(next, key, {
+  const keys = securityObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) continue;
+    securityDefineProperty(next, key, {
       configurable: true,
       enumerable: true,
       value: cloneJsonValue(record[key] as JsonValue),
@@ -46,7 +66,7 @@ export function cloneJsonValue<Value extends JsonValue>(value: Value): Value {
  * functions, symbols, non-finite numbers, accessors, or cyclic objects.
  */
 export function assertJsonValue(value: unknown, options: AssertJsonValueOptions = {}): JsonValue {
-  const seen = new WeakSet<object>();
+  const seen = securityWeakSet<object>();
   assertJsonValueAt(value, [], options.root ?? '$', seen);
   return value as JsonValue;
 }
@@ -103,20 +123,23 @@ function assertJsonValueAt(
   }
 
   const object = value as object;
-  if (seen.has(object)) {
+  if (securityWeakSetHas(seen, object)) {
     throw jsonValueError(root, path, 'must not contain a cycle');
   }
 
-  if (Array.isArray(value)) {
-    seen.add(object);
+  if (securityIsArray(value)) {
+    securityWeakSetAdd(seen, object);
     assertNoEnumerableSymbolKeys(value, path, root);
-    for (const key of Object.keys(value)) {
+    const keys = securityObjectKeys(value);
+    for (let offset = 0; offset < keys.length; offset += 1) {
+      const key = keys[offset];
+      if (key === undefined) continue;
       if (!isArrayIndexKey(key, value.length)) {
         throw jsonValueError(root, [...path, key], 'must not be a custom array property');
       }
     }
     for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      const descriptor = securityGetOwnPropertyDescriptor(value, String(index));
       if (descriptor === undefined) {
         throw jsonValueError(root, [...path, index], 'must not be an array hole');
       }
@@ -125,7 +148,7 @@ function assertJsonValueAt(
       }
       assertJsonValueAt((value as readonly unknown[])[index], [...path, index], root, seen);
     }
-    seen.delete(object);
+    securityWeakSetDelete(seen, object);
     return;
   }
 
@@ -133,23 +156,30 @@ function assertJsonValueAt(
     throw jsonValueError(root, path, 'must be a plain JSON object');
   }
 
-  seen.add(object);
+  securityWeakSetAdd(seen, object);
   assertNoEnumerableSymbolKeys(value, path, root);
 
   const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  const keys = securityObjectKeys(record);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) continue;
+    const descriptor = securityGetOwnPropertyDescriptor(record, key);
     if (descriptor !== undefined && !('value' in descriptor)) {
       throw jsonValueError(root, [...path, key], 'must be a data property');
     }
     assertJsonValueAt(record[key], [...path, key], root, seen);
   }
-  seen.delete(object);
+  securityWeakSetDelete(seen, object);
 }
 
 function canonicalizeJsonValue(value: JsonValue): JsonValue {
-  if (Array.isArray(value)) {
-    return value.map((item) => canonicalizeJsonValue(item));
+  if (securityIsArray(value)) {
+    const next: JsonValue[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      next[index] = canonicalizeJsonValue(value[index] as JsonValue);
+    }
+    return next;
   }
   if (value === null || typeof value !== 'object') {
     return value;
@@ -157,8 +187,11 @@ function canonicalizeJsonValue(value: JsonValue): JsonValue {
 
   const record = value as Record<string, JsonValue>;
   const sorted: Record<string, JsonValue> = {};
-  for (const key of Object.keys(record).sort()) {
-    Object.defineProperty(sorted, key, {
+  const keys = sortStrings(securityObjectKeys(record));
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) continue;
+    securityDefineProperty(sorted, key, {
       configurable: true,
       enumerable: true,
       value: canonicalizeJsonValue(record[key] as JsonValue),
@@ -170,7 +203,7 @@ function canonicalizeJsonValue(value: JsonValue): JsonValue {
 
 function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object') return false;
-  const prototype = Object.getPrototypeOf(value);
+  const prototype = securityGetPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
@@ -179,12 +212,29 @@ function assertNoEnumerableSymbolKeys(
   path: readonly JsonPathSegment[],
   root: string,
 ): void {
-  const symbols = Object.getOwnPropertySymbols(value);
-  for (const symbol of symbols) {
-    if (Object.prototype.propertyIsEnumerable.call(value, symbol)) {
+  const symbols = securityGetOwnPropertySymbols(value);
+  for (let index = 0; index < symbols.length; index += 1) {
+    const symbol = symbols[index];
+    if (symbol !== undefined && securityPropertyIsEnumerable(value, symbol)) {
       throw jsonValueError(root, path, `must not contain symbol key ${String(symbol)}`);
     }
   }
+}
+
+function sortStrings(values: string[]): string[] {
+  for (let index = 1; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === undefined) continue;
+    let insertion = index;
+    while (insertion > 0) {
+      const previous = values[insertion - 1];
+      if (previous === undefined || previous <= value) break;
+      values[insertion] = previous;
+      insertion -= 1;
+    }
+    values[insertion] = value;
+  }
+  return values;
 }
 
 function isArrayIndexKey(key: string, length: number): boolean {

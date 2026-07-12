@@ -1,0 +1,174 @@
+import { spawnSync } from 'node:child_process';
+
+import { describe, expect, it } from 'vitest';
+
+import {
+  freezeSecurityValue,
+  securityMap,
+  securityMapGet,
+  securityMapSet,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from './internal/security-witness-intrinsics.js';
+
+const moduleUrl = new URL('./internal/security-witness-intrinsics.ts', import.meta.url).href;
+
+describe('core security witness intrinsics', () => {
+  it('uses captured operations after ambient collection/freeze replacement', () => {
+    const originalMapGet = Map.prototype.get;
+    const originalMapSet = Map.prototype.set;
+    const originalWeakSetAdd = WeakSet.prototype.add;
+    const originalWeakSetHas = WeakSet.prototype.has;
+    const originalFreeze = Object.freeze;
+    let mapValue: object | undefined;
+    let positive = false;
+    let negative = true;
+    let frozen = false;
+    try {
+      Map.prototype.get = () => ({ forged: true });
+      Map.prototype.set = function () {
+        return this;
+      };
+      WeakSet.prototype.add = function () {
+        return this;
+      };
+      WeakSet.prototype.has = () => true;
+      Object.freeze = ((value: unknown) => value) as typeof Object.freeze;
+
+      const key = {};
+      const other = {};
+      const value = {};
+      const map = securityMap<object, object>();
+      securityMapSet(map, key, value);
+      mapValue = securityMapGet(map, key);
+      const set = securityWeakSet<object>();
+      securityWeakSetAdd(set, key);
+      positive = securityWeakSetHas(set, key);
+      negative = securityWeakSetHas(set, other);
+      frozen = Object.isFrozen(freezeSecurityValue({ proof: true }));
+    } finally {
+      Map.prototype.get = originalMapGet;
+      Map.prototype.set = originalMapSet;
+      WeakSet.prototype.add = originalWeakSetAdd;
+      WeakSet.prototype.has = originalWeakSetHas;
+      Object.freeze = originalFreeze;
+    }
+
+    expect(mapValue).toBeDefined();
+    expect(positive).toBe(true);
+    expect(negative).toBe(false);
+    expect(frozen).toBe(true);
+  });
+
+  it.each([
+    ['WeakSet', `WeakSet.prototype.has = () => true;`],
+    [
+      'Map',
+      `const original = Map.prototype.get;
+       Map.prototype.get = function (key) {
+         return typeof key === 'symbol' ? {} : Reflect.apply(original, this, [key]);
+       };`,
+    ],
+    [
+      'Set',
+      `const original = Set.prototype.has;
+       Set.prototype.has = function (value) {
+         return typeof value === 'symbol' ? true : Reflect.apply(original, this, [value]);
+       };`,
+    ],
+    ['Object.freeze', `Object.freeze = (value) => value;`],
+    [
+      'getOwnPropertyDescriptor',
+      `const original = Object.getOwnPropertyDescriptor;
+       Object.getOwnPropertyDescriptor = (value, key) => key === 'marker' ? undefined : original(value, key);`,
+    ],
+    [
+      'getPrototypeOf',
+      `const original = Object.getPrototypeOf;
+       Object.getPrototypeOf = (value) => value && value.visible ? null : original(value);`,
+    ],
+    [
+      'defineProperty',
+      `const original = Object.defineProperty;
+       Object.defineProperty = (value, key, descriptor) => key === 'hidden' ? value : original(value, key, descriptor);`,
+    ],
+    [
+      'hasOwnProperty',
+      `const original = Object.prototype.hasOwnProperty;
+       Object.prototype.hasOwnProperty = function (key) {
+         return key === 'missing' ? true : Reflect.apply(original, this, [key]);
+       };`,
+    ],
+    [
+      'propertyIsEnumerable',
+      `const original = Object.prototype.propertyIsEnumerable;
+       Object.prototype.propertyIsEnumerable = function (key) {
+         return key === 'hidden' ? true : Reflect.apply(original, this, [key]);
+       };`,
+    ],
+    [
+      'Object.keys',
+      `const original = Object.keys;
+       Object.keys = (value) => value && value.visible ? [] : original(value);`,
+    ],
+    [
+      'getOwnPropertySymbols',
+      `const original = Object.getOwnPropertySymbols;
+       Object.getOwnPropertySymbols = (value) => value && value.visible ? [] : original(value);`,
+    ],
+    [
+      'Array.isArray',
+      `const original = Array.isArray;
+       Array.isArray = (value) => value && value.visible ? true : original(value);`,
+    ],
+    [
+      'String',
+      `const original = globalThis.String;
+       globalThis.String = function (value) { return value === 422 ? 'forged' : original(value); };`,
+    ],
+    [
+      'String/RegExp methods',
+      String.raw`const trim = String.prototype.trim;
+       const slice = String.prototype.slice;
+       const charCodeAt = String.prototype.charCodeAt;
+       const startsWith = String.prototype.startsWith;
+       const split = String.prototype.split;
+       const toLowerCase = String.prototype.toLowerCase;
+       const toUpperCase = String.prototype.toUpperCase;
+       const exec = RegExp.prototype.exec;
+       const test = RegExp.prototype.test;
+       String.prototype.trim = function () { return this === ' \tKovo\n' ? 'forged' : Reflect.apply(trim, this, []); };
+       String.prototype.slice = function (start, end) { return this === 'Kovo-security' ? 'forged' : Reflect.apply(slice, this, [start, end]); };
+       String.prototype.charCodeAt = function (index) { return this === 'Kovo' ? 0 : Reflect.apply(charCodeAt, this, [index]); };
+       String.prototype.startsWith = function (search, position) { return this === 'kovo/security' ? false : Reflect.apply(startsWith, this, [search, position]); };
+       String.prototype.split = function (separator, limit) { return this === 'root/child/file' ? [] : Reflect.apply(split, this, [separator, limit]); };
+       String.prototype.toLowerCase = function () { return this === 'JaVaScRiPt' ? 'forged' : Reflect.apply(toLowerCase, this, []); };
+       String.prototype.toUpperCase = function () { return this === 'x-kovo' ? 'forged' : Reflect.apply(toUpperCase, this, []); };
+       RegExp.prototype.exec = function (value) { return value === 'https:' ? null : Reflect.apply(exec, this, [value]); };
+       RegExp.prototype.test = function (value) { return value === 'https://kovo.test' ? false : Reflect.apply(test, this, [value]); };`,
+    ],
+    [
+      'Reflect.apply/Function@@hasInstance',
+      `const original = Reflect.apply;
+       const hasInstance = Function.prototype[Symbol.hasInstance];
+       Reflect.apply = (target, receiver, args) => target === hasInstance ? true : original(target, receiver, args);`,
+    ],
+  ])('fails closed when %s is poisoned before import', (label, poison) => {
+    const script = `
+      ${poison}
+      try {
+        const witness = await import(${JSON.stringify(`${moduleUrl}?probe=${label}`)});
+        witness.securityWeakMap();
+      } catch (error) {
+        if (String(error).includes('integrity check failed')) process.exit(0);
+        console.error(error);
+      }
+      process.exit(7);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.status, `${label}: ${result.stderr}`).toBe(0);
+  });
+});

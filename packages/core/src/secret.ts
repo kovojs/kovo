@@ -1,4 +1,20 @@
 import { createBoundedRuntimeAuditCollector } from './internal/security-markers.js';
+import {
+  freezeSecurityValue,
+  securityDefineProperty,
+  securityIsArray,
+  securityIsError,
+  securityIsMap,
+  securityIsSet,
+  securityGetOwnPropertyDescriptor,
+  securityMapForEach,
+  securityObjectIs,
+  securityObjectKeys,
+  securitySetForEach,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
+} from '#security-witness-intrinsics';
 
 declare const secretBrand: unique symbol;
 declare const untrustedBrand: unique symbol;
@@ -144,7 +160,7 @@ class KovoPoisonBox<T> {
     maybeMarkAsUncloneable?.(this);
     // Non-enumerable brand (value = kind) so the marker never appears in
     // spreads/Object.keys, while remaining detectable by the guards in-module.
-    Object.defineProperty(this, secretBoxBrand, { value: kind, enumerable: false });
+    securityDefineProperty(this, secretBoxBrand, { value: kind, enumerable: false });
   }
 
   reveal(reason?: SecretRevealReason): T {
@@ -159,7 +175,7 @@ class KovoPoisonBox<T> {
   }
 
   map<U>(fn: (value: T) => U): KovoPoisonBox<U> {
-    return Object.freeze(
+    return freezeSecurityValue(
       new KovoPoisonBox(fn(this.#value), this.#poison, this.#kind),
     ) as unknown as KovoPoisonBox<U>;
   }
@@ -173,7 +189,7 @@ class KovoPoisonBox<T> {
       if (leftComparable.kind !== rightComparable.kind) return false;
       return fixedDigestEqual(leftComparable, rightComparable);
     }
-    return Object.is(left, right);
+    return securityObjectIs(left, right);
   }
 
   toString(): string {
@@ -220,7 +236,9 @@ function isPoisonBox(value: unknown): value is KovoPoisonBox<unknown> {
  */
 export function secret<T>(value: T): SecretValue<T> {
   if (isSecret(value)) return value as unknown as SecretValue<T>;
-  return Object.freeze(new KovoPoisonBox(value, REDACTED, 'secret')) as unknown as SecretValue<T>;
+  return freezeSecurityValue(
+    new KovoPoisonBox(value, REDACTED, 'secret'),
+  ) as unknown as SecretValue<T>;
 }
 
 /**
@@ -249,7 +267,7 @@ function installStructuredCloneSecretGuard(): void {
     assertNoSecretStructuredCloneValue(value);
     return nativeStructuredClone(value, options);
   };
-  Object.defineProperty(globalClone, structuredCloneSecretGuard, {
+  securityDefineProperty(globalClone, structuredCloneSecretGuard, {
     configurable: false,
     enumerable: false,
     value: true,
@@ -258,31 +276,41 @@ function installStructuredCloneSecretGuard(): void {
 
 function assertNoSecretStructuredCloneValue(
   value: unknown,
-  seen: WeakSet<object> = new WeakSet(),
+  seen: WeakSet<object> = securityWeakSet(),
 ): void {
   if (isSecret(value)) throw nonCoercibleError('secret', 'structuredClone');
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return;
-  if (seen.has(value)) return;
-  seen.add(value);
-  if (Array.isArray(value)) {
-    for (const item of value) assertNoSecretStructuredCloneValue(item, seen);
-    return;
-  }
-  if (value instanceof Map) {
-    for (const [key, item] of value) {
-      assertNoSecretStructuredCloneValue(key, seen);
-      assertNoSecretStructuredCloneValue(item, seen);
+  if (securityWeakSetHas(seen, value)) return;
+  securityWeakSetAdd(seen, value);
+  if (securityIsArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = securityGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined) continue;
+      if (!('value' in descriptor)) {
+        throw new TypeError('structuredClone input must not hide secrets behind array accessors.');
+      }
+      assertNoSecretStructuredCloneValue(descriptor.value, seen);
     }
     return;
   }
-  if (value instanceof Set) {
-    for (const item of value) assertNoSecretStructuredCloneValue(item, seen);
+  if (securityIsMap(value)) {
+    securityMapForEach(value, (item, key) => {
+      assertNoSecretStructuredCloneValue(key, seen);
+      assertNoSecretStructuredCloneValue(item, seen);
+    });
     return;
   }
-  for (const key of Object.keys(value as Record<string, unknown>)) {
+  if (securityIsSet(value)) {
+    securitySetForEach(value, (item) => assertNoSecretStructuredCloneValue(item, seen));
+    return;
+  }
+  const keys = securityObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) continue;
     assertNoSecretStructuredCloneValue((value as Record<string, unknown>)[key], seen);
   }
-  if (value instanceof Error && 'cause' in value) {
+  if (securityIsError(value) && 'cause' in value) {
     assertNoSecretStructuredCloneValue((value as { cause?: unknown }).cause, seen);
   }
 }
@@ -311,7 +339,7 @@ export function drainSecretRevealAuditFacts(): SecretRevealAuditFact[] {
 /** Wraps a request-derived value in a non-coercible DX provenance tag. */
 export function untrusted<T>(value: T): UntrustedValue<T> {
   if (isUntrusted(value)) return value as unknown as UntrustedValue<T>;
-  return Object.freeze(
+  return freezeSecurityValue(
     new KovoPoisonBox(value, UNTRUSTED_REDACTED, 'untrusted'),
   ) as unknown as UntrustedValue<T>;
 }
@@ -391,7 +419,7 @@ export interface RedactedOptions {
 export function redacted<T>(value: T, options: RedactedOptions = {}): RedactedValue<T> {
   if (isRedacted(value)) return value as unknown as RedactedValue<T>;
   const box = new KovoPoisonBox(value, options.mask ?? REDACTED_MASK, 'redacted');
-  return Object.freeze(box) as unknown as RedactedValue<T>;
+  return freezeSecurityValue(box) as unknown as RedactedValue<T>;
 }
 
 /**

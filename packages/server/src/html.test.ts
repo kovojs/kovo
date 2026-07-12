@@ -1,3 +1,6 @@
+import { Buffer } from 'node:buffer';
+import { createHmac } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,11 +9,15 @@ import {
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
 import {
+  escapeHtml,
+  escapeScriptJson,
+  escapeTextWithRenderedHtml,
   escapeAttribute,
   isRenderedHtml,
   renderedHtml,
   renderHtmlValue,
   safeRuntimeAttribute,
+  safeRuntimeAttributeName,
   safeUrlAttribute,
 } from './html.js';
 
@@ -18,6 +25,41 @@ import {
 // identically. `safeUrlAttribute` mirrors the client's `kovoBoundAttributeValue`
 // scheme-check logic for server SSR (F1 fix in bugs-and-testing-part2.md).
 describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
+  it('keeps escaping and dynamic-name rejection pinned after scalar and array prototype changes', () => {
+    const attacker = '<img src=x onerror=alert(1)>';
+    const breakoutName = 'x><img src=x onerror=alert(1)';
+    const originalMap = Array.prototype.map;
+    const originalReplaceAll = String.prototype.replaceAll;
+    const originalRegExpTest = RegExp.prototype.test;
+    let escapedScalar = '';
+    let escapedArray = '';
+    let escapedScriptJson = '';
+    let breakoutAccepted = true;
+    try {
+      Array.prototype.map = (() => [attacker]) as typeof Array.prototype.map;
+      String.prototype.replaceAll = function () {
+        return attacker;
+      };
+      RegExp.prototype.test = function (value: string) {
+        return value === breakoutName;
+      };
+
+      escapedScalar = escapeHtml(attacker);
+      escapedArray = escapeTextWithRenderedHtml([attacker]);
+      escapedScriptJson = escapeScriptJson('"</script><img onerror=alert(1)>"');
+      breakoutAccepted = safeRuntimeAttributeName(breakoutName);
+    } finally {
+      Array.prototype.map = originalMap;
+      String.prototype.replaceAll = originalReplaceAll;
+      RegExp.prototype.test = originalRegExpTest;
+    }
+
+    expect(escapedScalar).toBe('&lt;img src=x onerror=alert(1)&gt;');
+    expect(escapedArray).toBe('&lt;img src=x onerror=alert(1)&gt;');
+    expect(escapedScriptJson).toBe('"\\u003c/script>\\u003cimg onerror=alert(1)>"');
+    expect(breakoutAccepted).toBe(false);
+  });
+
   it('pins rendered bytes across hostile collection and freeze prototype replacement', () => {
     const originalWeakMapGet = WeakMap.prototype.get;
     const originalWeakMapHas = WeakMap.prototype.has;
@@ -56,6 +98,45 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
     expect(genuine).toBe('<main>pinned</main>');
     expect(forgedAccepted).toBe(false);
     expect(frozen).toBe(true);
+  });
+
+  it('rejects forged coerced-HTML markers after Hmac and Buffer prototype poisoning', () => {
+    const payloadHtml = '<img src=x onerror=forged()>';
+    const payload = Buffer.from(payloadHtml, 'utf8').toString('base64url');
+    const forgedMarker = `\uE000kovo-rendered-html:v2:${payload}.forged\uE001`;
+    const hmacPrototype = Object.getPrototypeOf(createHmac('sha256', 'probe')) as object;
+    const updateDescriptor = Object.getOwnPropertyDescriptor(hmacPrototype, 'update');
+    const digestDescriptor = Object.getOwnPropertyDescriptor(hmacPrototype, 'digest');
+    const originalBufferFrom = Buffer.from;
+    const originalBufferToString = Buffer.prototype.toString;
+    let forged = '';
+    let genuine = '';
+    try {
+      Object.defineProperty(hmacPrototype, 'update', {
+        ...updateDescriptor,
+        value(this: unknown) {
+          return this;
+        },
+      });
+      Object.defineProperty(hmacPrototype, 'digest', {
+        ...digestDescriptor,
+        value: () => 'forged',
+      });
+      Buffer.from = (() => originalBufferFrom('attacker-controlled')) as typeof Buffer.from;
+      Buffer.prototype.toString = () => 'forged';
+
+      forged = renderHtmlValue(forgedMarker);
+      const composed = (renderedHtml('<strong>genuine</strong>') as unknown as string) + '';
+      genuine = renderHtmlValue(composed);
+    } finally {
+      if (updateDescriptor) Object.defineProperty(hmacPrototype, 'update', updateDescriptor);
+      if (digestDescriptor) Object.defineProperty(hmacPrototype, 'digest', digestDescriptor);
+      Buffer.from = originalBufferFrom;
+      Buffer.prototype.toString = originalBufferToString;
+    }
+
+    expect(forged).not.toContain(payloadHtml);
+    expect(genuine).toBe('<strong>genuine</strong>');
   });
 
   it('escapes forged rendered and trusted HTML brands as text', () => {

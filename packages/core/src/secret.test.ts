@@ -69,6 +69,32 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(() => structuredClone(new Set([s]))).toThrow(/KV435/);
   });
 
+  it('cannot hide nested secrets by poisoning Array iteration after framework import', () => {
+    const originalIterator = Array.prototype[Symbol.iterator];
+    let arrayError: unknown;
+    let objectError: unknown;
+    try {
+      Array.prototype[Symbol.iterator] = function () {
+        return { next: () => ({ done: true, value: undefined }) } as ArrayIterator<unknown>;
+      };
+      try {
+        structuredClone([secret('array-secret')]);
+      } catch (error) {
+        arrayError = error;
+      }
+      try {
+        structuredClone({ nested: [secret('object-secret')] });
+      } catch (error) {
+        objectError = error;
+      }
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(String(arrayError)).toMatch(/KV435/);
+    expect(String(objectError)).toMatch(/KV435/);
+  });
+
   it('reveals the value only on explicit reveal()/revealSecret()', () => {
     drainSecretRevealAuditFacts();
     const s = secret('hunter2');

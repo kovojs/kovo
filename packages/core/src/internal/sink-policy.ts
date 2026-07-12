@@ -3,10 +3,16 @@ import {
   securityMap,
   securityMapGet,
   securityMapSet,
+  securityRegExpExec,
+  securityRegExpTest,
   securitySet,
   securitySetAdd,
   securitySetHas,
   securityString,
+  securityStringCharCodeAt,
+  securityStringSlice,
+  securityStringToLowerCase,
+  securityStringTrim,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapSet,
@@ -39,12 +45,10 @@ const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
 const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
-// eslint-disable-next-line no-control-regex
-const urlSchemeStripPattern = /[\u0000-\u0020\u007f-\u009f]+/g;
 
 /** @internal True when an HTML attribute is URL-bearing and needs scheme checks. */
 export function isUrlAttributeName(name: string): boolean {
-  return securitySetHas(urlAttributeNames, name.toLowerCase());
+  return securitySetHas(urlAttributeNames, securityStringToLowerCase(name));
 }
 
 /**
@@ -55,10 +59,10 @@ export function hasUnsafeUrlScheme(value: string): boolean {
   const normalized = normalizedUrlForSchemeCheck(value);
   if (hasHtmlColonReferenceInSchemePosition(normalized)) return true;
 
-  const match = urlSchemePattern.exec(normalized);
+  const match = securityRegExpExec(urlSchemePattern, normalized);
   if (!match) return false;
 
-  return !securitySetHas(safeUrlSchemes, (match[1] ?? '').toLowerCase());
+  return !securitySetHas(safeUrlSchemes, securityStringToLowerCase(match[1] ?? ''));
 }
 
 /**
@@ -261,27 +265,27 @@ export function drainRuntimeSinkSecurityEvent(event: RuntimeSinkSecurityEvent | 
 
 /** @internal True when an attribute/property name is an event-handler sink. */
 export function isEventHandlerAttributeName(name: string): boolean {
-  return /^on[^:]/i.test(name);
+  return securityRegExpTest(/^on[^:]/i, name);
 }
 
 /** @internal True when an attribute/property name is a srcdoc sink. */
 export function isSrcdocAttributeName(name: string): boolean {
-  return name.toLowerCase() === 'srcdoc';
+  return securityStringToLowerCase(name) === 'srcdoc';
 }
 
 /** @internal True when an attribute/property name is raw CSS text. */
 export function isCssTextAttributeName(name: string): boolean {
-  return name.toLowerCase() === 'style';
+  return securityStringToLowerCase(name) === 'style';
 }
 
 /** @internal True when an attribute/property name is raw HTML insertion. */
 export function isRawHtmlSinkName(name: string): boolean {
-  return securitySetHas(rawHtmlSinkNames, name.toLowerCase());
+  return securitySetHas(rawHtmlSinkNames, securityStringToLowerCase(name));
 }
 
 /** @internal True when an attribute/property name is a srcset candidate-list sink. */
 export function isSrcsetAttributeName(name: string): boolean {
-  return securitySetHas(srcsetAttributeNames, name.toLowerCase());
+  return securitySetHas(srcsetAttributeNames, securityStringToLowerCase(name));
 }
 
 /** @internal Classify one dynamic attribute/property sink. */
@@ -351,28 +355,39 @@ export function decideRuntimeAttributeWrite(name: string, value: string): Runtim
 
 /** @internal Sanitize a srcset candidate list by dropping unsafe URL candidates. */
 export function sanitizeRuntimeSrcset(value: string): string | null {
-  const safeCandidates = splitSrcsetCandidates(value).flatMap((candidate) => {
-    const trimmed = candidate.trim();
-    if (!trimmed) return [];
-    if (hasUnsafeUrlScheme(trimmed)) return [];
+  const candidates = splitSrcsetCandidates(value);
+  const safeCandidates: string[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    if (candidate === undefined) continue;
+    const trimmed = securityStringTrim(candidate);
+    if (!trimmed || hasUnsafeUrlScheme(trimmed)) continue;
 
     const urlEnd = firstAsciiWhitespaceIndex(trimmed);
-    const url = urlEnd === -1 ? trimmed : trimmed.slice(0, urlEnd);
-    const descriptor = urlEnd === -1 ? '' : trimmed.slice(urlEnd).trim();
-    if (hasUnsafeUrlScheme(unquoteCssUrlToken(url))) return [];
+    const url = urlEnd === -1 ? trimmed : securityStringSlice(trimmed, 0, urlEnd);
+    const descriptor =
+      urlEnd === -1 ? '' : securityStringTrim(securityStringSlice(trimmed, urlEnd));
+    if (hasUnsafeUrlScheme(unquoteCssUrlToken(url))) continue;
 
-    return [descriptor ? `${url} ${descriptor}` : url];
-  });
+    safeCandidates[safeCandidates.length] = descriptor ? `${url} ${descriptor}` : url;
+  }
 
-  return safeCandidates.length === 0 ? null : safeCandidates.join(', ');
+  if (safeCandidates.length === 0) return null;
+  let sanitized = '';
+  for (let index = 0; index < safeCandidates.length; index += 1) {
+    const candidate = safeCandidates[index];
+    if (candidate === undefined) continue;
+    sanitized += `${sanitized === '' ? '' : ', '}${candidate}`;
+  }
+  return sanitized || null;
 }
 
 /** @internal CSS url(...) backstop for focused property-sanitizer tests. */
 export function hasUnsafeCssUrl(value: string): boolean {
   const pattern = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s][^)]*?))\s*\)/gi;
   let match: RegExpExecArray | null;
-  while ((match = pattern.exec(value)) !== null) {
-    const url = (match[1] ?? match[2] ?? match[3] ?? '').trim();
+  while ((match = securityRegExpExec(pattern, value)) !== null) {
+    const url = securityStringTrim(match[1] ?? match[2] ?? match[3] ?? '');
     if (hasUnsafeUrlScheme(url)) return true;
   }
   return false;
@@ -381,7 +396,9 @@ export function hasUnsafeCssUrl(value: string): boolean {
 /** @internal CSS text backstop for parsed server/browser fragment attributes. */
 export function hasUnsafeCssText(value: string): boolean {
   return (
-    hasUnsafeCssUrl(value) || /\bexpression\s*\(/i.test(value) || /-moz-binding\s*:/i.test(value)
+    hasUnsafeCssUrl(value) ||
+    securityRegExpTest(/\bexpression\s*\(/i, value) ||
+    securityRegExpTest(/-moz-binding\s*:/i, value)
   );
 }
 
@@ -410,18 +427,18 @@ function splitSrcsetCandidates(value: string): string[] {
       continue;
     }
     if (char === ',' && depth === 0) {
-      candidates.push(value.slice(start, index));
+      candidates[candidates.length] = securityStringSlice(value, start, index);
       start = index + 1;
     }
   }
 
-  candidates.push(value.slice(start));
+  candidates[candidates.length] = securityStringSlice(value, start);
   return candidates;
 }
 
 function firstAsciiWhitespaceIndex(value: string): number {
   for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
+    const code = securityStringCharCodeAt(value, index);
     if (code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d || code === 0x20) {
       return index;
     }
@@ -431,22 +448,34 @@ function firstAsciiWhitespaceIndex(value: string): number {
 
 function unquoteCssUrlToken(value: string): string {
   if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
+    (value[0] === '"' && value[value.length - 1] === '"') ||
+    (value[0] === "'" && value[value.length - 1] === "'")
   ) {
-    return value.slice(1, -1);
+    return securityStringSlice(value, 1, -1);
   }
   return value;
 }
 
 function normalizedUrlForSchemeCheck(value: string): string {
-  return value.replace(urlSchemeStripPattern, '');
+  let normalized = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if ((code >= 0 && code <= 0x20) || (code >= 0x7f && code <= 0x9f)) continue;
+    normalized += value[index] ?? '';
+  }
+  return normalized;
 }
 
 function hasHtmlColonReferenceInSchemePosition(value: string): boolean {
-  const pathBoundary = value.search(/[/?]/);
-  const schemePosition = pathBoundary < 0 ? value : value.slice(0, pathBoundary);
-  return htmlColonReferencePattern.test(schemePosition);
+  let pathBoundary = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '/' || value[index] === '?') {
+      pathBoundary = index;
+      break;
+    }
+  }
+  const schemePosition = pathBoundary < 0 ? value : securityStringSlice(value, 0, pathBoundary);
+  return securityRegExpTest(htmlColonReferencePattern, schemePosition);
 }
 
 function blockedDecision(

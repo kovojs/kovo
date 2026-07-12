@@ -66,8 +66,14 @@ import type {
 } from './route-ir.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 import {
+  createWitnessMap,
+  createWitnessSet,
   createWitnessWeakMap,
+  witnessMapGet,
+  witnessMapSet,
   witnessFreeze,
+  witnessSetAdd,
+  witnessSetHas,
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
@@ -736,14 +742,14 @@ function routeLayoutChain(
   layoutDeclaration: LayoutDeclaration<any, any, any> | undefined,
 ): LayoutDeclaration<any, any, any>[] {
   const chain: LayoutDeclaration<any, any, any>[] = [];
-  const seen = new Set<LayoutDeclaration<any, any, any>>();
+  const seen = createWitnessSet<LayoutDeclaration<any, any, any>>();
   let current = layoutDeclaration;
 
   while (current) {
-    if (seen.has(current)) {
+    if (witnessSetHas(seen, current)) {
       throw new Error('Cyclic route layout parent chain.');
     }
-    seen.add(current);
+    witnessSetAdd(seen, current);
     chain.unshift(current);
     current = current.parent;
   }
@@ -807,7 +813,10 @@ async function renderRouteRegions<
   const segments = routeRegionNavigationSegments(metadata);
   for (const [name, render] of entries) {
     const value = await render(routeRequest, request);
-    rendered[name] = stampRouteNavigationSegment(segments.get(name), value);
+    rendered[name] = stampRouteNavigationSegment(
+      witnessMapGet(segments as Map<string, CompiledRouteNavigationSegment>, name),
+      value,
+    );
   }
   return rendered;
 }
@@ -849,10 +858,10 @@ function stampRoutePageSegment(
 function routeRegionNavigationSegments(
   metadata: CompiledRoutePageMetadata | undefined,
 ): ReadonlyMap<string, CompiledRouteNavigationSegment> {
-  const segments = new Map<string, CompiledRouteNavigationSegment>();
+  const segments = createWitnessMap<string, CompiledRouteNavigationSegment>();
   for (const segment of metadata?.navigationSegments ?? []) {
     if (segment.kind === 'layout') continue;
-    segments.set(segment.localName, segment);
+    witnessMapSet(segments, segment.localName, segment);
   }
   return segments;
 }
@@ -950,15 +959,22 @@ function mergeAttributeTokens(
   existing: string | undefined,
   additions: readonly string[],
 ): string[] {
-  return [
-    ...new Set([
-      ...(existing ?? '')
-        .split(/[\s,]+/)
-        .map((token) => token.trim())
-        .filter(Boolean),
-      ...additions,
-    ]),
-  ];
+  const seen = createWitnessSet<string>();
+  const merged: string[] = [];
+  const existingTokens = (existing ?? '').split(/[\s,]+/);
+  for (let index = 0; index < existingTokens.length; index += 1) {
+    const token = existingTokens[index]?.trim();
+    if (!token || witnessSetHas(seen, token)) continue;
+    witnessSetAdd(seen, token);
+    merged[merged.length] = token;
+  }
+  for (let index = 0; index < additions.length; index += 1) {
+    const token = additions[index];
+    if (!token || witnessSetHas(seen, token)) continue;
+    witnessSetAdd(seen, token);
+    merged[merged.length] = token;
+  }
+  return merged;
 }
 
 function attributeValue(attrs: string, name: string): string | undefined {

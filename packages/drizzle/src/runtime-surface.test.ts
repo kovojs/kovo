@@ -124,6 +124,53 @@ describe('@kovojs/drizzle runtime surface', () => {
     });
   });
 
+  it('pins SQL constructors from one dense snapshot despite iterator and scalar poisoning', () => {
+    const rawDelete = 'DELETE FROM accounts; --';
+    const originalMap = Array.prototype.map;
+    const originalJoin = Array.prototype.join;
+    const originalReplaceAll = String.prototype.replaceAll;
+    let identifierSnapshot: ReturnType<typeof snapshotManagedSqlStatement> | undefined;
+    let staticSnapshot: ReturnType<typeof snapshotManagedSqlStatement> | undefined;
+    try {
+      Array.prototype.map = (() => [rawDelete]) as typeof Array.prototype.map;
+      Array.prototype.join = () => rawDelete;
+      String.prototype.replaceAll = () => rawDelete;
+      identifierSnapshot = snapshotManagedSqlStatement(sql.identifier('accounts'), 'postgres');
+      staticSnapshot = snapshotManagedSqlStatement(staticSql`select 1`, 'postgres');
+    } finally {
+      Array.prototype.map = originalMap;
+      Array.prototype.join = originalJoin;
+      String.prototype.replaceAll = originalReplaceAll;
+    }
+
+    const raw = sql.raw(rawDelete);
+    const parts: unknown[] = [raw];
+    Object.defineProperty(parts, Symbol.iterator, {
+      configurable: true,
+      value: function* () {},
+    });
+    const joined = sql.join(parts);
+
+    expect(identifierSnapshot).toMatchObject({
+      ok: true,
+      statement: { text: '"accounts"', values: [] },
+    });
+    expect(staticSnapshot).toMatchObject({
+      ok: true,
+      statement: { text: 'select 1', values: [] },
+    });
+    expect(snapshotManagedSqlStatement(joined, 'postgres')).toMatchObject({
+      message: expect.stringContaining('sql.raw'),
+      ok: false,
+    });
+    expect(
+      snapshotManagedSqlStatement(
+        trustedSql(joined, { justification: 'audited raw maintenance statement' }),
+        'postgres',
+      ),
+    ).toMatchObject({ ok: true, statement: { text: rawDelete } });
+  });
+
   it('validates dynamic SQL identifiers and allowlisted keyword fragments', () => {
     expect(() => sql.identifier('products; drop table users')).toThrow(/KV422/);
     expect(() => sql.identifier('users', { allow: ['products'] })).toThrow(/KV422/);

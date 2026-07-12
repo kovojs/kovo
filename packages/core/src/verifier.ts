@@ -1,9 +1,43 @@
 import {
   freezeSecurityValue,
+  securityApply,
+  securityGetOwnPropertyDescriptor,
+  securityHasInstance,
+  securityIsArray,
+  securityIsMap,
+  securityMapGet,
+  securityObjectKeys,
+  securityRegExpTest,
+  securityStringCharCodeAt,
+  securityStringSlice,
+  securityStringToLowerCase,
+  securityStringToUpperCase,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetHas,
 } from '#security-witness-intrinsics';
+
+const IntrinsicArrayBuffer = ArrayBuffer;
+const IntrinsicDate = Date;
+const IntrinsicHeaders = globalThis.Headers;
+const IntrinsicTextDecoder = TextDecoder;
+const IntrinsicTextEncoder = TextEncoder;
+const IntrinsicUint8Array = Uint8Array;
+const intrinsicAtob = globalThis.atob;
+const hmacTextEncoder = new IntrinsicTextEncoder();
+const hmacTextDecoder = new IntrinsicTextDecoder();
+const intrinsicTextEncoderEncode = IntrinsicTextEncoder.prototype.encode;
+const intrinsicTextDecoderDecode = IntrinsicTextDecoder.prototype.decode;
+const intrinsicUint8ArraySet = IntrinsicUint8Array.prototype.set;
+const intrinsicHeadersGet = IntrinsicHeaders?.prototype.get;
+const intrinsicDateGetTime = IntrinsicDate.prototype.getTime;
+const intrinsicDateNow = IntrinsicDate.now;
+const capturedSubtleCrypto = globalThis.crypto?.subtle;
+const capturedSubtleImportKey = capturedSubtleCrypto?.importKey;
+const capturedSubtleSign = capturedSubtleCrypto?.sign;
+const capturedHmacByteControlsSound = verifyCapturedHmacByteControls();
+const capturedVerifierScalarControlsSound = verifyCapturedVerifierScalarControls();
+const capturedHmacCryptoControl = verifyCapturedHmacCryptoControls();
 
 /** The raw request body a webhook verifier signs over: a string or raw bytes. */
 export type WebhookPayload = string | ArrayBuffer | ArrayBufferView;
@@ -126,7 +160,6 @@ export interface StandardWebhooksOptions {
 }
 
 const defaultWebhookToleranceSeconds = 5 * 60;
-const textEncoder = new TextEncoder();
 const frameworkHmacSignatureVerifiers = securityWeakSet<object>();
 
 /** @internal Unforgeable provenance check for framework-constructed HMAC verifiers. */
@@ -217,25 +250,37 @@ function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignat
 
 function snapshotWebhookPayload(payload: HmacSignaturePayload): HmacSignaturePayload {
   if (typeof payload === 'function' || typeof payload === 'string') return payload;
-  if (payload instanceof ArrayBuffer) return copyBytes(new Uint8Array(payload));
-  return copyBytes(new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength));
+  if (securityHasInstance(IntrinsicArrayBuffer, payload)) {
+    return copyBytes(new IntrinsicUint8Array(payload as ArrayBuffer));
+  }
+  const view = payload as ArrayBufferView;
+  return copyBytes(new IntrinsicUint8Array(view.buffer, view.byteOffset, view.byteLength));
 }
 
 function snapshotHmacSecrets(
   secret: HmacSignatureOptions['secret'],
 ): HmacSignatureOptions['secret'] {
-  if (Array.isArray(secret)) {
-    return freezeSecurityValue((secret as readonly HmacSecret[]).map(snapshotHmacSecret));
+  if (securityIsArray(secret)) {
+    const snapshot: HmacSecret[] = [];
+    for (let index = 0; index < secret.length; index += 1) {
+      const descriptor = securityGetOwnPropertyDescriptor(secret, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('HMAC secret arrays require stable own-data entries.');
+      }
+      snapshot[snapshot.length] = snapshotHmacSecret(descriptor.value as HmacSecret);
+    }
+    return freezeSecurityValue(snapshot);
   }
   return snapshotHmacSecret(secret as HmacSecret);
 }
 
 function snapshotHmacSecret(secret: HmacSecret): HmacSecret {
   if (typeof secret === 'string') return secret;
-  if (secret instanceof Uint8Array) return copyBytes(secret);
+  if (securityHasInstance(IntrinsicUint8Array, secret)) return copyBytes(secret as Uint8Array);
+  const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
   return freezeSecurityValue({
-    ...(secret.encoding === undefined ? {} : { encoding: secret.encoding }),
-    value: typeof secret.value === 'string' ? secret.value : copyBytes(secret.value),
+    ...(encoded.encoding === undefined ? {} : { encoding: encoded.encoding }),
+    value: typeof encoded.value === 'string' ? encoded.value : copyBytes(encoded.value),
   });
 }
 
@@ -343,23 +388,45 @@ async function verifyHmacSignature(
         ? undefined
         : getHeader(request.headers, options.tolerance.header));
     const prefix = timestampValue !== undefined ? `${timestampValue}.` : '';
-    const prefixBytes = textEncoder.encode(prefix);
+    const prefixBytes = encodeUtf8(prefix);
     const payloadBytes = payloadToBytes(signedPayload);
-    signedPayloadBytes = new Uint8Array(prefixBytes.length + payloadBytes.length);
-    signedPayloadBytes.set(prefixBytes, 0);
-    signedPayloadBytes.set(payloadBytes, prefixBytes.length);
+    signedPayloadBytes = new IntrinsicUint8Array(prefixBytes.length + payloadBytes.length);
+    setBytes(signedPayloadBytes, prefixBytes, 0);
+    setBytes(signedPayloadBytes, payloadBytes, prefixBytes.length);
   } else {
     signedPayloadBytes = payloadToBytes(signedPayload);
   }
-  const signatures = parseSignatures(options.multiSig, signatureHeader)
-    .map((signature) => decodeSignature(signature, options.encoding))
-    .filter((signature): signature is Uint8Array => signature !== undefined);
+  const parsedSignatures = parseSignatures(options.multiSig, signatureHeader);
+  const signatures: Uint8Array[] = [];
+  for (let index = 0; index < parsedSignatures.length; index += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(parsedSignatures, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      continue;
+    }
+    const signature = descriptor.value;
+    const decoded = decodeSignature(signature, options.encoding);
+    if (decoded !== undefined) signatures[signatures.length] = decoded;
+  }
   if (signatures.length === 0) return false;
 
-  const secrets = Array.isArray(options.secret) ? options.secret : [options.secret];
-  for (const secret of secrets) {
+  const secrets = securityIsArray(options.secret) ? options.secret : [options.secret];
+  for (let secretIndex = 0; secretIndex < secrets.length; secretIndex += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(secrets, secretIndex);
+    if (descriptor === undefined || !('value' in descriptor) || descriptor.value === undefined) {
+      continue;
+    }
+    const secret = descriptor.value;
     const expected = await hmacSha256(secretToBytes(secret), signedPayloadBytes);
-    for (const signature of signatures) {
+    for (let signatureIndex = 0; signatureIndex < signatures.length; signatureIndex += 1) {
+      const descriptor = securityGetOwnPropertyDescriptor(signatures, signatureIndex);
+      if (descriptor === undefined || !('value' in descriptor) || descriptor.value === undefined) {
+        continue;
+      }
+      const signature = descriptor.value;
       if (constantTimeEqual(expected, signature)) return true;
     }
   }
@@ -372,17 +439,36 @@ function parseSignatures(
   header: string,
 ): readonly string[] {
   if (typeof multiSig === 'function') return multiSig(header);
-  if (multiSig === true) return header.split(/[,\s]+/u).filter(Boolean);
+  if (multiSig === true) {
+    const signatures: string[] = [];
+    let start = 0;
+    for (let index = 0; index <= header.length; index += 1) {
+      const delimiter =
+        index === header.length ||
+        header[index] === ',' ||
+        securityRegExpTest(/\s/u, header[index] ?? '');
+      if (!delimiter) continue;
+      if (index > start) signatures[signatures.length] = securityStringSlice(header, start, index);
+      start = index + 1;
+    }
+    return signatures;
+  }
   return [header];
 }
 
 function standardV1Signatures(header: string): readonly string[] {
   const signatures: string[] = [];
-  for (const versionedSignature of header.split(/\s+/u)) {
-    const [version, signature] = versionedSignature.split(',', 2);
-    if (version === 'v1' && signature !== undefined && signature.length > 0) {
-      signatures.push(signature);
+  let start = 0;
+  for (let index = 0; index <= header.length; index += 1) {
+    if (index < header.length && !securityRegExpTest(/\s/u, header[index] ?? '')) continue;
+    if (index > start) {
+      const token = securityStringSlice(header, start, index);
+      const comma = firstCharacterIndex(token, ',');
+      if (comma === 2 && token[0] === 'v' && token[1] === '1' && comma + 1 < token.length) {
+        signatures[signatures.length] = securityStringSlice(token, comma + 1);
+      }
     }
+    start = index + 1;
   }
   return signatures;
 }
@@ -390,21 +476,36 @@ function standardV1Signatures(header: string): readonly string[] {
 function normalizeStandardWebhooksSecrets(
   secrets: HmacSecret | readonly HmacSecret[],
 ): HmacSecret | readonly HmacSecret[] {
-  if (Array.isArray(secrets)) {
-    return (secrets as readonly HmacSecret[]).map(normalizeStandardWebhooksSecret);
+  if (securityIsArray(secrets)) {
+    const secretValues = secrets as readonly HmacSecret[];
+    const normalized: HmacSecret[] = [];
+    for (let index = 0; index < secretValues.length; index += 1) {
+      const descriptor = securityGetOwnPropertyDescriptor(secretValues, index);
+      if (descriptor !== undefined && 'value' in descriptor && descriptor.value !== undefined) {
+        normalized[normalized.length] = normalizeStandardWebhooksSecret(
+          descriptor.value as HmacSecret,
+        );
+      }
+    }
+    return normalized;
   }
   return normalizeStandardWebhooksSecret(secrets as HmacSecret);
 }
 
 function normalizeStandardWebhooksSecret(secret: HmacSecret): HmacSecret {
   if (typeof secret === 'string') {
-    return { encoding: 'base64', value: secret.replace(/^whsec_/u, '') };
+    return { encoding: 'base64', value: stripStandardWebhookSecretPrefix(secret) };
   }
-  if (secret instanceof Uint8Array) return secret;
-  if (typeof secret.value === 'string' && secret.encoding === undefined) {
-    return { encoding: 'base64', value: secret.value.replace(/^whsec_/u, '') };
+  if (securityHasInstance(IntrinsicUint8Array, secret)) return secret as Uint8Array;
+  const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
+  if (typeof encoded.value === 'string' && encoded.encoding === undefined) {
+    return { encoding: 'base64', value: stripStandardWebhookSecretPrefix(encoded.value) };
   }
   return secret;
+}
+
+function stripStandardWebhookSecretPrefix(value: string): string {
+  return securityStringSlice(value, 0, 6) === 'whsec_' ? securityStringSlice(value, 6) : value;
 }
 
 function isWithinTolerance(
@@ -419,63 +520,135 @@ function isWithinTolerance(
     (tolerance.header === undefined ? undefined : getHeader(request.headers, tolerance.header));
   const timestamp = parseTimestampSeconds(timestampValue);
   if (timestamp === undefined) return false;
+  if (!capturedVerifierScalarControlsSound) return false;
 
-  const now = request.now instanceof Date ? request.now.getTime() : (request.now ?? Date.now());
-  const nowSeconds = Math.floor(now / 1000);
-  return Math.abs(nowSeconds - timestamp) <= tolerance.seconds;
+  const now =
+    typeof request.now === 'number'
+      ? request.now
+      : request.now !== undefined && securityHasInstance(IntrinsicDate, request.now)
+        ? securityApply<number>(intrinsicDateGetTime, request.now, [])
+        : securityApply<number>(intrinsicDateNow, IntrinsicDate, []);
+  const nowSeconds = floorNumber(now / 1000);
+  const difference = nowSeconds - timestamp;
+  return (difference < 0 ? -difference : difference) <= tolerance.seconds;
 }
 
 function parseTimestampSeconds(value: number | string | undefined): number | undefined {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
-  if (value === undefined || !/^-?\d+$/u.test(value)) return undefined;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
+  if (typeof value === 'number') return isFiniteNumber(value) ? value : undefined;
+  if (value === undefined || value.length === 0) return undefined;
+  let index = value[0] === '-' ? 1 : 0;
+  if (index === value.length) return undefined;
+  let parsed = 0;
+  for (; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code < 0x30 || code > 0x39) return undefined;
+    parsed = parsed * 10 + code - 0x30;
+    if (parsed > 9_007_199_254_740_991) return undefined;
+  }
+  return value[0] === '-' ? -parsed : parsed;
 }
 
 function getHeader(headers: WebhookHeaders, name: string): string | undefined {
-  const get =
-    'get' in headers && typeof headers.get === 'function' ? headers.get.bind(headers) : undefined;
-  const direct = get?.(name) ?? get?.(name.toLowerCase()) ?? get?.(name.toUpperCase());
+  const lowerName = securityStringToLowerCase(name);
+  const upperName = securityStringToUpperCase(name);
+  let direct: WebhookHeaderValue;
+  if (
+    typeof IntrinsicHeaders === 'function' &&
+    intrinsicHeadersGet !== undefined &&
+    securityHasInstance(IntrinsicHeaders, headers)
+  ) {
+    direct =
+      securityApply<string | null>(intrinsicHeadersGet, headers, [name]) ??
+      securityApply<string | null>(intrinsicHeadersGet, headers, [lowerName]) ??
+      securityApply<string | null>(intrinsicHeadersGet, headers, [upperName]);
+  } else if (securityIsMap(headers)) {
+    const headerMap = headers as Map<string, WebhookHeaderValue>;
+    direct =
+      securityMapGet(headerMap, name) ??
+      securityMapGet(headerMap, lowerName) ??
+      securityMapGet(headerMap, upperName);
+  } else {
+    const get = 'get' in headers && typeof headers.get === 'function' ? headers.get : undefined;
+    direct =
+      (get === undefined ? undefined : securityApply<WebhookHeaderValue>(get, headers, [name])) ??
+      (get === undefined
+        ? undefined
+        : securityApply<WebhookHeaderValue>(get, headers, [lowerName])) ??
+      (get === undefined
+        ? undefined
+        : securityApply<WebhookHeaderValue>(get, headers, [upperName]));
+  }
   if (direct !== undefined && direct !== null) return normalizeHeaderValue(direct);
 
-  if (headers instanceof Headers || headers instanceof Map) return undefined;
+  if (
+    (typeof IntrinsicHeaders === 'function' && securityHasInstance(IntrinsicHeaders, headers)) ||
+    securityIsMap(headers)
+  ) {
+    return undefined;
+  }
 
-  const lowerName = name.toLowerCase();
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === lowerName) return normalizeHeaderValue(value);
+  const keys = securityObjectKeys(headers);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined || securityStringToLowerCase(key) !== lowerName) continue;
+    const descriptor = securityGetOwnPropertyDescriptor(headers, key);
+    if (descriptor === undefined || !('value' in descriptor)) return undefined;
+    const value = descriptor.value as WebhookHeaderValue;
+    if (value !== undefined && value !== null) return normalizeHeaderValue(value);
   }
 
   return undefined;
 }
 
 function normalizeHeaderValue(value: Exclude<WebhookHeaderValue, null | undefined>): string {
-  return typeof value === 'string' ? value : value.join(',');
+  if (typeof value === 'string') return value;
+  let normalized = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined || !('value' in descriptor)) return '';
+    const part = descriptor.value;
+    if (part === undefined) continue;
+    normalized += `${normalized === '' ? '' : ','}${part}`;
+  }
+  return normalized;
 }
 
 function payloadToString(payload: WebhookPayload): string {
   if (typeof payload === 'string') return payload;
-  return new TextDecoder().decode(payloadToBytes(payload));
+  if (!capturedHmacByteControlsSound) {
+    throw new TypeError('Kovo HMAC verifier byte controls are unavailable.');
+  }
+  return securityApply<string>(intrinsicTextDecoderDecode, hmacTextDecoder, [
+    payloadToBytes(payload),
+  ]);
 }
 
 function payloadToBytes(payload: WebhookPayload): Uint8Array {
-  if (typeof payload === 'string') return textEncoder.encode(payload);
-  if (payload instanceof ArrayBuffer) return new Uint8Array(payload);
-  return new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+  if (typeof payload === 'string') return encodeUtf8(payload);
+  if (securityHasInstance(IntrinsicArrayBuffer, payload)) {
+    return new IntrinsicUint8Array(payload as ArrayBuffer);
+  }
+  const view = payload as ArrayBufferView;
+  return new IntrinsicUint8Array(view.buffer, view.byteOffset, view.byteLength);
 }
 
 function secretToBytes(secret: HmacSecret): Uint8Array {
-  if (typeof secret === 'string') return textEncoder.encode(secret);
-  if (secret instanceof Uint8Array) return secret;
-  if (secret.value instanceof Uint8Array) return secret.value;
-
-  switch (secret.encoding ?? 'utf8') {
-    case 'base64':
-      return base64ToBytes(secret.value);
-    case 'base64url':
-      return base64ToBytes(secret.value.replace(/-/gu, '+').replace(/_/gu, '/'));
-    case 'utf8':
-      return textEncoder.encode(secret.value);
+  if (typeof secret === 'string') return encodeUtf8(secret);
+  if (securityHasInstance(IntrinsicUint8Array, secret)) return secret as Uint8Array;
+  const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
+  if (securityHasInstance(IntrinsicUint8Array, encoded.value)) {
+    return encoded.value as Uint8Array;
   }
+
+  switch (encoded.encoding ?? 'utf8') {
+    case 'base64':
+      return base64ToBytes(encoded.value as string);
+    case 'base64url':
+      return base64ToBytes(normalizeBase64Url(encoded.value as string));
+    case 'utf8':
+      return encodeUtf8(encoded.value as string);
+  }
+  throw new TypeError('Unsupported HMAC secret encoding.');
 }
 
 function decodeSignature(
@@ -487,7 +660,7 @@ function decodeSignature(
       case 'base64':
         return base64ToBytes(signature);
       case 'base64url':
-        return base64ToBytes(signature.replace(/-/gu, '+').replace(/_/gu, '/'));
+        return base64ToBytes(normalizeBase64Url(signature));
       case 'hex':
         return hexToBytes(signature);
     }
@@ -497,48 +670,207 @@ function decodeSignature(
 }
 
 function base64ToBytes(value: string): Uint8Array {
-  const padded = value.padEnd(value.length + ((4 - (value.length % 4)) % 4), '=');
-  const binary = globalThis.atob(padded);
-  const bytes = new Uint8Array(binary.length);
+  let padded = value;
+  const padding = (4 - (value.length % 4)) % 4;
+  for (let index = 0; index < padding; index += 1) padded += '=';
+  if (!capturedHmacByteControlsSound || typeof intrinsicAtob !== 'function') {
+    throw new TypeError('Kovo HMAC verifier base64 controls are unavailable.');
+  }
+  const binary = intrinsicAtob(padded);
+  const bytes = new IntrinsicUint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
+    bytes[index] = securityStringCharCodeAt(binary, index);
   }
   return bytes;
 }
 
+function normalizeBase64Url(value: string): string {
+  let normalized = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    normalized += character === '-' ? '+' : character === '_' ? '/' : character;
+  }
+  return normalized;
+}
+
 function hexToBytes(value: string): Uint8Array | undefined {
-  if (value.length % 2 !== 0 || !/^[\da-f]*$/iu.test(value)) return undefined;
-  const bytes = new Uint8Array(value.length / 2);
+  if (value.length % 2 !== 0) return undefined;
+  const bytes = new IntrinsicUint8Array(value.length / 2);
   for (let index = 0; index < bytes.length; index += 1) {
-    bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+    const high = hexNibble(securityStringCharCodeAt(value, index * 2));
+    const low = hexNibble(securityStringCharCodeAt(value, index * 2 + 1));
+    if (high < 0 || low < 0) return undefined;
+    bytes[index] = (high << 4) + low;
   }
   return bytes;
 }
 
 async function hmacSha256(secret: Uint8Array, payload: Uint8Array): Promise<Uint8Array> {
+  if (!(await capturedHmacCryptoControl)) {
+    throw new TypeError(
+      'Kovo HMAC verifier crypto controls were modified before framework initialization.',
+    );
+  }
+  if (
+    capturedSubtleCrypto === undefined ||
+    capturedSubtleImportKey === undefined ||
+    capturedSubtleSign === undefined
+  ) {
+    throw new TypeError('Kovo HMAC verifier requires Web Crypto SubtleCrypto support.');
+  }
   const secretBytes = copyBytes(secret);
   const payloadBytes = copyBytes(payload);
-  const key = await globalThis.crypto.subtle.importKey(
-    'raw',
-    secretBytes,
-    { hash: 'SHA-256', name: 'HMAC' },
-    false,
-    ['sign'],
+  const key = await securityApply<Promise<CryptoKey>>(
+    capturedSubtleImportKey,
+    capturedSubtleCrypto,
+    ['raw', secretBytes, { hash: 'SHA-256', name: 'HMAC' }, false, ['sign']],
   );
-  const signature = await globalThis.crypto.subtle.sign('HMAC', key, payloadBytes);
-  return new Uint8Array(signature);
+  const signature = await securityApply<Promise<ArrayBuffer>>(
+    capturedSubtleSign,
+    capturedSubtleCrypto,
+    ['HMAC', key, payloadBytes],
+  );
+  return new IntrinsicUint8Array(signature);
 }
 
 function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   // Do not dispatch to bytes.slice(): Node Buffer is a Uint8Array subclass whose
   // slice() shares backing memory, which would retain caller-owned signing material.
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
+  const copy = new IntrinsicUint8Array(bytes.byteLength);
+  setBytes(copy, bytes, 0);
   return copy;
 }
 
+function encodeUtf8(value: string): Uint8Array {
+  if (!capturedHmacByteControlsSound) {
+    throw new TypeError('Kovo HMAC verifier UTF-8 controls are unavailable.');
+  }
+  const encoded = securityApply<Uint8Array>(intrinsicTextEncoderEncode, hmacTextEncoder, [value]);
+  return encoded;
+}
+
+function setBytes(target: Uint8Array, source: Uint8Array, offset: number): void {
+  if (!capturedHmacByteControlsSound) {
+    throw new TypeError('Kovo HMAC verifier byte-copy controls are unavailable.');
+  }
+  securityApply<void>(intrinsicUint8ArraySet, target, [source, offset]);
+}
+
+function verifyCapturedHmacByteControls(): boolean {
+  try {
+    const encoded = securityApply<Uint8Array>(intrinsicTextEncoderEncode, hmacTextEncoder, [
+      'Kovo',
+    ]);
+    if (
+      encoded.length !== 4 ||
+      encoded[0] !== 0x4b ||
+      encoded[1] !== 0x6f ||
+      encoded[2] !== 0x76 ||
+      encoded[3] !== 0x6f
+    ) {
+      return false;
+    }
+    const source = new IntrinsicUint8Array(2);
+    source[0] = 0x41;
+    source[1] = 0x42;
+    const target = new IntrinsicUint8Array(4);
+    securityApply<void>(intrinsicUint8ArraySet, target, [source, 1]);
+    if (target[0] !== 0 || target[1] !== 0x41 || target[2] !== 0x42 || target[3] !== 0) {
+      return false;
+    }
+    if (securityApply<string>(intrinsicTextDecoderDecode, hmacTextDecoder, [encoded]) !== 'Kovo') {
+      return false;
+    }
+    return typeof intrinsicAtob === 'function' && intrinsicAtob('S292bw==') === 'Kovo';
+  } catch {
+    return false;
+  }
+}
+
+function verifyCapturedVerifierScalarControls(): boolean {
+  try {
+    const control = new IntrinsicDate(1_700_000_000_123);
+    const timestamp = securityApply<number>(intrinsicDateGetTime, control, []);
+    const now = securityApply<number>(intrinsicDateNow, IntrinsicDate, []);
+    const directNow = securityApply<number>(intrinsicDateGetTime, new IntrinsicDate(), []);
+    return (
+      timestamp === 1_700_000_000_123 &&
+      isFiniteNumber(now) &&
+      isFiniteNumber(directNow) &&
+      (now > directNow ? now - directNow : directNow - now) < 60_000
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function verifyCapturedHmacCryptoControls(): Promise<boolean> {
+  if (
+    capturedSubtleCrypto === undefined ||
+    capturedSubtleImportKey === undefined ||
+    capturedSubtleSign === undefined
+  ) {
+    return false;
+  }
+  try {
+    const keyBytes = encodeUtf8('kovo-hmac-control-key');
+    const payloadBytes = encodeUtf8('kovo-hmac-control-payload');
+    const key = await securityApply<Promise<CryptoKey>>(
+      capturedSubtleImportKey,
+      capturedSubtleCrypto,
+      ['raw', keyBytes, { hash: 'SHA-256', name: 'HMAC' }, false, ['sign']],
+    );
+    const signature = await securityApply<Promise<ArrayBuffer>>(
+      capturedSubtleSign,
+      capturedSubtleCrypto,
+      ['HMAC', key, payloadBytes],
+    );
+    return bytesEqualHex(
+      new IntrinsicUint8Array(signature),
+      '0822211b3d7ed77d25825fa1873c00ea4809fde1dc06e95f71d5a891ca453a0b',
+    );
+  } catch {
+    return false;
+  }
+}
+
+function bytesEqualHex(bytes: Uint8Array, hex: string): boolean {
+  if (bytes.length * 2 !== hex.length) return false;
+  for (let index = 0; index < bytes.length; index += 1) {
+    const high = hexNibble(securityStringCharCodeAt(hex, index * 2));
+    const low = hexNibble(securityStringCharCodeAt(hex, index * 2 + 1));
+    if (high < 0 || low < 0 || bytes[index] !== (high << 4) + low) return false;
+  }
+  return true;
+}
+
+function hexNibble(code: number): number {
+  if (code >= 48 && code <= 57) return code - 48;
+  if (code >= 65 && code <= 70) return code - 55;
+  if (code >= 97 && code <= 102) return code - 87;
+  return -1;
+}
+
+function firstCharacterIndex(value: string, expected: string): number {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === expected) return index;
+  }
+  return -1;
+}
+
+function floorNumber(value: number): number {
+  if (!isFiniteNumber(value)) return value;
+  const remainder = value % 1;
+  if (remainder === 0) return value;
+  return value - remainder - (value < 0 ? 1 : 0);
+}
+
+function isFiniteNumber(value: number): boolean {
+  return value === value && value !== Infinity && value !== -Infinity;
+}
+
 function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
-  const length = Math.max(left.length, right.length);
+  const length = left.length > right.length ? left.length : right.length;
   let difference = left.length ^ right.length;
 
   for (let index = 0; index < length; index += 1) {

@@ -441,7 +441,7 @@ describe('server jsx runtime', () => {
     );
   });
 
-  it('M3: spread reconstruction snapshots mutable/getter/prototype carriers once', () => {
+  it('M3: spread reconstruction snapshots own data and skips getters/prototype carriers', () => {
     let reads = 0;
     const inherited = {
       'on:load': '/c/inherited.client.js#run',
@@ -467,13 +467,54 @@ describe('server jsx runtime', () => {
     record['on:load'] = '/c/late.client.js#run';
 
     expect(Object.getPrototypeOf(safe)).toBeNull();
-    expect(html(jsx('div', safe))).toBe(
-      '<div class="before" data-label="pinned" __proto__="ordinary-own-data"></div>',
-    );
-    expect(reads).toBe(1);
+    expect(html(jsx('div', safe))).toBe('<div class="before" __proto__="ordinary-own-data"></div>');
+    expect(reads).toBe(0);
     expect(safe.class).toBe('before');
     expect(safe['on:load']).toBeUndefined();
     expect(safe['kovo-param-types']).toBeUndefined();
+  });
+
+  it('keeps spread control-plane filtering pinned after object and string prototype changes', () => {
+    const originalCreate = Object.create;
+    const originalKeys = Object.keys;
+    const originalDescriptor = Object.getOwnPropertyDescriptor;
+    const originalEntries = Object.entries;
+    const originalLowerCase = String.prototype.toLowerCase;
+    const originalStartsWith = String.prototype.startsWith;
+    let safe: Record<string, unknown> = {};
+    try {
+      Object.create = (() => ({ forged: true })) as typeof Object.create;
+      Object.keys = () => ['ON:CLICK', 'class'];
+      Object.getOwnPropertyDescriptor = () => ({
+        configurable: true,
+        enumerable: true,
+        value: '/c/forged.client.js#run',
+        writable: true,
+      });
+      Object.entries = (() => [
+        ['class', '<img onerror=forged()>'],
+      ]) as unknown as typeof Object.entries;
+      String.prototype.toLowerCase = function () {
+        return 'class';
+      };
+      String.prototype.startsWith = () => false;
+
+      safe = kovoSafeJsxSpread({
+        'ON:CLICK': '/c/attacker.client.js#run',
+        class: 'card',
+      });
+    } finally {
+      Object.create = originalCreate;
+      Object.keys = originalKeys;
+      Object.getOwnPropertyDescriptor = originalDescriptor;
+      Object.entries = originalEntries;
+      String.prototype.toLowerCase = originalLowerCase;
+      String.prototype.startsWith = originalStartsWith;
+    }
+
+    expect(Object.getPrototypeOf(safe)).toBeNull();
+    expect(safe).toEqual({ class: 'card' });
+    expect(safe['ON:CLICK']).toBeUndefined();
   });
 
   it('H1: drains a redacted KV236 event when an attribute name is rejected', () => {

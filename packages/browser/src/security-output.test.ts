@@ -29,6 +29,71 @@ const forgedTrustedHtmlType: TrustedHtml = { value: '<b>unsafe</b>' };
 const forgedTrustedUrlType: TrustedUrl = { value: 'javascript:alert(1)' };
 
 describe('runtime output-context helpers', () => {
+  it('keeps HTML escaping, rich-text sanitization, and URL checks pinned after prototype changes', () => {
+    const attacker = '<img src=x onerror=alert(1)>';
+    const originalReplace = String.prototype.replace;
+    const originalReplaceAll = String.prototype.replaceAll;
+    const originalTrim = String.prototype.trim;
+    const originalSlice = String.prototype.slice;
+    const originalIndexOf = String.prototype.indexOf;
+    const originalCharCodeAt = String.prototype.charCodeAt;
+    const originalToLowerCase = String.prototype.toLowerCase;
+    const originalExec = RegExp.prototype.exec;
+    const originalTest = RegExp.prototype.test;
+    const originalMap = Array.prototype.map;
+    const originalJoin = Array.prototype.join;
+    let escaped = '';
+    let safeUrl = '';
+    let rich = '';
+
+    try {
+      String.prototype.replace = function () {
+        return attacker;
+      };
+      String.prototype.replaceAll = function () {
+        return attacker;
+      };
+      String.prototype.trim = function () {
+        return attacker;
+      };
+      String.prototype.slice = function () {
+        return attacker;
+      };
+      String.prototype.indexOf = () => -1;
+      String.prototype.charCodeAt = () => 0;
+      String.prototype.toLowerCase = function () {
+        return 'forged-safe';
+      };
+      RegExp.prototype.exec = () => null;
+      RegExp.prototype.test = () => false;
+      Array.prototype.map = (() => [attacker]) as typeof Array.prototype.map;
+      Array.prototype.join = () => attacker;
+
+      escaped = kovoEscapeHtml(attacker);
+      safeUrl = kovoSafeUrl('java\nscript:alert(1)');
+      rich = sanitizeRichHtml(
+        '<p title="&quot;"><script>bad()</script><a href="javascript:alert(1)">ok</a></p>',
+      );
+    } finally {
+      String.prototype.replace = originalReplace;
+      String.prototype.replaceAll = originalReplaceAll;
+      String.prototype.trim = originalTrim;
+      String.prototype.slice = originalSlice;
+      String.prototype.indexOf = originalIndexOf;
+      String.prototype.charCodeAt = originalCharCodeAt;
+      String.prototype.toLowerCase = originalToLowerCase;
+      RegExp.prototype.exec = originalExec;
+      RegExp.prototype.test = originalTest;
+      Array.prototype.map = originalMap;
+      Array.prototype.join = originalJoin;
+    }
+
+    expect(escaped).toBe('&lt;img src=x onerror=alert(1)&gt;');
+    expect(safeUrl).toBe('#');
+    expect(rich).toBe('<p title="&amp;quot;"><a href="#">ok</a></p>');
+    expect(rich).not.toContain(attacker);
+  });
+
   it('escapes HTML-fragment placeholders and neutralizes unsafe URL attributes', () => {
     expect(kovoEscapeHtml('<img src=x onerror=alert(1)>')).toBe(
       '&lt;img src=x onerror=alert(1)&gt;',
