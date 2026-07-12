@@ -249,7 +249,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     semantically checked exact-key and collection controls; late/import-order poison cannot
     cross-bind definitions, jobs, principal context, or completion state.
 
-- [ ] **H16 - Mutable guard redirect controls reopen protocol-relative login targets.**
+- [x] **H16 - Mutable guard redirect controls reopen protocol-relative login targets.**
       `packages/server/src/guards.ts`
   - Selective late `String.prototype.startsWith` plus a replacement global `URL` constructor made
     `sanitizeNext('//evil.example/phish')` return the attacker target instead of `/`, violating the
@@ -258,6 +258,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     stripping, and login URL assembly use boot-pinned, semantically checked exact-byte controls;
     protocol-relative, backslash, scheme, normalized-authority, and control-bearing targets retain
     the safe fallback under late and import-order poison.
+  - **Evidence:** the 158-test app/guard/request-state matrix passes; the independent late-poison
+    protocol-relative proof now receives `/`, and all three rate-window bypass proofs fail closed.
 
 - [ ] **H17 - Mutable response-header controls admit forbidden browser state and redirects.**
       `packages/server/src/{response,app-system-response}.ts`
@@ -374,7 +376,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     Number/Map controls; Argon2i/Argon2d, malformed, duplicate, substituted, and import-order-poisoned
     strings fail closed while genuine Argon2id verify, rehash, and strong decoy cost remain intact.
 
-- [ ] **M7 - Mutable rate-limit state and clock controls reset enforced request windows.**
+- [x] **M7 - Mutable rate-limit state and clock controls reset enforced request windows.**
       `packages/server/src/{app-load-shed,guards}.ts`
   - A selective late `WeakMap.prototype.get` override made each request allocate fresh private
     per-app rate state; replacing `Date.now` with an advanced value expired the active bucket. In
@@ -383,6 +385,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** per-app/store/bucket operations, time reads, client-key parsing, numeric bounds,
     LRU eviction, and retry calculations use boot-pinned, semantically checked controls; late and
     import-order poison cannot reset windows, cross-bind clients, or exceed the configured key cap.
+  - **Evidence:** the 158-test app/guard/request-state matrix passes; independent WeakMap and clock
+    poison proofs retain the configured 429/rate-limited outcomes.
 
 - [ ] **M8 - Mutable replay-store state and clock controls erase committed idempotency truth.**
       `packages/server/src/replay.ts`
@@ -406,9 +410,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H22, and M7-M9 are active
-capability, request-carrier, response/deferred/mutation/client output, task/guard, request-limit, and
-replay fixes.
+The remediation pass remains intentionally non-zero: C10-C12, H15, H17-H22, and M8-M9 are active
+capability, request-carrier, response/deferred/mutation/client output, task, replay, and reporting
+fixes.
 Integrated
 evidence is
 green at
