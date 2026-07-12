@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    16 | H1-H16 |
+| High     |    17 | H1-H17 |
 | Medium   |     8 | M1-M8 |
 
 ## Critical
@@ -258,6 +258,17 @@ This is an active closure ledger; `SPEC.md` remains normative.
     protocol-relative, backslash, scheme, normalized-authority, and control-bearing targets retain
     the safe fallback under late and import-order poison.
 
+- [ ] **H17 - Mutable response-header controls admit forbidden browser state and redirects.**
+      `packages/server/src/{response,app-system-response}.ts`
+  - Replacing `Set.prototype.has` made a real `respond.file()` outcome forward its app-supplied
+    `Set-Cookie` through the reserved-header floor into the final Web Response. Selective
+    `String.prototype.startsWith` also made `redirectLocationHeader('//evil.example/phish')` return
+    the protocol-relative attacker target with no allowlist.
+  - **Acceptance:** header-source identity/traversal, case folding, reserved names, multi-value
+    cloning/merging, filename and control escaping, Location URL parsing/allowlist comparison, and
+    final system-response header insertion use boot-pinned, semantically checked exact bytes; late
+    and import-order poison cannot emit reserved Set-Cookie/content controls or an unapproved target.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -334,8 +345,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H16, and M7-M8 are active
-capability, request-carrier, task/guard, request-limit, and replay fixes. Integrated evidence is
+The remediation pass remains intentionally non-zero: C10-C12, H15-H17, and M7-M8 are active
+capability, request-carrier, response, task/guard, request-limit, and replay fixes. Integrated
+evidence is
 green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
