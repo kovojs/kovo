@@ -171,6 +171,44 @@ describe('@kovojs/drizzle runtime surface', () => {
     ).toMatchObject({ ok: true, statement: { text: rawDelete } });
   });
 
+  it('cannot erase SQL constructor arguments through inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '1');
+    let poisonHits = 0;
+    let snapshot: ReturnType<typeof snapshotManagedSqlStatement> | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '1', {
+        configurable: true,
+        set(value: unknown) {
+          const first = (this as unknown[])[0] as { raw?: unknown } | undefined;
+          if (value === 'reviewed-param' && Array.isArray(first?.raw)) {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '1', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      snapshot = snapshotManagedSqlStatement(sql`select ${'reviewed-param'}`, 'postgres');
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['1'];
+      } else {
+        nativeDefineProperty(Array.prototype, '1', originalDescriptor);
+      }
+    }
+
+    expect(snapshot).toMatchObject({
+      ok: true,
+      statement: { text: 'select $1', values: ['reviewed-param'] },
+    });
+    expect(poisonHits).toBe(0);
+  });
+
   it('validates dynamic SQL identifiers and allowlisted keyword fragments', () => {
     expect(() => sql.identifier('products; drop table users')).toThrow(/KV422/);
     expect(() => sql.identifier('users', { allow: ['products'] })).toThrow(/KV422/);

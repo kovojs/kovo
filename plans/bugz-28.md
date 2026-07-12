@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   252 | C1-C252 |
+| Critical |   253 | C1-C253 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2950,6 +2950,16 @@ build:dist` passes.
   - **Evidence:** the exact setter receives zero commits, the source census is empty, inline parity
     and Trusted Types routing pass, all 762 node and 525 three-engine browser tests pass, and browser
     dist/DTS builds are green.
+
+- [x] **C253 - Drizzle SQL constructor argument arrays invoke inherited numeric setters.**
+      `packages/drizzle/src/runtime.ts`
+  - The SQL template invocation and `sql.join` metadata aggregation copied reviewed values through
+    ordinary indexed writes. A selective setter could erase a bound parameter from the executable
+    constructor call or cross-bind the metadata later authenticated by the managed SQL choke.
+  - **Acceptance:** SQL constructor and metadata arrays commit through boot-captured verified own
+    descriptors; the production Drizzle census has no numeric length assignment.
+  - **Evidence:** the exact template-argument setter receives zero commits and the managed snapshot
+    retains `$1` plus its original value; all 866 Drizzle tests and dist/DTS builds pass.
 
 ## High
 

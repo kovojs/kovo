@@ -14,6 +14,68 @@ import {
   validateSqlIdentifier,
 } from '@kovojs/core/internal/sql-safety';
 
+const DrizzleNativeNumber = globalThis.Number;
+const DrizzleNativeObject = globalThis.Object;
+const DrizzleNativeReflect = globalThis.Reflect;
+const drizzleDefineProperty = DrizzleNativeObject.defineProperty;
+const drizzleGetOwnPropertyDescriptor = DrizzleNativeObject.getOwnPropertyDescriptor;
+const drizzleNumberIsSafeInteger = DrizzleNativeNumber.isSafeInteger;
+const drizzleReflectApply = DrizzleNativeReflect.apply;
+
+function drizzleApply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
+  return drizzleReflectApply(fn, receiver, args) as Return;
+}
+
+function commitDrizzleArrayValue<Value>(target: Value[], value: Value): boolean {
+  const length = drizzleApply<PropertyDescriptor | undefined>(
+    drizzleGetOwnPropertyDescriptor,
+    DrizzleNativeObject,
+    [target, 'length'],
+  );
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    !drizzleApply(drizzleNumberIsSafeInteger, DrizzleNativeNumber, [length.value]) ||
+    length.value < 0 ||
+    length.value >= 1_000_000
+  ) {
+    return false;
+  }
+  const index = length.value;
+  drizzleApply(drizzleDefineProperty, DrizzleNativeObject, [
+    target,
+    index,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = drizzleApply<PropertyDescriptor | undefined>(
+    drizzleGetOwnPropertyDescriptor,
+    DrizzleNativeObject,
+    [target, index],
+  );
+  return committed !== undefined && 'value' in committed && committed.value === value;
+}
+
+const drizzleArrayControlsSound = (() => {
+  try {
+    const control: string[] = [];
+    return commitDrizzleArrayValue(control, 'drizzle-control') && control[0] === 'drizzle-control';
+  } catch {
+    return false;
+  }
+})();
+
+function drizzleArrayAppend<Value>(target: Value[], value: Value): void {
+  if (!drizzleArrayControlsSound || !commitDrizzleArrayValue(target, value)) {
+    throw new TypeError('Kovo Drizzle SQL collection own-data append failed.');
+  }
+}
+
 export type {
   KovoAnalyzerFunctionSummary,
   KovoAnalyzerPrivateScopeKind,
@@ -129,7 +191,7 @@ export const sql = (<T = unknown>(strings: TemplateStringsArray, ...values: unkn
   const valueSnapshot = snapshotSqlConstructorArray(values, 'sql template values');
   const args: unknown[] = [strings];
   for (let index = 0; index < valueSnapshot.length; index += 1) {
-    args[args.length] = valueSnapshot[index];
+    drizzleArrayAppend(args, valueSnapshot[index]);
   }
   const statement = invokeSqlConstructor<SQL<T>>(drizzleSql, undefined, args);
   return stampParameterizedSql(statement, mergeSqlSafetyMetadata(valueSnapshot), {
@@ -179,9 +241,9 @@ sql.join = <T = unknown>(parts: readonly unknown[], separator?: unknown) => {
   ]);
   const metadataInputs: unknown[] = [];
   for (let index = 0; index < partSnapshot.length; index += 1) {
-    metadataInputs[metadataInputs.length] = partSnapshot[index];
+    drizzleArrayAppend(metadataInputs, partSnapshot[index]);
   }
-  metadataInputs[metadataInputs.length] = drizzleSeparator;
+  drizzleArrayAppend(metadataInputs, drizzleSeparator);
   return stampParameterizedSql(statement, mergeSqlSafetyMetadata(metadataInputs), {
     kind: 'join',
     parts: partSnapshot,
