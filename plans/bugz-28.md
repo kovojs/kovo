@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    60 | C1-C60 |
+| Critical |    61 | C1-C61 |
 | High     |    31 | H1-H31 |
 | Medium   |     9 | M1-M9  |
 
@@ -708,6 +708,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     mutation cannot omit a direct, nested, CTE, compound, or schema-qualified write target, while
     proven reads and fully declared writes retain their existing verdicts.
 
+- [ ] **C61 - Mutable compiler provenance traversal suppresses request-derived raw-HTML errors.**
+      `packages/compiler/src/validate/trusted-html-provenance.ts`
+  - A selective late `Array.prototype.map` replacement returned no provenance facts for a
+    TypeScript template-span array. The real compiler then treated
+    ``trustedHtml(`<p>${request.body}</p>`)`` as locally clean, emitted no KV426 diagnostic, and
+    allowed request-controlled raw HTML through the trusted escape instead of blocking the build.
+  - **Acceptance:** render-binding discovery, alias/mutation tracking, expression/object/array/
+    template traversal, trust-sink resolution, and diagnostic collection use boot-pinned
+    collection/reflection/string controls over the parsed AST; late/import-order mutation cannot
+    erase request/query/unprovable provenance or a blocking diagnostic, while static literals and
+    explicit audited reasons retain their intended verdicts.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1138,7 +1150,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C60, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C61, H20, H27,
 and H31 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
