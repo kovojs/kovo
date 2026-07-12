@@ -17,7 +17,6 @@ import {
   type BlessedFormatName,
   type LinearRegexProgram,
   type UnsafeRegexBrand,
-  BLESSED_FORMATS,
   PATTERN_MAX_INPUT_LENGTH,
   compileLinearPattern,
   testLinearPattern,
@@ -39,14 +38,47 @@ import {
 } from './security-witness-intrinsics.js';
 import {
   requestCreateNullRecord,
+  requestBlobArrayBuffer,
+  requestBlobSize,
+  requestBlobType,
+  requestFileName,
   requestFormDataEntries,
+  requestIsFile,
   requestIsFormData,
+  requestIsPlainRecord,
 } from './request-body-intrinsics.js';
-import { securityArrayIsArray } from './response-security-intrinsics.js';
-
-const nativeArrayIsArray = Array.isArray;
-const nativeObjectCreate = Object.create;
-const nativeObjectPrototype = Object.prototype;
+import {
+  assertResponseSecurityIntrinsics,
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityCreateDate,
+  securityCreateRegExp,
+  securityDateGetTime,
+  securityDateToISOString,
+  securityIsDate,
+  securityJsonParse,
+  securityNumber,
+  securityNumberIsFinite,
+  securityNumberIsInteger,
+  securityNumberIsNaN,
+  securityRegExpFlags,
+  securityRegExpSource,
+  securityRegExpTest,
+  securityString,
+  securityStringCharCodeAt,
+  securityStringEndsWith,
+  securityStringIncludes,
+  securityStringIndexOf,
+  securityStringLastIndexOf,
+  securityStringReplaceAll,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
+  securityStringToLowerCase,
+  securityStringTrim,
+  securityUint8ArrayFromArrayBuffer,
+  securityUint8ArraySlice,
+} from './response-security-intrinsics.js';
 
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
@@ -141,7 +173,7 @@ function sameSchemaDataDescriptor(
 }
 
 function snapshotSchemaShape<Shape extends Record<string, Schema<unknown>>>(shape: Shape): Shape {
-  if (typeof shape !== 'object' || shape === null || nativeArrayIsArray(shape)) {
+  if (typeof shape !== 'object' || shape === null || securityArrayIsArray(shape)) {
     throw new TypeError('s.object(shape) requires a stable own-data schema record.');
   }
   assertSafeObjectShape(shape);
@@ -263,23 +295,38 @@ export class SchemaValidationError extends Error {
   readonly issues: readonly ValidationIssue[];
 
   constructor(issues: readonly ValidationIssue[]) {
-    super(issues[0]?.message ?? 'Invalid input');
+    super(firstValidationIssueMessage(issues));
     this.name = 'SchemaValidationError';
     this.issues = issues;
   }
 }
 
 export function isSchemaValidationError(error: unknown): error is SchemaValidationErrorLike {
-  if (error instanceof SchemaValidationError) return true;
   if (typeof error !== 'object' || error === null) return false;
-
-  const candidate = error as Partial<SchemaValidationErrorLike>;
+  const name = witnessGetOwnPropertyDescriptor(error, 'name');
+  const message = witnessGetOwnPropertyDescriptor(error, 'message');
+  const issues = witnessGetOwnPropertyDescriptor(error, 'issues');
   return (
-    candidate.name === 'SchemaValidationError' &&
-    typeof candidate.message === 'string' &&
-    nativeArrayIsArray(candidate.issues) &&
-    arrayEvery(candidate.issues, isValidationIssue)
+    name !== undefined &&
+    'value' in name &&
+    name.value === 'SchemaValidationError' &&
+    message !== undefined &&
+    'value' in message &&
+    typeof message.value === 'string' &&
+    issues !== undefined &&
+    'value' in issues &&
+    securityArrayIsArray(issues.value) &&
+    arrayEvery(issues.value, isValidationIssue)
   );
+}
+
+function firstValidationIssueMessage(issues: readonly ValidationIssue[]): string {
+  const issue = witnessGetOwnPropertyDescriptor(issues, 0);
+  if (issue === undefined || !('value' in issue) || !isValidationIssue(issue.value)) {
+    return 'Invalid input';
+  }
+  const message = witnessGetOwnPropertyDescriptor(issue.value, 'message');
+  return message !== undefined && 'value' in message ? message.value : 'Invalid input';
 }
 
 /**
@@ -323,7 +370,7 @@ export const s = {
               writable: true,
             });
           } catch (error) {
-            throw validationErrorFrom(error, [String(index)]);
+            throw validationErrorFrom(error, [securityString(index)]);
           }
         }
         return output;
@@ -341,7 +388,7 @@ export const s = {
               writable: true,
             });
           } catch (error) {
-            throw validationErrorFrom(error, [String(index)]);
+            throw validationErrorFrom(error, [securityString(index)]);
           }
         }
 
@@ -360,10 +407,10 @@ export const s = {
         input = revealSchemaInput(input);
         if (typeof input === 'boolean') return input;
         if (input === undefined || input === null || input === '') return false;
-        if (typeof input === 'number' && (input === 0 || input === 1)) return Boolean(input);
+        if (typeof input === 'number' && (input === 0 || input === 1)) return input === 1;
 
         if (typeof input === 'string') {
-          const value = input.toLowerCase();
+          const value = securityStringToLowerCase(input);
           if (value === '1' || value === 'on' || value === 'true' || value === 'yes') return true;
           if (value === '0' || value === 'false' || value === 'no' || value === 'off') return false;
         }
@@ -423,11 +470,11 @@ export const s = {
           const key = keys[index] as keyof Shape;
           const fieldSchema = closedShape[key]!;
           try {
-            output[key] = fieldSchema.parse(readOwnInputField(record, String(key))) as InferSchema<
-              Shape[keyof Shape]
-            >;
+            output[key] = fieldSchema.parse(
+              readOwnInputField(record, securityString(key)),
+            ) as InferSchema<Shape[keyof Shape]>;
           } catch (error) {
-            throw validationErrorFrom(error, [String(key)]);
+            throw validationErrorFrom(error, [securityString(key)]);
           }
         }
 
@@ -444,11 +491,11 @@ export const s = {
           try {
             output[key] = (await parseSchemaAsync(
               fieldSchema,
-              readOwnInputField(record, String(key)),
+              readOwnInputField(record, securityString(key)),
               true,
             )) as InferSchema<Shape[keyof Shape]>;
           } catch (error) {
-            throw validationErrorFrom(error, [String(key)]);
+            throw validationErrorFrom(error, [securityString(key)]);
           }
         }
 
@@ -463,7 +510,7 @@ export const s = {
     const schema: AsyncSchema<Record<string, Value>> = {
       parse(input: unknown): Record<string, Value> {
         const record = recordInput(input);
-        const output = nativeObjectCreate(null) as Record<string, Value>;
+        const output = requestCreateNullRecord<Value>() as Record<string, Value>;
 
         const keys = witnessObjectKeys(record);
         for (let index = 0; index < keys.length; index += 1) {
@@ -481,7 +528,7 @@ export const s = {
       },
       async parseAsync(input: unknown): Promise<Record<string, Value>> {
         const record = recordInput(input);
-        const output = nativeObjectCreate(null) as Record<string, Value>;
+        const output = requestCreateNullRecord<Value>() as Record<string, Value>;
 
         const keys = witnessObjectKeys(record);
         for (let index = 0; index < keys.length; index += 1) {
@@ -786,10 +833,11 @@ class NumberSchemaImpl implements NumberSchema {
     input = revealSchemaInput(input);
     const value =
       input === undefined || input === null || input === '' ? this.#defaultValue : input;
-    const number = typeof value === 'number' ? value : Number(value);
+    const number = typeof value === 'number' ? value : securityNumber(value);
 
-    if (!Number.isFinite(number)) throw validationError('Expected number');
-    if (this.#integer && !Number.isInteger(number)) throw validationError('Expected integer');
+    if (!securityNumberIsFinite(number)) throw validationError('Expected number');
+    if (this.#integer && !securityNumberIsInteger(number))
+      throw validationError('Expected integer');
     if (this.#minimum !== undefined && number < this.#minimum) {
       throw validationError(`Expected number >= ${this.#minimum}`);
     }
@@ -825,7 +873,12 @@ class StringSchemaImpl implements StringSchema {
   }
 
   #with(check: StringCheck): StringSchema {
-    return new StringSchemaImpl([...this.#checks, check], this.#defaultValue, this.#controlPolicy);
+    const checks: StringCheck[] = [];
+    for (let index = 0; index < this.#checks.length; index += 1) {
+      appendSchemaArrayValue(checks, this.#checks[index]!);
+    }
+    appendSchemaArrayValue(checks, check);
+    return new StringSchemaImpl(checks, this.#defaultValue, this.#controlPolicy);
   }
 
   default(value: string): StringSchema {
@@ -861,17 +914,21 @@ class StringSchemaImpl implements StringSchema {
   }
 
   pattern(source: RegExp | string): StringSchema {
-    const src = typeof source === 'string' ? source : source.source;
+    assertResponseSecurityIntrinsics();
+    const src = typeof source === 'string' ? source : securityRegExpSource(source);
     // KV434: compile to the framework-owned linear engine before the pattern can run. A
     // dynamic/non-literal pattern reaches here as a runtime value the compiler cannot inspect; the
     // KV434 lint flags that at the call site, and `unsafeRegex(...)` is the audited JS RegExp escape.
-    const flags = typeof source === 'string' ? '' : source.flags.replace(/[gy]/g, '');
+    const flags =
+      typeof source === 'string' ? '' : stableValidationRegexFlags(securityRegExpFlags(source));
     return this.#with({ kind: 'pattern', program: compileLinearPattern(src, flags), source: src });
   }
 
   matches(brand: UnsafeRegexBrand): StringSchema {
     // The audited escape: the ReDoS risk was accepted + recorded at `unsafeRegex(...)`.
-    return this.#with({ kind: 'unsafe', regex: brand.regex });
+    const source = securityRegExpSource(brand.regex);
+    const flags = stableValidationRegexFlags(securityRegExpFlags(brand.regex));
+    return this.#with({ kind: 'unsafe', regex: securityCreateRegExp(source, flags) });
   }
 
   parse(input: unknown): string {
@@ -883,9 +940,11 @@ class StringSchemaImpl implements StringSchema {
 
     assertStringControlPolicy(input, this.#controlPolicy);
 
-    for (const check of this.#checks) {
+    for (let index = 0; index < this.#checks.length; index += 1) {
+      const check = this.#checks[index];
+      if (check === undefined) throw validationError('Expected stable string checks');
       if (check.kind === 'format') {
-        if (!BLESSED_FORMATS[check.name].test(input)) {
+        if (!testBlessedFormat(check.name, input)) {
           throw validationError(`Expected ${check.name}`);
         }
         continue;
@@ -899,7 +958,7 @@ class StringSchemaImpl implements StringSchema {
         if (!testLinearPattern(check.program, input)) {
           throw validationError('Expected string matching pattern');
         }
-      } else if (!check.regex.test(input))
+      } else if (!securityRegExpTest(check.regex, input))
         throw validationError('Expected string matching pattern');
     }
 
@@ -907,11 +966,154 @@ class StringSchemaImpl implements StringSchema {
   }
 }
 
+function stableValidationRegexFlags(flags: string): string {
+  return securityStringReplaceAll(securityStringReplaceAll(flags, 'g', ''), 'y', '');
+}
+
+function testBlessedFormat(name: BlessedFormatName, value: string): boolean {
+  switch (name) {
+    case 'email':
+      return isBlessedEmail(value);
+    case 'slug':
+      return isBlessedSlug(value);
+    case 'url':
+      return isBlessedUrl(value);
+    case 'uuid':
+      return isBlessedUuid(value);
+  }
+}
+
+function isAsciiLetter(code: number): boolean {
+  return (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
+}
+
+function isAsciiDigit(code: number): boolean {
+  return code >= 0x30 && code <= 0x39;
+}
+
+function isBlessedSlug(value: string): boolean {
+  if (value.length === 0 || value.length > 256) return false;
+  let previousHyphen = true;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (isAsciiDigit(code) || (code >= 0x61 && code <= 0x7a)) {
+      previousHyphen = false;
+    } else if (code === 0x2d) {
+      if (previousHyphen) return false;
+      previousHyphen = true;
+    } else {
+      return false;
+    }
+  }
+  return !previousHyphen;
+}
+
+function isBlessedUuid(value: string): boolean {
+  if (value.length !== 36) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (index === 8 || index === 13 || index === 18 || index === 23) {
+      if (code !== 0x2d) return false;
+    } else if (
+      !isAsciiDigit(code) &&
+      !(code >= 0x41 && code <= 0x46) &&
+      !(code >= 0x61 && code <= 0x66)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isBlessedEmail(value: string): boolean {
+  if (value.length === 0 || value.length > 254) return false;
+  const at = securityStringIndexOf(value, '@');
+  if (at <= 0 || at !== securityStringLastIndexOf(value, '@')) return false;
+  const local = securityStringSlice(value, 0, at);
+  const domain = securityStringSlice(value, at + 1);
+  if (local.length > 64 || domain.length === 0) return false;
+  let previousDot = true;
+  for (let index = 0; index < local.length; index += 1) {
+    const code = securityStringCharCodeAt(local, index);
+    if (code === 0x2e) {
+      if (previousDot) return false;
+      previousDot = true;
+    } else if (
+      isAsciiLetter(code) ||
+      isAsciiDigit(code) ||
+      securityStringIncludes("!#$%&'*+/=?^_`{|}~-", securityStringSlice(local, index, index + 1))
+    ) {
+      previousDot = false;
+    } else {
+      return false;
+    }
+  }
+  return !previousDot && isBlessedDomain(domain);
+}
+
+function isBlessedDomain(domain: string): boolean {
+  if (domain.length > 253) return false;
+  const labels = securityStringSplit(domain, '.');
+  if (labels.length < 2) return false;
+  for (let labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
+    const label = labels[labelIndex]!;
+    if (
+      label.length === 0 ||
+      label.length > 63 ||
+      securityStringStartsWith(label, '-') ||
+      securityStringEndsWith(label, '-')
+    ) {
+      return false;
+    }
+    for (let index = 0; index < label.length; index += 1) {
+      const code = securityStringCharCodeAt(label, index);
+      if (!isAsciiLetter(code) && !isAsciiDigit(code) && code !== 0x2d) return false;
+    }
+  }
+  const tld = labels[labels.length - 1]!;
+  for (let index = 0; index < tld.length; index += 1) {
+    if (!isAsciiLetter(securityStringCharCodeAt(tld, index))) return false;
+  }
+  return true;
+}
+
+function isBlessedUrl(value: string): boolean {
+  if (value.length === 0 || value.length > 2_048) return false;
+  const lower = securityStringToLowerCase(value);
+  const scheme = securityStringStartsWith(lower, 'https://')
+    ? 8
+    : securityStringStartsWith(lower, 'http://')
+      ? 7
+      : -1;
+  if (scheme === -1) return false;
+  const rest = securityStringSlice(value, scheme);
+  if (rest.length === 0) return false;
+  let end = rest.length;
+  for (let index = 0; index < rest.length; index += 1) {
+    const code = securityStringCharCodeAt(rest, index);
+    if (code === 0x2f || code === 0x3f || code === 0x23) {
+      end = index;
+      break;
+    }
+  }
+  const authority = securityStringSlice(rest, 0, end);
+  const colon = securityStringLastIndexOf(authority, ':');
+  const host = colon === -1 ? authority : securityStringSlice(authority, 0, colon);
+  if (colon !== -1) {
+    const port = securityStringSlice(authority, colon + 1);
+    if (port.length === 0 || port.length > 5) return false;
+    for (let index = 0; index < port.length; index += 1) {
+      if (!isAsciiDigit(securityStringCharCodeAt(port, index))) return false;
+    }
+  }
+  return host === 'localhost' || isBlessedDomain(host);
+}
+
 function assertStringControlPolicy(input: string, policy: StringControlPolicy): void {
   if (policy === 'allow') return;
 
   for (let index = 0; index < input.length; index += 1) {
-    const code = input.charCodeAt(index);
+    const code = securityStringCharCodeAt(input, index);
     if (isLineTerminatorCode(code)) {
       if (policy === 'multiline') continue;
       throw validationError('Expected string without line terminators');
@@ -927,30 +1129,31 @@ function isLineTerminatorCode(code: number): boolean {
 }
 
 function parseDecimalString(input: string, scale: number | undefined): string {
-  const value = input.trim();
-  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value)) {
+  const value = securityStringTrim(input);
+  if (!securityRegExpTest(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u, value)) {
     throw validationError('Expected decimal string');
   }
   if (scale !== undefined) {
-    const fractional = value.split('.', 2)[1]?.length ?? 0;
+    const fractional = securityStringSplit(value, '.')[1]?.length ?? 0;
     if (fractional > scale) throw validationError(`Expected decimal with <= ${scale} decimals`);
   }
   return value;
 }
 
 function parseDateInput(input: unknown, kind: 'date' | 'datetime'): Date {
-  if (input instanceof Date) {
-    if (Number.isNaN(input.getTime())) throw validationError(`Expected ${kind}`);
-    return input;
+  if (securityIsDate(input)) {
+    const timestamp = securityDateGetTime(input);
+    if (securityNumberIsNaN(timestamp)) throw validationError(`Expected ${kind}`);
+    return securityCreateDate(timestamp);
   }
   if (typeof input !== 'string') throw validationError(`Expected ${kind}`);
-  const value = input.trim();
-  if (kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+  const value = securityStringTrim(input);
+  if (kind === 'date' && !securityRegExpTest(/^\d{4}-\d{2}-\d{2}$/u, value)) {
     throw validationError('Expected date');
   }
-  const date = kind === 'date' ? new Date(`${value}T00:00:00.000Z`) : new Date(value);
-  if (Number.isNaN(date.getTime())) throw validationError(`Expected ${kind}`);
-  if (kind === 'date' && date.toISOString().slice(0, 10) !== value) {
+  const date = securityCreateDate(kind === 'date' ? `${value}T00:00:00.000Z` : value);
+  if (securityNumberIsNaN(securityDateGetTime(date))) throw validationError(`Expected ${kind}`);
+  if (kind === 'date' && securityStringSlice(securityDateToISOString(date), 0, 10) !== value) {
     throw validationError('Expected date');
   }
   return date;
@@ -958,7 +1161,7 @@ function parseDateInput(input: unknown, kind: 'date' | 'datetime'): Date {
 
 function parseJsonInput(input: string): unknown {
   try {
-    return JSON.parse(input);
+    return securityJsonParse(input);
   } catch {
     throw validationError('Expected JSON value');
   }
@@ -970,9 +1173,9 @@ function isJsonValue(value: unknown): value is JsonValue {
     case 'boolean':
     case 'number':
     case 'string':
-      return Number.isFinite(value as number) || typeof value !== 'number';
+      return securityNumberIsFinite(value) || typeof value !== 'number';
     case 'object':
-      if (nativeArrayIsArray(value)) return arrayEvery(value, isJsonValue);
+      if (securityArrayIsArray(value)) return arrayEvery(value, isJsonValue);
       if (!isPlainJsonObject(value)) return false;
       return recordValuesEvery(value as Record<string, unknown>, isJsonValue);
     default:
@@ -981,8 +1184,7 @@ function isJsonValue(value: unknown): value is JsonValue {
 }
 
 function isPlainJsonObject(value: object): boolean {
-  const proto = witnessGetPrototypeOf(value);
-  return proto === nativeObjectPrototype || proto === null;
+  return requestIsPlainRecord(value);
 }
 
 class FileSchemaImpl implements FileSchema {
@@ -1048,7 +1250,10 @@ class StoredFileSchemaImpl implements StoredFileSchema {
   }
 
   async parseAsync(input: unknown): Promise<StoredFileUpload> {
-    const { bytes, file, sniffed } = await parseVerifiedFileLike(input, this.#fileOptions);
+    const { bytes, file, name, sniffed, type } = await parseVerifiedFileLike(
+      input,
+      this.#fileOptions,
+    );
 
     // KV428 (SPEC §6.6/§9.1): the storage key is SERVER-GENERATED and opaque (random UUID), never
     // derived from the client filename. This kills path traversal / overwrite by construction — an
@@ -1060,17 +1265,17 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     // instead (recorded for `kovo explain --capabilities`). The bytes are already buffered, so the
     // deep sniff is free.
     const contentType = isUnverifiedAcceptance(this.#fileOptions.accept)
-      ? file.type
+      ? type
       : sniffed.contentType;
 
-    const storage = await this.#storageOptions.storage.put(key, bytes.slice(), {
+    const storage = await this.#storageOptions.storage.put(key, securityUint8ArraySlice(bytes), {
       ...(contentType === '' ? {} : { contentType }),
       metadata: {
         ...this.#storageOptions.metadata?.(file),
         // The client filename is sanitized framework-owned download METADATA only — never the key.
         // Keep it last so app metadata cannot replace the value that later reaches
         // Content-Disposition at the stored-file sink (SPEC §6.6 / §9.1).
-        filename: sanitizeDownloadFilename(file.name),
+        filename: sanitizeDownloadFilename(name),
       },
     });
 
@@ -1081,19 +1286,16 @@ class StoredFileSchemaImpl implements StoredFileSchema {
 function isUnverifiedAcceptance(
   accept: UnverifiedAcceptance | readonly string[] | undefined,
 ): accept is UnverifiedAcceptance {
-  return (
-    typeof accept === 'object' &&
-    accept !== null &&
-    !nativeArrayIsArray(accept) &&
-    (accept as UnverifiedAcceptance).unverified === true
-  );
+  if (typeof accept !== 'object' || accept === null || securityArrayIsArray(accept)) return false;
+  const unverified = witnessGetOwnPropertyDescriptor(accept, 'unverified');
+  return unverified !== undefined && 'value' in unverified && unverified.value === true;
 }
 
 function snapshotFileAcceptance(
   accept: UnverifiedAcceptance | readonly string[] | undefined,
 ): UnverifiedAcceptance | readonly string[] | undefined {
   if (accept === undefined) return undefined;
-  if (nativeArrayIsArray(accept)) {
+  if (securityArrayIsArray(accept)) {
     const snapshot: string[] = [];
     const length = witnessGetOwnPropertyDescriptor(accept, 'length');
     if (length === undefined || !('value' in length) || length.value > 1_000) {
@@ -1158,7 +1360,7 @@ function createFileOptions(
 function arrayValues(input: unknown): unknown[] {
   input = revealSchemaInput(input);
   if (input === undefined || input === null) return [];
-  return nativeArrayIsArray(input) ? input : [input];
+  return securityArrayIsArray(input) ? input : [input];
 }
 
 function optionalSchema<Value>(
@@ -1187,7 +1389,9 @@ witnessSetAdd(PROTOTYPE_POLLUTION_KEYS, 'constructor');
 witnessSetAdd(PROTOTYPE_POLLUTION_KEYS, 'prototype');
 
 function assertSafeObjectShape(shape: Record<string, Schema<unknown>>): void {
-  for (const key of witnessObjectKeys(shape)) {
+  const keys = witnessObjectKeys(shape);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
     if (witnessSetHas(PROTOTYPE_POLLUTION_KEYS, key)) {
       throw new Error(
         `s.object(): "${key}" is reserved by the prototype-pollution input floor (SPEC §6.6).`,
@@ -1213,11 +1417,11 @@ function readOwnInputField(record: Record<string, unknown>, key: string): unknow
 }
 
 function parseFileLikeSync(input: unknown, options: FileSchemaOptions): FileLike {
-  const file = parseFileLikeShape(input, options);
+  const snapshot = parseFileLikeShape(input, options);
   const accept = options.accept;
   if (isUnverifiedAcceptance(accept)) {
-    if (accept.types.length > 0 && !stringArrayIncludes(accept.types, file.type)) {
-      throw validationError(`Expected file type ${accept.types.join(', ')}`);
+    if (accept.types.length > 0 && !stringArrayIncludes(accept.types, snapshot.type)) {
+      throw validationError(`Expected file type ${securityArrayJoin(accept.types, ', ')}`);
     }
   } else if (accept && accept.length > 0) {
     // SPEC §6.6/§9.1, KV428: verified `accept([...])` has one enforcing path:
@@ -1229,7 +1433,7 @@ function parseFileLikeSync(input: unknown, options: FileSchemaOptions): FileLike
     );
   }
 
-  return file;
+  return snapshot.file;
 }
 
 async function parseFileLikeAsync(input: unknown, options: FileSchemaOptions): Promise<FileLike> {
@@ -1240,45 +1444,94 @@ async function parseFileLikeAsync(input: unknown, options: FileSchemaOptions): P
 async function parseVerifiedFileLike(
   input: unknown,
   options: FileSchemaOptions,
-): Promise<{ bytes: Uint8Array; file: FileLike; sniffed: ReturnType<typeof sniffUploadBytes> }> {
-  const file = parseFileLikeShape(input, options);
-  const bytes = new Uint8Array(await file.arrayBuffer());
+): Promise<{
+  bytes: Uint8Array;
+  file: FileLike;
+  name: string;
+  sniffed: ReturnType<typeof sniffUploadBytes>;
+  type: string;
+}> {
+  const snapshot = parseFileLikeShape(input, options);
+  const bytes = securityUint8ArrayFromArrayBuffer(await snapshot.readBytes());
   const sniffed = sniffUploadBytes(bytes);
   const accept = options.accept;
   if (isUnverifiedAcceptance(accept)) {
-    if (accept.types.length > 0 && !stringArrayIncludes(accept.types, file.type)) {
-      throw validationError(`Expected file type ${accept.types.join(', ')}`);
+    if (accept.types.length > 0 && !stringArrayIncludes(accept.types, snapshot.type)) {
+      throw validationError(`Expected file type ${securityArrayJoin(accept.types, ', ')}`);
     }
   } else if (accept && accept.length > 0 && !stringArrayIncludes(accept, sniffed.contentType)) {
-    throw validationError(`Expected file type ${accept.join(', ')}`);
+    throw validationError(`Expected file type ${securityArrayJoin(accept, ', ')}`);
   }
 
-  return { bytes, file, sniffed };
+  return {
+    bytes,
+    file: snapshot.file,
+    name: snapshot.name,
+    sniffed,
+    type: snapshot.type,
+  };
 }
 
-function parseFileLikeShape(input: unknown, options: FileSchemaOptions): FileLike {
+interface FileLikeSnapshot {
+  file: FileLike;
+  name: string;
+  readBytes(): Promise<ArrayBuffer>;
+  size: number;
+  type: string;
+}
+
+function parseFileLikeShape(input: unknown, options: FileSchemaOptions): FileLikeSnapshot {
   input = revealSchemaInput(input);
-  if (!isFileLike(input)) throw validationError('Expected file');
-  if (options.maxBytes !== undefined && input.size > options.maxBytes) {
+  const snapshot = snapshotFileLike(input);
+  if (snapshot === undefined) throw validationError('Expected file');
+  if (options.maxBytes !== undefined && snapshot.size > options.maxBytes) {
     throw validationError(`Expected file <= ${options.maxBytes} bytes`);
   }
 
-  return input;
+  return snapshot;
 }
 
-function isFileLike(value: unknown): value is FileLike {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'arrayBuffer' in value &&
-    typeof value.arrayBuffer === 'function' &&
-    'name' in value &&
-    typeof value.name === 'string' &&
-    'size' in value &&
-    typeof value.size === 'number' &&
-    'type' in value &&
-    typeof value.type === 'string'
-  );
+function snapshotFileLike(value: unknown): FileLikeSnapshot | undefined {
+  if (requestIsFile(value)) {
+    return {
+      file: value,
+      name: requestFileName(value),
+      readBytes: () => requestBlobArrayBuffer(value),
+      size: requestBlobSize(value),
+      type: requestBlobType(value),
+    };
+  }
+  if (typeof value !== 'object' || value === null) return undefined;
+
+  const arrayBuffer = witnessGetOwnPropertyDescriptor(value, 'arrayBuffer');
+  const name = witnessGetOwnPropertyDescriptor(value, 'name');
+  const size = witnessGetOwnPropertyDescriptor(value, 'size');
+  const type = witnessGetOwnPropertyDescriptor(value, 'type');
+  if (
+    arrayBuffer === undefined ||
+    !('value' in arrayBuffer) ||
+    typeof arrayBuffer.value !== 'function' ||
+    name === undefined ||
+    !('value' in name) ||
+    typeof name.value !== 'string' ||
+    size === undefined ||
+    !('value' in size) ||
+    typeof size.value !== 'number' ||
+    type === undefined ||
+    !('value' in type) ||
+    typeof type.value !== 'string'
+  ) {
+    return undefined;
+  }
+  const file = value as FileLike;
+  const readBytes = arrayBuffer.value;
+  return {
+    file,
+    name: name.value,
+    readBytes: () => witnessReflectApply(readBytes, file, []),
+    size: size.value,
+    type: type.value,
+  };
 }
 
 export function formLikeToRecord(input: unknown): Record<string, unknown> {
@@ -1293,7 +1546,7 @@ export function formLikeToRecord(input: unknown): Record<string, unknown> {
 
 function recordInput(input: unknown): Record<string, unknown> {
   const record = formLikeToRecord(input);
-  if (nativeArrayIsArray(record)) throw validationError('Expected record input');
+  if (securityArrayIsArray(record)) throw validationError('Expected record input');
   return record;
 }
 
@@ -1313,11 +1566,12 @@ function validationError(message: string, path: readonly string[] = []): SchemaV
 function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): SchemaValidationError {
   if (isSchemaValidationError(error)) {
     const issues: ValidationIssue[] = [];
-    for (let index = 0; index < error.issues.length; index += 1) {
-      const issue = error.issues[index]!;
+    const errorIssues = stableValidationIssues(error);
+    for (let index = 0; index < errorIssues.length; index += 1) {
+      const issue = stableValidationIssue(errorIssues, index);
       appendSchemaArrayValue(issues, {
         message: issue.message,
-        path: [...pathPrefix, ...issue.path],
+        path: mergeValidationPath(pathPrefix, issue.path),
       });
     }
     return new SchemaValidationError(issues);
@@ -1327,16 +1581,73 @@ function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): Sch
 }
 
 function isValidationIssue(value: unknown): value is ValidationIssue {
+  if (typeof value !== 'object' || value === null) return false;
+  const message = witnessGetOwnPropertyDescriptor(value, 'message');
+  const path = witnessGetOwnPropertyDescriptor(value, 'path');
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as Partial<ValidationIssue>).message === 'string' &&
-    nativeArrayIsArray((value as Partial<ValidationIssue>).path) &&
-    arrayEvery(
-      (value as Partial<ValidationIssue>).path as readonly unknown[],
-      (segment) => typeof segment === 'string',
-    )
+    message !== undefined &&
+    'value' in message &&
+    typeof message.value === 'string' &&
+    path !== undefined &&
+    'value' in path &&
+    securityArrayIsArray(path.value) &&
+    arrayEvery(path.value, (segment) => typeof segment === 'string')
   );
+}
+
+function stableValidationIssues(error: SchemaValidationErrorLike): readonly ValidationIssue[] {
+  const descriptor = witnessGetOwnPropertyDescriptor(error, 'issues');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    !securityArrayIsArray(descriptor.value) ||
+    !arrayEvery(descriptor.value, isValidationIssue)
+  ) {
+    throw error;
+  }
+  return descriptor.value as readonly ValidationIssue[];
+}
+
+function stableValidationIssue(issues: readonly ValidationIssue[], index: number): ValidationIssue {
+  const descriptor = witnessGetOwnPropertyDescriptor(issues, index);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    !isValidationIssue(descriptor.value)
+  ) {
+    throw new TypeError('Kovo received an unstable schema validation issue.');
+  }
+  return descriptor.value;
+}
+
+function mergeValidationPath(
+  prefix: readonly string[],
+  suffix: readonly string[],
+): readonly string[] {
+  const path: string[] = [];
+  for (let index = 0; index < prefix.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(prefix, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Kovo received an unstable schema validation path.');
+    }
+    appendSchemaArrayValue(path, descriptor.value);
+  }
+  for (let index = 0; index < suffix.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(suffix, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Kovo received an unstable schema validation path.');
+    }
+    appendSchemaArrayValue(path, descriptor.value);
+  }
+  return path;
 }
 
 function isAsyncSchema<T>(schema: Schema<T>): schema is AsyncSchema<T> {
@@ -1368,9 +1679,8 @@ export function configureShapeBudget(budget: Partial<ShapeBudget>): void {
 
 /** Container children to descend; non-plain objects (File/Blob/Date/Map) are leaves. */
 function descendableChildren(value: object): readonly unknown[] | undefined {
-  if (nativeArrayIsArray(value)) return value;
-  const proto = witnessGetPrototypeOf(value);
-  if (proto === nativeObjectPrototype || proto === null) {
+  if (securityArrayIsArray(value)) return value;
+  if (requestIsPlainRecord(value)) {
     return ownRecordValues(value as Record<string, unknown>);
   }
   return undefined;
@@ -1393,27 +1703,64 @@ export function assertShapeWithinBudget(
   let nodes = 1;
   const stack: Array<readonly [value: object, depth: number]> = [[input, 0]];
   while (stack.length > 0) {
-    const entry = stack.pop();
+    const entry = popSchemaArrayValue(stack);
     if (entry === undefined) break;
-    const [value, depth] = entry;
+    const value = entry[0];
+    const depth = entry[1];
     if (depth > budget.maxDepth) {
       throw validationError(`Input nesting exceeds the maximum depth of ${budget.maxDepth}.`);
     }
     const children = descendableChildren(value);
     if (children === undefined) continue;
-    if (children.length > budget.maxBreadth) {
+    const childCount = stableSchemaArrayLength(children);
+    if (childCount > budget.maxBreadth) {
       throw validationError(
-        `Input container of ${children.length} entries exceeds the maximum breadth of ${budget.maxBreadth}.`,
+        `Input container of ${childCount} entries exceeds the maximum breadth of ${budget.maxBreadth}.`,
       );
     }
-    nodes += children.length;
+    nodes += childCount;
     if (nodes > budget.maxNodes) {
       throw validationError(`Input exceeds the maximum node count of ${budget.maxNodes}.`);
     }
-    for (const child of children) {
-      if (child !== null && typeof child === 'object') stack.push([child, depth + 1]);
+    for (let index = 0; index < childCount; index += 1) {
+      const child = stableSchemaArrayValue(children, index);
+      if (child !== null && typeof child === 'object') {
+        appendSchemaArrayValue(stack, [child, depth + 1]);
+      }
     }
   }
+}
+
+function popSchemaArrayValue<Value>(values: Value[]): Value | undefined {
+  if (values.length === 0) return undefined;
+  const index = values.length - 1;
+  const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+  values.length = index;
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError('Kovo received an unstable schema traversal stack.');
+  }
+  return descriptor.value;
+}
+
+function stableSchemaArrayLength(values: readonly unknown[]): number {
+  const descriptor = witnessGetOwnPropertyDescriptor(values, 'length');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    !securityNumberIsInteger(descriptor.value) ||
+    descriptor.value < 0
+  ) {
+    throw validationError('Expected stable array input');
+  }
+  return descriptor.value;
+}
+
+function stableSchemaArrayValue(values: readonly unknown[], index: number): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw validationError('Expected dense stable array input');
+  }
+  return descriptor.value;
 }
 
 const SCHEMA_UNTRUSTED_REVEAL_REASON =
@@ -1479,7 +1826,7 @@ function appendRecordValue(record: Record<string, unknown>, key: string, value: 
   }
 
   const existing = record[key];
-  if (nativeArrayIsArray(existing)) {
+  if (securityArrayIsArray(existing)) {
     appendSchemaArrayValue(existing, value);
   } else {
     record[key] = [existing, value];

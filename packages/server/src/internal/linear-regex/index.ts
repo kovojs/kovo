@@ -1,3 +1,15 @@
+import {
+  createSecuritySet,
+  securityArrayPush,
+  securityCreateUint8Array,
+  securitySetAdd,
+  securitySetHas,
+  securityStringCharCodeAt,
+  securityStringFromCharCode,
+  securityStringSlice,
+  securityUint8ArrayFill,
+} from '../../response-security-intrinsics.js';
+
 export type LinearRegexFlags = Readonly<{
   dotAll: boolean;
   ignoreCase: boolean;
@@ -73,7 +85,7 @@ export function linearRegexMatch(program: LinearRegexProgram, input: string): bo
 
   for (let index = 0; index < input.length; index += 1) {
     resetStateSet(next);
-    const charCode = input.charCodeAt(index);
+    const charCode = securityStringCharCodeAt(input, index);
     for (let stateIndex = 0; stateIndex < current.count; stateIndex += 1) {
       const instruction = instructions[current.states[stateIndex] ?? 0];
       if (instruction?.type !== 'char') continue;
@@ -107,7 +119,7 @@ class Parser {
     const branches: Ast[] = [this.#parseConcat()];
     while (this.#peek() === '|') {
       this.#index += 1;
-      branches.push(this.#parseConcat());
+      securityArrayPush(branches, this.#parseConcat());
     }
     return branches.length === 1 ? (branches[0] ?? empty()) : { kind: 'alt', branches };
   }
@@ -117,7 +129,7 @@ class Parser {
     while (!this.#done()) {
       const ch = this.#peek();
       if (ch === ')' || ch === '|') break;
-      nodes.push(this.#parseRepeat());
+      securityArrayPush(nodes, this.#parseRepeat());
     }
     if (nodes.length === 0) return empty();
     return nodes.length === 1 ? (nodes[0] ?? empty()) : { kind: 'concat', nodes };
@@ -203,12 +215,15 @@ class Parser {
         const end = this.#readClassChar();
         if (start.length !== 1 || end.length !== 1)
           this.#fail('character-class ranges must use literal endpoints');
-        const from = start.charCodeAt(0);
-        const to = end.charCodeAt(0);
+        const from = securityStringCharCodeAt(start, 0);
+        const to = securityStringCharCodeAt(end, 0);
         if (from > to) this.#fail('character-class range is out of order');
-        ranges.push({ from, to });
+        securityArrayPush(ranges, { from, to });
       } else {
-        for (const range of classAtomRanges(start)) ranges.push(range);
+        const atomRanges = classAtomRanges(start);
+        for (let index = 0; index < atomRanges.length; index += 1) {
+          securityArrayPush(ranges, atomRanges[index]!);
+        }
       }
     }
     this.#fail('unterminated character class');
@@ -322,7 +337,7 @@ class Parser {
   }
 
   #peekCode(): number {
-    return this.source.charCodeAt(this.#index);
+    return securityStringCharCodeAt(this.source, this.#index);
   }
 
   #done(): boolean {
@@ -367,14 +382,15 @@ class Compiler {
         return this.#compileConcat(ast.nodes);
       case 'alt': {
         let fragment: Fragment | null = null;
-        for (const branch of ast.branches) {
+        for (let index = 0; index < ast.branches.length; index += 1) {
+          const branch = ast.branches[index]!;
           const next = this.#compile(branch);
           if (!fragment) {
             fragment = next;
             continue;
           }
           const split = this.#emit({ type: 'split', out: fragment.start, out1: next.start });
-          fragment = { start: split, outs: [...fragment.outs, ...next.outs] };
+          fragment = { start: split, outs: appendArrays(fragment.outs, next.outs) };
         }
         return fragment ?? this.#compile(empty());
       }
@@ -385,7 +401,8 @@ class Compiler {
 
   #compileConcat(nodes: readonly Ast[]): Fragment {
     let fragment: Fragment | null = null;
-    for (const node of nodes) {
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index]!;
       const next = this.#compile(node);
       if (!fragment) {
         fragment = next;
@@ -400,9 +417,9 @@ class Compiler {
   #compileRepeat(ast: Extract<Ast, { kind: 'repeat' }>): Fragment {
     if (ast.min === 0 && ast.max === 0) return this.#compile(empty());
     const pieces: Ast[] = [];
-    for (let i = 0; i < ast.min; i += 1) pieces.push(ast.node);
+    for (let i = 0; i < ast.min; i += 1) securityArrayPush(pieces, ast.node);
     if (ast.max === null) {
-      pieces.push({ kind: 'repeat', node: ast.node, min: 0, max: null });
+      securityArrayPush(pieces, { kind: 'repeat', node: ast.node, min: 0, max: null });
       if (ast.min > 0) return this.#compileConcat(pieces);
       const body = this.#compile(ast.node);
       const split = this.#emit({ type: 'split', out: body.start, out1: NO_OUT });
@@ -410,12 +427,15 @@ class Compiler {
       return { start: split, outs: [{ field: 'out1', pc: split }] };
     }
     for (let i = ast.min; i < ast.max; i += 1) {
-      pieces.push({ kind: 'repeat', node: ast.node, min: 0, max: 1 });
+      securityArrayPush(pieces, { kind: 'repeat', node: ast.node, min: 0, max: 1 });
     }
     if (ast.min === 0 && ast.max === 1) {
       const body = this.#compile(ast.node);
       const split = this.#emit({ type: 'split', out: body.start, out1: NO_OUT });
-      return { start: split, outs: [...body.outs, { field: 'out1', pc: split }] };
+      return {
+        start: split,
+        outs: appendArrays(body.outs, [{ field: 'out1', pc: split }]),
+      };
     }
     return this.#compileConcat(pieces);
   }
@@ -426,12 +446,13 @@ class Compiler {
         'pattern(): compiled program exceeds the linear-regex program cap; use unsafeRegex(...)',
       );
     }
-    this.#instructions.push(instruction);
+    securityArrayPush(this.#instructions, instruction);
     return this.#instructions.length - 1;
   }
 
   #patch(outs: readonly Patch[], target: number): void {
-    for (const patch of outs) {
+    for (let index = 0; index < outs.length; index += 1) {
+      const patch = outs[index]!;
       const instruction = this.#instructions[patch.pc];
       if (!instruction)
         throw new LinearRegexError('pattern(): internal compiler patch target missing');
@@ -458,13 +479,13 @@ interface StateSet {
 }
 
 function createStateSet(size: number): StateSet {
-  return { count: 0, matched: false, seen: new Uint8Array(size), states: [] };
+  return { count: 0, matched: false, seen: securityCreateUint8Array(size), states: [] };
 }
 
 function resetStateSet(set: StateSet): void {
   set.count = 0;
   set.matched = false;
-  set.seen.fill(0);
+  securityUint8ArrayFill(set.seen, 0);
 }
 
 function addState(
@@ -476,18 +497,20 @@ function addState(
 ): void {
   const stack = [startPc];
   while (stack.length > 0) {
-    const pc = stack.pop() ?? 0;
+    const pc = stack[stack.length - 1] ?? 0;
+    stack.length -= 1;
     if (pc < 0 || set.seen[pc]) continue;
     set.seen[pc] = 1;
     const instruction = program.instructions[pc];
     if (!instruction) continue;
     if (instruction.type === 'split') {
-      stack.push(instruction.out1, instruction.out);
+      securityArrayPush(stack, instruction.out1);
+      securityArrayPush(stack, instruction.out);
     } else if (instruction.type === 'jmp') {
-      stack.push(instruction.out);
+      securityArrayPush(stack, instruction.out);
     } else if (instruction.type === 'assert') {
       if (assertionPasses(program.flags, instruction.anchor, input, position)) {
-        stack.push(instruction.out);
+        securityArrayPush(stack, instruction.out);
       }
     } else if (instruction.type === 'match') {
       set.matched = true;
@@ -516,8 +539,8 @@ function assertionPasses(
         (isFinalLineTerminatorPosition(input, position) || isEcmaLineTerminatorAt(input, position)))
     );
   }
-  const before = position > 0 ? input.charCodeAt(position - 1) : -1;
-  const after = position < input.length ? input.charCodeAt(position) : -1;
+  const before = position > 0 ? securityStringCharCodeAt(input, position - 1) : -1;
+  const after = position < input.length ? securityStringCharCodeAt(input, position) : -1;
   const boundary = isWordCode(before) !== isWordCode(after);
   return anchor === 'word-boundary' ? boundary : !boundary;
 }
@@ -531,7 +554,8 @@ function matchesChar(matcher: CharMatcher, charCode: number, flags: LinearRegexF
     );
   const normalized = normalizeCode(charCode, flags);
   let found = false;
-  for (const range of matcher.ranges) {
+  for (let index = 0; index < matcher.ranges.length; index += 1) {
+    const range = matcher.ranges[index]!;
     if (codeInClassRange(charCode, normalized, range, flags)) {
       found = true;
       break;
@@ -544,10 +568,11 @@ function parseFlags(flagsText: string): LinearRegexFlags {
   let dotAll = false;
   let ignoreCase = false;
   let multiline = false;
-  const seen = new Set<string>();
-  for (const flag of flagsText) {
-    if (seen.has(flag)) throw new LinearRegexError('pattern(): duplicate regex flag');
-    seen.add(flag);
+  const seen = createSecuritySet<string>();
+  for (let index = 0; index < flagsText.length; index += 1) {
+    const flag = securityStringSlice(flagsText, index, index + 1);
+    if (securitySetHas(seen, flag)) throw new LinearRegexError('pattern(): duplicate regex flag');
+    securitySetAdd(seen, flag);
     if (flag === 's') dotAll = true;
     else if (flag === 'i') ignoreCase = true;
     else if (flag === 'm') multiline = true;
@@ -562,7 +587,7 @@ function parseFlags(flagsText: string): LinearRegexFlags {
 
 function containsNonAscii(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
-    if (value.charCodeAt(i) > 0x7f) return true;
+    if (securityStringCharCodeAt(value, i) > 0x7f) return true;
   }
   return false;
 }
@@ -572,7 +597,8 @@ function empty(): Ast {
 }
 
 function literal(value: string): Ast {
-  return charClass([{ from: value.charCodeAt(0), to: value.charCodeAt(0) }]);
+  const code = securityStringCharCodeAt(value, 0);
+  return charClass([{ from: code, to: code }]);
 }
 
 function charClass(ranges: readonly CharRange[], negated = false): Ast {
@@ -581,7 +607,7 @@ function charClass(ranges: readonly CharRange[], negated = false): Ast {
 
 function classAtomRanges(value: string): readonly CharRange[] {
   if (value.length === 1) {
-    const code = value.charCodeAt(0);
+    const code = securityStringCharCodeAt(value, 0);
     return [{ from: code, to: code }];
   }
   if (value === '\\d') return [{ from: 0x30, to: 0x39 }];
@@ -591,9 +617,9 @@ function classAtomRanges(value: string): readonly CharRange[] {
 }
 
 function rangesToClassAtom(ranges: readonly CharRange[]): string {
-  const [range] = ranges;
+  const range = ranges[0];
   if (range && ranges.length === 1 && range.from === range.to) {
-    return String.fromCharCode(range.from);
+    return securityStringFromCharCode(range.from);
   }
   if (sameRanges(ranges, [{ from: 0x30, to: 0x39 }])) return '\\d';
   if (sameRanges(ranges, wordRanges())) return '\\w';
@@ -602,10 +628,22 @@ function rangesToClassAtom(ranges: readonly CharRange[]): string {
 }
 
 function sameRanges(a: readonly CharRange[], b: readonly CharRange[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every((range, index) => range.from === b[index]?.from && range.to === b[index]?.to)
-  );
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index]?.from !== b[index]?.from || a[index]?.to !== b[index]?.to) return false;
+  }
+  return true;
+}
+
+function appendArrays<Value>(left: readonly Value[], right: readonly Value[]): Value[] {
+  const combined: Value[] = [];
+  for (let index = 0; index < left.length; index += 1) {
+    securityArrayPush(combined, left[index]!);
+  }
+  for (let index = 0; index < right.length; index += 1) {
+    securityArrayPush(combined, right[index]!);
+  }
+  return combined;
 }
 
 function escapeValue(value: string): string {
@@ -646,8 +684,8 @@ function previousCodeUnitStart(input: string, position: number): number {
   if (position <= 0) return -1;
   if (
     position >= 2 &&
-    input.charCodeAt(position - 2) === 0x0d &&
-    input.charCodeAt(position - 1) === 0x0a
+    securityStringCharCodeAt(input, position - 2) === 0x0d &&
+    securityStringCharCodeAt(input, position - 1) === 0x0a
   ) {
     return position - 2;
   }
@@ -656,19 +694,19 @@ function previousCodeUnitStart(input: string, position: number): number {
 
 function isFinalLineTerminatorPosition(input: string, position: number): boolean {
   if (position === input.length - 1) {
-    const code = input.charCodeAt(position);
+    const code = securityStringCharCodeAt(input, position);
     return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
   }
   return (
     position === input.length - 2 &&
-    input.charCodeAt(position) === 0x0d &&
-    input.charCodeAt(position + 1) === 0x0a
+    securityStringCharCodeAt(input, position) === 0x0d &&
+    securityStringCharCodeAt(input, position + 1) === 0x0a
   );
 }
 
 function isEcmaLineTerminatorAt(input: string, position: number): boolean {
   if (position < 0 || position >= input.length) return false;
-  const code = input.charCodeAt(position);
+  const code = securityStringCharCodeAt(input, position);
   return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
 }
 

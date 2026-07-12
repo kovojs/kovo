@@ -23,6 +23,7 @@ const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
+const NativeTextDecoder = globalThis.TextDecoder;
 const NativeTextEncoder = globalThis.TextEncoder;
 const NativeUint8Array = globalThis.Uint8Array;
 const NativeURL = globalThis.URL;
@@ -41,10 +42,13 @@ const nativeArraySort = NativeArray.prototype.sort;
 const nativeBufferAllocUnsafe = NativeBuffer.allocUnsafe;
 const nativeBufferFrom = NativeBuffer.from;
 const nativeBufferToString = NativeBuffer.prototype.toString;
+const nativeDateGetTime = NativeDate.prototype.getTime;
+const nativeDateToISOString = NativeDate.prototype.toISOString;
 const nativeDateToUtcString = NativeDate.prototype.toUTCString;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeEncodeUri = globalThis.encodeURI;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
+const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
 const nativeHeadersGet = NativeHeaders.prototype.get;
@@ -56,16 +60,21 @@ const nativeMathFloor = NativeMath.floor;
 const nativeNumberIsFinite = NativeNumber.isFinite;
 const nativeNumberIsInteger = NativeNumber.isInteger;
 const nativeNumberParseInt = NativeNumber.parseInt;
+const nativeNumberIsNaN = NativeNumber.isNaN;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectKeys = NativeObject.keys;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
+const nativeRegExpFlags = stableOwnAccessor(NativeRegExp.prototype, 'flags');
+const nativeRegExpSource = stableOwnAccessor(NativeRegExp.prototype, 'source');
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
+const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
+const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
 const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringSplit = NativeString.prototype.split;
@@ -73,6 +82,8 @@ const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeStringFromCodePoint = NativeString.fromCodePoint;
+const nativeStringFromCharCode = NativeString.fromCharCode;
+const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
 const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
@@ -85,11 +96,15 @@ const nativeUrlOriginGet = stableOwnGetter(NativeURL.prototype, 'origin');
 const nativeUrlPathnameGet = stableOwnGetter(NativeURL.prototype, 'pathname');
 const nativeUrlProtocolGet = stableOwnGetter(NativeURL.prototype, 'protocol');
 const nativeUrlSearchGet = stableOwnGetter(NativeURL.prototype, 'search');
+const nativeUint8ArrayLength = stableOwnAccessor(NativeUint8Array.prototype, 'length');
+const nativeUint8ArrayFill = NativeUint8Array.prototype.fill;
+const nativeUint8ArraySlice = NativeUint8Array.prototype.slice;
 
 const hashControl = nativeCreateHash('sha256');
 const nativeHashUpdate = stableOwnFunction(hashControl, 'update');
 const nativeHashDigest = stableOwnFunction(hashControl, 'digest');
 const textEncoder = new NativeTextEncoder();
+const fatalTextDecoder = new NativeTextDecoder('utf-8', { fatal: true });
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -126,6 +141,25 @@ function stableOwnGetter(value: object, property: PropertyKey): Function {
   return descriptor.get;
 }
 
+function stableOwnAccessor(value: object, property: PropertyKey): Function {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [owner, property],
+    );
+    if (descriptor !== undefined) {
+      if (typeof descriptor.get !== 'function') {
+        throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
+      }
+      return descriptor.get;
+    }
+    owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+  }
+  throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
+}
+
 function capturedControlsAreSound(): boolean {
   try {
     const shell = ['<!doctype html>', '<html><body>safe</body></html>'];
@@ -160,6 +194,8 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeStringTrim, '   ', []) !== '') return false;
     if (apply(nativeStringIndexOf, 'name=value', ['=']) !== 4) return false;
     if (apply(nativeStringIndexOf, 'name', ['=']) !== -1) return false;
+    if (apply(nativeStringLastIndexOf, 'a@b@c', ['@']) !== 3) return false;
+    if (apply(nativeStringLastIndexOf, 'abc', ['@']) !== -1) return false;
     if (apply(nativeStringSlice, 'name=value', [5]) !== 'value') return false;
     if (apply(nativeStringToLowerCase, 'SameSite', []) !== 'samesite') return false;
     if (apply(nativeStringStartsWith, '__Host-id', ['__Host-']) !== true) return false;
@@ -168,7 +204,12 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeStringStartsWith, 'onclick', ['data-']) !== false) return false;
     if (apply(nativeStringStartsWith, '//evil.example/phish', ['//']) !== true) return false;
     if (apply(nativeStringStartsWith, '/safe', ['//']) !== false) return false;
+    if (apply(nativeStringEndsWith, 'safe.txt', ['.txt']) !== true) return false;
+    if (apply(nativeStringEndsWith, 'safe.txt', ['.html']) !== false) return false;
     if (apply(nativeStringCharCodeAt, '\u007f', [0]) !== 0x7f) return false;
+    if (apply(nativeStringFromCharCode, NativeString, [0x73, 0x61, 0x66, 0x65]) !== 'safe') {
+      return false;
+    }
     if (apply(nativeStringReplaceAll, '&amp;&amp;', ['&amp;', '&']) !== '&&') return false;
     if (apply(NativeString, undefined, [42]) !== '42') return false;
     if (apply(NativeString, undefined, [null]) !== 'null') return false;
@@ -208,17 +249,32 @@ function capturedControlsAreSound(): boolean {
     ) {
       return false;
     }
+    if (replaceRegExp('...safe', /^\.+/, '') !== 'safe') return false;
+    const expression = /^safe$/giu;
+    if (apply(nativeRegExpSource, expression, []) !== '^safe$') return false;
+    if (apply(nativeRegExpFlags, expression, []) !== 'giu') return false;
+    const recreated = new NativeRegExp('^safe$', 'u');
+    if (apply<RegExpExecArray | null>(nativeRegExpExec, recreated, ['safe']) === null) return false;
+    if (apply<RegExpExecArray | null>(nativeRegExpExec, recreated, ['unsafe']) !== null)
+      return false;
 
     if (apply(nativeNumberIsInteger, NativeNumber, [2]) !== true) return false;
     if (apply(nativeNumberIsInteger, NativeNumber, [2.5]) !== false) return false;
     if (apply(nativeNumberIsFinite, NativeNumber, [2]) !== true) return false;
     if (apply(nativeNumberIsFinite, NativeNumber, [Infinity]) !== false) return false;
     if (apply(nativeNumberParseInt, NativeNumber, ['10', 10]) !== 10) return false;
+    if (apply(nativeNumberIsNaN, NativeNumber, [NaN]) !== true) return false;
+    if (apply(nativeNumberIsNaN, NativeNumber, [0]) !== false) return false;
+    if (apply(NativeNumber, undefined, ['42']) !== 42) return false;
     if (apply(nativeMathFloor, NativeMath, [2.9]) !== 2) return false;
     if (apply(nativeEncodeURIComponent, undefined, ['a;b']) !== 'a%3Bb') return false;
     if (apply(nativeEncodeUri, undefined, ['/a b,<']) !== '/a%20b,%3C') return false;
     if (apply(nativeJsonStringify, NativeJSON, [{ safe: true }]) !== '{"safe":true}') return false;
     if (apply(nativeStringFromCodePoint, NativeString, [0x1f642]) !== '🙂') return false;
+    const parsedJson = apply<Record<string, unknown>>(nativeJsonParse, NativeJSON, [
+      '{"safe":true}',
+    ]);
+    if (parsedJson.safe !== true) return false;
 
     const map = new NativeMap<string, string>();
     apply(nativeMapSet, map, ['safe', 'value']);
@@ -267,6 +323,8 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeFunctionHasInstance, NativeDate, [date]) !== true) return false;
     if (apply(nativeFunctionHasInstance, NativeDate, [{}]) !== false) return false;
     if (apply(nativeDateToUtcString, date, []) !== 'Fri, 02 Jan 2026 03:04:05 GMT') return false;
+    if (apply(nativeDateGetTime, date, []) !== 1_767_323_045_000) return false;
+    if (apply(nativeDateToISOString, date, []) !== '2026-01-02T03:04:05.000Z') return false;
 
     const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, ['safe', 'utf8']);
     if (apply(nativeBufferToString, bytes, ['base64url']) !== 'c2FmZQ') return false;
@@ -276,6 +334,26 @@ function capturedControlsAreSound(): boolean {
     if (encoded.byteLength !== 4 || encoded[0] !== 0x73 || encoded[3] !== 0x65) return false;
     if (apply(nativeFunctionHasInstance, NativeUint8Array, [encoded]) !== true) return false;
     if (apply(nativeFunctionHasInstance, NativeUint8Array, [{}]) !== false) return false;
+    if (apply(nativeUint8ArrayLength, encoded, []) !== 4) return false;
+    const filled = new NativeUint8Array(3);
+    apply(nativeUint8ArrayFill, filled, [0x2a]);
+    if (filled[0] !== 0x2a || filled[2] !== 0x2a) return false;
+    const sliced = apply<Uint8Array>(nativeUint8ArraySlice, encoded, [1, 3]);
+    if (
+      sliced[0] !== 0x61 ||
+      sliced[1] !== 0x66 ||
+      apply(nativeUint8ArrayLength, sliced, []) !== 2
+    ) {
+      return false;
+    }
+    if (apply(nativeTextDecoderDecode, fatalTextDecoder, [encoded]) !== 'safe') return false;
+    let invalidUtf8Rejected = false;
+    try {
+      apply(nativeTextDecoderDecode, fatalTextDecoder, [new NativeUint8Array([0xff])]);
+    } catch {
+      invalidUtf8Rejected = true;
+    }
+    if (!invalidUtf8Rejected) return false;
 
     const hash = nativeCreateHash('sha256');
     apply(nativeHashUpdate, hash, ['abc']);
@@ -385,6 +463,11 @@ export function securityStringIndexOf(value: string, search: string, fromIndex?:
   );
 }
 
+export function securityStringLastIndexOf(value: string, search: string): number {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeStringLastIndexOf, value, [search]);
+}
+
 export function securityStringSlice(value: string, start: number, end?: number): string {
   assertResponseSecurityIntrinsics();
   return apply(nativeStringSlice, value, end === undefined ? [start] : [start, end]);
@@ -408,9 +491,19 @@ export function securityStringStartsWith(
   );
 }
 
+export function securityStringEndsWith(value: string, search: string): boolean {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeStringEndsWith, value, [search]);
+}
+
 export function securityStringCharCodeAt(value: string, index: number): number {
   assertResponseSecurityIntrinsics();
   return apply(nativeStringCharCodeAt, value, [index]);
+}
+
+export function securityStringFromCharCode(value: number): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeStringFromCharCode, NativeString, [value]);
 }
 
 export function securityStringReplaceAll(
@@ -430,6 +523,21 @@ export function securityRegExpTest(expression: RegExp, value: string): boolean {
 export function securityRegExpExec(expression: RegExp, value: string): RegExpExecArray | null {
   assertResponseSecurityIntrinsics();
   return apply(nativeRegExpExec, expression, [value]);
+}
+
+export function securityRegExpSource(expression: RegExp): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeRegExpSource, expression, []);
+}
+
+export function securityRegExpFlags(expression: RegExp): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeRegExpFlags, expression, []);
+}
+
+export function securityCreateRegExp(source: string, flags = ''): RegExp {
+  assertResponseSecurityIntrinsics();
+  return new NativeRegExp(source, flags);
 }
 
 export function securityRegExpReplace(
@@ -463,6 +571,9 @@ export function securityRegExpReplaceMatches(
 
 function replaceRegExp(value: string, expression: RegExp, replacement: string): string {
   expression.lastIndex = 0;
+  const repeats = apply<boolean>(nativeStringIncludes, apply(nativeRegExpFlags, expression, []), [
+    'g',
+  ]);
   let result = '';
   let consumed = 0;
   let match: RegExpExecArray | null;
@@ -471,6 +582,7 @@ function replaceRegExp(value: string, expression: RegExp, replacement: string): 
     result += apply<string>(nativeStringSlice, value, [consumed, match.index]);
     result += replacement;
     consumed = match.index + matched.length;
+    if (!repeats) break;
     if (matched.length === 0) expression.lastIndex = match.index + 1;
   }
   return result + apply<string>(nativeStringSlice, value, [consumed]);
@@ -582,6 +694,16 @@ export function securityNumberParseInt(value: string, radix: number): number {
   return apply(nativeNumberParseInt, NativeNumber, [value, radix]);
 }
 
+export function securityNumberIsNaN(value: unknown): boolean {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeNumberIsNaN, NativeNumber, [value]);
+}
+
+export function securityNumber(value: unknown): number {
+  assertResponseSecurityIntrinsics();
+  return apply(NativeNumber, undefined, [value]);
+}
+
 export function securityMathFloor(value: number): number {
   assertResponseSecurityIntrinsics();
   return apply(nativeMathFloor, NativeMath, [value]);
@@ -627,6 +749,21 @@ export function securityUrlSnapshot(value: string, base?: string): SecurityUrlSn
 export function securityIsDate(value: unknown): value is Date {
   assertResponseSecurityIntrinsics();
   return apply(nativeFunctionHasInstance, NativeDate, [value]);
+}
+
+export function securityCreateDate(value: string | number): Date {
+  assertResponseSecurityIntrinsics();
+  return new NativeDate(value);
+}
+
+export function securityDateGetTime(value: Date): number {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeDateGetTime, value, []);
+}
+
+export function securityDateToISOString(value: Date): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeDateToISOString, value, []);
 }
 
 export function securityIsUint8Array(value: unknown): value is Uint8Array {
@@ -726,6 +863,49 @@ export function securityStreamError<Value>(
 ): void {
   assertResponseSecurityIntrinsics();
   apply(nativeControllerError, controller, [error]);
+}
+
+export function securityDecodeUtf8Fatal(value: Uint8Array): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeTextDecoderDecode, fatalTextDecoder, [value]);
+}
+
+export function securityUint8ArrayLength(value: Uint8Array): number {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeUint8ArrayLength, value, []);
+}
+
+export function securityUint8ArrayFromArrayBuffer(value: ArrayBuffer): Uint8Array<ArrayBuffer> {
+  assertResponseSecurityIntrinsics();
+  return new NativeUint8Array(value);
+}
+
+export function securityCreateUint8Array(size: number): Uint8Array<ArrayBuffer> {
+  assertResponseSecurityIntrinsics();
+  return new NativeUint8Array(size);
+}
+
+export function securityUint8ArrayFill(value: Uint8Array, fill: number): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeUint8ArrayFill, value, [fill]);
+}
+
+export function securityUint8ArraySlice(
+  value: Uint8Array,
+  start?: number,
+  end?: number,
+): Uint8Array<ArrayBuffer> {
+  assertResponseSecurityIntrinsics();
+  return apply(
+    nativeUint8ArraySlice,
+    value,
+    start === undefined ? [] : end === undefined ? [start] : [start, end],
+  );
+}
+
+export function securityJsonParse(value: string): unknown {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeJsonParse, NativeJSON, [value]);
 }
 
 export function securityRandomBytes(size: number): Buffer {

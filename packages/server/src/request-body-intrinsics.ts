@@ -59,7 +59,10 @@ const nativeFormDataEntries = stablePlatformMethod(NativeFormData.prototype, 'en
 const nativeFormDataGet = stablePlatformMethod(NativeFormData.prototype, 'get');
 const nativeFormDataGetAll = stablePlatformMethod(NativeFormData.prototype, 'getAll');
 const nativeFormDataValues = stablePlatformMethod(NativeFormData.prototype, 'values');
+const nativeBlobArrayBuffer = stablePlatformMethod(NativeBlob.prototype, 'arrayBuffer');
+const nativeBlobSize = stablePlatformAccessor(NativeBlob.prototype, 'size');
 const nativeBlobType = stablePlatformAccessor(NativeBlob.prototype, 'type');
+const nativeFileName = stablePlatformAccessor(NativeFile.prototype, 'name');
 const nativeJsonParse = NativeJSON.parse;
 const nativeTextDecoderDecode = stablePlatformMethod(NativeTextDecoder.prototype, 'decode');
 const nativeTypedArrayLength = stablePlatformAccessor(NativeUint8Array.prototype, 'length');
@@ -196,6 +199,13 @@ function capturedRequestControlsAreSound(): boolean {
       const file = new NativeFile(['safe'], 'safe.txt', { type: 'text/plain' });
       if (!isInstanceUnchecked(NativeFile, file) || isInstanceUnchecked(NativeFile, {}))
         return false;
+      if (
+        witnessReflectApply(nativeFileName, file, []) !== 'safe.txt' ||
+        witnessReflectApply(nativeBlobType, file, []) !== 'text/plain' ||
+        witnessReflectApply(nativeBlobSize, file, []) !== 4
+      ) {
+        return false;
+      }
     }
 
     if (
@@ -249,6 +259,12 @@ async function asynchronousRequestControlsAreSound(): Promise<boolean> {
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     });
+    const file = new NativeFile(['safe'], 'safe.txt', { type: 'text/plain' });
+    const fileBytesPromise = witnessReflectApply<Promise<ArrayBuffer>>(
+      nativeBlobArrayBuffer,
+      file,
+      [],
+    );
     const jsonBytes = await requestBytesUnchecked(jsonRequest);
     if (
       typedArrayLengthUnchecked(jsonBytes) !== 18 ||
@@ -260,6 +276,14 @@ async function asynchronousRequestControlsAreSound(): Promise<boolean> {
     const jsonText = decodeUtf8Unchecked(jsonBytes);
     const json = witnessReflectApply<unknown>(nativeJsonParse, NativeJSON, [jsonText]);
     if (!requestIsPlainRecord(json) || json.carrier !== 'json') return false;
+    const fileBytes = new NativeUint8Array(await fileBytesPromise);
+    if (
+      typedArrayLengthUnchecked(fileBytes) !== 4 ||
+      fileBytes[0] !== 0x73 ||
+      fileBytes[3] !== 0x65
+    ) {
+      return false;
+    }
     return true;
   } catch {
     return false;
@@ -781,6 +805,26 @@ export function requestIsBlob(value: unknown): value is Blob {
 export function requestIsFile(value: unknown): value is File {
   assertRequestBodyIntrinsics();
   return isFileUnchecked(value);
+}
+
+export function requestFileName(value: File): string {
+  assertRequestBodyIntrinsics();
+  return witnessReflectApply(nativeFileName, value, []);
+}
+
+export function requestBlobSize(value: Blob): number {
+  assertRequestBodyIntrinsics();
+  return witnessReflectApply(nativeBlobSize, value, []);
+}
+
+export function requestBlobType(value: Blob): string {
+  assertRequestBodyIntrinsics();
+  return witnessReflectApply(nativeBlobType, value, []);
+}
+
+export async function requestBlobArrayBuffer(value: Blob): Promise<ArrayBuffer> {
+  await assertRequestBodyAsyncIntrinsics();
+  return await witnessReflectApply<Promise<ArrayBuffer>>(nativeBlobArrayBuffer, value, []);
 }
 
 function isRequestUnchecked(value: unknown): value is Request {

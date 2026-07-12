@@ -1,6 +1,20 @@
-import { randomUUID } from 'node:crypto';
-
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
+
+import { witnessFreeze } from './security-witness-intrinsics.js';
+import {
+  securityDecodeUtf8Fatal,
+  securityRandomUuid,
+  securityRegExpReplace,
+  securityRegExpTest,
+  securityStringCharCodeAt,
+  securityStringFromCharCode,
+  securityStringIncludes,
+  securityStringReplaceAll,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringTrim,
+  securityUint8ArrayLength,
+} from './response-security-intrinsics.js';
 
 /**
  * KV428 upload inline-XSS gate (SPEC §6.6/§9.1; plans/secure-framework.md Phase 6 Tier 1).
@@ -43,13 +57,13 @@ export interface SniffedContentType {
   readonly inlineSafe: boolean;
 }
 
-const UNKNOWN: SniffedContentType = {
+const UNKNOWN: SniffedContentType = witnessFreeze({
   contentType: 'application/octet-stream',
   inlineSafe: false,
-};
+});
 
 function bytesStartWith(bytes: Uint8Array, signature: readonly number[], offset = 0): boolean {
-  if (bytes.length < offset + signature.length) return false;
+  if (securityUint8ArrayLength(bytes) < offset + signature.length) return false;
   for (let i = 0; i < signature.length; i += 1) {
     if (bytes[offset + i] !== signature[i]) return false;
   }
@@ -61,16 +75,17 @@ function leadingAsciiLower(bytes: Uint8Array, limit = 512): string {
   let start = 0;
   // Skip a UTF-8 BOM and leading ASCII whitespace so `  <SVG`/`﻿<html` are still caught.
   if (bytesStartWith(bytes, [0xef, 0xbb, 0xbf])) start = 3;
-  while (start < bytes.length) {
+  const length = securityUint8ArrayLength(bytes);
+  while (start < length) {
     const b = bytes[start];
     if (b === 0x09 || b === 0x0a || b === 0x0c || b === 0x0d || b === 0x20) start += 1;
     else break;
   }
   let out = '';
-  for (let i = start; i < bytes.length && out.length < limit; i += 1) {
+  for (let i = start; i < length && out.length < limit; i += 1) {
     const b = bytes[i] ?? 0;
     if (b === 0) return out; // a NUL in the prefix → not text; stop (also kills `<\0script>` tricks).
-    out += String.fromCharCode(b >= 0x41 && b <= 0x5a ? b + 0x20 : b);
+    out += securityStringFromCharCode(b >= 0x41 && b <= 0x5a ? b + 0x20 : b);
   }
   return out;
 }
@@ -89,8 +104,10 @@ function looksLikeActiveContent(bytes: Uint8Array): boolean {
   // because the script can live anywhere in the document. Scanning the whole prefix (not just the
   // start) is the polyglot guard: a media header followed by embedded markup still trips this.
   return (
-    /<(\?xml|!doctype|html|svg|script|iframe|object|embed|link|style)\b/.test(head) ||
-    head.includes('javascript:')
+    securityRegExpTest(
+      /<(\?xml|!doctype|html|svg|script|iframe|object|embed|link|style)\b/,
+      head,
+    ) || securityStringIncludes(head, 'javascript:')
   );
 }
 
@@ -130,11 +147,13 @@ export function sniffUploadBytes(bytes: Uint8Array): SniffedContentType {
 
 function looksLikePlainText(bytes: Uint8Array): boolean {
   try {
-    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    securityDecodeUtf8Fatal(bytes);
   } catch {
     return false;
   }
-  for (const byte of bytes) {
+  const length = securityUint8ArrayLength(bytes);
+  for (let index = 0; index < length; index += 1) {
+    const byte = bytes[index]!;
     if (byte === 0) return false;
     if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d && byte !== 0x0c) {
       return false;
@@ -177,15 +196,21 @@ function recognizePassiveMagic(bytes: Uint8Array): string | undefined {
  */
 export function sanitizeDownloadFilename(name: string): string {
   // Take the last path segment (kills `../` and absolute paths), strip control chars and quotes.
-  const base = name.split(/[/\\]/).pop() ?? '';
-  const cleaned = base
-    // Strip ASCII control chars (\x00-\x1f, \x7f) plus quote/backslash so the result is a safe,
-    // header-injection-free quoted Content-Disposition filename value.
-    // eslint-disable-next-line no-control-regex
-    .replace(/[ -"\\]/g, '')
-    .replace(/^\.+/, '') // no leading dots (no hidden/`..` names)
-    .trim();
-  return cleaned.length > 0 ? cleaned.slice(0, 255) : 'download';
+  const segments = securityStringSplit(securityStringReplaceAll(name, '\\', '/'), '/');
+  const base = segments[segments.length - 1] ?? '';
+  const withoutControls = stripUnsafeFilenameCharacters(base);
+  const cleaned = securityStringTrim(securityRegExpReplace(withoutControls, /^\.+/, ''));
+  return cleaned.length > 0 ? securityStringSlice(cleaned, 0, 255) : 'download';
+}
+
+function stripUnsafeFilenameCharacters(value: string): string {
+  let output = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code <= 0x1f || code === 0x7f || code === 0x22 || code === 0x5c) continue;
+    output += securityStringSlice(value, index, index + 1);
+  }
+  return output;
 }
 
 /**
@@ -197,9 +222,13 @@ export function sanitizeDownloadFilename(name: string): string {
  * @param prefix - Optional namespace segment for the key.
  */
 export function mintStorageKey(prefix?: string): string {
-  const id = randomUUID();
+  const id = securityRandomUuid();
   if (prefix === undefined || prefix === '') return id;
-  const safePrefix = prefix.replace(/[^a-z0-9._-]/gi, '').replace(/^\.+/, '');
+  const safePrefix = securityRegExpReplace(
+    securityRegExpReplace(prefix, /[^a-z0-9._-]/gi, ''),
+    /^\.+/,
+    '',
+  );
   return safePrefix.length > 0 ? `${safePrefix}/${id}` : id;
 }
 
@@ -234,15 +263,22 @@ const unverifiedMimeFacts = createBoundedRuntimeAuditCollector<UnverifiedMimeFac
  * - `accept.unverified([...types], justification)` — the audited escape: trust the client MIME,
  *   recorded for `kovo explain --capabilities`. Still attachment-forced.
  */
-export const accept = Object.assign((types: readonly string[]): readonly string[] => types, {
-  unverified(types: readonly string[], justification: string): UnverifiedAcceptance {
-    if (!justification || justification.trim().length === 0) {
+export function accept(types: readonly string[]): readonly string[] {
+  return types;
+}
+
+export namespace accept {
+  export function unverified(
+    types: readonly string[],
+    justification: string,
+  ): UnverifiedAcceptance {
+    if (!justification || securityStringTrim(justification).length === 0) {
       throw new Error('accept.unverified(...) requires a justification (KV428, SPEC §6.6/§9.1).');
     }
     unverifiedMimeFacts.record({ justification, types });
     return { justification, types, unverified: true };
-  },
-});
+  }
+}
 
 /**
  * Drain the recorded `accept.unverified()` capability facts (SPEC §6.6/§9.1).
