@@ -1,5 +1,5 @@
 import type { KovoApp } from './app-types.js';
-import { buildOwnDataProperty } from './build-security-intrinsics.js';
+import { buildOwnDataProperty, type BuildOwnDataProperty } from './build-security-intrinsics.js';
 import type { StaticExportAssetInput, StaticExportOptions } from './static-export-types.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
@@ -152,8 +152,11 @@ export function kovoAppShellViteBuildDryRunStaticExportOptions(
   build: KovoAppShellBuild,
   options: KovoAppShellViteBuildStaticExportInventoryOptions,
 ): StaticExportOptions {
-  assertViteStaticExportInventoryOptions(options);
-  const { assets, distDir, ...exportOptions } = options;
+  const snapshot = snapshotViteStaticExportOptions(options);
+  assertViteStaticExportInventoryOptions(snapshot);
+  const assets = optionValue<readonly StaticExportAssetInput[]>(snapshot.assets);
+  const distDir = optionValue<string | URL>(snapshot.distDir)!;
+  const exportOptions = staticExportOptionsFromSnapshot(snapshot, false);
 
   return {
     ...exportOptions,
@@ -177,8 +180,10 @@ export function kovoAppShellViteBuildOutputStaticExportPlan(
   options: KovoAppShellViteBuildOutputStaticExportOptions,
   distDir: string | URL,
 ): KovoAppShellViteBuildOutputStaticExportPlan {
-  assertViteBuildOutputStaticExportOptions(options);
-  const { assets, ...exportOptions } = options;
+  const snapshot = snapshotViteStaticExportOptions(options);
+  assertViteBuildOutputStaticExportOptions(snapshot);
+  const assets = optionValue<readonly StaticExportAssetInput[]>(snapshot.assets);
+  const exportOptions = staticExportOptionsFromSnapshot(snapshot, true);
   const staticExportAssets = kovoAppShellViteBuildStaticExportAssets(build, {
     ...(assets === undefined ? {} : { assets }),
     distDir,
@@ -224,23 +229,109 @@ export function kovoAppShellViteManifestFileWriteStaticExportOptions(
 export function kovoAppShellViteManifestFileDryRunStaticExportOptions(
   options: KovoAppShellViteManifestFileBuildStaticExportInventoryOptions,
 ): KovoAppShellViteBuildStaticExportInventoryOptions {
-  assertViteStaticExportInventoryOptions(options);
-  const {
-    app: _app,
-    base: _base,
-    clientModules: _clientModules,
-    manifestFile: _manifestFile,
-    routeEntryMap: _routeEntryMap,
-    ...exportOptions
-  } = options;
-
-  return exportOptions;
+  const snapshot = snapshotViteStaticExportOptions(options);
+  assertViteStaticExportInventoryOptions(snapshot);
+  return {
+    ...staticExportOptionsFromSnapshot(snapshot, false),
+    distDir: optionValue<string | URL>(snapshot.distDir)!,
+  };
 }
 
-function assertViteStaticExportInventoryOptions(options: object): void {
-  if (!buildOwnDataProperty(options, 'outDir', 'Vite static-export inventory outDir').present) {
-    return;
-  }
+interface ViteStaticExportOptionsSnapshot {
+  readonly assets: BuildOwnDataProperty;
+  readonly diagnostics: BuildOwnDataProperty;
+  readonly distDir: BuildOwnDataProperty;
+  readonly onNonExportable: BuildOwnDataProperty;
+  readonly origin: BuildOwnDataProperty;
+  readonly outDir: BuildOwnDataProperty;
+  readonly publicAssetBase: BuildOwnDataProperty;
+  readonly publicAssetRoot: BuildOwnDataProperty;
+}
+
+function snapshotViteStaticExportOptions(options: object): ViteStaticExportOptionsSnapshot {
+  return {
+    assets: buildOwnDataProperty(options, 'assets', 'Vite static-export assets'),
+    diagnostics: buildOwnDataProperty(options, 'diagnostics', 'Vite static-export diagnostics'),
+    distDir: buildOwnDataProperty(options, 'distDir', 'Vite static-export distDir'),
+    onNonExportable: buildOwnDataProperty(
+      options,
+      'onNonExportable',
+      'Vite static-export onNonExportable',
+    ),
+    origin: buildOwnDataProperty(options, 'origin', 'Vite static-export origin'),
+    outDir: buildOwnDataProperty(options, 'outDir', 'Vite static-export outDir'),
+    publicAssetBase: buildOwnDataProperty(
+      options,
+      'publicAssetBase',
+      'Vite static-export publicAssetBase',
+    ),
+    publicAssetRoot: buildOwnDataProperty(
+      options,
+      'publicAssetRoot',
+      'Vite static-export publicAssetRoot',
+    ),
+  };
+}
+
+function staticExportOptionsFromSnapshot(
+  snapshot: ViteStaticExportOptionsSnapshot,
+  includeOutDir: false,
+): Omit<StaticExportOptions, 'outDir'>;
+function staticExportOptionsFromSnapshot(
+  snapshot: ViteStaticExportOptionsSnapshot,
+  includeOutDir: true,
+): StaticExportOptions;
+function staticExportOptionsFromSnapshot(
+  snapshot: ViteStaticExportOptionsSnapshot,
+  includeOutDir: boolean,
+): StaticExportOptions {
+  return {
+    ...(snapshot.assets.present && snapshot.assets.value !== undefined
+      ? { assets: snapshot.assets.value as NonNullable<StaticExportOptions['assets']> }
+      : {}),
+    ...(snapshot.diagnostics.present && snapshot.diagnostics.value !== undefined
+      ? {
+          diagnostics: snapshot.diagnostics.value as NonNullable<
+            StaticExportOptions['diagnostics']
+          >,
+        }
+      : {}),
+    ...(snapshot.onNonExportable.present && snapshot.onNonExportable.value !== undefined
+      ? {
+          onNonExportable: snapshot.onNonExportable.value as NonNullable<
+            StaticExportOptions['onNonExportable']
+          >,
+        }
+      : {}),
+    ...(snapshot.origin.present && snapshot.origin.value !== undefined
+      ? { origin: snapshot.origin.value as NonNullable<StaticExportOptions['origin']> }
+      : {}),
+    ...(includeOutDir && snapshot.outDir.present && snapshot.outDir.value !== undefined
+      ? { outDir: snapshot.outDir.value as NonNullable<StaticExportOptions['outDir']> }
+      : {}),
+    ...(snapshot.publicAssetBase.present && snapshot.publicAssetBase.value !== undefined
+      ? {
+          publicAssetBase: snapshot.publicAssetBase.value as NonNullable<
+            StaticExportOptions['publicAssetBase']
+          >,
+        }
+      : {}),
+    ...(snapshot.publicAssetRoot.present && snapshot.publicAssetRoot.value !== undefined
+      ? {
+          publicAssetRoot: snapshot.publicAssetRoot.value as NonNullable<
+            StaticExportOptions['publicAssetRoot']
+          >,
+        }
+      : {}),
+  };
+}
+
+function optionValue<Value>(property: BuildOwnDataProperty): Value | undefined {
+  return property.present ? (property.value as Value) : undefined;
+}
+
+function assertViteStaticExportInventoryOptions(snapshot: ViteStaticExportOptionsSnapshot): void {
+  if (!snapshot.outDir.present) return;
 
   throw new StaticExportError([
     staticExportDiagnostic(
@@ -253,12 +344,8 @@ function assertViteStaticExportInventoryOptions(options: object): void {
   ]);
 }
 
-function assertViteBuildOutputStaticExportOptions(options: object): void {
-  if (
-    !buildOwnDataProperty(options, 'distDir', 'Vite build-output static-export distDir').present
-  ) {
-    return;
-  }
+function assertViteBuildOutputStaticExportOptions(snapshot: ViteStaticExportOptionsSnapshot): void {
+  if (!snapshot.distDir.present) return;
 
   throw new StaticExportError([
     staticExportDiagnostic(

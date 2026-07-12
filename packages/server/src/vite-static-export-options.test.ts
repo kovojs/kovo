@@ -322,6 +322,30 @@ describe('server app shell Vite static export options boundary', () => {
       expect(await readdir(outDir)).toEqual([]);
       expect(poisonedError).toBeInstanceOf(StaticExportError);
       expect(poisonedError).toMatchObject(expectedError);
+
+      let descriptorReads = 0;
+      const timeVaryingOptions = new Proxy(
+        { distDir, outDir },
+        {
+          getOwnPropertyDescriptor(target, property) {
+            if (property === 'outDir' && descriptorReads++ === 0) return undefined;
+            return Reflect.getOwnPropertyDescriptor(target, property);
+          },
+        },
+      );
+      let proxyError: unknown;
+      try {
+        await staticExportInventoryForKovoAppShellViteBuild(
+          build,
+          timeVaryingOptions as unknown as Parameters<
+            typeof staticExportInventoryForKovoAppShellViteBuild
+          >[1],
+        );
+      } catch (error) {
+        proxyError = error;
+      }
+      expect(await readdir(outDir)).toEqual([]);
+      expect(proxyError).toBeUndefined();
     } finally {
       await Promise.all([
         rm(distDir, { force: true, recursive: true }),
