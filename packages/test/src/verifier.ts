@@ -107,12 +107,49 @@ export function createDbVerifier(
   const rootProxyCache = verifierWeakMap<object, object>();
   const replicaCollectionCache = verifierWeakMap<object, object>();
   const readBuilderProxyCache = verifierWeakMap<object, object>();
+  const mutationReadBuilderProxyCache = verifierWeakMap<object, object>();
+  const mutationQueryBuilderProxyCache = verifierWeakMap<object, object>();
   const relationalBuilderProxyCache = verifierWeakMap<object, object>();
   const relationalNamespaceProxyCache = verifierWeakMap<object, object>();
   const cteBuilderProxyCache = verifierWeakMap<object, object>();
+  const mutationCteBuilderProxyCache = verifierWeakMap<object, object>();
   const derivedReadSourceWitness = verifierWeakMap<object, true>();
+  const readBuilderRawTargets = verifierWeakMap<object, object>();
+  const insertEntryBuilderProxyCache = verifierWeakMap<object, object>();
+  const updateEntryBuilderProxyCache = verifierWeakMap<object, object>();
+  const insertBaseBuilderProxyCache = verifierWeakMap<object, object>();
+  const updateBaseBuilderProxyCache = verifierWeakMap<object, object>();
+  const deleteBaseBuilderProxyCache = verifierWeakMap<object, object>();
+  const writePreparedProxyCache = verifierWeakMap<object, object>();
   const sqlHandleProxyCache = verifierWeakMap<object, object>();
   const methodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
+  const mutationMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
+  const writeEntryMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
+  const writeBaseMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
+  const writePreparedMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
+  const writeBuilderContext: DrizzleWriteBuilderContext = {
+    baseCaches: {
+      delete: deleteBaseBuilderProxyCache,
+      insert: insertBaseBuilderProxyCache,
+      update: updateBaseBuilderProxyCache,
+    },
+    baseMethodCache: writeBaseMethodCache,
+    cteCache: mutationCteBuilderProxyCache,
+    derivedSources: derivedReadSourceWitness,
+    entryCaches: {
+      insert: insertEntryBuilderProxyCache,
+      update: updateEntryBuilderProxyCache,
+    },
+    entryMethodCache: writeEntryMethodCache,
+    mutationMethodCache,
+    preparedCache: writePreparedProxyCache,
+    queryBuilderCache: mutationQueryBuilderProxyCache,
+    readBuilderCache: mutationReadBuilderProxyCache,
+    readBuilderRawTargets,
+    recorder,
+    preparedMethodCache: writePreparedMethodCache,
+    config: configSnapshot,
+  };
 
   const verifier: DbVerifier = {
     assertCovered(touchGraphKey?: string): void {
@@ -220,6 +257,7 @@ export function createDbVerifier(
                   readBuilderProxyCache,
                   methodCache,
                   derivedReadSourceWitness,
+                  readBuilderRawTargets,
                 );
               });
             }
@@ -248,7 +286,7 @@ export function createDbVerifier(
                 }
                 return wrapDrizzleCteBuilder(
                   builder,
-                  verifier,
+                  (queryBuilder) => verifier.wrap(queryBuilder),
                   cteBuilderProxyCache,
                   methodCache,
                   derivedReadSourceWitness,
@@ -327,8 +365,23 @@ export function createDbVerifier(
               (prop === 'insert' || prop === 'update' || prop === 'delete') &&
               typeof value === 'function'
             ) {
-              return cachedMethod(target, prop, value, methodCache, () =>
-                observableTableMethod('write', target, value, configSnapshot, recorder),
+              return cachedMethod(
+                target,
+                prop,
+                value,
+                methodCache,
+                () =>
+                  (table: unknown, ...args: unknown[]) => {
+                    observeRequiredTableOperation('write', table, args, configSnapshot, recorder);
+                    const builder = verifierApply<unknown>(value, target, [table, ...args]);
+                    if (typeof builder !== 'object' || builder === null) return builder;
+                    return wrapDrizzleWriteBuilder(
+                      builder,
+                      prop,
+                      prop === 'delete' ? 'base' : 'entry',
+                      writeBuilderContext,
+                    );
+                  },
               );
             }
 
@@ -412,6 +465,411 @@ function wrapReplicaCollection(
   return snapshot;
 }
 
+type DrizzleWriteFamily = 'delete' | 'insert' | 'update';
+type DrizzleWritePhase = 'base' | 'entry';
+
+// SPEC §11.2/§14: a Drizzle DML entry is only the first step of an executable authority chain.
+// Keep every intermediate builder, insert-select QueryBuilder, and prepared result behind the
+// verifier membrane so source-table reads cannot disappear after the target write is observed.
+interface DrizzleWriteBuilderContext {
+  baseCaches: Record<DrizzleWriteFamily, WeakMap<object, object>>;
+  baseMethodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>;
+  config: DbVerificationConfig;
+  cteCache: WeakMap<object, object>;
+  derivedSources: WeakMap<object, true>;
+  entryCaches: Record<Exclude<DrizzleWriteFamily, 'delete'>, WeakMap<object, object>>;
+  entryMethodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>;
+  mutationMethodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>;
+  preparedCache: WeakMap<object, object>;
+  preparedMethodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>;
+  queryBuilderCache: WeakMap<object, object>;
+  readBuilderCache: WeakMap<object, object>;
+  readBuilderRawTargets: WeakMap<object, object>;
+  recorder: ObservationRecorder;
+}
+
+function writeBuilderCache(
+  family: DrizzleWriteFamily,
+  phase: DrizzleWritePhase,
+  context: DrizzleWriteBuilderContext,
+): WeakMap<object, object> {
+  if (phase === 'base') return context.baseCaches[family];
+  if (family === 'delete') {
+    throw verifierTypeError('KV407: Drizzle delete() must enter a base write builder.');
+  }
+  return context.entryCaches[family];
+}
+
+function wrapDrizzleWriteBuilder(
+  builder: object,
+  family: DrizzleWriteFamily,
+  phase: DrizzleWritePhase,
+  context: DrizzleWriteBuilderContext,
+): object {
+  const cache = writeBuilderCache(family, phase, context);
+  const methodCache = phase === 'entry' ? context.entryMethodCache : context.baseMethodCache;
+  const cached = verifierWeakMapGet(cache, builder);
+  if (cached !== undefined) return cached;
+
+  let proxy!: Record<PropertyKey, unknown>;
+  proxy = createFrameworkManagedSqlDispatchProxy(
+    builder as Record<PropertyKey, unknown>,
+    {
+      get(target, property, receiver) {
+        const value = verifierReflectGet(target, property, receiver);
+        if (property === 'then' && value === undefined) return undefined;
+        if (typeof value !== 'function') return blockedWriteBuilderProperty(property);
+
+        if (phase === 'entry') {
+          if (family === 'insert' && property === 'select') {
+            return cachedMethod(
+              target,
+              property,
+              value,
+              methodCache,
+              () =>
+                (query: unknown, ...args: unknown[]) => {
+                  const safeQuery = safeInsertSelectQuery(query, context);
+                  const result = verifierApply<unknown>(value, target, [safeQuery, ...args]);
+                  return requiredDrizzleWriteBuilderResult(
+                    result,
+                    family,
+                    'base',
+                    context,
+                    property,
+                  );
+                },
+            );
+          }
+
+          if (family === 'insert' && property === 'values') {
+            return cachedMethod(
+              target,
+              property,
+              value,
+              methodCache,
+              () =>
+                (...args: unknown[]) =>
+                  requiredDrizzleWriteBuilderResult(
+                    verifierApply(value, target, args),
+                    family,
+                    'base',
+                    context,
+                    property,
+                  ),
+            );
+          }
+
+          if (
+            family === 'insert' &&
+            (property === 'ignore' || property === 'overridingSystemValue')
+          ) {
+            return cachedMethod(
+              target,
+              property,
+              value,
+              methodCache,
+              () =>
+                (...args: unknown[]) =>
+                  requiredDrizzleWriteBuilderResult(
+                    verifierApply(value, target, args),
+                    family,
+                    'entry',
+                    context,
+                    property,
+                  ),
+            );
+          }
+
+          if (family === 'update' && property === 'set') {
+            return cachedMethod(
+              target,
+              property,
+              value,
+              methodCache,
+              () =>
+                (...args: unknown[]) =>
+                  requiredDrizzleWriteBuilderResult(
+                    verifierApply(value, target, args),
+                    family,
+                    'base',
+                    context,
+                    property,
+                  ),
+            );
+          }
+
+          return blockedWriteBuilderProperty(property);
+        }
+
+        if (isDrizzleWriteReadSourceMethod(family, property)) {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            methodCache,
+            () =>
+              (table: unknown, ...args: unknown[]) => {
+                if (
+                  typeof table !== 'object' ||
+                  table === null ||
+                  verifierWeakMapGet(context.derivedSources, table) !== true
+                ) {
+                  observeRequiredTableOperation(
+                    'read',
+                    table,
+                    args,
+                    context.config,
+                    context.recorder,
+                    true,
+                  );
+                }
+                return requiredDrizzleWriteBuilderResult(
+                  verifierApply(value, target, [table, ...args]),
+                  family,
+                  'base',
+                  context,
+                  property,
+                );
+              },
+          );
+        }
+
+        if (isDrizzleWriteChainMethod(family, property)) {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                requiredDrizzleWriteBuilderResult(
+                  verifierApply(value, target, args),
+                  family,
+                  'base',
+                  context,
+                  property,
+                ),
+          );
+        }
+
+        if (property === 'prepare') {
+          return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+            const prepared = verifierApply<unknown>(value, target, args);
+            if (typeof prepared !== 'object' || prepared === null) {
+              throw verifierTypeError(
+                'KV407: Kovo DB verifier write-builder prepare() must return an object.',
+              );
+            }
+            return wrapDrizzlePreparedWrite(prepared, context);
+          });
+        }
+
+        if (isDrizzleWriteTerminalMethod(property)) {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                verifierApply(value, target, args),
+          );
+        }
+
+        return blockedWriteBuilderProperty(property);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return safeReflectedOwnDescriptor(target, property, () =>
+          verifierReflectGet(proxy, property, proxy),
+        );
+      },
+      getPrototypeOf() {
+        return null;
+      },
+    },
+    'test-fixture',
+  );
+  verifierWeakMapSet(cache, builder, proxy);
+  return proxy;
+}
+
+function requiredDrizzleWriteBuilderResult(
+  result: unknown,
+  family: DrizzleWriteFamily,
+  phase: DrizzleWritePhase,
+  context: DrizzleWriteBuilderContext,
+  property: PropertyKey,
+): object {
+  if (typeof result !== 'object' || result === null) {
+    throw verifierTypeError(
+      `KV407: Kovo DB verifier write-builder ${verifierString(property)}() must return an object.`,
+    );
+  }
+  return wrapDrizzleWriteBuilder(result, family, phase, context);
+}
+
+function safeInsertSelectQuery(query: unknown, context: DrizzleWriteBuilderContext): unknown {
+  if (typeof query === 'function') {
+    return (queryBuilder: unknown) => {
+      const selected = verifierApply<unknown>(query, undefined, [
+        wrapDrizzleMutationQueryBuilder(queryBuilder, context),
+      ]);
+      return unwrapVerifiedInsertSelect(selected, context);
+    };
+  }
+  return unwrapVerifiedInsertSelect(query, context);
+}
+
+function unwrapVerifiedInsertSelect(
+  selected: unknown,
+  context: DrizzleWriteBuilderContext,
+): object {
+  if (typeof selected === 'object' && selected !== null) {
+    const raw = verifierWeakMapGet(context.readBuilderRawTargets, selected);
+    if (raw !== undefined) return raw;
+  }
+  throw verifierTypeError(
+    'KV407: insert-select reads must return a verifier-wrapped read builder.',
+  );
+}
+
+function wrapDrizzleMutationQueryBuilder(
+  queryBuilder: unknown,
+  context: DrizzleWriteBuilderContext,
+): object {
+  if (typeof queryBuilder !== 'object' || queryBuilder === null) {
+    throw verifierTypeError('KV407: insert-select callback must receive a query-builder object.');
+  }
+  const cached = verifierWeakMapGet(context.queryBuilderCache, queryBuilder);
+  if (cached !== undefined) return cached;
+
+  let proxy!: Record<PropertyKey, unknown>;
+  proxy = createFrameworkManagedSqlDispatchProxy(
+    queryBuilder as Record<PropertyKey, unknown>,
+    {
+      get(target, property, receiver) {
+        const value = verifierReflectGet(target, property, receiver);
+        if (typeof value !== 'function') return blockedMutationQueryBuilderProperty(property);
+
+        if (isDrizzleSelectEntry(property)) {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            context.mutationMethodCache,
+            () =>
+              (...args: unknown[]) => {
+                const builder = verifierApply<unknown>(value, target, args);
+                if (typeof builder !== 'object' || builder === null) {
+                  throw verifierTypeError(
+                    `KV407: insert-select ${verifierString(property)}() must return a builder object.`,
+                  );
+                }
+                return wrapDrizzleReadBuilder(
+                  builder,
+                  context.config,
+                  context.recorder,
+                  context.readBuilderCache,
+                  context.mutationMethodCache,
+                  context.derivedSources,
+                  context.readBuilderRawTargets,
+                  true,
+                );
+              },
+          );
+        }
+
+        if (property === '$with') {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            context.mutationMethodCache,
+            () =>
+              (...args: unknown[]) => {
+                const builder = verifierApply<unknown>(value, target, args);
+                if (typeof builder !== 'object' || builder === null) {
+                  throw verifierTypeError('KV407: insert-select $with() must return an object.');
+                }
+                return wrapDrizzleCteBuilder(
+                  builder,
+                  (next) => wrapDrizzleMutationQueryBuilder(next, context),
+                  context.cteCache,
+                  context.mutationMethodCache,
+                  context.derivedSources,
+                );
+              },
+          );
+        }
+
+        if (property === 'with') {
+          return cachedMethod(
+            target,
+            property,
+            value,
+            context.mutationMethodCache,
+            () =>
+              (...args: unknown[]) =>
+                wrapDrizzleMutationQueryBuilder(verifierApply(value, target, args), context),
+          );
+        }
+
+        return blockedMutationQueryBuilderProperty(property);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return safeReflectedOwnDescriptor(target, property, () =>
+          verifierReflectGet(proxy, property, proxy),
+        );
+      },
+      getPrototypeOf() {
+        return null;
+      },
+    },
+    'test-fixture',
+  );
+  verifierWeakMapSet(context.queryBuilderCache, queryBuilder, proxy);
+  return proxy;
+}
+
+function wrapDrizzlePreparedWrite(prepared: object, context: DrizzleWriteBuilderContext): object {
+  const cached = verifierWeakMapGet(context.preparedCache, prepared);
+  if (cached !== undefined) return cached;
+  let proxy!: Record<PropertyKey, unknown>;
+  proxy = createFrameworkManagedSqlDispatchProxy(
+    prepared as Record<PropertyKey, unknown>,
+    {
+      get(target, property, receiver) {
+        const value = verifierReflectGet(target, property, receiver);
+        if (property === 'then' && value === undefined) return undefined;
+        if (typeof value !== 'function' || !isDrizzlePreparedExecutionMethod(property)) {
+          return blockedWriteBuilderProperty(property);
+        }
+        return cachedMethod(
+          target,
+          property,
+          value,
+          context.preparedMethodCache,
+          () =>
+            (...args: unknown[]) =>
+              verifierApply(value, target, args),
+        );
+      },
+      getOwnPropertyDescriptor(target, property) {
+        return safeReflectedOwnDescriptor(target, property, () =>
+          verifierReflectGet(proxy, property, proxy),
+        );
+      },
+      getPrototypeOf() {
+        return null;
+      },
+    },
+    'test-fixture',
+  );
+  verifierWeakMapSet(context.preparedCache, prepared, proxy);
+  return proxy;
+}
+
 function wrapDrizzleReadBuilder(
   builder: object,
   config: DbVerificationConfig,
@@ -419,6 +877,8 @@ function wrapDrizzleReadBuilder(
   cache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
   derivedSources: WeakMap<object, true>,
+  rawTargets: WeakMap<object, object>,
+  mutationRead?: boolean,
 ): object {
   const cached = verifierWeakMapGet(cache, builder);
   if (cached !== undefined) return cached;
@@ -444,7 +904,14 @@ function wrapDrizzleReadBuilder(
                   table === null ||
                   verifierWeakMapGet(derivedSources, table) !== true
                 ) {
-                  observeRequiredTableOperation('read', table, args, config, recorder);
+                  observeRequiredTableOperation(
+                    'read',
+                    table,
+                    args,
+                    config,
+                    recorder,
+                    mutationRead,
+                  );
                 }
                 const result = verifierApply<unknown>(value, target, [table, ...args]);
                 return wrapDrizzleBuilderResult(
@@ -454,7 +921,9 @@ function wrapDrizzleReadBuilder(
                   cache,
                   methodCache,
                   derivedSources,
+                  rawTargets,
                   false,
+                  mutationRead,
                 );
               },
           );
@@ -470,7 +939,9 @@ function wrapDrizzleReadBuilder(
               cache,
               methodCache,
               derivedSources,
+              rawTargets,
               property === 'as',
+              mutationRead,
             );
           });
         }
@@ -502,6 +973,7 @@ function wrapDrizzleReadBuilder(
   );
   verifierWeakMapSet(cache, builder, proxy);
   verifierWeakMapSet(derivedSources, proxy, true);
+  verifierWeakMapSet(rawTargets, proxy, builder);
   return proxy;
 }
 
@@ -512,7 +984,9 @@ function wrapDrizzleBuilderResult(
   cache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
   derivedSources: WeakMap<object, true>,
+  rawTargets: WeakMap<object, object>,
   derived: boolean,
+  mutationRead: boolean | undefined,
 ): unknown {
   if (typeof result !== 'object' || result === null) return result;
   const wrapped = wrapDrizzleReadBuilder(
@@ -522,6 +996,8 @@ function wrapDrizzleBuilderResult(
     cache,
     methodCache,
     derivedSources,
+    rawTargets,
+    mutationRead,
   );
   if (derived) {
     verifierWeakMapSet(derivedSources, result, true);
@@ -655,7 +1131,7 @@ function assertRelationalReadArguments(args: readonly unknown[]): void {
 
 function wrapDrizzleCteBuilder(
   builder: object,
-  verifier: DbVerifier,
+  wrapQueryBuilder: (queryBuilder: unknown) => unknown,
   cache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
   derivedSources: WeakMap<object, true>,
@@ -691,7 +1167,7 @@ function wrapDrizzleCteBuilder(
               const safeQuery =
                 typeof query === 'function'
                   ? (queryBuilder: unknown) =>
-                      verifierApply(query, undefined, [verifier.wrap(queryBuilder)])
+                      verifierApply(query, undefined, [wrapQueryBuilder(queryBuilder)])
                   : query;
               const derived = verifierApply<unknown>(value, target, [safeQuery, ...args]);
               if (typeof derived === 'object' && derived !== null) {
@@ -714,6 +1190,77 @@ function wrapDrizzleCteBuilder(
   );
   verifierWeakMapSet(cache, builder, proxy);
   return proxy;
+}
+
+function blockedWriteBuilderProperty(property: PropertyKey): () => never {
+  return () => {
+    throw verifierTypeError(
+      `KV407: Kovo DB verifier blocked unsupported write-builder property ${verifierString(property)}.`,
+    );
+  };
+}
+
+function blockedMutationQueryBuilderProperty(property: PropertyKey): () => never {
+  return () => {
+    throw verifierTypeError(
+      `KV407: Kovo DB verifier blocked unsupported insert-select query-builder property ${verifierString(property)}.`,
+    );
+  };
+}
+
+function isDrizzleWriteReadSourceMethod(
+  family: DrizzleWriteFamily,
+  property: PropertyKey,
+): boolean {
+  if (family === 'update') {
+    return (
+      property === 'from' ||
+      property === 'leftJoin' ||
+      property === 'rightJoin' ||
+      property === 'innerJoin' ||
+      property === 'fullJoin'
+    );
+  }
+  return family === 'delete' && property === 'using';
+}
+
+function isDrizzleWriteChainMethod(family: DrizzleWriteFamily, property: PropertyKey): boolean {
+  if (property === '$dynamic' || property === 'returning') return true;
+  if (family === 'insert') {
+    return (
+      property === '$returningId' ||
+      property === 'onConflictDoNothing' ||
+      property === 'onConflictDoUpdate' ||
+      property === 'onDuplicateKeyUpdate'
+    );
+  }
+  return property === 'limit' || property === 'orderBy' || property === 'where';
+}
+
+function isDrizzleWriteTerminalMethod(property: PropertyKey): boolean {
+  return (
+    property === 'all' ||
+    property === 'catch' ||
+    property === 'execute' ||
+    property === 'finally' ||
+    property === 'get' ||
+    property === 'getSQL' ||
+    property === 'iterator' ||
+    property === 'run' ||
+    property === 'sync' ||
+    property === 'then' ||
+    property === 'toSQL' ||
+    property === 'values'
+  );
+}
+
+function isDrizzlePreparedExecutionMethod(property: PropertyKey): boolean {
+  return (
+    isPreparedStatementExecutionMethod(property) ||
+    property === 'execute' ||
+    property === 'sync' ||
+    property === 'values'
+  );
 }
 
 function blockedReadBuilderProperty(property: PropertyKey): () => never {

@@ -240,14 +240,15 @@ export function observeRequiredTableOperation(
   args: readonly unknown[],
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
+  mutationRead?: boolean,
 ): void {
   const name = tableNameOf(table);
   if (name === undefined) {
     throw new TypeError(
-      'KV407: Kovo DB verifier could not resolve a Drizzle read-builder table to stable physical identity.',
+      'KV407: Kovo DB verifier could not resolve a Drizzle table argument to stable physical identity.',
     );
   }
-  observe(kind, name, args, config, recorder);
+  observe(kind, name, args, config, recorder, mutationRead);
 }
 
 function observe(
@@ -256,12 +257,13 @@ function observe(
   args: readonly unknown[],
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
+  mutationRead?: boolean,
 ): void {
   recorder.record({
     branch: observationOptions(args)?.branch,
     domain: config.domainByTable[table],
     kind,
-    mutationRead: undefined,
+    mutationRead,
     rowKey: observationOptions(args)?.rowKey,
     sql: undefined,
     table,
