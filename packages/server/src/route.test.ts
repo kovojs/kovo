@@ -352,7 +352,7 @@ describe('route primitives', () => {
       });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('[kovo] route-page failed route=/products/:id'),
-        thrown,
+        'Error: private route load detail',
       );
     } finally {
       errorSpy.mockRestore();

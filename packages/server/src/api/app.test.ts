@@ -931,9 +931,13 @@ describe('server app-shell public API barrels', () => {
       // blessed raw-endpoint read helper) are reachable on the internal execution subpath so
       // adapters/tests can resolve a read-only/read-write handle the same way the shell does.
       'KovoReadonlyHandleError',
+      // The CLI's exact build graph consumes the same pinned access/guard classifiers through the
+      // internal execution subpath (SPEC §6.6/§10.2); keep the barrel census explicit.
+      'accessDecisionFor',
       'accessFactsFromApp',
       'createMemoryMutationReplayStore',
       'endpointMatches',
+      'explainGuard',
       'frameworkManagedDbRawTarget',
       'guardAuditName',
       'invalidate',

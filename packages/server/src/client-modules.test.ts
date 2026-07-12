@@ -331,7 +331,7 @@ describe('versioned client modules', () => {
       const controls = await import(`${clientModuleUrlIntrinsicsUrl}?preimport-url-poison`);
       expect(() =>
         controls.snapshotClientModuleUrl('/c/safe.client.js', 'https://kovo.local'),
-      ).toThrow(/client-module URL controls are unavailable/);
+      ).toThrow(/client-module security bootstrap failed/);
     } finally {
       Object.defineProperty(URL.prototype, 'pathname', pathnameDescriptor);
     }
