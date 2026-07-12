@@ -1507,10 +1507,7 @@ function stableQueryShapeSignature(shape: QueryShape): string {
         encodeRenderPlanFrame(
           'property',
           encodeRenderPlanFrame('name', key) +
-            encodeRenderPlanFrame(
-              'shape',
-              stableQueryShapeSignature(objectShape[key] ?? 'object'),
-            ),
+            encodeRenderPlanFrame('shape', stableQueryShapeSignature(objectShape[key] ?? 'object')),
         ),
       )
       .join(''),

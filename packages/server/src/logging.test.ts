@@ -49,7 +49,10 @@ describe('log-channel neutralization', () => {
         'https://app.test/_kovo/storage/a?kovo-cap=CAPABILITY&next=%2Faccount',
         '/_kovo/storage/a?kovo-cap&next',
       ],
-      ['/oauth/callback?code=AUTH_CODE&state=STATE&state=SECOND', '/oauth/callback?code&state&state'],
+      [
+        '/oauth/callback?code=AUTH_CODE&state=STATE&state=SECOND',
+        '/oauth/callback?code&state&state',
+      ],
       ['/reset?Token=RESET&token=lower&TOKEN=upper', '/reset?Token&token&TOKEN'],
       ['/encoded?%6b%6f%76%6f%2d%63%61%70=a%252Fb&x=%00', '/encoded?kovo-cap&x'],
       ['/plain/path#fragment-secret', '/plain/path'],

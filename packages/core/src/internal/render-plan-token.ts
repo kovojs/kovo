@@ -48,8 +48,7 @@ export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput):
     .map((name) =>
       encodeRenderPlanFrame(
         'query',
-        encodeRenderPlanFrame('name', name) +
-          encodeRenderPlanFrame('shape', input[name] ?? ''),
+        encodeRenderPlanFrame('name', name) + encodeRenderPlanFrame('shape', input[name] ?? ''),
       ),
     )
     .join('');

@@ -573,7 +573,9 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     };
     const onError = vi.fn();
     const app = createApp({
-      endpoints: [createStorageDownloadEndpoint({ basePath: '/downloads', secret: SECRET, storage })],
+      endpoints: [
+        createStorageDownloadEndpoint({ basePath: '/downloads', secret: SECRET, storage }),
+      ],
       onError,
     });
     const { url, token } = await createSignUrl({ basePath: '/downloads', secret: SECRET }).signUrl({
@@ -586,9 +588,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     const [, context] = onError.mock.calls[0]!;
     expect(context.url).toBe('/downloads/receipts/failing.txt?kovo-cap');
-    expect(context.request.url).toBe(
-      'https://app.example/downloads/receipts/failing.txt?kovo-cap',
-    );
+    expect(context.request.url).toBe('https://app.example/downloads/receipts/failing.txt?kovo-cap');
     expect(JSON.stringify(onError.mock.calls)).not.toContain(token);
   });
 
