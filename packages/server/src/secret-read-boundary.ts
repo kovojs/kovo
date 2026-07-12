@@ -1,5 +1,25 @@
 import { secret } from '@kovojs/core';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import {
+  createWitnessMap,
+  createWitnessSet,
+  createWitnessWeakSet,
+  witnessCreateNullRecord,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessObjectKeys,
+  witnessSetAdd,
+  witnessSetForEach,
+  witnessSetHas,
+  witnessSetSize,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
 
 /** Runtime provenance for a database column participating in read-confidentiality decisions. */
 export interface SecretReadColumnSource {
@@ -90,6 +110,8 @@ interface SecretReadBoundary {
 }
 
 const kovoDeclaredSecretReadCapability = Symbol('kovoDeclaredSecretReadCapability');
+const pinnedSecretReadMetadata = createWitnessWeakSet<object>();
+const pinnedSecretReadBoundaries = createWitnessWeakSet<object>();
 
 /**
  * Attach an audited raw secret-read declaration to a statement object.
@@ -131,13 +153,19 @@ export function createSecretBoxingReadDb<Db extends object>(
   metadata: SecretReadMetadata,
   options: SecretReadBoundaryOptions = {},
 ): Db {
+  const pinnedMetadata = snapshotSecretReadMetadata(metadata);
   return new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const item = Reflect.get(target, prop, receiver);
       if (typeof item !== 'function') return item;
       if (!isReadSurfaceMethod(prop)) return item.bind(target);
       return (...args: unknown[]) => {
-        const boundary = readBoundaryForArgs(args, metadata, isDirectSqlReadMethod(prop), options);
+        const boundary = readBoundaryForArgs(
+          args,
+          pinnedMetadata,
+          isDirectSqlReadMethod(prop),
+          options,
+        );
         const readTarget =
           boundary.declaredSecretRead && options.privilegedDb !== undefined
             ? (options.privilegedDb as Record<PropertyKey, unknown>)
@@ -146,13 +174,153 @@ export function createSecretBoxingReadDb<Db extends object>(
         if (typeof readMethod !== 'function') return readMethod;
         return wrapReadSurface(
           Reflect.apply(readMethod, readTarget, args),
-          metadata,
+          pinnedMetadata,
           boundary,
           options,
         );
       };
     },
   }) as Db;
+}
+
+/**
+ * Reconstruct the complete confidentiality classifier once at the managed read boundary.
+ * Metadata originates in generated/adapter code but application modules share the same realm;
+ * exact private copies keep later collection mutation or prototype replacement from changing a
+ * declared secret verdict (SPEC §6.6 C9/§10.3/§11.2).
+ */
+function snapshotSecretReadMetadata(metadata: SecretReadMetadata): SecretReadMetadata {
+  if (witnessWeakSetHas(pinnedSecretReadMetadata, metadata as object)) return metadata;
+
+  try {
+    const allColumnKeys = snapshotStringSet(
+      ownDataValue(metadata, 'allColumnKeys'),
+      'allColumnKeys',
+    );
+    const secretColumnKeys = snapshotStringSet(
+      ownDataValue(metadata, 'secretColumnKeys'),
+      'secretColumnKeys',
+    );
+    const secretColumnNames = snapshotStringSet(
+      ownDataValue(metadata, 'secretColumnNames'),
+      'secretColumnNames',
+    );
+    const secretTableNames = snapshotStringSet(
+      ownDataValue(metadata, 'secretTableNames'),
+      'secretTableNames',
+    );
+    const columnSources = createWitnessMap<object, SecretReadColumnSource>();
+    witnessMapForEach(
+      ownDataValue(metadata, 'columnSources') as Map<unknown, unknown>,
+      (source, column) => {
+        if ((typeof column !== 'object' && typeof column !== 'function') || column === null) {
+          throw new TypeError('columnSources keys must be object identities.');
+        }
+        const snapshot = witnessFreeze({
+          column: ownStringDataValue(source, 'column'),
+          key: ownStringDataValue(source, 'key'),
+          secret: ownBooleanDataValue(source, 'secret'),
+          table: ownStringDataValue(source, 'table'),
+        });
+        witnessMapSet(columnSources, column, snapshot);
+      },
+    );
+
+    const secretColumnKeysByTable = snapshotStringSetMap(
+      ownDataValue(metadata, 'secretColumnKeysByTable'),
+      'secretColumnKeysByTable',
+    );
+    const secretColumnNamesByTable = snapshotStringSetMap(
+      ownDataValue(metadata, 'secretColumnNamesByTable'),
+      'secretColumnNamesByTable',
+    );
+    const snapshot = witnessFreeze({
+      allColumnKeys,
+      columnSources,
+      secretColumnKeys,
+      secretColumnKeysByTable,
+      secretColumnNames,
+      secretColumnNamesByTable,
+      secretTableNames,
+    });
+    witnessWeakSetAdd(pinnedSecretReadMetadata, snapshot);
+    return snapshot;
+  } catch (error) {
+    throw new TypeError(
+      `Secret read metadata must be an exact collection-backed snapshot: ${error instanceof Error ? error.message : 'invalid metadata'}`,
+    );
+  }
+}
+
+function snapshotSecretReadBoundary(boundary: SecretReadBoundary): SecretReadBoundary {
+  if (witnessWeakSetHas(pinnedSecretReadBoundaries, boundary as object)) return boundary;
+  const snapshot = witnessFreeze({
+    declaredSecretRead: ownBooleanDataValue(boundary, 'declaredSecretRead'),
+    opaqueResultKeys: snapshotStringSet(
+      ownDataValue(boundary, 'opaqueResultKeys'),
+      'opaqueResultKeys',
+    ),
+    rawWholeRowSecret: ownBooleanDataValue(boundary, 'rawWholeRowSecret'),
+    secretColumnKeys: snapshotStringSet(
+      ownDataValue(boundary, 'secretColumnKeys'),
+      'secretColumnKeys',
+    ),
+    secretColumnNames: snapshotStringSet(
+      ownDataValue(boundary, 'secretColumnNames'),
+      'secretColumnNames',
+    ),
+    secretColumnScopeKnown: ownBooleanDataValue(boundary, 'secretColumnScopeKnown'),
+    secretResultKeys: snapshotStringSet(
+      ownDataValue(boundary, 'secretResultKeys'),
+      'secretResultKeys',
+    ),
+  });
+  witnessWeakSetAdd(pinnedSecretReadBoundaries, snapshot);
+  return snapshot;
+}
+
+function snapshotStringSet(value: unknown, label: string): ReadonlySet<string> {
+  const snapshot = createWitnessSet<string>();
+  witnessSetForEach(value as Set<unknown>, (entry) => {
+    if (typeof entry !== 'string') throw new TypeError(`${label} must contain only strings.`);
+    witnessSetAdd(snapshot, entry);
+  });
+  return snapshot;
+}
+
+function snapshotStringSetMap(
+  value: unknown,
+  label: string,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const snapshot = createWitnessMap<string, ReadonlySet<string>>();
+  witnessMapForEach(value as Map<unknown, unknown>, (entry, key) => {
+    if (typeof key !== 'string') throw new TypeError(`${label} keys must be strings.`);
+    witnessMapSet(snapshot, key, snapshotStringSet(entry, `${label}.${key}`));
+  });
+  return snapshot;
+}
+
+function ownDataValue(value: unknown, property: PropertyKey): unknown {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    throw new TypeError('expected an object carrier.');
+  }
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`${String(property)} must be an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function ownStringDataValue(value: unknown, property: PropertyKey): string {
+  const result = ownDataValue(value, property);
+  if (typeof result !== 'string') throw new TypeError(`${String(property)} must be a string.`);
+  return result;
+}
+
+function ownBooleanDataValue(value: unknown, property: PropertyKey): boolean {
+  const result = ownDataValue(value, property);
+  if (typeof result !== 'boolean') throw new TypeError(`${String(property)} must be a boolean.`);
+  return result;
 }
 
 /**
@@ -167,40 +335,89 @@ export const boxSecretReadRows = securityClassifier(
     metadata: SecretReadMetadata,
     boundary: SecretReadBoundary = emptyReadBoundary(),
   ): unknown {
-    if (Array.isArray(value)) {
-      return value.map((entry) => boxSecretReadRows(entry, metadata, boundary));
+    metadata = snapshotSecretReadMetadata(metadata);
+    boundary = snapshotSecretReadBoundary(boundary);
+    if (witnessIsArray(value)) {
+      return mapDenseReadArray(value, (entry) => boxSecretReadRows(entry, metadata, boundary));
     }
     if (value === null || typeof value !== 'object') return value;
-    if (boundary.rawWholeRowSecret && Array.isArray((value as { rows?: unknown }).rows)) {
+    if (boundary.rawWholeRowSecret && witnessIsArray((value as { rows?: unknown }).rows)) {
       return {
         ...value,
-        rows: (value as { rows: unknown[] }).rows.map((row) =>
+        rows: mapDenseReadArray((value as { rows: unknown[] }).rows, (row) =>
           row !== null && typeof row === 'object' ? secret(row) : row,
         ),
       };
     }
     if (boundary.rawWholeRowSecret) return secret(value);
-    const boxed: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) {
+    const boxed = witnessCreateNullRecord();
+    const keys = witnessObjectKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+      if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+        throw new TypeError('Secret read rows must expose stable own data keys.');
+      }
+      const key = keyDescriptor.value;
+      const itemDescriptor = witnessGetOwnPropertyDescriptor(value, key);
+      if (itemDescriptor === undefined || !('value' in itemDescriptor)) {
+        throw new TypeError('Secret read rows must expose stable own data values.');
+      }
+      const item = itemDescriptor.value;
       const secretColumnKeys = boundary.secretColumnScopeKnown
         ? boundary.secretColumnKeys
         : metadata.secretColumnKeys;
       const secretColumnNames = boundary.secretColumnScopeKnown
         ? boundary.secretColumnNames
         : metadata.secretColumnNames;
-      boxed[key] =
+      const boxedValue =
         item === null || item === undefined
           ? item
-          : boundary.secretResultKeys.has(key) ||
-              boundary.opaqueResultKeys.has(key) ||
-              secretColumnKeys.has(key) ||
-              secretColumnNames.has(key)
+          : witnessSetHas(boundary.secretResultKeys as Set<string>, key) ||
+              witnessSetHas(boundary.opaqueResultKeys as Set<string>, key) ||
+              witnessSetHas(secretColumnKeys as Set<string>, key) ||
+              witnessSetHas(secretColumnNames as Set<string>, key)
             ? secret(item)
             : boxSecretReadRows(item, metadata, boundary);
+      witnessDefineProperty(boxed, key, {
+        configurable: true,
+        enumerable: true,
+        value: boxedValue,
+        writable: true,
+      });
     }
     return boxed;
   },
 );
+
+function mapDenseReadArray(
+  source: readonly unknown[],
+  project: (entry: unknown) => unknown,
+): unknown[] {
+  const lengthDescriptor = witnessGetOwnPropertyDescriptor(source, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number' ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value % 1 !== 0
+  ) {
+    throw new TypeError('Secret read arrays must expose a stable dense length.');
+  }
+  const result: unknown[] = [];
+  for (let index = 0; index < lengthDescriptor.value; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(source, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Secret read arrays must expose stable own data values.');
+    }
+    witnessDefineProperty(result, index, {
+      configurable: true,
+      enumerable: true,
+      value: project(descriptor.value),
+      writable: true,
+    });
+  }
+  return result;
+}
 
 const sqliteSecretReadBoundaryForStatement = securityClassifier(
   'server.secret-read.sqlite-boundary',
@@ -210,8 +427,8 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
     metadata: SecretReadMetadata,
     client: SecretReadSqliteColumnOriginClient,
   ): SecretReadBoundary {
-    const secretResultKeys = new Set<string>();
-    const opaqueResultKeys = new Set<string>();
+    const secretResultKeys = createWitnessSet<string>();
+    const opaqueResultKeys = createWitnessSet<string>();
     const expressionSafety = expressionSafetyByResultKey(statement, metadata);
     const selectedKeys = selectedResultKeysFromValue(statement);
     const referencesSecretTable = sqlReferencesSecretTable(sql, metadata.secretTableNames);
@@ -224,7 +441,8 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
         : { ...emptyReadBoundary(), secretColumnScopeKnown: true };
     }
 
-    for (const [index, column] of columns.entries()) {
+    for (let index = 0; index < columns.length; index += 1) {
+      const column = columns[index]!;
       const key =
         selectedKeys[index] ??
         (typeof column.name === 'string' && column.name !== '' ? column.name : undefined);
@@ -233,21 +451,27 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
         continue;
       }
       if (secretBearingCompound) {
-        opaqueResultKeys.add(key);
+        witnessSetAdd(opaqueResultKeys, key);
         continue;
       }
       if (
         typeof column.table === 'string' &&
         typeof column.column === 'string' &&
-        (metadata.secretColumnNamesByTable.get(column.table)?.has(column.column) ?? false)
+        (() => {
+          const names = witnessMapGet(
+            metadata.secretColumnNamesByTable as Map<string, ReadonlySet<string>>,
+            column.table,
+          );
+          return names === undefined ? false : witnessSetHas(names as Set<string>, column.column);
+        })()
       ) {
-        secretResultKeys.add(key);
+        witnessSetAdd(secretResultKeys, key);
         continue;
       }
       if (typeof column.table === 'string' && typeof column.column === 'string') continue;
-      if (expressionSafety.get(key) === 'safe') continue;
-      if (referencesSecretTable || expressionSafety.get(key) === 'opaque') {
-        opaqueResultKeys.add(key);
+      if (witnessMapGet(expressionSafety, key) === 'safe') continue;
+      if (referencesSecretTable || witnessMapGet(expressionSafety, key) === 'opaque') {
+        witnessSetAdd(opaqueResultKeys, key);
       }
     }
 
@@ -288,7 +512,7 @@ function wrapReadSurface(
   options: SecretReadBoundaryOptions,
 ): unknown {
   if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return boxSecretReadRows(value, metadata, inheritedBoundary);
+  if (witnessIsArray(value)) return boxSecretReadRows(value, metadata, inheritedBoundary);
   if (value instanceof Promise) {
     return value.then((result) => boxSecretReadRows(result, metadata, inheritedBoundary));
   }
@@ -388,10 +612,16 @@ function hasDeclaredSecretReadCapability(
     | DeclaredSecretReadCapability
     | undefined;
   if (declaration === undefined) return false;
-  if (!metadata.secretTableNames.has(declaration.table)) return false;
-  const secretColumns =
-    metadata.secretColumnNamesByTable.get(declaration.table) ?? new Set<string>();
-  return declaration.columns.every((column) => secretColumns.has(column));
+  if (!witnessSetHas(metadata.secretTableNames as Set<string>, declaration.table)) return false;
+  const secretColumns = witnessMapGet(
+    metadata.secretColumnNamesByTable as Map<string, ReadonlySet<string>>,
+    declaration.table,
+  );
+  if (secretColumns === undefined) return false;
+  for (let index = 0; index < declaration.columns.length; index += 1) {
+    if (!witnessSetHas(secretColumns as Set<string>, declaration.columns[index]!)) return false;
+  }
+  return true;
 }
 
 function mergeReadBoundaries(
@@ -410,15 +640,17 @@ function mergeReadBoundaries(
 }
 
 function emptyReadBoundary(): SecretReadBoundary {
-  return {
+  const boundary = witnessFreeze({
     declaredSecretRead: false,
-    opaqueResultKeys: new Set<string>(),
+    opaqueResultKeys: createWitnessSet<string>(),
     rawWholeRowSecret: false,
-    secretResultKeys: new Set<string>(),
-    secretColumnKeys: new Set<string>(),
-    secretColumnNames: new Set<string>(),
+    secretResultKeys: createWitnessSet<string>(),
+    secretColumnKeys: createWitnessSet<string>(),
+    secretColumnNames: createWitnessSet<string>(),
     secretColumnScopeKnown: false,
-  };
+  });
+  witnessWeakSetAdd(pinnedSecretReadBoundaries, boundary);
+  return boundary;
 }
 
 function selectedResultKeysFromValue(value: unknown): readonly string[] {
@@ -435,7 +667,7 @@ function sqliteResultColumns(
     const columns = statement.columns;
     if (typeof columns !== 'function') return undefined;
     const result = columns.call(statement);
-    return Array.isArray(result) ? (result as SecretReadSqliteColumnOrigin[]) : undefined;
+    return witnessIsArray(result) ? (result as SecretReadSqliteColumnOrigin[]) : undefined;
   } catch {
     return undefined;
   }
@@ -446,12 +678,12 @@ function expressionSafetyByResultKey(
   metadata: SecretReadMetadata,
 ): Map<string, 'opaque' | 'safe'> {
   const fields = selectedFieldsFromValue(value);
-  const safety = new Map<string, 'opaque' | 'safe'>();
+  const safety = createWitnessMap<string, 'opaque' | 'safe'>();
   if (fields === undefined) return safety;
   for (const [key, field] of Object.entries(fields)) {
     if (isColumnLike(field)) continue;
     const verdict = classifySqlExpression(field, metadata);
-    if (verdict !== undefined) safety.set(key, verdict);
+    if (verdict !== undefined) witnessMapSet(safety, key, verdict);
   }
   return safety;
 }
@@ -474,7 +706,7 @@ function classifySqlExpression(
 ): 'opaque' | 'safe' | undefined {
   if (value === null || typeof value !== 'object') return undefined;
   const chunks = (value as { queryChunks?: unknown }).queryChunks;
-  if (!Array.isArray(chunks)) return undefined;
+  if (!witnessIsArray(chunks)) return undefined;
   return chunks.every((chunk) => sqlChunkIsSafe(chunk, metadata)) ? 'safe' : 'opaque';
 }
 
@@ -485,14 +717,17 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
   }
   if (typeof chunk !== 'object') return false;
 
-  const source = metadata.columnSources.get(chunk);
+  const source = witnessMapGet(
+    metadata.columnSources as Map<object, SecretReadColumnSource>,
+    chunk,
+  );
   if (source !== undefined) return !source.secret;
 
   const nested = (chunk as { queryChunks?: unknown }).queryChunks;
-  if (Array.isArray(nested)) return nested.every((item) => sqlChunkIsSafe(item, metadata));
+  if (witnessIsArray(nested)) return nested.every((item) => sqlChunkIsSafe(item, metadata));
 
   const value = (chunk as { value?: unknown }).value;
-  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+  if (witnessIsArray(value) && value.every((item) => typeof item === 'string')) {
     if (value.some(sqlStringChunkHidesReadSource)) {
       throw new Error(
         'KV410: raw SQL expression chunks cannot contain SELECT or FROM; use builder table bindings or a declared rawRead path so the read set stays visible (SPEC §10.2/§10.3).',
@@ -532,7 +767,7 @@ const SAFE_SQL_WORDS = new Set([
 function sqlStringChunkIsInert(value: string): boolean {
   if (/\bselect\b/i.test(value)) return false;
   for (const word of value.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []) {
-    if (!SAFE_SQL_WORDS.has(word.toLowerCase())) return false;
+    if (!witnessSetHas(SAFE_SQL_WORDS, word.toLowerCase())) return false;
   }
   return true;
 }
@@ -563,7 +798,7 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
       const result = toSQL.call(value) as { params?: unknown; sql?: unknown };
       if (typeof result?.sql === 'string') {
         return {
-          params: Array.isArray(result.params) ? result.params : params,
+          params: witnessIsArray(result.params) ? result.params : params,
           text: result.sql,
         };
       }
@@ -582,11 +817,11 @@ function sqlTextFromValue(value: unknown): string | undefined {
   const sql = (value as { sql?: unknown }).sql;
   if (typeof sql === 'string') return sql;
   const chunks = (value as { queryChunks?: unknown }).queryChunks;
-  if (Array.isArray(chunks)) {
+  if (witnessIsArray(chunks)) {
     const text = chunks
       .flatMap((chunk) => {
         const part = (chunk as { value?: unknown }).value;
-        return Array.isArray(part)
+        return witnessIsArray(part)
           ? part.filter((item): item is string => typeof item === 'string')
           : [];
       })
@@ -597,10 +832,11 @@ function sqlTextFromValue(value: unknown): string | undefined {
 }
 
 function sqlReferencesSecretTable(sql: string, secretTableNames: ReadonlySet<string>): boolean {
-  for (const table of secretTableNames) {
-    if (sqlReferencesTable(sql, table)) return true;
-  }
-  return false;
+  let references = false;
+  witnessSetForEach(secretTableNames as Set<string>, (table) => {
+    if (sqlReferencesTable(sql, table)) references = true;
+  });
+  return references;
 }
 
 function sqlHasCompoundSelect(sql: string): boolean {
@@ -621,11 +857,14 @@ function isColumnLike(value: unknown): value is { name: string } {
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !witnessIsArray(value);
 }
 
 function unionSets(left: ReadonlySet<string>, right: ReadonlySet<string>): ReadonlySet<string> {
-  if (left.size === 0) return right;
-  if (right.size === 0) return left;
-  return new Set([...left, ...right]);
+  if (witnessSetSize(left as Set<string>) === 0) return right;
+  if (witnessSetSize(right as Set<string>) === 0) return left;
+  const union = createWitnessSet<string>();
+  witnessSetForEach(left as Set<string>, (value) => witnessSetAdd(union, value));
+  witnessSetForEach(right as Set<string>, (value) => witnessSetAdd(union, value));
+  return union;
 }

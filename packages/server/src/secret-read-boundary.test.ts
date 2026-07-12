@@ -69,6 +69,36 @@ function queryObject(
 }
 
 describe('secret read boundary', () => {
+  it('pins declared secret metadata before application code can replace Set.has', () => {
+    // SPEC §10.3/§11.2: the managed read boundary is the confidentiality choke. Application
+    // code shares the server realm, so a late prototype replacement must not turn a declared
+    // secret column into an ordinary scalar at that choke.
+    const declared = metadata();
+    const db = createSecretBoxingReadDb(
+      {
+        select() {
+          return [{ classified: 'victim-secret' }];
+        },
+      },
+      declared,
+    );
+    const nativeHas = Set.prototype.has;
+    let rows: readonly Record<string, unknown>[];
+
+    try {
+      Set.prototype.has = function (value: unknown): boolean {
+        if (this === declared.secretColumnKeys || this === declared.secretColumnNames) return false;
+        return nativeHas.call(this, value);
+      };
+      rows = db.select();
+    } finally {
+      Set.prototype.has = nativeHas;
+    }
+
+    expect(isSecret(rows[0]!.classified)).toBe(true);
+    expect(revealSecret(rows[0]!.classified, 'test')).toBe('victim-secret');
+  });
+
   it('boxes values whose concrete SQLite origin is a secret column', async () => {
     const db = createSecretBoxingReadDb(
       builderDb(
