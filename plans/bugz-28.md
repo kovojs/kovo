@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    74 | C1-C74 |
-| High     |    34 | H1-H34 |
+| Critical |    75 | C1-C75 |
+| High     |    35 | H1-H35 |
 | Medium   |    10 | M1-M10 |
 
 ## Critical
@@ -915,6 +915,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     module-graph duplication, and app/server races and prove emitted bytes and blocking diagnostics
     remain exact.
 
+- [ ] **C75 - Mutable Node response writers replace pinned output at the native transport.**
+      `packages/server/src/{node,build}.ts`
+  - The source and emitted Node/Vercel adapters pinned the Web `Response` fields but invoked live
+    `ServerResponse.prototype.writeHead`, `end`, `writeEarlyHints`, and `destroy` controls after the
+    authored handler returned. A handler can therefore preserve every framework classification and
+    snapshot, then substitute attacker status, headers, cookies, or body at the final native write.
+  - **Acceptance:** capture the complete Node response transport before authored evaluation, choose
+    any host-owned per-instance test/embedding overrides before dispatch, and invoke every head,
+    interim-header, body, termination, and abort operation only through that pinned transport.
+    Source, generated Node, and Vercel real-HTTP regressions must prove selective prototype and
+    per-call replacements cannot change any wire byte or convert a failed write into a clean 200.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1289,6 +1301,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
     graph before the fixture entry. A poison-first fixture regression must prove app evaluation
     cannot influence captured controls while the normal integration suite retains its behavior.
 
+- [ ] **H35 - Mutable compression classification re-enables compression for secret responses.**
+      `packages/server/src/node.ts`
+  - The final Node adapter cloned the response but classified `Cache-Control`, `Vary: Cookie`,
+    content types, and `Accept-Encoding` through live RegExp, String, Array, Map, Number, and Math
+    controls after the authored handler returned. Selectively hiding the `cookie` token made the
+    default adapter compress a cookie-varying response that its BREACH-style confidentiality floor
+    had classified as sensitive.
+  - **Acceptance:** sensitive-response, media-type, negotiation, and `Vary` parsing consume only
+    boot-pinned scalar/collection controls over the exact response/request snapshots; malformed or
+    ambiguous values fail closed to no compression. Late and import-order poison regressions must
+    retain no compression for private, no-store, no-transform, Set-Cookie, and Vary-Cookie outputs
+    while ordinary q-value negotiation remains exact.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -1396,7 +1421,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 ## Latest verification
 
 The remediation pass remains intentionally non-zero: C17-C19, C21-C22, C25, C28, C31-C32, C42,
-C58-C74, H20, H27, H32-H34, and M10 are active compiler-cache, static-analysis, server authority/output,
+C58-C75, H20, H27, H32-H35, and M10 are active compiler-cache, static-analysis, server authority/output,
 and immutable-output fixes. Integrated evidence is green at 97 PostgreSQL, 88 egress, 37
 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158 auth/response, 51 Better Auth,
 86 crypto/replay, 234 output/compiler/core, 87 scalar route/handler/secret, and 18 password tests. A
