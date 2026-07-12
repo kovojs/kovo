@@ -17,6 +17,7 @@ export const protocolFreeFilesystemEnumerationFiles = [
   'packages/server/src/static-export-output.ts',
 ];
 export const staticExportEndpointBlockerFile = 'packages/server/src/static-export-document.ts';
+export const staticExportReplayArtifactFile = 'packages/server/src/static-export-replay.ts';
 
 export const defaultAllowedRuntimeFiles = [
   filesystemBoundaryFile,
@@ -57,6 +58,9 @@ export function checkFilesystemBoundary(options = {}) {
   );
   const staticExportEndpointBlockerFiles = new Set(
     options.staticExportEndpointBlockerFiles ?? [staticExportEndpointBlockerFile],
+  );
+  const staticExportReplayArtifactFiles = new Set(
+    options.staticExportReplayArtifactFiles ?? [staticExportReplayArtifactFile],
   );
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
@@ -107,6 +111,9 @@ export function checkFilesystemBoundary(options = {}) {
     if (staticExportEndpointBlockerFiles.has(filePath)) {
       findings.push(...staticExportEndpointBlockerFindings(filePath, sourceText));
     }
+    if (staticExportReplayArtifactFiles.has(filePath)) {
+      findings.push(...staticExportReplayArtifactCommitFindings(filePath, sourceText));
+    }
 
     if (!allowed && usesPathConfinementPrimitive(scanText, importedPathNames)) {
       findings.push(
@@ -154,6 +161,23 @@ export function staticExportEndpointBlockerFindings(filePath, sourceText) {
     );
   }
 
+  return findings;
+}
+
+export function staticExportReplayArtifactCommitFindings(filePath, sourceText) {
+  const scanText = stripCommentsAndStrings(sourceText);
+  const findings = [];
+  const mutableCommit = /\bartifacts\s*\.\s*(?:push|unshift|splice)\s*\(/u.exec(scanText);
+  if (mutableCommit !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableCommit.index)}: approved static-export route artifacts must not commit through mutable collection methods`,
+    );
+  }
+  if (!/\bcommitBuildArrayValue\s*\(\s*artifacts\s*,\s*approvedArtifact\s*,/u.test(scanText)) {
+    findings.push(
+      `${filePath}: approved static-export route bytes must commit through commitBuildArrayValue() after replay classification`,
+    );
+  }
   return findings;
 }
 

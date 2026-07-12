@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { securityArrayIsArray, securityNumberIsInteger } from './response-security-intrinsics.ts';
 import {
   createWitnessWeakSet,
+  witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
@@ -161,6 +162,32 @@ export function snapshotBuildArray<Value>(
     snapshot[index] = descriptorDataProperty(descriptor) as Value;
   }
   return witnessFreeze(snapshot);
+}
+
+/** Commit one value to a framework-owned dense array without mutable method or prototype dispatch. */
+export function commitBuildArrayValue<Value>(target: Value[], value: Value, label: string): void {
+  assertBuildSecurityIntrinsics();
+  if (!securityArrayIsArray(target)) {
+    throw new TypeError(`Kovo build security boundary expected ${label} target to be an array.`);
+  }
+
+  const lengthDescriptor = witnessGetOwnPropertyDescriptor(target, 'length');
+  if (lengthDescriptor === undefined) {
+    throw new TypeError(`Kovo build security boundary could not commit ${label}.`);
+  }
+  const rawLength = descriptorDataProperty(lengthDescriptor);
+  if (!securityNumberIsInteger(rawLength) || (rawLength as number) < 0) {
+    throw new TypeError(`Kovo build security boundary found an invalid ${label} target length.`);
+  }
+
+  // Object.defineProperty's array-index algorithm grows `length` while bypassing inherited numeric
+  // setters. The control itself is boot-pinned, so evaluated app code cannot replace the commit.
+  witnessDefineProperty(target, rawLength as number, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 export type BuildOwnDataProperty =

@@ -89,6 +89,55 @@ describe('server static export', () => {
     }
   });
 
+  it('C200 keeps approved route bytes authoritative after late Array.push replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-artifact-push-'));
+    const originalPush = Array.prototype.push;
+    try {
+      const app = createApp({
+        routes: [
+          route('/plugin', {
+            page() {
+              Array.prototype.push = function (...items) {
+                const first = items[0] as
+                  | { body?: unknown; headers?: unknown; path?: unknown; status?: unknown }
+                  | undefined;
+                if (
+                  first?.path === '/cart/index.html' &&
+                  typeof first.body === 'string' &&
+                  first.status === 200
+                ) {
+                  return Reflect.apply(originalPush, this, [
+                    {
+                      ...first,
+                      body: '<main><form method="post" action="/_m/cart/add"><button>Add</button></form></main>',
+                    },
+                  ]);
+                }
+                return Reflect.apply(originalPush, this, items);
+              } as typeof Array.prototype.push;
+              return trustedHtml('<main>Plugin landing</main>');
+            },
+          }),
+          route('/cart', {
+            page() {
+              return trustedHtml('<main data-approved="true">Approved cart</main>');
+            },
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, { outDir });
+      const written = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
+
+      expect(result.artifacts[1]?.body).toContain('data-approved="true"');
+      expect(written).toContain('data-approved="true"');
+      expect(written).not.toContain('/_m/cart/add');
+    } finally {
+      Array.prototype.push = originalPush;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('skips route documents with server endpoint references when non-exportable routes are skipped', async () => {
     const app = createApp({
       routes: [

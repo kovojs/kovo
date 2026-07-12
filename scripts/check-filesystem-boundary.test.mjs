@@ -7,6 +7,8 @@ import {
   filesystemIntrinsicsFile,
   staticExportEndpointBlockerFile,
   staticExportEndpointBlockerFindings,
+  staticExportReplayArtifactCommitFindings,
+  staticExportReplayArtifactFile,
 } from './check-filesystem-boundary.mjs';
 
 function runFixture(files, overrides = {}) {
@@ -115,6 +117,30 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
           for (let index = 0; index < endpointRefs.length; index += 1) {
             diagnostics[diagnostics.length] = toDiagnostic(endpointRefs[index]);
           }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('C200 pins approved static-export artifacts to the boot-pinned dense commit', () => {
+    expect(
+      staticExportReplayArtifactCommitFindings(
+        staticExportReplayArtifactFile,
+        'artifacts.push(await replayStaticExportRouteDocumentArtifact(options));',
+      ),
+    ).toContain(
+      `${staticExportReplayArtifactFile}:1: approved static-export route artifacts must not commit through mutable collection methods`,
+    );
+    expect(
+      staticExportReplayArtifactCommitFindings(
+        staticExportReplayArtifactFile,
+        `
+          const approvedArtifact = await replayStaticExportRouteDocumentArtifact(options);
+          commitBuildArrayValue(
+            artifacts,
+            approvedArtifact,
+            'approved static-export route artifact',
+          );
         `,
       ),
     ).toEqual([]);

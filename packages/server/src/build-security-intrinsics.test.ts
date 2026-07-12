@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { buildSecuritySourceLiteral } from './build-security-intrinsics.js';
+import { buildSecuritySourceLiteral, commitBuildArrayValue } from './build-security-intrinsics.js';
 
 const originalJsonStringify = JSON.stringify;
 
@@ -9,6 +9,38 @@ afterEach(() => {
 });
 
 describe('build source serialization (SPEC §6.6 rule 6)', () => {
+  it('commits dense framework arrays without method or inherited-index dispatch', () => {
+    const originalPush = Array.prototype.push;
+    const originalZero = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let setterCalls = 0;
+    let committed: PropertyDescriptor | undefined;
+    let committedLength = -1;
+    try {
+      Array.prototype.push = () => {
+        throw new Error('mutable push must not run');
+      };
+      Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        set() {
+          setterCalls += 1;
+        },
+      });
+
+      const target: string[] = [];
+      commitBuildArrayValue(target, 'approved', 'test artifact');
+      committed = Object.getOwnPropertyDescriptor(target, '0');
+      committedLength = target.length;
+    } finally {
+      Array.prototype.push = originalPush;
+      if (originalZero === undefined) delete Array.prototype[0];
+      else Object.defineProperty(Array.prototype, '0', originalZero);
+    }
+
+    expect(committed?.value).toBe('approved');
+    expect(committedLength).toBe(1);
+    expect(setterCalls).toBe(0);
+  });
+
   it('keeps nested source data exact after a selective ambient JSON replacement', () => {
     JSON.stringify = ((value: unknown) =>
       value && typeof value === 'object'

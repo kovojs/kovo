@@ -1,5 +1,5 @@
 import type { KovoApp } from './app-types.js';
-import { snapshotBuildArray } from './build-security-intrinsics.js';
+import { commitBuildArrayValue, snapshotBuildArray } from './build-security-intrinsics.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan, type StaticExportRouteTarget } from './static-export-route-plan.js';
@@ -62,12 +62,13 @@ export async function replayStaticExportApp({
     }
 
     try {
-      artifacts.push(
-        await replayStaticExportRouteDocumentArtifact({
-          context,
-          routePath: routeTarget.path,
-        }),
-      );
+      const approvedArtifact = await replayStaticExportRouteDocumentArtifact({
+        context,
+        routePath: routeTarget.path,
+      });
+      // SPEC §6.6/§9.5: commit the exact post-KV229 bytes through a boot-pinned own-data write.
+      // Earlier app routes may have replaced Array methods or installed numeric prototype setters.
+      commitBuildArrayValue(artifacts, approvedArtifact, 'approved static-export route artifact');
     } catch (error) {
       if (!(error instanceof StaticExportError) || onNonExportable !== 'skip') {
         throw error;
