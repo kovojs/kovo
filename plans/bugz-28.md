@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |    15 | C1-C15 |
+| Critical |    16 | C1-C16 |
 | High     |    25 | H1-H25 |
 | Medium   |     9 | M1-M9 |
 
@@ -165,6 +165,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     undercount bounded canonical data.
   - **Evidence:** the 42-test canonical-JSON/security-witness/task-queue matrix passes; the independent
     serialized-argument replacement proof now writes the exact validated victim operation/principal.
+
+- [ ] **C16 - Mutable wire-JSON controls can replace reconstructed query truth.**
+      `packages/core/src/internal/wire-json.ts`
+  - A selective late `JSON.stringify` replacement recognized a safe normalized query result and
+    replaced it with an admin-bearing record containing a server-only token. The canonical wire
+    encoder returned those injected bytes even though they were absent from the classified value.
+  - **Acceptance:** secret/untrusted classification, Date/bigint tagging, array/object traversal,
+    own-data reconstruction, canonical serialization, tagged-value parse/revival, and diagnostics use
+    boot-pinned controls; late/import-order poison cannot add, remove, or replace client-wire truth.
 
 ## High
 
@@ -490,8 +499,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: H15 and H17-H25 are active response/deferred/
-mutation/client output, task, and browser-navigation/replay-token fixes.
+The remediation pass remains intentionally non-zero: C16, H15, and H17-H25 are active wire JSON,
+response/deferred/mutation/client output, task, and browser-navigation/replay-token fixes.
 Integrated
 evidence is
 green at
