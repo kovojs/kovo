@@ -203,7 +203,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: H6-H7 and M4 are active request-transport,
-Better Auth, and diagnostics fixes. Integrated evidence is green at 97 PostgreSQL,
-88 egress, 198 app/schema/document, 158 auth/response, 86 crypto/replay, and 234 output/compiler/core
-tests. A complete fresh sweep of the final integrated tree is still required.
+The remediation pass remains intentionally non-zero: C6, H6-H7, H9-H10, and M4 are active
+request-transport, document/cookie/CSRF, Better Auth, and generated-diagnostics fixes. Integrated
+evidence is green at 97 PostgreSQL, 88 egress, 37 filesystem/storage, 198 app/schema/document, 158
+auth/response, 86 crypto/replay, 234 output/compiler/core, and 87 scalar route/handler/secret tests.
+A complete fresh sweep of the final integrated tree is still required.
