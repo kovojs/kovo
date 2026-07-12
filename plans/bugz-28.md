@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |     5 | C1-C5 |
-| High     |     8 | H1-H8 |
+| High     |    10 | H1-H10 |
 | Medium   |     4 | M1-M4 |
 
 ## Critical
@@ -120,6 +120,23 @@ This is an active closure ledger; `SPEC.md` remains normative.
     victim object's body from memory storage.
   - **Evidence:** the 37-test filesystem/storage/intrinsic matrix passes with pinned map operations,
     exact logical-key controls, late-poison isolation, and import-order fail-closed coverage.
+
+- [ ] **H9 - Mutable document array operations can replace the complete response shell.**
+      `packages/server/src/document-core.ts`
+  - A selective late `Array.prototype.join` override on the final shell array replaced an otherwise
+    safe `renderDocument()` result with a raw event-bearing document.
+  - **Acceptance:** document parts, query scripts, CSP facts, and final/deferred shell assembly use
+    boot-pinned, semantically checked traversal/concatenation over closed own-data arrays; hostile
+    import-order and late-poison regressions retain the original shell bytes and matching CSP.
+
+- [ ] **H10 - Mutable cookie scalar/collection controls permit raw Set-Cookie attribute injection.**
+      `packages/server/src/cookies.ts`
+  - A selective late `String.prototype.includes` override hid a semicolon in the declared Domain and
+    made `serializeCookie()` emit attacker-supplied `Partitioned` attribute text; parser Map/Set and
+    token/attribute controls have the same mutable dispatch surface.
+  - **Acceptance:** cookie token/octet validation, prefix/floor decisions, parsing, attribute maps,
+    and serialization use boot-pinned, semantically checked operations; semicolon/control injection
+    and forged forwarded attributes fail closed under hostile import order and late poison.
 
 ## Medium
 
