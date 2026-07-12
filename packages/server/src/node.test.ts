@@ -719,6 +719,41 @@ describe('toNodeHandler incomplete request transport closure', () => {
       nodeRequestToWebRequest(nodeRequest('/_m/a/b'), { origin: 'https://internal.example' }).url,
     ).toBe('https://internal.example/_m/a/b');
   });
+
+  it('keeps raw mutation target classification after String, RegExp, and Math poisoning', () => {
+    const originalStartsWith = String.prototype.startsWith;
+    const originalIncludes = String.prototype.includes;
+    const originalRegExpTest = RegExp.prototype.test;
+    const originalMin = Math.min;
+    String.prototype.startsWith = () => false;
+    String.prototype.includes = () => false;
+    RegExp.prototype.test = () => false;
+    Math.min = () => 1 / 0;
+    try {
+      for (const target of [
+        '/_m/a/%2f/b',
+        '/_m/a/%2e/b',
+        '/_m/a/./b',
+        '\\_m\\a\\b',
+        'http://attacker.test/_m/a/b',
+      ]) {
+        const request = nodeRequest(target);
+        request.method = 'POST';
+        expect(() => nodeRequestToWebRequest(request)).toThrow(
+          'Reserved mutation request targets must use their canonical raw path.',
+        );
+      }
+
+      expect(
+        nodeRequestToWebRequest(nodeRequest('/_m/a/b'), { origin: 'https://internal.example' }).url,
+      ).toBe('https://internal.example/_m/a/b');
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.includes = originalIncludes;
+      RegExp.prototype.test = originalRegExpTest;
+      Math.min = originalMin;
+    }
+  });
 });
 
 describe('responseHeadersToNodeHeaders (B1)', () => {

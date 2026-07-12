@@ -306,17 +306,18 @@ function rejectUnsafeNodeMutationTarget(
 }
 
 function unsafeReservedMutationRequestTarget(rawTarget: string): boolean {
-  const absoluteForm = /^[a-z][a-z0-9+.-]*:/i.test(rawTarget);
+  if (typeof rawTarget !== 'string') return true;
+  const absoluteForm = rawRequestTargetHasScheme(rawTarget);
   const pathname = rawNodeRequestTargetPathname(rawTarget);
-  const comparablePathname = pathname.replaceAll('\\', '/');
-  const rootedPathname = `/${comparablePathname.replace(/^\/+/, '')}`;
+  const comparablePathname = rawRequestTargetSlashPath(pathname);
+  const rootedPathname = rootedRawRequestTargetPath(comparablePathname);
   let normalizedPathname: string;
   try {
     normalizedPathname = urlPathname(new NativeURL(rootedPathname, requestTargetAnalysisOrigin));
   } catch {
     return false;
   }
-  if (normalizedPathname !== '/_m' && !normalizedPathname.startsWith('/_m/')) return false;
+  if (!isReservedMutationPath(normalizedPathname)) return false;
 
   // Canonical mutation identities are already exactly what the URL parser will expose. Any raw
   // spelling that reaches the same reserved path only after slash, backslash, percent-dot, or dot
@@ -324,20 +325,114 @@ function unsafeReservedMutationRequestTarget(rawTarget: string): boolean {
   return (
     absoluteForm ||
     pathname !== normalizedPathname ||
-    pathname.includes('\\') ||
-    /%(?:2e|2f|5c)/i.test(pathname)
+    rawRequestTargetHasBackslash(pathname) ||
+    rawRequestTargetHasEncodedPathControl(pathname)
   );
 }
 
 function rawNodeRequestTargetPathname(rawTarget: string): string {
-  const query = rawTarget.search(/[?#]/);
-  const target = query < 0 ? rawTarget : rawTarget.slice(0, query);
-  const scheme = target.indexOf('://');
-  if (scheme < 0) return target;
-  const slash = target.indexOf('/', scheme + 3);
-  const backslash = target.indexOf('\\', scheme + 3);
-  const path = slash < 0 ? backslash : backslash < 0 ? slash : Math.min(slash, backslash);
-  return path < 0 ? '/' : target.slice(path);
+  let end = rawTarget.length;
+  for (let index = 0; index < rawTarget.length; index += 1) {
+    const character = rawTarget[index];
+    if (character === '?' || character === '#') {
+      end = index;
+      break;
+    }
+  }
+
+  let scheme = -1;
+  for (let index = 0; index + 2 < end; index += 1) {
+    if (rawTarget[index] === ':' && rawTarget[index + 1] === '/' && rawTarget[index + 2] === '/') {
+      scheme = index;
+      break;
+    }
+  }
+  if (scheme < 0) return rawRequestTargetRange(rawTarget, 0, end);
+
+  let path = -1;
+  for (let index = scheme + 3; index < end; index += 1) {
+    if (rawTarget[index] === '/' || rawTarget[index] === '\\') {
+      path = index;
+      break;
+    }
+  }
+  return path < 0 ? '/' : rawRequestTargetRange(rawTarget, path, end);
+}
+
+function rawRequestTargetRange(value: string, start: number, end: number): string {
+  let result = '';
+  for (let index = start; index < end; index += 1) result += value[index];
+  return result;
+}
+
+function rawRequestTargetHasScheme(value: string): boolean {
+  if (value.length < 2 || !isAsciiAlpha(value[0])) return false;
+  for (let index = 1; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === ':') return true;
+    if (
+      !isAsciiAlpha(character) &&
+      !(character >= '0' && character <= '9') &&
+      character !== '+' &&
+      character !== '-' &&
+      character !== '.'
+    ) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function isAsciiAlpha(character: string | undefined): boolean {
+  return (
+    character !== undefined &&
+    ((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z'))
+  );
+}
+
+function rawRequestTargetSlashPath(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    result += value[index] === '\\' ? '/' : value[index];
+  }
+  return result;
+}
+
+function rootedRawRequestTargetPath(value: string): string {
+  let first = 0;
+  while (first < value.length && value[first] === '/') first += 1;
+  return `/${rawRequestTargetRange(value, first, value.length)}`;
+}
+
+function isReservedMutationPath(value: string): boolean {
+  if (value === '/_m') return true;
+  return (
+    value.length >= 4 &&
+    value[0] === '/' &&
+    value[1] === '_' &&
+    value[2] === 'm' &&
+    value[3] === '/'
+  );
+}
+
+function rawRequestTargetHasBackslash(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '\\') return true;
+  }
+  return false;
+}
+
+function rawRequestTargetHasEncodedPathControl(value: string): boolean {
+  for (let index = 0; index + 2 < value.length; index += 1) {
+    if (value[index] !== '%') continue;
+    const first = value[index + 1];
+    const second = value[index + 2];
+    if (first === '2' && (second === 'e' || second === 'E' || second === 'f' || second === 'F')) {
+      return true;
+    }
+    if (first === '5' && (second === 'c' || second === 'C')) return true;
+  }
+  return false;
 }
 
 function urlHash(url: URL): string {
@@ -500,18 +595,24 @@ function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): 
   const pinnedOrigin = urlOrigin(originUrl);
   if (pinnedOrigin === 'null') throw new TypeError('Node adapter origin must be hierarchical.');
 
-  const absolute = /^[a-z][a-z0-9+.-]*:/i.test(rawUrl);
+  const absolute = rawRequestTargetHasScheme(rawUrl);
   const pathTarget = absolute
     ? new NativeURL(rawUrl)
-    : new NativeURL(
-        /^[\\/]/.test(rawUrl) ? `/${rawUrl.replace(/^[\\/]+/, '')}` : rawUrl,
-        requestTargetAnalysisOrigin,
-      );
+    : new NativeURL(canonicalRelativeRequestTarget(rawUrl), requestTargetAnalysisOrigin);
   const pathname = urlPathname(pathTarget);
   const assembled = new NativeURL(
-    `${pinnedOrigin}${pathname.startsWith('/') ? '' : '/'}${pathname}${urlSearch(pathTarget)}${urlHash(pathTarget)}`,
+    `${pinnedOrigin}${pathname[0] === '/' ? '' : '/'}${pathname}${urlSearch(pathTarget)}${urlHash(pathTarget)}`,
   );
   return urlHref(assembled);
+}
+
+function canonicalRelativeRequestTarget(rawTarget: string): string {
+  if (rawTarget[0] !== '/' && rawTarget[0] !== '\\') return rawTarget;
+  let first = 0;
+  while (first < rawTarget.length && (rawTarget[first] === '/' || rawTarget[first] === '\\')) {
+    first += 1;
+  }
+  return `/${rawRequestTargetRange(rawTarget, first, rawTarget.length)}`;
 }
 
 function defaultOrigin(request: IncomingMessage, options: NodeHandlerOptions): string {

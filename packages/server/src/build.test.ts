@@ -2236,6 +2236,43 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     );
   }
 
+  const originalIncludes = String.prototype.includes;
+  const originalRegExpTest = RegExp.prototype.test;
+  const originalMin = Math.min;
+  String.prototype.includes = () => false;
+  RegExp.prototype.test = () => false;
+  Math.min = () => 1 / 0;
+  try {
+    for (const target of [
+      '/_m/a/%2f/b',
+      '/_m/a/%2e/b',
+      '/_m/a/./b',
+      '\\_m\\a\\b',
+      'http://attacker.test/_m/a/b',
+    ]) {
+      const unsafeMutationRequest = adapterParityRequest();
+      unsafeMutationRequest.headers = { host: 'h2.example.test', 'x-from-test': 'yes' };
+      unsafeMutationRequest.method = 'POST';
+      unsafeMutationRequest.url = target;
+      expect(() => adapter.nodeRequestToWebRequest(unsafeMutationRequest)).toThrow(
+        'Reserved mutation request targets must use their canonical raw path.',
+      );
+    }
+
+    const canonicalUnderPoison = adapterParityRequest();
+    canonicalUnderPoison.headers = { host: 'h2.example.test', 'x-from-test': 'yes' };
+    canonicalUnderPoison.url = '/_m/a/b';
+    expect(
+      adapter.nodeRequestToWebRequest(canonicalUnderPoison, {
+        origin: 'https://h2.example.test',
+      }).url,
+    ).toBe('https://h2.example.test/_m/a/b');
+  } finally {
+    String.prototype.includes = originalIncludes;
+    RegExp.prototype.test = originalRegExpTest;
+    Math.min = originalMin;
+  }
+
   const canonicalMutationRequest = adapterParityRequest();
   canonicalMutationRequest.url = '/_m/a/b';
   expect(
