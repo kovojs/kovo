@@ -202,6 +202,7 @@ const templateFiles: readonly TemplateFile[] = [
   'tsconfig.json',
   'kovo.config.ts',
   'vite.config.ts',
+  'index.html',
   '.github/workflows/ci.yml',
   { path: 'README.md', sqlitePath: 'README.sqlite.md' },
   'scripts/check-sound-subset.mjs',

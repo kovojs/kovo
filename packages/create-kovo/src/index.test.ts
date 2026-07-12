@@ -34,6 +34,7 @@ const TEMPLATE_FILES = [
   'tsconfig.json',
   'kovo.config.ts',
   'vite.config.ts',
+  'index.html',
   '.github/workflows/ci.yml',
   'README.md',
   'scripts/check-sound-subset.mjs',
@@ -267,7 +268,7 @@ describe('create-kovo starter (metadata)', () => {
       '@kovojs/server/internal/managed-db',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export const appRuntimeDbOptions = {\n  schema,\n  seedSql: SEED_CONTACTS,\n} satisfies KovoPostgresAppRuntimeOptions;',
+      'export const appRuntimeDbOptions = {\n  schema: appRuntimeSchema,\n  seedSql: SEED_CONTACTS,\n} satisfies KovoPostgresAppRuntimeOptions;',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'let appDatabase: KovoPostgresAppRuntimeDb | undefined;',

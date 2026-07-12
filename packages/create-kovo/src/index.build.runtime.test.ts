@@ -48,8 +48,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
       const origin = `http://127.0.0.1:${port}`;
       const loginResponse = await fetch(`${origin}/login`);
-      expect(loginResponse.status).toBe(200);
       const loginHtml = await loginResponse.text();
+      expect(loginResponse.status, `${loginHtml}\n${output()}`).toBe(200);
       const stylesheetHref = /\/assets\/styles\.css/.exec(loginHtml)?.[0] ?? '';
 
       expect(stylesheetHref).toBe('/assets/styles.css');
