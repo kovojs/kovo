@@ -1,5 +1,23 @@
 import type { JsonValue } from './index.js';
 import { cloneJsonValue, jsonEncodedByteLength } from './json-clone.js';
+import {
+  securityDefineProperty,
+  securityGetOwnPropertyDescriptor,
+  securityHasOwn,
+  securityIsArray,
+  securityMap,
+  securityMapDelete,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityObjectKeys,
+  securityOwnArrayEntry,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securitySetValues,
+  securityString,
+} from '#security-witness-intrinsics';
 
 /**
  * @internal
@@ -63,7 +81,7 @@ export class QueryDeltaApplyError extends Error {
 }
 
 function isPlainObject(value: unknown): value is { [key: string]: JsonValue } {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !securityIsArray(value);
 }
 
 /**
@@ -72,14 +90,16 @@ function isPlainObject(value: unknown): value is { [key: string]: JsonValue } {
  * {@link QueryDelta} structure (`lists` → {@link QueryListDelta}) to `JsonValue`.
  */
 function isRecordShape(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !securityIsArray(value);
 }
 
 function rowKey(row: JsonValue, keyField: string): string | undefined {
   if (!isPlainObject(row)) return undefined;
-  const value = row[keyField];
+  const descriptor = securityGetOwnPropertyDescriptor(row, keyField);
+  if (descriptor === undefined || !('value' in descriptor)) return undefined;
+  const value = descriptor.value;
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return securityString(value);
   return undefined;
 }
 
@@ -109,43 +129,79 @@ export function buildQueryDelta(
   if (!isPlainObject(value) || listMeta.length === 0) return undefined;
 
   const lists: { [path: string]: QueryListDelta } = {};
-  const collectionPaths = new Set<string>();
+  const collectionPaths = securitySet<string>();
 
-  for (const meta of listMeta) {
-    const affected = affectedKeysByDomain.get(meta.domain);
+  for (let metaIndex = 0; metaIndex < listMeta.length; metaIndex += 1) {
+    const metaEntry = securityOwnArrayEntry(listMeta, metaIndex);
+    if (!metaEntry.ok) return undefined;
+    const meta = metaEntry.value;
+    const affected = securityMapGet(affectedKeysByDomain, meta.domain);
     // No explicit keys for this collection's domain ⇒ the whole collection could
     // have changed ⇒ a scoped delta is not sound. Fall back to full.
-    if (affected === undefined || affected.size === 0) return undefined;
+    if (affected === undefined || securitySetValues(affected).length === 0) return undefined;
 
-    const collection = value[meta.path];
-    if (!Array.isArray(collection)) return undefined;
-    collectionPaths.add(meta.path);
+    const collectionDescriptor = securityGetOwnPropertyDescriptor(value, meta.path);
+    if (
+      collectionDescriptor === undefined ||
+      !('value' in collectionDescriptor) ||
+      !securityIsArray(collectionDescriptor.value)
+    ) {
+      return undefined;
+    }
+    const collection = collectionDescriptor.value as JsonValue[];
+    securitySetAdd(collectionPaths, meta.path);
 
     const upsert: JsonValue[] = [];
-    const present = new Set<string>();
-    for (const row of collection) {
+    const present = securitySet<string>();
+    for (let rowIndex = 0; rowIndex < collection.length; rowIndex += 1) {
+      const rowEntry = securityOwnArrayEntry(collection, rowIndex);
+      if (!rowEntry.ok) return undefined;
+      const row = rowEntry.value;
       const key = rowKey(row, meta.key);
       if (key === undefined) return undefined; // unkeyed row ⇒ cannot scope ⇒ full
-      present.add(key);
-      if (affected.has(key)) upsert.push(row);
+      securitySetAdd(present, key);
+      if (securitySetHas(affected, key)) upsert[upsert.length] = row;
     }
-    const remove = [...affected].filter((key) => !present.has(key));
+    const remove: string[] = [];
+    const affectedValues = securitySetValues(affected);
+    for (let keyIndex = 0; keyIndex < affectedValues.length; keyIndex += 1) {
+      const keyEntry = securityOwnArrayEntry(affectedValues, keyIndex);
+      if (!keyEntry.ok) return undefined;
+      if (!securitySetHas(present, keyEntry.value)) remove[remove.length] = keyEntry.value;
+    }
 
-    lists[meta.path] = {
-      key: meta.key,
-      ...(upsert.length > 0 ? { upsert } : {}),
-      ...(remove.length > 0 ? { remove } : {}),
-    };
+    securityDefineProperty(lists, meta.path, {
+      configurable: true,
+      enumerable: true,
+      value: {
+        key: meta.key,
+        ...(upsert.length > 0 ? { upsert } : {}),
+        ...(remove.length > 0 ? { remove } : {}),
+      },
+      writable: true,
+    });
   }
 
   const set: { [field: string]: JsonValue } = {};
-  for (const [field, fieldValue] of Object.entries(value)) {
-    if (!collectionPaths.has(field)) set[field] = fieldValue;
+  const valueKeys = securityObjectKeys(value);
+  for (let fieldIndex = 0; fieldIndex < valueKeys.length; fieldIndex += 1) {
+    const fieldEntry = securityOwnArrayEntry(valueKeys, fieldIndex);
+    if (!fieldEntry.ok) return undefined;
+    const field = fieldEntry.value;
+    if (securitySetHas(collectionPaths, field)) continue;
+    const fieldDescriptor = securityGetOwnPropertyDescriptor(value, field);
+    if (fieldDescriptor === undefined || !('value' in fieldDescriptor)) return undefined;
+    securityDefineProperty(set, field, {
+      configurable: true,
+      enumerable: true,
+      value: fieldDescriptor.value as JsonValue,
+      writable: true,
+    });
   }
 
   return {
-    ...(Object.keys(set).length > 0 ? { set } : {}),
-    ...(Object.keys(lists).length > 0 ? { lists } : {}),
+    ...(securityObjectKeys(set).length > 0 ? { set } : {}),
+    ...(securityObjectKeys(lists).length > 0 ? { lists } : {}),
   };
 }
 
@@ -209,31 +265,61 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
   // deleted by this rule — they are not part of the whole-object `set`. This
   // mirrors buildQueryDelta, which emits `set` as exactly value-minus-collectionPaths.
   if (delta.set) {
-    const listPaths = new Set(Object.keys(delta.lists ?? {}));
-    for (const field of Object.keys(next)) {
-      if (!Object.prototype.hasOwnProperty.call(delta.set, field) && !listPaths.has(field)) {
+    const listPaths = securitySet<string>();
+    const listPathKeys = securityObjectKeys(delta.lists ?? {});
+    for (let index = 0; index < listPathKeys.length; index += 1) {
+      const pathEntry = securityOwnArrayEntry(listPathKeys, index);
+      if (!pathEntry.ok) throw new QueryDeltaApplyError('query delta list paths are unstable');
+      securitySetAdd(listPaths, pathEntry.value);
+    }
+    const nextFields = securityObjectKeys(next);
+    for (let index = 0; index < nextFields.length; index += 1) {
+      const fieldEntry = securityOwnArrayEntry(nextFields, index);
+      if (!fieldEntry.ok) throw new QueryDeltaApplyError('query delta base fields are unstable');
+      const field = fieldEntry.value;
+      if (!securityHasOwn(delta.set, field) && !securitySetHas(listPaths, field)) {
         delete next[field];
       }
     }
     // part-4 L2-protopollution-1: assign as an OWN data property. Bracket assignment of a
     // `__proto__` field from the wire/DB would invoke the prototype setter (rebinding the value
     // object's prototype + dropping the field) instead of replacing the field wholesale (§9.1.1).
-    for (const [field, fieldValue] of Object.entries(delta.set)) {
-      Object.defineProperty(next, field, {
+    const setFields = securityObjectKeys(delta.set);
+    for (let index = 0; index < setFields.length; index += 1) {
+      const fieldEntry = securityOwnArrayEntry(setFields, index);
+      if (!fieldEntry.ok) throw new QueryDeltaApplyError('query delta set fields are unstable');
+      const field = fieldEntry.value;
+      const valueDescriptor = securityGetOwnPropertyDescriptor(delta.set, field);
+      if (valueDescriptor === undefined || !('value' in valueDescriptor)) {
+        throw new QueryDeltaApplyError(`query delta set field "${field}" is unstable`);
+      }
+      securityDefineProperty(next, field, {
         configurable: true,
         enumerable: true,
-        value: fieldValue,
+        value: valueDescriptor.value as JsonValue,
         writable: true,
       });
     }
   }
 
-  for (const [path, listDelta] of Object.entries(delta.lists ?? {})) {
-    const baseList = Object.getOwnPropertyDescriptor(next, path)?.value as JsonValue | undefined;
-    Object.defineProperty(next, path, {
+  const listFields = securityObjectKeys(delta.lists ?? {});
+  for (let index = 0; index < listFields.length; index += 1) {
+    const pathEntry = securityOwnArrayEntry(listFields, index);
+    if (!pathEntry.ok) throw new QueryDeltaApplyError('query delta list fields are unstable');
+    const path = pathEntry.value;
+    const listDescriptor = securityGetOwnPropertyDescriptor(delta.lists ?? {}, path);
+    if (listDescriptor === undefined || !('value' in listDescriptor)) {
+      throw new QueryDeltaApplyError(`query delta list field "${path}" is unstable`);
+    }
+    const baseDescriptor = securityGetOwnPropertyDescriptor(next, path);
+    const baseList =
+      baseDescriptor !== undefined && 'value' in baseDescriptor
+        ? (baseDescriptor.value as JsonValue)
+        : undefined;
+    securityDefineProperty(next, path, {
       configurable: true,
       enumerable: true,
-      value: reconcileList(baseList, listDelta, path),
+      value: reconcileList(baseList, listDescriptor.value as QueryListDelta, path),
       writable: true,
     });
   }
@@ -246,43 +332,82 @@ function reconcileList(
   listDelta: QueryListDelta,
   path: string,
 ): JsonValue[] {
-  if (!Array.isArray(baseList)) {
+  if (!securityIsArray(baseList)) {
     throw new QueryDeltaApplyError(`query delta targets non-array base collection "${path}"`);
   }
 
-  const removeSet = new Set(listDelta.remove ?? []);
-  const upsertByKey = new Map<string, JsonValue>();
-  for (const row of listDelta.upsert ?? []) {
+  const removeSet = securitySet<string>();
+  const remove = listDelta.remove ?? [];
+  if (!securityIsArray(remove)) {
+    throw new QueryDeltaApplyError(`query delta remove list for "${path}" is not an array`);
+  }
+  for (let index = 0; index < remove.length; index += 1) {
+    const entry = securityOwnArrayEntry(remove, index);
+    if (!entry.ok || typeof entry.value !== 'string') {
+      throw new QueryDeltaApplyError(`query delta remove list for "${path}" is unstable`);
+    }
+    securitySetAdd(removeSet, entry.value);
+  }
+  const upsertByKey = securityMap<string, JsonValue>();
+  const upsert = listDelta.upsert ?? [];
+  if (!securityIsArray(upsert)) {
+    throw new QueryDeltaApplyError(`query delta upsert list for "${path}" is not an array`);
+  }
+  for (let index = 0; index < upsert.length; index += 1) {
+    const entry = securityOwnArrayEntry(upsert, index);
+    if (!entry.ok) {
+      throw new QueryDeltaApplyError(`query delta upsert list for "${path}" is unstable`);
+    }
+    const row = entry.value as JsonValue;
     const key = rowKey(row, listDelta.key);
     if (key === undefined) {
       throw new QueryDeltaApplyError(`query delta upsert row missing key "${listDelta.key}"`);
     }
-    upsertByKey.set(key, row);
+    securityMapSet(upsertByKey, key, row);
   }
 
   const kept: JsonValue[] = [];
-  for (const row of baseList) {
+  for (let index = 0; index < baseList.length; index += 1) {
+    const entry = securityOwnArrayEntry(baseList, index);
+    if (!entry.ok) throw new QueryDeltaApplyError(`query delta base list "${path}" is unstable`);
+    const row = entry.value as JsonValue;
     const key = rowKey(row, listDelta.key);
-    if (key !== undefined && removeSet.has(key)) continue;
-    if (key !== undefined && upsertByKey.has(key)) {
-      kept.push(upsertByKey.get(key) as JsonValue);
-      upsertByKey.delete(key);
+    if (key !== undefined && securitySetHas(removeSet, key)) continue;
+    if (key !== undefined && securityMapHas(upsertByKey, key)) {
+      kept[kept.length] = securityMapGet(upsertByKey, key) as JsonValue;
+      securityMapDelete(upsertByKey, key);
       continue;
     }
-    kept.push(row);
+    kept[kept.length] = row;
   }
   // New rows (upserts whose key was not already present), in wire order.
   const added: JsonValue[] = [];
-  for (const row of listDelta.upsert ?? []) {
+  for (let index = 0; index < upsert.length; index += 1) {
+    const entry = securityOwnArrayEntry(upsert, index);
+    if (!entry.ok) throw new QueryDeltaApplyError(`query delta upsert list "${path}" is unstable`);
+    const row = entry.value as JsonValue;
     const key = rowKey(row, listDelta.key);
-    if (key !== undefined && upsertByKey.has(key)) {
-      added.push(row);
-      upsertByKey.delete(key);
+    if (key !== undefined && securityMapHas(upsertByKey, key)) {
+      added[added.length] = row;
+      securityMapDelete(upsertByKey, key);
     }
   }
 
   // SPEC §9.1.1/§9.3 read-side pagination: a `prepend` delta inserts the new page
   // at the FRONT of the held list (load older), otherwise new rows append (load
   // more). Matched rows already reconciled in place above either way.
-  return listDelta.prepend ? [...added, ...kept] : [...kept, ...added];
+  const result: JsonValue[] = [];
+  const first = listDelta.prepend ? added : kept;
+  const second = listDelta.prepend ? kept : added;
+  for (let index = 0; index < first.length; index += 1) {
+    const entry = securityOwnArrayEntry(first, index);
+    if (!entry.ok) throw new QueryDeltaApplyError(`query delta result for "${path}" is unstable`);
+    result[result.length] = entry.value;
+  }
+  for (let index = 0; index < second.length; index += 1) {
+    const entry = securityOwnArrayEntry(second, index);
+    if (!entry.ok) throw new QueryDeltaApplyError(`query delta result for "${path}" is unstable`);
+    result[result.length] = entry.value;
+  }
+  return result;
 }

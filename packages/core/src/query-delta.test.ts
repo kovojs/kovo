@@ -147,6 +147,34 @@ describe('applyQueryDelta', () => {
     expect(next).toEqual({ count: 2, items: [{ id: 'p1', qty: 2 }] });
   });
 
+  it('drops an omitted confidential field under mutable own-property dispatch', () => {
+    const base: JsonValue = { public: 'old', secret: 'victim-only' };
+    const delta: QueryDelta = { set: { public: 'new' } };
+    const nativeCall = Function.prototype.call;
+    let callHits = 0;
+    let next: JsonValue;
+
+    try {
+      Function.prototype.call = function retainConfidentialField(thisArg, ...args) {
+        if (
+          this === Object.prototype.hasOwnProperty &&
+          thisArg === delta.set &&
+          args[0] === 'secret'
+        ) {
+          callHits += 1;
+          return true;
+        }
+        return Reflect.apply(nativeCall, this, [thisArg, ...args]);
+      };
+      next = applyQueryDelta(base, delta);
+    } finally {
+      Function.prototype.call = nativeCall;
+    }
+
+    expect(next!).toEqual({ public: 'new' });
+    expect(callHits).toBe(0);
+  });
+
   it('never drops a tracked list path even when it is absent from set', () => {
     // `set` carries only non-collection fields; the `items` list survives via
     // `delta.lists` reconciliation and must not be treated as a dropped field.
