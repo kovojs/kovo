@@ -31,6 +31,16 @@ import {
 } from './response.js';
 import type { Schema } from './schema.js';
 import {
+  requestStateIsSafeInteger,
+  requestStateIsSingleLeadingSlashPath,
+  requestStateLocationWithQuery,
+  requestStateNow,
+  requestStatePathname,
+  requestStateRequiredRateLimitKey,
+  requestStateRetryAfterSeconds,
+  requestStateSameOriginPath,
+} from './request-state-intrinsics.js';
+import {
   createWitnessMap,
   createWitnessSet,
   createWitnessWeakMap,
@@ -560,6 +570,7 @@ export const guards = {
   rateLimit<Request extends SessionRequestLike>(
     options: RateLimitOptions<Request>,
   ): Guard<Request> {
+    assertRateLimitOptions(options);
     const counts = createWitnessMap<string, { count: number; resetAt: number }>();
     const rateOptions: RateLimitOptions<Request> = witnessFreeze({
       ...(options.key === undefined ? {} : { key: options.key }),
@@ -571,7 +582,7 @@ export const guards = {
 
     return stampGuardAudit(
       (request) => {
-        const now = Date.now();
+        const now = requestStateNow();
         evictExpiredRateLimits(counts, now);
 
         const windowMs = rateOptions.windowMs ?? defaultRateLimitWindowMs;
@@ -1043,8 +1054,37 @@ function rateLimitFailure(resetAt: number, now: number): RateLimitedDenial {
   return {
     kind: 'rateLimited',
     payload: {},
-    retryAfter: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+    retryAfter: requestStateRetryAfterSeconds(resetAt - now),
   };
+}
+
+function assertRateLimitOptions<Request>(options: RateLimitOptions<Request>): void {
+  if (!requestStateIsSafeInteger(options.max) || options.max < 0) {
+    throw new TypeError('guards.rateLimit({ max }) must be a non-negative integer.');
+  }
+  if (
+    options.maxKeys !== undefined &&
+    (!requestStateIsSafeInteger(options.maxKeys) || options.maxKeys < 1)
+  ) {
+    throw new TypeError('guards.rateLimit({ maxKeys }) must be a positive integer.');
+  }
+  if (
+    options.windowMs !== undefined &&
+    (!requestStateIsSafeInteger(options.windowMs) || options.windowMs < 1)
+  ) {
+    throw new TypeError('guards.rateLimit({ windowMs }) must be a positive integer.');
+  }
+  if (options.key !== undefined && typeof options.key !== 'function') {
+    throw new TypeError('guards.rateLimit({ key }) must be a function when provided.');
+  }
+  if (
+    options.per !== undefined &&
+    options.per !== 'global' &&
+    options.per !== 'session' &&
+    options.per !== 'ip'
+  ) {
+    throw new TypeError("guards.rateLimit({ per }) must be 'global', 'session', or 'ip'.");
+  }
 }
 
 function unauthenticatedGuardFailure(): UnauthenticatedDenial {
@@ -1198,10 +1238,7 @@ function loginLocationWithNext(
   routes?: readonly RouteLike[],
 ): string {
   const base = 'https://kovo.local';
-  const url = new URL(loginPath, base);
-  url.searchParams.set('next', sanitizeNext(next, routes));
-
-  return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : url.toString();
+  return requestStateLocationWithQuery(loginPath, base, 'next', sanitizeNext(next, routes));
 }
 
 /**
@@ -1221,7 +1258,7 @@ function loginLocationWithNext(
  * @internal
  */
 export function sanitizeNext(next: string, routes?: readonly RouteLike[]): string {
-  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/';
+  if (!requestStateIsSingleLeadingSlashPath(next)) return '/';
   const sanitized = sanitizeNextOrigin(next);
   if (sanitized === undefined) return '/';
 
@@ -1230,7 +1267,7 @@ export function sanitizeNext(next: string, routes?: readonly RouteLike[]): strin
   // dead end (or an internal path that was never meant to be a public destination).
   if (routes !== undefined && routes.length > 0) {
     // Strip query string and hash to get the bare pathname for route matching.
-    const pathnameOnly = sanitized.replace(/[?#].*$/, '');
+    const pathnameOnly = requestStatePathname(sanitized);
     const match = matchRoute(routes, pathnameOnly);
     if (!match) return '/';
   }
@@ -1239,22 +1276,9 @@ export function sanitizeNext(next: string, routes?: readonly RouteLike[]): strin
 }
 
 function sanitizeNextOrigin(next: string): string | undefined {
-  try {
-    const base = 'https://kovo.local';
-    const resolved = new URL(next, base);
-    if (resolved.origin !== base) return undefined;
-    const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
-    // SPEC §6.5 (P1-1, plans/compiler-soundness.md): re-apply the scheme-relative guard to the
-    // NORMALIZED path. WHATWG URL-with-base normalization can collapse e.g. `/..//evil.com` (or its
-    // percent-encoded `/%2e%2e//evil.com`) to pathname `//evil.com` while the origin stays the base,
-    // so the raw-input prefix check at the call site never saw the synthesized leading `//`. A
-    // base-less `Location: //evil.com` header is protocol-relative and resolves cross-origin, so fail
-    // closed unless the final string the header will carry is a strict single-leading-slash path.
-    if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\')) return undefined;
-    return path;
-  } catch {
-    return undefined;
-  }
+  // SPEC §6.5 (P1-1, plans/compiler-soundness.md): the intrinsic helper both resolves against
+  // the pinned origin and re-applies the scheme-relative guard to the NORMALIZED final scalar.
+  return requestStateSameOriginPath(next, 'https://kovo.local');
 }
 
 export function guardFailureIsUnauthenticated<Request>(
@@ -1271,7 +1295,12 @@ function rateLimitKey<Request extends SessionRequestLike>(
   request: Request,
   options: RateLimitOptions<Request>,
 ): string {
-  if (options.key) return options.key(request);
+  if (options.key) {
+    return requestStateRequiredRateLimitKey(
+      options.key(request),
+      'guards.rateLimit({ key })',
+    );
+  }
   if (options.per === 'global') return 'global';
 
   if (options.per === 'ip') {
@@ -1280,7 +1309,9 @@ function rateLimitKey<Request extends SessionRequestLike>(
     // never a raw header read here. Namespace with an `ip:` prefix so an IP can never collide with
     // a session id bucket.
     const clientIp = (request as ClientIpRequestLike).clientIp;
-    if (clientIp !== undefined && clientIp !== '') return `ip:${clientIp}`;
+    if (clientIp !== undefined && clientIp !== '') {
+      return `ip:${requestStateRequiredRateLimitKey(clientIp, "guards.rateLimit({ per: 'ip' })")}`;
+    }
 
     // Mirror the M3 protection below: refuse to silently collapse every client whose IP the shell
     // could not resolve into one shared `ip:unknown` bucket (a DoS lever that lets one attacker

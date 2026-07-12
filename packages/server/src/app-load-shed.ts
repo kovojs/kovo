@@ -12,6 +12,28 @@ import {
   createNativeRequest,
   registerAuthorityNeutralRequestClone,
 } from './request-carrier.js';
+import {
+  requestStateHeaderGet,
+  requestStateIsSafeInteger,
+  requestStateNow,
+  requestStateOptionalRateLimitKey,
+  requestStateParseUnsignedInteger,
+  requestStateRetryAfterSeconds,
+  requestStateRightmostForwardedForValue,
+  requestStateRightmostHeaderListValue,
+  requestStateString,
+} from './request-state-intrinsics.js';
+import {
+  createWitnessMap,
+  createWitnessWeakMap,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessMapSize,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 export type LoadShedSurface = AppSystemResponseSurface;
 
@@ -84,7 +106,7 @@ const readNativeRequestMethod = requestIntrinsicGetter<string>('method');
 const readNativeRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
 const readNativeRequestUrl = requestIntrinsicGetter<string>('url');
 
-const rateStates = new WeakMap<KovoApp, AppRateState>();
+const rateStates = createWitnessWeakMap<KovoApp, AppRateState>();
 
 export function normalizeAppRequestLimits(
   options: AppRequestLimitOptions | false | undefined,
@@ -136,16 +158,16 @@ export function preDispatchLoadShedResponse(
   const bodyFailure = requestBodySizeFailure(maxBodyBytes, request, surface, buildToken);
   if (bodyFailure) return bodyFailure;
 
-  const rateLimited = rateLimitFailure(app, request, surface, Date.now());
+  const rateLimited = rateLimitFailure(app, request, surface, requestStateNow());
   if (!rateLimited) return undefined;
 
   return appSystemResponse('Too Many Requests', {
     buildToken,
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
-      'Retry-After': String(rateLimited.retryAfterSeconds),
+      'Retry-After': requestStateString(rateLimited.retryAfterSeconds),
     },
-    method: request.method,
+    method: readNativeRequestMethod(request),
     status: 429,
     surface,
   });
@@ -154,7 +176,7 @@ export function preDispatchLoadShedResponse(
 function normalizeBodyLimit(options: AppRequestLimitOptions): number | false {
   if (options.maxBodyBytes === false) return false;
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
-  if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 0) {
+  if (!requestStateIsSafeInteger(maxBodyBytes) || maxBodyBytes < 0) {
     throw new TypeError(
       'createApp({ requestLimits.maxBodyBytes }) must be a non-negative integer.',
     );
@@ -163,7 +185,7 @@ function normalizeBodyLimit(options: AppRequestLimitOptions): number | false {
 }
 
 function normalizeQueryListLimit(maxQueryListItems: number): number {
-  if (!Number.isSafeInteger(maxQueryListItems) || maxQueryListItems < 1) {
+  if (!requestStateIsSafeInteger(maxQueryListItems) || maxQueryListItems < 1) {
     throw new TypeError(
       'createApp({ requestLimits.maxQueryListItems }) must be a positive integer.',
     );
@@ -179,13 +201,13 @@ function normalizeRate(
   const max = options?.max ?? defaults.max;
   const maxKeys = options?.maxKeys ?? defaults.maxKeys;
   const windowMs = options?.windowMs ?? defaults.windowMs;
-  if (!Number.isSafeInteger(max) || max < 1) {
+  if (!requestStateIsSafeInteger(max) || max < 1) {
     throw new TypeError('createApp({ requestLimits.*.max }) must be a positive integer.');
   }
-  if (!Number.isSafeInteger(maxKeys) || maxKeys < 1) {
+  if (!requestStateIsSafeInteger(maxKeys) || maxKeys < 1) {
     throw new TypeError('createApp({ requestLimits.*.maxKeys }) must be a positive integer.');
   }
-  if (!Number.isSafeInteger(windowMs) || windowMs < 1) {
+  if (!requestStateIsSafeInteger(windowMs) || windowMs < 1) {
     throw new TypeError('createApp({ requestLimits.*.windowMs }) must be a positive integer.');
   }
   return { max, maxKeys, windowMs };
@@ -204,18 +226,16 @@ function requestBodySizeFailure(
   return appSystemResponse('Payload Too Large', {
     buildToken,
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    method: request.method,
+    method: readNativeRequestMethod(request),
     status: 413,
     surface,
   });
 }
 
 function requestContentLength(request: Request): number | undefined {
-  const value = readNativeRequestHeaders(request).get('content-length');
+  const value = requestStateHeaderGet(readNativeRequestHeaders(request), 'content-length');
   if (value === null) return undefined;
-  if (!/^\d+$/.test(value)) return undefined;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
+  return requestStateParseUnsignedInteger(value);
 }
 
 function rateLimitFailure(
@@ -269,24 +289,27 @@ function consumeRateLimit(
 ): RateLimitDecision | undefined {
   evictExpiredRateBuckets(store, limit, now);
 
-  const existing = store.get(key);
+  const existing = witnessMapGet(store, key);
   const bucket = existing === undefined ? { count: 0, windowStart: now } : existing;
   bucket.count += 1;
   if (existing === undefined) {
-    while (store.size >= limit.maxKeys) {
-      const oldest = store.keys().next().value;
+    while (witnessMapSize(store) >= limit.maxKeys) {
+      let oldest: string | undefined;
+      witnessMapForEach(store, (_bucket, candidate) => {
+        if (oldest === undefined) oldest = candidate;
+      });
       if (oldest === undefined) break;
-      store.delete(oldest);
+      witnessMapDelete(store, oldest);
     }
   } else {
-    store.delete(key);
+    witnessMapDelete(store, key);
   }
-  store.set(key, bucket);
+  witnessMapSet(store, key, bucket);
 
   if (bucket.count <= limit.max) return undefined;
 
   return {
-    retryAfterSeconds: Math.max(1, Math.ceil((bucket.windowStart + limit.windowMs - now) / 1000)),
+    retryAfterSeconds: requestStateRetryAfterSeconds(bucket.windowStart + limit.windowMs - now),
   };
 }
 
@@ -295,16 +318,16 @@ function evictExpiredRateBuckets(
   limit: ResolvedAppRateLimitOptions,
   now: number,
 ): void {
-  for (const [key, bucket] of store) {
-    if (now - bucket.windowStart >= limit.windowMs) store.delete(key);
-  }
+  witnessMapForEach(store, (bucket, key) => {
+    if (now - bucket.windowStart >= limit.windowMs) witnessMapDelete(store, key);
+  });
 }
 
 function appRateState(app: KovoApp): AppRateState {
-  const existing = rateStates.get(app);
+  const existing = witnessWeakMapGet(rateStates, app);
   if (existing) return existing;
-  const next = { stores: new Map<string, RateBucketStore>() };
-  rateStates.set(app, next);
+  const next = { stores: createWitnessMap<string, RateBucketStore>() };
+  witnessWeakMapSet(rateStates, app, next);
   return next;
 }
 
@@ -313,10 +336,10 @@ function appRateBucketStore(
   id: string,
   scope: RateBucketScope,
 ): Map<string, RateBucket> {
-  const existing = state.stores.get(id);
+  const existing = witnessMapGet(state.stores, id);
   if (existing) return existing.buckets;
-  const next: RateBucketStore = { buckets: new Map<string, RateBucket>(), scope };
-  state.stores.set(id, next);
+  const next: RateBucketStore = { buckets: createWitnessMap<string, RateBucket>(), scope };
+  witnessMapSet(state.stores, id, next);
   return next.buckets;
 }
 
@@ -325,13 +348,13 @@ export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: nu
   const state = appRateState(app);
   let global = 0;
   let perIp = 0;
-  for (const store of state.stores.values()) {
+  witnessMapForEach(state.stores, (store) => {
     if (store.scope === 'global') {
-      global += store.buckets.size;
+      global += witnessMapSize(store.buckets);
     } else {
-      perIp += store.buckets.size;
+      perIp += witnessMapSize(store.buckets);
     }
-  }
+  });
   return { global, perIp };
 }
 
@@ -497,8 +520,7 @@ export function resolveRequestClientIp(app: KovoApp, request: Request): string |
     limits.clientIp?.(request) ??
     requestClientIp(request, { trustedProxy: limits.trustedProxy }) ??
     requestPeerAddress(request);
-  const trimmed = ip?.trim();
-  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
+  return requestStateOptionalRateLimitKey(ip, 'createApp({ requestLimits.clientIp })');
 }
 
 function requestPeerAddress(request: Request): string | undefined {
@@ -510,31 +532,17 @@ function requestPeerAddress(request: Request): string | undefined {
 
 function requestClientIp(request: Request, options: { trustedProxy: boolean }): string | undefined {
   if (!options.trustedProxy) return undefined;
-  const forwardedFor = rightmostHeaderListValue(request.headers.get('x-forwarded-for'));
+  const headers = readNativeRequestHeaders(request);
+  const forwardedFor = requestStateRightmostHeaderListValue(
+    requestStateHeaderGet(headers, 'x-forwarded-for'),
+  );
   if (forwardedFor) return forwardedFor;
 
-  const realIp = request.headers.get('x-real-ip')?.trim();
+  const realIp = requestStateOptionalRateLimitKey(
+    requestStateHeaderGet(headers, 'x-real-ip'),
+    'trusted X-Real-IP',
+  );
   if (realIp) return realIp;
 
-  const forwarded = request.headers.get('forwarded');
-  return rightmostForwardedForValue(forwarded);
-}
-
-function rightmostHeaderListValue(value: string | null): string | undefined {
-  if (value === null) return undefined;
-  for (const entry of value.split(',').reverse()) {
-    const trimmed = entry.trim();
-    if (trimmed !== '') return trimmed;
-  }
-  return undefined;
-}
-
-function rightmostForwardedForValue(value: string | null): string | undefined {
-  if (value === null) return undefined;
-  for (const entry of value.split(',').reverse()) {
-    const match = entry.match(/(?:^|;)\s*for="?([^";,\s]+)"?/i);
-    const client = match?.[1]?.trim();
-    if (client) return client;
-  }
-  return undefined;
+  return requestStateRightmostForwardedForValue(requestStateHeaderGet(headers, 'forwarded'));
 }

@@ -626,44 +626,37 @@ describe('server guard and session primitives', () => {
   });
 
   it('resets rate-limit buckets after the configured window', async () => {
-    const now = vi.spyOn(Date, 'now');
-    let currentTime = 1_000;
-    now.mockImplementation(() => currentTime);
     const guarded = mutation('cart/add', {
-      guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 50 }),
+      guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 5 }),
       input: s.object({ productId: s.string() }),
       handler() {
         return 'ok';
       },
     });
 
-    try {
-      await expect(
-        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
-      ).resolves.toMatchObject({
-        ok: true,
-        value: 'ok',
-      });
-      await expect(
-        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
-      ).resolves.toMatchObject({
-        error: { code: 'RATE_LIMITED', payload: {} },
-        ok: false,
-        retryAfter: 1,
-        status: 429,
-      });
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'ok',
+    });
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+    ).resolves.toMatchObject({
+      error: { code: 'RATE_LIMITED', payload: {} },
+      ok: false,
+      retryAfter: 1,
+      status: 429,
+    });
 
-      currentTime = 1_051;
+    await new Promise((resolve) => setTimeout(resolve, 15));
 
-      await expect(
-        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
-      ).resolves.toMatchObject({
-        ok: true,
-        value: 'ok',
-      });
-    } finally {
-      now.mockRestore();
-    }
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'ok',
+    });
   });
 
   it('shares global rate limits across sessions and isolates custom keys', async () => {

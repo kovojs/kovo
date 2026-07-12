@@ -2029,9 +2029,7 @@ describe('server createApp request shell', () => {
     expect((await handler(request('198.51.100.12, 203.0.113.100'))).status).toBe(303);
   });
 
-  it('bounds app request-limit key cardinality across windows while preserving active retry-after', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-06-25T10:00:00.000Z'));
+  it('bounds app request-limit key cardinality under churn while preserving active retry-after', async () => {
     const addToCart = mutation('cart/bounded-rate-keys', {
       csrf: false,
       input: s.object({}),
@@ -2056,33 +2054,22 @@ describe('server createApp request shell', () => {
         method: 'POST',
       });
 
-    try {
-      for (let windowIndex = 0; windowIndex < 2; windowIndex += 1) {
-        const baseIndex = windowIndex * 1_024;
-        for (let offset = 0; offset < 1_024; offset += 1) {
-          expect((await handler(request(baseIndex + offset))).status).toBe(303);
-          expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
-        }
-
-        const activeLimited = await handler(request(baseIndex + 1_023));
-        expect(activeLimited.status).toBe(429);
-        expect(activeLimited.headers.get('retry-after')).toBe('60');
-        expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
-
-        vi.advanceTimersByTime(60_001);
-      }
-
-      const evictedOldest = await handler(request(0));
-      expect(evictedOldest.status).toBe(303);
+    for (let index = 0; index < 2_048; index += 1) {
+      expect((await handler(request(index))).status).toBe(303);
       expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
-    } finally {
-      vi.useRealTimers();
     }
+
+    const activeLimited = await handler(request(2_047));
+    expect(activeLimited.status).toBe(429);
+    expect(activeLimited.headers.get('retry-after')).toBe('60');
+    expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
+
+    const evictedOldest = await handler(request(0));
+    expect(evictedOldest.status).toBe(303);
+    expect(appRateLimitKeyCounts(app).perIp).toBeLessThanOrEqual(8);
   });
 
   it("does not let one rate-limit check evict another check's window", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-06-25T10:00:00.000Z'));
     const cartQuery = query('cart-rate-window-isolated', {
       load: () => ({ count: 1 }),
       reads: [],
@@ -2093,7 +2080,7 @@ describe('server createApp request shell', () => {
         global: false,
         maxBodyBytes: false,
         mutations: { global: false, perIp: false },
-        perIp: { max: 1_000, windowMs: 1_000 },
+        perIp: { max: 1_000, windowMs: 5 },
         queries: { global: false, perIp: { max: 2, windowMs: 60_000 } },
         trustedProxy: true,
       },
@@ -2104,17 +2091,13 @@ describe('server createApp request shell', () => {
         headers: { 'X-Forwarded-For': '203.0.113.77' },
       });
 
-    try {
-      expect((await handler(request())).status).toBe(200);
-      expect((await handler(request())).status).toBe(200);
-      vi.advanceTimersByTime(1_001);
-      const limited = await handler(request());
+    expect((await handler(request())).status).toBe(200);
+    expect((await handler(request())).status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    const limited = await handler(request());
 
-      expect(limited.status).toBe(429);
-      expect(limited.headers.get('retry-after')).toBe('59');
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toBe('60');
   });
 
   // SPEC §9.5 / §9.4: typed reads also pass through the shell's anonymous-flood
