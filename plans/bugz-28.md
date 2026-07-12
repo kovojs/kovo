@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    80 | C1-C80 |
+| Critical |    81 | C1-C81 |
 | High     |    35 | H1-H35 |
 | Medium   |    12 | M1-M12 |
 
@@ -983,7 +983,7 @@ build:dist` passes.
     metadata; every secret-bearing relational result is boxed or fails closed, and no non-function
     namespace can escape the read boundary merely because it was reached through a property.
 
-- [ ] **C78 - Mutable response-policy closure replaces reviewed mutation failure HTML.**
+- [x] **C78 - Mutable response-policy closure replaces reviewed mutation failure HTML.**
       `packages/server/src/app-mutation-responses.ts`
   - A selective ambient `Object.freeze` replacement captured the normalized response policy during
     `createApp()`, returned it unfrozen, and later replaced its reviewed `renderFailurePage`. A real
@@ -993,6 +993,10 @@ build:dist` passes.
     nested renderer/stylesheet arrays, redirect snapshots, object/array construction, and every
     freeze use boot-pinned semantically checked controls; late/import-order collection or Object
     poison cannot retain or mutate any post-validation output authority.
+  - **Evidence:** the 21-test app-mutation response matrix passes; an independent worktree rerun of
+    the raw failure-page exploit plus adjacent Object/Reflect/Array/Set poison cannot capture the
+    policy, retains the safe 422 page, rejects unknown/CSRF fields, and keeps every nested snapshot
+    frozen.
 
 - [ ] **C79 - Parameter-bearing prepared reads skip secret classification.**
       `packages/server/src/secret-read-boundary.ts`
@@ -1015,6 +1019,18 @@ build:dist` passes.
   - **Acceptance:** recognize `sync` as a terminal, bind its placeholder values to one exact SQL and
     origin snapshot, deep-box aliases/nested relations, and fail closed when exact classification is
     unavailable; the terminal cannot inherit an empty boundary merely because it is synchronous.
+
+- [ ] **C81 - Mutable URLSearchParams iteration substitutes guarded query capability bytes.**
+      `packages/server/src/{query,request-body-intrinsics}.ts`
+  - A selective late `URLSearchParams.prototype[Symbol.iterator]` replacement changed the submitted
+    `attacker-submitted` token into a cached valid victim capability before schema validation and
+    guards. The real typed-read endpoint returned status 200 with `victim-account` even though those
+    bytes were absent from the request carrier.
+  - **Acceptance:** native URLSearchParams detection, entry iteration, iterator settlement, record
+    and generic-pair traversal, duplicate handling, query-string reconstruction, and guard-failure
+    current URLs consume one bounded exact snapshot through boot-pinned controls; late/import-order
+    poison cannot substitute or cross-bind any query key/value while genuine repeated parameters
+    retain their existing schema behavior.
 
 ## High
 
