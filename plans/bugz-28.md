@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |    13 | C1-C13 |
+| Critical |    14 | C1-C14 |
 | High     |    24 | H1-H24 |
 | Medium   |     9 | M1-M9 |
 
@@ -138,6 +138,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     late or import-order poison.
   - **Evidence:** the 81-test PostgreSQL/runtime matrix passes; the independent real-PGlite collision
     proof now leaves the table empty after the outer rollback under constant clock/RNG replacements.
+
+- [ ] **C14 - Mutable storage codec controls can cross-bind a filesystem object key.**
+      `packages/core/src/{storage,internal/filesystem-intrinsics}.ts`
+  - Selective late `TextEncoder.prototype.encode` mapped an attacker logical key onto the victim's
+    physical SHA-256 slot, while a late `TextDecoder.prototype.decode` replacement forged the
+    exact-key sidecar ownership record. A real filesystem storage `get(attacker)` then returned the
+    victim blob bytes and labeled them with the attacker key.
+  - **Acceptance:** logical-key UTF-8 bytes, sidecar encode/decode/JSON, exact metadata validation,
+    physical-key derivation, and every get/stat/stream/delete/put ownership decision use boot-pinned,
+    semantically checked controls; late/import-order poison cannot alias keys or forge sidecar truth.
 
 ## High
 
@@ -453,7 +463,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C12, H15, and H17-H24 are active
+The remediation pass remains intentionally non-zero: C12, C14, H15, and H17-H24 are active
 request-carrier, response/deferred/mutation/client output, task, and browser-navigation fixes.
 Integrated
 evidence is
