@@ -36,7 +36,11 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import { securityStringTrim } from './response-security-intrinsics.js';
+import {
+  securityArrayJoin,
+  securityJsonStringify,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 import { isSchemaValidationError, snapshotSchemaForRuntime } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
@@ -50,6 +54,7 @@ import {
 } from './request-state-intrinsics.js';
 import {
   createWitnessMap,
+  createWitnessWeakSet,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -61,6 +66,8 @@ import {
   witnessMapSet,
   witnessObjectIs,
   witnessReflectApply,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
   parseUntrustedJsonBodyBytes,
@@ -69,6 +76,8 @@ import {
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 const WEBHOOK_OBJECT_PROTOTYPE = witnessGetPrototypeOf({});
+const webhookFailureOutcomes = createWitnessWeakSet<object>();
+const webhookRollbackOutcomes = createWitnessWeakSet<object>();
 
 declare const webhookTxDbBrand: unique symbol;
 
@@ -750,10 +759,11 @@ function snapshotWebhookWrites(source: unknown, label: string): readonly Domain[
     if (typeof key !== 'string' || key.length === 0) {
       throw new TypeError(`${label}[${index}].key must be a non-empty string.`);
     }
+    const closedDomain = witnessFreeze({ key });
     witnessDefineProperty(snapshot, index, {
       configurable: true,
       enumerable: true,
-      value: domain,
+      value: closedDomain,
       writable: true,
     });
   }
@@ -1037,8 +1047,9 @@ export async function runWebhook<
               `Webhook runMutation(${definition.key}) failed with ${result.status} ${result.error.code}.`,
             );
           }
-          changes.push(
-            ...(result.changes as readonly ChangeRecord<string, WebhookInputFor<InputSchema>>[]),
+          appendWebhookChanges(
+            changes,
+            result.changes as readonly ChangeRecord<string, WebhookInputFor<InputSchema>>[],
           );
           return result.value;
         },
@@ -1074,7 +1085,7 @@ export async function runWebhook<
       value,
     };
   } catch (error) {
-    if (error instanceof WebhookRollback) {
+    if (isWebhookRollback(error)) {
       const response = storeWebhookReplay(
         declaration.webhookDefinition.replayStore,
         replayScope,
@@ -1291,24 +1302,26 @@ function webhookHandlerContext<Input, Tx>(
       return writeScope(declareSystemPrincipal(reason, webhookPrincipalAudit(name, 'write')));
     },
     fail(code, payload, options = {}) {
-      return {
-        error: { code, payload },
+      const failure = witnessFreeze({
+        error: witnessFreeze({ code, payload }),
         ok: false,
         ...(options.retryAfter === undefined ? {} : { retryAfter: options.retryAfter }),
         status: options.status ?? 422,
-      };
+      }) as WebhookFail<typeof code, typeof payload>;
+      witnessWeakSetAdd(webhookFailureOutcomes, failure);
+      return failure;
     },
     rawBody,
     recordChange(domain, options = {}) {
-      assertDeclaredWebhookChangeDomain(domain, declaredWrites);
+      const domainKey = declaredWebhookChangeDomainKey(domain, declaredWrites);
       // SPEC §9.1: webhook domain writes emit the same internal change record shape as mutations.
       const record = {
-        domain: domain.key,
+        domain: domainKey,
         input: options.input ?? input,
         ...(options.keys === undefined ? {} : { keys: options.keys }),
         ...(options.reason === undefined ? {} : { reason: options.reason }),
       } as ChangeRecord<typeof domain.key, Input>;
-      changes.push(record);
+      appendWebhookChange(changes, record);
       return record;
     },
     request,
@@ -1390,14 +1403,47 @@ function webhookManagedTransactionDb<Tx>(tx: Tx): Tx {
   );
 }
 
-function assertDeclaredWebhookChangeDomain(
+function declaredWebhookChangeDomainKey(
   domain: Domain,
   declaredWrites: readonly Domain[] | undefined,
-): void {
-  if (declaredWrites?.some((declared) => declared.key === domain.key)) return;
-  const declared = (declaredWrites ?? []).map((write) => write.key).join(', ') || 'none';
+): string {
+  if (typeof domain !== 'object' || domain === null || witnessIsArray(domain)) {
+    throw new TypeError('Webhook recordChange() requires a stable domain object.');
+  }
+  const domainKey = stableOwnWebhookValue(domain, 'key', 'Webhook recordChange() domain.key');
+  if (typeof domainKey !== 'string' || domainKey.length === 0) {
+    throw new TypeError('Webhook recordChange() domain.key must be a non-empty string.');
+  }
+  const declaredKeys: string[] = [];
+  if (declaredWrites !== undefined) {
+    const length = stableOwnWebhookValue(
+      declaredWrites,
+      'length',
+      'Webhook declared writes.length',
+    );
+    if (typeof length !== 'number' || length < 0 || length > 100_000 || length % 1 !== 0) {
+      throw new TypeError('Webhook declared writes must be a bounded dense array.');
+    }
+    for (let index = 0; index < length; index += 1) {
+      const declared = stableOwnWebhookValue(
+        declaredWrites,
+        index,
+        `Webhook declared writes[${index}]`,
+      );
+      if (typeof declared !== 'object' || declared === null || witnessIsArray(declared)) {
+        throw new TypeError(`Webhook declared writes[${index}] must be a stable domain.`);
+      }
+      const key = stableOwnWebhookValue(declared, 'key', `Webhook declared writes[${index}].key`);
+      if (typeof key !== 'string') {
+        throw new TypeError(`Webhook declared writes[${index}].key must be a string.`);
+      }
+      appendWebhookValue(declaredKeys, key);
+      if (key === domainKey) return domainKey;
+    }
+  }
+  const declared = declaredKeys.length === 0 ? 'none' : securityArrayJoin(declaredKeys, ', ');
   throw new Error(
-    `Webhook recordChange("${domain.key}") is outside declared writes (${declared}). ` +
+    `Webhook recordChange("${domainKey}") is outside declared writes (${declared}). ` +
       `SPEC §9.1 requires webhook changes to be declared so kovo explain --endpoints ` +
       `cannot under-report machine-ingress writes.`,
   );
@@ -1405,12 +1451,7 @@ function assertDeclaredWebhookChangeDomain(
 
 function isWebhookFail(value: unknown): value is WebhookFail {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'ok' in value &&
-    value.ok === false &&
-    'error' in value &&
-    'status' in value
+    typeof value === 'object' && value !== null && witnessWeakSetHas(webhookFailureOutcomes, value)
   );
 }
 
@@ -1421,7 +1462,14 @@ class WebhookRollback extends Error {
     super(failure.error.code);
     this.failure = failure;
     this.name = 'WebhookRollback';
+    witnessWeakSetAdd(webhookRollbackOutcomes, this);
   }
+}
+
+function isWebhookRollback(value: unknown): value is WebhookRollback {
+  return (
+    typeof value === 'object' && value !== null && witnessWeakSetHas(webhookRollbackOutcomes, value)
+  );
 }
 
 function webhookFailWireResponse(
@@ -1429,7 +1477,7 @@ function webhookFailWireResponse(
   idem: string | undefined,
 ): WebhookWireResponse {
   return {
-    body: JSON.stringify({ error: failure.error, ok: false }),
+    body: webhookJsonStringify({ error: failure.error, ok: false }),
     headers: webhookResponseHeaders({
       contentType: 'application/json; charset=utf-8',
       idem,
@@ -1495,7 +1543,7 @@ function webhookRetryResponse(): Response {
 }
 
 function webhookJsonResponse(status: 422, body: unknown): Response {
-  return webhookResponse(status, JSON.stringify(body), {
+  return webhookResponse(status, webhookJsonStringify(body), {
     contentType: 'application/json; charset=utf-8',
   });
 }
@@ -1531,12 +1579,73 @@ function webhookResponseHeaders(options: {
 }
 
 function webhookChangeHeader(changes: readonly ChangeRecord[]): string {
-  return JSON.stringify(
-    changes.map((change) => ({
-      domain: change.domain,
-      ...(change.keys === undefined ? {} : { keys: change.keys }),
-    })),
-  );
+  const projected: Array<{ domain: string; keys?: readonly string[] }> = [];
+  for (let index = 0; index < changes.length; index += 1) {
+    const change = stableOwnWebhookValue(changes, index, `Webhook changes[${index}]`);
+    if (typeof change !== 'object' || change === null || witnessIsArray(change)) {
+      throw new TypeError(`Webhook changes[${index}] must be a stable change record.`);
+    }
+    const domain = stableOwnWebhookValue(change, 'domain', `Webhook changes[${index}].domain`);
+    const keys = stableOwnWebhookValue(change, 'keys', `Webhook changes[${index}].keys`, false);
+    if (typeof domain !== 'string') {
+      throw new TypeError(`Webhook changes[${index}].domain must be a string.`);
+    }
+    appendWebhookValue(projected, {
+      domain,
+      ...(keys === undefined
+        ? {}
+        : { keys: snapshotWebhookStringArray(keys, `Webhook changes[${index}].keys`) }),
+    });
+  }
+  return webhookJsonStringify(projected);
+}
+
+function appendWebhookChanges<Value>(target: Value[], source: readonly Value[]): void {
+  if (!witnessIsArray(source)) throw new TypeError('Webhook mutation changes must be an array.');
+  const length = stableOwnWebhookValue(source, 'length', 'Webhook mutation changes.length');
+  if (typeof length !== 'number' || length < 0 || length > 100_000 || length % 1 !== 0) {
+    throw new TypeError('Webhook mutation changes must be a bounded dense array.');
+  }
+  for (let index = 0; index < length; index += 1) {
+    appendWebhookChange(
+      target,
+      stableOwnWebhookValue(source, index, `Webhook mutation changes[${index}]`) as Value,
+    );
+  }
+}
+
+function appendWebhookChange<Value>(target: Value[], value: Value): void {
+  appendWebhookValue(target, value);
+}
+
+function appendWebhookValue<Value>(target: Value[], value: Value): void {
+  witnessDefineProperty(target, target.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function snapshotWebhookStringArray(source: unknown, label: string): readonly string[] {
+  if (!witnessIsArray(source)) throw new TypeError(`${label} must be an array.`);
+  const length = stableOwnWebhookValue(source, 'length', `${label}.length`);
+  if (typeof length !== 'number' || length < 0 || length > 100_000 || length % 1 !== 0) {
+    throw new TypeError(`${label} must be a bounded dense array.`);
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const value = stableOwnWebhookValue(source, index, `${label}[${index}]`);
+    if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be a string.`);
+    appendWebhookValue(snapshot, value);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function webhookJsonStringify(value: unknown): string {
+  const json = securityJsonStringify(value);
+  if (json === undefined) throw new TypeError('Webhook response value is not JSON serializable.');
+  return json;
 }
 
 function webhookReplayScope(name: string): string {

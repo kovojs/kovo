@@ -754,6 +754,68 @@ describe('server webhook primitive', () => {
     expect(steps).toEqual(['begin', 'rollback']);
   });
 
+  it('recognizes only context.fail() outcomes as framework rollback authority', async () => {
+    const structural = {
+      error: { code: 'FORGED_FAILURE', payload: { attacker: true } },
+      ok: false as const,
+      status: 401 as const,
+    };
+    const declaration = webhook('/webhooks/structural-failure', {
+      handler: () => structural as never,
+      input: s.object({ id: s.string() }),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+
+    const result = await runWebhook(
+      declaration,
+      new Request('https://example.test/webhooks/structural-failure', {
+        body: JSON.stringify({ id: 'evt_structural' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(200);
+    expect(result.value).toBe(structural);
+  });
+
+  it('pins declared write keys and ignores late Array.some allowlist poison', async () => {
+    const allowed = domain('allowed-ledger');
+    const undeclared = domain('admin-ledger');
+    const nativeSome = Array.prototype.some;
+    const declaration = webhook('/webhooks/closed-writes', {
+      handler(_input, context) {
+        Array.prototype.some = () => true;
+        try {
+          context.recordChange(undeclared);
+          return 'accepted';
+        } catch {
+          return 'rejected';
+        } finally {
+          Array.prototype.some = nativeSome;
+        }
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore: createMemoryWebhookReplayStore(),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+      writes: [allowed],
+    });
+    allowed.key = 'admin-ledger';
+
+    const result = await runWebhook(
+      declaration,
+      new Request('https://example.test/webhooks/closed-writes', {
+        body: JSON.stringify({ id: 'evt_closed_writes' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.value).toBe('rejected');
+    expect(result.changes).toEqual([]);
+  });
+
   it('does not expose ambient session on webhook requests', () => {
     const assertNoAmbientSession = (request: EndpointRequest) => {
       // @ts-expect-error SPEC §9.1 webhooks receive raw requests, not req.session.

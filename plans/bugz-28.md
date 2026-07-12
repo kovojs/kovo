@@ -637,7 +637,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     own-data controls at declaration; endpoint audit/auth metadata and dispatch consume one immutable
     witnessed authority snapshot, and post-construction mutation or late/import-order poison cannot
     waive verification or change executable/write posture.
-  - **Evidence:** the 240-test webhook/app/endpoint/request matrix and server dist+DTS build pass; the
+  - **Evidence:** the 242-test webhook/app/endpoint/request matrix and server dist+DTS build pass; the
     independent full-app no-op pin proof now retains the rejecting custom verifier, returns 401 to
     the unsigned request, and never runs the handler after both definition and verifier mutation.
 
