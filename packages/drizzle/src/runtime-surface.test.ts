@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { validateManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
+import {
+  snapshotManagedSqlStatement,
+  validateManagedSqlStatement,
+} from '@kovojs/core/internal/sql-safety';
 import { sql as drizzleSql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { sql, staticSql, trustedSql } from './runtime.js';
@@ -37,6 +40,25 @@ function drizzleDeriveSource(): string {
 
 function drizzleCompatibilityBarrelSource(): string {
   return readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8');
+}
+
+// H5 strict-TypeScript control: these public Drizzle fields are genuinely mutable without casts.
+// The static KV422 gate rejects the laundering pattern, while the runtime executes only the recipe
+// that Kovo pinned before returning either object to app code.
+function strictTypeValidCarrierMutation(executableText: string) {
+  const replaced = sql`select ${'safe'}`;
+  Object.assign(replaced, {
+    queryChunks: [{ value: [executableText] }],
+  });
+
+  const nested = sql`select ${'safe'}`;
+  const literal = nested.queryChunks[0];
+  if (literal === null || typeof literal !== 'object') {
+    throw new Error('expected Drizzle StringChunk');
+  }
+  Object.assign(literal, { value: [executableText] });
+  nested.queryChunks.splice(1);
+  return { nested, replaced };
 }
 
 describe('@kovojs/drizzle runtime surface', () => {
@@ -86,6 +108,19 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(validateManagedSqlStatement(drizzleSql.raw('select * from products'))).toMatchObject({
       ok: false,
       message: expect.stringContaining('unbranded object-shaped SQL'),
+    });
+  });
+
+  it('pins genuine SQL carriers before strict-TypeScript-valid public mutation', () => {
+    const { nested, replaced } = strictTypeValidCarrierMutation('delete from accounts');
+
+    expect(snapshotManagedSqlStatement(replaced, 'postgres')).toMatchObject({
+      ok: true,
+      statement: { text: 'select $1', values: ['safe'] },
+    });
+    expect(snapshotManagedSqlStatement(nested, 'postgres')).toMatchObject({
+      ok: true,
+      statement: { text: 'select $1', values: ['safe'] },
     });
   });
 

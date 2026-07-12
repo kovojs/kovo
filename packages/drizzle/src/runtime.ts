@@ -123,13 +123,17 @@ type SqlTag = (<T = unknown>(
  */
 export const sql = (<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => {
   const statement = drizzleSql<T>(strings, ...values);
-  return stampParameterizedSql(statement, mergeSqlSafetyMetadata(values));
+  return stampParameterizedSql(statement, mergeSqlSafetyMetadata(values), {
+    kind: 'template',
+    strings,
+    values,
+  });
 }) as unknown as SqlTag;
 
 sql.raw = <T = unknown>(value: string) => {
   const raw = drizzleSql.raw(value) as SQL<T>;
-  stampRawSqlChunk(raw);
-  return stampStaticSql(raw, { containsRawChunk: true });
+  stampRawSqlChunk(raw, value);
+  return stampStaticSql(raw, { containsRawChunk: true }, { kind: 'text', text: value });
 };
 
 sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string[] } = {}) => {
@@ -141,15 +145,16 @@ sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string
     typeof factory === 'function'
       ? factory<T>(identifier)
       : (drizzleSql.raw(quoteSqlIdentifier(identifier)) as SQL<T>);
-  return stampSqlIdentifier(statement);
+  return stampSqlIdentifier(statement, quoteSqlIdentifier(identifier));
 };
 
 sql.allow = <T = unknown>(value: string, allow: readonly string[]) => {
   const fragment = validateSqlAllow(value, allow);
-  return stampSqlKeyword(drizzleSql.raw(fragment) as SQL<T>);
+  return stampSqlKeyword(drizzleSql.raw(fragment) as SQL<T>, fragment);
 };
 
-sql.join = <T = unknown>(parts: readonly unknown[], separator: unknown = drizzleSql.raw(', ')) => {
+sql.join = <T = unknown>(parts: readonly unknown[], separator?: unknown) => {
+  const drizzleSeparator = separator ?? drizzleSql.raw(', ');
   const factory = (
     drizzleSql as unknown as {
       join?: <TResult = unknown>(parts: unknown[], separator?: unknown) => SQL<TResult>;
@@ -157,13 +162,17 @@ sql.join = <T = unknown>(parts: readonly unknown[], separator: unknown = drizzle
   ).join;
   const statement =
     typeof factory === 'function'
-      ? factory<T>([...parts], separator)
+      ? factory<T>([...parts], drizzleSeparator)
       : drizzleSql<T>`${parts.reduce<unknown[]>((items, part, index) => {
-          if (index > 0) items.push(separator);
+          if (index > 0) items.push(drizzleSeparator);
           items.push(part);
           return items;
         }, [])}`;
-  return stampParameterizedSql(statement, mergeSqlSafetyMetadata([...parts, separator]));
+  return stampParameterizedSql(statement, mergeSqlSafetyMetadata([...parts, drizzleSeparator]), {
+    kind: 'join',
+    parts,
+    separator,
+  });
 };
 
 /**
@@ -177,7 +186,8 @@ export function staticSql<T = unknown>(
   if (values.length > 0) {
     throw new Error('staticSql accepts literal-only SQL text; use sql`...` for parameters.');
   }
-  return stampStaticSql(drizzleSql.raw(strings.join('')) as SQL<T>);
+  const text = strings.join('');
+  return stampStaticSql(drizzleSql.raw(text) as SQL<T>, {}, { kind: 'text', text });
 }
 
 /**

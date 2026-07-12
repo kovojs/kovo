@@ -199,15 +199,22 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
   });
 
   it('accepts legitimately branded parameterized / static / trusted / identifier / keyword statements', () => {
-    expect(validateManagedSqlStatement(stampParameterizedSql({})).ok).toBe(true);
-    expect(validateManagedSqlStatement(stampStaticSql({})).ok).toBe(true);
-    expect(validateManagedSqlStatement(stampTrustedSql({}, 'audited report clause')).ok).toBe(true);
-    expect(validateManagedSqlStatement(stampSqlIdentifier({})).ok).toBe(true);
-    expect(validateManagedSqlStatement(stampSqlKeyword({})).ok).toBe(true);
+    expect(
+      validateManagedSqlStatement(
+        stampParameterizedSql({ queryChunks: [{ value: ['select '] }, 1] }),
+      ).ok,
+    ).toBe(true);
+    expect(validateManagedSqlStatement(stampStaticSql({ text: 'select 1' })).ok).toBe(true);
+    expect(
+      validateManagedSqlStatement(stampTrustedSql({ text: 'select 1' }, 'audited report clause'))
+        .ok,
+    ).toBe(true);
+    expect(validateManagedSqlStatement(stampSqlIdentifier({}, '"products"')).ok).toBe(true);
+    expect(validateManagedSqlStatement(stampSqlKeyword({}, 'desc')).ok).toBe(true);
   });
 
   it('preserves raw SQL chunk metadata across later SQL brands', () => {
-    const raw = {};
+    const raw = { queryChunks: [{ value: ['select 1'] }] };
     stampRawSqlChunk(raw);
     stampStaticSql(raw);
 
@@ -222,14 +229,35 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
       queryChunks: [{ value: ['select * from products where id = '] }, 'p1'],
       values: ['p1'],
     });
+    Object.assign(statement, {
+      queryChunks: [{ value: ['delete from products where 1=1'] }],
+      values: [],
+    });
     const snapshot = snapshotManagedSqlStatement(statement, 'postgres');
     expect(snapshot.ok).toBe(true);
     if (!snapshot.ok) return;
     expect(snapshot.statement).toMatchObject({
       dialect: 'postgres',
-      provenance: 'branded-query-chunks',
+      provenance: 'pinned-kovo-recipe',
       text: 'select * from products where id = $1',
       values: ['p1'],
+    });
+  });
+
+  it('pins trusted separated carriers before later text/value mutation', () => {
+    const statement = stampTrustedSql(
+      { text: 'select * from products where id = $1', values: ['p1'] },
+      'audited report query',
+    );
+    statement.text = 'delete from products where 1=1';
+    statement.values.splice(0);
+
+    expect(snapshotManagedSqlStatement(statement, 'postgres')).toMatchObject({
+      ok: true,
+      statement: {
+        text: 'select * from products where id = $1',
+        values: ['p1'],
+      },
     });
   });
 

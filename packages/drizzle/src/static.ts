@@ -884,6 +884,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const context = sqlSafetyContextForSourceFile(sourceFile);
   const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
   if (rawDriverImport) diagnostics.push(rawDriverImport);
+  diagnostics.push(...mutableKovoSqlCarrierDiagnostics(file, sourceFile));
   diagnostics.push(...unresolvedConcurrencyAnnotationDiagnostics(sourceFile));
   diagnostics.push(...sqliteOwnerScopeWarningDiagnostics(file, sourceFile));
   diagnostics.push(...crossOwnerReadStaticGuardDiagnostics(file, sourceFile));
@@ -930,6 +931,179 @@ function sqlSafetyDiagnosticsForSourceFile(
   }
 
   return diagnostics;
+}
+
+type SqlCarrierBindingKind = 'nested' | 'root';
+
+/**
+ * SPEC §6.6/§10.2/§10.3 C15 (KV422): a Kovo SQL constructor pins an immutable private recipe.
+ * Public Drizzle fields remain mutable for compatibility, but app code must never use those fields
+ * as a second executable-text construction channel. Reject mutation of a known Kovo carrier (or a
+ * queryChunks-derived alias) even when a sink later sees the original, still-valid Kovo witness.
+ */
+function mutableKovoSqlCarrierDiagnostics(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic[] {
+  const roots = new Set<string>();
+  const nested = new Set<string>();
+  const declarations = sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const declaration of declarations) {
+      const name = declaration.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+      const key = sqlSafetySymbolKey(name);
+      const initializer = declaration.getInitializer();
+      if (!key || !initializer) continue;
+      const kind = kovoSqlCarrierExpressionKind(initializer, roots, nested);
+      const target = kind === 'root' ? roots : kind === 'nested' ? nested : undefined;
+      if (target && !target.has(key)) {
+        target.add(key);
+        changed = true;
+      }
+    }
+  }
+
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  const emitted = new Set<number>();
+  const emit = (node: Node): void => {
+    if (emitted.has(node.getStart())) return;
+    emitted.add(node.getStart());
+    diagnostics.push(
+      drizzleDiagnostic({
+        code: 'KV422',
+        detail:
+          'Kovo SQL carrier executable fields are immutable construction facts; do not mutate queryChunks/text/sql/value after sql construction. Build a new sql`...` value so request data remains bound parameters (SPEC §6.6/§10.3 C15).',
+        site: `${file.fileName}:${lineForIndex(file.source, node.getStart())}`,
+      }),
+    );
+  };
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = unwrappedStaticExpressionNode(call.getExpression());
+    if (Node.isPropertyAccessExpression(callee) || Node.isElementAccessExpression(callee)) {
+      const method = staticAccessName(callee);
+      const receiver = callee.getExpression();
+      const receiverKind = kovoSqlCarrierExpressionKind(receiver, roots, nested);
+
+      if (
+        receiverKind === 'nested' &&
+        method !== undefined &&
+        SQL_CARRIER_COLLECTION_MUTATORS.has(method)
+      ) {
+        emit(call);
+        continue;
+      }
+
+      if (
+        (method === 'assign' ||
+          method === 'defineProperty' ||
+          method === 'defineProperties' ||
+          method === 'setPrototypeOf') &&
+        receiver.getText() === 'Object' &&
+        kovoSqlCarrierExpressionKind(call.getArguments()[0], roots, nested) !== undefined
+      ) {
+        emit(call);
+        continue;
+      }
+
+      if (
+        method === 'set' &&
+        receiver.getText() === 'Reflect' &&
+        kovoSqlCarrierExpressionKind(call.getArguments()[0], roots, nested) !== undefined
+      ) {
+        emit(call);
+      }
+    }
+  }
+
+  for (const binary of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    if (!SQL_CARRIER_ASSIGNMENT_OPERATORS.has(binary.getOperatorToken().getKind())) continue;
+    if (kovoSqlCarrierExpressionKind(binary.getLeft(), roots, nested) === 'nested') emit(binary);
+  }
+
+  return diagnostics;
+}
+
+const SQL_CARRIER_COLLECTION_MUTATORS = new Set([
+  'copyWithin',
+  'fill',
+  'pop',
+  'push',
+  'reverse',
+  'shift',
+  'sort',
+  'splice',
+  'unshift',
+]);
+
+const SQL_CARRIER_ASSIGNMENT_OPERATORS = new Set([
+  SyntaxKind.AmpersandAmpersandEqualsToken,
+  SyntaxKind.AmpersandEqualsToken,
+  SyntaxKind.AsteriskAsteriskEqualsToken,
+  SyntaxKind.AsteriskEqualsToken,
+  SyntaxKind.BarBarEqualsToken,
+  SyntaxKind.BarEqualsToken,
+  SyntaxKind.CaretEqualsToken,
+  SyntaxKind.EqualsToken,
+  SyntaxKind.GreaterThanGreaterThanEqualsToken,
+  SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+  SyntaxKind.LessThanLessThanEqualsToken,
+  SyntaxKind.MinusEqualsToken,
+  SyntaxKind.PercentEqualsToken,
+  SyntaxKind.PlusEqualsToken,
+  SyntaxKind.QuestionQuestionEqualsToken,
+  SyntaxKind.SlashEqualsToken,
+]);
+
+function kovoSqlCarrierExpressionKind(
+  expression: Node | undefined,
+  roots: ReadonlySet<string>,
+  nested: ReadonlySet<string>,
+): SqlCarrierBindingKind | undefined {
+  if (!expression) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+  if (kovoSqlCarrierConstruction(node)) return 'root';
+  if (Node.isIdentifier(node)) {
+    const key = sqlSafetySymbolKey(node);
+    return key && roots.has(key) ? 'root' : key && nested.has(key) ? 'nested' : undefined;
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const parent = kovoSqlCarrierExpressionKind(node.getExpression(), roots, nested);
+    if (parent === 'nested') return 'nested';
+    const member = staticAccessName(node);
+    return parent === 'root' && member !== undefined && SQL_CARRIER_EXECUTABLE_FIELDS.has(member)
+      ? 'nested'
+      : undefined;
+  }
+  return undefined;
+}
+
+const SQL_CARRIER_EXECUTABLE_FIELDS = new Set(['queryChunks', 'sql', 'text', 'value']);
+
+function kovoSqlCarrierConstruction(expression: Node): boolean {
+  if (Node.isTaggedTemplateExpression(expression)) {
+    return isKovoSqlTagExpression(expression.getTag());
+  }
+  if (!Node.isCallExpression(expression)) return false;
+  if (isKovoDrizzleTrustedSqlCall(expression)) return true;
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  if (!Node.isPropertyAccessExpression(callee) && !Node.isElementAccessExpression(callee)) {
+    return false;
+  }
+  const method = staticAccessName(callee);
+  return (
+    method !== undefined &&
+    (method === 'allow' || method === 'identifier' || method === 'join' || method === 'raw') &&
+    expressionResolvesToFrameworkExport(
+      callee.getExpression(),
+      frameworkExport('@kovojs/drizzle', 'sql'),
+      { legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')] },
+    )
+  );
 }
 
 function crossOwnerReadStaticGuardDiagnostics(

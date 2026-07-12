@@ -15,6 +15,23 @@ type SqlBlessedSink =
 const rawSqlChunkBrand = Symbol('kovo.sql.raw-chunk');
 const sqlSafetyMetadataBrand = Symbol('kovo.sql.metadata');
 const managedSqlStatements = new WeakSet<object>();
+const sqlSafetyMetadataByValue = new WeakMap<object, Readonly<SqlSafetyMetadata>>();
+const pinnedSqlCarriers = new WeakMap<object, PinnedSqlCarrier>();
+
+type PinnedSqlChunk =
+  | Readonly<{ kind: 'parameter'; value: unknown }>
+  | Readonly<{ kind: 'text'; value: string }>;
+
+type PinnedSqlCarrier =
+  | Readonly<{
+      chunks: readonly PinnedSqlChunk[];
+      kind: 'recipe';
+    }>
+  | Readonly<{
+      kind: 'fixed';
+      text: string;
+      values: readonly unknown[];
+    }>;
 
 /** @internal */
 export type SqlSafetyMode = 'enforce';
@@ -49,13 +66,34 @@ interface SqlSafetyMetadata {
   justification?: string;
 }
 
+/** Construction facts consumed once while minting a parameterized SQL witness. */
+type ParameterizedSqlConstruction =
+  | Readonly<{
+      kind: 'join';
+      parts: readonly unknown[];
+      separator?: unknown;
+    }>
+  | Readonly<{
+      kind: 'template';
+      strings: readonly string[];
+      values: readonly unknown[];
+    }>;
+
+/** Construction facts consumed once while minting a static SQL witness. */
+type StaticSqlConstruction = Readonly<{
+  kind: 'text';
+  text: string;
+}>;
+
 /** @internal */
 export function stampParameterizedSql<T extends object>(
   value: T,
   metadata: SqlSafetyMetadata = {},
+  construction?: ParameterizedSqlConstruction,
 ): T & ParameterizedSql {
   blessSql('parameterized-sql', value);
   stampSqlSafetyMetadata(value, metadata);
+  pinSqlCarrier(value, construction);
   return value as T & ParameterizedSql;
 }
 
@@ -63,9 +101,11 @@ export function stampParameterizedSql<T extends object>(
 export function stampStaticSql<T extends object>(
   value: T,
   metadata: SqlSafetyMetadata = {},
+  construction?: StaticSqlConstruction,
 ): T & StaticSqlText {
   blessSql('static-sql', value);
   stampSqlSafetyMetadata(value, metadata);
+  pinSqlCarrier(value, construction);
   return value as T & StaticSqlText;
 }
 
@@ -73,6 +113,7 @@ export function stampStaticSql<T extends object>(
 export function stampTrustedSql<T extends object>(value: T, justification: string): T & TrustedSql {
   blessSql('trusted-sql', value);
   stampSqlSafetyMetadata(value, { ...sqlSafetyMetadata(value), justification });
+  pinSqlCarrier(value);
   return value as T & TrustedSql;
 }
 
@@ -90,29 +131,39 @@ export function frameworkTrustedSqlCarrier(
 }
 
 /** @internal */
-export function stampSqlIdentifier<T extends object>(value: T): T & StaticSqlText & SqlIdentifier {
+export function stampSqlIdentifier<T extends object>(
+  value: T,
+  text?: string,
+): T & StaticSqlText & SqlIdentifier {
   blessSql('sql-identifier', value);
-  return stampStaticSql(value) as T & StaticSqlText & SqlIdentifier;
+  return stampStaticSql(value, {}, text === undefined ? undefined : { kind: 'text', text }) as T &
+    StaticSqlText &
+    SqlIdentifier;
 }
 
 /** @internal */
-export function stampSqlKeyword<T extends object>(value: T): T & StaticSqlText & SqlKeyword {
+export function stampSqlKeyword<T extends object>(
+  value: T,
+  text?: string,
+): T & StaticSqlText & SqlKeyword {
   blessSql('sql-keyword', value);
-  return stampStaticSql(value) as T & StaticSqlText & SqlKeyword;
+  return stampStaticSql(value, {}, text === undefined ? undefined : { kind: 'text', text }) as T &
+    StaticSqlText &
+    SqlKeyword;
 }
 
 /** @internal */
-export function stampRawSqlChunk<T extends object>(value: T): T {
+export function stampRawSqlChunk<T extends object>(value: T, text?: string): T {
   stamp(value, rawSqlChunkBrand, true);
   stampSqlSafetyMetadata(value, { ...sqlSafetyMetadata(value), containsRawChunk: true });
+  pinSqlCarrier(value, text === undefined ? undefined : { kind: 'text', text });
   return value;
 }
 
 /** @internal */
 export function sqlSafetyMetadata(value: unknown): SqlSafetyMetadata {
   if (typeof value !== 'object' || value === null) return {};
-  const metadata = (value as Record<PropertyKey, unknown>)[sqlSafetyMetadataBrand];
-  return typeof metadata === 'object' && metadata !== null ? (metadata as SqlSafetyMetadata) : {};
+  return sqlSafetyMetadataByValue.get(value) ?? {};
 }
 
 /** @internal */
@@ -209,7 +260,7 @@ export type ManagedSqlDialect = 'postgres' | 'sqlite' | undefined;
 
 /** @internal */
 export type ManagedSqlProvenance =
-  | 'branded-query-chunks'
+  | 'pinned-kovo-recipe'
   | 'plain-separated-carrier'
   | 'trusted-separated-carrier';
 
@@ -238,14 +289,10 @@ export function validateManagedSqlStatement(statement: unknown): SqlStatementVal
     return unsafeSqlResult('SQL statements must be branded SQL objects or separated carriers.');
   }
 
-  if (isTrustedSql(statement)) return { ok: true };
-
   const metadata = sqlSafetyMetadata(statement);
   if (metadata.containsRawChunk) {
     return unsafeSqlResult('sql.raw(...) chunks require trustedSql(..., { justification }).');
   }
-
-  if (isParameterizedSql(statement) || isStaticSql(statement)) return { ok: true };
   if (isSeparatedSqlCarrier(statement)) return { ok: true };
 
   // SPEC §10.2: an object that exposes assembled SQL *text* (a `.text`/`.sql` string) but keeps it
@@ -287,6 +334,34 @@ export function snapshotManagedSqlStatement(
     };
   }
   if (typeof statement !== 'object' || statement === null) return { ok: false };
+
+  const trusted = isTrustedSql(statement);
+  if (trusted || isParameterizedSql(statement) || isStaticSql(statement)) {
+    // SPEC §6.6/§10.3 C9/C15: the witness authenticates the immutable construction-time recipe,
+    // never the later state of the mutable third-party Drizzle object. In particular, do not read
+    // queryChunks/text/sql here: app code can replace those public properties without losing the
+    // identity witness.
+    if (!trusted && sqlSafetyMetadata(statement).containsRawChunk) {
+      return {
+        message: 'sql.raw(...) chunks require trustedSql(..., { justification }).',
+        ok: false,
+      };
+    }
+    const pinned = pinnedSqlCarriers.get(statement);
+    if (pinned === undefined) {
+      return {
+        message:
+          'branded SQL carrier has no immutable framework-owned construction recipe; rebuild it through @kovojs/drizzle sql/staticSql/trustedSql (SPEC §6.6/§10.3 C15).',
+        ok: false,
+      };
+    }
+    const rendered = renderPinnedSqlCarrier(pinned);
+    return managedSqlSnapshot(rendered.text, rendered.values, dialect, {
+      allowEmptyValues: true,
+      provenance: pinned.kind === 'fixed' ? 'trusted-separated-carrier' : 'pinned-kovo-recipe',
+    });
+  }
+
   const unsafeSurface = unsafeSqlCarrierSurface(statement);
   if (unsafeSurface !== undefined) {
     return {
@@ -298,35 +373,6 @@ export function snapshotManagedSqlStatement(
   const record = statement as Record<PropertyKey, unknown>;
   const textSnapshot = snapshotSqlText(record);
   const parameterSnapshot = snapshotSqlParameters(record);
-  const queryChunks = dataPropertyValue(record, 'queryChunks');
-
-  if (isTrustedSql(statement) || isParameterizedSql(statement) || isStaticSql(statement)) {
-    if (!isTrustedSql(statement) && sqlSafetyMetadata(statement).containsRawChunk) {
-      return {
-        message: 'sql.raw(...) chunks require trustedSql(..., { justification }).',
-        ok: false,
-      };
-    }
-    if (textSnapshot.ok) {
-      return managedSqlSnapshot(
-        textSnapshot.value,
-        parameterSnapshot.ok ? parameterSnapshot.value : [],
-        dialect,
-        {
-          allowEmptyValues: true,
-          provenance: 'trusted-separated-carrier',
-        },
-      );
-    }
-    if (Array.isArray(queryChunks)) {
-      const values = parameterSnapshot.ok ? parameterSnapshot.value : [];
-      return managedSqlSnapshot(sqlFromQueryChunks(queryChunks), values, dialect, {
-        allowEmptyValues: true,
-        provenance: 'branded-query-chunks',
-      });
-    }
-    return { ok: false };
-  }
 
   if (!textSnapshot.ok || !parameterSnapshot.ok) {
     return !textSnapshot.ok && textSnapshot.message !== undefined
@@ -494,39 +540,186 @@ function managedSqlSnapshot(
   };
 }
 
-function sqlFromQueryChunks(chunks: readonly unknown[]): string {
-  let sql = '';
-  let parameterIndex = 0;
-  const nextParameter = () => `$${++parameterIndex}`;
-
-  for (const chunk of chunks) {
-    sql += sqlFromQueryChunk(chunk, nextParameter);
-  }
-
-  return sql;
+function pinSqlCarrier(
+  value: object,
+  construction?: ParameterizedSqlConstruction | StaticSqlConstruction,
+): void {
+  // A witness pins exactly once. Later trustedSql(...) wrapping may add audited authority, but it
+  // cannot reinterpret public properties that changed since the original Kovo constructor ran.
+  if (pinnedSqlCarriers.has(value)) return;
+  const pinned =
+    construction === undefined
+      ? pinnedSqlCarrierFromCurrentData(value)
+      : construction.kind === 'text'
+        ? pinnedSqlRecipe([{ kind: 'text', value: construction.text }])
+        : construction.kind === 'template'
+          ? pinnedSqlTemplate(construction.strings, construction.values)
+          : pinnedSqlJoin(construction.parts, construction.separator);
+  if (pinned !== undefined) pinnedSqlCarriers.set(value, pinned);
 }
 
-function sqlFromQueryChunk(chunk: unknown, nextParameter: () => string): string {
-  if (typeof chunk === 'string' || typeof chunk === 'number' || typeof chunk === 'boolean') {
-    return nextParameter();
+function pinnedSqlTemplate(
+  strings: readonly string[],
+  values: readonly unknown[],
+): PinnedSqlCarrier | undefined {
+  if (strings.length !== values.length + 1) return undefined;
+  const chunks: PinnedSqlChunk[] = [];
+  for (let index = 0; index < strings.length; index += 1) {
+    chunks.push({ kind: 'text', value: strings[index] ?? '' });
+    if (index < values.length && !appendPinnedSqlInterpolation(chunks, values[index])) {
+      return undefined;
+    }
   }
-  if (typeof chunk !== 'object' || chunk === null) return nextParameter();
+  return pinnedSqlRecipe(chunks);
+}
+
+function pinnedSqlJoin(
+  parts: readonly unknown[],
+  separator: unknown,
+): PinnedSqlCarrier | undefined {
+  const chunks: PinnedSqlChunk[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    if (index > 0) {
+      if (separator === undefined) {
+        chunks.push({ kind: 'text', value: ', ' });
+      } else if (!appendPinnedSqlInterpolation(chunks, separator)) {
+        return undefined;
+      }
+    }
+    if (!appendPinnedSqlInterpolation(chunks, parts[index])) return undefined;
+  }
+  return pinnedSqlRecipe(chunks);
+}
+
+function appendPinnedSqlInterpolation(chunks: PinnedSqlChunk[], value: unknown): boolean {
+  if (typeof value === 'object' && value !== null) {
+    const nested = pinnedSqlCarriers.get(value);
+    if (nested?.kind === 'recipe') {
+      chunks.push(...nested.chunks);
+      return true;
+    }
+    // Kovo can pin its own recursively composed SQL values. An unpinned SQLWrapper remains useful
+    // to Drizzle builders, but direct managed execution cannot reconstruct it without invoking or
+    // rereading a mutable third-party object, so leave the outer carrier unpinned and fail closed.
+    if (nested?.kind === 'fixed' || hasSqlWrapperSurface(value)) return false;
+  }
+  chunks.push({ kind: 'parameter', value });
+  return true;
+}
+
+function pinnedSqlCarrierFromCurrentData(value: object): PinnedSqlCarrier | undefined {
+  const record = value as Record<PropertyKey, unknown>;
+  const text = snapshotSqlText(record);
+  if (text.ok) {
+    const parameters = snapshotSqlParameters(record);
+    return Object.freeze({
+      kind: 'fixed',
+      text: text.value,
+      values: Object.freeze(parameters.ok ? [...parameters.value] : []),
+    });
+  }
+
+  const queryChunks = dataPropertyValue(record, 'queryChunks');
+  if (!Array.isArray(queryChunks)) return undefined;
+  const seen = new WeakSet<object>([value]);
+  const chunks: PinnedSqlChunk[] = [];
+  for (const chunk of queryChunks) {
+    if (!appendPinnedQueryChunk(chunks, chunk, seen)) return undefined;
+  }
+  return pinnedSqlRecipe(chunks);
+}
+
+function appendPinnedQueryChunk(
+  chunks: PinnedSqlChunk[],
+  chunk: unknown,
+  seen: WeakSet<object>,
+): boolean {
+  if (typeof chunk !== 'object' || chunk === null) {
+    chunks.push({ kind: 'parameter', value: chunk });
+    return true;
+  }
+
+  const pinned = pinnedSqlCarriers.get(chunk);
+  if (pinned?.kind === 'recipe') {
+    chunks.push(...pinned.chunks);
+    return true;
+  }
+  if (pinned?.kind === 'fixed') return false;
 
   const record = chunk as Record<PropertyKey, unknown>;
   const chunkValue = Object.getOwnPropertyDescriptor(record, 'value')?.value;
   if (Array.isArray(chunkValue) && chunkValue.every((item) => typeof item === 'string')) {
-    return chunkValue.join('');
+    chunks.push({ kind: 'text', value: chunkValue.join('') });
+    return true;
   }
   if (typeof chunkValue === 'string' && Object.prototype.hasOwnProperty.call(record, 'brand')) {
-    return chunkValue;
+    chunks.push({ kind: 'text', value: chunkValue });
+    return true;
   }
 
   const nested = dataPropertyValue(record, 'queryChunks');
   if (Array.isArray(nested)) {
-    return nested.map((item) => sqlFromQueryChunk(item, nextParameter)).join('');
+    if (seen.has(chunk)) return false;
+    seen.add(chunk);
+    for (const item of nested) {
+      if (!appendPinnedQueryChunk(chunks, item, seen)) return false;
+    }
+    return true;
   }
 
-  return nextParameter();
+  if (hasSqlWrapperSurface(chunk)) return false;
+  chunks.push({ kind: 'parameter', value: chunk });
+  return true;
+}
+
+function pinnedSqlRecipe(chunks: readonly PinnedSqlChunk[]): PinnedSqlCarrier {
+  return Object.freeze({
+    chunks: Object.freeze(
+      chunks.map((chunk) =>
+        Object.freeze(
+          chunk.kind === 'text'
+            ? { kind: 'text' as const, value: chunk.value }
+            : { kind: 'parameter' as const, value: chunk.value },
+        ),
+      ),
+    ),
+    kind: 'recipe',
+  });
+}
+
+function renderPinnedSqlCarrier(pinned: PinnedSqlCarrier): {
+  readonly text: string;
+  readonly values: readonly unknown[];
+} {
+  if (pinned.kind === 'fixed') return { text: pinned.text, values: pinned.values };
+  let text = '';
+  const values: unknown[] = [];
+  for (const chunk of pinned.chunks) {
+    if (chunk.kind === 'text') {
+      text += chunk.value;
+    } else {
+      values.push(chunk.value);
+      text += `$${values.length}`;
+    }
+  }
+  return { text, values };
+}
+
+function hasSqlWrapperSurface(value: object): boolean {
+  try {
+    let current: object | null = value;
+    while (current !== null) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, 'getSQL');
+      if (descriptor !== undefined) {
+        return !('value' in descriptor) || typeof descriptor.value === 'function';
+      }
+      current = Object.getPrototypeOf(current) as object | null;
+      if (current === Object.prototype) break;
+    }
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 function hasSqlBindMarker(sqlText: string): boolean {
@@ -604,7 +797,9 @@ function isSqlParameterNameStart(char: string | undefined): boolean {
 }
 
 function stampSqlSafetyMetadata(value: object, metadata: SqlSafetyMetadata): void {
-  stamp(value, sqlSafetyMetadataBrand, { ...sqlSafetyMetadata(value), ...metadata });
+  const pinned = Object.freeze({ ...sqlSafetyMetadata(value), ...metadata });
+  sqlSafetyMetadataByValue.set(value, pinned);
+  stamp(value, sqlSafetyMetadataBrand, pinned);
 }
 
 function blessSql(sink: SqlBlessedSink, value: object): void {

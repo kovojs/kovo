@@ -681,6 +681,47 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it('rejects request-derived queryChunks replacement on a genuine Kovo SQL carrier', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function executeRequestText(input: { sql: string }, db: any) {
+        const statement = sql\`select \${input.sql}\`;
+        Object.assign(statement, {
+          queryChunks: [{ value: [input.sql] }],
+        });
+        await db.execute(statement);
+      }
+    `);
+
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('executable fields are immutable construction facts'),
+        site: 'app.ts:5',
+      },
+    ]);
+  });
+
+  it('tracks queryChunks-derived aliases and rejects nested mutation laundering', () => {
+    const diagnostics = diagnosticsFor(`
+      import * as kovoDrizzle from '@kovojs/drizzle';
+      export async function executeRequestText(input: { sql: string }, db: any) {
+        const statement = kovoDrizzle.sql\`select \${input.sql}\`;
+        const chunks = statement.queryChunks;
+        const literal = chunks[0];
+        Object.assign(literal, { value: [input.sql] });
+        chunks.splice(1);
+        await db.execute(statement);
+      }
+    `);
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(['KV422', 'KV422']);
+    expect(diagnostics.map(({ message }) => message)).toEqual([
+      expect.stringContaining('executable fields are immutable construction facts'),
+      expect.stringContaining('executable fields are immutable construction facts'),
+    ]);
+  });
+
   it('keeps trustedSql auditable by flagging dynamic executable raw chunks', () => {
     expect(
       diagnosticsFor(`
