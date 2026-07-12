@@ -245,7 +245,7 @@ describe('server app shell Vite build seam', () => {
     expect(buildB.app.clientModules.buildToken()).toBe(tokenB);
   });
 
-  it('moves all build-scoped tokens and hrefs when compiler render-plan shape changes but client bytes do not', async () => {
+  it('moves build-scoped tokens and hrefs across old-document/new-server deploy skew for delimiter-collision shapes', async () => {
     const routePath = '/cart';
     const cartDomain = domain('cart');
     const source = `
@@ -264,8 +264,11 @@ export const CartButton = component({
         queryShapes,
         source,
       });
-    const compiledA = compileForShape({ cart: { count: 'number' } });
-    const compiledB = compileForShape({ cart: { total: 'number' } });
+    // These projected shapes serialized identically before the tagged framing
+    // grammar. Keep this as an end-to-end deploy-skew proof, not only a hash test
+    // (SPEC §5.2.1, §5.2.2, §14).
+    const compiledA = compileForShape({ cart: { a: 'string', b: 'string' } });
+    const compiledB = compileForShape({ cart: { 'a:string,b': 'string' } });
     const clientA = compiledClientModule(compiledA);
     const clientB = compiledClientModule(compiledB);
 
@@ -346,6 +349,11 @@ export const CartButton = component({
     ]);
     expect(queryA.headers.get('Kovo-Build')).toBe(tokenA);
     expect(queryB.headers.get('Kovo-Build')).toBe(tokenB);
+    // An old A document talking to the newly deployed B server observes B's
+    // distinct response token and therefore cannot accept it as same-contract
+    // response truth.
+    expect(documentBodyA).toContain(`<meta name="kovo-build" content="${tokenA}">`);
+    expect(queryB.headers.get('Kovo-Build')).not.toBe(tokenA);
 
     const mutationRequest = () =>
       new Request('https://example.test/_m/cart/add-token-proof', {
@@ -365,6 +373,7 @@ export const CartButton = component({
     expect(mutationB.status).toBe(200);
     expect(mutationA.headers.get('Kovo-Build')).toBe(tokenA);
     expect(mutationB.headers.get('Kovo-Build')).toBe(tokenB);
+    expect(mutationB.headers.get('Kovo-Build')).not.toBe(tokenA);
     await expect(mutationA.text()).resolves.toContain('<kovo-query name="cart"');
     await expect(mutationB.text()).resolves.toContain('<kovo-query name="cart"');
 

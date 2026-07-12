@@ -1508,6 +1508,44 @@ describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () =>
     ).not.toThrow();
   });
 
+  it('moves the production token for nested delimiter, control, and Unicode field-name changes', () => {
+    const source = `
+import { component } from '@kovojs/core';
+
+export const CollisionProof = component({
+  queries: { cart: {} },
+  render: () => <div>proof</div>,
+});
+`;
+    const before = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          nested: { a: 'string', b: 'string' },
+          '🧪:\u0000': 'number',
+        },
+      },
+      source,
+    });
+    const after = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          nested: { 'a:string,b': 'string' },
+          '🧪': { '\u0000': 'number' },
+        },
+      },
+      source,
+    });
+
+    expect(before.diagnostics).toEqual([]);
+    expect(after.diagnostics).toEqual([]);
+    expect(before.renderPlanFingerprint).toBeTruthy();
+    expect(after.renderPlanFingerprint).toBeTruthy();
+    expect(before.renderPlanFingerprint).not.toBe(after.renderPlanFingerprint);
+    expect(before.hmrImpact?.clientHref).not.toBe(after.hmrImpact?.clientHref);
+  });
+
   it('wires KV416 into the production compile gate diagnostics', () => {
     const frozenToken = (_: Record<string, string>) => 'frozen-v1';
     const result = compileComponentModule({

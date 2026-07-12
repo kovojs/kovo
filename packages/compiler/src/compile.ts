@@ -2,6 +2,7 @@ import * as ts from 'typescript';
 
 import {
   computeRenderPlanFingerprint,
+  encodeRenderPlanFrame,
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
@@ -1485,17 +1486,35 @@ function renderPlanFingerprintInputForOptions(
 }
 
 function stableQueryShapeSignature(shape: QueryShape): string {
-  if (Array.isArray(shape)) return `[${shape.map(stableQueryShapeSignature).join(',')}]`;
-  if (typeof shape === 'string') return shape;
+  if (Array.isArray(shape)) {
+    return encodeRenderPlanFrame('array', shape.map(stableQueryShapeSignature).join(''));
+  }
+  if (typeof shape === 'string') return encodeRenderPlanFrame('primitive', shape);
   if (isQueryShapeWrapper(shape)) {
-    return `${shape.kind}<${stableQueryShapeSignature(shape.shape)}>`;
+    return encodeRenderPlanFrame(
+      'wrapper',
+      encodeRenderPlanFrame('kind', shape.kind) +
+        encodeRenderPlanFrame('shape', stableQueryShapeSignature(shape.shape)),
+    );
   }
 
   const objectShape = shape as Readonly<Record<string, QueryShape>>;
-  return `{${Object.keys(shape)
-    .sort()
-    .map((key) => `${key}:${stableQueryShapeSignature(objectShape[key] ?? 'object')}`)
-    .join(',')}}`;
+  return encodeRenderPlanFrame(
+    'object',
+    Object.keys(shape)
+      .sort()
+      .map((key) =>
+        encodeRenderPlanFrame(
+          'property',
+          encodeRenderPlanFrame('name', key) +
+            encodeRenderPlanFrame(
+              'shape',
+              stableQueryShapeSignature(objectShape[key] ?? 'object'),
+            ),
+        ),
+      )
+      .join(''),
+  );
 }
 
 function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {

@@ -28,6 +28,8 @@ describe('CAP6: render-plan token cross-package contract', () => {
     { cart: 'shape:{count:number}', product: 'shape:{id:string,stock:number}' },
     { product: 'shape:{id:string,stock:number}', cart: 'shape:{count:number}' },
     { a: '1', b: '2', c: '3' },
+    { 'a:x\nb': 'y' },
+    { 'ユニコード:\u0000': 'shape:\n,:{}' },
   ];
 
   it('compiler fingerprint equals the shared core fingerprint over a corpus', () => {
@@ -48,6 +50,16 @@ describe('CAP6: render-plan token cross-package contract', () => {
     expect(changed).not.toBe(base);
   });
 
+  it('frames query names and shapes so delimiter/control/Unicode inputs cannot alias', () => {
+    const splitQueries = computeCompilerRenderPlanFingerprint({ a: 'x', b: 'y' });
+    const chosenPrefix = computeCompilerRenderPlanFingerprint({ 'a:x\nb': 'y' });
+    const unicodeA = computeCompilerRenderPlanFingerprint({ '🧪:\u0000': '\n,名' });
+    const unicodeB = computeCompilerRenderPlanFingerprint({ '🧪': '\u0000:\n,名' });
+
+    expect(chosenPrefix).not.toBe(splitQueries);
+    expect(unicodeA).not.toBe(unicodeB);
+  });
+
   it('is deterministic for a fixed input', () => {
     const input = { cart: 'shape:{count:number}', product: 'shape:{id:string}' };
     expect(computeCompilerRenderPlanFingerprint(input)).toBe(
@@ -56,6 +68,6 @@ describe('CAP6: render-plan token cross-package contract', () => {
   });
 
   it('pins the shared grammar version constant', () => {
-    expect(RENDER_PLAN_GRAMMAR_VERSION).toBe('kovo-render-plan/1');
+    expect(RENDER_PLAN_GRAMMAR_VERSION).toBe('kovo-render-plan/2');
   });
 });

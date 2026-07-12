@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
 /**
@@ -11,7 +12,21 @@ import { createHash } from 'node:crypto';
  * monotonicity, SPEC §5.2.2). Bump this string whenever the update-plan grammar
  * changes in a way that breaks wire compatibility.
  */
-export const RENDER_PLAN_GRAMMAR_VERSION = 'kovo-render-plan/1';
+export const RENDER_PLAN_GRAMMAR_VERSION = 'kovo-render-plan/2';
+
+/**
+ * Encode one render-plan grammar value without relying on delimiter characters
+ * being absent from app-authored query or field names. Byte lengths make the
+ * encoding canonical across ASCII, control characters, and Unicode (SPEC
+ * §5.2.1 rule 1).
+ *
+ * @internal Shared by the compiler's structural query-shape encoder and this
+ * module's query-name encoder so both layers use the same collision-resistant
+ * framing contract.
+ */
+export function encodeRenderPlanFrame(tag: string, value: string): string {
+  return `${Buffer.byteLength(tag, 'utf8')}:${tag}${Buffer.byteLength(value, 'utf8')}:${value}`;
+}
 
 /**
  * Input to {@link computeRenderPlanFingerprint}: a map of query name to an opaque
@@ -30,11 +45,17 @@ export type RenderPlanFingerprintInput = Record<string, string>;
 export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput): string {
   const entries = Object.keys(input)
     .sort()
-    .map((name) => `${name}:${input[name]}`);
+    .map((name) =>
+      encodeRenderPlanFrame(
+        'query',
+        encodeRenderPlanFrame('name', name) +
+          encodeRenderPlanFrame('shape', input[name] ?? ''),
+      ),
+    )
+    .join('');
   return createHash('sha256')
-    .update(RENDER_PLAN_GRAMMAR_VERSION)
-    .update('\0')
-    .update(entries.join('\n'))
+    .update(encodeRenderPlanFrame('grammar', RENDER_PLAN_GRAMMAR_VERSION))
+    .update(encodeRenderPlanFrame('queries', entries))
     .digest('hex')
     .slice(0, 16);
 }

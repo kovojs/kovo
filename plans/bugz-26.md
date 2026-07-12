@@ -309,7 +309,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     request size bounds without consuming handler data; identical bytes replay, any byte change
     conflicts, and digest failure fails closed.
 
-- [ ] **M9 - Render-plan query-shape serialization has chosen-prefix delimiter collisions, so a
+- [x] **M9 - Render-plan query-shape serialization has chosen-prefix delimiter collisions, so a
       changed projected field set can keep the same fingerprint, client href, and build token.**
       `packages/compiler/src/compile.ts:1472-1500`,
       `packages/core/src/internal/render-plan-token.ts:25-36`
@@ -325,6 +325,9 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** use a tagged canonical/length-prefixed structural encoding at both shape and
     query-name layers; cover nested delimiter/control/Unicode keys and an actual old-document/new-
     server deploy-skew integration, not only hash-unit tests.
+  - **Evidence:** the source-aliased compiler/core/server render-plan suite passes 90 tests,
+    including the formerly colliding shapes through compiled hrefs, old document tokens, and new
+    server query/mutation response tokens; three declaration builds and API/security gates pass.
 
 - [ ] **M10 - Valid capability bearer query values are logged verbatim when a verified storage read
       fails.** `packages/server/src/capability-route.ts:323-350`,

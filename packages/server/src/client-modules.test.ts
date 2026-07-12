@@ -34,6 +34,15 @@ describe('render-plan fingerprint and grammar version (D1, DEPLOY-3)', () => {
     expect(fp1).toBe(fp2);
   });
 
+  it('length-frames query names and shapes instead of trusting delimiters', () => {
+    expect(computeRenderPlanFingerprint({ a: 'x', b: 'y' })).not.toBe(
+      computeRenderPlanFingerprint({ 'a:x\nb': 'y' }),
+    );
+    expect(computeRenderPlanFingerprint({ '🧪:\u0000': '\n,名' })).not.toBe(
+      computeRenderPlanFingerprint({ '🧪': '\u0000:\n,名' }),
+    );
+  });
+
   it('buildToken() is never empty even with zero registered modules (DEPLOY-3)', () => {
     const registry = createMemoryVersionedClientModuleRegistry();
     const token = registry.buildToken();
