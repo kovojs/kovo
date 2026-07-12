@@ -3,15 +3,28 @@ import { createHash } from 'node:crypto';
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
 import {
   createFileSystemMap,
+  createFileSystemReadableStream,
+  fileSystemArrayBufferViewByteLength,
   fileSystemArrayJoin,
   fileSystemArraySome,
+  fileSystemCopyArrayBuffer,
+  fileSystemCopyArrayBufferView,
+  fileSystemCreateUint8Array,
   fileSystemFreeze,
+  fileSystemIsArrayBuffer,
+  fileSystemIsArrayBufferView,
   fileSystemJsonParse,
   fileSystemJsonStringify,
   fileSystemMapDelete,
   fileSystemMapGet,
   fileSystemMapSet,
   fileSystemObjectValues,
+  fileSystemReadableStreamClose,
+  fileSystemReadableStreamEnqueue,
+  fileSystemReadableStreamError,
+  fileSystemReadableStreamGetReader,
+  fileSystemReadableStreamReadChunk,
+  fileSystemReadableStreamReleaseLock,
   fileSystemReflectApply,
   fileSystemStableMethod,
   fileSystemStringEndsWith,
@@ -19,6 +32,7 @@ import {
   fileSystemStringSplit,
   fileSystemStringStartsWith,
   fileSystemStringToLowerCase,
+  fileSystemUint8ArraySet,
   fileSystemUtf8Decode,
   fileSystemUtf8Encode,
 } from './internal/filesystem-intrinsics.js';
@@ -212,7 +226,12 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
       const bytes = await storageBodyToBytes(body);
-      const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, now());
+      const info = objectInfo(
+        normalizedKey,
+        fileSystemArrayBufferViewByteLength(bytes),
+        putOptions,
+        now(),
+      );
       fileSystemMapSet(objects, normalizedKey, {
         body: copyBytes(bytes),
         info,
@@ -274,7 +293,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
 
       return {
         ...info,
-        body: new Uint8Array(bytes),
+        body: copyBytes(bytes),
       };
     },
     async put(key, body, putOptions = {}) {
@@ -283,7 +302,12 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       const filePath = storageFilePath(fileSystem, physicalKey);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new Date();
-      const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, lastModified);
+      const info = objectInfo(
+        normalizedKey,
+        fileSystemArrayBufferViewByteLength(bytes),
+        putOptions,
+        lastModified,
+      );
 
       await withFileSystemWriteLock(writeLocks, filePath, async () => {
         await assertFileSystemStorageSlotOwnership(fileSystem, physicalKey, normalizedKey);
@@ -344,17 +368,25 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
 
       const body = await storageBodyToBytes(output.body);
       return {
-        ...s3ObjectInfo(normalizedKey, output, body.byteLength),
+        ...s3ObjectInfo(
+          normalizedKey,
+          output,
+          fileSystemArrayBufferViewByteLength(body),
+        ),
         body,
       };
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
-      const size = storageBodySize(body);
+      // SPEC §6.6/§12: snapshot every accepted carrier through boot-pinned byte controls before
+      // handing it to an adapter. The client must never observe bytes different from the body Kovo
+      // classified merely because app code replaced ArrayBuffer/stream prototype operations.
+      const bytes = await storageBodyToBytes(body);
+      const size = fileSystemArrayBufferViewByteLength(bytes);
       const output = await options.client.putObject({
         bucket: options.bucket,
         key: s3ObjectKey(prefix, normalizedKey),
-        body,
+        body: bytes,
         ...(putOptions.contentType === undefined ? {} : { contentType: putOptions.contentType }),
         // Forward the caller etag so a conforming client can persist + echo it (Part 3 bug L2 parity).
         ...(putOptions.etag === undefined ? {} : { etag: putOptions.etag }),
@@ -493,28 +525,39 @@ export function normalizeStorageKey(key: string): string {
  */
 export async function storageBodyToBytes(body: StorageBody): Promise<Uint8Array> {
   if (typeof body === 'string') return fileSystemUtf8Encode(body);
-  if (body instanceof ArrayBuffer) return new Uint8Array(body.slice(0));
-  if (ArrayBuffer.isView(body)) {
-    return new Uint8Array(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
-  }
+  if (fileSystemIsArrayBuffer(body)) return fileSystemCopyArrayBuffer(body);
+  if (fileSystemIsArrayBufferView(body)) return fileSystemCopyArrayBufferView(body);
 
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
+  const reader = fileSystemReadableStreamGetReader(body);
+  const chunks = createFileSystemMap<number, Uint8Array>();
+  let chunkCount = 0;
   let length = 0;
 
-  while (true) {
-    const result = await reader.read();
-    if (result.done) break;
-    chunks[chunks.length] = result.value;
-    length += result.value.byteLength;
+  try {
+    for (; chunkCount <= 1_000_000; chunkCount += 1) {
+      const chunk = await fileSystemReadableStreamReadChunk(reader);
+      if (chunk === undefined) break;
+      const chunkLength = fileSystemArrayBufferViewByteLength(chunk);
+      if (chunkLength > 9_007_199_254_740_991 - length) {
+        throw new TypeError('Kovo storage refused an unbounded byte stream.');
+      }
+      fileSystemMapSet(chunks, chunkCount, chunk);
+      length += chunkLength;
+      if (chunkCount === 1_000_000) {
+        throw new TypeError('Kovo storage refused a byte stream with too many chunks.');
+      }
+    }
+  } finally {
+    fileSystemReadableStreamReleaseLock(reader);
   }
 
-  const bytes = new Uint8Array(length);
+  const bytes = fileSystemCreateUint8Array(length);
   let offset = 0;
-  for (let index = 0; index < chunks.length; index += 1) {
-    const chunk = chunks[index]!;
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+  for (let index = 0; index < chunkCount; index += 1) {
+    const chunk = fileSystemMapGet(chunks, index);
+    if (chunk === undefined) throw new TypeError('Kovo storage lost a snapshotted byte chunk.');
+    fileSystemUint8ArraySet(bytes, chunk, offset);
+    offset += fileSystemArrayBufferViewByteLength(chunk);
   }
 
   return bytes;
@@ -693,36 +736,30 @@ function copyInfo(info: StorageObjectInfo): StorageObjectInfo {
 }
 
 function copyBytes(bytes: Uint8Array): Uint8Array {
-  return new Uint8Array(bytes);
+  return fileSystemCopyArrayBufferView(bytes);
 }
 
 function bytesToReadableStream(bytes: Uint8Array): ReadableStream<Uint8Array> {
-  return new ReadableStream<Uint8Array>({
+  const snapshot = copyBytes(bytes);
+  return createFileSystemReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(copyBytes(bytes));
-      controller.close();
+      fileSystemReadableStreamEnqueue(controller, snapshot);
+      fileSystemReadableStreamClose(controller);
     },
   });
 }
 
 function storageBodyToReadableStream(body: StorageBody): ReadableStream<Uint8Array> {
-  if (typeof body === 'string' || body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-    return new ReadableStream<Uint8Array>({
-      async start(controller) {
-        controller.enqueue(await storageBodyToBytes(body));
-        controller.close();
-      },
-    });
-  }
-
-  return body;
-}
-
-function storageBodySize(body: StorageBody): number | undefined {
-  if (typeof body === 'string') return fileSystemUtf8Encode(body).byteLength;
-  if (body instanceof ArrayBuffer) return body.byteLength;
-  if (ArrayBuffer.isView(body)) return body.byteLength;
-  return undefined;
+  return createFileSystemReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        fileSystemReadableStreamEnqueue(controller, await storageBodyToBytes(body));
+        fileSystemReadableStreamClose(controller);
+      } catch (error) {
+        fileSystemReadableStreamError(controller, error);
+      }
+    },
+  });
 }
 
 function normalizeStoragePrefix(prefix: string): string {

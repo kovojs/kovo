@@ -136,6 +136,214 @@ storageConformance('memory', async () => ({
   storage: createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') }),
 }));
 
+describe('storage byte snapshots', () => {
+  it('does not replace validated typed-array bytes through late ArrayBuffer.slice', async () => {
+    const safe = textEncoder.encode('validated-safe-bytes');
+    const attacker = textEncoder.encode('attacker-substitution');
+    const safeBuffer = safe.buffer as ArrayBuffer;
+    const originalSlice = ArrayBuffer.prototype.slice;
+    let poisonHits = 0;
+    let bytes: Uint8Array | undefined;
+
+    try {
+      ArrayBuffer.prototype.slice = function replaceValidatedBytes(start, end) {
+        if (this === safeBuffer) {
+          poisonHits += 1;
+          return Reflect.apply(originalSlice, attacker.buffer, [
+            attacker.byteOffset,
+            attacker.byteOffset + attacker.byteLength,
+          ]);
+        }
+        return Reflect.apply(originalSlice, this, [start, end]);
+      };
+      bytes = await storageBodyToBytes(safe);
+    } finally {
+      ArrayBuffer.prototype.slice = originalSlice;
+    }
+
+    expect(bytesToText(bytes)).toBe('validated-safe-bytes');
+    expect(poisonHits).toBe(0);
+  });
+
+  it('pins raw-buffer and offset-view location and copy controls before app evaluation', async () => {
+    const payload = textEncoder.encode('validated-safe-bytes');
+    const padded = new Uint8Array(payload.byteLength + 4);
+    padded.set(payload, 2);
+    const offsetView = new Uint8Array(padded.buffer, 2, payload.byteLength);
+    const rawBuffer = payload.buffer.slice(
+      payload.byteOffset,
+      payload.byteOffset + payload.byteLength,
+    );
+    const attacker = textEncoder.encode('attacker-substitution');
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const typedBuffer = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'buffer')!;
+    const typedByteLength = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength')!;
+    const typedByteOffset = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteOffset')!;
+    const arrayBufferByteLength = Object.getOwnPropertyDescriptor(
+      ArrayBuffer.prototype,
+      'byteLength',
+    )!;
+    const originalIsView = ArrayBuffer.isView;
+    const originalSlice = ArrayBuffer.prototype.slice;
+    const originalSet = Uint8Array.prototype.set;
+    let poisonHits = 0;
+    let copiedView: Uint8Array | undefined;
+    let copiedBuffer: Uint8Array | undefined;
+
+    try {
+      ArrayBuffer.isView = () => {
+        poisonHits += 1;
+        return false;
+      };
+      ArrayBuffer.prototype.slice = function substituteSlice() {
+        poisonHits += 1;
+        return attacker.buffer;
+      };
+      Object.defineProperty(typedArrayPrototype, 'buffer', {
+        ...typedBuffer,
+        get() {
+          poisonHits += 1;
+          return attacker.buffer;
+        },
+      });
+      Object.defineProperty(typedArrayPrototype, 'byteLength', {
+        ...typedByteLength,
+        get() {
+          poisonHits += 1;
+          return attacker.byteLength;
+        },
+      });
+      Object.defineProperty(typedArrayPrototype, 'byteOffset', {
+        ...typedByteOffset,
+        get() {
+          poisonHits += 1;
+          return 0;
+        },
+      });
+      Object.defineProperty(ArrayBuffer.prototype, 'byteLength', {
+        ...arrayBufferByteLength,
+        get() {
+          poisonHits += 1;
+          return attacker.byteLength;
+        },
+      });
+      Uint8Array.prototype.set = function substituteSet() {
+        poisonHits += 1;
+        Reflect.apply(originalSet, this, [attacker, 0]);
+      };
+
+      copiedView = await storageBodyToBytes(offsetView);
+      copiedBuffer = await storageBodyToBytes(rawBuffer);
+    } finally {
+      ArrayBuffer.isView = originalIsView;
+      ArrayBuffer.prototype.slice = originalSlice;
+      Object.defineProperty(typedArrayPrototype, 'buffer', typedBuffer);
+      Object.defineProperty(typedArrayPrototype, 'byteLength', typedByteLength);
+      Object.defineProperty(typedArrayPrototype, 'byteOffset', typedByteOffset);
+      Object.defineProperty(ArrayBuffer.prototype, 'byteLength', arrayBufferByteLength);
+      Uint8Array.prototype.set = originalSet;
+    }
+
+    expect(bytesToText(copiedView)).toBe('validated-safe-bytes');
+    expect(bytesToText(copiedBuffer)).toBe('validated-safe-bytes');
+    expect(poisonHits).toBe(0);
+  });
+
+  it('pins stream acquisition, chunk reads, snapshots, and assembly controls', async () => {
+    const first = textEncoder.encode('validated-');
+    const second = textEncoder.encode('safe-bytes');
+    const attacker = textEncoder.encode('attacker-substitution');
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(first);
+        controller.enqueue(second);
+        controller.close();
+      },
+    });
+    const originalGetReader = ReadableStream.prototype.getReader;
+    const originalRead = ReadableStreamDefaultReader.prototype.read;
+    const originalReleaseLock = ReadableStreamDefaultReader.prototype.releaseLock;
+    const originalSet = Uint8Array.prototype.set;
+    let poisonHits = 0;
+    let bytes: Uint8Array | undefined;
+
+    try {
+      ReadableStream.prototype.getReader = function substituteReader() {
+        poisonHits += 1;
+        throw new Error('late getReader reached');
+      } as typeof ReadableStream.prototype.getReader;
+      ReadableStreamDefaultReader.prototype.read = async function substituteRead() {
+        poisonHits += 1;
+        return { done: false, value: attacker };
+      };
+      ReadableStreamDefaultReader.prototype.releaseLock = function substituteRelease() {
+        poisonHits += 1;
+      };
+      Uint8Array.prototype.set = function substituteSet() {
+        poisonHits += 1;
+        Reflect.apply(originalSet, this, [attacker, 0]);
+      };
+
+      bytes = await storageBodyToBytes(stream);
+    } finally {
+      ReadableStream.prototype.getReader = originalGetReader;
+      ReadableStreamDefaultReader.prototype.read = originalRead;
+      ReadableStreamDefaultReader.prototype.releaseLock = originalReleaseLock;
+      Uint8Array.prototype.set = originalSet;
+    }
+
+    expect(bytesToText(bytes)).toBe('validated-safe-bytes');
+    expect(poisonHits).toBe(0);
+  });
+
+  it('pins returned byte copies and stream construction controls', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('receipts/safe.txt', 'validated-safe-bytes');
+    const uint8ArrayDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Uint8Array')!;
+    const readableStreamDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ReadableStream')!;
+    const originalEnqueue = ReadableStreamDefaultController.prototype.enqueue;
+    const originalClose = ReadableStreamDefaultController.prototype.close;
+    let poisonHits = 0;
+    let copied: Uint8Array | undefined;
+    let streamed: ReadableStream<Uint8Array> | undefined;
+
+    try {
+      Object.defineProperty(globalThis, 'Uint8Array', {
+        ...uint8ArrayDescriptor,
+        value: function substituteUint8Array() {
+          poisonHits += 1;
+          throw new Error('late Uint8Array constructor reached');
+        },
+      });
+      Object.defineProperty(globalThis, 'ReadableStream', {
+        ...readableStreamDescriptor,
+        value: function substituteReadableStream() {
+          poisonHits += 1;
+          throw new Error('late ReadableStream constructor reached');
+        },
+      });
+      ReadableStreamDefaultController.prototype.enqueue = function substituteEnqueue() {
+        poisonHits += 1;
+      };
+      ReadableStreamDefaultController.prototype.close = function substituteClose() {
+        poisonHits += 1;
+      };
+
+      copied = (await storage.get('receipts/safe.txt'))?.body;
+      streamed = (await storage.stream('receipts/safe.txt'))?.body;
+    } finally {
+      Object.defineProperty(globalThis, 'Uint8Array', uint8ArrayDescriptor);
+      Object.defineProperty(globalThis, 'ReadableStream', readableStreamDescriptor);
+      ReadableStreamDefaultController.prototype.enqueue = originalEnqueue;
+      ReadableStreamDefaultController.prototype.close = originalClose;
+    }
+
+    expect(bytesToText(copied)).toBe('validated-safe-bytes');
+    expect(bytesToText(await storageBodyToBytes(streamed!))).toBe('validated-safe-bytes');
+    expect(poisonHits).toBe(0);
+  });
+});
+
 describe('storage read/write authority split', () => {
   it('keeps read-only storage views fail-closed even when cast back to a write shape', async () => {
     const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });

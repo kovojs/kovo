@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   167 | C1-C167 |
+| Critical |   171 | C1-C171 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2035,7 +2035,7 @@ build:dist` passes.
     the 120-test core/compiler/Drizzle identity matrix, all three dist/DTS builds, API, and classifier
     routing/corpus gates pass.
 
-- [ ] **C162 - Mutable query-shape extraction downgrades secret wire facts.**
+- [x] **C162 - Mutable query-shape extraction downgrades secret wire facts.**
       `packages/core/src/internal/query-shape-source.ts`
   - Late `Array.prototype.map` either replaced an exact primary secret shape with a public string
     shape during merge or omitted every source file during output-schema extraction. The real serial
@@ -2043,6 +2043,8 @@ build:dist` passes.
   - **Acceptance:** source/project traversal, TS dispatch, object/schema extraction, fact merge,
     dedupe/order, and every shape carrier use captured dense own-data controls; a changed or ambiguous
     fact fails closed and the C13 secret/table-row corpus remains a superset.
+  - **Evidence:** 27 exact extraction/merge/security regressions pass with zero late collection
+    dispatch; core/compiler/server dist builds plus import, API, and classifier gates pass.
 
 - [ ] **C163 - Integration route pages have no declared read policy.**
       `packages/test/src/integration/fixture-instance.ts`
@@ -2051,13 +2053,15 @@ build:dist` passes.
   - **Acceptance:** fixtures expose an explicit immutable page/route read-policy map with empty-deny
     default; every route-page operation is captured and undeclared reads fail KV407.
 
-- [ ] **C164 - Mutable BroadcastChannel subscription bypasses receive principal checks.**
+- [x] **C164 - Mutable BroadcastChannel subscription bypasses receive principal checks.**
       `packages/browser/src/broadcast.ts`, generated inline loader
   - A late `BroadcastChannel.prototype.onmessage` setter wrapped the receiver and delivered a new
     brand-valid event with session A's private body but no principal. Modular/generated anonymous UIs
     applied it synchronously before the asynchronous controls witness; exploit reproduces 6/6.
   - **Acceptance:** subscription uses only a captured witnessed setter/listener and cannot process any
     event before controls readiness; late setter interposition cannot bypass the C137 snapshot floor.
+  - **Evidence:** exact modular/generated subscription substitutions reject 6/6 across Chromium,
+    Firefox, and WebKit; full browser and browser-package matrices pass 432/432 and 750/750.
 
 - [ ] **C165 - Integration route pages can write outside mutation authority.**
       `packages/test/src/integration/fixture-instance.ts`
@@ -2080,6 +2084,39 @@ build:dist` passes.
     capture window bypassed an empty declared read policy and resolved successfully.
   - **Acceptance:** every read observed during mutation capture is mutation-scoped and checked against
     the immutable declared reads; `mutationRead` remains provenance metadata, never an inclusion gate.
+
+- [x] **C168 - Mutable storage byte copying substitutes validated upload bytes.**
+      `packages/core/src/{storage,internal/filesystem-intrinsics}.ts`
+  - A selective late `ArrayBuffer.prototype.slice` replaced a genuine typed-array upload with attacker
+    bytes after validation; adjacent mutable view getters, stream readers, constructors, copy methods,
+    and stream controllers could change the carrier at the same boundary.
+  - **Acceptance:** raw buffers, offset views, stream acquisition/results, chunk snapshots, final
+    assembly, adapter handoff, returned copies, and stream construction use boot-pinned witnessed byte
+    controls so the bytes classified are the bytes stored and returned.
+  - **Evidence:** the 30-test storage matrix exercises every carrier family under late substitution;
+    core dist/DTS plus filesystem, sink, single-choke, TCB, API, and diff gates pass.
+
+- [ ] **C169 - Mutable public-asset ordering publishes a private sibling file.**
+      `packages/cli/src/commands/build-export.ts`
+  - A selective late `Array.prototype.sort` replaced `/mark.svg` with `/server-secret.env`; the real
+    static export then copied the secret file into the public artifact under the expected asset path.
+  - **Acceptance:** public-root discovery, relative-path ownership, deterministic ordering, and copy
+    inputs use boot-pinned dense controls; late collection mutation cannot add, replace, or redirect an
+    asset outside the exact public root.
+
+- [ ] **C170 - A split-view Drizzle table reports one domain and executes another.**
+      `packages/test/src` managed database verifier
+  - A Proxy-backed table exposed `cart` to verifier classification but `audit` to the retained adapter,
+    letting an operation pass declared-read checks while the engine executed against a different table.
+  - **Acceptance:** table carriers are rejected when proxied and their exact table identity is captured
+    once through witnessed Drizzle controls before both observation and adapter dispatch.
+
+- [ ] **C171 - Mutable BroadcastChannel retirement reopens a closed private subscription.**
+      `packages/browser/src/broadcast.ts`, generated inline loader
+  - Late `onmessage = null` and `close()` interposition made `MutationBroadcast.close()` retire only an
+    attacker wrapper; a subsequent private message still reached and updated the closed subscriber.
+  - **Acceptance:** retirement flips an immediate private state bit and uses captured clear/close
+    controls; late method/setter replacement and close-before-ready races cannot deliver after close.
 
 ## High
 
