@@ -99,9 +99,48 @@ function capturedControlsAreSound(): boolean {
     );
     if (descriptors.visible?.value !== value || descriptors.hidden?.value !== value) return false;
     const ownKeys = apply<PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [record]);
-    if (!ownKeys.includes('visible') || !ownKeys.includes('hidden')) return false;
+    const ownKeysLength = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [ownKeys, 'length'],
+    );
+    if (ownKeysLength === undefined || !('value' in ownKeysLength) || ownKeysLength.value !== 2) {
+      return false;
+    }
+    let sawVisible = false;
+    let sawHidden = false;
+    for (let index = 0; index < ownKeysLength.value; index += 1) {
+      const keyDescriptor = apply<PropertyDescriptor | undefined>(
+        nativeObjectGetOwnPropertyDescriptor,
+        NativeObject,
+        [ownKeys, index],
+      );
+      if (keyDescriptor === undefined || !('value' in keyDescriptor)) return false;
+      if (keyDescriptor.value === 'visible') sawVisible = true;
+      if (keyDescriptor.value === 'hidden') sawHidden = true;
+    }
+    if (!sawVisible || !sawHidden) return false;
     const keys = apply<string[]>(nativeObjectKeys, NativeObject, [record]);
-    if (keys.length !== 1 || keys[0] !== 'visible') return false;
+    const keysLength = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [keys, 'length'],
+    );
+    const firstKey = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [keys, 0],
+    );
+    if (
+      keysLength === undefined ||
+      !('value' in keysLength) ||
+      keysLength.value !== 1 ||
+      firstKey === undefined ||
+      !('value' in firstKey) ||
+      firstKey.value !== 'visible'
+    ) {
+      return false;
+    }
     if (apply(nativeReflectGet, NativeReflect, [record, 'visible', record]) !== value) {
       return false;
     }
@@ -110,7 +149,12 @@ function capturedControlsAreSound(): boolean {
     }
     if (apply(nativeObjectIs, NativeObject, [value, value]) !== true) return false;
     if (apply(nativeObjectIs, NativeObject, [value, other]) !== false) return false;
-    if (NativeString(42) !== '42' || NativeString(null) !== 'null') return false;
+    if (
+      apply(NativeString, undefined, [42]) !== '42' ||
+      apply(NativeString, undefined, [null]) !== 'null'
+    ) {
+      return false;
+    }
     const frozen = apply<object>(nativeObjectFreeze, NativeObject, [record]);
     if (frozen !== record || apply(nativeObjectIsFrozen, NativeObject, [record]) !== true) {
       return false;
@@ -307,5 +351,5 @@ export function witnessReflectApply<Return>(
 
 export function witnessString(value: unknown): string {
   assertSecurityWitnessIntrinsics();
-  return NativeString(value);
+  return apply(NativeString, undefined, [value]);
 }
