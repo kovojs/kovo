@@ -24,6 +24,7 @@ import {
   verifierObjectKeys,
   verifierPromiseResolve,
   verifierPromiseThen,
+  verifierTypeError,
   verifierWeakMapGet,
   verifierWeakMapSet,
 } from './verifier-security-intrinsics.js';
@@ -56,6 +57,7 @@ export interface DbObservationOptions {
 
 export interface ObservationRecorder {
   readonly observed: readonly ObservedDbOperation[];
+  assertActive(): void;
   capture<T>(
     callback: () => T | Promise<T>,
   ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
@@ -65,6 +67,7 @@ export interface ObservationRecorder {
 }
 
 interface ObservationScope {
+  active: boolean;
   observed: ObservedDbOperation[];
 }
 
@@ -76,22 +79,39 @@ export interface CachedMethod {
 export function createObservationRecorder(recordOutsideCapture = true): ObservationRecorder {
   const observed: ObservedDbOperation[] = [];
   const storage = verifierAsyncStorage<ObservationScope>();
+  const assertActive = (): void => {
+    const scope = verifierAsyncStorageGetStore(storage);
+    if (scope?.active === false) {
+      throw verifierTypeError(
+        'KV407: Kovo DB verifier capture has settled; inherited DB authority is revoked.',
+      );
+    }
+  };
 
   return {
     get observed(): readonly ObservedDbOperation[] {
       return verifierFreeze(verifierArraySlice(observed));
     },
+    assertActive,
     async capture<T>(
       callback: () => T | Promise<T>,
     ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
-      const scope: ObservationScope = { observed: [] };
-      const result = await verifierAsyncStorageRun(storage, scope, callback);
-      return { observed: verifierFreeze(verifierArraySlice(scope.observed)), result };
+      const scope: ObservationScope = { active: true, observed: [] };
+      try {
+        const result = await verifierAsyncStorageRun(storage, scope, callback);
+        return { observed: verifierFreeze(verifierArraySlice(scope.observed)), result };
+      } finally {
+        // AsyncLocalStorage descendants retain the scope object after run() settles. Revoke that
+        // shared object before capture() resolves so detached work cannot use inherited verifier
+        // authority after its observations have already been checked (SPEC.md §11.2).
+        scope.active = false;
+      }
     },
     length(): number {
       return observed.length;
     },
     record(operation: ObservedDbOperation): void {
+      assertActive();
       const scope = verifierAsyncStorageGetStore(storage);
       if (scope === undefined && !recordOutsideCapture) return;
       const snapshot = snapshotObservedOperation(operation);
@@ -133,6 +153,7 @@ export function observableTableMethod(
   recorder: ObservationRecorder,
 ): (table: unknown, ...args: unknown[]) => unknown {
   return (table: unknown, ...args: unknown[]) => {
+    recorder.assertActive();
     observeTableIfString(kind, table, args, config, recorder);
     return verifierApply(value, target, [table, ...args]);
   };
@@ -163,6 +184,9 @@ export function observeSqlExecution(
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
 ): unknown {
+  // Assert before parsing, count probes, or the adapter call: each of those may cross an
+  // application-controlled authority boundary and must be impossible after capture settlement.
+  recorder.assertActive();
   const explicitOperations = observeSqlStatementArgument(statement, config, recorder);
   const sql = sqlStatementText(statement);
 
@@ -173,6 +197,7 @@ export function observeSqlExecution(
     target,
     verifierObjectKeys(config.domainByTable),
     config.sqlDialect,
+    recorder,
   );
   if (syncBefore !== null) {
     if (verifierMapSize(syncBefore) === 0) return execute();
@@ -189,11 +214,14 @@ export function observeSqlExecution(
     target,
     verifierObjectKeys(config.domainByTable),
     config.sqlDialect,
+    recorder,
   );
   return verifierPromiseThen(verifierPromiseResolve(before), (counts) => {
+    recorder.assertActive();
     if (verifierMapSize(counts) === 0) return execute();
 
     return verifierPromiseThen(verifierPromiseResolve(execute()), async (result) => {
+      recorder.assertActive();
       await observeSqlEngineSideEffects(target, sql, config, recorder, explicitOperations, counts);
       return result;
     });

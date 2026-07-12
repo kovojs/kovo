@@ -127,6 +127,7 @@ export async function observeSqlEngineSideEffects(
     target,
     verifierObjectKeys(config.domainByTable),
     config.sqlDialect,
+    recorder,
   );
   recordSqlEngineSideEffects(statement, config, recorder, explicitOperations, before, after);
 }
@@ -146,6 +147,7 @@ export function observeSqlEngineSideEffectsSync(
     target,
     verifierObjectKeys(config.domainByTable),
     config.sqlDialect,
+    recorder,
   );
   if (after === null) return;
 
@@ -193,9 +195,12 @@ export async function tableObservationSnapshots(
   target: object,
   tables: readonly string[],
   sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+  recorder?: ObservationRecorder,
 ): Promise<ReadonlyMap<string, TableObservationSnapshot>> {
+  recorder?.assertActive();
   const query = tableCountQuery(target, sqlDialect);
   if (!query) return verifierMap();
+  recorder?.assertActive();
   const existing = await existingTables(query, sqlDialect);
   if (!existing) return verifierMap();
 
@@ -203,6 +208,7 @@ export async function tableObservationSnapshots(
   for (let index = 0; index < tables.length; index += 1) {
     const table = tables[index];
     if (table === undefined || !verifierSetHas(existing, unqualifiedTableName(table))) continue;
+    recorder?.assertActive();
     try {
       const rows = resultRows(
         await query(`select * from ${quoteSqlIdentifier(table, sqlDialect)}`),
@@ -223,9 +229,12 @@ export function tableObservationSnapshotsSync(
   target: object,
   tables: readonly string[],
   sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+  recorder?: ObservationRecorder,
 ): ReadonlyMap<string, TableObservationSnapshot> | null {
+  recorder?.assertActive();
   const query = tableCountQuerySync(target, sqlDialect);
   if (!query) return null;
+  recorder?.assertActive();
   const existing = existingTablesSync(query, sqlDialect);
   if (!existing) return verifierMap();
 
@@ -233,6 +242,7 @@ export function tableObservationSnapshotsSync(
   for (let index = 0; index < tables.length; index += 1) {
     const table = tables[index];
     if (table === undefined || !verifierSetHas(existing, unqualifiedTableName(table))) continue;
+    recorder?.assertActive();
     try {
       const rows = resultRows(query(`select * from ${quoteSqlIdentifier(table, sqlDialect)}`));
       verifierMapSet(snapshots, table, {

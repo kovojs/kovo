@@ -7,6 +7,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { PgliteTestDb } from '../pglite.js';
+import { deferred } from '../test-fixtures.js';
 import type { KovoFixtureDescriptor } from './define-fixture.js';
 import { createFixtureInstance, type FixtureInstance } from './fixture-instance.js';
 
@@ -575,6 +576,39 @@ describe('integration fixture verifier security', () => {
     const response = await instance.handle(new Request('http://fixture.local/products'));
     expect(response.status).toBe(500);
     await expect(response.text()).resolves.toContain('KV402');
+  });
+
+  it('C235 revokes route handler descendants after request verification settles', async () => {
+    const gate = deferred();
+    let db!: PgliteTestDb;
+    let detached!: Promise<unknown>;
+    const app = { queries: [] } as unknown as KovoApp;
+    const descriptor: KovoFixtureDescriptor = {
+      __kovoIntegrationFixture: true,
+      definition: {
+        app: ({ db: fixtureDb }) => {
+          db = fixtureDb;
+          return app;
+        },
+        schema: 'create table audit_log (id text primary key)',
+        touchGraph: {},
+        verification: {
+          domainByTable: { audit_log: 'audit' },
+        },
+      },
+    };
+
+    instance = await createFixtureInstance(descriptor, () => async () => {
+      detached = gate.promise.then(() => db.write('audit_log', { id: 'event-1' }));
+      return new Response('ok');
+    });
+
+    const response = await instance.handle(new Request('http://fixture.local/audit'));
+    expect(response.status).toBe(200);
+    gate.resolve();
+
+    await expect(detached).rejects.toThrow(/KV407.*capture.*settled/u);
+    await expect(instance.db.read('audit_log')).resolves.toEqual([]);
   });
 
   it('C166 rejects database writes during a query request', async () => {

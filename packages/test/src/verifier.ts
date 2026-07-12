@@ -242,6 +242,7 @@ export function createDbVerifier(
         {
           get(target, prop, receiver) {
             if (prop === '__kovoObserved') return recorder.observed;
+            recorder.assertActive();
             const value = verifierReflectGet(target, prop, receiver);
 
             if (
@@ -257,6 +258,7 @@ export function createDbVerifier(
 
             if (isDrizzleSelectEntry(prop) && typeof value === 'function') {
               return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                recorder.assertActive();
                 const builder = verifierApply<unknown>(value, target, args);
                 if (typeof builder !== 'object' || builder === null) {
                   throw verifierTypeError(
@@ -291,6 +293,7 @@ export function createDbVerifier(
 
             if (prop === '$with' && typeof value === 'function') {
               return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                recorder.assertActive();
                 const builder = verifierApply<unknown>(value, target, args);
                 if (typeof builder !== 'object' || builder === null) {
                   throw verifierTypeError(
@@ -303,12 +306,14 @@ export function createDbVerifier(
                   cteBuilderProxyCache,
                   methodCache,
                   derivedReadSourceWitness,
+                  recorder,
                 );
               });
             }
 
             if (prop === 'with' && typeof value === 'function') {
               return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                recorder.assertActive();
                 const scopedDb = verifierApply<unknown>(value, target, args);
                 if (typeof scopedDb !== 'object' || scopedDb === null) {
                   throw verifierTypeError(
@@ -363,8 +368,11 @@ export function createDbVerifier(
 
             if (prop === 'transaction' && typeof value === 'function') {
               return cachedMethod(target, prop, value, methodCache, () =>
-                verifiedTransactionMethod(target, value, (transactionDb) =>
-                  verifier.wrap(transactionDb),
+                verifiedTransactionMethod(
+                  target,
+                  value,
+                  (transactionDb) => verifier.wrap(transactionDb),
+                  recorder,
                 ),
               );
             }
@@ -440,18 +448,14 @@ export function createDbVerifier(
             }
 
             return typeof value === 'function'
-              ? cachedMethod(
-                  target,
-                  prop,
-                  value,
-                  methodCache,
-                  () =>
-                    (...args: unknown[]) =>
-                      verifierApply(value, target, args),
-                )
+              ? cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+                  recorder.assertActive();
+                  return verifierApply(value, target, args);
+                })
               : value;
           },
           getOwnPropertyDescriptor(target, prop) {
+            recorder.assertActive();
             return safeReflectedOwnDescriptor(target, prop, () =>
               verifierReflectGet(proxy, prop, proxy),
             );
@@ -541,6 +545,7 @@ function wrapDrizzleWriteBuilder(
     builder as Record<PropertyKey, unknown>,
     {
       get(target, property, receiver) {
+        context.recorder.assertActive();
         const value = verifierReflectGet(target, property, receiver);
         if (property === 'then' && value === undefined) return undefined;
         if (typeof value !== 'function') return blockedWriteBuilderProperty(property);
@@ -554,6 +559,7 @@ function wrapDrizzleWriteBuilder(
               methodCache,
               () =>
                 (query: unknown, ...args: unknown[]) => {
+                  context.recorder.assertActive();
                   const safeQuery = safeInsertSelectQuery(query, context);
                   const result = verifierApply<unknown>(value, target, [safeQuery, ...args]);
                   return requiredDrizzleWriteBuilderResult(
@@ -574,14 +580,16 @@ function wrapDrizzleWriteBuilder(
               value,
               methodCache,
               () =>
-                (...args: unknown[]) =>
-                  requiredDrizzleWriteBuilderResult(
+                (...args: unknown[]) => {
+                  context.recorder.assertActive();
+                  return requiredDrizzleWriteBuilderResult(
                     verifierApply(value, target, args),
                     family,
                     'base',
                     context,
                     property,
-                  ),
+                  );
+                },
             );
           }
 
@@ -595,14 +603,16 @@ function wrapDrizzleWriteBuilder(
               value,
               methodCache,
               () =>
-                (...args: unknown[]) =>
-                  requiredDrizzleWriteBuilderResult(
+                (...args: unknown[]) => {
+                  context.recorder.assertActive();
+                  return requiredDrizzleWriteBuilderResult(
                     verifierApply(value, target, args),
                     family,
                     'entry',
                     context,
                     property,
-                  ),
+                  );
+                },
             );
           }
 
@@ -613,14 +623,16 @@ function wrapDrizzleWriteBuilder(
               value,
               methodCache,
               () =>
-                (...args: unknown[]) =>
-                  requiredDrizzleWriteBuilderResult(
+                (...args: unknown[]) => {
+                  context.recorder.assertActive();
+                  return requiredDrizzleWriteBuilderResult(
                     verifierApply(value, target, args),
                     family,
                     'base',
                     context,
                     property,
-                  ),
+                  );
+                },
             );
           }
 
@@ -635,6 +647,7 @@ function wrapDrizzleWriteBuilder(
             methodCache,
             () =>
               (table: unknown, ...args: unknown[]) => {
+                context.recorder.assertActive();
                 if (
                   typeof table !== 'object' ||
                   table === null ||
@@ -661,25 +674,21 @@ function wrapDrizzleWriteBuilder(
         }
 
         if (isDrizzleWriteChainMethod(family, property)) {
-          return cachedMethod(
-            target,
-            property,
-            value,
-            methodCache,
-            () =>
-              (...args: unknown[]) =>
-                requiredDrizzleWriteBuilderResult(
-                  verifierApply(value, target, args),
-                  family,
-                  'base',
-                  context,
-                  property,
-                ),
-          );
+          return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+            context.recorder.assertActive();
+            return requiredDrizzleWriteBuilderResult(
+              verifierApply(value, target, args),
+              family,
+              'base',
+              context,
+              property,
+            );
+          });
         }
 
         if (property === 'prepare') {
           return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+            context.recorder.assertActive();
             const prepared = verifierApply<unknown>(value, target, args);
             if (typeof prepared !== 'object' || prepared === null) {
               throw verifierTypeError(
@@ -691,20 +700,16 @@ function wrapDrizzleWriteBuilder(
         }
 
         if (isDrizzleWriteTerminalMethod(property)) {
-          return cachedMethod(
-            target,
-            property,
-            value,
-            methodCache,
-            () =>
-              (...args: unknown[]) =>
-                verifierApply(value, target, args),
-          );
+          return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+            context.recorder.assertActive();
+            return verifierApply(value, target, args);
+          });
         }
 
         return blockedWriteBuilderProperty(property);
       },
       getOwnPropertyDescriptor(target, property) {
+        context.recorder.assertActive();
         return safeReflectedOwnDescriptor(target, property, () =>
           verifierReflectGet(proxy, property, proxy),
         );
@@ -737,6 +742,7 @@ function requiredDrizzleWriteBuilderResult(
 function safeInsertSelectQuery(query: unknown, context: DrizzleWriteBuilderContext): unknown {
   if (typeof query === 'function') {
     return (queryBuilder: unknown) => {
+      context.recorder.assertActive();
       const selected = verifierApply<unknown>(query, undefined, [
         wrapDrizzleMutationQueryBuilder(queryBuilder, context),
       ]);
@@ -774,6 +780,7 @@ function wrapDrizzleMutationQueryBuilder(
     queryBuilder as Record<PropertyKey, unknown>,
     {
       get(target, property, receiver) {
+        context.recorder.assertActive();
         const value = verifierReflectGet(target, property, receiver);
         if (typeof value !== 'function') return blockedMutationQueryBuilderProperty(property);
 
@@ -785,6 +792,7 @@ function wrapDrizzleMutationQueryBuilder(
             context.mutationMethodCache,
             () =>
               (...args: unknown[]) => {
+                context.recorder.assertActive();
                 const builder = verifierApply<unknown>(value, target, args);
                 if (typeof builder !== 'object' || builder === null) {
                   throw verifierTypeError(
@@ -813,6 +821,7 @@ function wrapDrizzleMutationQueryBuilder(
             context.mutationMethodCache,
             () =>
               (...args: unknown[]) => {
+                context.recorder.assertActive();
                 const builder = verifierApply<unknown>(value, target, args);
                 if (typeof builder !== 'object' || builder === null) {
                   throw verifierTypeError('KV407: insert-select $with() must return an object.');
@@ -823,6 +832,7 @@ function wrapDrizzleMutationQueryBuilder(
                   context.cteCache,
                   context.mutationMethodCache,
                   context.derivedSources,
+                  context.recorder,
                 );
               },
           );
@@ -835,14 +845,17 @@ function wrapDrizzleMutationQueryBuilder(
             value,
             context.mutationMethodCache,
             () =>
-              (...args: unknown[]) =>
-                wrapDrizzleMutationQueryBuilder(verifierApply(value, target, args), context),
+              (...args: unknown[]) => {
+                context.recorder.assertActive();
+                return wrapDrizzleMutationQueryBuilder(verifierApply(value, target, args), context);
+              },
           );
         }
 
         return blockedMutationQueryBuilderProperty(property);
       },
       getOwnPropertyDescriptor(target, property) {
+        context.recorder.assertActive();
         return safeReflectedOwnDescriptor(target, property, () =>
           verifierReflectGet(proxy, property, proxy),
         );
@@ -865,6 +878,7 @@ function wrapDrizzlePreparedWrite(prepared: object, context: DrizzleWriteBuilder
     prepared as Record<PropertyKey, unknown>,
     {
       get(target, property, receiver) {
+        context.recorder.assertActive();
         const value = verifierReflectGet(target, property, receiver);
         if (property === 'then' && value === undefined) return undefined;
         if (typeof value !== 'function' || !isDrizzlePreparedExecutionMethod(property)) {
@@ -876,11 +890,14 @@ function wrapDrizzlePreparedWrite(prepared: object, context: DrizzleWriteBuilder
           value,
           context.preparedMethodCache,
           () =>
-            (...args: unknown[]) =>
-              verifierApply(value, target, args),
+            (...args: unknown[]) => {
+              context.recorder.assertActive();
+              return verifierApply(value, target, args);
+            },
         );
       },
       getOwnPropertyDescriptor(target, property) {
+        context.recorder.assertActive();
         return safeReflectedOwnDescriptor(target, property, () =>
           verifierReflectGet(proxy, property, proxy),
         );
@@ -912,6 +929,7 @@ function wrapDrizzleReadBuilder(
     builder as Record<PropertyKey, unknown>,
     {
       get(target, property, receiver) {
+        recorder.assertActive();
         const value = verifierReflectGet(target, property, receiver);
         if (property === 'then' && value === undefined) return undefined;
         if (typeof value !== 'function') return blockedReadBuilderProperty(property);
@@ -924,6 +942,7 @@ function wrapDrizzleReadBuilder(
             methodCache,
             () =>
               (table: unknown, ...args: unknown[]) => {
+                recorder.assertActive();
                 if (
                   typeof table !== 'object' ||
                   table === null ||
@@ -956,6 +975,7 @@ function wrapDrizzleReadBuilder(
 
         if (isDrizzleReadChainMethod(property)) {
           return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+            recorder.assertActive();
             const result = verifierApply<unknown>(value, target, args);
             return wrapDrizzleBuilderResult(
               result,
@@ -972,20 +992,16 @@ function wrapDrizzleReadBuilder(
         }
 
         if (isDrizzleReadTerminalMethod(property)) {
-          return cachedMethod(
-            target,
-            property,
-            value,
-            methodCache,
-            () =>
-              (...args: unknown[]) =>
-                verifierApply(value, target, args),
-          );
+          return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+            recorder.assertActive();
+            return verifierApply(value, target, args);
+          });
         }
 
         return blockedReadBuilderProperty(property);
       },
       getOwnPropertyDescriptor(target, property) {
+        recorder.assertActive();
         return safeReflectedOwnDescriptor(target, property, () =>
           verifierReflectGet(proxy, property, proxy),
         );
@@ -1046,6 +1062,7 @@ function wrapRelationalNamespace(
     namespace as Record<PropertyKey, unknown>,
     {
       get(target, property, receiver) {
+        recorder.assertActive();
         const builder = verifierReflectGet(target, property, receiver);
         if (typeof builder !== 'object' || builder === null) {
           throw verifierTypeError(
@@ -1062,6 +1079,7 @@ function wrapRelationalNamespace(
         );
       },
       getOwnPropertyDescriptor(target, property) {
+        recorder.assertActive();
         return safeReflectedOwnDescriptor(target, property, () =>
           verifierReflectGet(proxy, property, proxy),
         );
@@ -1107,18 +1125,21 @@ function wrapRelationalBuilder(
     builder as Record<PropertyKey, unknown>,
     {
       get(target, property, receiver) {
+        recorder.assertActive();
         const value = verifierReflectGet(target, property, receiver);
         if (property === 'then' && value === undefined) return undefined;
         if (!isRelationalReadMethod(property) || typeof value !== 'function') {
           return blockedRelationalBuilderProperty(property);
         }
         return cachedMethod(target, property, value, methodCache, () => (...args: unknown[]) => {
+          recorder.assertActive();
           assertRelationalReadArguments(args);
           observeRequiredTableOperation('read', table, args, config, recorder);
           return verifierApply(value, target, args);
         });
       },
       getOwnPropertyDescriptor(target, property) {
+        recorder.assertActive();
         return safeReflectedOwnDescriptor(target, property, () =>
           verifierReflectGet(proxy, property, proxy),
         );
@@ -1160,6 +1181,7 @@ function wrapDrizzleCteBuilder(
   cache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
   derivedSources: WeakMap<object, true>,
+  recorder: ObservationRecorder,
 ): object {
   const cached = verifierWeakMapGet(cache, builder);
   if (cached !== undefined) return cached;
@@ -1168,6 +1190,7 @@ function wrapDrizzleCteBuilder(
     builder as Record<PropertyKey, unknown>,
     {
       get(target, property, receiver) {
+        recorder.assertActive();
         const value = verifierReflectGet(target, property, receiver);
         if (property !== 'as' || typeof value !== 'function') {
           return blockedReadBuilderProperty(property);
@@ -1179,6 +1202,7 @@ function wrapDrizzleCteBuilder(
           methodCache,
           () =>
             (query: unknown, ...args: unknown[]) => {
+              recorder.assertActive();
               if (
                 typeof query !== 'function' &&
                 (typeof query !== 'object' ||
@@ -1191,8 +1215,10 @@ function wrapDrizzleCteBuilder(
               }
               const safeQuery =
                 typeof query === 'function'
-                  ? (queryBuilder: unknown) =>
-                      verifierApply(query, undefined, [wrapQueryBuilder(queryBuilder)])
+                  ? (queryBuilder: unknown) => {
+                      recorder.assertActive();
+                      return verifierApply(query, undefined, [wrapQueryBuilder(queryBuilder)]);
+                    }
                   : query;
               const derived = verifierApply<unknown>(value, target, [safeQuery, ...args]);
               if (typeof derived === 'object' && derived !== null) {
@@ -1203,6 +1229,7 @@ function wrapDrizzleCteBuilder(
         );
       },
       getOwnPropertyDescriptor(target, property) {
+        recorder.assertActive();
         return safeReflectedOwnDescriptor(target, property, () =>
           verifierReflectGet(proxy, property, proxy),
         );
@@ -1382,9 +1409,11 @@ function verifiedTransactionMethod(
   target: object,
   transaction: Function,
   wrapDb: (transactionDb: object) => object,
+  recorder: ObservationRecorder,
 ): (callback: unknown, ...args: unknown[]) => unknown {
   return (callback: unknown, ...args: unknown[]) => {
-    const safeCallback = verifiedTransactionCallback(callback, wrapDb);
+    recorder.assertActive();
+    const safeCallback = verifiedTransactionCallback(callback, wrapDb, recorder);
     return verifierApply(
       transaction,
       target,
@@ -1396,11 +1425,13 @@ function verifiedTransactionMethod(
 function verifiedTransactionCallback(
   callback: unknown,
   wrapDb: (transactionDb: object) => object,
+  recorder: ObservationRecorder,
 ): (transactionDb: unknown, ...args: unknown[]) => unknown {
   if (typeof callback !== 'function') {
     throw verifierTypeError('KV407: Kovo DB verifier transaction() requires a callback function.');
   }
   return (transactionDb: unknown, ...args: unknown[]) => {
+    recorder.assertActive();
     if (args.length !== 0) {
       throw verifierTypeError(
         'KV407: Kovo DB verifier transaction callback received unsupported authority arguments.',
@@ -1486,6 +1517,7 @@ function wrapSqlHandle<Handle extends object>(
   let proxy!: Handle;
   proxy = createFrameworkManagedSqlDispatchProxy(handle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
+      recorder.assertActive();
       const value = verifierReflectGet(target, prop, receiver);
 
       if (prop === 'transaction' && typeof value === 'function') {
@@ -1496,18 +1528,21 @@ function wrapSqlHandle<Handle extends object>(
           methodCache,
           () =>
             async (callback: unknown, ...args: unknown[]) => {
-              const safeCallback = verifiedTransactionCallback(callback, wrapDb);
+              recorder.assertActive();
+              const safeCallback = verifiedTransactionCallback(callback, wrapDb, recorder);
               const safeArgs = snapshotTransactionArguments(args);
               const before = await tableObservationSnapshots(
                 target,
                 verifierObjectKeys(config.domainByTable),
                 config.sqlDialect,
+                recorder,
               );
               const start = recorder.length();
               let failed = false;
               let failure: unknown;
               let result: unknown;
               try {
+                recorder.assertActive();
                 result = await verifierApply(
                   value,
                   target,
@@ -1517,6 +1552,7 @@ function wrapSqlHandle<Handle extends object>(
                 failed = true;
                 failure = error;
               }
+              recorder.assertActive();
               await observeSqlEngineSideEffects(
                 target,
                 '<transaction>',
@@ -1555,18 +1591,14 @@ function wrapSqlHandle<Handle extends object>(
       }
 
       return typeof value === 'function'
-        ? cachedMethod(
-            target,
-            prop,
-            value,
-            methodCache,
-            () =>
-              (...args: unknown[]) =>
-                verifierApply(value, target, args),
-          )
+        ? cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+            recorder.assertActive();
+            return verifierApply(value, target, args);
+          })
         : value;
     },
     getOwnPropertyDescriptor(target, prop) {
+      recorder.assertActive();
       return safeReflectedOwnDescriptor(target, prop, () => verifierReflectGet(proxy, prop, proxy));
     },
     getPrototypeOf() {
@@ -1588,6 +1620,7 @@ function observablePrepareMethod(
   wrapDb: (preparedResult: object) => object,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
+    recorder.assertActive();
     if (args.length !== 0) {
       throw verifierTypeError(
         'KV407: Kovo DB verifier prepare() accepts exactly one SQL statement.',
@@ -1627,6 +1660,7 @@ function wrapPreparedSqlStatement<Statement extends object>(
   let proxy!: Statement;
   proxy = createFrameworkManagedSqlDispatchProxy(statementHandle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
+      recorder.assertActive();
       const value = preparedStatementPropertyValue(target, prop, receiver);
       if (prop === 'then' && value === undefined) return undefined;
 
@@ -1646,6 +1680,7 @@ function wrapPreparedSqlStatement<Statement extends object>(
 
       if (isPreparedConfigurationMethod(prop) && typeof value === 'function') {
         return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+          recorder.assertActive();
           const configured = verifierApply<unknown>(value, target, args);
           if (typeof configured !== 'object' || configured === null) {
             throw verifierTypeError(
@@ -1666,15 +1701,10 @@ function wrapPreparedSqlStatement<Statement extends object>(
       }
 
       if (prop === 'columns' && typeof value === 'function') {
-        return cachedMethod(
-          target,
-          prop,
-          value,
-          methodCache,
-          () =>
-            (...args: unknown[]) =>
-              wrapPreparedExecutionResult(verifierApply(value, target, args), wrapDb),
-        );
+        return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+          recorder.assertActive();
+          return wrapPreparedExecutionResult(verifierApply(value, target, args), wrapDb);
+        });
       }
 
       if (typeof value === 'object' && value !== null) {
@@ -1686,6 +1716,7 @@ function wrapPreparedSqlStatement<Statement extends object>(
       return value;
     },
     getOwnPropertyDescriptor(target, prop) {
+      recorder.assertActive();
       return safeReflectedOwnDescriptor(target, prop, () => verifierReflectGet(proxy, prop, proxy));
     },
     getPrototypeOf() {

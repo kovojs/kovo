@@ -307,7 +307,7 @@ describe('@kovojs/test DB verifier', () => {
     expect(verifier.diagnostics()).toEqual([]);
   });
 
-  it('returns scoped capture observations as a completed snapshot', async () => {
+  it('C235 returns a completed snapshot and revokes detached capture descendants', async () => {
     const verifier = createDbVerifier(
       {},
       { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
@@ -332,13 +332,10 @@ describe('@kovojs/test DB verifier', () => {
     expect(captured.observed.map((operation) => operation.table)).toEqual(['cart_items']);
 
     releaseLateWrite();
-    await lateWrite;
+    await expect(lateWrite).rejects.toThrow(/KV407.*capture.*settled/u);
 
     expect(captured.observed.map((operation) => operation.table)).toEqual(['cart_items']);
-    expect(verifier.observed.map((operation) => operation.table)).toEqual([
-      'cart_items',
-      'audit_log',
-    ]);
+    expect(verifier.observed.map((operation) => operation.table)).toEqual(['cart_items']);
   });
 
   it('verifies observed query reads against declared domains', () => {
