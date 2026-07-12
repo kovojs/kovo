@@ -11,8 +11,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |     8 | C1-C8 |
-| High     |    11 | H1-H11 |
-| Medium   |     4 | M1-M4 |
+| High     |    13 | H1-H13 |
+| Medium   |     5 | M1-M5 |
 
 ## Critical
 
@@ -118,14 +118,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** app/schema/document (198), crypto/replay/provenance (86), and core verifier/output
     (234) matrices pass post-closure schema and late cipher/SubtleCrypto/HMAC poison regressions.
 
-- [ ] **H6 - Mutable RegExp/String controls reopen ambiguous reserved Node request targets.**
+- [x] **H6 - Mutable RegExp/String controls reopen ambiguous reserved Node request targets.**
       `packages/server/src/{node,build}.ts`
   - A selective late `RegExp.prototype.test` override disabled only the percent-encoded separator
     detector and admitted `/_m/a/%2f/b` through the live Node conversion boundary; the generated
     Node/Vercel copies use the same mutable parsing controls.
-  - **Acceptance:** live and emitted target lexing use boot-pinned, semantically checked operations;
-    encoded separators, dot segments, slash/backslash aliases, and absolute forms stay rejected under
-    hostile import order and late poison while canonical targets retain their configured authority.
+  - **Evidence:** live and emitted target lexing use indexed exact-byte operations; encoded
+    separators, dot segments, slash/backslash aliases, and absolute forms stay rejected under late
+    poison while canonical targets retain their configured authority. The independent
+    `/_m/a/%2f/b` RegExp poison proof now throws before Web Request construction.
 
 - [ ] **H7 - Mutable redirect string controls reopen Better Auth protocol-relative redirects.**
       `packages/better-auth/src/internal/credential.ts`
@@ -167,6 +168,23 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 87-test scalar matrix rejects `/admin/upload` and missing `/c/` modules under
     poison while preserving the exact genuine manifest entry.
 
+- [x] **H12 - Mutable registry traversal can cross-bind request keys to sibling authority.**
+      `packages/server/src/{app-request,app-mutation-request,query,registry-facts,shell}.ts`
+  - Selective `Array.prototype.find`/`some`/`map`/`flatMap` overrides could resolve a protected
+    mutation, query, endpoint, or live-target key through a public or CSRF-exempt sibling and could
+    make dispatch facts disagree with the exact registry entry named by the request.
+  - **Evidence:** the 180-test request-dispatch matrix uses dense own-array traversal, exact-key
+    lookup, and pinned Map/Set facts; protected mutation/query/endpoint and live-target sibling
+    poison controls now reject or retain the named declaration without executing the wrong handler.
+
+- [x] **H13 - Mutable request-method canonicalization can waive CSRF or open write dispatch.**
+      `packages/server/src/{app-dispatch,app-mutation-request,shell,request-method}.ts`
+  - Selective `String.prototype.toUpperCase` overrides mapped unsafe endpoint POST to GET before the
+    CSRF decision, mapped GET to POST at the mutation boundary, and changed the GET/HEAD-only query
+    channel classification.
+  - **Evidence:** the same 180-test request-dispatch matrix pins exact ASCII GET/HEAD/POST/PUT/PATCH/
+    DELETE classification across mutation, query, endpoint matching, method-allow, and CSRF gates.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -201,10 +219,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
     neutralization use boot-pinned, semantically checked operations in live and emitted paths; hostile
     import-order and late-poison tests keep credentials absent and each event on one line.
 
+- [x] **M5 - Mutable `Math.max` can disable the file-aware streamed-body ceiling.**
+      `packages/server/src/app-request.ts`
+  - Returning `Infinity` from a late `Math.max` override changed a finite mutation upload allowance
+    into an unbounded pre-dispatch body read, bypassing the global resource floor before schema
+    validation.
+  - **Evidence:** the 180-test request-dispatch matrix computes the larger finite bound with scalar
+    comparison; an oversized stream is cancelled with 413 and the mutation handler is not called
+    under late `Math.max` poison.
+
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, H6-H7, H9-H10, and M4 are active
-request-transport, document/cookie/CSRF, Better Auth, and generated-diagnostics fixes. Integrated
-evidence is green at 97 PostgreSQL, 88 egress, 37 filesystem/storage, 198 app/schema/document, 158
+The remediation pass remains intentionally non-zero: C6, H7, H9-H10, and M4 are active
+document/cookie/CSRF, Better Auth, and generated-diagnostics fixes. Integrated evidence is green at
+97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 86 crypto/replay, 234 output/compiler/core, and 87 scalar route/handler/secret tests.
 A complete fresh sweep of the final integrated tree is still required.

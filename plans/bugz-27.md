@@ -77,12 +77,14 @@ source-only concern was insufficient.
   - **Evidence:** the 345-test mutation/endpoint integration selection passes, proving neutral
     request views/clones and private executed-verifier receipts at every browser-state response choke.
 
-- [ ] **H7 - Raw Node request targets normalize into another mutation or attacker authority.**
+- [x] **H7 - Raw Node request targets normalize into another mutation or attacker authority.**
       `packages/server/src/{node,build}.ts`
   - Dot-prefix, encoded-dot-prefix, multiple-slash, and backslash targets reached canonical `/_m`
     handlers; an absolute-form `//host` path could also replace a configured Web Request origin.
-  - **Acceptance:** lex and reject every ambiguous reserved target before Web Request construction in
-    live/emitted Node and Vercel, while URL construction pins the configured/default authority.
+  - **Evidence:** live/emitted Node and Vercel lex raw targets without mutable RegExp/String
+    classifiers, reject encoded separators/dot and slash/backslash aliases, and pin the configured
+    authority; the independent `/_m/a/%2f/b` late-poison proof now fails closed before Web Request
+    construction.
 
 - [x] **H8 - KV418/guard audit proof could bind mutable, opaque, or decoy application facts.**
       `packages/compiler/src/scan/parse.ts`, `packages/server/src/guards.ts`,
@@ -147,6 +149,6 @@ source-only concern was insufficient.
 
 ## Latest verification
 
-The first fresh post-`bugz-26` pass intentionally ended non-zero. Every item except H7 is integrated
-with focused evidence; H7 remains open with the broader raw-target intrinsic closure tracked in
-`bugz-28` H6. A complete fresh sweep is required after that merge.
+Every carried item is integrated with focused evidence; H7's broader raw-target intrinsic closure
+is also recorded in `bugz-28` H6. A complete fresh sweep of the final integrated tree remains
+required before closure.
