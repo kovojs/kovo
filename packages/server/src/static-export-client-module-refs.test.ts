@@ -107,6 +107,64 @@ describe('server static export', () => {
     }
   });
 
+  it('does not publish registered but unreferenced modules after Set.add replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-module-set-'));
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const publicHref = registry.put({
+      path: '/c/public.client.js',
+      source: 'export const publicModule = true;',
+      version: 'public-build',
+    });
+    const privateHref = registry.put({
+      path: '/c/private-admin.client.js',
+      source: 'export const serverOnlyAdminToken = "internal-build-token";',
+      version: 'private-build',
+    });
+    const originalAdd = Set.prototype.add;
+    let result: Awaited<ReturnType<typeof exportStaticApp>>;
+
+    try {
+      const app = createApp({
+        clientModules: registry,
+        routes: [
+          route('/', {
+            page() {
+              Set.prototype.add = function (value) {
+                const added = Reflect.apply(originalAdd, this, [value]);
+                if (typeof value === 'string' && value.indexOf(publicHref) !== -1) {
+                  Reflect.apply(originalAdd, this, [privateHref]);
+                }
+                return added;
+              };
+              return trustedHtml(
+                `<main><button on:click="${publicHref}#Public$run">Run</button></main>`,
+              );
+            },
+          }),
+        ],
+      });
+
+      result = await exportStaticApp(app, { outDir });
+    } finally {
+      Set.prototype.add = originalAdd;
+    }
+
+    try {
+      expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
+        '/c/__v/public-build/public.client.js',
+        expect.stringMatching(runtimeClientModulePath),
+      ]);
+      expect(result.clientModules.map((artifact) => artifact.body)).not.toContain(
+        'export const serverOnlyAdminToken = "internal-build-token";',
+      );
+      await expect(
+        readFile(path.join(outDir, 'c/__v/private-build/private-admin.client.js'), 'utf8'),
+      ).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('copies same-origin absolute client module refs from exported documents and Link headers', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {

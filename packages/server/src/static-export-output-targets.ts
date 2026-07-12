@@ -1,5 +1,25 @@
 import * as path from 'node:path';
 
+import { confinedPath } from '@kovojs/core/internal/filesystem';
+
+import {
+  buildSecurityDecodeURIComponent,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
+import {
+  createSecurityMap,
+  securityArrayJoin,
+  securityArrayPush,
+  securityMapGet,
+  securityMapSet,
+  securityObjectKeys,
+  securityRegExpTest,
+  securityStringIncludes,
+  securityStringSplit,
+  securityStringStartsWith,
+  securityUrlSnapshot,
+  type SecurityUrlSnapshot,
+} from './response-security-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
   type StaticExportArtifact,
@@ -58,38 +78,44 @@ export function staticExportOutputTargets(
   root: string,
 ): StaticExportOutputTarget[] {
   const targets: StaticExportOutputTarget[] = [];
+  const artifacts = snapshotBuildArray(plan.artifacts, 'static-export route artifacts');
+  const clientModules = snapshotBuildArray(plan.clientModules, 'static-export client modules');
+  const assets = snapshotBuildArray(plan.assets, 'static-export assets');
 
-  plan.artifacts.forEach((artifact, itemIndex) => {
-    targets.push({
+  for (let itemIndex = 0; itemIndex < artifacts.length; itemIndex += 1) {
+    const artifact = artifacts[itemIndex]!;
+    securityArrayPush(targets, {
       diagnosticPath: artifact.path,
       itemIndex,
       itemKind: 'route-document',
       kind: 'route document',
       targetPath: staticExportArtifactTargetPath(root, artifact.path),
     });
-  });
+  }
 
-  plan.clientModules.forEach((artifact, itemIndex) => {
+  for (let itemIndex = 0; itemIndex < clientModules.length; itemIndex += 1) {
+    const artifact = clientModules[itemIndex]!;
     const targetPath = staticExportClientModuleTargetPath(root, artifact.path);
     assertStaticExportClientModuleTarget(artifact);
-    targets.push({
+    securityArrayPush(targets, {
       diagnosticPath: artifact.path,
       itemIndex,
       itemKind: 'client-module',
       kind: 'client module',
       targetPath,
     });
-  });
+  }
 
-  plan.assets.forEach((artifact, itemIndex) => {
-    targets.push({
+  for (let itemIndex = 0; itemIndex < assets.length; itemIndex += 1) {
+    const artifact = assets[itemIndex]!;
+    securityArrayPush(targets, {
       diagnosticPath: artifact.path,
       itemIndex,
       itemKind: 'static-asset',
       kind: 'static asset',
       targetPath: staticExportAssetTargetPath(root, artifact.path),
     });
-  });
+  }
 
   // Emit a Netlify-style `_headers` sidecar that materializes the captured per-document
   // security-header floor (CSP, X-Frame-Options, COOP, Permissions-Policy, Referrer-Policy)
@@ -98,11 +124,23 @@ export function staticExportOutputTargets(
   // versioned client modules (`/c/…`) and static assets (`/assets/…`) that every server
   // preset applies (build.ts `immutableStaticHeaders()`), so emit it whenever there are
   // route-document headers OR any `/c/`/`/assets/` artifacts to protect.
-  const hasRouteDocumentHeaders = plan.artifacts.some((a) => Object.keys(a.headers).length > 0);
-  const hasImmutableAssetArtifacts =
-    plan.clientModules.length > 0 || plan.assets.some((a) => a.path.startsWith('/assets/'));
+  let hasRouteDocumentHeaders = false;
+  for (let index = 0; index < artifacts.length; index += 1) {
+    if (securityObjectKeys(artifacts[index]!.headers).length > 0) {
+      hasRouteDocumentHeaders = true;
+      break;
+    }
+  }
+  let hasAssetFloor = false;
+  for (let index = 0; index < assets.length; index += 1) {
+    if (securityStringStartsWith(assets[index]!.path, '/assets/')) {
+      hasAssetFloor = true;
+      break;
+    }
+  }
+  const hasImmutableAssetArtifacts = clientModules.length > 0 || hasAssetFloor;
   if (hasRouteDocumentHeaders || hasImmutableAssetArtifacts) {
-    targets.push({
+    securityArrayPush(targets, {
       diagnosticPath: '_headers',
       itemIndex: 0,
       itemKind: 'header-sidecar',
@@ -120,9 +158,10 @@ function assertStaticExportClientModuleTarget(artifact: StaticExportClientModule
 
   if (
     hrefUrl.origin === 'https://kovo.local' &&
-    artifact.path.startsWith('/c/') &&
+    securityStringStartsWith(artifact.path, '/c/') &&
     hrefUrl.pathname === artifact.path &&
-    (hrefUrl.searchParams.get('v') || hrefUrl.pathname.startsWith('/c/__v/'))
+    (securityRegExpTest(/[?&]v=[^&]+/u, hrefUrl.search) ||
+      securityStringStartsWith(hrefUrl.pathname, '/c/__v/'))
   ) {
     return;
   }
@@ -135,9 +174,11 @@ function assertStaticExportClientModuleTarget(artifact: StaticExportClientModule
   ]);
 }
 
-function staticExportClientModuleHrefUrl(artifact: StaticExportClientModuleArtifact): URL {
+function staticExportClientModuleHrefUrl(
+  artifact: StaticExportClientModuleArtifact,
+): SecurityUrlSnapshot {
   try {
-    return new URL(artifact.href, 'https://kovo.local');
+    return securityUrlSnapshot(artifact.href, 'https://kovo.local');
   } catch {
     throw new StaticExportError([
       staticExportDiagnostic(
@@ -149,10 +190,12 @@ function staticExportClientModuleHrefUrl(artifact: StaticExportClientModuleArtif
 }
 
 function assertNoStaticExportOutputConflicts(targets: readonly StaticExportOutputTarget[]): void {
-  const seen = new Map<string, StaticExportOutputTarget>();
+  const seen = createSecurityMap<string, StaticExportOutputTarget>();
+  const pinnedTargets = snapshotBuildArray(targets, 'static-export output targets');
 
-  for (const target of targets) {
-    const existing = seen.get(target.targetPath);
+  for (let index = 0; index < pinnedTargets.length; index += 1) {
+    const target = pinnedTargets[index]!;
+    const existing = securityMapGet(seen, target.targetPath);
     if (existing) {
       throw new StaticExportError([
         staticExportDiagnostic(
@@ -162,12 +205,12 @@ function assertNoStaticExportOutputConflicts(targets: readonly StaticExportOutpu
       ]);
     }
 
-    seen.set(target.targetPath, target);
+    securityMapSet(seen, target.targetPath, target);
   }
 }
 
 function staticExportArtifactTargetPath(root: string, artifactPath: string): string {
-  const segments = artifactPath.split('/').filter(Boolean).map(decodeRouteDocumentPathSegment);
+  const segments = decodedStaticExportPathSegments(artifactPath, decodeRouteDocumentPathSegment);
   if (segments.length === 0) {
     throw new StaticExportError([
       staticExportDiagnostic(
@@ -177,8 +220,8 @@ function staticExportArtifactTargetPath(root: string, artifactPath: string): str
     ]);
   }
 
-  const targetPath = path.resolve(root, ...segments);
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
+  const targetPath = confinedPath(root, securityArrayJoin(segments, path.sep));
+  if (targetPath !== undefined) return targetPath;
 
   throw new StaticExportError([
     staticExportDiagnostic(
@@ -191,7 +234,7 @@ function staticExportArtifactTargetPath(root: string, artifactPath: string): str
 function decodeRouteDocumentPathSegment(segment: string): string {
   let decoded: string;
   try {
-    decoded = decodeURIComponent(segment);
+    decoded = buildSecurityDecodeURIComponent(segment);
   } catch {
     throw new StaticExportError([
       staticExportDiagnostic(
@@ -201,7 +244,12 @@ function decodeRouteDocumentPathSegment(segment: string): string {
     ]);
   }
 
-  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+  if (
+    decoded === '.' ||
+    decoded === '..' ||
+    securityStringIncludes(decoded, '/') ||
+    securityStringIncludes(decoded, '\\')
+  ) {
     throw new StaticExportError([
       staticExportDiagnostic(
         segment,
@@ -214,9 +262,9 @@ function decodeRouteDocumentPathSegment(segment: string): string {
 }
 
 function staticExportClientModuleTargetPath(root: string, modulePath: string): string {
-  const segments = modulePath.split('/').filter(Boolean).map(decodeClientModulePathSegment);
-  const targetPath = path.resolve(root, ...segments);
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
+  const segments = decodedStaticExportPathSegments(modulePath, decodeClientModulePathSegment);
+  const targetPath = confinedPath(root, securityArrayJoin(segments, path.sep));
+  if (targetPath !== undefined) return targetPath;
 
   throw new StaticExportError([
     staticExportDiagnostic(
@@ -229,7 +277,7 @@ function staticExportClientModuleTargetPath(root: string, modulePath: string): s
 function decodeClientModulePathSegment(segment: string): string {
   let decoded: string;
   try {
-    decoded = decodeURIComponent(segment);
+    decoded = buildSecurityDecodeURIComponent(segment);
   } catch {
     throw new StaticExportError([
       staticExportDiagnostic(
@@ -239,7 +287,12 @@ function decodeClientModulePathSegment(segment: string): string {
     ]);
   }
 
-  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+  if (
+    decoded === '.' ||
+    decoded === '..' ||
+    securityStringIncludes(decoded, '/') ||
+    securityStringIncludes(decoded, '\\')
+  ) {
     throw new StaticExportError([
       staticExportDiagnostic(
         `/c/${segment}`,
@@ -252,7 +305,7 @@ function decodeClientModulePathSegment(segment: string): string {
 }
 
 function staticExportAssetTargetPath(root: string, assetPath: string): string {
-  const segments = assetPath.split('/').filter(Boolean).map(decodeStaticExportAssetPathSegment);
+  const segments = decodedStaticExportPathSegments(assetPath, decodeStaticExportAssetPathSegment);
   if (segments.length === 0) {
     throw new StaticExportError([
       staticExportDiagnostic(
@@ -262,8 +315,8 @@ function staticExportAssetTargetPath(root: string, assetPath: string): string {
     ]);
   }
 
-  const targetPath = path.resolve(root, ...segments);
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
+  const targetPath = confinedPath(root, securityArrayJoin(segments, path.sep));
+  if (targetPath !== undefined) return targetPath;
 
   throw new StaticExportError([
     staticExportDiagnostic(
@@ -276,7 +329,7 @@ function staticExportAssetTargetPath(root: string, assetPath: string): string {
 function decodeStaticExportAssetPathSegment(segment: string): string {
   let decoded: string;
   try {
-    decoded = decodeURIComponent(segment);
+    decoded = buildSecurityDecodeURIComponent(segment);
   } catch {
     throw new StaticExportError([
       staticExportDiagnostic(
@@ -286,7 +339,12 @@ function decodeStaticExportAssetPathSegment(segment: string): string {
     ]);
   }
 
-  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+  if (
+    decoded === '.' ||
+    decoded === '..' ||
+    securityStringIncludes(decoded, '/') ||
+    securityStringIncludes(decoded, '\\')
+  ) {
     throw new StaticExportError([
       staticExportDiagnostic(
         segment,
@@ -295,5 +353,18 @@ function decodeStaticExportAssetPathSegment(segment: string): string {
     ]);
   }
 
+  return decoded;
+}
+
+function decodedStaticExportPathSegments(
+  value: string,
+  decode: (segment: string) => string,
+): string[] {
+  const rawSegments = securityStringSplit(value, '/');
+  const decoded: string[] = [];
+  for (let index = 0; index < rawSegments.length; index += 1) {
+    const segment = rawSegments[index]!;
+    if (segment !== '') securityArrayPush(decoded, decode(segment));
+  }
   return decoded;
 }

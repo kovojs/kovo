@@ -68,14 +68,28 @@ export interface StaticExportDocumentProtocol {
   serverOnlyMarkers: readonly StaticExportServerOnlyProtocolMarker[];
 }
 
-const STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES = new Set(['action', 'formaction', 'href', 'src']);
-const STATIC_EXPORT_RAW_TEXT_ELEMENTS = new Set(['script', 'style', 'textarea', 'title']);
-const STATIC_EXPORT_PROTOCOL_BODY_SKIP_ELEMENTS = new Set([
-  ...STATIC_EXPORT_RAW_TEXT_ELEMENTS,
+const STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES = securityStringSet([
+  'action',
+  'formaction',
+  'href',
+  'src',
+]);
+const STATIC_EXPORT_RAW_TEXT_ELEMENTS = securityStringSet(['script', 'style', 'textarea', 'title']);
+const STATIC_EXPORT_PROTOCOL_BODY_SKIP_ELEMENTS = securityStringSet([
+  'script',
+  'style',
+  'textarea',
+  'title',
   'pre',
   'template',
 ]);
 const STATIC_EXPORT_DEFERRED_BOUNDARY_MARKER = '--kovo-boundary';
+
+function securityStringSet(values: readonly string[]): Set<string> {
+  const set = createSecuritySet<string>();
+  for (let index = 0; index < values.length; index += 1) securitySetAdd(set, values[index]!);
+  return set;
+}
 
 export function scanStaticExportDocumentProtocol(
   html: string,
@@ -89,13 +103,19 @@ export function scanStaticExportDocumentProtocol(
 
   let offset = 0;
   while (offset < html.length) {
-    const start = html.indexOf('<', offset);
+    const start = securityStringIndexOf(html, '<', offset);
     if (start === -1) {
-      collectStaticExportDeferredBoundaryMarkers(html.slice(offset), deferredMarkers);
+      collectStaticExportDeferredBoundaryMarkers(
+        securityStringSlice(html, offset),
+        deferredMarkers,
+      );
       break;
     }
 
-    collectStaticExportDeferredBoundaryMarkers(html.slice(offset, start), deferredMarkers);
+    collectStaticExportDeferredBoundaryMarkers(
+      securityStringSlice(html, offset, start),
+      deferredMarkers,
+    );
 
     const skippedMarkupEnd = readStaticExportSkippedMarkupEnd(html, start);
     if (skippedMarkupEnd !== undefined) {
@@ -112,11 +132,12 @@ export function scanStaticExportDocumentProtocol(
     const refs = readStaticExportHtmlAttributeRefs(tag.attributes);
     const attrs = staticExportAttributeMap(refs);
 
-    for (const ref of refs) {
+    for (let refIndex = 0; refIndex < refs.length; refIndex += 1) {
+      const ref = refs[refIndex]!;
       const endpoint = staticExportServerEndpointRef(ref, origin);
-      if (endpoint !== undefined) endpointRefs.push(endpoint);
+      if (endpoint !== undefined) securityArrayPush(endpointRefs, endpoint);
 
-      if (ref.name.startsWith('on:')) {
+      if (securityStringStartsWith(ref.name, 'on:')) {
         collectStaticExportClientModuleRefsFromTokens(
           ref,
           origin,
@@ -140,21 +161,32 @@ export function scanStaticExportDocumentProtocol(
     offset = readStaticExportProtocolElementBodyEnd(html, tag) ?? tag.end;
   }
 
+  const serverOnlyMarkers: StaticExportServerOnlyProtocolMarker[] = [];
+  for (let index = 0; index < endpointRefs.length; index += 1) {
+    securityArrayPush(serverOnlyMarkers, {
+      endpoint: endpointRefs[index]!,
+      kind: 'server-endpoint',
+    });
+  }
+  for (let index = 0; index < deferredMarkers.length; index += 1) {
+    securityArrayPush(serverOnlyMarkers, {
+      deferred: deferredMarkers[index]!,
+      kind: 'deferred-marker',
+    });
+  }
+
   return {
     clientModuleRefs,
     deferredMarkers,
     endpointRefs,
     mutationForms,
     queryScripts,
-    serverOnlyMarkers: [
-      ...endpointRefs.map((endpoint) => ({ endpoint, kind: 'server-endpoint' }) as const),
-      ...deferredMarkers.map((deferred) => ({ deferred, kind: 'deferred-marker' }) as const),
-    ],
+    serverOnlyMarkers,
   };
 }
 
 function collectStaticExportElementProtocol(options: {
-  attrs: ReadonlyMap<string, string>;
+  attrs: Map<string, string>;
   clientModuleRefs: StaticExportClientModuleRef[];
   deferredMarkers: StaticExportDeferredMarker[];
   mutationForms: StaticExportMutationForm[];
@@ -175,29 +207,32 @@ function collectStaticExportElementProtocol(options: {
   } = options;
 
   if (tag.name === 'script' && isStaticExportModuleScript(attrs)) {
-    const src = refs.find((ref) => ref.name === 'src');
+    const src = staticExportAttributeRef(refs, 'src');
     if (src !== undefined) {
       collectStaticExportClientModuleRef(src, origin, 'module-script', clientModuleRefs);
     }
   }
 
-  if (tag.name === 'link' && staticExportRelTokens(attrs.get('rel')).includes('modulepreload')) {
-    const href = refs.find((ref) => ref.name === 'href');
+  if (
+    tag.name === 'link' &&
+    stringArrayContains(staticExportRelTokens(securityMapGet(attrs, 'rel')), 'modulepreload')
+  ) {
+    const href = staticExportAttributeRef(refs, 'href');
     if (href !== undefined) {
       collectStaticExportClientModuleRef(href, origin, 'modulepreload-link', clientModuleRefs);
     }
   }
 
   if (tag.name === 'kovo-defer') {
-    const target = attrs.get('target');
-    deferredMarkers.push({
+    const target = securityMapGet(attrs, 'target');
+    securityArrayPush(deferredMarkers, {
       kind: 'defer',
       ...(target === undefined ? {} : { target }),
       value: 'kovo-defer',
     });
   } else if (tag.name === 'kovo-fragment') {
-    const target = attrs.get('target');
-    deferredMarkers.push({
+    const target = securityMapGet(attrs, 'target');
+    securityArrayPush(deferredMarkers, {
       kind: 'fragment',
       ...(target === undefined ? {} : { target }),
       value: 'kovo-fragment',
@@ -205,18 +240,18 @@ function collectStaticExportElementProtocol(options: {
   }
 
   const queryScript = staticExportQueryScript(tag.name, attrs);
-  if (queryScript !== undefined) queryScripts.push(queryScript);
+  if (queryScript !== undefined) securityArrayPush(queryScripts, queryScript);
 
   const mutationForm = staticExportMutationForm(tag.name, attrs, refs, origin);
-  if (mutationForm !== undefined) mutationForms.push(mutationForm);
+  if (mutationForm !== undefined) securityArrayPush(mutationForms, mutationForm);
 }
 
 function collectStaticExportDeferredBoundaryMarkers(
   text: string,
   markers: StaticExportDeferredMarker[],
 ): void {
-  if (!text.includes(STATIC_EXPORT_DEFERRED_BOUNDARY_MARKER)) return;
-  markers.push({
+  if (!securityStringIncludes(text, STATIC_EXPORT_DEFERRED_BOUNDARY_MARKER)) return;
+  securityArrayPush(markers, {
     kind: 'boundary',
     value: STATIC_EXPORT_DEFERRED_BOUNDARY_MARKER,
   });
@@ -224,11 +259,11 @@ function collectStaticExportDeferredBoundaryMarkers(
 
 function staticExportQueryScript(
   tagName: string,
-  attrs: ReadonlyMap<string, string>,
+  attrs: Map<string, string>,
 ): StaticExportQueryScript | undefined {
   if (tagName === 'kovo-query') {
-    const key = attrs.get('key');
-    const name = attrs.get('name');
+    const key = securityMapGet(attrs, 'key');
+    const name = securityMapGet(attrs, 'name');
     return {
       ...(key === undefined ? {} : { key }),
       kind: 'kovo-query-element',
@@ -236,10 +271,10 @@ function staticExportQueryScript(
     };
   }
 
-  if (tagName !== 'script' || !attrs.has('kovo-query')) return undefined;
+  if (tagName !== 'script' || !securityMapHas(attrs, 'kovo-query')) return undefined;
 
-  const key = attrs.get('key');
-  const name = attrs.get('kovo-query');
+  const key = securityMapGet(attrs, 'key');
+  const name = securityMapGet(attrs, 'kovo-query');
   return {
     ...(key === undefined ? {} : { key }),
     kind: 'script-attribute',
@@ -249,17 +284,19 @@ function staticExportQueryScript(
 
 function staticExportMutationForm(
   tagName: string,
-  attrs: ReadonlyMap<string, string>,
+  attrs: Map<string, string>,
   refs: readonly StaticExportHtmlAttributeRef[],
   origin: string,
 ): StaticExportMutationForm | undefined {
   if (tagName !== 'form') return undefined;
 
-  const action = refs.find((ref) => ref.name === 'action');
+  const action = staticExportAttributeRef(refs, 'action');
   const endpoint = action === undefined ? undefined : staticExportServerEndpointRef(action, origin);
-  const dataMutation = attrs.get('data-mutation');
-  const streamValue = attrs.get('data-mutation-stream');
-  const stream = streamValue !== undefined && streamValue.trim().toLowerCase() !== 'false';
+  const dataMutation = securityMapGet(attrs, 'data-mutation');
+  const streamValue = securityMapGet(attrs, 'data-mutation-stream');
+  const stream =
+    streamValue !== undefined &&
+    securityStringToLowerCase(securityStringTrim(streamValue)) !== 'false';
 
   if (endpoint?.phase !== 'mutation' && dataMutation === undefined && !stream) {
     return undefined;
@@ -269,7 +306,8 @@ function staticExportMutationForm(
     ...(action === undefined ? {} : { action: action.value }),
     ...(dataMutation === undefined ? {} : { dataMutation }),
     ...(endpoint?.phase === 'mutation' ? { endpoint } : {}),
-    method: attrs.get('method')?.trim().toLowerCase() || 'get',
+    method:
+      securityStringToLowerCase(securityStringTrim(securityMapGet(attrs, 'method') ?? '')) || 'get',
     stream,
   };
 }
@@ -278,10 +316,10 @@ function staticExportServerEndpointRef(
   ref: StaticExportHtmlAttributeRef,
   origin: string,
 ): StaticExportServerEndpointRef | undefined {
-  if (!STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES.has(ref.name)) return undefined;
+  if (!securitySetHas(STATIC_EXPORT_SERVER_ENDPOINT_ATTRIBUTES, ref.name)) return undefined;
 
   const url = staticExportUrlFromAttributeValue(ref.value, origin);
-  if (url === undefined || url.origin !== new URL(origin).origin) return undefined;
+  if (url === undefined || url.origin !== securityUrlSnapshot(origin).origin) return undefined;
 
   const phase = staticExportServerEndpointPhase(url.pathname);
   if (phase === undefined) return undefined;
@@ -295,8 +333,16 @@ function collectStaticExportClientModuleRefsFromTokens(
   source: StaticExportClientModuleRefSource,
   refs: StaticExportClientModuleRef[],
 ): void {
-  for (const token of ref.value.split(/\s+/)) {
-    collectStaticExportClientModuleRef({ ...ref, value: token }, origin, source, refs);
+  const normalizedTokens = staticExportWhitespaceTokens(ref.value);
+  // Handler ref tokens use HTML whitespace, so reuse the scanner's pinned tokenizer rather than
+  // live RegExp/String splitting.
+  for (let index = 0; index < normalizedTokens.length; index += 1) {
+    collectStaticExportClientModuleRef(
+      { ...ref, value: normalizedTokens[index]! },
+      origin,
+      source,
+      refs,
+    );
   }
 }
 
@@ -307,7 +353,7 @@ function collectStaticExportClientModuleRef(
   refs: StaticExportClientModuleRef[],
 ): void {
   const href = staticExportClientModuleHref(ref.value, origin);
-  if (href !== undefined) refs.push({ ...ref, href, source });
+  if (href !== undefined) securityArrayPush(refs, { ...ref, href, source });
 }
 
 export function collectStaticExportOpeningTags(html: string): StaticExportOpeningTag[] {
@@ -315,7 +361,7 @@ export function collectStaticExportOpeningTags(html: string): StaticExportOpenin
   let offset = 0;
 
   while (offset < html.length) {
-    const start = html.indexOf('<', offset);
+    const start = securityStringIndexOf(html, '<', offset);
     if (start === -1) break;
 
     const skippedMarkupEnd = readStaticExportSkippedMarkupEnd(html, start);
@@ -330,7 +376,7 @@ export function collectStaticExportOpeningTags(html: string): StaticExportOpenin
       continue;
     }
 
-    tags.push(tag);
+    securityArrayPush(tags, tag);
     offset = readStaticExportRawTextElementEnd(html, tag) ?? tag.end;
   }
 
@@ -351,7 +397,7 @@ function readStaticExportOpeningTag(
     offset += 1;
   }
 
-  const name = html.slice(start + 1, offset).toLowerCase();
+  const name = securityStringToLowerCase(securityStringSlice(html, start + 1, offset));
   const attributesStart = offset;
   let quote: '"' | "'" | undefined;
   while (offset < html.length) {
@@ -362,7 +408,7 @@ function readStaticExportOpeningTag(
       quote = char;
     } else if (char === '>') {
       return {
-        attributes: html.slice(attributesStart, offset),
+        attributes: securityStringSlice(html, attributesStart, offset),
         end: offset + 1,
         name,
         start,
@@ -380,8 +426,8 @@ function readStaticExportSkippedMarkupEnd(html: string, start: number): number |
   if (afterOpen === undefined) return undefined;
 
   if (afterOpen === '!') {
-    if (html.startsWith('<!--', start)) {
-      const commentEnd = html.indexOf('-->', start + 4);
+    if (securityStringStartsWith(html, '<!--', start)) {
+      const commentEnd = securityStringIndexOf(html, '-->', start + 4);
       return commentEnd === -1 ? html.length : commentEnd + 3;
     }
 
@@ -418,7 +464,7 @@ function readStaticExportProtocolElementBodyEnd(
   html: string,
   tag: StaticExportOpeningTag,
 ): number | undefined {
-  if (!STATIC_EXPORT_PROTOCOL_BODY_SKIP_ELEMENTS.has(tag.name)) return undefined;
+  if (!securitySetHas(STATIC_EXPORT_PROTOCOL_BODY_SKIP_ELEMENTS, tag.name)) return undefined;
   return readStaticExportElementBodyEnd(html, tag);
 }
 
@@ -426,7 +472,7 @@ function readStaticExportRawTextElementEnd(
   html: string,
   tag: StaticExportOpeningTag,
 ): number | undefined {
-  if (!STATIC_EXPORT_RAW_TEXT_ELEMENTS.has(tag.name)) return undefined;
+  if (!securitySetHas(STATIC_EXPORT_RAW_TEXT_ELEMENTS, tag.name)) return undefined;
   return readStaticExportElementBodyEnd(html, tag);
 }
 
@@ -434,14 +480,14 @@ function readStaticExportElementBodyEnd(
   html: string,
   tag: StaticExportOpeningTag,
 ): number | undefined {
-  const lowerHtml = html.toLowerCase();
+  const lowerHtml = securityStringToLowerCase(html);
   const closePattern = `</${tag.name}`;
-  let closeStart = lowerHtml.indexOf(closePattern, tag.end);
+  let closeStart = securityStringIndexOf(lowerHtml, closePattern, tag.end);
   while (
     closeStart !== -1 &&
     !isStaticExportTagNameBoundary(lowerHtml[closeStart + closePattern.length])
   ) {
-    closeStart = lowerHtml.indexOf(closePattern, closeStart + closePattern.length);
+    closeStart = securityStringIndexOf(lowerHtml, closePattern, closeStart + closePattern.length);
   }
   if (closeStart === -1) return html.length;
 
@@ -472,10 +518,10 @@ export function readStaticExportHtmlAttributeRefs(
       offset += 1;
     }
 
-    const name = attributes.slice(nameStart, offset).toLowerCase();
+    const name = securityStringToLowerCase(securityStringSlice(attributes, nameStart, offset));
     offset = skipStaticExportHtmlSpace(attributes, offset);
     if (attributes[offset] !== '=') {
-      if (name !== '') refs.push({ name, value: '' });
+      if (name !== '') securityArrayPush(refs, { name, value: '' });
       continue;
     }
 
@@ -484,7 +530,7 @@ export function readStaticExportHtmlAttributeRefs(
     offset = read.end;
 
     if (name !== '') {
-      refs.push({
+      securityArrayPush(refs, {
         name,
         value: decodeHtmlAttributeText(read.value),
       });
@@ -501,9 +547,14 @@ function readStaticExportHtmlAttributeValue(
   const quote = attributes[start];
   if (quote === '"' || quote === "'") {
     const valueStart = start + 1;
-    const valueEnd = attributes.indexOf(quote, valueStart);
-    if (valueEnd === -1) return { end: attributes.length, value: attributes.slice(valueStart) };
-    return { end: valueEnd + 1, value: attributes.slice(valueStart, valueEnd) };
+    const valueEnd = securityStringIndexOf(attributes, quote, valueStart);
+    if (valueEnd === -1) {
+      return { end: attributes.length, value: securityStringSlice(attributes, valueStart) };
+    }
+    return {
+      end: valueEnd + 1,
+      value: securityStringSlice(attributes, valueStart, valueEnd),
+    };
   }
 
   let end = start;
@@ -515,85 +566,126 @@ function readStaticExportHtmlAttributeValue(
     end += 1;
   }
 
-  return { end, value: attributes.slice(start, end) };
+  return { end, value: securityStringSlice(attributes, start, end) };
 }
 
-function staticExportUrlFromAttributeValue(value: string, origin: string): URL | undefined {
-  if (value.trim() === '') return undefined;
+function staticExportUrlFromAttributeValue(
+  value: string,
+  origin: string,
+): SecurityUrlSnapshot | undefined {
+  if (securityStringTrim(value) === '') return undefined;
 
   try {
-    return new URL(value, origin);
+    return securityUrlSnapshot(value, origin);
   } catch {
     return undefined;
   }
 }
 
 function staticExportServerEndpointPhase(pathname: string): 'mutation' | 'query' | undefined {
-  if (pathname.startsWith('/_m/')) return 'mutation';
-  if (pathname.startsWith('/_q/')) return 'query';
+  if (securityStringStartsWith(pathname, '/_m/')) return 'mutation';
+  if (securityStringStartsWith(pathname, '/_q/')) return 'query';
   return undefined;
 }
 
 export function staticExportAttributeMap(
   refs: readonly StaticExportHtmlAttributeRef[],
 ): Map<string, string> {
-  const attrs = new Map<string, string>();
-  for (const ref of refs) {
-    if (!attrs.has(ref.name)) attrs.set(ref.name, ref.value);
+  const attrs = createSecurityMap<string, string>();
+  const pinnedRefs = snapshotBuildArray(refs, 'static-export HTML attribute refs');
+  for (let index = 0; index < pinnedRefs.length; index += 1) {
+    const ref = pinnedRefs[index]!;
+    if (!securityMapHas(attrs, ref.name)) securityMapSet(attrs, ref.name, ref.value);
   }
   return attrs;
 }
 
-function isStaticExportModuleScript(attrs: ReadonlyMap<string, string>): boolean {
-  return attrs.get('type')?.trim().toLowerCase() === 'module';
+function isStaticExportModuleScript(attrs: Map<string, string>): boolean {
+  const type = securityMapGet(attrs, 'type');
+  return type !== undefined && securityStringToLowerCase(securityStringTrim(type)) === 'module';
 }
 
 export function staticExportRelTokens(value: string | undefined): string[] {
-  return (value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+  return staticExportWhitespaceTokens(securityStringToLowerCase(value ?? ''));
+}
+
+function staticExportWhitespaceTokens(source: string): string[] {
+  const tokens: string[] = [];
+  let offset = 0;
+  while (offset < source.length) {
+    offset = skipStaticExportHtmlSpace(source, offset);
+    if (offset >= source.length) break;
+    const start = offset;
+    while (offset < source.length && !isStaticExportHtmlSpace(source[offset])) offset += 1;
+    securityArrayPush(tokens, securityStringSlice(source, start, offset));
+  }
+  return tokens;
 }
 
 export function staticExportClientModuleHref(value: string, origin: string): string | undefined {
-  if (value.trim() === '') return undefined;
+  if (securityStringTrim(value) === '') return undefined;
 
-  let url: URL;
+  let url: SecurityUrlSnapshot;
   try {
-    url = new URL(value, origin);
+    url = securityUrlSnapshot(value, origin);
   } catch {
     return undefined;
   }
 
-  if (url.origin !== new URL(origin).origin || !url.pathname.startsWith('/c/')) {
+  if (
+    url.origin !== securityUrlSnapshot(origin).origin ||
+    !securityStringStartsWith(url.pathname, '/c/')
+  ) {
     return undefined;
   }
 
   // SPEC §4.3 permits full module URLs. Static export must still publish the
   // same-origin /c/ file that a static host serves by path.
-  return value.startsWith('/c/') ? value : `${url.pathname}${url.search}${url.hash}`;
+  return securityStringStartsWith(value, '/c/') ? value : `${url.pathname}${url.search}${url.hash}`;
 }
 
 function decodeHtmlAttributeText(value: string): string {
-  return value
-    .replace(/&#x([0-9a-fA-F]+);/g, (entity: string, hex: string) =>
-      decodeHtmlNumericEntity(entity, Number.parseInt(hex, 16)),
-    )
-    .replace(/&#([0-9]+);/g, (entity: string, decimal: string) =>
-      decodeHtmlNumericEntity(entity, Number.parseInt(decimal, 10)),
-    )
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&sol;/g, '/');
+  let decoded = securityRegExpReplaceMatches(value, /&#x([0-9a-fA-F]+);/gu, (match) =>
+    decodeHtmlNumericEntity(match[0], securityNumberParseInt(match[1] ?? '', 16)),
+  );
+  decoded = securityRegExpReplaceMatches(decoded, /&#([0-9]+);/gu, (match) =>
+    decodeHtmlNumericEntity(match[0], securityNumberParseInt(match[1] ?? '', 10)),
+  );
+  decoded = securityRegExpReplace(decoded, /&amp;/gu, '&');
+  decoded = securityRegExpReplace(decoded, /&quot;/gu, '"');
+  decoded = securityRegExpReplace(decoded, /&apos;/gu, "'");
+  decoded = securityRegExpReplace(decoded, /&#39;/gu, "'");
+  decoded = securityRegExpReplace(decoded, /&lt;/gu, '<');
+  decoded = securityRegExpReplace(decoded, /&gt;/gu, '>');
+  decoded = securityRegExpReplace(decoded, /&sol;/gu, '/');
+  return decoded;
 }
 
 function decodeHtmlNumericEntity(entity: string, codePoint: number): string {
   try {
-    return String.fromCodePoint(codePoint);
+    return securityStringFromCodePoint(codePoint);
   } catch {
     return entity;
   }
+}
+
+function staticExportAttributeRef(
+  refs: readonly StaticExportHtmlAttributeRef[],
+  name: string,
+): StaticExportHtmlAttributeRef | undefined {
+  const pinned = snapshotBuildArray(refs, 'static-export HTML attribute refs');
+  for (let index = 0; index < pinned.length; index += 1) {
+    if (pinned[index]!.name === name) return pinned[index]!;
+  }
+  return undefined;
+}
+
+function stringArrayContains(values: readonly string[], expected: string): boolean {
+  const pinned = snapshotBuildArray(values, 'static-export protocol tokens');
+  for (let index = 0; index < pinned.length; index += 1) {
+    if (pinned[index] === expected) return true;
+  }
+  return false;
 }
 
 function skipStaticExportHtmlSpace(source: string, offset: number): number {
@@ -607,3 +699,26 @@ function skipStaticExportHtmlSpace(source: string, offset: number): number {
 function isStaticExportHtmlSpace(char: string | undefined): boolean {
   return char === ' ' || char === '\n' || char === '\t' || char === '\r' || char === '\f';
 }
+import { snapshotBuildArray } from './build-security-intrinsics.js';
+import {
+  createSecurityMap,
+  createSecuritySet,
+  securityArrayPush,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityNumberParseInt,
+  securityRegExpReplace,
+  securityRegExpReplaceMatches,
+  securitySetAdd,
+  securitySetHas,
+  securityStringFromCodePoint,
+  securityStringIncludes,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringToLowerCase,
+  securityStringTrim,
+  securityUrlSnapshot,
+  type SecurityUrlSnapshot,
+} from './response-security-intrinsics.js';

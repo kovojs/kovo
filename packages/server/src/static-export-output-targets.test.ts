@@ -200,4 +200,37 @@ describe('server static export output target boundary', () => {
       ),
     ).toThrow(/conflicts with route document '\/index\.html'/);
   });
+
+  it('pins artifact traversal and header-floor planning after intrinsic replacement', () => {
+    const root = path.resolve('/tmp/kovo-static-export-targets-pinned');
+    const artifacts = [
+      {
+        body: '<!doctype html><main>Home</main>',
+        headers: { 'x-frame-options': 'DENY' },
+        path: '/index.html',
+        status: 200 as const,
+      },
+    ];
+    const originalForEach = Array.prototype.forEach;
+    const originalSome = Array.prototype.some;
+    try {
+      Array.prototype.forEach = function (callback, thisArg) {
+        if (this === artifacts) return;
+        return Reflect.apply(originalForEach, this, [callback, thisArg]);
+      } as typeof Array.prototype.forEach;
+      Array.prototype.some = function (callback, thisArg) {
+        if (this === artifacts) return false;
+        return Reflect.apply(originalSome, this, [callback, thisArg]);
+      } as typeof Array.prototype.some;
+
+      expect(
+        staticExportOutputTargets({ artifacts, assets: [], clientModules: [] }, root).map(
+          (target) => target.itemKind,
+        ),
+      ).toEqual(['route-document', 'header-sidecar']);
+    } finally {
+      Array.prototype.forEach = originalForEach;
+      Array.prototype.some = originalSome;
+    }
+  });
 });

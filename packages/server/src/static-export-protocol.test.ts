@@ -108,4 +108,53 @@ describe('server static export protocol scanner', () => {
       'deferred-marker',
     ]);
   });
+
+  it('pins entity decoding and collection classifiers after app-realm replacement', () => {
+    const originalReplace = String.prototype.replace;
+    const originalSetHas = Set.prototype.has;
+    const originalMapSet = Map.prototype.set;
+    try {
+      String.prototype.replace = function (searchValue, replaceValue) {
+        const text = String(this);
+        if (text.indexOf('&#47;_m') !== -1) return text;
+        return Reflect.apply(originalReplace, this, [searchValue, replaceValue]);
+      } as typeof String.prototype.replace;
+      Set.prototype.has = function (value) {
+        if (value === 'action') return false;
+        return Reflect.apply(originalSetHas, this, [value]);
+      };
+      Map.prototype.set = function (key, value) {
+        if (key === 'type' && value === 'text/plain') {
+          return Reflect.apply(originalMapSet, this, [key, 'module']);
+        }
+        return Reflect.apply(originalMapSet, this, [key, value]);
+      };
+
+      const protocol = scanStaticExportDocumentProtocol(
+        [
+          '<form action="&#47;_m&#47;account&#47;delete"><button>Delete</button></form>',
+          '<script type="text/plain" src="/c/__v/private/private.client.js"></script>',
+          '<kovo-fragment target="account">Pending</kovo-fragment>',
+        ].join(''),
+        'https://shop.example.test',
+      );
+
+      expect(protocol.endpointRefs).toEqual([
+        {
+          name: 'action',
+          path: '/_m/account/delete',
+          phase: 'mutation',
+          value: '/_m/account/delete',
+        },
+      ]);
+      expect(protocol.clientModuleRefs).toEqual([]);
+      expect(protocol.deferredMarkers).toEqual([
+        { kind: 'fragment', target: 'account', value: 'kovo-fragment' },
+      ]);
+    } finally {
+      String.prototype.replace = originalReplace;
+      Set.prototype.has = originalSetHas;
+      Map.prototype.set = originalMapSet;
+    }
+  });
 });
