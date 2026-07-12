@@ -89,6 +89,21 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('if(event.persisted)');
   });
 
+  it('keeps bfcache enrollment on boot-witnessed document and EventTarget controls', () => {
+    // C183 / SPEC §6.6/§8: the generated deferred runtime must not fall back to live
+    // `document.querySelector` or global `addEventListener` for the session guard.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'addLifecycleEventListener:(type,listener)=>bns.addLifecycleEventListener(globalThis,type,listener)',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain('queryOne:(root,sl)=>bns.queryOne(root,sl)');
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'if(options.queryOne(doc,\'meta[name="kovo-session"]\'))',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain(
+      'if(doc.querySelector?.(\'meta[name="kovo-session"]\'))',
+    );
+  });
+
   it('keeps mutation broadcast envelopes on the immutable MessageEvent snapshot', () => {
     // C137 / SPEC §9.3: the principal comparison and private wire body must
     // originate from one boot-read snapshot, and C164 keeps the application

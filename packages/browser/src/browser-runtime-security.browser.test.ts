@@ -325,6 +325,8 @@ describe('browser-runtime security regressions', () => {
 
     const recovery = createDocumentLifecycleRecovery({
       acceptHeader: 'text/html',
+      addLifecycleEventListener: (type, listener) =>
+        security.addLifecycleEventListener(globalThis, type, listener),
       applyBody(body) {
         const chunks = readInlineMutationResponseBodyChunks(body);
         applyHtmlResponseFragments(chunks.fragments, (name) =>
@@ -342,6 +344,7 @@ describe('browser-runtime security regressions', () => {
       },
       liveTargets: () => ['account#account@tok_account:{}'],
       parseHtmlDocument: (value) => security.parseHtmlDocument(value),
+      queryOne: (root, selector) => security.queryOne(root, selector),
       queryAll: (root, selector) => [...root.querySelectorAll(selector)],
       queryUrl: () => '',
       readAttribute: () => null,

@@ -621,6 +621,8 @@ function installInlineKovoLoader(im) {
   ${documentLifecycleReadableSource}
   const dl = createDocumentLifecycleRecovery({
     acceptHeader: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)},
+    addLifecycleEventListener: (type, listener) =>
+      bns.addLifecycleEventListener(globalThis, type, listener),
     applyBody: fab,
     buildHeader: bh,
     currentBuild: kb,
@@ -631,6 +633,7 @@ function installInlineKovoLoader(im) {
     findTarget: ftd,
     liveTargets: rlt,
     parseHtmlDocument: (value) => bns.parseHtmlDocument(value),
+    queryOne: (root, selector) => bns.queryOne(root, selector),
     queryAll: qa,
     queryUrl: qurl,
     readAttribute,

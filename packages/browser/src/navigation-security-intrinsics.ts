@@ -69,6 +69,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeUint8Array = scope.Uint8Array;
   const NativeReadableStream = scope.ReadableStream;
   const NativeReadableStreamDefaultReader = scope.ReadableStreamDefaultReader;
+  const NativeEvent = scope.Event;
+  const NativeEventTarget = scope.EventTarget;
   const NativePageTransitionEvent = scope.PageTransitionEvent;
   const NativeMessageEvent = scope.MessageEvent;
   const NativeBroadcastChannel = scope.BroadcastChannel;
@@ -210,6 +212,15 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const readerReleaseLock = NativeReadableStreamDefaultReader
     ? valueMethod(NativeReadableStreamDefaultReader.prototype, 'releaseLock')
+    : undefined;
+  const eventTargetAddEventListener = NativeEventTarget
+    ? valueMethod(NativeEventTarget.prototype, 'addEventListener')
+    : undefined;
+  const eventTargetRemoveEventListener = NativeEventTarget
+    ? valueMethod(NativeEventTarget.prototype, 'removeEventListener')
+    : undefined;
+  const eventTargetDispatchEvent = NativeEventTarget
+    ? valueMethod(NativeEventTarget.prototype, 'dispatchEvent')
     : undefined;
   const pageTransitionPersisted = NativePageTransitionEvent
     ? getter(NativePageTransitionEvent.prototype, 'persisted')
@@ -363,6 +374,56 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       [selector],
     );
     return value !== null && typeof value === 'object' ? (value as Element) : null;
+  }
+
+  function callEventTargetMethod(
+    target: unknown,
+    platformMethod: Function | undefined,
+    property: 'addEventListener' | 'removeEventListener',
+    args: readonly unknown[],
+  ): boolean {
+    if (!controlsSound || (typeof target !== 'object' && typeof target !== 'function') || !target) {
+      return false;
+    }
+    if (platformMethod) {
+      try {
+        apply(platformMethod, target, args);
+        return true;
+      } catch {}
+    }
+    // Keep the explicit structural seam used by non-browser conformance tests. A real browser
+    // Window/Document is accepted by the captured EventTarget method above, so a late poisoned
+    // prototype is never consulted for the security-bearing lifecycle enrollment.
+    const custom = stableMethod(target, property);
+    if (!custom) return false;
+    try {
+      apply(custom, target, args);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function addLifecycleEventListener(
+    target: unknown,
+    type: string,
+    listener: (event: unknown) => void,
+  ): boolean {
+    return callEventTargetMethod(target, eventTargetAddEventListener, 'addEventListener', [
+      type,
+      listener,
+    ]);
+  }
+
+  function removeLifecycleEventListener(
+    target: unknown,
+    type: string,
+    listener: (event: unknown) => void,
+  ): boolean {
+    return callEventTargetMethod(target, eventTargetRemoveEventListener, 'removeEventListener', [
+      type,
+      listener,
+    ]);
   }
 
   function readAttribute(element: unknown, name: string): string | null {
@@ -1809,6 +1870,65 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           return false;
         }
       }
+      if (NativeDocument) {
+        if (
+          !NativeEvent ||
+          !documentObject ||
+          !documentQuerySelector ||
+          !documentElement ||
+          !eventTargetAddEventListener ||
+          !eventTargetRemoveEventListener ||
+          !eventTargetDispatchEvent
+        ) {
+          return false;
+        }
+        // SPEC §6.6/§8: prove that the exact real-document query and EventTarget controls used
+        // for bfcache enrollment preserve platform receiver and add/remove/dispatch semantics.
+        const queriedRoot = apply<unknown>(documentQuerySelector, documentObject, ['html']);
+        const expectedRoot = apply<unknown>(documentElement, documentObject, []);
+        if (queriedRoot === null || queriedRoot !== expectedRoot) return false;
+        let rejectedForeignQueryReceiver = false;
+        try {
+          apply(documentQuerySelector, {}, ['html']);
+        } catch {
+          rejectedForeignQueryReceiver = true;
+        }
+        if (!rejectedForeignQueryReceiver) return false;
+
+        const eventType = 'kovo-security-control:lifecycle-event-target';
+        const eventTargetControl = documentObject;
+        let eventCalls = 0;
+        const eventListener = () => {
+          eventCalls += 1;
+        };
+        apply(eventTargetAddEventListener, eventTargetControl, [eventType, eventListener]);
+        let firstDispatchResult: unknown;
+        try {
+          firstDispatchResult = apply<unknown>(eventTargetDispatchEvent, eventTargetControl, [
+            new NativeEvent(eventType),
+          ]);
+        } finally {
+          apply(eventTargetRemoveEventListener, eventTargetControl, [eventType, eventListener]);
+        }
+        if (firstDispatchResult !== true || eventCalls !== 1) {
+          return false;
+        }
+        if (
+          apply<unknown>(eventTargetDispatchEvent, eventTargetControl, [
+            new NativeEvent(eventType),
+          ]) !== true ||
+          eventCalls !== 1
+        ) {
+          return false;
+        }
+        let rejectedForeignEventReceiver = false;
+        try {
+          apply(eventTargetAddEventListener, {}, [eventType, eventListener]);
+        } catch {
+          rejectedForeignEventReceiver = true;
+        }
+        if (!rejectedForeignEventReceiver) return false;
+      }
       if (NativeMessageEvent) {
         if (!messageEventData) return false;
         const firstData = {
@@ -2088,6 +2208,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
 
   return {
     acquireStreamReader,
+    addLifecycleEventListener,
     appendElementChildren,
     cancelReadableStream,
     cancelStreamReader,
@@ -2131,6 +2252,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     regExpTest,
     readStreamChunk,
     readNodeIsConnected,
+    removeLifecycleEventListener,
     removeElementAttribute,
     reload,
     removeElement,

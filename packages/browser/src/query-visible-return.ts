@@ -276,7 +276,11 @@ export function installBfcacheSessionReload(
   options: BfcacheSessionReloadOptions = {},
 ): InstalledBfcacheSessionReload {
   const sessionMetaDocument = options.document ?? globalSessionMetaDocument();
-  const sessionDependent = sessionMetaDocument?.querySelector('meta[name="kovo-session"]') != null;
+  const sessionDependent =
+    sessionMetaDocument !== undefined &&
+    (browserLifecycleSecurity
+      ? browserLifecycleSecurity.queryOne(sessionMetaDocument, 'meta[name="kovo-session"]') !== null
+      : sessionMetaDocument.querySelector('meta[name="kovo-session"]') !== null);
   const pageShowTarget = options.pageShowTarget ?? globalEventTarget();
   const reload = options.reload ?? globalLocationReload();
   const readPageTransitionPersisted =
@@ -298,12 +302,22 @@ export function installBfcacheSessionReload(
     if (!readPageTransitionPersisted(event)) return;
     reload();
   };
-  pageShowTarget.addEventListener('pageshow', listener);
+  if (browserLifecycleSecurity) {
+    if (!browserLifecycleSecurity.addLifecycleEventListener(pageShowTarget, 'pageshow', listener)) {
+      throw new TypeError('Kovo bfcache session guard could not enroll its pageshow listener.');
+    }
+  } else {
+    pageShowTarget.addEventListener('pageshow', listener);
+  }
 
   return {
     dispose() {
       disposed = true;
-      pageShowTarget.removeEventListener?.('pageshow', listener);
+      if (browserLifecycleSecurity) {
+        browserLifecycleSecurity.removeLifecycleEventListener(pageShowTarget, 'pageshow', listener);
+      } else {
+        pageShowTarget.removeEventListener?.('pageshow', listener);
+      }
     },
   };
 }
@@ -319,12 +333,19 @@ function readNonBrowserPageTransitionPersisted(event: unknown): boolean {
 
 function globalSessionMetaDocument(): SessionMetaDocumentLike | undefined {
   const doc = (globalThis as { document?: SessionMetaDocumentLike }).document;
-  return doc !== undefined && typeof doc.querySelector === 'function' ? doc : undefined;
+  if (doc === undefined) return undefined;
+  // In a real browser the boot-witnessed query control owns this read. Do not consult a mutable
+  // late `Document.prototype.querySelector` merely to decide whether the document is available.
+  return browserLifecycleSecurity ? doc : typeof doc.querySelector === 'function' ? doc : undefined;
 }
 
 function globalEventTarget(): ListenerTargetLike<unknown> | undefined {
   const target = globalThis as unknown as ListenerTargetLike<unknown>;
-  return typeof target.addEventListener === 'function' ? target : undefined;
+  // Same rule as the document: a browser Window is enrolled through the captured EventTarget
+  // control, while structural non-browser seams retain the old capability check.
+  return browserLifecycleSecurity || typeof target.addEventListener === 'function'
+    ? target
+    : undefined;
 }
 
 function globalLocationReload(): (() => void) | undefined {

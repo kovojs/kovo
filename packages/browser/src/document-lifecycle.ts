@@ -1,5 +1,7 @@
 export interface DocumentLifecycleRecoveryOptions {
   acceptHeader: string;
+  /** Boot-pinned EventTarget enrollment; structural fake targets remain supported in tests. */
+  addLifecycleEventListener: (type: string, listener: (event: unknown) => void) => boolean;
   applyBody: (body: string, build?: string) => void;
   buildHeader: (response: unknown) => string;
   currentBuild: (root?: ParentNode) => string;
@@ -10,6 +12,8 @@ export interface DocumentLifecycleRecoveryOptions {
   findTarget: (root: ParentNode, target: string) => Element | undefined;
   liveTargets: () => string[];
   parseHtmlDocument: (value: string) => Document | undefined;
+  /** Boot-pinned real-document query used by the session-dependent bfcache guard. */
+  queryOne: (root: ParentNode, selector: string) => Element | null;
   queryUrl: (wireKey: string) => string;
   readAttribute: (attrs: string, name: string) => string | null;
   readElementAttribute: (
@@ -162,19 +166,24 @@ export function createDocumentLifecycleRecovery(
     refreshLiveTargets();
   };
   const install = (navigation: { handlePopState(): void }) => {
-    addEventListener('popstate', () => navigation.handlePopState());
+    const listen = (type: string, listener: (event: unknown) => void) => {
+      if (!options.addLifecycleEventListener(type, listener)) {
+        throw new TypeError('Kovo document lifecycle listener enrollment failed.');
+      }
+    };
+    listen('popstate', () => navigation.handlePopState());
     rememberQueryScripts();
-    addEventListener('visibilitychange', () => {
+    listen('visibilitychange', () => {
       if (doc.visibilityState === 'hidden') return;
       visibleReturnRefresh();
     });
-    addEventListener('pageshow', (event) => {
+    listen('pageshow', (event) => {
       if (options.readPageTransitionPersisted(event)) visibleReturnRefresh();
     });
     // SPEC.md §8: guarded/session-dependent bfcache restores must revalidate
     // with a full server GET rather than presenting a persisted authenticated DOM.
-    if (doc.querySelector?.('meta[name="kovo-session"]')) {
-      addEventListener('pageshow', (event) => {
+    if (options.queryOne(doc, 'meta[name="kovo-session"]')) {
+      listen('pageshow', (event) => {
         if (options.readPageTransitionPersisted(event)) options.reload();
       });
     }

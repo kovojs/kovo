@@ -47,6 +47,144 @@ it('keeps the modular session reload pinned after late PageTransitionEvent persi
   installed.dispose();
 });
 
+it('keeps modular bfcache enrollment pinned after late real-document query poisoning', () => {
+  // C183 / SPEC §6.6/§8: the session posture is a real-document security read. A late authored
+  // prototype replacement must not hide the server-stamped principal meta and suppress reload.
+  const queryDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'querySelector');
+  const dispatchDescriptor = Object.getOwnPropertyDescriptor(
+    EventTarget.prototype,
+    'dispatchEvent',
+  );
+  if (!queryDescriptor?.value || !dispatchDescriptor?.value) {
+    throw new Error('Document/EventTarget controls unavailable');
+  }
+  const meta = document.createElement('meta');
+  meta.setAttribute('name', 'kovo-session');
+  meta.setAttribute('content', 'principal-fp');
+  document.head.append(meta);
+  const target = new EventTarget();
+  const reload = vi.fn();
+  let queryPoisonCalls = 0;
+  let installed: ReturnType<typeof installBfcacheSessionReload> | undefined;
+
+  Object.defineProperty(Document.prototype, 'querySelector', {
+    ...queryDescriptor,
+    value(this: Document, selector: string) {
+      if (this === document && selector === 'meta[name="kovo-session"]') {
+        queryPoisonCalls += 1;
+        return null;
+      }
+      return Reflect.apply(queryDescriptor.value, this, [selector]);
+    },
+  });
+  try {
+    installed = installBfcacheSessionReload({ pageShowTarget: target, reload });
+    expect(queryPoisonCalls).toBe(0);
+  } finally {
+    Object.defineProperty(Document.prototype, 'querySelector', queryDescriptor);
+  }
+
+  try {
+    Reflect.apply(dispatchDescriptor.value, target, [
+      new PageTransitionEvent('pageshow', { persisted: false }),
+    ]);
+    expect(reload).not.toHaveBeenCalled();
+    Reflect.apply(dispatchDescriptor.value, target, [
+      new PageTransitionEvent('pageshow', { persisted: true }),
+    ]);
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    installed?.dispose();
+    Reflect.apply(dispatchDescriptor.value, target, [
+      new PageTransitionEvent('pageshow', { persisted: true }),
+    ]);
+    expect(reload).toHaveBeenCalledTimes(1);
+  } finally {
+    installed?.dispose();
+    meta.remove();
+  }
+});
+
+it('keeps modular bfcache enrollment and disposal pinned after late EventTarget poisoning', () => {
+  // C183 / SPEC §6.6/§8: real EventTarget add/remove controls are captured and semantically
+  // witnessed at boot. Late no-op replacements cannot suppress enrollment or leave it installed.
+  const addDescriptor = Object.getOwnPropertyDescriptor(EventTarget.prototype, 'addEventListener');
+  const removeDescriptor = Object.getOwnPropertyDescriptor(
+    EventTarget.prototype,
+    'removeEventListener',
+  );
+  const dispatchDescriptor = Object.getOwnPropertyDescriptor(
+    EventTarget.prototype,
+    'dispatchEvent',
+  );
+  if (!addDescriptor?.value || !removeDescriptor?.value || !dispatchDescriptor?.value) {
+    throw new Error('EventTarget controls unavailable');
+  }
+  const meta = document.createElement('meta');
+  meta.setAttribute('name', 'kovo-session');
+  meta.setAttribute('content', 'principal-fp');
+  document.head.append(meta);
+  const target = new EventTarget();
+  const reload = vi.fn();
+  let addPoisonCalls = 0;
+  let removePoisonCalls = 0;
+  let installed: ReturnType<typeof installBfcacheSessionReload> | undefined;
+
+  Object.defineProperty(EventTarget.prototype, 'addEventListener', {
+    ...addDescriptor,
+    value(this: EventTarget, type: string, listener: EventListenerOrEventListenerObject) {
+      if (this === target && type === 'pageshow') {
+        addPoisonCalls += 1;
+        return;
+      }
+      return Reflect.apply(addDescriptor.value, this, [type, listener]);
+    },
+  });
+  try {
+    installed = installBfcacheSessionReload({ pageShowTarget: target, reload });
+    expect(addPoisonCalls).toBe(0);
+  } finally {
+    Object.defineProperty(EventTarget.prototype, 'addEventListener', addDescriptor);
+  }
+
+  try {
+    Reflect.apply(dispatchDescriptor.value, target, [
+      new PageTransitionEvent('pageshow', { persisted: false }),
+    ]);
+    expect(reload).not.toHaveBeenCalled();
+    Reflect.apply(dispatchDescriptor.value, target, [
+      new PageTransitionEvent('pageshow', { persisted: true }),
+    ]);
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(EventTarget.prototype, 'removeEventListener', {
+      ...removeDescriptor,
+      value(this: EventTarget, type: string, listener: EventListenerOrEventListenerObject) {
+        if (this === target && type === 'pageshow') {
+          removePoisonCalls += 1;
+          return;
+        }
+        return Reflect.apply(removeDescriptor.value, this, [type, listener]);
+      },
+    });
+    try {
+      installed?.dispose();
+      expect(removePoisonCalls).toBe(0);
+    } finally {
+      Object.defineProperty(EventTarget.prototype, 'removeEventListener', removeDescriptor);
+    }
+    Reflect.apply(dispatchDescriptor.value, target, [
+      new PageTransitionEvent('pageshow', { persisted: true }),
+    ]);
+    expect(reload).toHaveBeenCalledTimes(1);
+  } finally {
+    Object.defineProperty(EventTarget.prototype, 'addEventListener', addDescriptor);
+    Object.defineProperty(EventTarget.prototype, 'removeEventListener', removeDescriptor);
+    installed?.dispose();
+    meta.remove();
+  }
+});
+
 it('keeps the generated inline session reload pinned after late PageTransitionEvent persisted poisoning', async () => {
   // SPEC §5.2/§8: exercise the shipped generated artifact, not hand-authored
   // lowered IR, and prove its boot-local getter is the one that drives reload.

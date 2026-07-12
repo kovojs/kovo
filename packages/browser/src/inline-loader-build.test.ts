@@ -57,9 +57,7 @@ describe('inline loader build source', () => {
       "bns.createMutationBroadcastChannel('kovo:mutation-response')",
     );
     expect(inlineKovoLoaderInstallerReadableSource).not.toContain('new BroadcastChannel(');
-    expect(inlineKovoLoaderInstallerReadableSource).toContain(
-      "addEventListener('visibilitychange'",
-    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain("listen('visibilitychange'");
     expect(buildInlineKovoLoaderInstallerSource()).toBe(inlineKovoLoaderInstallerSource);
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-live-component')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('kovo-live-cp');
