@@ -481,7 +481,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     callbacks, error collection, emitted-file traversal, and transform return/throw decisions use one
     boot-pinned exact snapshot; any ambiguous error diagnostic prevents emitted code from escaping.
 
-- [ ] **C43 - Mutable secret-read metadata returns a declared secret column unboxed.**
+- [x] **C43 - Mutable secret-read metadata returns a declared secret column unboxed.**
       `packages/server/src/secret-read-boundary.ts`
   - A selective late `Set.prototype.has` replacement hid the concrete `secrets.classified` origin
     only while SQLite provenance was classified. `createSecretBoxingReadDb(...).select()` then
@@ -490,8 +490,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     secret table/column membership, boundary merging, row traversal, and boxing consume boot-pinned
     dense snapshots; ambiguous or poisoned provenance boxes conservatively and never releases raw
     secret material.
+  - **Evidence:** the 103-test secret/guard/session matrix plus server dist+DTS and classifier/TCB/
+    security gates pass; the independent selective Set proof now returns a runtime `Secret` box.
 
-- [ ] **C44 - Mutable guard-chain classifiers and iterators skip every authorization guard.**
+- [x] **C44 - Mutable guard-chain classifiers and iterators skip every authorization guard.**
       `packages/server/src/{access,guards}.ts`
   - Selective private-array iterators made both `guards.all(denyA, denyB)` and `runGuardChain()` run
     zero guards and return allow. Independently, replacing live `Array.isArray` only for the
@@ -501,8 +503,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     snapshots; array/classifier decisions, audit projection, exact indexed traversal, await/settle,
     and denial normalization use boot-pinned controls, and any ambiguous chain denies rather than
     becoming public access.
+  - **Evidence:** the same matrix and gates pass; all three independent `guards.all`,
+    `runGuardChain`, and access-decision classifier proofs now execute the deny guard.
 
-- [ ] **C45 - Inherited session-provider envelope fields attach an attacker admin principal.**
+- [x] **C45 - Inherited session-provider envelope fields attach an attacker admin principal.**
       `packages/server/src/{guards,auth-principal}.ts`
   - A provider returned a plain victim/member session whose prototype supplied inherited `value`
     and `setCookies`. The lifecycle misclassified it as an envelope, attached the inherited
@@ -511,6 +515,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     carrier; value/session/user/roles and cookie arrays are independently snapshotted and validated,
     inherited/accessor/proxy-unstable or malformed fields fail closed, and only the framework-owned
     settled session snapshot can establish principal authority.
+  - **Evidence:** the same matrix and gates pass; the independent inherited-envelope proof retains
+    the victim/member session, denies the admin guard, and forwards no forged cookie.
 
 - [x] **C46 - Nested rendered JSX launders ordinary text into executable script bytes.**
       `packages/server/src/jsx-runtime.ts`
@@ -828,7 +834,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     sidecar assembly use boot-pinned controls; validation and commit consume the same key/value, and
     late/import-order poison cannot introduce Set-Cookie, Kovo-reserved, or control-bearing headers.
 
-- [ ] **H29 - Inherited client IP state rotates per-IP rate-limit buckets.**
+- [x] **H29 - Inherited client IP state rotates per-IP rate-limit buckets.**
       `packages/server/src/guards.ts`
   - With no own `clientIp`, an inherited `Object.prototype.clientIp` was accepted as framework-
     resolved identity. Changing the inherited value between calls admitted two requests under
@@ -836,6 +842,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** per-IP guards accept only a framework-owned own-data client-IP snapshot attached
     by the trusted request shell; inherited/accessor/proxy-unstable, blank, or unproven identities
     fail loud, and late mutation cannot rotate or cross-bind an established bucket.
+  - **Evidence:** the same matrix and gates pass; the independent inherited-IP proof now fails loud
+    before allocating any attacker-selected bucket.
 
 ## Medium
 
@@ -929,9 +937,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C45, H20, and
-H27-H29 are active compiler-cache, static-analysis, static-export, guard/session, and build-output
-fixes.
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, H20, and
+H27-H28 are active compiler-cache, static-analysis, static-export, and build-output fixes.
 Integrated
 evidence is
 green at
