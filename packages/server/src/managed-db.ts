@@ -1714,7 +1714,7 @@ function sqlControlTokens(sql: string): string[] | undefined {
       token += asciiLowerCharacter(sql[index]!);
       index += 1;
     }
-    tokens[tokens.length] = token;
+    appendManagedValue(tokens, token);
   }
   return tokens;
 }

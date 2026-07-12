@@ -2930,6 +2930,52 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(queries).toEqual([]);
   });
 
+  it('keeps transaction-control tokens closed under inherited array index setters', () => {
+    const queries: string[] = [];
+    const tx = {
+      exec: async (_sql: string) => undefined,
+      query: async (statement: string) => {
+        queries.push(statement);
+        return [];
+      },
+    };
+    const scoped = createPostgresScopedClient(
+      {
+        transaction: async <Result>(callback: (value: typeof tx) => Promise<Result>) =>
+          callback(tx),
+      },
+      { principal: 'attacker', role: false },
+    ) as unknown as { query(sql: string): Promise<unknown> };
+    const prior = Object.getOwnPropertyDescriptor(Array.prototype, '1');
+    let error: unknown;
+    try {
+      Object.defineProperty(Array.prototype, '1', {
+        configurable: true,
+        set(value: unknown) {
+          if (typeof value === 'string') return;
+          Object.defineProperty(this, '1', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      try {
+        void scoped.query('ROLLBACK AND CHAIN');
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      if (prior === undefined) delete (Array.prototype as { 1?: unknown })[1];
+      else Object.defineProperty(Array.prototype, '1', prior);
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('unsupported transaction control statement');
+    expect(queries).toEqual([]);
+  });
+
   it('rejects Unicode-escaped set_config before it can replace the scoped Postgres principal', async () => {
     const client = new PGlite();
     await client.waitReady;
