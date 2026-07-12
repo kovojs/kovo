@@ -16,6 +16,7 @@ export interface ServerErrorDiagnosticContext {
     | 'error-shell'
     | 'mutation-handler'
     | 'mutation-render'
+    | 'mutation-response-policy'
     | 'no-js-mutation-handler'
     | 'query-endpoint'
     | 'task-runner'

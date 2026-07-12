@@ -49,6 +49,36 @@ export interface ErrorBoundaryRenderer {
   target?: string;
 }
 
+/** @internal Result that author response decoration may observe after lifecycle completion. */
+export type MutationPostLifecycleOutcome =
+  | { kind: 'failure'; result: MutationFail }
+  | { kind: 'success'; result: MutationSuccess<unknown> };
+
+/**
+ * @internal Non-security response decoration resolved only after the mutation lifecycle. CSRF,
+ * request, raw input, and replay posture are deliberately absent so a callback cannot replace a
+ * security decision that was fixed before body consumption (SPEC §6.6/§10.3).
+ */
+export interface MutationPostLifecycleResponseOptions {
+  failureTarget?: string;
+  failureStylesheets?: readonly (string | StylesheetAsset)[];
+  fragmentRenderers?: readonly FragmentRenderer[];
+  redirectTo?: string | Redirect | ((result: MutationSuccess<any>) => string | Redirect);
+  renderFailureFragment?: (
+    failure: MutationFail,
+    rawInput: unknown,
+  ) => AwaitableGeneratedFragmentRenderable;
+  renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
+}
+
+/** @internal Deferred response decoration hook invoked only for handler success/typed failure. */
+export type MutationPostLifecycleResponseResolver = (
+  outcome: MutationPostLifecycleOutcome,
+) =>
+  | MutationPostLifecycleResponseOptions
+  | Promise<MutationPostLifecycleResponseOptions | undefined>
+  | undefined;
+
 /**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). The resolved mutation request
  * after the `Kovo-Fragment`/`Kovo-Idem`/`Kovo-Targets` headers are parsed. Exported only
@@ -81,6 +111,7 @@ export interface MutationWireRequest<
     rawInput: unknown,
   ) => AwaitableGeneratedFragmentRenderable;
   replayStore?: MutationReplayStore<MutationEndpointReplayResponse>;
+  resolvePostLifecycleResponse?: MutationPostLifecycleResponseResolver;
   requestFingerprint?: string;
   rawInput: unknown;
   request: Request;
@@ -196,6 +227,7 @@ export interface MutationWireRequestOptions<
     rawInput: unknown,
   ) => AwaitableGeneratedFragmentRenderable;
   replayStore?: MutationReplayStore<MutationEndpointReplayResponse>;
+  resolvePostLifecycleResponse?: MutationPostLifecycleResponseResolver;
   request: Request;
   /** @internal Transaction-scoped durable task scheduler for request.schedule/cancel (SPEC §9.6). */
   taskScheduler?: TaskScheduler;
@@ -245,6 +277,7 @@ export interface NoJsMutationRequest<
   renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   /** Replay store for no-JS dedup (A2, SPEC §10.3:1063). Typed as a separate interface to allow 303 responses. */
   replayStore?: NoJsMutationReplayStore;
+  resolvePostLifecycleResponse?: MutationPostLifecycleResponseResolver;
   request: Request;
   /** @internal Transaction-scoped durable task scheduler for request.schedule/cancel (SPEC §9.6). */
   taskScheduler?: TaskScheduler;
@@ -390,6 +423,9 @@ export function mutationWireRequestFromHeaders<Request>(
       ? {}
       : { renderFailureFragment: options.renderFailureFragment }),
     ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
+    ...(options.resolvePostLifecycleResponse === undefined
+      ? {}
+      : { resolvePostLifecycleResponse: options.resolvePostLifecycleResponse }),
     ...(headers.submittedFormTarget === undefined
       ? {}
       : { submittedFormTarget: headers.submittedFormTarget }),

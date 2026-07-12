@@ -847,6 +847,9 @@ export async function renderMutationEndpointResponse<
     ...(endpointRequest.renderFailurePage === undefined
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
+    ...(endpointRequest.resolvePostLifecycleResponse === undefined
+      ? {}
+      : { resolvePostLifecycleResponse: endpointRequest.resolvePostLifecycleResponse }),
     request: endpointRequest.request,
     ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
     ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),

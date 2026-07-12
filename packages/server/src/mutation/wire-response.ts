@@ -13,6 +13,8 @@ import { renderFragmentWireHtml } from '../wire-html.js';
 import { commitReservedMutationReplay } from '../replay.js';
 import {
   type BufferedMutationWireResponse,
+  type MutationPostLifecycleOutcome,
+  type MutationPostLifecycleResponseOptions,
   type MutationWireRequest,
   type MutationWireResponse,
 } from '../mutation-wire.js';
@@ -120,11 +122,26 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
 
     if (lifecycle.kind === 'mutation-failure') {
       const result = lifecycle.result;
+      let responseRequest: MutationWireRequest<Request>;
+      try {
+        responseRequest = await resolvePostLifecycleWireRequest(wireRequest, {
+          kind: 'failure',
+          result,
+        });
+      } catch (error) {
+        lifecycle.reservation?.abort?.();
+        reportServerError(wireRequest.onError, error, {
+          mutationKey: definition.key,
+          operation: 'mutation-response-policy',
+          request: wireRequest.request,
+        });
+        return mutationServerErrorResponse(wireRequest);
+      }
       if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
         return {
-          body: frameworkWireBody(await renderFailureFragment(result, wireRequest)),
+          body: frameworkWireBody(await renderFailureFragment(result, responseRequest)),
           headers: mergeResponseHeaders(
-            mutationWireResponseHeaders(wireRequest),
+            mutationWireResponseHeaders(responseRequest),
             retryAfterHeaders(result),
           ),
           status: result.status,
@@ -132,9 +149,9 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
       }
 
       return commitReservedMutationReplay(lifecycle.reservation, async () => ({
-        body: frameworkWireBody(await renderFailureFragment(result, wireRequest)),
+        body: frameworkWireBody(await renderFailureFragment(result, responseRequest)),
         headers: mergeResponseHeaders(
-          mutationWireResponseHeaders(wireRequest),
+          mutationWireResponseHeaders(responseRequest),
           retryAfterHeaders(result),
         ),
         status: result.status,
@@ -142,12 +159,27 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     }
 
     const { reservation, result } = lifecycle;
-    const renderInput = mutationResponseInput(result, wireRequest.rawInput);
+    let responseRequest: MutationWireRequest<Request>;
+    try {
+      responseRequest = await resolvePostLifecycleWireRequest(wireRequest, {
+        kind: 'success',
+        result,
+      });
+    } catch (error) {
+      reservation?.abort?.();
+      reportServerError(wireRequest.onError, error, {
+        mutationKey: definition.key,
+        operation: 'mutation-response-policy',
+        request: wireRequest.request,
+      });
+      return mutationServerErrorResponse(wireRequest);
+    }
+    const renderInput = mutationResponseInput(result, responseRequest.rawInput);
     let finalResponse: BufferedMutationWireResponse;
     try {
       finalResponse = await renderSuccessfulMutationWireResponse(
         definition,
-        wireRequest,
+        responseRequest,
         result,
         renderInput,
         options.registryFacts,
@@ -160,7 +192,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
         ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
       });
       return commitReservedMutationReplay(reservation, async () =>
-        mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders),
+        mutationRenderErrorResponse(result.changes, responseRequest, result.responseHeaders),
       );
     }
 
@@ -176,12 +208,12 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
         finalResponse,
         reservation,
         {
-          onError: wireRequest.onError,
+          onError: responseRequest.onError,
           context: {
             mutationKey: definition.key,
             operation: 'mutation-stream',
-            request: wireRequest.request,
-            ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+            request: responseRequest.request,
+            ...(responseRequest.targets === undefined ? {} : { targets: responseRequest.targets }),
           },
         },
       );
@@ -191,6 +223,34 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     return finalResponse;
   },
 );
+
+async function resolvePostLifecycleWireRequest<Request>(
+  request: MutationWireRequest<Request>,
+  outcome: MutationPostLifecycleOutcome,
+): Promise<MutationWireRequest<Request>> {
+  const resolved = await request.resolvePostLifecycleResponse?.(outcome);
+  if (resolved === undefined) return request;
+  return applyPostLifecycleWireOptions(request, resolved);
+}
+
+function applyPostLifecycleWireOptions<Request>(
+  request: MutationWireRequest<Request>,
+  options: MutationPostLifecycleResponseOptions,
+): MutationWireRequest<Request> {
+  return {
+    ...request,
+    ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
+    ...(options.failureStylesheets === undefined
+      ? {}
+      : { failureStylesheets: options.failureStylesheets }),
+    ...(options.fragmentRenderers === undefined
+      ? {}
+      : { fragmentRenderers: options.fragmentRenderers }),
+    ...(options.renderFailureFragment === undefined
+      ? {}
+      : { renderFailureFragment: options.renderFailureFragment }),
+  };
+}
 
 const renderSuccessfulMutationWireResponse = wireEmitter(
   'server.wire.mutation-success-delta',

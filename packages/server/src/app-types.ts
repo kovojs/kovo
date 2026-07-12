@@ -355,6 +355,8 @@ export interface AppMutationResponseContext {
   currentUrl: string;
   key: string;
   mutation: AppMutationDeclaration;
+  /** Framework-produced result available only after the normative mutation lifecycle completed. */
+  outcome: { kind: 'failure'; code: string; status: number } | { kind: 'success' };
   rawInput: unknown;
   request: Request;
   url: URL;
@@ -365,7 +367,6 @@ export interface AppMutationResponseContext {
  * succeeds or fails (SPEC §9.5).
  */
 export interface AppMutationResponseOptions {
-  csrf?: CsrfOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragmentRenderers?: readonly FragmentRenderer[];
@@ -386,8 +387,8 @@ export type AppMutationResponsePolicy = AppMutationResponseOptions | AppMutation
 export type AppMutationResponses = Readonly<Record<string, AppMutationResponsePolicy>>;
 
 /**
- * Resolve mutation response policy from the current mutation request instead of
- * declaring static options up front (SPEC §9.5).
+ * Resolve mutation response policy after validation, authorization, replay reservation, and the
+ * mutation transaction complete instead of declaring static options up front (SPEC §9.5/§10.3).
  */
 export type AppMutationResponseResolver = (
   context: AppMutationResponseContext,

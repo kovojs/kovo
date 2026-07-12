@@ -3,17 +3,22 @@ import {
   type MutationDefinition,
   type MutationFail,
 } from './mutation.js';
-import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
+import type {
+  FragmentRenderer,
+  LiveTargetRenderer,
+  MutationPostLifecycleOutcome,
+  MutationPostLifecycleResponseOptions,
+} from './mutation-wire.js';
 import { mutationCsrfOptions } from './csrf.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
 import type {
   AppMutationResponseContext,
   AppMutationResponseOptions,
-  AppMutationResponsePolicy,
   AppMutationDeclaration,
   KovoApp,
 } from './app-types.js';
+import { normalizeAppMutationResponseOptions } from './app-mutation-responses.js';
 import {
   appRequestUrl,
   renderAppErrorDocumentResponse,
@@ -93,19 +98,10 @@ export async function handleAppMutationRequest(
     rawInput,
     'validated app mutation response raw input',
   );
-  const mutationResponseOptions = await resolveAppMutationResponsePolicy(app, {
-    currentUrl,
-    key: mutation.key,
-    mutation,
-    rawInput: responseRawInput,
-    request: mutationRequest,
-    url: new URL(url),
-  });
+  const mutationResponsePolicy = app.mutationResponses[mutation.key];
+  const mutationResponseOptions =
+    typeof mutationResponsePolicy === 'function' ? undefined : mutationResponsePolicy;
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
-  const failureStylesheets = mergedStylesheets(
-    inheritedStylesheets,
-    mutationResponseOptions?.failureStylesheets,
-  );
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
     app,
     mutationRequest,
@@ -123,6 +119,42 @@ export async function handleAppMutationRequest(
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
   const taskScheduler = appTaskScheduler(app);
+  const fallbackRedirectTo =
+    mutation.redirectTo ??
+    mutation.defaultRedirectTo ??
+    defaultMutationRedirectTo(mutationRequest, appRequestUrl(sourceUrl));
+  const responseOptions = appMutationEndpointResponseOptions(
+    mutationResponseOptions,
+    inheritedStylesheets,
+    defaultFailurePageRenderer,
+    fallbackRedirectTo,
+  );
+  const resolvePostLifecycleResponse =
+    typeof mutationResponsePolicy !== 'function'
+      ? undefined
+      : async (
+          outcome: MutationPostLifecycleOutcome,
+        ): Promise<MutationPostLifecycleResponseOptions | undefined> => {
+          const resolved = await mutationResponsePolicy({
+            currentUrl,
+            key: mutation.key,
+            mutation,
+            outcome: appMutationResponseOutcome(outcome),
+            rawInput: responseRawInput,
+            request: mutationRequest,
+            url: new URL(url),
+          });
+          if (resolved === undefined) return undefined;
+          return appMutationEndpointResponseOptions(
+            normalizeAppMutationResponseOptions(
+              resolved,
+              `mutationResponses.${mutation.key} post-lifecycle result`,
+            ),
+            inheritedStylesheets,
+            defaultFailurePageRenderer,
+            fallbackRedirectTo,
+          );
+        };
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     buildToken,
@@ -130,39 +162,15 @@ export async function handleAppMutationRequest(
     currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),
-    ...(mutationResponseOptions?.csrf === undefined ? {} : { csrf: mutationResponseOptions.csrf }),
     maxListItems: app.requestLimits.maxQueryListItems,
-    ...(mutationResponseOptions?.failureTarget === undefined
-      ? {}
-      : { failureTarget: mutationResponseOptions.failureTarget }),
-    ...(failureStylesheets === undefined ? {} : { failureStylesheets }),
-    ...(mutationResponseOptions?.fragmentRenderers === undefined
-      ? {}
-      : {
-          fragmentRenderers: inheritFragmentRendererStylesheets(
-            mutationResponseOptions.fragmentRenderers,
-            inheritedStylesheets,
-          ),
-        }),
+    ...responseOptions,
     headers: request.headers,
     liveTargetRenderers: inheritLiveTargetRendererStylesheets(
       app.liveTargetRenderers,
       inheritedStylesheets,
     ),
     rawInput,
-    redirectTo:
-      mutationResponseOptions?.redirectTo ??
-      mutation.redirectTo ??
-      mutation.defaultRedirectTo ??
-      defaultMutationRedirectTo(mutationRequest, appRequestUrl(sourceUrl)),
-    ...(mutationResponseOptions?.renderFailureFragment === undefined
-      ? {}
-      : { renderFailureFragment: mutationResponseOptions.renderFailureFragment }),
-    ...(mutationResponseOptions?.renderFailurePage !== undefined
-      ? { renderFailurePage: mutationResponseOptions.renderFailurePage }
-      : defaultFailurePageRenderer === undefined
-        ? {}
-        : { renderFailurePage: defaultFailurePageRenderer }),
+    ...(resolvePostLifecycleResponse === undefined ? {} : { resolvePostLifecycleResponse }),
     request: mutationRequest,
     ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
@@ -294,19 +302,50 @@ function stylesheetCriticalCssIsAlreadyLoaded(
   return inheritedCriticalCss.some((candidate) => candidate.includes(criticalCss));
 }
 
-async function resolveAppMutationResponsePolicy(
-  app: KovoApp,
-  context: AppMutationResponseContext,
-): Promise<AppMutationResponseOptions | undefined> {
-  return resolveMutationResponsePolicy(app.mutationResponses[context.key], context);
+type ResolvedAppMutationEndpointOptions = MutationPostLifecycleResponseOptions & {
+  redirectTo: NonNullable<AppMutationResponseOptions['redirectTo']>;
+};
+
+function appMutationResponseOutcome(
+  outcome: MutationPostLifecycleOutcome,
+): AppMutationResponseContext['outcome'] {
+  return outcome.kind === 'success'
+    ? Object.freeze({ kind: 'success' })
+    : Object.freeze({
+        code: String(outcome.result.error.code),
+        kind: 'failure',
+        status: outcome.result.status,
+      });
 }
 
-async function resolveMutationResponsePolicy(
-  policy: AppMutationResponsePolicy | undefined,
-  context: AppMutationResponseContext,
-): Promise<AppMutationResponseOptions | undefined> {
-  if (policy === undefined) return undefined;
-  return typeof policy === 'function' ? policy(context) : policy;
+function appMutationEndpointResponseOptions(
+  options: AppMutationResponseOptions | undefined,
+  inheritedStylesheets: readonly KovoApp['stylesheets'][number][],
+  defaultFailurePageRenderer: ((failure: MutationFail) => Promise<string>) | undefined,
+  fallbackRedirectTo: NonNullable<AppMutationResponseOptions['redirectTo']>,
+): ResolvedAppMutationEndpointOptions {
+  const failureStylesheets = mergedStylesheets(inheritedStylesheets, options?.failureStylesheets);
+  return {
+    redirectTo: options?.redirectTo ?? fallbackRedirectTo,
+    ...(options?.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
+    ...(failureStylesheets === undefined ? {} : { failureStylesheets }),
+    ...(options?.fragmentRenderers === undefined
+      ? {}
+      : {
+          fragmentRenderers: inheritFragmentRendererStylesheets(
+            options.fragmentRenderers,
+            inheritedStylesheets,
+          ),
+        }),
+    ...(options?.renderFailureFragment === undefined
+      ? {}
+      : { renderFailureFragment: options.renderFailureFragment }),
+    ...(options?.renderFailurePage !== undefined
+      ? { renderFailurePage: options.renderFailurePage }
+      : defaultFailurePageRenderer === undefined
+        ? {}
+        : { renderFailurePage: defaultFailurePageRenderer }),
+  };
 }
 
 function defaultMutationRedirectTo(request: Request, currentUrl: string): string {

@@ -10,7 +10,12 @@ import {
   type ResponseHeaders,
 } from '../response.js';
 import { isNoJsReplayResponse, type MutationLifecycleOutcome } from './replay-policy.js';
-import type { NoJsMutationRequest, NoJsMutationResponse } from '../mutation-wire.js';
+import type {
+  MutationPostLifecycleOutcome,
+  MutationPostLifecycleResponseOptions,
+  NoJsMutationRequest,
+  NoJsMutationResponse,
+} from '../mutation-wire.js';
 import type { InferSchema, Schema } from '../schema.js';
 import type { MutationDefinition, MutationFail, MutationSuccess } from './definition.js';
 import { renderDefaultFailurePage } from './failure-html.js';
@@ -89,16 +94,46 @@ export async function renderNoJsMutationLifecycleResponse<
 
   if (lifecycle.kind === 'mutation-failure') {
     lifecycle.reservation?.abort?.();
-    return renderNoJsMutationFailureResponse(lifecycle.result, noJsRequest);
+    try {
+      return renderNoJsMutationFailureResponse(
+        lifecycle.result,
+        await resolvePostLifecycleNoJsRequest(noJsRequest, {
+          kind: 'failure',
+          result: lifecycle.result,
+        }),
+      );
+    } catch (error) {
+      reportServerError(noJsRequest.onError, error, {
+        mutationKey: definition.key,
+        operation: 'mutation-response-policy',
+        request: noJsRequest.request,
+      });
+      return noJsMutationServerErrorResponse();
+    }
   }
 
+  let responseRequest: NoJsMutationRequest<Request, Value>;
+  try {
+    responseRequest = await resolvePostLifecycleNoJsRequest(noJsRequest, {
+      kind: 'success',
+      result: lifecycle.result,
+    });
+  } catch (error) {
+    lifecycle.reservation?.abort?.();
+    reportServerError(noJsRequest.onError, error, {
+      mutationKey: definition.key,
+      operation: 'mutation-response-policy',
+      request: noJsRequest.request,
+    });
+    return noJsMutationServerErrorResponse();
+  }
   const successResponse = blessRedirectResponse({
     body: frameworkWireBody(''),
     headers: mergeResponseHeaders(
       {
         'Cache-Control': 'no-store',
         Location: redirectLocationHeader(
-          mutationRedirectLocation(noJsRequest.redirectTo, lifecycle.result),
+          mutationRedirectLocation(responseRequest.redirectTo, lifecycle.result),
         ),
       },
       lifecycle.result.responseHeaders,
@@ -107,6 +142,32 @@ export async function renderNoJsMutationLifecycleResponse<
   });
   lifecycle.reservation?.commit(successResponse);
   return successResponse;
+}
+
+async function resolvePostLifecycleNoJsRequest<Request, Value>(
+  request: NoJsMutationRequest<Request, Value>,
+  outcome: MutationPostLifecycleOutcome,
+): Promise<NoJsMutationRequest<Request, Value>> {
+  const resolved = await request.resolvePostLifecycleResponse?.(outcome);
+  if (resolved === undefined) return request;
+  return applyPostLifecycleNoJsOptions(request, resolved);
+}
+
+function applyPostLifecycleNoJsOptions<Request, Value>(
+  request: NoJsMutationRequest<Request, Value>,
+  options: MutationPostLifecycleResponseOptions,
+): NoJsMutationRequest<Request, Value> {
+  return {
+    ...request,
+    ...(options.redirectTo === undefined
+      ? {}
+      : {
+          redirectTo: options.redirectTo as NoJsMutationRequest<Request, Value>['redirectTo'],
+        }),
+    ...(options.renderFailurePage === undefined
+      ? {}
+      : { renderFailurePage: options.renderFailurePage }),
+  };
 }
 
 export function noJsMutationReauthResponse<Request>(

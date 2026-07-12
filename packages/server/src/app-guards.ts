@@ -146,13 +146,16 @@ function isMutationResponseOptions(value: unknown): boolean {
     isRecord(value) &&
     (value.redirectTo === undefined ||
       typeof value.redirectTo === 'string' ||
-      typeof value.redirectTo === 'function') &&
+      typeof value.redirectTo === 'function' ||
+      (isRecord(value.redirectTo) &&
+        value.redirectTo.status === 303 &&
+        typeof value.redirectTo.location === 'string')) &&
     isOptionalFunction(value.renderFailureFragment) &&
     isOptionalFunction(value.renderFailurePage) &&
     (value.failureTarget === undefined || typeof value.failureTarget === 'string') &&
     (value.failureStylesheets === undefined || Array.isArray(value.failureStylesheets)) &&
     (value.fragmentRenderers === undefined || Array.isArray(value.fragmentRenderers)) &&
-    (value.csrf === undefined || isOptionalCsrfOptions(value.csrf))
+    value.csrf === undefined
   );
 }
 

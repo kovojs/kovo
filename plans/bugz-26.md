@@ -166,7 +166,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     native method and cross-origin sensitive-header semantics. Include direct, manual,
     allowed-to-allowed, and allowed-to-denied controls.
 
-- [ ] **M2 - Dynamic `mutationResponses` resolvers execute before CSRF, schema, replay, guards, and
+- [x] **M2 - Dynamic `mutationResponses` resolvers execute before CSRF, schema, replay, guards, and
       the mutation handler; runtime policy can also replace pinned CSRF posture.**
       `packages/server/src/app-mutation-request.ts:69-103`,
       `packages/server/src/app-types.ts:346-389`
@@ -185,6 +185,9 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     response configuration static; invoke dynamic resolution only from a framework-minted
     post-lifecycle outcome after validation, authorization, and handler/transaction completion.
     No resolver runs for CSRF/schema/guard/replay failures.
+  - **Evidence:** the focused eight-file mutation/replay suite passes 226 tests, including forged
+    CSRF, schema, guard, replay-shed, static-snapshot, and runtime-override regressions;
+    `pnpm --filter @kovojs/server run build:dist` and `pnpm run check:api-surface` pass.
 
 - [ ] **M3 - Failed or non-complete streaming mutations leave progressively applied fragments
       authoritative in the DOM.** `packages/browser/src/apply-mutation-response.ts:196-303`,

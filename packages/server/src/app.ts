@@ -13,6 +13,7 @@ import {
   snapshotLiveTargetRenderers,
 } from './app-snapshot.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
+import { snapshotAppMutationResponses } from './app-mutation-responses.js';
 import { createAppTaskRuntime, registerAppTaskRuntime } from './task-runtime.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
@@ -187,7 +188,7 @@ export function createApp<
       stylesheets: options.stylesheets ?? [],
       ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
       ...(options.db === undefined ? {} : { db: options.db }),
-      mutationResponses: options.mutationResponses ?? {},
+      mutationResponses: snapshotAppMutationResponses(options.mutationResponses ?? {}),
       ...(options.mutationReplayStore === undefined
         ? {}
         : { mutationReplayStore: options.mutationReplayStore }),
