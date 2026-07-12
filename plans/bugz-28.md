@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    27 | C1-C27 |
+| Critical |    28 | C1-C28 |
 | High     |    26 | H1-H26 |
 | Medium   |     9 | M1-M9  |
 
@@ -306,6 +306,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     manifest traversal/resolution, dist-path normalization, asset mapping, and public copy inputs use
     boot-pinned own-data controls; inherited/accessor/proxy fields and late/import-order poison cannot
     add a public artifact or disclose an unlisted server/build file.
+
+- [ ] **C28 - Mutable static-analysis cache hashing suppresses unsafe SQL findings.**
+      `packages/server/src/internal/data-plane-static-analysis.ts`
+  - Safe parameterized SQL was cached with zero findings, while the same-path
+    `db.execute(sql.raw(input.id))` produced real KV422 findings with cache disabled. A synchronized
+    selective `node:crypto.createHash` replacement returned the safe source digest only for the
+    unsafe source; cache-enabled `staticDataPlaneBuildFacts()` then replayed the safe facts exactly
+    and returned zero KV422 findings for the unsafe program.
+  - **Acceptance:** source discovery/snapshots, analyzer identity/fingerprints, cache keys and paths,
+    crypto function/method dispatch, cached JSON parsing and fact validation, in-memory lookup,
+    filesystem operations, analyzer imports/results, and diagnostic projection use boot-pinned exact
+    controls; poisoned or stale cache state can only miss/fail closed and cannot suppress a finding.
 
 ## High
 
@@ -676,8 +688,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17-C27, H20, and H26 are active task,
-command, crypto, JSX output-authority, compiler-cache, static-export, and build-output fixes.
+The remediation pass remains intentionally non-zero: C18-C28, H20, and H26 are active command,
+crypto, JSX output-authority, compiler-cache, static-analysis, static-export, and build-output fixes.
 Integrated
 evidence is
 green at
