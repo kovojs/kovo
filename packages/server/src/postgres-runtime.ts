@@ -16,11 +16,7 @@ import {
   type NonRequestPrincipalPosture,
 } from './auth-principal.js';
 import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
-import {
-  egressDecodeURIComponent,
-  egressUrl,
-  egressUrlUsername,
-} from './egress-intrinsics.js';
+import { egressDecodeURIComponent, egressUrl, egressUrlUsername } from './egress-intrinsics.js';
 import {
   createAuthorizationCensusDb,
   createDeclaredWriteDb,
@@ -37,8 +33,13 @@ import { requestPassedRoleGuard } from './guards.js';
 import { securityStringReplaceAll } from './response-security-intrinsics.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
 import {
+  createWitnessSet,
   witnessDefineProperty,
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
+  witnessMapGet,
+  witnessSetAdd,
+  witnessSetHas,
 } from './security-witness-intrinsics.js';
 import { ensureRecurringTaskSchema } from './task-cron.js';
 import {
@@ -2995,16 +2996,16 @@ function resolvePostgresRoleTopology(input: {
   writerRole: string;
   writerRoleAdopted: boolean;
 }): PostgresRoleTopology {
-  const roles = {
+  const roles = witnessFreeze({
     admin: postgresTopologyRole('admin', input.adminRole, input.adminRoleAdopted),
     reader: postgresTopologyRole('reader', input.readerRole, input.readerRoleAdopted),
     system: postgresTopologyRole('system', input.systemRole, input.systemRoleAdopted),
     writer: postgresTopologyRole('writer', input.writerRole, input.writerRoleAdopted),
-  };
-  return {
+  });
+  return witnessFreeze({
     roles,
-    membershipEdges: [],
-  };
+    membershipEdges: witnessFreeze([]),
+  });
 }
 
 function postgresTopologyRole(
@@ -3012,11 +3013,11 @@ function postgresTopologyRole(
   name: string,
   adopted: boolean,
 ): PostgresRoleTopologyRole {
-  return {
+  return witnessFreeze({
     management: adopted ? 'adopt' : 'create',
     name,
     purpose,
-  };
+  });
 }
 
 function postgresRoleTopologyWithRuntimeLogin(
@@ -3024,36 +3025,86 @@ function postgresRoleTopologyWithRuntimeLogin(
   runtimeLoginRole: string | undefined,
 ): PostgresRoleTopology {
   if (runtimeLoginRole === undefined || runtimeLoginRole === '') return topology;
-  return {
+  return witnessFreeze({
     ...topology,
     membershipEdges: postgresRuntimeMembershipEdges(topology, runtimeLoginRole),
-  };
+  });
 }
 
 function postgresRuntimeMembershipEdges(
   topology: PostgresRoleTopology,
   runtimeLoginRole: string,
 ): readonly PostgresRoleMembershipEdge[] {
-  return [topology.roles.reader.name, topology.roles.writer.name]
-    .filter((role) => role !== runtimeLoginRole)
-    .map((role) => ({
-      memberRole: runtimeLoginRole,
-      owner: 'kovo' as const,
-      role,
-    }));
+  const edges: PostgresRoleMembershipEdge[] = [];
+  appendPostgresRuntimeMembershipEdge(edges, topology.roles.reader.name, runtimeLoginRole);
+  appendPostgresRuntimeMembershipEdge(edges, topology.roles.writer.name, runtimeLoginRole);
+  return witnessFreeze(edges);
+}
+
+function appendPostgresRuntimeMembershipEdge(
+  edges: PostgresRoleMembershipEdge[],
+  role: string,
+  runtimeLoginRole: string,
+): void {
+  if (role === runtimeLoginRole) return;
+  appendPostgresDenseValue(
+    edges,
+    witnessFreeze({ memberRole: runtimeLoginRole, owner: 'kovo' as const, role }),
+  );
+}
+
+function postgresTopologyRoles(
+  topology: PostgresRoleTopology,
+): readonly PostgresRoleTopologyRole[] {
+  const roles: PostgresRoleTopologyRole[] = [];
+  appendPostgresDenseValue(roles, topology.roles.admin);
+  appendPostgresDenseValue(roles, topology.roles.reader);
+  appendPostgresDenseValue(roles, topology.roles.system);
+  appendPostgresDenseValue(roles, topology.roles.writer);
+  return roles;
+}
+
+function appendPostgresDenseValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function postgresDenseValue<Value>(values: readonly Value[], index: number, label: string): Value {
+  const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`${label} must remain a dense own-data array.`);
+  }
+  return descriptor.value;
 }
 
 async function preflightPostgresRoleTopology(
   client: RuntimeTransactionClient,
   topology: PostgresRoleTopology,
 ): Promise<void> {
-  const adoptedRoles = Object.values(topology.roles).filter((role) => role.management === 'adopt');
+  const roles = postgresTopologyRoles(topology);
+  const adoptedRoles: PostgresRoleTopologyRole[] = [];
+  for (let index = 0; index < roles.length; index += 1) {
+    const role = postgresDenseValue(roles, index, 'Postgres topology roles');
+    if (role.management === 'adopt') appendPostgresDenseValue(adoptedRoles, role);
+  }
   if (adoptedRoles.length === 0) return;
-  const existing = await existingPostgresRoles(
-    client,
-    adoptedRoles.map((role) => role.name),
-  );
-  const missing = adoptedRoles.filter((role) => !existing.has(role.name));
+  const adoptedRoleNames: string[] = [];
+  for (let index = 0; index < adoptedRoles.length; index += 1) {
+    appendPostgresDenseValue(
+      adoptedRoleNames,
+      postgresDenseValue(adoptedRoles, index, 'Postgres adopted roles').name,
+    );
+  }
+  const existing = await existingPostgresRoles(client, adoptedRoleNames);
+  const missing: PostgresRoleTopologyRole[] = [];
+  for (let index = 0; index < adoptedRoles.length; index += 1) {
+    const role = postgresDenseValue(adoptedRoles, index, 'Postgres adopted roles');
+    if (!witnessSetHas(existing, role.name)) appendPostgresDenseValue(missing, role);
+  }
   if (missing.length > 0) {
     throw new Error(
       [
@@ -3063,11 +3114,14 @@ async function preflightPostgresRoleTopology(
       ].join(' '),
     );
   }
-  const attributeRows = await postgresRoleAttributeRows(
-    client,
-    adoptedRoles.map((role) => role.name),
-  );
-  const privileged = attributeRows.filter((row) => postgresRoleElevatedAttributes(row).length > 0);
+  const attributeRows = await postgresRoleAttributeRows(client, adoptedRoleNames);
+  const privileged: PostgresRoleAttributeRow[] = [];
+  for (let index = 0; index < attributeRows.length; index += 1) {
+    const row = postgresDenseValue(attributeRows, index, 'Postgres role attribute rows');
+    if (postgresRoleElevatedAttributes(row).length > 0) {
+      appendPostgresDenseValue(privileged, row);
+    }
+  }
   if (privileged.length > 0) {
     throw new Error(
       [
@@ -3085,7 +3139,9 @@ async function ensurePostgresRoleTopology(
   topology: PostgresRoleTopology,
 ): Promise<void> {
   await preflightPostgresRoleTopology(client, topology);
-  for (const role of Object.values(topology.roles)) {
+  const roles = postgresTopologyRoles(topology);
+  for (let index = 0; index < roles.length; index += 1) {
+    const role = postgresDenseValue(roles, index, 'Postgres topology roles');
     if (role.management === 'create') await ensurePostgresRole(client, role.name);
   }
 }
@@ -3094,12 +3150,17 @@ async function existingPostgresRoles(
   client: RuntimeTransactionClient,
   roles: readonly string[],
 ): Promise<ReadonlySet<string>> {
-  if (roles.length === 0) return new Set();
+  if (roles.length === 0) return createWitnessSet<string>();
   const result = await client.query<{ rolname: string }>(
     'SELECT rolname FROM pg_roles WHERE rolname = ANY($1::text[])',
     [roles],
   );
-  return new Set(result.rows.map((row) => row.rolname));
+  const existing = createWitnessSet<string>();
+  for (let index = 0; index < result.rows.length; index += 1) {
+    const row = postgresDenseValue(result.rows, index, 'Postgres existing role rows');
+    witnessSetAdd(existing, row.rolname);
+  }
+  return existing;
 }
 
 async function postgresRoleAttributeRows(
@@ -3119,8 +3180,13 @@ async function postgresRoleAttributeRows(
 
 function postgresRoleElevatedAttributes(row: PostgresRoleAttributeRow): readonly string[] {
   const attributes: string[] = [];
-  for (const attribute of POSTGRES_ELEVATED_ROLE_ATTRIBUTES) {
-    if (row[attribute.column]) attributes.push(attribute.label);
+  for (let index = 0; index < POSTGRES_ELEVATED_ROLE_ATTRIBUTES.length; index += 1) {
+    const attribute = postgresDenseValue(
+      POSTGRES_ELEVATED_ROLE_ATTRIBUTES,
+      index,
+      'Postgres elevated role attributes',
+    );
+    if (row[attribute.column]) appendPostgresDenseValue(attributes, attribute.label);
   }
   return attributes;
 }
@@ -3154,7 +3220,14 @@ async function postgresRoleAttributeVersionIssues(
       },
     ];
   }
-  const unclassified = unclassifiedPostgresRoleColumns(rows.rows.map((row) => row.attname));
+  const columns: string[] = [];
+  for (let index = 0; index < rows.rows.length; index += 1) {
+    appendPostgresDenseValue(
+      columns,
+      postgresDenseValue(rows.rows, index, 'Postgres role column rows').attname,
+    );
+  }
+  const unclassified = unclassifiedPostgresRoleColumns(columns);
   if (unclassified.length === 0) return [];
   return [
     {
@@ -3167,9 +3240,14 @@ async function postgresRoleAttributeVersionIssues(
 }
 
 function unclassifiedPostgresRoleColumns(columns: readonly string[]): readonly string[] {
-  return columns
-    .filter((column) => !POSTGRES_CLASSIFIED_ROLE_COLUMNS.has(column))
-    .sort((left, right) => left.localeCompare(right));
+  const unclassified: string[] = [];
+  for (let index = 0; index < columns.length; index += 1) {
+    const column = postgresDenseValue(columns, index, 'Postgres role columns');
+    if (!witnessSetHas(POSTGRES_CLASSIFIED_ROLE_COLUMNS, column)) {
+      appendPostgresDenseValue(unclassified, column);
+    }
+  }
+  return unclassified;
 }
 
 async function postgresRuntimeLoginPostureIssues(
@@ -3200,21 +3278,23 @@ async function postgresRuntimeLoginPostureIssues(
     ];
   }
   if (postgresRoleElevatedAttributes(login).length > 0) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_RUNTIME_ROLE',
       detail: `runtime login ${runtimeLoginRole} must have no elevated role attributes; found ${postgresRoleAttributeDetail(
         login,
       )}`,
     });
   }
-  for (const [purpose, role, canAssume] of [
-    ['admin', config.adminRole, login.can_admin],
-    ['system', config.systemRole, login.can_system],
-  ] as const) {
-    if (canAssume !== true) continue;
-    issues.push({
+  if (login.can_admin === true) {
+    appendPostgresDenseValue(issues, {
       code: 'KV433_RUNTIME_ROLE',
-      detail: `runtime login ${runtimeLoginRole} must not be able to SET ROLE to ${purpose}Role=${role}`,
+      detail: `runtime login ${runtimeLoginRole} must not be able to SET ROLE to adminRole=${config.adminRole}`,
+    });
+  }
+  if (login.can_system === true) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_RUNTIME_ROLE',
+      detail: `runtime login ${runtimeLoginRole} must not be able to SET ROLE to systemRole=${config.systemRole}`,
     });
   }
 
@@ -3236,19 +3316,19 @@ async function postgresRuntimeLoginPostureIssues(
     ].join(' '),
     [runtimeLoginRole],
   );
-  const frameworkRoles: ReadonlySet<string> = new Set([
-    config.readerRole,
-    config.writerRole,
-    config.adminRole,
-    config.systemRole,
-  ]);
+  const frameworkRoles = createWitnessSet<string>();
+  witnessSetAdd(frameworkRoles, config.readerRole);
+  witnessSetAdd(frameworkRoles, config.writerRole);
+  witnessSetAdd(frameworkRoles, config.adminRole);
+  witnessSetAdd(frameworkRoles, config.systemRole);
   if (assumableRows === undefined) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_RUNTIME_ROLE',
       detail: `could not enumerate roles assumable by runtime login ${runtimeLoginRole}`,
     });
   } else {
-    for (const role of assumableRows.rows) {
+    for (let index = 0; index < assumableRows.rows.length; index += 1) {
+      const role = postgresDenseValue(assumableRows.rows, index, 'Postgres assumable role rows');
       // SPEC §10.3 (C10/C11): ALLOWLIST over predefined-role membership. Membership in any `pg_*`
       // predefined role that is not one of the framework's own roles or an explicit benign
       // don't-care entry fails closed and is named — this catches escalation surfaces (OS command
@@ -3256,16 +3336,16 @@ async function postgresRuntimeLoginPostureIssues(
       // of the five elevated role attributes and would otherwise pass the attribute allowlist.
       if (
         role.is_predefined === true &&
-        !frameworkRoles.has(role.rolname) &&
-        !POSTGRES_BENIGN_PREDEFINED_ROLES.has(role.rolname)
+        !witnessSetHas(frameworkRoles, role.rolname) &&
+        !witnessSetHas(POSTGRES_BENIGN_PREDEFINED_ROLES, role.rolname)
       ) {
-        issues.push({
+        appendPostgresDenseValue(issues, {
           code: 'KV433_RUNTIME_ROLE',
           detail: `runtime login ${runtimeLoginRole} is a member of PostgreSQL predefined role ${role.rolname}; predefined-role membership grants escalation capabilities that carry no elevated role attribute, so the runtime login and every assumable role must be a member of only framework roles`,
         });
       }
       if (postgresRoleElevatedAttributes(role).length === 0) continue;
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_RUNTIME_ROLE',
         detail: `runtime login ${runtimeLoginRole} can SET ROLE to ${postgresRoleAttributeDetail(
           role,
@@ -3287,13 +3367,14 @@ async function postgresRuntimeLoginPostureIssues(
     [runtimeLoginRole],
   );
   if (adminOptionRows === undefined) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_RUNTIME_ROLE',
       detail: `could not verify runtime login ${runtimeLoginRole} ADMIN OPTION memberships`,
     });
   } else {
-    for (const row of adminOptionRows.rows) {
-      issues.push({
+    for (let index = 0; index < adminOptionRows.rows.length; index += 1) {
+      const row = postgresDenseValue(adminOptionRows.rows, index, 'Postgres admin-option rows');
+      appendPostgresDenseValue(issues, {
         code: 'KV433_RUNTIME_ROLE',
         detail: `runtime login ${runtimeLoginRole} holds ADMIN OPTION on ${row.role_name}; runtime logins must not be able to grant themselves assumable roles`,
       });
@@ -3326,14 +3407,16 @@ async function postgresRuntimeMembershipIssues(
       },
     ];
   }
-  for (const [purpose, role, ok] of [
-    ['reader', topology.roles.reader.name, row.can_reader],
-    ['writer', topology.roles.writer.name, row.can_writer],
-  ] as const) {
-    if (role === row.runtime_login || ok === true) continue;
-    issues.push({
+  if (topology.roles.reader.name !== row.runtime_login && row.can_reader !== true) {
+    appendPostgresDenseValue(issues, {
       code: 'KV433_ROLE_TOPOLOGY',
-      detail: `runtime login ${row.runtime_login} is missing membership in ${purpose}Role=${role}; grant ${quoteIdent(role)} to ${quoteIdent(row.runtime_login)} or run kovo db provision with a privileged admin URL`,
+      detail: `runtime login ${row.runtime_login} is missing membership in readerRole=${topology.roles.reader.name}; grant ${quoteIdent(topology.roles.reader.name)} to ${quoteIdent(row.runtime_login)} or run kovo db provision with a privileged admin URL`,
+    });
+  }
+  if (topology.roles.writer.name !== row.runtime_login && row.can_writer !== true) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_ROLE_TOPOLOGY',
+      detail: `runtime login ${row.runtime_login} is missing membership in writerRole=${topology.roles.writer.name}; grant ${quoteIdent(topology.roles.writer.name)} to ${quoteIdent(row.runtime_login)} or run kovo db provision with a privileged admin URL`,
     });
   }
   return issues;
@@ -3358,12 +3441,27 @@ function postgresRoleTopologyReport(
   } = {},
 ): KovoPostgresPostureReport['roleTopology'] {
   const withRuntime = postgresRoleTopologyWithRuntimeLogin(topology, input.runtimeLogin);
+  const membershipEdges: KovoPostgresPostureReport['roleTopology']['membershipEdges'][number][] =
+    [];
+  for (let index = 0; index < withRuntime.membershipEdges.length; index += 1) {
+    const edge = postgresDenseValue(
+      withRuntime.membershipEdges,
+      index,
+      'Postgres membership edges',
+    );
+    appendPostgresDenseValue(membershipEdges, {
+      memberRole: edge.memberRole,
+      owner: edge.owner,
+      role: edge.role,
+      status:
+        (input.edgeStatuses === undefined
+          ? undefined
+          : witnessMapGet(input.edgeStatuses, postgresMembershipEdgeKey(edge))) ?? 'expected',
+    });
+  }
   return {
     adminRole: withRuntime.roles.admin,
-    membershipEdges: withRuntime.membershipEdges.map((edge) => ({
-      ...edge,
-      status: input.edgeStatuses?.get(postgresMembershipEdgeKey(edge)) ?? 'expected',
-    })),
+    membershipEdges,
     readerRole: withRuntime.roles.reader,
     ...(input.runtimeLogin === undefined ? {} : { runtimeLogin: input.runtimeLogin }),
     systemRole: withRuntime.roles.system,
@@ -3423,12 +3521,16 @@ async function grantPostgresRuntimeLoginRole(
   client: RuntimeTransactionClient,
   topology: PostgresRoleTopology,
 ): Promise<void> {
-  for (const edge of topology.membershipEdges) {
+  for (let index = 0; index < topology.membershipEdges.length; index += 1) {
+    const edge = postgresDenseValue(topology.membershipEdges, index, 'Postgres membership edges');
     if (edge.owner !== 'kovo') continue;
     if (await postgresRoleMembershipExists(client, edge)) continue;
     await client.exec(`GRANT ${quoteIdent(edge.role)} TO ${quoteIdent(edge.memberRole)}`);
   }
-  const runtimeLoginRole = topology.membershipEdges[0]?.memberRole;
+  const runtimeLoginRole =
+    topology.membershipEdges.length === 0
+      ? undefined
+      : postgresDenseValue(topology.membershipEdges, 0, 'Postgres membership edges').memberRole;
   if (runtimeLoginRole === undefined || runtimeLoginRole === '') return;
   await client.exec(
     `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)} TO ${quoteIdent(runtimeLoginRole)}`,

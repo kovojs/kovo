@@ -11,9 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   drainCrossOwnerReadAuditFacts,
   drainPostgresRlsSilentDenyDiagnostics,
-  kovoReadonlyDbHandle,
-  type KovoReadonlyDbCapable,
-  type Reader,
+  managedDb,
 } from './managed-db.js';
 import { actAsNonRequestPrincipal, declareSystemPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
@@ -654,9 +652,7 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       const writer = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
-      const readDb = (writer as unknown as KovoReadonlyDbCapable<Reader<KovoPostgresRuntimeDb>>)[
-        kovoReadonlyDbHandle
-      ]();
+      const readDb = managedDb(writer, 'read');
 
       const rows = await readDb.rawRead<{ id: string; title: string }>(
         trustedSql(sql.raw('select id, title from kovo_runtime_notes order by id'), {
@@ -719,9 +715,7 @@ describe('createPostgresAppRuntimeDb', () => {
       await runtime.ready;
       drainPostgresRlsSilentDenyDiagnostics();
       const writer = runtime.db({ principalPosture: actAsRuntimePrincipal('missing') });
-      const readDb = (writer as unknown as KovoReadonlyDbCapable<Reader<KovoPostgresRuntimeDb>>)[
-        kovoReadonlyDbHandle
-      ]();
+      const readDb = managedDb(writer, 'read');
 
       await expect(
         readDb.select({ id: notes.id, title: notes.title }).from(notes),
@@ -940,9 +934,27 @@ describe('createPostgresAppRuntimeDb', () => {
         );
       }
     }
+    const nativeMap = Array.prototype.map;
     const nativeReplaceAll = String.prototype.replaceAll;
     const nativeStringValueOf = String.prototype.valueOf;
     globalThis.URL = PoisonedURL;
+    Array.prototype.map = function (callback, thisArg) {
+      if (this.length === 2 && this[0] === 'kovo_reader' && this[1] === 'kovo_writer') {
+        return [
+          {
+            memberRole: 'attacker_runtime_login',
+            owner: 'kovo',
+            role: 'kovo_reader',
+          },
+          {
+            memberRole: 'attacker_runtime_login',
+            owner: 'kovo',
+            role: 'kovo_writer',
+          },
+        ];
+      }
+      return Reflect.apply(nativeMap, this, [callback, thisArg]);
+    } as typeof Array.prototype.map;
     String.prototype.replaceAll = function (search, replacement) {
       const value = Reflect.apply(nativeStringValueOf, this, []);
       return value === 'victim_runtime_login'
@@ -969,6 +981,7 @@ describe('createPostgresAppRuntimeDb', () => {
       });
     } finally {
       globalThis.URL = NativeURL;
+      Array.prototype.map = nativeMap;
       String.prototype.replaceAll = nativeReplaceAll;
     }
 
@@ -2931,10 +2944,8 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
-      const writer = runtime.db(request) as unknown as KovoReadonlyDbCapable<
-        Reader<KovoPostgresRuntimeDb>
-      >;
-      const readDb = writer[kovoReadonlyDbHandle]();
+      const writer = runtime.db(request);
+      const readDb = managedDb(writer, 'read');
       expect(() =>
         readDb.crossOwnerRead(sql`SELECT id, title FROM ${notes} ORDER BY id`, {
           reads: ['kovo_runtime_notes'],
