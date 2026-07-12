@@ -57,6 +57,8 @@ const nativeSetSize = apply<PropertyDescriptor | undefined>(
 )?.get;
 const NativeString = globalThis.String;
 const nativeStringReplaceAll = NativeString.prototype.replaceAll;
+const nativeStringStartsWith = NativeString.prototype.startsWith;
+const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeRegExpTest = NativeRegExp.prototype.test;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -191,6 +193,9 @@ function capturedControlsAreSound(): boolean {
       return false;
     }
     if (apply(nativeStringReplaceAll, 'a-b-a', ['a', 'x']) !== 'x-b-x') return false;
+    if (apply(nativeStringStartsWith, 'kovo-control', ['kovo-']) !== true) return false;
+    if (apply(nativeStringStartsWith, 'app-control', ['kovo-']) !== false) return false;
+    if (apply(nativeStringToLowerCase, 'KoVo', []) !== 'kovo') return false;
     if (apply(nativeRegExpTest, /^a+$/, ['aaa']) !== true) return false;
     if (apply(nativeRegExpTest, /^a+$/, ['a!']) !== false) return false;
     const frozen = apply<object>(nativeObjectFreeze, NativeObject, [record]);
@@ -433,6 +438,20 @@ export function witnessStringReplaceAll(
 ): string {
   assertSecurityWitnessIntrinsics();
   return apply(nativeStringReplaceAll, value, [searchValue, replaceValue]);
+}
+
+export function witnessStringStartsWith(
+  value: string,
+  searchValue: string,
+  position?: number,
+): boolean {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeStringStartsWith, value, [searchValue, position]);
+}
+
+export function witnessStringToLowerCase(value: string): string {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeStringToLowerCase, value, []);
 }
 
 export function witnessRegExpTest(expression: RegExp, value: string): boolean {
