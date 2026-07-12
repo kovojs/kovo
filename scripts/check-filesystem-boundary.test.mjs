@@ -5,6 +5,8 @@ import {
   cloudflareTomlAssemblyFindings,
   checkFilesystemBoundary,
   defaultAllowedToolingFiles,
+  egressArrayCommitFindings,
+  egressSecurityIntrinsicsFile,
   filesystemBoundaryFile,
   filesystemIntrinsicsFile,
   nodeRuntimePackageBoundaryFindings,
@@ -412,6 +414,45 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         expect.stringContaining('HttpOnly cookie floor must use the response array choke'),
       ]),
     );
+  });
+
+  it('C237 pins egress parser and splice arrays to own-data indexed commits', () => {
+    expect(
+      egressArrayCommitFindings(
+        egressSecurityIntrinsicsFile,
+        `
+          const nativeArrayPush = NativeArray.prototype.push;
+          export function egressArrayPush(values, ...items) {
+            return Reflect.apply(nativeArrayPush, values, items);
+          }
+          export function egressArraySplice(values, start, deleteCount, ...items) {
+            const args = [start, deleteCount];
+            args.push(items[0]);
+            return Reflect.apply(nativeArraySplice, values, args);
+          }
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('must not append through mutable Array.push'),
+        expect.stringContaining('prototype-visible [[Set]]'),
+        expect.stringContaining('missing boot-pinned property definition'),
+        expect.stringContaining('missing descriptor-indexed egress commit'),
+        expect.stringContaining('missing own-data item snapshot'),
+        expect.stringContaining('missing splice-argument own-data delegation'),
+      ]),
+    );
+
+    expect(
+      egressArrayCommitFindings(
+        'packages/server/src/egress.ts',
+        `
+          function parse(words, value) {
+            words[words.length] = value;
+          }
+        `,
+      ),
+    ).toEqual([expect.stringContaining('must not dispatch through inherited numeric setters')]);
   });
 
   it('C202 pins deploy-skew retention classification to the emitted module snapshot', () => {

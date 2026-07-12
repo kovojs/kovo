@@ -17,6 +17,7 @@ const NativeObject = globalThis.Object;
 const NativeRequest = globalThis.Request;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
+const NativeTypeError = globalThis.TypeError;
 const NativeURL = globalThis.URL;
 const NativeReflect = globalThis.Reflect;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
@@ -26,7 +27,6 @@ const nativeArrayFilter = NativeArray.prototype.filter;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArrayMap = NativeArray.prototype.map;
-const nativeArrayPush = NativeArray.prototype.push;
 const nativeArraySlice = NativeArray.prototype.slice;
 const nativeArraySome = NativeArray.prototype.some;
 const nativeArraySplice = NativeArray.prototype.splice;
@@ -71,6 +71,69 @@ function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]
   return nativeReflectApply(fn, receiver, args) as Return;
 }
 
+// SPEC §6.6: even a boot-captured Array.push appends through prototype-visible [[Set]]. The egress
+// parser and connection floor therefore define every new slot as own data through pinned controls.
+function ownEgressArrayLength(values: readonly unknown[], label: string): number {
+  if (apply(nativeArrayIsArray, NativeArray, [values]) !== true) {
+    throw new NativeTypeError(`${label} target must be an array.`);
+  }
+  const lengthDescriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [values, 'length'],
+  );
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number'
+  ) {
+    throw new NativeTypeError(`${label} target must expose an own data length.`);
+  }
+  return lengthDescriptor.value;
+}
+
+function defineEgressArrayIndex<Value>(
+  values: Value[],
+  index: number,
+  value: Value,
+  label: string,
+): void {
+  const length = ownEgressArrayLength(values, label);
+  if (index < 0 || index > length || index >= 4_294_967_295 || index % 1 !== 0) {
+    throw new NativeTypeError(`${label} index must preserve dense array bounds.`);
+  }
+  apply(nativeObjectDefineProperty, NativeObject, [
+    values,
+    index,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+}
+
+function commitEgressArrayItems<Value>(
+  values: Value[],
+  items: readonly Value[],
+  label: string,
+): number {
+  const itemCount = ownEgressArrayLength(items, `${label} values`);
+  for (let index = 0; index < itemCount; index += 1) {
+    const descriptor = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [items, index],
+    );
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new NativeTypeError(`${label} values must be dense own-data entries.`);
+    }
+    defineEgressArrayIndex(values, ownEgressArrayLength(values, label), descriptor.value, label);
+  }
+  return ownEgressArrayLength(values, label);
+}
+
 function capturedControlsAreSound(): boolean {
   try {
     if (
@@ -111,8 +174,12 @@ function capturedControlsAreSound(): boolean {
     if (apply<string[]>(nativeArraySlice, values, [1])[0] !== 'private') return false;
     if (apply(nativeArrayJoin, values, [':']) !== 'public:private') return false;
 
+    const privateWords: number[] = [];
+    commitEgressArrayItems(privateWords, [0xfd00, 0x0ec2], 'egress control probe');
+    if (privateWords[0] !== 0xfd00 || privateWords[1] !== 0x0ec2) return false;
+
     const mutable = ['a'];
-    apply(nativeArrayPush, mutable, ['b']);
+    commitEgressArrayItems(mutable, ['b'], 'egress control probe');
     apply(nativeArraySplice, mutable, [0, 1, 'c']);
     if (mutable.length !== 2 || mutable[0] !== 'c' || mutable[1] !== 'b') return false;
 
@@ -242,7 +309,7 @@ export function egressArrayMap<T, Result>(
 
 export function egressArrayPush<T>(value: T[], ...items: T[]): number {
   assertEgressIntrinsics();
-  return apply(nativeArrayPush, value, items);
+  return commitEgressArrayItems(value, items, 'egress array append');
 }
 
 export function egressArraySlice<T>(value: readonly T[], start?: number, end?: number): T[] {
@@ -266,8 +333,7 @@ export function egressArraySplice<T>(
 ): T[] {
   assertEgressIntrinsics();
   const args: unknown[] = [start, deleteCount];
-  for (let index = 0; index < items.length; index += 1)
-    apply(nativeArrayPush, args, [items[index]]);
+  commitEgressArrayItems(args, items, 'egress splice arguments');
   return apply(nativeArraySplice, value, args);
 }
 

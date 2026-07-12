@@ -39,6 +39,11 @@ export const taskArrayCommitFiles = [
   'packages/server/src/task-runner.ts',
   'packages/server/src/task-runtime.ts',
 ];
+export const egressSecurityIntrinsicsFile = 'packages/server/src/egress-intrinsics.ts';
+export const egressArrayCommitFiles = [
+  egressSecurityIntrinsicsFile,
+  'packages/server/src/egress.ts',
+];
 
 export const defaultAllowedRuntimeFiles = [
   filesystemBoundaryFile,
@@ -102,6 +107,9 @@ export function checkFilesystemBoundary(options = {}) {
   const taskArrayCommitFileSet = new Set(options.taskArrayCommitFiles ?? taskArrayCommitFiles);
   const responseSecurityArrayCommitFileSet = new Set(
     options.responseSecurityArrayCommitFiles ?? responseSecurityArrayCommitFiles,
+  );
+  const egressArrayCommitFileSet = new Set(
+    options.egressArrayCommitFiles ?? egressArrayCommitFiles,
   );
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
@@ -184,6 +192,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (responseSecurityArrayCommitFileSet.has(filePath)) {
       findings.push(...responseSecurityArrayCommitFindings(filePath, sourceText));
+    }
+    if (egressArrayCommitFileSet.has(filePath)) {
+      findings.push(...egressArrayCommitFindings(filePath, sourceText));
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
@@ -704,6 +715,63 @@ export function responseSecurityArrayCommitFindings(filePath, sourceText) {
     const [description, pattern] = requiredControls[index];
     if (!pattern.test(sourceText)) {
       findings.push(`${filePath}: response security arrays are missing ${description}`);
+    }
+  }
+  return findings;
+}
+
+export function egressArrayCommitFindings(filePath, sourceText) {
+  const findings = [];
+  const scanText = stripCommentsAndStrings(sourceText);
+  const mutableMethodCommit = /\.\s*push\s*\(/u.exec(scanText);
+  if (mutableMethodCommit !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableMethodCommit.index)}: egress authority arrays must not append through mutable Array.push`,
+    );
+  }
+  const mutableIndexCommit =
+    /\b[A-Za-z_$][\w$]*\s*\[\s*(?:\d+|[a-z_$][\w$]*(?:\s*\.\s*length)?)\s*\]\s*=(?!=)/u.exec(
+      scanText,
+    );
+  if (mutableIndexCommit !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableIndexCommit.index)}: egress authority arrays must not dispatch through inherited numeric setters`,
+    );
+  }
+
+  if (filePath !== egressSecurityIntrinsicsFile) return findings;
+
+  if (/\bnativeArrayPush\b/u.test(scanText)) {
+    findings.push(
+      `${filePath}: captured Array.push is not a safe egress commit because it still performs prototype-visible [[Set]]`,
+    );
+  }
+  const requiredControls = [
+    [
+      'boot-pinned property definition',
+      /\bconst\s+nativeObjectDefineProperty\s*=\s*NativeObject\s*\.\s*defineProperty\s*;/u,
+    ],
+    [
+      'descriptor-indexed egress commit',
+      /\bfunction\s+defineEgressArrayIndex\s*<[^>]+>\s*\([\s\S]*?\bapply\s*\(\s*nativeObjectDefineProperty\s*,\s*NativeObject\s*,/u,
+    ],
+    [
+      'own-data item snapshot',
+      /\bfunction\s+commitEgressArrayItems\s*<[^>]+>\s*\([\s\S]*?\bnativeObjectGetOwnPropertyDescriptor\b[\s\S]*?\bdefineEgressArrayIndex\s*\(/u,
+    ],
+    [
+      'egressArrayPush own-data delegation',
+      /\bfunction\s+egressArrayPush\s*<[^>]+>\s*\([^)]*\)\s*:\s*number\s*\{[\s\S]*?\bcommitEgressArrayItems\s*\(\s*value\s*,\s*items\s*,/u,
+    ],
+    [
+      'splice-argument own-data delegation',
+      /\bfunction\s+egressArraySplice\s*<[^>]+>\s*\([\s\S]*?\bcommitEgressArrayItems\s*\(\s*args\s*,\s*items\s*,\s*['"]egress splice arguments['"]\s*\)/u,
+    ],
+  ];
+  for (let index = 0; index < requiredControls.length; index += 1) {
+    const [description, pattern] = requiredControls[index];
+    if (!pattern.test(sourceText)) {
+      findings.push(`${filePath}: egress security arrays are missing ${description}`);
     }
   }
   return findings;

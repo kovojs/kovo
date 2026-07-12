@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   236 | C1-C236 |
+| Critical |   237 | C1-C237 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2746,6 +2746,19 @@ build:dist` passes.
     gate prevents response authority from returning to prototype-visible push or numeric assignment.
   - **Evidence:** the exact late HttpOnly-strip and pre-import setter regressions pass; the 302-test
     response/document matrix, server distribution build, and response-array source gate are green.
+
+- [x] **C237 - Inherited egress array writes rewrite private IPv6 words as public.**
+      `packages/server/src/{egress-intrinsics,egress}.ts`
+  - A selective inherited index-zero setter substitutes AWS IMDSv6's leading `fd00` word with
+    `2606` while captured `Array.prototype.push` advances the parser array. The real
+    `evaluateEgress` authority therefore classifies `fd00:ec2::254` as public and admits it outside
+    the credential frame.
+  - **Acceptance:** every egress multi-item and splice-argument array commit uses boot-pinned
+    own-data descriptors; late and pre-import inherited numeric setters cannot rewrite private or
+    metadata destinations, and a source gate prevents prototype-visible egress array commits.
+  - **Evidence:** the exact `fd00` rewrite/admission, splice-argument, and pre-import regressions pass;
+    the 91-test egress/Undici/redirect/bootstrap matrix, server distribution build, filesystem/egress
+    source gates, classifier corpus, and security boundary gates are green.
 
 ## High
 

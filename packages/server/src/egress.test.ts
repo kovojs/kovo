@@ -350,6 +350,58 @@ function referenceIpv6Words(side: string): number[] | null {
 }
 
 describe('evaluateEgress policy decision', () => {
+  it('keeps AWS IMDSv6 classified as metadata under inherited numeric setters', () => {
+    const policy = emptyPolicy();
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    const defineProperty = Object.defineProperty;
+    let rewrittenWordCount = 0;
+    let classification: ReturnType<typeof classifyIp>;
+    let decision: ReturnType<typeof evaluateEgress>;
+
+    try {
+      defineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 0xfd00) {
+            rewrittenWordCount += 1;
+            defineProperty(this, '0', {
+              configurable: true,
+              enumerable: true,
+              value: 0x2606,
+              writable: true,
+            });
+            return;
+          }
+          defineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+
+      classification = classifyIp('fd00:ec2::254');
+      decision = evaluateEgress({
+        host: 'fd00:ec2::254',
+        port: 80,
+        resolvedIp: 'fd00:ec2::254',
+        policy,
+      });
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else defineProperty(Array.prototype, '0', originalDescriptor);
+    }
+
+    expect({
+      admitted: decision === null,
+      classification,
+      rewrittenWordCount,
+    }).toEqual({ admitted: false, classification: 'metadata', rewrittenWordCount: 0 });
+    expect(decision).toBeInstanceOf(EgressBlockedError);
+    expect(decision?.classification).toBe('metadata');
+  });
+
   it('keeps private-IP classification closed after late collection and regexp poisoning', () => {
     const policy = emptyPolicy();
     const originalSome = Array.prototype.some;
