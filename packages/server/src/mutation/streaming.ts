@@ -3,6 +3,15 @@ import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 import { generatedFragmentHtmlValue, type FragmentHtml } from '../html.js';
 import { frameworkWireBody } from '../response.js';
+import {
+  createSecurityReadableStream,
+  securityArrayJoin,
+  securityArrayPush,
+  securityStreamClose,
+  securityStreamEnqueue,
+  securityStreamError,
+  securityTextEncode,
+} from '../response-security-intrinsics.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
 import type { ServerFragmentRenderable } from '../renderable.js';
 import type { MutationReplayReservation } from '../replay.js';
@@ -157,7 +166,6 @@ export const renderStreamingMutationWireResponse = wireEmitter(
     reservation?: MutationReplayReservation<BufferedMutationWireResponse>,
     errorContext?: StreamingMutationErrorContext,
   ): MutationWireResponse {
-    const encoder = new TextEncoder();
     // H4 (SPEC §9): retain a reference to the raw source iterator so the cancel
     // handler can call return() on it directly — the coalesce layer's inner await
     // on a pending read won't propagate the cancel signal automatically.
@@ -169,7 +177,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
     const iterator = source[Symbol.asyncIterator]();
 
     return {
-      body: new ReadableStream<Uint8Array>({
+      body: createSecurityReadableStream<Uint8Array>({
         async start(controller) {
           // A3 (SPEC §10.3:1063): buffer all emitted bytes so we can commit the full
           // settled body (stream chunks + finalResponse.body + <kovo-done>) to the
@@ -178,8 +186,8 @@ export const renderStreamingMutationWireResponse = wireEmitter(
 
           const enqueue = (text: string): void => {
             const line = `${text}\n`;
-            buffered.push(line);
-            controller.enqueue(encoder.encode(line));
+            securityArrayPush(buffered, line);
+            securityStreamEnqueue(controller, securityTextEncode(line));
           };
 
           try {
@@ -188,10 +196,10 @@ export const renderStreamingMutationWireResponse = wireEmitter(
               if (done) break;
               enqueue(renderMutationStreamChunk(chunk));
               if (chunk.kind === 'done') {
-                controller.close();
+                securityStreamClose(controller);
                 // Commit the full settled body so replays re-serve the complete stream.
                 reservation?.commit({
-                  body: frameworkWireBody(buffered.join('')),
+                  body: frameworkWireBody(securityArrayJoin(buffered, '')),
                   headers: finalResponse.headers,
                   status: finalResponse.status,
                 });
@@ -202,10 +210,10 @@ export const renderStreamingMutationWireResponse = wireEmitter(
             // fragment body (pre-rendered query/fragment HTML) and kovo-done.
             if (finalResponse.body) enqueue(finalResponse.body);
             enqueue(renderDoneWireHtml());
-            controller.close();
+            securityStreamClose(controller);
             // Commit after the generator exhausted (no explicit done chunk).
             reservation?.commit({
-              body: frameworkWireBody(buffered.join('')),
+              body: frameworkWireBody(securityArrayJoin(buffered, '')),
               headers: finalResponse.headers,
               status: finalResponse.status,
             });
@@ -224,11 +232,11 @@ export const renderStreamingMutationWireResponse = wireEmitter(
             }
             try {
               enqueue(renderDoneWireHtml({ reason: 'error' }));
-              controller.close();
+              securityStreamClose(controller);
             } catch {
               // The controller may already be errored/closed (e.g. the consumer cancelled
               // concurrently); fall back to surfacing the original error on the stream.
-              controller.error(error);
+              securityStreamError(controller, error);
             }
             // Do not commit on error; let the reservation remain pending/aborted.
             reservation?.abort?.();
