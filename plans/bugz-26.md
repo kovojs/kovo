@@ -165,7 +165,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
 
 ## Medium
 
-- [ ] **M1 - `frameworkEgressFetch` enforces `allowDestinations` only on the initial origin, not on
+- [x] **M1 - `frameworkEgressFetch` enforces `allowDestinations` only on the initial origin, not on
       redirect hops.** `packages/server/src/egress.ts:983-1052`,
       `packages/server/src/egress-undici.ts:84-146`
   - Native fetch follows redirects after the helper's positive-origin check. The process transport
@@ -181,6 +181,10 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     hop, reject scheme/loop/max-hop drift, cover `Request` inputs and 307/308 bodies, and preserve
     native method and cross-origin sensitive-header semantics. Include direct, manual,
     allowed-to-allowed, and allowed-to-denied controls.
+  - **Evidence:** the integrated egress/Undici/bootstrap/redirect/task-runner suite passes 97 tests,
+    including denied 307 exfiltration, allowed 307/308 bodies, native 303/credential behavior,
+    private-IP drift, mutable input pinning, schemes, loops, and the native 20-hop bound; the server
+    declaration build and seven security/API gates pass.
 
 - [x] **M2 - Dynamic `mutationResponses` resolvers execute before CSRF, schema, replay, guards, and
       the mutation handler; runtime policy can also replace pinned CSRF posture.**
