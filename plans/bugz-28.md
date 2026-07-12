@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |    12 | C1-C12 |
+| Critical |    13 | C1-C13 |
 | High     |    24 | H1-H24 |
 | Medium   |     9 | M1-M9 |
 
@@ -125,6 +125,17 @@ This is an active closure ledger; `SPEC.md` remains normative.
     FormData identity and traversal, recursive tagging/reveal, and record construction use
     boot-pinned, semantically checked exact-value controls; late/import-order poison cannot replace
     CSRF or schema input bytes while genuine JSON/form/multipart parsing remains intact.
+
+- [ ] **C13 - Colliding nested PostgreSQL savepoints can commit writes from a failed scope.**
+      `packages/server/src/postgres-runtime.ts`
+  - Replacing `Date.now` and `Math.random` with constants gave an outer and inner nested transaction
+    the same savepoint name. After the inner failure was caught, PostgreSQL retained its duplicate
+    marker; the outer rollback targeted that newer marker, and a real PGlite execution committed the
+    write made inside the supposedly rolled-back outer scope.
+  - **Acceptance:** every nested transaction on one physical client gets a framework-private,
+    collision-free identifier independent of mutable clocks/RNG/string prototypes; savepoint SQL has
+    a fixed grammar, and caught inner failures cannot shadow outer release/rollback ownership under
+    late or import-order poison.
 
 ## High
 
@@ -440,7 +451,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C12, H15, and H17-H24 are active
+The remediation pass remains intentionally non-zero: C12-C13, H15, and H17-H24 are active
 request-carrier, response/deferred/mutation/client output, task, and browser-navigation fixes.
 Integrated
 evidence is
