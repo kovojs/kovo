@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    19 | H1-H19 |
+| High     |    20 | H1-H20 |
 | Medium   |     8 | M1-M8 |
 
 ## Critical
@@ -290,6 +290,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     and failure/reauth redirects use boot-pinned, semantically checked controls; poison cannot replace
     wire bytes, cross-bind targets, or suppress required build/session transition metadata.
 
+- [ ] **H20 - Mutable client-module registry lookup can serve a privileged sibling's code.**
+      `packages/server/src/{client-modules,loader-runtime-client-module}.ts`
+  - A selective late `Map.prototype.get` override made the immutable URL registered for
+    `/c/public.client.js@v1` return status 200 with the exact source bytes registered for the
+    privileged sibling module instead.
+  - **Acceptance:** module/path/version normalization, exact registry keys, Map/version tracking,
+    entries, build-token hash inputs/crypto, URL request parsing, and runtime-href registration use
+    boot-pinned, semantically checked controls; late/import-order poison cannot cross-bind module
+    bytes, forge an unchanged build token, or alias unversioned/out-of-registry paths.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -366,9 +376,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H19, and M7-M8 are active
-capability, request-carrier, response/deferred/mutation output, task/guard, request-limit, and replay
-fixes.
+The remediation pass remains intentionally non-zero: C10-C12, H15-H20, and M7-M8 are active
+capability, request-carrier, response/deferred/mutation/client output, task/guard, request-limit, and
+replay fixes.
 Integrated
 evidence is
 green at
