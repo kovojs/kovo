@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    28 | C1-C28 |
+| Critical |    32 | C1-C32 |
 | High     |    26 | H1-H26 |
 | Medium   |     9 | M1-M9  |
 
@@ -191,7 +191,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     independent clock/RNG, stale-lease, registry cross-binding, and late synchronized-crypto proofs
     now retain distinct 128-bit identities and exact task dispatch.
 
-- [ ] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
+- [x] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
       `packages/server/src/command.ts`
   - `cmd()` froze the reviewed Node argv, but `runCommand()` later spread it through the live
     `Array.prototype[Symbol.iterator]`. A selective late iterator returned attacker `-e` source for
@@ -201,8 +201,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cloning, `execFile` identity, execution options, callback settlement, output conversion, and
     Promise controls are boot-pinned and semantically checked; late/import-order poison cannot alter
     any byte passed to the privileged process sink while genuine allowlisted commands still run.
+  - **Evidence:** the 161-test command/crypto/entropy consumer matrix plus server dist/DTS and
+    security gates pass; the independent iterator proof executes only the reviewed `reviewed` argv.
 
-- [ ] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
+- [x] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
       `packages/server/src/confidential-at-rest.ts`
   - Replacing CommonJS `node:crypto.randomBytes` with a constant function and calling
     `syncBuiltinESMExports()` updated the live ESM binding consumed by `encryptAtRest()`. Two distinct
@@ -212,6 +214,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     controls, key/AAD/plaintext byte snapshots, cipher method dispatch, tag/ciphertext assembly, and
     envelope encoding use boot-pinned, semantically verified controls; late synchronized builtins and
     hostile pre-import sources cannot repeat an IV or return a branded non-authenticated envelope.
+  - **Evidence:** the same matrix covers bounded IV replay detection and staged hostile entropy;
+    the independent synchronized-builtin proof now receives distinct 96-bit IVs.
 
 - [ ] **C20 - A public global bridge exposes the framework's raw-HTML mint.**
       `packages/core/src/index.ts`, `packages/server/src/jsx-runtime.ts`
@@ -236,7 +240,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     hostile pre-import or late controls cannot forge a marker while genuine rendered composition
     remains byte-stable and bounded.
 
-- [ ] **C22 - Predictable pre-import response entropy collapses upload object authority.**
+- [x] **C22 - Predictable pre-import response entropy collapses upload object authority.**
       `packages/server/src/{response-security-intrinsics,upload-sniff,csrf,deferred-stream}.ts`
   - The shared response membrane accepted constant `randomBytes` and a constant valid-shaped v4
     `randomUUID` after CommonJS replacement plus `syncBuiltinESMExports()` before import. Two real
@@ -247,6 +251,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     sources fail closed; every security identity uses the required random-bit floor and runtime
     non-repetition controls, including at least 128 random bits for no-JS idempotency; upload keys,
     anonymous bindings, replay identities, and stream boundaries cannot repeat or become predictable.
+  - **Evidence:** the same focused matrix covers upload keys, anonymous CSRF, exact 128-bit no-JS
+    identities, and deferred boundaries; the independent constant pre-import source fails closed.
 
 - [ ] **C23 - Mutable static-route planning publishes guarded session content.**
       `packages/server/src/{static-export-route-plan,static-export-replay,static-export}.ts`
@@ -272,13 +278,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     filesystem/path controls, and Promise settlement use boot-pinned exact operations; committed
     bytes must match their reviewed manifest hash and cannot be substituted after validation.
 
-- [ ] **C25 - Mutable persistent-cache hashing authenticates attacker compiler output.**
-      `packages/compiler/src/{persistent-compile-cache,vite}.ts`
+- [ ] **C25 - Mutable compiler-cache hashing authenticates attacker compiler output.**
+      `packages/compiler/src/{compile-cache,persistent-compile-cache,vite}.ts`
   - After a genuine safe cached `account.client.js` was replaced with attacker JavaScript, the
     normal cache reader correctly missed. Replacing CommonJS `node:crypto.createHash`, synchronizing
     ESM exports, and selectively returning the stored filename digest for the tampered JSON made the
     real persistent reader accept the attacker module; the Vite path returns such hits without
     recompilation or another output check.
+  - The process-lifetime `CompileCache` shared the same flaw: selectively aliasing an unsafe source
+    digest to a prior safe source returned the earlier emitted result without invoking the compiler.
   - **Acceptance:** cache-key/footprint narrowing, compiler identity, manifest/entry/blob parsing and
     own-data snapshots, path/ref validation, hashing and crypto methods, file reads/writes/renames,
     atomic temp identities, iteration, and Promise settlement use boot-pinned exact controls;
@@ -318,6 +326,52 @@ This is an active closure ledger; `SPEC.md` remains normative.
     crypto function/method dispatch, cached JSON parsing and fact validation, in-memory lookup,
     filesystem operations, analyzer imports/results, and diagnostic projection use boot-pinned exact
     controls; poisoned or stale cache state can only miss/fail closed and cannot suppress a finding.
+
+- [ ] **C29 - Mutable mutation-form attribute assembly injects executable HTML.**
+      `packages/server/src/jsx-runtime.ts`
+  - A selective late `Array.prototype.join` recognized the internal mutation-form attribute array
+    beginning with ` method="post"` and returned `><img onerror=...>` instead. The real JSX renderer
+    inserted those raw bytes into the opening `<form>` tag, and `renderHtmlValue()` emitted the event
+    handler without escaping.
+  - **Acceptance:** mutation definition/key recognition, default method/action/data attributes,
+    stream flags, key/CSRF/idem hidden fields, attribute escaping, and opening-tag assembly use
+    boot-pinned exact controls; late/import-order poison cannot add markup or alter the form target,
+    while authored overrides and ordinary mutation forms retain byte-stable behavior.
+
+- [ ] **C30 - Inherited request sessions bypass authentication and role guards.**
+      `packages/server/src/{auth-principal,guards}.ts`
+  - With `Object.prototype.session = { user: { id: "attacker", roles: ["admin"] } }`, a genuine
+    `Request` carrying no own session was classified as a proven attacker principal. The real
+    built-in `guards.authed()` and `guards.role("admin")` both passed; an explicit own null session
+    correctly denies, showing inherited request state alone created the authority.
+  - **Acceptance:** session/sessionId carrier presence and session/user/id/roles reads use boot-
+    pinned own-data descriptors and exact snapshots; inherited, accessor-backed, proxy-unstable, or
+    ambiguous carriers remain anonymous/unresolved and fail every built-in auth/role path under
+    late/import-order pollution, while framework-attached own session outcomes remain compatible.
+
+- [ ] **C31 - Mutable build-source filtering suppresses every data-plane finding.**
+      `packages/server/src/internal/data-plane-static-analysis.ts`,
+      `packages/cli/src/commands/build-export.ts`
+  - An evaluated app replaced `Array.prototype.filter` only for the real discovered source array
+    containing `sql.raw(input.id)`. `staticDataPlaneBuildFacts()` analyzed an empty list, and the
+    complete cache-disabled `kovo build --check` returned exit 0 with `CHECK ok preset=node`; the
+    identical unpoisoned app fails with KV422.
+  - **Acceptance:** source discovery, relevance decisions, dense own-data snapshots, analyzer input,
+    fact/diagnostic traversal, graph construction, preflight classification, and final exit/output
+    use boot-pinned exact controls; evaluated app code cannot omit, replace, or reorder a discovered
+    source or suppress an error under late/import-order poison, with or without caches.
+
+- [ ] **C32 - Mutable handler fingerprints bind safe authority facts to unsafe runtime code.**
+      `packages/compiler/src/scan/parse.ts`, `packages/cli/src/commands/build-export.ts`
+  - The SHA-256 handler fingerprint joins statically inspected authority facts to the runtime
+    mutation. A synchronized selective `createHash` replacement gave a safe machine-signature
+    handler and a Cookie-reading `csrf:false` handler one digest; the real cache-disabled build then
+    treated the unsafe runtime handler as the safe same-key decoy and returned a green check instead
+    of KV418.
+  - **Acceptance:** handler extraction/transpilation, canonical AST construction, crypto function and
+    method dispatch, fact grouping/deduplication, runtime function-source capture, exact mutation-key
+    and fingerprint matching, and graph projection use boot-pinned exact controls; uninspectable or
+    mismatched handlers remain ambient-authority-positive and cannot borrow a sibling proof.
 
 ## High
 
@@ -688,8 +742,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C18-C28, H20, and H26 are active command,
-crypto, JSX output-authority, compiler-cache, static-analysis, static-export, and build-output fixes.
+The remediation pass remains intentionally non-zero: C20-C21, C23-C32, H20, and H26 are active JSX
+output-authority, compiler-cache, static-analysis, static-export, and build-output fixes.
 Integrated
 evidence is
 green at
