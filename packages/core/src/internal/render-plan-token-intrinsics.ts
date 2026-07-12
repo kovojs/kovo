@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 
 import {
   securityApply,
+  securityDefineProperty,
   securityGetPrototypeOf,
   securityGetOwnPropertyDescriptor,
   securityObjectKeys,
@@ -71,11 +72,19 @@ export function renderPlanOwnStringEntries(input: object): readonly (readonly [s
       !('value' in descriptor) ||
       typeof descriptor.value !== 'string'
     ) {
-      throw new TypeError(
-        `Render-plan shape ${name} must be an enumerable string data property.`,
-      );
+      throw new TypeError(`Render-plan shape ${name} must be an enumerable string data property.`);
     }
-    entries[entries.length] = [name, descriptor.value];
+    const entry: [string, string] = [name, descriptor.value];
+    securityDefineProperty(entries, entries.length, {
+      configurable: true,
+      enumerable: true,
+      value: entry,
+      writable: true,
+    });
+    const committed = securityGetOwnPropertyDescriptor(entries, entries.length - 1);
+    if (committed === undefined || !('value' in committed) || committed.value !== entry) {
+      throw new TypeError('Render-plan shape entry own-data commit failed.');
+    }
   }
   return entries;
 }

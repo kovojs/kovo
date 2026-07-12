@@ -7,6 +7,9 @@ import {
   securityMap,
   securityMapGet,
   securityMapSet,
+  securitySet,
+  securitySetAdd,
+  securitySetValues,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetHas,
@@ -59,6 +62,66 @@ describe('core security witness intrinsics', () => {
     expect(positive).toBe(true);
     expect(negative).toBe(false);
     expect(frozen).toBe(true);
+  });
+
+  it('C241 commits materialized Set values as own array data under a late inherited setter', () => {
+    const marker = Symbol('security-set-value');
+    const set = securitySet<symbol>();
+    securitySetAdd(set, marker);
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    let values: symbol[] = [];
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === marker) {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      values = securitySetValues(set);
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(Object.getOwnPropertyDescriptor(values, '0')?.value).toBe(marker);
+    expect(values).toHaveLength(1);
+  });
+
+  it('C241 resists an inherited Set-value setter installed before module import', () => {
+    const script = `
+      const marker = Symbol('pre-import-security-set-value');
+      const define = Object.defineProperty;
+      let hits = 0;
+      define(Array.prototype, '0', {
+        configurable: true,
+        set(value) {
+          if (value === marker) { hits += 1; return; }
+          define(this, '0', { configurable: true, enumerable: true, value, writable: true });
+        },
+      });
+      const witness = await import(${JSON.stringify(`${moduleUrl}?probe=C241`)});
+      const set = witness.securitySet();
+      witness.securitySetAdd(set, marker);
+      const values = witness.securitySetValues(set);
+      const descriptor = Object.getOwnPropertyDescriptor(values, '0');
+      process.exit(hits === 0 && values.length === 1 && descriptor?.value === marker ? 0 : 7);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.status, result.stderr).toBe(0);
   });
 
   it.each([

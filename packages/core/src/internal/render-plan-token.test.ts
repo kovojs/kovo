@@ -2,10 +2,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import {
-  computeRenderPlanFingerprint,
-  encodeRenderPlanFrame,
-} from './render-plan-token.js';
+import { computeRenderPlanFingerprint, encodeRenderPlanFrame } from './render-plan-token.js';
 
 const renderPlanIntrinsicsUrl = new URL('./render-plan-token-intrinsics.ts', import.meta.url).href;
 
@@ -56,6 +53,39 @@ describe('render-plan token security controls', () => {
     }
   });
 
+  it('C242 cannot erase a query shape from the render-plan fingerprint with an inherited setter', () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    const nativeDefineProperty = Object.defineProperty;
+    let poisonHits = 0;
+    let safe = '';
+    let changed = '';
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (Array.isArray(value) && value[0] === 'account') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      safe = computeRenderPlanFingerprint({ account: 'field:id' });
+      changed = computeRenderPlanFingerprint({ account: 'field:role' });
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(safe).not.toBe(changed);
+  });
+
   it('rejects accessor-backed query shapes instead of re-reading mutable caller authority', () => {
     const input = {} as Record<string, string>;
     Object.defineProperty(input, 'account', {
@@ -87,7 +117,9 @@ describe('render-plan token security controls', () => {
       return this;
     };
     try {
-      await expect(import(`${renderPlanIntrinsicsUrl}?preimport-hash-poison`)).resolves.toBeDefined();
+      await expect(
+        import(`${renderPlanIntrinsicsUrl}?preimport-hash-poison`),
+      ).resolves.toBeDefined();
       const controls = await import(`${renderPlanIntrinsicsUrl}?preimport-hash-poison`);
       expect(() => controls.renderPlanHash16(['safe'])).toThrow(
         /render-plan controls are unavailable/,
