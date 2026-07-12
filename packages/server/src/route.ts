@@ -12,6 +12,14 @@ import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { reportServerError } from './diagnostics.js';
 import {
+  htmlAttributeValue,
+  joinHtmlAttributeTokens,
+  mergeHtmlAttributeTokens,
+  replaceHtmlOpeningTag,
+  setOrAppendHtmlAttribute,
+  snapshotHtmlOpeningTag,
+} from './component-root-stamps.js';
+import {
   guardFailureToResult,
   renderHttpGuardFailureResponse,
   runAccessDecisionGuards,
@@ -51,7 +59,6 @@ import {
 import { resolveKovoLifecycleRequest } from './response-posture.js';
 import { isSchemaValidationError, type Schema, type ValidationFailurePayload } from './schema.js';
 import {
-  escapeAttribute,
   isRenderedHtml,
   renderedHtml,
   renderedHtmlContent,
@@ -59,6 +66,11 @@ import {
   unwrapCoercedRenderedHtml,
   type RenderedHtml,
 } from './html.js';
+import {
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityArrayPush,
+} from './response-security-intrinsics.js';
 import type {
   CompiledRouteNavigationSegment,
   CompiledRoutePageFunction,
@@ -69,6 +81,7 @@ import {
   createWitnessMap,
   createWitnessSet,
   createWitnessWeakMap,
+  witnessGetOwnPropertyDescriptor,
   witnessMapGet,
   witnessMapSet,
   witnessFreeze,
@@ -880,32 +893,44 @@ function stampRouteNavigationSegment(
   if (!segment || !rendered) return value;
 
   const html = renderedHtmlContent(rendered);
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
-  if (!opening) return value;
+  const opening = snapshotHtmlOpeningTag(html);
+  if (opening === undefined) return value;
 
-  const tagName = opening[1];
-  const attrs = opening[2] ?? '';
-  const stampedAttrs = stampRouteNavigationAttributes(attrs, segment);
-  const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return renderedHtml(`${stampedOpening}${html.slice(opening[0].length)}`);
+  return renderedHtml(
+    replaceHtmlOpeningTag(html, opening, stampRouteNavigationAttributes(opening.attrs, segment)),
+  );
 }
 
 function stampRouteNavigationAttributes(
   attrs: string,
   segment: CompiledRouteNavigationSegment,
 ): string {
-  let nextAttrs = setOrAppendAttribute(attrs, 'kovo-nav-segment', segment.id);
-  nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-nav-kind', segment.kind);
-  nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-nav-name', segment.localName);
+  const id = routeStampOwnString(segment, 'id', 'Route navigation segment');
+  const kind = routeStampOwnString(segment, 'kind', 'Route navigation segment');
+  const localName = routeStampOwnString(segment, 'localName', 'Route navigation segment');
+  const queries = routeStampOptionalStringArray(segment, 'queries', 'Route navigation segment');
+  const components = routeStampOptionalStringArray(
+    segment,
+    'components',
+    'Route navigation segment',
+  );
 
-  if (segment.queries && segment.queries.length > 0) {
-    nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-nav-queries', segment.queries.join(' '));
+  let nextAttrs = setOrAppendHtmlAttribute(attrs, 'kovo-nav-segment', id);
+  nextAttrs = setOrAppendHtmlAttribute(nextAttrs, 'kovo-nav-kind', kind);
+  nextAttrs = setOrAppendHtmlAttribute(nextAttrs, 'kovo-nav-name', localName);
+
+  if (queries !== undefined && queries.length > 0) {
+    nextAttrs = setOrAppendHtmlAttribute(
+      nextAttrs,
+      'kovo-nav-queries',
+      securityArrayJoin(queries, ' '),
+    );
   }
-  if (segment.components && segment.components.length > 0) {
-    nextAttrs = setOrAppendAttribute(
+  if (components !== undefined && components.length > 0) {
+    nextAttrs = setOrAppendHtmlAttribute(
       nextAttrs,
       'kovo-nav-components',
-      segment.components.join(' '),
+      securityArrayJoin(components, ' '),
     );
   }
 
@@ -919,17 +944,15 @@ function stampLayoutLiveTarget(
   const rendered = stampableRouteHtml(value);
   if (!rendered) return value;
   const metadata = witnessWeakMapGet(layoutLiveTargetMetadata, layoutDeclaration);
-  if (!metadata || metadata.deps.length === 0) return value;
+  if (!metadata) return value;
 
   const html = renderedHtmlContent(rendered);
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
-  if (!opening) return value;
+  const opening = snapshotHtmlOpeningTag(html);
+  if (opening === undefined) return value;
 
-  const tagName = opening[1];
-  const attrs = opening[2] ?? '';
-  const stampedAttrs = stampLayoutAttributes(attrs, metadata);
-  const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return renderedHtml(`${stampedOpening}${html.slice(opening[0].length)}`);
+  return renderedHtml(
+    replaceHtmlOpeningTag(html, opening, stampLayoutAttributes(opening.attrs, metadata)),
+  );
 }
 
 function stampableRouteHtml(value: unknown): RenderedHtml | undefined {
@@ -941,77 +964,73 @@ function stampableRouteHtml(value: unknown): RenderedHtml | undefined {
 }
 
 function stampLayoutAttributes(attrs: string, metadata: LayoutLiveTargetMetadata): string {
-  const mergedDeps = mergeAttributeTokens(attributeValue(attrs, 'kovo-deps'), metadata.deps);
-  let nextAttrs = setOrAppendAttribute(attrs, 'kovo-deps', mergedDeps.join(' '));
+  const deps = routeStampOwnStringArray(metadata, 'deps', 'Layout live-target metadata');
+  const target = routeStampOwnString(metadata, 'target', 'Layout live-target metadata');
+  if (deps.length === 0) return attrs;
+  const mergedDeps = mergeHtmlAttributeTokens(htmlAttributeValue(attrs, 'kovo-deps'), deps);
+  let nextAttrs = setOrAppendHtmlAttribute(attrs, 'kovo-deps', joinHtmlAttributeTokens(mergedDeps));
 
   if (
-    attributeValue(nextAttrs, 'kovo-fragment-target') === undefined &&
-    attributeValue(nextAttrs, 'id') === undefined &&
-    attributeValue(nextAttrs, 'kovo-c') === undefined
+    htmlAttributeValue(nextAttrs, 'kovo-fragment-target') === undefined &&
+    htmlAttributeValue(nextAttrs, 'id') === undefined &&
+    htmlAttributeValue(nextAttrs, 'kovo-c') === undefined
   ) {
-    nextAttrs = setOrAppendAttribute(nextAttrs, 'kovo-fragment-target', metadata.target);
+    nextAttrs = setOrAppendHtmlAttribute(nextAttrs, 'kovo-fragment-target', target);
   }
 
   return nextAttrs;
 }
 
-function mergeAttributeTokens(
-  existing: string | undefined,
-  additions: readonly string[],
-): string[] {
-  const seen = createWitnessSet<string>();
-  const merged: string[] = [];
-  const existingTokens = (existing ?? '').split(/[\s,]+/);
-  for (let index = 0; index < existingTokens.length; index += 1) {
-    const token = existingTokens[index]?.trim();
-    if (!token || witnessSetHas(seen, token)) continue;
-    witnessSetAdd(seen, token);
-    merged[merged.length] = token;
+function routeStampOwnString(value: object, property: PropertyKey, label: string): string {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
+    throw new TypeError(`${label}.${String(property)} must be an own string data property.`);
   }
-  for (let index = 0; index < additions.length; index += 1) {
-    const token = additions[index];
-    if (!token || witnessSetHas(seen, token)) continue;
-    witnessSetAdd(seen, token);
-    merged[merged.length] = token;
+  return descriptor.value;
+}
+
+function routeStampOwnStringArray(value: object, property: PropertyKey, label: string): string[] {
+  const snapshot = routeStampOptionalStringArray(value, property, label);
+  if (snapshot === undefined) {
+    throw new TypeError(`${label}.${String(property)} must be an own dense string array.`);
   }
-  return merged;
+  return snapshot;
 }
 
-function attributeValue(attrs: string, name: string): string | undefined {
-  const match = attributePattern(name).exec(attrs);
-  return match ? unescapeAttribute(match[1] ?? match[2] ?? match[3] ?? '') : undefined;
-}
-
-function setOrAppendAttribute(attrs: string, name: string, value: string): string {
-  const rendered = `${name}="${escapeAttribute(value)}"`;
-  const pattern = attributePattern(name);
-  if (pattern.test(attrs)) {
-    return attrs.replace(pattern, (match) => `${match.startsWith(' ') ? ' ' : ''}${rendered}`);
+function routeStampOptionalStringArray(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): string[] | undefined {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor) || !securityArrayIsArray(descriptor.value)) {
+    throw new TypeError(`${label}.${String(property)} must be an own dense string array.`);
   }
-  return `${attrs} ${rendered}`;
-}
-
-function attributePattern(name: string): RegExp {
-  return new RegExp(
-    `(?:^|\\s)${escapeRegExp(name)}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>` +
-      '`' +
-      `]+)))?(?=\\s|$|/|>)`,
-    'i',
-  );
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function unescapeAttribute(value: string): string {
-  return value
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'")
-    .replaceAll('&apos;', "'")
-    .replaceAll('&gt;', '>')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&amp;', '&');
+  const source = descriptor.value;
+  const length = witnessGetOwnPropertyDescriptor(source, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value % 1 !== 0
+  ) {
+    throw new TypeError(`${label}.${String(property)} must expose a stable dense length.`);
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = witnessGetOwnPropertyDescriptor(source, index);
+    if (entry === undefined || !('value' in entry) || typeof entry.value !== 'string') {
+      throw new TypeError(`${label}.${String(property)} must contain own string data entries.`);
+    }
+    securityArrayPush(snapshot, entry.value);
+  }
+  return snapshot;
 }
 
 /** @internal */

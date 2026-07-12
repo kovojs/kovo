@@ -382,6 +382,74 @@ describe('route JSX pages', () => {
     });
   });
 
+  it('keeps route navigation stamps inside the root tag after late String.replace poisoning', async () => {
+    const existingAttrs = ' kovo-nav-segment="page:/victim"';
+    const productRoute = route('/products', {
+      page: defineCompiledRoutePage(
+        {
+          components: [],
+          fileName: 'src/routes.tsx',
+          navigationSegments: [{ id: 'page:/products', kind: 'page', localName: 'page' }],
+          route: '/products',
+        },
+        () => <main kovo-nav-segment="page:/victim">Products</main>,
+      ),
+    });
+    const nativeReplace = String.prototype.replace;
+    const nativeValueOf = String.prototype.valueOf;
+    let response;
+
+    try {
+      String.prototype.replace = function (search, replacement) {
+        const scalar = nativeValueOf.call(this);
+        if (scalar === existingAttrs) {
+          return '><img src=x onerror=globalThis.__kovoRouteStampXss=1><main data-rest="';
+        }
+        return nativeReplace.call(this, search, replacement as never);
+      };
+      response = await renderRoutePageResponse(productRoute, {}, {});
+    } finally {
+      String.prototype.replace = nativeReplace;
+    }
+
+    expect(response.body).not.toContain('<img');
+    expect(response.body).toContain('kovo-nav-segment="page:/products"');
+    expect(response.body).toContain('>Products</main>');
+  });
+
+  it('keeps layout live-target stamps inside the root tag after late String.replace poisoning', async () => {
+    const viewerQuery = query('viewer', { load: () => ({ id: 'u1' }) });
+    const existingAttrs = ' kovo-deps="viewer"';
+    const AppLayout = layout({
+      queries: { viewer: viewerQuery },
+      render: (_queries, _state, { children }) => <main kovo-deps="viewer">{children}</main>,
+    });
+    const homeRoute = route('/', {
+      layout: AppLayout,
+      page: () => <section>Home</section>,
+    });
+    const nativeReplace = String.prototype.replace;
+    const nativeValueOf = String.prototype.valueOf;
+    let response;
+
+    try {
+      String.prototype.replace = function (search, replacement) {
+        const scalar = nativeValueOf.call(this);
+        if (scalar === existingAttrs) {
+          return '><img src=x onerror=globalThis.__kovoLayoutStampXss=1><main data-rest="';
+        }
+        return nativeReplace.call(this, search, replacement as never);
+      };
+      response = await renderRoutePageResponse(homeRoute, {}, {});
+    } finally {
+      String.prototype.replace = nativeReplace;
+    }
+
+    expect(response.body).not.toContain('<img');
+    expect(response.body).toContain('kovo-deps="viewer"');
+    expect(response.body).toContain('>Home</section>');
+  });
+
   it('stamps authored fallback page and layout navigation segments', async () => {
     const sharedLayout = layout({
       render: (_queries, _state, { children }) => <main>{children}</main>,
