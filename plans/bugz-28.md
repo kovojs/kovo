@@ -177,7 +177,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 33-test wire-JSON/TCB/query-HTML matrix passes; the independent serializer
     replacement proof now emits only the classified `{ count: 1 }` truth.
 
-- [ ] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
+- [x] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
       `packages/server/src/task-queue.ts`
   - Replacing `Date.now` and `Math.random` with constants made two distinct memory-queue enqueues
     receive the same job id, so the second task silently replaced the first queued task and args.
@@ -187,12 +187,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cryptographic entropy with at least 128 random bits; queue lookup, iteration, coalescing, claim,
     heartbeat, completion, retry, and reaping use exact pinned controls, and neither late nor
     import-order poison can overwrite a sibling job or reuse expired worker authority.
-  - **Evidence:** the 64-test durable-task matrix plus server dist/DTS, import, and API gates pass;
-    the independent collision and stale-lease proofs now receive distinct 128-bit crypto identities.
-  - **Reopened:** the checkpoint called the imported ESM `randomBytes` live binding directly. A
-    late CommonJS replacement plus `syncBuiltinESMExports()` still made two enqueues receive the same
-    job id and overwrite the first; the crypto function itself must be boot-pinned and regression-
-    tested against synchronized replacement before this item can close.
+  - **Evidence:** the 66-test durable-task matrix plus server dist/DTS, import, and API gates pass;
+    independent clock/RNG, stale-lease, registry cross-binding, and late synchronized-crypto proofs
+    now retain distinct 128-bit identities and exact task dispatch.
 
 - [ ] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
       `packages/server/src/command.ts`

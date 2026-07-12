@@ -57,6 +57,7 @@ const NativeRequest = globalThis.Request;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeURL = globalThis.URL;
+const nativeNodeRandomBytes = nodeRandomBytes;
 
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayPush = NativeArray.prototype.push;
@@ -223,8 +224,8 @@ function capturedTaskControlsAreSound(): boolean {
       return false;
     }
 
-    const firstEntropy = nodeRandomBytes(16);
-    const secondEntropy = nodeRandomBytes(16);
+    const firstEntropy = nativeNodeRandomBytes(16);
+    const secondEntropy = nativeNodeRandomBytes(16);
     if (firstEntropy.byteLength !== 16 || secondEntropy.byteLength !== 16) return false;
     let differs = false;
     for (let index = 0; index < 16; index += 1) {
@@ -390,7 +391,9 @@ export function taskOwnDataValue(value: object, property: PropertyKey): unknown 
   assertTaskSecurityIntrinsics();
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);
   if (descriptor === undefined || !('value' in descriptor)) {
-    throw new TypeError(`Durable task property ${witnessString(property)} must be an own data value.`);
+    throw new TypeError(
+      `Durable task property ${witnessString(property)} must be an own data value.`,
+    );
   }
   return descriptor.value;
 }
@@ -400,7 +403,9 @@ export function taskOptionalOwnDataValue(value: object, property: PropertyKey): 
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);
   if (descriptor === undefined) return undefined;
   if (!('value' in descriptor)) {
-    throw new TypeError(`Durable task property ${witnessString(property)} must be an own data value.`);
+    throw new TypeError(
+      `Durable task property ${witnessString(property)} must be an own data value.`,
+    );
   }
   return descriptor.value;
 }
@@ -650,7 +655,9 @@ export function taskRegExpTest(expression: RegExp, value: string): boolean {
   return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]) !== null;
 }
 
-export function taskPromiseResolve<Value>(value: Value | PromiseLike<Value>): Promise<Awaited<Value>> {
+export function taskPromiseResolve<Value>(
+  value: Value | PromiseLike<Value>,
+): Promise<Awaited<Value>> {
   assertTaskSecurityIntrinsics();
   return apply(nativePromiseResolve, NativePromise, [value]);
 }
@@ -665,7 +672,9 @@ export function taskCreatePromise<Value>(
   return new NativePromise<Value>(executor);
 }
 
-export function taskPromiseAll<Value>(values: Iterable<Value | PromiseLike<Value>>): Promise<Awaited<Value>[]> {
+export function taskPromiseAll<Value>(
+  values: Iterable<Value | PromiseLike<Value>>,
+): Promise<Awaited<Value>[]> {
   assertTaskSecurityIntrinsics();
   const entries = taskSnapshotCollection(
     values as Iterable<Value | PromiseLike<Value>>,
@@ -694,7 +703,9 @@ export function taskPromiseAll<Value>(values: Iterable<Value | PromiseLike<Value
   });
 }
 
-export function taskPromiseRace<Value>(values: Iterable<Value | PromiseLike<Value>>): Promise<Awaited<Value>> {
+export function taskPromiseRace<Value>(
+  values: Iterable<Value | PromiseLike<Value>>,
+): Promise<Awaited<Value>> {
   assertTaskSecurityIntrinsics();
   const entries = taskSnapshotCollection(
     values as Iterable<Value | PromiseLike<Value>>,
@@ -719,7 +730,10 @@ export function taskPromiseThen<Value, Result>(
   return apply(nativePromiseThen, promise, [onFulfilled, onRejected]);
 }
 
-export function taskPromiseFinally<Value>(promise: Promise<Value>, onFinally: () => void): Promise<Value> {
+export function taskPromiseFinally<Value>(
+  promise: Promise<Value>,
+  onFinally: () => void,
+): Promise<Value> {
   assertTaskSecurityIntrinsics();
   return apply(nativePromiseThen, promise, [
     (value: Value) => {
@@ -728,14 +742,19 @@ export function taskPromiseFinally<Value>(promise: Promise<Value>, onFinally: ()
     },
     (reason: unknown) => {
       const finalized = apply<Promise<void>>(nativePromiseResolve, NativePromise, [onFinally()]);
-      return apply(nativePromiseThen, finalized, [() => {
-        throw reason;
-      }]);
+      return apply(nativePromiseThen, finalized, [
+        () => {
+          throw reason;
+        },
+      ]);
     },
   ]);
 }
 
-export function taskSetTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout> {
+export function taskSetTimeout(
+  callback: () => void,
+  delayMs: number,
+): ReturnType<typeof setTimeout> {
   assertTaskSecurityIntrinsics();
   const controls = testFakeTimerControls();
   return controls === undefined
@@ -749,7 +768,10 @@ export function taskClearTimeout(timer: ReturnType<typeof setTimeout>): void {
   apply(controls?.clearTimeout ?? realmClearTimeout, undefined, [timer]);
 }
 
-export function taskSetInterval(callback: () => void, delayMs: number): ReturnType<typeof setInterval> {
+export function taskSetInterval(
+  callback: () => void,
+  delayMs: number,
+): ReturnType<typeof setInterval> {
   assertTaskSecurityIntrinsics();
   const controls = testFakeTimerControls();
   return controls === undefined
@@ -773,7 +795,7 @@ export function taskTimerUnref(
 
 export function taskCreateEntropyId(prefix: 'job' | 'lease'): string {
   assertTaskSecurityIntrinsics();
-  const bytes = nodeRandomBytes(16);
+  const bytes = nativeNodeRandomBytes(16);
   if (bytes.byteLength !== 16) {
     throw new TypeError('Kovo durable-task cryptographic entropy returned the wrong byte length.');
   }
@@ -796,7 +818,11 @@ export function taskIsRecord(value: unknown): value is Record<PropertyKey, unkno
   return (typeof value === 'object' || typeof value === 'function') && value !== null;
 }
 
-export function taskStableOwnFunction(value: object, property: PropertyKey, label: string): Function {
+export function taskStableOwnFunction(
+  value: object,
+  property: PropertyKey,
+  label: string,
+): Function {
   assertTaskSecurityIntrinsics();
   let owner: object | null = value;
   for (let depth = 0; owner !== null && depth < 16; depth += 1) {

@@ -1,3 +1,6 @@
+import { randomBytes } from 'node:crypto';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
 
 import { s } from './schema.js';
@@ -13,6 +16,9 @@ import {
   taskPromiseThen,
   taskSetTimeout,
 } from './task-security-intrinsics.js';
+
+const require = createRequire(import.meta.url);
+const mutableCrypto = require('node:crypto') as { randomBytes: typeof randomBytes };
 
 describe('durable-task intrinsic membrane (SPEC §9.6/§10.3)', () => {
   it('keeps exact registry dispatch and cryptographic identities after late poisoning', async () => {
@@ -96,5 +102,26 @@ describe('durable-task intrinsic membrane (SPEC §9.6/§10.3)', () => {
 
   it('is available under ordinary initialization', () => {
     expect(() => assertTaskSecurityIntrinsics()).not.toThrow();
+  });
+
+  it('pins task entropy before a late synchronized Node builtin replacement', () => {
+    const originalRandomBytes = mutableCrypto.randomBytes;
+    let first = '';
+    let second = '';
+    try {
+      mutableCrypto.randomBytes = ((size: number) =>
+        Buffer.alloc(size, 0x43)) as typeof randomBytes;
+      syncBuiltinESMExports();
+      first = taskCreateEntropyId('job');
+      second = taskCreateEntropyId('job');
+    } finally {
+      mutableCrypto.randomBytes = originalRandomBytes;
+      syncBuiltinESMExports();
+    }
+
+    expect(first).toMatch(/^job_[0-9a-f]{32}$/u);
+    expect(second).toMatch(/^job_[0-9a-f]{32}$/u);
+    expect(second).not.toBe(first);
+    expect(first).not.toBe(`job_${'43'.repeat(16)}`);
   });
 });
