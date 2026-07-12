@@ -5,6 +5,8 @@ import {
   compileComponentModule,
   CompilerDiagnosticError,
 } from './compile.js';
+import { emitServerModule, semanticRenderEquivalenceCheck } from './emit/server.js';
+import { parseComponentModule } from './scan/parse.js';
 
 describe('compiler classifier intrinsic security', () => {
   it('does not suppress request-derived trustedHtml diagnostics through template-span Array.map', () => {
@@ -974,6 +976,42 @@ export const ProductList = component({
 
     expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV238')).toHaveLength(1);
     expect(result?.loweredSource).not.toContain('action="/_m/');
+    expect(poisonHits).toBe(0);
+  });
+
+  it('cannot normalize visible server-render drift into equivalence', () => {
+    const nativeReplace = String.prototype.replace;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let check: ReturnType<typeof semanticRenderEquivalenceCheck> | undefined;
+    const expectedSource = `
+export const Card = component({ render: () => <section><span>reviewed</span></section> });
+`;
+    const actualSource = `
+export const Card = component({ render: () => <section><span>attacker</span></section> });
+`;
+    try {
+      String.prototype.replace = function poisonedSemanticNormalization(
+        searchValue: string | RegExp,
+        replaceValue: string | ((...values: string[]) => string),
+      ): string {
+        if (this === '<section><span>attacker</span></section>') {
+          poisonHits += 1;
+          return '<section><span>reviewed</span></section>';
+        }
+        return nativeApply(nativeReplace, this, [searchValue, replaceValue]);
+      };
+      check = semanticRenderEquivalenceCheck(
+        'card.server.js',
+        parseComponentModule('card.tsx', expectedSource),
+        emitServerModule(actualSource).executableSource,
+      );
+    } finally {
+      String.prototype.replace = nativeReplace;
+    }
+
+    expect(check?.ok).toBe(false);
+    expect(check?.actual).toContain('attacker');
     expect(poisonHits).toBe(0);
   });
 });

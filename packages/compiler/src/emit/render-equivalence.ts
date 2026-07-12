@@ -3,6 +3,27 @@ import { runInNewContext } from 'node:vm';
 import { isGeneratedOnlySemanticAttribute } from '@kovojs/core/internal/semantic-attributes';
 
 import {
+  compilerCreateNullRecord,
+  compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerJsonStringify,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+  compilerRegExpExec,
+  compilerRegExpReplace,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringEndsWith,
+  compilerStringIndexOf,
+  compilerStringLocaleCompare,
+  compilerStringSlice,
+  compilerStringSplit,
+  compilerStringStartsWith,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
+import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
   primitiveObjectEntryAttributes,
@@ -30,6 +51,57 @@ import {
   mutationFormErrorProps,
   staticStringAttributeValue,
 } from './server-emit-shared.js';
+
+const compilerRunInNewContext = runInNewContext;
+
+function appendSemanticValue<Value>(target: Value[], value: Value): void {
+  target[target.length] = value;
+}
+
+function joinSemanticStrings(values: readonly string[], separator: string): string {
+  let output = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) output += separator;
+    output += values[index]!;
+  }
+  return output;
+}
+
+function semanticAttribute(
+  element: JsxElementModel,
+  name: string,
+): JsxAttributeModel | undefined {
+  const attributes = compilerSnapshotDenseArray(element.attributes, 'Semantic JSX attributes');
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
+}
+
+function semanticJsonSource(value: unknown, label: string): string {
+  const source = compilerJsonStringify(value);
+  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  return source;
+}
+
+function stableSemanticSort<Value>(
+  values: readonly Value[],
+  compare: (left: Value, right: Value) => number,
+  label: string,
+): Value[] {
+  const sorted = compilerSnapshotDenseArray(values, label);
+  for (let index = 1; index < sorted.length; index += 1) {
+    const value = sorted[index]!;
+    let insertion = index;
+    while (insertion > 0 && compare(sorted[insertion - 1]!, value) > 0) {
+      sorted[insertion] = sorted[insertion - 1]!;
+      insertion -= 1;
+    }
+    sorted[insertion] = value;
+  }
+  return sorted;
+}
 
 export function semanticRenderEquivalenceCheck(
   artifact: string,
@@ -84,14 +156,14 @@ export function authoredStaticTextEquivalenceCheck(
   const ok = missing === null;
 
   return {
-    actual: lowered.join(' '),
+    actual: joinSemanticStrings(lowered, ' '),
     artifact,
     detail:
       'SPEC §5.2 rule 3 (authored→lowered): authored literal text must survive lowering. ' +
       (ok
         ? 'authored text is an ordered subsequence of the lowered render.'
-        : `lowering dropped or reordered authored text token ${JSON.stringify(missing)}.`),
-    expected: authored.join(' '),
+        : `lowering dropped or reordered authored text token ${semanticJsonSource(missing, 'Missing authored text token')}.`),
+    expected: joinSemanticStrings(authored, ' '),
     ok,
   };
 }
@@ -103,27 +175,37 @@ export function authoredStaticTextEquivalenceCheck(
  * so the check is robust to escapeText/span/style lowering of the dynamic parts.
  */
 function staticTextTokens(html: string): string[] {
-  const withoutTags = html.replace(/<[^>]*>/g, ' ');
+  const withoutTags = compilerRegExpReplace(/<[^>]*>/g, html, ' ');
   let withoutExpressions = '';
   let depth = 0;
-  for (const char of withoutTags) {
+  for (let index = 0; index < withoutTags.length; index += 1) {
+    const char = withoutTags[index]!;
     if (char === '{') depth += 1;
-    else if (char === '}') depth = Math.max(0, depth - 1);
+    else if (char === '}') depth = depth > 0 ? depth - 1 : 0;
     else if (depth === 0) withoutExpressions += char;
   }
-  return withoutExpressions
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0);
+  const parts = compilerStringSplit(
+    compilerRegExpReplace(/\s+/g, withoutExpressions, '\n'),
+    '\n',
+  );
+  const tokens: string[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const token = compilerStringTrim(parts[index]!);
+    if (token.length > 0) appendSemanticValue(tokens, token);
+  }
+  return tokens;
 }
 
 /** Return the first `needle` token that is not present as an ordered subsequence of `haystack`. */
 function firstMissingSubsequenceToken(needle: string[], haystack: string[]): string | null {
   let cursor = 0;
-  for (const token of needle) {
+  const needleSnapshot = compilerSnapshotDenseArray(needle, 'Authored semantic tokens');
+  const haystackSnapshot = compilerSnapshotDenseArray(haystack, 'Lowered semantic tokens');
+  for (let index = 0; index < needleSnapshot.length; index += 1) {
+    const token = needleSnapshot[index]!;
     let found = false;
-    while (cursor < haystack.length) {
-      const current = haystack[cursor];
+    while (cursor < haystackSnapshot.length) {
+      const current = haystackSnapshot[cursor];
       cursor += 1;
       if (current === token) {
         found = true;
@@ -137,7 +219,7 @@ function firstMissingSubsequenceToken(needle: string[], haystack: string[]): str
 
 function emittedServerRenderSource(serverSource: string): string {
   try {
-    const actual = runInNewContext(`${serverSource}\n;renderSource();`, {}, { timeout: 1000 });
+    const actual = compilerRunInNewContext(`${serverSource}\n;renderSource();`, {}, { timeout: 1000 });
     return typeof actual === 'string' ? actual : '';
   } catch {
     return '';
@@ -145,26 +227,42 @@ function emittedServerRenderSource(serverSource: string): string {
 }
 
 function normalizeSemanticHtmlForComparison(html: string): string {
-  return html.replace(/<[^>]*>/g, (tag) => normalizeSemanticTagForComparison(tag));
+  return compilerRegExpReplace(/<[^>]*>/g, html, (tag) =>
+    normalizeSemanticTagForComparison(tag),
+  );
 }
 
 function normalizeSemanticTagForComparison(tag: string): string {
-  if (!tag.startsWith('<') || !tag.endsWith('>')) return tag;
-  const body = tag.slice(1, -1);
-  if (body.startsWith('/') || body.startsWith('!') || body.trim() === '') return tag;
+  if (!compilerStringStartsWith(tag, '<') || !compilerStringEndsWith(tag, '>')) return tag;
+  const body = compilerStringSlice(tag, 1, -1);
+  if (
+    compilerStringStartsWith(body, '/') ||
+    compilerStringStartsWith(body, '!') ||
+    compilerStringTrim(body) === ''
+  ) {
+    return tag;
+  }
 
-  const match = /^([^\s/>]+)([\s\S]*)$/.exec(body);
+  const match = compilerRegExpExec(/^([^\s/>]+)([\s\S]*)$/, body);
   if (!match) return tag;
 
-  const [, name, rest = ''] = match;
-  const attributes = splitSemanticTagAttributes(rest.trim());
+  const name = match[1]!;
+  const rest = match[2] ?? '';
+  const attributes = splitSemanticTagAttributes(compilerStringTrim(rest));
   if (attributes.length <= 1) return tag;
 
-  const sorted = [...attributes].sort((left, right) => {
-    const nameOrder = semanticAttributeName(left).localeCompare(semanticAttributeName(right));
-    return nameOrder === 0 ? left.localeCompare(right) : nameOrder;
-  });
-  return `<${name} ${sorted.join(' ')}>`;
+  const sorted = stableSemanticSort(
+    attributes,
+    (left, right) => {
+      const nameOrder = compilerStringLocaleCompare(
+        semanticAttributeName(left),
+        semanticAttributeName(right),
+      );
+      return nameOrder === 0 ? compilerStringLocaleCompare(left, right) : nameOrder;
+    },
+    'Semantic tag attributes',
+  );
+  return `<${name} ${joinSemanticStrings(sorted, ' ')}>`;
 }
 
 function splitSemanticTagAttributes(source: string): string[] {
@@ -185,24 +283,25 @@ function splitSemanticTagAttributes(source: string): string[] {
       quote = char;
       continue;
     }
-    if (/\s/.test(char)) {
-      const attribute = source.slice(start, index).trim();
-      if (attribute) attributes.push(attribute);
+    if (compilerRegExpTest(/\s/, char)) {
+      const attribute = compilerStringTrim(compilerStringSlice(source, start, index));
+      if (attribute) appendSemanticValue(attributes, attribute);
       start = index + 1;
     }
   }
 
-  const tail = source.slice(start).trim();
-  if (tail) attributes.push(tail);
+  const tail = compilerStringTrim(compilerStringSlice(source, start));
+  if (tail) appendSemanticValue(attributes, tail);
   return attributes;
 }
 
 function semanticAttributeName(attribute: string): string {
-  const equalsIndex = attribute.indexOf('=');
-  return equalsIndex === -1 ? attribute : attribute.slice(0, equalsIndex);
+  const equalsIndex = compilerStringIndexOf(attribute, '=');
+  return equalsIndex === -1 ? attribute : compilerStringSlice(attribute, 0, equalsIndex);
 }
 
-const voidElements = new Set([
+const voidElements = compilerCreateSet<string>();
+const semanticVoidElementNames = [
   'area',
   'base',
   'br',
@@ -216,7 +315,10 @@ const voidElements = new Set([
   'source',
   'track',
   'wbr',
-]);
+];
+for (let index = 0; index < semanticVoidElementNames.length; index += 1) {
+  compilerSetAdd(voidElements, semanticVoidElementNames[index]!);
+}
 
 interface SemanticRenderContext {
   fileName?: string;
@@ -253,7 +355,7 @@ function renderSemanticElement(
   const tag = semanticElementTag(element);
   const attributes = options.forcedAttributes ?? renderSemanticAttributes(model, element, options);
 
-  if (voidElements.has(tag)) return `<${tag}${attributes}>`;
+  if (compilerSetHas(voidElements, tag)) return `<${tag}${attributes}>`;
 
   return `<${tag}${attributes}>${renderSemanticChildren(model, element, options)}</${tag}>`;
 }
@@ -268,14 +370,19 @@ function renderSemanticAttributes(
   options: SemanticRenderContext = {},
 ): string {
   if (element.tag === 'Link') {
-    return [
-      semanticLinkHrefAttribute(element),
-      ...element.attributes
-        .filter((attribute) => !['params', 'search', 'to'].includes(attribute.name))
-        .map(renderSemanticAttribute),
-    ]
-      .filter((attribute): attribute is string => attribute !== null)
-      .join('');
+    const rendered: string[] = [];
+    const href = semanticLinkHrefAttribute(element);
+    if (href !== null) appendSemanticValue(rendered, href);
+    const attributes = compilerSnapshotDenseArray(element.attributes, 'Semantic link attributes');
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index]!;
+      if (attribute.name === 'params' || attribute.name === 'search' || attribute.name === 'to') {
+        continue;
+      }
+      const value = renderSemanticAttribute(attribute);
+      if (value !== null) appendSemanticValue(rendered, value);
+    }
+    return joinSemanticStrings(rendered, '');
   }
 
   const mutationFormOptions: SemanticRenderContext = {};
@@ -286,7 +393,9 @@ function renderSemanticAttributes(
   const viewTransitionStyle = semanticViewTransitionStyle(element);
   const fieldErrorDescribedBy = semanticFieldErrorDescribedByAttribute(model, element);
   const semanticAttributes: string[] = [];
-  for (const attribute of element.attributes) {
+  const attributes = compilerSnapshotDenseArray(element.attributes, 'Semantic render attributes');
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
     if (attribute.name === 'viewTransitionName' || isQueryExpressionAttribute(model, attribute)) {
       continue;
     }
@@ -297,9 +406,20 @@ function renderSemanticAttributes(
     ) {
       continue;
     }
-    if (formMutation?.generatedAttributeNames.has(attribute.name)) {
-      if (attribute.name === 'mutation')
-        semanticAttributes.push(...formMutation.semanticAttributes);
+    if (
+      formMutation !== null &&
+      formMutation !== undefined &&
+      compilerSetHas(formMutation.generatedAttributeNames, attribute.name)
+    ) {
+      if (attribute.name === 'mutation') {
+        const generated = compilerSnapshotDenseArray(
+          formMutation.semanticAttributes,
+          'Semantic mutation form attributes',
+        );
+        for (let generatedIndex = 0; generatedIndex < generated.length; generatedIndex += 1) {
+          appendSemanticValue(semanticAttributes, generated[generatedIndex]!);
+        }
+      }
       continue;
     }
     const rendered =
@@ -308,19 +428,18 @@ function renderSemanticAttributes(
         : attribute.name === 'streamText'
           ? renderSemanticAttributeWithName('data-stream-text', attribute)
           : renderSemanticAttribute(attribute);
-    if (rendered) semanticAttributes.push(rendered);
+    if (rendered) appendSemanticValue(semanticAttributes, rendered);
   }
-  return semanticAttributes
-    .concat(
-      viewTransitionStyle && !element.attributes.some((attribute) => attribute.name === 'style')
-        ? [` style="${escapeAttribute(viewTransitionStyle)}"`]
-        : [],
-      fieldErrorDescribedBy &&
-        !element.attributes.some((attribute) => attribute.name === 'aria-describedby')
-        ? [fieldErrorDescribedBy]
-        : [],
-    )
-    .join('');
+  if (viewTransitionStyle && semanticAttribute(element, 'style') === undefined) {
+    appendSemanticValue(
+      semanticAttributes,
+      ` style="${escapeAttribute(viewTransitionStyle)}"`,
+    );
+  }
+  if (fieldErrorDescribedBy && semanticAttribute(element, 'aria-describedby') === undefined) {
+    appendSemanticValue(semanticAttributes, fieldErrorDescribedBy);
+  }
+  return joinSemanticStrings(semanticAttributes, '');
 }
 
 function semanticMutationFormErrorExpression(
@@ -343,40 +462,48 @@ function semanticFieldErrorDescribedByAttribute(
   model: ComponentModuleModel,
   control: JsxElementModel,
 ): string | null {
-  if (!['input', 'select', 'textarea'].includes(control.tag)) return null;
-  const name = staticStringAttributeValue(
-    control.attributes.find((attribute) => attribute.name === 'name'),
-  );
+  if (control.tag !== 'input' && control.tag !== 'select' && control.tag !== 'textarea') return null;
+  const name = staticStringAttributeValue(semanticAttribute(control, 'name'));
   if (!name) return null;
 
-  const form = model.jsxElements
-    .filter(
-      (element) =>
-        element.tag === 'form' &&
-        control.start >= element.openingEnd &&
-        control.end <= element.closingStart,
-    )
-    .sort((left, right) => right.start - left.start)[0];
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Semantic form-error elements');
+  let form: JsxElementModel | undefined;
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (
+      element.tag === 'form' &&
+      control.start >= element.openingEnd &&
+      control.end <= element.closingStart &&
+      (form === undefined || element.start > form.start)
+    ) {
+      form = element;
+    }
+  }
   if (!form) return null;
 
-  const fieldError = model.jsxElements.find(
-    (element) =>
+  let fieldError: JsxElementModel | undefined;
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (
       element.tag === 'FieldError' &&
       element.start >= form.openingEnd &&
       element.end <= form.closingStart &&
-      staticStringAttributeValue(
-        element.attributes.find((attribute) => attribute.name === 'name'),
-      ) === name,
-  );
+      staticStringAttributeValue(semanticAttribute(element, 'name')) === name
+    ) {
+      fieldError = element;
+      break;
+    }
+  }
   if (!fieldError) return null;
 
-  const explicitId = staticStringAttributeValue(
-    fieldError.attributes.find((attribute) => attribute.name === 'id'),
-  );
+  const explicitId = staticStringAttributeValue(semanticAttribute(fieldError, 'id'));
   const binding = enhancedMutationFormBinding(form);
   const slotName = binding ? componentMutationSlotName(model, binding.localName) : null;
   const id = explicitId
-    ? { expression: JSON.stringify(explicitId), source: JSON.stringify(explicitId) }
+    ? {
+        expression: semanticJsonSource(explicitId, 'Semantic field-error id'),
+        source: semanticJsonSource(explicitId, 'Semantic field-error id'),
+      }
     : slotName
       ? mutationFormErrorIdExpression(form, slotName, name)
       : null;
@@ -390,25 +517,33 @@ function isQueryExpressionAttribute(
   attribute: JsxAttributeModel,
 ): boolean {
   if (attribute.expression === undefined) return false;
-  const queryNames = new Set(componentOptionObjectKeys(model, 'queries'));
-  return (attribute.expressionPropertyAccesses ?? []).some((access) => {
-    const [root] = access.path.split('.');
-    return root !== undefined && queryNames.has(root);
-  });
+  const queryNames = compilerCreateSet<string>();
+  const keys = compilerSnapshotDenseArray(
+    componentOptionObjectKeys(model, 'queries'),
+    'Semantic query names',
+  );
+  for (let index = 0; index < keys.length; index += 1) compilerSetAdd(queryNames, keys[index]!);
+  const accesses = compilerSnapshotDenseArray(
+    attribute.expressionPropertyAccesses ?? [],
+    'Semantic query property accesses',
+  );
+  for (let index = 0; index < accesses.length; index += 1) {
+    const root = compilerStringSplit(accesses[index]!.path, '.')[0];
+    if (root !== undefined && compilerSetHas(queryNames, root)) return true;
+  }
+  return false;
 }
 
 function semanticPrimitiveChild(
   model: ComponentModuleModel,
   element: JsxElementModel,
 ): { child: JsxElementModel; forcedAttributes: string } | null {
-  if (!element.attributes.some((attribute) => attribute.name === 'asChild')) return null;
-  const attrs = element.attributes.find(
-    (attribute) => attribute.name === 'attrs',
-  )?.expressionObjectEntries;
+  if (semanticAttribute(element, 'asChild') === undefined) return null;
+  const attrs = semanticAttribute(element, 'attrs')?.expressionObjectEntries;
   if (!attrs) return null;
   const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
   if (!primitiveAttributes) return null;
-  const [child] = directChildElements(model, element);
+  const child = directChildElements(model, element)[0];
   if (!child) return null;
   const merge = mergePrimitiveAndAuthorAttributes(
     primitiveAttributes,
@@ -423,7 +558,7 @@ function semanticPrimitiveChild(
 }
 
 function semanticLinkHrefAttribute(element: JsxElementModel): string | null {
-  const to = element.attributes.find((attribute) => attribute.name === 'to');
+  const to = semanticAttribute(element, 'to');
   if (!to) return null;
   const target =
     to.value ??
@@ -441,22 +576,27 @@ function semanticStaticObjectAttribute(
   element: JsxElementModel,
   name: string,
 ): Record<string, string | number | boolean | null> | null {
-  const value = element.attributes.find(
-    (attribute) => attribute.name === name,
-  )?.expressionStaticValue;
+  const value = semanticAttribute(element, name)?.expressionStaticValue;
   if (!value || typeof value !== 'object') return null;
-  return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, string | number | boolean | null] => {
-      const entryValue = entry[1];
-      return entryValue === null || ['boolean', 'number', 'string'].includes(typeof entryValue);
-    }),
-  );
+  const result = compilerCreateNullRecord<string | number | boolean | null>();
+  const keys = compilerObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const entryValue = compilerOwnDataValue(value, key, 'Semantic static object attribute');
+    if (
+      entryValue === null ||
+      typeof entryValue === 'boolean' ||
+      typeof entryValue === 'number' ||
+      typeof entryValue === 'string'
+    ) {
+      compilerDefineOwnDataProperty(result, key, entryValue);
+    }
+  }
+  return result;
 }
 
 function semanticViewTransitionStyle(element: JsxElementModel): string | null {
-  const transition = element.attributes.find(
-    (attribute) => attribute.name === 'viewTransitionName' && attribute.value !== undefined,
-  )?.value;
+  const transition = semanticAttribute(element, 'viewTransitionName')?.value;
   return transition ? `view-transition-name: ${transition}` : null;
 }
 
@@ -467,8 +607,8 @@ function renderSemanticStyleAttribute(
   const rendered = renderSemanticAttribute(attribute);
   if (!rendered) return null;
   if (attribute.value === undefined) return rendered;
-  const existing = attribute.value.trim();
-  const separator = existing === '' || existing.endsWith(';') ? '' : ';';
+  const existing = compilerStringTrim(attribute.value);
+  const separator = existing === '' || compilerStringEndsWith(existing, ';') ? '' : ';';
   const value = existing === '' ? extraStyle : `${existing}${separator} ${extraStyle}`;
   return ` style="${escapeAttribute(value)}"`;
 }
@@ -482,7 +622,7 @@ function renderSemanticAttributeWithName(
   attribute: JsxAttributeModel,
 ): string | null {
   if (isGeneratedOnlySemanticAttribute(attribute.name)) return null;
-  if (attribute.domEventName || /^on[A-Z][\w-]*$/.test(attribute.name)) return null;
+  if (attribute.domEventName || compilerRegExpTest(/^on[A-Z][\w-]*$/, attribute.name)) return null;
 
   if (attribute.value !== undefined) {
     return ` ${name}="${escapeAttribute(attribute.value)}"`;
@@ -505,11 +645,14 @@ function renderStaticAttributeValue(
 ): string | null {
   if (value === false || value === null) return null;
   if (value === true) return ` ${name}`;
-  if (typeof value === 'string' || typeof value === 'number') {
-    return ` ${name}="${escapeAttribute(value.toString())}"`;
+  if (typeof value === 'string') {
+    return ` ${name}="${escapeAttribute(value)}"`;
+  }
+  if (typeof value === 'number') {
+    return ` ${name}="${escapeAttribute(semanticJsonSource(value, 'Semantic numeric attribute'))}"`;
   }
 
-  return ` ${name}="${escapeAttribute(JSON.stringify(value) ?? '')}"`;
+  return ` ${name}="${escapeAttribute(semanticJsonSource(value, 'Semantic static attribute'))}"`;
 }
 
 function renderSemanticChildren(
@@ -521,23 +664,39 @@ function renderSemanticChildren(
   if (!body) return '';
 
   const bodyEnd = body.offset + body.source.length;
-  const tokens = [
-    ...directChildElements(model, element).map((child) => ({
+  const tokens: { end: number; render: () => string; start: number }[] = [];
+  const children = directChildElements(model, element);
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index]!;
+    appendSemanticValue(tokens, {
       end: child.end,
       render: () => renderSemanticElement(model, child, options),
       start: child.start,
-    })),
-    ...element.childExpressionContainers.map((container) => ({
+    });
+  }
+  const containers = compilerSnapshotDenseArray(
+    element.childExpressionContainers,
+    'Semantic child expression containers',
+  );
+  for (let index = 0; index < containers.length; index += 1) {
+    const container = containers[index]!;
+    appendSemanticValue(tokens, {
       end: container.end,
       render: () => renderSemanticExpression(model, container),
       start: container.start,
-    })),
-  ].toSorted((left, right) => left.start - right.start || left.end - right.end);
+    });
+  }
+  const sortedTokens = stableSemanticSort(
+    tokens,
+    (left, right) => left.start - right.start || left.end - right.end,
+    'Semantic child tokens',
+  );
 
   let output = '';
   let cursor = body.offset;
 
-  for (const token of tokens) {
+  for (let index = 0; index < sortedTokens.length; index += 1) {
+    const token = sortedTokens[index]!;
     if (token.start < body.offset || token.end > bodyEnd || token.start < cursor) continue;
     output += childBodySlice(body, cursor, token.start);
     output += token.render();
@@ -552,27 +711,52 @@ function directChildElements(
   model: ComponentModuleModel,
   parent: JsxElementModel,
 ): JsxElementModel[] {
-  const candidates = model.jsxElements.filter(
-    (element) =>
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Semantic direct child elements');
+  const candidates: JsxElementModel[] = [];
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (
       element !== parent &&
       element.start >= parent.openingEnd &&
-      element.end <= parent.closingStart,
-  );
+      element.end <= parent.closingStart
+    ) {
+      appendSemanticValue(candidates, element);
+    }
+  }
 
-  return candidates.filter(
-    (candidate) =>
-      !candidates.some(
-        (other) =>
-          other !== candidate && candidate.start >= other.openingEnd && candidate.end <= other.end,
-      ),
-  );
+  const direct: JsxElementModel[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    let nested = false;
+    for (let otherIndex = 0; otherIndex < candidates.length; otherIndex += 1) {
+      const other = candidates[otherIndex]!;
+      if (
+        other !== candidate &&
+        candidate.start >= other.openingEnd &&
+        candidate.end <= other.end
+      ) {
+        nested = true;
+        break;
+      }
+    }
+    if (!nested) appendSemanticValue(direct, candidate);
+  }
+  return direct;
 }
 
 function renderSemanticExpression(model: ComponentModuleModel, container: SourceSpan): string {
-  const expression = model.jsxExpressions.find(
-    (candidate) =>
-      candidate.containerStart === container.start && candidate.containerEnd === container.end,
+  const expressions = compilerSnapshotDenseArray(
+    model.jsxExpressions,
+    'Semantic JSX expressions',
   );
+  let expression: (typeof expressions)[number] | undefined;
+  for (let index = 0; index < expressions.length; index += 1) {
+    const candidate = expressions[index]!;
+    if (candidate.containerStart === container.start && candidate.containerEnd === container.end) {
+      expression = candidate;
+      break;
+    }
+  }
   if (!expression) return '';
   const normalized = normalizeGeneratedSemanticExpression(expression.expression);
   return normalized === '' ? '' : `{${normalized}}`;
@@ -584,15 +768,17 @@ function normalizeGeneratedSemanticExpression(expression: string): string {
   // asymmetry between authored and lowered sources is caught (fails closed), not silently
   // equated. The mutation-field helpers are generated-only with no authored equivalent and
   // are always stripped.
-  return expression
-    .replace(/\b__kovoRenderMutationCsrfField\([^()]*\)/g, '')
-    .replace(/\b__kovoRenderMutationIdemField\(\)/g, '');
+  return compilerRegExpReplace(
+    /\b__kovoRenderMutationIdemField\(\)/g,
+    compilerRegExpReplace(/\b__kovoRenderMutationCsrfField\([^()]*\)/g, expression, ''),
+    '',
+  );
 }
 
 function hasGeneratedMutationFormAttributes(element: JsxElementModel): boolean {
   return (
-    element.attributes.some((attribute) => attribute.name === 'action') &&
-    element.attributes.some((attribute) => attribute.name === 'data-mutation')
+    semanticAttribute(element, 'action') !== undefined &&
+    semanticAttribute(element, 'data-mutation') !== undefined
   );
 }
 
@@ -601,5 +787,5 @@ function childBodySlice(
   start: number,
   end: number,
 ): string {
-  return body.source.slice(start - body.offset, end - body.offset);
+  return compilerStringSlice(body.source, start - body.offset, end - body.offset);
 }
