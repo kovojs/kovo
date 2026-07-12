@@ -1131,6 +1131,13 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const rap = Reflect.apply;
   const gopd = Object.getOwnPropertyDescriptor;
   const submitControl = doc.createElement('form');
+  const replayControl = doc.createElement('button');
+  // SPEC.md §4.4/§6.6: bootstrap replay runs before the deferred runtime can protect the realm.
+  // Capture and witness every replay control now so a late prototype/global replacement cannot
+  // consume the prevented interaction or keep the capture listeners enrolled (C217).
+  const NativeEvent = globalThis.Event;
+  const NativeSubmitEvent = globalThis.SubmitEvent;
+  const NativeMouseEvent = globalThis.MouseEvent;
   let nativeSubmit;
   let submitControlsReady = false;
   try {
@@ -1155,6 +1162,62 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   if (!submitControlsReady) {
     throw new TypeError('Kovo bootstrap form submit controls are unavailable.');
   }
+  let nativeAddEventListener;
+  let nativeRemoveEventListener;
+  let nativeDispatchEvent;
+  let replayControlsReady = false;
+  try {
+    const eventTargetPrototype = globalThis.EventTarget?.prototype;
+    const addDescriptor = gopd(eventTargetPrototype, 'addEventListener');
+    const removeDescriptor = gopd(eventTargetPrototype, 'removeEventListener');
+    const dispatchDescriptor = gopd(eventTargetPrototype, 'dispatchEvent');
+    nativeAddEventListener = addDescriptor && 'value' in addDescriptor
+      ? addDescriptor.value
+      : undefined;
+    nativeRemoveEventListener = removeDescriptor && 'value' in removeDescriptor
+      ? removeDescriptor.value
+      : undefined;
+    nativeDispatchEvent = dispatchDescriptor && 'value' in dispatchDescriptor
+      ? dispatchDescriptor.value
+      : undefined;
+    if (
+      typeof NativeEvent !== 'function' ||
+      typeof NativeMouseEvent !== 'function' ||
+      typeof nativeAddEventListener !== 'function' ||
+      typeof nativeRemoveEventListener !== 'function' ||
+      typeof nativeDispatchEvent !== 'function'
+    ) {
+      throw new TypeError('Kovo bootstrap replay controls are unavailable.');
+    }
+    const replayType = 'kovo-security-control:bootstrap-replay';
+    let replayCalls = 0;
+    const replayListener = () => {
+      replayCalls += 1;
+    };
+    rap(nativeAddEventListener, replayControl, [replayType, replayListener]);
+    try {
+      if (rap(nativeDispatchEvent, replayControl, [new NativeEvent(replayType)]) !== true) {
+        throw new TypeError('Kovo bootstrap replay dispatch control is invalid.');
+      }
+    } finally {
+      rap(nativeRemoveEventListener, replayControl, [replayType, replayListener]);
+    }
+    if (
+      replayCalls !== 1 ||
+      rap(nativeDispatchEvent, replayControl, [new NativeEvent(replayType)]) !== true ||
+      replayCalls !== 1
+    ) {
+      throw new TypeError('Kovo bootstrap replay controls are unavailable.');
+    }
+    try {
+      rap(nativeDispatchEvent, {}, [new NativeEvent(replayType)]);
+    } catch {
+      replayControlsReady = true;
+    }
+  } catch {}
+  if (!replayControlsReady) {
+    throw new TypeError('Kovo bootstrap replay controls are unavailable.');
+  }
   const submitForm = (form) => {
     try {
       rap(nativeSubmit, form, []);
@@ -1164,6 +1227,22 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     if (!ownSubmit || !('value' in ownSubmit) || typeof ownSubmit.value !== 'function') return false;
     try {
       rap(ownSubmit.value, form, []);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const dispatchEvent = (target, event) => {
+    try {
+      rap(nativeDispatchEvent, target, [event]);
+      return true;
+    } catch {}
+    const ownDispatch = gopd(target, 'dispatchEvent');
+    if (!ownDispatch || !('value' in ownDispatch) || typeof ownDispatch.value !== 'function') {
+      return false;
+    }
+    try {
+      rap(ownDispatch.value, target, [event]);
       return true;
     } catch {
       return false;
@@ -1247,19 +1326,28 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     if (!item.target?.isConnected) return;
     if (item.type === 'submit') {
       let event;
-      try {
-        event = new SubmitEvent('submit', {
+      if (typeof NativeSubmitEvent === 'function') {
+        try {
+          event = new NativeSubmitEvent('submit', {
+            bubbles: true,
+            cancelable: true,
+            submitter: item.submitter,
+          });
+        } catch {}
+      }
+      if (!event) {
+        event = new NativeEvent('submit', {
           bubbles: true,
           cancelable: true,
-          submitter: item.submitter,
         });
-      } catch {
-        event = new Event('submit', { bubbles: true, cancelable: true });
       }
-      item.target.dispatchEvent(event);
+      dispatchEvent(item.target, event);
       return;
     }
-    item.target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    dispatchEvent(
+      item.target,
+      new NativeMouseEvent('click', { bubbles: true, cancelable: true }),
+    );
   };
   const fallback = (item) => {
     if (!item.target?.isConnected) return;
@@ -1271,7 +1359,9 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     else replay(item);
   };
   const cleanup = () => {
-    for (const event of events) removeEventListener(event, capture, { capture: true });
+    for (const event of events) {
+      rap(nativeRemoveEventListener, globalThis, [event, capture, { capture: true }]);
+    }
   };
   const load = () =>
     (loading ||= runtimeImport(runtimeUrl)
@@ -1296,7 +1386,9 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     queued.push(item);
     void load();
   };
-  for (const event of events) addEventListener(event, capture, { capture: true });
+  for (const event of events) {
+    rap(nativeAddEventListener, globalThis, [event, capture, { capture: true }]);
+  }
   ps();
   const raf = globalThis.requestAnimationFrame;
   if (typeof raf === 'function') raf(() => raf(() => void load()));

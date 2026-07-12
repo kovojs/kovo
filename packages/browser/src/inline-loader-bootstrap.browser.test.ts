@@ -161,6 +161,78 @@ describe('browser inline loader bootstrap', () => {
     await vi.waitFor(() => expect(replayedClicks).toBe(1));
   });
 
+  it('pins dispatch, cleanup, and event construction before late replay-control replacement', async () => {
+    installRafQueue();
+    const target = document.createElement('button');
+    target.setAttribute('on:click', '/c/client.ts#mark');
+    let runtimeInstalled = false;
+    let replayedClicks = 0;
+    target.addEventListener('click', () => {
+      if (runtimeInstalled) replayedClicks += 1;
+    });
+    document.body.append(target);
+    const runtimeImport = vi.fn(async () => ({
+      installKovoDeferredRuntime() {
+        runtimeInstalled = true;
+      },
+    }));
+    const dispatchDescriptor = Object.getOwnPropertyDescriptor(
+      EventTarget.prototype,
+      'dispatchEvent',
+    );
+    const removeDescriptor = Object.getOwnPropertyDescriptor(
+      EventTarget.prototype,
+      'removeEventListener',
+    );
+    if (
+      !dispatchDescriptor ||
+      !('value' in dispatchDescriptor) ||
+      typeof dispatchDescriptor.value !== 'function' ||
+      !removeDescriptor ||
+      !('value' in removeDescriptor) ||
+      typeof removeDescriptor.value !== 'function'
+    ) {
+      throw new Error('native bootstrap replay controls unavailable');
+    }
+    const NativeMouseEvent = MouseEvent;
+    const poisonedDispatch = vi.fn(() => true);
+    const poisonedRemove = vi.fn();
+    const poisonedMouseConstruction = vi.fn();
+
+    installInlineKovoBootstrap('/c/__v/runtime/kovo-runtime.client.js', runtimeImport);
+    Object.defineProperty(EventTarget.prototype, 'dispatchEvent', {
+      ...dispatchDescriptor,
+      value: poisonedDispatch,
+    });
+    Object.defineProperty(EventTarget.prototype, 'removeEventListener', {
+      ...removeDescriptor,
+      value: poisonedRemove,
+    });
+    vi.stubGlobal(
+      'MouseEvent',
+      class PoisonedMouseEvent extends NativeMouseEvent {
+        constructor(type: string, init?: MouseEventInit) {
+          poisonedMouseConstruction();
+          super(type, init);
+        }
+      },
+    );
+    try {
+      Reflect.apply(dispatchDescriptor.value, target, [
+        new NativeMouseEvent('click', { bubbles: true, cancelable: true }),
+      ]);
+
+      await vi.waitFor(() => expect(replayedClicks).toBe(1));
+      expect(poisonedDispatch).not.toHaveBeenCalled();
+      expect(poisonedRemove).not.toHaveBeenCalled();
+      expect(poisonedMouseConstruction).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(EventTarget.prototype, 'dispatchEvent', dispatchDescriptor);
+      Object.defineProperty(EventTarget.prototype, 'removeEventListener', removeDescriptor);
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('queues deferred stream apply calls until the runtime installs', async () => {
     const callbacks = installRafQueue();
     const applied: string[] = [];
@@ -335,6 +407,28 @@ describe('browser inline loader bootstrap', () => {
       ).toThrow(/bootstrap form submit controls are unavailable/);
     } finally {
       Object.defineProperty(HTMLFormElement.prototype, 'submit', descriptor);
+    }
+  });
+
+  it('rejects bootstrap installation when event dispatch was poisoned before capture', () => {
+    installRafQueue();
+    const descriptor = Object.getOwnPropertyDescriptor(EventTarget.prototype, 'dispatchEvent');
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new Error('native event dispatch unavailable');
+    }
+    Object.defineProperty(EventTarget.prototype, 'dispatchEvent', {
+      ...descriptor,
+      value: () => true,
+    });
+    try {
+      expect(() =>
+        installInlineKovoBootstrap(
+          '/c/__v/runtime/kovo-runtime.client.js',
+          vi.fn(async () => ({})),
+        ),
+      ).toThrow(/bootstrap replay controls are unavailable/);
+    } finally {
+      Object.defineProperty(EventTarget.prototype, 'dispatchEvent', descriptor);
     }
   });
 });
