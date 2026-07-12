@@ -69,6 +69,6 @@ export const CartBadge = component({
         expect.objectContaining({ styleRef: 'styles.inactive' }),
       ]),
     );
-    expect(result.factSnapshot.factHash).toMatch(/^[0-9a-f]{8}$/);
+    expect(result.factSnapshot.factHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });

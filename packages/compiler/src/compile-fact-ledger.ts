@@ -1,4 +1,15 @@
+import { canonicalJson } from './canonical-json.js';
 import { factHash } from './fact-hash.js';
+import {
+  compilerArrayIsArray,
+  compilerCreateNullRecord,
+  compilerDefineOwnDataProperty,
+  compilerFreeze,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+  compilerSnapshotDenseArray,
+  compilerSnapshotJsonValue,
+} from './compiler-security-intrinsics.js';
 import { dedupeByKey, dedupeOutputContextFacts, mergeQueryUpdatePlans } from './compile-result.js';
 import type { ComponentCssAsset } from './css.js';
 import type { StyleRuleUsage } from './css.js';
@@ -94,12 +105,29 @@ export class CompileFactLedger {
     facts: readonly CompileFactFamilyMap[Family][],
   ): void {
     if (facts.length === 0) return;
-    this.#entries[family].push(...facts.map((fact) => ({ fact, owner })));
+    const factSnapshot = compilerSnapshotDenseArray(facts, `Compile facts.${family}`);
+    const ownerSnapshot = snapshotFactOwner(owner);
+    const entries = this.#entries[family];
+    for (let index = 0; index < factSnapshot.length; index += 1) {
+      entries[entries.length] = {
+        fact: snapshotCompileFact(
+          family,
+          factSnapshot[index]!,
+          `Compile facts.${family}[${index}]`,
+        ),
+        owner: ownerSnapshot,
+      } as CompileFactEntry<Family>;
+    }
   }
 
   merge(snapshot: CompileFactSnapshot, owner: CompileFactOwner): void {
-    for (const family of compileFactFamilies) {
-      this.append(family, owner, snapshot[family]);
+    for (let index = 0; index < compileFactFamilies.length; index += 1) {
+      const family = compileFactFamilies[index]!;
+      const facts = compilerOwnDataValue(snapshot, family, 'Compile fact snapshot');
+      if (!compilerArrayIsArray(facts)) {
+        throw new TypeError(`Compile fact snapshot.${family} must be an array.`);
+      }
+      this.append(family, owner, facts as CompileFactFamilyMap[typeof family][]);
     }
   }
 
@@ -124,9 +152,11 @@ export class CompileFactLedger {
     } satisfies {
       readonly [Family in CompileFactFamily]: readonly CompileFactFamilyMap[Family][];
     };
-    const familyHashes = Object.fromEntries(
-      compileFactFamilies.map((family) => [family, factHash(values[family])]),
-    ) as Record<CompileFactFamily, string>;
+    const familyHashes = {} as Record<CompileFactFamily, string>;
+    for (let index = 0; index < compileFactFamilies.length; index += 1) {
+      const family = compileFactFamilies[index]!;
+      familyHashes[family] = factHash(values[family]);
+    }
 
     return {
       ...values,
@@ -139,14 +169,28 @@ export class CompileFactLedger {
   #facts<Family extends CompileFactFamily>(
     family: Family,
   ): readonly CompileFactFamilyMap[Family][] {
-    return this.#entries[family].map((entry) => entry.fact);
+    const entries = this.#entries[family];
+    const facts: CompileFactFamilyMap[Family][] = [];
+    for (let index = 0; index < entries.length; index += 1) {
+      facts[index] = snapshotCompileFact(
+        family,
+        entries[index]!.fact,
+        `Compile facts.${family}[${index}]`,
+      );
+    }
+    return facts;
   }
 
   #owners(): CompileFactOwner[] {
-    return dedupeByKey(
-      compileFactFamilies.flatMap((family) => this.#entries[family].map((entry) => entry.owner)),
-      (owner) => `${owner.phase}\0${owner.pass}`,
-    );
+    const owners: CompileFactOwner[] = [];
+    for (let familyIndex = 0; familyIndex < compileFactFamilies.length; familyIndex += 1) {
+      const family = compileFactFamilies[familyIndex]!;
+      const entries = this.#entries[family];
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+        owners[owners.length] = entries[entryIndex]!.owner;
+      }
+    }
+    return dedupeByKey(owners, (owner) => `${owner.phase}\0${owner.pass}`);
   }
 }
 
@@ -157,11 +201,80 @@ export function createCompileFactLedger(): CompileFactLedger {
 function emptyEntries(): {
   [Family in CompileFactFamily]: CompileFactEntry<Family>[];
 } {
-  return Object.fromEntries(compileFactFamilies.map((family) => [family, []])) as unknown as {
+  return {
+    clockUpdatePlans: [],
+    componentCssAssets: [],
+    componentGraphFacts: [],
+    endpointGraphFacts: [],
+    fragmentTargetFacts: [],
+    handlerWriteSinkFacts: [],
+    liveTargetFacts: [],
+    outputContexts: [],
+    platformSubstitutions: [],
+    publishToClientFacts: [],
+    queryUpdateCoverage: [],
+    queryUpdatePlans: [],
+    stateDerives: [],
+    styleRuleUsages: [],
+    taskGraphFacts: [],
+    viewTransitions: [],
+  } as unknown as {
     [Family in CompileFactFamily]: CompileFactEntry<Family>[];
   };
 }
 
 function dedupeByJson<Value>(values: readonly Value[]): Value[] {
-  return dedupeByKey(values, (value) => JSON.stringify(value));
+  return dedupeByKey(values, canonicalJson);
+}
+
+function snapshotFactOwner(owner: CompileFactOwner): CompileFactOwner {
+  const pass = compilerOwnDataValue(owner, 'pass', 'Compile fact owner');
+  const phase = compilerOwnDataValue(owner, 'phase', 'Compile fact owner');
+  if (
+    typeof pass !== 'string' ||
+    (phase !== 'analyze' &&
+      phase !== 'emit' &&
+      phase !== 'graph' &&
+      phase !== 'lower' &&
+      phase !== 'validate')
+  ) {
+    throw new TypeError('Compile fact owner must have an exact pass and phase.');
+  }
+  return compilerSnapshotJsonValue({ pass, phase }, 'Compile fact owner');
+}
+
+function snapshotCompileFact<Family extends CompileFactFamily>(
+  family: Family,
+  fact: CompileFactFamilyMap[Family],
+  label: string,
+): CompileFactFamilyMap[Family] {
+  const snapshot = compilerSnapshotJsonValue(fact, label);
+  if (family !== 'queryUpdatePlans') return snapshot;
+
+  // Query-update analysis deliberately carries output contexts as a non-enumerable sidecar so the
+  // dedicated output-context fact family owns their hash. Preserve that sidecar while still
+  // severing caller ownership (SPEC.md §5.2).
+  const outputContexts = compilerOwnDataValue(fact, 'outputContexts', label);
+  if (outputContexts === undefined) return snapshot;
+  if (!compilerArrayIsArray(outputContexts)) {
+    throw new TypeError(`${label}.outputContexts must be an array.`);
+  }
+  const record = compilerCreateNullRecord<unknown>();
+  const keys = compilerObjectKeys(snapshot as object);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (key === 'outputContexts') continue;
+    compilerDefineOwnDataProperty(
+      record,
+      key,
+      compilerOwnDataValue(snapshot, key, label),
+    );
+  }
+  compilerDefineOwnDataProperty(
+    record,
+    'outputContexts',
+    compilerSnapshotJsonValue(outputContexts, `${label}.outputContexts`),
+    false,
+  );
+  return compilerFreeze(record) as CompileFactFamilyMap[Family];
 }

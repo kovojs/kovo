@@ -41,6 +41,9 @@ const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeMathTrunc = NativeMath.trunc;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
+const nativeNumberIsFinite = NativeNumber.isFinite;
+const nativeObjectFreeze = NativeObject.freeze;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectKeys = NativeObject.keys;
@@ -255,6 +258,109 @@ export function compilerObjectKeys(value: object): string[] {
 export function compilerNumberIsSafeInteger(value: unknown): value is number {
   assertCompilerSecurityIntrinsics();
   return apply(nativeNumberIsSafeInteger, NativeNumber, [value]);
+}
+
+export function compilerNumberIsFinite(value: unknown): value is number {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeNumberIsFinite, NativeNumber, [value]);
+}
+
+export function compilerFreeze<Value extends object>(value: Value): Readonly<Value> {
+  assertCompilerSecurityIntrinsics();
+  return apply(nativeObjectFreeze, NativeObject, [value]);
+}
+
+export function compilerDefineOwnDataProperty(
+  target: object,
+  property: PropertyKey,
+  value: unknown,
+  enumerable = true,
+): void {
+  assertCompilerSecurityIntrinsics();
+  apply(nativeObjectDefineProperty, NativeObject, [target, property, {
+    configurable: false,
+    enumerable,
+    value,
+    writable: false,
+  }]);
+}
+
+/**
+ * Snapshot compiler-owned lowered facts into frozen dense arrays and null-prototype records.
+ * SPEC.md §5.2 makes these JSON-shaped facts the build/graph authority boundary.
+ */
+export function compilerSnapshotJsonValue<Value>(value: Value, label: string): Value {
+  const state = { entries: 0, stack: compilerCreateSet<object>() };
+  return snapshotJsonValue(value, label, state, 0) as Value;
+}
+
+function snapshotJsonValue(
+  value: unknown,
+  label: string,
+  state: { entries: number; stack: Set<object> },
+  depth: number,
+): unknown {
+  assertCompilerSecurityIntrinsics();
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!compilerNumberIsFinite(value)) {
+      throw new NativeTypeError(`${label} numbers must be finite.`);
+    }
+    return value;
+  }
+  if (typeof value !== 'object') {
+    throw new NativeTypeError(`${label} must contain only JSON-shaped compiler facts.`);
+  }
+  if (depth > 64 || state.entries > 1_000_000) {
+    throw new NativeTypeError(`${label} exceeds the compiler fact snapshot budget.`);
+  }
+  if (compilerSetHas(state.stack, value)) {
+    throw new NativeTypeError(`${label} must not contain cycles.`);
+  }
+  compilerSetAdd(state.stack, value);
+  try {
+    if (compilerArrayIsArray(value)) {
+      const length = compilerArrayLength(value, label);
+      const snapshot: unknown[] = [];
+      for (let index = 0; index < length; index += 1) {
+        state.entries += 1;
+        snapshot[index] = snapshotJsonValue(
+          compilerOwnDataValue(value, index, label),
+          `${label}[${index}]`,
+          state,
+          depth + 1,
+        );
+      }
+      return compilerFreeze(snapshot);
+    }
+
+    const prototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [value]);
+    if (prototype !== null && prototype !== NativeObject.prototype) {
+      throw new NativeTypeError(`${label} objects must have a plain or null prototype.`);
+    }
+    const snapshot = compilerCreateNullRecord<unknown>();
+    const keys = compilerObjectKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      state.entries += 1;
+      snapshot[key] = snapshotJsonValue(
+        compilerOwnDataValue(value, key, label),
+        `${label}.${key}`,
+        state,
+        depth + 1,
+      );
+    }
+    return compilerFreeze(snapshot);
+  } finally {
+    compilerSetDelete(state.stack, value);
+  }
 }
 
 export function compilerMathTrunc(value: number): number {

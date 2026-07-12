@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |   134 | C1-C134 |
+| Critical |   136 | C1-C136 |
 | High     |    35 | H1-H35 |
 | Medium   |    12 | M1-M12 |
 
@@ -1667,7 +1667,7 @@ build:dist` passes.
     driver/Promise controls. Late prototype/instance wrappers cannot change the session setting,
     execute extra SQL, alter reviewed bytes/values, or return before an enforcement failure.
 
-- [ ] **C130 - Mutable app-graph traversal erases a webhook from the authority census.**
+- [x] **C130 - Mutable app-graph traversal erases a webhook from the authority census.**
       `packages/compiler/src/{app-graph,compile-fact-ledger,compile-result}.ts`
   - A compiled webhook produced a complete verified-machine-auth endpoint fact. Replacing
     `Array.prototype.flatMap` only for the caller's component-result array made
@@ -1678,6 +1678,10 @@ build:dist` passes.
     Component, route-page, task, endpoint, access, sink, capability, posture, and diagnostic facts
     cannot be omitted, fabricated, deduplicated together, or reordered by late dispatch or hostile
     carriers; uncertainty fails closed before graph emission/cache hashing.
+  - **Evidence:** exact late-`flatMap`, caller-mutation, frozen-cache, hidden output-context sidecar,
+    and fact-ledger mutation replays pass. App graph, registry, ledger, compile-result, and shared
+    helpers contain no live collection/scalar dispatch; the compiler suite passes 1,004/1,004 plus
+    compiler dist/DTS and the security-classifier corpus.
 
 - [ ] **C131 - Mutable production-build traversal blesses an undeclared route.**
       `packages/server/src/vite-build.ts`
@@ -1731,6 +1735,28 @@ build:dist` passes.
   - **Evidence:** the exact late-`replaceAll` replay emits only `&quot;`-escaped href bytes and never
     a genuine event-handler attribute; captured CSS escaping, source patching, render equivalence,
     compiler dist/DTS, and the same focused 209-test matrices pass.
+
+- [x] **C135 - Colliding compiler fact hashes suppress graph/cache invalidation.**
+      `packages/compiler/src/{fact-hash,app-graph,hmr-impact}.ts`
+  - Distinct canonical facts `hmr-authority-149599` and `hmr-authority-312382` both produced the
+    former 32-bit FNV-1a identity `3e919d20`. Authority-bearing graph or HMR facts could therefore
+    alias and replay stale derived output despite changed source truth.
+  - **Acceptance:** every fact, app-graph contribution, ledger family, HMR impact, and cache identity
+    uses collision-resistant hashing over one canonical immutable preimage through boot-pinned crypto
+    controls; late scalar/hash mutation cannot alter or collapse the digest.
+  - **Evidence:** the fixed collision pair now produces distinct 64-hex SHA-256 identities; the exact
+    late `charCodeAt`/`Math.imul`/number-format replay receives zero calls, and the full compiler
+    matrix plus dist/DTS pass.
+
+- [ ] **C136 - Mutable page-transition state bypasses the session bfcache reload floor.**
+      `packages/browser/src/{query-visible-return,document-lifecycle}.ts`, generated inline loader
+  - After installing the session-dependent `pageshow` defense, a late replacement of
+    `PageTransitionEvent.prototype.persisted` returned false for a genuine native persisted event.
+    Modular and generated runtimes then skipped the mandatory reload and left prior-principal DOM
+    visible; the exploit reproduces 6/6 in Chromium, Firefox, and WebKit.
+  - **Acceptance:** source and generated lifecycle runtimes read the native persisted state through
+    one boot-pinned, witnessed, fail-closed control. Late getter/prototype/event substitution cannot
+    suppress a session-dependent restore reload; exact three-engine parity remains permanent.
 
 ## High
 

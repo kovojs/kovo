@@ -1689,6 +1689,83 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
     expect(derived.graph.endpoints).toEqual(result.endpointGraphFacts);
   });
 
+  it('does not let late component traversal erase webhook authority facts', () => {
+    const result = compileComponentModule({
+      fileName: 'src/webhooks.ts',
+      source: `
+export const stripeWebhook = webhook('/webhooks/stripe', {
+  input: s.object({ id: s.string() }),
+  idempotency: (input) => input.id,
+  replayStore,
+  verify: 'none',
+  verifyJustification: 'fixture-only webhook test',
+  async handler(input) {
+    return { ok: true };
+  },
+});
+`,
+    });
+    const components = [
+      {
+        componentGraphFacts: result.componentGraphFacts,
+        endpointGraphFacts: result.endpointGraphFacts,
+      },
+    ];
+    const originalFlatMap = Array.prototype.flatMap;
+    let poisonHits = 0;
+    let derived!: ReturnType<typeof deriveAppGraph>;
+
+    try {
+      Array.prototype.flatMap = function eraseComponentAuthorityFacts(callback, thisArg) {
+        if (this === components) {
+          poisonHits += 1;
+          return [];
+        }
+        return Reflect.apply(originalFlatMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.flatMap;
+      derived = deriveAppGraph({ components });
+    } finally {
+      Array.prototype.flatMap = originalFlatMap;
+    }
+
+    expect(derived.graph.endpoints).toEqual(result.endpointGraphFacts);
+    expect(derived.graph.access).toEqual([
+      expect.objectContaining({ decision: 'verified', kind: 'webhook', name: '/webhooks/stripe' }),
+    ]);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('does not retain caller-owned webhook facts in derived or cached graphs', () => {
+    const result = compileComponentModule({
+      fileName: 'src/webhooks.ts',
+      source: `
+export const stripeWebhook = webhook('/webhooks/stripe', {
+  input: s.object({ id: s.string() }),
+  idempotency: (input) => input.id,
+  replayStore,
+  verify: 'none',
+  verifyJustification: 'fixture-only webhook test',
+  async handler(input) { return { ok: true }; },
+});
+`,
+    });
+    const endpointGraphFacts = result.endpointGraphFacts.map((fact) => ({ ...fact }));
+    const options = {
+      components: [{ componentGraphFacts: result.componentGraphFacts, endpointGraphFacts }],
+    };
+    const cache = new IncrementalAppGraphCache();
+    const first = cache.derive(options);
+
+    endpointGraphFacts[0]!.path = '/attacker';
+    endpointGraphFacts.length = 0;
+    expect(() => {
+      (first.graph.endpoints as { path: string }[])[0]!.path = '/mutated-cache';
+    }).toThrow();
+
+    expect(first.graph.endpoints?.[0]?.path).toBe('/webhooks/stripe');
+    expect(cache.derive(options).graph.endpoints).toBeUndefined();
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',

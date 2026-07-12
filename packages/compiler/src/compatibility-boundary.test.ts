@@ -21,6 +21,7 @@ describe('compatibility path boundaries', () => {
       './graph',
       './internal',
       './internal/graph',
+      './internal/security-bootstrap',
       './package-styles',
       './vite',
     ]);

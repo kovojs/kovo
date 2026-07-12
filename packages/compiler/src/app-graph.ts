@@ -11,6 +11,25 @@ import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { factHash } from './fact-hash.js';
+import {
+  compilerArrayIsArray,
+  compilerCreateMap,
+  compilerCreateNullRecord,
+  compilerCreateSet,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+  compilerRegExpReplace,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerSnapshotJsonValue,
+  compilerStringLocaleCompare,
+  compilerStringStartsWith,
+  compilerStringTrim,
+} from './compiler-security-intrinsics.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import {
   componentOptionObjectEntries,
@@ -52,72 +71,106 @@ import type { StyleRuleUsage } from './css.js';
  * registries (SPEC.md §5.2).
  */
 export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraphResult {
-  const packageComponentPrefixes = [
-    ...(options.graph?.packageComponentPrefixes ?? []),
-    ...(options.packageComponentPrefixes ?? []),
-  ];
-  const components = disambiguateComponentDomNames([
-    ...(options.graph?.components ?? []),
-    ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
-  ]);
-  const tasks = mergeTaskExplainFacts([
-    ...(options.graph?.tasks ?? []),
-    ...(options.components ?? []).flatMap((component) => component.taskGraphFacts ?? []),
-  ]);
-  const handlerWriteSinks = mergeHandlerWriteSinkFacts([
-    ...(options.graph?.handlerWriteSinks ?? []),
-    ...(options.components ?? []).flatMap((component) => component.handlerWriteSinkFacts ?? []),
-  ]);
-  const endpoints = mergeEndpointExplainFacts([
-    ...(options.graph?.endpoints ?? []),
-    ...(options.components ?? []).flatMap((component) => component.endpointGraphFacts ?? []),
-  ]);
-  const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
-  const publishToClientCapabilities = (options.components ?? []).flatMap((component) =>
-    publishToClientCapabilitiesFromFacts(component.publishToClientFacts ?? []),
+  // SPEC.md §5.2: graph emission consumes one immutable exact lowered-fact snapshot. Authored code
+  // has already evaluated in this realm, so no live carrier or prototype traversal can participate.
+  const input = compilerSnapshotJsonValue(options, 'Compile app graph options');
+  const graphInput = input.graph;
+  const componentInputs = input.components ?? [];
+  const packageComponentPrefixes = concatDense(
+    graphInput?.packageComponentPrefixes ?? [],
+    input.packageComponentPrefixes ?? [],
   );
-  const capabilities = [
-    ...(options.graph?.capabilities ?? []),
-    ...publishToClientCapabilities,
-  ].sort(compareCapabilityFacts);
+  const components = disambiguateComponentDomNames(
+    concatDense(
+      graphInput?.components ?? [],
+      flattenFactProperty<ComponentGraphFact>(
+        componentInputs,
+        'componentGraphFacts',
+        'Component graph facts',
+      ),
+    ),
+  );
+  const tasks = mergeTaskExplainFacts(
+    concatDense(
+      graphInput?.tasks ?? [],
+      flattenFactProperty<CoreGraph.TaskExplain>(componentInputs, 'taskGraphFacts', 'Task facts'),
+    ),
+  );
+  const handlerWriteSinks = mergeHandlerWriteSinkFacts(
+    concatDense(
+      graphInput?.handlerWriteSinks ?? [],
+      flattenFactProperty<CoreGraph.HandlerWriteSinkExplain>(
+        componentInputs,
+        'handlerWriteSinkFacts',
+        'Handler write-sink facts',
+      ),
+    ),
+  );
+  const endpoints = mergeEndpointExplainFacts(
+    concatDense(
+      graphInput?.endpoints ?? [],
+      flattenFactProperty<CoreGraph.EndpointExplain>(
+        componentInputs,
+        'endpointGraphFacts',
+        'Endpoint graph facts',
+      ),
+    ),
+  );
+  const routePages = flattenFactProperty<RoutePageFact>(
+    input.routePages ?? [],
+    'routePageFacts',
+    'Route-page facts',
+  );
+  const publishToClientCapabilities = publishToClientCapabilitiesFromFacts(
+    flattenFactProperty<PublishToClientFact>(
+      componentInputs,
+      'publishToClientFacts',
+      'Publish-to-client facts',
+    ),
+  );
+  const capabilities = stableSortedCopy(
+    concatDense(graphInput?.capabilities ?? [], publishToClientCapabilities),
+    compareCapabilityFacts,
+    'capability facts',
+  );
   const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
   const mergedPages =
-    derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
-      ? mergeGraphPages(options.graph?.pages ?? [], derivedRoutePages)
+    derivedRoutePages.length > 0 || (graphInput?.pages?.length ?? 0) > 0
+      ? mergeGraphPages(graphInput?.pages ?? [], derivedRoutePages)
       : undefined;
   // SPEC.md §10.2/§6.6: classify every query/mutation/route-page/endpoint/webhook
   // surface from producer-owned access facts and populate `graph.access` so the
   // KV436 consumer (`kovo check`) fires on any surface with no explicit decision.
   // By-construction: the proof is this static graph fact, not a TS brand. KV436
   // proves a decision EXISTS, never that it is correct.
-  const pagesForAccess = mergedPages ?? options.graph?.pages;
+  const pagesForAccess = mergedPages ?? graphInput?.pages;
   const derivedAccess = deriveAccessExplainFacts({
     ...(endpoints.length === 0 ? {} : { endpoints }),
-    ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
+    ...(graphInput?.mutations === undefined ? {} : { mutations: graphInput.mutations }),
     ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
-    ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
+    ...(graphInput?.queries === undefined ? {} : { queries: graphInput.queries }),
   });
-  const access = mergeAccessExplainFacts(options.graph?.access ?? [], derivedAccess);
+  const access = mergeAccessExplainFacts(graphInput?.access ?? [], derivedAccess);
   const accessDerivationInput = {
     ...(endpoints.length === 0 ? {} : { endpoints }),
-    ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
+    ...(graphInput?.mutations === undefined ? {} : { mutations: graphInput.mutations }),
     ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
-    ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
+    ...(graphInput?.queries === undefined ? {} : { queries: graphInput.queries }),
   };
   const authPosture = mergeAuthPostureFacts(
-    options.graph?.authPosture ?? [],
+    graphInput?.authPosture ?? [],
     deriveAuthPostureFacts(accessDerivationInput),
   );
   const sessionAuthority = mergeSessionAuthorityFacts(
-    options.graph?.sessionAuthority ?? [],
+    graphInput?.sessionAuthority ?? [],
     deriveSessionAuthorityFacts(accessDerivationInput),
   );
   const ownershipPosture = mergeOwnershipPostureFacts(
-    options.graph?.ownershipPosture ?? [],
+    graphInput?.ownershipPosture ?? [],
     deriveOwnershipPostureFacts(accessDerivationInput),
   );
   const graph: RegistryGraphInput = {
-    ...options.graph,
+    ...graphInput,
     ...(access.length > 0 ? { access } : {}),
     ...(authPosture.length > 0 ? { authPosture } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
@@ -134,40 +187,43 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     // them and the check fails end-to-end. By-construction at `kovo check`: an error-severity finding
     // here means request-derived text could reach executable SQL on a managed handle. (The spread
     // above already retains the field at runtime; this is the explicit, load-bearing thread.)
-    ...(options.graph?.sqlSafetyDiagnostics === undefined
+    ...(graphInput?.sqlSafetyDiagnostics === undefined
       ? {}
-      : { sqlSafetyDiagnostics: options.graph.sqlSafetyDiagnostics }),
+      : { sqlSafetyDiagnostics: graphInput.sqlSafetyDiagnostics }),
     // SPEC §6.6: preserve KV426 trust escapes (`kovo explain --trust`, audit-only) and KV424
     // app dangerous-sink facts (`kovo check` error gate) from `compile drizzle-static` so the
     // build→graph.json carries the trust surface and the imperative-DOM sink findings.
-    ...(options.graph?.trustEscapes === undefined
+    ...(graphInput?.trustEscapes === undefined
       ? {}
-      : { trustEscapes: options.graph.trustEscapes }),
+      : { trustEscapes: graphInput.trustEscapes }),
     // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): app-authored escape-hatch capability facts
     // (`--capabilities`) and credential-cookie downgrades (`--cookies`) collected by the static
     // producers ride from `compile drizzle-static` / the build-check graph through into graph.json.
     // `capabilities` is folded in above (with the publishToClient call-site facts); this threads the
     // typed cookie-downgrade surface, which previously had no static producer.
-    ...(options.graph?.cookieDowngrades === undefined
+    ...(graphInput?.cookieDowngrades === undefined
       ? {}
-      : { cookieDowngrades: options.graph.cookieDowngrades }),
-    ...(options.graph?.unregisteredSinks === undefined
+      : { cookieDowngrades: graphInput.cookieDowngrades }),
+    ...(graphInput?.unregisteredSinks === undefined
       ? {}
-      : { unregisteredSinks: options.graph.unregisteredSinks }),
+      : { unregisteredSinks: graphInput.unregisteredSinks }),
   };
 
   const registryFacts = deriveRegistryFactsFromGraph(graph, {
-    ...options.registryTypes,
-    ...(options.previousRegistryFacts === undefined
+    ...input.registryTypes,
+    ...(input.previousRegistryFacts === undefined
       ? {}
-      : { previousRegistryFacts: options.previousRegistryFacts }),
+      : { previousRegistryFacts: input.previousRegistryFacts }),
   });
 
-  return {
-    diagnostics: registryFacts.diagnostics ?? [],
-    graph,
-    registryFacts,
-  };
+  return compilerSnapshotJsonValue(
+    {
+      diagnostics: registryFacts.diagnostics ?? [],
+      graph,
+      registryFacts,
+    },
+    'Compile app graph result',
+  );
 }
 
 function mergeAccessExplainFacts(
@@ -186,9 +242,9 @@ function compareAccessFacts(
   right: CoreGraph.AccessExplainFact,
 ): number {
   return (
-    left.kind.localeCompare(right.kind) ||
-    left.name.localeCompare(right.name) ||
-    left.decision.localeCompare(right.decision)
+    compilerStringLocaleCompare(left.kind, right.kind) ||
+    compilerStringLocaleCompare(left.name, right.name) ||
+    compilerStringLocaleCompare(left.decision, right.decision)
   );
 }
 
@@ -207,18 +263,20 @@ function mergeSessionAuthorityFacts(
   callerFacts: readonly CoreGraph.SessionAuthorityFact[],
   derivedFacts: readonly CoreGraph.SessionAuthorityFact[],
 ): CoreGraph.SessionAuthorityFact[] {
-  const facts = new Map<string, CoreGraph.SessionAuthorityFact>();
-  for (const fact of [...derivedFacts, ...callerFacts]) {
+  const facts = compilerCreateMap<string, CoreGraph.SessionAuthorityFact>();
+  const candidates = concatDense(derivedFacts, callerFacts);
+  for (let index = 0; index < candidates.length; index += 1) {
+    const fact = candidates[index]!;
     const key = sessionAuthorityFactKey(fact);
-    const previous = facts.get(key);
+    const previous = compilerMapGet(facts, key);
     // Session authority is an OR lattice: a source-level negative proves only
     // that the handler body is clean and must never suppress a positive runtime
     // guard/session fact for the same mutation. Conversely, a positive handler
     // fact must override an ordinary derived negative.
     if (previous?.referencesSession === true && !fact.referencesSession) continue;
-    facts.set(key, fact);
+    compilerMapSet(facts, key, fact);
   }
-  return [...facts.values()].sort(compareKindNameFacts);
+  return stableSortedCopy(mapValues(facts), compareKindNameFacts, 'session-authority facts');
 }
 
 function sessionAuthorityFactKey(fact: CoreGraph.SessionAuthorityFact): string {
@@ -247,22 +305,30 @@ function mergeFactsByKey<Fact>(
   keyForFact: (fact: Fact) => string,
   compareFacts: (left: Fact, right: Fact) => number,
 ): Fact[] {
-  const facts = [...callerFacts];
-  const existing = new Set(callerFacts.map(keyForFact));
-  for (const fact of derivedFacts) {
-    const key = keyForFact(fact);
-    if (existing.has(key)) continue;
-    facts.push(fact);
-    existing.add(key);
+  const facts = compilerSnapshotDenseArray(callerFacts, 'Caller graph facts');
+  const existing = compilerCreateSet<string>();
+  for (let index = 0; index < facts.length; index += 1) {
+    compilerSetAdd(existing, keyForFact(facts[index]!));
   }
-  return facts.sort(compareFacts);
+  const derivedSnapshot = compilerSnapshotDenseArray(derivedFacts, 'Derived graph facts');
+  for (let index = 0; index < derivedSnapshot.length; index += 1) {
+    const fact = derivedSnapshot[index]!;
+    const key = keyForFact(fact);
+    if (compilerSetHas(existing, key)) continue;
+    facts[facts.length] = fact;
+    compilerSetAdd(existing, key);
+  }
+  return stableSortedCopy(facts, compareFacts, 'merged graph facts');
 }
 
 function compareKindNameFacts(
   left: { readonly kind: string; readonly name: string },
   right: { readonly kind: string; readonly name: string },
 ): number {
-  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+  return (
+    compilerStringLocaleCompare(left.kind, right.kind) ||
+    compilerStringLocaleCompare(left.name, right.name)
+  );
 }
 
 function compareOwnershipPostureFacts(
@@ -270,78 +336,74 @@ function compareOwnershipPostureFacts(
   right: CoreGraph.OwnershipPostureFact,
 ): number {
   return (
-    left.kind.localeCompare(right.kind) ||
-    left.name.localeCompare(right.name) ||
-    left.domain.localeCompare(right.domain) ||
-    (left.key ?? '').localeCompare(right.key ?? '')
+    compilerStringLocaleCompare(left.kind, right.kind) ||
+    compilerStringLocaleCompare(left.name, right.name) ||
+    compilerStringLocaleCompare(left.domain, right.domain) ||
+    compilerStringLocaleCompare(left.key ?? '', right.key ?? '')
   );
 }
 
 /** @internal Process-lifetime cache for app graph derivation keyed by contribution fingerprints. */
 export class IncrementalAppGraphCache {
-  readonly #results = new Map<string, CompileAppGraphResult>();
+  readonly #results = compilerCreateMap<string, CompileAppGraphResult>();
 
   derive(options: CompileAppGraphOptions): CompileAppGraphResult {
     const key = appGraphContributionHash(options);
-    const cached = this.#results.get(key);
+    const cached = compilerMapGet(this.#results, key);
     if (cached) return cached;
 
     const result = deriveAppGraph(options);
-    this.#results.set(key, result);
+    compilerMapSet(this.#results, key, result);
     return result;
   }
 }
 
 /** @internal Stable multiset hash of the facts that contribute to {@link deriveAppGraph}. */
 export function appGraphContributionHash(options: CompileAppGraphOptions): string {
-  const componentHashes = (options.components ?? [])
-    .flatMap((component) => component.componentGraphFacts)
-    .map((fact) => factHash(fact))
-    .sort();
-  const taskHashes = (options.components ?? [])
-    .flatMap((component) => component.taskGraphFacts ?? [])
-    .map((fact) => factHash(fact))
-    .sort();
-  const handlerWriteSinkHashes = (options.components ?? [])
-    .flatMap((component) => component.handlerWriteSinkFacts ?? [])
-    .map((fact) => factHash(fact))
-    .sort();
-  const endpointHashes = (options.components ?? [])
-    .flatMap((component) => component.endpointGraphFacts ?? [])
-    .map((fact) => factHash(fact))
-    .sort();
-  const routeHashes = (options.routePages ?? [])
-    .flatMap((routePage) => routePage.routePageFacts)
-    .map((fact) => factHash(fact))
-    .sort();
+  const input = compilerSnapshotJsonValue(options, 'App graph contribution options');
+  const components = input.components ?? [];
+  const componentHashes = hashFacts(
+    flattenFactProperty(components, 'componentGraphFacts', 'Component graph facts'),
+  );
+  const taskHashes = hashFacts(flattenFactProperty(components, 'taskGraphFacts', 'Task facts'));
+  const handlerWriteSinkHashes = hashFacts(
+    flattenFactProperty(components, 'handlerWriteSinkFacts', 'Handler write-sink facts'),
+  );
+  const endpointHashes = hashFacts(
+    flattenFactProperty(components, 'endpointGraphFacts', 'Endpoint graph facts'),
+  );
+  const routeHashes = hashFacts(
+    flattenFactProperty(input.routePages ?? [], 'routePageFacts', 'Route-page facts'),
+  );
 
   return factHash({
     components: componentHashes,
     endpoints: endpointHashes,
-    graph: options.graph ?? null,
+    graph: input.graph ?? null,
     handlerWriteSinks: handlerWriteSinkHashes,
-    packageComponentPrefixes: options.packageComponentPrefixes ?? null,
-    previousRegistryFacts: options.previousRegistryFacts ?? null,
-    registryTypes: options.registryTypes ?? null,
+    packageComponentPrefixes: input.packageComponentPrefixes ?? null,
+    previousRegistryFacts: input.previousRegistryFacts ?? null,
+    registryTypes: input.registryTypes ?? null,
     routes: routeHashes,
     tasks: taskHashes,
-    publishToClientFacts: (options.components ?? [])
-      .flatMap((component) => component.publishToClientFacts ?? [])
-      .map((fact) => factHash(fact))
-      .sort(),
+    publishToClientFacts: hashFacts(
+      flattenFactProperty(components, 'publishToClientFacts', 'Publish-to-client facts'),
+    ),
   });
 }
 
 function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGraph.TaskExplain[] {
-  const byKey = new Map<string, CoreGraph.TaskExplain>();
+  const byKey = compilerCreateMap<string, CoreGraph.TaskExplain>();
+  const snapshot = compilerSnapshotDenseArray(tasks, 'Task explain facts');
 
-  for (const task of tasks) {
-    const previous = byKey.get(task.key);
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const task = snapshot[index]!;
+    const previous = compilerMapGet(byKey, task.key);
     const cron = previous?.cron ?? task.cron;
     const runMutations = mergeSortedStrings(previous?.runMutations, task.runMutations);
     const runQueries = mergeSortedStrings(previous?.runQueries, task.runQueries);
     const schedules = mergeSortedStrings(previous?.schedules, task.schedules);
-    byKey.set(task.key, {
+    compilerMapSet(byKey, task.key, {
       ...(cron === undefined ? {} : { cron }),
       key: task.key,
       ...(runMutations.length === 0 ? {} : { runMutations }),
@@ -350,8 +412,11 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
     });
   }
 
-  return [...byKey.values()]
-    .map((task) => ({
+  const normalized: CoreGraph.TaskExplain[] = [];
+  const values = mapValues(byKey);
+  for (let index = 0; index < values.length; index += 1) {
+    const task = values[index]!;
+    normalized[normalized.length] = {
       ...(task.cron === undefined ? {} : { cron: task.cron }),
       key: task.key,
       ...(task.runMutations === undefined || task.runMutations.length === 0
@@ -363,36 +428,49 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
       ...(task.schedules === undefined || task.schedules.length === 0
         ? {}
         : { schedules: task.schedules }),
-    }))
-    .sort((left, right) => left.key.localeCompare(right.key));
+    };
+  }
+  return stableSortedCopy(
+    normalized,
+    (left, right) => compilerStringLocaleCompare(left.key, right.key),
+    'task facts',
+  );
 }
 
 function mergeHandlerWriteSinkFacts(
   facts: readonly CoreGraph.HandlerWriteSinkExplain[],
 ): CoreGraph.HandlerWriteSinkExplain[] {
-  const byKey = new Map<string, CoreGraph.HandlerWriteSinkExplain>();
-  for (const fact of facts) {
-    byKey.set(factHash(fact), fact);
+  const byKey = compilerCreateMap<string, CoreGraph.HandlerWriteSinkExplain>();
+  const snapshot = compilerSnapshotDenseArray(facts, 'Handler write-sink facts');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const fact = snapshot[index]!;
+    compilerMapSet(byKey, factHash(fact), fact);
   }
-  return [...byKey.values()].sort(compareHandlerWriteSinkFacts);
+  return stableSortedCopy(
+    mapValues(byKey),
+    compareHandlerWriteSinkFacts,
+    'handler write-sink facts',
+  );
 }
 
 function mergeEndpointExplainFacts(
   facts: readonly CoreGraph.EndpointExplain[],
 ): CoreGraph.EndpointExplain[] {
-  const byKey = new Map<string, CoreGraph.EndpointExplain>();
+  const byKey = compilerCreateMap<string, CoreGraph.EndpointExplain>();
+  const snapshot = compilerSnapshotDenseArray(facts, 'Endpoint explain facts');
 
-  for (const fact of facts) {
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const fact = snapshot[index]!;
     const key = endpointExplainMergeKey(fact);
-    const previous = byKey.get(key);
+    const previous = compilerMapGet(byKey, key);
     if (!previous) {
-      byKey.set(key, normalizeEndpointExplainFact(fact));
+      compilerMapSet(byKey, key, normalizeEndpointExplainFact(fact));
       continue;
     }
 
     const runMutations = mergeSortedStrings(previous.runMutations, fact.runMutations);
     const writes = mergeSortedStrings(previous.writes, fact.writes);
-    byKey.set(key, {
+    compilerMapSet(byKey, key, {
       ...previous,
       ...normalizeEndpointExplainFact(fact),
       ...(runMutations.length === 0 ? {} : { runMutations }),
@@ -400,7 +478,7 @@ function mergeEndpointExplainFacts(
     });
   }
 
-  return [...byKey.values()].sort(compareEndpointExplainFacts);
+  return stableSortedCopy(mapValues(byKey), compareEndpointExplainFacts, 'endpoint facts');
 }
 
 function normalizeEndpointExplainFact(fact: CoreGraph.EndpointExplain): CoreGraph.EndpointExplain {
@@ -408,10 +486,10 @@ function normalizeEndpointExplainFact(fact: CoreGraph.EndpointExplain): CoreGrap
     ...fact,
     ...(fact.runMutations === undefined || fact.runMutations.length === 0
       ? {}
-      : { runMutations: [...new Set(fact.runMutations)].sort() }),
+      : { runMutations: uniqueSorted(fact.runMutations) }),
     ...(fact.writes === undefined || fact.writes.length === 0
       ? {}
-      : { writes: [...new Set(fact.writes)].sort() }),
+      : { writes: uniqueSorted(fact.writes) }),
   };
 }
 
@@ -424,9 +502,9 @@ function compareEndpointExplainFacts(
   right: CoreGraph.EndpointExplain,
 ): number {
   return (
-    (left.name ?? left.path).localeCompare(right.name ?? right.path) ||
-    left.path.localeCompare(right.path) ||
-    (left.surface ?? 'endpoint').localeCompare(right.surface ?? 'endpoint')
+    compilerStringLocaleCompare(left.name ?? left.path, right.name ?? right.path) ||
+    compilerStringLocaleCompare(left.path, right.path) ||
+    compilerStringLocaleCompare(left.surface ?? 'endpoint', right.surface ?? 'endpoint')
   );
 }
 
@@ -435,13 +513,13 @@ function compareHandlerWriteSinkFacts(
   right: CoreGraph.HandlerWriteSinkExplain,
 ): number {
   return (
-    left.surface.localeCompare(right.surface) ||
-    left.owner.kind.localeCompare(right.owner.kind) ||
-    left.owner.value.localeCompare(right.owner.value) ||
+    compilerStringLocaleCompare(left.surface, right.surface) ||
+    compilerStringLocaleCompare(left.owner.kind, right.owner.kind) ||
+    compilerStringLocaleCompare(left.owner.value, right.owner.value) ||
     left.span.start - right.span.start ||
     left.span.end - right.span.end ||
-    left.operationKind.localeCompare(right.operationKind) ||
-    left.path.localeCompare(right.path)
+    compilerStringLocaleCompare(left.operationKind, right.operationKind) ||
+    compilerStringLocaleCompare(left.path, right.path)
   );
 }
 
@@ -449,19 +527,25 @@ function mergeSortedStrings(
   left: readonly string[] | undefined,
   right: readonly string[] | undefined,
 ): readonly string[] {
-  return [...new Set([...(left ?? []), ...(right ?? [])])].sort();
+  return uniqueSorted(concatDense(left ?? [], right ?? []));
 }
 
 function publishToClientCapabilitiesFromFacts(
   facts: readonly PublishToClientFact[],
 ): CoreGraph.CapabilityExplain[] {
-  return facts.map((fact) => ({
-    justification: fact.reason,
-    kind: 'publishToClient',
-    moduleSpecifier: fact.moduleSpecifier,
-    site: fact.site,
-    target: fact.localName,
-  }));
+  const snapshot = compilerSnapshotDenseArray(facts, 'Publish-to-client facts');
+  const capabilities: CoreGraph.CapabilityExplain[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const fact = snapshot[index]!;
+    capabilities[capabilities.length] = {
+      justification: fact.reason,
+      kind: 'publishToClient',
+      moduleSpecifier: fact.moduleSpecifier,
+      site: fact.site,
+      target: fact.localName,
+    };
+  }
+  return capabilities;
 }
 
 function compareCapabilityFacts(
@@ -469,11 +553,112 @@ function compareCapabilityFacts(
   right: CoreGraph.CapabilityExplain,
 ): number {
   return (
-    left.kind.localeCompare(right.kind) ||
-    left.site.localeCompare(right.site) ||
-    (left.moduleSpecifier ?? '').localeCompare(right.moduleSpecifier ?? '') ||
-    (left.target ?? '').localeCompare(right.target ?? '')
+    compilerStringLocaleCompare(left.kind, right.kind) ||
+    compilerStringLocaleCompare(left.site, right.site) ||
+    compilerStringLocaleCompare(left.moduleSpecifier ?? '', right.moduleSpecifier ?? '') ||
+    compilerStringLocaleCompare(left.target ?? '', right.target ?? '')
   );
+}
+
+function concatDense<Value>(left: readonly Value[], right: readonly Value[]): Value[] {
+  const leftSnapshot = compilerSnapshotDenseArray(left, 'Compiler graph facts');
+  const rightSnapshot = compilerSnapshotDenseArray(right, 'Compiler graph facts');
+  const combined: Value[] = [];
+  for (let index = 0; index < leftSnapshot.length; index += 1) {
+    combined[combined.length] = leftSnapshot[index]!;
+  }
+  for (let index = 0; index < rightSnapshot.length; index += 1) {
+    combined[combined.length] = rightSnapshot[index]!;
+  }
+  return combined;
+}
+
+function flattenFactProperty<Value>(
+  containers: readonly object[],
+  property: string,
+  label: string,
+): Value[] {
+  const containerSnapshot = compilerSnapshotDenseArray(containers, `${label} containers`);
+  const flattened: Value[] = [];
+  for (let containerIndex = 0; containerIndex < containerSnapshot.length; containerIndex += 1) {
+    const values = compilerOwnDataValue(
+      containerSnapshot[containerIndex],
+      property,
+      `${label}[${containerIndex}]`,
+    );
+    if (values === undefined) continue;
+    if (!compilerArrayIsArray(values)) {
+      throw new TypeError(`${label}[${containerIndex}].${property} must be an array.`);
+    }
+    const valueSnapshot = compilerSnapshotDenseArray(
+      values,
+      `${label}[${containerIndex}].${property}`,
+    );
+    for (let valueIndex = 0; valueIndex < valueSnapshot.length; valueIndex += 1) {
+      flattened[flattened.length] = valueSnapshot[valueIndex] as Value;
+    }
+  }
+  return flattened;
+}
+
+function stableSortedCopy<Value>(
+  values: readonly Value[],
+  compare: (left: Value, right: Value) => number,
+  label: string,
+): Value[] {
+  const sorted = compilerSnapshotDenseArray(values, `Compiler ${label}`);
+  for (let index = 1; index < sorted.length; index += 1) {
+    const value = sorted[index]!;
+    let insertion = index;
+    while (insertion > 0 && compare(sorted[insertion - 1]!, value) > 0) {
+      sorted[insertion] = sorted[insertion - 1]!;
+      insertion -= 1;
+    }
+    sorted[insertion] = value;
+  }
+  return sorted;
+}
+
+function mapValues<Key, Value>(map: ReadonlyMap<Key, Value>): Value[] {
+  const values: Value[] = [];
+  compilerMapForEach(map, (value) => {
+    values[values.length] = value;
+  });
+  return values;
+}
+
+function sortedStringMapEntries<Value>(
+  map: ReadonlyMap<string, Value>,
+  label: string,
+): [string, Value][] {
+  const entries: [string, Value][] = [];
+  compilerMapForEach(map, (value, key) => {
+    entries[entries.length] = [key, value];
+  });
+  return stableSortedCopy(
+    entries,
+    ([left], [right]) => compilerStringLocaleCompare(left, right),
+    label,
+  );
+}
+
+function joinStrings(values: readonly string[], separator: string): string {
+  const snapshot = compilerSnapshotDenseArray(values, 'Compiler strings');
+  let output = '';
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (index > 0) output += separator;
+    output += snapshot[index]!;
+  }
+  return output;
+}
+
+function hashFacts(facts: readonly unknown[]): string[] {
+  const snapshot = compilerSnapshotDenseArray(facts, 'App graph hash facts');
+  const hashes: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    hashes[hashes.length] = factHash(snapshot[index]);
+  }
+  return stableSortedCopy(hashes, compilerStringLocaleCompare, 'app graph fact hashes');
 }
 
 /**
@@ -546,6 +731,12 @@ export function componentGraphFact(
   const clocks = component
     ? componentClockExplainFacts(component)
     : componentClockExplainFactsForModule(model);
+  const styleRules: ComponentGraphFact['styleRules'] = [];
+  const styleRuleSnapshot = compilerSnapshotDenseArray(styleRuleUsages, 'Component style rules');
+  for (let index = 0; index < styleRuleSnapshot.length; index += 1) {
+    const { className, source, styleRef } = styleRuleSnapshot[index]!;
+    styleRules[styleRules.length] = { className, source, styleRef };
+  }
 
   return {
     ...(clocks.length === 0 ? {} : { clocks }),
@@ -562,30 +753,30 @@ export function componentGraphFact(
         : {}),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
-    ...(styleRuleUsages.length === 0
-      ? {}
-      : {
-          styleRules: styleRuleUsages.map(({ className, source, styleRef }) => ({
-            className,
-            source,
-            styleRef,
-          })),
-        }),
+    ...(styleRules.length === 0 ? {} : { styleRules }),
   };
 }
 
 function componentClockExplainFactsForModule(
   model: ComponentModuleModel,
 ): CoreGraph.ClockExplain[] {
-  return componentOptionObjectEntries(model, 'clocks').flatMap((entry) =>
-    entry.value ? [{ cadence: clockCadenceSummary(entry), name: entry.key }] : [],
-  );
+  return clockExplainFacts(componentOptionObjectEntries(model, 'clocks'));
 }
 
 function componentClockExplainFacts(component: ComponentModel): CoreGraph.ClockExplain[] {
-  return componentOptionObjectEntriesFor(component, 'clocks').flatMap((entry) =>
-    entry.value ? [{ cadence: clockCadenceSummary(entry), name: entry.key }] : [],
-  );
+  return clockExplainFacts(componentOptionObjectEntriesFor(component, 'clocks'));
+}
+
+function clockExplainFacts(entries: readonly ObjectLiteralEntry[]): CoreGraph.ClockExplain[] {
+  const snapshot = compilerSnapshotDenseArray(entries, 'Component clock entries');
+  const facts: CoreGraph.ClockExplain[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const entry = snapshot[index]!;
+    if (entry.value) {
+      facts[facts.length] = { cadence: clockCadenceSummary(entry), name: entry.key };
+    }
+  }
+  return facts;
 }
 
 function firstComponentDeclaresMutableLocalState(model: ComponentModuleModel): boolean {
@@ -594,16 +785,28 @@ function firstComponentDeclaresMutableLocalState(model: ComponentModuleModel): b
 }
 
 function clockCadenceSummary(entry: Pick<ObjectLiteralEntry, 'objectEntries'>): string {
-  const fields = entry.objectEntries ?? [];
-  if (fields.some((field) => field.key === 'renderOnce' && field.value === 'true')) {
-    return 'renderOnce';
+  const fields = compilerSnapshotDenseArray(entry.objectEntries ?? [], 'Clock cadence fields');
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
+    if (field.key === 'renderOnce' && field.value === 'true') return 'renderOnce';
   }
 
-  const parts = ['every', 'at', 'until'].flatMap((key) => {
-    const value = fields.find((field) => field.key === key)?.value;
-    return value ? [`${key}=${value.trim().replace(/\s+/g, ' ')}`] : [];
-  });
-  return parts.length > 0 ? parts.join(',') : 'manual';
+  const cadenceKeys = ['every', 'at', 'until'] as const;
+  const parts: string[] = [];
+  for (let keyIndex = 0; keyIndex < cadenceKeys.length; keyIndex += 1) {
+    const key = cadenceKeys[keyIndex]!;
+    for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
+      const field = fields[fieldIndex]!;
+      if (field.key !== key || !field.value) continue;
+      parts[parts.length] = `${key}=${compilerRegExpReplace(
+        /\s+/g,
+        compilerStringTrim(field.value),
+        ' ',
+      )}`;
+      break;
+    }
+  }
+  return parts.length > 0 ? joinStrings(parts, ',') : 'manual';
 }
 
 /**
@@ -615,30 +818,46 @@ export function deriveRegistryFactsFromGraph(
   graph: RegistryGraphInput,
   options: RegistryTypeFactOptions = {},
 ): RegistryFacts {
-  const components = deriveComponentFactsFromGraph(graph);
-  const diagnostics = [
-    ...routeFactDiagnostics(graph),
-    ...queryReadSetFactDiagnostics(graph),
-    ...mutationFactDiagnostics(graph),
-    ...registryTypeDriftDiagnostics('mutation', options.mutations, options.previousRegistryFacts),
-    ...registryTypeDriftDiagnostics('query', options.queries, options.previousRegistryFacts),
-  ];
-  const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
-  const statefulComponents = deriveStatefulComponentsFromGraph(graph);
-  const viewTransitions = deriveViewTransitionsFromGraph(graph);
+  const input = compilerSnapshotJsonValue(graph, 'Registry graph input');
+  const typeOptions = compilerSnapshotJsonValue(options, 'Registry type options');
+  const components = deriveComponentFactsFromGraph(input);
+  let diagnostics = concatDense(routeFactDiagnostics(input), queryReadSetFactDiagnostics(input));
+  diagnostics = concatDense(diagnostics, mutationFactDiagnostics(input));
+  diagnostics = concatDense(
+    diagnostics,
+    registryTypeDriftDiagnostics(
+      'mutation',
+      typeOptions.mutations,
+      typeOptions.previousRegistryFacts,
+    ),
+  );
+  diagnostics = concatDense(
+    diagnostics,
+    registryTypeDriftDiagnostics('query', typeOptions.queries, typeOptions.previousRegistryFacts),
+  );
+  const fragmentTargets = deriveFragmentTargetsFromGraph(input);
+  const statefulComponents = deriveStatefulComponentsFromGraph(input);
+  const viewTransitions = deriveViewTransitionsFromGraph(input);
+  const mutationTypes = typeOptions.mutations ?? {};
+  const queryTypes = typeOptions.queries ?? {};
+  const routes: string[] = [];
+  const pages = compilerSnapshotDenseArray(input.pages ?? [], 'Registry graph pages');
+  for (let index = 0; index < pages.length; index += 1) {
+    routes[routes.length] = pages[index]!.route;
+  }
 
-  return {
+  return compilerSnapshotJsonValue({
     ...(components.length > 0 ? { components } : {}),
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
-    domainKeys: deriveDomainKeysFromGraph(graph),
+    domainKeys: deriveDomainKeysFromGraph(input),
     ...(fragmentTargets.length > 0 ? { fragmentTargets } : {}),
-    invalidations: deriveInvalidationFactsFromGraph(graph),
-    ...(Object.keys(options.mutations ?? {}).length > 0 ? { mutations: options.mutations } : {}),
-    ...(Object.keys(options.queries ?? {}).length > 0 ? { queries: options.queries } : {}),
-    routes: [...new Set((graph.pages ?? []).map((page) => page.route))].sort(),
+    invalidations: deriveInvalidationFactsFromGraph(input),
+    ...(compilerObjectKeys(mutationTypes).length > 0 ? { mutations: mutationTypes } : {}),
+    ...(compilerObjectKeys(queryTypes).length > 0 ? { queries: queryTypes } : {}),
+    routes: uniqueSorted(routes),
     ...(statefulComponents.length > 0 ? { statefulComponents } : {}),
     ...(viewTransitions.length > 0 ? { viewTransitions } : {}),
-  };
+  }, 'Registry facts');
 }
 
 /**
@@ -648,23 +867,25 @@ export function deriveRegistryFactsFromGraph(
  */
 export function routeFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const routeCounts = new Map<string, number>();
+  const routeCounts = compilerCreateMap<string, number>();
+  const pages = compilerSnapshotDenseArray(graph.pages ?? [], 'Registry graph pages');
 
-  for (const page of graph.pages ?? []) {
-    routeCounts.set(page.route, (routeCounts.get(page.route) ?? 0) + 1);
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index]!;
+    compilerMapSet(routeCounts, page.route, (compilerMapGet(routeCounts, page.route) ?? 0) + 1);
   }
 
-  for (const [route, count] of [...routeCounts].sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
+  const entries = sortedStringMapEntries(routeCounts, 'route counts');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [route, count] = entries[index]!;
     if (count < 2) continue;
-    diagnostics.push({
+    diagnostics[diagnostics.length] = {
       code: 'KV228',
       fileName: 'app graph route table',
       help: diagnosticDefinitions.KV228.help,
       message: `${diagnosticDefinitions.KV228.message} duplicate route path "${route}" appears ${count} times in graph pages.`,
       severity: diagnosticDefinitions.KV228.severity,
-    });
+    };
   }
 
   return diagnostics;
@@ -682,21 +903,25 @@ export function routeFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnos
  */
 export function mutationFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const keyCounts = new Map<string, number>();
+  const keyCounts = compilerCreateMap<string, number>();
+  const mutations = compilerSnapshotDenseArray(graph.mutations ?? [], 'Registry graph mutations');
 
-  for (const mutation of graph.mutations ?? []) {
-    keyCounts.set(mutation.key, (keyCounts.get(mutation.key) ?? 0) + 1);
+  for (let index = 0; index < mutations.length; index += 1) {
+    const mutation = mutations[index]!;
+    compilerMapSet(keyCounts, mutation.key, (compilerMapGet(keyCounts, mutation.key) ?? 0) + 1);
   }
 
-  for (const [key, count] of [...keyCounts].sort(([left], [right]) => left.localeCompare(right))) {
+  const entries = sortedStringMapEntries(keyCounts, 'mutation counts');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, count] = entries[index]!;
     if (count < 2) continue;
-    diagnostics.push({
+    diagnostics[diagnostics.length] = {
       code: 'KV421',
       fileName: 'app graph mutation table',
       help: diagnosticDefinitions.KV421.help,
       message: `${diagnosticDefinitions.KV421.message} mutation key "${key}" appears ${count} times in graph mutations.`,
       severity: diagnosticDefinitions.KV421.severity,
-    });
+    };
   }
 
   return diagnostics;
@@ -716,28 +941,30 @@ export function mutationFactDiagnostics(graph: RegistryGraphInput): CompilerDiag
  */
 export function queryReadSetFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const queryCounts = new Map<string, number>();
+  const queryCounts = compilerCreateMap<string, number>();
+  const queries = compilerSnapshotDenseArray(graph.queries ?? [], 'Registry graph queries');
 
-  for (const query of graph.queries ?? []) {
-    queryCounts.set(query.query, (queryCounts.get(query.query) ?? 0) + 1);
+  for (let index = 0; index < queries.length; index += 1) {
+    const query = queries[index]!;
+    compilerMapSet(queryCounts, query.query, (compilerMapGet(queryCounts, query.query) ?? 0) + 1);
   }
 
-  for (const [query, count] of [...queryCounts].sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
+  const entries = sortedStringMapEntries(queryCounts, 'query counts');
+  for (let index = 0; index < entries.length; index += 1) {
+    const [query, count] = entries[index]!;
     if (count < 2) continue;
-    diagnostics.push({
+    diagnostics[diagnostics.length] = {
       code: 'KV240',
       fileName: 'app graph query table',
-      help: [
+      help: joinStrings([
         'Would lower to: one query read-set fact per source-derived query key for the generated query registry, /_q dispatch, kovo-query hydration, kovo-deps, and mutation invalidation graph.',
         'Blocked reason: two query declarations share one key, so graph indexing can silently collapse read sets and generated wire artifacts before the server read endpoint sees the ambiguity.',
         'Fixes: emit exactly one query fact per query key, or rename/move one exported query so its source-derived key is unique across the app graph.',
         'SPEC §4.1 derives query registry identities from source, §10.2 makes each query key a typed read surface, and §10.3 relies on those stable query identities when mutations compute invalidated reads.',
-      ].join('\n'),
+      ], '\n'),
       message: `Duplicate query key. query key "${query}" appears ${count} times in graph queries.`,
       severity: diagnosticDefinitions.KV240.severity,
-    });
+    };
   }
 
   return diagnostics;
@@ -752,23 +979,55 @@ function registryTypeDriftDiagnostics(
     kind === 'mutation' ? previousRegistryFacts?.mutations : previousRegistryFacts?.queries;
   if (!current || !previous) return [];
 
-  const previousByType = new Map<string, string[]>();
-  for (const [key, typeSource] of Object.entries(previous)) {
-    const keys = previousByType.get(typeSource) ?? [];
-    keys.push(key);
-    previousByType.set(typeSource, keys);
+  const previousByType = compilerCreateMap<string, string[]>();
+  const previousKeys = compilerObjectKeys(previous);
+  for (let index = 0; index < previousKeys.length; index += 1) {
+    const key = previousKeys[index]!;
+    const typeSource = compilerOwnDataValue(previous, key, 'Previous registry types');
+    if (typeof typeSource !== 'string') {
+      throw new TypeError(`Previous registry type ${key} must be a string.`);
+    }
+    const keys = compilerMapGet(previousByType, typeSource) ?? [];
+    keys[keys.length] = key;
+    compilerMapSet(previousByType, typeSource, keys);
   }
 
   const diagnostics: CompilerDiagnostic[] = [];
-  for (const [currentKey, typeSource] of Object.entries(current).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    const previousKeys = (previousByType.get(typeSource) ?? [])
-      .filter((previousKey) => previousKey !== currentKey)
-      .sort((left, right) => left.localeCompare(right));
-    if (previousKeys.length !== 1 || previous[currentKey] === typeSource) continue;
+  const currentKeys = stableSortedCopy(
+    compilerObjectKeys(current),
+    compilerStringLocaleCompare,
+    'registry type keys',
+  );
+  for (let currentIndex = 0; currentIndex < currentKeys.length; currentIndex += 1) {
+    const currentKey = currentKeys[currentIndex]!;
+    const typeSource = compilerOwnDataValue(current, currentKey, 'Current registry types');
+    if (typeof typeSource !== 'string') {
+      throw new TypeError(`Current registry type ${currentKey} must be a string.`);
+    }
+    const matchingPreviousKeys = compilerMapGet(previousByType, typeSource) ?? [];
+    const renamedKeys: string[] = [];
+    for (let previousIndex = 0; previousIndex < matchingPreviousKeys.length; previousIndex += 1) {
+      const previousKey = matchingPreviousKeys[previousIndex]!;
+      if (previousKey !== currentKey) renamedKeys[renamedKeys.length] = previousKey;
+    }
+    const sortedPreviousKeys = stableSortedCopy(
+      renamedKeys,
+      compilerStringLocaleCompare,
+      'previous registry type keys',
+    );
+    const previousCurrentType = compilerOwnDataValue(
+      previous,
+      currentKey,
+      'Previous registry types',
+    );
+    if (sortedPreviousKeys.length !== 1 || previousCurrentType === typeSource) continue;
 
-    diagnostics.push(registryTypeDriftDiagnostic(kind, previousKeys[0]!, currentKey, typeSource));
+    diagnostics[diagnostics.length] = registryTypeDriftDiagnostic(
+      kind,
+      sortedPreviousKeys[0]!,
+      currentKey,
+      typeSource,
+    );
   }
   return diagnostics;
 }
@@ -784,75 +1043,91 @@ function registryTypeDriftDiagnostic(
   return {
     code,
     fileName: `app graph ${kind} table`,
-    help: [
+    help: joinStrings([
       definition.help,
       `Previous registry key: ${previousKey}`,
       `Current registry key: ${currentKey}`,
       `Registry type: ${typeSource}`,
       `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
-    ].join('\n'),
+    ], '\n'),
     message: `${definition.message} ${previousKey} -> ${currentKey}.`,
     severity: definition.severity,
   };
 }
 
 function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {
-  return [
-    ...(graph.queries ?? []).flatMap((query) => query.domains),
-    ...(graph.mutations ?? []).flatMap((mutation) => mutation.writes ?? []),
-    ...(graph.mutations ?? []).flatMap((mutation) => mutation.invalidates ?? []),
-  ]
-    .filter((key, index, keys) => keys.indexOf(key) === index)
-    .sort((left, right) => left.localeCompare(right));
+  const queryDomains = flattenFactProperty<string>(
+    graph.queries ?? [],
+    'domains',
+    'Query domain facts',
+  );
+  const writes = flattenFactProperty<string>(
+    graph.mutations ?? [],
+    'writes',
+    'Mutation write facts',
+  );
+  const invalidates = flattenFactProperty<string>(
+    graph.mutations ?? [],
+    'invalidates',
+    'Mutation invalidation facts',
+  );
+  return uniqueSorted(concatDense(concatDense(queryDomains, writes), invalidates));
 }
 
 function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
-  return [...new Set((graph.components ?? []).map((component) => component.name))].sort(
-    (left, right) => left.localeCompare(right),
-  );
+  const components = compilerSnapshotDenseArray(graph.components ?? [], 'Component graph facts');
+  const names: string[] = [];
+  for (let index = 0; index < components.length; index += 1) {
+    names[names.length] = components[index]!.name;
+  }
+  return uniqueSorted(names);
 }
 
 function disambiguateComponentDomNames(
   components: readonly ComponentGraphFact[],
 ): ComponentGraphFact[] {
-  const counts = new Map<string, number>();
-  for (const component of components) {
+  const counts = compilerCreateMap<string, number>();
+  const snapshot = compilerSnapshotDenseArray(components, 'Component graph facts');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const component = snapshot[index]!;
     const domName = component.domName;
     if (!domName) continue;
-    counts.set(domName, (counts.get(domName) ?? 0) + 1);
+    compilerMapSet(counts, domName, (compilerMapGet(counts, domName) ?? 0) + 1);
   }
 
-  return components.map((component) => {
+  const result: ComponentGraphFact[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const component = snapshot[index]!;
     const domName = component.domName;
-    if (!domName || (counts.get(domName) ?? 0) < 2) return component;
-    if (component.disambiguatedDomName === component.name) return component;
-
-    return {
-      ...component,
-      disambiguatedDomName: component.name,
-    };
-  });
+    result[result.length] =
+      !domName ||
+      (compilerMapGet(counts, domName) ?? 0) < 2 ||
+      component.disambiguatedDomName === component.name
+        ? component
+        : { ...component, disambiguatedDomName: component.name };
+  }
+  return result;
 }
 
 function deriveFragmentTargetsFromGraph(graph: RegistryGraphInput): string[] {
-  return [
-    ...new Set((graph.components ?? []).flatMap((component) => component.fragments ?? [])),
-  ].sort((left, right) => left.localeCompare(right));
+  return uniqueSorted(
+    flattenFactProperty(graph.components ?? [], 'fragments', 'Component fragment facts'),
+  );
 }
 
 function deriveStatefulComponentsFromGraph(graph: RegistryGraphInput): string[] {
-  return [
-    ...new Set(
-      (graph.components ?? [])
-        .filter((component) => component.mutableLocalState === true)
-        .map((component) => component.name),
-    ),
-  ].sort((left, right) => left.localeCompare(right));
+  const components = compilerSnapshotDenseArray(graph.components ?? [], 'Component graph facts');
+  const names: string[] = [];
+  for (let index = 0; index < components.length; index += 1) {
+    const component = components[index]!;
+    if (component.mutableLocalState === true) names[names.length] = component.name;
+  }
+  return uniqueSorted(names);
 }
 
 function deriveViewTransitionsFromGraph(graph: RegistryGraphInput): string[] {
-  return [...new Set((graph.pages ?? []).flatMap((page) => page.viewTransitions ?? []))].sort(
-    (left, right) => left.localeCompare(right),
+  return uniqueSorted(
+    flattenFactProperty(graph.pages ?? [], 'viewTransitions', 'Page view-transition facts'),
   );
 }
 
@@ -861,69 +1136,94 @@ function derivedPageFactsFromRoutePages(
   components: readonly ComponentGraphFact[],
 ): CoreGraph.PageExplain[] {
   const componentQueriesByExportName = componentQueryMap(components);
-
-  return routePages.map((page) => {
+  const pages = compilerSnapshotDenseArray(routePages, 'Route-page facts');
+  const results: CoreGraph.PageExplain[] = [];
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex]!;
     const queries = pageComponentQueries(page, componentQueriesByExportName);
     const componentQueryNamesByLocalName = routePageComponentQueryNamesByLocalName(
       page,
       componentQueriesByExportName,
     );
-    const navigationSegments = (page.navigationSegments ?? []).map((segment) => {
-      const segmentQueries =
-        segment.kind === 'page'
-          ? uniqueSorted(
-              (segment.components ?? []).flatMap(
-                (component) => componentQueryNamesByLocalName.get(component) ?? [],
-              ),
-            )
-          : (segment.queries ?? []);
+    const navigationSegmentFacts = compilerSnapshotDenseArray(
+      page.navigationSegments ?? [],
+      'Route-page navigation segments',
+    );
+    const navigationSegments: CoreGraph.PageNavigationSegmentExplain[] = [];
+    for (let segmentIndex = 0; segmentIndex < navigationSegmentFacts.length; segmentIndex += 1) {
+      const segment = navigationSegmentFacts[segmentIndex]!;
+      let segmentQueries = compilerSnapshotDenseArray(
+        segment.queries ?? [],
+        'Route-page navigation queries',
+      );
+      if (segment.kind === 'page') {
+        segmentQueries = [];
+        const segmentComponents = compilerSnapshotDenseArray(
+          segment.components ?? [],
+          'Route-page navigation components',
+        );
+        for (let index = 0; index < segmentComponents.length; index += 1) {
+          segmentQueries = concatDense(
+            segmentQueries,
+            compilerMapGet(componentQueryNamesByLocalName, segmentComponents[index]!) ?? [],
+          );
+        }
+        segmentQueries = uniqueSorted(segmentQueries);
+      }
 
-      return {
+      navigationSegments[navigationSegments.length] = {
         ...(segment.components === undefined ? {} : { components: segment.components }),
         id: segment.id,
         kind: segment.kind,
         name: segment.localName,
         ...(segmentQueries.length === 0 ? {} : { queries: segmentQueries }),
       };
-    });
+    }
 
-    return {
+    const layouts: CoreGraph.PageLayoutExplain[] = [];
+    const layoutFacts = compilerSnapshotDenseArray(page.layouts ?? [], 'Route-page layouts');
+    for (let index = 0; index < layoutFacts.length; index += 1) {
+      const layout = layoutFacts[index]!;
+      layouts[layouts.length] = { name: layout.localName, queries: layout.queries };
+    }
+
+    results[results.length] = {
       ...(page.access === undefined ? {} : { access: page.access }),
       ...(page.guards === undefined || page.guards.length === 0 ? {} : { guards: page.guards }),
-      ...(page.layouts && page.layouts.length > 0
-        ? {
-            layouts: page.layouts.map((layout) => ({
-              name: layout.localName,
-              queries: layout.queries,
-            })),
-          }
-        : {}),
+      ...(layouts.length > 0 ? { layouts } : {}),
       ...(navigationSegments.length > 0 ? { navigationSegments } : {}),
       ...(queries.length === 0 ? {} : { queries }),
       route: page.route,
     };
-  });
+  }
+  return results;
 }
 
 function mergeGraphPages(
   authoredPages: readonly CoreGraph.PageExplain[],
   routePages: readonly CoreGraph.PageExplain[],
 ): CoreGraph.PageExplain[] {
-  const result = [...authoredPages];
-  const routeCounts = new Map<string, number>();
-  for (const page of routePages)
-    routeCounts.set(page.route, (routeCounts.get(page.route) ?? 0) + 1);
+  const result = compilerSnapshotDenseArray(authoredPages, 'Authored graph pages');
+  const derivedPages = compilerSnapshotDenseArray(routePages, 'Derived graph pages');
+  const routeCounts = compilerCreateMap<string, number>();
+  for (let index = 0; index < derivedPages.length; index += 1) {
+    const page = derivedPages[index]!;
+    compilerMapSet(routeCounts, page.route, (compilerMapGet(routeCounts, page.route) ?? 0) + 1);
+  }
 
-  for (const page of routePages) {
-    const authoredMatches = result
-      .map((candidate, index) => ({ candidate, index }))
-      .filter(({ candidate }) => candidate.route === page.route);
-    if ((routeCounts.get(page.route) ?? 0) === 1 && authoredMatches.length === 1) {
-      const [match] = authoredMatches;
-      if (!match) continue;
-      result[match.index] = mergeGraphPage(match.candidate, page);
+  for (let pageIndex = 0; pageIndex < derivedPages.length; pageIndex += 1) {
+    const page = derivedPages[pageIndex]!;
+    let matchIndex = -1;
+    let matchCount = 0;
+    for (let index = 0; index < result.length; index += 1) {
+      if (result[index]!.route !== page.route) continue;
+      matchIndex = index;
+      matchCount += 1;
+    }
+    if ((compilerMapGet(routeCounts, page.route) ?? 0) === 1 && matchCount === 1) {
+      result[matchIndex] = mergeGraphPage(result[matchIndex]!, page);
     } else {
-      result.push(page);
+      result[result.length] = page;
     }
   }
 
@@ -949,7 +1249,9 @@ function mergeGraphPage(
     ...(authoredPage.queries === undefined && derivedPage.queries === undefined
       ? {}
       : {
-          queries: uniqueSorted([...(authoredPage.queries ?? []), ...(derivedPage.queries ?? [])]),
+          queries: uniqueSorted(
+            concatDense(authoredPage.queries ?? [], derivedPage.queries ?? []),
+          ),
         }),
   };
 }
@@ -957,12 +1259,14 @@ function mergeGraphPage(
 function componentQueryMap(
   components: readonly ComponentGraphFact[],
 ): ReadonlyMap<string, readonly string[]> {
-  const queriesByExportName = new Map<string, string[]>();
+  const queriesByExportName = compilerCreateMap<string, string[]>();
+  const snapshot = compilerSnapshotDenseArray(components, 'Component graph facts');
 
-  for (const component of components) {
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const component = snapshot[index]!;
     const exportName = component.exportName;
     if (!exportName) continue;
-    queriesByExportName.set(exportName, uniqueSorted(component.queries ?? []));
+    compilerMapSet(queriesByExportName, exportName, uniqueSorted(component.queries ?? []));
   }
 
   return queriesByExportName;
@@ -972,24 +1276,33 @@ function pageComponentQueries(
   page: RoutePageFact,
   componentQueriesByExportName: ReadonlyMap<string, readonly string[]>,
 ): string[] {
-  return uniqueSorted(
-    page.components.flatMap(
-      (component) =>
-        componentQueriesByExportName.get(routePageComponentExportName(component)) ?? [],
-    ),
-  );
+  const components = compilerSnapshotDenseArray(page.components, 'Route-page components');
+  let queries: string[] = [];
+  for (let index = 0; index < components.length; index += 1) {
+    queries = concatDense(
+      queries,
+      compilerMapGet(
+        componentQueriesByExportName,
+        routePageComponentExportName(components[index]!),
+      ) ?? [],
+    );
+  }
+  return uniqueSorted(queries);
 }
 
 function routePageComponentQueryNamesByLocalName(
   page: RoutePageFact,
   componentQueriesByExportName: ReadonlyMap<string, readonly string[]>,
 ): ReadonlyMap<string, readonly string[]> {
-  const result = new Map<string, readonly string[]>();
+  const result = compilerCreateMap<string, readonly string[]>();
+  const components = compilerSnapshotDenseArray(page.components, 'Route-page components');
 
-  for (const component of page.components) {
-    result.set(
+  for (let index = 0; index < components.length; index += 1) {
+    const component = components[index]!;
+    compilerMapSet(
+      result,
       component.localName,
-      componentQueriesByExportName.get(routePageComponentExportName(component)) ?? [],
+      compilerMapGet(componentQueriesByExportName, routePageComponentExportName(component)) ?? [],
     );
   }
 
@@ -1028,20 +1341,22 @@ function componentQueryNameFacts(
   model: ComponentModuleModel | undefined,
   sourceFileName: string | undefined,
 ): string[] {
-  return uniqueSorted(
-    entries.flatMap((entry) => {
-      const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
-      return [
-        entry.key,
-        ...(queryExpression
-          ? [
-              queryExpression,
-              derivedImportedQueryKey(sourceFileName, model?.namedImports ?? [], queryExpression),
-            ]
-          : []),
-      ].filter(isString);
-    }),
-  );
+  const snapshot = compilerSnapshotDenseArray(entries, 'Component query entries');
+  const names: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const entry = snapshot[index]!;
+    names[names.length] = entry.key;
+    const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+    if (!queryExpression) continue;
+    names[names.length] = queryExpression;
+    const importedKey = derivedImportedQueryKey(
+      sourceFileName,
+      model?.namedImports ?? [],
+      queryExpression,
+    );
+    if (importedKey !== undefined) names[names.length] = importedKey;
+  }
+  return uniqueSorted(names);
 }
 
 function derivedImportedQueryKey(
@@ -1050,9 +1365,18 @@ function derivedImportedQueryKey(
   queryExpression: string,
 ): string | undefined {
   if (!fileName) return undefined;
-  const namedImport = imports.find(
-    (entry) => entry.localName === queryExpression && entry.moduleSpecifier.startsWith('.'),
-  );
+  const importSnapshot = compilerSnapshotDenseArray(imports, 'Component named imports');
+  let namedImport: NamedImportModel | undefined;
+  for (let index = 0; index < importSnapshot.length; index += 1) {
+    const entry = importSnapshot[index]!;
+    if (
+      entry.localName === queryExpression &&
+      compilerStringStartsWith(entry.moduleSpecifier, '.')
+    ) {
+      namedImport = entry;
+      break;
+    }
+  }
   if (!namedImport) return undefined;
 
   return deriveRegistryIdentity(
@@ -1062,71 +1386,119 @@ function derivedImportedQueryKey(
 }
 
 function resolveImportedSourceFileName(fileName: string, moduleSpecifier: string): string {
-  return join(dirname(fileName), moduleSpecifier).split(/[\\/]/).join('/');
-}
-
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
+  return compilerRegExpReplace(/[\\/]/g, join(dirname(fileName), moduleSpecifier), '/');
 }
 
 function componentQueryBindingNames(component: ComponentModel): string[] {
-  return componentOptionObjectEntriesFor(component, 'queries').map((entry) => entry.key);
+  return objectEntryKeys(componentOptionObjectEntriesFor(component, 'queries'), 'query');
 }
 
 function componentPropNames(component: ComponentModel): string[] {
-  return componentOptionObjectEntriesFor(component, 'props').map((entry) => entry.key);
+  return objectEntryKeys(componentOptionObjectEntriesFor(component, 'props'), 'prop');
 }
 
 function componentQueryBindingFacts(component: ComponentModel): LiveTargetQueryBindingFact[] {
-  return componentOptionObjectEntriesFor(component, 'queries').map((entry) => {
+  const entries = compilerSnapshotDenseArray(
+    componentOptionObjectEntriesFor(component, 'queries'),
+    'Component query entries',
+  );
+  const facts: LiveTargetQueryBindingFact[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
     const parsed = entry.value ? queryBindingFromExpression(entry.value) : null;
-    return {
+    facts[facts.length] = {
       name: entry.key,
       ...(parsed ?? { queryExpression: entry.value ?? entry.key }),
     };
-  });
+  }
+  return facts;
 }
 
 function fragmentTargetPropsType(component: ComponentModel): string {
-  const props = componentOptionObjectEntriesFor(component, 'props').map((entry) => ({
-    key: entry.key,
-    type: entry.staticConstructorType ?? 'unknown',
-  }));
+  const entries = compilerSnapshotDenseArray(
+    componentOptionObjectEntriesFor(component, 'props'),
+    'Component prop entries',
+  );
+  const props: { key: string; type: string }[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    props[props.length] = { key: entry.key, type: entry.staticConstructorType ?? 'unknown' };
+  }
 
   if (props.length === 0) return '{}';
 
-  return `{ ${props.map((prop) => `${prop.key}: ${prop.type}`).join('; ')} }`;
+  const parts: string[] = [];
+  for (let index = 0; index < props.length; index += 1) {
+    const prop = props[index]!;
+    parts[parts.length] = `${prop.key}: ${prop.type}`;
+  }
+  return `{ ${joinStrings(parts, '; ')} }`;
 }
 
 function liveTargetCoverageFacts(
   coverage: readonly QueryUpdateCoverageFact[],
   component: ComponentModel,
 ): LiveTargetCoverageFact[] {
-  return coverage
-    .filter(
-      (fact) => component.localName === undefined || fact.componentName === component.localName,
-    )
-    .map((fact) => ({
+  const snapshot = compilerSnapshotDenseArray(coverage, 'Live-target coverage facts');
+  const facts: LiveTargetCoverageFact[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const fact = snapshot[index]!;
+    if (component.localName !== undefined && fact.componentName !== component.localName) continue;
+    facts[facts.length] = {
       position: fact.position,
       query: fact.query,
       status: fact.status,
-    }));
+    };
+  }
+  return facts;
+}
+
+function objectEntryKeys(entries: readonly ObjectLiteralEntry[], label: string): string[] {
+  const snapshot = compilerSnapshotDenseArray(entries, `Component ${label} entries`);
+  const keys: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    keys[keys.length] = snapshot[index]!.key;
+  }
+  return keys;
 }
 
 function deriveInvalidationFactsFromGraph(
   graph: RegistryGraphInput,
 ): Readonly<Record<string, readonly string[]>> {
-  const queries = graph.queries ?? [];
-  const invalidations: Record<string, string[]> = {};
+  const queries = compilerSnapshotDenseArray(graph.queries ?? [], 'Registry graph queries');
+  const mutations = compilerSnapshotDenseArray(graph.mutations ?? [], 'Registry graph mutations');
+  const invalidations = compilerCreateNullRecord<string[]>();
 
-  for (const mutation of graph.mutations ?? []) {
+  for (let mutationIndex = 0; mutationIndex < mutations.length; mutationIndex += 1) {
+    const mutation = mutations[mutationIndex]!;
     const invalidatedDomains = mutation.invalidates ?? mutation.writes ?? [];
-    const invalidatedQueries = queries
-      .filter((query) => query.domains.some((domain) => invalidatedDomains.includes(domain)))
-      .map((query) => query.query);
+    const invalidatedDomainSet = compilerCreateSet<string>();
+    const domainSnapshot = compilerSnapshotDenseArray(
+      invalidatedDomains,
+      `Mutation ${mutation.key} invalidated domains`,
+    );
+    for (let index = 0; index < domainSnapshot.length; index += 1) {
+      compilerSetAdd(invalidatedDomainSet, domainSnapshot[index]!);
+    }
+    const invalidatedQueries: string[] = [];
+    for (let queryIndex = 0; queryIndex < queries.length; queryIndex += 1) {
+      const query = queries[queryIndex]!;
+      const queryDomains = compilerSnapshotDenseArray(
+        query.domains,
+        `Query ${query.query} domains`,
+      );
+      let overlaps = false;
+      for (let domainIndex = 0; domainIndex < queryDomains.length; domainIndex += 1) {
+        if (compilerSetHas(invalidatedDomainSet, queryDomains[domainIndex]!)) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (overlaps) invalidatedQueries[invalidatedQueries.length] = query.query;
+    }
 
     if (invalidatedQueries.length > 0) {
-      invalidations[mutation.key] = [...new Set(invalidatedQueries)].sort();
+      invalidations[mutation.key] = uniqueSorted(invalidatedQueries);
     }
   }
 
