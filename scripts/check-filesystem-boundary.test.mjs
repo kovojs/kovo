@@ -5,6 +5,8 @@ import {
   defaultAllowedToolingFiles,
   filesystemBoundaryFile,
   filesystemIntrinsicsFile,
+  presetRetentionPolicyFile,
+  presetRetentionPolicyFindings,
   staticExportEndpointBlockerFile,
   staticExportEndpointBlockerFindings,
   staticExportReplayArtifactCommitFindings,
@@ -146,6 +148,31 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
     ).toEqual([]);
   });
 
+  it('C202 pins deploy-skew retention classification to the emitted module snapshot', () => {
+    expect(
+      presetRetentionPolicyFindings(
+        presetRetentionPolicyFile,
+        'const retained = build.clientModules.filter((module) => !isRuntime(module));',
+      ),
+    ).toContain(
+      `${presetRetentionPolicyFile}:1: deploy-skew retention policy must not classify client modules through mutable collection methods`,
+    );
+    expect(
+      presetRetentionPolicyFindings(
+        presetRetentionPolicyFile,
+        `
+          const clientModules = snapshotBuildArray(
+            build.clientModules,
+            'preset deploy-skew client modules',
+          );
+          for (let index = 0; index < clientModules.length; index += 1) {
+            if (!isRuntime(clientModules[index])) break;
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects raw fs access outside the filesystem boundary', () => {
     const result = runFixture({
       [filesystemBoundaryFile]: 'export const boundary = true;',
@@ -183,6 +210,7 @@ export function escape(root: string, key: string) {
       allowedRuntimeFiles: [filesystemBoundaryFile],
       allowedToolingFiles: ['packages/server/src/build.ts'],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      presetRetentionPolicyFiles: [],
       readText: (relativePath) =>
         relativePath === 'packages/server/src/build.ts'
           ? "import { readFile } from 'node:fs/promises';"

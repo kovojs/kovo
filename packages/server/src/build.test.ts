@@ -597,6 +597,57 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('C202 keeps KV417 retention policy blocking after route-time Array.filter replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-client-retention-filter-'));
+    const originalFilter = Array.prototype.filter;
+    let poisonHits = 0;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                Array.prototype.filter = function omitVersionedClientModules(callback, thisArg) {
+                  for (let index = 0; index < this.length; index += 1) {
+                    const candidate = this[index] as { path?: unknown } | undefined;
+                    if (
+                      typeof candidate?.path === 'string' &&
+                      candidate.path.startsWith('/c/__v/') &&
+                      !candidate.path.endsWith('/kovo-runtime.client.js')
+                    ) {
+                      poisonHits += 1;
+                      return [];
+                    }
+                  }
+                  return Reflect.apply(originalFilter, this, [callback, thisArg]);
+                } as typeof Array.prototype.filter;
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/app.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
+            source: 'export const app = true;',
+            version: 'app-v1',
+          },
+        ],
+        outDir: join(root, '.kovo'),
+      });
+
+      expect(node().inspect!(build, { declaredEnv: [] })).toEqual([
+        clientModuleRetentionError('node'),
+      ]);
+      expect(poisonHits).toBe(0);
+    } finally {
+      Array.prototype.filter = originalFilter;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails closed when a task-using build targets a preset without a JobRunner', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-task-preset-runner-'));
     const sendReceipt = task('receipt/send', {

@@ -18,6 +18,7 @@ export const protocolFreeFilesystemEnumerationFiles = [
 ];
 export const staticExportEndpointBlockerFile = 'packages/server/src/static-export-document.ts';
 export const staticExportReplayArtifactFile = 'packages/server/src/static-export-replay.ts';
+export const presetRetentionPolicyFile = 'packages/server/src/build.ts';
 
 export const defaultAllowedRuntimeFiles = [
   filesystemBoundaryFile,
@@ -61,6 +62,9 @@ export function checkFilesystemBoundary(options = {}) {
   );
   const staticExportReplayArtifactFiles = new Set(
     options.staticExportReplayArtifactFiles ?? [staticExportReplayArtifactFile],
+  );
+  const presetRetentionPolicyFiles = new Set(
+    options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
   );
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
@@ -113,6 +117,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (staticExportReplayArtifactFiles.has(filePath)) {
       findings.push(...staticExportReplayArtifactCommitFindings(filePath, sourceText));
+    }
+    if (presetRetentionPolicyFiles.has(filePath)) {
+      findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
     }
 
     if (!allowed && usesPathConfinementPrimitive(scanText, importedPathNames)) {
@@ -176,6 +183,35 @@ export function staticExportReplayArtifactCommitFindings(filePath, sourceText) {
   if (!/\bcommitBuildArrayValue\s*\(\s*artifacts\s*,\s*approvedArtifact\s*,/u.test(scanText)) {
     findings.push(
       `${filePath}: approved static-export route bytes must commit through commitBuildArrayValue() after replay classification`,
+    );
+  }
+  return findings;
+}
+
+export function presetRetentionPolicyFindings(filePath, sourceText) {
+  const scanText = stripCommentsAndStrings(sourceText);
+  const findings = [];
+  const mutableClassification =
+    /\bbuild\s*\.\s*clientModules\s*\.\s*(?:every|filter|find|findIndex|forEach|map|reduce|some)\s*\(/u.exec(
+      scanText,
+    );
+  if (mutableClassification !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableClassification.index)}: deploy-skew retention policy must not classify client modules through mutable collection methods`,
+    );
+  }
+  if (!/\bsnapshotBuildArray\s*\(\s*build\s*\.\s*clientModules\s*,/u.test(scanText)) {
+    findings.push(
+      `${filePath}: deploy-skew retention policy must snapshot the complete emitted client-module ledger`,
+    );
+  }
+  if (
+    !/\bfor\s*\(\s*let\s+[A-Za-z_$][\w$]*\s*=\s*0\s*;[^;]*<\s*clientModules\s*\.\s*length\s*;[^)]*\+=\s*1\s*\)/u.test(
+      scanText,
+    )
+  ) {
+    findings.push(
+      `${filePath}: deploy-skew retention policy must classify pinned client modules with indexed traversal`,
     );
   }
   return findings;

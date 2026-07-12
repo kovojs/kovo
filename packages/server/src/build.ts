@@ -14,8 +14,10 @@ import {
   buildSecurityFunctionSource,
   buildSecuritySha256Hex,
   buildSecuritySourceLiteral,
+  snapshotBuildArray,
 } from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
+import { securityStringEndsWith } from './response-security-intrinsics.js';
 import {
   staticHostHeaders,
   staticHostImmutableAssetPathPatternFlags,
@@ -35,6 +37,7 @@ const revalidatingAssetHeadersSource = buildSecuritySourceLiteral(
 );
 const documentStaticHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('document'));
 const staticErrorHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('errorDocument'));
+const frameworkRuntimeClientModulePathSuffix = kovoDeferredRuntimeModulePath.replace(/^\/c\//, '/');
 const nativeExecFileSync = execFileSync;
 const nodeExecutablePath = process.execPath;
 
@@ -460,10 +463,19 @@ function clientModuleRetentionDiagnostics(
   presetName: string,
   options: DeploySkewPresetOptions,
 ): PresetDiagnostic[] {
-  const retainedClientModules = build.clientModules.filter(
-    (module) => !isFrameworkRuntimeClientModule(module),
+  // SPEC §6.6/§14: route evaluation precedes preset inspection. Pin the complete emitted-module
+  // ledger and classify it with indexed traversal so app code cannot suppress KV417 via Array.filter.
+  const clientModules = snapshotBuildArray(
+    build.clientModules,
+    'preset deploy-skew client modules',
   );
-  if (retainedClientModules.length === 0) return [];
+  let hasRetainedClientModule = false;
+  for (let index = 0; index < clientModules.length; index += 1) {
+    if (isFrameworkRuntimeClientModule(clientModules[index]!)) continue;
+    hasRetainedClientModule = true;
+    break;
+  }
+  if (!hasRetainedClientModule) return [];
   if (deploySkewRetentionProofSatisfiesFloor(options.retention)) return [];
 
   return [
@@ -590,7 +602,7 @@ function isFrameworkRuntimeClientModule(
   module: KovoNeutralBuild['clientModules'][number],
 ): boolean {
   return (
-    module.path.endsWith(kovoDeferredRuntimeModulePath.replace(/^\/c\//, '/')) &&
+    securityStringEndsWith(module.path, frameworkRuntimeClientModulePathSuffix) &&
     module.version === kovoDeferredRuntimeModuleVersion
   );
 }
