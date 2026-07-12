@@ -31,6 +31,7 @@ const NativeURL = globalThis.URL;
 const NativePromise = globalThis.Promise;
 const NativeReadableStream = globalThis.ReadableStream;
 const NativeReadableStreamDefaultController = globalThis.ReadableStreamDefaultController;
+const NativeResponse = globalThis.Response;
 const nativeCreateHash = createHash;
 const nativeRandomBytes = randomBytes;
 
@@ -53,6 +54,8 @@ const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
 const nativeHeadersGet = NativeHeaders.prototype.get;
+const nativeHeadersDelete = NativeHeaders.prototype.delete;
+const nativeHeadersSet = NativeHeaders.prototype.set;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
@@ -89,6 +92,11 @@ const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
 const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
+const nativeResponseBody = stableOwnGetter(NativeResponse.prototype, 'body');
+const nativeResponseHeaders = stableOwnGetter(NativeResponse.prototype, 'headers');
+const nativeResponseStatus = stableOwnGetter(NativeResponse.prototype, 'status');
+const nativeResponseStatusText = stableOwnGetter(NativeResponse.prototype, 'statusText');
+const nativeResponseText = stableOwnFunction(NativeResponse.prototype, 'text');
 const nativeControllerClose = NativeReadableStreamDefaultController.prototype.close;
 const nativeControllerEnqueue = NativeReadableStreamDefaultController.prototype.enqueue;
 const nativeControllerError = NativeReadableStreamDefaultController.prototype.error;
@@ -164,6 +172,20 @@ function stableOwnAccessor(value: object, property: PropertyKey): Function {
 
 function capturedControlsAreSound(): boolean {
   try {
+    const response = new NativeResponse('safe', {
+      headers: { 'x-kovo-control': 'safe' },
+      status: 201,
+      statusText: 'Created',
+    });
+    const responseHeaders = apply<Headers>(nativeResponseHeaders, response, []);
+    if (
+      apply(nativeResponseStatus, response, []) !== 201 ||
+      apply(nativeResponseStatusText, response, []) !== 'Created' ||
+      apply(nativeHeadersGet, responseHeaders, ['x-kovo-control']) !== 'safe' ||
+      apply(nativeResponseBody, response, []) === null
+    ) {
+      return false;
+    }
     const shell = ['<!doctype html>', '<html><body>safe</body></html>'];
     if (apply(nativeArrayJoin, shell, ['']) !== '<!doctype html><html><body>safe</body></html>') {
       return false;
@@ -638,9 +660,54 @@ export function securityHeadersGet(headers: Headers, name: string): string | nul
   return apply(nativeHeadersGet, headers, [name]);
 }
 
+export function securityHeadersDelete(headers: Headers, name: string): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeHeadersDelete, headers, [name]);
+}
+
+export function securityHeadersSet(headers: Headers, name: string, value: string): void {
+  assertResponseSecurityIntrinsics();
+  apply(nativeHeadersSet, headers, [name, value]);
+}
+
 export function createSecurityHeaders(init?: unknown): Headers {
   assertResponseSecurityIntrinsics();
   return new NativeHeaders(init as HeadersInit | undefined);
+}
+
+export function createSecurityResponse(body?: BodyInit | null, init?: ResponseInit): Response {
+  assertResponseSecurityIntrinsics();
+  return new NativeResponse(body, init);
+}
+
+export function securityIsResponse(value: unknown): value is Response {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeFunctionHasInstance, NativeResponse, [value]);
+}
+
+export function securityResponseBody(response: Response): ReadableStream<Uint8Array> | null {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeResponseBody, response, []);
+}
+
+export function securityResponseHeaders(response: Response): Headers {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeResponseHeaders, response, []);
+}
+
+export function securityResponseStatus(response: Response): number {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeResponseStatus, response, []);
+}
+
+export function securityResponseStatusText(response: Response): string {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeResponseStatusText, response, []);
+}
+
+export function securityResponseText(response: Response): Promise<string> {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeResponseText, response, []);
 }
 
 export function createSecurityNullRecord<Value = unknown>(): Record<PropertyKey, Value> {

@@ -24,7 +24,18 @@ import { renderFragmentWireHtml } from './wire-html.js';
 import type { ServerErrorDiagnosticContext } from './diagnostics.js';
 import { scrubConsoleArgs } from './logging.js';
 import {
+  createSecurityHeaders,
+  createSecurityResponse,
   securityArrayJoin,
+  securityHeadersDelete,
+  securityHeadersGet,
+  securityHeadersSet,
+  securityIsResponse,
+  securityResponseBody,
+  securityResponseHeaders,
+  securityResponseStatus,
+  securityResponseStatusText,
+  securityResponseText,
   securityStringIncludes,
   securityStringIndexOf,
   securityStringSlice,
@@ -506,7 +517,7 @@ function renderKovoAppShellViteDevHmrResponse(
 }
 
 function renderKovoHmrClientResponse(): Response {
-  return new Response(kovoHmrClientSource(), {
+  return createSecurityResponse(kovoHmrClientSource(), {
     headers: {
       'Cache-Control': 'no-store',
       'Content-Type': 'text/javascript; charset=utf-8',
@@ -529,7 +540,7 @@ async function renderKovoHmrRouteRefreshResponse(
 
   const webRequest = nodeRequestToWebRequest(request);
   const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
-  if (targetUrl instanceof Response) return targetUrl;
+  if (securityIsResponse(targetUrl)) return targetUrl;
 
   const diagnosticResponse = renderKovoAppShellViteDevDiagnosticResponse(
     app,
@@ -590,7 +601,7 @@ async function renderKovoHmrLiveTargetRefreshResponse(
 
   const webRequest = nodeRequestToWebRequest(request);
   const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
-  if (targetUrl instanceof Response) return targetUrl;
+  if (securityIsResponse(targetUrl)) return targetUrl;
 
   const chunks = await renderLiveTargetChunks(
     app.liveTargetRenderers,
@@ -612,7 +623,7 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     );
   }
 
-  return new Response(securityArrayJoin(chunks, '\n'), {
+  return createSecurityResponse(securityArrayJoin(chunks, '\n'), {
     headers: hmrRefreshHeaders(
       app,
       'live-targets',
@@ -682,10 +693,15 @@ function withKovoHmrRefreshHeaders(
   refreshKind: 'live-targets' | 'route',
   previousBuildToken: string | undefined,
 ): Response {
-  return new Response(response.body, {
-    headers: hmrRefreshHeaders(app, refreshKind, response.headers, previousBuildToken),
-    status: response.status,
-    statusText: response.statusText,
+  return createSecurityResponse(securityResponseBody(response), {
+    headers: hmrRefreshHeaders(
+      app,
+      refreshKind,
+      securityResponseHeaders(response),
+      previousBuildToken,
+    ),
+    status: securityResponseStatus(response),
+    statusText: securityResponseStatusText(response),
   });
 }
 
@@ -701,9 +717,9 @@ function hmrRefreshTextResponse(
   const headers = hmrRefreshHeaders(app, options.refreshKind, {
     'Content-Type': 'text/plain; charset=utf-8',
   });
-  if (options.fallback) headers.set('Kovo-HMR-Fallback', options.fallback);
+  if (options.fallback) securityHeadersSet(headers, 'Kovo-HMR-Fallback', options.fallback);
 
-  return new Response(message, { headers, status });
+  return createSecurityResponse(message, { headers, status });
 }
 
 function hmrRefreshHeaders(
@@ -712,12 +728,12 @@ function hmrRefreshHeaders(
   initialHeaders: HeadersInit = {},
   previousBuildToken?: string,
 ): Headers {
-  const headers = new Headers(initialHeaders);
+  const headers = createSecurityHeaders(initialHeaders);
   const buildToken = app?.clientModules.buildToken() ?? '';
 
-  if (refreshKind) headers.set('Kovo-HMR-Refresh', refreshKind);
-  if (buildToken !== '') headers.set('Kovo-Build', buildToken);
-  if (previousBuildToken) headers.set('Kovo-Previous-Build', previousBuildToken);
+  if (refreshKind) securityHeadersSet(headers, 'Kovo-HMR-Refresh', refreshKind);
+  if (buildToken !== '') securityHeadersSet(headers, 'Kovo-Build', buildToken);
+  if (previousBuildToken) securityHeadersSet(headers, 'Kovo-Previous-Build', previousBuildToken);
 
   return headers;
 }
@@ -749,16 +765,18 @@ function injectKovoHmrScriptIntoRouteResponse(response: RoutePageResponse): Rout
 }
 
 async function injectKovoHmrScriptIntoWebResponse(response: Response): Promise<Response> {
-  const contentType = response.headers.get('Content-Type') ?? response.headers.get('content-type');
-  if (!shouldInjectKovoHmrScript(response.status, contentType, null)) return response;
+  const responseHeaders = securityResponseHeaders(response);
+  const contentType = securityHeadersGet(responseHeaders, 'Content-Type');
+  const status = securityResponseStatus(response);
+  if (!shouldInjectKovoHmrScript(status, contentType, null)) return response;
 
-  const headers = new Headers(response.headers);
-  headers.delete('content-length');
+  const headers = createSecurityHeaders(responseHeaders);
+  securityHeadersDelete(headers, 'content-length');
 
-  return new Response(injectKovoHmrScript(await response.text()), {
+  return createSecurityResponse(injectKovoHmrScript(await securityResponseText(response)), {
     headers,
-    status: response.status,
-    statusText: response.statusText,
+    status,
+    statusText: securityResponseStatusText(response),
   });
 }
 
@@ -1325,7 +1343,7 @@ function renderKovoAppShellViteDevStylesheetAsset(
   const asset = devStylesheetAssets(assets).find((candidate) => candidate.href === href);
   if (!asset?.criticalCss) return undefined;
 
-  return new Response(asset.criticalCss, {
+  return createSecurityResponse(asset.criticalCss, {
     headers: {
       'Cache-Control': 'no-store',
       'Content-Type': 'text/css; charset=utf-8',

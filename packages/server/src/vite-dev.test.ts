@@ -883,8 +883,10 @@ describe('server app shell Vite dev seam', () => {
 
   it('serves and injects the dev-only HMR client through Vite middleware', async () => {
     const originalStringReplace = String.prototype.replace;
+    const NativeResponse = globalThis.Response;
     const safeDocument = '<!doctype html><html><head></head><body><main>Cart</main></body></html>';
     const poisonedDocument = '<script>globalThis.__kovoDevHmrPwned=1</script>';
+    const poisonedClient = 'globalThis.__kovoDevHmrClientPwned=1;';
     const app = createApp({
       routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
     });
@@ -941,6 +943,14 @@ describe('server app shell Vite dev seam', () => {
       } as typeof String.prototype.replace;
       const documentResponse = await fetch(`${origin}/cart`);
       const documentBody = await documentResponse.text();
+      globalThis.Response = class PoisonedHmrResponse extends NativeResponse {
+        constructor(body?: BodyInit | null, init?: ResponseInit) {
+          super(
+            typeof body === 'string' && body.includes('createHotContext') ? poisonedClient : body,
+            init,
+          );
+        }
+      };
       const clientResponse = await fetch(`${origin}/@kovo/hmr-client`);
       const clientBody = await clientResponse.text();
 
@@ -951,6 +961,7 @@ describe('server app shell Vite dev seam', () => {
       expect(documentBody).not.toContain(poisonedDocument);
       expect(clientResponse.status).toBe(200);
       expect(clientResponse.headers.get('cache-control')).toBe('no-store');
+      expect(clientBody).not.toBe(poisonedClient);
       expect(clientBody).toContain('createHotContext("/@kovo/hmr-client")');
       expect(clientBody).toContain('hot.on("kovo:component-render"');
       expect(clientBody).toContain('hot.on("kovo:diagnostics"');
@@ -958,6 +969,7 @@ describe('server app shell Vite dev seam', () => {
       expect(clientBody).toContain('/@kovo/hmr/refresh/live-targets');
     } finally {
       String.prototype.replace = originalStringReplace;
+      globalThis.Response = NativeResponse;
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       });
