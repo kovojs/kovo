@@ -12,7 +12,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | -------- | ----: | ------ |
 | Critical |    76 | C1-C76 |
 | High     |    35 | H1-H35 |
-| Medium   |    11 | M1-M11 |
+| Medium   |    12 | M1-M12 |
 
 ## Critical
 
@@ -1481,6 +1481,15 @@ build:dist` passes.
   - **Evidence:** the 68-test no-JS replay/request-body matrix uses the shared exact FormData snapshot
     boundary; distinct tagged bodies now return `IDEMPOTENCY_CONFLICT`, while identical replay and
     ordinary native FormData remain green.
+
+- [x] **M12 - The reference login shell reused one process-wide CSRF binding across browsers.**
+      `examples/reference/src/app-shell.ts`, `examples/reference/src/shell-auth-form.tsx`
+  - The hand-authored reference form bound every anonymous login token to the same server constant.
+    A token obtained by one browser was therefore valid for another browser's pre-authentication
+    flow whenever the Origin floor was not the rejecting layer.
+  - **Evidence:** the reference shell now uses compiler-owned JSX mutation forms and the framework's
+    per-browser anonymous CSRF cookie. Its real HTTP regression obtains two independent bindings and
+    proves browser A's token with browser B's cookie fails with `CSRF`; the ordinary auth flow passes.
 
 ## Latest verification
 
