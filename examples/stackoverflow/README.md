@@ -29,7 +29,7 @@ stamps, `graph.json`) — author the TSX/TS sources, not the lowered IR (SPEC §
 
 ```bash
 # Dev server (Vite-plus toolchain runner):
-pnpm --filter @kovojs/example-stackoverflow dev       # vp dev
+pnpm --filter @kovojs/example-stackoverflow dev       # bootstrap-first kovo dev
 
 # Run the tests:
 pnpm --filter @kovojs/example-stackoverflow test       # vitest --run

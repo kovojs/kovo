@@ -136,8 +136,8 @@ When the feature crosses data domains or relies on optimistic behavior, add a gr
 
 ## The commands you'll use daily
 
-`vp` is the toolchain runner (`vp dev`, `vp check`, `vp test`, `vp build`) and `kovo` is the
-framework CLI (`kovo check`, `kovo explain`, `kovo add`). The full table - and the rule for which
+`vp` is the project toolchain runner (`vp check`, `vp test`, `vp build`) and `kovo` is the
+framework CLI (`kovo dev`, `kovo check`, `kovo explain`, `kovo add`). The full table - and the rule for which
 binary does what - lives in [Installation > The everyday commands](/getting-started/installation/#the-everyday-commands).
 
 ## Next

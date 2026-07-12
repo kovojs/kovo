@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "check": "vp check",
-    "dev": "vp dev",
+    "dev": "kovo dev ./src/app-shell.ts",
     "test": "vp test"
   },
   "dependencies": {
@@ -13,6 +13,7 @@
     "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
+    "@kovojs/cli": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/node": "^25.0.0",
     "typescript": "^6.0.0",

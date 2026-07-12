@@ -74,7 +74,7 @@ repeating it.
 
 | Command                          | What it does                                                                                               |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `vp dev`                         | Dev server with the Kovo compile step.                                                                     |
+| `npm run dev`                    | Bootstrap-first Kovo dev server (`kovo dev ./src/app.tsx`).                                                |
 | `npm run check`                  | Full starter gate: `vp check`, sound-subset policy, and endpoint posture.                                  |
 | `vp check`                       | Typecheck + lint sub-gate; this is where Kovo static errors surface.                                       |
 | `npm run check:sound-subset`     | Rejects `any`, unchecked casts, and non-null assertions in starter app code.                               |

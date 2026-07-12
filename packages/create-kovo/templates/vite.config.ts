@@ -4,8 +4,9 @@ import { defineConfig } from 'vite-plus';
 const port = Number.parseInt(process.env.PORT ?? '5173', 10);
 
 // `kovo({ app })` is the Kovo dev/SSR plugin: it loads the app shell, serves route
-// documents and `/c/` handler modules, and applies the Kovo compiler. `vp dev`,
-// `vp check`, and `vp test` all run through it; `kovo build ./src/app.tsx` (see
+// documents and `/c/` handler modules, and applies the Kovo compiler. `kovo dev`
+// bootstraps it before authored config/plugins; `vp check` and `vp test` retain the
+// config integration. `kovo build ./src/app.tsx` (see
 // package.json) produces the deployable server.
 export default defineConfig({
   plugins: [kovo({ app: '/src/app.tsx' })],

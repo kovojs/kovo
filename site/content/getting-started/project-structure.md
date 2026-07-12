@@ -73,7 +73,7 @@ and uses the same `layout()` and stylesheet declaration on both pages.
   mutations for the auth forms.
 - CSRF tokens bind to an anonymous id before login and to the session id after login.
 - `seedDemoUser()` creates `demo@example.com` with the random `KOVO_DEMO_PASSWORD` from the
-  generated, gitignored `.env` file for a fresh `vp dev`.
+  generated, gitignored `.env` file for a fresh `pnpm run dev`.
 
 `create-kovo` writes a fresh `KOVO_CSRF_SECRET` and local-only `KOVO_DEMO_PASSWORD` into `.env` and
 refuses to let the app run with the CSRF placeholder. In production, set `BETTER_AUTH_SECRET` or

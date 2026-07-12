@@ -27,7 +27,7 @@ optimism spectrum: it mixes **compiler-derived** optimistic updates with a few
 
 ```bash
 # Dev server (Vite-plus toolchain runner):
-pnpm --filter @kovojs/example-crm dev       # vp dev
+pnpm --filter @kovojs/example-crm dev       # bootstrap-first kovo dev
 
 # Run the tests:
 pnpm --filter @kovojs/example-crm test       # vitest --run

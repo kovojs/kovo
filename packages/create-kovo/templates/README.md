@@ -6,7 +6,7 @@ optimistic UI, real authentication, and styled UI components — in as little co
 as possible.
 
 ```sh
-pnpm run dev         # vp dev — start the dev server
+pnpm run dev         # kovo dev — bootstrap trust roots, then start Vite
 pnpm run check       # vp check + sound-subset + endpoint posture + kovo build
 pnpm run test        # vp test
 pnpm run build:prod  # kovo build ./src/app.tsx → dist/server (node preset)
@@ -29,7 +29,8 @@ random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 | `src/app.tsx`          | The whole app: `createApp({ db, queries, mutations, routes, sessionProvider })` plus the routes. `vite.config.ts`'s `kovo({ app })` and `kovo build` both load this default export.                  |
 | `src/theme.ts`         | `defineTheme` — change the seed/custom colors to retheme everything.                                                                                                                                 |
 
-`vp dev`, `vp check`, and `vp test` run through the `kovo()` Vite plugin, which
+`kovo dev` bootstraps Kovo before loading the Vite config; `vp check` and `vp test`
+retain the `kovo()` config integration, which
 compiles the app and serves route documents and `/c/` handler modules (SPEC.md
 §9.5). `pnpm run check` also runs `kovo build`, so the compiler-derived
 dependency graph verifier runs before deploy — there is no hand-maintained graph

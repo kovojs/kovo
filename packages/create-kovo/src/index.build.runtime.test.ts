@@ -186,7 +186,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     }
   }, 180_000);
 
-  it('serves the generated app through vp dev (redirect + login + styles)', async () => {
+  it('serves the generated app through kovo dev (redirect + login + styles)', async () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-dev-'));
@@ -198,8 +198,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       linkStarterBuildDependencies(root);
 
       devServer = spawn(
-        resolveBin('vp'),
-        ['dev', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+        join(root, 'node_modules/.bin/kovo'),
+        ['dev', './src/app.tsx', '--host', '127.0.0.1', '--port', String(port), '--strict-port'],
         { cwd: root, detached: process.platform !== 'win32', env: withRepoBinOnPath() },
       );
       const output = collectOutput(devServer);
@@ -276,7 +276,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       writeKovoProject(root, { name: 'Dev Env Proof' });
       linkStarterBuildDependencies(root);
 
-      devServer = spawn(resolveBin('vp'), ['dev'], {
+      devServer = spawn(join(root, 'node_modules/.bin/kovo'), ['dev', './src/app.tsx'], {
         cwd: root,
         detached: process.platform !== 'win32',
         env: {

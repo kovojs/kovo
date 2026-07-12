@@ -18,7 +18,7 @@ Run the narrow checks in the same order the scaffold expects:
 pnpm install
 vp check
 vp test
-vp dev
+pnpm run dev
 ```
 
 If `vp check` fails, fix that before chasing browser behavior. The starter pushes most wiring
@@ -45,7 +45,7 @@ The starter signs in with `demo@example.com` plus the generated `KOVO_DEMO_PASSW
 If login fails:
 
 1. Check that `.env` still contains `KOVO_DEMO_PASSWORD`.
-2. Restart `vp dev` after changing env vars.
+2. Restart `pnpm run dev` after changing env vars.
 3. Delete the local data file or database volume only if you want to reseed from scratch.
 
 For production, remove the demo password and create real users through your own onboarding path.

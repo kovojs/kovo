@@ -14,7 +14,7 @@ Kovo authorization/confidentiality guarantees because SQLite has no engine role,
 RLS, or column-privilege layer.
 
 ```sh
-pnpm run dev         # vp dev — start the dev server
+pnpm run dev         # kovo dev — bootstrap trust roots, then start Vite
 pnpm run check       # vp check + sound-subset + endpoint posture + kovo build
 pnpm run test        # vp test
 pnpm run build:prod  # kovo build ./src/app.tsx → dist/server (node preset)
@@ -42,7 +42,8 @@ Better Auth timestamps are `integer(..., { mode: 'timestamp_ms' })` columns, and
 JSON should use `text(..., { mode: 'json' })` when you add JSON fields. Those
 mappings are the blessed SQLite subset described by the data-layer policy.
 
-`vp dev`, `vp check`, and `vp test` run through the `kovo()` Vite plugin, which
+`kovo dev` bootstraps Kovo before loading the Vite config; `vp check` and `vp test`
+retain the `kovo()` config integration, which
 compiles the app and serves route documents and `/c/` handler modules (SPEC.md
 §9.5). `pnpm run check` also runs `kovo build`, so the compiler-derived
 dependency graph verifier runs before deploy — there is no hand-maintained graph

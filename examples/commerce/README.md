@@ -31,7 +31,7 @@ the lowered IR (SPEC §5.2).
 
 ```bash
 # Dev server (Vite-plus toolchain runner):
-pnpm --filter @kovojs/example-commerce dev      # vp dev
+pnpm --filter @kovojs/example-commerce dev      # bootstrap-first kovo dev
 
 # Run the tests:
 pnpm --filter @kovojs/example-commerce test      # vp test

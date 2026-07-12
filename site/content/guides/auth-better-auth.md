@@ -221,7 +221,7 @@ Scaffold the starter, add `appSignUp` if you want first-user registration, then 
 pnpm create kovo my-app
 cd my-app
 pnpm install
-vp dev
+pnpm run dev
 ```
 
 Then check the whole loop:

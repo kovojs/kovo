@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vp build",
-    "dev": "vp dev",
+    "dev": "kovo dev ./src/app-shell.ts",
     "start": "node scripts/serve.mjs",
     "test": "vitest --run"
   },

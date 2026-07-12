@@ -6,7 +6,7 @@
   "scripts": {
     "build": "kovo build ./src/app.tsx --preset node",
     "build:demo": "vp build",
-    "dev": "vp dev",
+    "dev": "kovo dev ./src/app.tsx",
     "start": "node dist/server/server.mjs",
     "serve:demo": "pnpm run build:demo && node scripts/demo-serve.mjs",
     "serve:dev": "node scripts/serve.mjs",

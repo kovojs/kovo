@@ -1,6 +1,6 @@
 ---
 title: The kovo & vp CLIs
-description: Two distinct tools — vp runs the project toolchain, kovo answers questions about your app's graph — and how they compose through npm scripts.
+description: Use kovo for framework-aware dev, build, and graph commands; use vp for the surrounding project toolchain.
 order: 6.7
 ---
 
@@ -8,12 +8,10 @@ order: 6.7
 
 Kovo projects use **two distinct binaries**, and keeping them straight saves confusion:
 
-- **`vp`** is the **project / toolchain runner** — Vite+ (`vite-plus`). It is how you run the dev
-  server, build, test, typecheck, and run named project tasks. Day-to-day, `vp` is the command you
-  type most.
-- **`kovo`** is the **framework CLI**. It answers questions about your app's _graph_ — coverage,
-  invalidation, guards, audits — and emits compiler-backed artifacts. It is the legibility surface:
-  `kovo explain` prints the same stable, diffable text humans and agents both read.
+- **`vp`** is the **project / toolchain runner** — Vite+ (`vite-plus`). Use it for tests,
+  typechecking, packaging, and named project tasks.
+- **`kovo`** is the **framework CLI**. Use `kovo dev` for the app server, `kovo build` for deploy
+  output, and its graph commands for coverage, invalidation, guards, and audits.
 
 The two compose: `vp` orchestrates, and `kovo` is often invoked _through_ a `vp` task. For example,
 `vp run kovo-check` is a project task that runs `kovo check` under the hood (the repo wires this as
@@ -23,14 +21,14 @@ the `check:kovo` npm script).
 
 `vp` is the Vite+ runner. Its everyday commands:
 
-| Command         | What it does                                                                                                                                                                                        |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vp dev`        | Start the dev server. Regenerates Kovo registries before typechecking (so a stale registry is unrepresentable), serves pages, and reports compiler diagnostics through Vite's overlay and terminal. |
-| `vp build`      | Build the app and component packages for production.                                                                                                                                                |
-| `vp test`       | Run the project's test suites.                                                                                                                                                                      |
-| `vp check`      | Typecheck + lint. Regenerates registries first, then runs TypeScript static checking over all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, guards).                          |
-| `vp run <task>` | Run a named task from the Vite+ config — the general escape hatch for project-defined scripts.                                                                                                      |
-| `vp pack`       | Package the project / component library for publishing.                                                                                                                                             |
+| Command         | What it does                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vp dev`        | Start generic Vite directly. Do not use this for a Kovo app; it evaluates authored config before Kovo can establish its compiler trust root. Use `kovo dev <app-module>` instead. |
+| `vp build`      | Build the app and component packages for production.                                                                                                                              |
+| `vp test`       | Run the project's test suites.                                                                                                                                                    |
+| `vp check`      | Typecheck + lint. Regenerates registries first, then runs TypeScript static checking over all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, guards).        |
+| `vp run <task>` | Run a named task from the Vite+ config — the general escape hatch for project-defined scripts.                                                                                    |
+| `vp pack`       | Package the project / component library for publishing.                                                                                                                           |
 
 `vp check` is where the framework's type-level guarantees land: it regenerates the registry `.d.ts`
 files and runs `tsc`, so route renames, missing form fields, and dead links all surface as type
@@ -58,13 +56,26 @@ So `npm run check:kovo` → `vp run kovo-check` → `kovo check`. The npm script
 
 ```sh
 $ kovo
-kovo: add, audit, build, check, db, compile, explain, export, mcp, update-docs
+kovo: add, audit, build, dev, check, db, compile, explain, export, mcp, update-docs
 ```
 
 Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`,
 `kovo-db/v1`, …) — the same artifact a reviewer reads and an agent consumes.
 Every command also accepts `--help` or `-h`; use that for the exact flag surface, and use the
 [CLI API reference](/api/cli/) when you need the programmatic command wrappers.
+
+## Start the app with `kovo dev`
+
+Point `kovo dev` at the authored app entry. It loads Kovo's compiler and server controls before it
+loads `vite.config.ts` or any authored plugin, then starts the ordinary Vite server.
+
+```sh
+kovo dev ./src/app.tsx
+kovo dev ./src/app.tsx --host 127.0.0.1 --port 4173 --strict-port
+```
+
+Your Vite config still owns ordinary server, build, test, lint, and format settings. The Kovo plugin
+itself is runner-owned in dev so an authored plugin cannot replace its compiler hooks.
 
 ## Build the graph artifact first
 
@@ -325,7 +336,7 @@ to debug touch-graph consistency, optimistic exhaustiveness, and update coverage
 <details>
 <summary>Spec & diagnostics</summary>
 
-The compiler pipeline, hard rules (1:1 mapping, fixpoint, registry atomicity that `vp dev`/`vp check`
+The compiler pipeline, hard rules (1:1 mapping, fixpoint, registry atomicity that `kovo dev`/`vp check`
 rely on), and `kovo explain` sub-commands: SPEC §5.1–5.3. The verification surface — TypeScript
 checking, `kovo check`, graph queries over `kovo explain`, and the `--endpoints` machine-ingress
 audit: SPEC §11.4. Diagnostic severities and blocking policy: SPEC §11.3. Static export (`kovo
