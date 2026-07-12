@@ -6,6 +6,7 @@ import {
   createWitnessWeakSet,
   witnessFreeze,
   witnessIsArray,
+  witnessRegExpTest,
   witnessStringReplaceAll,
   witnessWeakMapGet,
   witnessWeakMapSet,
@@ -20,6 +21,7 @@ describe('server security witness intrinsics', () => {
     const originalWeakMapGet = WeakMap.prototype.get;
     const originalIsArray = Array.isArray;
     const originalReplaceAll = String.prototype.replaceAll;
+    const originalRegExpTest = RegExp.prototype.test;
     const originalWeakMapSet = WeakMap.prototype.set;
     const originalWeakSetAdd = WeakSet.prototype.add;
     const originalWeakSetHas = WeakSet.prototype.has;
@@ -28,6 +30,7 @@ describe('server security witness intrinsics', () => {
       WeakMap.prototype.get = () => ({ forged: true });
       Array.isArray = () => false;
       String.prototype.replaceAll = () => '<script>poisoned</script>';
+      RegExp.prototype.test = () => true;
       WeakMap.prototype.set = function () {
         return this;
       };
@@ -52,10 +55,12 @@ describe('server security witness intrinsics', () => {
       expect(witnessIsArray([])).toBe(true);
       expect(witnessIsArray({})).toBe(false);
       expect(witnessStringReplaceAll('a-b-a', 'a', 'x')).toBe('x-b-x');
+      expect(witnessRegExpTest(/^safe$/, 'unsafe')).toBe(false);
     } finally {
       WeakMap.prototype.get = originalWeakMapGet;
       Array.isArray = originalIsArray;
       String.prototype.replaceAll = originalReplaceAll;
+      RegExp.prototype.test = originalRegExpTest;
       WeakMap.prototype.set = originalWeakMapSet;
       WeakSet.prototype.add = originalWeakSetAdd;
       WeakSet.prototype.has = originalWeakSetHas;

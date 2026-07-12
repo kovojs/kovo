@@ -15,6 +15,7 @@ const NativeMap = globalThis.Map;
 const NativeSet = globalThis.Set;
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
+const NativeRegExp = globalThis.RegExp;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectGet = NativeReflect.get;
 const nativeReflectOwnKeys = NativeReflect.ownKeys;
@@ -56,6 +57,7 @@ const nativeSetSize = apply<PropertyDescriptor | undefined>(
 )?.get;
 const NativeString = globalThis.String;
 const nativeStringReplaceAll = NativeString.prototype.replaceAll;
+const nativeRegExpTest = NativeRegExp.prototype.test;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -189,6 +191,8 @@ function capturedControlsAreSound(): boolean {
       return false;
     }
     if (apply(nativeStringReplaceAll, 'a-b-a', ['a', 'x']) !== 'x-b-x') return false;
+    if (apply(nativeRegExpTest, /^a+$/, ['aaa']) !== true) return false;
+    if (apply(nativeRegExpTest, /^a+$/, ['a!']) !== false) return false;
     const frozen = apply<object>(nativeObjectFreeze, NativeObject, [record]);
     if (frozen !== record || apply(nativeObjectIsFrozen, NativeObject, [record]) !== true) {
       return false;
@@ -429,4 +433,9 @@ export function witnessStringReplaceAll(
 ): string {
   assertSecurityWitnessIntrinsics();
   return apply(nativeStringReplaceAll, value, [searchValue, replaceValue]);
+}
+
+export function witnessRegExpTest(expression: RegExp, value: string): boolean {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeRegExpTest, expression, [value]);
 }
