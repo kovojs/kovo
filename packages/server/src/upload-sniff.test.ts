@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   accept,
@@ -103,6 +106,31 @@ describe('storage key + filename hygiene (KV428)', () => {
     expect(key).toMatch(/^avatars\/[0-9a-f-]{36}$/u);
     expect(mintStorageKey()).toMatch(/^[0-9a-f-]{36}$/u);
     expect(mintStorageKey()).not.toBe(mintStorageKey()); // distinct.
+  });
+
+  it('fails closed rather than minting colliding keys from pre-import constant entropy', async () => {
+    const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
+      randomBytes: typeof randomBytes;
+      randomUUID: typeof randomUUID;
+    };
+    const originalRandomBytes = mutableCrypto.randomBytes;
+    const originalRandomUuid = mutableCrypto.randomUUID;
+    vi.resetModules();
+    try {
+      mutableCrypto.randomBytes = ((size: number) =>
+        Buffer.alloc(size, 0x42)) as typeof randomBytes;
+      mutableCrypto.randomUUID = (() =>
+        '42424242-4242-4424-8242-424242424242') as typeof randomUUID;
+      syncBuiltinESMExports();
+
+      const poisoned = await import('./upload-sniff.js?constant-entropy');
+      expect(() => poisoned.mintStorageKey('avatars')).toThrow(/intrinsics were modified/u);
+    } finally {
+      mutableCrypto.randomBytes = originalRandomBytes;
+      mutableCrypto.randomUUID = originalRandomUuid;
+      syncBuiltinESMExports();
+      vi.resetModules();
+    }
   });
 
   it('sanitizes a path-traversal filename into a safe download name', () => {

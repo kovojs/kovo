@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   csrfField,
   csrfToken,
+  mintIdemToken,
   mintCsrfField,
   mintCsrfToken,
   renderMutationCsrfField,
@@ -55,6 +56,15 @@ describe('csrf helpers', () => {
     expect(first).not.toBe(second);
     expect(validateCsrfToken({ 'csrf<input>': first }, request, csrf)).toBe(true);
     expect(validateCsrfToken({ 'csrf<input>': second }, request, csrf)).toBe(true);
+  });
+
+  it('mints distinct no-JS replay tokens with the exact 128-bit entropy floor', () => {
+    const first = mintIdemToken();
+    const second = mintIdemToken();
+
+    expect(first).toMatch(/^[A-Za-z0-9_-]{22}$/u);
+    expect(Buffer.from(first, 'base64url')).toHaveLength(16);
+    expect(second).not.toBe(first);
   });
 
   it('validates only the matching token for the configured field', () => {

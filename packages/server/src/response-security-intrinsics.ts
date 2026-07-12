@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 /**
  * Package-private intrinsic membrane for document, CSP, cookie, and CSRF response controls.
@@ -23,6 +23,7 @@ const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
+const NativeTypeError = globalThis.TypeError;
 const NativeTextDecoder = globalThis.TextDecoder;
 const NativeTextEncoder = globalThis.TextEncoder;
 const NativeUint8Array = globalThis.Uint8Array;
@@ -32,7 +33,6 @@ const NativeReadableStream = globalThis.ReadableStream;
 const NativeReadableStreamDefaultController = globalThis.ReadableStreamDefaultController;
 const nativeCreateHash = createHash;
 const nativeRandomBytes = randomBytes;
-const nativeRandomUuid = randomUUID;
 
 const nativeReflectApply = NativeReflect.apply;
 const nativeArrayIsArray = NativeArray.isArray;
@@ -41,6 +41,7 @@ const nativeArrayPush = NativeArray.prototype.push;
 const nativeArraySort = NativeArray.prototype.sort;
 const nativeBufferAllocUnsafe = NativeBuffer.allocUnsafe;
 const nativeBufferFrom = NativeBuffer.from;
+const nativeBufferIsBuffer = NativeBuffer.isBuffer;
 const nativeBufferToString = NativeBuffer.prototype.toString;
 const nativeDateGetTime = NativeDate.prototype.getTime;
 const nativeDateToISOString = NativeDate.prototype.toISOString;
@@ -48,6 +49,7 @@ const nativeDateToUtcString = NativeDate.prototype.toUTCString;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeEncodeUri = globalThis.encodeURI;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
+const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
@@ -69,6 +71,7 @@ const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRegExpFlags = stableOwnAccessor(NativeRegExp.prototype, 'flags');
 const nativeRegExpSource = stableOwnAccessor(NativeRegExp.prototype, 'source');
 const nativeSetAdd = NativeSet.prototype.add;
+const nativeSetDelete = NativeSet.prototype.delete;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
@@ -158,6 +161,39 @@ function stableOwnAccessor(value: object, property: PropertyKey): Function {
     owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
   }
   throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
+}
+
+function cryptoFunctionShapeIsSound(
+  value: Function,
+  expectedName: string,
+  expectedLength: number,
+  requiredSource: readonly string[],
+): boolean {
+  const name = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, 'name'],
+  );
+  const length = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, 'length'],
+  );
+  if (
+    name === undefined ||
+    !('value' in name) ||
+    name.value !== expectedName ||
+    length === undefined ||
+    !('value' in length) ||
+    length.value !== expectedLength
+  ) {
+    return false;
+  }
+  const source = apply<string>(nativeFunctionToString, value, []);
+  for (let index = 0; index < requiredSource.length; index += 1) {
+    if (apply<number>(nativeStringIndexOf, source, [requiredSource[index]!]) === -1) return false;
+  }
+  return true;
 }
 
 function capturedControlsAreSound(): boolean {
@@ -293,6 +329,8 @@ function capturedControlsAreSound(): boolean {
     apply(nativeSetAdd, set, ['safe']);
     if (apply(nativeSetHas, set, ['safe']) !== true) return false;
     if (apply(nativeSetHas, set, ['attacker']) !== false) return false;
+    if (apply(nativeSetDelete, set, ['safe']) !== true) return false;
+    if (apply(nativeSetHas, set, ['safe']) !== false) return false;
 
     const headers = new NativeHeaders([['X-Kovo-Probe', 'safe']]);
     if (apply(nativeHeadersGet, headers, ['x-kovo-probe']) !== 'safe') return false;
@@ -362,18 +400,33 @@ function capturedControlsAreSound(): boolean {
     ) {
       return false;
     }
-    const random = nativeRandomBytes(32);
-    if (random.byteLength !== 32) return false;
-    const uuid = nativeRandomUuid();
     if (
-      apply<RegExpExecArray | null>(
-        nativeRegExpExec,
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-        [uuid],
-      ) === null
+      !cryptoFunctionShapeIsSound(nativeRandomBytes, 'randomBytes', 2, [
+        'function randomBytes(size, callback) {',
+        'new FastBuffer(size)',
+        'randomFillSync(TypedArrayPrototypeGetBuffer(buf)',
+      ])
     ) {
       return false;
     }
+    const randomLeft = nativeRandomBytes(32);
+    const randomRight = nativeRandomBytes(32);
+    if (
+      apply(nativeBufferIsBuffer, NativeBuffer, [randomLeft]) !== true ||
+      apply(nativeBufferIsBuffer, NativeBuffer, [randomRight]) !== true ||
+      apply(nativeUint8ArrayLength, randomLeft, []) !== 32 ||
+      apply(nativeUint8ArrayLength, randomRight, []) !== 32
+    ) {
+      return false;
+    }
+    let randomDiffers = false;
+    for (let index = 0; index < 32; index += 1) {
+      if (randomLeft[index] !== randomRight[index]) {
+        randomDiffers = true;
+        break;
+      }
+    }
+    if (!randomDiffers) return false;
 
     const keys = apply<string[]>(nativeObjectKeys, NativeObject, [{ one: 1, two: 2 }]);
     if (keys.length !== 2 || keys[0] !== 'one' || keys[1] !== 'two') return false;
@@ -402,6 +455,28 @@ function capturedControlsAreSound(): boolean {
 }
 
 const capturedControlsSound = capturedControlsAreSound();
+const ENTROPY_REPLAY_WINDOW = 4_096;
+const recentEntropy = new NativeSet<string>();
+const recentEntropyOrder: string[] = [];
+let recentEntropyCursor = 0;
+
+function rememberEntropy(kind: 'bytes' | 'uuid', value: string): void {
+  const key = `${kind}\0${value}`;
+  if (apply(nativeSetHas, recentEntropy, [key])) {
+    throw new NativeTypeError(
+      'Kovo cryptographic entropy source repeated a recent authority value; refusing to continue.',
+    );
+  }
+  if (recentEntropyOrder.length < ENTROPY_REPLAY_WINDOW) {
+    apply(nativeArrayPush, recentEntropyOrder, [key]);
+  } else {
+    const expired = recentEntropyOrder[recentEntropyCursor]!;
+    apply(nativeSetDelete, recentEntropy, [expired]);
+    recentEntropyOrder[recentEntropyCursor] = key;
+    recentEntropyCursor = (recentEntropyCursor + 1) % ENTROPY_REPLAY_WINDOW;
+  }
+  apply(nativeSetAdd, recentEntropy, [key]);
+}
 
 export function assertResponseSecurityIntrinsics(): void {
   if (!capturedControlsSound) {
@@ -910,12 +985,37 @@ export function securityJsonParse(value: string): unknown {
 
 export function securityRandomBytes(size: number): Buffer {
   assertResponseSecurityIntrinsics();
-  return nativeRandomBytes(size);
+  if (apply(nativeNumberIsInteger, NativeNumber, [size]) !== true || size <= 0 || size > 65_536) {
+    throw new NativeTypeError('Kovo security entropy requests require 1..65536 whole bytes.');
+  }
+  const generated = nativeRandomBytes(size);
+  if (
+    apply(nativeBufferIsBuffer, NativeBuffer, [generated]) !== true ||
+    apply(nativeUint8ArrayLength, generated, []) !== size
+  ) {
+    throw new NativeTypeError('Kovo cryptographic entropy source returned invalid bytes.');
+  }
+  const exact = apply<Buffer>(nativeBufferFrom, NativeBuffer, [generated]);
+  rememberEntropy('bytes', apply<string>(nativeBufferToString, exact, ['base64url']));
+  return exact;
 }
 
 export function securityRandomUuid(): string {
-  assertResponseSecurityIntrinsics();
-  return nativeRandomUuid();
+  const bytes = securityRandomBytes(16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = apply<string>(nativeBufferToString, bytes, ['hex']);
+  const uuid = `${apply<string>(nativeStringSlice, hex, [0, 8])}-${apply<string>(
+    nativeStringSlice,
+    hex,
+    [8, 12],
+  )}-${apply<string>(nativeStringSlice, hex, [12, 16])}-${apply<string>(
+    nativeStringSlice,
+    hex,
+    [16, 20],
+  )}-${apply<string>(nativeStringSlice, hex, [20])}`;
+  rememberEntropy('uuid', uuid);
+  return uuid;
 }
 
 export function securitySha256Base64(value: string): string {

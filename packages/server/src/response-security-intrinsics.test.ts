@@ -8,6 +8,7 @@ import { cspSha256, renderContentSecurityPolicy } from './csp.js';
 import { csrfToken, validateCsrfToken } from './csrf.js';
 import { renderDocument } from './document-core.js';
 import { createSigningKeyRing } from './keyring.js';
+import { securityRandomBytes, securityRandomUuid } from './response-security-intrinsics.js';
 
 const intrinsicModuleUrl = new URL('./response-security-intrinsics.ts', import.meta.url).href;
 const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
@@ -246,6 +247,86 @@ describe('document, cookie, CSP, and CSRF intrinsic closure', () => {
     expect(hash).toBe('sha256-pd/B67oUKzpTJFjV6bXdTyRfEJ9N2whIqXUGGvfVKpY=');
     expect(token).toMatch(/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
     expect(forgedAccepted).toBe(false);
+  });
+
+  it('emits bounded, non-repeating cryptographic bytes and UUID authorities', () => {
+    const firstBytes = securityRandomBytes(16);
+    const secondBytes = securityRandomBytes(16);
+    const firstUuid = securityRandomUuid();
+    const secondUuid = securityRandomUuid();
+
+    expect(firstBytes).toHaveLength(16);
+    expect(secondBytes).not.toEqual(firstBytes);
+    expect(firstUuid).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
+    expect(secondUuid).not.toBe(firstUuid);
+    expect(() => securityRandomBytes(0)).toThrow(/1\.\.65536 whole bytes/u);
+  });
+
+  it('fails closed when synchronized builtin entropy is constant before framework import', () => {
+    const script = `
+      const { createRequire, syncBuiltinESMExports } = await import('node:module');
+      const mutable = createRequire(import.meta.url)('node:crypto');
+      mutable.randomBytes = function randomBytes(size, callback) {
+        const bytes = Buffer.alloc(size, 0x42);
+        if (typeof callback === 'function') { callback(null, bytes); return; }
+        return bytes;
+      };
+      mutable.randomUUID = function randomUUID() {
+        return '42424242-4242-4424-8242-424242424242';
+      };
+      syncBuiltinESMExports();
+      try {
+        const controls = await import(${JSON.stringify(`${intrinsicModuleUrl}?constant-entropy`)});
+        controls.assertResponseSecurityIntrinsics();
+      } catch (error) {
+        if (String(error).includes('intrinsics were modified')) process.exit(0);
+      }
+      process.exit(3);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
+  it('fails closed if an entropy source repeats after passing its boot probes', () => {
+    const script = `
+      const { createRequire, syncBuiltinESMExports } = await import('node:module');
+      const mutable = createRequire(import.meta.url)('node:crypto');
+      const originalRandomBytes = mutable.randomBytes;
+      const originalToString = Function.prototype.toString;
+      const genuineSource = Reflect.apply(originalToString, originalRandomBytes, []);
+      let calls = 0;
+      function randomBytes(size, callback) {
+        calls += 1;
+        const bytes = Buffer.alloc(size, calls === 1 ? 0x11 : calls === 2 ? 0x22 : 0x42);
+        if (typeof callback === 'function') { callback(null, bytes); return; }
+        return bytes;
+      }
+      Function.prototype.toString = function () {
+        if (this === randomBytes) return genuineSource;
+        return Reflect.apply(originalToString, this, []);
+      };
+      mutable.randomBytes = randomBytes;
+      syncBuiltinESMExports();
+      const controls = await import(${JSON.stringify(`${intrinsicModuleUrl}?staged-repeat-entropy`)});
+      controls.assertResponseSecurityIntrinsics();
+      controls.securityRandomBytes(16);
+      try {
+        controls.securityRandomBytes(16);
+      } catch (error) {
+        if (String(error).includes('repeated a recent authority value')) process.exit(0);
+      }
+      process.exit(3);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('fails closed when a selective response control is poisoned before framework import', () => {

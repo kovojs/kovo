@@ -1,3 +1,6 @@
+import { execFile, spawnSync } from 'node:child_process';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,6 +11,11 @@ import {
   type Command,
   type CommandAllowlist,
 } from './command.js';
+
+const commandIntrinsicModuleUrl = new URL('./command-intrinsics.ts', import.meta.url).href;
+const mutableChildProcess = createRequire(import.meta.url)('node:child_process') as {
+  execFile: typeof execFile;
+};
 
 describe('server command primitive', () => {
   const nodeCommands = () =>
@@ -49,6 +57,124 @@ describe('server command primitive', () => {
       stderr: '',
       stdout: 'semi;colon\n$(echo injected)\n',
     });
+  });
+
+  it('reconstructs exact argv without consulting a late Array iterator', async () => {
+    const command = cmd(process.execPath, ['-e', 'process.stdout.write("SAFE")'], {
+      allow: nodeCommands(),
+    });
+    const originalIterator = Array.prototype[Symbol.iterator];
+    try {
+      Array.prototype[Symbol.iterator] = function () {
+        if (this === command.argv) {
+          return originalIterator.call(['-e', 'process.stdout.write("ATTACKER-CODE-EXECUTED")']);
+        }
+        return originalIterator.call(this);
+      };
+
+      await expect(runCommand(command)).resolves.toEqual({ stderr: '', stdout: 'SAFE' });
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+  });
+
+  it('keeps execFile, Promise, and command-result text controls pinned after late replacement', async () => {
+    const command = cmd(process.execPath, ['-e', 'process.stdout.write("SAFE")'], {
+      allow: nodeCommands(),
+    });
+    const originalExecFile = mutableChildProcess.execFile;
+    const OriginalPromise = globalThis.Promise;
+    const OriginalString = globalThis.String;
+    let poisonedExecCalls = 0;
+    let resultPromise: Promise<{ stderr: string; stdout: string }> | undefined;
+    try {
+      mutableChildProcess.execFile = ((
+        _file: string,
+        _args: readonly string[],
+        options: Parameters<typeof execFile>[2],
+        callback: Parameters<typeof execFile>[3],
+      ) => {
+        poisonedExecCalls += 1;
+        return originalExecFile(
+          process.execPath,
+          ['-e', 'process.stdout.write("ATTACKER-CODE-EXECUTED")'],
+          options,
+          callback,
+        );
+      }) as typeof execFile;
+      syncBuiltinESMExports();
+      globalThis.Promise = class PoisonedPromise {
+        constructor() {
+          throw new Error('poisoned Promise reached');
+        }
+      } as unknown as PromiseConstructor;
+      try {
+        resultPromise = runCommand(command);
+      } finally {
+        globalThis.Promise = OriginalPromise;
+      }
+      globalThis.String = ((value?: unknown) =>
+        value === 'SAFE' || value === '' ? 'FORGED' : OriginalString(value)) as StringConstructor;
+      const result = await resultPromise;
+      expect(result).toEqual({ stderr: '', stdout: 'SAFE' });
+    } finally {
+      mutableChildProcess.execFile = originalExecFile;
+      syncBuiltinESMExports();
+      globalThis.Promise = OriginalPromise;
+      globalThis.String = OriginalString;
+    }
+    expect(poisonedExecCalls).toBe(0);
+  });
+
+  it('rejects accessor-backed argv, allowlists, and execution options before the sink', () => {
+    const argv: string[] = [];
+    Object.defineProperty(argv, 0, {
+      configurable: true,
+      enumerable: true,
+      get: () => '-e',
+    });
+    Object.defineProperty(argv, 'length', { value: 1 });
+    const allow = nodeCommands();
+
+    expect(() => cmd(process.execPath, argv, { allow })).toThrow(/stable own string value/);
+    expect(() =>
+      commandAllowlist([process.execPath], {
+        get justification() {
+          return 'accessor-backed audit text';
+        },
+      }),
+    ).toThrow(/changed while|own data property/);
+
+    const command = cmd(process.execPath, ['--version'], { allow });
+    expect(() =>
+      runCommand(command, {
+        get cwd() {
+          return process.cwd();
+        },
+      }),
+    ).toThrow(/changed while|own data property/);
+  });
+
+  it('fails closed when execFile was replaced before command controls initialize', () => {
+    const script = `
+      const { createRequire, syncBuiltinESMExports } = await import('node:module');
+      const mutable = createRequire(import.meta.url)('node:child_process');
+      const original = mutable.execFile;
+      mutable.execFile = (...args) => original(...args);
+      syncBuiltinESMExports();
+      try {
+        const controls = await import(${JSON.stringify(`${commandIntrinsicModuleUrl}?poisoned-exec-file`)});
+        controls.assertCommandIntrinsics();
+      } catch (error) {
+        if (String(error).includes('process or realm intrinsics were modified')) process.exit(0);
+      }
+      process.exit(3);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('denies command construction unless the program is explicitly allowed', () => {

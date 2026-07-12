@@ -991,15 +991,13 @@ describe('server jsx runtime', () => {
     expect(rendered).toMatch(/name="Kovo-Idem" value="[^"]+"/);
   });
 
-  it('A2: the Kovo-Idem value is a non-empty cryptographic UUID', () => {
+  it('A2: the Kovo-Idem value carries at least 128 exact cryptographic bits', () => {
     const addToCart = { key: 'cart/add' } as const;
     const rendered = html(jsx('form', { mutation: addToCart, children: '' }));
     const match = /name="Kovo-Idem" value="([^"]+)"/.exec(rendered);
     expect(match).not.toBeNull();
-    // RFC 4122 UUID format — 128 bits, cryptographically sourced.
-    expect(match![1]).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
+    expect(match![1]).toMatch(/^[A-Za-z0-9_-]{22}$/u);
+    expect(Buffer.from(match![1]!, 'base64url')).toHaveLength(16);
   });
 
   it('A2: each render mints a distinct Kovo-Idem value (per-submit freshness)', () => {

@@ -105,6 +105,25 @@ describe('deferred streams', () => {
     expect(result.body).toMatch(/\n--kovo-boundary-[0-9a-f]{32}--\n/);
   });
 
+  it('mints a fresh 128-bit boundary authority for each colliding document', () => {
+    const render = () =>
+      renderDeferredStream({
+        chunks: [
+          {
+            fragments: [
+              { html: '<section>content --kovo-boundary collision</section>', target: 'main' },
+            ],
+          },
+        ],
+        shell: '<!doctype html><html><body>',
+      });
+    const first = /--kovo-boundary-([0-9a-f]{32})/u.exec(render().body)?.[1];
+    const second = /--kovo-boundary-([0-9a-f]{32})/u.exec(render().body)?.[1];
+
+    expect(first).toBeDefined();
+    expect(second).not.toBe(first);
+  });
+
   it('orders deferred stream chunks by priority, queries before fragments within each chunk', () => {
     const result = renderDeferredStream({
       chunks: [

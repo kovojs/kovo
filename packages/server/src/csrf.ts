@@ -29,7 +29,6 @@ import {
   securityMapGet,
   securityMapSet,
   securityRandomBytes,
-  securityRandomUuid,
   securityRegExpTest,
   securityStringSplit,
   securityStringStartsWith,
@@ -271,11 +270,11 @@ export const KOVO_IDEM_FIELD_NAME = 'Kovo-Idem';
 /**
  * @internal Mint a fresh ≥128-bit cryptographically-random idempotency token for a
  * no-JS mutation form (SPEC.md §10.3:1063/1065 — "atomic reservation for **all**
- * mutation paths" including no-JS). Uses `crypto.randomUUID()` which provides 122
- * bits of cryptographic entropy.
+ * mutation paths" including no-JS). Sixteen exact random bytes preserve the normative
+ * 128-bit floor; unlike an RFC v4 UUID, no entropy bits are consumed by format markers.
  */
 export function mintIdemToken(): string {
-  return securityRandomUuid();
+  return securityBufferToString(securityRandomBytes(16), 'base64url');
 }
 
 /**
