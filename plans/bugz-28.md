@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    32 | C1-C32 |
-| High     |    26 | H1-H26 |
+| Critical |    40 | C1-C40 |
+| High     |    28 | H1-H28 |
 | Medium   |     9 | M1-M9  |
 
 ## Critical
@@ -217,7 +217,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the same matrix covers bounded IV replay detection and staged hostile entropy;
     the independent synchronized-builtin proof now receives distinct 96-bit IVs.
 
-- [ ] **C20 - A public global bridge exposes the framework's raw-HTML mint.**
+- [x] **C20 - A public global bridge exposes the framework's raw-HTML mint.**
       `packages/core/src/index.ts`, `packages/server/src/jsx-runtime.ts`
   - Server JSX installation writes `{ renderHtml: renderedHtml }` to the predictable
     `Symbol.for('kovo.mutationFormHelperRenderContext')` global. Any evaluated app module can read
@@ -227,8 +227,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
     no `Symbol.for()` value acts as an output authority brand, and the cross-package form-helper
     bridge accepts only structured helper operations that reconstruct escaped output inside the
     server choke; app code cannot mint or launder arbitrary raw HTML through casts or global access.
+  - **Evidence:** the 140-test focused JSX/form/output-authority matrix plus core/server dist+DTS and
+    import/API/security gates pass; the independent global-mint proof can no longer obtain a generic
+    raw-HTML constructor and its attacker markup stays escaped.
 
-- [ ] **C21 - Predictable pre-import entropy forges authenticated rendered-HTML markers.**
+- [x] **C21 - Predictable pre-import entropy forges authenticated rendered-HTML markers.**
       `packages/server/src/html.ts`
   - Replacing CommonJS `node:crypto.randomBytes` with known constant bytes and synchronizing the
     builtin ESM exports before importing the renderer made the private coercion-marker HMAC key
@@ -239,6 +242,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     HMAC construction, comparison, recursion, and final text/raw assembly use exact pinned controls;
     hostile pre-import or late controls cannot forge a marker while genuine rendered composition
     remains byte-stable and bounded.
+  - **Evidence:** the same focused matrix and build/gates pass; the independent pre-import constant-
+    entropy proof can no longer forge an accepted marker and attacker text remains escaped.
 
 - [x] **C22 - Predictable pre-import response entropy collapses upload object authority.**
       `packages/server/src/{response-security-intrinsics,upload-sniff,csrf,deferred-stream}.ts`
@@ -327,7 +332,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     filesystem operations, analyzer imports/results, and diagnostic projection use boot-pinned exact
     controls; poisoned or stale cache state can only miss/fail closed and cannot suppress a finding.
 
-- [ ] **C29 - Mutable mutation-form attribute assembly injects executable HTML.**
+- [x] **C29 - Mutable mutation-form attribute assembly injects executable HTML.**
       `packages/server/src/jsx-runtime.ts`
   - A selective late `Array.prototype.join` recognized the internal mutation-form attribute array
     beginning with ` method="post"` and returned `><img onerror=...>` instead. The real JSX renderer
@@ -337,8 +342,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     stream flags, key/CSRF/idem hidden fields, attribute escaping, and opening-tag assembly use
     boot-pinned exact controls; late/import-order poison cannot add markup or alter the form target,
     while authored overrides and ordinary mutation forms retain byte-stable behavior.
+  - **Evidence:** the same focused matrix passes; the independent selective final-join proof retains
+    the exact reviewed form attributes and emits no attacker element.
 
-- [ ] **C30 - Inherited request sessions bypass authentication and role guards.**
+- [x] **C30 - Inherited request sessions bypass authentication and role guards.**
       `packages/server/src/{auth-principal,guards}.ts`
   - With `Object.prototype.session = { user: { id: "attacker", roles: ["admin"] } }`, a genuine
     `Request` carrying no own session was classified as a proven attacker principal. The real
@@ -348,6 +355,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     pinned own-data descriptors and exact snapshots; inherited, accessor-backed, proxy-unstable, or
     ambiguous carriers remain anonymous/unresolved and fail every built-in auth/role path under
     late/import-order pollution, while framework-attached own session outcomes remain compatible.
+  - **Evidence:** the 73-test auth-principal/guard matrix plus server dist/DTS and classifier/security
+    gates pass; the independent inherited-admin proof now remains anonymous and both guards deny.
 
 - [ ] **C31 - Mutable build-source filtering suppresses every data-plane finding.**
       `packages/server/src/internal/data-plane-static-analysis.ts`,
@@ -372,6 +381,87 @@ This is an active closure ledger; `SPEC.md` remains normative.
     method dispatch, fact grouping/deduplication, runtime function-source capture, exact mutation-key
     and fingerprint matching, and graph projection use boot-pinned exact controls; uninspectable or
     mismatched handlers remain ambient-authority-positive and cannot borrow a sibling proof.
+
+- [x] **C33 - Mutable JSX element classifiers reopen executable text and refresh sinks.**
+      `packages/server/src/jsx-runtime.ts`
+  - Selective late `String.prototype.toLowerCase` replacements classified `script` as an ordinary
+    element and `meta` as a non-refresh tag. An ordinary scalar child was then emitted verbatim as
+    executable JavaScript, while `content="0;url=javascript:..."` survived on a refresh element.
+  - **Acceptance:** tag/attribute names, executable-element classification, meta http-equiv/content
+    pairing, scalar extraction, sink-event decisions, and final child/attribute composition use
+    boot-pinned exact controls; aliases/case variants remain conservatively classified and poison
+    cannot emit untrusted script/style text or an executable refresh navigation.
+  - **Evidence:** the focused matrix passes; independent script/meta classifier proofs now drop
+    untrusted executable text and refresh content under the same selective replacements.
+
+- [x] **C34 - Nested or promised JSX children bypass executable-element provenance checks.**
+      `packages/server/src/jsx-runtime.ts`
+  - The script/style choke inspected only direct scalar children. Wrapping the same app/request
+    JavaScript string in a one-element array or `Promise.resolve()` bypassed classification, and the
+    real renderer emitted it verbatim inside `<script>` after traversal or settlement.
+  - **Acceptance:** executable-element children are recursively classified across dense arrays,
+    nested JSX, iterables, function components, and Promise settlement with bounded depth/cardinality;
+    only explicitly framework-trusted executable text may survive, and async/nested carriers cannot
+    launder ordinary values into script or style bytes.
+  - **Evidence:** the focused matrix passes; independent array- and Promise-wrapped script proofs now
+    emit an empty executable element instead of laundering ordinary strings.
+
+- [x] **C35 - Mutable JSX props traversal fabricates a live meta redirect.**
+      `packages/server/src/jsx-runtime.ts`
+  - Selective late `Object.entries` fabrication on an otherwise empty props object supplied
+    `http-equiv=refresh` plus attacker `content`. The content classifier re-read the original empty
+    props, missed the fabricated pair, and emitted a live `javascript:` refresh target.
+  - **Acceptance:** JSX props become one dense own-data snapshot before any classification; name,
+    value, pair-dependent sink decisions, contextual escaping, and emission consume that same
+    snapshot, while inherited/accessor/proxy/fabricated entries fail closed under late/import-order
+    poison and cannot add an attribute absent from the authored carrier.
+  - **Evidence:** the focused matrix passes; the independent fabricated-entries proof now renders the
+    original empty meta element and cannot introduce a refresh target.
+
+- [ ] **C36 - Mutable replay-response headers publish server-only file bytes as HTML.**
+      `packages/server/src/{static-export-response,static-export-replay,static-export}.ts`
+  - A route returned a genuine attachment containing a database password, then selectively replaced
+    `Headers.prototype.get` so static replay hid only `Content-Disposition` and reported `text/html`.
+    Real export accepted status 200 and wrote the file bytes to public `/private-report/index.html`;
+    the unpoisoned route fails KV229.
+  - **Acceptance:** response/status/header/body identity, header getters and exact snapshots,
+    content-disposition/type/outcome classification, document-protocol scanning, diagnostics, and
+    artifact publication use boot-pinned controls; file/stream/redirect/error outcomes cannot be
+    reclassified as a route document under late/import-order poison.
+
+- [ ] **C37 - Mutable Vite source containment publishes files outside the dist root.**
+      `packages/server/src/{vite-manifest,vite-build-assets,static-export}.ts`
+  - A normal manifest `file: "../server-secret.env"` is rejected. Selective late `Array.some`
+    replacement bypassed unsafe-segment validation and `String.startsWith` replacement forged the
+    final dist-root containment check; after restoring both, real static export copied the sibling
+    `DATABASE_PASSWORD` file into public `/server-secret.env`.
+  - **Acceptance:** manifest file segments, decoding, normalization, dist/output roots, URL/path
+    conversion, relative/absolute containment, source descriptors, and asset copy inputs use boot-
+    pinned exact controls; encoded/plain traversal, separator aliases, symlinks, and late/import-
+    order poison cannot escape the trusted source root even when the destination remains confined.
+
+- [x] **C38 - Runtime JSX tag strings inject raw element syntax.**
+      `packages/server/src/jsx-runtime.ts`
+  - An app-controlled tag string containing spaces, attributes, and quotes was interpolated directly
+    into both opening and closing tags, producing an executable event handler without passing through
+    attribute validation or contextual escaping.
+  - **Evidence:** the 140-test focused matrix passes; the independent dynamic-tag proof now fails
+    closed and emits no attacker-controlled element bytes.
+
+- [x] **C39 - A mutable void-element classifier can create an unclosed executable element.**
+      `packages/server/src/jsx-runtime.ts`
+  - Replacing the private void-element `Set` classification made `script` omit its closing tag, so an
+    ordinary following sibling became executable script text in the browser parser.
+  - **Evidence:** the focused matrix passes; the independent classifier proof retains `</script>` and
+    leaves the following text outside the executable element.
+
+- [x] **C40 - Runtime component output and structural forgeries bypass raw-HTML authority.**
+      `packages/core/src/index.ts`,
+      `packages/server/src/{component-authority,component-render,jsx-runtime}.ts`
+  - An ordinary runtime component string was treated as framework-authored HTML, and a structural
+    object carrying a `definition.render` field could impersonate a component and return raw markup.
+  - **Evidence:** the focused matrix plus core/server dist+DTS and public-API/security gates pass;
+    ordinary component strings are escaped and the independent forged descriptor is rejected.
 
 ## High
 
@@ -562,10 +652,14 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - A completeness proof after the registry checkpoint selectively replaced the final render-plan
     `Array.join`; projected shapes with and without an `adminToken` field then produced the same
     fingerprint, suppressing the required deploy-skew token change.
+  - The compiler's production content version also used 32-bit FNV-1a. Two fixed distinct valid
+    JavaScript sources both hashed to `62a4c465`, so separate real registries produced the same
+    immutable href and build token while resolving different executable bytes.
   - **Acceptance:** module/path/version normalization, exact registry keys, Map/version tracking,
-    entries, build-token hash inputs/crypto, URL request parsing, and runtime-href registration use
-    boot-pinned, semantically checked controls; late/import-order poison cannot cross-bind module
-    bytes, forge an unchanged build token, or alias unversioned/out-of-registry paths.
+    entries, collision-resistant full-source identity, build-token hash inputs/crypto, URL request
+    parsing, and runtime-href registration use boot-pinned, semantically checked controls; neither
+    chosen collisions nor late/import-order poison can cross-bind module bytes, forge an unchanged
+    build token, or alias unversioned/out-of-registry paths.
   - **Evidence:** the 106-test client-module/static-export/app matrix, 31-test core/compiler/server
     render-plan matrix, core/server dist+dts builds, and import/API/wire-output gates pass. The two
     independent proofs now retain exact public module bytes and distinct fingerprints for projected
@@ -639,7 +733,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     dist+dts build pass; the four shipped inline variants retain pinned 128-bit bytes after live
     crypto replacement and reject hostile constant sources instead of consulting a clock.
 
-- [ ] **H26 - Mutable JSX form-helper replacement can inject raw executable response bytes.**
+- [x] **H26 - Mutable JSX form-helper replacement can inject raw executable response bytes.**
       `packages/server/src/{jsx-context,jsx-runtime}.ts`
   - Deferred `<FieldError>` output is first represented by a framework-private comment and then
     expanded inside a rendered `<form>`. A selective late `String.prototype.replace` recognized that
@@ -649,6 +743,29 @@ This is an active closure ledger; `SPEC.md` remains normative.
     placeholder detection/parsing/assembly, exact helper kind/props binding, async render isolation,
     final form composition, and cryptographic token minting use boot-pinned semantically checked
     controls; late/import-order poison cannot add raw bytes or cross-bind one helper/form to another.
+  - **Evidence:** the 140-test focused matrix passes; the independent selective replacement proof
+    cannot replace the structured helper operation with attacker markup.
+
+- [ ] **H27 - Truncated CSS hashes alias distinct deploy assets.**
+      `packages/compiler/src/css.ts`
+  - CSS split chunks truncated SHA-256 to 32 bits. Two fixed distinct valid CSS sources both emitted
+    the real `/assets/base-36fabc25.css` path even though their complete bytes and CSP hashes differ,
+    defeating the asset path's cache-busting/content-identity role across deployments.
+  - **Acceptance:** CSS chunk identity uses a collision-resistant source digest with enough bits for
+    immutable deployment identity, and manifest/href generation, CSP hashes, static output, and
+    delivery accounting consume the same exact byte snapshot; fixed collision regressions produce
+    distinct paths without weakening ordinary deterministic builds.
+
+- [ ] **H28 - Mutable static-header storage injects deployable Set-Cookie.**
+      `packages/server/src/{static-export-headers,static-export-output}.ts`
+  - The static header sink validated `x-frame-options: DENY`, then committed it through live
+    `Map.prototype.set`. A selective replacement stored `set-cookie: kovo_session=attacker-fixed`
+    instead; the real export artifact retained it and the deployable `_headers` sidecar emitted it
+    for the route, bypassing the explicit no-cookie static channel.
+  - **Acceptance:** header source traversal, name/value normalization, reserved-name checks,
+    append/set storage, exact map snapshots, sorting/serialization, fallback intersection, and
+    sidecar assembly use boot-pinned controls; validation and commit consume the same key/value, and
+    late/import-order poison cannot introduce Set-Cookie, Kovo-reserved, or control-bearing headers.
 
 ## Medium
 
@@ -742,8 +859,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C20-C21, C23-C32, H20, and H26 are active JSX
-output-authority, compiler-cache, static-analysis, static-export, and build-output fixes.
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, H20, and H27-H28
+are active compiler-cache, static-analysis, static-export, and build-output fixes.
 Integrated
 evidence is
 green at
