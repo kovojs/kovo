@@ -14,17 +14,24 @@ const NativeString = globalThis.String;
 const NativeURL = globalThis.URL;
 const NativeURLSearchParams = globalThis.URLSearchParams;
 const nativeArrayIsArray = NativeArray.isArray;
+const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectConstruct = NativeReflect.construct;
+const nativeRegExpExec = RegExp.prototype.exec;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
+const nativeStringEndsWith = NativeString.prototype.endsWith;
+const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringSlice = NativeString.prototype.slice;
+const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeStringTrim = NativeString.prototype.trim;
 const nativeUrlHrefGetter = getGetter(NativeURL.prototype, 'href');
 const nativeUrlHashGetter = getGetter(NativeURL.prototype, 'hash');
 const nativeUrlPathnameGetter = getGetter(NativeURL.prototype, 'pathname');
+const nativeUrlOriginGetter = getGetter(NativeURL.prototype, 'origin');
 const nativeUrlSearchGetter = getGetter(NativeURL.prototype, 'search');
 const nativeUrlSearchParamsGetter = getGetter(NativeURL.prototype, 'searchParams');
 const nativeUrlSearchParamsKeys = NativeURLSearchParams.prototype.keys;
@@ -64,12 +71,20 @@ function capturedControlsAreSound(): boolean {
       apply(nativeFunctionHasInstance, NativeError, [new NativeError('probe')]) === true &&
       apply(nativeFunctionHasInstance, NativeError, [{}]) === false &&
       apply(nativeStringCharCodeAt, '\n', [0]) === 10 &&
+      apply(nativeStringEndsWith, 'authorization', ['ization']) === true &&
+      apply(nativeStringIncludes, 'authorization', ['auth']) === true &&
       apply(nativeStringIndexOf, 'safe token safe', ['token', 0]) === 5 &&
       apply(nativeStringIndexOf, 'safe token safe', ['missing', 0]) === -1 &&
       apply(nativeStringSlice, 'safe token safe', [5, 10]) === 'token' &&
+      apply(nativeStringToLowerCase, 'AUTHORIZATION', []) === 'authorization' &&
+      apply(nativeStringTrim, ' safe ', []) === 'safe' &&
+      apply(nativeDecodeURIComponent, undefined, ['capability%2Fsecret']) === 'capability/secret' &&
+      apply<RegExpExecArray | null>(nativeRegExpExec, /^safe$/u, ['safe'])?.[0] === 'safe' &&
+      apply<RegExpExecArray | null>(nativeRegExpExec, /^safe$/u, ['unsafe']) === null &&
       parts.href ===
         'https://user:password@example.test/callback?code=SECRET&a%20b=value#fragment' &&
       parts.pathname === '/callback' &&
+      parts.origin === 'https://example.test' &&
       parts.search === '?code=SECRET&a%20b=value' &&
       parts.hash === '#fragment' &&
       parts.encodedQueryKeys.length === 2 &&
@@ -94,6 +109,53 @@ export function assertLoggingIntrinsics(): void {
 export function loggingString(value: unknown): string {
   assertLoggingIntrinsics();
   return apply(NativeString, undefined, [value]);
+}
+
+export function loggingCharacterCodeAt(value: string, index: number): number {
+  assertLoggingIntrinsics();
+  return apply(nativeStringCharCodeAt, value, [index]);
+}
+
+export function loggingDecodeURIComponent(value: string): string {
+  assertLoggingIntrinsics();
+  return apply(nativeDecodeURIComponent, undefined, [value]);
+}
+
+export function loggingStringEndsWith(value: string, suffix: string): boolean {
+  assertLoggingIntrinsics();
+  return apply(nativeStringEndsWith, value, [suffix]);
+}
+
+export function loggingStringIncludes(value: string, search: string): boolean {
+  assertLoggingIntrinsics();
+  return apply(nativeStringIncludes, value, [search]);
+}
+
+export function loggingStringIndexOf(value: string, search: string, position = 0): number {
+  assertLoggingIntrinsics();
+  return apply(nativeStringIndexOf, value, [search, position]);
+}
+
+export function loggingStringSlice(value: string, start: number, end?: number): string {
+  assertLoggingIntrinsics();
+  return end === undefined
+    ? apply(nativeStringSlice, value, [start])
+    : apply(nativeStringSlice, value, [start, end]);
+}
+
+export function loggingStringToLowerCase(value: string): string {
+  assertLoggingIntrinsics();
+  return apply(nativeStringToLowerCase, value, []);
+}
+
+export function loggingStringTrim(value: string): string {
+  assertLoggingIntrinsics();
+  return apply(nativeStringTrim, value, []);
+}
+
+export function loggingRegExpExec(pattern: RegExp, value: string): RegExpExecArray | null {
+  assertLoggingIntrinsics();
+  return apply(nativeRegExpExec, pattern, [value]);
 }
 
 export function loggingIsArray(value: unknown): value is unknown[] {
@@ -150,6 +212,7 @@ export interface LoggingDiagnosticUrlParts {
   encodedQueryKeys: string[];
   hash: string;
   href: string;
+  origin: string;
   pathname: string;
   search: string;
 }
@@ -194,6 +257,7 @@ function readUrlParts(url: URL): LoggingDiagnosticUrlParts {
     nativeUrlHrefGetter === undefined ||
     nativeUrlHashGetter === undefined ||
     nativeUrlPathnameGetter === undefined ||
+    nativeUrlOriginGetter === undefined ||
     nativeUrlSearchGetter === undefined ||
     nativeUrlSearchParamsGetter === undefined ||
     nativeUrlSearchParamsIteratorNext === undefined
@@ -214,6 +278,7 @@ function readUrlParts(url: URL): LoggingDiagnosticUrlParts {
     encodedQueryKeys,
     hash: apply(nativeUrlHashGetter, url, []),
     href: apply(nativeUrlHrefGetter, url, []),
+    origin: apply(nativeUrlOriginGetter, url, []),
     pathname: apply(nativeUrlPathnameGetter, url, []),
     search: apply(nativeUrlSearchGetter, url, []),
   };

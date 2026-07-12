@@ -333,6 +333,101 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
     }
   });
 
+  it('keeps request secrets and nested Secret branches closed after late realm poisoning', () => {
+    const basicUser = 'poisoned-diagnostic-user';
+    const basicPassword = 'POISONED_BASIC_PASSWORD';
+    const cookieSecret = 'POISONED_COOKIE_SECRET';
+    const taggedSecret = secret('POISONED_TAGGED_SECRET');
+    const basic = btoa(`${basicUser}:${basicPassword}`);
+    const request = new Request('https://app.test/fail?token=POISONED_QUERY_SECRET', {
+      headers: {
+        Authorization: `Basic ${basic}`,
+        Cookie: `sid=${cookieSecret}`,
+      },
+    });
+    let accessorReads = 0;
+    const nested: Record<string, unknown> = { tagged: [taggedSecret] };
+    Object.defineProperty(nested, 'accessor', {
+      enumerable: true,
+      get() {
+        accessorReads += 1;
+        return cookieSecret;
+      },
+    });
+    const error = new Error(
+      `user=${basicUser} password=${basicPassword} cookie=${cookieSecret} basic=${basic}`,
+    );
+    Object.defineProperty(error, 'nested', { enumerable: true, value: nested });
+    const onError = vi.fn();
+
+    const originalArrayIsArray = Array.isArray;
+    const originalArraySome = Array.prototype.some;
+    const originalArraySort = Array.prototype.sort;
+    const originalMapGet = Map.prototype.get;
+    const originalSetHas = Set.prototype.has;
+    const originalWeakMapGet = WeakMap.prototype.get;
+    const originalWeakMapSet = WeakMap.prototype.set;
+    const originalObjectDefineProperty = Object.defineProperty;
+    const originalObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    const originalObjectGetPrototypeOf = Object.getPrototypeOf;
+    const originalReflectOwnKeys = Reflect.ownKeys;
+    const originalExec = RegExp.prototype.exec;
+    const originalEndsWith = String.prototype.endsWith;
+    const originalIncludes = String.prototype.includes;
+    const originalReplaceAll = String.prototype.replaceAll;
+    try {
+      Array.isArray = () => false;
+      Array.prototype.some = () => false;
+      Array.prototype.sort = function () {
+        return this;
+      };
+      Map.prototype.get = () => undefined;
+      Set.prototype.has = () => false;
+      WeakMap.prototype.get = () => undefined;
+      WeakMap.prototype.set = function () {
+        return this;
+      };
+      Object.defineProperty = ((value: object) => value) as typeof Object.defineProperty;
+      Object.getOwnPropertyDescriptor = () => undefined;
+      Object.getPrototypeOf = () => null;
+      Reflect.ownKeys = () => [];
+      RegExp.prototype.exec = () => null;
+      String.prototype.endsWith = () => false;
+      String.prototype.includes = () => false;
+      String.prototype.replaceAll = function () {
+        return this.valueOf();
+      };
+
+      reportServerError(onError, error, { operation: 'app-request', request });
+    } finally {
+      Array.isArray = originalArrayIsArray;
+      Array.prototype.some = originalArraySome;
+      Array.prototype.sort = originalArraySort;
+      Map.prototype.get = originalMapGet;
+      Set.prototype.has = originalSetHas;
+      WeakMap.prototype.get = originalWeakMapGet;
+      WeakMap.prototype.set = originalWeakMapSet;
+      Object.defineProperty = originalObjectDefineProperty;
+      Object.getOwnPropertyDescriptor = originalObjectGetOwnPropertyDescriptor;
+      Object.getPrototypeOf = originalObjectGetPrototypeOf;
+      Reflect.ownKeys = originalReflectOwnKeys;
+      RegExp.prototype.exec = originalExec;
+      String.prototype.endsWith = originalEndsWith;
+      String.prototype.includes = originalIncludes;
+      String.prototype.replaceAll = originalReplaceAll;
+    }
+
+    expect(accessorReads).toBe(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    const serialized = JSON.stringify(onError.mock.calls);
+    for (const value of [basic, basicUser, basicPassword, cookieSecret, 'POISONED_TAGGED_SECRET']) {
+      expect(serialized).not.toContain(value);
+    }
+    expect((onError.mock.calls[0]?.[0] as Error).message).toBe(
+      'user=[redacted] password=[redacted] cookie=[redacted] basic=[redacted]',
+    );
+  });
+
   it('uses import-time Web constructors when app code replaces global Request', () => {
     const NativeRequest = Request;
     const NativeAbortController = AbortController;

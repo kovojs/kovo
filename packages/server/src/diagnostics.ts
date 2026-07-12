@@ -1,5 +1,19 @@
 import { isSecret } from '@kovojs/core';
 
+import {
+  loggingCharacterCodeAt,
+  loggingDecodeURIComponent,
+  loggingDiagnosticUrlParts,
+  loggingIsArray,
+  loggingRegExpExec,
+  loggingReplaceAllLiteral,
+  loggingStringEndsWith,
+  loggingStringIncludes,
+  loggingStringIndexOf,
+  loggingStringSlice,
+  loggingStringToLowerCase,
+  loggingStringTrim,
+} from './logging-intrinsics.js';
 import { neutralizeLogValue, sanitizeDiagnosticText, sanitizeDiagnosticUrl } from './logging.js';
 import {
   authorityNeutralAbortSignal,
@@ -10,14 +24,30 @@ import {
   isNativeRequest,
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
+import {
+  createWitnessWeakMap,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessMapGet,
+  witnessOwnKeys,
+  witnessReflectApply,
+  witnessReflectGet,
+  witnessSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 const readDiagnosticRequestHeaders = requestIntrinsicGetter<Headers>('headers');
 const readDiagnosticRequestMethod = requestIntrinsicGetter<string>('method');
 const readDiagnosticRequestReferrer = requestIntrinsicGetter<string>('referrer');
 const readDiagnosticRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
 const readDiagnosticRequestUrl = requestIntrinsicGetter<string>('url');
-const nativeHeadersEntries = Object.getOwnPropertyDescriptor(Headers.prototype, 'entries')
+const NativeHeaders = Headers;
+const nativeHeadersEntries = witnessGetOwnPropertyDescriptor(NativeHeaders.prototype, 'entries')
   ?.value as unknown;
+const nativeHeadersIteratorNext = diagnosticHeadersIteratorNext();
+const diagnosticHeadersControlsSound = diagnosticHeaderControlsAreSound();
 const nativeAtob = globalThis.atob;
 const NativeBlob = Blob;
 const NativeError = Error;
@@ -28,11 +58,14 @@ const NativeResponse = Response;
 const NativeSyntaxError = SyntaxError;
 const NativeTextDecoder = TextDecoder;
 const NativeTypeError = TypeError;
+const NativeUint8Array = Uint8Array;
 const NativeURIError = URIError;
 const NativeURL = URL;
 const NativeURLSearchParams = URLSearchParams;
 const nativeFunctionHasInstance = Function.prototype[Symbol.hasInstance];
-const nativeErrorStackDescriptor = Object.getOwnPropertyDescriptor(new NativeError(), 'stack');
+const nativeErrorStackDescriptor = witnessGetOwnPropertyDescriptor(new NativeError(), 'stack');
+const nativeObjectCreate = Object.create;
+const nativeObjectPrototype = Object.prototype;
 const nativeErrorPrototypeNames = new Map<object, string>([
   [NativeError.prototype, 'Error'],
   [NativeEvalError.prototype, 'EvalError'],
@@ -116,7 +149,7 @@ function safelyPrepareServerErrorDiagnostic(
   } catch {
     let operation: ServerErrorDiagnosticContext['operation'] = 'app-request';
     try {
-      if (SERVER_ERROR_OPERATIONS.has(context.operation)) operation = context.operation;
+      if (witnessSetHas(SERVER_ERROR_OPERATIONS, context.operation)) operation = context.operation;
     } catch {}
     return {
       context: { operation },
@@ -145,12 +178,16 @@ function prepareServerErrorDiagnostic(
   context: ServerErrorDiagnosticContext,
 ): { context: ServerErrorDiagnosticContext; error: unknown } {
   const requestInputs = diagnosticRequestInputs(context.request);
-  if (context.url !== undefined) requestInputs.urls.push(context.url);
-  requestInputs.urls = [...new Set(requestInputs.urls)];
-  requestInputs.secretValues = [
-    ...new Set([...requestInputs.secretValues, ...requestInputs.urls.flatMap(diagnosticUrlValues)]),
-  ];
-  const sanitizedError = sanitizeDiagnosticValue(error, requestInputs, new WeakMap());
+  if (context.url !== undefined) requestInputs.urls[requestInputs.urls.length] = context.url;
+  requestInputs.urls = uniqueDiagnosticStrings(requestInputs.urls);
+  for (let index = 0; index < requestInputs.urls.length; index += 1) {
+    const values = diagnosticUrlValues(requestInputs.urls[index]!);
+    for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+      requestInputs.secretValues[requestInputs.secretValues.length] = values[valueIndex]!;
+    }
+  }
+  requestInputs.secretValues = uniqueDiagnosticStrings(requestInputs.secretValues);
+  const sanitizedError = sanitizeDiagnosticValue(error, requestInputs, createWitnessWeakMap());
   const sanitizedRequest = sanitizeDiagnosticRequest(context.request);
   const sanitizedUrl = context.url === undefined ? undefined : sanitizeDiagnosticUrl(context.url);
   const contextChanged = sanitizedRequest !== context.request || sanitizedUrl !== context.url;
@@ -166,7 +203,7 @@ function prepareServerErrorDiagnostic(
     context: sanitizeDiagnosticValue(
       sanitizedContext,
       requestInputs,
-      new WeakMap(),
+      createWitnessWeakMap(),
     ) as ServerErrorDiagnosticContext,
     error: sanitizedError,
   };
@@ -201,25 +238,41 @@ function diagnosticRequestInputs(request: unknown): DiagnosticRequestInputs {
   if (!isNativeRequest(request)) return inputs;
   const source = requestForAuthorityNeutralMetadata(request);
   try {
-    inputs.urls.push(readDiagnosticRequestUrl(source));
+    inputs.urls[inputs.urls.length] = readDiagnosticRequestUrl(source);
   } catch {}
   try {
     const referrer = readDiagnosticRequestReferrer(source);
-    if (referrer !== '') inputs.urls.push(referrer);
+    if (referrer !== '') inputs.urls[inputs.urls.length] = referrer;
   } catch {}
   try {
     const headers = readDiagnosticRequestHeaders(source);
-    if (typeof nativeHeadersEntries !== 'function') return inputs;
-    const entries = Reflect.apply(nativeHeadersEntries, headers, []) as IterableIterator<
-      [string, string]
-    >;
-    for (const [name, value] of entries) {
-      if (diagnosticNameCarriesUrl(name) && value !== '') inputs.urls.push(value);
+    if (
+      !diagnosticHeadersControlsSound ||
+      typeof nativeHeadersEntries !== 'function' ||
+      typeof nativeHeadersIteratorNext !== 'function'
+    ) {
+      throw new NativeTypeError('Native diagnostic Headers controls are unavailable.');
+    }
+    const entries = witnessReflectApply<IterableIterator<[string, string]>>(
+      nativeHeadersEntries,
+      headers,
+      [],
+    );
+    while (true) {
+      const next = witnessReflectApply<IteratorResult<[string, string]>>(
+        nativeHeadersIteratorNext,
+        entries,
+        [],
+      );
+      if (next.done) break;
+      const name = next.value[0];
+      const value = next.value[1];
+      if (diagnosticNameCarriesUrl(name) && value !== '') inputs.urls[inputs.urls.length] = value;
       if (diagnosticNameCarriesSecret(name) && value !== '') {
-        inputs.secretValues.push(value);
-        inputs.secretValues.push(...diagnosticAuthorizationValues(value));
-        if (normalizeDiagnosticName(name).endsWith('cookie')) {
-          inputs.secretValues.push(...diagnosticCookieValues(value));
+        inputs.secretValues[inputs.secretValues.length] = value;
+        appendDiagnosticStrings(inputs.secretValues, diagnosticAuthorizationValues(value));
+        if (loggingStringEndsWith(normalizeDiagnosticName(name), 'cookie')) {
+          appendDiagnosticStrings(inputs.secretValues, diagnosticCookieValues(value));
         }
       }
     }
@@ -228,98 +281,122 @@ function diagnosticRequestInputs(request: unknown): DiagnosticRequestInputs {
 }
 
 function normalizeDiagnosticName(value: string): string {
-  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, '');
+  const lower = loggingStringToLowerCase(value);
+  let normalized = '';
+  for (let index = 0; index < lower.length; index += 1) {
+    const code = loggingCharacterCodeAt(lower, index);
+    if ((code >= 0x61 && code <= 0x7a) || (code >= 0x30 && code <= 0x39)) {
+      normalized += lower[index];
+    }
+  }
+  return normalized;
 }
 
 function diagnosticNameCarriesSecret(value: string): boolean {
   const normalized = normalizeDiagnosticName(value);
-  return DIAGNOSTIC_SECRET_NAME_SUFFIXES.some((suffix) => normalized.includes(suffix));
+  for (let index = 0; index < DIAGNOSTIC_SECRET_NAME_SUFFIXES.length; index += 1) {
+    if (loggingStringIncludes(normalized, DIAGNOSTIC_SECRET_NAME_SUFFIXES[index]!)) return true;
+  }
+  return false;
 }
 
 function diagnosticNameCarriesUrl(value: string): boolean {
   const normalized = normalizeDiagnosticName(value);
   return (
-    normalized.endsWith('location') ||
-    normalized.endsWith('referer') ||
-    normalized.endsWith('referrer') ||
-    normalized.endsWith('uri') ||
-    normalized.endsWith('url')
+    loggingStringEndsWith(normalized, 'location') ||
+    loggingStringEndsWith(normalized, 'referer') ||
+    loggingStringEndsWith(normalized, 'referrer') ||
+    loggingStringEndsWith(normalized, 'uri') ||
+    loggingStringEndsWith(normalized, 'url')
   );
 }
 
 function diagnosticCookieValues(value: string): string[] {
-  return value.split(';').flatMap((part) => {
-    const separator = part.indexOf('=');
-    if (separator < 0) return [];
-    const raw = part.slice(separator + 1).trim();
-    if (raw === '') return [];
+  const values: string[] = [];
+  const parts = splitDiagnosticLiteral(value, ';');
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
+    const separator = loggingStringIndexOf(part, '=');
+    if (separator < 0) continue;
+    const raw = loggingStringTrim(loggingStringSlice(part, separator + 1));
+    if (raw === '') continue;
     const unquoted =
-      raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')
-        ? raw.slice(1, -1).replaceAll(/\\(["\\])/g, '$1')
+      raw.length >= 2 && raw[0] === '"' && raw[raw.length - 1] === '"'
+        ? unescapeDiagnosticCookieValue(loggingStringSlice(raw, 1, -1))
         : raw;
     try {
-      const decoded = decodeURIComponent(unquoted);
-      return [...new Set([raw, unquoted, decoded])];
+      appendDiagnosticStrings(
+        values,
+        uniqueDiagnosticStrings([raw, unquoted, loggingDecodeURIComponent(unquoted)]),
+      );
     } catch {
-      return [...new Set([raw, unquoted])];
+      appendDiagnosticStrings(values, uniqueDiagnosticStrings([raw, unquoted]));
     }
-  });
+  }
+  return uniqueDiagnosticStrings(values);
 }
 
 function diagnosticAuthorizationValues(value: string): string[] {
-  const match = /^\s*(basic|bearer|digest|negotiate)\s+(.+)$/i.exec(value);
+  const match = loggingRegExpExec(/^\s*(basic|bearer|digest|negotiate)\s+(.+)$/i, value);
   if (!match?.[1] || !match[2]) return [];
-  const scheme = match[1].toLowerCase();
-  const payload = match[2].trim();
+  const scheme = loggingStringToLowerCase(match[1]);
+  const payload = loggingStringTrim(match[2]);
   const values = [payload];
   if (scheme === 'basic' && typeof nativeAtob === 'function') {
     try {
-      const decoded = new NativeTextDecoder().decode(
-        Uint8Array.from(Reflect.apply(nativeAtob, globalThis, [payload]), (char) =>
-          char.charCodeAt(0),
-        ),
-      );
-      values.push(decoded);
-      const separator = decoded.indexOf(':');
+      const binary = witnessReflectApply<string>(nativeAtob, globalThis, [payload]);
+      const bytes = new NativeUint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = loggingCharacterCodeAt(binary, index);
+      }
+      const decoded = new NativeTextDecoder().decode(bytes);
+      values[values.length] = decoded;
+      const separator = loggingStringIndexOf(decoded, ':');
       if (separator >= 0) {
-        values.push(decoded.slice(0, separator), decoded.slice(separator + 1));
+        values[values.length] = loggingStringSlice(decoded, 0, separator);
+        values[values.length] = loggingStringSlice(decoded, separator + 1);
       }
     } catch {}
   }
   if (scheme === 'digest') {
-    for (const field of payload.matchAll(/(?:^|,)\s*[^=,]+=(?:"([^"]*)"|([^,]*))/g)) {
-      const fieldValue = (field[1] ?? field[2])?.trim();
-      if (fieldValue) values.push(fieldValue);
+    const fields = /(?:^|,)\s*[^=,]+=(?:"([^"]*)"|([^,]*))/g;
+    for (
+      let field = loggingRegExpExec(fields, payload);
+      field !== null;
+      field = loggingRegExpExec(fields, payload)
+    ) {
+      const fieldValue = field[1] ?? field[2];
+      if (fieldValue === undefined) continue;
+      const trimmed = loggingStringTrim(fieldValue);
+      if (trimmed !== '') values[values.length] = trimmed;
     }
   }
-  return [...new Set(values.filter((item) => item !== ''))];
+  return uniqueDiagnosticStrings(values);
 }
 
 function diagnosticUrlValues(value: string): string[] {
-  let parsed: URL;
-  try {
-    parsed = new NativeURL(value, 'https://kovo.invalid');
-  } catch {
-    return [];
+  const parsed = loggingDiagnosticUrlParts(value);
+  if (parsed === undefined || parsed.search === '') return [];
+  const values: string[] = [];
+  const pairs = splitDiagnosticLiteral(loggingStringSlice(parsed.search, 1), '&');
+  for (let index = 0; index < pairs.length; index += 1) {
+    const pair = pairs[index]!;
+    const separator = loggingStringIndexOf(pair, '=');
+    if (separator < 0) continue;
+    const rawKey = loggingStringSlice(pair, 0, separator);
+    const rawValue = loggingStringSlice(pair, separator + 1);
+    let key = loggingReplaceAllLiteral(rawKey, '+', ' ');
+    try {
+      key = loggingDecodeURIComponent(key);
+    } catch {}
+    if (!diagnosticNameCarriesSecret(key) || rawValue === '') continue;
+    values[values.length] = rawValue;
+    try {
+      const decoded = loggingDecodeURIComponent(loggingReplaceAllLiteral(rawValue, '+', ' '));
+      if (decoded !== '') values[values.length] = decoded;
+    } catch {}
   }
-  const values = [...parsed.searchParams.entries()]
-    .filter(([key]) => diagnosticNameCarriesSecret(key))
-    .map(([, item]) => item)
-    .filter((item) => item !== '');
-  const rawValues = parsed.search
-    .slice(1)
-    .split('&')
-    .flatMap((pair) => {
-      const separator = pair.indexOf('=');
-      if (separator < 0) return [];
-      let key = pair.slice(0, separator);
-      try {
-        key = decodeURIComponent(key.replaceAll('+', ' '));
-      } catch {}
-      return diagnosticNameCarriesSecret(key) ? [pair.slice(separator + 1)] : [];
-    })
-    .filter((item) => item !== '');
-  return [...values, ...rawValues];
+  return uniqueDiagnosticStrings(values);
 }
 
 function sanitizeDiagnosticRequest(request: unknown): unknown {
@@ -328,8 +405,9 @@ function sanitizeDiagnosticRequest(request: unknown): unknown {
   try {
     const source = requestForAuthorityNeutralMetadata(request);
     const rawUrl = readDiagnosticRequestUrl(source);
-    const parsed = new NativeURL(rawUrl);
-    const safeUrl = new NativeURL(sanitizeDiagnosticUrl(rawUrl), parsed.origin).href;
+    const parsed = loggingDiagnosticUrlParts(rawUrl);
+    if (parsed === undefined) return undefined;
+    const safeUrl = `${parsed.origin}${sanitizeDiagnosticUrl(rawUrl)}`;
     const rawReferrer = readDiagnosticRequestReferrer(source);
     const safeReferrer = diagnosticRequestReferrer(rawReferrer);
     return createNativeRequest(safeUrl, {
@@ -345,23 +423,19 @@ function sanitizeDiagnosticRequest(request: unknown): unknown {
 }
 
 function requestIntrinsicGetter<Value>(property: string): (request: Request) => Value {
-  const descriptor = Object.getOwnPropertyDescriptor(Request.prototype, property);
-  const getter = descriptor ? (Reflect.get(descriptor, 'get') as unknown) : undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(Request.prototype, property);
+  const getter = descriptor ? witnessReflectGet(descriptor, 'get') : undefined;
   if (typeof getter !== 'function') {
     throw new TypeError(`The Web Request implementation lacks a ${property} getter.`);
   }
-  return (request) => Reflect.apply(getter, request, []) as Value;
+  return (request) => witnessReflectApply(getter, request, []) as Value;
 }
 
 function diagnosticRequestReferrer(value: string): string | undefined {
   if (value === '') return undefined;
   if (value === 'about:client') return value;
-  try {
-    const parsed = new NativeURL(value);
-    return new NativeURL(sanitizeDiagnosticUrl(value), parsed.origin).href;
-  } catch {
-    return undefined;
-  }
+  const parsed = loggingDiagnosticUrlParts(value);
+  return parsed === undefined ? undefined : `${parsed.origin}${sanitizeDiagnosticUrl(value)}`;
 }
 
 function sanitizeDiagnosticValue(
@@ -376,26 +450,26 @@ function sanitizeDiagnosticValue(
   if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
 
   const object = value as object;
-  const existing = seen.get(object);
+  const existing = witnessWeakMapGet(seen, object);
   if (existing !== undefined) return existing;
 
   if (isNativeRequest(value)) {
     const sanitized = sanitizeDiagnosticRequest(value);
-    seen.set(object, sanitized);
+    witnessWeakMapSet(seen, object, sanitized);
     return sanitized;
   }
   if (isNativeHeaders(value)) {
     const sanitized = createNativeHeaders();
-    seen.set(object, sanitized);
+    witnessWeakMapSet(seen, object, sanitized);
     return sanitized;
   }
   if (isNativeAbortSignal(value)) {
     try {
       const sanitized = authorityNeutralAbortSignal(value);
-      seen.set(object, sanitized);
+      witnessWeakMapSet(seen, object, sanitized);
       return sanitized;
     } catch {
-      seen.set(object, '[redacted]');
+      witnessWeakMapSet(seen, object, '[redacted]');
       return '[redacted]';
     }
   }
@@ -405,25 +479,28 @@ function sanitizeDiagnosticValue(
     hasNativeInstance(value, NativeResponse) ||
     hasNativeInstance(value, NativeBlob)
   ) {
-    seen.set(object, '[redacted]');
+    witnessWeakMapSet(seen, object, '[redacted]');
     return '[redacted]';
   }
 
   if (isNativeError(value)) {
-    const prototype = Object.getPrototypeOf(value);
-    const nativeName = nativeErrorPrototypeNames.get(prototype);
+    const prototype = witnessGetPrototypeOf(value);
+    const nativeName =
+      prototype === null ? undefined : witnessMapGet(nativeErrorPrototypeNames, prototype);
     const name = diagnosticErrorString(value, 'name', nativeName ?? '[redacted]', requestInputs);
     const message = diagnosticErrorString(value, 'message', '', requestInputs);
     const stack = diagnosticErrorString(value, 'stack', undefined, requestInputs);
     const clone = new NativeError(message.value);
     clone.name = name.value ?? 'Error';
     if (stack.value !== undefined) clone.stack = stack.value;
-    seen.set(object, clone);
+    witnessWeakMapSet(seen, object, clone);
     let changed = nativeName === undefined || name.changed || message.changed || stack.changed;
 
-    for (const key of Reflect.ownKeys(value)) {
+    const keys = witnessOwnKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
       if (key === 'name' || key === 'message' || key === 'stack') continue;
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      const descriptor = witnessGetOwnPropertyDescriptor(value, key);
       if (!descriptor) continue;
       if (typeof key === 'symbol') {
         changed = true;
@@ -434,7 +511,7 @@ function sanitizeDiagnosticValue(
         'value' in descriptor
           ? sanitizeDiagnosticValue(descriptor.value, requestInputs, seen)
           : '[redacted]';
-      Object.defineProperty(clone, sanitizedKey, {
+      witnessDefineProperty(clone, sanitizedKey, {
         configurable: true,
         enumerable: descriptor.enumerable ?? false,
         value: sanitized,
@@ -445,19 +522,21 @@ function sanitizeDiagnosticValue(
       }
     }
     if (!changed) {
-      seen.set(object, value);
+      witnessWeakMapSet(seen, object, value);
       return value;
     }
     return clone;
   }
 
-  if (Array.isArray(value)) {
+  if (loggingIsArray(value)) {
     const next: unknown[] = [];
-    seen.set(object, next);
+    witnessWeakMapSet(seen, object, next);
     let changed = false;
-    for (const key of Reflect.ownKeys(value)) {
+    const keys = witnessOwnKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
       if (key === 'length') continue;
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      const descriptor = witnessGetOwnPropertyDescriptor(value, key);
       if (!descriptor) continue;
       if (typeof key === 'symbol') {
         changed = true;
@@ -468,7 +547,7 @@ function sanitizeDiagnosticValue(
         'value' in descriptor
           ? sanitizeDiagnosticValue(descriptor.value, requestInputs, seen)
           : '[redacted]';
-      Object.defineProperty(next, sanitizedKey, {
+      witnessDefineProperty(next, sanitizedKey, {
         configurable: true,
         enumerable: descriptor.enumerable ?? false,
         value: sanitized,
@@ -479,22 +558,28 @@ function sanitizeDiagnosticValue(
       }
     }
     if (!changed) {
-      seen.set(object, value);
+      witnessWeakMapSet(seen, object, value);
       return value;
     }
     return next;
   }
 
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) {
-    seen.set(object, '[redacted]');
+  const prototype = witnessGetPrototypeOf(value);
+  if (prototype !== nativeObjectPrototype && prototype !== null) {
+    witnessWeakMapSet(seen, object, '[redacted]');
     return '[redacted]';
   }
-  const next = (prototype === null ? Object.create(null) : {}) as Record<PropertyKey, unknown>;
-  seen.set(object, next);
+  const next = (
+    prototype === null
+      ? witnessReflectApply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [null])
+      : {}
+  ) as Record<PropertyKey, unknown>;
+  witnessWeakMapSet(seen, object, next);
   let changed = false;
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  const keys = witnessOwnKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(value, key);
     if (!descriptor) continue;
     if (typeof key === 'symbol') {
       changed = true;
@@ -505,7 +590,7 @@ function sanitizeDiagnosticValue(
       'value' in descriptor
         ? sanitizeDiagnosticValue(descriptor.value, requestInputs, seen)
         : '[redacted]';
-    Object.defineProperty(next, sanitizedKey, {
+    witnessDefineProperty(next, sanitizedKey, {
       configurable: true,
       enumerable: descriptor.enumerable ?? false,
       value: sanitized,
@@ -516,7 +601,7 @@ function sanitizeDiagnosticValue(
     }
   }
   if (!changed) {
-    seen.set(object, value);
+    witnessWeakMapSet(seen, object, value);
     return value;
   }
   return next;
@@ -528,7 +613,7 @@ function diagnosticErrorString(
   fallback: string | undefined,
   inputs: DiagnosticRequestInputs,
 ): { changed: boolean; value: string | undefined } {
-  const descriptor = Object.getOwnPropertyDescriptor(error, key);
+  const descriptor = witnessGetOwnPropertyDescriptor(error, key);
   if (
     key === 'stack' &&
     descriptor !== undefined &&
@@ -552,25 +637,25 @@ function diagnosticErrorString(
 
 function sanitizeDiagnosticString(value: string, inputs: DiagnosticRequestInputs): string {
   let sanitized = sanitizeDiagnosticText(value, inputs.urls, sanitizeDiagnosticUrl);
-  for (const secretValue of [...inputs.secretValues].sort(
-    (left, right) => right.length - left.length,
-  )) {
-    if (secretValue !== '') sanitized = sanitized.replaceAll(secretValue, '[redacted]');
+  const secretValues = sortDiagnosticStringsByLength(inputs.secretValues);
+  for (let index = 0; index < secretValues.length; index += 1) {
+    const secretValue = secretValues[index]!;
+    if (secretValue !== '') {
+      sanitized = loggingReplaceAllLiteral(sanitized, secretValue, '[redacted]');
+    }
   }
   return sanitized;
 }
 
 function reportServerErrorToStderr(error: unknown, context: ServerErrorDiagnosticContext): void {
   try {
-    const details = [
-      `[kovo] ${context.operation} failed`,
-      context.url === undefined ? undefined : `url=${context.url}`,
-      context.routePath === undefined ? undefined : `route=${context.routePath}`,
-      context.queryKey === undefined ? undefined : `query=${context.queryKey}`,
-      context.mutationKey === undefined ? undefined : `mutation=${context.mutationKey}`,
-      context.status === undefined ? undefined : `status=${context.status}`,
-    ].filter((part): part is string => part !== undefined);
-    console.error(neutralizeLogValue(details.join(' ')), diagnosticLogValue(error));
+    let details = `[kovo] ${context.operation} failed`;
+    if (context.url !== undefined) details += ` url=${context.url}`;
+    if (context.routePath !== undefined) details += ` route=${context.routePath}`;
+    if (context.queryKey !== undefined) details += ` query=${context.queryKey}`;
+    if (context.mutationKey !== undefined) details += ` mutation=${context.mutationKey}`;
+    if (context.status !== undefined) details += ` status=${context.status}`;
+    console.error(neutralizeLogValue(details), diagnosticLogValue(error));
   } catch (_diagnosticError) {
     void _diagnosticError;
     // Diagnostics must not change SPEC §9.2's stable server-error responses.
@@ -579,8 +664,10 @@ function reportServerErrorToStderr(error: unknown, context: ServerErrorDiagnosti
 
 function diagnosticLogValue(value: unknown): string {
   if (!isNativeError(value)) return neutralizeLogValue('[diagnostic value redacted]');
-  const prototype = Object.getPrototypeOf(value);
-  const fallbackName = nativeErrorPrototypeNames.get(prototype) ?? 'Error';
+  const prototype = witnessGetPrototypeOf(value);
+  const fallbackName =
+    (prototype === null ? undefined : witnessMapGet(nativeErrorPrototypeNames, prototype)) ??
+    'Error';
   const name = diagnosticErrorString(value, 'name', fallbackName, {
     secretValues: [],
     urls: [],
@@ -598,7 +685,121 @@ function isNativeError(value: unknown): value is Error {
 
 function hasNativeInstance(value: unknown, constructor: Function): boolean {
   try {
-    return Reflect.apply(nativeFunctionHasInstance, constructor, [value]) as boolean;
+    return witnessReflectApply(nativeFunctionHasInstance, constructor, [value]) as boolean;
+  } catch {
+    return false;
+  }
+}
+
+function appendDiagnosticStrings(target: string[], values: readonly string[]): void {
+  for (let index = 0; index < values.length; index += 1) {
+    target[target.length] = values[index]!;
+  }
+}
+
+function uniqueDiagnosticStrings(values: readonly string[]): string[] {
+  const unique: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (value === '') continue;
+    let found = false;
+    for (let candidate = 0; candidate < unique.length; candidate += 1) {
+      if (unique[candidate] === value) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) unique[unique.length] = value;
+  }
+  return unique;
+}
+
+function sortDiagnosticStringsByLength(values: readonly string[]): string[] {
+  const sorted: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    let insert = sorted.length;
+    while (insert > 0 && sorted[insert - 1]!.length < value.length) {
+      sorted[insert] = sorted[insert - 1]!;
+      insert -= 1;
+    }
+    sorted[insert] = value;
+  }
+  return sorted;
+}
+
+function splitDiagnosticLiteral(value: string, separator: string): string[] {
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor <= value.length) {
+    const match = loggingStringIndexOf(value, separator, cursor);
+    if (match < 0) {
+      parts[parts.length] = loggingStringSlice(value, cursor);
+      return parts;
+    }
+    parts[parts.length] = loggingStringSlice(value, cursor, match);
+    cursor = match + separator.length;
+  }
+  return parts;
+}
+
+function unescapeDiagnosticCookieValue(value: string): string {
+  let result = '';
+  let cursor = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (loggingCharacterCodeAt(value, index) !== 0x5c || index + 1 >= value.length) continue;
+    const next = loggingCharacterCodeAt(value, index + 1);
+    if (next !== 0x22 && next !== 0x5c) continue;
+    result += loggingStringSlice(value, cursor, index) + value[index + 1];
+    cursor = index + 2;
+    index += 1;
+  }
+  return cursor === 0 ? value : result + loggingStringSlice(value, cursor);
+}
+
+function diagnosticHeadersIteratorNext(): Function | undefined {
+  if (typeof nativeHeadersEntries !== 'function') return undefined;
+  try {
+    const iterator = witnessReflectApply<IterableIterator<[string, string]>>(
+      nativeHeadersEntries,
+      new NativeHeaders(),
+      [],
+    );
+    return iterator.next;
+  } catch {
+    return undefined;
+  }
+}
+
+function diagnosticHeaderControlsAreSound(): boolean {
+  if (
+    typeof nativeHeadersEntries !== 'function' ||
+    typeof nativeHeadersIteratorNext !== 'function'
+  ) {
+    return false;
+  }
+  try {
+    const iterator = witnessReflectApply<IterableIterator<[string, string]>>(
+      nativeHeadersEntries,
+      new NativeHeaders({ 'x-kovo-probe': 'value' }),
+      [],
+    );
+    const first = witnessReflectApply<IteratorResult<[string, string]>>(
+      nativeHeadersIteratorNext,
+      iterator,
+      [],
+    );
+    const end = witnessReflectApply<IteratorResult<[string, string]>>(
+      nativeHeadersIteratorNext,
+      iterator,
+      [],
+    );
+    return (
+      first.done === false &&
+      first.value[0] === 'x-kovo-probe' &&
+      first.value[1] === 'value' &&
+      end.done === true
+    );
   } catch {
     return false;
   }
