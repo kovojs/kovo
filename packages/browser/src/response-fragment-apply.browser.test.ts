@@ -198,6 +198,52 @@ describe('browser response fragment apply', () => {
     expect(link?.getAttribute('style')).toBeNull();
   });
 
+  it('C240 cannot erase an unsafe attribute through an inherited array-index setter', () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'numeric-setter');
+    document.body.append(target);
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value instanceof Attr && value.name === 'onclick') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+
+      applyHtmlResponseFragments(
+        [
+          {
+            html: fragmentHtml(
+              '<article onclick="alert(1)" kovo-fragment-target="numeric-setter">unsafe</article>',
+            ),
+            target: 'numeric-setter',
+          },
+        ],
+        (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
+      );
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+    }
+
+    const article = document.querySelector('article[kovo-fragment-target="numeric-setter"]');
+    expect(poisonHits).toBe(0);
+    expect(article?.getAttribute('onclick')).toBeNull();
+  });
+
   it('keeps modular fragment sanitizer decisions in parity with the shared KV236 sink policy', () => {
     // SPEC.md §4.8/KV236: fragment adoption is a runtime output sink. The local
     // self-contained helper must match `decideRuntimeAttributeWrite()` because

@@ -506,6 +506,37 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     }
   }
 
+  function appendDenseSecurityValue<T>(values: T[], value: T, label: string): void {
+    const lengthDescriptor = descriptor(values, 'length');
+    const length =
+      lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined;
+    if (typeof length !== 'number' || length < 0 || length >= 100_000 || length % 1 !== 0) {
+      throw new TypeError(label + ' length is invalid.');
+    }
+    apply(nativeObjectDefineProperty, NativeObject, [
+      values,
+      length,
+      {
+        configurable: true,
+        enumerable: true,
+        value,
+        writable: true,
+      },
+    ]);
+    const committed = descriptor(values, length);
+    const nextLength = descriptor(values, 'length');
+    if (
+      !committed ||
+      !('value' in committed) ||
+      committed.value !== value ||
+      !nextLength ||
+      !('value' in nextLength) ||
+      nextLength.value !== length + 1
+    ) {
+      throw new TypeError(label + ' own-data commit failed.');
+    }
+  }
+
   function snapshotIndexedCollection<T>(
     collection: unknown,
     lengthGetters: readonly (((...args: never[]) => unknown) | undefined)[],
@@ -538,7 +569,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       if (entry === null || entry === undefined) {
         throw new TypeError('Kovo DOM collection item is unavailable.');
       }
-      snapshot[index] = entry as T;
+      appendDenseSecurityValue(snapshot, entry as T, 'Kovo DOM collection snapshot');
     }
     return snapshot;
   }
@@ -573,7 +604,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       if (typeof name !== 'string' || typeof value !== 'string') {
         throw new TypeError('Kovo DOM attribute snapshot is invalid.');
       }
-      snapshot[snapshot.length] = { name, value };
+      appendDenseSecurityValue(snapshot, { name, value }, 'Kovo DOM attribute snapshot');
     }
     return snapshot;
   }
@@ -1152,7 +1183,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       typeof length.value !== 'number' ||
       length.value < 0 ||
       length.value % 1 !== 0 ||
-      length.value > 0xffff_ffff
+      length.value > 100_000
     ) {
       return undefined;
     }
@@ -1173,7 +1204,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     for (let index = 0; index < length; index += 1) {
       const entry = descriptor(value, index);
       if (!entry || !('value' in entry) || typeof entry.value !== 'string') return undefined;
-      keys[index] = entry.value;
+      appendDenseSecurityValue(keys, entry.value, 'Kovo broadcast key snapshot');
     }
     return freezeBrowserSnapshot(keys);
   }
@@ -1225,7 +1256,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       if (!entry || !('value' in entry)) return undefined;
       const snapshot = snapshotBroadcastChange(entry.value);
       if (!snapshot) return undefined;
-      changeSnapshots[index] = snapshot;
+      appendDenseSecurityValue(changeSnapshots, snapshot, 'Kovo broadcast change snapshot');
     }
     const buildToken = descriptor(value, 'buildToken');
     const principal = descriptor(value, 'principal');
