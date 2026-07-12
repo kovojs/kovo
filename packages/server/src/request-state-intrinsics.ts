@@ -9,6 +9,7 @@
 
 const NativeDate = globalThis.Date;
 const NativeHeaders = globalThis.Headers;
+const NativeJSON = globalThis.JSON;
 const NativeMath = globalThis.Math;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
@@ -22,15 +23,20 @@ const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescript
 const nativeDateNow = NativeDate.now;
 const nativeDateGetTime = NativeDate.prototype.getTime;
 const nativeHeadersGet = NativeHeaders.prototype.get;
+const nativeJsonParse = NativeJSON.parse;
+const nativeJsonStringify = NativeJSON.stringify;
 const nativeMathCeil = NativeMath.ceil;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativePromiseCatch = NativePromise.prototype.catch;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
+const nativeStringCharAt = NativeString.prototype.charAt;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
+const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
+const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeRegExpExec = RegExp.prototype.exec;
 const nativeUrlHash = ownDescriptor(NativeURL.prototype, 'hash')?.get;
@@ -83,7 +89,21 @@ function capturedRequestStateControlsAreSound(): boolean {
     if (apply(nativeStringLastIndexOf, 'a,b,c', [',']) !== 3) return false;
     if (apply(nativeStringSlice, 'kovo', [1, 3]) !== 'ov') return false;
     if (apply(nativeStringCharCodeAt, '7', [0]) !== 55) return false;
+    if (apply(nativeStringCharAt, 'kovo', [2]) !== 'v') return false;
+    if (apply(nativeStringToLowerCase, 'KoVo', []) !== 'kovo') return false;
+    if (apply(nativeStringToUpperCase, 'post', []) !== 'POST') return false;
     if (apply<string>(NativeString, undefined, [42]) !== '42') return false;
+    const parsedJson = apply<unknown>(nativeJsonParse, NativeJSON, ['{"control":true}']);
+    if (
+      typeof parsedJson !== 'object' ||
+      parsedJson === null ||
+      (parsedJson as { control?: unknown }).control !== true
+    ) {
+      return false;
+    }
+    if (apply(nativeJsonStringify, NativeJSON, [['control', undefined]]) !== '["control",null]') {
+      return false;
+    }
     const forwardedMatch = apply<RegExpExecArray | null>(nativeRegExpExec, forwardedForPattern, [
       'proto=https; for="203.0.113.9"',
     ]);
@@ -179,6 +199,55 @@ export function requestStateIgnorePromiseRejection(promise: Promise<unknown>): v
 export function requestStateTrim(value: string): string {
   assertRequestStateIntrinsics();
   return apply(nativeStringTrim, value, []);
+}
+
+export function requestStateToLowerCase(value: string): string {
+  assertRequestStateIntrinsics();
+  return apply(nativeStringToLowerCase, value, []);
+}
+
+export function requestStateToUpperCase(value: string): string {
+  assertRequestStateIntrinsics();
+  return apply(nativeStringToUpperCase, value, []);
+}
+
+export function requestStateSlice(value: string, start: number, end?: number): string {
+  assertRequestStateIntrinsics();
+  return end === undefined
+    ? apply(nativeStringSlice, value, [start])
+    : apply(nativeStringSlice, value, [start, end]);
+}
+
+export function requestStateIndexOf(value: string, search: string): number {
+  assertRequestStateIntrinsics();
+  return apply(nativeStringIndexOf, value, [search]);
+}
+
+export function requestStateRegExpTest(expression: RegExp, value: string): boolean {
+  assertRequestStateIntrinsics();
+  return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]) !== null;
+}
+
+export function requestStateBoundedControlToken(value: string, maxLength: number): string {
+  assertRequestStateIntrinsics();
+  let normalized = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    normalized +=
+      code < 32 || code === 127 ? ' ' : apply<string>(nativeStringCharAt, value, [index]);
+  }
+  const trimmed = apply<string>(nativeStringTrim, normalized, []);
+  return apply(nativeStringSlice, trimmed, [0, maxLength]);
+}
+
+export function requestStateParseJson(value: string): unknown {
+  assertRequestStateIntrinsics();
+  return apply(nativeJsonParse, NativeJSON, [value]);
+}
+
+export function requestStateJsonStringify(value: unknown): string | undefined {
+  assertRequestStateIntrinsics();
+  return apply(nativeJsonStringify, NativeJSON, [value]);
 }
 
 export function requestStateStartsWith(value: string, prefix: string): boolean {
@@ -302,6 +371,16 @@ export function requestStateSameOriginPath(value: string, base: string): string 
     if (pathname === undefined || search === undefined || hash === undefined) return undefined;
     const path = `${pathname}${search}${hash}`;
     return requestStateIsSingleLeadingSlashPath(path) ? path : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function requestStateAbsoluteUrlOrigin(value: string): string | undefined {
+  assertRequestStateIntrinsics();
+  try {
+    const url = new NativeURL(value);
+    return urlScalar(nativeUrlOrigin, url);
   } catch {
     return undefined;
   }

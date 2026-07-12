@@ -1,5 +1,35 @@
 import type { KovoApp } from './app-types.js';
 import { appSystemResponse } from './app-system-response.js';
+import {
+  requestStateAbsoluteUrlOrigin,
+  requestStateBoundedControlToken,
+  requestStateIgnorePromiseRejection,
+  requestStateIndexOf,
+  requestStateJsonStringify,
+  requestStateMax,
+  requestStateNow,
+  requestStateParseJson,
+  requestStateRegExpTest,
+  requestStateSlice,
+  requestStateToLowerCase,
+  requestStateToUpperCase,
+  requestStateTrim,
+} from './request-state-intrinsics.js';
+import {
+  createWitnessMap,
+  createWitnessWeakMap,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessMapSize,
+  witnessReflectApply,
+  witnessWeakMapDelete,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 interface ReportAggregate {
   count: number;
@@ -50,7 +80,76 @@ const MAX_REPORT_AGGREGATES = 512;
 const REPORT_RATE_LIMIT = 1200;
 const REPORT_RATE_WINDOW_MS = 60_000;
 
-const reportingStates = new WeakMap<KovoApp, ReportingState>();
+const NativeRequest = globalThis.Request;
+const NativeTextDecoder = globalThis.TextDecoder;
+const nativeArrayJoin = Array.prototype.join;
+const nativeArrayPush = Array.prototype.push;
+const nativeReaderCancel = globalThis.ReadableStreamDefaultReader.prototype.cancel;
+const nativeReaderRead = globalThis.ReadableStreamDefaultReader.prototype.read;
+const nativeRequestBody = witnessGetOwnPropertyDescriptor(NativeRequest.prototype, 'body')?.get;
+const nativeRequestMethod = witnessGetOwnPropertyDescriptor(NativeRequest.prototype, 'method')?.get;
+const nativeStreamGetReader = globalThis.ReadableStream.prototype.getReader;
+const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
+const nativeUint8ArraySlice = Uint8Array.prototype.slice;
+
+function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
+  return witnessReflectApply<Return>(fn, receiver, args);
+}
+
+function reportingControlsAreSound(): boolean {
+  try {
+    if (
+      typeof nativeRequestBody !== 'function' ||
+      typeof nativeRequestMethod !== 'function' ||
+      typeof nativeStreamGetReader !== 'function' ||
+      typeof nativeReaderRead !== 'function' ||
+      typeof nativeReaderCancel !== 'function' ||
+      typeof nativeTextDecoderDecode !== 'function' ||
+      typeof nativeUint8ArraySlice !== 'function'
+    ) {
+      return false;
+    }
+    const request = new NativeRequest('https://kovo.local/report-control', {
+      body: 'A',
+      method: 'POST',
+    });
+    if (apply(nativeRequestMethod, request, []) !== 'POST') return false;
+    const body = apply<ReadableStream<Uint8Array> | null>(nativeRequestBody, request, []);
+    if (body === null) return false;
+    const reader = apply<ReadableStreamDefaultReader<Uint8Array>>(nativeStreamGetReader, body, []);
+    const read = apply<Promise<ReadableStreamReadResult<Uint8Array>>>(nativeReaderRead, reader, []);
+    if (!(read instanceof Promise)) return false;
+    const cancel = apply<Promise<void>>(nativeReaderCancel, reader, []);
+    if (!(cancel instanceof Promise)) return false;
+    requestStateIgnorePromiseRejection(read);
+    requestStateIgnorePromiseRejection(cancel);
+    if (
+      apply(nativeTextDecoderDecode, new NativeTextDecoder(), [new Uint8Array([65])]) !== 'A'
+    ) {
+      return false;
+    }
+    const bytes = apply<Uint8Array>(nativeUint8ArraySlice, new Uint8Array([1, 2, 3]), [0, 2]);
+    if (bytes.length !== 2 || bytes[0] !== 1 || bytes[1] !== 2) return false;
+    const values: string[] = [];
+    apply(nativeArrayPush, values, ['a']);
+    apply(nativeArrayPush, values, ['b']);
+    if (apply(nativeArrayJoin, values, ['']) !== 'ab') return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const reportingControlsSound = reportingControlsAreSound();
+const reportingStates = createWitnessWeakMap<KovoApp, ReportingState>();
+
+function assertReportingControls(): void {
+  if (!reportingControlsSound) {
+    throw new TypeError(
+      'Kovo reporting controls are unavailable because the server realm intrinsics were modified before framework initialization.',
+    );
+  }
+}
 
 /**
  * SPEC §6.6 audit-only telemetry: Reporting API reports are attacker-triggerable
@@ -64,7 +163,9 @@ export async function kovoSecurityReportResponse(
   app: KovoApp,
   request: Request,
 ): Promise<Response> {
-  if (request.method.toUpperCase() !== 'POST') {
+  assertReportingControls();
+  const method = apply<string>(nativeRequestMethod!, request, []);
+  if (requestStateToUpperCase(method) !== 'POST') {
     return appSystemResponse(null, {
       headers: { Allow: 'POST' },
       status: 405,
@@ -72,7 +173,7 @@ export async function kovoSecurityReportResponse(
     });
   }
 
-  await collectSecurityReports(app, request, Date.now());
+  await collectSecurityReports(app, request, requestStateNow());
   return appSystemResponse(null, {
     headers: { 'Cache-Control': 'no-store' },
     status: 204,
@@ -82,22 +183,26 @@ export async function kovoSecurityReportResponse(
 
 /** @internal */
 export function kovoSecurityReportSnapshot(app: KovoApp): KovoSecurityReportSnapshot {
-  const state = reportingStates.get(app);
+  const state = witnessWeakMapGet(reportingStates, app);
   if (!state) return { aggregates: [], dropped: 0 };
-  return {
-    aggregates: [...state.aggregates.values()].map((aggregate) => ({
+  const aggregates: Readonly<ReportAggregate>[] = [];
+  witnessMapForEach(state.aggregates, (aggregate) => {
+    aggregates[aggregates.length] = {
       count: aggregate.count,
       firstSeen: aggregate.firstSeen,
       lastSeen: aggregate.lastSeen,
       report: { ...aggregate.report },
-    })),
+    };
+  });
+  return {
+    aggregates,
     dropped: state.dropped,
   };
 }
 
 /** @internal */
 export function resetKovoSecurityReportsForTest(app: KovoApp): void {
-  reportingStates.delete(app);
+  witnessWeakMapDelete(reportingStates, app);
 }
 
 async function collectSecurityReports(app: KovoApp, request: Request, now: number): Promise<void> {
@@ -106,7 +211,7 @@ async function collectSecurityReports(app: KovoApp, request: Request, now: numbe
 
   const body = await readBoundedReportBody(request, MAX_REPORT_BODY_BYTES);
   if (body.truncated) state.dropped += 1;
-  if (body.text.trim() === '') return;
+  if (requestStateTrim(body.text) === '') return;
 
   const decoded = parseJson(body.text);
   if (!decoded.ok) {
@@ -118,7 +223,9 @@ async function collectSecurityReports(app: KovoApp, request: Request, now: numbe
   if (reports.length > MAX_REPORTS_PER_REQUEST) {
     state.dropped += reports.length - MAX_REPORTS_PER_REQUEST;
   }
-  for (const raw of reports.slice(0, MAX_REPORTS_PER_REQUEST)) {
+  const accepted = reports.length < MAX_REPORTS_PER_REQUEST ? reports.length : MAX_REPORTS_PER_REQUEST;
+  for (let index = 0; index < accepted; index += 1) {
+    const raw = reports[index];
     const report = normalizeSecurityReport(raw);
     if (!report) {
       state.dropped += 1;
@@ -129,14 +236,14 @@ async function collectSecurityReports(app: KovoApp, request: Request, now: numbe
 }
 
 function reportingState(app: KovoApp, now: number): ReportingState {
-  const existing = reportingStates.get(app);
+  const existing = witnessWeakMapGet(reportingStates, app);
   if (existing) return existing;
   const created: ReportingState = {
-    aggregates: new Map(),
+    aggregates: createWitnessMap(),
     dropped: 0,
     rate: { count: 0, startedAt: now },
   };
-  reportingStates.set(app, created);
+  witnessWeakMapSet(reportingStates, app, created);
   return created;
 }
 
@@ -154,44 +261,57 @@ async function readBoundedReportBody(
   request: Request,
   maxBytes: number,
 ): Promise<{ text: string; truncated: boolean }> {
-  if (!request.body) return { text: '', truncated: false };
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder();
+  assertReportingControls();
+  const body = apply<ReadableStream<Uint8Array> | null>(nativeRequestBody!, request, []);
+  if (body === null) return { text: '', truncated: false };
+  const reader = apply<ReadableStreamDefaultReader<Uint8Array>>(nativeStreamGetReader, body, []);
+  const decoder = new NativeTextDecoder();
   const chunks: string[] = [];
   let size = 0;
   let truncated = false;
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await apply<Promise<ReadableStreamReadResult<Uint8Array>>>(
+        nativeReaderRead,
+        reader,
+        [],
+      );
       if (done) break;
       size += value.byteLength;
       if (size > maxBytes) {
         truncated = true;
-        const allowed = Math.max(0, value.byteLength - (size - maxBytes));
-        if (allowed > 0) chunks.push(decoder.decode(value.slice(0, allowed), { stream: true }));
-        void reader.cancel().catch(() => undefined);
+        const allowed = requestStateMax(0, value.byteLength - (size - maxBytes));
+        if (allowed > 0) {
+          const accepted = apply<Uint8Array>(nativeUint8ArraySlice, value, [0, allowed]);
+          apply(nativeArrayPush, chunks, [
+            apply(nativeTextDecoderDecode, decoder, [accepted, { stream: true }]),
+          ]);
+        }
+        requestStateIgnorePromiseRejection(apply(nativeReaderCancel, reader, []));
         break;
       }
-      chunks.push(decoder.decode(value, { stream: true }));
+      apply(nativeArrayPush, chunks, [
+        apply(nativeTextDecoderDecode, decoder, [value, { stream: true }]),
+      ]);
     }
   } finally {
-    chunks.push(decoder.decode());
+    apply(nativeArrayPush, chunks, [apply(nativeTextDecoderDecode, decoder, [])]);
   }
 
-  return { text: chunks.join(''), truncated };
+  return { text: apply(nativeArrayJoin, chunks, ['']), truncated };
 }
 
 function parseJson(value: string): { ok: true; value: unknown } | { ok: false } {
   try {
-    return { ok: true, value: JSON.parse(value) as unknown };
+    return { ok: true, value: requestStateParseJson(value) };
   } catch {
     return { ok: false };
   }
 }
 
 function reportItems(decoded: unknown): unknown[] {
-  if (Array.isArray(decoded)) return decoded;
+  if (witnessIsArray(decoded)) return decoded;
   return [decoded];
 }
 
@@ -228,14 +348,16 @@ function compactReport(
 ): NormalizedSecurityReport | undefined {
   if (report.type.length === 0) return undefined;
   const compact: NormalizedSecurityReport = { type: report.type };
-  for (const key of [
+  const reportKeys = [
     'blocked',
     'disposition',
     'document',
     'effectivePolicy',
     'feature',
     'violatedDirective',
-  ] as const) {
+  ] as const;
+  for (let index = 0; index < reportKeys.length; index += 1) {
+    const key = reportKeys[index]!;
     const value = report[key];
     if (value !== undefined && value.length > 0) compact[key] = value;
   }
@@ -248,26 +370,29 @@ function aggregateReport(
   now: number,
 ): void {
   const key = reportKey(report);
-  const existing = state.aggregates.get(key);
+  const existing = witnessMapGet(state.aggregates, key);
   if (existing) {
     existing.count += 1;
     existing.lastSeen = now;
-    state.aggregates.delete(key);
-    state.aggregates.set(key, existing);
+    witnessMapDelete(state.aggregates, key);
+    witnessMapSet(state.aggregates, key, existing);
     return;
   }
 
-  while (state.aggregates.size >= MAX_REPORT_AGGREGATES) {
-    const oldest = state.aggregates.keys().next().value;
+  while (witnessMapSize(state.aggregates) >= MAX_REPORT_AGGREGATES) {
+    let oldest: string | undefined;
+    witnessMapForEach(state.aggregates, (_aggregate, candidate) => {
+      if (oldest === undefined) oldest = candidate;
+    });
     if (oldest === undefined) break;
-    state.aggregates.delete(oldest);
+    witnessMapDelete(state.aggregates, oldest);
     state.dropped += 1;
   }
-  state.aggregates.set(key, { count: 1, firstSeen: now, lastSeen: now, report });
+  witnessMapSet(state.aggregates, key, { count: 1, firstSeen: now, lastSeen: now, report });
 }
 
 function reportKey(report: NormalizedSecurityReport): string {
-  return JSON.stringify([
+  const key = requestStateJsonStringify([
     report.type,
     report.document,
     report.violatedDirective,
@@ -276,6 +401,8 @@ function reportKey(report: NormalizedSecurityReport): string {
     report.blocked,
     report.disposition,
   ]);
+  if (key === undefined) throw new TypeError('Kovo reporting fingerprint controls are unavailable.');
+  return key;
 }
 
 function stringValue(value: unknown): string | undefined {
@@ -284,35 +411,22 @@ function stringValue(value: unknown): string | undefined {
 
 function boundedToken(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
-  return replaceControlCharacters(value).trim().slice(0, 160);
-}
-
-function replaceControlCharacters(value: string): string {
-  let result = '';
-  for (const character of value) {
-    const code = character.charCodeAt(0);
-    result += code < 32 || code === 127 ? ' ' : character;
-  }
-  return result;
+  return requestStateBoundedControlToken(value, 160);
 }
 
 function redactedUrl(value: string | undefined): string | undefined {
   const token = boundedToken(value);
   if (token === undefined) return undefined;
-  if (/^(inline|eval|self|none)$/i.test(token)) return token.toLowerCase();
-  if (/^(data|blob|filesystem|about|javascript):/i.test(token)) {
-    return `${token.split(':', 1)[0] ?? 'opaque'}:`;
+  if (requestStateRegExpTest(/^(inline|eval|self|none)$/i, token)) {
+    return requestStateToLowerCase(token);
   }
-  try {
-    // L14 (SPEC §6.6): the stored aggregate is the framework's "redacted" telemetry, but
-    // returning origin+pathname retained the full path verbatim — so a secret embedded in a
-    // path segment (reset/magic-link/capability tokens, e.g. `/reset-password/<token>`)
-    // persisted unredacted at rest. Keep only the origin; drop the path, query, and fragment
-    // so no path-embedded secret is ever stored.
-    return new URL(token).origin;
-  } catch {
-    return token.slice(0, 160);
+  if (requestStateRegExpTest(/^(data|blob|filesystem|about|javascript):/i, token)) {
+    const colon = requestStateIndexOf(token, ':');
+    return `${requestStateToLowerCase(requestStateSlice(token, 0, colon))}:`;
   }
+  // L14/M9 (SPEC §6.6): keep only a pinned absolute URL origin. Paths, queries, fragments,
+  // credentials, malformed values, and relative paths are never retained as "redacted" telemetry.
+  return requestStateAbsoluteUrlOrigin(token) ?? 'opaque';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
