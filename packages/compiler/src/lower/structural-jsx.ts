@@ -49,10 +49,13 @@ import {
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 import { executableJavaScriptExpression } from '../javascript-expression.js';
 import {
+  compilerArrayJoin,
   compilerArrayLength,
   compilerDefineOwnDataProperty,
   compilerOwnDataValue,
   compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringLocaleCompare,
   compilerStringSplit,
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
@@ -215,38 +218,66 @@ export function lowerStructuralJsx(
   );
   const escapeApplied = inlineTextEscapeApplied || staticTextEscapeApplied;
 
-  const compilerEscapeImports = [
-    ...(escapeApplied ? ['escapeText'] : []),
-    ...(needsSafeJsxSpreadHelper ? ['kovoSafeJsxSpread'] : []),
-  ].filter(
-    (importedName) =>
-      !model.namedImports.some(
-        (entry) =>
-          entry.importedName === importedName &&
-          entry.moduleSpecifier === '@kovojs/server/internal/escape',
-      ),
+  const compilerEscapeImports: string[] = [];
+  if (escapeApplied && !hasCompilerEscapeImport(model, 'escapeText')) {
+    appendCompilerFact(compilerEscapeImports, 'escapeText', 'Compiler escape imports');
+  }
+  if (needsSafeJsxSpreadHelper && !hasCompilerEscapeImport(model, 'kovoSafeJsxSpread')) {
+    appendCompilerFact(
+      compilerEscapeImports,
+      'kovoSafeJsxSpread',
+      'Compiler escape imports',
+    );
+  }
+  const compilerEscapeImportLength = compilerArrayLength(
+    compilerEscapeImports,
+    'Compiler escape imports',
   );
   const escapeImport =
-    compilerEscapeImports.length > 0
-      ? `import { ${compilerEscapeImports.join(', ')} } from '@kovojs/server/internal/escape';\n`
+    compilerEscapeImportLength > 0
+      ? `import { ${compilerArrayJoin(compilerEscapeImports, ', ')} } from '@kovojs/server/internal/escape';\n`
       : '';
   /*
    * The helper import is compiler-owned ABI. App-authored imports from this internal subpath are
    * rejected by the authoring-surface gate; the lowered artifact is reparsed after insertion.
    */
-  const runtimeImports = [
-    ...(deriveExports.length > 0 ? ['derive'] : []),
-    ...(needsStylePropertyHelper ? [runtimeOutputHelpers.styleProperty] : []),
-  ].sort();
+  const runtimeImports: string[] = [];
+  const hasDeriveImport = compilerArrayLength(deriveExports, 'Structural derive exports') > 0;
+  const stylePropertyImport = needsStylePropertyHelper
+    ? runtimeOutputHelpers.styleProperty
+    : undefined;
+  if (
+    hasDeriveImport &&
+    stylePropertyImport !== undefined &&
+    compilerStringLocaleCompare('derive', stylePropertyImport) > 0
+  ) {
+    appendCompilerFact(runtimeImports, stylePropertyImport, 'Structural runtime imports');
+    appendCompilerFact(runtimeImports, 'derive', 'Structural runtime imports');
+  } else {
+    if (hasDeriveImport) {
+      appendCompilerFact(runtimeImports, 'derive', 'Structural runtime imports');
+    }
+    if (stylePropertyImport !== undefined) {
+      appendCompilerFact(runtimeImports, stylePropertyImport, 'Structural runtime imports');
+    }
+  }
+  const runtimeImportLength = compilerArrayLength(runtimeImports, 'Structural runtime imports');
   const derivePrefix =
-    runtimeImports.length > 0
-      ? `import { ${runtimeImports.join(', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n${deriveExports.join('\n')}\n\n`
+    runtimeImportLength > 0
+      ? `import { ${compilerArrayJoin(runtimeImports, ', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n${compilerArrayJoin(deriveExports, '\n')}\n\n`
       : '';
   const prefix = `${escapeImport}${derivePrefix}`;
-  const replacements = [...jsxIrReplacements(tree)];
+  const replacements = compilerSnapshotDenseArray(
+    jsxIrReplacements(tree),
+    'Structural JSX replacements',
+  );
   if (prefix.length > 0) {
     const start = derivePrefixInsertionOffset(options.source);
-    replacements.push({ end: start, replacement: prefix, start });
+    appendCompilerFact(
+      replacements,
+      { end: start, replacement: prefix, start },
+      'Structural JSX replacements',
+    );
   }
 
   return {
@@ -257,6 +288,24 @@ export function lowerStructuralJsx(
     stateDerives,
     viewTransitionStamps,
   };
+}
+
+function hasCompilerEscapeImport(model: ComponentModuleModel, importedName: string): boolean {
+  const importLength = compilerArrayLength(model.namedImports, 'Compiler named imports');
+  for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+    const entry = compilerOwnDataValue(
+      model.namedImports,
+      importIndex,
+      'Compiler named imports',
+    ) as ComponentModuleModel['namedImports'][number];
+    if (
+      entry.importedName === importedName &&
+      entry.moduleSpecifier === '@kovojs/server/internal/escape'
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

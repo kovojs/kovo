@@ -570,4 +570,37 @@ export const ProductCard = component({
     expect(result?.files[0]?.source).toContain('{escapeText(product.name)}');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject executable source through structural helper import Array.join', () => {
+    const nativeJoin = Array.prototype.join;
+    const nativeApply = Reflect.apply;
+    const injection = `escapeText } from '@kovojs/server/internal/escape';\nglobalThis.KOVO_COMPILER_INJECTION = true;\nimport { escapeText`;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.join = function poisonedStructuralHelperJoin(separator?: string): string {
+        if (this.length === 1 && this[0] === 'escapeText' && separator === ', ') {
+          poisonHits += 1;
+          return injection;
+        }
+        return nativeApply(nativeJoin, this, [separator]);
+      };
+      result = compileComponentModule({
+        fileName: 'product-card.tsx',
+        source: `
+export const ProductCard = component({
+  render: ({ product }) => <h2>{product.name}</h2>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.join = nativeJoin;
+    }
+
+    expect(result?.files[0]?.source).not.toContain('KOVO_COMPILER_INJECTION');
+    expect(result?.files[0]?.source).toContain(
+      "import { escapeText } from '@kovojs/server/internal/escape';",
+    );
+    expect(poisonHits).toBe(0);
+  });
 });
