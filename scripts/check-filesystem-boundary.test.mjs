@@ -15,6 +15,8 @@ import {
   presetDiagnosticAggregationFindings,
   presetRetentionPolicyFile,
   presetRetentionPolicyFindings,
+  responseSecurityArrayCommitFindings,
+  responseSecurityIntrinsicsFile,
   staticExportEndpointBlockerFile,
   staticExportEndpointBlockerFindings,
   staticExportReplayArtifactCommitFindings,
@@ -372,6 +374,44 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         'durable-task collections must not append through mutable Array.push',
       ),
     ]);
+  });
+
+  it('C236 pins response and cookie arrays to own-data indexed commits', () => {
+    expect(
+      responseSecurityArrayCommitFindings(
+        responseSecurityIntrinsicsFile,
+        `
+          const nativeArrayPush = NativeArray.prototype.push;
+          export function securityArrayPush(values, value) {
+            apply(nativeArrayPush, values, [value]);
+          }
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('prototype-visible [[Set]]'),
+        expect.stringContaining('missing boot-pinned property definition'),
+        expect.stringContaining('missing descriptor-indexed response commit'),
+        expect.stringContaining('missing securityArrayPush own-data delegation'),
+      ]),
+    );
+
+    expect(
+      responseSecurityArrayCommitFindings(
+        'packages/server/src/cookies.ts',
+        `
+          function serializeCookie() {
+            const parts = ['sid=value'];
+            parts.push('HttpOnly');
+          }
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('cookie attributes must commit through securityArrayPush'),
+        expect.stringContaining('HttpOnly cookie floor must use the response array choke'),
+      ]),
+    );
   });
 
   it('C202 pins deploy-skew retention classification to the emitted module snapshot', () => {

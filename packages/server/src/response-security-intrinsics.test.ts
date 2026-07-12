@@ -350,4 +350,38 @@ describe('document, cookie, CSP, and CSRF intrinsic closure', () => {
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
   });
+
+  it('C236 keeps own-data response commits when an inherited setter predates import', () => {
+    const script = `
+      const nativeDefineProperty = Object.defineProperty;
+      const nativeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+      let setterCalls = 0;
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value) {
+          if (value === 'approved-preimport') { setterCalls += 1; return; }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      const controls = await import(${JSON.stringify(`${intrinsicModuleUrl}?c236-inherited-index`)});
+      controls.assertResponseSecurityIntrinsics();
+      const values = [];
+      controls.securityArrayPush(values, 'approved-preimport');
+      const committed = nativeGetOwnPropertyDescriptor(values, '0');
+      if (values.length === 1 && committed?.value === 'approved-preimport' && setterCalls === 0) {
+        process.exit(0);
+      }
+      process.exit(3);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
 });

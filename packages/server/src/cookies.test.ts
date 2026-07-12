@@ -205,6 +205,40 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(cookie).toContain('Path=/');
   });
 
+  it('C236 keeps inherited index setters from stripping the HttpOnly cookie floor', () => {
+    process.env.NODE_ENV = 'development';
+    const originalTwo = Object.getOwnPropertyDescriptor(Array.prototype, '2');
+    const nativeDefineProperty = Object.defineProperty;
+    let setterCalls = 0;
+    let cookie = '';
+
+    try {
+      nativeDefineProperty(Array.prototype, '2', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'HttpOnly') {
+            setterCalls += 1;
+            return;
+          }
+          nativeDefineProperty(this, '2', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+
+      cookie = serializeCookie('sid', 'abc', { class: 'session' });
+    } finally {
+      if (originalTwo === undefined) delete Array.prototype[2];
+      else nativeDefineProperty(Array.prototype, '2', originalTwo);
+    }
+
+    expect(cookie).toBe('sid=abc; Path=/; HttpOnly; SameSite=Lax');
+    expect(setterCalls).toBe(0);
+  });
+
   it('forces Secure + a __Host- prefix on a session cookie in production', () => {
     process.env.NODE_ENV = 'production';
     const cookie = serializeCookie('sid', 'abc', { class: 'session' });

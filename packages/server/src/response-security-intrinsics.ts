@@ -38,7 +38,6 @@ const nativeRandomBytes = randomBytes;
 const nativeReflectApply = NativeReflect.apply;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
-const nativeArrayPush = NativeArray.prototype.push;
 const nativeArraySort = NativeArray.prototype.sort;
 const nativeBufferAllocUnsafe = NativeBuffer.allocUnsafe;
 const nativeBufferConcat = NativeBuffer.concat;
@@ -68,6 +67,7 @@ const nativeNumberIsInteger = NativeNumber.isInteger;
 const nativeNumberParseInt = NativeNumber.parseInt;
 const nativeNumberIsNaN = NativeNumber.isNaN;
 const nativeObjectCreate = NativeObject.create;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectKeys = NativeObject.keys;
@@ -120,6 +120,62 @@ const fatalTextDecoder = new NativeTextDecoder('utf-8', { fatal: true });
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
+}
+
+// SPEC §6.6/§9.1: even a captured Array.push performs prototype-visible [[Set]]. Response and
+// cookie authority therefore commits each new slot through the pinned own-data definition control.
+function defineResponseArrayIndex<Value>(
+  values: Value[],
+  index: number,
+  value: Value,
+  label: string,
+): void {
+  if (apply(nativeArrayIsArray, NativeArray, [values]) !== true) {
+    throw new NativeTypeError(`${label} target must be an array.`);
+  }
+  const lengthDescriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [values, 'length'],
+  );
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number'
+  ) {
+    throw new NativeTypeError(`${label} target must expose an own data length.`);
+  }
+  const length = lengthDescriptor.value;
+  if (index < 0 || index > length || index >= 4_294_967_295 || index % 1 !== 0) {
+    throw new NativeTypeError(`${label} index must preserve dense array bounds.`);
+  }
+  apply(nativeObjectDefineProperty, NativeObject, [
+    values,
+    index,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+}
+
+function commitResponseArrayValue<Value>(values: Value[], value: Value, label: string): void {
+  assertResponseSecurityIntrinsics();
+  const lengthDescriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [values, 'length'],
+  );
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number'
+  ) {
+    throw new NativeTypeError(`${label} target must expose an own data length.`);
+  }
+  defineResponseArrayIndex(values, lengthDescriptor.value, value, label);
 }
 
 function stableOwnFunction(value: object, property: PropertyKey): Function {
@@ -197,7 +253,8 @@ function capturedControlsAreSound(): boolean {
       return false;
     }
     const pushed: string[] = [];
-    if (apply(nativeArrayPush, pushed, ['safe']) !== 1 || pushed[0] !== 'safe') return false;
+    defineResponseArrayIndex(pushed, 0, 'safe', 'Kovo response control array');
+    if (pushed.length !== 1 || pushed[0] !== 'safe') return false;
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
     const sorted = [1, 3, 2];
@@ -456,7 +513,7 @@ function rememberEntropy(kind: 'bytes' | 'uuid', value: string): void {
     );
   }
   if (recentEntropyOrder.length < ENTROPY_REPLAY_WINDOW) {
-    apply(nativeArrayPush, recentEntropyOrder, [key]);
+    securityArrayPush(recentEntropyOrder, key);
   } else {
     const expired = recentEntropyOrder[recentEntropyCursor]!;
     apply(nativeSetDelete, recentEntropy, [expired]);
@@ -485,8 +542,7 @@ export function securityArrayJoin(values: readonly unknown[], separator: string)
 }
 
 export function securityArrayPush<Value>(values: Value[], value: Value): void {
-  assertResponseSecurityIntrinsics();
-  apply(nativeArrayPush, values, [value]);
+  commitResponseArrayValue(values, value, 'Kovo response security array commit');
 }
 
 export function securityArraySort<Value>(

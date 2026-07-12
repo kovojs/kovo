@@ -24,6 +24,11 @@ export const buildSecurityIntrinsicsFile = 'packages/server/src/build-security-i
 export const neutralBuildFile = 'packages/server/src/neutral-build.ts';
 export const neutralMetadataCommitFiles = [buildSecurityIntrinsicsFile, neutralBuildFile];
 export const presetRetentionPolicyFile = 'packages/server/src/build.ts';
+export const responseSecurityIntrinsicsFile = 'packages/server/src/response-security-intrinsics.ts';
+export const responseSecurityArrayCommitFiles = [
+  responseSecurityIntrinsicsFile,
+  'packages/server/src/cookies.ts',
+];
 export const taskSecurityIntrinsicsFile = 'packages/server/src/task-security-intrinsics.ts';
 export const taskArrayCommitFiles = [
   taskSecurityIntrinsicsFile,
@@ -95,6 +100,9 @@ export function checkFilesystemBoundary(options = {}) {
     options.neutralMetadataCommitFiles ?? neutralMetadataCommitFiles,
   );
   const taskArrayCommitFileSet = new Set(options.taskArrayCommitFiles ?? taskArrayCommitFiles);
+  const responseSecurityArrayCommitFileSet = new Set(
+    options.responseSecurityArrayCommitFiles ?? responseSecurityArrayCommitFiles,
+  );
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
   );
@@ -173,6 +181,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (taskArrayCommitFileSet.has(filePath)) {
       findings.push(...taskArrayCommitFindings(filePath, sourceText));
+    }
+    if (responseSecurityArrayCommitFileSet.has(filePath)) {
+      findings.push(...responseSecurityArrayCommitFindings(filePath, sourceText));
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
@@ -644,6 +655,55 @@ export function taskArrayCommitFindings(filePath, sourceText) {
     const [description, pattern] = requiredControls[index];
     if (!pattern.test(sourceText)) {
       findings.push(`${filePath}: durable-task collections are missing ${description}`);
+    }
+  }
+  return findings;
+}
+
+export function responseSecurityArrayCommitFindings(filePath, sourceText) {
+  const findings = [];
+  const scanText = stripCommentsAndStrings(sourceText);
+
+  if (filePath !== responseSecurityIntrinsicsFile) {
+    const mutableCookieCommit = /\bparts\s*\.\s*push\s*\(/u.exec(scanText);
+    if (mutableCookieCommit !== null) {
+      findings.push(
+        `${filePath}:${lineOf(sourceText, mutableCookieCommit.index)}: cookie attributes must commit through securityArrayPush()`,
+      );
+    }
+    if (!/\bsecurityArrayPush\s*\(\s*parts\s*,\s*['"]HttpOnly['"]\s*\)/u.test(sourceText)) {
+      findings.push(`${filePath}: the HttpOnly cookie floor must use the response array choke`);
+    }
+    return findings;
+  }
+
+  if (/\bnativeArrayPush\b/u.test(scanText)) {
+    findings.push(
+      `${filePath}: captured Array.push is not a safe response commit because it still performs prototype-visible [[Set]]`,
+    );
+  }
+  const requiredControls = [
+    [
+      'boot-pinned property definition',
+      /\bconst\s+nativeObjectDefineProperty\s*=\s*NativeObject\s*\.\s*defineProperty\s*;/u,
+    ],
+    [
+      'descriptor-indexed response commit',
+      /\bfunction\s+defineResponseArrayIndex\s*<[^>]+>\s*\([\s\S]*?\bapply\s*\(\s*nativeObjectDefineProperty\s*,\s*NativeObject\s*,/u,
+    ],
+    [
+      'securityArrayPush own-data delegation',
+      /\bfunction\s+securityArrayPush\s*<[^>]+>\s*\([^)]*\)\s*:\s*void\s*\{\s*commitResponseArrayValue\s*\(/u,
+    ],
+    [
+      'entropy replay-ledger commit',
+      /\bsecurityArrayPush\s*\(\s*recentEntropyOrder\s*,\s*key\s*\)/u,
+    ],
+  ];
+  for (let index = 0; index < requiredControls.length; index += 1) {
+    const [description, pattern] = requiredControls[index];
+    if (!pattern.test(sourceText)) {
+      findings.push(`${filePath}: response security arrays are missing ${description}`);
     }
   }
   return findings;

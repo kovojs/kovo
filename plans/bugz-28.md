@@ -2730,6 +2730,17 @@ build:dist` passes.
   - **Acceptance:** every authority entry checks an active capture epoch before adapter/transaction/
     probe dispatch; settled descendants fail KV407 while genuinely awaited in-scope work remains valid.
 
+- [x] **C236 - Captured response-array push strips mandatory cookie attributes.**
+      `packages/server/src/{response-security-intrinsics,cookies}.ts`
+  - A late inherited numeric setter can swallow `HttpOnly` while the captured
+    `Array.prototype.push` still advances the cookie-parts length, so the default credential-cookie
+    serializer emits a session cookie without its SPEC §9.1.1 browser-confidentiality floor.
+  - **Acceptance:** response-security array construction uses a boot-pinned own-data indexed commit;
+    late and pre-import inherited setters cannot suppress cookie/CSP/response values, and a source
+    gate prevents response authority from returning to prototype-visible push or numeric assignment.
+  - **Evidence:** the exact late HttpOnly-strip and pre-import setter regressions pass; the 302-test
+    response/document matrix, server distribution build, and response-array source gate are green.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
