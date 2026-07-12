@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+
 import { describe, expect, it } from 'vitest';
 
 import type { JsonValue } from './json.js';
@@ -8,6 +10,8 @@ import {
   cloneJsonValue,
   jsonEncodedByteLength,
 } from './json-clone.js';
+
+const moduleUrl = new URL('./json-clone.ts', import.meta.url).href;
 
 describe('JSON value utilities', () => {
   it('clones proxy-backed JSON values without structuredClone', () => {
@@ -76,6 +80,53 @@ describe('JSON value utilities', () => {
     expect(json).toBe('{"a":{"b":true,"emoji":"😀"},"z":1}');
     expect(jsonEncodedByteLength(value)).toBe(new TextEncoder().encode(json).byteLength);
     expect(jsonEncodedByteLength('😀')).toBeGreaterThan(canonicalJsonStringify('😀').length);
+  });
+
+  it('pins canonical JSON bytes and scalar checks after late intrinsic replacement', () => {
+    const originalStringify = JSON.stringify;
+    const originalEncode = TextEncoder.prototype.encode;
+    const originalIsFinite = Number.isFinite;
+    const originalIsInteger = Number.isInteger;
+    try {
+      JSON.stringify = () => '{"principalId":"attacker"}';
+      TextEncoder.prototype.encode = () => new Uint8Array();
+      Number.isFinite = () => true;
+      Number.isInteger = () => true;
+
+      expect(canonicalJsonStringify({ principalId: 'victim' })).toBe(
+        '{"principalId":"victim"}',
+      );
+      expect(jsonEncodedByteLength('Kovo')).toBe(6);
+      expect(() => assertJsonValue(Number.NaN, { root: 'args' })).toThrow(
+        'must be a finite JSON number',
+      );
+      expect(() => assertJsonValue(Object.assign(['safe'], { admin: true }))).toThrow(
+        'must not be a custom array property',
+      );
+    } finally {
+      JSON.stringify = originalStringify;
+      TextEncoder.prototype.encode = originalEncode;
+      Number.isFinite = originalIsFinite;
+      Number.isInteger = originalIsInteger;
+    }
+  });
+
+  it('fails closed when the UTF-8 encoder was poisoned before import', () => {
+    const script = `
+      TextEncoder.prototype.encode = () => new Uint8Array();
+      const json = await import(${JSON.stringify(`${moduleUrl}?poisoned-json-codec`)});
+      try {
+        json.jsonEncodedByteLength({ principalId: 'victim' });
+      } catch (error) {
+        if (String(error).includes('canonical JSON controls are unavailable')) process.exit(0);
+      }
+      process.exit(3);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('rejects array properties that JSON.stringify would drop', () => {

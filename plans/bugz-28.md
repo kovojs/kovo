@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    15 | C1-C15 |
-| High     |    24 | H1-H24 |
+| High     |    25 | H1-H25 |
 | Medium   |     9 | M1-M9 |
 
 ## Critical
@@ -154,7 +154,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 30-test storage/filesystem-codec matrix passes; the independent real-filesystem
     exploit now returns no attacker object while the victim bytes remain available under their key.
 
-- [ ] **C15 - Mutable canonical JSON serialization can replace validated durable-task arguments.**
+- [x] **C15 - Mutable canonical JSON serialization can replace validated durable-task arguments.**
       `packages/core/src/json-clone.ts`, `packages/server/src/task-queue.ts`
   - A selective late `JSON.stringify` replacement recognized the already-validated victim task
     arguments and substituted an attacker principal plus a destructive operation. The real
@@ -163,6 +163,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     and task queue argument cloning consume pinned exact values and fail closed on unsupported data;
     late/import-order JSON/encoder/number/collection poison cannot replace validated arguments or
     undercount bounded canonical data.
+  - **Evidence:** the 42-test canonical-JSON/security-witness/task-queue matrix passes; the independent
+    serialized-argument replacement proof now writes the exact validated victim operation/principal.
 
 ## High
 
@@ -386,6 +388,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     the emitted inline-loader closure use boot-pinned controls; late/import-order poison cannot
     navigate outside the current origin, suppress required retirement, or consume unclassified bytes.
 
+- [ ] **H25 - The shipped inline loader can mint predictable mutation replay identifiers.**
+      `packages/browser/src/{inline-loader-build,inline-loader,mutation-response}.ts`
+  - The emitted `ci` helper falls back from `crypto.randomUUID` to `Date.now` plus a realm-local
+    counter, violating the normative 128-bit cryptographic `Kovo-Idem` floor whenever random UUIDs
+    are unavailable. Its live method lookup also lets a late replacement force a constant token,
+    unlike the modular runtime's cryptographic `getRandomValues` fallback.
+  - **Acceptance:** modular and emitted mutation submission share boot-pinned, semantically checked
+    cryptographic sources, require at least 128 random bits, fail closed without one, and never use a
+    clock/counter fallback; late/import-order crypto replacement cannot repeat or predict the token.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -478,8 +490,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C15, H15, and H17-H24 are active canonical
-JSON, response/deferred/mutation/client output, task, and browser-navigation fixes.
+The remediation pass remains intentionally non-zero: H15 and H17-H25 are active response/deferred/
+mutation/client output, task, and browser-navigation/replay-token fixes.
 Integrated
 evidence is
 green at

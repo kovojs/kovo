@@ -1,19 +1,36 @@
 import type { JsonValue } from './json.js';
 import {
+  securityApply,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityGetOwnPropertySymbols,
   securityGetPrototypeOf,
   securityIsArray,
+  securityJsonStringify,
   securityObjectKeys,
   securityPropertyIsEnumerable,
+  securityRegExpTest,
+  securityString,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetDelete,
   securityWeakSetHas,
 } from '#security-witness-intrinsics';
 
-const textEncoder = new TextEncoder();
+const IntrinsicNumber = globalThis.Number;
+const IntrinsicObjectPrototype = globalThis.Object.prototype;
+const IntrinsicTextEncoder = globalThis.TextEncoder;
+const IntrinsicUint8Array = globalThis.Uint8Array;
+const intrinsicNumberIsFinite = IntrinsicNumber.isFinite;
+const intrinsicNumberIsInteger = IntrinsicNumber.isInteger;
+const intrinsicTextEncoderEncode = IntrinsicTextEncoder.prototype.encode;
+const textEncoder = new IntrinsicTextEncoder();
+const typedArrayPrototype = securityGetPrototypeOf(IntrinsicUint8Array.prototype);
+const intrinsicTypedArrayByteLength =
+  typedArrayPrototype === null
+    ? undefined
+    : securityGetOwnPropertyDescriptor(typedArrayPrototype, 'byteLength')?.get;
+const jsonScalarControlsSound = verifyJsonScalarControls();
 
 /** @internal Options for runtime JSON value validation. */
 export interface AssertJsonValueOptions {
@@ -84,7 +101,9 @@ export function canonicalJsonStringify(
   value: unknown,
   options: AssertJsonValueOptions = {},
 ): string {
-  return JSON.stringify(canonicalizeJsonValue(assertJsonValue(value, options)));
+  const result = securityJsonStringify(canonicalizeJsonValue(assertJsonValue(value, options)));
+  if (result === undefined) throw new TypeError('Canonical JSON value is not serializable.');
+  return result;
 }
 
 /** @internal UTF-8 encoded byte length of the canonical JSON representation. */
@@ -92,7 +111,11 @@ export function jsonEncodedByteLength(
   value: unknown,
   options: AssertJsonValueOptions = {},
 ): number {
-  return textEncoder.encode(canonicalJsonStringify(value, options)).byteLength;
+  assertJsonScalarControls();
+  const bytes = securityApply<Uint8Array>(intrinsicTextEncoderEncode, textEncoder, [
+    canonicalJsonStringify(value, options),
+  ]);
+  return securityApply<number>(intrinsicTypedArrayByteLength!, bytes, []);
 }
 
 function assertJsonValueAt(
@@ -108,7 +131,7 @@ function assertJsonValueAt(
     case 'string':
       return;
     case 'number':
-      if (Number.isFinite(value)) return;
+      if (jsonNumberIsFinite(value)) return;
       throw jsonValueError(root, path, 'must be a finite JSON number');
     case 'undefined':
       throw jsonValueError(root, path, 'must not be undefined');
@@ -204,7 +227,7 @@ function canonicalizeJsonValue(value: JsonValue): JsonValue {
 function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object') return false;
   const prototype = securityGetPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  return prototype === IntrinsicObjectPrototype || prototype === null;
 }
 
 function assertNoEnumerableSymbolKeys(
@@ -216,7 +239,7 @@ function assertNoEnumerableSymbolKeys(
   for (let index = 0; index < symbols.length; index += 1) {
     const symbol = symbols[index];
     if (symbol !== undefined && securityPropertyIsEnumerable(value, symbol)) {
-      throw jsonValueError(root, path, `must not contain symbol key ${String(symbol)}`);
+      throw jsonValueError(root, path, `must not contain symbol key ${securityString(symbol)}`);
     }
   }
 }
@@ -239,8 +262,9 @@ function sortStrings(values: string[]): string[] {
 
 function isArrayIndexKey(key: string, length: number): boolean {
   if (key === '') return false;
-  const index = Number(key);
-  return Number.isInteger(index) && index >= 0 && index < length && String(index) === key;
+  assertJsonScalarControls();
+  const index = securityApply<number>(IntrinsicNumber, undefined, [key]);
+  return jsonNumberIsInteger(index) && index >= 0 && index < length && securityString(index) === key;
 }
 
 function jsonValueError(
@@ -258,11 +282,51 @@ function formatJsonPath(root: string, path: readonly JsonPathSegment[]): string 
       out += `[${segment}]`;
       continue;
     }
-    if (/^[A-Za-z_$][\w$]*$/.test(segment)) {
+    if (securityRegExpTest(/^[A-Za-z_$][\w$]*$/, segment)) {
       out += `.${segment}`;
       continue;
     }
-    out += `[${JSON.stringify(segment)}]`;
+    out += `[${securityJsonStringify(segment) ?? '""'}]`;
   }
   return out;
+}
+
+function jsonNumberIsFinite(value: number): boolean {
+  assertJsonScalarControls();
+  return securityApply<boolean>(intrinsicNumberIsFinite, IntrinsicNumber, [value]) === true;
+}
+
+function jsonNumberIsInteger(value: number): boolean {
+  assertJsonScalarControls();
+  return securityApply<boolean>(intrinsicNumberIsInteger, IntrinsicNumber, [value]) === true;
+}
+
+function assertJsonScalarControls(): void {
+  if (!jsonScalarControlsSound) {
+    throw new TypeError(
+      'Kovo canonical JSON controls are unavailable because realm intrinsics were modified before framework initialization.',
+    );
+  }
+}
+
+function verifyJsonScalarControls(): boolean {
+  if (typeof intrinsicTypedArrayByteLength !== 'function') return false;
+  try {
+    const bytes = securityApply<Uint8Array>(intrinsicTextEncoderEncode, textEncoder, ['Kovo']);
+    return (
+      bytes[0] === 75 &&
+      bytes[1] === 111 &&
+      bytes[2] === 118 &&
+      bytes[3] === 111 &&
+      securityApply<number>(intrinsicTypedArrayByteLength, bytes, []) === 4 &&
+      securityApply<boolean>(intrinsicNumberIsFinite, IntrinsicNumber, [1]) === true &&
+      securityApply<boolean>(intrinsicNumberIsFinite, IntrinsicNumber, [IntrinsicNumber.NaN]) ===
+        false &&
+      securityApply<boolean>(intrinsicNumberIsInteger, IntrinsicNumber, [1]) === true &&
+      securityApply<boolean>(intrinsicNumberIsInteger, IntrinsicNumber, [1.5]) === false &&
+      securityApply<number>(IntrinsicNumber, undefined, ['42']) === 42
+    );
+  } catch {
+    return false;
+  }
 }

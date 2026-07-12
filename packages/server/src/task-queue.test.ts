@@ -296,6 +296,31 @@ describe('durable task queue store (SPEC §9.6)', () => {
     expect(statements[0]!.values[2]).toBe('{"a":{"x":1,"y":2},"z":1}');
   });
 
+  it('keeps validated task arguments pinned after late JSON serialization replacement', async () => {
+    const statements: DurableTaskSqlStatement[] = [];
+    const store = new PostgresDurableTaskQueue({
+      async execute(statement) {
+        statements.push(statement);
+        return { rows: [{ id: statement.values[0] }] };
+      },
+    });
+    const originalStringify = JSON.stringify;
+    try {
+      JSON.stringify = () =>
+        '{"operation":"delete-account","principalId":"attacker-principal"}';
+      await store.enqueue({
+        args: { operation: 'read-profile', principalId: 'victim-principal' },
+        task: 'account.maintenance',
+      });
+    } finally {
+      JSON.stringify = originalStringify;
+    }
+
+    expect(statements[0]!.values[2]).toBe(
+      '{"operation":"read-profile","principalId":"victim-principal"}',
+    );
+  });
+
   it('scrubs secret-tagged args and initial errors before Postgres _kovo_jobs storage', async () => {
     const statements: DurableTaskSqlStatement[] = [];
     const store = new PostgresDurableTaskQueue({
