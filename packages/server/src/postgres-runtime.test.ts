@@ -924,6 +924,62 @@ describe('createPostgresAppRuntimeDb', () => {
     });
   });
 
+  it('binds the runtime grant to the exact database URL username under late URL replacement', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-url-role-'));
+    roots.push(dataDir);
+    const runtimeDatabaseUrl = 'postgres://victim_runtime_login@127.0.0.1/kovo';
+    const NativeURL = globalThis.URL;
+    class PoisonedURL extends NativeURL {
+      constructor(input: string | URL, base?: string | URL) {
+        const source = typeof input === 'string' ? input : input.href;
+        super(
+          source === runtimeDatabaseUrl
+            ? 'postgres://attacker_runtime_login@127.0.0.1/kovo'
+            : input,
+          base,
+        );
+      }
+    }
+    globalThis.URL = PoisonedURL;
+
+    try {
+      await migratePostgresAppDb({
+        dataDir,
+        driver: 'pglite',
+        migrations: [
+          {
+            id: '001_exact_runtime_login',
+            sql: [
+              'CREATE ROLE victim_runtime_login LOGIN',
+              'CREATE ROLE attacker_runtime_login LOGIN',
+              runtimeSchemaMigrationSql,
+            ].join('; '),
+          },
+        ],
+        runtimeDatabaseUrl,
+        schema,
+      });
+    } finally {
+      globalThis.URL = NativeURL;
+    }
+
+    const privileges = await queryPglite<{
+      attacker_can_execute: boolean;
+      victim_can_execute: boolean;
+    }>(
+      dataDir,
+      [
+        'SELECT',
+        "has_function_privilege('victim_runtime_login', 'pg_catalog.set_config(text,text,boolean)', 'EXECUTE') AS victim_can_execute,",
+        "has_function_privilege('attacker_runtime_login', 'pg_catalog.set_config(text,text,boolean)', 'EXECUTE') AS attacker_can_execute",
+      ].join(' '),
+    );
+    expect(privileges.rows[0]).toEqual({
+      attacker_can_execute: false,
+      victim_can_execute: true,
+    });
+  });
+
   it('revokes app-schema table and sequence default privileges from PUBLIC during provision', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-default-privs-'));
     roots.push(dataDir);

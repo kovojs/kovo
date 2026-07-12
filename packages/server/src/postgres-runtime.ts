@@ -17,6 +17,11 @@ import {
 } from './auth-principal.js';
 import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
 import {
+  egressDecodeURIComponent,
+  egressUrl,
+  egressUrlUsername,
+} from './egress-intrinsics.js';
+import {
   createAuthorizationCensusDb,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
@@ -3448,8 +3453,8 @@ async function postgresRoleMembershipExists(
 function runtimeLoginRoleFromDatabaseUrl(databaseUrl: string | undefined): string | undefined {
   if (databaseUrl === undefined || databaseUrl === '') return undefined;
   try {
-    const username = new URL(databaseUrl).username;
-    return username === '' ? undefined : decodeURIComponent(username);
+    const username = egressUrlUsername(egressUrl(databaseUrl));
+    return username === '' ? undefined : egressDecodeURIComponent(username);
   } catch {
     return undefined;
   }
