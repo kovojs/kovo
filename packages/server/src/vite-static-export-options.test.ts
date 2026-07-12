@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,6 +8,7 @@ import { createApp } from './app.js';
 import { route } from './route.js';
 import { StaticExportError } from './static-export-diagnostics.js';
 import { createKovoAppShellViteBuild } from './vite-build.js';
+import { staticExportInventoryForKovoAppShellViteBuild } from './vite-static-export-build.js';
 import {
   kovoAppShellViteBuildDryRunStaticExportOptions,
   kovoAppShellViteBuildOutputStaticExportPlan,
@@ -301,6 +302,26 @@ describe('server app shell Vite static export options boundary', () => {
       }
       expect(manifestFileError).toBeInstanceOf(StaticExportError);
       expect(manifestFileError).toMatchObject(expectedError);
+
+      const nativeCall = Function.prototype.call;
+      let poisonedError: unknown;
+      try {
+        Function.prototype.call = function hideDryRunOutputTarget(thisArg, ...args) {
+          if (this === Object.prototype.hasOwnProperty && args[0] === 'outDir') return false;
+          return Reflect.apply(nativeCall, this, [thisArg, ...args]);
+        };
+        await staticExportInventoryForKovoAppShellViteBuild(build, {
+          distDir,
+          outDir,
+        } as unknown as Parameters<typeof staticExportInventoryForKovoAppShellViteBuild>[1]);
+      } catch (error) {
+        poisonedError = error;
+      } finally {
+        Function.prototype.call = nativeCall;
+      }
+      expect(await readdir(outDir)).toEqual([]);
+      expect(poisonedError).toBeInstanceOf(StaticExportError);
+      expect(poisonedError).toMatchObject(expectedError);
     } finally {
       await Promise.all([
         rm(distDir, { force: true, recursive: true }),

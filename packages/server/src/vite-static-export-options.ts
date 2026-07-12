@@ -1,4 +1,5 @@
 import type { KovoApp } from './app-types.js';
+import { buildOwnDataProperty } from './build-security-intrinsics.js';
 import type { StaticExportAssetInput, StaticExportOptions } from './static-export-types.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
@@ -237,7 +238,9 @@ export function kovoAppShellViteManifestFileDryRunStaticExportOptions(
 }
 
 function assertViteStaticExportInventoryOptions(options: object): void {
-  if (!Object.prototype.hasOwnProperty.call(options, 'outDir')) return;
+  if (!buildOwnDataProperty(options, 'outDir', 'Vite static-export inventory outDir').present) {
+    return;
+  }
 
   throw new StaticExportError([
     staticExportDiagnostic(
@@ -251,7 +254,11 @@ function assertViteStaticExportInventoryOptions(options: object): void {
 }
 
 function assertViteBuildOutputStaticExportOptions(options: object): void {
-  if (!Object.prototype.hasOwnProperty.call(options, 'distDir')) return;
+  if (
+    !buildOwnDataProperty(options, 'distDir', 'Vite build-output static-export distDir').present
+  ) {
+    return;
+  }
 
   throw new StaticExportError([
     staticExportDiagnostic(

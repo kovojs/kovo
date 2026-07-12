@@ -5,7 +5,7 @@ import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/f
 
 import type { KovoApp } from './app-types.js';
 import { isKovoApp } from './app-guards.js';
-import { snapshotBuildArray } from './build-security-intrinsics.js';
+import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
@@ -373,7 +373,9 @@ function assertStaticExportAppAggregate(app: KovoApp): void {
 }
 
 function assertNoStaticExportHtmlPathStyleOption(options: object): void {
-  if (!Object.prototype.hasOwnProperty.call(options, 'htmlPathStyle')) return;
+  if (!buildOwnDataProperty(options, 'htmlPathStyle', 'static-export htmlPathStyle').present) {
+    return;
+  }
 
   throw new StaticExportError([
     staticExportDiagnostic(
