@@ -91,24 +91,40 @@ it('retires the old channel and hard-navigates before applying a same-build new-
   );
   const oldDocument = harness.window.document;
   const oldAccount = oldDocument.querySelector('[kovo-fragment-target="account"]');
-  const channels: Array<{
-    closed: boolean;
-    onmessage: ((event: { data: unknown }) => void) | null;
-  }> = [];
-  (harness.window as unknown as Record<string, unknown>).BroadcastChannel = class {
-    closed = false;
-    onmessage: ((event: { data: unknown }) => void) | null = null;
-
-    constructor() {
-      channels.push(this);
-    }
-
-    close(): void {
-      this.closed = true;
-    }
-
-    postMessage(): void {}
-  };
+  const broadcastPrototype = harness.window.BroadcastChannel.prototype;
+  const onMessageDescriptor = Object.getOwnPropertyDescriptor(broadcastPrototype, 'onmessage');
+  if (!onMessageDescriptor?.get || !onMessageDescriptor.set) {
+    throw new Error('BroadcastChannel.onmessage controls unavailable');
+  }
+  const nativeOnMessageGet = onMessageDescriptor.get;
+  const nativeOnMessageSet = onMessageDescriptor.set;
+  const closeDescriptor = Object.getOwnPropertyDescriptor(broadcastPrototype, 'close');
+  if (
+    !closeDescriptor ||
+    !('value' in closeDescriptor) ||
+    typeof closeDescriptor.value !== 'function'
+  ) {
+    throw new Error('BroadcastChannel.close control unavailable');
+  }
+  const nativeClose = closeDescriptor.value;
+  const subscribedChannels: BroadcastChannel[] = [];
+  const closedChannels = new WeakSet<BroadcastChannel>();
+  Object.defineProperty(broadcastPrototype, 'onmessage', {
+    ...onMessageDescriptor,
+    set(this: BroadcastChannel, value: ((event: MessageEvent<unknown>) => void) | null) {
+      if (typeof value === 'function' && !subscribedChannels.includes(this)) {
+        subscribedChannels.push(this);
+      }
+      Reflect.apply(nativeOnMessageSet, this, [value]);
+    },
+  });
+  Object.defineProperty(broadcastPrototype, 'close', {
+    ...closeDescriptor,
+    value(this: BroadcastChannel) {
+      closedChannels.add(this);
+      Reflect.apply(nativeClose, this, []);
+    },
+  });
   const targetUrl = 'about:srcdoc?kovo-session=b';
   (harness.window as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
     headers: responseHeaders('build-a'),
@@ -128,17 +144,32 @@ it('retires the old channel and hard-navigates before applying a same-build new-
     url: targetUrl,
   }));
 
-  await installGeneratedInlineLoader(harness.window);
-  oldDocument
-    .querySelector<HTMLAnchorElement>('#switch')
-    ?.dispatchEvent(new harness.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  let runtimeChannel: BroadcastChannel | undefined;
+  try {
+    await installGeneratedInlineLoader(harness.window);
+    await vi.waitFor(() => {
+      const activeChannels = subscribedChannels.filter(
+        (channel) => Reflect.apply(nativeOnMessageGet, channel, []) !== null,
+      );
+      expect(activeChannels).toHaveLength(1);
+      runtimeChannel = activeChannels[0];
+    });
+    Object.defineProperty(broadcastPrototype, 'onmessage', onMessageDescriptor);
+    if (!runtimeChannel) throw new Error('inline mutation BroadcastChannel unavailable');
+    oldDocument
+      .querySelector<HTMLAnchorElement>('#switch')
+      ?.dispatchEvent(new harness.window.MouseEvent('click', { bubbles: true, cancelable: true }));
 
-  await vi.waitFor(() => expect(channels[0]?.closed).toBe(true));
-  expect(channels[0]?.onmessage).toBeNull();
-  expect(oldAccount?.textContent).toBe('A INITIAL');
-  expect(oldDocument.querySelector('meta[name="kovo-session"]')?.getAttribute('content')).toBe(
-    'session-a',
-  );
+    await vi.waitFor(() => expect(closedChannels.has(runtimeChannel!)).toBe(true));
+    expect(Reflect.apply(nativeOnMessageGet, runtimeChannel, [])).toBeNull();
+    expect(oldAccount?.textContent).toBe('A INITIAL');
+    expect(oldDocument.querySelector('meta[name="kovo-session"]')?.getAttribute('content')).toBe(
+      'session-a',
+    );
+  } finally {
+    Object.defineProperty(broadcastPrototype, 'onmessage', onMessageDescriptor);
+    Object.defineProperty(broadcastPrototype, 'close', closeDescriptor);
+  }
 });
 
 it.each([

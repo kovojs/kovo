@@ -3,6 +3,38 @@ import { describe, expect, it } from 'vitest';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 describe('browser navigation security controls', () => {
+  it('copies outgoing mutation envelopes to an exact deeply immutable snapshot', () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const keys = ['account:1'];
+    const changes = [{ domain: 'account', input: { secret: 'must-not-publish' }, keys }];
+    const envelope = {
+      body: '<kovo-query name="account">{"secret":"SERVER"}</kovo-query>',
+      changes,
+      extra: 'must-not-publish',
+      principal: 'session-safe',
+      type: 'kovo:mutation-response',
+    };
+
+    const snapshot = controls.snapshotMutationBroadcastEnvelopeData(envelope);
+
+    expect(snapshot).toEqual({
+      body: '<kovo-query name="account">{"secret":"SERVER"}</kovo-query>',
+      changes: [{ domain: 'account', keys: ['account:1'] }],
+      principal: 'session-safe',
+      type: 'kovo:mutation-response',
+    });
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot?.changes)).toBe(true);
+    expect(Object.isFrozen(snapshot?.changes[0])).toBe(true);
+    expect(Object.isFrozen(snapshot?.changes[0]?.keys)).toBe(true);
+
+    envelope.body = 'MUTATED AFTER SNAPSHOT';
+    changes[0]!.domain = 'mutated';
+    keys[0] = 'mutated';
+    expect(snapshot?.body).not.toContain('MUTATED');
+    expect(snapshot?.changes).toEqual([{ domain: 'account', keys: ['account:1'] }]);
+  });
+
   it('pins MessageEvent data and returns an immutable exact broadcast snapshot', () => {
     const controls = createBrowserNavigationSecurityControls();
     const descriptor = Object.getOwnPropertyDescriptor(MessageEvent.prototype, 'data');
@@ -368,6 +400,60 @@ describe('browser navigation security controls', () => {
       );
     } finally {
       Object.defineProperty(MessageEvent.prototype, 'data', descriptor);
+    }
+  });
+
+  it('fails closed when the BroadcastChannel constructor was replaced before capture', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'BroadcastChannel');
+    if (!descriptor) throw new Error('BroadcastChannel constructor descriptor unavailable');
+    class PoisonedBroadcastChannel {
+      onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+
+      close(): void {}
+
+      postMessage(): void {}
+    }
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      ...descriptor,
+      value: PoisonedBroadcastChannel,
+    });
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      Object.defineProperty(globalThis, 'BroadcastChannel', descriptor);
+    }
+  });
+
+  it('fails closed when postMessage stripped mutation principals before capture', async () => {
+    const original = BroadcastChannel.prototype.postMessage;
+    let controls: ReturnType<typeof createBrowserNavigationSecurityControls>;
+    BroadcastChannel.prototype.postMessage = function poisonedPostMessage(message: unknown): void {
+      const forged = { ...(message as Record<string, unknown>) };
+      delete forged.principal;
+      Reflect.apply(original, this, [forged]);
+    };
+    try {
+      controls = createBrowserNavigationSecurityControls();
+    } finally {
+      BroadcastChannel.prototype.postMessage = original;
+    }
+    const channel = controls.createMutationBroadcastChannel(
+      `kovo:c151-preinit:${crypto.randomUUID()}`,
+    );
+    if (!channel) throw new Error('BroadcastChannel unavailable');
+    try {
+      await expect(
+        controls.postMutationBroadcastEnvelope(channel, {
+          body: '<kovo-done reason="complete"></kovo-done>',
+          changes: [],
+          principal: 'session-safe',
+          type: 'kovo:mutation-response',
+        }),
+      ).rejects.toThrow(/boot witness/);
+    } finally {
+      channel.close();
     }
   });
 });

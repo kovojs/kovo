@@ -71,6 +71,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeReadableStreamDefaultReader = scope.ReadableStreamDefaultReader;
   const NativePageTransitionEvent = scope.PageTransitionEvent;
   const NativeMessageEvent = scope.MessageEvent;
+  const NativeBroadcastChannel = scope.BroadcastChannel;
+  const cryptoObject = scope.crypto;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -215,6 +217,22 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const messageEventData = NativeMessageEvent
     ? getter(NativeMessageEvent.prototype, 'data')
     : undefined;
+  const broadcastChannelPrototype = NativeBroadcastChannel?.prototype;
+  const broadcastChannelName = broadcastChannelPrototype
+    ? stableGetter(broadcastChannelPrototype, 'name')
+    : undefined;
+  const broadcastChannelPostMessage = broadcastChannelPrototype
+    ? stableMethod(broadcastChannelPrototype, 'postMessage')
+    : undefined;
+  const broadcastChannelClose = broadcastChannelPrototype
+    ? stableMethod(broadcastChannelPrototype, 'close')
+    : undefined;
+  const broadcastChannelOnMessageSetter = broadcastChannelPrototype
+    ? stableSetter(broadcastChannelPrototype, 'onmessage')
+    : undefined;
+  const cryptoRandomUuid = cryptoObject ? stableMethod(cryptoObject, 'randomUUID') : undefined;
+  const nativeSetTimeout = stableMethod(scope, 'setTimeout');
+  const nativeClearTimeout = stableMethod(scope, 'clearTimeout');
   const locationObject = scope.location;
   const documentObject = scope.document;
   const documentBody = documentObject ? stableGetter(documentObject, 'body') : undefined;
@@ -233,6 +251,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const streamReaderPlanWitness = {};
   let streamControlsReady: Promise<void> | undefined;
   let streamControlsVerified = false;
+  let broadcastControlsReady: Promise<void> | undefined;
+  let broadcastControlsVerified = false;
+  let broadcastWitnessPrincipal: string | undefined;
 
   function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
     return nativeReflectApply(fn, receiver, args) as Return;
@@ -287,11 +308,11 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   function stableSetter(
     value: object,
     property: PropertyKey,
-  ): ((value: string) => void) | undefined {
+  ): ((value: unknown) => void) | undefined {
     let owner: object | null = value;
     for (let depth = 0; owner !== null && depth < 16; depth += 1) {
       const found = descriptor(owner, property);
-      if (found?.set) return found.set as (value: string) => void;
+      if (found?.set) return found.set;
       if (found !== undefined) return undefined;
       owner = prototypeOf(owner);
     }
@@ -1085,6 +1106,154 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return snapshotMutationBroadcastEnvelopeData(value);
   }
 
+  function createMutationBroadcastChannel(name: string): BroadcastChannel | undefined {
+    if (!controlsSound || typeof name !== 'string') return undefined;
+    // Browser realms may only use the constructor captured and brand-witnessed at
+    // framework initialization. The no-Document branch is the explicit Node test
+    // seam, where conformance fixtures install a BroadcastChannel-like constructor.
+    if (NativeDocument) {
+      if (!NativeBroadcastChannel || !broadcastChannelName || !broadcastChannelClose) {
+        return undefined;
+      }
+      const channel = new NativeBroadcastChannel(name);
+      const actualName = call<unknown>(broadcastChannelName, channel, []);
+      if (actualName !== name) {
+        call(broadcastChannelClose, channel, []);
+        throw new TypeError('Kovo mutation broadcast constructor changed its channel name.');
+      }
+      return channel;
+    }
+    const CurrentBroadcastChannel = scope.BroadcastChannel;
+    if (typeof CurrentBroadcastChannel !== 'function') return undefined;
+    return new CurrentBroadcastChannel(name);
+  }
+
+  async function validateBroadcastControls(): Promise<void> {
+    if (
+      !NativeDocument ||
+      !NativeBroadcastChannel ||
+      !broadcastChannelName ||
+      !broadcastChannelPostMessage ||
+      !broadcastChannelClose ||
+      !broadcastChannelOnMessageSetter ||
+      !nativeSetTimeout ||
+      !nativeClearTimeout ||
+      !broadcastWitnessPrincipal
+    ) {
+      throw new TypeError('Kovo mutation broadcast witness controls are unavailable.');
+    }
+    const channelName = 'kovo:mutation-response';
+    const sender = new NativeBroadcastChannel(channelName);
+    const receiver = new NativeBroadcastChannel(channelName);
+    let timeoutHandle: unknown;
+    try {
+      if (
+        call<unknown>(broadcastChannelName, sender, []) !== channelName ||
+        call<unknown>(broadcastChannelName, receiver, []) !== channelName
+      ) {
+        throw new TypeError('Kovo mutation broadcast witness changed its channel name.');
+      }
+      const principal = broadcastWitnessPrincipal;
+      const body = '<kovo-done reason="broadcast-security-control"></kovo-done>';
+      const envelope = snapshotMutationBroadcastEnvelopeData({
+        body,
+        buildToken: principal,
+        changes: [{ domain: 'kovo-broadcast-control', keys: [principal] }],
+        principal,
+        type: 'kovo:mutation-response',
+      });
+      if (!envelope) {
+        throw new TypeError('Kovo mutation broadcast witness envelope is unavailable.');
+      }
+      const received = new NativePromise<BrowserMutationBroadcastEnvelopeSnapshot>(
+        (resolve, reject) => {
+          const onMessage = (event: unknown) => {
+            const snapshot = snapshotMutationBroadcastEnvelope(event);
+            if (snapshot?.principal === principal) resolve(snapshot);
+          };
+          call(broadcastChannelOnMessageSetter, receiver, [onMessage]);
+          timeoutHandle = call(nativeSetTimeout, scope, [
+            () =>
+              reject(
+                new TypeError('Kovo mutation broadcast controls did not pass their boot witness.'),
+              ),
+            2_000,
+          ]);
+        },
+      );
+      observePromiseRejection(received);
+      call(broadcastChannelPostMessage, sender, [envelope]);
+      const snapshot = await awaitNativePromise<BrowserMutationBroadcastEnvelopeSnapshot>(received);
+      if (
+        snapshot.body !== body ||
+        snapshot.buildToken !== principal ||
+        snapshot.principal !== principal ||
+        snapshot.type !== 'kovo:mutation-response' ||
+        snapshot.changes.length !== 1 ||
+        snapshot.changes[0]?.domain !== 'kovo-broadcast-control' ||
+        snapshot.changes[0]?.keys?.length !== 1 ||
+        snapshot.changes[0]?.keys?.[0] !== principal ||
+        call<unknown>(nativeObjectIsFrozen, NativeObject, [snapshot]) !== true ||
+        call<unknown>(nativeObjectIsFrozen, NativeObject, [snapshot.changes]) !== true ||
+        call<unknown>(nativeObjectIsFrozen, NativeObject, [snapshot.changes[0]]) !== true ||
+        call<unknown>(nativeObjectIsFrozen, NativeObject, [snapshot.changes[0]?.keys]) !== true
+      ) {
+        throw new TypeError('Kovo mutation broadcast witness changed the published envelope.');
+      }
+      broadcastControlsVerified = true;
+    } finally {
+      if (timeoutHandle !== undefined) call(nativeClearTimeout, scope, [timeoutHandle]);
+      try {
+        call(broadcastChannelOnMessageSetter, receiver, [null]);
+      } catch {}
+      try {
+        call(broadcastChannelClose, sender, []);
+      } catch {}
+      try {
+        call(broadcastChannelClose, receiver, []);
+      } catch {}
+    }
+  }
+
+  async function requireBroadcastControls(): Promise<void> {
+    if (!broadcastControlsReady) {
+      throw new TypeError('Kovo mutation broadcast controls are unavailable.');
+    }
+    await awaitNativePromise(broadcastControlsReady);
+    if (!broadcastControlsVerified) {
+      throw new TypeError('Kovo mutation broadcast controls have not passed their boot witness.');
+    }
+  }
+
+  async function postMutationBroadcastEnvelope(channel: object, value: unknown): Promise<void> {
+    // Copy before the first await: callers cannot mutate, accessor-swap, or retain
+    // an extra field across the asynchronous boot witness boundary.
+    const envelope = snapshotMutationBroadcastEnvelopeData(value);
+    if (!envelope) throw new TypeError('Kovo mutation broadcast envelope is invalid.');
+    if (!NativeDocument) {
+      const customPostMessage = stableMethod(channel, 'postMessage');
+      if (!customPostMessage) {
+        throw new TypeError('Kovo mutation broadcast test transport is unavailable.');
+      }
+      call(customPostMessage, channel, [envelope]);
+      return;
+    }
+    await requireBroadcastControls();
+    if (!broadcastChannelName || !broadcastChannelPostMessage) {
+      throw new TypeError('Kovo mutation broadcast controls are unavailable.');
+    }
+    let name: unknown;
+    try {
+      name = call<unknown>(broadcastChannelName, channel, []);
+    } catch {
+      throw new TypeError('Kovo mutation broadcast channel is not platform-owned.');
+    }
+    if (typeof name !== 'string') {
+      throw new TypeError('Kovo mutation broadcast channel name is invalid.');
+    }
+    call(broadcastChannelPostMessage, channel, [envelope]);
+  }
+
   function readDocumentField(
     value: unknown,
     property: 'body' | 'documentElement' | 'head',
@@ -1559,6 +1728,49 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         }
         if (!rejectedForeignReceiver) return false;
       }
+      if (NativeDocument && NativeBroadcastChannel) {
+        if (
+          !broadcastChannelName ||
+          !broadcastChannelPostMessage ||
+          !broadcastChannelClose ||
+          !broadcastChannelOnMessageSetter ||
+          !cryptoObject ||
+          !cryptoRandomUuid ||
+          !nativeSetTimeout ||
+          !nativeClearTimeout ||
+          !messageEventData
+        ) {
+          return false;
+        }
+        const firstUuid = apply<unknown>(cryptoRandomUuid, cryptoObject, []);
+        const secondUuid = apply<unknown>(cryptoRandomUuid, cryptoObject, []);
+        if (
+          typeof firstUuid !== 'string' ||
+          typeof secondUuid !== 'string' ||
+          firstUuid.length < 16 ||
+          secondUuid.length < 16 ||
+          firstUuid === secondUuid
+        ) {
+          return false;
+        }
+        broadcastWitnessPrincipal = 'kovo-broadcast-witness:' + firstUuid;
+        const channelName = 'kovo:mutation-response';
+        const channel = new NativeBroadcastChannel(channelName);
+        let actualName: unknown;
+        try {
+          actualName = apply<unknown>(broadcastChannelName, channel, []);
+        } finally {
+          apply(broadcastChannelClose, channel, []);
+        }
+        if (actualName !== channelName) return false;
+        let rejectedForeignReceiver = false;
+        try {
+          apply(broadcastChannelName, {}, []);
+        } catch {
+          rejectedForeignReceiver = true;
+        }
+        if (!rejectedForeignReceiver) return false;
+      }
       if (NativeHeaders && headersGet) {
         const headers = new NativeHeaders({ 'X-Kovo-Control': 'yes' });
         if (
@@ -1752,6 +1964,12 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   }
   streamControlsReady = validateStreamControls();
   observePromiseRejection(streamControlsReady);
+  if (NativeDocument && NativeBroadcastChannel) {
+    broadcastControlsReady = validateBroadcastControls();
+    observePromiseRejection(broadcastControlsReady);
+  } else {
+    broadcastControlsVerified = true;
+  }
 
   return {
     acquireStreamReader,
@@ -1762,6 +1980,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     charCode,
     cloneDomNode,
     cloneElement,
+    createMutationBroadcastChannel,
     createFragmentContent,
     createTextDecoder,
     currentPathTarget,
@@ -1809,7 +2028,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     snapshotChildNodes,
     snapshotElementAttributes,
     snapshotElementChildren,
+    snapshotMutationBroadcastEnvelopeData,
     snapshotMutationBroadcastEnvelope,
+    postMutationBroadcastEnvelope,
     observePromiseRejection,
     trim,
     upper,

@@ -843,7 +843,7 @@ function installInlineKovoLoader(im) {
   const sfp = doc.querySelector?.('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined;
   let bc;
   try {
-    bc = typeof BroadcastChannel === 'function' ? new BroadcastChannel('kovo:mutation-response') : undefined;
+    bc = bns.createMutationBroadcastChannel('kovo:mutation-response');
   } catch {}
   if (bc) {
     bc.onmessage = (event) => {
@@ -854,13 +854,15 @@ function installInlineKovoLoader(im) {
   }
   const pb = (body, changes) => {
     if (!bc) return;
-    bc.postMessage({
+    const envelope = bns.snapshotMutationBroadcastEnvelopeData({
       body,
       ...(kb() ? { buildToken: kb() } : {}),
       changes,
       ...(sfp === undefined ? {} : { principal: sfp }),
       type: 'kovo:mutation-response',
     });
+    if (!envelope) return;
+    bns.observePromiseRejection(bns.postMutationBroadcastEnvelope(bc, envelope));
   };
   const rsp = (response, fallback = 0) => {
     const value = bns.readResponseField(response, 'status');

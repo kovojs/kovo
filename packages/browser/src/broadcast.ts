@@ -99,11 +99,13 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
   options: Options & { broadcast?: MutationBroadcast };
 } {
   if (options.broadcast) return { options };
-  if (typeof globalThis.BroadcastChannel !== 'function') return { options };
 
   try {
+    const channel =
+      browserBroadcastSecurity.createMutationBroadcastChannel('kovo:mutation-response');
+    if (!channel) return { options };
     const broadcast = installMutationBroadcast({
-      channel: new globalThis.BroadcastChannel('kovo:mutation-response') as BroadcastLike,
+      channel: channel as BroadcastLike,
       ...definedProps({
         applyQuery: options.applyQuery,
         buildToken: options.buildToken,
@@ -189,7 +191,7 @@ export function installMutationBroadcast(
       options.channel.close?.();
     },
     publish(body: string, changes: readonly MutationChangeRecord[] = []) {
-      options.channel.postMessage({
+      const envelope = browserBroadcastSecurity.snapshotMutationBroadcastEnvelopeData({
         body,
         // D3 / SPEC §9.1.1, §847, §14: stamp the sender's render-plan version token so
         // a receiver on a different build converts the body's delta chunks to misses
@@ -204,6 +206,10 @@ export function installMutationBroadcast(
         ...(options.principal === undefined ? {} : { principal: options.principal }),
         type: 'kovo:mutation-response',
       });
+      if (!envelope) return;
+      browserBroadcastSecurity.observePromiseRejection(
+        browserBroadcastSecurity.postMutationBroadcastEnvelope(options.channel, envelope),
+      );
     },
   };
 }

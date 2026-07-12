@@ -41,6 +41,13 @@ describe('mutation broadcast publish', () => {
         type: 'kovo:mutation-response',
       },
     ]);
+    const published = channel.messages[0] as {
+      changes: readonly { keys?: readonly string[] }[];
+    };
+    expect(Object.isFrozen(published)).toBe(true);
+    expect(Object.isFrozen(published.changes)).toBe(true);
+    expect(Object.isFrozen(published.changes[0])).toBe(true);
+    expect(Object.isFrozen(published.changes[1]?.keys)).toBe(true);
 
     channel.onmessage?.({
       data: {

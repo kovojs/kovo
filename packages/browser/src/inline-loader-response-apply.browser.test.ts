@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installInlineKovoLoader } from './inline-loader.js';
 
+const testBroadcastChannels: BroadcastChannel[] = [];
+
 afterEach(() => {
+  for (const channel of testBroadcastChannels.splice(0)) channel.close();
   document.head.replaceChildren();
   document.body.replaceChildren();
   vi.unstubAllGlobals();
@@ -233,17 +236,9 @@ describe('browser inline loader response apply', () => {
     expect(root.querySelector('[kovo-key="row-2"]')?.textContent).toBe('two fresh');
   });
 
-  it('replays same-principal mutation broadcasts through the inline loader', () => {
-    const channels: TestBroadcastChannel[] = [];
-    vi.stubGlobal(
-      'BroadcastChannel',
-      class extends TestBroadcastChannel {
-        constructor(name: string) {
-          super(name);
-          channels.push(this);
-        }
-      },
-    );
+  it('replays same-principal mutation broadcasts through the inline loader', async () => {
+    const sender = new BroadcastChannel('kovo:mutation-response');
+    testBroadcastChannels.push(sender);
     document.head.innerHTML = [
       '<meta name="kovo-session" content="session-a">',
       '<meta name="kovo-build" content="build-a">',
@@ -253,47 +248,37 @@ describe('browser inline loader response apply', () => {
     document.body.append(root);
 
     installInlineKovoLoader(async () => ({}));
-    const channel = channels[0];
-    if (!channel?.onmessage) throw new Error('missing inline broadcast channel');
-
-    channel.onmessage(
-      new MessageEvent('message', {
-        data: {
-          body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">wrong session</section></kovo-fragment>',
-          changes: [],
-          principal: 'session-b',
-          type: 'kovo:mutation-response',
-        },
-      }),
-    );
+    sender.postMessage({
+      body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">wrong session</section></kovo-fragment>',
+      changes: [],
+      principal: 'session-b',
+      type: 'kovo:mutation-response',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('old cart');
 
-    channel.onmessage(
-      new MessageEvent('message', {
-        data: {
-          body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>',
-          buildToken: 'build-a',
-          changes: [],
-          principal: 'session-a',
-          type: 'kovo:mutation-response',
-        },
-      }),
-    );
+    sender.postMessage({
+      body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>',
+      buildToken: 'build-a',
+      changes: [],
+      principal: 'session-a',
+      type: 'kovo:mutation-response',
+    });
 
-    expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('fresh cart');
+    await vi.waitFor(() =>
+      expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('fresh cart'),
+    );
   });
 
   it('publishes successful inline enhanced mutation responses to BroadcastChannel', async () => {
-    const channels: TestBroadcastChannel[] = [];
-    vi.stubGlobal(
-      'BroadcastChannel',
-      class extends TestBroadcastChannel {
-        constructor(name: string) {
-          super(name);
-          channels.push(this);
-        }
-      },
-    );
+    const receiver = new BroadcastChannel('kovo:mutation-response');
+    testBroadcastChannels.push(receiver);
+    const published = new Promise<unknown>((resolve) => {
+      receiver.onmessage = (event) => {
+        const data = event.data as { principal?: unknown };
+        if (data?.principal === 'session-a') resolve(data);
+      };
+    });
     document.head.innerHTML = [
       '<meta name="kovo-session" content="session-a">',
       '<meta name="kovo-build" content="build-a">',
@@ -331,15 +316,13 @@ describe('browser inline loader response apply', () => {
     await vi.waitFor(() =>
       expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('fresh cart'),
     );
-    expect(channels[0]?.posted).toEqual([
-      {
-        body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>',
-        buildToken: 'build-a',
-        changes: [{ domain: 'cart' }],
-        principal: 'session-a',
-        type: 'kovo:mutation-response',
-      },
-    ]);
+    await expect(published).resolves.toEqual({
+      body: '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>',
+      buildToken: 'build-a',
+      changes: [{ domain: 'cart' }],
+      principal: 'session-a',
+      type: 'kovo:mutation-response',
+    });
   });
 
   it('refetches remembered kovo-query scripts when a tab becomes visible again', async () => {
@@ -388,16 +371,3 @@ describe('browser inline loader response apply', () => {
     });
   });
 });
-
-class TestBroadcastChannel {
-  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
-  readonly posted: unknown[] = [];
-
-  constructor(readonly name: string) {}
-
-  close(): void {}
-
-  postMessage(message: unknown): void {
-    this.posted.push(message);
-  }
-}

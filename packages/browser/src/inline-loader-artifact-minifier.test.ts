@@ -99,6 +99,22 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('bmsg(');
   });
 
+  it('keeps mutation broadcast publish on the witnessed exact-envelope controls', () => {
+    // C151 / SPEC §9.1/§9.3: constructor and publish authority stay inside the
+    // boot-witnessed membrane, and postMessage only receives the exact snapshot.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "bc=bns.createMutationBroadcastChannel('kovo:mutation-response')",
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'const envelope=bns.snapshotMutationBroadcastEnvelopeData({body,',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'bns.observePromiseRejection(bns.postMutationBroadcastEnvelope(bc,envelope))',
+    );
+    expect(inlineKovoLoaderInstallerSource).not.toContain('new BroadcastChannel(');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('bc.postMessage(');
+  });
+
   it('keeps the shipped minified response apply helper tied to the canonical runtime apply helper', () => {
     // SPEC.md §4.4/§9.1: inline apply must stay on the generated response helper.
     expect(inlineKovoLoaderInstallerSource).toBe(inlineKovoLoaderInstallerSource.trim());
