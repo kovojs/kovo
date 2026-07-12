@@ -874,4 +874,64 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(String(errors[0])).toContain('/private-downloads');
     expect(String(errors[0])).toContain('/public-downloads');
   });
+
+  it('keeps multiple storage signers ambiguous after app code mutates array mapping', async () => {
+    const key = 'receipts/authority.txt';
+    const privateStorage = await storageWith(key, 'private-download');
+    const publicStorage = await storageWith(key, 'public-download');
+    const privateSecret = 'private-capability-secret-at-least-32-characters';
+    const publicSecret = 'public-capability-secret-at-least-32-characters';
+    const errors: unknown[] = [];
+    const app = createApp({
+      endpoints: [
+        createStorageDownloadEndpoint({
+          basePath: '/private-downloads',
+          secret: privateSecret,
+          storage: privateStorage,
+        }),
+        createStorageDownloadEndpoint({
+          basePath: '/public-downloads',
+          secret: publicSecret,
+          storage: publicStorage,
+        }),
+      ],
+      onError(error) {
+        errors.push(error);
+      },
+      routes: [
+        route('/', {
+          async page(context) {
+            if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
+            const signed = await context.signUrl({ key });
+            return renderedHtml(`<a href="${signed.url}">Download</a>`);
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+    const originalMap = Array.prototype.map;
+    let response: Response;
+
+    try {
+      Array.prototype.map = function substituteStorageSigner(callback, thisArg) {
+        const mapped = Reflect.apply(originalMap, this, [callback, thisArg]) as unknown[];
+        if (
+          mapped.length === 2 &&
+          (mapped[0] as { basePath?: unknown } | undefined)?.basePath === '/private-downloads' &&
+          (mapped[1] as { basePath?: unknown } | undefined)?.basePath === '/public-downloads'
+        ) {
+          return [mapped[0]];
+        }
+        return mapped;
+      } as typeof Array.prototype.map;
+      response = await handler(new Request('https://app.example/'));
+    } finally {
+      Array.prototype.map = originalMap;
+    }
+
+    expect(response!.status).toBe(500);
+    expect(await response!.text()).not.toContain('kovo-cap=');
+    expect(errors).toHaveLength(1);
+    expect(String(errors[0])).toContain('ctx.signUrl() is ambiguous');
+  });
 });

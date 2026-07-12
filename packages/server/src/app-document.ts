@@ -332,20 +332,40 @@ type AppStorageDownloadSigner =
   | { kind: 'unavailable'; message: string };
 
 function appStorageDownloadSigner(app: KovoApp, request: Request): AppStorageDownloadSigner {
-  const endpoints = app.endpoints
-    .map((definition) => storageDownloadEndpointInfo(definition))
-    .filter((info): info is StorageDownloadEndpointInfo => info !== undefined);
-  if (endpoints.length === 1) {
-    const defaultScope = endpoints[0]!.scope?.(request);
+  let endpointCount = 0;
+  let endpointPaths = '';
+  let selected: StorageDownloadEndpointInfo | undefined;
+  for (let index = 0; index < app.endpoints.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(app.endpoints, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo app endpoints must remain a dense exact snapshot.');
+    }
+    const info = storageDownloadEndpointInfo(descriptor.value);
+    if (info === undefined) continue;
+    endpointCount += 1;
+    endpointPaths += `${endpointPaths === '' ? '' : ', '}${info.basePath}`;
+    if (selected === undefined) selected = info;
+  }
+
+  if (endpointCount === 1 && selected !== undefined) {
+    const defaultScope =
+      selected.scope === undefined
+        ? undefined
+        : witnessReflectApply<unknown>(selected.scope, undefined, [request]);
+    if (defaultScope !== undefined && typeof defaultScope !== 'string') {
+      throw new TypeError(
+        'Kovo storage download endpoint scope must return a string or undefined.',
+      );
+    }
     return {
       kind: 'ready',
-      basePath: endpoints[0]!.basePath,
+      basePath: selected.basePath,
       ...(defaultScope === undefined ? {} : { defaultScope }),
-      oneTimeReplayStore: endpoints[0]!.oneTimeReplayStore,
-      secret: endpoints[0]!.secret,
+      oneTimeReplayStore: selected.oneTimeReplayStore,
+      secret: selected.secret,
     };
   }
-  if (endpoints.length === 0) {
+  if (endpointCount === 0) {
     return {
       kind: 'absent',
     };
@@ -354,7 +374,7 @@ function appStorageDownloadSigner(app: KovoApp, request: Request): AppStorageDow
     kind: 'unavailable',
     message:
       'ctx.signUrl() is ambiguous because this app declares multiple storage download endpoints: ' +
-      `${endpoints.map((endpoint) => endpoint.basePath).join(', ')}. ` +
+      `${endpointPaths}. ` +
       'Create an explicit signer for the intended endpoint basePath instead of using route ' +
       'ctx.signUrl (SPEC §6.6).',
   };
@@ -562,10 +582,7 @@ function mergeAppRouteHints(app: KovoApp, route: AnyRouteDeclaration): PageHintO
 }
 
 function searchParamsToRecord(searchParams: URLSearchParams): Record<string, string | string[]> {
-  const record = witnessCreateNullRecord<string | string[]>() as Record<
-    string,
-    string | string[]
-  >;
+  const record = witnessCreateNullRecord<string | string[]>() as Record<string, string | string[]>;
   const entries = requestUrlSearchParamsEntries(searchParams);
   for (let index = 0; index < entries.length; index += 1) {
     const entryDescriptor = witnessGetOwnPropertyDescriptor(entries, index);
