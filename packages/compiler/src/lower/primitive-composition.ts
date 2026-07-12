@@ -16,6 +16,15 @@ import {
   type MergeableAttribute,
   type MergeableAttributeValue,
 } from './attribute-merge.js';
+import {
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerDefineOwnDataProperty,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerRegExpTest,
+  compilerStringIncludes,
+} from '../compiler-security-intrinsics.js';
 
 export function lowerPrimitiveComposition(
   elements: readonly JsxIrElement[],
@@ -25,13 +34,23 @@ export function lowerPrimitiveComposition(
   const candidates = primitiveCompositionCandidates(elements);
   const rewrites = primitiveIdRewrites(candidates);
 
-  for (const candidate of candidates) {
+  const candidateLength = compilerArrayLength(candidates, 'Primitive composition candidates');
+  for (let candidateIndex = 0; candidateIndex < candidateLength; candidateIndex += 1) {
+    const candidate = compilerOwnDataValue(
+      candidates,
+      candidateIndex,
+      'Primitive composition candidates',
+    ) as PrimitiveCompositionCandidate;
     const merge = mergePrimitiveAndAuthorAttributes(
       rewritePrimitiveIdrefAttributes(candidate.primitiveAttributes, rewrites),
       candidate.authorAttributes,
       options,
     );
-    diagnostics.push(...withMergeWriterNames(merge.diagnostics));
+    appendCompositionFacts(
+      diagnostics,
+      withMergeWriterNames(merge.diagnostics),
+      'Primitive composition diagnostics',
+    );
     unwrapPrimitiveWrapper(candidate.wrapper, candidate.child, merge.attributes, options);
   }
 
@@ -50,28 +69,32 @@ function primitiveCompositionCandidates(
 ): PrimitiveCompositionCandidate[] {
   const candidates: PrimitiveCompositionCandidate[] = [];
 
-  for (const wrapper of elements) {
+  const elementLength = compilerArrayLength(elements, 'Primitive composition elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const wrapper = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Primitive composition elements',
+    ) as JsxIrElement;
     if (!isComponentTag(wrapper.tag)) continue;
-    const attrsAttribute = wrapper.element.attributes.find(
-      (attribute) => attribute.name === 'attrs',
-    );
+    const attrsAttribute = sourceAttributeByName(wrapper, 'attrs');
     const attrs = attrsAttribute?.expressionObjectEntries;
     if (!attrs) continue;
 
     const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
     if (primitiveAttributes === null) continue;
 
-    const child = wrapper.element.attributes.some((attribute) => attribute.name === 'asChild')
+    const child = sourceAttributeByName(wrapper, 'asChild') !== undefined
       ? singleImmediateElementChild(wrapper)
       : singleAttrsFunctionElementChild(wrapper);
     if (!child || childHasUnsupportedSpreads(child)) continue;
 
-    candidates.push({
+    appendCompositionFact(candidates, {
       authorAttributes: authorJsxAttributes(child.element.attributes),
       child,
       primitiveAttributes,
       wrapper,
-    });
+    }, 'Primitive composition candidates');
   }
 
   return candidates;
@@ -80,12 +103,18 @@ function primitiveCompositionCandidates(
 function primitiveIdRewrites(
   candidates: readonly PrimitiveCompositionCandidate[],
 ): ReadonlyMap<string, string> {
-  return new Map(
-    candidates.flatMap((candidate) => {
-      const rewrite = primitiveIdRewrite(candidate.primitiveAttributes, candidate.authorAttributes);
-      return rewrite ? [rewrite] : [];
-    }),
-  );
+  const rewrites = compilerCreateMap<string, string>();
+  const length = compilerArrayLength(candidates, 'Primitive composition candidates');
+  for (let index = 0; index < length; index += 1) {
+    const candidate = compilerOwnDataValue(
+      candidates,
+      index,
+      'Primitive composition candidates',
+    ) as PrimitiveCompositionCandidate;
+    const rewrite = primitiveIdRewrite(candidate.primitiveAttributes, candidate.authorAttributes);
+    if (rewrite) compilerMapSet(rewrites, rewrite[0], rewrite[1]);
+  }
+  return rewrites;
 }
 
 function unwrapPrimitiveWrapper(
@@ -97,7 +126,21 @@ function unwrapPrimitiveWrapper(
   wrapper.tag = child.tag;
   wrapper.closingName = child.tag;
   wrapper.selfClosing = child.selfClosing;
-  wrapper.attributes = attributes.map((attribute) => mergeableToIrAttribute(attribute, options));
+  const irAttributes: JsxIrAttribute[] = [];
+  const attributeLength = compilerArrayLength(attributes, 'Primitive merged attributes');
+  for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      attributeIndex,
+      'Primitive merged attributes',
+    ) as MergeableAttribute;
+    appendCompositionFact(
+      irAttributes,
+      mergeableToIrAttribute(attribute, options),
+      'Primitive composed IR attributes',
+    );
+  }
+  wrapper.attributes = irAttributes;
   wrapper.children = child.children;
   wrapper.generatedAttributes = [];
   wrapper.ownership = 'generated';
@@ -111,34 +154,76 @@ function unwrapPrimitiveWrapper(
 }
 
 function singleImmediateElementChild(wrapper: JsxIrElement): JsxIrElement | null {
-  const children = wrapper.children.filter(
-    (child): child is JsxIrElement => child.kind === 'element',
-  );
-  if (wrapper.element.childNonWhitespaceCount !== 1 || children.length !== 1) return null;
-  return children[0] ?? null;
+  if (wrapper.element.childNonWhitespaceCount !== 1) return null;
+  let child: JsxIrElement | null = null;
+  let count = 0;
+  const length = compilerArrayLength(wrapper.children, 'Primitive wrapper children');
+  for (let index = 0; index < length; index += 1) {
+    const item = compilerOwnDataValue(
+      wrapper.children,
+      index,
+      'Primitive wrapper children',
+    ) as JsxIrElement['children'][number];
+    if (item.kind !== 'element') continue;
+    child = item;
+    count += 1;
+  }
+  return count === 1 ? child : null;
 }
 
 function singleAttrsFunctionElementChild(wrapper: JsxIrElement): JsxIrElement | null {
-  const child = wrapper.children
-    .filter((item): item is JsxIrElement => item.kind === 'element')
-    .find((item) =>
-      item.element.spreadAttributes.some(
-        (spread) => spread.expressionBareIdentifierName === 'attrs',
-      ),
+  const childLength = compilerArrayLength(wrapper.children, 'Primitive wrapper children');
+  for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+    const child = compilerOwnDataValue(
+      wrapper.children,
+      childIndex,
+      'Primitive wrapper children',
+    ) as JsxIrElement['children'][number];
+    if (child.kind !== 'element') continue;
+    const spreadLength = compilerArrayLength(
+      child.element.spreadAttributes,
+      'Primitive child spreads',
     );
-  if (child) return child;
+    for (let spreadIndex = 0; spreadIndex < spreadLength; spreadIndex += 1) {
+      const spread = compilerOwnDataValue(
+        child.element.spreadAttributes,
+        spreadIndex,
+        'Primitive child spreads',
+      ) as (typeof child.element.spreadAttributes)[number];
+      if (spread.expressionBareIdentifierName === 'attrs') return child;
+    }
+  }
 
-  const nested =
-    wrapper.element.childExpressionContainers.length === 1
-      ? wrapper.children.flatMap((item) => (item.kind === 'element' ? [item] : []))
-      : [];
-  return nested[0] ?? null;
+  if (
+    compilerArrayLength(
+      wrapper.element.childExpressionContainers,
+      'Primitive child expression containers',
+    ) !== 1
+  ) {
+    return null;
+  }
+  for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+    const child = compilerOwnDataValue(
+      wrapper.children,
+      childIndex,
+      'Primitive wrapper children',
+    ) as JsxIrElement['children'][number];
+    if (child.kind === 'element') return child;
+  }
+  return null;
 }
 
 function childHasUnsupportedSpreads(element: JsxIrElement): boolean {
-  return element.element.spreadAttributes.some(
-    (spread) => spread.expressionBareIdentifierName !== 'attrs',
-  );
+  const length = compilerArrayLength(element.element.spreadAttributes, 'Primitive child spreads');
+  for (let index = 0; index < length; index += 1) {
+    const spread = compilerOwnDataValue(
+      element.element.spreadAttributes,
+      index,
+      'Primitive child spreads',
+    ) as (typeof element.element.spreadAttributes)[number];
+    if (spread.expressionBareIdentifierName !== 'attrs') return true;
+  }
+  return false;
 }
 
 function mergeableToIrAttribute(
@@ -169,12 +254,61 @@ function mergeableValueToIr(value: MergeableAttributeValue): JsxIrAttributeValue
 }
 
 function withMergeWriterNames(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
-  return diagnostics.map((diagnostic) => ({
-    ...diagnostic,
-    message: `${diagnostic.message} (writers: primitive attrs, author JSX)`,
-  }));
+  const result: CompilerDiagnostic[] = [];
+  const length = compilerArrayLength(diagnostics, 'Primitive merge diagnostics');
+  for (let index = 0; index < length; index += 1) {
+    const diagnostic = compilerOwnDataValue(
+      diagnostics,
+      index,
+      'Primitive merge diagnostics',
+    ) as CompilerDiagnostic;
+    appendCompositionFact(
+      result,
+      {
+        ...diagnostic,
+        message: `${diagnostic.message} (writers: primitive attrs, author JSX)`,
+      },
+      'Primitive merge diagnostics',
+    );
+  }
+  return result;
+}
+
+function sourceAttributeByName(
+  element: JsxIrElement,
+  name: string,
+): (typeof element.element.attributes)[number] | undefined {
+  const length = compilerArrayLength(element.element.attributes, 'Primitive source attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.element.attributes,
+      index,
+      'Primitive source attributes',
+    ) as (typeof element.element.attributes)[number];
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
+}
+
+function appendCompositionFact<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
+}
+
+function appendCompositionFacts<Value>(
+  target: Value[],
+  values: readonly Value[],
+  label: string,
+): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    appendCompositionFact(
+      target,
+      compilerOwnDataValue(values, index, label) as Value,
+      label,
+    );
+  }
 }
 
 function isComponentTag(tag: string): boolean {
-  return tag.includes('.') || /^[A-Z]/.test(tag);
+  return compilerStringIncludes(tag, '.') || compilerRegExpTest(/^[A-Z]/, tag);
 }

@@ -1288,4 +1288,62 @@ export const SafeButton = component({
     expect(lowered).toContain('state.label');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject JSX through primitive-composition attribute projection', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedPrimitiveCompositionMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: unknown; origin?: unknown; value?: unknown } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          first?.name === 'id' &&
+          first.origin === 'primitive' &&
+          typeof first.value === 'object' &&
+          nativeApply(nativeIncludes, callbackSource, ['mergeableToIrAttribute'])
+        ) {
+          poisonHits += 1;
+          return [
+            {
+              name: 'id="safe" /><img src="x" data-kovo-primitive-injection="true" /><button data-rest',
+              ownership: 'generated',
+              provenance: {
+                description: 'forged primitive attribute',
+                ownership: 'generated',
+                writer: 'attacker',
+              },
+              value: { kind: 'string', value: 'safe' },
+            },
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'primitive-button.tsx',
+        source: `
+export const PrimitiveButton = component({
+  render: () => (
+    <Primitive.Trigger asChild attrs={{ id: 'safe', type: 'button' }}>
+      <button>Safe</button>
+    </Primitive.Trigger>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(lowered).not.toContain('data-kovo-primitive-injection');
+    expect(lowered).toContain('<button id="safe" type="button"');
+    expect(poisonHits).toBe(0);
+  });
 });

@@ -4,6 +4,24 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue, type StaticLiteralValue } from '../scan/object.js';
 import type { JsxAttributeModel, ObjectLiteralEntry } from '../scan/parse.js';
 import { dedupeBy, escapeAttribute, splitDepValue } from '../shared.js';
+import {
+  compilerArrayJoin,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerJsonStringify,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerRegExpReplace,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerStringCharCodeAt,
+  compilerStringSlice,
+  compilerStringStartsWith,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
 
 export type AttributeMergeDiagnosticCode = 'KV231' | 'KV232' | 'KV233' | 'KV317';
 
@@ -41,46 +59,58 @@ export interface AttributeMergeResult {
   diagnostics: readonly CompilerDiagnostic[];
 }
 
-const idrefAttributes = new Set([
-  'aria-activedescendant',
-  'aria-controls',
-  'aria-describedby',
-  'aria-labelledby',
-  'aria-owns',
-  'commandfor',
-  'for',
-  'htmlFor',
-  'kovo-context-menu',
-  'kovo-hover-card',
-  'kovo-tooltip',
-  'popovertarget',
-]);
+const idrefAttributes = compilerCreateSet<string>();
+compilerSetAdd(idrefAttributes, 'aria-activedescendant');
+compilerSetAdd(idrefAttributes, 'aria-controls');
+compilerSetAdd(idrefAttributes, 'aria-describedby');
+compilerSetAdd(idrefAttributes, 'aria-labelledby');
+compilerSetAdd(idrefAttributes, 'aria-owns');
+compilerSetAdd(idrefAttributes, 'commandfor');
+compilerSetAdd(idrefAttributes, 'for');
+compilerSetAdd(idrefAttributes, 'htmlFor');
+compilerSetAdd(idrefAttributes, 'kovo-context-menu');
+compilerSetAdd(idrefAttributes, 'kovo-hover-card');
+compilerSetAdd(idrefAttributes, 'kovo-tooltip');
+compilerSetAdd(idrefAttributes, 'popovertarget');
 
-const logicalOrAttributes = new Set(['aria-disabled', 'disabled', 'readonly', 'required']);
+const logicalOrAttributes = compilerCreateSet<string>();
+compilerSetAdd(logicalOrAttributes, 'aria-disabled');
+compilerSetAdd(logicalOrAttributes, 'disabled');
+compilerSetAdd(logicalOrAttributes, 'readonly');
+compilerSetAdd(logicalOrAttributes, 'required');
 
 // SPEC.md §4.6: state-bearing aria-* attributes are primitive-wins (not author-wins).
 // The primitive's runtime derive overwrites them on every render, so an author static
 // value that contradicts the primitive's render-time value is a KV317 error.
 // Descriptive aria-* (label / labelledby / describedby / roledescription, role) stay
 // author-wins under the KV232 lint, identical to today's behaviour.
-const stateAriaAttributes = new Set([
-  'aria-checked',
-  'aria-current',
-  'aria-disabled',
-  'aria-expanded',
-  'aria-pressed',
-  'aria-selected',
-]);
+const stateAriaAttributes = compilerCreateSet<string>();
+compilerSetAdd(stateAriaAttributes, 'aria-checked');
+compilerSetAdd(stateAriaAttributes, 'aria-current');
+compilerSetAdd(stateAriaAttributes, 'aria-disabled');
+compilerSetAdd(stateAriaAttributes, 'aria-expanded');
+compilerSetAdd(stateAriaAttributes, 'aria-pressed');
+compilerSetAdd(stateAriaAttributes, 'aria-selected');
+
+const booleanStateValues = compilerCreateSet<string>();
+compilerSetAdd(booleanStateValues, 'true');
+compilerSetAdd(booleanStateValues, 'false');
 
 export function primitiveObjectEntryAttributes(
   entries: readonly ObjectLiteralEntry[],
 ): readonly MergeableAttribute[] | null {
   const attributes: MergeableAttribute[] = [];
 
-  for (const entry of entries) {
+  const length = compilerArrayLength(entries, 'Primitive object entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(
+      entries,
+      index,
+      'Primitive object entries',
+    ) as ObjectLiteralEntry;
     const attribute = primitiveObjectEntryAttribute(entry);
     if (attribute === null) return null;
-    if (attribute) attributes.push(attribute);
+    if (attribute) appendMergeFact(attributes, attribute, 'Primitive merge attributes');
   }
 
   return attributes;
@@ -89,15 +119,26 @@ export function primitiveObjectEntryAttributes(
 export function authorJsxAttributes(
   attributes: readonly JsxAttributeModel[],
 ): readonly MergeableAttribute[] {
-  return attributes
-    .filter((attribute) => attribute.name !== 'asChild' && attribute.name !== 'attrs')
-    .map((attribute) => ({
+  const result: MergeableAttribute[] = [];
+  const length = compilerArrayLength(attributes, 'Author JSX attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'Author JSX attributes',
+    ) as JsxAttributeModel;
+    if (attribute.name === 'asChild' || attribute.name === 'attrs') continue;
+    const merged: MergeableAttribute = {
       attribute,
       name: attribute.name,
-      origin: 'author' as const,
+      origin: 'author',
       value: jsxAttributeValue(attribute),
-    }))
-    .filter((attribute) => !isAbsentAttributeValue(attribute.value));
+    };
+    if (!isAbsentAttributeValue(merged.value)) {
+      appendMergeFact(result, merged, 'Author merge attributes');
+    }
+  }
+  return result;
 }
 
 /**
@@ -115,33 +156,54 @@ export function mergePrimitiveAndAuthorAttributes(
   options: { fileName: string; source: string },
 ): AttributeMergeResult {
   const diagnostics: CompilerDiagnostic[] = [];
-  const merged = new Map<string, MergeableAttribute>();
+  const merged = compilerCreateMap<string, MergeableAttribute>();
   const order: string[] = [];
 
-  for (const attribute of primitiveAttributes) {
-    if (!merged.has(attribute.name)) order.push(attribute.name);
-    merged.set(attribute.name, attribute);
+  const primitiveLength = compilerArrayLength(primitiveAttributes, 'Primitive merge attributes');
+  for (let index = 0; index < primitiveLength; index += 1) {
+    const attribute = compilerOwnDataValue(
+      primitiveAttributes,
+      index,
+      'Primitive merge attributes',
+    ) as MergeableAttribute;
+    if (compilerMapGet(merged, attribute.name) === undefined) {
+      appendMergeFact(order, attribute.name, 'Merged attribute order');
+    }
+    compilerMapSet(merged, attribute.name, attribute);
   }
 
-  for (const author of authorAttributes) {
-    const primitive = merged.get(author.name);
+  const authorLength = compilerArrayLength(authorAttributes, 'Author merge attributes');
+  for (let index = 0; index < authorLength; index += 1) {
+    const author = compilerOwnDataValue(
+      authorAttributes,
+      index,
+      'Author merge attributes',
+    ) as MergeableAttribute;
+    const primitive = compilerMapGet(merged, author.name);
     if (!primitive) {
-      order.push(author.name);
-      merged.set(author.name, author);
+      appendMergeFact(order, author.name, 'Merged attribute order');
+      compilerMapSet(merged, author.name, author);
       continue;
     }
 
-    merged.set(author.name, {
+    compilerMapSet(merged, author.name, {
       ...mergeAttribute(primitive, author, diagnostics, options),
       name: author.name,
     });
   }
 
+  const attributes: MergeableAttribute[] = [];
+  const orderLength = compilerArrayLength(order, 'Merged attribute order');
+  for (let index = 0; index < orderLength; index += 1) {
+    const name = compilerOwnDataValue(order, index, 'Merged attribute order') as string;
+    const attribute = compilerMapGet(merged, name);
+    if (attribute && !isAbsentAttributeValue(attribute.value)) {
+      appendMergeFact(attributes, attribute, 'Merged attributes');
+    }
+  }
+
   return {
-    attributes: order.flatMap((name) => {
-      const attribute = merged.get(name);
-      return attribute && !isAbsentAttributeValue(attribute.value) ? [attribute] : [];
-    }),
+    attributes,
     diagnostics: dedupeBy(
       diagnostics,
       (diagnostic) =>
@@ -165,22 +227,53 @@ export function rewritePrimitiveIdrefAttributes(
   attributes: readonly MergeableAttribute[],
   rewrites: ReadonlyMap<string, string>,
 ): readonly MergeableAttribute[] {
-  if (rewrites.size === 0) return attributes;
-
-  return attributes.map((attribute) => {
-    if (!idrefAttributes.has(attribute.name)) return attribute;
+  const result: MergeableAttribute[] = [];
+  const length = compilerArrayLength(attributes, 'Primitive IDREF attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'Primitive IDREF attributes',
+    ) as MergeableAttribute;
+    if (!compilerSetHas(idrefAttributes, attribute.name)) {
+      appendMergeFact(result, attribute, 'Rewritten primitive attributes');
+      continue;
+    }
     const value = staticString(attribute.value);
-    if (value === undefined) return attribute;
+    if (value === undefined) {
+      appendMergeFact(result, attribute, 'Rewritten primitive attributes');
+      continue;
+    }
 
     const rewritten = rewriteIdrefValue(value, rewrites);
-    return rewritten === value
-      ? attribute
-      : { ...attribute, value: { kind: 'string', value: rewritten } };
-  });
+    appendMergeFact(
+      result,
+      rewritten === value
+        ? attribute
+        : { ...attribute, value: { kind: 'string', value: rewritten } },
+      'Rewritten primitive attributes',
+    );
+  }
+  return result;
 }
 
 export function renderMergedAttributes(attributes: readonly MergeableAttribute[]): string {
-  return attributes.map(renderMergedAttribute).join(' ');
+  const rendered: string[] = [];
+  const length = compilerArrayLength(attributes, 'Rendered merged attributes');
+  for (let index = 0; index < length; index += 1) {
+    appendMergeFact(
+      rendered,
+      renderMergedAttribute(
+        compilerOwnDataValue(
+          attributes,
+          index,
+          'Rendered merged attributes',
+        ) as MergeableAttribute,
+      ),
+      'Rendered merged attributes',
+    );
+  }
+  return compilerArrayJoin(rendered, ' ');
 }
 
 function primitiveObjectEntryAttribute(
@@ -216,7 +309,7 @@ function jsxAttributeValue(attribute: JsxAttributeModel): MergeableAttributeValu
 
 function staticAttributeValue(source: string): MergeableAttributeValue | null | undefined {
   const value = literalValue(source);
-  if (value === undefined) return { kind: 'expression', source: source.trim() };
+  if (value === undefined) return { kind: 'expression', source: compilerStringTrim(source) };
   return staticLiteralAttributeValue(value, source);
 }
 
@@ -228,7 +321,12 @@ function staticLiteralAttributeValue(
   if (typeof value === 'number') return { kind: 'number', value };
   if (typeof value === 'boolean') return value ? { kind: 'boolean', value } : undefined;
   if (value === null) return undefined;
-  return { kind: 'expression', source: source?.trim() ?? JSON.stringify(value) };
+  return {
+    kind: 'expression',
+    source: source === undefined
+      ? (compilerJsonStringify(value) ?? 'undefined')
+      : compilerStringTrim(source),
+  };
 }
 
 function mergeAttribute(
@@ -247,14 +345,18 @@ function mergeAttribute(
     return authorValue(name, mergeStyles(primitive.value, author.value), author);
   }
 
-  if (name.startsWith('on:')) {
+  if (compilerStringStartsWith(name, 'on:')) {
     return authorValue(name, mergeRefs(author.value, primitive.value), author);
   }
 
   if (name === 'id') return author;
 
-  if (idrefAttributes.has(name)) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'KV231', name, author));
+  if (compilerSetHas(idrefAttributes, name)) {
+    appendMergeFact(
+      diagnostics,
+      attributeMergeDiagnostic(options, 'KV231', name, author),
+      'Attribute merge diagnostics',
+    );
     return author;
   }
 
@@ -264,7 +366,7 @@ function mergeAttribute(
   // otherwise the usual KV232 lint is enough.
   // aria-disabled is also in logicalOrAttributes — the state-aria check runs first
   // here, so its OR-merge is handled in this branch instead of below.
-  if (stateAriaAttributes.has(name)) {
+  if (compilerSetHas(stateAriaAttributes, name)) {
     const primitiveStatic = staticString(primitive.value);
     const authorStatic = staticString(author.value);
     // KV317 only when both values are boolean state-aria values ('true'/'false') and
@@ -272,17 +374,24 @@ function mergeAttribute(
     // An author value that is not a valid state-aria boolean (e.g. 'author-aria') is
     // not a frozen-vs-clobbered contradiction — it is simply an invalid override, which
     // the ordinary KV232 lint already covers.
-    const booleanStateValues = new Set(['true', 'false']);
     if (
       primitiveStatic !== undefined &&
       authorStatic !== undefined &&
       primitiveStatic !== authorStatic &&
-      booleanStateValues.has(primitiveStatic) &&
-      booleanStateValues.has(authorStatic)
+      compilerSetHas(booleanStateValues, primitiveStatic) &&
+      compilerSetHas(booleanStateValues, authorStatic)
     ) {
-      diagnostics.push(attributeMergeDiagnostic(options, 'KV317', name, author));
+      appendMergeFact(
+        diagnostics,
+        attributeMergeDiagnostic(options, 'KV317', name, author),
+        'Attribute merge diagnostics',
+      );
     } else {
-      diagnostics.push(attributeMergeDiagnostic(options, 'KV232', name, author));
+      appendMergeFact(
+        diagnostics,
+        attributeMergeDiagnostic(options, 'KV232', name, author),
+        'Attribute merge diagnostics',
+      );
     }
     // aria-disabled uses logical-OR in the state-aria path (SPEC.md §4.6):
     // if either primitive or author is "true", the result is "true".
@@ -293,27 +402,43 @@ function mergeAttribute(
     return primitive;
   }
 
-  if (name.startsWith('aria-') || name === 'role') {
-    diagnostics.push(attributeMergeDiagnostic(options, 'KV232', name, author));
+  if (compilerStringStartsWith(name, 'aria-') || name === 'role') {
+    appendMergeFact(
+      diagnostics,
+      attributeMergeDiagnostic(options, 'KV232', name, author),
+      'Attribute merge diagnostics',
+    );
     return author;
   }
 
   if (name === 'data-state' || primitiveOwnedDataStateAttribute(name)) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'KV232', name, author));
+    appendMergeFact(
+      diagnostics,
+      attributeMergeDiagnostic(options, 'KV232', name, author),
+      'Attribute merge diagnostics',
+    );
     return primitive;
   }
 
-  if (name.startsWith('data-p-')) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'KV231', name, author));
+  if (compilerStringStartsWith(name, 'data-p-')) {
+    appendMergeFact(
+      diagnostics,
+      attributeMergeDiagnostic(options, 'KV231', name, author),
+      'Attribute merge diagnostics',
+    );
     return author;
   }
 
   if (isBindingAttribute(name)) {
-    diagnostics.push(attributeMergeDiagnostic(options, 'KV233', name, author));
+    appendMergeFact(
+      diagnostics,
+      attributeMergeDiagnostic(options, 'KV233', name, author),
+      'Attribute merge diagnostics',
+    );
     return author;
   }
 
-  if (logicalOrAttributes.has(name)) {
+  if (compilerSetHas(logicalOrAttributes, name)) {
     return authorValue(name, logicalOr(primitive.value, author.value), author);
   }
 
@@ -322,7 +447,11 @@ function mergeAttribute(
   }
 
   if (name === 'kovo-c' || name === 'kovo-state') {
-    diagnostics.push(attributeMergeDiagnostic(options, 'KV231', name, author));
+    appendMergeFact(
+      diagnostics,
+      attributeMergeDiagnostic(options, 'KV231', name, author),
+      'Attribute merge diagnostics',
+    );
     return author;
   }
 
@@ -345,19 +474,31 @@ function attributeValue(
   attributes: readonly MergeableAttribute[],
   name: string,
 ): MergeableAttributeValue | undefined {
-  return attributes.find((attribute) => attribute.name === name)?.value;
+  const length = compilerArrayLength(attributes, 'Merge attribute lookup');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'Merge attribute lookup',
+    ) as MergeableAttribute;
+    if (attribute.name === name) return attribute.value;
+  }
+  return undefined;
 }
 
 function rewriteIdrefValue(value: string, rewrites: ReadonlyMap<string, string>): string {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((token) => rewrites.get(token) ?? token)
-    .join(' ');
+  const tokens = splitWhitespaceTokens(value);
+  const rewritten: string[] = [];
+  const length = compilerArrayLength(tokens, 'IDREF tokens');
+  for (let index = 0; index < length; index += 1) {
+    const token = compilerOwnDataValue(tokens, index, 'IDREF tokens') as string;
+    appendMergeFact(rewritten, compilerMapGet(rewrites, token) ?? token, 'Rewritten IDREF tokens');
+  }
+  return compilerArrayJoin(rewritten, ' ');
 }
 
 function isBindingAttribute(name: string): boolean {
-  return name === 'data-bind' || name.startsWith('data-bind:');
+  return name === 'data-bind' || compilerStringStartsWith(name, 'data-bind:');
 }
 
 function mergeRefs(
@@ -367,7 +508,7 @@ function mergeRefs(
   const left = staticString(first);
   const right = staticString(second);
   if (left === undefined || right === undefined) return undefined;
-  return { kind: 'string', value: [left, right].filter(Boolean).join(' ') };
+  return { kind: 'string', value: joinNonempty(left, right, ' ') };
 }
 
 function mergeStyles(
@@ -379,7 +520,7 @@ function mergeStyles(
   if (left === undefined || right === undefined) return undefined;
   return {
     kind: 'string',
-    value: [trimTrailingSemicolon(left), trimTrailingSemicolon(right)].filter(Boolean).join('; '),
+    value: joinNonempty(trimTrailingSemicolon(left), trimTrailingSemicolon(right), '; '),
   };
 }
 
@@ -390,16 +531,19 @@ function mergeSpaceTokenLists(
   const left = staticString(first);
   const right = staticString(second);
   if (left === undefined || right === undefined) return undefined;
+  const unique = compilerCreateSet<string>();
+  const tokens = splitWhitespaceTokens(`${left} ${right}`);
+  const values: string[] = [];
+  const length = compilerArrayLength(tokens, 'Class merge tokens');
+  for (let index = 0; index < length; index += 1) {
+    const token = compilerOwnDataValue(tokens, index, 'Class merge tokens') as string;
+    if (compilerSetHas(unique, token)) continue;
+    compilerSetAdd(unique, token);
+    appendMergeFact(values, token, 'Class merge tokens');
+  }
   return {
     kind: 'string',
-    value: [
-      ...new Set(
-        `${left} ${right}`
-          .split(/\s+/)
-          .map((token) => token.trim())
-          .filter(Boolean),
-      ),
-    ].join(' '),
+    value: compilerArrayJoin(values, ' '),
   };
 }
 
@@ -410,7 +554,21 @@ function mergeDepLists(
   const left = staticString(first);
   const right = staticString(second);
   if (left === undefined || right === undefined) return undefined;
-  return { kind: 'string', value: [...new Set(splitDepValue(`${left} ${right}`))].join(' ') };
+  const unique = compilerCreateSet<string>();
+  const values: string[] = [];
+  const dependencies = splitDepValue(`${left} ${right}`);
+  const length = compilerArrayLength(dependencies, 'Dependency merge tokens');
+  for (let index = 0; index < length; index += 1) {
+    const dependency = compilerOwnDataValue(
+      dependencies,
+      index,
+      'Dependency merge tokens',
+    ) as string;
+    if (compilerSetHas(unique, dependency)) continue;
+    compilerSetAdd(unique, dependency);
+    appendMergeFact(values, dependency, 'Dependency merge tokens');
+  }
+  return { kind: 'string', value: compilerArrayJoin(values, ' ') };
 }
 
 function logicalOr(
@@ -446,13 +604,60 @@ function booleanish(value: MergeableAttributeValue): boolean | undefined {
 function staticString(value: MergeableAttributeValue | undefined): string | undefined {
   if (value === undefined) return undefined;
   if (value.kind === 'string') return value.value;
-  if (value.kind === 'number') return String(value.value);
+  if (value.kind === 'number') return `${value.value}`;
   if (value.kind === 'boolean') return value.value ? 'true' : 'false';
   return undefined;
 }
 
 function trimTrailingSemicolon(value: string): string {
-  return value.trim().replace(/;$/, '').trim();
+  return compilerStringTrim(
+    compilerRegExpReplace(/;$/, compilerStringTrim(value), ''),
+  );
+}
+
+function appendMergeFact<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
+}
+
+function joinNonempty(left: string, right: string, separator: string): string {
+  if (left === '') return right;
+  if (right === '') return left;
+  return `${left}${separator}${right}`;
+}
+
+function splitWhitespaceTokens(value: string): string[] {
+  const tokens: string[] = [];
+  let start = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = compilerStringCharCodeAt(value, index);
+    const whitespace =
+      code === 0x09 ||
+      code === 0x0a ||
+      code === 0x0b ||
+      code === 0x0c ||
+      code === 0x0d ||
+      code === 0x20 ||
+      code === 0xa0 ||
+      code === 0x1680 ||
+      (code >= 0x2000 && code <= 0x200a) ||
+      code === 0x2028 ||
+      code === 0x2029 ||
+      code === 0x202f ||
+      code === 0x205f ||
+      code === 0x3000;
+    if (whitespace) {
+      if (start >= 0) {
+        appendMergeFact(tokens, compilerStringSlice(value, start, index), 'Whitespace tokens');
+        start = -1;
+      }
+    } else if (start < 0) {
+      start = index;
+    }
+  }
+  if (start >= 0) {
+    appendMergeFact(tokens, compilerStringSlice(value, start), 'Whitespace tokens');
+  }
+  return tokens;
 }
 
 function isAbsentAttributeValue(value: MergeableAttributeValue | undefined): boolean {
