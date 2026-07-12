@@ -175,11 +175,18 @@ export function stampTrustedSql<T extends object>(value: T, justification: strin
 export function frameworkTrustedSqlCarrier(
   value: { readonly text: string; readonly values: readonly unknown[] },
   justification: string,
-): { readonly text: string; readonly values: readonly unknown[] } & TrustedSql {
+): {
+  readonly sql: string;
+  readonly text: string;
+  readonly values: readonly unknown[];
+} & TrustedSql {
   validateTrustedSqlJustification(justification);
-  return freezeSecurityValue(
-    stampTrustedSql({ text: value.text, values: copyOwnArray(value.values) }, justification),
-  );
+  const carrier = stampTrustedSql(
+    { text: value.text, values: copyOwnArray(value.values) },
+    justification,
+  ) as { sql: string; text: string; values: unknown[] } & TrustedSql;
+  securityDefineProperty(carrier, 'sql', { value: value.text });
+  return freezeSecurityValue(carrier);
 }
 
 /** @internal Require a source-visible, non-blank trusted-SQL justification. */

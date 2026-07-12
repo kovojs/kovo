@@ -3002,6 +3002,42 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ]);
   });
 
+  it('blocks every alternate real PGlite execution surface on scoped clients', async () => {
+    const client = new PGlite();
+    await client.waitReady;
+    try {
+      await client.exec('CREATE TABLE scoped_surface_proof (id integer primary key, secret text)');
+      const scoped = createPostgresReadonlyClient(client, { readerRole: false }) as typeof client;
+
+      expect(() => scoped.sql).toThrow(/transaction role frame/u);
+      for (const method of [
+        'describeQuery',
+        'execProtocol',
+        'execProtocolRaw',
+        'execProtocolRawStream',
+        'listen',
+        'runExclusive',
+      ]) {
+        expect(() => (scoped as unknown as Record<string, unknown>)[method]).toThrow(
+          /transaction role frame/u,
+        );
+      }
+      await expect(
+        scoped.transaction(async (tx) => {
+          expect(() => tx.sql).toThrow(/transaction role frame/u);
+          expect(() => tx.rollback).toThrow(/transaction role frame/u);
+          expect(() => tx.listen).toThrow(/transaction role frame/u);
+          return tx.query('select count(*)::int as count from scoped_surface_proof');
+        }),
+      ).resolves.toMatchObject({ rows: [{ count: 0 }] });
+      await expect(client.query('select * from scoped_surface_proof')).resolves.toMatchObject({
+        rows: [],
+      });
+    } finally {
+      await client.close();
+    }
+  });
+
   it('server-owned Postgres scoped client parameterizes the principal before assuming the app role', async () => {
     const log: string[] = [];
     const client = {

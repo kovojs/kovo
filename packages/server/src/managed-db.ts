@@ -450,10 +450,8 @@ export const createPostgresScopedClient = securityClassifier(
         if (prop === 'exec') return (query: string) => scopedPostgresExec(scopedOptions, query);
         if (prop === 'transaction')
           return scopedPostgresTransaction(target, scopedOptions, receiver);
-        const value = witnessReflectGet(target, prop, receiver);
-        return typeof value === 'function'
-          ? (...args: unknown[]) => witnessReflectApply(value, target, args)
-          : value;
+        if (prop === 'then') return undefined;
+        throw unsupportedPostgresScopedProperty(prop);
       },
     }) as Client;
   },
@@ -1700,12 +1698,16 @@ function scopedPostgresTransactionClient(
       }
       if (prop === 'exec') return (query: string) => scopedPostgresExec(options, query);
       if (prop === 'transaction') return scopedPostgresTransaction(target, options, receiver);
-      const value = witnessReflectGet(target, prop, receiver);
-      return typeof value === 'function'
-        ? (...args: unknown[]) => witnessReflectApply(value, target, args)
-        : value;
+      if (prop === 'then') return undefined;
+      throw unsupportedPostgresScopedProperty(prop);
     },
   }) as PostgresTransactionClient;
+}
+
+function unsupportedPostgresScopedProperty(property: PropertyKey): KovoReadonlyHandleError {
+  return new KovoReadonlyHandleError(
+    `KV433: Postgres scoped managed clients expose only query() and callback transaction(); property ${String(property)} could bypass the framework transaction role frame (SPEC §10.3/§11.2).`,
+  );
 }
 
 function scopedPostgresQuery(
