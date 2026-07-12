@@ -12,6 +12,7 @@ export interface InlineQueryEventInit {
 }
 
 export interface InlineMutationResponseApplyOptions {
+  createHTML(html: string): string;
   findFragmentTarget(target: string): HtmlResponseFragmentApplyTarget | null | undefined;
   security: HtmlResponseFragmentSecurityControls;
 }
@@ -23,5 +24,10 @@ export function applyInlineMutationResponseChunks(
   // SPEC.md §4.4/§9.1: the generated inline loader applies already-decoded
   // mutation response chunks through this runtime-owned fragment helper
   // closure, not a forked inline-only fragment apply path.
-  return p(chunks.fragments, (target) => options.findFragmentTarget(target), options.security);
+  return p(
+    chunks.fragments,
+    (target) => options.findFragmentTarget(target),
+    options.security,
+    (html) => options.createHTML(html),
+  );
 }

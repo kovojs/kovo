@@ -19,13 +19,14 @@ import { createBrowserNavigationSecurityControls } from './navigation-security-i
 // carries the strict `require-trusted-types-for 'script'; trusted-types kovo` directive the
 // server now emits by default. Inside that enforcing realm we prove:
 //   (1) a raw (non-framework) string `innerHTML` write THROWS — the DOM-XSS sink is killed;
-//   (2) a value minted by the `kovo` policy (what the inlined `trustedHtml` shim and the
-//       module-side `kovoCreateHTML` produce) is ACCEPTED — Kovo's own hydration survives.
+//   (2) a value minted by the boot-owned `kovo` policy controller is ACCEPTED — Kovo's own
+//       hydration survives without consulting a public policy cache.
 
 const hasTrustedTypes =
   typeof (globalThis as { trustedTypes?: unknown }).trustedTypes !== 'undefined';
 
 const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
+const initialPolicyCacheDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__kovo_tt');
 
 function enforcingFrame(): Promise<HTMLIFrameElement> {
   return new Promise((resolve) => {
@@ -44,10 +45,36 @@ function enforcingFrame(): Promise<HTMLIFrameElement> {
 
 afterEach(() => {
   document.body.replaceChildren();
+  if (initialPolicyCacheDescriptor === undefined) {
+    delete (globalThis as typeof globalThis & { __kovo_tt?: unknown }).__kovo_tt;
+  } else {
+    Object.defineProperty(globalThis, '__kovo_tt', initialPolicyCacheDescriptor);
+  }
   __resetKovoTrustedTypePolicyForTest();
 });
 
 describe('Trusted Types default-on enforcement (SF Tier 3, Chromium-only)', () => {
+  it('does not accept a caller-owned shared policy cache as HTML authority', () => {
+    const globalRecord = globalThis as typeof globalThis & {
+      __kovo_tt?: { createHTML(input: string): unknown } | null;
+    };
+    globalRecord.__kovo_tt = {
+      createHTML() {
+        return '<img data-kovo-policy-cache-attack src="x">';
+      },
+    };
+
+    const reviewed = '<strong data-kovo-policy-safe>framework-safe</strong>';
+    const output = kovoCreateHTML(reviewed);
+    expect(String(output)).toBe(reviewed);
+    const template = document.createElement('template');
+    template.innerHTML = output;
+    expect(template.content.querySelector('[data-kovo-policy-cache-attack]')).toBeNull();
+    expect(template.content.querySelector('[data-kovo-policy-safe]')?.textContent).toBe(
+      'framework-safe',
+    );
+  });
+
   it.runIf(hasTrustedTypes)(
     'boots navigation controls before policy creation and accepts policy-minted template HTML',
     async () => {
@@ -107,9 +134,8 @@ describe('Trusted Types default-on enforcement (SF Tier 3, Chromium-only)', () =
       };
       const target = frame.contentDocument?.getElementById('t') as HTMLElement;
 
-      // Mint a TrustedHTML through the sole `kovo` policy — the identity transform the
-      // inlined `trustedHtml` shim and module-side `kovoCreateHTML` both use. The strict CSP
-      // admits exactly this policy, so the same sink that threw above now succeeds.
+      // Mint a TrustedHTML through the same identity policy shape used by the private runtime
+      // controllers. The strict CSP admits this policy, so the same sink that threw above succeeds.
       const policy = win.trustedTypes.createPolicy('kovo', { createHTML: (s: string) => s });
       expect(() => {
         target.innerHTML = policy.createHTML('<span>hydrated</span>') as unknown as string;

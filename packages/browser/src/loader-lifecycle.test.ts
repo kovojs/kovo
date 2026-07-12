@@ -74,6 +74,13 @@ describe('loader lifecycle', () => {
         method: 'post',
       },
     );
+    // C210: browser-free structural fakes use an explicit own-data submit seam; inherited
+    // methods are deliberately ignored so a poisoned prototype cannot own fallback navigation.
+    Object.assign(form, {
+      submit() {
+        form.submitted = true;
+      },
+    });
     const fetchError = new Error('offline');
     const fetch = vi.fn(async () => {
       throw fetchError;

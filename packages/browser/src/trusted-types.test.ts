@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   __resetKovoTrustedTypePolicyForTest,
@@ -8,14 +8,12 @@ import {
 import { kovoTrustedHtmlContent, safeRichHtml } from './security-output.js';
 
 // SF (secure-framework Tier 3): the framework Trusted Types policy seam. These tests pin
-// the two load-bearing properties the CSP floor depends on: (1) where Trusted Types is
-// ABSENT (every non-Chromium browser / no CSP), the helpers are a TRANSPARENT passthrough
-// so routing a sink through them is behavior-preserving and can never brick hydration;
-// (2) where Trusted Types IS present, the helpers mint values through the single `kovo`
-// policy created exactly ONCE (a second `createPolicy('kovo', …)` throws under the strict
-// `trusted-types kovo` no-duplicates directive).
+// the load-bearing properties the CSP floor depends on: absent host controls are a transparent
+// passthrough, structural lookalikes never become output authority, and genuine browser controls
+// are covered by the three-engine suite.
 
 const globalWithTrustedTypes = globalThis as {
+  __kovo_tt?: { createHTML(input: string): unknown } | null;
   trustedTypes?: unknown;
 };
 
@@ -28,7 +26,23 @@ describe('kovo Trusted Types policy seam', () => {
     } else {
       Object.defineProperty(globalThis, 'trustedTypes', originalTrustedTypes);
     }
+    delete globalWithTrustedTypes.__kovo_tt;
     __resetKovoTrustedTypePolicyForTest();
+  });
+
+  it('ignores a caller-owned policy cache present before module initialization', async () => {
+    globalWithTrustedTypes.__kovo_tt = {
+      createHTML() {
+        return '<img data-kovo-preimport-policy-attack src="x">';
+      },
+    };
+    vi.resetModules();
+
+    const fresh = await import('./trusted-types.js');
+
+    expect(fresh.kovoCreateHTML('<strong>framework-safe</strong>')).toBe(
+      '<strong>framework-safe</strong>',
+    );
   });
 
   it('passes HTML/script URLs through verbatim when Trusted Types is unavailable', () => {
@@ -39,7 +53,7 @@ describe('kovo Trusted Types policy seam', () => {
     expect(kovoCreateScriptURL('/c/__v/1/m.js')).toBe('/c/__v/1/m.js');
   });
 
-  it('routes through a single kovo policy created exactly once when available', () => {
+  it('rejects a structural Trusted Types factory without platform value brands', () => {
     const created: string[] = [];
     let policyCalls = 0;
     globalWithTrustedTypes.trustedTypes = {
@@ -60,9 +74,10 @@ describe('kovo Trusted Types policy seam', () => {
 
     const out1 = kovoCreateHTML('<a>one</a>');
     const out2 = kovoCreateHTML('<a>two</a>');
-    // The policy is created once (cached); both writes mint through it.
-    expect(created).toEqual(['kovo']);
-    expect(policyCalls).toBe(2);
+    // A caller-owned structural factory cannot manufacture the browser's TrustedHTML internal
+    // slot, so boot validation keeps the exact raw bytes and never invokes it.
+    expect(created).toEqual([]);
+    expect(policyCalls).toBe(0);
     expect(String(out1)).toBe('<a>one</a>');
     expect(String(out2)).toBe('<a>two</a>');
   });
@@ -79,7 +94,7 @@ describe('kovo Trusted Types policy seam', () => {
     expect(kovoCreateHTML('<p>safe</p>')).toBe('<p>safe</p>');
   });
 
-  it('routes safeRichHtml output through the kovo policy after sanitizing', () => {
+  it('keeps sanitized rich HTML exact under a structural policy lookalike', () => {
     const htmlInputs: string[] = [];
     globalWithTrustedTypes.trustedTypes = {
       createPolicy(_name: string, rules: { createHTML?: (s: string) => string }) {
@@ -101,7 +116,7 @@ describe('kovo Trusted Types policy seam', () => {
 
     const rich = safeRichHtml('<p onclick="bad()">ok<script>bad()</script></p>');
 
-    expect(htmlInputs).toEqual(['<p>ok</p>']);
+    expect(htmlInputs).toEqual([]);
     expect(kovoTrustedHtmlContent(rich)).toBe('<p>ok</p>');
   });
 });

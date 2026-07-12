@@ -441,6 +441,7 @@ export function expectInlineOracleResponseApplyContract(
     const inlineResult = applyInlineMutationResponseChunks(
       readInlineMutationResponseBodyChunks(fixture.runtime.body),
       {
+        createHTML: (html) => html,
         findFragmentTarget(target) {
           return (
             (inlineTargets.get(target) as unknown as HtmlResponseFragmentApplyTarget | undefined) ??

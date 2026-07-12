@@ -48,12 +48,13 @@ describe('inline loader response apply source', () => {
     );
     expect(inlineResponseApplyReadableSource).not.toContain('element.innerHTML = html');
     expect(inlineResponseApplyReadableSource).toContain(
-      'return p(chunks.fragments, (target) => options.findFragmentTarget(target), options.security);',
+      '(html) => options.createHTML(html)',
     );
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableApply);
     expect(alternateReadable).not.toContain(inlineResponseApplyReadableSource);
-    expect(alternateReadable).toContain('applyInlineMutationResponseChunks({ fragments }, {');
+    expect(alternateReadable).toContain('applyInlineMutationResponseChunks(');
+    expect(alternateReadable).toContain('{ createHTML: (html) => tts.createHTML(html)');
   });
 
   it('extracts and checks readable and minified inline response apply embeds', () => {

@@ -2266,14 +2266,14 @@ describe('sink-policy gate', () => {
 
   it('pins response-fragment raw HTML writes to the Trusted Types and sanitizer path', () => {
     const validResponseApply = `
-      function trustedHtml(h: string): string {
-        const t = (globalThis as any).trustedTypes;
-        return t ? t.createPolicy('kovo', { createHTML: (s: string) => s }).createHTML(h) : h;
+      import { kovoCreateHTML } from './trusted-types.js';
+      export function applyHtmlResponseFragments(fragments, findFragmentTarget, security) {
+        return p(fragments, findFragmentTarget, security, kovoCreateHTML);
       }
-      export function p(fs, f, security) {
+      export function p(fs, f, security, createHTML: (html: string) => string) {
         for (const x of fs) {
           const e = f(x.target);
-          const content = security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(x.html)));
+          const content = security.createFragmentContent(createHTML(renderedFragmentHtmlContent(x.html)));
           const nodes = security.snapshotChildNodes(content);
           for (let index = 0; index < nodes.length; index += 1) {
             const node = nodes[index];
@@ -2282,8 +2282,8 @@ describe('sink-policy gate', () => {
           security.appendElementChildren(e, nodes);
         }
       }
-      function d(e, h, security) {
-        const content = security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(h)));
+      function d(e, h, security, createHTML: (html: string) => string) {
+        const content = security.createFragmentContent(createHTML(renderedFragmentHtmlContent(h)));
         const n = firstMorphElement(content);
         if (n) m(e, n, security);
       }
@@ -2313,7 +2313,7 @@ describe('sink-policy gate', () => {
       'response-fragment-apply.ts',
       validResponseApply
         .replace(
-          'security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(x.html)))',
+          'security.createFragmentContent(createHTML(renderedFragmentHtmlContent(x.html)))',
           'security.createFragmentContent(renderedFragmentHtmlContent(x.html))',
         )
         .replace('g(node as Element, security);', '')
@@ -2324,7 +2324,7 @@ describe('sink-policy gate', () => {
 
     expect(findings).toEqual([
       'response-fragment-apply.ts: response-fragment HTML sink must not use insertAdjacentHTML; parse through the template sanitizer path',
-      'response-fragment-apply.ts: response-fragment HTML sink must route exactly two membrane parse inputs through trustedHtml(); found 1',
+      'response-fragment-apply.ts: response-fragment HTML sink must route exactly two membrane parse inputs through the injected createHTML control; found 1',
       'response-fragment-apply.ts: append-mode response fragments must sanitize the exact membrane snapshot before DOM insertion',
       'response-fragment-apply.ts: replace-mode response fragments must sanitize the exact parsed morph root before DOM insertion',
       'response-fragment-apply.ts: response-fragment sanitizer denylist must keep event, srcdoc, and raw HTML attributes blocked',

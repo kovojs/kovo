@@ -9,14 +9,24 @@ describe('inline loader source', () => {
     const originals = {
       addEventListener: globalRecord.addEventListener,
       document: globalRecord.document,
+      htmlFormElement: globalRecord.HTMLFormElement,
       importModule: globalRecord.__kovoInlineImport,
       location: globalRecord.location,
+      mouseEvent: globalRecord.MouseEvent,
       removeEventListener: globalRecord.removeEventListener,
       requestAnimationFrame: globalRecord.requestAnimationFrame,
+      submitEvent: globalRecord.SubmitEvent,
     };
     const listeners = new Map<string, unknown>();
     const rafCallbacks: Function[] = [];
     const importModule = vi.fn(async () => ({}));
+    class FakeHTMLFormElement {
+      submit(): void {
+        if (!(this instanceof FakeHTMLFormElement)) throw new TypeError('invalid form receiver');
+      }
+    }
+    class FakeMouseEvent extends Event {}
+    class FakeSubmitEvent extends Event {}
 
     try {
       globalRecord.__kovoInlineImport = importModule;
@@ -28,7 +38,13 @@ describe('inline loader source', () => {
         rafCallbacks.push(callback);
         return rafCallbacks.length;
       };
+      globalRecord.HTMLFormElement = FakeHTMLFormElement;
+      globalRecord.MouseEvent = FakeMouseEvent;
+      globalRecord.SubmitEvent = FakeSubmitEvent;
       globalRecord.document = {
+        createElement(name: string) {
+          return name === 'form' ? new FakeHTMLFormElement() : new EventTarget();
+        },
         querySelectorAll() {
           return [];
         },
@@ -44,9 +60,12 @@ describe('inline loader source', () => {
       Object.assign(globalRecord, {
         addEventListener: originals.addEventListener,
         document: originals.document,
+        HTMLFormElement: originals.htmlFormElement,
         location: originals.location,
+        MouseEvent: originals.mouseEvent,
         removeEventListener: originals.removeEventListener,
         requestAnimationFrame: originals.requestAnimationFrame,
+        SubmitEvent: originals.submitEvent,
       });
       if (originals.importModule === undefined) {
         delete globalRecord.__kovoInlineImport;

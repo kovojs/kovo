@@ -89,6 +89,7 @@ describe('inline loader response apply runtime', () => {
           queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 12, start: 1 }],
         },
         {
+          createHTML: (html) => html,
           findFragmentTarget(target) {
             return (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null;
           },

@@ -36,13 +36,13 @@ describe('inline loader Trusted Types routing gate', () => {
     );
   });
 
-  it('fails when inline raw-HTML sinks stop routing through the Trusted Types shim', () => {
+  it('fails when inline raw-HTML sinks stop routing through the private Trusted Types control', () => {
     const unroutedApply = inlineResponseApplyReadableSource
       .replace(
-        'trustedHtml(renderedFragmentHtmlContent(x.html))',
+        'createHTML(renderedFragmentHtmlContent(x.html))',
         'renderedFragmentHtmlContent(x.html)',
       )
-      .replace('trustedHtml(renderedFragmentHtmlContent(h))', 'renderedFragmentHtmlContent(h)');
+      .replace('createHTML(renderedFragmentHtmlContent(h))', 'renderedFragmentHtmlContent(h)');
     const readableInstaller = buildInlineKovoLoaderInstallerReadableSource(
       inlineWireParserReadableSource,
       unroutedApply,

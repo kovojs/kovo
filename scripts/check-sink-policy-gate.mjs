@@ -611,23 +611,36 @@ export function responseFragmentApplyInvariantFindings(filePath, text) {
 
   const trustedHtmlSinkRoutes =
     source.match(
-      /\bsecurity\s*\.\s*createFragmentContent\s*\(\s*trustedHtml\s*\(\s*renderedFragmentHtmlContent\s*\(/g,
+      /\bsecurity\s*\.\s*createFragmentContent\s*\(\s*createHTML\s*\(\s*renderedFragmentHtmlContent\s*\(/g,
     ) ?? [];
   if (trustedHtmlSinkRoutes.length !== 2) {
     findings.push(
-      `${filePath}: response-fragment HTML sink must route exactly two membrane parse inputs through trustedHtml(); found ${trustedHtmlSinkRoutes.length}`,
+      `${filePath}: response-fragment HTML sink must route exactly two membrane parse inputs through the injected createHTML control; found ${trustedHtmlSinkRoutes.length}`,
     );
   }
 
-  if (!/\bfunction\s+trustedHtml\s*\(\s*h\s*:\s*string\s*\)/.test(source)) {
+  if (!/\bfunction\s+p\s*\([\s\S]{0,400}\bcreateHTML\s*:\s*\(\s*html\s*:\s*string\s*\)\s*=>\s*string/.test(source)) {
     findings.push(
-      `${filePath}: response-fragment HTML sink must keep the self-contained trustedHtml() shim for inline-loader extraction`,
+      `${filePath}: response-fragment HTML sink must receive its Trusted Types mint as an explicit apply-closure control`,
     );
   }
 
-  if (!/\bcreatePolicy\s*\(\s*['"]kovo['"]\s*,\s*\{\s*createHTML\s*:/.test(source)) {
+  if (
+    !/\bimport\s*\{\s*kovoCreateHTML\s*\}\s*from\s*['"]\.\/trusted-types\.js['"]/.test(
+      source,
+    ) ||
+    !/\bp\s*\(\s*fragments\s*,\s*findFragmentTarget\s*,\s*security\s*,\s*kovoCreateHTML\s*\)/.test(
+      source,
+    )
+  ) {
     findings.push(
-      `${filePath}: response-fragment HTML sink must mint TrustedHTML through the kovo policy`,
+      `${filePath}: modular response-fragment HTML sinks must inject the boot-owned kovoCreateHTML control`,
+    );
+  }
+
+  if (/\b__kovo_tt\b/.test(source)) {
+    findings.push(
+      `${filePath}: response-fragment HTML sink must not trust a public realm policy cache`,
     );
   }
 

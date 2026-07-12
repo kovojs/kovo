@@ -75,6 +75,83 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('ignores a caller-owned Trusted Types policy cache before generated fragment apply', async () => {
+  const harness = await createFrame(
+    '<section kovo-fragment-target="victim"><span>OLD</span></section>',
+    '<meta name="kovo-build" content="build-a">',
+  );
+  const globalRecord = harness.window as unknown as Record<string, unknown>;
+  globalRecord.__kovo_tt = {
+    createHTML() {
+      return '<img data-kovo-policy-cache-attack src="x">';
+    },
+  };
+
+  await installGeneratedInlineLoader(harness.window);
+  const apply = globalRecord.__kovo_a;
+  if (typeof apply !== 'function') throw new Error('generated fragment apply is unavailable');
+  apply(
+    [
+      '<kovo-fragment target="victim">',
+      '<section kovo-fragment-target="victim"><strong data-kovo-policy-safe>SAFE</strong></section>',
+      '</kovo-fragment>',
+    ].join(''),
+  );
+
+  expect(harness.window.document.querySelector('[data-kovo-policy-cache-attack]')).toBeNull();
+  expect(
+    harness.window.document.querySelector('[data-kovo-policy-safe]')?.textContent,
+  ).toBe('SAFE');
+});
+
+it('fails closed when the Trusted Types factory was replaced before generated install', async () => {
+  const harness = await createFrame(
+    '<section kovo-fragment-target="victim"><span>OLD</span></section>',
+    '<meta name="kovo-build" content="build-a">',
+  );
+  const factory = harness.window.trustedTypes;
+  const factoryPrototype = Object.getPrototypeOf(factory) as object;
+  const createPolicyDescriptor = Object.getOwnPropertyDescriptor(factoryPrototype, 'createPolicy');
+  if (
+    !createPolicyDescriptor ||
+    !('value' in createPolicyDescriptor) ||
+    typeof createPolicyDescriptor.value !== 'function'
+  ) {
+    throw new Error('Trusted Types factory control unavailable');
+  }
+  Object.defineProperty(factoryPrototype, 'createPolicy', {
+    ...createPolicyDescriptor,
+    value() {
+      return {
+        createHTML() {
+          return '<img data-kovo-import-order-policy-attack src="x">';
+        },
+      };
+    },
+  });
+  try {
+    await installGeneratedInlineLoader(harness.window);
+  } finally {
+    Object.defineProperty(factoryPrototype, 'createPolicy', createPolicyDescriptor);
+  }
+
+  const globalRecord = harness.window as unknown as Record<string, unknown>;
+  const apply = globalRecord.__kovo_a;
+  if (typeof apply !== 'function') throw new Error('generated fragment apply is unavailable');
+  apply(
+    [
+      '<kovo-fragment target="victim">',
+      '<section kovo-fragment-target="victim"><strong data-kovo-import-order-safe>SAFE</strong></section>',
+      '</kovo-fragment>',
+    ].join(''),
+  );
+
+  expect(harness.window.document.querySelector('[data-kovo-import-order-policy-attack]')).toBeNull();
+  expect(harness.window.document.querySelector('[data-kovo-import-order-safe]')?.textContent).toBe(
+    'SAFE',
+  );
+});
+
 it('retires the old channel and hard-navigates before applying a same-build new-session document', async () => {
   const harness = await createFrame(
     [

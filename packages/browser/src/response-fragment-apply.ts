@@ -2,6 +2,7 @@ import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 
 import type { FragmentChunk } from './wire-response-scanner.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import { kovoCreateHTML } from './trusted-types.js';
 
 type BrowserNavigationSecurityControls = ReturnType<typeof createBrowserNavigationSecurityControls>;
 
@@ -33,63 +34,6 @@ export type HtmlResponseFragmentSecurityControls = Pick<
   | 'snapshotElementChildren'
   | 'trim'
 >;
-
-// SF-WIRE (secure-framework Tier 3, Trusted Types — WIRED): the `p` and `d` helpers
-// below (their `insertAdjacentHTML('beforeend', …)` and `t.innerHTML = h` raw-HTML write
-// sinks) are EXTRACTED VERBATIM into the always-on inline loader by `inline-loader-build.ts`
-// (the `responseApply` spec; a byte-parity test pins the generated `inline-loader.ts`), and
-// that extractor forbids referencing any top-level binding. So unlike the module-side sinks
-// in `morph.ts`/`query-bindings.ts` — which route through `kovoCreateHTML` (trusted-types.ts)
-// — these two sinks cannot call `kovoCreateHTML`. Instead they call the self-contained
-// `trustedHtml` shim BELOW, which is itself a top-level function declaration, so the inline
-// extractor pulls it into the closure as a dependency (no top-level import). The shim mints a
-// `TrustedHTML` via the framework `kovo` Trusted Types policy when Chromium exposes
-// `globalThis.trustedTypes`, caching the policy on a shared global (`__kovo_tt`) so the inline
-// loader and the module-side `kovoCreateHTML` reuse the SAME policy — `trusted-types kovo`
-// admits no duplicates, so a second `createPolicy('kovo')` would throw. On every other engine
-// (and Chromium without the CSP directive) `trustedTypes` is absent and the shim returns the
-// raw string verbatim (transparent passthrough — behavior-preserving). Routing these last
-// always-on sinks is what lets the strict CSP's `require-trusted-types-for 'script'` directive
-// (server `csp.ts`) ship DEFAULT-ON without bricking Kovo's own hydration on Chromium. CSP is
-// the cross-browser floor; Trusted Types is Chromium-only runtime defense-in-depth (SPEC §6.6)
-// — it kills DOM-XSS sinks OUTSIDE the framework but is silently ignored by every non-Chromium
-// engine, so it is a hardening floor, NOT a by-construction proof.
-
-/**
- * SF (secure-framework Tier 3): the self-contained Trusted Types `createHTML` shim embedded
- * into the always-on inline loader's extracted closure. References no top-level binding (the
- * inline extractor forbids that), so the policy detection/creation/caching is inlined here.
- * Returns a `TrustedHTML` (typed as `string` so the sinks compile unchanged) where Trusted
- * Types is enforced, and the raw string everywhere TT is absent. The shared `__kovo_tt` global
- * keeps the single `kovo` policy in lockstep with the module-side `kovoCreateHTML`.
- *
- * @internal
- */
-function trustedHtml(h: string): string {
-  const w = globalThis as {
-    trustedTypes?: {
-      createPolicy(
-        name: string,
-        rules: { createHTML(input: string): string },
-      ): {
-        createHTML(input: string): string;
-      };
-    };
-    __kovo_tt?: { createHTML(input: string): string } | null;
-  };
-  const t = w.trustedTypes;
-  if (!t) return h;
-  let p = w.__kovo_tt;
-  if (p === undefined) {
-    try {
-      p = t.createPolicy('kovo', { createHTML: (s: string) => s });
-    } catch {
-      p = null;
-    }
-    w.__kovo_tt = p;
-  }
-  return p ? (p.createHTML(h) as unknown as string) : h;
-}
 
 function renderedFragmentHtmlContent(value: { readonly html: string }): string {
   return value.html;
@@ -157,13 +101,14 @@ export function applyHtmlResponseFragments(
   findFragmentTarget: (target: string) => HtmlResponseFragmentApplyTarget | null | undefined,
   security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
 ): string[] {
-  return p(fragments, findFragmentTarget, security);
+  return p(fragments, findFragmentTarget, security, kovoCreateHTML);
 }
 
 export function p(
   fs: readonly FragmentChunk[],
   f: (target: string) => HtmlResponseFragmentApplyTarget | null | undefined,
   security: HtmlResponseFragmentSecurityControls,
+  createHTML: (html: string) => string,
 ): string[] {
   // SPEC.md §4.4/§9.1: generated inline apply and modular decoded fragment
   // tests share the DOM HTML adapter instead of carrying an inline-only clone.
@@ -176,12 +121,10 @@ export function p(
     if (!e) continue;
 
     if (x.mode === 'append' || x.mode === 'prepend') {
-      // Concurrent hardening (template + g() attribute sanitization) PLUS Trusted Types routing:
-      // the raw-HTML write goes through the inlined `trustedHtml` shim so it mints a TrustedHTML
-      // under the strict CSP's `require-trusted-types-for 'script'`, and g() still neutralizes
-      // dangerous attributes/URLs on the inserted children (SPEC §4.4/§9.1/§6.6).
+      // C221 / SPEC §4.4/§6.6/§9.1: modular and generated callers inject a boot-owned exact-byte
+      // Trusted Types mint. The canonical apply closure never reads a public realm policy cache.
       const content = security.createFragmentContent(
-        trustedHtml(renderedFragmentHtmlContent(x.html)),
+        createHTML(renderedFragmentHtmlContent(x.html)),
       );
       if (x.mode === 'prepend') {
         // SPEC §9.3/§13.2: insert keyed rows at the START, deduped by kovo-key (a
@@ -225,7 +168,7 @@ export function p(
         security.appendElementChildren(e, nodes);
       }
     } else {
-      d(e, x.html, security);
+      d(e, x.html, security, createHTML);
     }
     a[a.length] = x.target;
   }
@@ -237,8 +180,9 @@ function d(
   e: HtmlResponseFragmentApplyTarget,
   h: RenderedFragmentHtml,
   security: HtmlResponseFragmentSecurityControls,
+  createHTML: (html: string) => string,
 ): void {
-  const content = security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(h)));
+  const content = security.createFragmentContent(createHTML(renderedFragmentHtmlContent(h)));
   const n = firstMorphElement(content, security);
   const active = security.readDocumentActiveElement();
   const s = active && security.elementContains(e, active) ? active : null;

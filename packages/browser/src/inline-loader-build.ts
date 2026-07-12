@@ -35,6 +35,7 @@ const mutationIdemIntrinsicsSourcePath = fileURLToPath(
 const documentLifecycleSourcePath = fileURLToPath(
   new URL('./document-lifecycle.ts', import.meta.url),
 );
+const trustedTypesSourcePath = fileURLToPath(new URL('./trusted-types.ts', import.meta.url));
 
 const inlineHelperSpecs = {
   fragmentTargetEscape: {
@@ -86,6 +87,15 @@ const inlineHelperSpecs = {
     sourcePath: documentLifecycleSourcePath,
     sourcePaths: [documentLifecycleSourcePath],
   },
+  trustedTypes: {
+    label: 'Trusted Types security controls',
+    readableParityLabel: 'canonical Trusted Types security-control closure',
+    minifiedParityLabel: 'canonical minified Trusted Types security-control closure',
+    rootFunctionNames: ['createKovoTrustedTypesSecurityControls'],
+    sourceFileName: 'trusted-types.ts',
+    sourcePath: trustedTypesSourcePath,
+    sourcePaths: [trustedTypesSourcePath],
+  },
 } as const;
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
@@ -102,6 +112,7 @@ export const inlineFragmentTargetEscapeReadableSource =
   readInlineFragmentTargetEscapeReadableSource();
 export const inlineEnhancedNavigationReadableSource = readInlineEnhancedNavigationReadableSource();
 export const inlineDocumentLifecycleReadableSource = readInlineDocumentLifecycleReadableSource();
+export const inlineTrustedTypesReadableSource = readInlineTrustedTypesReadableSource();
 export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
 const inlineBooleanPresenceAttributes = [
   'checked',
@@ -127,6 +138,7 @@ export function buildInlineKovoLoaderInstallerReadableSource(
   fragmentTargetEscapeReadableSource = inlineFragmentTargetEscapeReadableSource,
   enhancedNavigationReadableSource = inlineEnhancedNavigationReadableSource,
   documentLifecycleReadableSource = inlineDocumentLifecycleReadableSource,
+  trustedTypesReadableSource = inlineTrustedTypesReadableSource,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -137,6 +149,8 @@ function installInlineKovoLoader(im) {
   // capture phase at ancestors, so they are synthesized below from pointerover/out.
   const events = ${JSON.stringify([...delegatedEvents])};
   const doc = document;
+  ${trustedTypesReadableSource}
+  const tts = createKovoTrustedTypesSecurityControls();
   const bns = createBrowserNavigationSecurityControls();
   const mis = createMutationIdemSecurityControls();
   const ci = () => mis.createMutationIdem();
@@ -672,7 +686,10 @@ function installInlineKovoLoader(im) {
         y.a?.abort();
       }
     }
-    applyInlineMutationResponseChunks({ fragments }, { findFragmentTarget: ft, security: bns });
+    applyInlineMutationResponseChunks(
+      { fragments },
+      { createHTML: (html) => tts.createHTML(html), findFragmentTarget: ft, security: bns },
+    );
   };
   const ab = (body, build = kb()) => {
     const chunks = readInlineMutationResponseBodyChunks(body);
@@ -1232,22 +1249,24 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       return false;
     }
   };
-  const dispatchEvent = (target, event) => {
+  const callEventTargetMethod = (target, nativeMethod, property, args) => {
     try {
-      rap(nativeDispatchEvent, target, [event]);
+      rap(nativeMethod, target, args);
       return true;
     } catch {}
-    const ownDispatch = gopd(target, 'dispatchEvent');
-    if (!ownDispatch || !('value' in ownDispatch) || typeof ownDispatch.value !== 'function') {
+    const ownMethod = gopd(target, property);
+    if (!ownMethod || !('value' in ownMethod) || typeof ownMethod.value !== 'function') {
       return false;
     }
     try {
-      rap(ownDispatch.value, target, [event]);
+      rap(ownMethod.value, target, args);
       return true;
     } catch {
       return false;
     }
   };
+  const dispatchEvent = (target, event) =>
+    callEventTargetMethod(target, nativeDispatchEvent, 'dispatchEvent', [event]);
   const events = ['click', 'submit'];
   const queued = [];
   const streamQueue = [];
@@ -1360,7 +1379,11 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   };
   const cleanup = () => {
     for (const event of events) {
-      rap(nativeRemoveEventListener, globalThis, [event, capture, { capture: true }]);
+      callEventTargetMethod(globalThis, nativeRemoveEventListener, 'removeEventListener', [
+        event,
+        capture,
+        { capture: true },
+      ]);
     }
   };
   const load = () =>
@@ -1387,7 +1410,15 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     void load();
   };
   for (const event of events) {
-    rap(nativeAddEventListener, globalThis, [event, capture, { capture: true }]);
+    if (
+      !callEventTargetMethod(globalThis, nativeAddEventListener, 'addEventListener', [
+        event,
+        capture,
+        { capture: true },
+      ])
+    ) {
+      throw new TypeError('Kovo bootstrap replay listener enrollment failed.');
+    }
   }
   ps();
   const raf = globalThis.requestAnimationFrame;
@@ -1607,6 +1638,10 @@ function readInlineEnhancedNavigationReadableSource(): string {
 
 function readInlineDocumentLifecycleReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.documentLifecycle);
+}
+
+function readInlineTrustedTypesReadableSource(): string {
+  return readInlineHelperReadableSource(inlineHelperSpecs.trustedTypes);
 }
 
 function readModularDefaultDelegatedEvents(
@@ -1830,11 +1865,7 @@ function assertInlineKovoLoaderTrustedTypesRoutingForSource({
   installerSource,
   mode,
 }: InlineKovoLoaderTrustedTypesRoutingAssertion): void {
-  const sinkRoutes =
-    mode === 'readable'
-      ? countSubstring(applySource, 'trustedHtml(renderedFragmentHtmlContent(')
-      : countSubstring(applySource, 'th(renderedFragmentHtmlContent(') +
-        countSubstring(applySource, 'trustedHtml(renderedFragmentHtmlContent(');
+  const sinkRoutes = countSubstring(applySource, 'createHTML(renderedFragmentHtmlContent(');
   if (sinkRoutes !== 2) {
     throw new Error(
       `Inline Kovo loader Trusted Types routing must wrap both ${mode} response-apply raw-HTML inputs; found ${sinkRoutes}.`,
@@ -1851,30 +1882,27 @@ function assertInlineKovoLoaderTrustedTypesRoutingForSource({
     );
   }
 
-  const requiredTokens =
-    mode === 'readable'
-      ? [
-          ['function trustedHtml(h)'],
-          ['const t = w.trustedTypes;'],
-          ["p = t.createPolicy('kovo', { createHTML: (s) => s });"],
-          ['return p ? p.createHTML(h) : h;'],
-        ]
-      : [
-          ['function th(h)', 'function trustedHtml(h)'],
-          ['trustedTypes'],
-          ["createPolicy('kovo'"],
-          ['createHTML'],
-          ['p.createHTML(h)'],
-        ];
+  const requiredTokens = [
+    ['function createKovoTrustedTypesSecurityControls('],
+    ["'kovo'"],
+    ['exactTrustedHTML'],
+    ['policyCreateHTML'],
+    ['tts.createHTML(html)'],
+  ];
   for (const tokens of requiredTokens) {
     if (
-      !tokens.some((token) => applySource.includes(token)) ||
-      (mode === 'minified' && !tokens.some((token) => installerSource.includes(token)))
+      !tokens.some((token) => installerSource.includes(token))
     ) {
       throw new Error(
         `Inline Kovo loader ${mode} Trusted Types routing is missing ${tokens.join(' or ')}.`,
       );
     }
+  }
+
+  if (installerSource.includes('__kovo_tt') || applySource.includes('__kovo_tt')) {
+    throw new Error(
+      `Inline Kovo loader ${mode} Trusted Types routing must not trust a public realm policy cache.`,
+    );
   }
 
   if (mode === 'readable' && !installerSource.includes(applySource)) {
@@ -1945,10 +1973,6 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['createDocumentLifecycleRecovery', 'cdr'],
     ['applyInlineMutationResponseChunks', 'ai'],
     ['isFragmentResourceHint', 'irh'],
-    // SF (secure-framework Tier 3): the inline Trusted Types createHTML shim
-    // (response-fragment-apply.ts) and its policy handle, compacted to reclaim gzip
-    // headroom under the SPEC.md §4.4 budget.
-    ['trustedHtml', 'th'],
     ['firstMorphElement', 'fme'],
     ['findFragmentTarget', 'ff'],
     ['readElementChunks', 're'],
