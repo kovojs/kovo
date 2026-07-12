@@ -54,9 +54,36 @@ const nativeAddEventListener = witnessGetOwnPropertyDescriptor(
   'addEventListener',
 )?.value as unknown;
 const intrinsicObjectPrototype = witnessGetPrototypeOf({});
-const intrinsicArrayPrototype = witnessGetPrototypeOf([]);
+const intrinsicArrayPrototypeCandidate = witnessGetPrototypeOf([]);
+if (intrinsicArrayPrototypeCandidate === null) {
+  throw new TypeError('The intrinsic Array prototype is unavailable.');
+}
+const intrinsicArrayPrototype = intrinsicArrayPrototypeCandidate;
+const pinnedArrayPrototypeMethods = createWitnessMap<PropertyKey, Function>();
 const MAX_PINNED_LIFECYCLE_DEPTH = 64;
 const MAX_PINNED_LIFECYCLE_NODES = 10_000;
+
+const intrinsicArrayPrototypeKeys = witnessOwnKeys(intrinsicArrayPrototype);
+for (let index = 0; index < intrinsicArrayPrototypeKeys.length; index += 1) {
+  const propertyDescriptor = witnessGetOwnPropertyDescriptor(intrinsicArrayPrototypeKeys, index);
+  if (propertyDescriptor === undefined || !('value' in propertyDescriptor)) {
+    throw new TypeError('Intrinsic Array prototype keys must remain dense.');
+  }
+  const property = propertyDescriptor.value;
+  if (
+    property === 'constructor' ||
+    property === 'entries' ||
+    property === 'keys' ||
+    property === 'values' ||
+    property === Symbol.iterator
+  ) {
+    continue;
+  }
+  const descriptor = witnessGetOwnPropertyDescriptor(intrinsicArrayPrototype, property);
+  if (descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'function') {
+    witnessMapSet(pinnedArrayPrototypeMethods, property, descriptor.value);
+  }
+}
 
 export interface PinnedRequestProperty {
   readonly key: PropertyKey;
@@ -136,6 +163,7 @@ function snapshotPinnedLifecycleNode(
     if (ownKeys.length !== lengthDescriptor.value + 1) {
       throw new TypeError('Lifecycle session arrays cannot carry extra properties.');
     }
+    installPinnedLifecycleArraySurface(clone);
     return witnessFreeze(clone);
   }
 
@@ -166,6 +194,100 @@ function snapshotPinnedLifecycleNode(
     });
   }
   return witnessFreeze(clone);
+}
+
+function installPinnedLifecycleArraySurface(array: unknown[]): void {
+  witnessMapForEach(pinnedArrayPrototypeMethods, (method, property) => {
+    witnessDefineProperty(array, property, {
+      configurable: true,
+      enumerable: false,
+      value: method,
+      writable: false,
+    });
+  });
+  const values = () => pinnedLifecycleArrayIterator(array, 'values');
+  witnessDefineProperty(array, Symbol.iterator, {
+    configurable: true,
+    enumerable: false,
+    value: values,
+    writable: false,
+  });
+  witnessDefineProperty(array, 'values', {
+    configurable: true,
+    enumerable: false,
+    value: values,
+    writable: false,
+  });
+  witnessDefineProperty(array, 'keys', {
+    configurable: true,
+    enumerable: false,
+    value: () => pinnedLifecycleArrayIterator(array, 'keys'),
+    writable: false,
+  });
+  witnessDefineProperty(array, 'entries', {
+    configurable: true,
+    enumerable: false,
+    value: () => pinnedLifecycleArrayIterator(array, 'entries'),
+    writable: false,
+  });
+}
+
+function pinnedLifecycleArrayIterator(
+  array: readonly unknown[],
+  mode: 'entries' | 'keys' | 'values',
+): Iterator<unknown> & Iterable<unknown> {
+  let index = 0;
+  const length = ownPinnedArrayLength(array);
+  const iterator = witnessCreateNullRecord<Function>();
+  witnessDefineProperty(iterator, 'next', {
+    configurable: false,
+    enumerable: false,
+    value() {
+      if (index >= length) return pinnedLifecycleIterationResult(true, undefined);
+      const current = index;
+      index += 1;
+      const descriptor = witnessGetOwnPropertyDescriptor(array, current);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Pinned lifecycle array changed after reconstruction.');
+      }
+      const value =
+        mode === 'keys'
+          ? current
+          : mode === 'entries'
+            ? pinnedLifecycleEntry(current, descriptor.value)
+            : descriptor.value;
+      return pinnedLifecycleIterationResult(false, value);
+    },
+    writable: false,
+  });
+  witnessDefineProperty(iterator, Symbol.iterator, {
+    configurable: false,
+    enumerable: false,
+    value: () => iterator,
+    writable: false,
+  });
+  return witnessFreeze(iterator) as unknown as Iterator<unknown> & Iterable<unknown>;
+}
+
+function ownPinnedArrayLength(array: readonly unknown[]): number {
+  const descriptor = witnessGetOwnPropertyDescriptor(array, 'length');
+  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'number') {
+    throw new TypeError('Pinned lifecycle array lost its own length.');
+  }
+  return descriptor.value;
+}
+
+function pinnedLifecycleEntry(index: number, value: unknown): readonly [number, unknown] {
+  const entry: [number, unknown] = [index, value];
+  installPinnedLifecycleArraySurface(entry);
+  return witnessFreeze(entry);
+}
+
+function pinnedLifecycleIterationResult(done: boolean, value: unknown): IteratorResult<unknown> {
+  const result = witnessCreateNullRecord<unknown>();
+  witnessDefineProperty(result, 'done', { enumerable: true, value: done });
+  witnessDefineProperty(result, 'value', { enumerable: true, value });
+  return witnessFreeze(result) as unknown as IteratorResult<unknown>;
 }
 
 interface PinnedCarrierProperty {

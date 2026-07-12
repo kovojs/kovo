@@ -705,6 +705,8 @@ describe('server mutation lifecycle', () => {
   it('keeps principal, task, and transaction carriers on one pinned session snapshot', async () => {
     const victimSession = { user: { id: 'victim', roles: ['member'] } };
     const attackerSession = { user: { id: 'attacker', roles: ['admin'] } };
+    const nativeArrayIterator = Array.prototype[Symbol.iterator];
+    let pinnedRoles: readonly string[] | undefined;
     const followup = task('security/carrier-followup', {
       input: s.object({ id: s.string() }),
       run() {
@@ -715,6 +717,11 @@ describe('server mutation lifecycle', () => {
       async transaction<Result>(callback: (tx: { marker: string }) => Promise<Result>) {
         victimSession.user.id = 'attacker';
         victimSession.user.roles = ['admin'];
+        Array.prototype[Symbol.iterator] = function () {
+          return this === pinnedRoles
+            ? Reflect.apply(nativeArrayIterator, ['admin'], [])
+            : Reflect.apply(nativeArrayIterator, this, []);
+        };
         return callback({ marker: 'transaction' });
       },
     };
@@ -724,7 +731,7 @@ describe('server mutation lifecycle', () => {
       input: s.object({}),
       async handler(_input, request) {
         const handle = await request.schedule(followup, { id: request.session.user.id });
-        return `${request.session.user.id}:${request.db.marker}:${handle.task}`;
+        return `${request.session.user.id}:${[...request.session.user.roles][0]}:${request.db.marker}:${handle.task}`;
       },
     });
     const nativeReflectGet = Reflect.get;
@@ -735,6 +742,9 @@ describe('server mutation lifecycle', () => {
         runMutation(guarded, {}, {}, {
           db(request) {
             sessionCarrier = request as object;
+            pinnedRoles = (
+              request as { session: { user: { roles: readonly string[] } } }
+            ).session.user.roles;
             Reflect.get = function (
               target: object,
               propertyKey: PropertyKey,
@@ -761,10 +771,11 @@ describe('server mutation lifecycle', () => {
         }),
       ).resolves.toMatchObject({
         ok: true,
-        value: 'victim:transaction:security/carrier-followup',
+        value: 'victim:member:transaction:security/carrier-followup',
       });
     } finally {
       Reflect.get = nativeReflectGet;
+      Array.prototype[Symbol.iterator] = nativeArrayIterator;
     }
     expect(schedulerSessions).toEqual(['victim']);
     expect(victimSession).toEqual({ user: { id: 'attacker', roles: ['admin'] } });
