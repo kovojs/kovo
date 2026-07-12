@@ -20,6 +20,7 @@ import {
   frameworkManagedSqlDispatchPropertyValue,
   frameworkManagedDbRawTarget,
   isFrameworkManagedSqlDispatchProxy,
+  isFrameworkManagedTestFixtureSqlDispatchProxy,
   managedSqlExecutionPolicy,
   wrapManagedDbForSqlSafety,
   type ManagedSqlWritePolicy,
@@ -3212,6 +3213,11 @@ function readonlyCapabilityDb<Db extends object>(
   options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions },
   preserveInnerCapabilities = false,
 ): Reader<Db> {
+  // SPEC §11.2: integration fixtures use a repo-owned engine-readonly PGlite target so legacy
+  // fixture SQL can still exercise the real driver. The private managed-proxy witness plus the
+  // adapter hook are both required: ordinary app readers continue to reject callable query().
+  const allowTestFixtureQuery =
+    preserveInnerCapabilities && isFrameworkManagedTestFixtureSqlDispatchProxy(db);
   const proxy = witnessProxy(db, {
     get(target, prop, receiver) {
       const reject = readonlyCapabilityError;
@@ -3224,7 +3230,12 @@ function readonlyCapabilityDb<Db extends object>(
       if (prop === 'rawRead')
         return readonlyRawRead(target, receiver, options, preserveInnerCapabilities);
       const value = witnessReflectGet(target, prop, receiver);
-      if (prop === 'query') return typeof value === 'function' ? reject(prop) : value;
+      if (prop === 'query') {
+        if (typeof value !== 'function') return value;
+        return allowTestFixtureQuery
+          ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+          : reject(prop);
+      }
       if (!stringListHas(CALLABLE_READ_CAPABILITY_PROPERTIES, prop)) return reject(prop);
       return typeof value === 'function'
         ? (...args: unknown[]) => witnessReflectApply(value, target, args)

@@ -2163,6 +2163,46 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['readonly-target-created', 'writer.insert:contacts:readonly=false']);
   });
 
+  it('lets only witnessed integration fixtures call SQL-safe query on an engine reader', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoReadonlyDbHandle]() {
+        return createFrameworkManagedSqlDispatchProxy(
+          {
+            query(statement: unknown) {
+              log.push('readonly.query');
+              return statement;
+            },
+          },
+          {
+            get(target, property, receiver) {
+              return Reflect.get(target, property, receiver);
+            },
+          },
+          'test-fixture',
+        );
+      },
+      query(statement: unknown) {
+        log.push('writer.query');
+        return statement;
+      },
+    };
+    const reader = managedDb(raw, 'read') as unknown as {
+      query(statement: unknown): unknown;
+    };
+
+    expect(
+      reader.query(
+        stampTrustedSql(
+          { text: 'select id from products where id = $1', values: ['p1'] },
+          'integration fixture read',
+        ),
+      ),
+    ).toMatchObject({ text: 'select id from products where id = $1', values: ['p1'] });
+    expect(() => reader.query('select id from products')).toThrow(/KV422/);
+    expect(log).toEqual(['readonly.query']);
+  });
+
   it('C149 pins async engine rejection mapping against late Promise.catch replacement', async () => {
     const nativeCatch = Promise.prototype.catch;
     const nativeReject = Promise.reject;

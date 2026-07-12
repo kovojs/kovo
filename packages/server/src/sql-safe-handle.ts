@@ -203,6 +203,12 @@ export function frameworkManagedSqlDispatchPropertyValue(
   return witnessReflectGet(value, property, value);
 }
 
+/** @internal Whether a managed handle resolves to the repo-owned integration-fixture scope. */
+export function isFrameworkManagedTestFixtureSqlDispatchProxy(value: object): boolean {
+  const target = frameworkManagedDbRawTarget(value) ?? value;
+  return witnessWeakMapGet(frameworkManagedSqlDispatchScopes, target) === 'test-fixture';
+}
+
 function frameworkManagedSqlDispatchAllowsHelper(target: object, property: PropertyKey): boolean {
   const scope = witnessWeakMapGet(frameworkManagedSqlDispatchScopes, target);
   return (
