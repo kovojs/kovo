@@ -24,6 +24,7 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+import { requestForAuthorityNeutralMetadata } from './request-carrier.js';
 
 /**
  * Package-private intrinsic membrane for attacker-controlled Request and FormData carriers.
@@ -881,7 +882,13 @@ export function requestMethod(request: Request): string {
   if (!isRequestUnchecked(request)) {
     throw new TypeError('Kovo request method requires a genuine Request carrier.');
   }
-  return witnessReflectApply(nativeRequestMethod, request, []);
+  try {
+    return witnessReflectApply(nativeRequestMethod, request, []);
+  } catch (error) {
+    const source = requestForAuthorityNeutralMetadata(request);
+    if (source === request) throw error;
+    return witnessReflectApply(nativeRequestMethod, source, []);
+  }
 }
 
 export function requestUrl(request: Request): string {
@@ -889,7 +896,13 @@ export function requestUrl(request: Request): string {
   if (!isRequestUnchecked(request)) {
     throw new TypeError('Kovo request URL requires a genuine Request carrier.');
   }
-  return witnessReflectApply(nativeRequestUrl, request, []);
+  try {
+    return witnessReflectApply(nativeRequestUrl, request, []);
+  } catch (error) {
+    const source = requestForAuthorityNeutralMetadata(request);
+    if (source === request) throw error;
+    return witnessReflectApply(nativeRequestUrl, source, []);
+  }
 }
 
 export function requestCreateUrl(input: string, base?: string): URL {
