@@ -6,6 +6,7 @@ import {
   CompilerDiagnosticError,
 } from './compile.js';
 import { emitServerModule, semanticRenderEquivalenceCheck } from './emit/server.js';
+import { emitQueryPlanBootstrapModule } from './emit/bootstrap.js';
 import { parseComponentModule } from './scan/parse.js';
 
 describe('compiler classifier intrinsic security', () => {
@@ -1058,6 +1059,45 @@ export const LiveCard = component({
     expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
       'KOVO_LIVE_TARGET_EMIT_INJECTION',
     );
+    expect(poisonHits).toBe(0);
+  });
+
+  it('cannot inject executable client bootstrap imports through input traversal', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let source = '';
+    try {
+      Array.prototype.map = function poisonedBootstrapImportMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { exportName?: unknown; importPath?: unknown } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          typeof first?.exportName === 'string' &&
+          typeof first.importPath === 'string' &&
+          nativeApply(nativeIncludes, callbackSource, ['specifiers'])
+        ) {
+          poisonHits += 1;
+          return ['globalThis.KOVO_BOOTSTRAP_INJECTION = true;'] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      source = emitQueryPlanBootstrapModule([
+        {
+          exportName: 'Card$queryUpdatePlans',
+          importPath: './card.client.js',
+        },
+      ]).source;
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(source).not.toContain('KOVO_BOOTSTRAP_INJECTION');
+    expect(source).toContain('Card$queryUpdatePlans as kovoQueryPlans_0_');
     expect(poisonHits).toBe(0);
   });
 });

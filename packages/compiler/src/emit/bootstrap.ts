@@ -1,5 +1,12 @@
-import { createHash } from 'node:crypto';
-
+import {
+  compilerCreateSet,
+  compilerJsonStringify,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSha256Hex,
+  compilerSnapshotDenseArray,
+  compilerStringSlice,
+} from '../compiler-security-intrinsics.js';
 import { compilerIrHeader } from '../ir.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
@@ -42,7 +49,7 @@ export interface BootstrapEmittedFile {
  * small 32-bit hash in compiler output (SPEC.md §5.2).
  */
 function importPathDigest(importPath: string): string {
-  return createHash('sha256').update(importPath).digest('hex').slice(0, 16);
+  return compilerStringSlice(compilerSha256Hex(importPath), 0, 16);
 }
 
 /**
@@ -64,46 +71,60 @@ export function emitQueryPlanBootstrapModule(
   inputs: readonly QueryPlanBootstrapInput[],
   options: QueryPlanBootstrapOptions = {},
 ): BootstrapEmittedFile {
+  const inputSnapshot = compilerSnapshotDenseArray(inputs, 'Query plan bootstrap inputs');
   const fileName = options.fileName ?? 'generated/app.client.js';
   // Per-input UNIQUE local aliases (SPEC.md §5.2): two components with the same inferred name
   // produce the same `exportName` (`scan/parse.ts` inferComponentName has no path/hash
   // uniqueness). Without an alias the bootstrap would emit two `import { Demo$queryUpdatePlans }
   // ...` lines = a duplicate lexical binding = a hard ES module SyntaxError that kills the
   // entire client bootstrap. Aliasing each import to a path-hashed local keeps it parseable.
-  const queryAliases = inputs.map((input, index) =>
-    aliasFor('kovoQueryPlans', input.importPath, index),
-  );
-  const clockAliases = inputs.map((input, index) =>
-    input.clockExportName ? aliasFor('kovoClockPlans', input.importPath, index) : undefined,
-  );
-  assertUniqueAliases([
-    ...queryAliases,
-    ...clockAliases.filter((alias): alias is string => alias !== undefined),
-  ]);
+  const queryAliases: string[] = [];
+  const clockAliases: (string | undefined)[] = [];
+  const allAliases: string[] = [];
+  for (let index = 0; index < inputSnapshot.length; index += 1) {
+    const input = inputSnapshot[index]!;
+    const queryAlias = aliasFor('kovoQueryPlans', input.importPath, index);
+    queryAliases[queryAliases.length] = queryAlias;
+    allAliases[allAliases.length] = queryAlias;
+    const clockAlias = input.clockExportName
+      ? aliasFor('kovoClockPlans', input.importPath, index)
+      : undefined;
+    clockAliases[clockAliases.length] = clockAlias;
+    if (clockAlias !== undefined) allAliases[allAliases.length] = clockAlias;
+  }
+  assertUniqueAliases(allAliases);
 
-  const imports = inputs
-    .map((input, index) => {
-      const specifiers = [`${input.exportName} as ${queryAliases[index]}`];
-      const clockAlias = clockAliases[index];
-      if (input.clockExportName && clockAlias) {
-        specifiers.push(`${input.clockExportName} as ${clockAlias}`);
-      }
-      return `import { ${specifiers.join(', ')} } from ${JSON.stringify(input.importPath)};`;
-    })
-    .join('\n');
+  const importLines: string[] = [];
+  for (let index = 0; index < inputSnapshot.length; index += 1) {
+    const input = inputSnapshot[index]!;
+    const specifiers = [`${input.exportName} as ${queryAliases[index]}`];
+    const clockAlias = clockAliases[index];
+    if (input.clockExportName && clockAlias) {
+      specifiers[specifiers.length] = `${input.clockExportName} as ${clockAlias}`;
+    }
+    importLines[importLines.length] =
+      `import { ${joinBootstrapStrings(specifiers, ', ')} } from ${bootstrapJsonSource(input.importPath, 'Bootstrap import path')};`;
+  }
+  const imports = joinBootstrapStrings(importLines, '\n');
 
   // SPEC.md §4.8/§5.2: a query bound by two components contributes a plan from EACH. Shallow-
   // spreading the plan objects into one map (`{ ...A, ...B }`) lets B's entry clobber A's for a
   // shared query name, silently dropping one component's update coverage. Instead we MERGE per
   // query name into a combined applier that invokes every contributing component's plan.
+  const planLines: string[] = [];
+  for (let index = 0; index < queryAliases.length; index += 1) {
+    planLines[planLines.length] = `  ${queryAliases[index]!},`;
+  }
   const planSources =
-    queryAliases.length > 0
-      ? queryAliases.map((alias) => `  ${alias},`).join('\n')
+    planLines.length > 0
+      ? joinBootstrapStrings(planLines, '\n')
       : '  // no compiled query update plans';
-  const clockSpreads = clockAliases
-    .filter((alias): alias is string => alias !== undefined)
-    .map((alias) => `  ...${alias},`)
-    .join('\n');
+  const clockLines: string[] = [];
+  for (let index = 0; index < clockAliases.length; index += 1) {
+    const alias = clockAliases[index];
+    if (alias !== undefined) clockLines[clockLines.length] = `  ...${alias},`;
+  }
+  const clockSpreads = joinBootstrapStrings(clockLines, '\n');
 
   return {
     fileName,
@@ -169,12 +190,29 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
 }
 
 function assertUniqueAliases(aliases: readonly string[]): void {
-  const seen = new Set<string>();
-  for (const alias of aliases) {
-    if (!seen.has(alias)) {
-      seen.add(alias);
+  const seen = compilerCreateSet<string>();
+  const snapshot = compilerSnapshotDenseArray(aliases, 'Bootstrap aliases');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const alias = snapshot[index]!;
+    if (!compilerSetHas(seen, alias)) {
+      compilerSetAdd(seen, alias);
       continue;
     }
     throw new Error(`Duplicate generated bootstrap import alias "${alias}" (SPEC.md §5.2).`);
   }
+}
+
+function joinBootstrapStrings(values: readonly string[], separator: string): string {
+  let output = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) output += separator;
+    output += values[index]!;
+  }
+  return output;
+}
+
+function bootstrapJsonSource(value: unknown, label: string): string {
+  const source = compilerJsonStringify(value);
+  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  return source;
 }
