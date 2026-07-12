@@ -69,6 +69,12 @@ import {
 } from './internal/credential.js';
 import type { BetterAuthCredentialMutationInternalOptions } from './credential-options.js';
 import { betterAuthOAuthProviderSuccessorImportPaths } from './internal/plugin-metadata.js';
+import {
+  betterAuthArrayAppend,
+  betterAuthDefineOwnData,
+  betterAuthSnapshotDenseArray,
+  betterAuthToLowerCase,
+} from './internal/intrinsics.js';
 
 // The package's 13 public symbols are authored in the honestly-named source files
 // (`session.ts`, `mount.ts`, `mutations.ts`, `guards.ts`) and re-exported from the
@@ -184,12 +190,29 @@ export const betterAuthCredentialMutationDeclaredTableTouches =
 export const betterAuthCredentialMutationTouches = deriveBetterAuthCredentialMutationTouches();
 
 /** @internal Default mutation keys per Better Auth credential API, derived from contracts. */
-export const betterAuthCredentialMutationDefaultKeys = Object.fromEntries(
-  betterAuthCredentialMutationApis.map((api) => [
-    api,
-    betterAuthCredentialOperationContracts[api].defaultKey,
-  ]),
-) as Record<BetterAuthCredentialMutationApi, string>;
+export const betterAuthCredentialMutationDefaultKeys =
+  deriveBetterAuthCredentialMutationDefaultKeys();
+
+function deriveBetterAuthCredentialMutationDefaultKeys(): Record<
+  BetterAuthCredentialMutationApi,
+  string
+> {
+  const result = {} as Record<BetterAuthCredentialMutationApi, string>;
+  const apis = betterAuthSnapshotDenseArray(
+    betterAuthCredentialMutationApis,
+    'Better Auth credential mutation APIs',
+  );
+  for (let index = 0; index < apis.length; index += 1) {
+    const api = apis[index]!;
+    betterAuthDefineOwnData(
+      result,
+      api,
+      betterAuthCredentialOperationContracts[api].defaultKey,
+      'Better Auth credential mutation default keys',
+    );
+  }
+  return result;
+}
 
 function betterAuthDomainHandle(domain: BetterAuthTouchDomain): Domain {
   if (domain === 'auth') return betterAuthAuthDomain;
@@ -216,13 +239,22 @@ function deriveBetterAuthDeclaredTableTouches(
   } = {},
 ): BetterAuthDeclaredTableTouch[] {
   const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
-  return betterAuthOperationTableTouches(api, options.credentialMutationTableTouches)
-    .map((touch): BetterAuthDeclaredTableTouch | undefined => {
-      const bridge = betterAuthSchemaBridgeAnnotation(touch.table, schemaBridge);
-      if (bridge === undefined || !('domain' in bridge)) return undefined;
-      return { domain: bridge.domain, table: touch.table };
-    })
-    .filter((touch): touch is BetterAuthDeclaredTableTouch => touch !== undefined);
+  const touches = betterAuthSnapshotDenseArray(
+    betterAuthOperationTableTouches(api, options.credentialMutationTableTouches),
+    `Better Auth ${api} declared table touches`,
+  );
+  const declared: BetterAuthDeclaredTableTouch[] = [];
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = touches[index]!;
+    const bridge = betterAuthSchemaBridgeAnnotation(touch.table, schemaBridge);
+    if (bridge === undefined || !('domain' in bridge)) continue;
+    betterAuthArrayAppend(
+      declared,
+      { domain: bridge.domain, table: touch.table },
+      `Better Auth ${api} declared table touches`,
+    );
+  }
+  return declared;
 }
 
 function deriveBetterAuthCredentialDeclaredTableTouches(
@@ -237,7 +269,12 @@ function deriveBetterAuthCredentialDeclaredTableTouches(
     BetterAuthCredentialMutationApi,
     readonly BetterAuthDeclaredTableTouch[]
   >;
-  for (const api of betterAuthCredentialMutationApis) {
+  const apis = betterAuthSnapshotDenseArray(
+    betterAuthCredentialMutationApis,
+    'Better Auth credential mutation APIs',
+  );
+  for (let index = 0; index < apis.length; index += 1) {
+    const api = apis[index]!;
     result[api] = deriveBetterAuthDeclaredTableTouches(api, options);
   }
   return result;
@@ -252,7 +289,12 @@ function deriveBetterAuthCredentialMutationTouches(
   } = {},
 ): Record<BetterAuthCredentialMutationApi, readonly Domain[]> {
   const result = {} as Record<BetterAuthCredentialMutationApi, readonly Domain[]>;
-  for (const api of betterAuthCredentialMutationApis) {
+  const apis = betterAuthSnapshotDenseArray(
+    betterAuthCredentialMutationApis,
+    'Better Auth credential mutation APIs',
+  );
+  for (let index = 0; index < apis.length; index += 1) {
+    const api = apis[index]!;
     const domains = new Map<BetterAuthTouchDomain, Domain>();
     for (const touch of deriveBetterAuthDeclaredTableTouches(api, options)) {
       if (!domains.has(touch.domain))
@@ -367,23 +409,39 @@ export function createBetterAuthCredentialMutationTouchGraph(
     ...(tableTouches === undefined ? {} : { credentialMutationTableTouches: tableTouches }),
     ...(schemaBridge === undefined ? {} : { schemaBridge }),
   };
-
-  return Object.fromEntries(
-    apis.map((api) => [
-      keyOverrides[api] ?? betterAuthCredentialMutationDefaultKeys[api],
-      {
-        touches: deriveBetterAuthDeclaredTableTouches(api, derivationOptions).map((touch) => ({
+  const graph = {} as BetterAuthCredentialMutationTouchGraph;
+  const selectedApis = betterAuthSnapshotDenseArray(
+    apis,
+    'Better Auth credential mutation touch-graph APIs',
+  );
+  for (let apiIndex = 0; apiIndex < selectedApis.length; apiIndex += 1) {
+    const api = selectedApis[apiIndex]!;
+    const declaredTouches = deriveBetterAuthDeclaredTableTouches(api, derivationOptions);
+    const touches: BetterAuthTouchGraphSite[] = [];
+    for (let touchIndex = 0; touchIndex < declaredTouches.length; touchIndex += 1) {
+      const touch = declaredTouches[touchIndex]!;
+      betterAuthArrayAppend(
+        touches,
+        {
           domain: touch.domain,
           // Better Auth owns the SQL; the P9 bridge verifies domain/table coverage
           // without pretending row-key predicates are available at this boundary.
           keys: null,
           site: `@kovojs/better-auth:${api}`,
           via: touch.table,
-        })),
-        unresolved: [],
-      },
-    ]),
-  );
+        },
+        `Better Auth ${api} touch-graph sites`,
+      );
+    }
+    const key = keyOverrides[api] ?? betterAuthCredentialMutationDefaultKeys[api];
+    betterAuthDefineOwnData(
+      graph,
+      key,
+      { touches, unresolved: [] },
+      `Better Auth credential mutation touch graph ${key}`,
+    );
+  }
+  return graph;
 }
 
 /** @internal Build the db-verification config (per-physical-table domain/key/exempt data). */
@@ -398,25 +456,121 @@ export function createBetterAuthDbVerificationConfig(
   const keyByTable: Record<string, string> = {};
 
   for (const [table, annotation] of Object.entries(bridge)) {
-    const physicalTables = betterAuthPhysicalTableNames(table, tables).filter(
-      (physicalTable) => !collidingPhysicalTables.has(physicalTable),
+    const candidates = betterAuthSnapshotDenseArray(
+      betterAuthPhysicalTableNames(table, tables),
+      `Better Auth ${table} physical table names`,
     );
+    const physicalTables: string[] = [];
+    for (let index = 0; index < candidates.length; index += 1) {
+      const physicalTable = candidates[index]!;
+      if (!collidingPhysicalTables.has(physicalTable))
+        betterAuthArrayAppend(
+          physicalTables,
+          physicalTable,
+          `Better Auth ${table} physical table names`,
+        );
+    }
 
     if ('domain' in annotation) {
       for (const physicalTable of physicalTables) {
-        domainByTable[physicalTable] = annotation.domain;
-        if (annotation.key !== undefined) keyByTable[physicalTable] = annotation.key;
+        betterAuthDefineOwnData(
+          domainByTable,
+          physicalTable,
+          annotation.domain,
+          'Better Auth verifier table domains',
+        );
+        if (annotation.key !== undefined)
+          betterAuthDefineOwnData(
+            keyByTable,
+            physicalTable,
+            annotation.key,
+            'Better Auth verifier table keys',
+          );
       }
     } else {
-      exemptTables.push(...physicalTables);
+      for (let index = 0; index < physicalTables.length; index += 1) {
+        betterAuthArrayAppend(
+          exemptTables,
+          physicalTables[index]!,
+          'Better Auth verifier exempt tables',
+        );
+      }
     }
   }
 
   return {
     domainByTable,
-    exemptTables: [...new Set(exemptTables)],
+    exemptTables: uniqueBetterAuthStrings(exemptTables, 'Better Auth verifier exempt tables'),
     keyByTable,
   };
+}
+
+function sortedBetterAuthStrings(values: readonly string[], label: string): string[] {
+  const input = betterAuthSnapshotDenseArray(values, label);
+  const sorted: string[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const value = input[index]!;
+    betterAuthArrayAppend(sorted, value, label);
+    let insertion = sorted.length - 1;
+    while (insertion > 0 && value < sorted[insertion - 1]!) {
+      betterAuthDefineOwnData(sorted, insertion, sorted[insertion - 1]!, label);
+      insertion -= 1;
+    }
+    betterAuthDefineOwnData(sorted, insertion, value, label);
+  }
+  return sorted;
+}
+
+function sortedUniqueBetterAuthStrings(values: readonly string[], label: string): string[] {
+  const sorted = sortedBetterAuthStrings(values, label);
+  const unique: string[] = [];
+  for (let index = 0; index < sorted.length; index += 1) {
+    if (index > 0 && sorted[index] === sorted[index - 1]) continue;
+    betterAuthArrayAppend(unique, sorted[index]!, label);
+  }
+  return unique;
+}
+
+function uniqueBetterAuthStrings(values: readonly string[], label: string): string[] {
+  const snapshot = betterAuthSnapshotDenseArray(values, label);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const value = snapshot[index]!;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    betterAuthArrayAppend(unique, value, label);
+  }
+  return unique;
+}
+
+function joinBetterAuthStrings(
+  values: readonly string[],
+  separator: string,
+  label: string,
+): string {
+  const snapshot = betterAuthSnapshotDenseArray(values, label);
+  let joined = '';
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (index > 0) joined += separator;
+    joined += snapshot[index]!;
+  }
+  return joined;
+}
+
+function betterAuthSetStrings(values: ReadonlySet<string>, label: string): string[] {
+  const snapshot: string[] = [];
+  for (const value of values) betterAuthArrayAppend(snapshot, value, label);
+  return snapshot;
+}
+
+function quoteBetterAuthStrings(values: readonly string[], label: string): string[] {
+  const snapshot = betterAuthSnapshotDenseArray(values, label);
+  const quoted: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    betterAuthArrayAppend(quoted, `'${snapshot[index]!}'`, label);
+  }
+  return quoted;
 }
 
 /** @internal Validate Better Auth table metadata against the schema bridge; reports KV406 gaps. */
@@ -425,22 +579,74 @@ export function validateBetterAuthSchemaBridge(
   options: BetterAuthSchemaBridgeValidationOptions = {},
 ): BetterAuthSchemaBridgeValidation {
   const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
-  const bridgeTables = Object.keys(schemaBridge);
-  const tableNames = new Set(Object.keys(tables));
-  const bridgeTableNames = new Set<string>(bridgeTables);
-  const missingTables = betterAuthRequiredCoreTables.filter((table) => !tableNames.has(table));
-  const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
+  const bridgeTables = betterAuthSnapshotDenseArray(
+    Object.keys(schemaBridge),
+    'Better Auth schema-bridge table names',
+  );
+  const tableKeys = betterAuthSnapshotDenseArray(
+    Object.keys(tables),
+    'Better Auth metadata table names',
+  );
+  const tableNames = new Set<string>();
+  for (let index = 0; index < tableKeys.length; index += 1) tableNames.add(tableKeys[index]!);
+  const bridgeTableNames = new Set<string>();
+  for (let index = 0; index < bridgeTables.length; index += 1)
+    bridgeTableNames.add(bridgeTables[index]!);
+  const missingTables: BetterAuthCoreTable[] = [];
+  const requiredTables = betterAuthSnapshotDenseArray(
+    betterAuthRequiredCoreTables,
+    'Better Auth required core tables',
+  );
+  for (let index = 0; index < requiredTables.length; index += 1) {
+    const table = requiredTables[index]!;
+    if (!tableNames.has(table))
+      betterAuthArrayAppend(missingTables, table, 'Better Auth missing required tables');
+  }
+  const unsortedUnbridgedTables: string[] = [];
+  for (let index = 0; index < tableKeys.length; index += 1) {
+    const table = tableKeys[index]!;
+    if (!bridgeTableNames.has(table))
+      betterAuthArrayAppend(unsortedUnbridgedTables, table, 'Better Auth unbridged table names');
+  }
+  const unbridgedTables = sortedBetterAuthStrings(
+    unsortedUnbridgedTables,
+    'Better Auth unbridged table names',
+  );
   const declaredTouchMismatches = declaredTableTouchMismatches(tableNames, {
     ...options,
     schemaBridge,
   });
-  const keyFieldMismatches = [
-    ...schemaBridgeKeyFieldMismatches(tables, schemaBridge),
-    ...schemaBridgeExtensionCollisionMismatches(options.schemaBridge),
-  ].sort();
-  const pluginTableDegradations = unbridgedTables.map((table) =>
-    unsupportedPluginTableDegradation(table, tables[table]),
+  const unsortedKeyFieldMismatches: string[] = [];
+  const keyMismatchGroups = [
+    schemaBridgeKeyFieldMismatches(tables, schemaBridge),
+    schemaBridgeExtensionCollisionMismatches(options.schemaBridge),
+  ];
+  for (let groupIndex = 0; groupIndex < keyMismatchGroups.length; groupIndex += 1) {
+    const group = betterAuthSnapshotDenseArray(
+      keyMismatchGroups[groupIndex]!,
+      'Better Auth schema-bridge key mismatches',
+    );
+    for (let mismatchIndex = 0; mismatchIndex < group.length; mismatchIndex += 1) {
+      betterAuthArrayAppend(
+        unsortedKeyFieldMismatches,
+        group[mismatchIndex]!,
+        'Better Auth schema-bridge key mismatches',
+      );
+    }
+  }
+  const keyFieldMismatches = sortedBetterAuthStrings(
+    unsortedKeyFieldMismatches,
+    'Better Auth schema-bridge key mismatches',
   );
+  const pluginTableDegradations: BetterAuthPluginTableDegradation[] = [];
+  for (let index = 0; index < unbridgedTables.length; index += 1) {
+    const table = unbridgedTables[index]!;
+    betterAuthArrayAppend(
+      pluginTableDegradations,
+      unsupportedPluginTableDegradation(table, tables[table]),
+      'Better Auth plugin table degradations',
+    );
+  }
 
   return {
     declaredTouchMismatches,
@@ -712,16 +918,26 @@ function declaredTableTouchMismatches(
   const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
   const mismatches: string[] = [];
 
-  for (const api of betterAuthCredentialMutationApis) {
-    const touches =
+  const apis = betterAuthSnapshotDenseArray(
+    betterAuthCredentialMutationApis,
+    'Better Auth declared-touch validation APIs',
+  );
+  for (let apiIndex = 0; apiIndex < apis.length; apiIndex += 1) {
+    const api = apis[apiIndex]!;
+    const touches = betterAuthSnapshotDenseArray(
       options.credentialMutationTableTouches?.[api] ??
-      betterAuthCredentialOperationContracts[api].tableTouches;
+        betterAuthCredentialOperationContracts[api].tableTouches,
+      `Better Auth ${api} declared-touch validation`,
+    );
     const declaredTouchDomains: BetterAuthTouchDomain[] = [];
 
-    for (const touch of touches) {
+    for (let touchIndex = 0; touchIndex < touches.length; touchIndex += 1) {
+      const touch = touches[touchIndex]!;
       if (!tableNames.has(touch.table)) {
-        mismatches.push(
+        betterAuthArrayAppend(
+          mismatches,
           `${api}.${touch.table} is declared touched but Better Auth table metadata is missing that table`,
+          'Better Auth declared-touch mismatches',
         );
         continue;
       }
@@ -729,58 +945,85 @@ function declaredTableTouchMismatches(
       const bridge = betterAuthSchemaBridgeAnnotation(touch.table, schemaBridge);
 
       if (bridge === undefined) {
-        mismatches.push(
+        betterAuthArrayAppend(
+          mismatches,
           `${api}.${touch.table} is declared touched but outside the Better Auth schema bridge`,
+          'Better Auth declared-touch mismatches',
         );
         continue;
       }
 
       if (!('domain' in bridge)) {
-        mismatches.push(`${api}.${touch.table} is declared touched but schema-bridge exempt`);
+        betterAuthArrayAppend(
+          mismatches,
+          `${api}.${touch.table} is declared touched but schema-bridge exempt`,
+          'Better Auth declared-touch mismatches',
+        );
         continue;
       }
 
-      declaredTouchDomains.push(bridge.domain);
+      betterAuthArrayAppend(
+        declaredTouchDomains,
+        bridge.domain,
+        `Better Auth ${api} declared-touch domains`,
+      );
       const legacyDomain = (touch as Partial<BetterAuthDeclaredTableTouch>).domain;
       if (legacyDomain !== undefined && bridge.domain !== legacyDomain) {
-        mismatches.push(
+        betterAuthArrayAppend(
+          mismatches,
           `${api}.${touch.table} declares ${legacyDomain} but schema bridge maps ${bridge.domain}`,
+          'Better Auth declared-touch mismatches',
         );
       }
     }
 
-    const mutationTouchDomains = deriveBetterAuthCredentialMutationTouches({
+    const mutationTouches = deriveBetterAuthCredentialMutationTouches({
       ...(options.credentialMutationTableTouches === undefined
         ? {}
         : { credentialMutationTableTouches: options.credentialMutationTableTouches }),
       ...(options.schemaBridge === undefined ? {} : { schemaBridge: options.schemaBridge }),
-    })[api].map((touch) => touch.key);
+    })[api];
+    const mutationTouchDomains: string[] = [];
+    for (let touchIndex = 0; touchIndex < mutationTouches.length; touchIndex += 1) {
+      betterAuthArrayAppend(
+        mutationTouchDomains,
+        mutationTouches[touchIndex]!.key,
+        `Better Auth ${api} mutation registry domains`,
+      );
+    }
 
     if (!sameSortedValues(declaredTouchDomains, mutationTouchDomains)) {
-      mismatches.push(
+      betterAuthArrayAppend(
+        mismatches,
         `${api} mutation registry domains ${formatDomainList(
           mutationTouchDomains,
         )} do not match declared table-touch domains ${formatDomainList(declaredTouchDomains)}`,
+        'Better Auth declared-touch mismatches',
       );
     }
   }
 
-  return mismatches.sort();
+  return sortedBetterAuthStrings(mismatches, 'Better Auth declared-touch mismatches');
 }
 
 function sameSortedValues(left: readonly string[], right: readonly string[]): boolean {
-  const leftValues = [...new Set(left)].sort();
-  const rightValues = [...new Set(right)].sort();
+  const leftValues = sortedUniqueBetterAuthStrings(left, 'Better Auth declared-touch domains');
+  const rightValues = sortedUniqueBetterAuthStrings(right, 'Better Auth mutation-touch domains');
 
   if (leftValues.length !== rightValues.length) return false;
 
-  return leftValues.every((value, index) => value === rightValues[index]);
+  for (let index = 0; index < leftValues.length; index += 1) {
+    if (leftValues[index] !== rightValues[index]) return false;
+  }
+  return true;
 }
 
 function formatDomainList(values: readonly string[]): string {
-  const uniqueValues = [...new Set(values)].sort();
+  const uniqueValues = sortedUniqueBetterAuthStrings(values, 'Better Auth domain list');
 
-  return uniqueValues.length === 0 ? '[]' : `[${uniqueValues.join(', ')}]`;
+  return uniqueValues.length === 0
+    ? '[]'
+    : `[${joinBetterAuthStrings(uniqueValues, ', ', 'Better Auth domain list')}]`;
 }
 
 function schemaBridgeKeyFieldMismatches(
@@ -797,10 +1040,14 @@ function schemaBridgeKeyFieldMismatches(
     if (fieldNames === null) continue;
     if (fieldNames.has(annotation.key)) continue;
 
-    mismatches.push(schemaBridgeKeyFieldMismatch(table, annotation.key, tables[table]));
+    betterAuthArrayAppend(
+      mismatches,
+      schemaBridgeKeyFieldMismatch(table, annotation.key, tables[table]),
+      'Better Auth schema-bridge key mismatches',
+    );
   }
 
-  return mismatches.sort();
+  return sortedBetterAuthStrings(mismatches, 'Better Auth schema-bridge key mismatches');
 }
 
 function schemaBridgeKeyFieldMismatch(table: string, key: string, metadata: unknown): string {
@@ -823,10 +1070,14 @@ function betterAuthPhysicalTableNameCollisionMismatches(
   for (const [physicalTable, logicalTables] of physicalTables) {
     if (logicalTables.length < 2) continue;
 
-    mismatches.push(
-      `Better Auth tables ${logicalTables.join(
+    betterAuthArrayAppend(
+      mismatches,
+      `Better Auth tables ${joinBetterAuthStrings(
+        logicalTables,
         ', ',
+        'Better Auth colliding logical table names',
       )} resolve to the same physical table ${physicalTable}; modelName aliases must be unique for schema.ts annotations and P9 verification`,
+      'Better Auth physical-table collision mismatches',
     );
   }
 
@@ -837,11 +1088,14 @@ function betterAuthCollidingPhysicalTableNames(
   tables: Record<string, unknown>,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): Set<string> {
-  return new Set(
-    [...betterAuthPhysicalTableNameGroups(tables, schemaBridge)]
-      .filter(([, logicalTables]) => logicalTables.length > 1)
-      .map(([physicalTable]) => physicalTable),
-  );
+  const collisions = new Set<string>();
+  for (const [physicalTable, logicalTables] of betterAuthPhysicalTableNameGroups(
+    tables,
+    schemaBridge,
+  )) {
+    if (logicalTables.length > 1) collisions.add(physicalTable);
+  }
+  return collisions;
 }
 
 function betterAuthTableFieldNames(table: unknown): Set<string> | null {
@@ -864,7 +1118,13 @@ function unsupportedPluginTableDegradation(
 
   return {
     diagnosticCode: 'KV406',
-    fields: fieldNames === null ? null : [...fieldNames].sort(),
+    fields:
+      fieldNames === null
+        ? null
+        : sortedBetterAuthStrings(
+            betterAuthSetStrings(fieldNames, 'Better Auth plugin table fields'),
+            'Better Auth plugin table fields',
+          ),
     manualBridgeSteps: unsupportedPluginTableManualBridgeSteps(
       table,
       physicalTable,
@@ -889,7 +1149,16 @@ function unsupportedPluginTableManualBridgeSteps(
   suggestedAnnotation: BetterAuthSchemaBridgeAnnotation | null,
 ): string[] {
   const fieldList =
-    fields === null ? 'unavailable from Better Auth metadata' : [...fields].sort().join(', ');
+    fields === null
+      ? 'unavailable from Better Auth metadata'
+      : joinBetterAuthStrings(
+          sortedBetterAuthStrings(
+            betterAuthSetStrings(fields, 'Better Auth plugin table fields'),
+            'Better Auth plugin table fields',
+          ),
+          ', ',
+          'Better Auth plugin table fields',
+        );
   const annotationStep =
     suggestedAnnotation === null
       ? 'If it is app-visible, add a schema.ts kovo({ domain, key }) annotation; otherwise add kovo({ exempt: true }) with a rationale.'
@@ -936,12 +1205,20 @@ function suggestedUnsupportedPluginTableAnnotation(
 }
 
 function isLikelyBetterAuthProtocolTable(fields: ReadonlySet<string>): boolean {
-  const nonIdFields = [...fields].filter((field) => field !== 'id');
+  const nonIdFields: string[] = [];
+  for (const field of fields) {
+    if (field !== 'id')
+      betterAuthArrayAppend(nonIdFields, field, 'Better Auth plugin protocol fields');
+  }
 
   if (nonIdFields.length === 0) return false;
-  if (!nonIdFields.some((field) => protocolStateAnchorFields.has(field))) return false;
-
-  return nonIdFields.every((field) => protocolStateFields.has(field));
+  let hasAnchor = false;
+  for (let index = 0; index < nonIdFields.length; index += 1) {
+    const field = nonIdFields[index]!;
+    if (protocolStateAnchorFields.has(field)) hasAnchor = true;
+    if (!protocolStateFields.has(field)) return false;
+  }
+  return hasAnchor;
 }
 
 const protocolStateAnchorFields = new Set(['challenge', 'code', 'deviceCode', 'token', 'value']);
@@ -972,7 +1249,11 @@ function formatBetterAuthSchemaDomainAnnotation(
   const secret =
     annotation.secret === undefined || annotation.secret.length === 0
       ? ''
-      : `, secret: [${annotation.secret.map((column) => `'${column}'`).join(', ')}]`;
+      : `, secret: [${joinBetterAuthStrings(
+          quoteBetterAuthStrings(annotation.secret, 'Better Auth schema secret fields'),
+          ', ',
+          'Better Auth schema secret fields',
+        )}]`;
 
   return `{ domain: '${annotation.domain}'${key}${secret} }`;
 }
@@ -983,14 +1264,22 @@ function betterAuthObservedSchemaAnnotation(
 ): BetterAuthSchemaBridgeDomainAnnotation {
   if (fields === null) return annotation;
 
-  const staticSecret = annotation.secret ?? [];
+  const staticSecret = betterAuthSnapshotDenseArray(
+    annotation.secret ?? [],
+    'Better Auth static schema secret fields',
+  );
   const classifiedSecret = betterAuthCredentialSecretFields(fields);
-  const secret = [...staticSecret];
-  const seen = new Set(secret);
+  const secret: string[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < staticSecret.length; index += 1) {
+    const column = staticSecret[index]!;
+    betterAuthArrayAppend(secret, column, 'Better Auth schema secret fields');
+    seen.add(column);
+  }
 
   for (const column of classifiedSecret) {
     if (seen.has(column)) continue;
-    secret.push(column);
+    betterAuthArrayAppend(secret, column, 'Better Auth schema secret fields');
     seen.add(column);
   }
 
@@ -1046,12 +1335,22 @@ const betterAuthCredentialColumnNouns = new Set<string>([
  * non-alphanumeric boundaries. `refreshTokenExpiresAt` → `[refresh, token, expires, at]`.
  */
 function betterAuthColumnSegments(column: string): string[] {
-  return column
+  const split = column
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .split(/[^A-Za-z0-9]+/)
-    .filter((segment) => segment.length > 0)
-    .map((segment) => segment.toLowerCase());
+    .split(/[^A-Za-z0-9]+/);
+  const snapshot = betterAuthSnapshotDenseArray(split, 'Better Auth credential column segments');
+  const segments: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const segment = snapshot[index]!;
+    if (segment.length === 0) continue;
+    betterAuthArrayAppend(
+      segments,
+      betterAuthToLowerCase(segment),
+      'Better Auth credential column segments',
+    );
+  }
+  return segments;
 }
 
 /**
@@ -1076,7 +1375,12 @@ export function isBetterAuthCredentialShapedColumn(column: string): boolean {
  * plausible credential column (e.g. apiKey `key`) without an explicit author override.
  */
 export function betterAuthCredentialSecretFields(fields: ReadonlySet<string>): readonly string[] {
-  return [...fields].filter((field) => isBetterAuthCredentialShapedColumn(field)).sort();
+  const secretFields: string[] = [];
+  for (const field of fields) {
+    if (isBetterAuthCredentialShapedColumn(field))
+      betterAuthArrayAppend(secretFields, field, 'Better Auth credential-shaped secret fields');
+  }
+  return sortedBetterAuthStrings(secretFields, 'Better Auth credential-shaped secret fields');
 }
 
 /**
@@ -1139,14 +1443,21 @@ function schemaBridgeExtensionCollisionMismatches(
   extensions: BetterAuthSchemaBridgeExtensions = {},
 ): string[] {
   const builtInTables = new Set(Object.keys(betterAuthSchemaBridge));
-
-  return Object.keys(extensions)
-    .filter((table) => builtInTables.has(table))
-    .sort()
-    .map(
-      (table) =>
-        `${table} is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge`,
+  const collisions: string[] = [];
+  const extensionTables = betterAuthSnapshotDenseArray(
+    Object.keys(extensions),
+    'Better Auth schema-bridge extension table names',
+  );
+  for (let index = 0; index < extensionTables.length; index += 1) {
+    const table = extensionTables[index]!;
+    if (!builtInTables.has(table)) continue;
+    betterAuthArrayAppend(
+      collisions,
+      `${table} is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge`,
+      'Better Auth schema-bridge extension collisions',
     );
+  }
+  return sortedBetterAuthStrings(collisions, 'Better Auth schema-bridge extension collisions');
 }
 
 function betterAuthPhysicalTableNames(table: string, tables: Record<string, unknown>): string[] {
@@ -1190,8 +1501,11 @@ function betterAuthPhysicalTableNameGroups(
 
     const physicalTable = betterAuthPhysicalTableName(table, tables[table]);
     const logicalTables = physicalTables.get(physicalTable) ?? [];
-    logicalTables.push(table);
-    physicalTables.set(physicalTable, logicalTables.sort());
+    betterAuthArrayAppend(logicalTables, table, `Better Auth ${physicalTable} logical table names`);
+    physicalTables.set(
+      physicalTable,
+      sortedBetterAuthStrings(logicalTables, `Better Auth ${physicalTable} logical table names`),
+    );
   }
 
   return physicalTables;

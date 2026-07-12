@@ -131,6 +131,29 @@ export function betterAuthGetOwnPropertyDescriptor(
   return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
 }
 
+export function betterAuthDefineOwnData<Value>(
+  target: object,
+  property: PropertyKey,
+  value: Value,
+  label: string,
+): void {
+  assertBetterAuthIntrinsics();
+  apply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    property,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = betterAuthGetOwnPropertyDescriptor(target, property);
+  if (committed === undefined || !('value' in committed) || committed.value !== value) {
+    throw new TypeError(`${label} own-data commit failed.`);
+  }
+}
+
 export function betterAuthArrayAppend<Value>(target: Value[], value: Value, label: string): void {
   assertBetterAuthIntrinsics();
   const length = betterAuthGetOwnPropertyDescriptor(target, 'length');
@@ -144,21 +167,35 @@ export function betterAuthArrayAppend<Value>(target: Value[], value: Value, labe
   ) {
     throw new TypeError(`${label} must have a bounded own array length.`);
   }
-  const index = length.value;
-  apply(nativeObjectDefineProperty, NativeObject, [
-    target,
-    index,
-    {
-      configurable: true,
-      enumerable: true,
-      value,
-      writable: true,
-    },
-  ]);
-  const committed = betterAuthGetOwnPropertyDescriptor(target, index);
-  if (committed === undefined || !('value' in committed) || committed.value !== value) {
-    throw new TypeError(`${label} own-data append failed.`);
+  betterAuthDefineOwnData(target, length.value, value, label);
+}
+
+export function betterAuthSnapshotDenseArray<Value>(
+  source: readonly Value[],
+  label: string,
+): Value[] {
+  assertBetterAuthIntrinsics();
+  const length = betterAuthGetOwnPropertyDescriptor(source, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    !apply(nativeNumberIsSafeInteger, NativeNumber, [length.value]) ||
+    length.value < 0 ||
+    length.value >= 100_000
+  ) {
+    throw new TypeError(`${label} must have a bounded own array length.`);
   }
+
+  const snapshot: Value[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = betterAuthGetOwnPropertyDescriptor(source, index);
+    if (entry === undefined || !('value' in entry)) {
+      throw new TypeError(`${label} must contain dense own data entries.`);
+    }
+    betterAuthArrayAppend(snapshot, entry.value as Value, label);
+  }
+  return snapshot;
 }
 
 export function betterAuthIndexOf(value: string, search: string, position = 0): number {

@@ -299,6 +299,102 @@ describe('schema bridge', () => {
     });
   });
 
+  it('keeps schema gaps, key drift, touch mismatches, and credential secrets closed after late Array combinator poisoning', () => {
+    // SPEC.md §10.1/§11.2: these arrays carry schema ownership and declared-write
+    // evidence, so app code cannot erase diagnostics by replacing Array helpers.
+    const tables = {
+      account: authTable([]),
+      auditLog: authTable(['organizationId', 'actorUserId']),
+      session: authTable(['userId']),
+      user: authTable(),
+    };
+    const arrayPrototype = Array.prototype as unknown as Record<string, unknown>;
+    const originals = {
+      filter: arrayPrototype.filter,
+      map: arrayPrototype.map,
+      push: arrayPrototype.push,
+      sort: arrayPrototype.sort,
+    };
+    let validation: ReturnType<typeof validateBetterAuthSchemaBridge> | undefined;
+    let graph: ReturnType<typeof createBetterAuthCredentialMutationTouchGraph> | undefined;
+    let credentialSecrets: readonly string[] | undefined;
+
+    try {
+      const poison = () => {
+        throw new Error('late Array combinator poison dispatched');
+      };
+      arrayPrototype.filter = poison;
+      arrayPrototype.map = poison;
+      arrayPrototype.push = poison;
+      arrayPrototype.sort = poison;
+
+      validation = validateBetterAuthSchemaBridge(tables, {
+        credentialMutationTableTouches: {
+          signInEmail: [{ table: 'session' }, { table: 'twoFactor' }],
+        },
+        schemaBridge: {
+          account: { domain: 'user', key: 'id' },
+        },
+      });
+      graph = createBetterAuthCredentialMutationTouchGraph({
+        apis: ['signInEmail'],
+        credentialMutationTableTouches: { signInEmail: [{ table: 'session' }] },
+        keys: { signInEmail: 'auth/poison-proof-sign-in' },
+      });
+      credentialSecrets = betterAuthCredentialSecretFields(
+        new Set(['userId', 'apiToken', 'label']),
+      );
+    } finally {
+      arrayPrototype.filter = originals.filter;
+      arrayPrototype.map = originals.map;
+      arrayPrototype.push = originals.push;
+      arrayPrototype.sort = originals.sort;
+    }
+
+    expect(validation).toEqual({
+      declaredTouchMismatches: [
+        'signInEmail.twoFactor is declared touched but Better Auth table metadata is missing that table',
+      ],
+      keyFieldMismatches: [
+        'account is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge',
+        'account.userId is a schema-bridge key but Better Auth table metadata does not expose that field',
+      ],
+      missingTables: ['verification'],
+      ok: false,
+      pluginTableDegradations: [
+        {
+          diagnosticCode: 'KV406',
+          fields: ['actorUserId', 'id', 'organizationId'],
+          manualBridgeSteps: [
+            'Inspect auditLog fields (actorUserId, id, organizationId) and decide whether the app reads this table.',
+            "Likely app-visible ownership is kovo({ domain: 'organization', key: 'organizationId' }); confirm before adding the bridge, otherwise use kovo({ exempt: true }) with a rationale.",
+            'Add declared Better Auth API touches for writes that can mutate auditLog; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.',
+          ],
+          message:
+            'auditLog is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+          reason: 'unsupported-plugin-table',
+          suggestedAnnotation: { domain: 'organization', key: 'organizationId' },
+          table: 'auditLog',
+        },
+      ],
+      unbridgedTables: ['auditLog'],
+    });
+    expect(graph).toEqual({
+      'auth/poison-proof-sign-in': {
+        touches: [
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@kovojs/better-auth:signInEmail',
+            via: 'session',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(credentialSecrets).toEqual(['apiToken']);
+  });
+
   it('suggests ownership annotations for unsupported plugin-table diagnostics', () => {
     expect(
       validateBetterAuthSchemaBridge({
