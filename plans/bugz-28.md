@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    17 | C1-C17 |
+| Critical |    19 | C1-C19 |
 | High     |    25 | H1-H25 |
 | Medium   |     9 | M1-M9  |
 
@@ -187,6 +187,28 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cryptographic entropy with at least 128 random bits; queue lookup, iteration, coalescing, claim,
     heartbeat, completion, retry, and reaping use exact pinned controls, and neither late nor
     import-order poison can overwrite a sibling job or reuse expired worker authority.
+
+- [ ] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
+      `packages/server/src/command.ts`
+  - `cmd()` froze the reviewed Node argv, but `runCommand()` later spread it through the live
+    `Array.prototype[Symbol.iterator]`. A selective late iterator returned attacker `-e` source for
+    that exact frozen array, and the real shell-free command door executed `substituted` instead of
+    the reviewed program arguments.
+  - **Acceptance:** allowlist lookup, program/argv construction and immutable snapshots, exact argv
+    cloning, `execFile` identity, execution options, callback settlement, output conversion, and
+    Promise controls are boot-pinned and semantically checked; late/import-order poison cannot alter
+    any byte passed to the privileged process sink while genuine allowlisted commands still run.
+
+- [ ] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
+      `packages/server/src/confidential-at-rest.ts`
+  - Replacing CommonJS `node:crypto.randomBytes` with a constant function and calling
+    `syncBuiltinESMExports()` updated the live ESM binding consumed by `encryptAtRest()`. Two distinct
+    plaintexts under the same key/AAD then serialized the same 96-bit IV, violating GCM's nonce
+    uniqueness requirement and endangering both confidentiality and authenticity.
+  - **Acceptance:** random/cipher function identities, 96-bit IV generation and non-repetition
+    controls, key/AAD/plaintext byte snapshots, cipher method dispatch, tag/ciphertext assembly, and
+    envelope encoding use boot-pinned, semantically verified controls; late synchronized builtins and
+    hostile pre-import sources cannot repeat an IV or return a branded non-authenticated envelope.
 
 ## High
 
@@ -538,8 +560,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17, H15, and H19 are active mutation-output
-and durable-task fixes.
+The remediation pass remains intentionally non-zero: C17-C19, H15, and H19 are active command/
+crypto, mutation-output, and durable-task fixes.
 Integrated
 evidence is
 green at
