@@ -14,6 +14,27 @@ describe('request input provenance tracking', () => {
     });
   });
 
+  it('pins the provenance tracker against late global Proxy replacement', () => {
+    const source = { role: 'admin' };
+    const NativeProxy = globalThis.Proxy;
+    let proxyHits = 0;
+    try {
+      globalThis.Proxy = class BypassProxy {
+        constructor(target: object) {
+          if (target === source) proxyHits += 1;
+          return target;
+        }
+      } as unknown as ProxyConstructor;
+      runWithRequestInputProvenance(source, (input) => {
+        expect(requestInputProvenanceForValue(input.role)).toEqual({ path: '<input>.role' });
+      });
+    } finally {
+      globalThis.Proxy = NativeProxy;
+    }
+
+    expect(proxyHits).toBe(0);
+  });
+
   it('tracks object identity and spread reads', () => {
     runWithRequestInputProvenance({ profile: { name: 'Ada' }, role: 'admin' }, (input) => {
       const profile = input.profile;

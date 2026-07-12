@@ -33,7 +33,7 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
-import { witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
+import { witnessGetOwnPropertyDescriptor, witnessProxy } from './security-witness-intrinsics.js';
 
 const formDataIteratorSymbol = Symbol.iterator;
 
@@ -246,7 +246,7 @@ function stableRecordValue(value: object, property: PropertyKey): unknown {
 }
 
 function tagUntrustedFormData(form: FormData): FormData {
-  const proxy = new Proxy(form, {
+  const proxy = witnessProxy(form, {
     get(target, property, receiver) {
       if (property === 'get') {
         return (name: string) => tagUntrustedFormEntry(requestFormDataGet(target, name));

@@ -11,6 +11,7 @@ import {
   readUntrustedRequestBody,
   readUntrustedRequestHeader,
   revealUntrustedRequestValue,
+  tagUntrustedRequestValue,
 } from './untrusted-request-body.js';
 
 describe('untrusted request body parser', () => {
@@ -100,6 +101,28 @@ describe('untrusted request body parser', () => {
     const taggedTitle = (result.value as FormData).get('title');
     expect(isUntrusted(taggedTitle)).toBe(true);
     expect(s.object({ title: s.string() }).parse(result.value)).toEqual({ title: 'Hello' });
+  });
+
+  it('pins the FormData provenance membrane against late global Proxy replacement', () => {
+    const form = new FormData();
+    form.set('title', 'attacker-input');
+    const NativeProxy = globalThis.Proxy;
+    let proxyHits = 0;
+    let tagged!: FormData;
+    try {
+      globalThis.Proxy = class BypassProxy {
+        constructor(target: object) {
+          if (target === form) proxyHits += 1;
+          return target;
+        }
+      } as unknown as ProxyConstructor;
+      tagged = tagUntrustedRequestValue(form) as FormData;
+    } finally {
+      globalThis.Proxy = NativeProxy;
+    }
+
+    expect(proxyHits).toBe(0);
+    expect(isUntrusted(tagged.get('title'))).toBe(true);
   });
 
   it('validates route params and search by revealing request tags inside schemas', () => {

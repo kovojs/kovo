@@ -15,6 +15,7 @@ import {
   witnessMapGet,
   witnessMapSet,
   witnessObjectKeys,
+  witnessProxy,
   witnessReflectApply,
   witnessReflectGet,
   witnessSetAdd,
@@ -213,7 +214,7 @@ export function createSecretBoxingReadDb<Db extends object>(
 ): Db {
   const pinnedMetadata = snapshotSecretReadMetadata(metadata);
   const pinnedOptions = snapshotSecretReadBoundaryOptions(options);
-  return new Proxy(db as Record<PropertyKey, unknown>, {
+  return witnessProxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
       if (prop === 'query' && item !== null && typeof item === 'object') {
@@ -602,11 +603,11 @@ export const boxSecretReadRows = securityClassifier(
             ? boxEveryLeaf
             : boundary.boxEveryResultValue ||
                 witnessSetHas(boundary.secretResultKeys as Set<string>, key) ||
-              witnessSetHas(boundary.opaqueResultKeys as Set<string>, key) ||
-              witnessSetHas(secretColumnKeys as Set<string>, key) ||
-              witnessSetHas(secretColumnNames as Set<string>, key)
-            ? secret(item)
-            : boxSecretReadRows(item, metadata, boundary);
+                witnessSetHas(boundary.opaqueResultKeys as Set<string>, key) ||
+                witnessSetHas(secretColumnKeys as Set<string>, key) ||
+                witnessSetHas(secretColumnNames as Set<string>, key)
+              ? secret(item)
+              : boxSecretReadRows(item, metadata, boundary);
       witnessDefineProperty(boxed, key, {
         configurable: true,
         enumerable: true,
@@ -664,7 +665,8 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
     const selectedKeys = selectedResultKeysFromValue(statement);
     const referencesSecretTable = sqlReferencesSecretTable(sql, metadata.secretTableNames);
     const secretBearingCompound = sqlHasCompoundSelect(sql) && referencesSecretTable;
-    const columns = exactColumns ?? (client === undefined ? undefined : sqliteResultColumns(client, sql));
+    const columns =
+      exactColumns ?? (client === undefined ? undefined : sqliteResultColumns(client, sql));
 
     if (columns === undefined) {
       return referencesSecretTable
@@ -685,10 +687,7 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
         witnessSetAdd(opaqueResultKeys, key);
         continue;
       }
-      if (
-        nestedResultKeys !== undefined &&
-        witnessSetHas(nestedResultKeys as Set<string>, key)
-      ) {
+      if (nestedResultKeys !== undefined && witnessSetHas(nestedResultKeys as Set<string>, key)) {
         // Drizzle relational selections encode a nested relation into one driver JSON column.
         // Preserve that container so the post-mapping walk can classify each nested schema key.
         continue;
@@ -759,7 +758,7 @@ function wrapReadSurface(
     ]);
   }
   const relationalQuery = inheritedRelationalQuery ?? pinRelationalReadQuery(value);
-  return new Proxy(value, {
+  return witnessProxy(value, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
       if (prop === 'then' && typeof item === 'function') {
@@ -771,14 +770,7 @@ function wrapReadSurface(
         const boundary = mergeReadBoundaries(
           mergeReadBoundaries(
             inheritedBoundary,
-            readBoundaryForQuery(
-              target,
-              carrier,
-              metadata,
-              options,
-              exact,
-              relationalQuery,
-            ),
+            readBoundaryForQuery(target, carrier, metadata, options, exact, relationalQuery),
           ),
           relationalReadBoundary(relationalQuery, metadata),
         );
@@ -789,8 +781,7 @@ function wrapReadSurface(
           if (relationalQuery !== undefined) {
             const settled = settleSecretReadResult(relationalQuery.execute('execute', []));
             return witnessReflectApply(nativePromiseThen, settled, [
-              (result: unknown) =>
-                onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
+              (result: unknown) => onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
               onRejected,
             ]);
           }
@@ -801,15 +792,13 @@ function wrapReadSurface(
               [exact.execute()],
             );
             return witnessReflectApply(nativePromiseThen, settled, [
-              (result: unknown) =>
-                onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
+              (result: unknown) => onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
               onRejected,
             ]);
           }
           const fallback = failClosedExecutionBoundary(boundary);
           return witnessReflectApply(item, target, [
-            (result: unknown) =>
-              onFulfilled?.(boxSecretReadRows(result, metadata, fallback)),
+            (result: unknown) => onFulfilled?.(boxSecretReadRows(result, metadata, fallback)),
             onRejected,
           ]);
         };
@@ -836,22 +825,13 @@ function wrapReadSurface(
         if (terminalMode !== undefined) {
           const carrier = relationalQuery?.carrier ?? sqlCarrierFromValue(target, []);
           const exact =
-            carrier === undefined ||
-            relationalQuery !== undefined ||
-            args.length !== 0
+            carrier === undefined || relationalQuery !== undefined || args.length !== 0
               ? undefined
               : exactSecretReadExecution(target, carrier, terminalMode, options);
           const boundary = mergeReadBoundaries(
             mergeReadBoundaries(
               inheritedBoundary,
-              readBoundaryForQuery(
-                target,
-                carrier,
-                metadata,
-                options,
-                exact,
-                relationalQuery,
-              ),
+              readBoundaryForQuery(target, carrier, metadata, options, exact, relationalQuery),
             ),
             relationalReadBoundary(relationalQuery, metadata),
           );
@@ -863,9 +843,7 @@ function wrapReadSurface(
             return boxSecretReadExecutionResult(result, metadata, terminalBoundary);
           }
           const result =
-            exact === undefined
-              ? witnessReflectApply(item, target, args)
-              : exact.execute();
+            exact === undefined ? witnessReflectApply(item, target, args) : exact.execute();
           return boxSecretReadExecutionResult(
             result,
             metadata,
@@ -1083,9 +1061,7 @@ function readBuilderTerminalMode(
 ): SecretReadExecutionMode | undefined {
   if (property === 'get') return 'get';
   if (property === 'values') return 'values';
-  return property === 'all' || property === 'execute' || property === 'sync'
-    ? 'all'
-    : undefined;
+  return property === 'all' || property === 'execute' || property === 'sync' ? 'all' : undefined;
 }
 
 function exactSecretReadExecution(
@@ -1103,9 +1079,7 @@ function exactSecretReadExecution(
         const columns =
           columnsMethod === undefined
             ? undefined
-            : snapshotSqliteColumnOrigins(
-                witnessReflectApply(columnsMethod, statement, []),
-              );
+            : snapshotSqliteColumnOrigins(witnessReflectApply(columnsMethod, statement, []));
         return witnessFreeze({
           columns,
           exactColumns: true,
@@ -1141,9 +1115,7 @@ function mapExactSqliteReadResult(
   const selectedKeys = selectedResultKeysFromValue(query);
   if (selectedKeys.length !== columns.length) return result;
   if (witnessIsArray(result)) {
-    return mapDenseReadArray(result, (row) =>
-      mapExactSqliteReadRow(row, selectedKeys, columns),
-    );
+    return mapDenseReadArray(result, (row) => mapExactSqliteReadRow(row, selectedKeys, columns));
   }
   return mapExactSqliteReadRow(result, selectedKeys, columns);
 }
@@ -1619,9 +1591,7 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
         const resultParams = optionalOwnDataValue(result, 'params');
         if (typeof sql === 'string') {
           return witnessFreeze({
-            params: snapshotSqlCarrierParams(
-              witnessIsArray(resultParams) ? resultParams : params,
-            ),
+            params: snapshotSqlCarrierParams(witnessIsArray(resultParams) ? resultParams : params),
             text: sql,
           });
         }

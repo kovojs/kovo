@@ -15,6 +15,7 @@ import {
   witnessMapHas,
   witnessMapSet,
   witnessOwnKeys,
+  witnessProxy,
   witnessReflectApply,
   witnessReflectGet,
   witnessSetAdd,
@@ -319,7 +320,11 @@ function pinnedLifecycleArrayIterator(
 
 function ownPinnedArrayLength(array: readonly unknown[]): number {
   const descriptor = witnessGetOwnPropertyDescriptor(array, 'length');
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'number') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'number'
+  ) {
     throw new TypeError('Pinned lifecycle array lost its own length.');
   }
   return descriptor.value;
@@ -431,7 +436,7 @@ export function pinnedRequestCarrier<Request>(
     nativeMetadataSource === undefined
       ? witnessCreateNullRecord()
       : witnessCreateWithPrototype<Record<PropertyKey, unknown>>(nativeRequestPrototype);
-  const carrier = new Proxy(carrierTarget, {
+  const carrier = witnessProxy(carrierTarget, {
     get(_target, property) {
       return witnessMapGet(properties, property)?.value;
     },
@@ -508,10 +513,7 @@ function snapshotRequestOwnProperties(
     if (witnessSetHas(omitted, key) || witnessMapHas(overrides, key)) continue;
     const descriptor = witnessGetOwnPropertyDescriptor(target, key);
     if (descriptor === undefined) continue;
-    const value =
-      'value' in descriptor
-        ? descriptor.value
-        : witnessReflectGet(target, key, target);
+    const value = 'value' in descriptor ? descriptor.value : witnessReflectGet(target, key, target);
     appendPinnedRequestKey(ownKeys, key);
     witnessMapSet(properties, key, {
       enumerable: descriptor.enumerable ?? false,
@@ -606,9 +608,7 @@ function arrayHasPropertyKey(
   return false;
 }
 
-function snapshotPinnedRequestKeys(
-  keys: readonly (string | symbol)[],
-): (string | symbol)[] {
+function snapshotPinnedRequestKeys(keys: readonly (string | symbol)[]): (string | symbol)[] {
   const snapshot: (string | symbol)[] = [];
   for (let index = 0; index < keys.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(keys, index);

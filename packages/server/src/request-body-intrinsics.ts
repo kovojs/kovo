@@ -74,10 +74,7 @@ const nativeUrlSearchParamsEntries = stablePlatformMethod(
   NativeURLSearchParams.prototype,
   'entries',
 );
-const nativeUrlSearchParamsAppend = stablePlatformMethod(
-  NativeURLSearchParams.prototype,
-  'append',
-);
+const nativeUrlSearchParamsAppend = stablePlatformMethod(NativeURLSearchParams.prototype, 'append');
 const nativeUrlSearchParamsToString = stablePlatformMethod(
   NativeURLSearchParams.prototype,
   'toString',
@@ -982,11 +979,7 @@ export function requestSerializeUrlSearchParamsEntries(
 function urlSearchParamsEntriesUnchecked(
   searchParams: URLSearchParams,
 ): readonly (readonly [string, string])[] {
-  const iterator = witnessReflectApply<object>(
-    nativeUrlSearchParamsEntries,
-    searchParams,
-    [],
-  );
+  const iterator = witnessReflectApply<object>(nativeUrlSearchParamsEntries, searchParams, []);
   const entries: (readonly [string, string])[] = [];
   for (let count = 0; count <= 100_000; count += 1) {
     const result = witnessReflectApply<{ done?: unknown; value?: unknown }>(
@@ -1258,7 +1251,7 @@ export function requestDecodeURIComponent(value: string): string {
   return witnessReflectApply(nativeDecodeURIComponent, undefined, [value]);
 }
 
-export function requestDecodeUtf8(value: Uint8Array): string {
+export function requestDecodeUtf8(value: ArrayBuffer | Uint8Array): string {
   assertRequestBodyIntrinsics();
   return witnessReflectApply(nativeTextDecoderDecode, textDecoder, [value]);
 }

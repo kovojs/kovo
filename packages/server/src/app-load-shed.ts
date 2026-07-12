@@ -12,6 +12,7 @@ import {
   createNativeRequest,
   registerAuthorityNeutralRequestClone,
 } from './request-carrier.js';
+import { requestDecodeUtf8, requestParseJson } from './request-body-intrinsics.js';
 import {
   requestStateHeaderGet,
   requestStateIgnorePromiseRejection,
@@ -40,6 +41,7 @@ import {
   witnessMapSize,
   witnessReflectApply,
   witnessReflectGet,
+  witnessProxy,
   witnessWeakMapGet,
   witnessWeakMapSet,
   witnessWeakSetAdd,
@@ -453,18 +455,17 @@ export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: nu
 export function requestWithBodyLimit(request: Request, maxBodyBytes: number | false): Request {
   if (witnessWeakSetHas(verifiedBodyRequests, request)) return request;
   if (maxBodyBytes === false || readNativeRequestBody(request) === null) return request;
-  const limited = new Proxy(request, {
+  const limited = witnessProxy(request, {
     get(target, property) {
       if (property === 'arrayBuffer') {
         return async () => readLimitedArrayBuffer(target, maxBodyBytes);
       }
       if (property === 'text') {
-        return async () =>
-          new TextDecoder().decode(await readLimitedArrayBuffer(target, maxBodyBytes));
+        return async () => requestDecodeUtf8(await readLimitedArrayBuffer(target, maxBodyBytes));
       }
       if (property === 'json') {
         return async () =>
-          JSON.parse(new TextDecoder().decode(await readLimitedArrayBuffer(target, maxBodyBytes)));
+          requestParseJson(requestDecodeUtf8(await readLimitedArrayBuffer(target, maxBodyBytes)));
       }
       if (property === 'formData') {
         return async () => {

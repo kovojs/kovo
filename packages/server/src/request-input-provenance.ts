@@ -2,6 +2,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
+  witnessGetPrototypeOf,
+  witnessIsArray,
+  witnessObjectIs,
+  witnessProxy,
+  witnessRegExpTest,
   witnessReflectGet,
   witnessWeakMapGet,
   witnessWeakMapSet,
@@ -34,6 +39,7 @@ export interface RequestInputProvenance {
 }
 
 const requestInputProvenance = new AsyncLocalStorage<RequestInputProvenanceState>();
+const requestInputObjectPrototype = witnessGetPrototypeOf({});
 
 /** @internal Run a mutation handler under a request-input provenance context (SPEC §11.1 KV438). */
 export function runWithRequestInputProvenance<Input, Result>(
@@ -65,7 +71,7 @@ export function markPrivilegedRequestInputAssignment(value: unknown): void {
       type: typeof value,
       value,
     };
-    state.privilegedPrimitives.push({ ...read, consumed: false });
+    state.privilegedPrimitives[state.privilegedPrimitives.length] = { ...read, consumed: false };
   }
 }
 
@@ -94,14 +100,16 @@ function trackRequestInputValue(
   state: RequestInputProvenanceState,
 ): unknown {
   if (!isTrackableObject(value)) {
-    if (isPrimitiveValue(value)) state.primitiveReads.push({ path, type: typeof value, value });
+    if (isPrimitiveValue(value)) {
+      state.primitiveReads[state.primitiveReads.length] = { path, type: typeof value, value };
+    }
     return value;
   }
 
   const cached = witnessWeakMapGet(state.proxyCache, value);
   if (cached !== undefined) return cached;
 
-  const proxy = new Proxy(value as Record<PropertyKey, unknown>, {
+  const proxy = witnessProxy(value as Record<PropertyKey, unknown>, {
     get(target, property, receiver) {
       const item = witnessReflectGet(target, property, receiver);
       return trackRequestInputValue(item, pathForProperty(path, property), state);
@@ -116,14 +124,14 @@ function trackRequestInputValue(
 function pathForProperty(base: string, property: PropertyKey): string {
   if (typeof property === 'symbol') return `${base}[${String(property)}]`;
   const key = String(property);
-  return /^\d+$/u.test(key) ? `${base}[${key}]` : `${base}.${key}`;
+  return witnessRegExpTest(/^\d+$/u, key) ? `${base}[${key}]` : `${base}.${key}`;
 }
 
 function isTrackableObject(value: unknown): value is object {
   if (typeof value !== 'object' || value === null) return false;
-  if (Array.isArray(value)) return true;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  if (witnessIsArray(value)) return true;
+  const prototype = witnessGetPrototypeOf(value);
+  return prototype === requestInputObjectPrototype || prototype === null;
 }
 
 function isPrimitiveValue(value: unknown): value is PrimitiveValue {
@@ -131,7 +139,7 @@ function isPrimitiveValue(value: unknown): value is PrimitiveValue {
 }
 
 function primitiveReadMatches(read: PrimitiveRead, value: PrimitiveValue): boolean {
-  return read.type === typeof value && Object.is(read.value, value);
+  return read.type === typeof value && witnessObjectIs(read.value, value);
 }
 
 function lastPrimitiveReadForValue(

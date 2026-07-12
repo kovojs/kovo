@@ -55,6 +55,7 @@ import {
 } from './request-state-intrinsics.js';
 import {
   createWitnessMap,
+  witnessCreateNullRecord,
   createWitnessWeakSet,
   witnessDefineProperty,
   witnessFreeze,
@@ -69,6 +70,7 @@ import {
   witnessReflectApply,
   witnessReflectGet,
   witnessOwnKeys,
+  witnessProxy,
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
@@ -1368,7 +1370,7 @@ function missingWebhookPrincipalPostureError(
 }
 
 function deniedWebhookTx(name: string): unknown {
-  return new Proxy(Object.create(null), {
+  return witnessProxy(witnessCreateNullRecord(), {
     get() {
       throw missingWebhookPrincipalPostureError(name, 'write');
     },
@@ -1383,7 +1385,7 @@ function deniedWebhookTx(name: string): unknown {
 
 function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointRequest {
   if (tx === undefined) return request;
-  return new Proxy(request, {
+  return witnessProxy(request, {
     get(target, property) {
       if (property === 'db') return tx;
       const value = witnessReflectGet(target, property, target);

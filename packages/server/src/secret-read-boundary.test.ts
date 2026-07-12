@@ -76,6 +76,32 @@ function queryObject(
 }
 
 describe('secret read boundary', () => {
+  it('pins the secret-boxing membrane against late global Proxy replacement', () => {
+    const NativeProxy = globalThis.Proxy;
+    let proxyHits = 0;
+    const raw = {
+      select() {
+        return [{ classified: 'victim-secret' }];
+      },
+    };
+    let db!: typeof raw;
+    try {
+      globalThis.Proxy = class BypassProxy {
+        constructor(target: object) {
+          if (target === raw) proxyHits += 1;
+          return target;
+        }
+      } as unknown as ProxyConstructor;
+      db = createSecretBoxingReadDb(raw, metadata());
+    } finally {
+      globalThis.Proxy = NativeProxy;
+    }
+
+    const [row] = db.select();
+    expect(proxyHits).toBe(0);
+    expect(isSecret(row?.classified)).toBe(true);
+  });
+
   it('pins declared secret metadata before application code can replace Set.has', () => {
     // SPEC §10.3/§11.2: the managed read boundary is the confidentiality choke. Application
     // code shares the server realm, so a late prototype replacement must not turn a declared
@@ -129,13 +155,9 @@ describe('secret read boundary', () => {
     const rows = [{ publicLabel: 'public label' }];
     const db = createSecretBoxingReadDb(
       builderDb(
-        queryObject(
-          'select upper(label) as publicLabel from secrets',
-          rows,
-          {
-            publicLabel: { queryChunks: [{ value: ['upper('] }, publicColumn, { value: [')'] }] },
-          },
-        ),
+        queryObject('select upper(label) as publicLabel from secrets', rows, {
+          publicLabel: { queryChunks: [{ value: ['upper('] }, publicColumn, { value: [')'] }] },
+        }),
       ),
       metadata(),
       {
@@ -356,9 +378,7 @@ describe('secret read boundary', () => {
   });
 
   it('pins the SQLite origin client before application mutation', async () => {
-    const client = originClient([
-      { column: 'classified', name: 'leaked', table: 'secrets' },
-    ]);
+    const client = originClient([{ column: 'classified', name: 'leaked', table: 'secrets' }]);
     const rows = [{ leaked: 'victim-secret' }];
     const db = createSecretBoxingReadDb(
       builderDb(queryObject('select classified as leaked from secrets', rows)),
@@ -378,9 +398,7 @@ describe('secret read boundary', () => {
   it('boxes every derived value when no exact builder execution path exists', async () => {
     const db = createSecretBoxingReadDb(
       builderDb(
-        queryObject('select max(classified) as leaked from secrets', [
-          { leaked: 'victim-secret' },
-        ]),
+        queryObject('select max(classified) as leaked from secrets', [{ leaked: 'victim-secret' }]),
       ),
       metadata(),
     );
@@ -529,10 +547,7 @@ describe('secret read boundary', () => {
         label: pgText('label').notNull(),
       });
       const relations = defineRelations({ secrets }, () => ({}));
-      const db = createSecretBoxingReadDb(
-        drizzlePostgres({ client, relations }),
-        metadata(),
-      );
+      const db = createSecretBoxingReadDb(drizzlePostgres({ client, relations }), metadata());
 
       const first = await db.query.secrets.findFirst();
       expect(Array.isArray(first)).toBe(false);

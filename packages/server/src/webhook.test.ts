@@ -639,6 +639,53 @@ describe('server webhook primitive', () => {
     expect(writes).toBe(0);
   });
 
+  it('pins the denied webhook transaction membrane against late global Proxy replacement', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let injectedWrites = 0;
+    const directTx = webhook('/webhooks/proxy-tx-unscoped', {
+      handler(_input, context) {
+        (context.tx as unknown as { insert(): void }).insert();
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      async transaction(_context, run) {
+        return run({ insert() {} });
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only late Proxy webhook posture test',
+    });
+    const NativeProxy = globalThis.Proxy;
+    let proxyHits = 0;
+    let result!: Awaited<ReturnType<typeof runWebhook>>;
+    try {
+      globalThis.Proxy = class BypassProxy {
+        constructor(target: object, handler: ProxyHandler<object>) {
+          proxyHits += 1;
+          if (Object.getPrototypeOf(target) === null && Reflect.ownKeys(target).length === 0) {
+            return { insert: () => (injectedWrites += 1) };
+          }
+          return new NativeProxy(target, handler);
+        }
+      } as unknown as ProxyConstructor;
+      result = await runWebhook(
+        directTx,
+        new Request('https://example.test/webhooks/proxy-tx-unscoped', {
+          body: JSON.stringify({ id: 'evt_proxy_tx' }),
+          method: 'POST',
+        }),
+      );
+    } finally {
+      globalThis.Proxy = NativeProxy;
+    }
+
+    expect(proxyHits).toBe(0);
+    expect(result.response.status).toBe(500);
+    expect(result.changes).toEqual([]);
+    expect(injectedWrites).toBe(0);
+  });
+
   it('fails closed before a webhook mutation dispatch when replay posture is inactive', async () => {
     const invoice = domain('invoice-run-mutation-no-replay');
     let mutationWrites = 0;
