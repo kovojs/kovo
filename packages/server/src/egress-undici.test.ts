@@ -77,6 +77,49 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
     );
   });
 
+  it('binds the checked literal host to native URL bytes after late String.replace poisoning', async () => {
+    uninstall = await installUndiciFloor(resolveEgressPolicy(undefined, () => {}));
+    const originalReplace = String.prototype.replace;
+    let lied = false;
+    let outcome: unknown;
+    try {
+      String.prototype.replace = function (search, replacement) {
+        if (!lied && this.valueOf() === '127.0.0.1') {
+          lied = true;
+          return '8.8.8.8';
+        }
+        return originalReplace.call(this, search, replacement as string);
+      };
+      outcome = await fetch(`http://127.0.0.1:${port}/late-replace`).catch(
+        (error: unknown) => error,
+      );
+    } finally {
+      String.prototype.replace = originalReplace;
+    }
+
+    expect(reason(outcome)).toMatch(/EgressBlockedError|loopback/);
+  });
+
+  it('does not accept a forged public resolution from late Map.get poisoning', async () => {
+    dnsLookupMock.mockImplementationOnce(() =>
+      Promise.resolve([{ address: '127.0.0.1', family: 4 }]),
+    );
+    uninstall = await installUndiciFloor(resolveEgressPolicy(undefined, () => {}));
+    const originalGet = Map.prototype.get;
+    let outcome: unknown;
+    try {
+      Map.prototype.get = function (key) {
+        if (key === 'localhost') return { expires: Number.POSITIVE_INFINITY, ip: '8.8.8.8' };
+        return originalGet.call(this, key);
+      };
+      outcome = await fetch(`http://localhost:${port}/late-map`).catch((error: unknown) => error);
+    } finally {
+      Map.prototype.get = originalGet;
+    }
+
+    expect(reason(outcome)).toMatch(/EgressBlockedError|loopback/);
+  });
+
   it('ALLOWS a fetch to a private literal that IS in allowInternal (reaches the loopback test server)', async () => {
     uninstall = await installUndiciFloor(
       resolveEgressPolicy({ allowInternal: [`127.0.0.1:${port}`] }, () => {}),

@@ -4,6 +4,53 @@ import http from 'node:http';
 import net from 'node:net';
 import type { LookupAddress } from 'node:dns';
 
+import {
+  egressApply,
+  egressArrayEvery,
+  egressArrayFilter,
+  egressArrayIsArray,
+  egressArrayJoin,
+  egressArrayMap,
+  egressArrayPush,
+  egressArraySlice,
+  egressArraySome,
+  egressArraySplice,
+  egressDecodeURIComponent,
+  egressNetIsIp,
+  egressNumber,
+  egressNumberIsInteger,
+  egressNumberToString,
+  egressObjectDefineProperty,
+  egressParseInt,
+  egressRegExpExec,
+  egressRegExpTest,
+  egressRequest,
+  egressRequestUrl,
+  egressSetAdd,
+  egressSetDelete,
+  egressSetHas,
+  egressString,
+  egressStringEndsWith,
+  egressStringIncludes,
+  egressStringIndexOf,
+  egressStringLastIndexOf,
+  egressStringSlice,
+  egressStringSplit,
+  egressStringStartsWith,
+  egressStringToLowerCase,
+  egressStringTrim,
+  egressUrl,
+  egressUrlHash,
+  egressUrlHostname,
+  egressUrlPassword,
+  egressUrlPathname,
+  egressUrlPort,
+  egressUrlProtocol,
+  egressUrlSearch,
+  egressUrlToString,
+  egressUrlUsername,
+} from './egress-intrinsics.js';
+
 /**
  * Outbound-egress private-network deny floor (SPEC §6.6 "Outbound egress"; SPEC §6.6
  * soundness boundary rule 3; `plans/secure-framework.md` Phase 5 / Tier 3).
@@ -84,7 +131,7 @@ export class EgressBlockedError extends Error {
     reason?: 'private-network' | 'destination-allowlist' | 'missing-floor' | undefined;
   }) {
     const where =
-      args.resolvedIp && args.resolvedIp !== args.destination.split(':')[0]
+      args.resolvedIp && args.resolvedIp !== egressStringSplit(args.destination, ':')[0]
         ? `${args.destination} (resolved to ${args.resolvedIp})`
         : args.destination;
     const reason = args.reason ?? 'private-network';
@@ -264,8 +311,9 @@ export function resolveEgressPolicy(
   const allowDatabaseEndpoints = new Set<string>();
   const allowDestinations = new Set<string>();
   const allowInternalCidrs: string[] = [];
-  for (const raw of options?.allowDestinations ?? []) {
-    const entry = String(raw).trim();
+  const destinationInputs = options?.allowDestinations ?? [];
+  for (let index = 0; index < destinationInputs.length; index += 1) {
+    const entry = egressStringTrim(egressString(destinationInputs[index]));
     if (entry === '') continue;
     const normalized = normalizeHttpOrigin(entry);
     if (!normalized) {
@@ -274,18 +322,19 @@ export function resolveEgressPolicy(
       );
       continue;
     }
-    allowDestinations.add(normalized);
+    egressSetAdd(allowDestinations, normalized);
   }
-  for (const raw of options?.allowInternal ?? []) {
-    const entry = String(raw).trim();
+  const internalInputs = options?.allowInternal ?? [];
+  for (let index = 0; index < internalInputs.length; index += 1) {
+    const entry = egressStringTrim(egressString(internalInputs[index]));
     if (entry === '') continue;
     // CIDR notation: flag + warn (broad ranges widen the floor), honor as a fallback range.
-    if (entry.includes('/')) {
+    if (egressStringIncludes(entry, '/')) {
       warn(
         `allowInternal entry "${entry}" is a CIDR range. A broad CIDR widens the private-network ` +
           'floor; prefer narrow host:port entries. Honored as a range fallback.',
       );
-      allowInternalCidrs.push(entry);
+      egressArrayPush(allowInternalCidrs, entry);
       continue;
     }
     const parsed = parseHostPort(entry);
@@ -309,13 +358,15 @@ export function resolveEgressPolicy(
           'so this entry is redundant.',
       );
     }
-    allowInternal.add(`${parsed.host.toLowerCase()}:${parsed.port}`);
+    egressSetAdd(allowInternal, `${egressStringToLowerCase(parsed.host)}:${parsed.port}`);
   }
-  for (const endpoint of resolveDatabaseEgressEndpoints(policyOptions.databaseUrls)) {
-    allowDatabaseEndpoints.add(endpoint);
+  const resolvedDatabaseEndpoints = resolveDatabaseEgressEndpoints(policyOptions.databaseUrls);
+  for (let index = 0; index < resolvedDatabaseEndpoints.length; index += 1) {
+    egressSetAdd(allowDatabaseEndpoints, resolvedDatabaseEndpoints[index]!);
   }
-  for (const endpoint of policyOptions.databaseEndpoints ?? []) {
-    allowDatabaseEndpoints.add(endpoint);
+  const configuredDatabaseEndpoints = policyOptions.databaseEndpoints ?? [];
+  for (let index = 0; index < configuredDatabaseEndpoints.length; index += 1) {
+    egressSetAdd(allowDatabaseEndpoints, configuredDatabaseEndpoints[index]!);
   }
   const policy: EgressPolicy = {
     allowInternal,
@@ -340,19 +391,23 @@ export function databaseEgressEndpointsFromUrls(
 /** @internal Mutate the active egress floor with framework-owned DB endpoints. */
 export function addDatabaseEgressEndpoints(
   policy: EgressPolicy,
-  endpoints: Iterable<string>,
+  endpoints: readonly string[],
 ): void {
   const mutable = policy.allowDatabaseEndpoints as Set<string>;
-  for (const endpoint of endpoints) mutable.add(endpoint);
+  for (let index = 0; index < endpoints.length; index += 1) {
+    egressSetAdd(mutable, endpoints[index]!);
+  }
 }
 
 /** @internal Remove framework-owned DB endpoints that are no longer registered. */
 export function removeDatabaseEgressEndpoints(
   policy: EgressPolicy,
-  endpoints: Iterable<string>,
+  endpoints: readonly string[],
 ): void {
   const mutable = policy.allowDatabaseEndpoints as Set<string>;
-  for (const endpoint of endpoints) mutable.delete(endpoint);
+  for (let index = 0; index < endpoints.length; index += 1) {
+    egressSetDelete(mutable, endpoints[index]!);
+  }
 }
 
 function resolveDatabaseEgressEndpoints(
@@ -360,27 +415,34 @@ function resolveDatabaseEgressEndpoints(
 ): readonly string[] {
   const urls = databaseUrls ?? [process.env.KOVO_DATABASE_URL];
   const endpoints = new Set<string>();
-  for (const raw of urls) {
-    if (raw === undefined || raw.trim() === '') continue;
+  const result: string[] = [];
+  for (let index = 0; index < urls.length; index += 1) {
+    const raw = urls[index];
+    if (raw === undefined || egressStringTrim(raw) === '') continue;
     const endpoint = databaseEgressEndpointFromUrl(raw);
-    if (endpoint) endpoints.add(endpoint);
+    if (endpoint && !egressSetHas(endpoints, endpoint)) {
+      egressSetAdd(endpoints, endpoint);
+      egressArrayPush(result, endpoint);
+    }
   }
-  return [...endpoints];
+  return result;
 }
 
 function databaseEgressEndpointFromUrl(raw: string): string | null {
   let url: URL;
   try {
-    url = new URL(raw);
+    url = egressUrl(raw);
   } catch {
     return null;
   }
-  if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') return null;
-  const host = decodeURIComponent(url.hostname).replace(/^\[/, '').replace(/\]$/, '');
+  const protocol = egressUrlProtocol(url);
+  if (protocol !== 'postgres:' && protocol !== 'postgresql:') return null;
+  const host = stripIpv6Brackets(egressDecodeURIComponent(egressUrlHostname(url)));
   if (host === '') return null;
-  const port = url.port === '' ? 5432 : Number(url.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
-  return `${host.toLowerCase()}:${port}`;
+  const urlPort = egressUrlPort(url);
+  const port = urlPort === '' ? 5432 : egressNumber(urlPort);
+  if (!egressNumberIsInteger(port) || port < 1 || port > 65535) return null;
+  return `${egressStringToLowerCase(host)}:${port}`;
 }
 
 /** Boot-time config error for an invalid/forbidden egress allowlist entry. */
@@ -402,47 +464,68 @@ interface HostPort {
 function parseHostPort(entry: string): HostPort | null {
   let host: string;
   let portStr: string;
-  if (entry.startsWith('[')) {
-    const close = entry.indexOf(']');
+  if (egressStringStartsWith(entry, '[')) {
+    const close = egressStringIndexOf(entry, ']');
     if (close < 0) return null;
-    host = entry.slice(1, close);
-    const rest = entry.slice(close + 1);
-    if (!rest.startsWith(':')) return null;
-    portStr = rest.slice(1);
+    host = egressStringSlice(entry, 1, close);
+    const rest = egressStringSlice(entry, close + 1);
+    if (!egressStringStartsWith(rest, ':')) return null;
+    portStr = egressStringSlice(rest, 1);
   } else {
-    const idx = entry.lastIndexOf(':');
+    const idx = egressStringLastIndexOf(entry, ':');
     if (idx < 0) return null;
-    host = entry.slice(0, idx);
-    portStr = entry.slice(idx + 1);
+    host = egressStringSlice(entry, 0, idx);
+    portStr = egressStringSlice(entry, idx + 1);
   }
-  const port = Number(portStr);
-  if (host === '' || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  const port = egressNumber(portStr);
+  if (host === '' || !egressNumberIsInteger(port) || port < 1 || port > 65535) return null;
   return { host, port };
 }
 
 function normalizeHttpOrigin(entry: string): string | null {
   try {
-    const url = new URL(entry);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    const url = egressUrl(entry);
+    const protocol = egressUrlProtocol(url);
+    if (protocol !== 'http:' && protocol !== 'https:') return null;
+    if (
+      egressUrlUsername(url) ||
+      egressUrlPassword(url) ||
+      egressUrlPathname(url) !== '/' ||
+      egressUrlSearch(url) ||
+      egressUrlHash(url)
+    ) {
+      return null;
+    }
     const port = normalizedUrlPort(url);
-    return `${url.protocol}//${url.hostname.toLowerCase()}:${port}`;
+    return `${protocol}//${egressStringToLowerCase(egressUrlHostname(url))}:${port}`;
   } catch {
     return null;
   }
 }
 
 function normalizedUrlPort(url: URL): number {
-  if (url.port) return Number(url.port);
-  return url.protocol === 'https:' ? 443 : 80;
+  const port = egressUrlPort(url);
+  if (port) return egressNumber(port);
+  return egressUrlProtocol(url) === 'https:' ? 443 : 80;
+}
+
+function stripIpv6Brackets(value: string): string {
+  let result = value;
+  if (egressStringStartsWith(result, '[')) result = egressStringSlice(result, 1);
+  if (egressStringEndsWith(result, ']')) result = egressStringSlice(result, 0, -1);
+  return result;
+}
+
+function stripTrailingDnsDot(value: string): string {
+  return egressStringEndsWith(value, '.') ? egressStringSlice(value, 0, -1) : value;
 }
 
 function resolveAzureIdentityEndpoint(raw: string | undefined): AzureIdentityEndpoint | undefined {
-  if (raw === undefined || raw.trim() === '') return undefined;
+  if (raw === undefined || egressStringTrim(raw) === '') return undefined;
 
   let url: URL;
   try {
-    url = new URL(raw.trim());
+    url = egressUrl(egressStringTrim(raw));
   } catch {
     throw new EgressConfigError(
       'IDENTITY_ENDPOINT must be an absolute http(s) URL so Kovo can classify its authority as ' +
@@ -451,9 +534,9 @@ function resolveAzureIdentityEndpoint(raw: string | undefined): AzureIdentityEnd
     );
   }
   if (
-    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
-    url.username !== '' ||
-    url.password !== ''
+    (egressUrlProtocol(url) !== 'http:' && egressUrlProtocol(url) !== 'https:') ||
+    egressUrlUsername(url) !== '' ||
+    egressUrlPassword(url) !== ''
   ) {
     throw new EgressConfigError(
       'IDENTITY_ENDPOINT must be an absolute http(s) URL without embedded credentials so Kovo ' +
@@ -462,9 +545,9 @@ function resolveAzureIdentityEndpoint(raw: string | undefined): AzureIdentityEnd
     );
   }
 
-  const host = normalizeAuthorityHost(url.hostname);
+  const host = normalizeAuthorityHost(egressUrlHostname(url));
   const port = normalizedUrlPort(url);
-  if (host === '' || !Number.isInteger(port) || port < 1 || port > 65_535) {
+  if (host === '' || !egressNumberIsInteger(port) || port < 1 || port > 65_535) {
     throw new EgressConfigError(
       'IDENTITY_ENDPOINT has an invalid host or port; refusing to install an ambiguous Azure ' +
         'metadata egress policy (SPEC §6.6).',
@@ -481,14 +564,14 @@ function resolveAzureIdentityEndpoint(raw: string | undefined): AzureIdentityEnd
 }
 
 function normalizeAuthorityHost(host: string): string {
-  const unbracketed = host.trim().replace(/^\[/u, '').replace(/\]$/u, '');
+  const unbracketed = stripIpv6Brackets(egressStringTrim(host));
   const literalIp = normalizeIpLiteral(unbracketed);
-  if (literalIp !== null) return literalIp.toLowerCase();
-  return unbracketed.toLowerCase().replace(/\.$/u, '');
+  if (literalIp !== null) return egressStringToLowerCase(literalIp);
+  return stripTrailingDnsDot(egressStringToLowerCase(unbracketed));
 }
 
 function isLocalhostName(host: string): boolean {
-  return host === 'localhost' || host.endsWith('.localhost');
+  return host === 'localhost' || egressStringEndsWith(host, '.localhost');
 }
 
 function isConfiguredAzureIdentityAuthority(
@@ -522,7 +605,7 @@ function isAzureIdentityDestination(args: {
   const normalizedResolvedIp = normalizeIpLiteral(resolvedIp);
   if (normalizedHost === endpoint.host) {
     if (normalizedResolvedIp !== null) {
-      endpoint.resolvedIps.add(normalizedResolvedIp);
+      egressSetAdd(endpoint.resolvedIps, normalizedResolvedIp);
     }
     return true;
   }
@@ -538,7 +621,7 @@ function isAzureIdentityDestination(args: {
   ) {
     return true;
   }
-  return normalizedResolvedIp !== null && endpoint.resolvedIps.has(normalizedResolvedIp);
+  return normalizedResolvedIp !== null && egressSetHas(endpoint.resolvedIps, normalizedResolvedIp);
 }
 
 // ---------------------------------------------------------------------------
@@ -558,7 +641,7 @@ function isAzureIdentityDestination(args: {
  * `http://2130706433/` (== 127.0.0.1) past a naive `=== '127.0.0.1'` check.
  */
 export function normalizeIpLiteral(host: string): string | null {
-  const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
+  const h = stripIpv6Brackets(egressStringTrim(host));
   if (h === '') return null;
 
   // Bare IPv4 in decimal/octal/hex (any of the 1–4 part forms inet_aton accepts).
@@ -580,7 +663,7 @@ export function normalizeIpLiteral(host: string): string | null {
  * and pin the actual dialed address before the SPEC §6.6 sink decision.
  */
 export function normalizeFastPathIpLiteral(host: string): string | null {
-  const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
+  const h = stripIpv6Brackets(egressStringTrim(host));
   if (h === '') return null;
 
   if (isCanonicalIpv4Literal(h)) return h;
@@ -604,17 +687,19 @@ export function normalizeFastPathIpLiteral(host: string): string | null {
  * @internal
  */
 export function isNodeAcceptedUnnormalizedIpLiteral(host: string): boolean {
-  const h = host.trim().replace(/^\[/, '').replace(/\]$/, '');
-  return h !== '' && net.isIP(h) !== 0 && normalizeIpLiteral(h) === null;
+  const h = stripIpv6Brackets(egressStringTrim(host));
+  return h !== '' && egressNetIsIp(h) !== 0 && normalizeIpLiteral(h) === null;
 }
 
 function isCanonicalIpv4Literal(input: string): boolean {
-  const parts = input.split('.');
+  const parts = egressStringSplit(input, '.');
   if (parts.length !== 4) return false;
-  return parts.every((part) => {
-    if (!/^(0|[1-9][0-9]*)$/.test(part)) return false;
-    const value = Number(part);
-    return Number.isInteger(value) && value >= 0 && value <= 255 && String(value) === part;
+  return egressArrayEvery(parts, (part) => {
+    if (!egressRegExpTest(/^(0|[1-9][0-9]*)$/u, part)) return false;
+    const value = egressNumber(part);
+    return (
+      egressNumberIsInteger(value) && value >= 0 && value <= 255 && egressString(value) === part
+    );
   });
 }
 
@@ -624,19 +709,21 @@ function isCanonicalIpv4Literal(input: string): boolean {
  * Returns canonical dotted-quad or null.
  */
 export function parseLooseIpv4(input: string): string | null {
-  const parts = input.split('.');
+  const parts = egressStringSplit(input, '.');
   if (parts.length === 0 || parts.length > 4) return null;
   const nums: number[] = [];
-  for (const part of parts) {
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
     if (part === '') return null;
     let value: number;
-    if (/^0x[0-9a-f]+$/i.test(part)) value = parseInt(part.slice(2), 16);
-    else if (/^0[0-7]+$/.test(part)) value = parseInt(part, 8);
-    else if (/^0$/.test(part)) value = 0;
-    else if (/^[1-9][0-9]*$/.test(part)) value = parseInt(part, 10);
+    if (egressRegExpTest(/^0x[0-9a-f]+$/iu, part)) {
+      value = egressParseInt(egressStringSlice(part, 2), 16);
+    } else if (egressRegExpTest(/^0[0-7]+$/u, part)) value = egressParseInt(part, 8);
+    else if (egressRegExpTest(/^0$/u, part)) value = 0;
+    else if (egressRegExpTest(/^[1-9][0-9]*$/u, part)) value = egressParseInt(part, 10);
     else return null;
-    if (!Number.isInteger(value) || value < 0) return null;
-    nums.push(value);
+    if (!egressNumberIsInteger(value) || value < 0) return null;
+    egressArrayPush(nums, value);
   }
   // Compose into a 32-bit address per inet_aton's part-count semantics.
   let addr: number;
@@ -651,7 +738,7 @@ export function parseLooseIpv4(input: string): string | null {
     if (nums[0]! > 0xff || nums[1]! > 0xff || nums[2]! > 0xffff) return null;
     addr = (nums[0]! << 24) | (nums[1]! << 16) | nums[2]!;
   } else {
-    if (nums.some((x) => x > 0xff)) return null;
+    if (egressArraySome(nums, (x) => x > 0xff)) return null;
     addr = (nums[0]! << 24) | (nums[1]! << 16) | (nums[2]! << 8) | nums[3]!;
   }
   addr = addr >>> 0;
@@ -682,11 +769,15 @@ export function classifyIp(host: string): PrivateAddressClass {
 }
 
 function classifyIpv4(ip: string): PrivateAddressClass {
-  const octets = ip.split('.').map((o) => Number(o));
-  if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) {
+  const octets = egressArrayMap(egressStringSplit(ip, '.'), (octet) => egressNumber(octet));
+  if (
+    octets.length !== 4 ||
+    egressArraySome(octets, (octet) => !egressNumberIsInteger(octet) || octet < 0 || octet > 255)
+  ) {
     return 'special-use';
   }
-  const [a, b] = octets as [number, number, number, number];
+  const a = octets[0]!;
+  const b = octets[1]!;
   // Cloud instance-metadata (AWS/GCP/Azure all use 169.254.169.254; AWS also 169.254.169.123 NTP,
   // 169.254.170.2 ECS task creds, 169.254.170.23 EKS Pod Identity). Treat the whole 169.254/16
   // link-local block as metadata-sensitive: it is the SSRF credential-theft surface. (A genuine
@@ -726,8 +817,10 @@ interface Ipv6Bytes {
 
 function classifyIpv6Bytes(ip: Ipv6Bytes): PrivateAddressClass {
   const bytes = ip.bytes;
-  if (bytes.every((byte) => byte === 0)) return 'unspecified';
-  if (bytes.slice(0, 15).every((byte) => byte === 0) && bytes[15] === 1) return 'loopback';
+  if (egressArrayEvery(bytes, (byte) => byte === 0)) return 'unspecified';
+  if (egressArrayEvery(egressArraySlice(bytes, 0, 15), (byte) => byte === 0) && bytes[15] === 1) {
+    return 'loopback';
+  }
 
   const extractedV4 = extractedIpv4FromIpv6(bytes);
   if (extractedV4 !== null) return classifyIpv4(extractedV4);
@@ -753,20 +846,24 @@ function classifyIpv6Bytes(ip: Ipv6Bytes): PrivateAddressClass {
 }
 
 function extractedIpv4FromIpv6(bytes: readonly number[]): string | null {
-  const prefix96 = bytes.slice(0, 12);
+  const prefix96 = egressArraySlice(bytes, 0, 12);
   const embedded = (): string => `${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`;
 
   // ::a.b.c.d / ::hhhh:hhhh IPv4-compatible.
-  if (prefix96.every((byte) => byte === 0)) return embedded();
+  if (egressArrayEvery(prefix96, (byte) => byte === 0)) return embedded();
 
   // ::ffff:a.b.c.d / ::ffff:hhhh:hhhh IPv4-mapped.
-  if (bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff) {
+  if (
+    egressArrayEvery(egressArraySlice(bytes, 0, 10), (byte) => byte === 0) &&
+    bytes[10] === 0xff &&
+    bytes[11] === 0xff
+  ) {
     return embedded();
   }
 
   // 64:ff9b::/96 NAT64.
   const nat64Prefix = [0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0];
-  if (prefix96.every((byte, index) => byte === nat64Prefix[index])) return embedded();
+  if (egressArrayEvery(prefix96, (byte, index) => byte === nat64Prefix[index])) return embedded();
 
   // ISATAP embeds IPv4 in the low 32 bits after a 0000:5efe interface-id marker:
   // <prefix>:0:5efe:w.x.y.z or <prefix>:0:5efe:hhhh:hhhh.
@@ -779,11 +876,13 @@ function extractedIpv4FromIpv6(bytes: readonly number[]): string | null {
 }
 
 function parseIpv6Bytes(input: string): Ipv6Bytes | null {
-  const ip = input.toLowerCase();
-  if (!ip.includes(':') || ip.includes('%')) return null;
-  if (ip.split('::').length > 2) return null;
+  const ip = egressStringToLowerCase(input);
+  if (!egressStringIncludes(ip, ':') || egressStringIncludes(ip, '%')) return null;
+  if (egressStringSplit(ip, '::').length > 2) return null;
 
-  const [headRaw, tailRaw] = ip.split('::') as [string, string | undefined];
+  const halves = egressStringSplit(ip, '::');
+  const headRaw = halves[0]!;
+  const tailRaw = halves[1];
   const head = parseIpv6Side(headRaw);
   if (head === null) return null;
   const tail = tailRaw === undefined ? [] : parseIpv6Side(tailRaw);
@@ -796,52 +895,59 @@ function parseIpv6Bytes(input: string): Ipv6Bytes | null {
     return null;
   }
 
-  const words = tailRaw === undefined ? head : [...head, ...Array(missing).fill(0), ...tail];
+  const words = egressArraySlice(head);
+  if (tailRaw !== undefined) {
+    for (let index = 0; index < missing; index += 1) egressArrayPush(words, 0);
+    for (let index = 0; index < tail.length; index += 1) egressArrayPush(words, tail[index]!);
+  }
   if (words.length !== 8) return null;
   const bytes: number[] = [];
-  for (const word of words) bytes.push((word >> 8) & 0xff, word & 0xff);
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index]!;
+    egressArrayPush(bytes, (word >> 8) & 0xff, word & 0xff);
+  }
   return { bytes };
 }
 
 function parseScopedIpv6Bytes(input: string): Ipv6Bytes | null {
-  const percent = input.lastIndexOf('%');
+  const percent = egressStringLastIndexOf(input, '%');
   if (percent <= 0 || percent === input.length - 1) return null;
-  const address = input.slice(0, percent);
-  const scope = input.slice(percent + 1);
-  if (!/^[0-9a-z_.~-]+$/i.test(scope)) return null;
-  if (net.isIP(input) !== 6) return null;
+  const address = egressStringSlice(input, 0, percent);
+  const scope = egressStringSlice(input, percent + 1);
+  if (!egressRegExpTest(/^[0-9a-z_.~-]+$/iu, scope)) return null;
+  if (egressNetIsIp(input) !== 6) return null;
   return parseIpv6Bytes(address);
 }
 
 function parseIpv6Side(side: string): number[] | null {
   if (side === '') return [];
-  const parts = side.split(':');
+  const parts = egressStringSplit(side, ':');
   const words: number[] = [];
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index]!;
     if (part === '') return null;
-    if (part.includes('.')) {
+    if (egressStringIncludes(part, '.')) {
       if (index !== parts.length - 1) return null;
       const v4 = parseStrictIpv4(part);
       if (v4 === null) return null;
-      words.push((v4[0]! << 8) | v4[1]!, (v4[2]! << 8) | v4[3]!);
+      egressArrayPush(words, (v4[0]! << 8) | v4[1]!, (v4[2]! << 8) | v4[3]!);
       continue;
     }
-    if (!/^[0-9a-f]{1,4}$/.test(part)) return null;
-    words.push(parseInt(part, 16));
+    if (!egressRegExpTest(/^[0-9a-f]{1,4}$/u, part)) return null;
+    egressArrayPush(words, egressParseInt(part, 16));
   }
   return words;
 }
 
 function parseStrictIpv4(input: string): readonly number[] | null {
-  const parts = input.split('.');
+  const parts = egressStringSplit(input, '.');
   if (parts.length !== 4) return null;
-  const octets = parts.map((part) => {
-    if (!/^(0|[1-9][0-9]*)$/.test(part)) return null;
-    const value = Number(part);
-    return Number.isInteger(value) && value >= 0 && value <= 255 ? value : null;
+  const octets = egressArrayMap(parts, (part) => {
+    if (!egressRegExpTest(/^(0|[1-9][0-9]*)$/u, part)) return null;
+    const value = egressNumber(part);
+    return egressNumberIsInteger(value) && value >= 0 && value <= 255 ? value : null;
   });
-  return octets.some((octet) => octet === null) ? null : (octets as number[]);
+  return egressArraySome(octets, (octet) => octet === null) ? null : (octets as number[]);
 }
 
 function wordAt(bytes: readonly number[], index: number): number {
@@ -850,7 +956,8 @@ function wordAt(bytes: readonly number[], index: number): number {
 }
 
 function canonicalizeIpv6Bytes(ip: Ipv6Bytes): string {
-  const words = Array.from({ length: 8 }, (_, index) => wordAt(ip.bytes, index));
+  const words: number[] = [];
+  for (let index = 0; index < 8; index += 1) egressArrayPush(words, wordAt(ip.bytes, index));
   let bestStart = -1;
   let bestLength = 0;
   for (let index = 0; index < words.length; ) {
@@ -866,11 +973,20 @@ function canonicalizeIpv6Bytes(ip: Ipv6Bytes): string {
       bestLength = length;
     }
   }
-  if (bestStart === -1) return words.map((word) => word.toString(16)).join(':');
+  if (bestStart === -1) {
+    return egressArrayJoin(
+      egressArrayMap(words, (word) => egressNumberToString(word, 16)),
+      ':',
+    );
+  }
 
-  const left = words.slice(0, bestStart).map((word) => word.toString(16));
-  const right = words.slice(bestStart + bestLength).map((word) => word.toString(16));
-  return `${left.join(':')}::${right.join(':')}`;
+  const left = egressArrayMap(egressArraySlice(words, 0, bestStart), (word) =>
+    egressNumberToString(word, 16),
+  );
+  const right = egressArrayMap(egressArraySlice(words, bestStart + bestLength), (word) =>
+    egressNumberToString(word, 16),
+  );
+  return `${egressArrayJoin(left, ':')}::${egressArrayJoin(right, ':')}`;
 }
 
 /**
@@ -940,15 +1056,20 @@ export function evaluateEgress(args: {
   // a stable name; matching the resolved IP lets them allowlist by address.
   if (policy.allowPrivateNetwork) return null;
 
-  const hostKey = `${host.toLowerCase()}:${port}`;
-  const ipKey = `${resolvedIp.toLowerCase()}:${port}`;
-  if (policy.allowInternal.has(hostKey) || policy.allowInternal.has(ipKey)) return null;
-  if (policy.allowDatabaseEndpoints.has(hostKey) || policy.allowDatabaseEndpoints.has(ipKey)) {
+  const hostKey = `${egressStringToLowerCase(host)}:${port}`;
+  const ipKey = `${egressStringToLowerCase(resolvedIp)}:${port}`;
+  if (egressSetHas(policy.allowInternal, hostKey) || egressSetHas(policy.allowInternal, ipKey)) {
+    return null;
+  }
+  if (
+    egressSetHas(policy.allowDatabaseEndpoints, hostKey) ||
+    egressSetHas(policy.allowDatabaseEndpoints, ipKey)
+  ) {
     return null;
   }
 
   // CIDR fallback (operator opted into a broad range, warned at boot).
-  if (policy.allowInternalCidrs.some((cidr) => ipInCidr(resolvedIp, cidr))) return null;
+  if (egressArraySome(policy.allowInternalCidrs, (cidr) => ipInCidr(resolvedIp, cidr))) return null;
 
   return new EgressBlockedError({
     destination: `${host}:${port}`,
@@ -973,8 +1094,8 @@ function evaluateDestinationAllowlist(args: {
       reason: 'destination-allowlist',
     });
   }
-  const origin = `${protocol}//${host.toLowerCase()}:${port}`;
-  if (policy.allowDestinations.has(origin)) return null;
+  const origin = `${protocol}//${egressStringToLowerCase(host)}:${port}`;
+  if (egressSetHas(policy.allowDestinations, origin)) return null;
   return new EgressBlockedError({
     destination: origin,
     resolvedIp,
@@ -1009,7 +1130,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
     // method, body, header, credential-stripping, referrer, abort, and manual/error semantics.
     // Calling fetch with only this Request also prevents a nonstandard per-call dispatcher from
     // bypassing the framework-owned dispatcher on later hops.
-    request = new Request(input, init);
+    request = egressRequest(input, init);
   } catch {
     throw new EgressBlockedError({
       destination: requestDestination(input),
@@ -1017,7 +1138,8 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       reason: 'destination-allowlist',
     });
   }
-  const url = new URL(request.url);
+  const requestUrl = egressRequestUrl(request);
+  const url = egressUrl(requestUrl);
 
   // The strict dispatcher is load-bearing for redirect hops: net.connect sees only dials, not
   // every pooled request, and it does not know that this call requires allowDestinations. Refuse
@@ -1027,23 +1149,24 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   const { isUndiciFloorInstalled } = await import('./egress-undici.js');
   if (!isUndiciFloorInstalled()) {
     throw new EgressBlockedError({
-      destination: request.url,
+      destination: requestUrl,
       classification: 'special-use',
       reason: 'missing-floor',
     });
   }
 
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+  const protocol = egressUrlProtocol(url);
+  if (protocol !== 'http:' && protocol !== 'https:') {
     throw new EgressBlockedError({
-      destination: request.url,
+      destination: requestUrl,
       classification: 'special-use',
       reason: 'destination-allowlist',
     });
   }
-  const host = decodeURIComponent(url.hostname).replace(/^\[/, '').replace(/\]$/, '');
+  const host = stripIpv6Brackets(egressDecodeURIComponent(egressUrlHostname(url)));
   const port = normalizedUrlPort(url);
-  const origin = `${url.protocol}//${host.toLowerCase()}:${port}`;
-  if (!policy.allowDestinations.has(origin)) {
+  const origin = `${protocol}//${egressStringToLowerCase(host)}:${port}`;
+  if (!egressSetHas(policy.allowDestinations, origin)) {
     throw new EgressBlockedError({
       destination: origin,
       classification: 'special-use',
@@ -1055,7 +1178,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
     const blocked = evaluateEgress({
       host,
       port,
-      protocol: url.protocol,
+      protocol,
       resolvedIp: literalIp,
       policy,
       requireDestinationAllowlist: true,
@@ -1077,11 +1200,12 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
         reason: 'destination-allowlist',
       });
     }
-    for (const { address } of resolved) {
+    for (let index = 0; index < resolved.length; index += 1) {
+      const address = resolved[index]!.address;
       const blocked = evaluateEgress({
         host,
         port,
-        protocol: url.protocol,
+        protocol,
         resolvedIp: address,
         policy,
         requireDestinationAllowlist: true,
@@ -1108,20 +1232,35 @@ function lookupAllAddresses(host: string): Promise<LookupAddress[]> {
 }
 
 function requestDestination(input: RequestInfo | URL): string {
-  if (input instanceof URL) return input.toString();
   if (typeof input === 'string') return input;
-  return input.url;
+  try {
+    return egressUrlToString(egressUrl(input as URL));
+  } catch {
+    try {
+      return egressRequestUrl(input as Request);
+    } catch {
+      return '<invalid-egress-destination>';
+    }
+  }
 }
 
 /** Minimal IPv4 CIDR membership for the broad-range fallback. IPv6 CIDR ranges are not honored. */
 function ipInCidr(ip: string, cidr: string): boolean {
-  const [range, bitsStr] = cidr.split('/');
+  const cidrParts = egressStringSplit(cidr, '/');
+  const range = cidrParts[0];
+  const bitsStr = cidrParts[1];
   if (!range || bitsStr === undefined) return false;
-  if (net.isIP(ip) !== 4 || net.isIP(range) !== 4) return false;
-  const bits = Number(bitsStr);
-  if (!Number.isInteger(bits) || bits < 0 || bits > 32) return false;
-  const toInt = (s: string): number =>
-    s.split('.').reduce((acc, o) => ((acc << 8) | (Number(o) & 0xff)) >>> 0, 0) >>> 0;
+  if (egressNetIsIp(ip) !== 4 || egressNetIsIp(range) !== 4) return false;
+  const bits = egressNumber(bitsStr);
+  if (!egressNumberIsInteger(bits) || bits < 0 || bits > 32) return false;
+  const toInt = (value: string): number => {
+    const octets = egressStringSplit(value, '.');
+    let result = 0;
+    for (let index = 0; index < octets.length; index += 1) {
+      result = ((result << 8) | (egressNumber(octets[index]) & 0xff)) >>> 0;
+    }
+    return result >>> 0;
+  };
   const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
   return (toInt(ip) & mask) === (toInt(range) & mask);
 }
@@ -1217,15 +1356,15 @@ export function installNetConnectFloor(
 
   const patchedConnect = function patchedConnect(this: net.Socket, ...args: unknown[]): net.Socket {
     const activePolicy = flooredNet[FLOOR_INSTALLED];
-    if (!activePolicy) return original.apply(this, args) as net.Socket;
+    if (!activePolicy) return egressApply(original, this, args);
 
     const options = normalizeConnectOptions(args);
     if (!options || options.host === undefined || options.host === '') {
       // Port/path-only or unparseable form (e.g. a UDS connect) — nothing to classify.
-      return original.apply(this, args) as net.Socket;
+      return egressApply(original, this, args);
     }
     const host = options.host;
-    const port = Number(options.port ?? 0);
+    const port = egressNumber(options.port ?? 0);
 
     // If host is already an IP literal, classify + decide synchronously before connecting.
     const literalIp = normalizeFastPathIpLiteral(host);
@@ -1235,7 +1374,7 @@ export function installNetConnectFloor(
         // Throw on the connect call so fetch/http.get reject with the typed error.
         throw blocked;
       }
-      return original.apply(this, args) as net.Socket;
+      return egressApply(original, this, args);
     }
     if (isNodeAcceptedUnnormalizedIpLiteral(host)) {
       throw new EgressBlockedError({
@@ -1259,37 +1398,42 @@ export function installNetConnectFloor(
           : callback;
       const opts = typeof lookupOptions === 'function' ? {} : (lookupOptions as object);
       const resolver = (userLookup ?? dns.lookup) as typeof dns.lookup;
-      resolver(hostname, opts as dns.LookupOptions, (err, address, family) => {
-        if (err) return cb(err, address as unknown as string, family as unknown as number);
-        // SPEC §6.6 rule 2 ("the answer we validate is the answer we connect to"): classify
-        // EVERY resolved IP, not just address[0]. Under Node's default autoSelectFamily the
-        // lookup is invoked with `{ all: true }` and `address` is a `LookupAddress[]` that
-        // RFC-8305 happy-eyeballs may dial at ANY index when an earlier record is slow/refused.
-        // Validating only address[0] and then forwarding the whole array (the old bug) let a
-        // multi-A answer like `[<public>, 169.254.169.254]` (or `[<public>, 127.0.0.1]`) pass
-        // the floor and then connect to the private sibling — SSRF/DNS-rebind to cloud metadata.
-        // Fail the WHOLE lookup CLOSED if any entry is non-public/not-allowlisted; never forward
-        // an unvalidated array on the strength of one passing record.
-        if (Array.isArray(address)) {
-          for (const entry of address as LookupAddress[]) {
-            const blocked = evaluateEgress({
-              host,
-              port,
-              resolvedIp: entry.address,
-              policy: activePolicy,
-            });
-            if (blocked) return cb(blocked, entry.address, family as unknown as number);
+      egressApply<void>(resolver, dns, [
+        hostname,
+        opts as dns.LookupOptions,
+        (err: Error | null, address: string | LookupAddress[], family: number) => {
+          if (err) return cb(err, address as unknown as string, family as unknown as number);
+          // SPEC §6.6 rule 2 ("the answer we validate is the answer we connect to"): classify
+          // EVERY resolved IP, not just address[0]. Under Node's default autoSelectFamily the
+          // lookup is invoked with `{ all: true }` and `address` is a `LookupAddress[]` that
+          // RFC-8305 happy-eyeballs may dial at ANY index when an earlier record is slow/refused.
+          // Validating only address[0] and then forwarding the whole array (the old bug) let a
+          // multi-A answer like `[<public>, 169.254.169.254]` (or `[<public>, 127.0.0.1]`) pass
+          // the floor and then connect to the private sibling — SSRF/DNS-rebind to cloud metadata.
+          // Fail the WHOLE lookup CLOSED if any entry is non-public/not-allowlisted; never forward
+          // an unvalidated array on the strength of one passing record.
+          if (egressArrayIsArray(address)) {
+            for (let index = 0; index < address.length; index += 1) {
+              const entry = address[index] as LookupAddress;
+              const blocked = evaluateEgress({
+                host,
+                port,
+                resolvedIp: entry.address,
+                policy: activePolicy,
+              });
+              if (blocked) return cb(blocked, entry.address, family as unknown as number);
+            }
+            return cb(null, address as unknown as string, family as unknown as number);
           }
-          return cb(null, address as unknown as string, family as unknown as number);
-        }
-        const resolvedIp = address as string;
-        const blocked = evaluateEgress({ host, port, resolvedIp, policy: activePolicy });
-        if (blocked) return cb(blocked, resolvedIp, family as unknown as number);
-        cb(null, address as unknown as string, family as unknown as number);
-      });
+          const resolvedIp = address as string;
+          const blocked = evaluateEgress({ host, port, resolvedIp, policy: activePolicy });
+          if (blocked) return cb(blocked, resolvedIp, family as unknown as number);
+          cb(null, address as unknown as string, family as unknown as number);
+        },
+      ]);
     }) as typeof dns.lookup;
 
-    return original.apply(this, args) as net.Socket;
+    return egressApply(original, this, args);
   } as ConnectFn;
 
   flooredNet[FLOOR_WRAPPER] = patchedConnect;
@@ -1313,7 +1457,7 @@ function installHttpAgentReuseFloor(flooredNet: FlooredNetModule): void {
     options: AgentRequestOptions,
   ): void {
     const activePolicy = flooredNet[FLOOR_INSTALLED];
-    if (!activePolicy) return original.call(this, req, options);
+    if (!activePolicy) return egressApply(original, this, [req, options]);
 
     const blocked = evaluateHttpAgentRequest(this, options, activePolicy);
     if (blocked) {
@@ -1323,7 +1467,7 @@ function installHttpAgentReuseFloor(flooredNet: FlooredNetModule): void {
       throw blocked;
     }
 
-    return original.call(this, req, options);
+    return egressApply(original, this, [req, options]);
   };
 
   flooredNet[HTTP_AGENT_FLOOR_WRAPPER] = patchedAddRequest;
@@ -1335,8 +1479,8 @@ function evaluateHttpAgentRequest(
   options: AgentRequestOptions,
   policy: EgressPolicy,
 ): EgressBlockedError | null {
-  const host = String(options.hostname ?? options.host ?? 'localhost');
-  const port = Number(
+  const host = egressString(options.hostname ?? options.host ?? 'localhost');
+  const port = egressNumber(
     options.port ?? options.defaultPort ?? (options.protocol === 'https:' ? 443 : 80),
   );
   const literalIp = normalizeFastPathIpLiteral(host);
@@ -1352,26 +1496,39 @@ function evaluateHttpAgentRequest(
   }
 
   const getName = (agent as unknown as { getName?: (opts: AgentRequestOptions) => string }).getName;
-  const name = typeof getName === 'function' ? getName.call(agent, options) : undefined;
+  const name =
+    typeof getName === 'function' ? egressApply<string>(getName, agent, [options]) : undefined;
   const agentState = agent as unknown as {
     freeSockets?: Record<string, AgentSocket[]>;
     sockets?: Record<string, AgentSocket[]>;
   };
   const socketGroups = name
-    ? [agentState.freeSockets?.[name], agentState.sockets?.[name]].filter(
+    ? egressArrayFilter(
+        [agentState.freeSockets?.[name], agentState.sockets?.[name]],
         (sockets): sockets is AgentSocket[] => sockets !== undefined && sockets.length > 0,
       )
     : [];
   if (socketGroups.length === 0) return null;
 
-  for (const sockets of socketGroups) {
-    for (const socket of sockets) {
+  for (let groupIndex = 0; groupIndex < socketGroups.length; groupIndex += 1) {
+    const sockets = socketGroups[groupIndex]!;
+    for (let socketIndex = 0; socketIndex < sockets.length; socketIndex += 1) {
+      const socket = sockets[socketIndex]!;
       const resolvedIp = socket.remoteAddress;
       if (!resolvedIp) continue;
-      const socketPort = Number(socket.remotePort ?? port);
+      const socketPort = egressNumber(socket.remotePort ?? port);
       const blocked = evaluateEgress({ host, port: socketPort, resolvedIp, policy });
       if (blocked) {
-        for (const group of socketGroups) for (const pooled of group) pooled.destroy(blocked);
+        for (
+          let destroyGroupIndex = 0;
+          destroyGroupIndex < socketGroups.length;
+          destroyGroupIndex += 1
+        ) {
+          const group = socketGroups[destroyGroupIndex]!;
+          for (let pooledIndex = 0; pooledIndex < group.length; pooledIndex += 1) {
+            group[pooledIndex]!.destroy(blocked);
+          }
+        }
         return blocked;
       }
     }
@@ -1383,14 +1540,14 @@ function makeUninstall(flooredNet: FlooredNetModule, proto: { connect: ConnectFn
   return () => {
     const original = flooredNet[ORIGINAL_CONNECT];
     if (original) {
-      Object.defineProperty(proto, 'connect', {
+      egressObjectDefineProperty(proto, 'connect', {
         value: original,
         writable: true,
         configurable: true,
       });
       const originalAddRequest = flooredNet[ORIGINAL_HTTP_AGENT_ADD_REQUEST];
       if (originalAddRequest) {
-        Object.defineProperty(http.Agent.prototype, 'addRequest', {
+        egressObjectDefineProperty(http.Agent.prototype, 'addRequest', {
           value: originalAddRequest,
           writable: true,
           configurable: true,
@@ -1416,7 +1573,7 @@ function applyNetConnectHardening(
   if (!wrapper) return;
   flooredNet[FLOOR_HARDENING] = { mode, warn };
   if (mode === 'off') {
-    Object.defineProperty(proto, 'connect', {
+    egressObjectDefineProperty(proto, 'connect', {
       value: wrapper,
       writable: true,
       configurable: true,
@@ -1424,7 +1581,7 @@ function applyNetConnectHardening(
     return;
   }
   if (mode === 'freeze') {
-    Object.defineProperty(proto, 'connect', {
+    egressObjectDefineProperty(proto, 'connect', {
       value: wrapper,
       writable: false,
       configurable: true,
@@ -1433,7 +1590,7 @@ function applyNetConnectHardening(
   }
 
   let current: ConnectFn = wrapper;
-  Object.defineProperty(proto, 'connect', {
+  egressObjectDefineProperty(proto, 'connect', {
     configurable: true,
     get() {
       return current;
@@ -1471,7 +1628,7 @@ function applyNetConnectHardening(
 function normalizeConnectOptions(args: unknown[]): ConnectOptions | null {
   let first = args[0];
   // Unwrap node's normalizeArgs array form: socket.connect([options, cb]).
-  if (Array.isArray(first)) {
+  if (egressArrayIsArray(first)) {
     const inner = first[0];
     if (inner && typeof inner === 'object') return inner as ConnectOptions;
     first = inner;
@@ -1479,14 +1636,22 @@ function normalizeConnectOptions(args: unknown[]): ConnectOptions | null {
   if (first && typeof first === 'object') {
     return first as ConnectOptions;
   }
-  if (typeof first === 'number' || (typeof first === 'string' && /^\d+$/.test(first))) {
+  if (
+    typeof first === 'number' ||
+    (typeof first === 'string' && egressRegExpTest(/^\d+$/u, first))
+  ) {
     // (port, host?, cb?) — host is the next string arg.
-    const port = Number(first);
+    const port = egressNumber(first);
     const second = args[1];
     const host = typeof second === 'string' ? second : '127.0.0.1';
     const synthesized: ConnectOptions = { host, port };
     // Replace args so the options object (with our lookup) is what `connect` sees.
-    args.splice(0, args[1] !== undefined && typeof args[1] !== 'function' ? 2 : 1, synthesized);
+    egressArraySplice(
+      args,
+      0,
+      args[1] !== undefined && typeof args[1] !== 'function' ? 2 : 1,
+      synthesized,
+    );
     return synthesized;
   }
   // (path, cb) — UDS, nothing to classify.

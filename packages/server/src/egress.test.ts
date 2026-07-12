@@ -350,6 +350,41 @@ function referenceIpv6Words(side: string): number[] | null {
 }
 
 describe('evaluateEgress policy decision', () => {
+  it('keeps private-IP classification closed after late collection and regexp poisoning', () => {
+    const policy = emptyPolicy();
+    const originalSome = Array.prototype.some;
+    const originalExec = RegExp.prototype.exec;
+    const originalReplace = RegExp.prototype[Symbol.replace];
+    let result: ReturnType<typeof evaluateEgress>;
+    try {
+      Array.prototype.some = function (callback, thisArg) {
+        if (this === policy.allowInternalCidrs) return true;
+        return originalSome.call(this, callback, thisArg);
+      };
+      RegExp.prototype.exec = function (value) {
+        if (value === '127.0.0.1') return null;
+        return originalExec.call(this, value);
+      };
+      RegExp.prototype[Symbol.replace] = function (value, replacement) {
+        if (value === '[127.0.0.1]') return '8.8.8.8';
+        return originalReplace.call(this, value, replacement);
+      };
+      result = evaluateEgress({
+        host: '127.0.0.1',
+        port: 80,
+        resolvedIp: '127.0.0.1',
+        policy,
+      });
+    } finally {
+      Array.prototype.some = originalSome;
+      RegExp.prototype.exec = originalExec;
+      RegExp.prototype[Symbol.replace] = originalReplace;
+    }
+
+    expect(result).toMatchObject({ classification: 'loopback', reason: 'private-network' });
+    expect(evaluateEgress({ host: '8.8.8.8', port: 53, resolvedIp: '8.8.8.8', policy })).toBeNull();
+  });
+
   it('allows public, denies loopback not in allowInternal', () => {
     const policy = emptyPolicy();
     expect(
@@ -731,6 +766,32 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       },
     );
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('frameworkEgressFetch keeps an allowlisted private literal blocked after late Array.some poisoning', async () => {
+    const policy = resolveEgressPolicy(
+      { allowDestinations: [`http://127.0.0.1:${port}`] },
+      () => {},
+    );
+    installFrameworkFetchFloor(policy);
+    const originalSome = Array.prototype.some;
+    let outcome: unknown;
+    try {
+      Array.prototype.some = function (callback, thisArg) {
+        if (this === policy.allowInternalCidrs) return true;
+        return originalSome.call(this, callback, thisArg);
+      };
+      outcome = await frameworkEgressFetch(`http://127.0.0.1:${port}/late-poison`).catch(
+        (error: unknown) => error,
+      );
+    } finally {
+      Array.prototype.some = originalSome;
+    }
+
+    expect(outcome).toMatchObject({
+      classification: 'loopback',
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
   });
 
   function installFrameworkFetchFloor(policy: EgressPolicy): void {

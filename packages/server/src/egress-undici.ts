@@ -17,6 +17,21 @@ import {
   normalizeFastPathIpLiteral,
   type EgressPolicy,
 } from './egress.js';
+import {
+  egressDateNow,
+  egressDecodeURIComponent,
+  egressMapClear,
+  egressMapGet,
+  egressMapSet,
+  egressNumber,
+  egressStringEndsWith,
+  egressStringSlice,
+  egressStringStartsWith,
+  egressUrl,
+  egressUrlHostname,
+  egressUrlPort,
+  egressUrlProtocol,
+} from './egress-intrinsics.js';
 
 /**
  * Layer (a) of the outbound-egress floor (SPEC §6.6): a custom undici dispatcher installed as
@@ -62,7 +77,7 @@ export class EgressGatingDispatcher extends Agent {
 
   setPolicy(policy: EgressPolicy): void {
     this.#policy = policy;
-    this.#resolutionCache.clear();
+    egressMapClear(this.#resolutionCache);
   }
 
   override dispatch(
@@ -75,10 +90,11 @@ export class EgressGatingDispatcher extends Agent {
       // No origin to classify — let undici reject/handle it normally.
       return super.dispatch(options, handler);
     }
-    const host = decodeURIComponent(url.hostname).replace(/^\[/, '').replace(/\]$/, '');
-    const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80);
-    const protocol =
-      url.protocol === 'http:' || url.protocol === 'https:' ? url.protocol : undefined;
+    const host = stripIpv6Brackets(egressDecodeURIComponent(egressUrlHostname(url)));
+    const urlPort = egressUrlPort(url);
+    const urlProtocol = egressUrlProtocol(url);
+    const port = egressNumber(urlPort) || (urlProtocol === 'https:' ? 443 : 80);
+    const protocol = urlProtocol === 'http:' || urlProtocol === 'https:' ? urlProtocol : undefined;
     const frameworkPolicy = activeFrameworkEgressPolicy();
     const policy = frameworkPolicy ?? this.#policy;
     const requireDestinationAllowlist = frameworkPolicy !== undefined;
@@ -117,8 +133,8 @@ export class EgressGatingDispatcher extends Agent {
     // `dispatch` is synchronous-returning; we resolve asynchronously and then either reject the
     // handler or forward to the real dispatch. undici accepts an async gate as long as we drive
     // the handler ourselves on the deny path.
-    const cached = this.#resolutionCache.get(host);
-    if (cached && cached.expires > Date.now()) {
+    const cached = egressMapGet(this.#resolutionCache, host);
+    if (cached && cached.expires > egressDateNow()) {
       const blocked = evaluateEgress({
         host,
         port,
@@ -173,7 +189,8 @@ export class EgressGatingDispatcher extends Agent {
     }
     // Fail the whole request CLOSED if ANY resolved IP is non-public/not-allowlisted; never
     // forward on the strength of one passing record.
-    for (const { address } of resolved) {
+    for (let index = 0; index < resolved.length; index += 1) {
+      const address = resolved[index]!.address;
       const blocked = evaluateEgress({
         host,
         port,
@@ -188,9 +205,9 @@ export class EgressGatingDispatcher extends Agent {
       }
     }
     // All addresses passed; pin the first for the short rebind-resistance cache window.
-    this.#resolutionCache.set(host, {
+    egressMapSet(this.#resolutionCache, host, {
       ip: resolved[0]!.address,
-      expires: Date.now() + ORIGIN_RESOLUTION_CACHE_MS,
+      expires: egressDateNow() + ORIGIN_RESOLUTION_CACHE_MS,
     });
     super.dispatch(options, handler);
   }
@@ -198,10 +215,17 @@ export class EgressGatingDispatcher extends Agent {
 
 function safeUrl(value: string): URL | undefined {
   try {
-    return new URL(value);
+    return egressUrl(value);
   } catch {
     return undefined;
   }
+}
+
+function stripIpv6Brackets(value: string): string {
+  let result = value;
+  if (egressStringStartsWith(result, '[')) result = egressStringSlice(result, 1);
+  if (egressStringEndsWith(result, ']')) result = egressStringSlice(result, 0, -1);
+  return result;
 }
 
 /**
