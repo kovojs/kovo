@@ -190,6 +190,32 @@ describe('secret read boundary', () => {
     expect(isSecret(row.leaked)).toBe(true);
   });
 
+  it('keeps derived secret expressions boxed after late Array.every substitution', async () => {
+    // SPEC §6.6/§10.3: expression provenance is an authority decision. Walk the exact
+    // framework snapshot by index; app-replaced collection callbacks cannot skip the source.
+    const query = queryObject(
+      'select max(classified) as leaked from secrets',
+      [{ leaked: 'victim-secret' }],
+      { leaked: { queryChunks: [{ value: ['max('] }, secretColumn, { value: [')'] }] } },
+    );
+    const db = createSecretBoxingReadDb(builderDb(query), metadata(), {
+      sqliteColumnOrigins: originClient([{ column: null, name: 'leaked', table: null }]),
+    });
+    const nativeEvery = Array.prototype.every;
+    let row: Record<string, unknown> | undefined;
+    try {
+      Array.prototype.every = function (): boolean {
+        return true;
+      };
+      [row] = await db.select();
+    } finally {
+      Array.prototype.every = nativeEvery;
+    }
+
+    expect(isSecret(row?.leaked)).toBe(true);
+    expect(revealSecret(row?.leaked, 'test')).toBe('victim-secret');
+  });
+
   it('boxes compound selects before trusting a benign left-arm SQLite origin', async () => {
     const db = createSecretBoxingReadDb(
       builderDb(
@@ -259,6 +285,31 @@ describe('secret read boundary', () => {
     );
 
     expect(() => db.all('select classified from secrets')).toThrow(/KV435/);
+  });
+
+  it('does not let late RegExp replacement hide a direct secret-table read', () => {
+    // SPEC §6.6 C13: this classifier retains the old closed verdict without dispatching
+    // through application-replaceable RegExp controls.
+    const db = createSecretBoxingReadDb(readDb([{ classified: 'victim-secret' }]), metadata(), {
+      rawSecretTableRead: 'throw',
+      sqliteColumnOrigins: originClient([{ column: null, name: 'classified', table: null }]),
+    });
+    const nativeTest = RegExp.prototype.test;
+    let error: unknown;
+    try {
+      RegExp.prototype.test = function (): boolean {
+        return false;
+      };
+      try {
+        db.all({ sql: 'select classified from secrets', values: [] });
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      RegExp.prototype.test = nativeTest;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('KV435');
   });
 
   it('boxes entire raw declared secret reads', () => {

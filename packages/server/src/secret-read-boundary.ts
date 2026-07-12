@@ -311,6 +311,14 @@ function ownDataValue(value: unknown, property: PropertyKey): unknown {
   return descriptor.value;
 }
 
+function optionalOwnDataValue(value: unknown, property: PropertyKey): unknown {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    return undefined;
+  }
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+}
+
 function ownStringDataValue(value: unknown, property: PropertyKey): string {
   const result = ownDataValue(value, property);
   if (typeof result !== 'string') throw new TypeError(`${String(property)} must be a string.`);
@@ -655,7 +663,7 @@ function emptyReadBoundary(): SecretReadBoundary {
 
 function selectedResultKeysFromValue(value: unknown): readonly string[] {
   const fields = selectedFieldsFromValue(value);
-  return fields === undefined ? [] : Object.keys(fields);
+  return fields === undefined ? [] : witnessObjectKeys(fields);
 }
 
 function sqliteResultColumns(
@@ -680,7 +688,15 @@ function expressionSafetyByResultKey(
   const fields = selectedFieldsFromValue(value);
   const safety = createWitnessMap<string, 'opaque' | 'safe'>();
   if (fields === undefined) return safety;
-  for (const [key, field] of Object.entries(fields)) {
+  const keys = witnessObjectKeys(fields);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(fields, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      witnessMapSet(safety, key, 'opaque');
+      continue;
+    }
+    const field = descriptor.value;
     if (isColumnLike(field)) continue;
     const verdict = classifySqlExpression(field, metadata);
     if (verdict !== undefined) witnessMapSet(safety, key, verdict);
@@ -690,11 +706,20 @@ function expressionSafetyByResultKey(
 
 function selectedFieldsFromValue(value: unknown): Record<string, unknown> | undefined {
   if (value === null || typeof value !== 'object') return undefined;
-  for (const candidate of [
-    (value as { config?: { fields?: unknown } }).config?.fields,
-    (value as { _?: { selectedFields?: unknown } })._?.selectedFields,
-    (value as { selectedFields?: unknown }).selectedFields,
-  ]) {
+  const candidates: unknown[] = [];
+  const config = optionalOwnDataValue(value, 'config');
+  const internal = optionalOwnDataValue(value, '_');
+  candidates[0] =
+    config !== null && typeof config === 'object'
+      ? optionalOwnDataValue(config, 'fields')
+      : undefined;
+  candidates[1] =
+    internal !== null && typeof internal === 'object'
+      ? optionalOwnDataValue(internal, 'selectedFields')
+      : undefined;
+  candidates[2] = optionalOwnDataValue(value, 'selectedFields');
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
     if (isPlainRecord(candidate)) return candidate;
   }
   return undefined;
@@ -705,9 +730,19 @@ function classifySqlExpression(
   metadata: SecretReadMetadata,
 ): 'opaque' | 'safe' | undefined {
   if (value === null || typeof value !== 'object') return undefined;
-  const chunks = (value as { queryChunks?: unknown }).queryChunks;
+  const chunks = optionalOwnDataValue(value, 'queryChunks');
   if (!witnessIsArray(chunks)) return undefined;
-  return chunks.every((chunk) => sqlChunkIsSafe(chunk, metadata)) ? 'safe' : 'opaque';
+  for (let index = 0; index < chunks.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(chunks, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      !sqlChunkIsSafe(descriptor.value, metadata)
+    ) {
+      return 'opaque';
+    }
+  }
+  return 'safe';
 }
 
 function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
@@ -723,22 +758,45 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
   );
   if (source !== undefined) return !source.secret;
 
-  const nested = (chunk as { queryChunks?: unknown }).queryChunks;
-  if (witnessIsArray(nested)) return nested.every((item) => sqlChunkIsSafe(item, metadata));
-
-  const value = (chunk as { value?: unknown }).value;
-  if (witnessIsArray(value) && value.every((item) => typeof item === 'string')) {
-    if (value.some(sqlStringChunkHidesReadSource)) {
-      throw new Error(
-        'KV410: raw SQL expression chunks cannot contain SELECT or FROM; use builder table bindings or a declared rawRead path so the read set stays visible (SPEC §10.2/§10.3).',
-      );
+  const nested = optionalOwnDataValue(chunk, 'queryChunks');
+  if (witnessIsArray(nested)) {
+    for (let index = 0; index < nested.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(nested, index);
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        !sqlChunkIsSafe(descriptor.value, metadata)
+      ) {
+        return false;
+      }
     }
-    return value.every(sqlStringChunkIsInert);
+    return true;
+  }
+
+  const value = optionalOwnDataValue(chunk, 'value');
+  if (witnessIsArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        typeof descriptor.value !== 'string'
+      ) {
+        return false;
+      }
+      if (sqlStringChunkHidesReadSource(descriptor.value)) {
+        throw new Error(
+          'KV410: raw SQL expression chunks cannot contain SELECT or FROM; use builder table bindings or a declared rawRead path so the read set stays visible (SPEC §10.2/§10.3).',
+        );
+      }
+      if (!sqlStringChunkIsInert(descriptor.value)) return false;
+    }
+    return true;
   }
   return false;
 }
 
-const SAFE_SQL_WORDS = new Set([
+const SAFE_SQL_WORDS = [
   'abs',
   'as',
   'avg',
@@ -762,18 +820,70 @@ const SAFE_SQL_WORDS = new Set([
   'total',
   'trim',
   'upper',
-]);
+] as const;
 
 function sqlStringChunkIsInert(value: string): boolean {
-  if (/\bselect\b/i.test(value)) return false;
-  for (const word of value.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []) {
-    if (!witnessSetHas(SAFE_SQL_WORDS, word.toLowerCase())) return false;
+  const words = sqlIdentifierWords(value);
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index]!;
+    if (word === 'select' || !stringListHas(SAFE_SQL_WORDS, word)) return false;
   }
   return true;
 }
 
 function sqlStringChunkHidesReadSource(value: string): boolean {
-  return /\b(?:from|select)\b/i.test(value);
+  return sqlHasIdentifierWord(value, 'from') || sqlHasIdentifierWord(value, 'select');
+}
+
+function sqlIdentifierWords(value: string): string[] {
+  const words: string[] = [];
+  let index = 0;
+  while (index < value.length) {
+    if (!isSqlIdentifierStart(value[index]!)) {
+      index += 1;
+      continue;
+    }
+    let word = '';
+    while (index < value.length && isSqlIdentifierContinue(value[index]!)) {
+      word += asciiLowerCharacter(value[index]!);
+      index += 1;
+    }
+    words[words.length] = word;
+  }
+  return words;
+}
+
+function sqlHasIdentifierWord(value: string, expected: string): boolean {
+  const words = sqlIdentifierWords(value);
+  for (let index = 0; index < words.length; index += 1) {
+    if (words[index] === expected) return true;
+  }
+  return false;
+}
+
+function stringListHas(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
+}
+
+function asciiLowerCharacter(value: string): string {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < upper.length; index += 1) {
+    if (upper[index] === value) return lower[index]!;
+  }
+  return value;
+}
+
+function isSqlIdentifierStart(value: string): boolean {
+  const lower = asciiLowerCharacter(value);
+  return (lower >= 'a' && lower <= 'z') || value === '_';
+}
+
+function isSqlIdentifierContinue(value: string): boolean {
+  return isSqlIdentifierStart(value) || (value >= '0' && value <= '9') || value === '$';
 }
 
 function isDirectSqlReadMethod(prop: PropertyKey): boolean {
@@ -814,18 +924,24 @@ function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCar
 function sqlTextFromValue(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
   if (value === null || typeof value !== 'object') return undefined;
-  const sql = (value as { sql?: unknown }).sql;
+  const sql = optionalOwnDataValue(value, 'sql');
   if (typeof sql === 'string') return sql;
-  const chunks = (value as { queryChunks?: unknown }).queryChunks;
+  const chunks = optionalOwnDataValue(value, 'queryChunks');
   if (witnessIsArray(chunks)) {
-    const text = chunks
-      .flatMap((chunk) => {
-        const part = (chunk as { value?: unknown }).value;
-        return witnessIsArray(part)
-          ? part.filter((item): item is string => typeof item === 'string')
-          : [];
-      })
-      .join('');
+    let text = '';
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+      const chunkDescriptor = witnessGetOwnPropertyDescriptor(chunks, chunkIndex);
+      if (chunkDescriptor === undefined || !('value' in chunkDescriptor)) return undefined;
+      const chunk = chunkDescriptor.value;
+      if (chunk === null || typeof chunk !== 'object') continue;
+      const part = optionalOwnDataValue(chunk, 'value');
+      if (!witnessIsArray(part)) continue;
+      for (let partIndex = 0; partIndex < part.length; partIndex += 1) {
+        const partDescriptor = witnessGetOwnPropertyDescriptor(part, partIndex);
+        if (partDescriptor === undefined || !('value' in partDescriptor)) return undefined;
+        if (typeof partDescriptor.value === 'string') text += partDescriptor.value;
+      }
+    }
     return text || undefined;
   }
   return undefined;
@@ -840,12 +956,46 @@ function sqlReferencesSecretTable(sql: string, secretTableNames: ReadonlySet<str
 }
 
 function sqlHasCompoundSelect(sql: string): boolean {
-  return /\b(?:union|intersect|except)\b/i.test(sql);
+  return (
+    sqlHasIdentifierWord(sql, 'union') ||
+    sqlHasIdentifierWord(sql, 'intersect') ||
+    sqlHasIdentifierWord(sql, 'except')
+  );
 }
 
 function sqlReferencesTable(sql: string, table: string): boolean {
-  const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^|[^A-Za-z0-9_])"?${escaped}"?(?:$|[^A-Za-z0-9_])`, 'i').test(sql);
+  const expected = asciiLower(table);
+  for (let start = 0; start < sql.length; start += 1) {
+    const quoted = sql[start] === '"';
+    const valueStart = quoted ? start + 1 : start;
+    let matches = true;
+    for (let offset = 0; offset < expected.length; offset += 1) {
+      if (asciiLowerCharacter(sql[valueStart + offset] ?? '') !== expected[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (!matches) continue;
+    const before = sql[valueStart - 1];
+    const after = sql[valueStart + expected.length];
+    if (
+      (!quoted && before !== undefined && isSqlIdentifierContinue(before)) ||
+      (quoted && after !== '"') ||
+      (!quoted && after !== undefined && isSqlIdentifierContinue(after))
+    ) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+function asciiLower(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    result += asciiLowerCharacter(value[index]!);
+  }
+  return result;
 }
 
 function isColumnLike(value: unknown): value is { name: string } {
