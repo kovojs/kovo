@@ -15,8 +15,16 @@ import { isFrameworkHmacSignatureVerifier } from './internal/verifier.js';
 const providerPayload = '{"id":"evt_test_webhook","object":"event"}';
 const providerTimestamp = 1674087231;
 const providerNow = providerTimestamp * 1000;
-const providerSignatureHeader =
-  't=1674087231,v1=413e6d5ee0846b0726a98c703e7195bb2ff47e561b7de4a663cfc050fec40796';
+const genericSecret = '000102030405060708090a0b0c0d0e0f';
+const snapshotSecret = '101112131415161718191a1b1c1d1e1f';
+const postImportSecret = '202122232425262728292a2b2c2d2e2f';
+const scalarSecret = '303132333435363738393a3b3c3d3e3f';
+const replaySecret = '404142434445464748494a4b4c4d4e4f';
+const providerSecret = '505152535455565758595a5b5c5d5e5f';
+const providerOldSecret = '606162636465666768696a6b6c6d6e6f';
+const providerSignatureHeader = `t=${providerTimestamp},v1=${createHmac('sha256', providerSecret)
+  .update(`${providerTimestamp}.${providerPayload}`)
+  .digest('hex')}`;
 
 const standardPayload =
   '{"type":"contact.created","timestamp":"2022-11-03T20:26:10.344522Z","data":{"id":"1f81eb52-5198-4599-803e-771906343485"}}';
@@ -30,12 +38,12 @@ const standardHeaders = {
 describe('webhook verifier kit', () => {
   it('verifies a generic HMAC signature with constant-time comparison inputs', async () => {
     // B5 fix: tolerance is set and timestampBound is not false, so the timestamp is
-    // prepended to the signed bytes: hmacSha256('secret', '1674087231.hello') → new sig.
+    // prepended to the signed bytes before HMAC verification.
     const verifier = hmacSignature({
       encoding: 'hex',
       header: 'x-signature',
       payload: ({ payload }) => payload,
-      secret: 'secret',
+      secret: genericSecret,
       tolerance: {
         header: 'x-timestamp',
         seconds: 300,
@@ -43,7 +51,7 @@ describe('webhook verifier kit', () => {
     });
     const request = {
       headers: {
-        'x-signature': '78509988eaa146d55bb90115e984b947f415366dffed63fa0aa0907f7b801a0e',
+        'x-signature': createHmac('sha256', genericSecret).update('1674087231.hello').digest('hex'),
         'x-timestamp': '1674087231',
       },
       now: 1674087231 * 1000,
@@ -62,8 +70,65 @@ describe('webhook verifier kit', () => {
     ).resolves.toBe(false);
   });
 
+  it('rejects every decoded HMAC signing key shorter than 32 bytes at construction', () => {
+    const shortBase64 = Buffer.alloc(31, 0x61).toString('base64');
+    const shortBase64Url = Buffer.alloc(31, 0x62).toString('base64url');
+    const weakSecrets: HmacSecret[] = [
+      '',
+      'one-byte-is-still-weak',
+      new Uint8Array(31),
+      { encoding: 'base64', value: shortBase64 },
+      { encoding: 'base64url', value: shortBase64Url },
+      { encoding: 'utf8', value: 'also-too-short' },
+    ];
+
+    for (const secret of weakSecrets) {
+      expect(() =>
+        hmacSignature({
+          encoding: 'hex',
+          header: 'x-signature',
+          payload: ({ payload }) => payload,
+          secret,
+        }),
+      ).toThrow(/minimum is 32 bytes/);
+    }
+
+    expect(() =>
+      hmacSignature({
+        encoding: 'hex',
+        header: 'x-signature',
+        payload: ({ payload }) => payload,
+        secret: [genericSecret, 'weak-rotation-key'],
+      }),
+    ).toThrow(/minimum is 32 bytes/);
+  });
+
+  it('rejects non-finite, fractional, negative, and over-one-day replay tolerances', () => {
+    for (const seconds of [Number.NaN, Number.POSITIVE_INFINITY, -1, 0.5, 86_401]) {
+      expect(() =>
+        hmacSignature({
+          encoding: 'hex',
+          header: 'x-signature',
+          payload: ({ payload }) => payload,
+          secret: genericSecret,
+          tolerance: { header: 'x-timestamp', seconds },
+        }),
+      ).toThrow('tolerance.seconds must be a whole number from 0 through 86400');
+    }
+
+    expect(() =>
+      hmacSignature({
+        encoding: 'hex',
+        header: 'x-signature',
+        payload: ({ payload }) => payload,
+        secret: genericSecret,
+        tolerance: { header: 'x-timestamp', seconds: 86_400 },
+      }),
+    ).not.toThrow();
+  });
+
   it('keeps executable HMAC posture on a private semantic snapshot', async () => {
-    const secret = new TextEncoder().encode('snapshot-secret');
+    const secret = new TextEncoder().encode(snapshotSecret);
     const payload = new TextEncoder().encode('snapshot-payload');
     const tolerance = { header: 'x-timestamp', seconds: 300 };
     const options = {
@@ -75,7 +140,7 @@ describe('webhook verifier kit', () => {
     };
     const verifier = hmacSignature(options);
     const timestamp = '1700000000';
-    const signature = createHmac('sha256', 'snapshot-secret')
+    const signature = createHmac('sha256', snapshotSecret)
       .update(`${timestamp}.snapshot-payload`)
       .digest('hex');
 
@@ -83,7 +148,7 @@ describe('webhook verifier kit', () => {
     payload.fill(0);
     tolerance.header = 'x-attacker-time';
     tolerance.seconds = 0;
-    options.secret = new TextEncoder().encode('attacker-secret');
+    options.secret = new TextEncoder().encode('7172737475767778797a7b7c7d7e7f80');
     options.payload = new TextEncoder().encode('attacker-payload');
     const exposedSecret = verifier.config.secret as Uint8Array;
     const exposedPayload = verifier.config.payload as Uint8Array;
@@ -116,7 +181,7 @@ describe('webhook verifier kit', () => {
   });
 
   it('uses captured validated SubtleCrypto methods after ambient prototype poisoning', async () => {
-    const secretList = ['post-import-secret'];
+    const secretList = [postImportSecret];
     const originalArrayMap = Array.prototype.map;
     let observedSecretArray = false;
     let verifier!: HmacSignatureVerifier;
@@ -134,7 +199,7 @@ describe('webhook verifier kit', () => {
     } finally {
       Array.prototype.map = originalArrayMap;
     }
-    const validSignature = createHmac('sha256', 'post-import-secret').update('body').digest('hex');
+    const validSignature = createHmac('sha256', postImportSecret).update('body').digest('hex');
     const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle) as Record<
       'importKey' | 'sign',
       unknown
@@ -147,10 +212,7 @@ describe('webhook verifier kit', () => {
         ...importKeyDescriptor,
         value: async (...args: unknown[]) => {
           const bytes = args[1];
-          if (
-            bytes instanceof Uint8Array &&
-            new TextDecoder().decode(bytes) === 'post-import-secret'
-          ) {
+          if (bytes instanceof Uint8Array && new TextDecoder().decode(bytes) === postImportSecret) {
             observedSecret = true;
           }
           return {} as CryptoKey;
@@ -182,20 +244,20 @@ describe('webhook verifier kit', () => {
       encoding: 'hex',
       header: 'x-signature',
       payload: ({ payload }) => payload,
-      secret: 'scalar-secret',
+      secret: scalarSecret,
     });
     const timestamp = '1000';
     const stale = hmacSignature({
       encoding: 'hex',
       header: 'x-signature',
       payload: ({ payload }) => payload,
-      secret: 'scalar-secret',
+      secret: scalarSecret,
       tolerance: { header: 'x-timestamp', seconds: 10 },
     });
-    const staleSignature = createHmac('sha256', 'scalar-secret')
+    const staleSignature = createHmac('sha256', scalarSecret)
       .update(`${timestamp}.body`)
       .digest('hex');
-    const validSignature = createHmac('sha256', 'scalar-secret').update('body').digest('hex');
+    const validSignature = createHmac('sha256', scalarSecret).update('body').digest('hex');
     const forgedSignature = '0'.repeat(64);
     const originalMathMax = Math.max;
     const originalMathFloor = Math.floor;
@@ -269,8 +331,8 @@ describe('webhook verifier kit', () => {
   });
 
   it('copies Buffer payloads and direct or wrapped Buffer secrets without shared backing memory', async () => {
-    const directSecret = Buffer.from('old-secret');
-    const wrappedSecret = Buffer.from('old-secret');
+    const directSecret = Buffer.from('808182838485868788898a8b8c8d8e8f');
+    const wrappedSecret = Buffer.from('808182838485868788898a8b8c8d8e8f');
     const configuredPayload = Buffer.from('old-payload');
     const direct = hmacSignature({
       encoding: 'hex',
@@ -284,7 +346,8 @@ describe('webhook verifier kit', () => {
       payload: configuredPayload,
       secret: { encoding: 'utf8', value: wrappedSecret },
     });
-    const attackerSignature = createHmac('sha256', 'new-secret')
+    const attackerSecret = '909192939495969798999a9b9c9d9e9f';
+    const attackerSignature = createHmac('sha256', attackerSecret)
       .update('new-payload')
       .digest('hex');
     const request = {
@@ -294,8 +357,8 @@ describe('webhook verifier kit', () => {
 
     await expect(direct.verify(request)).resolves.toBe(false);
     await expect(wrapped.verify(request)).resolves.toBe(false);
-    directSecret.set(Buffer.from('new-secret'));
-    wrappedSecret.set(Buffer.from('new-secret'));
+    directSecret.set(Buffer.from(attackerSecret));
+    wrappedSecret.set(Buffer.from(attackerSecret));
     configuredPayload.set(Buffer.from('new-payload'));
 
     await expect(direct.verify(request)).resolves.toBe(false);
@@ -303,7 +366,7 @@ describe('webhook verifier kit', () => {
   });
 
   it('supports app-owned timestamped multi-signature HMAC recipes', async () => {
-    const verifier = timestampedProviderSignature({ secret: 'whsec_test_secret' });
+    const verifier = timestampedProviderSignature({ secret: providerSecret });
 
     expect(verifier.resolved).toEqual({
       encoding: 'hex',
@@ -326,7 +389,7 @@ describe('webhook verifier kit', () => {
   });
 
   it('rejects tampered payloads and stale timestamped provider signatures', async () => {
-    const verifier = timestampedProviderSignature({ secret: 'whsec_test_secret' });
+    const verifier = timestampedProviderSignature({ secret: providerSecret });
     const request = {
       headers: {
         'x-provider-signature': providerSignatureHeader,
@@ -343,8 +406,11 @@ describe('webhook verifier kit', () => {
 
   it('accepts rotated secrets and multiple v1 signatures in app-owned recipes', async () => {
     const verifier = timestampedProviderSignature({
-      secret: ['whsec_current_secret', 'whsec_old_secret'],
+      secret: [providerSecret, providerOldSecret],
     });
+    const oldSignature = createHmac('sha256', providerOldSecret)
+      .update(`${providerTimestamp}.${providerPayload}`)
+      .digest('hex');
 
     await expect(
       verifier.verify({
@@ -352,7 +418,7 @@ describe('webhook verifier kit', () => {
           'x-provider-signature': [
             't=1674087231',
             'v1=0000000000000000000000000000000000000000000000000000000000000000',
-            'v1=9cdda4392bf620067d218f36a1a74bba6f181ea440c8e81ac4e847807976f5d3',
+            `v1=${oldSignature}`,
           ].join(','),
         },
         now: providerNow,
@@ -412,7 +478,7 @@ describe('webhook verifier kit', () => {
       header: 'x-signature',
       // body-only payload — does NOT embed the timestamp, the natural default
       payload: ({ payload }) => payload,
-      secret: 'replay-test-secret',
+      secret: replaySecret,
       tolerance: {
         header: 'x-timestamp',
         seconds: 300,
@@ -421,7 +487,9 @@ describe('webhook verifier kit', () => {
 
     const originalTimestamp = '1700000000';
     // signature over '1700000000.test-body' (timestamp auto-prepended by B5 fix)
-    const capturedSignature = 'cf0bf7a18251437c4e0cef93f992afa1f5b63492d999e5813ea445bd0d135670';
+    const capturedSignature = createHmac('sha256', replaySecret)
+      .update(`${originalTimestamp}.test-body`)
+      .digest('hex');
     const originalRequest = {
       headers: {
         'x-signature': capturedSignature,

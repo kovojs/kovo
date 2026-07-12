@@ -74,7 +74,13 @@ export interface CustomWebhookVerifier {
 /** Encoding of an HMAC signature as it appears in the signature header. */
 export type HmacSignatureEncoding = 'base64' | 'base64url' | 'hex';
 
-/** A signing secret: a string, raw bytes, or a value with an explicit encoding. */
+/**
+ * HMAC signing material: a string, raw bytes, or a value with an explicit encoding.
+ *
+ * {@link hmacSignature} validates the decoded value at construction and rejects material shorter
+ * than 32 bytes (SPEC §6.6). The type is author-time ergonomics; the runtime constructor remains
+ * the security boundary, so JavaScript callers and casts cannot bypass the strength floor.
+ */
 export type HmacSecret =
   | string
   | Uint8Array
@@ -100,6 +106,7 @@ export type HmacSignaturePayload =
 /** Replay-protection window: the allowed clock skew in seconds plus how to read the request timestamp. */
 export interface HmacSignatureTolerance {
   header?: string;
+  /** Whole seconds from 0 through 86,400 (24 hours); larger windows are not clock-skew tolerance. */
   seconds: number;
   timestamp?: (
     request: WebhookVerificationRequest,
@@ -161,6 +168,11 @@ export interface StandardWebhooksOptions {
 }
 
 const defaultWebhookToleranceSeconds = 5 * 60;
+const minimumHmacSecretBytes = 32;
+// A timestamp tolerance is clock-skew protection, not an event-retention policy. One day is a
+// deliberately generous ceiling that accommodates badly skewed integrations without making a
+// captured signature valid indefinitely (SPEC §9.1 verifier replay protection).
+const maximumWebhookToleranceSeconds = 24 * 60 * 60;
 const frameworkHmacSignatureVerifiers = securityWeakSet<object>();
 
 /** @internal Unforgeable provenance check for framework-constructed HMAC verifiers. */
@@ -187,7 +199,7 @@ export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacS
  *   encoding: 'hex',
  *   header: 'x-signature',
  *   payload: (request) => request.payload,
- *   secret: 'whsec_test',
+ *   secret: '0123456789abcdef0123456789abcdef',
  * });
  */
 export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerifier {
@@ -226,6 +238,9 @@ export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerif
 }
 
 function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignatureOptions {
+  const sourceTolerance = options.tolerance;
+  const tolerance =
+    sourceTolerance === undefined ? undefined : snapshotHmacSignatureTolerance(sourceTolerance);
   return freezeSecurityValue({
     encoding: options.encoding,
     header: options.header,
@@ -235,17 +250,35 @@ function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignat
     ...(options.scheme === undefined ? {} : { scheme: options.scheme }),
     secret: snapshotHmacSecrets(options.secret),
     ...(options.timestampBound === undefined ? {} : { timestampBound: options.timestampBound }),
-    ...(options.tolerance === undefined
-      ? {}
-      : {
-          tolerance: freezeSecurityValue({
-            ...(options.tolerance.header === undefined ? {} : { header: options.tolerance.header }),
-            seconds: options.tolerance.seconds,
-            ...(options.tolerance.timestamp === undefined
-              ? {}
-              : { timestamp: options.tolerance.timestamp }),
-          }),
-        }),
+    ...(tolerance === undefined ? {} : { tolerance }),
+  });
+}
+
+function snapshotHmacSignatureTolerance(tolerance: HmacSignatureTolerance): HmacSignatureTolerance {
+  const header = tolerance.header;
+  const seconds = tolerance.seconds;
+  const timestamp = tolerance.timestamp;
+  if (
+    typeof seconds !== 'number' ||
+    !isFiniteNumber(seconds) ||
+    seconds % 1 !== 0 ||
+    seconds < 0 ||
+    seconds > maximumWebhookToleranceSeconds
+  ) {
+    throw new TypeError(
+      `HMAC signature tolerance.seconds must be a whole number from 0 through ${maximumWebhookToleranceSeconds}.`,
+    );
+  }
+  if (header !== undefined && typeof header !== 'string') {
+    throw new TypeError('HMAC signature tolerance.header must be a string when provided.');
+  }
+  if (timestamp !== undefined && typeof timestamp !== 'function') {
+    throw new TypeError('HMAC signature tolerance.timestamp must be a function when provided.');
+  }
+  return freezeSecurityValue({
+    ...(header === undefined ? {} : { header }),
+    seconds,
+    ...(timestamp === undefined ? {} : { timestamp }),
   });
 }
 
@@ -262,6 +295,9 @@ function snapshotHmacSecrets(
   secret: HmacSignatureOptions['secret'],
 ): HmacSignatureOptions['secret'] {
   if (securityIsArray(secret)) {
+    if (secret.length === 0) {
+      throw new TypeError('HMAC signature configuration requires at least one signing secret.');
+    }
     const snapshot: HmacSecret[] = [];
     for (let index = 0; index < secret.length; index += 1) {
       const descriptor = securityGetOwnPropertyDescriptor(secret, index);
@@ -276,13 +312,39 @@ function snapshotHmacSecrets(
 }
 
 function snapshotHmacSecret(secret: HmacSecret): HmacSecret {
-  if (typeof secret === 'string') return secret;
-  if (securityHasInstance(IntrinsicUint8Array, secret)) return copyBytes(secret as Uint8Array);
-  const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
-  return freezeSecurityValue({
-    ...(encoded.encoding === undefined ? {} : { encoding: encoded.encoding }),
-    value: typeof encoded.value === 'string' ? encoded.value : copyBytes(encoded.value),
-  });
+  let snapshot: HmacSecret;
+  if (typeof secret === 'string') {
+    snapshot = secret;
+  } else if (securityHasInstance(IntrinsicUint8Array, secret)) {
+    snapshot = copyBytes(secret as Uint8Array);
+  } else {
+    const encoded = secret as Exclude<HmacSecret, string | Uint8Array>;
+    const encoding = encoded.encoding;
+    const value = encoded.value;
+    if (
+      encoding !== undefined &&
+      encoding !== 'base64' &&
+      encoding !== 'base64url' &&
+      encoding !== 'utf8'
+    ) {
+      throw new TypeError('HMAC signing material uses an unsupported encoding.');
+    }
+    if (typeof value !== 'string' && !securityHasInstance(IntrinsicUint8Array, value)) {
+      throw new TypeError('HMAC signing material must be a string or Uint8Array.');
+    }
+    snapshot = freezeSecurityValue({
+      ...(encoding === undefined ? {} : { encoding }),
+      value: typeof value === 'string' ? value : copyBytes(value as Uint8Array),
+    });
+  }
+
+  const byteLength = secretToBytes(snapshot).byteLength;
+  if (byteLength < minimumHmacSecretBytes) {
+    throw new TypeError(
+      `HMAC signing material is ${byteLength} bytes; minimum is ${minimumHmacSecretBytes} bytes (SPEC §6.6).`,
+    );
+  }
+  return snapshot;
 }
 
 /**
@@ -331,7 +393,9 @@ export function customVerifier(
  * @example
  * import { standardWebhooks } from '@kovojs/core';
  *
- * export const verifier = standardWebhooks({ secret: 'whsec_test' });
+ * export const verifier = standardWebhooks({
+ *   secret: 'whsec_c3RhbmRhcmQgdGVzdCBzZWNyZXQga2V5IDMyIGJ5dGVzISE=',
+ * });
  */
 export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatureVerifier {
   return hmacSignature({
