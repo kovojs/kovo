@@ -291,10 +291,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
     strings fail closed while genuine Argon2id verify, rehash, and strong decoy cost remain intact.
 
 - [ ] **M7 - Mutable rate-limit state and clock controls reset enforced request windows.**
-      `packages/server/src/app-load-shed.ts`
+      `packages/server/src/{app-load-shed,guards}.ts`
   - A selective late `WeakMap.prototype.get` override made each request allocate fresh private
     per-app rate state; replacing `Date.now` with an advanced value expired the active bucket. In
-    both independent proofs, a second mutation stayed admitted under a configured maximum of one.
+    the independent proofs, a second mutation and a second global guard check stayed admitted under
+    a configured maximum of one.
   - **Acceptance:** per-app/store/bucket operations, time reads, client-key parsing, numeric bounds,
     LRU eviction, and retry calculations use boot-pinned, semantically checked controls; late and
     import-order poison cannot reset windows, cross-bind clients, or exceed the configured key cap.
