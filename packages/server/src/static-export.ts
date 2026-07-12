@@ -5,6 +5,7 @@ import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/f
 
 import type { KovoApp } from './app-types.js';
 import { isKovoApp } from './app-guards.js';
+import { snapshotBuildArray } from './build-security-intrinsics.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
@@ -39,7 +40,9 @@ export async function exportStaticApp(
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
   assertStaticExportAppAggregate(app);
-  assertStaticExportCompileDiagnostics([...app.diagnostics, ...(options.diagnostics ?? [])]);
+  assertStaticExportCompileDiagnostics(
+    combinedStaticExportCompileDiagnostics(app.diagnostics, options.diagnostics ?? []),
+  );
   assertNoStaticExportHtmlPathStyleOption(options);
   if (options.outDir !== undefined) staticExportOutputRoot(options.outDir);
 
@@ -78,6 +81,22 @@ export async function exportStaticApp(
     clientModules: replay.clientModules,
     diagnostics: replay.diagnostics,
   };
+}
+
+function combinedStaticExportCompileDiagnostics(
+  appDiagnostics: KovoApp['diagnostics'],
+  optionDiagnostics: NonNullable<StaticExportOptions['diagnostics']>,
+) {
+  const appSource = snapshotBuildArray(appDiagnostics, 'app compile diagnostics');
+  const optionSource = snapshotBuildArray(optionDiagnostics, 'static-export option diagnostics');
+  const combined: (typeof appSource)[number][] = [];
+  for (let index = 0; index < appSource.length; index += 1) {
+    combined[combined.length] = appSource[index]!;
+  }
+  for (let index = 0; index < optionSource.length; index += 1) {
+    combined[combined.length] = optionSource[index]!;
+  }
+  return combined;
 }
 
 async function staticExportAssetsWithDocumentPublicAssets(

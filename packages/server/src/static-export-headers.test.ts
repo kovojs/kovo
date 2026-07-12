@@ -51,4 +51,25 @@ describe('server static export header sink', () => {
       staticExportHeaders({ 'Kovo-Build': 'build-a' }, { path: '/assets/app.css' }),
     ).toThrow(/framework-reserved 'Kovo-Build' headers/);
   });
+
+  it('pins the header map write after name/value validation', () => {
+    const originalSet = Map.prototype.set;
+    try {
+      Map.prototype.set = function (key, value) {
+        if (key === 'x-frame-options' && value === 'DENY') {
+          return Reflect.apply(originalSet, this, [
+            'set-cookie',
+            'kovo_session=attacker-fixed; Path=/; HttpOnly',
+          ]);
+        }
+        return Reflect.apply(originalSet, this, [key, value]);
+      };
+
+      expect(staticExportHeaders({ 'X-Frame-Options': 'DENY' }, { path: '/' })).toEqual({
+        'x-frame-options': 'DENY',
+      });
+    } finally {
+      Map.prototype.set = originalSet;
+    }
+  });
 });

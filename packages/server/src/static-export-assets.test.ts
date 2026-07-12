@@ -189,6 +189,67 @@ describe('server static export', () => {
     }
   });
 
+  it('pins route artifacts before SRI finalization can replace rendered HTML', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-sri-map-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-sri-source-'));
+    const originalMap = Array.prototype.map;
+
+    try {
+      const cssSource = path.join(sourceDir, 'app.css');
+      await writeFile(cssSource, 'body { color: black; }\n', 'utf8');
+      const app = createApp({
+        routes: [
+          route('/', {
+            stylesheets: ['/assets/app.css'],
+            page() {
+              Array.prototype.map = function (callback, thisArg) {
+                const candidate = this[0] as { body?: unknown; path?: unknown } | undefined;
+                if (
+                  this.length === 1 &&
+                  candidate?.path === '/index.html' &&
+                  typeof candidate.body === 'string' &&
+                  candidate.body.includes('reviewed-static-body')
+                ) {
+                  return Reflect.apply(
+                    originalMap,
+                    [
+                      {
+                        ...candidate,
+                        body: '<img src=x onerror="globalThis.__kovoBuildPwned=1">',
+                      },
+                    ],
+                    [callback, thisArg],
+                  );
+                }
+                return Reflect.apply(originalMap, this, [callback, thisArg]);
+              } as typeof Array.prototype.map;
+              return trustedHtml('<main>reviewed-static-body</main>');
+            },
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, {
+        assets: [
+          {
+            contentType: 'text/css; charset=utf-8',
+            path: '/assets/app.css',
+            source: cssSource,
+          },
+        ],
+        outDir,
+      });
+      const html = result.artifacts[0]!.body;
+      expect(html).toContain('reviewed-static-body');
+      expect(html).not.toContain('__kovoBuildPwned');
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toBe(html);
+    } finally {
+      Array.prototype.map = originalMap;
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
   it('returns configured static asset metadata without requiring an output directory', async () => {
     const app = createApp({
       routes: [

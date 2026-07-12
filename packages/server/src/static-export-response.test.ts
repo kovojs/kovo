@@ -114,6 +114,46 @@ describe('server static export replay response boundary', () => {
     });
   });
 
+  it('pins response headers before classifying file responses as route documents', async () => {
+    const response = new Response('DATABASE_PASSWORD=prod-only-secret', {
+      headers: {
+        'Content-Disposition': 'attachment; filename="private-report.txt"',
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+      status: 200,
+    });
+    const headers = response.headers;
+    const originalGet = Headers.prototype.get;
+
+    try {
+      Headers.prototype.get = function (name) {
+        if (this === headers && String(name).toLowerCase() === 'content-disposition') return null;
+        if (this === headers && String(name).toLowerCase() === 'content-type') {
+          return 'text/html; charset=utf-8';
+        }
+        return Reflect.apply(originalGet, this, [name]);
+      };
+
+      await expect(
+        readStaticExportReplayedResponse({
+          kind: 'route-document',
+          response,
+          routePath: '/private-report',
+        }),
+      ).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          expect.objectContaining({
+            message: expect.stringContaining('file/stream response'),
+            routePath: '/private-report',
+          }),
+        ],
+      });
+    } finally {
+      Headers.prototype.get = originalGet;
+    }
+  });
+
   it('raises concrete KV229 for public deferred route documents', async () => {
     await expect(
       readStaticExportReplayedResponse({

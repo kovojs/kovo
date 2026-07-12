@@ -3,6 +3,19 @@ import { fileURLToPath } from 'node:url';
 
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
+import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
+import {
+  createSecurityNullRecord,
+  createSecuritySet,
+  securityArrayJoin,
+  securityArrayPush,
+  securityObjectKeys,
+  securitySetAdd,
+  securitySetHas,
+  securityStringEndsWith,
+  securityStringSlice,
+  securityStringStartsWith,
+} from './response-security-intrinsics.js';
 import {
   staticExportOutputTargets,
   type StaticExportOutputPlanItem,
@@ -10,7 +23,7 @@ import {
   type StaticExportOutputTarget,
 } from './static-export-output-targets.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
-import { createStaticExportHeaderSink } from './static-export-headers.js';
+import { createStaticExportHeaderSink, staticExportHeaders } from './static-export-headers.js';
 import { staticHostHeaders, type StaticHostHeaderPolicyKind } from './static-host-header-policy.js';
 import {
   type StaticExportArtifact,
@@ -64,16 +77,22 @@ export function staticExportOutputPlan(
   result: StaticExportOutputArtifacts,
   options: StaticExportOutputPlanOptions,
 ): StaticExportOutputPlanItem[] {
-  return createStaticExportOutputPlan({
+  const writes = createStaticExportOutputPlan({
     artifacts: result.artifacts,
     assets: result.assets,
     clientModules: result.clientModules,
     outDir: options.outDir,
-  }).writes.map((write) => ({
-    kind: write.itemKind,
-    path: write.diagnosticPath,
-    targetPath: write.targetPath,
-  }));
+  }).writes;
+  const output: StaticExportOutputPlanItem[] = [];
+  for (let index = 0; index < writes.length; index += 1) {
+    const write = writes[index]!;
+    output[output.length] = {
+      kind: write.itemKind,
+      path: write.diagnosticPath,
+      targetPath: write.targetPath,
+    };
+  }
+  return output;
 }
 
 /**
@@ -113,8 +132,9 @@ export function staticExportOutputRoot(outDir: string | URL): string {
  * resolved static export output plan.
  */
 export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<void> {
-  for (const artifact of plan.assets) {
-    await assertReadableStaticExportAssetSource(artifact);
+  const assets = snapshotBuildArray(plan.assets, 'static-export output assets');
+  for (let index = 0; index < assets.length; index += 1) {
+    await assertReadableStaticExportAssetSource(assets[index]!);
   }
 
   await assertStaticExportOutputRoot(plan.root);
@@ -125,7 +145,12 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
     return;
   }
 
-  await writeArtifactOutput(plan.root, plan.writes.map(staticExportArtifactOutputEntry), {
+  const writes = snapshotBuildArray(plan.writes, 'static-export output writes');
+  const outputEntries: ArtifactOutputEntry[] = [];
+  for (let index = 0; index < writes.length; index += 1) {
+    outputEntries[outputEntries.length] = staticExportArtifactOutputEntry(writes[index]!);
+  }
+  await writeArtifactOutput(plan.root, outputEntries, {
     cleanup: {
       enumerate(root) {
         return enumerateStaticExportRouteDocuments(root, path.join(root, 'c'));
@@ -159,22 +184,24 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
  * never enumerated for pruning.
  */
 async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan): Promise<void> {
-  const ownedIndexHtmlDocuments = new Set(
-    plan.writes
-      .filter(
-        (write) =>
-          write.itemKind === 'route-document' ||
-          (write.itemKind === 'static-asset' && path.basename(write.targetPath) === 'index.html'),
-      )
-      .map((write) => write.targetPath),
-  );
+  const ownedIndexHtmlDocuments = createSecuritySet<string>();
+  const writes = snapshotBuildArray(plan.writes, 'static-export output writes');
+  for (let index = 0; index < writes.length; index += 1) {
+    const write = writes[index]!;
+    if (
+      write.itemKind === 'route-document' ||
+      (write.itemKind === 'static-asset' && path.basename(write.targetPath) === 'index.html')
+    ) {
+      securitySetAdd(ownedIndexHtmlDocuments, write.targetPath);
+    }
+  }
 
   const clientModuleRoot = path.join(plan.root, 'c');
   for await (const indexHtmlPath of enumerateStaticExportRouteDocuments(
     plan.root,
     clientModuleRoot,
   )) {
-    if (!ownedIndexHtmlDocuments.has(indexHtmlPath)) {
+    if (!securitySetHas(ownedIndexHtmlDocuments, indexHtmlPath)) {
       // Remove only the stale directory-index document; leave any sibling files (assets the export
       // does not own a manifest for, user-managed files) untouched.
       const fileSystem = createFrameworkOutputFileSystemBoundary(plan.root);
@@ -216,21 +243,33 @@ async function* enumerateStaticExportRouteDocuments(
 export function staticExportAssetArtifacts(
   assets: readonly StaticExportAssetInput[],
 ): StaticExportAssetArtifact[] {
-  return assets.map((asset) => ({
-    headers: staticExportAssetHeaders(asset),
-    path: asset.path,
-    source: staticExportSourcePath(asset),
-    status: 200,
-  }));
+  const sourceAssets = snapshotBuildArray(assets, 'static-export asset inputs');
+  const artifacts: StaticExportAssetArtifact[] = [];
+  for (let index = 0; index < sourceAssets.length; index += 1) {
+    const asset = sourceAssets[index]!;
+    artifacts[artifacts.length] = {
+      headers: staticExportAssetHeaders(asset),
+      path: asset.path,
+      source: staticExportSourcePath(asset),
+      status: 200,
+    };
+  }
+  return artifacts;
 }
 
 function staticExportPlannedWrites(
   plan: StaticExportOutputArtifacts,
   root: string,
 ): StaticExportPlannedWrite[] {
-  return staticExportOutputTargets(plan, root).map((target) =>
-    staticExportPlannedWrite(plan, target),
+  const targets = snapshotBuildArray(
+    staticExportOutputTargets(plan, root),
+    'static-export output targets',
   );
+  const writes: StaticExportPlannedWrite[] = [];
+  for (let index = 0; index < targets.length; index += 1) {
+    writes[writes.length] = staticExportPlannedWrite(plan, targets[index]!);
+  }
+  return writes;
 }
 
 function staticExportPlannedWrite(
@@ -289,66 +328,116 @@ function staticExportPlannedWrite(
  */
 function buildNetlifyHeadersSidecar(plan: StaticExportOutputArtifacts): string {
   const lines: string[] = ['# Kovo static export security headers (SPEC §6.6)'];
+  const artifacts = snapshotBuildArray(plan.artifacts, 'static-export route artifacts');
 
-  for (const artifact of plan.artifacts) {
-    const entries = Object.entries(artifact.headers);
+  for (let artifactIndex = 0; artifactIndex < artifacts.length; artifactIndex += 1) {
+    const artifact = artifacts[artifactIndex]!;
+    const entries = staticExportHeaderRecordEntries(artifact.headers);
     if (entries.length === 0) continue;
 
-    for (const documentPath of staticExportDocumentHeaderPaths(artifact.path)) {
-      lines.push('');
-      lines.push(documentPath);
-      for (const [name, value] of entries) {
-        lines.push(`  ${name}: ${value}`);
+    const documentPaths = staticExportDocumentHeaderPaths(artifact.path);
+    for (let pathIndex = 0; pathIndex < documentPaths.length; pathIndex += 1) {
+      securityArrayPush(lines, '');
+      securityArrayPush(lines, documentPaths[pathIndex]!);
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+        const [name, value] = entries[entryIndex]!;
+        securityArrayPush(lines, `  ${name}: ${value}`);
       }
     }
   }
 
-  const fallbackHeaders = commonStaticExportDocumentHeaders(plan.artifacts);
-  if (Object.keys(fallbackHeaders).length > 0) {
-    lines.push('');
-    lines.push('/*');
-    for (const [name, value] of Object.entries(fallbackHeaders)) {
-      lines.push(`  ${name}: ${value}`);
+  const fallbackHeaders = commonStaticExportDocumentHeaders(artifacts);
+  const fallbackEntries = staticExportHeaderRecordEntries(fallbackHeaders);
+  if (fallbackEntries.length > 0) {
+    securityArrayPush(lines, '');
+    securityArrayPush(lines, '/*');
+    for (let index = 0; index < fallbackEntries.length; index += 1) {
+      const [name, value] = fallbackEntries[index]!;
+      securityArrayPush(lines, `  ${name}: ${value}`);
     }
   }
 
   // bugz-3 L8: versioned client modules live under `/c/` (enforced by
   // `assertStaticExportClientModuleTarget`); static assets under `/assets/` follow the
   // preset convention. Carry the immutable-asset floor on those public file trees.
-  if (plan.clientModules.length > 0) {
+  const clientModules = snapshotBuildArray(plan.clientModules, 'static-export client modules');
+  if (clientModules.length > 0) {
     appendStaticExportHeaderPolicyStanza(lines, '/c/*', 'clientModule');
   }
-  if (plan.assets.some((asset) => asset.path.startsWith('/assets/'))) {
+  const assets = snapshotBuildArray(plan.assets, 'static-export assets');
+  let hasImmutableAsset = false;
+  for (let index = 0; index < assets.length; index += 1) {
+    if (securityStringStartsWith(assets[index]!.path, '/assets/')) {
+      hasImmutableAsset = true;
+      break;
+    }
+  }
+  if (hasImmutableAsset) {
     appendStaticExportHeaderPolicyStanza(lines, '/assets/*', 'immutableAsset');
   }
 
-  lines.push('');
-  return lines.join('\n');
+  securityArrayPush(lines, '');
+  // SPEC §6.6: the validated sidecar plan is finalized through a boot-pinned join. App code
+  // cannot replace the whole deployable `_headers` body after each header has passed the sink.
+  return securityArrayJoin(lines, '\n');
 }
 
 function staticExportDocumentHeaderPaths(artifactPath: string): string[] {
   const paths = [artifactPath];
   if (artifactPath === '/index.html') {
-    paths.push('/');
-  } else if (artifactPath.endsWith('/index.html')) {
-    const directory = artifactPath.slice(0, -'index.html'.length);
-    paths.push(directory, directory.endsWith('/') ? directory.slice(0, -1) || '/' : directory);
+    securityArrayPush(paths, '/');
+  } else if (securityStringEndsWith(artifactPath, '/index.html')) {
+    const directory = securityStringSlice(artifactPath, 0, -'index.html'.length);
+    securityArrayPush(paths, directory);
+    securityArrayPush(
+      paths,
+      securityStringEndsWith(directory, '/')
+        ? securityStringSlice(directory, 0, -1) || '/'
+        : directory,
+    );
   }
-  return [...new Set(paths)];
+  const unique: string[] = [];
+  for (let index = 0; index < paths.length; index += 1) {
+    const candidate = paths[index]!;
+    let seen = false;
+    for (let prior = 0; prior < unique.length; prior += 1) {
+      if (unique[prior] === candidate) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) securityArrayPush(unique, candidate);
+  }
+  return unique;
 }
 
 function commonStaticExportDocumentHeaders(
   artifacts: readonly StaticExportArtifact[],
 ): Record<string, string> {
-  if (artifacts.length === 0) return {};
-  const [first, ...rest] = artifacts;
+  const source = snapshotBuildArray(artifacts, 'static-export route artifacts');
+  if (source.length === 0) return createSecurityNullRecord<string>();
+  const first = source[0];
   if (first === undefined) return {};
 
-  return Object.fromEntries(
-    Object.entries(first.headers).filter(([name, value]) =>
-      rest.every((artifact) => artifact.headers[name] === value),
-    ),
-  );
+  const common = createSecurityNullRecord<string>();
+  const firstEntries = staticExportHeaderRecordEntries(first.headers);
+  for (let entryIndex = 0; entryIndex < firstEntries.length; entryIndex += 1) {
+    const [name, value] = firstEntries[entryIndex]!;
+    let shared = true;
+    for (let artifactIndex = 1; artifactIndex < source.length; artifactIndex += 1) {
+      const property = buildOwnDataProperty(
+        source[artifactIndex]!.headers,
+        name,
+        `static-export header '${name}'`,
+      );
+      if (!property.present || property.value !== value) {
+        shared = false;
+        break;
+      }
+    }
+    if (shared) common[name] = value;
+  }
+  return common;
 }
 
 function appendStaticExportHeaderPolicyStanza(
@@ -356,11 +445,29 @@ function appendStaticExportHeaderPolicyStanza(
   pathPattern: string,
   policy: StaticHostHeaderPolicyKind,
 ): void {
-  lines.push('');
-  lines.push(pathPattern);
-  for (const [name, value] of Object.entries(staticHostHeaders(policy))) {
-    lines.push(`  ${name}: ${value}`);
+  securityArrayPush(lines, '');
+  securityArrayPush(lines, pathPattern);
+  const entries = staticExportHeaderRecordEntries(staticHostHeaders(policy));
+  for (let index = 0; index < entries.length; index += 1) {
+    const [name, value] = entries[index]!;
+    securityArrayPush(lines, `  ${name}: ${value}`);
   }
+}
+
+function staticExportHeaderRecordEntries(
+  headers: Readonly<Record<string, string>>,
+): readonly (readonly [string, string])[] {
+  const names = securityObjectKeys(headers);
+  const entries: (readonly [string, string])[] = [];
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const property = buildOwnDataProperty(headers, name, `static-export header '${name}'`);
+    if (!property.present || typeof property.value !== 'string') {
+      throw new TypeError(`Static export header '${name}' must be an own string value.`);
+    }
+    entries[entries.length] = [name, property.value] as const;
+  }
+  return entries;
 }
 
 async function assertReadableStaticExportAssetSource(
@@ -414,16 +521,11 @@ async function assertStaticExportOutputRoot(root: string): Promise<void> {
 
 function staticExportAssetHeaders(asset: StaticExportAssetInput): Record<string, string> {
   const headers = createStaticExportHeaderSink({ path: asset.path });
-  if (asset.headers !== undefined) {
-    if (asset.headers instanceof Headers) {
-      for (const [name, value] of asset.headers.entries()) headers.append(name, value);
-    } else if (Array.isArray(asset.headers)) {
-      for (const [name, value] of asset.headers) headers.append(String(name), String(value));
-    } else {
-      for (const [name, value] of Object.entries(asset.headers)) {
-        headers.append(name, String(value));
-      }
-    }
+  const normalized = staticExportHeaders(asset.headers, { path: asset.path });
+  const entries = staticExportHeaderRecordEntries(normalized);
+  for (let index = 0; index < entries.length; index += 1) {
+    const [name, value] = entries[index]!;
+    headers.append(name, value);
   }
   if (asset.contentType !== undefined) headers.set('content-type', asset.contentType);
   return headers.toJSON();

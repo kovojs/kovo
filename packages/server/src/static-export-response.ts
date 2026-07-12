@@ -1,4 +1,15 @@
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
+import {
+  buildSecurityResponseStatus,
+  buildSecurityResponseText,
+} from './build-security-intrinsics.js';
+import {
+  securityHeadersGet,
+  securityStringIncludes,
+  securityStringSplit,
+  securityStringToLowerCase,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 import { staticExportHeaders } from './static-export-headers.js';
 import {
   scanStaticExportDocumentProtocol,
@@ -25,8 +36,11 @@ export async function readStaticExportReplayedResponse(
   options: StaticExportReplayedResponseReadOptions,
 ): Promise<StaticExportResponseSnapshot> {
   const { response } = options;
-  const contentType = response.headers.get('content-type');
-  const body = await response.text();
+  // SPEC §6.6: classification and body capture use boot-pinned web controls. A route cannot hide
+  // Content-Disposition or alter status/content type by replacing Headers/Response prototypes.
+  const status = buildSecurityResponseStatus(response);
+  const contentType = securityHeadersGet(response.headers, 'content-type');
+  const body = await buildSecurityResponseText(response);
   const routeDocumentProtocol =
     options.kind === 'route-document'
       ? scanStaticExportDocumentProtocol(body, 'https://kovo.static-export.local')
@@ -41,7 +55,7 @@ export async function readStaticExportReplayedResponse(
     if (routeOutcomeDiagnostics.length > 0) throw new StaticExportError(routeOutcomeDiagnostics);
   }
 
-  if (response.status !== 200 || !isExpectedStaticExportContentType(options, contentType)) {
+  if (status !== 200 || !isExpectedStaticExportContentType(options, contentType)) {
     throw new StaticExportError(
       staticExportReplayResponseDiagnostics(options, contentType, routeDocumentProtocol),
     );
@@ -50,7 +64,7 @@ export async function readStaticExportReplayedResponse(
   return {
     body,
     headers: staticExportHeaders(response.headers, { path: staticExportResponsePath(options) }),
-    status: response.status,
+    status,
   };
 }
 
@@ -63,6 +77,7 @@ function staticExportReplayResponseDiagnostics(
   contentType: string | null,
   routeDocumentProtocol: StaticExportDocumentProtocol | undefined,
 ) {
+  const status = buildSecurityResponseStatus(options.response);
   if (options.kind === 'route-document') {
     const routeOutcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
       options,
@@ -83,7 +98,7 @@ function staticExportReplayResponseDiagnostics(
     return [
       staticExportDiagnostic(
         options.routePath,
-        `KV229 static export can only write successful HTML route documents; '${options.routePath}' returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'.`,
+        `KV229 static export can only write successful HTML route documents; '${options.routePath}' returned status ${status} with Content-Type '${contentType ?? 'none'}'.`,
         options.routePath,
       ),
     ];
@@ -92,7 +107,7 @@ function staticExportReplayResponseDiagnostics(
   return [
     staticExportDiagnostic(
       options.path,
-      `KV229 static export cannot copy client module '${options.href}' because the app handler returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
+      `KV229 static export cannot copy client module '${options.href}' because the app handler returned status ${status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
     ),
   ];
 }
@@ -103,17 +118,18 @@ function routeDocumentNonExportableOutcomeDiagnostics(
   routeDocumentProtocol: StaticExportDocumentProtocol | undefined,
 ) {
   const { response, routePath } = options;
-  if (response.status >= 300 && response.status < 400) {
+  const status = buildSecurityResponseStatus(response);
+  if (status >= 300 && status < 400) {
     return [
       staticExportDiagnostic(
         routePath,
-        `KV229 static export cannot export route '${routePath}' because replay returned redirect status ${response.status} with Location '${response.headers.get('location') ?? 'none'}'. Static export is L0/L1 only; serve this route dynamically or export the redirect target as a route document.`,
+        `KV229 static export cannot export route '${routePath}' because replay returned redirect status ${status} with Location '${securityHeadersGet(response.headers, 'location') ?? 'none'}'. Static export is L0/L1 only; serve this route dynamically or export the redirect target as a route document.`,
         routePath,
       ),
     ];
   }
 
-  const contentDisposition = response.headers.get('content-disposition');
+  const contentDisposition = securityHeadersGet(response.headers, 'content-disposition');
   if (contentDisposition !== null) {
     return [
       staticExportDiagnostic(
@@ -144,13 +160,17 @@ function routeDocumentEndpointDiagnostics(
 ) {
   if (!isHtmlDocumentContentType(contentType)) return [];
 
-  return (routeDocumentProtocol?.endpointRefs ?? []).map((ref) =>
-    staticExportDiagnostic(
+  const refs = routeDocumentProtocol?.endpointRefs ?? [];
+  const diagnostics: ReturnType<typeof staticExportDiagnostic>[] = [];
+  for (let index = 0; index < refs.length; index += 1) {
+    const ref = refs[index]!;
+    diagnostics[diagnostics.length] = staticExportDiagnostic(
       routePath,
       `KV229 static export cannot export route '${routePath}' because replayed HTML attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
       routePath,
-    ),
-  );
+    );
+  }
+  return diagnostics;
 }
 
 function isExpectedStaticExportContentType(
@@ -163,11 +183,15 @@ function isExpectedStaticExportContentType(
 }
 
 function isHtmlDocumentContentType(contentType: string | null): boolean {
-  return contentType?.toLowerCase().includes('text/html') ?? false;
+  return contentType === null
+    ? false
+    : securityStringIncludes(securityStringToLowerCase(contentType), 'text/html');
 }
 
 function isJavaScriptClientModuleContentType(contentType: string | null): boolean {
   if (contentType === null) return false;
-  const mime = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  const mime = securityStringToLowerCase(
+    securityStringTrim(securityStringSplit(contentType, ';')[0] ?? ''),
+  );
   return mime === 'text/javascript' || mime === 'application/javascript';
 }

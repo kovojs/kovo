@@ -1,5 +1,6 @@
 import type { DiagnosticCode } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { snapshotBuildArray } from './build-security-intrinsics.js';
 
 /**
  * Route-level diagnostic emitted when a request-shell route cannot be represented
@@ -111,7 +112,12 @@ export function formatStaticExportDiagnostics(
   diagnostics: readonly StaticExportDiagnostic[],
   severity: StaticExportDiagnosticSeverity,
 ): string[] {
-  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
+  const source = snapshotBuildArray(diagnostics, 'static-export diagnostics');
+  const formatted: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    formatted[formatted.length] = formatStaticExportDiagnostic(source[index]!, severity);
+  }
+  return formatted;
 }
 
 export function assertStaticExportCompileDiagnostics(
@@ -125,13 +131,20 @@ export function blockingStaticExportDiagnostics(
   diagnostics: readonly StaticExportCompileDiagnostic[],
 ): StaticExportDiagnostic[] {
   // SPEC §11.3: error diagnostics block static export before output is written.
-  return diagnostics
-    .filter((diagnostic) => diagnosticDefinitions[diagnostic.code].severity === 'error')
-    .map((diagnostic) => ({
+  // SPEC §6.6: app evaluation precedes export, so this gate must not dispatch through a mutable
+  // Array.filter/map. Snapshot the complete compiler ledger and construct blocking rows directly.
+  const source = snapshotBuildArray(diagnostics, 'static-export compile diagnostics');
+  const blocking: StaticExportDiagnostic[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = source[index]!;
+    if (diagnosticDefinitions[diagnostic.code].severity !== 'error') continue;
+    blocking[blocking.length] = {
       code: diagnostic.code,
       message: staticExportCompileDiagnosticMessage(diagnostic),
       routePath: diagnostic.fileName,
-    }));
+    };
+  }
+  return blocking;
 }
 
 function stableDiagnosticText(value: string): string {

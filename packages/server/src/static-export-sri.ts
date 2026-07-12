@@ -1,9 +1,19 @@
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import { escapeAttribute } from './html.js';
+import { buildSecuritySha384Base64, snapshotBuildArray } from './build-security-intrinsics.js';
+import {
+  createSecurityMap,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityStringSlice,
+  securityStringToLowerCase,
+  securityStringTrim,
+  securityUrlSnapshot,
+} from './response-security-intrinsics.js';
 import {
   collectStaticExportOpeningTags,
   readStaticExportHtmlAttributeRefs,
@@ -34,101 +44,120 @@ export async function applyStaticExportSubresourceIntegrity({
   origin,
 }: StaticExportSriInput): Promise<StaticExportArtifact[]> {
   const integrityByPath = await staticExportIntegrityByPath({ assets, clientModules });
-  if (integrityByPath.size === 0) return [...artifacts];
-
-  return artifacts.map((artifact) => ({
-    ...artifact,
-    body: renderStaticExportSriHtml(artifact.body, origin, integrityByPath),
-  }));
+  const sourceArtifacts = snapshotBuildArray(artifacts, 'static-export SRI route artifacts');
+  const finalized: StaticExportArtifact[] = [];
+  for (let index = 0; index < sourceArtifacts.length; index += 1) {
+    const artifact = sourceArtifacts[index]!;
+    finalized[finalized.length] = {
+      ...artifact,
+      body: renderStaticExportSriHtml(artifact.body, origin, integrityByPath),
+    };
+  }
+  return finalized;
 }
 
 async function staticExportIntegrityByPath({
   assets,
   clientModules,
 }: Pick<StaticExportSriInput, 'assets' | 'clientModules'>): Promise<Map<string, string>> {
-  const integrityByPath = new Map<string, string>();
+  const integrityByPath = createSecurityMap<string, string>();
+  const pinnedClientModules = snapshotBuildArray(clientModules, 'static-export SRI client modules');
 
-  for (const artifact of clientModules) {
-    integrityByPath.set(artifact.path, sriSha384(Buffer.from(artifact.body, 'utf8')));
+  for (let index = 0; index < pinnedClientModules.length; index += 1) {
+    const artifact = pinnedClientModules[index]!;
+    securityMapSet(integrityByPath, artifact.path, sriSha384(artifact.body));
   }
 
-  await Promise.all(
-    assets.map(async (asset) => {
-      const bytes = await readableStaticExportAssetBytes(asset);
-      if (bytes !== undefined) integrityByPath.set(asset.path, sriSha384(bytes));
-    }),
-  );
+  const pinnedAssets = snapshotBuildArray(assets, 'static-export SRI assets');
+  for (let index = 0; index < pinnedAssets.length; index += 1) {
+    const asset = pinnedAssets[index]!;
+    const bytes = await readableStaticExportAssetBytes(asset);
+    if (bytes !== undefined) securityMapSet(integrityByPath, asset.path, sriSha384(bytes));
+  }
 
   return integrityByPath;
 }
 
 async function readableStaticExportAssetBytes(
   asset: StaticExportAssetArtifact,
-): Promise<Buffer | undefined> {
+): Promise<Uint8Array | undefined> {
   const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(asset.source));
   const bytes = await fileSystem.fileBytes(path.basename(asset.source));
-  return bytes === undefined ? undefined : Buffer.from(bytes);
+  return bytes;
 }
 
-function sriSha384(bytes: Buffer): string {
-  return `sha384-${createHash('sha384').update(bytes).digest('base64')}`;
+function sriSha384(bytes: string | Uint8Array): string {
+  return `sha384-${buildSecuritySha384Base64(bytes)}`;
 }
 
 function renderStaticExportSriHtml(
   html: string,
   origin: string,
-  integrityByPath: ReadonlyMap<string, string>,
+  integrityByPath: Map<string, string>,
 ): string {
   const replacements: { end: number; start: number; value: string }[] = [];
 
-  for (const tag of collectStaticExportOpeningTags(html)) {
+  const tags = snapshotBuildArray(
+    collectStaticExportOpeningTags(html),
+    'static-export SRI opening tags',
+  );
+  for (let index = 0; index < tags.length; index += 1) {
+    const tag = tags[index]!;
     const refs = readStaticExportHtmlAttributeRefs(tag.attributes);
     const attrs = staticExportAttributeMap(refs);
-    if (attrs.has('integrity')) continue;
+    if (securityMapHas(attrs, 'integrity')) continue;
 
     const href = staticExportSriHref(tag.name, attrs);
     if (href === undefined) continue;
 
-    const url = staticExportFirstPartyUrl(href, origin);
-    if (url === undefined) continue;
+    const pathname = staticExportFirstPartyPath(href, origin);
+    if (pathname === undefined) continue;
 
-    const integrity = integrityByPath.get(url.pathname);
+    const integrity = securityMapGet(integrityByPath, pathname);
     if (integrity === undefined) continue;
 
-    replacements.push({
+    replacements[replacements.length] = {
       end: tag.end - 1,
       start: tag.end - 1,
       value: ` integrity="${escapeAttribute(integrity)}"`,
-    });
+    };
   }
 
   return applyStaticExportHtmlReplacements(html, replacements);
 }
 
-function staticExportSriHref(
-  tagName: string,
-  attrs: ReadonlyMap<string, string>,
-): string | undefined {
+function staticExportSriHref(tagName: string, attrs: Map<string, string>): string | undefined {
   if (tagName === 'script') {
-    return attrs.get('type')?.trim().toLowerCase() === 'module' ? attrs.get('src') : undefined;
+    const type = securityMapGet(attrs, 'type');
+    return type !== undefined && securityStringToLowerCase(securityStringTrim(type)) === 'module'
+      ? securityMapGet(attrs, 'src')
+      : undefined;
   }
 
   if (tagName !== 'link') return undefined;
 
-  const rels = staticExportRelTokens(attrs.get('rel'));
-  if (rels.includes('modulepreload')) return attrs.get('href');
-  if (rels.includes('stylesheet')) return attrs.get('href');
-  if (rels.includes('preload') && attrs.get('as')?.trim().toLowerCase() === 'style') {
-    return attrs.get('href');
+  const rels = snapshotBuildArray(
+    staticExportRelTokens(securityMapGet(attrs, 'rel')),
+    'static-export SRI rel tokens',
+  );
+  if (stringArrayContains(rels, 'modulepreload')) return securityMapGet(attrs, 'href');
+  if (stringArrayContains(rels, 'stylesheet')) return securityMapGet(attrs, 'href');
+  const as = securityMapGet(attrs, 'as');
+  if (
+    stringArrayContains(rels, 'preload') &&
+    as !== undefined &&
+    securityStringToLowerCase(securityStringTrim(as)) === 'style'
+  ) {
+    return securityMapGet(attrs, 'href');
   }
 
   return undefined;
 }
 
-function staticExportFirstPartyUrl(href: string, origin: string): URL | undefined {
+function staticExportFirstPartyPath(href: string, origin: string): string | undefined {
   try {
-    const url = new URL(href, origin);
-    return url.origin === new URL(origin).origin ? url : undefined;
+    const url = securityUrlSnapshot(href, origin);
+    return url.origin === securityUrlSnapshot(origin).origin ? url.pathname : undefined;
   } catch {
     return undefined;
   }
@@ -142,10 +171,19 @@ function applyStaticExportHtmlReplacements(
 
   let output = '';
   let offset = 0;
-  for (const replacement of replacements) {
-    output += html.slice(offset, replacement.start);
+  const pinnedReplacements = snapshotBuildArray(replacements, 'static-export SRI replacements');
+  for (let index = 0; index < pinnedReplacements.length; index += 1) {
+    const replacement = pinnedReplacements[index]!;
+    output += securityStringSlice(html, offset, replacement.start);
     output += replacement.value;
     offset = replacement.end;
   }
-  return output + html.slice(offset);
+  return output + securityStringSlice(html, offset);
+}
+
+function stringArrayContains(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
 }

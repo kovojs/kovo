@@ -646,6 +646,51 @@ describe('server static export output boundary', () => {
     }
   });
 
+  it('pins final _headers serialization after validating every header', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-join-'));
+    const originalJoin = Array.prototype.join;
+    try {
+      Array.prototype.join = function (separator) {
+        if (this[0] === '# Kovo static export security headers (SPEC §6.6)') {
+          return [
+            '/*',
+            '  set-cookie: kovo_session=attacker-fixed; Path=/; HttpOnly',
+            '  content-security-policy: default-src * unsafe-inline',
+            '',
+          ].join('\n');
+        }
+        return Reflect.apply(originalJoin, this, [separator]);
+      } as typeof Array.prototype.join;
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {
+              'content-security-policy': "default-src 'self'; frame-ancestors 'none'",
+              'x-frame-options': 'DENY',
+            },
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+
+      await writeStaticExportOutput(plan);
+      const sidecar = await readFile(path.join(outDir, '_headers'), 'utf8');
+      expect(sidecar).toContain('x-frame-options: DENY');
+      expect(sidecar).toContain("content-security-policy: default-src 'self'");
+      expect(sidecar).not.toContain('set-cookie');
+      expect(sidecar).not.toContain('default-src *');
+    } finally {
+      Array.prototype.join = originalJoin;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   // bugz-3 L8 / SPEC §6.6: the sidecar must ALSO carry the immutable-asset floor
   // (nosniff / CORP:same-origin / immutable cache-control) for the public `/c/` client
   // modules and `/assets/` static files, matching `immutableStaticHeaders()` that every

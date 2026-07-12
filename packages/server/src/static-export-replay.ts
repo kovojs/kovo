@@ -1,4 +1,5 @@
 import type { KovoApp } from './app-types.js';
+import { snapshotBuildArray } from './build-security-intrinsics.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
 import { staticExportRoutePlan, type StaticExportRouteTarget } from './static-export-route-plan.js';
@@ -35,7 +36,7 @@ export async function replayStaticExportApp({
   if (appDiagnostics.length > 0) throw new StaticExportError(appDiagnostics);
 
   const routePlan = staticExportRoutePlan(app);
-  const diagnostics = [...routePlan.diagnostics];
+  const diagnostics = copyStaticExportDiagnostics(routePlan.diagnostics);
   if (diagnostics.length > 0 && onNonExportable !== 'skip') {
     throw new StaticExportError(diagnostics);
   }
@@ -46,15 +47,17 @@ export async function replayStaticExportApp({
   });
   const artifacts: StaticExportArtifact[] = [];
 
-  for (const routeTarget of routePlan.targets) {
+  // Pin the complete route target set before the first synthetic request executes app code. A
+  // route cannot replace Array iteration and smuggle an unplanned guarded/session route into replay.
+  const routeTargets = snapshotBuildArray(routePlan.targets, 'static-export replay targets');
+  for (let routeIndex = 0; routeIndex < routeTargets.length; routeIndex += 1) {
+    const routeTarget = routeTargets[routeIndex]!;
     // SPEC §9.5: `skip` policy publishes the exportable subset. Suppress a target only when a
     // diagnostic names this exact concrete URL (`concretePath`), or — for a route-level diagnostic
     // with no single concrete target — when it shares the route pattern. Matching every staticPath
     // sibling by `routePath` (all param targets share `route.path`) would drop valid pages whenever
     // one staticPath is non-exportable; see C1.
-    if (
-      diagnostics.some((diagnostic) => staticExportDiagnosticSuppresses(diagnostic, routeTarget))
-    ) {
+    if (staticExportDiagnosticsSuppressTarget(diagnostics, routeTarget)) {
       continue;
     }
 
@@ -70,7 +73,13 @@ export async function replayStaticExportApp({
         throw error;
       }
 
-      diagnostics.push(...error.diagnostics);
+      const errorDiagnostics = snapshotBuildArray(
+        error.diagnostics,
+        'static-export replay error diagnostics',
+      );
+      for (let index = 0; index < errorDiagnostics.length; index += 1) {
+        diagnostics[diagnostics.length] = errorDiagnostics[index]!;
+      }
     }
   }
 
@@ -82,6 +91,27 @@ export async function replayStaticExportApp({
     }),
     diagnostics,
   };
+}
+
+function copyStaticExportDiagnostics(
+  source: readonly StaticExportDiagnostic[],
+): StaticExportDiagnostic[] {
+  const pinned = snapshotBuildArray(source, 'static-export diagnostics');
+  const diagnostics: StaticExportDiagnostic[] = [];
+  for (let index = 0; index < pinned.length; index += 1) {
+    diagnostics[diagnostics.length] = pinned[index]!;
+  }
+  return diagnostics;
+}
+
+function staticExportDiagnosticsSuppressTarget(
+  diagnostics: readonly StaticExportDiagnostic[],
+  routeTarget: StaticExportRouteTarget,
+): boolean {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    if (staticExportDiagnosticSuppresses(diagnostics[index]!, routeTarget)) return true;
+  }
+  return false;
 }
 
 /**

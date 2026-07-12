@@ -80,6 +80,54 @@ describe('server static export diagnostic boundary', () => {
     }
   });
 
+  it('keeps KV426 blocking after selective Array.filter replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-kv426-filter-'));
+    const originalFilter = Array.prototype.filter;
+    let replayed = false;
+
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page() {
+              replayed = true;
+              return trustedHtml('<main><img src=x onerror=alert(1)></main>');
+            },
+          }),
+        ],
+      });
+      const diagnostics = [
+        {
+          code: 'KV426' as const,
+          fileName: 'src/home.tsx',
+          message: 'trustedHtml() raw HTML requires a literal justification.',
+        },
+      ];
+
+      Array.prototype.filter = function (callback, thisArg) {
+        let containsKv426 = false;
+        for (let index = 0; index < this.length; index += 1) {
+          if ((this[index] as { code?: unknown } | undefined)?.code === 'KV426') {
+            containsKv426 = true;
+            break;
+          }
+        }
+        if (containsKv426) return [];
+        return Reflect.apply(originalFilter, this, [callback, thisArg]);
+      } as typeof Array.prototype.filter;
+
+      await expect(exportStaticApp(app, { diagnostics, outDir })).rejects.toMatchObject({
+        code: 'KV426',
+        diagnostics: [expect.objectContaining({ code: 'KV426', routePath: 'src/home.tsx' })],
+      });
+      expect(replayed).toBe(false);
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      Array.prototype.filter = originalFilter;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('blocks KV228 app route-table diagnostics before route replay or output writes', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-kv228-'));
     try {

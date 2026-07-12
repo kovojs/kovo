@@ -207,6 +207,90 @@ describe('server static export', () => {
     }
   });
 
+  it('never publishes respond.file bytes as an HTML route document after header replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-file-headers-'));
+    const originalGet = Headers.prototype.get;
+    try {
+      const app = createApp({
+        routes: [
+          route('/private-report', {
+            page() {
+              Headers.prototype.get = function (name) {
+                const normalized = String(name).toLowerCase();
+                if (normalized === 'content-disposition') return null;
+                if (normalized === 'content-type') return 'text/html; charset=utf-8';
+                return Reflect.apply(originalGet, this, [name]);
+              };
+              return respond.file('DATABASE_PASSWORD=prod-only-secret', {
+                contentType: 'text/plain; charset=utf-8',
+                filename: 'private-report.txt',
+              });
+            },
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          expect.objectContaining({
+            message: expect.stringContaining('file/stream response'),
+            routePath: '/private-report',
+          }),
+        ],
+      });
+      await expect(
+        readFile(path.join(outDir, 'private-report', 'index.html'), 'utf8'),
+      ).rejects.toThrow();
+    } finally {
+      Headers.prototype.get = originalGet;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps encoded server endpoint markers blocking after protocol intrinsic replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-protocol-pin-'));
+    const originalReplace = String.prototype.replace;
+    const originalSetHas = Set.prototype.has;
+    try {
+      const app = createApp({
+        routes: [
+          route('/account', {
+            page() {
+              String.prototype.replace = function (searchValue, replaceValue) {
+                const text = String(this);
+                if (text.indexOf('&#47;_m') !== -1) return text;
+                return Reflect.apply(originalReplace, this, [searchValue, replaceValue]);
+              } as typeof String.prototype.replace;
+              Set.prototype.has = function (value) {
+                if (value === 'action') return false;
+                return Reflect.apply(originalSetHas, this, [value]);
+              };
+              return trustedHtml(
+                '<main><form action="&#47;_m&#47;account&#47;delete"><button>Delete</button></form></main>',
+              );
+            },
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          expect.objectContaining({
+            message: expect.stringContaining("server mutation endpoint '/_m/account/delete'"),
+            routePath: '/account',
+          }),
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'account', 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      String.prototype.replace = originalReplace;
+      Set.prototype.has = originalSetHas;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('fails loudly for guarded and session-provider routes', async () => {
     const guardedApp = createApp({
       routes: [
@@ -243,6 +327,50 @@ describe('server static export', () => {
         },
       ],
     });
+  });
+
+  it('pins guarded route planning before replay despite selective route iteration', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-route-snapshot-'));
+    const app = createApp({
+      routes: [
+        route('/account', {
+          guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
+          page(_context, request) {
+            const userId = (request as { session?: { user?: { id: string } } }).session?.user?.id;
+            return trustedHtml(`<main>${userId ?? 'anonymous'}:server-only-account-token</main>`);
+          },
+        }),
+      ],
+      sessionProvider: () => ({ user: { id: 'victim' } }),
+    });
+    const routes = app.routes;
+    const publicClone = {
+      ...routes[0]!,
+      access: publicAccess('iterator attempted to downgrade guarded route'),
+      guard: undefined,
+    };
+    const originalIterator = Array.prototype[Symbol.iterator];
+
+    try {
+      Array.prototype[Symbol.iterator] = function () {
+        if (this === routes) return Reflect.apply(originalIterator, [publicClone], []);
+        return Reflect.apply(originalIterator, this, []);
+      } as (typeof Array.prototype)[Symbol.iterator];
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [
+          expect.objectContaining({
+            message: expect.stringContaining('session-independent'),
+            routePath: '/account',
+          }),
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'account', 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+      await rm(outDir, { force: true, recursive: true });
+    }
   });
 
   it('exports explicitly public routes from an app with a session provider', async () => {
