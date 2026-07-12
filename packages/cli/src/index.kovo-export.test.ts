@@ -664,23 +664,23 @@ describe('kovo export', () => {
       );
       delete process.env.KOVO_TEST_VITE_STYLESHEET;
 
-      await expect(
-        mainAsync([
-          'export',
-          '/src/app.ts',
-          '--vite',
-          '--root',
-          root,
-          '--out',
-          outDir,
-          '--manifest',
-          join(distDir, '.vite', 'manifest.json'),
-          '--dist',
-          distDir,
-          '--stylesheet-env',
-          'KOVO_TEST_VITE_STYLESHEET',
-        ]),
-      ).resolves.toBe(0);
+      const exitCode = await mainAsync([
+        'export',
+        '/src/app.ts',
+        '--vite',
+        '--root',
+        root,
+        '--out',
+        outDir,
+        '--manifest',
+        join(distDir, '.vite', 'manifest.json'),
+        '--dist',
+        distDir,
+        '--stylesheet-env',
+        'KOVO_TEST_VITE_STYLESHEET',
+      ]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(

@@ -1,6 +1,8 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
+
 import { createHash } from 'node:crypto';
 
-import { securityArrayIsArray, securityNumberIsInteger } from './response-security-intrinsics.js';
+import { securityArrayIsArray, securityNumberIsInteger } from './response-security-intrinsics.ts';
 import {
   createWitnessWeakSet,
   witnessFreeze,
@@ -14,7 +16,7 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetDelete,
   witnessWeakSetHas,
-} from './security-witness-intrinsics.js';
+} from './security-witness-intrinsics.ts';
 
 /**
  * Boot-pinned controls used by build and static-export authority boundaries.
@@ -262,7 +264,11 @@ function serializeBuildSourceValue(
 
 function stableBuildArrayLength(value: readonly unknown[]): number {
   const length = stableBuildDataValue(value, 'length', 'generated source array.length');
-  if (!securityNumberIsInteger(length) || (length as number) < 0 || (length as number) > 1_000_000) {
+  if (
+    !securityNumberIsInteger(length) ||
+    (length as number) < 0 ||
+    (length as number) > 1_000_000
+  ) {
     throw new TypeError('Kovo generated source array must have a bounded stable length.');
   }
   return length as number;

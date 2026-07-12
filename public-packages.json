@@ -2081,7 +2081,15 @@
       "apiBoundary": {
         "public": [],
         "generated": [],
-        "internal": [".", "./graph", "./internal", "./internal/graph", "./package-styles", "./vite"]
+        "internal": [
+          ".",
+          "./graph",
+          "./internal",
+          "./internal/graph",
+          "./internal/security-bootstrap",
+          "./package-styles",
+          "./vite"
+        ]
       }
     },
     {

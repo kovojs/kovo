@@ -255,6 +255,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/server
     devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
@@ -601,6 +604,9 @@ importers:
       '@kovojs/browser':
         specifier: workspace:*
         version: link:../browser
+      '@kovojs/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core

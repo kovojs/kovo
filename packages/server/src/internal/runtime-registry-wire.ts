@@ -1,5 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { buildSecuritySourceLiteral } from '../build-security-intrinsics.js';
+import { buildSecuritySourceLiteral } from '../build-security-intrinsics.ts';
 
 /** @internal Runtime mutation-touch fact serialized into dev/prod registry modules. */
 export interface RuntimeRegistryMutationTouchSite {

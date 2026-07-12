@@ -198,7 +198,7 @@ export const generatedProdEmitContract = Object.freeze({
         {
           label: 'stable source-derived handler module URL',
           pattern:
-            /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/routes\/products\/product-card\.client\.js#ProductCard\$button_click"/,
+            /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/routes\/products\/product-card\.client\.js#ProductCard\$button_click"/,
         },
       ]),
     },

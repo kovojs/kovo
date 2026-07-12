@@ -14,6 +14,7 @@
     "./graph": "./src/graph.ts",
     "./internal": "./src/internal.ts",
     "./internal/graph": "./src/internal/graph.ts",
+    "./internal/security-bootstrap": "./src/security-bootstrap.ts",
     "./package-styles": "./src/package-styles.ts",
     "./vite": "./src/vite-config.ts"
   },
@@ -35,6 +36,10 @@
         "types": "./dist/internal/graph.d.mts",
         "default": "./dist/internal/graph.mjs"
       },
+      "./internal/security-bootstrap": {
+        "types": "./dist/security-bootstrap.d.mts",
+        "default": "./dist/security-bootstrap.mjs"
+      },
       "./package-styles": {
         "types": "./dist/package-styles.d.mts",
         "default": "./dist/package-styles.mjs"
@@ -46,7 +51,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/compile.ts src/graph.ts src/index.ts src/internal.ts src/internal/graph.ts src/package-styles.ts src/vite-config.ts --dts",
+    "build:dist": "vp pack src/compile.ts src/graph.ts src/index.ts src/internal.ts src/internal/graph.ts src/package-styles.ts src/security-bootstrap.ts src/vite-config.ts --dts",
     "gen:reactive-attrs": "node scripts/gen-primitive-reactive-attrs.mjs",
     "prepack": "pnpm run build:dist"
   },

@@ -31,7 +31,6 @@ describe('server security bootstrap census', () => {
       ['index.ts', "import './security-bootstrap.js';"],
       ['jsx-runtime.ts', "import './security-bootstrap.js';"],
       ['testing.ts', "import './security-bootstrap.js';"],
-      ['vite.ts', "import './security-bootstrap.js';"],
       ['internal/app-shell-vite.ts', "import '../security-bootstrap.js';"],
       ['internal/build.ts', "import '../security-bootstrap.js';"],
       ['internal/static-export.ts', "import '../security-bootstrap.js';"],
@@ -41,6 +40,23 @@ describe('server security bootstrap census', () => {
       const source = readFileSync(new URL(fileName, import.meta.url), 'utf8');
       expect(source.indexOf(bootstrapImport), fileName).toBe(0);
     }
+  });
+
+  it('captures config-time compiler and data-plane controls through native-TS-safe entries', () => {
+    const source = readFileSync(new URL('./vite.ts', import.meta.url), 'utf8');
+    const compilerBootstrap = source.indexOf(
+      "import '@kovojs/compiler/internal/security-bootstrap';",
+    );
+    const dataPlaneBootstrap = source.indexOf(
+      "from './internal/data-plane-static-analysis-intrinsics.ts';",
+    );
+    const firstAuthoredIntegrationImport = source.indexOf(
+      "from '@kovojs/server/internal/data-plane-static-analysis';",
+    );
+
+    expect(compilerBootstrap).toBeGreaterThanOrEqual(0);
+    expect(dataPlaneBootstrap).toBeGreaterThan(compilerBootstrap);
+    expect(firstAuthoredIntegrationImport).toBeGreaterThan(dataPlaneBootstrap);
   });
 
   it('preloads the complete server profile before the authored Vite app graph', () => {

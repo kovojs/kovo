@@ -24,7 +24,7 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createApp, route } from '@kovojs/server';
+import { createApp, csrfToken, route } from '@kovojs/server';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
@@ -34,7 +34,23 @@ import { createLiveTargetAttestation } from '../../server/src/mutation-wire.js';
 import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
+const BUILD_FIXTURE_CSRF_SECRET = 'build-fixture-csrf-secret-0123456789abcdef0123456789';
+const BUILD_FIXTURE_CSRF_SESSION_ID = 'build-fixture-session';
+const BUILD_FIXTURE_CSRF = {
+  secret: BUILD_FIXTURE_CSRF_SECRET,
+  sessionId: () => BUILD_FIXTURE_CSRF_SESSION_ID,
+};
 const dockerIt = process.env.KOVO_TEST_DOCKER === '1' && dockerAvailable() ? it : it.skip;
+
+function buildFixtureMutationBody(
+  audience: string,
+  input: Record<string, string> = {},
+): URLSearchParams {
+  return new URLSearchParams({
+    ...input,
+    'kovo-csrf': csrfToken({}, BUILD_FIXTURE_CSRF, { audience }),
+  });
+}
 
 describe('kovo build', () => {
   it('bundles an app module and emits node preset output without Vite at request time', async () => {
@@ -78,8 +94,11 @@ describe('kovo build', () => {
         expect(document.status).toBe(200);
 
         const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
-          body: new URLSearchParams({ quantity: '2' }),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: buildFixtureMutationBody('cart/add', { quantity: '2' }),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Origin: origin,
+          },
           method: 'POST',
           redirect: 'manual',
         });
@@ -243,8 +262,11 @@ export default createApp({
         expect(document.status).toBe(200);
 
         const mutationResponse = await fetch(`${origin}/_m/app/add-to-cart`, {
-          body: new URLSearchParams({ quantity: '2' }),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: buildFixtureMutationBody('app/add-to-cart', { quantity: '2' }),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Origin: origin,
+          },
           method: 'POST',
           redirect: 'manual',
         });
@@ -585,17 +607,21 @@ export default createApp({
         const origin = await listen(server);
 
         try {
-          const liveTarget = liveTargetHeader({
-            component: 'components/contacts-region/contacts-region',
-            target: 'contacts-region',
-          });
+          const liveTarget = liveTargetHeader(
+            {
+              component: 'components/contacts-region/contacts-region',
+              target: 'contacts-region',
+            },
+            { csrf: true },
+          );
           const mutationResponse = await fetch(`${origin}/_m/${addContactKey}`, {
-            body: new URLSearchParams(),
+            body: buildFixtureMutationBody(addContactKey),
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
               'Kovo-Fragment': 'true',
               'Kovo-Live-Targets': liveTarget,
               'Kovo-Targets': `contacts-region=${contactsQueryKey}`,
+              Origin: origin,
               Referer: `${origin}/`,
             },
             method: 'POST',
@@ -1526,7 +1552,6 @@ const ContactsRegion = component({
 
 const addContact = mutation('contacts/add', {
   access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
-  csrf: false,
   input: s.object({}),
   optimistic: { contacts: (draft) => draft },
   registry: {
@@ -2185,7 +2210,13 @@ const forgedEndpoint = endpoint('/forged-hmac', {
   response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
 });
 
-export default createApp({ endpoints: [paymentWebhook, forgedEndpoint] });
+export default createApp({
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
+  endpoints: [paymentWebhook, forgedEndpoint],
+});
 `,
         'utf8',
       );
@@ -2723,8 +2754,11 @@ export async function resetFixture() {
         expect(document.status).toBe(200);
 
         const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
-          body: new URLSearchParams({ quantity: '3' }),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: buildFixtureMutationBody('cart/add', { quantity: '3' }),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Origin: origin,
+          },
           method: 'POST',
           redirect: 'manual',
         });
@@ -2801,8 +2835,11 @@ export async function resetFixture() {
         expect(document.status).toBe(200);
 
         const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
-          body: new URLSearchParams({ quantity: '5' }),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: buildFixtureMutationBody('cart/add', { quantity: '5' }),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Origin: origin,
+          },
           method: 'POST',
           redirect: 'manual',
         });
@@ -3129,7 +3166,7 @@ export async function resetFixture() {
         'compatibility_flags = ["nodejs_compat"]',
       );
       expect(readFileSync(join(outDir, 'cloudflare/worker.mjs'), 'utf8')).toContain(
-        "import handler from './server/handler.mjs';",
+        "await import('./server/handler.mjs')",
       );
     } finally {
       stdout.mockRestore();
@@ -3275,7 +3312,6 @@ const cartQuery = query('cart', {
 });
 const addToCart = mutation('cart/add', {
   access: { kind: 'public', reason: 'build fixture mutation' },
-  csrf: false,
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   optimistic: { cart: 'await-fragment' },
   registry: {
@@ -3290,6 +3326,14 @@ const addToCart = mutation('cart/add', {
 
 export default createApp({
   clientModules,
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
@@ -3311,7 +3355,6 @@ import { contactDomain, contactsDb, contactsQuery } from './contacts-query.js';
 
 export const addContact = mutation({
   access: { kind: 'public', reason: 'build fixture mutation' },
-  csrf: false,
   input: s.object({}),
   optimistic: { [contactsQuery.key]: 'await-fragment' },
   registry: {
@@ -3325,6 +3368,14 @@ export const addContact = mutation({
 });
 
 export default createApp({
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
   mutations: [addContact],
   queries: [contactsQuery],
   routes: [
@@ -3369,11 +3420,17 @@ export const ContactsRegion = component({
 `;
 }
 
-function liveTargetHeader(input: { component: string; target: string }): string {
+function liveTargetHeader(
+  input: { component: string; target: string },
+  options: { csrf?: boolean } = {},
+): string {
   const props = {};
   const token = createLiveTargetAttestation(
     { component: input.component, props, target: input.target },
-    { request: {} },
+    {
+      ...(options.csrf ? { csrf: BUILD_FIXTURE_CSRF } : {}),
+      request: {},
+    },
   );
   return `${input.target}#${input.component}@${token}:${JSON.stringify(props)}`;
 }
@@ -3415,7 +3472,6 @@ const cartQuery = query('cart', {
 });
 const addToCart = mutation('cart/add', {
   access: { kind: 'public', reason: 'build fixture mutation' },
-  csrf: false,
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   optimistic: { cart: 'await-fragment' },
   registry: {
@@ -3429,6 +3485,10 @@ const addToCart = mutation('cart/add', {
 });
 
 export default createApp({
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
@@ -3601,6 +3661,10 @@ const touchHome = mutation('home/touch', {
 });
 
 export default createApp({
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
   liveTargetRenderers: [
     {
       component: 'home-panel/home-panel',
@@ -4223,6 +4287,9 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
       },
     },
     async ssrLoadModule(id) {
+      if (id === '@kovojs/server') {
+        return (await import('@kovojs/server')) as Record<string, unknown>;
+      }
       if (id === '@kovojs/server/internal/app-shell-vite') {
         return (await import('@kovojs/server/internal/app-shell-vite')) as Record<string, unknown>;
       }
@@ -4359,7 +4426,6 @@ const typedQuery = query('typed', {
 });
 export const addToCart = mutation({
   access: { kind: 'public', reason: 'build fixture mutation' },
-  csrf: false,
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   handler(input) {
     db.count += input.quantity;
@@ -4368,6 +4434,14 @@ export const addToCart = mutation({
 });
 
 export default createApp({
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
   mutations: [addToCart],
   queries: [typedQuery],
   routes: [

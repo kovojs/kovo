@@ -52,7 +52,6 @@ import {
   staticDataPlaneBuildFacts,
   type StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
-import { accessDecisionFor, explainGuard, guardAuditName } from '@kovojs/server/internal/execution';
 import {
   runtimeRegistryWireFactsFromGraph,
   type RuntimeRegistryWireFacts,
@@ -291,8 +290,14 @@ interface KovoBuildOptions {
 interface LoadedBuildAppModule {
   appModule: unknown;
   serverBuildModule: typeof import('@kovojs/server/build');
+  serverExecutionModule: typeof import('@kovojs/server/internal/execution');
   serverInternalBuildModule: typeof import('@kovojs/server/internal/build');
 }
+
+type BuildExecutionModule = Pick<
+  typeof import('@kovojs/server/internal/execution'),
+  'accessDecisionFor' | 'accessFactsFromApp' | 'explainGuard' | 'guardAuditName'
+>;
 
 interface LoadedExportAppModule {
   appModule: unknown;
@@ -587,18 +592,23 @@ async function loadAndCheckBuildApp(
   options: KovoBuildOptions,
   reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
 ) {
-  const [loadedBuildApp, buildStylesheetCss] = await withBuildGraphDerivationContext(() =>
-    buildPromiseAll([
-      loadBuildAppModule(resolvedAppModulePath, process.cwd()),
-      kovoBuildStylesheetCss(resolvedAppModulePath),
-    ]),
+  // SPEC §6.6 rule 6: the exact app-resolved SSR graph must finish its trust-root transition
+  // before any other build lane is allowed to evaluate authored modules. In particular, do not
+  // race CSS discovery against the server/compiler/data-plane preload.
+  const loadedBuildApp = await withBuildGraphDerivationContext(() =>
+    loadBuildAppModule(resolvedAppModulePath, process.cwd()),
+  );
+  const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
+    kovoBuildStylesheetCss(resolvedAppModulePath),
   );
   const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
+  const execution = loadedBuildApp.serverExecutionModule;
   const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
   const appModule = loadedBuildApp.appModule;
   const app = appFromModule(appModule, options.appModulePath);
   const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
     cache: options.cache,
+    execution,
     reachableSessionAuthorityFacts,
   });
   return {
@@ -672,6 +682,7 @@ async function runKovoBuildCheckPreflight(
   appModulePath: string,
   options: {
     cache: boolean;
+    execution: BuildExecutionModule;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
   },
 ): Promise<KovoBuildCheckArtifacts> {
@@ -754,20 +765,18 @@ async function buildCheckGraph(
   appModulePath: string,
   options: {
     cache: boolean;
+    execution: BuildExecutionModule;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
   },
 ): Promise<KovoBuildCheckArtifacts> {
-  const [{ accessFactsFromApp }, { deriveAppGraph }] = await buildPromiseAll([
-    import('@kovojs/server/internal/execution'),
-    import('@kovojs/compiler/graph'),
-  ]);
+  const { deriveAppGraph } = await import('@kovojs/compiler/graph');
   const staticArtifacts = await staticBuildCheckGraph(app, appModulePath, options);
   const graph = staticArtifacts.graph;
   const result = deriveAppGraph({
     ...(staticArtifacts.components === undefined ? {} : { components: staticArtifacts.components }),
     graph: {
       ...graph,
-      access: accessFactsFromApp(app),
+      access: options.execution.accessFactsFromApp(app),
     },
     ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
@@ -835,6 +844,7 @@ async function staticBuildCheckGraph(
   appModulePath: string,
   options: {
     cache: boolean;
+    execution: BuildExecutionModule;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
   },
 ): Promise<KovoBuildCheckArtifacts> {
@@ -872,6 +882,7 @@ async function staticBuildCheckGraph(
   const routeOutcomeFacts = routeFileStreamEndpointFacts(
     app.routes,
     sourceGraphFacts.routeOutcomes,
+    options.execution,
   );
   const sessionAuthorityFacts = completeMutationSessionAuthorityFacts(
     app,
@@ -895,7 +906,7 @@ async function staticBuildCheckGraph(
     endpoints[endpoints.length] = routeOutcomeFacts[index]!;
   }
   const mutations = buildMapDense(app.mutations, 'Build app mutations', (mutation) =>
-    mutationCheckFact(mutation, queryReadSets),
+    mutationCheckFact(mutation, queryReadSets, options.execution),
   );
   const optimistic = buildFlatMapDense(
     app.mutations,
@@ -1250,12 +1261,13 @@ function queryCheckFact(
 function mutationCheckFact(
   mutation: KovoApp['mutations'][number],
   queryReadSets: readonly CoreGraph.QueryReadSet[],
+  execution: BuildExecutionModule,
 ): CoreGraph.MutationExplain {
-  const access = accessDecisionGraphFact(accessDecisionFor(mutation));
+  const access = accessDecisionGraphFact(execution.accessDecisionFor(mutation), execution);
   const guards = uniqueSorted(
     appendDense(
       access?.kind === 'guard-chain' ? access.guards : [],
-      mutation.guard === undefined ? [] : [guardAuditName(mutation.guard)],
+      mutation.guard === undefined ? [] : [execution.guardAuditName(mutation.guard)],
       `Mutation guards for ${mutation.key}`,
     ),
   );
@@ -1281,7 +1293,7 @@ function mutationCheckFact(
     queryReadSets,
     appendDense(writes, inferredWrites, `Mutation writes for ${mutation.key}`),
   );
-  const referencesSessionAuthority = mutationGuardReferencesSessionAuthority(mutation);
+  const referencesSessionAuthority = mutationGuardReferencesSessionAuthority(mutation, execution);
   return {
     ...(access === undefined ? {} : { access }),
     csrf: mutation.csrf === false ? 'exempt' : 'checked',
@@ -1301,21 +1313,27 @@ function mutationCheckFact(
   };
 }
 
-function mutationGuardReferencesSessionAuthority(mutation: KovoApp['mutations'][number]): boolean {
-  const access = accessDecisionFor(mutation);
+function mutationGuardReferencesSessionAuthority(
+  mutation: KovoApp['mutations'][number],
+  execution: BuildExecutionModule,
+): boolean {
+  const access = execution.accessDecisionFor(mutation);
   if (buildArrayIsArray(access)) {
     return buildSomeDense(
       access as readonly Guard<any, any>[],
       `Mutation access guards for ${mutation.key}`,
-      guardReferencesSessionAuthority,
+      (guard) => guardReferencesSessionAuthority(guard, execution),
     );
   }
   if (access !== undefined) return false;
-  return mutation.guard !== undefined && guardReferencesSessionAuthority(mutation.guard);
+  return mutation.guard !== undefined && guardReferencesSessionAuthority(mutation.guard, execution);
 }
 
-function guardReferencesSessionAuthority(guard: Guard<any, any>): boolean {
-  const facts = buildSnapshotDenseArray(explainGuard(guard), 'Guard audit facts');
+function guardReferencesSessionAuthority(
+  guard: Guard<any, any>,
+  execution: BuildExecutionModule,
+): boolean {
+  const facts = buildSnapshotDenseArray(execution.explainGuard(guard), 'Guard audit facts');
   const substantive = buildFilterDense(
     facts,
     'Substantive guard audit facts',
@@ -1469,19 +1487,21 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
 function routeFileStreamEndpointFacts(
   routes: readonly KovoApp['routes'][number][],
   outcomeByPath: ReadonlyMap<string, 'file' | 'stream'>,
+  execution: BuildExecutionModule,
 ): CoreGraph.EndpointExplain[] {
   return buildFlatMapDense(routes, 'Routes with file/stream outcomes', (route) => {
     const outcome = buildMapGet(outcomeByPath, route.path);
     if (outcome === undefined) return [];
-    return [routeFileStreamEndpointFact(route, outcome)];
+    return [routeFileStreamEndpointFact(route, outcome, execution)];
   });
 }
 
 function routeFileStreamEndpointFact(
   route: KovoApp['routes'][number],
   outcome: 'file' | 'stream',
+  execution: BuildExecutionModule,
 ): CoreGraph.EndpointExplain {
-  const access = routeEndpointAccessFact(route);
+  const access = routeEndpointAccessFact(route, execution);
   return {
     ...(access === undefined ? {} : { access }),
     ...(route.guard === undefined
@@ -1504,13 +1524,14 @@ function routeFileStreamEndpointFact(
 
 function routeEndpointAccessFact(
   route: KovoApp['routes'][number],
+  execution: BuildExecutionModule,
 ): CoreGraph.AccessDecisionFact | undefined {
-  const access = accessDecisionGraphFact(route.access);
+  const access = accessDecisionGraphFact(execution.accessDecisionFor(route), execution);
   if (access !== undefined) return access;
 
   let layout = route.layout;
   while (layout !== undefined) {
-    const layoutAccess = accessDecisionGraphFact(layout.access);
+    const layoutAccess = accessDecisionGraphFact(execution.accessDecisionFor(layout), execution);
     if (layoutAccess !== undefined) return layoutAccess;
     layout = layout.parent;
   }
@@ -1520,13 +1541,16 @@ function routeEndpointAccessFact(
 
 function accessDecisionGraphFact(
   access: AccessDecision | undefined,
+  execution: BuildExecutionModule,
 ): CoreGraph.AccessDecisionFact | undefined {
   if (access === undefined) return undefined;
 
   if (isGuardAccessDecisionValue(access)) {
     if (access.length === 0) return undefined;
     return {
-      guards: buildMapDense(access, 'Access-decision guard chain', (item) => guardAuditName(item)),
+      guards: buildMapDense(access, 'Access-decision guard chain', (item) =>
+        execution.guardAuditName(item),
+      ),
       kind: 'guard-chain',
     };
   }
@@ -1803,8 +1827,7 @@ async function loadKovoBuildConfig(
     ssr: { noExternal: [/^@kovojs\//] },
   });
   try {
-    const requireFromApp = createRequire(pathToFileURL(appModulePath));
-    await server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server'), root));
+    await preloadKovoSsrSecurityProfile(server, appModulePath, root);
     const configModule = await server.ssrLoadModule(`/${basename(configPath)}`);
     const config = kovoBuildConfigFromModule(configModule, configPath);
     return { config, path: configPath };
@@ -1840,26 +1863,63 @@ async function loadBuildAppModule(
     ssr: { noExternal: [/^@kovojs\//] },
   });
   try {
-    // SPEC §6.6 rule 6: the app-resolved server root owns the supported-runner security bootstrap.
-    // Evaluate it before any app module so tree-shaken/runtime-specific controls capture a pristine
-    // framework realm even when the app imports them before the generated handler entry does.
-    await server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server'), root));
-    const [serverBuildModule, serverInternalBuildModule] = await buildPromiseAll([
-      server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server/build'), root)),
-      server.ssrLoadModule(
-        viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
-      ),
-    ]);
+    await preloadKovoSsrSecurityProfile(server, appModulePath, root);
+    // Keep the profile entries sequential too: the app is not permitted to overlap any portion of
+    // framework initialization, even when a future build entry acquires a new eager dependency.
+    const serverBuildModule = await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/build'), root),
+    );
+    const serverExecutionModule = await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/execution'), root),
+    );
+    const serverInternalBuildModule = await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
+    );
     const appModule = await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
     return {
       appModule,
       serverBuildModule: serverBuildModule as LoadedBuildAppModule['serverBuildModule'],
+      serverExecutionModule: serverExecutionModule as LoadedBuildAppModule['serverExecutionModule'],
       serverInternalBuildModule:
         serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'],
     };
   } finally {
     await server.close();
   }
+}
+
+interface KovoSsrSecurityProfileLoader {
+  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+}
+
+/**
+ * Establish the complete build proof profile inside the exact Vite SSR graph that will load the
+ * app/config (SPEC §5.2, §6.6 rule 6, §11.4). A native CLI import is intentionally insufficient:
+ * `ssr.noExternal` can instantiate a distinct compiler/server graph with its own captured controls.
+ */
+async function preloadKovoSsrSecurityProfile(
+  server: KovoSsrSecurityProfileLoader,
+  appModulePath: string,
+  root: string,
+): Promise<void> {
+  const requireFromApp = createRequire(pathToFileURL(appModulePath));
+  const serverRootPath = requireFromApp.resolve('@kovojs/server');
+  const requireFromServer = createRequire(pathToFileURL(serverRootPath));
+
+  await server.ssrLoadModule(
+    viteSsrModuleId(
+      requireFromServer.resolve('@kovojs/compiler/internal/security-bootstrap'),
+      root,
+    ),
+  );
+  await server.ssrLoadModule(viteSsrModuleId(requireFromServer.resolve('@kovojs/compiler'), root));
+  await server.ssrLoadModule(
+    viteSsrModuleId(
+      requireFromApp.resolve('@kovojs/server/internal/data-plane-static-analysis'),
+      root,
+    ),
+  );
+  await server.ssrLoadModule(viteSsrModuleId(serverRootPath, root));
 }
 
 function viteSsrModuleId(filePath: string, root: string): string {
@@ -2035,6 +2095,7 @@ async function buildKovoClientManifest(
       manifest: true,
       outDir,
     },
+    configFile: false,
     logLevel: 'silent',
     plugins: [viteAssetPlugin],
     root,
@@ -2632,10 +2693,27 @@ export async function runExportCommandStructured(
 }
 
 async function loadExportAppModule(options: KovoExportOptions): Promise<LoadedExportAppModule> {
-  const resolvedAppModulePath = resolve(options.appModulePath);
+  const root = resolve(options.root ?? process.cwd());
+  // `--vite --root` accepts Vite root-relative ids such as `/src/app.ts` (the documented CLI
+  // form). Resolve the physical file under the project root before deriving the app-local Kovo
+  // dependency graph; resolving `/src/app.ts` as a filesystem absolute would instead bootstrap
+  // from `/src` and silently miss the app's framework installation.
+  const resolvedAppModulePath =
+    options.vite && options.appModulePath.startsWith('/')
+      ? resolve(root, options.appModulePath.slice(1))
+      : resolve(options.root === undefined ? process.cwd() : root, options.appModulePath);
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
   const appResolvedServerPath = requireFromApp.resolve('@kovojs/server');
   if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {
+    const requireFromServer = createRequire(pathToFileURL(appResolvedServerPath));
+    await import(
+      pathToFileURL(requireFromServer.resolve('@kovojs/compiler/internal/security-bootstrap')).href
+    );
+    await import(pathToFileURL(requireFromServer.resolve('@kovojs/compiler')).href);
+    await import(
+      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/data-plane-static-analysis'))
+        .href
+    );
     const serverModule = await import(pathToFileURL(appResolvedServerPath).href);
     return {
       appModule: await import(pathToFileURL(resolvedAppModulePath).href),
@@ -2644,15 +2722,16 @@ async function loadExportAppModule(options: KovoExportOptions): Promise<LoadedEx
   }
 
   const { createServer } = await import('vite-plus');
-  const root = resolve(options.root ?? process.cwd());
   const server = await createServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
     root,
     server: buildTimeViteServerOptions(),
+    ssr: { noExternal: [/^@kovojs\//] },
   });
   try {
+    await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
     const serverModule = await server.ssrLoadModule(viteSsrModuleId(appResolvedServerPath, root));
     const appModule = await server.ssrLoadModule(resolvedAppModulePath);
     return {

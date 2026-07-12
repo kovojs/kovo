@@ -161,7 +161,7 @@ function validProdEmitFiles() {
       fileName: 'routes/products/product-card.server.js',
       kind: 'server',
       source:
-        '<button on:click="/c/__v/0123456789abcdef-12345678/routes/products/product-card.client.js#ProductCard$button_click">Add</button>',
+        '<button on:click="/c/__v/0123456789abcdef-1234567812345678123456781234567812345678123456781234567812345678/routes/products/product-card.client.js#ProductCard$button_click">Add</button>',
     },
     {
       fileName: 'routes/products/product-card.client.js',

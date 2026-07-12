@@ -136,12 +136,13 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build.ts src/internal/build-context.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/runtime-registry-wire.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/testing.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/route.ts src/internal/runtime-registry-wire.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/testing.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.1",
     "@kovojs/browser": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/drizzle": "workspace:*",
     "@kovojs/style": "workspace:*",

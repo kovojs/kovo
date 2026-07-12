@@ -37,7 +37,19 @@ registerHooks({
   },
 });
 
+// Import the complete trusted dispatcher graph before lockdown so framework modules that capture
+// Web/Node controls from data descriptors see the host-native descriptors. No authored module is
+// evaluated by this import; command dispatch below is the first authored-evaluation boundary.
 const { mainAsync } = await import('./index.js');
+
+// SPEC §5.2 / §6.6 rule 6: supported commands that evaluate authored modules lock the shared
+// compiler realm at the last trusted boundary, before invoking the dispatcher. Direct imports of
+// `@kovojs/cli/internal` are tooling APIs, not the supported security runner.
+if (process.argv[2] === 'build' || process.argv[2] === 'dev' || process.argv[2] === 'export') {
+  const { lockCompilerSecurityRealm } =
+    await import('@kovojs/compiler/internal/security-bootstrap');
+  lockCompilerSecurityRealm();
+}
 
 // `kovo mcp` is a long-lived stdio server: its `mainAsync` resolves as soon as the
 // transport is wired up, while the process must stay alive to serve requests. Every
@@ -49,7 +61,7 @@ const { mainAsync } = await import('./index.js');
 // NOTE: this file is also copied verbatim to a `.mjs` and run as plain JavaScript by the
 // "does not respawn for a compiled JavaScript bin entrypoint" test, so it must stay free of
 // TypeScript-only syntax (no type annotations / type arguments). Lean on contextual typing.
-const isLongLivedCommand = process.argv[2] === 'mcp';
+const isLongLivedCommand = process.argv[2] === 'mcp' || process.argv[2] === 'dev';
 
 void mainAsync().then(async (exitCode) => {
   process.exitCode = exitCode;

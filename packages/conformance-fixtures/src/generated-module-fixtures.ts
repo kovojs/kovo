@@ -533,7 +533,7 @@ interface InlineEnhancedFormFetchOptions {
 }
 
 export type GeneratedHandlerReferenceVersionShape =
-  | 'render-plan-hex-16-plus-hash-hex-8'
+  | 'render-plan-hex-16-plus-hash-hex-64'
   | 'invalid';
 
 export interface GeneratedHandlerReferenceFact {
@@ -610,11 +610,11 @@ export function generatedHandlerReferenceFact(
       ? `/c/__v/${version}/${pathVersion[2] ?? ''}?cache=1`
       : `${url.pathname}?cache=1&v=${version}`,
     staleVersionRequestPath: pathVersion
-      ? `/c/__v/0000000000000000-00000000/${pathVersion[2] ?? ''}`
+      ? `/c/__v/0000000000000000-${'0'.repeat(64)}/${pathVersion[2] ?? ''}`
       : `${url.pathname}?v=00000000`,
     version,
-    versionShape: /^[0-9a-f]{16}-[0-9a-f]{8}$/.test(version)
-      ? 'render-plan-hex-16-plus-hash-hex-8'
+    versionShape: /^[0-9a-f]{16}-[0-9a-f]{64}$/.test(version)
+      ? 'render-plan-hex-16-plus-hash-hex-64'
       : 'invalid',
   };
 }

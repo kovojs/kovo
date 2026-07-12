@@ -279,6 +279,9 @@ export const LoginCard = component({
           },
         },
         async ssrLoadModule(id) {
+          if (id === '@kovojs/server') {
+            return await import('@kovojs/server');
+          }
           if (id === '@kovojs/server/internal/app-shell-vite') {
             return await import('@kovojs/server/internal/app-shell-vite');
           }

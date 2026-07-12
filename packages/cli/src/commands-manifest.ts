@@ -55,6 +55,10 @@ export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
 export const BUILD_USAGE =
   'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]';
 
+/** @internal Usage line emitted for `kovo dev` (see `parseDevArgs`). */
+export const DEV_USAGE =
+  'usage: kovo dev <app-module> [--root <dir>] [--config <file>] [--host <host>] [--port <port>] [--strict-port] [--mode <mode>]';
+
 /** @internal Usage line emitted for `kovo db` (see `dbUsage`). */
 export const DB_USAGE =
   'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
@@ -181,6 +185,38 @@ export const BUILD_ARGV_SPEC = {
     },
     { flag: '--check', kind: 'boolean' },
     { flag: '--no-cache', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Dev command flags consumed by the bootstrap-first Vite runner. */
+export const DEV_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--root',
+      kind: 'value',
+      requiresValueMessage: 'kovo: dev --root requires a directory.\n',
+    },
+    {
+      flag: '--config',
+      kind: 'value',
+      requiresValueMessage: 'kovo: dev --config requires a file.\n',
+    },
+    {
+      flag: '--host',
+      kind: 'value',
+      requiresValueMessage: 'kovo: dev --host requires a host.\n',
+    },
+    {
+      flag: '--port',
+      kind: 'value',
+      requiresValueMessage: 'kovo: dev --port requires a port.\n',
+    },
+    { flag: '--strict-port', kind: 'boolean' },
+    {
+      flag: '--mode',
+      kind: 'value',
+      requiresValueMessage: 'kovo: dev --mode requires a mode.\n',
+    },
   ],
 } as const satisfies CommandArgvSpec;
 
@@ -436,8 +472,8 @@ export interface CommandManifestEntry {
 
 /**
  * @internal The full `kovo` command surface, in display order. Covers every
- * command `main`/`mainAsync` dispatches: check, explain, add, build, db, audit,
- * compile, export, mcp, update-docs.
+ * command `main`/`mainAsync` dispatches: check, explain, add, build, dev, db,
+ * audit, compile, export, mcp, update-docs.
  */
 export const COMMANDS_MANIFEST = [
   {
@@ -577,6 +613,24 @@ export const COMMANDS_MANIFEST = [
       },
     ],
     examples: ['kovo build ./src/app-shell.ts --out dist', 'kovo build ./src/app.tsx --check'],
+  },
+  {
+    name: 'dev',
+    noArgsOrder: 3.5,
+    summary:
+      'Start Vite only after the app-resolved compiler, data-plane, and server trust roots are established.',
+    unknownOrder: 2.5,
+    usage: DEV_USAGE,
+    async: true,
+    flags: [
+      { flag: '--root <dir>', description: 'Project root (default: current directory).' },
+      { flag: '--config <file>', description: 'Authored Vite config loaded after bootstrap.' },
+      { flag: '--host <host>', description: 'Vite listen host override.' },
+      { flag: '--port <port>', description: 'Vite listen port override.' },
+      { flag: '--strict-port', description: 'Fail instead of selecting another occupied port.' },
+      { flag: '--mode <mode>', description: 'Vite mode (default: development).' },
+    ],
+    examples: ['kovo dev ./src/app.tsx', 'kovo dev ./src/app.tsx --port 4173 --strict-port'],
   },
   {
     name: 'db',

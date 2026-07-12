@@ -1,4 +1,10 @@
-import './security-bootstrap.js';
+// This entry is evaluated while Vite loads authored config/plugin modules. Capture the two proof
+// engines it owns before the config body runs; the live SSR graph separately preloads the complete
+// server profile before loading the app (SPEC §6.6 rule 6).
+import '@kovojs/compiler/internal/security-bootstrap';
+import { assertDataPlaneStaticAnalysisIntrinsics } from './internal/data-plane-static-analysis-intrinsics.ts';
+
+assertDataPlaneStaticAnalysisIntrinsics();
 
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -16,6 +22,9 @@ import type {
 import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { serializeRuntimeRegistryWireModule } from '@kovojs/server/internal/runtime-registry-wire';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
+
+const viteClearTimeout = globalThis.clearTimeout;
+const viteSetTimeout = globalThis.setTimeout;
 
 /** Options for the public Kovo Vite plugin (SPEC.md §9.5). */
 export interface KovoVitePluginOptions {
@@ -193,8 +202,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     const adapter = await importKovoDataPlaneStaticAnalysisModule();
     if (!adapter.isDataPlaneSourceFile(file, dirname(appEntryFileName(app, root)))) return;
     compilerQueryShapeFacts = undefined;
-    if (devDataPlaneDebounce) clearTimeout(devDataPlaneDebounce);
-    devDataPlaneDebounce = setTimeout(() => {
+    if (devDataPlaneDebounce) viteClearTimeout(devDataPlaneDebounce);
+    devDataPlaneDebounce = viteSetTimeout(() => {
       void collectCompilerQueryShapeFacts(root, app)
         .then((facts) => {
           compilerQueryShapeFacts = facts;
