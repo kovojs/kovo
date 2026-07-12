@@ -2069,6 +2069,88 @@ export default async function handler(request) {
     }
   });
 
+  it('C213 keeps runtime package metadata and lockfile authoritative after route-time poisoning', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-runtime-package-intrinsics-'));
+    const originalJsonParse = JSON.parse;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    let parsePoisonHits = 0;
+    let iteratorPoisonHits = 0;
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                JSON.parse = function replaceRuntimePackage(text, reviver) {
+                  if (typeof text === 'string' && text.includes('"name": "kovo-monorepo"')) {
+                    parsePoisonHits += 1;
+                    return {
+                      dependencies: { 'attacker-runtime': '9.9.9' },
+                      name: 'attacker-runtime',
+                      packageManager: 'npm@0.0.0',
+                    };
+                  }
+                  return originalJsonParse(text, reviver);
+                } as typeof JSON.parse;
+                Array.prototype[Symbol.iterator] = function omitRuntimeLockfile() {
+                  if (
+                    this[0] === 'package-lock.json' &&
+                    this[1] === 'npm-shrinkwrap.json' &&
+                    this[2] === 'pnpm-lock.yaml'
+                  ) {
+                    iteratorPoisonHits += 1;
+                    return Reflect.apply(originalIterator, [], []);
+                  }
+                  return Reflect.apply(originalIterator, this, []);
+                } as (typeof Array.prototype)[Symbol.iterator];
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node().emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      const runtimePackageText = await readFile(join(nodeOutDir, 'package.json'), 'utf8');
+      let copiedLockfile = true;
+      try {
+        await readFile(join(nodeOutDir, 'pnpm-lock.yaml'));
+      } catch {
+        copiedLockfile = false;
+      }
+      const parseHitsAfterEmit = parsePoisonHits;
+      const iteratorHitsAfterEmit = iteratorPoisonHits;
+      JSON.parse = originalJsonParse;
+      Array.prototype[Symbol.iterator] = originalIterator;
+
+      const runtimePackage = JSON.parse(runtimePackageText) as {
+        dependencies?: Record<string, string>;
+        name?: string;
+        packageManager?: string;
+      };
+      expect(runtimePackage.name).toBe('kovo-monorepo-server');
+      expect(runtimePackage.packageManager).toBe('pnpm@10.12.1');
+      expect(runtimePackage.dependencies).not.toHaveProperty('attacker-runtime');
+      expect(copiedLockfile).toBe(true);
+      expect(parseHitsAfterEmit).toBe(0);
+      expect(iteratorHitsAfterEmit).toBe(0);
+    } finally {
+      JSON.parse = originalJsonParse;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits Vercel Build Output API v3 with static files and a Node function', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-vercel-preset-'));
 

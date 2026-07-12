@@ -20,9 +20,12 @@ import {
 } from './build-security-intrinsics.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
 import {
+  createSecurityNullRecord,
   securityArrayJoin,
   securityIsPromise,
+  securityJsonParse,
   securityNumberIsFinite,
+  securityObjectKeys,
   securityPromiseResolve,
   securityPromiseThen,
   securityRegExpTest,
@@ -3041,24 +3044,26 @@ async function readPackageJsonForNodeRuntime(): Promise<{
   name?: string;
   packageManager?: string;
 }> {
+  let source: string;
   try {
-    return JSON.parse(await readFile(path.join(process.cwd(), 'package.json'), 'utf8')) as {
-      dependencies?: Record<string, string>;
-      name?: string;
-      packageManager?: string;
-    };
+    source = await readFile(path.join(process.cwd(), 'package.json'), 'utf8');
   } catch {
     return {};
   }
+  return snapshotNodeRuntimePackageManifest(securityJsonParse(source));
 }
 
+const runtimeLockfileNames = [
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+] as const;
+
 async function copyRuntimeLockfile(outDir: string): Promise<void> {
-  for (const fileName of [
-    'package-lock.json',
-    'npm-shrinkwrap.json',
-    'pnpm-lock.yaml',
-    'yarn.lock',
-  ]) {
+  const fileNames = snapshotBuildArray(runtimeLockfileNames, 'Node runtime lockfile candidates');
+  for (let index = 0; index < fileNames.length; index += 1) {
+    const fileName = fileNames[index]!;
     try {
       await copyFile(path.join(process.cwd(), fileName), path.join(outDir, fileName));
       return;
@@ -3066,4 +3071,59 @@ async function copyRuntimeLockfile(outDir: string): Promise<void> {
       // Lockfiles are optional for the deploy artifact; package.json still gives Docker an install path.
     }
   }
+}
+
+function snapshotNodeRuntimePackageManifest(value: unknown): {
+  dependencies?: Record<string, string>;
+  name?: string;
+  packageManager?: string;
+} {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Node runtime package manifest must be an own-data object.');
+  }
+  const dependenciesProperty = buildOwnDataProperty(
+    value,
+    'dependencies',
+    'Node runtime package manifest.dependencies',
+  );
+  const name = optionalNodeRuntimePackageString(value, 'name');
+  const packageManager = optionalNodeRuntimePackageString(value, 'packageManager');
+  const dependencies =
+    !dependenciesProperty.present || dependenciesProperty.value === undefined
+      ? undefined
+      : snapshotNodeRuntimeDependencies(dependenciesProperty.value);
+  return {
+    ...(dependencies === undefined ? {} : { dependencies }),
+    ...(name === undefined ? {} : { name }),
+    ...(packageManager === undefined ? {} : { packageManager }),
+  };
+}
+
+function optionalNodeRuntimePackageString(
+  value: object,
+  property: 'name' | 'packageManager',
+): string | undefined {
+  const field = buildOwnDataProperty(value, property, `Node runtime package manifest.${property}`);
+  if (!field.present || field.value === undefined) return undefined;
+  if (typeof field.value !== 'string') {
+    throw new TypeError(`Node runtime package manifest ${property} must be a string.`);
+  }
+  return field.value;
+}
+
+function snapshotNodeRuntimeDependencies(value: unknown): Record<string, string> {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Node runtime package dependencies must be an own-data object.');
+  }
+  const dependencies = createSecurityNullRecord<string>();
+  const names = snapshotBuildArray(securityObjectKeys(value), 'Node runtime dependency names');
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const dependency = buildOwnDataProperty(value, name, `Node runtime package dependency ${name}`);
+    if (!dependency.present || typeof dependency.value !== 'string') {
+      throw new TypeError(`Node runtime package dependency ${name} must be a string.`);
+    }
+    dependencies[name] = dependency.value;
+  }
+  return dependencies;
 }

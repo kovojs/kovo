@@ -72,6 +72,9 @@ export function checkFilesystemBoundary(options = {}) {
   const cloudflareTomlAssemblyFiles = new Set(
     options.cloudflareTomlAssemblyFiles ?? [presetRetentionPolicyFile],
   );
+  const nodeRuntimePackageBoundaryFiles = new Set(
+    options.nodeRuntimePackageBoundaryFiles ?? [presetRetentionPolicyFile],
+  );
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
   const exists = options.exists ?? ((relativePath) => existsSync(path.join(root, relativePath)));
@@ -132,6 +135,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (cloudflareTomlAssemblyFiles.has(filePath)) {
       findings.push(...cloudflareTomlAssemblyFindings(filePath, sourceText));
+    }
+    if (nodeRuntimePackageBoundaryFiles.has(filePath)) {
+      findings.push(...nodeRuntimePackageBoundaryFindings(filePath, sourceText));
     }
 
     if (!allowed && usesPathConfinementPrimitive(scanText, importedPathNames)) {
@@ -312,6 +318,45 @@ export function cloudflareTomlAssemblyFindings(filePath, sourceText) {
     findings.push(
       `${filePath}: authoritative Wrangler TOML must use boot-pinned final composition`,
     );
+  }
+  return findings;
+}
+
+export function nodeRuntimePackageBoundaryFindings(filePath, sourceText) {
+  const scanText = stripCommentsAndStrings(sourceText);
+  const findings = [];
+  const mutableParse = /\bJSON\s*\.\s*parse\s*\(/u.exec(scanText);
+  if (mutableParse !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableParse.index)}: Node runtime package metadata must not parse through mutable JSON.parse`,
+    );
+  }
+  const mutableLockfileTraversal = /\bfor\s*\(\s*const\s+fileName\s+of\s*\[/u.exec(scanText);
+  if (mutableLockfileTraversal !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableLockfileTraversal.index)}: Node runtime lockfile selection must use a pinned inventory and indexed traversal`,
+    );
+  }
+  if (!/\bsecurityJsonParse\s*\(/u.test(sourceText)) {
+    findings.push(`${filePath}: Node runtime package metadata must use boot-pinned JSON parsing`);
+  }
+  if (!/\bfunction\s+snapshotNodeRuntimePackageManifest\s*\(/u.test(sourceText)) {
+    findings.push(`${filePath}: Node runtime package metadata must cross an own-data snapshot`);
+  }
+  if (!/\bsecurityObjectKeys\s*\(/u.test(sourceText)) {
+    findings.push(
+      `${filePath}: Node runtime dependency names must use boot-pinned own-key capture`,
+    );
+  }
+  if (!/\bsnapshotBuildArray\s*\(\s*runtimeLockfileNames\s*,/u.test(sourceText)) {
+    findings.push(`${filePath}: Node runtime lockfile candidates must use a dense snapshot`);
+  }
+  if (
+    !/\bfor\s*\(\s*let\s+[A-Za-z_$][\w$]*\s*=\s*0\s*;[^;]*<\s*fileNames\s*\.\s*length\s*;[^)]*\+=\s*1\s*\)/u.test(
+      sourceText,
+    )
+  ) {
+    findings.push(`${filePath}: Node runtime lockfile candidates must use indexed traversal`);
   }
   return findings;
 }

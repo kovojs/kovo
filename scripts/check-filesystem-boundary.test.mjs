@@ -6,6 +6,7 @@ import {
   defaultAllowedToolingFiles,
   filesystemBoundaryFile,
   filesystemIntrinsicsFile,
+  nodeRuntimePackageBoundaryFindings,
   presetDiagnosticAggregationFindings,
   presetRetentionPolicyFile,
   presetRetentionPolicyFindings,
@@ -246,6 +247,40 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
     ).toEqual([]);
   });
 
+  it('C213 pins Node runtime package parsing and lockfile selection', () => {
+    expect(
+      nodeRuntimePackageBoundaryFindings(
+        presetRetentionPolicyFile,
+        `
+          const manifest = JSON.parse(source);
+          for (const fileName of ['package-lock.json', 'pnpm-lock.yaml']) copy(fileName);
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('mutable JSON.parse'),
+        expect.stringContaining('pinned inventory and indexed traversal'),
+      ]),
+    );
+    expect(
+      nodeRuntimePackageBoundaryFindings(
+        presetRetentionPolicyFile,
+        `
+          const parsed = securityJsonParse(source);
+          function snapshotNodeRuntimePackageManifest(value) {
+            const names = securityObjectKeys(value);
+            return names;
+          }
+          const fileNames = snapshotBuildArray(
+            runtimeLockfileNames,
+            'Node runtime lockfile candidates',
+          );
+          for (let index = 0; index < fileNames.length; index += 1) copy(fileNames[index]);
+        `,
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects raw fs access outside the filesystem boundary', () => {
     const result = runFixture({
       [filesystemBoundaryFile]: 'export const boundary = true;',
@@ -284,6 +319,7 @@ export function escape(root: string, key: string) {
       allowedToolingFiles: ['packages/server/src/build.ts'],
       cloudflareTomlAssemblyFiles: [],
       exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      nodeRuntimePackageBoundaryFiles: [],
       presetDiagnosticAggregationFiles: [],
       presetRetentionPolicyFiles: [],
       readText: (relativePath) =>
