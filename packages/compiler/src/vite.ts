@@ -18,6 +18,7 @@ import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import { CompileCache, compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
 import { canonicalJson } from './canonical-json.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerArrayLength,
   compilerCreateMap,
@@ -317,7 +318,11 @@ export function createKovoVitePlugin(
     getCssAssetManifest(manifestOptions = {}) {
       const results: Array<{ cssAssets: readonly ComponentCssAsset[] }> = [];
       compilerMapForEach(cssAssetsByFileName, (cssAssets) => {
-        results[results.length] = { cssAssets };
+        compilerArrayAppend(
+          results,
+          { cssAssets },
+          'Compiler packages/compiler/src/vite.ts collection',
+        );
       });
       return collectCssAssetManifest(results, manifestOptions);
     },
@@ -855,7 +860,7 @@ export function viteFrameworkIdentityFiles(
   collectViteFrameworkIdentityFiles(root, fileName, source, collected, visited);
   const files: Array<{ fileName: string; source: string }> = [];
   compilerMapForEach(collected, (file) => {
-    files[files.length] = file;
+    compilerArrayAppend(files, file, 'Compiler packages/compiler/src/vite.ts collection');
   });
   return files;
 }
@@ -1107,22 +1112,34 @@ function componentLocalQueryShapeFacts(
       compilerMapGet(factsByQuery, queryExpression) ??
       compilerMapGet(factsByQuery, importedKey ?? '');
     if (!sourceFact) continue;
-    aliasCandidates[aliasCandidates.length] = {
-      query: key,
-      shape: sourceFact.shape,
-      source: sourceFact.source,
-    };
+    compilerArrayAppend(
+      aliasCandidates,
+      {
+        query: key,
+        shape: sourceFact.shape,
+        source: sourceFact.source,
+      },
+      'Compiler packages/compiler/src/vite.ts collection',
+    );
   }
   const aliases = uniqueQueryShapeFacts(aliasCandidates);
 
   if (aliases.length === 0) return facts;
   const combined: QueryShapeFact[] = [];
   for (let index = 0; index < factLength; index += 1) {
-    combined[combined.length] = snapshotViteQueryShapeFact(facts, index);
+    compilerArrayAppend(
+      combined,
+      snapshotViteQueryShapeFact(facts, index),
+      'Compiler packages/compiler/src/vite.ts collection',
+    );
   }
   const aliasLength = compilerArrayLength(aliases, 'Vite query-shape aliases');
   for (let index = 0; index < aliasLength; index += 1) {
-    combined[combined.length] = snapshotViteQueryShapeFact(aliases, index);
+    compilerArrayAppend(
+      combined,
+      snapshotViteQueryShapeFact(aliases, index),
+      'Compiler packages/compiler/src/vite.ts collection',
+    );
   }
   return combined;
 }
@@ -1136,7 +1153,7 @@ function uniqueQueryShapeFacts(facts: readonly QueryShapeFact[]): QueryShapeFact
     const key = canonicalJson(fact);
     if (compilerSetHas(seen, key)) continue;
     compilerSetAdd(seen, key);
-    unique[unique.length] = fact;
+    compilerArrayAppend(unique, fact, 'Compiler packages/compiler/src/vite.ts collection');
   }
   return unique;
 }
@@ -1218,11 +1235,19 @@ function reportViteDiagnostics(
       throw new TypeError(`Kovo Vite compile diagnostics[${index}] must be a dense own value.`);
     }
     const diagnostic = snapshotViteCompilerDiagnostic(rawDiagnostic, index);
-    snapshot[snapshot.length] = diagnostic;
+    compilerArrayAppend(snapshot, diagnostic, 'Compiler packages/compiler/src/vite.ts collection');
     if (diagnosticSeverity(diagnostic) === 'error') {
-      errorDiagnostics[errorDiagnostics.length] = diagnostic;
+      compilerArrayAppend(
+        errorDiagnostics,
+        diagnostic,
+        'Compiler packages/compiler/src/vite.ts collection',
+      );
     } else {
-      nonErrorDiagnostics[nonErrorDiagnostics.length] = diagnostic;
+      compilerArrayAppend(
+        nonErrorDiagnostics,
+        diagnostic,
+        'Compiler packages/compiler/src/vite.ts collection',
+      );
     }
   }
 
@@ -1294,7 +1319,11 @@ function cloneViteCompilerDiagnostics(
 ): CompilerDiagnostic[] {
   const result: CompilerDiagnostic[] = [];
   for (let index = 0; index < diagnostics.length; index += 1) {
-    result[result.length] = cloneViteCompilerDiagnostic(diagnostics[index]!);
+    compilerArrayAppend(
+      result,
+      cloneViteCompilerDiagnostic(diagnostics[index]!),
+      'Compiler packages/compiler/src/vite.ts collection',
+    );
   }
   return result;
 }
@@ -1325,7 +1354,11 @@ function snapshotViteEmittedFiles(result: ViteCompileResult): { kind: string; so
         `Kovo Vite compile files[${index}] must contain own kind/source strings.`,
       );
     }
-    files[files.length] = { kind, source };
+    compilerArrayAppend(
+      files,
+      { kind, source },
+      'Compiler packages/compiler/src/vite.ts collection',
+    );
   }
   return files;
 }
@@ -1409,9 +1442,9 @@ function classifyViteHmrImpact(
 
   const reasons: HmrImpactReason[] = [];
   if (previous.queryUpdatePlanHash !== next.queryUpdatePlanHash)
-    reasons[reasons.length] = 'query-plan';
+    compilerArrayAppend(reasons, 'query-plan', 'Compiler packages/compiler/src/vite.ts collection');
   if (previous.stylesheetAssetsHash !== next.stylesheetAssetsHash)
-    reasons[reasons.length] = 'style';
+    compilerArrayAppend(reasons, 'style', 'Compiler packages/compiler/src/vite.ts collection');
   if (reasons.length > 0) return { impact: 'routeRefresh', reasons };
   if (previous.liveTargetFactsHash !== next.liveTargetFactsHash) {
     return viteFullReload('live-target');
@@ -1498,7 +1531,7 @@ function viteHmrLiveTargets(facts: HmrImpactMetadata['liveTargetFacts']): string
     if (typeof target !== 'string') {
       throw new TypeError(`Vite HMR live-target facts[${index}].target must be a string.`);
     }
-    targets[targets.length] = target;
+    compilerArrayAppend(targets, target, 'Compiler packages/compiler/src/vite.ts collection');
   }
   return targets;
 }

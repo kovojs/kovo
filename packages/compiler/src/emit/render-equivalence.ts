@@ -3,6 +3,7 @@ import { runInNewContext } from 'node:vm';
 import { isGeneratedOnlySemanticAttribute } from '@kovojs/core/internal/semantic-attributes';
 
 import {
+  compilerArrayAppend,
   compilerCreateNullRecord,
   compilerCreateSet,
   compilerDefineOwnDataProperty,
@@ -55,7 +56,11 @@ import {
 const compilerRunInNewContext = runInNewContext;
 
 function appendSemanticValue<Value>(target: Value[], value: Value): void {
-  target[target.length] = value;
+  compilerArrayAppend(
+    target,
+    value,
+    'Compiler packages/compiler/src/emit/render-equivalence.ts collection',
+  );
 }
 
 function joinSemanticStrings(values: readonly string[], separator: string): string {
@@ -67,10 +72,7 @@ function joinSemanticStrings(values: readonly string[], separator: string): stri
   return output;
 }
 
-function semanticAttribute(
-  element: JsxElementModel,
-  name: string,
-): JsxAttributeModel | undefined {
+function semanticAttribute(element: JsxElementModel, name: string): JsxAttributeModel | undefined {
   const attributes = compilerSnapshotDenseArray(element.attributes, 'Semantic JSX attributes');
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
@@ -184,10 +186,7 @@ function staticTextTokens(html: string): string[] {
     else if (char === '}') depth = depth > 0 ? depth - 1 : 0;
     else if (depth === 0) withoutExpressions += char;
   }
-  const parts = compilerStringSplit(
-    compilerRegExpReplace(/\s+/g, withoutExpressions, '\n'),
-    '\n',
-  );
+  const parts = compilerStringSplit(compilerRegExpReplace(/\s+/g, withoutExpressions, '\n'), '\n');
   const tokens: string[] = [];
   for (let index = 0; index < parts.length; index += 1) {
     const token = compilerStringTrim(parts[index]!);
@@ -219,7 +218,11 @@ function firstMissingSubsequenceToken(needle: string[], haystack: string[]): str
 
 function emittedServerRenderSource(serverSource: string): string {
   try {
-    const actual = compilerRunInNewContext(`${serverSource}\n;renderSource();`, {}, { timeout: 1000 });
+    const actual = compilerRunInNewContext(
+      `${serverSource}\n;renderSource();`,
+      {},
+      { timeout: 1000 },
+    );
     return typeof actual === 'string' ? actual : '';
   } catch {
     return '';
@@ -227,9 +230,7 @@ function emittedServerRenderSource(serverSource: string): string {
 }
 
 function normalizeSemanticHtmlForComparison(html: string): string {
-  return compilerRegExpReplace(/<[^>]*>/g, html, (tag) =>
-    normalizeSemanticTagForComparison(tag),
-  );
+  return compilerRegExpReplace(/<[^>]*>/g, html, (tag) => normalizeSemanticTagForComparison(tag));
 }
 
 function normalizeSemanticTagForComparison(tag: string): string {
@@ -431,10 +432,7 @@ function renderSemanticAttributes(
     if (rendered) appendSemanticValue(semanticAttributes, rendered);
   }
   if (viewTransitionStyle && semanticAttribute(element, 'style') === undefined) {
-    appendSemanticValue(
-      semanticAttributes,
-      ` style="${escapeAttribute(viewTransitionStyle)}"`,
-    );
+    appendSemanticValue(semanticAttributes, ` style="${escapeAttribute(viewTransitionStyle)}"`);
   }
   if (fieldErrorDescribedBy && semanticAttribute(element, 'aria-describedby') === undefined) {
     appendSemanticValue(semanticAttributes, fieldErrorDescribedBy);
@@ -462,7 +460,8 @@ function semanticFieldErrorDescribedByAttribute(
   model: ComponentModuleModel,
   control: JsxElementModel,
 ): string | null {
-  if (control.tag !== 'input' && control.tag !== 'select' && control.tag !== 'textarea') return null;
+  if (control.tag !== 'input' && control.tag !== 'select' && control.tag !== 'textarea')
+    return null;
   const name = staticStringAttributeValue(semanticAttribute(control, 'name'));
   if (!name) return null;
 
@@ -745,10 +744,7 @@ function directChildElements(
 }
 
 function renderSemanticExpression(model: ComponentModuleModel, container: SourceSpan): string {
-  const expressions = compilerSnapshotDenseArray(
-    model.jsxExpressions,
-    'Semantic JSX expressions',
-  );
+  const expressions = compilerSnapshotDenseArray(model.jsxExpressions, 'Semantic JSX expressions');
   let expression: (typeof expressions)[number] | undefined;
   for (let index = 0; index < expressions.length; index += 1) {
     const candidate = expressions[index]!;

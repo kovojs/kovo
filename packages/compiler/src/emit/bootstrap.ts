@@ -1,4 +1,5 @@
 import {
+  compilerArrayAppend,
   compilerCreateSet,
   compilerJsonStringify,
   compilerSetAdd,
@@ -84,13 +85,30 @@ export function emitQueryPlanBootstrapModule(
   for (let index = 0; index < inputSnapshot.length; index += 1) {
     const input = inputSnapshot[index]!;
     const queryAlias = aliasFor('kovoQueryPlans', input.importPath, index);
-    queryAliases[queryAliases.length] = queryAlias;
-    allAliases[allAliases.length] = queryAlias;
+    compilerArrayAppend(
+      queryAliases,
+      queryAlias,
+      'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+    );
+    compilerArrayAppend(
+      allAliases,
+      queryAlias,
+      'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+    );
     const clockAlias = input.clockExportName
       ? aliasFor('kovoClockPlans', input.importPath, index)
       : undefined;
-    clockAliases[clockAliases.length] = clockAlias;
-    if (clockAlias !== undefined) allAliases[allAliases.length] = clockAlias;
+    compilerArrayAppend(
+      clockAliases,
+      clockAlias,
+      'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+    );
+    if (clockAlias !== undefined)
+      compilerArrayAppend(
+        allAliases,
+        clockAlias,
+        'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+      );
   }
   assertUniqueAliases(allAliases);
 
@@ -100,10 +118,17 @@ export function emitQueryPlanBootstrapModule(
     const specifiers = [`${input.exportName} as ${queryAliases[index]}`];
     const clockAlias = clockAliases[index];
     if (input.clockExportName && clockAlias) {
-      specifiers[specifiers.length] = `${input.clockExportName} as ${clockAlias}`;
+      compilerArrayAppend(
+        specifiers,
+        `${input.clockExportName} as ${clockAlias}`,
+        'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+      );
     }
-    importLines[importLines.length] =
-      `import { ${joinBootstrapStrings(specifiers, ', ')} } from ${bootstrapJsonSource(input.importPath, 'Bootstrap import path')};`;
+    compilerArrayAppend(
+      importLines,
+      `import { ${joinBootstrapStrings(specifiers, ', ')} } from ${bootstrapJsonSource(input.importPath, 'Bootstrap import path')};`,
+      'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+    );
   }
   const imports = joinBootstrapStrings(importLines, '\n');
 
@@ -113,7 +138,11 @@ export function emitQueryPlanBootstrapModule(
   // query name into a combined applier that invokes every contributing component's plan.
   const planLines: string[] = [];
   for (let index = 0; index < queryAliases.length; index += 1) {
-    planLines[planLines.length] = `  ${queryAliases[index]!},`;
+    compilerArrayAppend(
+      planLines,
+      `  ${queryAliases[index]!},`,
+      'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+    );
   }
   const planSources =
     planLines.length > 0
@@ -122,7 +151,12 @@ export function emitQueryPlanBootstrapModule(
   const clockLines: string[] = [];
   for (let index = 0; index < clockAliases.length; index += 1) {
     const alias = clockAliases[index];
-    if (alias !== undefined) clockLines[clockLines.length] = `  ...${alias},`;
+    if (alias !== undefined)
+      compilerArrayAppend(
+        clockLines,
+        `  ...${alias},`,
+        'Compiler packages/compiler/src/emit/bootstrap.ts collection',
+      );
   }
   const clockSpreads = joinBootstrapStrings(clockLines, '\n');
 

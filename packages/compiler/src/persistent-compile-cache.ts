@@ -10,6 +10,7 @@ import { dirname as builtinDirname, join as builtinJoin } from 'node:path';
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildCacheIdentity } from './cache-identity.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateMap,
   compilerHmacSha256Hex,
@@ -106,7 +107,12 @@ async function readEntryFiles(cacheDir: string): Promise<PersistentCompileCacheE
     if (!compilerStringEndsWith(fileName, '.json')) continue;
     try {
       const parsed = compilerJsonParse(await readFile(join(cacheDir, 'entries', fileName), 'utf8'));
-      if (isPersistentCompileCacheEntry(parsed)) entries[entries.length] = parsed;
+      if (isPersistentCompileCacheEntry(parsed))
+        compilerArrayAppend(
+          entries,
+          parsed,
+          'Compiler packages/compiler/src/persistent-compile-cache.ts collection',
+        );
     } catch {
       // A malformed entry is an untrusted cache miss.
     }

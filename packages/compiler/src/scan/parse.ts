@@ -11,6 +11,7 @@ import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
 
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
@@ -524,7 +525,11 @@ export function allComponentOptionObjectEntries(
   for (let index = 0; index < components.length; index += 1) {
     const entries = componentOptionObjectEntriesFor(components[index]!, propertyName);
     for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
-      result[result.length] = entries[entryIndex]!;
+      compilerArrayAppend(
+        result,
+        entries[entryIndex]!,
+        'Compiler packages/compiler/src/scan/parse.ts collection',
+      );
     }
   }
   return result;
@@ -760,7 +765,11 @@ export function mutationSessionAuthorityFacts(model: ComponentModuleModel): Sess
         if (typeof value !== 'string') {
           throw new TypeError('Mutation authority handler fingerprints must be strings.');
         }
-        handlerFingerprints[handlerFingerprints.length] = value;
+        compilerArrayAppend(
+          handlerFingerprints,
+          value,
+          'Compiler packages/compiler/src/scan/parse.ts collection',
+        );
       }
       if (handlerFingerprint !== undefined) {
         let duplicate = false;
@@ -770,7 +779,12 @@ export function mutationSessionAuthorityFacts(model: ComponentModuleModel): Sess
             break;
           }
         }
-        if (!duplicate) handlerFingerprints[handlerFingerprints.length] = handlerFingerprint;
+        if (!duplicate)
+          compilerArrayAppend(
+            handlerFingerprints,
+            handlerFingerprint,
+            'Compiler packages/compiler/src/scan/parse.ts collection',
+          );
       }
     }
     const fact: SessionAuthorityFact = {
@@ -782,7 +796,8 @@ export function mutationSessionAuthorityFacts(model: ComponentModuleModel): Sess
       source: 'session-authority',
       ...(unresolvedName ? { unresolvedName: true as const } : {}),
     };
-    if (previousIndex < 0) facts[facts.length] = fact;
+    if (previousIndex < 0)
+      compilerArrayAppend(facts, fact, 'Compiler packages/compiler/src/scan/parse.ts collection');
     else facts[previousIndex] = fact;
   };
 
@@ -1557,18 +1572,24 @@ function mutationHandlerModels(
     const { body, handler, model, parameters } = entries[index]!;
     const directDbTargets = mutationDirectDbTargetIdentities(sourceFile, body, parameters);
     const authorityFingerprint = mutationHandlerFingerprint(sourceFile, source, handler);
-    result[result.length] = {
-      ...model,
-      ...(authorityFingerprint === undefined ? {} : { authorityFingerprint }),
-      handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
-        owner,
-        resolvedTargetFilter: (identity) =>
-          compilerSetHas(directDbTargets, identity) || looksLikeDbTargetIdentity(identity),
-        surface: 'mutation',
-      }),
-      mutationOwner: owner,
-      ...(handlerReadsAmbientCookie(body, parameters) ? { readsAmbientCookie: true as const } : {}),
-    };
+    compilerArrayAppend(
+      result,
+      {
+        ...model,
+        ...(authorityFingerprint === undefined ? {} : { authorityFingerprint }),
+        handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
+          owner,
+          resolvedTargetFilter: (identity) =>
+            compilerSetHas(directDbTargets, identity) || looksLikeDbTargetIdentity(identity),
+          surface: 'mutation',
+        }),
+        mutationOwner: owner,
+        ...(handlerReadsAmbientCookie(body, parameters)
+          ? { readsAmbientCookie: true as const }
+          : {}),
+      },
+      'Compiler packages/compiler/src/scan/parse.ts collection',
+    );
   }
   return result;
 }
@@ -1592,7 +1613,11 @@ function handlerReadsAmbientCookie(
       ? 1
       : 0;
   for (let index = runtimeParameterStart; index < parameterSnapshot.length; index += 1) {
-    runtimeParameters[runtimeParameters.length] = parameterSnapshot[index]!;
+    compilerArrayAppend(
+      runtimeParameters,
+      parameterSnapshot[index]!,
+      'Compiler packages/compiler/src/scan/parse.ts collection',
+    );
   }
   if (runtimeParameters[0]?.dotDotDotToken || runtimeParameters[1]?.dotDotDotToken) return true;
   if (handlerReferencesUnprovenFreeAuthority(body, parameters)) return true;
@@ -1832,7 +1857,11 @@ function handlerReferencesUnprovenFreeAuthority(
     recordHandlerBindingName(bindings, parameter.name, root);
   }
   if ((ts.isFunctionExpression(root) || ts.isClassExpression(root)) && root.name !== undefined) {
-    bindings[bindings.length] = { name: root.name.text, scope: root };
+    compilerArrayAppend(
+      bindings,
+      { name: root.name.text, scope: root },
+      'Compiler packages/compiler/src/scan/parse.ts collection',
+    );
   }
 
   const collectBindings = (node: ts.Node): void => {
@@ -1848,19 +1877,31 @@ function handlerReferencesUnprovenFreeAuthority(
         ts.isEnumDeclaration(node)) &&
       node.name !== undefined
     ) {
-      bindings[bindings.length] = {
-        name: node.name.text,
-        scope: handlerLexicalBindingScope(node, root),
-      };
+      compilerArrayAppend(
+        bindings,
+        {
+          name: node.name.text,
+          scope: handlerLexicalBindingScope(node, root),
+        },
+        'Compiler packages/compiler/src/scan/parse.ts collection',
+      );
     } else if (
       (ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
       node.name !== undefined
     ) {
-      bindings[bindings.length] = { name: node.name.text, scope: node };
+      compilerArrayAppend(
+        bindings,
+        { name: node.name.text, scope: node },
+        'Compiler packages/compiler/src/scan/parse.ts collection',
+      );
     }
 
     if (node !== root && ts.isFunctionLike(node) && !ts.isArrowFunction(node)) {
-      bindings[bindings.length] = { name: 'arguments', scope: node };
+      compilerArrayAppend(
+        bindings,
+        { name: 'arguments', scope: node },
+        'Compiler packages/compiler/src/scan/parse.ts collection',
+      );
     }
     ts.forEachChild(node, collectBindings);
   };
@@ -1926,7 +1967,11 @@ function recordHandlerBindingName(
   scope: ts.Node,
 ): void {
   if (ts.isIdentifier(name)) {
-    bindings[bindings.length] = { name: name.text, scope };
+    compilerArrayAppend(
+      bindings,
+      { name: name.text, scope },
+      'Compiler packages/compiler/src/scan/parse.ts collection',
+    );
     return;
   }
   const elements = compilerSnapshotDenseArray(name.elements, 'Handler binding elements');
@@ -2514,12 +2559,16 @@ function handlerPropertyEntries(
     if (!property) throw new TypeError(`Handler factory properties[${index}] must be own data.`);
     if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'handler') {
       if (property.body) {
-        result[result.length] = {
-          body: property.body,
-          handler: property,
-          model: functionBodyModel(sourceFile, source, property.body, property.parameters),
-          parameters: property.parameters,
-        };
+        compilerArrayAppend(
+          result,
+          {
+            body: property.body,
+            handler: property,
+            model: functionBodyModel(sourceFile, source, property.body, property.parameters),
+            parameters: property.parameters,
+          },
+          'Compiler packages/compiler/src/scan/parse.ts collection',
+        );
       }
       continue;
     }
@@ -2531,12 +2580,16 @@ function handlerPropertyEntries(
     const initializer = unwrapExpression(property.initializer);
     if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) continue;
 
-    result[result.length] = {
-      body: initializer.body,
-      handler: initializer,
-      model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
-      parameters: initializer.parameters,
-    };
+    compilerArrayAppend(
+      result,
+      {
+        body: initializer.body,
+        handler: initializer,
+        model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
+        parameters: initializer.parameters,
+      },
+      'Compiler packages/compiler/src/scan/parse.ts collection',
+    );
   }
   return result;
 }

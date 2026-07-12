@@ -2,6 +2,7 @@ import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/m
 
 import { compilerIrHeader } from '../ir.js';
 import {
+  compilerArrayAppend,
   compilerCreateSet,
   compilerJsonStringify,
   compilerSetAdd,
@@ -170,7 +171,11 @@ function serverRenderPatches(
     for (let index = 0; index < handlerSnapshot.length; index += 1) {
       const handler = handlerSnapshot[index]!;
       if (handler.attributeStart >= host.start && handler.attributeEnd <= host.end) {
-        hostHandlers[hostHandlers.length] = handler;
+        compilerArrayAppend(
+          hostHandlers,
+          handler,
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
       }
     }
   }
@@ -179,11 +184,15 @@ function serverRenderPatches(
     const handler = handlerSnapshot[index]!;
     if (compilerSetHas(chainedHandlers, handler)) continue;
     if (serverArrayIncludesIdentity(hostHandlers, handler)) continue;
-    patches[patches.length] = {
-      end: handler.attributeEnd,
-      replacement: handlerAttributeReplacement(handler),
-      start: handler.attributeStart,
-    };
+    compilerArrayAppend(
+      patches,
+      {
+        end: handler.attributeEnd,
+        replacement: handlerAttributeReplacement(handler),
+        start: handler.attributeStart,
+      },
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
     appendServerValues(
       outputContexts,
       handlerOutputContexts(handler),
@@ -197,7 +206,11 @@ function serverRenderPatches(
       for (let index = 0; index < hostHandlers.length; index += 1) {
         const handler = hostHandlers[index]!;
         if (compilerSetHas(chainedHandlers, handler)) continue;
-        patches[patches.length] = handlerSourceReplacement(handler);
+        compilerArrayAppend(
+          patches,
+          handlerSourceReplacement(handler),
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
         appendServerValues(
           outputContexts,
           handlerOutputContexts(handler),
@@ -243,7 +256,11 @@ function serverRenderPatches(
 function appendServerValues<Value>(target: Value[], values: readonly Value[], label: string): void {
   const snapshot = compilerSnapshotDenseArray(values, label);
   for (let index = 0; index < snapshot.length; index += 1) {
-    target[target.length] = snapshot[index]!;
+    compilerArrayAppend(
+      target,
+      snapshot[index]!,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
 }
 
@@ -308,18 +325,26 @@ function executionTriggerRenderLowering(
       if (!ref || ref.url !== unversionedHref) continue;
 
       const value = formatKovoModuleRef({ ...ref, url: options.clientHref });
-      replacements[replacements.length] = {
-        end: attribute.end,
-        replacement: `${attribute.name}="${escapeAttribute(value)}" ${clientModuleAllowlistAttribute([value])}`,
-        start: attribute.start,
-      };
-      outputContexts[outputContexts.length] = {
-        context: outputContextForAttribute(attribute.name),
-        expression: value,
-        sink: attribute.name,
-        source: 'server-render',
-        writer: 'execution trigger URL versioning',
-      };
+      compilerArrayAppend(
+        replacements,
+        {
+          end: attribute.end,
+          replacement: `${attribute.name}="${escapeAttribute(value)}" ${clientModuleAllowlistAttribute([value])}`,
+          start: attribute.start,
+        },
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
+      compilerArrayAppend(
+        outputContexts,
+        {
+          context: outputContextForAttribute(attribute.name),
+          expression: value,
+          sink: attribute.name,
+          source: 'server-render',
+          writer: 'execution trigger URL versioning',
+        },
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
   }
 
@@ -339,13 +364,17 @@ function handlerOutputContexts(handler: HandlerLowering): GeneratedOutputWriteFa
   const params = compilerSnapshotDenseArray(handler.params, 'Server handler parameters');
   for (let index = 0; index < params.length; index += 1) {
     const param = params[index]!;
-    contexts[contexts.length] = {
-      context: outputContextForAttribute(param.attributeName),
-      expression: param.value,
-      sink: param.attributeName,
-      source: 'server-render' as const,
-      writer: 'event handler param lowering',
-    };
+    compilerArrayAppend(
+      contexts,
+      {
+        context: outputContextForAttribute(param.attributeName),
+        expression: param.value,
+        sink: param.attributeName,
+        source: 'server-render' as const,
+        writer: 'event handler param lowering',
+      },
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   return contexts;
 }
@@ -370,7 +399,11 @@ function chainedPrimitiveHandlerPatches(
     for (let index = 0; index < handlerSnapshot.length; index += 1) {
       const handler = handlerSnapshot[index]!;
       if (handler.attributeStart >= element.start && handler.attributeEnd <= element.openingEnd) {
-        elementHandlers[elementHandlers.length] = handler;
+        compilerArrayAppend(
+          elementHandlers,
+          handler,
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
       }
     }
     if (elementHandlers.length === 0) continue;
@@ -387,28 +420,40 @@ function chainedPrimitiveHandlerPatches(
       for (let index = 0; index < elementHandlers.length; index += 1) {
         const handler = elementHandlers[index]!;
         if (handler.attributeName === attribute.name) {
-          attributeHandlers[attributeHandlers.length] = handler;
+          compilerArrayAppend(
+            attributeHandlers,
+            handler,
+            'Compiler packages/compiler/src/emit/server-render.ts collection',
+          );
         }
       }
       if (attributeHandlers.length === 0) continue;
 
       // SPEC.md §4.6: primitive composition chains on:* refs author-first, then primitive.
-      patches[patches.length] = {
-        end: attribute.end,
-        replacement: chainedPrimitiveHandlerAttribute(
-          attribute.name,
-          attribute.value,
-          attributeHandlers,
-        ),
-        start: attribute.start,
-      };
-      outputContexts[outputContexts.length] = {
-        context: 'attribute',
-        expression: attribute.value,
-        sink: attribute.name,
-        source: 'server-render',
-        writer: 'primitive handler chain',
-      };
+      compilerArrayAppend(
+        patches,
+        {
+          end: attribute.end,
+          replacement: chainedPrimitiveHandlerAttribute(
+            attribute.name,
+            attribute.value,
+            attributeHandlers,
+          ),
+          start: attribute.start,
+        },
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
+      compilerArrayAppend(
+        outputContexts,
+        {
+          context: 'attribute',
+          expression: attribute.value,
+          sink: attribute.name,
+          source: 'server-render',
+          writer: 'primitive handler chain',
+        },
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
       for (let index = 0; index < attributeHandlers.length; index += 1) {
         const handler = attributeHandlers[index]!;
         appendServerValues(
@@ -416,12 +461,20 @@ function chainedPrimitiveHandlerPatches(
           handlerOutputContexts(handler),
           'Primitive-chain handler output contexts',
         );
-        patches[patches.length] = {
-          end: handler.attributeEnd,
-          replacement: '',
-          start: handler.attributeStart,
-        };
-        chainedHandlers[chainedHandlers.length] = handler;
+        compilerArrayAppend(
+          patches,
+          {
+            end: handler.attributeEnd,
+            replacement: '',
+            start: handler.attributeStart,
+          },
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
+        compilerArrayAppend(
+          chainedHandlers,
+          handler,
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
       }
     }
   }
@@ -439,18 +492,30 @@ function chainedPrimitiveHandlerAttribute(
   const params: ElementParam[] = [];
   for (let handlerIndex = 0; handlerIndex < handlerSnapshot.length; handlerIndex += 1) {
     const handler = handlerSnapshot[handlerIndex]!;
-    refValues[refValues.length] = handler.attributeValue;
+    compilerArrayAppend(
+      refValues,
+      handler.attributeValue,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
     const handlerParams = compilerSnapshotDenseArray(
       handler.params,
       'Chained primitive handler parameters',
     );
     for (let paramIndex = 0; paramIndex < handlerParams.length; paramIndex += 1) {
-      params[params.length] = handlerParams[paramIndex]!;
+      compilerArrayAppend(
+        params,
+        handlerParams[paramIndex]!,
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
   }
   const primitiveTokens = splitDepValue(primitiveRefs);
   for (let index = 0; index < primitiveTokens.length; index += 1) {
-    refValues[refValues.length] = primitiveTokens[index]!;
+    compilerArrayAppend(
+      refValues,
+      primitiveTokens[index]!,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
 
   const parts = [
@@ -494,7 +559,11 @@ function clientModuleAllowlistAttribute(refValues: readonly string[]): string {
       !compilerSetHas(urls, ref.url)
     ) {
       compilerSetAdd(urls, ref.url);
-      orderedUrls[orderedUrls.length] = ref.url;
+      compilerArrayAppend(
+        orderedUrls,
+        ref.url,
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
   }
   return orderedUrls.length > 0
@@ -502,13 +571,14 @@ function clientModuleAllowlistAttribute(refValues: readonly string[]): string {
     : '';
 }
 
-function appendHandlerParamAttributes(
-  target: string[],
-  params: readonly ElementParam[],
-): void {
+function appendHandlerParamAttributes(target: string[], params: readonly ElementParam[]): void {
   for (let index = 0; index < params.length; index += 1) {
     const param = params[index]!;
-    target[target.length] = `${param.attributeName}="${escapeAttribute(param.value)}"`;
+    compilerArrayAppend(
+      target,
+      `${param.attributeName}="${escapeAttribute(param.value)}"`,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
 }
 
@@ -544,27 +614,39 @@ function renderHostStampPatches(
     const write = writeSnapshot[index]!;
     const rendered = renderHostStampAttribute(write);
     if (write.mode === 'insert') {
-      insertedAttributes[insertedAttributes.length] = rendered;
+      compilerArrayAppend(
+        insertedAttributes,
+        rendered,
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
       continue;
     }
     if (write.mode === 'replace') {
       const existing = serverElementAttribute(hostElement, write.attr);
       if (!existing) continue;
-      patches[patches.length] = {
-        end: existing.end,
-        replacement: rendered,
-        start: existing.start,
-      };
+      compilerArrayAppend(
+        patches,
+        {
+          end: existing.end,
+          replacement: rendered,
+          start: existing.start,
+        },
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
   }
 
   if (insertedAttributes.length > 0) {
     const insertion = openingTagAttributeInsertion(hostElement, insertedAttributes);
-    patches[patches.length] = {
-      end: insertion.position,
-      replacement: insertion.replacement,
-      start: insertion.position,
-    };
+    compilerArrayAppend(
+      patches,
+      {
+        end: insertion.position,
+        replacement: insertion.replacement,
+        start: insertion.position,
+      },
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
 
   return patches;
@@ -577,13 +659,17 @@ function renderHostStampOutputContexts(
   const contexts: GeneratedOutputWriteFact[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const write = snapshot[index]!;
-    contexts[contexts.length] = {
-      context: 'attribute',
-      expression: write.value,
-      sink: write.attr,
-      source: 'server-render',
-      writer: write.writer,
-    };
+    compilerArrayAppend(
+      contexts,
+      {
+        context: 'attribute',
+        expression: write.value,
+        sink: write.attr,
+        source: 'server-render',
+        writer: write.writer,
+      },
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   return contexts;
 }
@@ -612,57 +698,93 @@ function renderHostStampWrites(
     if (componentIdentity.mode === 'replace') {
       const existing = serverElementAttribute(hostElement, 'kovo-c');
       if (existing) {
-        conflicts[conflicts.length] = {
-          attribute: existing,
-          attr: 'kovo-c',
-          writer: 'host identity stamp',
-        };
+        compilerArrayAppend(
+          conflicts,
+          {
+            attribute: existing,
+            attr: 'kovo-c',
+            writer: 'host identity stamp',
+          },
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
       }
     }
-    writes[writes.length] = componentIdentity;
+    compilerArrayAppend(
+      writes,
+      componentIdentity,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   if (declaredQueryDeps) {
-    writes[writes.length] = declaredQueryDeps;
+    compilerArrayAppend(
+      writes,
+      declaredQueryDeps,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   if (fragmentTarget) {
     if (fragmentTarget.mode === 'replace') {
       const existing = serverElementAttribute(hostElement, 'kovo-fragment-target');
       if (existing) {
-        conflicts[conflicts.length] = {
-          attribute: existing,
-          attr: 'kovo-fragment-target',
-          writer: 'host fragment target stamp',
-        };
+        compilerArrayAppend(
+          conflicts,
+          {
+            attribute: existing,
+            attr: 'kovo-fragment-target',
+            writer: 'host fragment target stamp',
+          },
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
       }
     }
-    writes[writes.length] = fragmentTarget;
+    compilerArrayAppend(
+      writes,
+      fragmentTarget,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   if (liveComponent) {
-    writes[writes.length] = liveComponent;
+    compilerArrayAppend(
+      writes,
+      liveComponent,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   if (stateJson) {
     const existing = serverElementAttribute(hostElement, 'kovo-state');
     if (existing) {
       if (!sameEscapedOrRawAttributeValue(existing.value, stateJson)) {
-        conflicts[conflicts.length] = {
-          attribute: existing,
-          attr: 'kovo-state',
-          writer: 'host state stamp',
-        };
+        compilerArrayAppend(
+          conflicts,
+          {
+            attribute: existing,
+            attr: 'kovo-state',
+            writer: 'host state stamp',
+          },
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
       }
-      writes[writes.length] = {
-        attr: 'kovo-state',
-        mode: 'preserve',
-        value: stateJson,
-        writer: 'host state stamp',
-      };
+      compilerArrayAppend(
+        writes,
+        {
+          attr: 'kovo-state',
+          mode: 'preserve',
+          value: stateJson,
+          writer: 'host state stamp',
+        },
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     } else {
-      writes[writes.length] = {
-        attr: 'kovo-state',
-        mode: 'insert',
-        value: stateJson,
-        writer: 'host state stamp',
-      };
+      compilerArrayAppend(
+        writes,
+        {
+          attr: 'kovo-state',
+          mode: 'insert',
+          value: stateJson,
+          writer: 'host state stamp',
+        },
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
   }
 
@@ -744,7 +866,11 @@ function declaredQueryDepsStamp(
   const existingDeps = splitDepValue(existing?.value ?? '');
   const existingTokens: QueryDependencyToken[] = [];
   for (let index = 0; index < existingDeps.length; index += 1) {
-    existingTokens[existingTokens.length] = { value: existingDeps[index]! };
+    compilerArrayAppend(
+      existingTokens,
+      { value: existingDeps[index]! },
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   const mergedDeps = mergeDepValues(existingTokens, deps);
   const depValue = renderQueryDependencyTokens(mergedDeps);
@@ -785,9 +911,13 @@ function componentQueryDependencyTokens(component: ComponentModel): QueryDepende
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
     const expression = queryKeyExpressionForBinding(entry);
-    tokens[tokens.length] = expression
-      ? { fallback: entry.key, kind: 'expression', value: expression }
-      : { value: entry.key };
+    compilerArrayAppend(
+      tokens,
+      expression
+        ? { fallback: entry.key, kind: 'expression', value: expression }
+        : { value: entry.key },
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   return tokens;
 }
@@ -813,7 +943,11 @@ function mergeDepValues(
       const key = dep.kind === 'expression' ? `expr:${dep.value}` : `lit:${dep.value}`;
       if (compilerSetHas(seen, key)) continue;
       compilerSetAdd(seen, key);
-      merged[merged.length] = dep;
+      compilerArrayAppend(
+        merged,
+        dep,
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
   }
   return merged;
@@ -831,7 +965,11 @@ function renderQueryDependencyTokens(deps: readonly QueryDependencyToken[]): str
   const values: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const dep = snapshot[index]!;
-    values[values.length] = hasExpression ? renderQueryDependencyExpressionElement(dep) : dep.value;
+    compilerArrayAppend(
+      values,
+      hasExpression ? renderQueryDependencyExpressionElement(dep) : dep.value,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
   }
   return hasExpression
     ? `[${joinServerStrings(values, ', ')}].join(' ')`
@@ -886,12 +1024,16 @@ function renderHostStampConflictDiagnostics(
   const diagnostics: CompilerDiagnostic[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const conflict = snapshot[index]!;
-    diagnostics[diagnostics.length] = writerConflictDiagnostic(
-      options,
-      conflict.attribute,
-      conflict.attr,
-      'author JSX',
-      conflict.writer,
+    compilerArrayAppend(
+      diagnostics,
+      writerConflictDiagnostic(
+        options,
+        conflict.attribute,
+        conflict.attr,
+        'author JSX',
+        conflict.writer,
+      ),
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
     );
   }
   return diagnostics;
@@ -924,21 +1066,33 @@ function handlerStampConflictDiagnostics(
     const params = compilerSnapshotDenseArray(handler.params, 'Handler conflict parameters');
     const generatedAttrs: string[] = [];
     for (let index = 0; index < params.length; index += 1) {
-      generatedAttrs[generatedAttrs.length] = params[index]!.attributeName;
+      compilerArrayAppend(
+        generatedAttrs,
+        params[index]!.attributeName,
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
     if (emitElementParamTypes(params).length > 0) {
-      generatedAttrs[generatedAttrs.length] = 'kovo-param-types';
+      compilerArrayAppend(
+        generatedAttrs,
+        'kovo-param-types',
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
+      );
     }
     for (let index = 0; index < generatedAttrs.length; index += 1) {
       const name = generatedAttrs[index]!;
       const existing = serverElementAttribute(element, name);
       if (!existing) continue;
-      diagnostics[diagnostics.length] = writerConflictDiagnostic(
-        options,
-        existing,
-        name,
-        'author JSX',
-        'event handler param lowering',
+      compilerArrayAppend(
+        diagnostics,
+        writerConflictDiagnostic(
+          options,
+          existing,
+          name,
+          'author JSX',
+          'event handler param lowering',
+        ),
+        'Compiler packages/compiler/src/emit/server-render.ts collection',
       );
     }
   }

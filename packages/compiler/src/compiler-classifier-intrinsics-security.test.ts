@@ -954,6 +954,51 @@ export const HostButton = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('cannot erase reviewed emitter patches through inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          const replacement = (value as { replacement?: unknown } | null)?.replacement;
+          if (typeof replacement === 'string' && replacement.includes('on:click=')) {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      result = compileComponentModule({
+        fileName: 'setter-host-button.tsx',
+        source: `
+import { component } from '@kovojs/core';
+import { track } from './analytics';
+export const HostButton = component({
+  render: () => <button onClick={() => track('click')}>Track</button>,
+});
+`,
+      });
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+
+    const emitted = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(emitted).toContain('on:click=');
+    expect(poisonHits).toBe(0);
+  });
+
   it('cannot inject executable source through server template-literal escaping', () => {
     const nativeReplaceAll = String.prototype.replaceAll;
     const nativeApply = Reflect.apply;

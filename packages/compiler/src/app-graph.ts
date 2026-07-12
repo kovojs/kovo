@@ -12,6 +12,7 @@ import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { factHash } from './fact-hash.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateMap,
   compilerCreateNullRecord,
@@ -193,9 +194,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     // SPEC §6.6: preserve KV426 trust escapes (`kovo explain --trust`, audit-only) and KV424
     // app dangerous-sink facts (`kovo check` error gate) from `compile drizzle-static` so the
     // build→graph.json carries the trust surface and the imperative-DOM sink findings.
-    ...(graphInput?.trustEscapes === undefined
-      ? {}
-      : { trustEscapes: graphInput.trustEscapes }),
+    ...(graphInput?.trustEscapes === undefined ? {} : { trustEscapes: graphInput.trustEscapes }),
     // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): app-authored escape-hatch capability facts
     // (`--capabilities`) and credential-cookie downgrades (`--cookies`) collected by the static
     // producers ride from `compile drizzle-static` / the build-check graph through into graph.json.
@@ -315,7 +314,7 @@ function mergeFactsByKey<Fact>(
     const fact = derivedSnapshot[index]!;
     const key = keyForFact(fact);
     if (compilerSetHas(existing, key)) continue;
-    facts[facts.length] = fact;
+    compilerArrayAppend(facts, fact, 'Compiler packages/compiler/src/app-graph.ts collection');
     compilerSetAdd(existing, key);
   }
   return stableSortedCopy(facts, compareFacts, 'merged graph facts');
@@ -416,19 +415,23 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
   const values = mapValues(byKey);
   for (let index = 0; index < values.length; index += 1) {
     const task = values[index]!;
-    normalized[normalized.length] = {
-      ...(task.cron === undefined ? {} : { cron: task.cron }),
-      key: task.key,
-      ...(task.runMutations === undefined || task.runMutations.length === 0
-        ? {}
-        : { runMutations: task.runMutations }),
-      ...(task.runQueries === undefined || task.runQueries.length === 0
-        ? {}
-        : { runQueries: task.runQueries }),
-      ...(task.schedules === undefined || task.schedules.length === 0
-        ? {}
-        : { schedules: task.schedules }),
-    };
+    compilerArrayAppend(
+      normalized,
+      {
+        ...(task.cron === undefined ? {} : { cron: task.cron }),
+        key: task.key,
+        ...(task.runMutations === undefined || task.runMutations.length === 0
+          ? {}
+          : { runMutations: task.runMutations }),
+        ...(task.runQueries === undefined || task.runQueries.length === 0
+          ? {}
+          : { runQueries: task.runQueries }),
+        ...(task.schedules === undefined || task.schedules.length === 0
+          ? {}
+          : { schedules: task.schedules }),
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return stableSortedCopy(
     normalized,
@@ -537,13 +540,17 @@ function publishToClientCapabilitiesFromFacts(
   const capabilities: CoreGraph.CapabilityExplain[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const fact = snapshot[index]!;
-    capabilities[capabilities.length] = {
-      justification: fact.reason,
-      kind: 'publishToClient',
-      moduleSpecifier: fact.moduleSpecifier,
-      site: fact.site,
-      target: fact.localName,
-    };
+    compilerArrayAppend(
+      capabilities,
+      {
+        justification: fact.reason,
+        kind: 'publishToClient',
+        moduleSpecifier: fact.moduleSpecifier,
+        site: fact.site,
+        target: fact.localName,
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return capabilities;
 }
@@ -565,10 +572,18 @@ function concatDense<Value>(left: readonly Value[], right: readonly Value[]): Va
   const rightSnapshot = compilerSnapshotDenseArray(right, 'Compiler graph facts');
   const combined: Value[] = [];
   for (let index = 0; index < leftSnapshot.length; index += 1) {
-    combined[combined.length] = leftSnapshot[index]!;
+    compilerArrayAppend(
+      combined,
+      leftSnapshot[index]!,
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   for (let index = 0; index < rightSnapshot.length; index += 1) {
-    combined[combined.length] = rightSnapshot[index]!;
+    compilerArrayAppend(
+      combined,
+      rightSnapshot[index]!,
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return combined;
 }
@@ -595,7 +610,11 @@ function flattenFactProperty<Value>(
       `${label}[${containerIndex}].${property}`,
     );
     for (let valueIndex = 0; valueIndex < valueSnapshot.length; valueIndex += 1) {
-      flattened[flattened.length] = valueSnapshot[valueIndex] as Value;
+      compilerArrayAppend(
+        flattened,
+        valueSnapshot[valueIndex] as Value,
+        'Compiler packages/compiler/src/app-graph.ts collection',
+      );
     }
   }
   return flattened;
@@ -622,7 +641,7 @@ function stableSortedCopy<Value>(
 function mapValues<Key, Value>(map: ReadonlyMap<Key, Value>): Value[] {
   const values: Value[] = [];
   compilerMapForEach(map, (value) => {
-    values[values.length] = value;
+    compilerArrayAppend(values, value, 'Compiler packages/compiler/src/app-graph.ts collection');
   });
   return values;
 }
@@ -633,7 +652,11 @@ function sortedStringMapEntries<Value>(
 ): [string, Value][] {
   const entries: [string, Value][] = [];
   compilerMapForEach(map, (value, key) => {
-    entries[entries.length] = [key, value];
+    compilerArrayAppend(
+      entries,
+      [key, value],
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   });
   return stableSortedCopy(
     entries,
@@ -656,7 +679,11 @@ function hashFacts(facts: readonly unknown[]): string[] {
   const snapshot = compilerSnapshotDenseArray(facts, 'App graph hash facts');
   const hashes: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
-    hashes[hashes.length] = factHash(snapshot[index]);
+    compilerArrayAppend(
+      hashes,
+      factHash(snapshot[index]),
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return stableSortedCopy(hashes, compilerStringLocaleCompare, 'app graph fact hashes');
 }
@@ -735,7 +762,11 @@ export function componentGraphFact(
   const styleRuleSnapshot = compilerSnapshotDenseArray(styleRuleUsages, 'Component style rules');
   for (let index = 0; index < styleRuleSnapshot.length; index += 1) {
     const { className, source, styleRef } = styleRuleSnapshot[index]!;
-    styleRules[styleRules.length] = { className, source, styleRef };
+    compilerArrayAppend(
+      styleRules,
+      { className, source, styleRef },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
 
   return {
@@ -773,7 +804,11 @@ function clockExplainFacts(entries: readonly ObjectLiteralEntry[]): CoreGraph.Cl
   for (let index = 0; index < snapshot.length; index += 1) {
     const entry = snapshot[index]!;
     if (entry.value) {
-      facts[facts.length] = { cadence: clockCadenceSummary(entry), name: entry.key };
+      compilerArrayAppend(
+        facts,
+        { cadence: clockCadenceSummary(entry), name: entry.key },
+        'Compiler packages/compiler/src/app-graph.ts collection',
+      );
     }
   }
   return facts;
@@ -798,11 +833,11 @@ function clockCadenceSummary(entry: Pick<ObjectLiteralEntry, 'objectEntries'>): 
     for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
       const field = fields[fieldIndex]!;
       if (field.key !== key || !field.value) continue;
-      parts[parts.length] = `${key}=${compilerRegExpReplace(
-        /\s+/g,
-        compilerStringTrim(field.value),
-        ' ',
-      )}`;
+      compilerArrayAppend(
+        parts,
+        `${key}=${compilerRegExpReplace(/\s+/g, compilerStringTrim(field.value), ' ')}`,
+        'Compiler packages/compiler/src/app-graph.ts collection',
+      );
       break;
     }
   }
@@ -843,21 +878,28 @@ export function deriveRegistryFactsFromGraph(
   const routes: string[] = [];
   const pages = compilerSnapshotDenseArray(input.pages ?? [], 'Registry graph pages');
   for (let index = 0; index < pages.length; index += 1) {
-    routes[routes.length] = pages[index]!.route;
+    compilerArrayAppend(
+      routes,
+      pages[index]!.route,
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
 
-  return compilerSnapshotJsonValue({
-    ...(components.length > 0 ? { components } : {}),
-    ...(diagnostics.length > 0 ? { diagnostics } : {}),
-    domainKeys: deriveDomainKeysFromGraph(input),
-    ...(fragmentTargets.length > 0 ? { fragmentTargets } : {}),
-    invalidations: deriveInvalidationFactsFromGraph(input),
-    ...(compilerObjectKeys(mutationTypes).length > 0 ? { mutations: mutationTypes } : {}),
-    ...(compilerObjectKeys(queryTypes).length > 0 ? { queries: queryTypes } : {}),
-    routes: uniqueSorted(routes),
-    ...(statefulComponents.length > 0 ? { statefulComponents } : {}),
-    ...(viewTransitions.length > 0 ? { viewTransitions } : {}),
-  }, 'Registry facts');
+  return compilerSnapshotJsonValue(
+    {
+      ...(components.length > 0 ? { components } : {}),
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      domainKeys: deriveDomainKeysFromGraph(input),
+      ...(fragmentTargets.length > 0 ? { fragmentTargets } : {}),
+      invalidations: deriveInvalidationFactsFromGraph(input),
+      ...(compilerObjectKeys(mutationTypes).length > 0 ? { mutations: mutationTypes } : {}),
+      ...(compilerObjectKeys(queryTypes).length > 0 ? { queries: queryTypes } : {}),
+      routes: uniqueSorted(routes),
+      ...(statefulComponents.length > 0 ? { statefulComponents } : {}),
+      ...(viewTransitions.length > 0 ? { viewTransitions } : {}),
+    },
+    'Registry facts',
+  );
 }
 
 /**
@@ -879,13 +921,17 @@ export function routeFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnos
   for (let index = 0; index < entries.length; index += 1) {
     const [route, count] = entries[index]!;
     if (count < 2) continue;
-    diagnostics[diagnostics.length] = {
-      code: 'KV228',
-      fileName: 'app graph route table',
-      help: diagnosticDefinitions.KV228.help,
-      message: `${diagnosticDefinitions.KV228.message} duplicate route path "${route}" appears ${count} times in graph pages.`,
-      severity: diagnosticDefinitions.KV228.severity,
-    };
+    compilerArrayAppend(
+      diagnostics,
+      {
+        code: 'KV228',
+        fileName: 'app graph route table',
+        help: diagnosticDefinitions.KV228.help,
+        message: `${diagnosticDefinitions.KV228.message} duplicate route path "${route}" appears ${count} times in graph pages.`,
+        severity: diagnosticDefinitions.KV228.severity,
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
 
   return diagnostics;
@@ -915,13 +961,17 @@ export function mutationFactDiagnostics(graph: RegistryGraphInput): CompilerDiag
   for (let index = 0; index < entries.length; index += 1) {
     const [key, count] = entries[index]!;
     if (count < 2) continue;
-    diagnostics[diagnostics.length] = {
-      code: 'KV421',
-      fileName: 'app graph mutation table',
-      help: diagnosticDefinitions.KV421.help,
-      message: `${diagnosticDefinitions.KV421.message} mutation key "${key}" appears ${count} times in graph mutations.`,
-      severity: diagnosticDefinitions.KV421.severity,
-    };
+    compilerArrayAppend(
+      diagnostics,
+      {
+        code: 'KV421',
+        fileName: 'app graph mutation table',
+        help: diagnosticDefinitions.KV421.help,
+        message: `${diagnosticDefinitions.KV421.message} mutation key "${key}" appears ${count} times in graph mutations.`,
+        severity: diagnosticDefinitions.KV421.severity,
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
 
   return diagnostics;
@@ -953,18 +1003,25 @@ export function queryReadSetFactDiagnostics(graph: RegistryGraphInput): Compiler
   for (let index = 0; index < entries.length; index += 1) {
     const [query, count] = entries[index]!;
     if (count < 2) continue;
-    diagnostics[diagnostics.length] = {
-      code: 'KV240',
-      fileName: 'app graph query table',
-      help: joinStrings([
-        'Would lower to: one query read-set fact per source-derived query key for the generated query registry, /_q dispatch, kovo-query hydration, kovo-deps, and mutation invalidation graph.',
-        'Blocked reason: two query declarations share one key, so graph indexing can silently collapse read sets and generated wire artifacts before the server read endpoint sees the ambiguity.',
-        'Fixes: emit exactly one query fact per query key, or rename/move one exported query so its source-derived key is unique across the app graph.',
-        'SPEC §4.1 derives query registry identities from source, §10.2 makes each query key a typed read surface, and §10.3 relies on those stable query identities when mutations compute invalidated reads.',
-      ], '\n'),
-      message: `Duplicate query key. query key "${query}" appears ${count} times in graph queries.`,
-      severity: diagnosticDefinitions.KV240.severity,
-    };
+    compilerArrayAppend(
+      diagnostics,
+      {
+        code: 'KV240',
+        fileName: 'app graph query table',
+        help: joinStrings(
+          [
+            'Would lower to: one query read-set fact per source-derived query key for the generated query registry, /_q dispatch, kovo-query hydration, kovo-deps, and mutation invalidation graph.',
+            'Blocked reason: two query declarations share one key, so graph indexing can silently collapse read sets and generated wire artifacts before the server read endpoint sees the ambiguity.',
+            'Fixes: emit exactly one query fact per query key, or rename/move one exported query so its source-derived key is unique across the app graph.',
+            'SPEC §4.1 derives query registry identities from source, §10.2 makes each query key a typed read surface, and §10.3 relies on those stable query identities when mutations compute invalidated reads.',
+          ],
+          '\n',
+        ),
+        message: `Duplicate query key. query key "${query}" appears ${count} times in graph queries.`,
+        severity: diagnosticDefinitions.KV240.severity,
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
 
   return diagnostics;
@@ -988,7 +1045,7 @@ function registryTypeDriftDiagnostics(
       throw new TypeError(`Previous registry type ${key} must be a string.`);
     }
     const keys = compilerMapGet(previousByType, typeSource) ?? [];
-    keys[keys.length] = key;
+    compilerArrayAppend(keys, key, 'Compiler packages/compiler/src/app-graph.ts collection');
     compilerMapSet(previousByType, typeSource, keys);
   }
 
@@ -1008,7 +1065,12 @@ function registryTypeDriftDiagnostics(
     const renamedKeys: string[] = [];
     for (let previousIndex = 0; previousIndex < matchingPreviousKeys.length; previousIndex += 1) {
       const previousKey = matchingPreviousKeys[previousIndex]!;
-      if (previousKey !== currentKey) renamedKeys[renamedKeys.length] = previousKey;
+      if (previousKey !== currentKey)
+        compilerArrayAppend(
+          renamedKeys,
+          previousKey,
+          'Compiler packages/compiler/src/app-graph.ts collection',
+        );
     }
     const sortedPreviousKeys = stableSortedCopy(
       renamedKeys,
@@ -1022,11 +1084,10 @@ function registryTypeDriftDiagnostics(
     );
     if (sortedPreviousKeys.length !== 1 || previousCurrentType === typeSource) continue;
 
-    diagnostics[diagnostics.length] = registryTypeDriftDiagnostic(
-      kind,
-      sortedPreviousKeys[0]!,
-      currentKey,
-      typeSource,
+    compilerArrayAppend(
+      diagnostics,
+      registryTypeDriftDiagnostic(kind, sortedPreviousKeys[0]!, currentKey, typeSource),
+      'Compiler packages/compiler/src/app-graph.ts collection',
     );
   }
   return diagnostics;
@@ -1043,13 +1104,16 @@ function registryTypeDriftDiagnostic(
   return {
     code,
     fileName: `app graph ${kind} table`,
-    help: joinStrings([
-      definition.help,
-      `Previous registry key: ${previousKey}`,
-      `Current registry key: ${currentKey}`,
-      `Registry type: ${typeSource}`,
-      `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
-    ], '\n'),
+    help: joinStrings(
+      [
+        definition.help,
+        `Previous registry key: ${previousKey}`,
+        `Current registry key: ${currentKey}`,
+        `Registry type: ${typeSource}`,
+        `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
+      ],
+      '\n',
+    ),
     message: `${definition.message} ${previousKey} -> ${currentKey}.`,
     severity: definition.severity,
   };
@@ -1078,7 +1142,11 @@ function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
   const components = compilerSnapshotDenseArray(graph.components ?? [], 'Component graph facts');
   const names: string[] = [];
   for (let index = 0; index < components.length; index += 1) {
-    names[names.length] = components[index]!.name;
+    compilerArrayAppend(
+      names,
+      components[index]!.name,
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return uniqueSorted(names);
 }
@@ -1099,12 +1167,15 @@ function disambiguateComponentDomNames(
   for (let index = 0; index < snapshot.length; index += 1) {
     const component = snapshot[index]!;
     const domName = component.domName;
-    result[result.length] =
+    compilerArrayAppend(
+      result,
       !domName ||
-      (compilerMapGet(counts, domName) ?? 0) < 2 ||
-      component.disambiguatedDomName === component.name
+        (compilerMapGet(counts, domName) ?? 0) < 2 ||
+        component.disambiguatedDomName === component.name
         ? component
-        : { ...component, disambiguatedDomName: component.name };
+        : { ...component, disambiguatedDomName: component.name },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return result;
 }
@@ -1120,7 +1191,12 @@ function deriveStatefulComponentsFromGraph(graph: RegistryGraphInput): string[] 
   const names: string[] = [];
   for (let index = 0; index < components.length; index += 1) {
     const component = components[index]!;
-    if (component.mutableLocalState === true) names[names.length] = component.name;
+    if (component.mutableLocalState === true)
+      compilerArrayAppend(
+        names,
+        component.name,
+        'Compiler packages/compiler/src/app-graph.ts collection',
+      );
   }
   return uniqueSorted(names);
 }
@@ -1171,30 +1247,42 @@ function derivedPageFactsFromRoutePages(
         segmentQueries = uniqueSorted(segmentQueries);
       }
 
-      navigationSegments[navigationSegments.length] = {
-        ...(segment.components === undefined ? {} : { components: segment.components }),
-        id: segment.id,
-        kind: segment.kind,
-        name: segment.localName,
-        ...(segmentQueries.length === 0 ? {} : { queries: segmentQueries }),
-      };
+      compilerArrayAppend(
+        navigationSegments,
+        {
+          ...(segment.components === undefined ? {} : { components: segment.components }),
+          id: segment.id,
+          kind: segment.kind,
+          name: segment.localName,
+          ...(segmentQueries.length === 0 ? {} : { queries: segmentQueries }),
+        },
+        'Compiler packages/compiler/src/app-graph.ts collection',
+      );
     }
 
     const layouts: CoreGraph.PageLayoutExplain[] = [];
     const layoutFacts = compilerSnapshotDenseArray(page.layouts ?? [], 'Route-page layouts');
     for (let index = 0; index < layoutFacts.length; index += 1) {
       const layout = layoutFacts[index]!;
-      layouts[layouts.length] = { name: layout.localName, queries: layout.queries };
+      compilerArrayAppend(
+        layouts,
+        { name: layout.localName, queries: layout.queries },
+        'Compiler packages/compiler/src/app-graph.ts collection',
+      );
     }
 
-    results[results.length] = {
-      ...(page.access === undefined ? {} : { access: page.access }),
-      ...(page.guards === undefined || page.guards.length === 0 ? {} : { guards: page.guards }),
-      ...(layouts.length > 0 ? { layouts } : {}),
-      ...(navigationSegments.length > 0 ? { navigationSegments } : {}),
-      ...(queries.length === 0 ? {} : { queries }),
-      route: page.route,
-    };
+    compilerArrayAppend(
+      results,
+      {
+        ...(page.access === undefined ? {} : { access: page.access }),
+        ...(page.guards === undefined || page.guards.length === 0 ? {} : { guards: page.guards }),
+        ...(layouts.length > 0 ? { layouts } : {}),
+        ...(navigationSegments.length > 0 ? { navigationSegments } : {}),
+        ...(queries.length === 0 ? {} : { queries }),
+        route: page.route,
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return results;
 }
@@ -1223,7 +1311,7 @@ function mergeGraphPages(
     if ((compilerMapGet(routeCounts, page.route) ?? 0) === 1 && matchCount === 1) {
       result[matchIndex] = mergeGraphPage(result[matchIndex]!, page);
     } else {
-      result[result.length] = page;
+      compilerArrayAppend(result, page, 'Compiler packages/compiler/src/app-graph.ts collection');
     }
   }
 
@@ -1249,9 +1337,7 @@ function mergeGraphPage(
     ...(authoredPage.queries === undefined && derivedPage.queries === undefined
       ? {}
       : {
-          queries: uniqueSorted(
-            concatDense(authoredPage.queries ?? [], derivedPage.queries ?? []),
-          ),
+          queries: uniqueSorted(concatDense(authoredPage.queries ?? [], derivedPage.queries ?? [])),
         }),
   };
 }
@@ -1345,16 +1431,25 @@ function componentQueryNameFacts(
   const names: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const entry = snapshot[index]!;
-    names[names.length] = entry.key;
+    compilerArrayAppend(names, entry.key, 'Compiler packages/compiler/src/app-graph.ts collection');
     const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
     if (!queryExpression) continue;
-    names[names.length] = queryExpression;
+    compilerArrayAppend(
+      names,
+      queryExpression,
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
     const importedKey = derivedImportedQueryKey(
       sourceFileName,
       model?.namedImports ?? [],
       queryExpression,
     );
-    if (importedKey !== undefined) names[names.length] = importedKey;
+    if (importedKey !== undefined)
+      compilerArrayAppend(
+        names,
+        importedKey,
+        'Compiler packages/compiler/src/app-graph.ts collection',
+      );
   }
   return uniqueSorted(names);
 }
@@ -1406,10 +1501,14 @@ function componentQueryBindingFacts(component: ComponentModel): LiveTargetQueryB
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
     const parsed = entry.value ? queryBindingFromExpression(entry.value) : null;
-    facts[facts.length] = {
-      name: entry.key,
-      ...(parsed ?? { queryExpression: entry.value ?? entry.key }),
-    };
+    compilerArrayAppend(
+      facts,
+      {
+        name: entry.key,
+        ...(parsed ?? { queryExpression: entry.value ?? entry.key }),
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return facts;
 }
@@ -1422,7 +1521,11 @@ function fragmentTargetPropsType(component: ComponentModel): string {
   const props: { key: string; type: string }[] = [];
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
-    props[props.length] = { key: entry.key, type: entry.staticConstructorType ?? 'unknown' };
+    compilerArrayAppend(
+      props,
+      { key: entry.key, type: entry.staticConstructorType ?? 'unknown' },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
 
   if (props.length === 0) return '{}';
@@ -1430,7 +1533,11 @@ function fragmentTargetPropsType(component: ComponentModel): string {
   const parts: string[] = [];
   for (let index = 0; index < props.length; index += 1) {
     const prop = props[index]!;
-    parts[parts.length] = `${prop.key}: ${prop.type}`;
+    compilerArrayAppend(
+      parts,
+      `${prop.key}: ${prop.type}`,
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return `{ ${joinStrings(parts, '; ')} }`;
 }
@@ -1444,11 +1551,15 @@ function liveTargetCoverageFacts(
   for (let index = 0; index < snapshot.length; index += 1) {
     const fact = snapshot[index]!;
     if (component.localName !== undefined && fact.componentName !== component.localName) continue;
-    facts[facts.length] = {
-      position: fact.position,
-      query: fact.query,
-      status: fact.status,
-    };
+    compilerArrayAppend(
+      facts,
+      {
+        position: fact.position,
+        query: fact.query,
+        status: fact.status,
+      },
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return facts;
 }
@@ -1457,7 +1568,11 @@ function objectEntryKeys(entries: readonly ObjectLiteralEntry[], label: string):
   const snapshot = compilerSnapshotDenseArray(entries, `Component ${label} entries`);
   const keys: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
-    keys[keys.length] = snapshot[index]!.key;
+    compilerArrayAppend(
+      keys,
+      snapshot[index]!.key,
+      'Compiler packages/compiler/src/app-graph.ts collection',
+    );
   }
   return keys;
 }
@@ -1494,7 +1609,12 @@ function deriveInvalidationFactsFromGraph(
           break;
         }
       }
-      if (overlaps) invalidatedQueries[invalidatedQueries.length] = query.query;
+      if (overlaps)
+        compilerArrayAppend(
+          invalidatedQueries,
+          query.query,
+          'Compiler packages/compiler/src/app-graph.ts collection',
+        );
     }
 
     if (invalidatedQueries.length > 0) {

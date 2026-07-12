@@ -1,6 +1,7 @@
 import { canonicalJson } from './canonical-json.js';
 import { factHash } from './fact-hash.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateNullRecord,
   compilerDefineOwnDataProperty,
@@ -109,14 +110,18 @@ export class CompileFactLedger {
     const ownerSnapshot = snapshotFactOwner(owner);
     const entries = this.#entries[family];
     for (let index = 0; index < factSnapshot.length; index += 1) {
-      entries[entries.length] = {
-        fact: snapshotCompileFact(
-          family,
-          factSnapshot[index]!,
-          `Compile facts.${family}[${index}]`,
-        ),
-        owner: ownerSnapshot,
-      } as CompileFactEntry<Family>;
+      compilerArrayAppend(
+        entries,
+        {
+          fact: snapshotCompileFact(
+            family,
+            factSnapshot[index]!,
+            `Compile facts.${family}[${index}]`,
+          ),
+          owner: ownerSnapshot,
+        } as CompileFactEntry<Family>,
+        'Compiler packages/compiler/src/compile-fact-ledger.ts collection',
+      );
     }
   }
 
@@ -187,7 +192,11 @@ export class CompileFactLedger {
       const family = compileFactFamilies[familyIndex]!;
       const entries = this.#entries[family];
       for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
-        owners[owners.length] = entries[entryIndex]!.owner;
+        compilerArrayAppend(
+          owners,
+          entries[entryIndex]!.owner,
+          'Compiler packages/compiler/src/compile-fact-ledger.ts collection',
+        );
       }
     }
     return dedupeByKey(owners, (owner) => `${owner.phase}\0${owner.pass}`);
@@ -264,11 +273,7 @@ function snapshotCompileFact<Family extends CompileFactFamily>(
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
     if (key === 'outputContexts') continue;
-    compilerDefineOwnDataProperty(
-      record,
-      key,
-      compilerOwnDataValue(snapshot, key, label),
-    );
+    compilerDefineOwnDataProperty(record, key, compilerOwnDataValue(snapshot, key, label));
   }
   compilerDefineOwnDataProperty(
     record,

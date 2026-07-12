@@ -1,6 +1,7 @@
 import * as ts from 'typescript';
 
 import {
+  compilerArrayAppend,
   compilerCreateSet,
   compilerJsonStringify,
   compilerRegExpReplace,
@@ -46,9 +47,13 @@ export function appendLiveTargetRendererExports(
   const exports: string[] = [];
   for (let index = 0; index < facts.length; index += 1) {
     const fact = facts[index]!;
-    exports[exports.length] = liveTargetRendererExport(
-      options.componentExpressionForFact?.(fact) ?? options.componentExpression,
-      fact,
+    compilerArrayAppend(
+      exports,
+      liveTargetRendererExport(
+        options.componentExpressionForFact?.(fact) ?? options.componentExpression,
+        fact,
+      ),
+      'Compiler packages/compiler/src/emit/live-target-renderers.ts collection',
     );
   }
 
@@ -64,7 +69,10 @@ function insertLiveTargetRendererImport(source: string): string {
     ts.ScriptKind.TSX,
   );
   let wireImport: ts.ImportDeclaration | undefined;
-  const statements = compilerSnapshotDenseArray(sourceFile.statements, 'Live-target source statements');
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Live-target source statements',
+  );
   for (let index = 0; index < statements.length; index += 1) {
     const statement = statements[index]!;
     if (
@@ -112,15 +120,18 @@ function augmentLiveTargetRendererImport(
   const missing: string[] = [];
   for (let index = 0; index < liveTargetWireImports.length; index += 1) {
     const name = liveTargetWireImports[index]!;
-    if (!compilerSetHas(importedNames, name)) missing[missing.length] = name;
+    if (!compilerSetHas(importedNames, name))
+      compilerArrayAppend(
+        missing,
+        name,
+        'Compiler packages/compiler/src/emit/live-target-renderers.ts collection',
+      );
   }
   if (missing.length === 0) return source;
 
   const insertion = `${elements.length > 0 ? ', ' : ''}${joinRendererStrings(missing, ', ')}`;
   const insertionPoint =
-    elements.length > 0
-      ? elements[elements.length - 1]?.end
-      : namedBindings.getStart() + 1;
+    elements.length > 0 ? elements[elements.length - 1]?.end : namedBindings.getStart() + 1;
   if (insertionPoint === undefined) return null;
 
   return `${compilerStringSlice(source, 0, insertionPoint)}${insertion}${compilerStringSlice(source, insertionPoint)}`;
@@ -133,7 +144,12 @@ function liveTargetRendererExport(componentExpression: string, fact: LiveTargetF
     `  component: ${componentExpression},`,
     `  componentId: ${rendererJsonSource(fact.component, 'Live-target component id')},`,
   ];
-  if (queries) optionLines[optionLines.length] = queries;
+  if (queries)
+    compilerArrayAppend(
+      optionLines,
+      queries,
+      'Compiler packages/compiler/src/emit/live-target-renderers.ts collection',
+    );
 
   return `export const ${exportName} = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
 ${joinRendererStrings(optionLines, '\n')}
@@ -149,7 +165,12 @@ function liveTargetRendererQueries(fact: LiveTargetFact): string {
   const bindings: string[] = [];
   for (let index = 0; index < facts.length; index += 1) {
     const binding = liveTargetRendererQueryBinding(facts[index]!);
-    if (binding !== null) bindings[bindings.length] = binding;
+    if (binding !== null)
+      compilerArrayAppend(
+        bindings,
+        binding,
+        'Compiler packages/compiler/src/emit/live-target-renderers.ts collection',
+      );
   }
   if (bindings.length === 0) return '';
 

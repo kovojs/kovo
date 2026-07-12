@@ -3,6 +3,7 @@ import { relative as builtinRelative } from 'node:path';
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildId } from './cache-identity.js';
 import {
+  compilerArrayAppend,
   compilerArrayLength,
   compilerMapGet,
   compilerMapSet,
@@ -93,7 +94,11 @@ export class CompileCache<Result> {
     const result = compile();
     const entry = { active: true, input, sourceKey, value: result };
     this.#setEntryKey(key, entry);
-    this.#records[this.#records.length] = entry;
+    compilerArrayAppend(
+      this.#records,
+      entry,
+      'Compiler packages/compiler/src/compile-cache.ts collection',
+    );
     const syncFootprint = resolvedDependencyFootprint(result);
     if (syncFootprint) {
       this.#setEntryKey(compileCacheKey({ ...input, dependencyFootprint: syncFootprint }), entry);
@@ -384,7 +389,11 @@ function slicePreviousRegistryFactsForKey(
       if (
         compilerOwnDataValue(leaves, leafIndex, 'Previous registry component DOM leaves') === leaf
       ) {
-        components[components.length] = name;
+        compilerArrayAppend(
+          components,
+          name,
+          'Compiler packages/compiler/src/compile-cache.ts collection',
+        );
         break;
       }
     }
@@ -480,7 +489,11 @@ function sliceArrayForKey<T>(items: readonly T[] | undefined, keys: readonly T[]
     const item = source[itemIndex]!;
     for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
       if (item === keys[keyIndex]) {
-        result[result.length] = item;
+        compilerArrayAppend(
+          result,
+          item,
+          'Compiler packages/compiler/src/compile-cache.ts collection',
+        );
         break;
       }
     }

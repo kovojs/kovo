@@ -3,6 +3,7 @@ import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
   compilerCreateMap,
   compilerCreateSet,
   compilerJsonStringify,
@@ -53,7 +54,11 @@ function appendMutationValues<Value>(
 ): void {
   const snapshot = compilerSnapshotDenseArray(values, label);
   for (let index = 0; index < snapshot.length; index += 1) {
-    target[target.length] = snapshot[index]!;
+    compilerArrayAppend(
+      target,
+      snapshot[index]!,
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
 }
 
@@ -103,22 +108,30 @@ export function mutationFormErrorRenderLowering(
 
     const form = enclosingEnhancedMutationForm(model, element);
     if (!form) {
-      diagnostics[diagnostics.length] = formFieldDiagnostic(
-        options,
-        element.openingTagNameStart,
-        element.openingTagNameEnd - element.openingTagNameStart,
-        `<${element.tag}> must be rendered inside an enhanced mutation form`,
+      compilerArrayAppend(
+        diagnostics,
+        formFieldDiagnostic(
+          options,
+          element.openingTagNameStart,
+          element.openingTagNameEnd - element.openingTagNameStart,
+          `<${element.tag}> must be rendered inside an enhanced mutation form`,
+        ),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
       );
       continue;
     }
 
     const binding = enhancedMutationFormBinding(form);
     if (!binding) {
-      diagnostics[diagnostics.length] = formFieldDiagnostic(
-        options,
-        element.openingTagNameStart,
-        element.openingTagNameEnd - element.openingTagNameStart,
-        `<${element.tag}> must be rendered inside a form with mutation={...} or mutationFormAttributes(...)`,
+      compilerArrayAppend(
+        diagnostics,
+        formFieldDiagnostic(
+          options,
+          element.openingTagNameStart,
+          element.openingTagNameEnd - element.openingTagNameStart,
+          `<${element.tag}> must be rendered inside a form with mutation={...} or mutationFormAttributes(...)`,
+        ),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
       );
       continue;
     }
@@ -126,11 +139,15 @@ export function mutationFormErrorRenderLowering(
     const slotsParam = componentRenderSlotsParam(model);
     const slotName = componentMutationSlotName(model, binding.localName);
     if (!slotName) {
-      diagnostics[diagnostics.length] = formFieldDiagnostic(
-        options,
-        element.openingTagNameStart,
-        element.openingTagNameEnd - element.openingTagNameStart,
-        `<${element.tag}> could not resolve the component-local mutation slot for ${binding.localName}`,
+      compilerArrayAppend(
+        diagnostics,
+        formFieldDiagnostic(
+          options,
+          element.openingTagNameStart,
+          element.openingTagNameEnd - element.openingTagNameStart,
+          `<${element.tag}> could not resolve the component-local mutation slot for ${binding.localName}`,
+        ),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
       );
       continue;
     }
@@ -145,11 +162,7 @@ export function mutationFormErrorRenderLowering(
     if (!slotsParam) continue;
 
     const lowered = lowerMutationFormErrorElement(model, element, form, slotName, slotsParam.name);
-    appendMutationValues(
-      replacements,
-      lowered.replacements,
-      'Mutation form error replacements',
-    );
+    appendMutationValues(replacements, lowered.replacements, 'Mutation form error replacements');
   }
 
   return { diagnostics, replacements };
@@ -189,17 +202,25 @@ export function mutationFormExplainFacts(
         'Mutation form explain fields',
       );
       for (let index = 0; index < fields.length; index += 1) {
-        mutationFields[mutationFields.length] = fields[index]!.name;
+        compilerArrayAppend(
+          mutationFields,
+          fields[index]!.name,
+          'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+        );
       }
     }
-    forms[forms.length] = {
-      ...(fieldErrors.length === 0 ? {} : { fieldErrors }),
-      ...(mutationInput === null ? {} : { fields: mutationFields }),
-      ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-      ...(formErrors.length === 0 ? {} : { formErrors }),
-      mutation: mutationInput?.key ?? mutationKey ?? binding.localName,
-      slot,
-    };
+    compilerArrayAppend(
+      forms,
+      {
+        ...(fieldErrors.length === 0 ? {} : { fieldErrors }),
+        ...(mutationInput === null ? {} : { fields: mutationFields }),
+        ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+        ...(formErrors.length === 0 ? {} : { formErrors }),
+        mutation: mutationInput?.key ?? mutationKey ?? binding.localName,
+        slot,
+      },
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
 
   return forms;
@@ -222,7 +243,11 @@ function mutationFormFieldErrorFacts(
     const authoredId = staticStringAttributeValue(mutationFormAttribute(element, 'id'));
     const generatedId = mutationFormErrorIdExpression(form, slot, name).source;
     const id = authoredId ?? compilerRegExpReplace(/^"|"$/g, generatedId, '');
-    facts[facts.length] = { id, name };
+    compilerArrayAppend(
+      facts,
+      { id, name },
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
   return facts;
 }
@@ -239,7 +264,11 @@ function mutationFormErrorFacts(
       continue;
     }
     const code = staticStringAttributeValue(mutationFormAttribute(element, 'code'));
-    facts[facts.length] = code ? { code } : {};
+    compilerArrayAppend(
+      facts,
+      code ? { code } : {},
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
   return facts;
 }
@@ -283,7 +312,11 @@ function fieldErrorDiagnostics(
   for (let index = 0; index < fields.length; index += 1) {
     const fieldName = fields[index]!.name;
     compilerSetAdd(fieldNames, fieldName);
-    fieldNameList[fieldNameList.length] = fieldName;
+    compilerArrayAppend(
+      fieldNameList,
+      fieldName,
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
   if (compilerSetHas(fieldNames, name)) return [];
 
@@ -346,11 +379,15 @@ function fieldControlDescribedByReplacements(
     const control = controls[index]!;
     if (mutationFormAttribute(control, 'aria-describedby')) continue;
     const position = openingTagAttributePosition(control);
-    replacements[replacements.length] = {
-      end: position,
-      replacement: ` aria-describedby=${errorId.source}`,
-      start: position,
-    };
+    compilerArrayAppend(
+      replacements,
+      {
+        end: position,
+        replacement: ` aria-describedby=${errorId.source}`,
+        start: position,
+      },
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
   return replacements;
 }
@@ -372,7 +409,11 @@ function formControlElements(
     const type = rawType === null ? undefined : compilerStringToLowerCase(rawType);
     if (element.tag === 'input' && type === 'hidden') continue;
     if (staticStringAttributeValue(mutationFormAttribute(element, 'name')) !== name) continue;
-    controls[controls.length] = element;
+    compilerArrayAppend(
+      controls,
+      element,
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
   return controls;
 }
@@ -400,7 +441,11 @@ export function enhancedMutationFormRenderLowering(
     const element = elements[elementIndex]!;
     const repeatableDiagnostic = repeatableMutationFormDiagnostic(model, element, options);
     if (repeatableDiagnostic) {
-      diagnostics[diagnostics.length] = repeatableDiagnostic;
+      compilerArrayAppend(
+        diagnostics,
+        repeatableDiagnostic,
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+      );
       continue;
     }
 
@@ -415,7 +460,11 @@ export function enhancedMutationFormRenderLowering(
     const lowering = enhancedMutationFormLowering(model, element, options);
     if (!lowering) continue;
 
-    appendMutationValues(replacements, lowering.replacements, 'Enhanced mutation form replacements');
+    appendMutationValues(
+      replacements,
+      lowering.replacements,
+      'Enhanced mutation form replacements',
+    );
     needsCsrfImport ||= lowering.importsMutationCsrfField;
     appendMutationValues(
       outputContexts,
@@ -429,12 +478,16 @@ export function enhancedMutationFormRenderLowering(
       );
       for (let index = 0; index < conflicts.length; index += 1) {
         const conflict = conflicts[index]!;
-        diagnostics[diagnostics.length] = writerConflictDiagnostic(
-          options,
-          conflict.attribute,
-          conflict.attribute.name,
-          'author JSX',
-          'typed mutation form lowering',
+        compilerArrayAppend(
+          diagnostics,
+          writerConflictDiagnostic(
+            options,
+            conflict.attribute,
+            conflict.attribute.name,
+            'author JSX',
+            'typed mutation form lowering',
+          ),
+          'Compiler packages/compiler/src/emit/mutation-form.ts collection',
         );
       }
     }
@@ -442,14 +495,18 @@ export function enhancedMutationFormRenderLowering(
 
   if (needsCsrfImport && options && !importsMutationCsrfField(model)) {
     const start = compilerHelperImportInsertionOffset(options.source);
-    replacements[replacements.length] = {
-      end: start,
-      // SPEC.md §10.3:1063/1065: also import renderMutationIdemField so each
-      // emitted form body includes a per-submit idempotency token alongside CSRF.
-      replacement:
-        "import { renderMutationCsrfField as __kovoRenderMutationCsrfField, renderMutationIdemField as __kovoRenderMutationIdemField } from '@kovojs/server/internal/csrf';\n",
-      start,
-    };
+    compilerArrayAppend(
+      replacements,
+      {
+        end: start,
+        // SPEC.md §10.3:1063/1065: also import renderMutationIdemField so each
+        // emitted form body includes a per-submit idempotency token alongside CSRF.
+        replacement:
+          "import { renderMutationCsrfField as __kovoRenderMutationCsrfField, renderMutationIdemField as __kovoRenderMutationIdemField } from '@kovojs/server/internal/csrf';\n",
+        start,
+      },
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
 
   return { diagnostics, outputContexts, replacements };
@@ -474,12 +531,16 @@ export function streamTextTargetRenderLowering(
     const residual = mutationFormAttribute(element, 'data-stream-text');
 
     if (streamText && residual && options) {
-      diagnostics[diagnostics.length] = writerConflictDiagnostic(
-        options,
-        residual,
-        'data-stream-text',
-        'author JSX',
-        'stream text target lowering',
+      compilerArrayAppend(
+        diagnostics,
+        writerConflictDiagnostic(
+          options,
+          residual,
+          'data-stream-text',
+          'author JSX',
+          'stream text target lowering',
+        ),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
       );
     }
 
@@ -488,23 +549,31 @@ export function streamTextTargetRenderLowering(
 
     const literalTarget = staticStringAttributeValue(targetAttribute);
     if (options && literalTarget !== null && !isValidStreamTextTarget(literalTarget)) {
-      diagnostics[diagnostics.length] = streamTextTargetDiagnostic(
-        options,
-        targetAttribute,
-        literalTarget,
+      compilerArrayAppend(
+        diagnostics,
+        streamTextTargetDiagnostic(options, targetAttribute, literalTarget),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
       );
     }
 
     if (streamText) {
-      replacements[replacements.length] = {
-        end: streamText.end,
-        replacement: renderAttributeWithName('data-stream-text', streamText),
-        start: streamText.start,
-      };
-      outputContexts[outputContexts.length] = formLoweringOutputContext(
-        'data-stream-text',
-        attributeValueExpression(streamText),
-        'stream text target lowering',
+      compilerArrayAppend(
+        replacements,
+        {
+          end: streamText.end,
+          replacement: renderAttributeWithName('data-stream-text', streamText),
+          start: streamText.start,
+        },
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+      );
+      compilerArrayAppend(
+        outputContexts,
+        formLoweringOutputContext(
+          'data-stream-text',
+          attributeValueExpression(streamText),
+          'stream text target lowering',
+        ),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
       );
     }
   }
@@ -589,40 +658,48 @@ function mutationFormFieldDiagnostics(
   for (let index = 0; index < fields.length; index += 1) {
     const fieldName = fields[index]!.name;
     compilerSetAdd(fieldNames, fieldName);
-    fieldNameList[fieldNameList.length] = fieldName;
+    compilerArrayAppend(
+      fieldNameList,
+      fieldName,
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
   const controlNames = compilerCreateSet<string>();
   const diagnostics: CompilerDiagnostic[] = [];
   for (let index = 0; index < controls.length; index += 1) {
     const control = controls[index]!;
     compilerSetAdd(controlNames, control.name);
-    appendMutationValues(
-      diagnostics,
-      control.diagnostics,
-      'Mutation form control diagnostics',
-    );
+    appendMutationValues(diagnostics, control.diagnostics, 'Mutation form control diagnostics');
   }
 
   for (let index = 0; index < controls.length; index += 1) {
     const control = controls[index]!;
     if (!control.name) continue;
     if (compilerSetHas(fieldNames, control.name)) continue;
-    diagnostics[diagnostics.length] = formFieldDiagnostic(
-      options,
-      control.start,
-      control.length,
-      `unknown field "${control.name}" for mutation "${mutation.key}". Expected fields: ${joinMutationStrings(fieldNameList, ', ')}`,
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        control.start,
+        control.length,
+        `unknown field "${control.name}" for mutation "${mutation.key}". Expected fields: ${joinMutationStrings(fieldNameList, ', ')}`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
   }
 
   for (let index = 0; index < fields.length; index += 1) {
     const field = fields[index]!;
     if (!field.required || compilerSetHas(controlNames, field.name)) continue;
-    diagnostics[diagnostics.length] = formFieldDiagnostic(
-      options,
-      binding.start,
-      binding.end - binding.start,
-      `missing required field "${field.name}" for mutation "${mutation.key}". Expected fields: ${joinMutationStrings(fieldNameList, ', ')}`,
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        binding.start,
+        binding.end - binding.start,
+        `missing required field "${field.name}" for mutation "${mutation.key}". Expected fields: ${joinMutationStrings(fieldNameList, ', ')}`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
   }
 
@@ -701,29 +778,41 @@ function successfulFormControls(
     const nameAttribute = mutationFormAttribute(element, 'name');
     const diagnostics: CompilerDiagnostic[] = [];
     if (!descendant || externalFormAttribute) {
-      diagnostics[diagnostics.length] = formFieldDiagnostic(
-        options,
-        (externalFormAttribute ?? element).start,
-        (externalFormAttribute ?? element).end - (externalFormAttribute ?? element).start,
-        'external form-associated controls are not supported for enhanced mutation field validation; keep controls inside the submitted form',
+      compilerArrayAppend(
+        diagnostics,
+        formFieldDiagnostic(
+          options,
+          (externalFormAttribute ?? element).start,
+          (externalFormAttribute ?? element).end - (externalFormAttribute ?? element).start,
+          'external form-associated controls are not supported for enhanced mutation field validation; keep controls inside the submitted form',
+        ),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
       );
     }
 
     const name = staticStringAttributeValue(nameAttribute);
     if (!nameAttribute) continue;
     if (!name) {
-      diagnostics[diagnostics.length] = formFieldDiagnostic(
-        options,
-        nameAttribute.start,
-        nameAttribute.end - nameAttribute.start,
-        'dynamic field names are not supported for enhanced mutation field validation; use a literal name from the mutation input schema',
-      );
-      controls[controls.length] = {
+      compilerArrayAppend(
         diagnostics,
-        length: nameAttribute.end - nameAttribute.start,
-        name: '',
-        start: nameAttribute.start,
-      };
+        formFieldDiagnostic(
+          options,
+          nameAttribute.start,
+          nameAttribute.end - nameAttribute.start,
+          'dynamic field names are not supported for enhanced mutation field validation; use a literal name from the mutation input schema',
+        ),
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+      );
+      compilerArrayAppend(
+        controls,
+        {
+          diagnostics,
+          length: nameAttribute.end - nameAttribute.start,
+          name: '',
+          start: nameAttribute.start,
+        },
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+      );
       continue;
     }
 
@@ -733,12 +822,16 @@ function successfulFormControls(
       'Unsupported mutation control diagnostics',
     );
 
-    controls[controls.length] = {
-      diagnostics,
-      length: nameAttribute.end - nameAttribute.start,
-      name,
-      start: nameAttribute.start,
-    };
+    compilerArrayAppend(
+      controls,
+      {
+        diagnostics,
+        length: nameAttribute.end - nameAttribute.start,
+        name,
+        start: nameAttribute.start,
+      },
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
 
   const counts = compilerCreateMap<string, number>();
@@ -752,23 +845,35 @@ function successfulFormControls(
   for (let index = 0; index < controls.length; index += 1) {
     const control = controls[index]!;
     if (!control.name || (compilerMapGet(counts, control.name) ?? 0) <= 1) {
-      result[result.length] = control;
+      compilerArrayAppend(
+        result,
+        control,
+        'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+      );
       continue;
     }
     const repeatedDiagnostics = compilerSnapshotDenseArray(
       control.diagnostics,
       'Repeated form control diagnostics',
     );
-    repeatedDiagnostics[repeatedDiagnostics.length] = formFieldDiagnostic(
-      options,
-      control.start,
-      control.length,
-      `repeated field "${control.name}" is not supported for enhanced mutation field validation; declare one control per mutation input field`,
+    compilerArrayAppend(
+      repeatedDiagnostics,
+      formFieldDiagnostic(
+        options,
+        control.start,
+        control.length,
+        `repeated field "${control.name}" is not supported for enhanced mutation field validation; declare one control per mutation input field`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
-    result[result.length] = {
-      ...control,
-      diagnostics: repeatedDiagnostics,
-    };
+    compilerArrayAppend(
+      result,
+      {
+        ...control,
+        diagnostics: repeatedDiagnostics,
+      },
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
   }
   return result;
 }
@@ -784,38 +889,54 @@ function unsupportedControlDiagnostics(
   const type = rawType === null ? undefined : compilerStringToLowerCase(rawType);
 
   if (compilerRegExpTest(/[.[\]]/, name)) {
-    diagnostics[diagnostics.length] = formFieldDiagnostic(
-      options,
-      nameAttribute.start,
-      nameAttribute.end - nameAttribute.start,
-      `nested field path "${name}" is not supported for enhanced mutation field validation; use a flat mutation input field name`,
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `nested field path "${name}" is not supported for enhanced mutation field validation; use a flat mutation input field name`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
   }
 
   if (element.tag === 'input' && type === 'file') {
-    diagnostics[diagnostics.length] = formFieldDiagnostic(
-      options,
-      nameAttribute.start,
-      nameAttribute.end - nameAttribute.start,
-      `file input field "${name}" is not supported for enhanced mutation field validation`,
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `file input field "${name}" is not supported for enhanced mutation field validation`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
   }
 
   if (element.tag === 'input' && (type === 'checkbox' || type === 'radio')) {
-    diagnostics[diagnostics.length] = formFieldDiagnostic(
-      options,
-      nameAttribute.start,
-      nameAttribute.end - nameAttribute.start,
-      `${type} field "${name}" is not supported for enhanced mutation field validation; use a single scalar input or a later multivalue form primitive`,
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `${type} field "${name}" is not supported for enhanced mutation field validation; use a single scalar input or a later multivalue form primitive`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
   }
 
   if (element.tag === 'select' && mutationFormAttribute(element, 'multiple')) {
-    diagnostics[diagnostics.length] = formFieldDiagnostic(
-      options,
-      nameAttribute.start,
-      nameAttribute.end - nameAttribute.start,
-      `multiple select field "${name}" is not supported for enhanced mutation field validation; use a single-value select or a later multivalue form primitive`,
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        nameAttribute.start,
+        nameAttribute.end - nameAttribute.start,
+        `multiple select field "${name}" is not supported for enhanced mutation field validation; use a single-value select or a later multivalue form primitive`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );
   }
 

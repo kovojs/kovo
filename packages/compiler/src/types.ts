@@ -3,6 +3,7 @@ import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { ComponentCssAsset } from './css.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerArrayLength,
   compilerCreateMap,
@@ -1130,7 +1131,7 @@ export function queryShapeFactDiagnostics(
     const fact = exactQueryShapeFact(facts, index);
     const queryFacts = compilerMapGet(factsByQuery, fact.query);
     if (queryFacts) {
-      queryFacts[queryFacts.length] = fact;
+      compilerArrayAppend(queryFacts, fact, 'Compiler packages/compiler/src/types.ts collection');
     } else {
       compilerMapSet(factsByQuery, fact.query, [fact]);
     }
@@ -1145,7 +1146,11 @@ export function queryShapeFactDiagnostics(
     }
     const sourceNames: string[] = [];
     compilerSetForEach(sourceSet, (source) => {
-      sourceNames[sourceNames.length] = source;
+      compilerArrayAppend(
+        sourceNames,
+        source,
+        'Compiler packages/compiler/src/types.ts collection',
+      );
     });
     for (let index = 1; index < sourceNames.length; index += 1) {
       const source = sourceNames[index]!;
@@ -1162,11 +1167,15 @@ export function queryShapeFactDiagnostics(
       sources += sourceNames[index]!;
     }
     const base = diagnosticFor(fileName, 'KV240');
-    diagnostics[diagnostics.length] = {
-      ...base,
-      help: diagnosticDefinitions.KV240.help,
-      message: `${base.message} query="${query}" sources=${sources}`,
-    };
+    compilerArrayAppend(
+      diagnostics,
+      {
+        ...base,
+        help: diagnosticDefinitions.KV240.help,
+        message: `${base.message} query="${query}" sources=${sources}`,
+      },
+      'Compiler packages/compiler/src/types.ts collection',
+    );
   });
 
   return diagnostics;

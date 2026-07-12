@@ -3,6 +3,7 @@ import type { SourceSpan } from './scan/parse.js';
 import type { QueryUpdateCoverageFact, QueryUpdatePlanFact } from './types.js';
 import { canonicalJson } from './canonical-json.js';
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateMap,
   compilerMapForEach,
@@ -36,13 +37,21 @@ export function mergeQueryUpdatePlans(
   for (let index = 0; index < snapshot.length; index += 1) {
     const plan = snapshot[index]!;
     const queryPlans = compilerMapGet(byQuery, plan.query) ?? [];
-    queryPlans[queryPlans.length] = plan;
+    compilerArrayAppend(
+      queryPlans,
+      plan,
+      'Compiler packages/compiler/src/compile-result.ts collection',
+    );
     compilerMapSet(byQuery, plan.query, queryPlans);
   }
 
   const entries: [string, QueryUpdatePlanFact[]][] = [];
   compilerMapForEach(byQuery, (queryPlans, query) => {
-    entries[entries.length] = [query, queryPlans];
+    compilerArrayAppend(
+      entries,
+      [query, queryPlans],
+      'Compiler packages/compiler/src/compile-result.ts collection',
+    );
   });
   stableSort(entries, ([left], [right]) => compilerStringLocaleCompare(left, right));
 
@@ -95,7 +104,11 @@ export function mergeQueryUpdatePlans(
             ),
           }),
     };
-    merged[merged.length] = result;
+    compilerArrayAppend(
+      merged,
+      result,
+      'Compiler packages/compiler/src/compile-result.ts collection',
+    );
   }
   return merged;
 }
@@ -121,26 +134,30 @@ export function mergeStyleUpdateCoverage(
   const merged: QueryUpdateCoverageFact[] = [];
   for (let factIndex = 0; factIndex < coverageSnapshot.length; factIndex += 1) {
     const fact = coverageSnapshot[factIndex]!;
-      const sourceSpan = fact.sourceSpan;
-      let handled = false;
-      if (sourceSpan !== undefined) {
-        for (let spanIndex = 0; spanIndex < spanSnapshot.length; spanIndex += 1) {
-          if (containsSourceSpan(spanSnapshot[spanIndex]!, sourceSpan)) {
-            handled = true;
-            break;
-          }
+    const sourceSpan = fact.sourceSpan;
+    let handled = false;
+    if (sourceSpan !== undefined) {
+      for (let spanIndex = 0; spanIndex < spanSnapshot.length; spanIndex += 1) {
+        if (containsSourceSpan(spanSnapshot[spanIndex]!, sourceSpan)) {
+          handled = true;
+          break;
         }
       }
-      if (
-        fact.status !== 'UNHANDLED' ||
-        sourceSpan === undefined ||
-        !handled
-      ) {
-        merged[merged.length] = fact;
-      }
+    }
+    if (fact.status !== 'UNHANDLED' || sourceSpan === undefined || !handled) {
+      compilerArrayAppend(
+        merged,
+        fact,
+        'Compiler packages/compiler/src/compile-result.ts collection',
+      );
+    }
   }
   for (let index = 0; index < styleSnapshot.length; index += 1) {
-    merged[merged.length] = styleSnapshot[index]!;
+    compilerArrayAppend(
+      merged,
+      styleSnapshot[index]!,
+      'Compiler packages/compiler/src/compile-result.ts collection',
+    );
   }
   return merged;
 }
@@ -169,7 +186,11 @@ function flattenPlanFacts<
     if (values === undefined) continue;
     const snapshot = compilerSnapshotDenseArray(values, `Query update plan.${key}`);
     for (let valueIndex = 0; valueIndex < snapshot.length; valueIndex += 1) {
-      flattened[flattened.length] = snapshot[valueIndex]!;
+      compilerArrayAppend(
+        flattened,
+        snapshot[valueIndex]!,
+        'Compiler packages/compiler/src/compile-result.ts collection',
+      );
     }
   }
   return flattened;

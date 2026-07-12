@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   249 | C1-C249 |
+| Critical |   250 | C1-C250 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2917,6 +2917,17 @@ build:dist` passes.
     verified own-data commit; the security/validate source census has no numeric length assignment.
   - **Evidence:** the exact KV235 diagnostic setter receives zero commits and the diagnostic remains;
     all 1,032 compiler tests pass, and compiler dist/DTS builds are green.
+
+- [x] **C250 - Compiler emit, cache, parse, and build facts still use prototype-visible appends.**
+      `packages/compiler/src`
+  - Outside the validators, 204 fresh-array writes still committed source replacements, output
+    contexts, mutation-form facts, cache identities, graph facts, parsed models, and generated module
+    lines through inherited numeric setters. Selective setters could erase or cross-bind the exact
+    reviewed fact before it was hashed, cached, or emitted.
+  - **Acceptance:** every production compiler append routes through the bounded boot-pinned own-data
+    primitive; the complete non-test compiler source census has no numeric length assignment.
+  - **Evidence:** an inherited setter cannot observe or erase an `on:click` emitter patch; the complete
+    compiler census is empty and all 1,033 compiler tests pass.
 
 ## High
 

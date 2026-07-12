@@ -1,6 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import {
+  compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateSet,
   compilerJsonStringify,
@@ -113,16 +114,28 @@ export function mutationFormErrorProps(
   const entries = [`"failure": ${slotsParamName}.forms.${localName}.failure`];
   const attributes = compilerSnapshotDenseArray(element.attributes, 'Mutation error attributes');
   for (let index = 0; index < attributes.length; index += 1) {
-    entries[entries.length] = jsxAttributeObjectEntry(attributes[index]!);
+    compilerArrayAppend(
+      entries,
+      jsxAttributeObjectEntry(attributes[index]!),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   }
   if (serverEmitAttribute(element, 'id') === undefined) {
     const name = staticStringAttributeValue(serverEmitAttribute(element, 'name'));
     if (name)
-      entries[entries.length] =
-        `"id": ${mutationFormErrorIdExpression(form, localName, name).expression}`;
+      compilerArrayAppend(
+        entries,
+        `"id": ${mutationFormErrorIdExpression(form, localName, name).expression}`,
+        'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+      );
   }
   const children = jsxElementChildrenExpression(element);
-  if (children) entries[entries.length] = `"children": ${children}`;
+  if (children)
+    compilerArrayAppend(
+      entries,
+      `"children": ${children}`,
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   return `{ ${joinServerEmitStrings(entries, ', ')} }`;
 }
 
@@ -215,7 +228,11 @@ export function enhancedMutationFormLowering(
     enctypeAttribute &&
     staticStringAttributeValue(enctypeAttribute) !== 'multipart/form-data'
   ) {
-    conflicts[conflicts.length] = { attribute: enctypeAttribute };
+    compilerArrayAppend(
+      conflicts,
+      { attribute: enctypeAttribute },
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   }
   if (conflicts.length > 0) {
     return {
@@ -238,21 +255,44 @@ export function enhancedMutationFormLowering(
   const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
   const generatedInMutationSlot: string[] = [];
   if (preserveRuntimeMutation) {
-    generatedInMutationSlot[generatedInMutationSlot.length] =
-      `mutation={${mutationAttribute.expressionBareIdentifierName}}`;
+    compilerArrayAppend(
+      generatedInMutationSlot,
+      `mutation={${mutationAttribute.expressionBareIdentifierName}}`,
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   }
-  if (!methodAttribute) generatedInMutationSlot[generatedInMutationSlot.length] = 'method="post"';
+  if (!methodAttribute)
+    compilerArrayAppend(
+      generatedInMutationSlot,
+      'method="post"',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   if (generateEnctype)
-    generatedInMutationSlot[generatedInMutationSlot.length] = 'enctype="multipart/form-data"';
-  generatedInMutationSlot[generatedInMutationSlot.length] =
-    `action="${escapeAttribute(`/_m/${mutationKey}`)}"`;
-  generatedInMutationSlot[generatedInMutationSlot.length] =
-    `data-mutation="${escapeAttribute(mutationKey)}"`;
+    compilerArrayAppend(
+      generatedInMutationSlot,
+      'enctype="multipart/form-data"',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+  compilerArrayAppend(
+    generatedInMutationSlot,
+    `action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+  );
+  compilerArrayAppend(
+    generatedInMutationSlot,
+    `data-mutation="${escapeAttribute(mutationKey)}"`,
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+  );
   if (streaming)
-    generatedInMutationSlot[generatedInMutationSlot.length] = 'data-mutation-stream="true"';
-  generatedInMutationSlot[generatedInMutationSlot.length] = submittedFormTargetAttribute(
-    targetBase,
-    keyAttribute,
+    compilerArrayAppend(
+      generatedInMutationSlot,
+      'data-mutation-stream="true"',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+  compilerArrayAppend(
+    generatedInMutationSlot,
+    submittedFormTargetAttribute(targetBase, keyAttribute),
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
   );
   const replacements: SourceReplacement[] = [
     {
@@ -262,35 +302,65 @@ export function enhancedMutationFormLowering(
     },
   ];
   if (streamAttribute) {
-    replacements[replacements.length] = {
-      end: streamAttribute.end,
-      replacement: '',
-      start: streamAttribute.leadingStart,
-    };
+    compilerArrayAppend(
+      replacements,
+      {
+        end: streamAttribute.end,
+        replacement: '',
+        start: streamAttribute.leadingStart,
+      },
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   }
-  if (keyAttribute) replacements[replacements.length] = submittedFormKeyReplacement(keyAttribute);
+  if (keyAttribute)
+    compilerArrayAppend(
+      replacements,
+      submittedFormKeyReplacement(keyAttribute),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   if (!preserveRuntimeMutation) {
-    replacements[replacements.length] = submittedFormCsrfReplacement(
-      element,
-      mutationAttribute.expressionBareIdentifierName,
+    compilerArrayAppend(
+      replacements,
+      submittedFormCsrfReplacement(element, mutationAttribute.expressionBareIdentifierName),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
     );
   }
   const semanticAttributes: string[] = [];
-  if (!methodAttribute) semanticAttributes[semanticAttributes.length] = ' method="post"';
+  if (!methodAttribute)
+    compilerArrayAppend(
+      semanticAttributes,
+      ' method="post"',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   if (generateEnctype)
-    semanticAttributes[semanticAttributes.length] = ' enctype="multipart/form-data"';
-  semanticAttributes[semanticAttributes.length] =
-    ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`;
-  semanticAttributes[semanticAttributes.length] =
-    ` data-mutation="${escapeAttribute(mutationKey)}"`;
+    compilerArrayAppend(
+      semanticAttributes,
+      ' enctype="multipart/form-data"',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+  compilerArrayAppend(
+    semanticAttributes,
+    ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+  );
+  compilerArrayAppend(
+    semanticAttributes,
+    ` data-mutation="${escapeAttribute(mutationKey)}"`,
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+  );
   if (streaming)
-    semanticAttributes[semanticAttributes.length] = ' data-mutation-stream="true"';
-  const generatedAttributeNameValues = [
-    'action',
-    'data-mutation',
-    'data-mutation-stream',
-  ];
-  if (generateEnctype) generatedAttributeNameValues[generatedAttributeNameValues.length] = 'enctype';
+    compilerArrayAppend(
+      semanticAttributes,
+      ' data-mutation-stream="true"',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+  const generatedAttributeNameValues = ['action', 'data-mutation', 'data-mutation-stream'];
+  if (generateEnctype)
+    compilerArrayAppend(
+      generatedAttributeNameValues,
+      'enctype',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   const generatedAttributeNameTail = [
     'key',
     'kovo-fragment-target',
@@ -299,53 +369,73 @@ export function enhancedMutationFormLowering(
     'stream',
   ];
   for (let index = 0; index < generatedAttributeNameTail.length; index += 1) {
-    generatedAttributeNameValues[generatedAttributeNameValues.length] =
-      generatedAttributeNameTail[index]!;
+    compilerArrayAppend(
+      generatedAttributeNameValues,
+      generatedAttributeNameTail[index]!,
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   }
-  if (!methodAttribute) generatedAttributeNameValues[generatedAttributeNameValues.length] = 'method';
+  if (!methodAttribute)
+    compilerArrayAppend(
+      generatedAttributeNameValues,
+      'method',
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
   const generatedAttributeNames = serverEmitStringSet(generatedAttributeNameValues);
   const outputContexts: GeneratedOutputWriteFact[] = [];
   if (!methodAttribute) {
-    outputContexts[outputContexts.length] = formLoweringOutputContext(
-      'method',
-      'post',
-      'typed mutation form lowering',
+    compilerArrayAppend(
+      outputContexts,
+      formLoweringOutputContext('method', 'post', 'typed mutation form lowering'),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
     );
   }
   if (generateEnctype) {
-    outputContexts[outputContexts.length] = formLoweringOutputContext(
-      'enctype',
-      'multipart/form-data',
-      'typed mutation file form lowering',
+    compilerArrayAppend(
+      outputContexts,
+      formLoweringOutputContext(
+        'enctype',
+        'multipart/form-data',
+        'typed mutation file form lowering',
+      ),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
     );
   }
-  outputContexts[outputContexts.length] = formLoweringOutputContext(
-    'action',
-    `/_m/${mutationKey}`,
-    'typed mutation form lowering',
+  compilerArrayAppend(
+    outputContexts,
+    formLoweringOutputContext('action', `/_m/${mutationKey}`, 'typed mutation form lowering'),
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
   );
-  outputContexts[outputContexts.length] = formLoweringOutputContext(
-    'data-mutation',
-    mutationKey,
-    'typed mutation form lowering',
+  compilerArrayAppend(
+    outputContexts,
+    formLoweringOutputContext('data-mutation', mutationKey, 'typed mutation form lowering'),
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
   );
   if (streaming) {
-    outputContexts[outputContexts.length] = formLoweringOutputContext(
-      'data-mutation-stream',
-      'true',
-      'streaming mutation form lowering',
+    compilerArrayAppend(
+      outputContexts,
+      formLoweringOutputContext('data-mutation-stream', 'true', 'streaming mutation form lowering'),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
     );
   }
-  outputContexts[outputContexts.length] = formLoweringOutputContext(
-    'kovo-fragment-target',
-    submittedFormTargetExpression(targetBase, keyAttribute),
-    'typed mutation form lowering',
+  compilerArrayAppend(
+    outputContexts,
+    formLoweringOutputContext(
+      'kovo-fragment-target',
+      submittedFormTargetExpression(targetBase, keyAttribute),
+      'typed mutation form lowering',
+    ),
+    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
   );
   if (keyAttribute) {
-    outputContexts[outputContexts.length] = formLoweringOutputContext(
-      'kovo-key',
-      attributeValueExpression(keyAttribute),
-      'typed mutation form lowering',
+    compilerArrayAppend(
+      outputContexts,
+      formLoweringOutputContext(
+        'kovo-key',
+        attributeValueExpression(keyAttribute),
+        'typed mutation form lowering',
+      ),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
     );
   }
 
@@ -371,7 +461,12 @@ export function mutationInputFileFieldsForLocalName(
   const fileFields: string[] = [];
   for (let index = 0; index < fields.length; index += 1) {
     const field = fields[index]!;
-    if (field.coercion === 'file') fileFields[fileFields.length] = field.name;
+    if (field.coercion === 'file')
+      compilerArrayAppend(
+        fileFields,
+        field.name,
+        'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+      );
   }
   return fileFields;
 }
@@ -429,7 +524,12 @@ export function enhancedMutationFormConflicts(
   const conflicts: EnhancedMutationFormConflict[] = [];
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
-    if (compilerSetHas(names, attribute.name)) conflicts[conflicts.length] = { attribute };
+    if (compilerSetHas(names, attribute.name))
+      compilerArrayAppend(
+        conflicts,
+        { attribute },
+        'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+      );
   }
   return conflicts;
 }
@@ -487,7 +587,10 @@ export function localMutationKey(
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
     const typeSource = compilerOwnDataValue(mutations, key, 'Registry mutation type');
-    if (typeof typeSource === 'string' && compilerStringTrim(typeSource) === `typeof ${localName}`) {
+    if (
+      typeof typeSource === 'string' &&
+      compilerStringTrim(typeSource) === `typeof ${localName}`
+    ) {
       return key;
     }
   }

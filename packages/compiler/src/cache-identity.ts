@@ -8,6 +8,7 @@ import { fileURLToPath as builtinFileUrlToPath } from 'node:url';
 
 import { canonicalJson } from './canonical-json.js';
 import {
+  compilerArrayAppend,
   compilerArrayLength,
   compilerJsonParse,
   compilerOwnDataValue,
@@ -180,10 +181,14 @@ function collectImplementationFiles(
       collectImplementationFiles(rootDir, absolute, files);
     } else if (compilerStatsIsFile(stats)) {
       const relative = compilerStringSlice(absolute, rootDir.length + 1);
-      files[files.length] = {
-        path: relative,
-        sourceBase64: readFileSync(absolute, 'base64'),
-      };
+      compilerArrayAppend(
+        files,
+        {
+          path: relative,
+          sourceBase64: readFileSync(absolute, 'base64'),
+        },
+        'Compiler packages/compiler/src/cache-identity.ts collection',
+      );
     }
   }
 }
