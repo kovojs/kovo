@@ -157,11 +157,9 @@ it.each([
     const oldDocument = harness.window.document;
     const oldTarget = oldDocument.querySelector('[kovo-fragment-target="messages"]');
     const cancel = vi.fn(async () => undefined);
-    const getReader = vi.fn(() => {
-      throw new Error('untrusted build acquired a reader');
-    });
+    const body = new harness.window.ReadableStream<Uint8Array>({ cancel });
     (harness.window as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
-      body: { cancel, getReader },
+      body,
       headers: responseHeaders(responseBuild),
       ok: true,
       status: 200,
@@ -175,7 +173,7 @@ it.each([
       );
 
     await vi.waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
-    expect(getReader).not.toHaveBeenCalled();
+    expect(body.locked).toBe(false);
     expect(oldTarget?.textContent).toBe('OLD BUILD TRUTH');
     await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1));
   },

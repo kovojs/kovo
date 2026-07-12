@@ -26,9 +26,10 @@ import { reportRuntimeError } from './error-policy.js';
 import { readAttribute } from './wire-html.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
-// SPEC §6.6/§9.1: streaming response bytes remain server truth only when the decoder
-// constructor and decode method are captured during framework module initialization,
-// before any authored client module can replace browser-realm intrinsics.
+// SPEC §6.6/§9.1: streaming response bytes remain server truth only when stream
+// acquisition, reader read/cancel/release, byte copying, and decoder construction/
+// decode are captured and witnessed during framework module initialization before
+// any authored client module can replace browser-realm intrinsics.
 const mutationResponseSecurity = createBrowserNavigationSecurityControls();
 
 type RuntimeStreamTextOptions = StreamTextBufferOptions & {
@@ -179,10 +180,10 @@ export async function applyStreamingMutationResponseBodyToRuntime(
 ): Promise<AppliedMutationResponse | AppliedMutationResponseWithRoot> {
   const { body, ...applyOptions } = options;
   if (isWholeResponseBuildTokenMiss(applyOptions)) {
-    await body.cancel();
+    await mutationResponseSecurity.cancelReadableStream(body);
     return emptyAppliedMutationResponse(options.root);
   }
-  const reader = body.getReader();
+  const readerPlan = await mutationResponseSecurity.acquireStreamReader(body);
   const decoder = mutationResponseSecurity.createTextDecoder();
   const streamAbortController =
     options.streamText?.signal === undefined ? new AbortController() : undefined;
@@ -243,15 +244,15 @@ export async function applyStreamingMutationResponseBodyToRuntime(
       // L13-3: check the abort signal before each read so an abort observed between reads stops
       // applying immediately, cancels the reader, and fails (rather than committing more chunks).
       if (abortSignal?.aborted) {
-        await reader.cancel();
+        await mutationResponseSecurity.cancelStreamReader(readerPlan);
         throw abortStreamError(abortSignal);
       }
-      const read = await reader.read();
+      const read = await mutationResponseSecurity.readStreamChunk(readerPlan);
       if (read.done) break;
       // L13-3: an abort that lands while a read was in flight must also halt before we apply
       // the just-read chunk to the store / morph the DOM.
       if (abortSignal?.aborted) {
-        await reader.cancel();
+        await mutationResponseSecurity.cancelStreamReader(readerPlan);
         throw abortStreamError(abortSignal);
       }
       const chunk = mutationResponseSecurity.decodeText(decoder, read.value, { stream: true });
@@ -320,7 +321,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
     }
     throw error;
   } finally {
-    reader.releaseLock();
+    mutationResponseSecurity.releaseStreamReader(readerPlan);
   }
 }
 

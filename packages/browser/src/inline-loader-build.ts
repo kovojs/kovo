@@ -736,13 +736,16 @@ function installInlineKovoLoader(im) {
     return appliedTexts;
   };
   const streamRecoveryError = {};
-  const recoverStream = async (source) => {
+  const recoverStream = async (source, reader = false) => {
     try {
       // Cancellation is best effort and must not let a hostile/stuck underlying source delay the
       // security recovery. Attach a rejection sink, then hard-reload immediately.
-      source?.cancel?.()?.catch?.(() => {});
+      const cancellation = reader
+        ? bns.cancelStreamReader(source)
+        : bns.cancelReadableStream(source);
+      bns.observePromiseRejection(cancellation);
     } catch {}
-    await location.reload?.();
+    bns.reload();
   };
   const cp = (body, state) => {
     if (state.done) {
@@ -786,13 +789,13 @@ function installInlineKovoLoader(im) {
     throw Error('Streaming mutation was not confirmed: ' + reason);
   };
   const asr = async (body) => {
-    const reader = body.getReader();
+    const reader = await bns.acquireStreamReader(body);
     const decoder = bns.createTextDecoder();
     const state = { done: false, queries: [] };
     let pending = '';
     try {
       while (true) {
-        const read = await reader.read();
+        const read = await bns.readStreamChunk(reader);
         if (read.done) break;
         pending = cp(pending + bns.decodeText(decoder, read.value, { stream: true }), state);
       }
@@ -807,10 +810,10 @@ function installInlineKovoLoader(im) {
       // bugz-26 M3 / SPEC §9.1: partial fragments are not authority. Cancel the reader and
       // initiate framework-owned hard recovery before the promise rejects; the private sentinel
       // prevents the generic form fallback from racing a second navigation.
-      await recoverStream(reader);
+      await recoverStream(reader, true);
       throw streamRecoveryError;
     } finally {
-      reader.releaseLock?.();
+      bns.releaseStreamReader(reader);
     }
   };
   const fsb = (form) => {

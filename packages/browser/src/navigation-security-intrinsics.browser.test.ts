@@ -3,6 +3,89 @@ import { describe, expect, it } from 'vitest';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 describe('browser navigation security controls', () => {
+  it('pins reader read, cancel, release, lock posture, and byte snapshots after late replacement', async () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const lockedDescriptor = Object.getOwnPropertyDescriptor(ReadableStream.prototype, 'locked')!;
+    const nativeRead = ReadableStreamDefaultReader.prototype.read;
+    const nativeCancel = ReadableStreamDefaultReader.prototype.cancel;
+    const nativeReleaseLock = ReadableStreamDefaultReader.prototype.releaseLock;
+    const nativeStreamCancel = ReadableStream.prototype.cancel;
+    const serverBytes = new TextEncoder().encode('SERVER-SAFE');
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(serverBytes);
+        controller.close();
+      },
+    });
+    const plan = await controls.acquireStreamReader(stream);
+    let readPoisonCalls = 0;
+    let cancelPoisonCalls = 0;
+    let releasePoisonCalls = 0;
+
+    ReadableStreamDefaultReader.prototype.read = async function poisonedRead() {
+      readPoisonCalls += 1;
+      return { done: false, value: new TextEncoder().encode('ATTACKER') };
+    } as typeof ReadableStreamDefaultReader.prototype.read;
+    Object.defineProperty(ReadableStream.prototype, 'locked', {
+      configurable: true,
+      get: () => false,
+    });
+    try {
+      const read = await controls.readStreamChunk(plan);
+      expect(read.done).toBe(false);
+      if (read.done) throw new Error('missing stream witness bytes');
+      serverBytes.fill(0x41);
+      expect(new TextDecoder().decode(read.value)).toBe('SERVER-SAFE');
+      expect(readPoisonCalls).toBe(0);
+    } finally {
+      ReadableStreamDefaultReader.prototype.read = nativeRead;
+      Object.defineProperty(ReadableStream.prototype, 'locked', lockedDescriptor);
+      controls.releaseStreamReader(plan);
+    }
+
+    const cancelStream = new ReadableStream<Uint8Array>();
+    const cancelPlan = await controls.acquireStreamReader(cancelStream);
+    ReadableStreamDefaultReader.prototype.cancel = async function poisonedCancel() {
+      cancelPoisonCalls += 1;
+    };
+    ReadableStreamDefaultReader.prototype.releaseLock = function poisonedRelease(): void {
+      releasePoisonCalls += 1;
+    };
+    Object.defineProperty(ReadableStream.prototype, 'locked', {
+      configurable: true,
+      get: () => false,
+    });
+    try {
+      await controls.cancelStreamReader(cancelPlan);
+      controls.releaseStreamReader(cancelPlan);
+      expect(cancelPoisonCalls).toBe(0);
+      expect(releasePoisonCalls).toBe(0);
+      expect(Reflect.apply(lockedDescriptor.get!, cancelStream, [])).toBe(false);
+    } finally {
+      ReadableStreamDefaultReader.prototype.cancel = nativeCancel;
+      ReadableStreamDefaultReader.prototype.releaseLock = nativeReleaseLock;
+      Object.defineProperty(ReadableStream.prototype, 'locked', lockedDescriptor);
+    }
+
+    let underlyingCancelCalls = 0;
+    let streamCancelPoisonCalls = 0;
+    const directCancelStream = new ReadableStream<Uint8Array>({
+      cancel() {
+        underlyingCancelCalls += 1;
+      },
+    });
+    ReadableStream.prototype.cancel = async function poisonedStreamCancel() {
+      streamCancelPoisonCalls += 1;
+    };
+    try {
+      await controls.cancelReadableStream(directCancelStream);
+      expect(underlyingCancelCalls).toBe(1);
+      expect(streamCancelPoisonCalls).toBe(0);
+    } finally {
+      ReadableStream.prototype.cancel = nativeStreamCancel;
+    }
+  });
+
   it('pins mutation decoding and DOM commits after late intrinsic replacement', () => {
     const controls = createBrowserNavigationSecurityControls();
     const nativeDecode = TextDecoder.prototype.decode;
@@ -128,6 +211,46 @@ describe('browser navigation security controls', () => {
       );
     } finally {
       Element.prototype.replaceWith = nativeReplaceWith;
+    }
+  });
+
+  it('fails closed when stream acquisition or reader semantics were poisoned before capture', async () => {
+    const nativeGetReader = ReadableStream.prototype.getReader;
+    const nativeStreamCancel = ReadableStream.prototype.cancel;
+    const nativeRead = ReadableStreamDefaultReader.prototype.read;
+    const nativeCancel = ReadableStreamDefaultReader.prototype.cancel;
+
+    ReadableStream.prototype.getReader = function poisonedGetReader() {
+      return {} as ReadableStreamDefaultReader<unknown>;
+    };
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      ReadableStream.prototype.getReader = nativeGetReader;
+    }
+
+    for (const poison of ['read', 'reader-cancel', 'stream-cancel'] as const) {
+      if (poison === 'read') {
+        ReadableStreamDefaultReader.prototype.read = async function poisonedRead() {
+          return { done: true, value: undefined };
+        } as typeof ReadableStreamDefaultReader.prototype.read;
+      } else if (poison === 'reader-cancel') {
+        ReadableStreamDefaultReader.prototype.cancel = async function poisonedCancel() {};
+      } else {
+        ReadableStream.prototype.cancel = async function poisonedStreamCancel() {};
+      }
+      try {
+        const controls = createBrowserNavigationSecurityControls();
+        await expect(
+          controls.acquireStreamReader(new ReadableStream<Uint8Array>()),
+        ).rejects.toThrow(/witness/);
+      } finally {
+        ReadableStreamDefaultReader.prototype.read = nativeRead;
+        ReadableStreamDefaultReader.prototype.cancel = nativeCancel;
+        ReadableStream.prototype.cancel = nativeStreamCancel;
+      }
     }
   });
 });

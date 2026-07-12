@@ -98,6 +98,16 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineKovoLoaderInstallerSource).toContain('function p(fs,f,security)');
     expect(inlineKovoLoaderInstallerSource).toContain('morph:(cur,next)=>m(cur,next,bns)');
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'const rr=await bns.acquireStreamReader(body)',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain('await bns.readStreamChunk(rr)');
+    expect(inlineKovoLoaderInstallerSource).toContain('bns.cancelStreamReader(src)');
+    expect(inlineKovoLoaderInstallerSource).toContain('bns.cancelReadableStream(src)');
+    expect(inlineKovoLoaderInstallerSource).toContain('bns.releaseStreamReader(rr)');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('body.getReader()');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('rr.read()');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('rr.releaseLock');
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-key')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineKovoLoaderInstallerSource).not.toContain('applyResponseChunks');

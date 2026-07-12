@@ -6,6 +6,18 @@ export interface NavigationUrlFacts {
   search: string;
 }
 
+/** @internal Boot-witnessed readable-stream/reader binding for mutation bytes. */
+export type BrowserStreamReaderPlan = readonly [
+  stream: ReadableStream<Uint8Array>,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  witness: object,
+];
+
+/** @internal Dense copied byte result returned by the browser stream membrane. */
+export type BrowserStreamChunkSnapshot =
+  | { done: true; value?: undefined }
+  | { done: false; value: Uint8Array };
+
 /**
  * Boot-pinned browser controls for navigation, mutation decoding, and DOM response commits.
  *
@@ -19,6 +31,7 @@ export interface NavigationUrlFacts {
  */
 export function createBrowserNavigationSecurityControls(scope: typeof globalThis = globalThis) {
   const NativeObject = Object;
+  const NativePromise = Promise;
   const NativeReflect = Reflect;
   const NativeRegExp = RegExp;
   const NativeString = String;
@@ -38,10 +51,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeAttr = scope.Attr;
   const NativeTextDecoder = scope.TextDecoder;
   const NativeUint8Array = scope.Uint8Array;
+  const NativeReadableStream = scope.ReadableStream;
+  const NativeReadableStreamDefaultReader = scope.ReadableStreamDefaultReader;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
   const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+  const nativePromiseThen = NativePromise.prototype.then;
   const nativeRegExpExec = NativeRegExp.prototype.exec;
   const nativeRegExpTest = NativeRegExp.prototype.test;
   const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
@@ -151,6 +167,27 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const textDecoderDecode = NativeTextDecoder
     ? valueMethod(NativeTextDecoder.prototype, 'decode')
     : undefined;
+  const uint8ArrayByteLength = NativeUint8Array
+    ? stableGetter(NativeUint8Array.prototype, 'byteLength')
+    : undefined;
+  const readableStreamCancel = NativeReadableStream
+    ? valueMethod(NativeReadableStream.prototype, 'cancel')
+    : undefined;
+  const readableStreamGetReader = NativeReadableStream
+    ? valueMethod(NativeReadableStream.prototype, 'getReader')
+    : undefined;
+  const readableStreamLocked = NativeReadableStream
+    ? getter(NativeReadableStream.prototype, 'locked')
+    : undefined;
+  const readerCancel = NativeReadableStreamDefaultReader
+    ? valueMethod(NativeReadableStreamDefaultReader.prototype, 'cancel')
+    : undefined;
+  const readerRead = NativeReadableStreamDefaultReader
+    ? valueMethod(NativeReadableStreamDefaultReader.prototype, 'read')
+    : undefined;
+  const readerReleaseLock = NativeReadableStreamDefaultReader
+    ? valueMethod(NativeReadableStreamDefaultReader.prototype, 'releaseLock')
+    : undefined;
   const locationObject = scope.location;
   const documentObject = scope.document;
   const documentBody = documentObject ? stableGetter(documentObject, 'body') : undefined;
@@ -166,6 +203,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const locationAssign = locationObject ? stableMethod(locationObject, 'assign') : undefined;
   const locationReload = locationObject ? stableMethod(locationObject, 'reload') : undefined;
   const locationHrefSetter = locationObject ? stableSetter(locationObject, 'href') : undefined;
+  const streamReaderPlanWitness = {};
+  let streamControlsReady: Promise<void> | undefined;
+  let streamControlsVerified = false;
 
   function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
     return nativeReflectApply(fn, receiver, args) as Return;
@@ -576,6 +616,267 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return value;
   }
 
+  function observePromiseRejection(promise: Promise<unknown>): void {
+    try {
+      apply(nativePromiseThen, promise, [undefined, () => undefined]);
+    } catch {
+      throw new TypeError('Kovo browser control returned a non-native promise.');
+    }
+  }
+
+  async function awaitNativePromise<Value>(value: unknown): Promise<Value> {
+    if (value === null || typeof value !== 'object') {
+      throw new TypeError('Kovo browser control returned a non-native promise.');
+    }
+    observePromiseRejection(value as Promise<unknown>);
+    return await (value as Promise<Value>);
+  }
+
+  function readStreamLocked(stream: object): boolean {
+    if (!readableStreamLocked) {
+      throw new TypeError('Kovo mutation stream lock control is unavailable.');
+    }
+    const locked = call<unknown>(readableStreamLocked, stream, []);
+    if (typeof locked !== 'boolean') {
+      throw new TypeError('Kovo mutation stream lock control returned invalid data.');
+    }
+    return locked;
+  }
+
+  function acquireStreamReaderRaw(stream: object): BrowserStreamReaderPlan {
+    if (!readableStreamGetReader || readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream is unavailable or already locked.');
+    }
+    const reader = call<unknown>(readableStreamGetReader, stream, []);
+    if (reader === null || typeof reader !== 'object' || !readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream reader acquisition returned invalid data.');
+    }
+    return [
+      stream as ReadableStream<Uint8Array>,
+      reader as ReadableStreamDefaultReader<Uint8Array>,
+      streamReaderPlanWitness,
+    ];
+  }
+
+  function readStreamReaderPlan(plan: BrowserStreamReaderPlan): {
+    reader: ReadableStreamDefaultReader<Uint8Array>;
+    stream: ReadableStream<Uint8Array>;
+  } {
+    if (
+      plan === null ||
+      typeof plan !== 'object' ||
+      readOwnData(plan, '2') !== streamReaderPlanWitness
+    ) {
+      throw new TypeError('Kovo mutation stream reader plan is not framework-owned.');
+    }
+    const stream = readOwnData(plan, '0');
+    const reader = readOwnData(plan, '1');
+    if (
+      reader === null ||
+      typeof reader !== 'object' ||
+      stream === null ||
+      typeof stream !== 'object'
+    ) {
+      throw new TypeError('Kovo mutation stream reader plan is invalid.');
+    }
+    return {
+      reader: reader as ReadableStreamDefaultReader<Uint8Array>,
+      stream: stream as ReadableStream<Uint8Array>,
+    };
+  }
+
+  function snapshotStreamChunk(value: unknown): Uint8Array {
+    if (!NativeUint8Array || !uint8ArrayByteLength || value === null || typeof value !== 'object') {
+      throw new TypeError('Kovo mutation stream returned a non-Uint8Array chunk.');
+    }
+    const byteLength = call<unknown>(uint8ArrayByteLength, value, []);
+    if (
+      typeof byteLength !== 'number' ||
+      byteLength < 0 ||
+      byteLength % 1 !== 0 ||
+      byteLength > 0xffff_ffff
+    ) {
+      throw new TypeError('Kovo mutation stream returned an invalid byte length.');
+    }
+    let owner = prototypeOf(value);
+    let nativeUint8Array = false;
+    for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+      if (owner === NativeUint8Array.prototype) {
+        nativeUint8Array = true;
+        break;
+      }
+      owner = prototypeOf(owner);
+    }
+    if (!nativeUint8Array) {
+      throw new TypeError('Kovo mutation stream returned a foreign typed-array chunk.');
+    }
+    const snapshot = new NativeUint8Array(value as Uint8Array);
+    if (call<unknown>(uint8ArrayByteLength, snapshot, []) !== byteLength) {
+      throw new TypeError('Kovo mutation stream byte snapshot changed length.');
+    }
+    return snapshot;
+  }
+
+  async function readStreamChunkRaw(
+    plan: BrowserStreamReaderPlan,
+  ): Promise<BrowserStreamChunkSnapshot> {
+    const { reader, stream } = readStreamReaderPlan(plan);
+    if (!readerRead || !readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream reader control is unavailable.');
+    }
+    const raw = await awaitNativePromise<unknown>(call(readerRead, reader, []));
+    if (raw === null || typeof raw !== 'object' || !readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream read returned invalid data.');
+    }
+    const doneDescriptor = descriptor(raw, 'done');
+    if (
+      !doneDescriptor ||
+      !('value' in doneDescriptor) ||
+      typeof doneDescriptor.value !== 'boolean'
+    ) {
+      throw new TypeError('Kovo mutation stream read returned an invalid done flag.');
+    }
+    if (doneDescriptor.value) return { done: true };
+    const valueDescriptor = descriptor(raw, 'value');
+    if (!valueDescriptor || !('value' in valueDescriptor)) {
+      throw new TypeError('Kovo mutation stream read returned an invalid chunk carrier.');
+    }
+    return { done: false, value: snapshotStreamChunk(valueDescriptor.value) };
+  }
+
+  async function cancelReadableStreamRaw(stream: object): Promise<void> {
+    if (!readableStreamCancel || readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream cancel control is unavailable.');
+    }
+    await awaitNativePromise(call(readableStreamCancel, stream, []));
+    if (readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream cancel changed its lock posture.');
+    }
+  }
+
+  async function cancelStreamReaderRaw(plan: BrowserStreamReaderPlan): Promise<void> {
+    const { reader, stream } = readStreamReaderPlan(plan);
+    if (!readerCancel || !readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation reader cancel control is unavailable.');
+    }
+    await awaitNativePromise(call(readerCancel, reader, []));
+    if (!readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation reader cancel released the bound stream unexpectedly.');
+    }
+  }
+
+  function releaseStreamReaderRaw(plan: BrowserStreamReaderPlan): void {
+    const { reader, stream } = readStreamReaderPlan(plan);
+    if (!readerReleaseLock || !readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream release control is unavailable.');
+    }
+    call(readerReleaseLock, reader, []);
+    if (readStreamLocked(stream)) {
+      throw new TypeError('Kovo mutation stream reader failed to release its bound stream.');
+    }
+  }
+
+  async function validateStreamControls(): Promise<void> {
+    if (!NativeResponse || !responseBody || !NativeUint8Array || !uint8ArrayByteLength) {
+      throw new TypeError('Kovo mutation stream witness controls are unavailable.');
+    }
+    const expected = new NativeUint8Array([0x4b, 0x56, 0x4f]);
+    const response = new NativeResponse(expected);
+    const body = call<unknown>(responseBody, response, []);
+    if (body === null || typeof body !== 'object') {
+      throw new TypeError('Kovo mutation stream witness body is unavailable.');
+    }
+    const plan = acquireStreamReaderRaw(body);
+    try {
+      const first = await readStreamChunkRaw(plan);
+      if (
+        first.done ||
+        call<unknown>(uint8ArrayByteLength, first.value, []) !== 3 ||
+        first.value[0] !== 0x4b ||
+        first.value[1] !== 0x56 ||
+        first.value[2] !== 0x4f
+      ) {
+        throw new TypeError('Kovo mutation stream witness bytes changed before parsing.');
+      }
+      const done = await readStreamChunkRaw(plan);
+      if (!done.done) {
+        throw new TypeError('Kovo mutation stream witness did not terminate exactly once.');
+      }
+    } finally {
+      releaseStreamReaderRaw(plan);
+    }
+
+    const cancelResponse = new NativeResponse(expected);
+    const cancelBody = call<unknown>(responseBody, cancelResponse, []);
+    if (cancelBody === null || typeof cancelBody !== 'object') {
+      throw new TypeError('Kovo mutation stream cancel witness body is unavailable.');
+    }
+    const cancelPlan = acquireStreamReaderRaw(cancelBody);
+    try {
+      await cancelStreamReaderRaw(cancelPlan);
+      const cancelled = await readStreamChunkRaw(cancelPlan);
+      if (!cancelled.done) {
+        throw new TypeError('Kovo mutation stream cancel witness retained unread bytes.');
+      }
+    } finally {
+      releaseStreamReaderRaw(cancelPlan);
+    }
+
+    const directCancelResponse = new NativeResponse(expected);
+    const directCancelBody = call<unknown>(responseBody, directCancelResponse, []);
+    if (directCancelBody === null || typeof directCancelBody !== 'object') {
+      throw new TypeError('Kovo mutation direct-cancel witness body is unavailable.');
+    }
+    await cancelReadableStreamRaw(directCancelBody);
+    const directCancelPlan = acquireStreamReaderRaw(directCancelBody);
+    try {
+      const cancelled = await readStreamChunkRaw(directCancelPlan);
+      if (!cancelled.done) {
+        throw new TypeError('Kovo mutation direct-cancel witness retained unread bytes.');
+      }
+    } finally {
+      releaseStreamReaderRaw(directCancelPlan);
+    }
+    streamControlsVerified = true;
+  }
+
+  async function requireStreamControls(): Promise<void> {
+    if (!streamControlsReady) {
+      throw new TypeError('Kovo mutation stream controls are unavailable.');
+    }
+    await awaitNativePromise(streamControlsReady);
+  }
+
+  async function acquireStreamReader(stream: object): Promise<BrowserStreamReaderPlan> {
+    await requireStreamControls();
+    return acquireStreamReaderRaw(stream);
+  }
+
+  function requireVerifiedStreamControls(): void {
+    if (!streamControlsVerified) {
+      throw new TypeError('Kovo mutation stream controls have not passed their boot witness.');
+    }
+  }
+
+  function readStreamChunk(plan: BrowserStreamReaderPlan): Promise<BrowserStreamChunkSnapshot> {
+    requireVerifiedStreamControls();
+    return readStreamChunkRaw(plan);
+  }
+
+  function cancelReadableStream(stream: object): Promise<void> {
+    return cancelReadableStreamRaw(stream);
+  }
+
+  function cancelStreamReader(plan: BrowserStreamReaderPlan): Promise<void> {
+    requireVerifiedStreamControls();
+    return cancelStreamReaderRaw(plan);
+  }
+
+  function releaseStreamReader(plan: BrowserStreamReaderPlan): void {
+    requireVerifiedStreamControls();
+    releaseStreamReaderRaw(plan);
+  }
+
   function readLocationString(
     property: 'hash' | 'href' | 'origin' | 'pathname' | 'search',
   ): string | undefined {
@@ -936,6 +1237,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         typeof nativeReflectApply !== 'function' ||
         typeof nativeObjectGetOwnPropertyDescriptor !== 'function' ||
         typeof nativeObjectGetPrototypeOf !== 'function' ||
+        typeof nativePromiseThen !== 'function' ||
         typeof nativeRegExpExec !== 'function' ||
         typeof nativeRegExpTest !== 'function' ||
         typeof nativeDecodeURIComponent !== 'function' ||
@@ -946,7 +1248,16 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         !urlHash ||
         !NativeTextDecoder ||
         !NativeUint8Array ||
-        !textDecoderDecode
+        !NativeReadableStream ||
+        !NativeReadableStreamDefaultReader ||
+        !textDecoderDecode ||
+        !uint8ArrayByteLength ||
+        !readableStreamCancel ||
+        !readableStreamGetReader ||
+        !readableStreamLocked ||
+        !readerCancel ||
+        !readerRead ||
+        !readerReleaseLock
       ) {
         return false;
       }
@@ -994,6 +1305,29 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       ) {
         return false;
       }
+      const decoderCopy = new NativeUint8Array(decoderBytes);
+      const decoderByteLength = apply<unknown>(uint8ArrayByteLength, decoderBytes, []);
+      const decoderCopyByteLength = apply<unknown>(uint8ArrayByteLength, decoderCopy, []);
+      if (
+        typeof decoderByteLength !== 'number' ||
+        decoderCopyByteLength !== decoderByteLength ||
+        decoderCopy[0] !== 60 ||
+        decoderCopy[decoderByteLength - 1] !== 62
+      ) {
+        return false;
+      }
+      const streamControl = new NativeReadableStream<Uint8Array>();
+      if (apply<unknown>(readableStreamLocked, streamControl, []) !== false) return false;
+      const readerControl = apply<unknown>(readableStreamGetReader, streamControl, []);
+      if (
+        readerControl === null ||
+        typeof readerControl !== 'object' ||
+        apply<unknown>(readableStreamLocked, streamControl, []) !== true
+      ) {
+        return false;
+      }
+      apply(readerReleaseLock, readerControl, []);
+      if (apply<unknown>(readableStreamLocked, streamControl, []) !== false) return false;
       if (NativeHeaders && headersGet) {
         const headers = new NativeHeaders({ 'X-Kovo-Control': 'yes' });
         if (
@@ -1185,9 +1519,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       'Kovo browser navigation controls are unavailable because realm intrinsics were modified before runtime initialization.',
     );
   }
+  streamControlsReady = validateStreamControls();
+  observePromiseRejection(streamControlsReady);
 
   return {
+    acquireStreamReader,
     appendElementChildren,
+    cancelReadableStream,
+    cancelStreamReader,
     call,
     charCode,
     cloneDomNode,
@@ -1224,18 +1563,21 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     readResponseText,
     regExpExec,
     regExpTest,
+    readStreamChunk,
     readNodeIsConnected,
     removeElementAttribute,
     reload,
     removeElement,
     replaceElement,
     replaceElementChildren,
+    releaseStreamReader,
     safeSameOriginPath,
     setElementAttribute,
     slice,
     snapshotChildNodes,
     snapshotElementAttributes,
     snapshotElementChildren,
+    observePromiseRejection,
     trim,
     upper,
   };

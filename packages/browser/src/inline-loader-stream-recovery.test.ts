@@ -137,14 +137,10 @@ describe('inline streaming recovery invariants', () => {
     async (_name, installSource) => {
       for (const responseBuild of [undefined, 'build-b']) {
         const order: string[] = [];
-        const body = {
-          cancel: vi.fn(async () => {
-            order.push('cancel');
-          }),
-          getReader: vi.fn(() => {
-            throw new Error('untrusted-build stream must never acquire a reader');
-          }),
-        };
+        const cancel = vi.fn(async () => {
+          order.push('cancel');
+        });
+        const body = new ReadableStream<Uint8Array>({ cancel });
         const response = {
           body,
           headers: {
@@ -161,8 +157,8 @@ describe('inline streaming recovery invariants', () => {
         });
 
         await vi.waitFor(() => expect(harness.reload).toHaveBeenCalledTimes(1));
-        expect(body.cancel).toHaveBeenCalledTimes(1);
-        expect(body.getReader).not.toHaveBeenCalled();
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(body.locked).toBe(false);
         expect(harness.append).not.toHaveBeenCalled();
         expect(harness.formSubmit).not.toHaveBeenCalled();
         expect(order).toEqual(['cancel', 'reload']);
