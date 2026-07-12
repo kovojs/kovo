@@ -1,7 +1,11 @@
+import * as path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   buildSecurityGetRequest,
+  buildSecurityPathJoin,
+  buildSecurityPathResolve,
   buildSecuritySourceLiteral,
   buildSecurityUrlSnapshot,
   commitBuildArrayValue,
@@ -14,6 +18,30 @@ afterEach(() => {
 });
 
 describe('build source serialization (SPEC §6.6 rule 6)', () => {
+  it('keeps variadic build paths exact after late array-iterator replacement', () => {
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const expectedJoin = path.join('approved-root', 'child.css');
+    const expectedResolve = path.resolve('approved-root', 'child.css');
+    let joined = '';
+    let resolved = '';
+    try {
+      Array.prototype[Symbol.iterator] = function () {
+        if (this[0] === 'approved-root') {
+          return Reflect.apply(originalIterator, ['attacker-root', 'cross-route.css'], []);
+        }
+        return Reflect.apply(originalIterator, this, []);
+      } as (typeof Array.prototype)[Symbol.iterator];
+
+      joined = buildSecurityPathJoin('approved-root', 'child.css');
+      resolved = buildSecurityPathResolve('approved-root', 'child.css');
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(joined).toBe(expectedJoin);
+    expect(resolved).toBe(expectedResolve);
+  });
+
   it('keeps synthetic replay URL and Request identity after late global replacement', () => {
     const NativeRequest = globalThis.Request;
     const NativeURL = globalThis.URL;

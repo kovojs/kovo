@@ -299,6 +299,112 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('C218 keeps post-replay static stylesheet bytes authoritative after late intrinsic replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-push-'));
+    const originalPush = Array.prototype.push;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalJoin = Array.prototype.join;
+    const originalMapGet = Map.prototype.get;
+    const originalMapSet = Map.prototype.set;
+    const originalTrim = String.prototype.trim;
+    const NativeURL = globalThis.URL;
+    const approvedCss = '.public-shell{display:block}';
+    const buildOwnedCss = '.framework-owned{color:teal}';
+    const attackerCss = '@import url("https://attacker.invalid/cross-route.css");';
+
+    try {
+      const outDir = join(root, 'dist', '.kovo');
+      const app = createApp({
+        routes: [
+          route('/poison', {
+            page() {
+              Array.prototype.push = function (...items) {
+                if (items[0] === approvedCss) items[0] = attackerCss;
+                return Reflect.apply(originalPush, this, items);
+              } as typeof Array.prototype.push;
+              Array.prototype[Symbol.iterator] = function () {
+                const first = this[0] as { css?: unknown } | undefined;
+                return Reflect.apply(
+                  originalIterator,
+                  first?.css === buildOwnedCss
+                    ? [
+                        {
+                          css: attackerCss,
+                          href: '/assets/styles.css',
+                        },
+                      ]
+                    : this,
+                  [],
+                );
+              } as (typeof Array.prototype)[Symbol.iterator];
+              Array.prototype.join = function (separator) {
+                if (this[0] === approvedCss) return attackerCss;
+                return Reflect.apply(originalJoin, this, [separator]);
+              } as typeof Array.prototype.join;
+              Map.prototype.get = function (key: unknown) {
+                const value = Reflect.apply(originalMapGet, this, [key]);
+                if (
+                  key === '/assets/styles.css' &&
+                  Array.isArray(value) &&
+                  value[0] === approvedCss
+                ) {
+                  return [attackerCss];
+                }
+                return value;
+              } as typeof Map.prototype.get;
+              Map.prototype.set = function (key: unknown, value: unknown) {
+                return Reflect.apply(originalMapSet, this, [
+                  key,
+                  key === '/assets/styles.css' && Array.isArray(value) ? [attackerCss] : value,
+                ]);
+              } as typeof Map.prototype.set;
+              String.prototype.trim = function () {
+                const value = Reflect.apply(originalTrim, this, []);
+                return value === approvedCss ? attackerCss : value;
+              };
+              globalThis.URL = class CrossBindStylesheetUrl extends NativeURL {
+                constructor(input: string | URL, base?: string | URL) {
+                  super(input === '/assets/styles.css' ? '/assets/cross-route.css' : input, base);
+                }
+              } as typeof URL;
+              return renderedHtml('<main>Poison setup</main>');
+            },
+          }),
+          route('/public', {
+            page: () => renderedHtml('<main class="public-shell">Public</main>'),
+          }),
+        ],
+        stylesheets: [stylesheet('./styles.css', { criticalCss: approvedCss })],
+      });
+
+      await writeKovoNeutralBuild({
+        app,
+        buildStylesheetCss: [{ css: buildOwnedCss, href: '/assets/styles.css' }],
+        outDir,
+      });
+
+      const clientCss = await readFile(join(outDir, 'client/assets/styles.css'), 'utf8');
+      const staticCss = await readFile(join(outDir, 'static/assets/styles.css'), 'utf8');
+      const publicHtml = await readFile(join(outDir, 'static/public/index.html'), 'utf8');
+      expect(clientCss).toContain(approvedCss);
+      expect(clientCss).toContain(buildOwnedCss);
+      expect(clientCss).not.toContain(attackerCss);
+      expect(publicHtml).toContain('<link rel="stylesheet" href="/assets/styles.css">');
+      expect(staticCss).toContain(approvedCss);
+      expect(staticCss).toContain(buildOwnedCss);
+      expect(staticCss).not.toContain(attackerCss);
+    } finally {
+      globalThis.URL = NativeURL;
+      String.prototype.trim = originalTrim;
+      Map.prototype.set = originalMapSet;
+      Map.prototype.get = originalMapGet;
+      Array.prototype.join = originalJoin;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      Array.prototype.push = originalPush;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('materializes local stylesheet source files declared by an app module', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-local-css-'));
 

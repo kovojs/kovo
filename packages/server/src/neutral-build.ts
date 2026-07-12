@@ -1,12 +1,19 @@
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import * as path from 'node:path';
 
 import { clientModulePath } from '@kovojs/core/internal/client-module-url';
 
 import type { KovoApp } from './app-types.js';
 import {
   buildOwnDataProperty,
+  buildSecurityPathDirname,
+  buildSecurityPathIsAbsolute,
+  buildSecurityPathJoin,
+  buildSecurityPathRelative,
+  buildSecurityPathResolve,
+  buildSecurityPathSeparator,
   buildSecuritySourceLiteral,
+  buildSecurityUrlSnapshot,
+  commitBuildArrayValue,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
 import { versionedClientModuleHref, type VersionedClientModuleInput } from './client-modules.js';
@@ -26,14 +33,21 @@ import {
 import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 import { normalizedDistFile, type KovoAppShellRouteEntryMap } from './vite-manifest.js';
 import { witnessReflectApply } from './security-witness-intrinsics.js';
+import {
+  createSecurityMap,
+  securityArrayJoin,
+  securityMapForEach,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityStringEndsWith,
+  securityStringReplaceAll,
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 
 const neutralBuildVersion = 'kovo-neutral-build/v1';
-const nativePathDirname = path.dirname;
-const nativePathIsAbsolute = path.isAbsolute;
-const nativePathJoin = path.join;
-const nativePathRelative = path.relative;
-const nativePathResolve = path.resolve;
-const neutralPathSeparator = path.sep;
 
 /**
  * Inputs for writing Kovo's platform-neutral deployment artifact.
@@ -455,10 +469,10 @@ function concatenateNeutralBuildArrays<Value>(
   const pinnedSecond = snapshotBuildArray(second, `${label} second`);
   const combined: Value[] = [];
   for (let index = 0; index < pinnedFirst.length; index += 1) {
-    combined[combined.length] = pinnedFirst[index]!;
+    commitBuildArrayValue(combined, pinnedFirst[index]!, `${label} combined values`);
   }
   for (let index = 0; index < pinnedSecond.length; index += 1) {
-    combined[combined.length] = pinnedSecond[index]!;
+    commitBuildArrayValue(combined, pinnedSecond[index]!, `${label} combined values`);
   }
   return snapshotBuildArray(combined, label);
 }
@@ -668,10 +682,10 @@ async function copyNeutralPublicAssetEntries(
 }
 
 function skipNeutralPublicAsset(relativePath: string, entry: { name: string }): boolean {
-  const normalized = relativePath.replaceAll(neutralPathSeparator, '/');
-  if (normalized === '.vite' || normalized.startsWith('.vite/')) return true;
-  if (normalized === 'assets' || normalized.startsWith('assets/')) return true;
-  if (normalized === 'c' || normalized.startsWith('c/')) return true;
+  const normalized = securityStringReplaceAll(relativePath, buildSecurityPathSeparator(), '/');
+  if (normalized === '.vite' || securityStringStartsWith(normalized, '.vite/')) return true;
+  if (normalized === 'assets' || securityStringStartsWith(normalized, 'assets/')) return true;
+  if (normalized === 'c' || securityStringStartsWith(normalized, 'c/')) return true;
   if (normalized === 'index.html') return true;
   return entry.name === '.DS_Store';
 }
@@ -696,8 +710,24 @@ async function materializeNeutralStylesheetAssets({
   const cssByPath = stylesheetCssByPath(app, assets, buildStylesheetCss);
   const viteCssBySourceFile = sourceFileByStylesheetAssetPath(assets);
   const localCssByPath = stylesheetSourceByPath(app, stylesheetSourceRoot);
+  const stylesheetEntries: { assetPath: string; cssChunks: readonly string[] }[] = [];
+  securityMapForEach(cssByPath, (cssChunks, assetPath) => {
+    commitBuildArrayValue(
+      stylesheetEntries,
+      {
+        assetPath,
+        cssChunks: snapshotBuildArray(cssChunks, `neutral stylesheet ${assetPath} CSS chunks`),
+      },
+      'neutral stylesheet materialization entries',
+    );
+  });
+  const pinnedEntries = snapshotBuildArray(
+    stylesheetEntries,
+    'pinned neutral stylesheet materialization entries',
+  );
 
-  for (const [assetPath, cssChunks] of cssByPath) {
+  for (let index = 0; index < pinnedEntries.length; index += 1) {
+    const { assetPath, cssChunks } = pinnedEntries[index]!;
     const outputPath = neutralClientOutputPath(rootDir, assetPath);
     // M2 (bugs-part4 L12-1): compute each stylesheet's content purely from the
     // *current* build's inputs (declared/critical CSS, build-owned CSS, and the
@@ -706,23 +736,28 @@ async function materializeNeutralStylesheetAssets({
     // already-merged output back in, so reusing the §14 retention output dir on a
     // 2nd+ build retained stale rules and duplicated current ones. Overwrite the
     // asset deterministically from current inputs instead.
-    const viteSourceFile = viteCssBySourceFile.get(assetPath);
+    const viteSourceFile = securityMapGet(viteCssBySourceFile, assetPath);
     const viteCss =
       viteSourceFile === undefined || manifestDistDir === undefined
         ? ''
         : await readExistingStylesheet(viteDistSourcePath(manifestDistDir, viteSourceFile));
-    const localSourceFile = localCssByPath.get(assetPath);
+    const localSourceFile = securityMapGet(localCssByPath, assetPath);
     const localCss =
       viteCss || cssChunks.length > 0 || localSourceFile === undefined
         ? ''
         : await readRequiredStylesheet(localSourceFile, assetPath);
-    const mergedCss = dedupeCssChunks(
+    const dedupedCss = dedupeCssChunks(
       concatenateNeutralBuildArrays(cssChunks, [localCss, viteCss], 'neutral stylesheet chunks'),
-    ).join('\n');
+    );
+    const mergedCss = securityArrayJoin(dedupedCss, '\n');
     if (!mergedCss) continue;
 
     await mkdir(neutralPathDirname(outputPath), { recursive: true });
-    await writeFile(outputPath, `${mergedCss}${mergedCss.endsWith('\n') ? '' : '\n'}`, 'utf8');
+    await writeFile(
+      outputPath,
+      `${mergedCss}${securityStringEndsWith(mergedCss, '\n') ? '' : '\n'}`,
+      'utf8',
+    );
   }
 }
 
@@ -735,10 +770,12 @@ async function materializeNeutralStylesheetAssets({
 function sourceFileByStylesheetAssetPath(
   assets: readonly KovoNeutralBuild['staticAssets'][number][],
 ): Map<string, string> {
-  const sourceFileByPath = new Map<string, string>();
-  for (const asset of assets) {
-    if (!asset.path.endsWith('.css')) continue;
-    sourceFileByPath.set(asset.path, asset.file);
+  const sourceFileByPath = createSecurityMap<string, string>();
+  const pinnedAssets = snapshotBuildArray(assets, 'neutral stylesheet source-file assets');
+  for (let index = 0; index < pinnedAssets.length; index += 1) {
+    const asset = pinnedAssets[index]!;
+    if (!securityStringEndsWith(asset.path, '.css')) continue;
+    securityMapSet(sourceFileByPath, asset.path, asset.file);
   }
   return sourceFileByPath;
 }
@@ -748,19 +785,36 @@ function stylesheetCssByPath(
   assets: readonly KovoNeutralBuild['staticAssets'][number][],
   buildStylesheetCss: readonly { css: string; href: string }[],
 ): Map<string, string[]> {
-  const cssByPath = new Map<string, string[]>();
+  const cssByPath = createSecurityMap<string, string[]>();
 
-  for (const asset of app.stylesheets) addStylesheetDeclarationCss(cssByPath, asset);
-  for (const route of app.routes) {
-    for (const asset of route.stylesheets ?? []) addStylesheetDeclarationCss(cssByPath, asset);
+  const appStylesheets = snapshotBuildArray(app.stylesheets, 'neutral app stylesheets');
+  for (let index = 0; index < appStylesheets.length; index += 1) {
+    addStylesheetDeclarationCss(cssByPath, appStylesheets[index]!);
+  }
+  const routes = snapshotBuildArray(app.routes, 'neutral stylesheet routes');
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const routeStylesheets = snapshotBuildArray(
+      routes[routeIndex]!.stylesheets ?? [],
+      `neutral route ${routeIndex} stylesheets`,
+    );
+    for (let index = 0; index < routeStylesheets.length; index += 1) {
+      addStylesheetDeclarationCss(cssByPath, routeStylesheets[index]!);
+    }
   }
   const pinnedAssets = snapshotBuildArray(assets, 'neutral stylesheet build assets');
   const cssAssetPaths: string[] = [];
   for (let index = 0; index < pinnedAssets.length; index += 1) {
     const assetPath = pinnedAssets[index]!.path;
-    if (assetPath.endsWith('.css')) cssAssetPaths[cssAssetPaths.length] = assetPath;
+    if (securityStringEndsWith(assetPath, '.css')) {
+      commitBuildArrayValue(cssAssetPaths, assetPath, 'neutral stylesheet asset paths');
+    }
   }
-  for (const asset of buildStylesheetCss) {
+  const pinnedBuildStylesheetCss = snapshotBuildArray(
+    buildStylesheetCss,
+    'neutral build-owned stylesheet CSS',
+  );
+  for (let index = 0; index < pinnedBuildStylesheetCss.length; index += 1) {
+    const asset = pinnedBuildStylesheetCss[index]!;
     addStylesheetCss(
       cssByPath,
       buildStylesheetCssHref(asset.href, cssByPath, cssAssetPaths),
@@ -775,11 +829,19 @@ function stylesheetSourceByPath(
   app: KovoApp,
   stylesheetSourceRoot: string | undefined,
 ): Map<string, string> {
-  const sources = new Map<string, string>();
-  for (const asset of app.stylesheets) addStylesheetSource(sources, asset, stylesheetSourceRoot);
-  for (const route of app.routes) {
-    for (const asset of route.stylesheets ?? []) {
-      addStylesheetSource(sources, asset, stylesheetSourceRoot);
+  const sources = createSecurityMap<string, string>();
+  const appStylesheets = snapshotBuildArray(app.stylesheets, 'neutral source app stylesheets');
+  for (let index = 0; index < appStylesheets.length; index += 1) {
+    addStylesheetSource(sources, appStylesheets[index]!, stylesheetSourceRoot);
+  }
+  const routes = snapshotBuildArray(app.routes, 'neutral source stylesheet routes');
+  for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
+    const routeStylesheets = snapshotBuildArray(
+      routes[routeIndex]!.stylesheets ?? [],
+      `neutral source route ${routeIndex} stylesheets`,
+    );
+    for (let index = 0; index < routeStylesheets.length; index += 1) {
+      addStylesheetSource(sources, routeStylesheets[index]!, stylesheetSourceRoot);
     }
   }
   return sources;
@@ -798,7 +860,7 @@ function addStylesheetSource(
     stylesheetSourceFile(asset) ??
     stylesheetSourceFileFromRoot(asset, stylesheetSourceRoot, assetPath);
   if (sourceFile === undefined) return;
-  if (!sources.has(assetPath)) sources.set(assetPath, sourceFile);
+  if (!securityMapHas(sources, assetPath)) securityMapSet(sources, assetPath, sourceFile);
 }
 
 function stylesheetSourceFileFromRoot(
@@ -812,7 +874,7 @@ function stylesheetSourceFileFromRoot(
   const relativeToRoot = neutralPathRelative(stylesheetSourceRoot, sourceFile);
   if (
     relativeToRoot === '' ||
-    relativeToRoot.startsWith('..') ||
+    securityStringStartsWith(relativeToRoot, '..') ||
     neutralPathIsAbsolute(relativeToRoot)
   ) {
     throw new Error(
@@ -828,7 +890,7 @@ function buildStylesheetCssHref(
   cssAssetPaths: readonly string[],
 ): string {
   const assetPath = localStylesheetAssetPath(href);
-  if (assetPath && cssByPath.has(assetPath)) return href;
+  if (assetPath && securityMapHas(cssByPath, assetPath)) return href;
   if (assetPath && assetPath !== '/assets/styles.css') return href;
   if (cssAssetPaths.length === 1 && cssAssetPaths[0] !== undefined) return cssAssetPaths[0];
   return href;
@@ -840,7 +902,9 @@ function addStylesheetDeclarationCss(
 ): void {
   if (typeof asset === 'string') return;
   const assetPath = localStylesheetAssetPath(asset.href);
-  if (assetPath && !cssByPath.has(assetPath)) cssByPath.set(assetPath, []);
+  if (assetPath && !securityMapHas(cssByPath, assetPath)) {
+    securityMapSet(cssByPath, assetPath, []);
+  }
   addStylesheetCss(cssByPath, asset.href, asset.criticalCss);
 }
 
@@ -854,17 +918,17 @@ function addStylesheetCss(
   const assetPath = localStylesheetAssetPath(href);
   if (!assetPath) return;
 
-  const chunks = cssByPath.get(assetPath);
+  const chunks = securityMapGet(cssByPath, assetPath);
   if (chunks) {
-    chunks.push(css);
+    commitBuildArrayValue(chunks, css, `neutral stylesheet ${assetPath} CSS chunks`);
   } else {
-    cssByPath.set(assetPath, [css]);
+    securityMapSet(cssByPath, assetPath, [css]);
   }
 }
 
 function localStylesheetAssetPath(href: string): string | null {
   try {
-    const url = new URL(href, 'https://kovo.local');
+    const url = buildSecurityUrlSnapshot(href, 'https://kovo.local');
     if (url.origin !== 'https://kovo.local') return null;
     return url.pathname;
   } catch {
@@ -900,7 +964,7 @@ function dedupeCssChunks(chunks: readonly string[]): string[] {
 
   for (let index = 0; index < source.length; index += 1) {
     const chunk = source[index]!;
-    const css = chunk.trim();
+    const css = securityStringTrim(chunk);
     if (!css) continue;
     let seen = false;
     for (let seenIndex = 0; seenIndex < deduped.length; seenIndex += 1) {
@@ -909,7 +973,7 @@ function dedupeCssChunks(chunks: readonly string[]): string[] {
         break;
       }
     }
-    if (!seen) deduped[deduped.length] = css;
+    if (!seen) commitBuildArrayValue(deduped, css, 'deduplicated neutral stylesheet CSS');
   }
 
   return deduped;
@@ -920,13 +984,15 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 function neutralClientOutputPath(clientDir: string, urlPath: string): string {
-  const relativePath = urlPath.startsWith('/') ? urlPath.slice(1) : urlPath;
+  const relativePath = securityStringStartsWith(urlPath, '/')
+    ? securityStringSlice(urlPath, 1)
+    : urlPath;
   const outputPath = neutralPathResolve(clientDir, relativePath);
   const relativeToClient = neutralPathRelative(clientDir, outputPath);
 
   if (
     relativeToClient === '' ||
-    relativeToClient.startsWith('..') ||
+    securityStringStartsWith(relativeToClient, '..') ||
     neutralPathIsAbsolute(relativeToClient)
   ) {
     throw new Error(`Neutral build asset must stay within the client directory: ${urlPath}`);
@@ -941,21 +1007,21 @@ async function writeJson(filePath: string, value: unknown): Promise<void> {
 }
 
 function neutralPathDirname(value: string): string {
-  return witnessReflectApply(nativePathDirname, path, [value]);
+  return buildSecurityPathDirname(value);
 }
 
 function neutralPathIsAbsolute(value: string): boolean {
-  return witnessReflectApply(nativePathIsAbsolute, path, [value]);
+  return buildSecurityPathIsAbsolute(value);
 }
 
 function neutralPathJoin(...values: string[]): string {
-  return witnessReflectApply(nativePathJoin, path, values);
+  return witnessReflectApply(buildSecurityPathJoin, undefined, values);
 }
 
 function neutralPathRelative(from: string, to: string): string {
-  return witnessReflectApply(nativePathRelative, path, [from, to]);
+  return buildSecurityPathRelative(from, to);
 }
 
 function neutralPathResolve(...values: string[]): string {
-  return witnessReflectApply(nativePathResolve, path, values);
+  return witnessReflectApply(buildSecurityPathResolve, undefined, values);
 }

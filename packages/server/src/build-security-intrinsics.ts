@@ -40,6 +40,7 @@ const nativeFunctionToString = globalThis.Function.prototype.toString;
 const nativePathBasename = path.basename;
 const nativePathDirname = path.dirname;
 const nativePathExtname = path.extname;
+const nativePathIsAbsolute = path.isAbsolute;
 const nativePathJoin = path.join;
 const nativePathRelative = path.relative;
 const nativePathResolve = path.resolve;
@@ -129,6 +130,8 @@ function capturedControlsAreSound(): boolean {
       nativePathBasename(joinedPathControl) === 'child.txt' &&
       nativePathRelative(nativePathDirname(pathControl), pathControl) === 'child.txt' &&
       nativePathExtname(pathControl) === '.txt' &&
+      nativePathIsAbsolute(pathControl) === true &&
+      nativePathIsAbsolute('relative/child.txt') === false &&
       (nativePathSeparator === '/' || nativePathSeparator === '\\') &&
       nativePathBasename(fileUrlControl) === 'kovo-build-control.txt' &&
       nativePosixExtname('/assets/app.css') === '.css' &&
@@ -383,9 +386,18 @@ export function buildSecurityPathExtname(value: string): string {
   return nativePathExtname(value);
 }
 
+export function buildSecurityPathIsAbsolute(value: string): boolean {
+  assertBuildSecurityIntrinsics();
+  return nativePathIsAbsolute(value);
+}
+
 export function buildSecurityPathJoin(...values: string[]): string {
   assertBuildSecurityIntrinsics();
-  return nativePathJoin(...values);
+  return witnessReflectApply(
+    nativePathJoin,
+    path,
+    snapshotBuildArray(values, 'build security path join inputs'),
+  );
 }
 
 export function buildSecurityPathRelative(from: string, to: string): string {
@@ -393,9 +405,13 @@ export function buildSecurityPathRelative(from: string, to: string): string {
   return nativePathRelative(from, to);
 }
 
-export function buildSecurityPathResolve(value: string): string {
+export function buildSecurityPathResolve(...values: string[]): string {
   assertBuildSecurityIntrinsics();
-  return nativePathResolve(value);
+  return witnessReflectApply(
+    nativePathResolve,
+    path,
+    snapshotBuildArray(values, 'build security path resolve inputs'),
+  );
 }
 
 export function buildSecurityPathSeparator(): string {

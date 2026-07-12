@@ -8,6 +8,8 @@ import {
   filesystemBoundaryFile,
   filesystemIntrinsicsFile,
   nodeRuntimePackageBoundaryFindings,
+  neutralBuildFile,
+  neutralStylesheetAssemblyFindings,
   presetDiagnosticAggregationFindings,
   presetRetentionPolicyFile,
   presetRetentionPolicyFindings,
@@ -198,6 +200,43 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         expect.stringContaining('captured Request constructor'),
         expect.stringContaining('captured URL constructor'),
         expect.stringContaining('ambient URL descriptor restoration'),
+      ]),
+    );
+  });
+
+  it('C218 pins post-replay neutral stylesheet assembly', () => {
+    const unsafe = `
+      async function materializeNeutralStylesheetAssets() {
+        const cssByPath = new Map<string, string[]>();
+        for (const asset of app.stylesheets) chunks.push(asset.criticalCss);
+        for (const [assetPath, chunks] of cssByPath) {
+          const css = chunks.map((chunk) => chunk.trim()).join('\\n');
+          new URL(assetPath, 'https://kovo.local');
+        }
+      }
+      function isNodeError() {}
+    `;
+    expect(neutralStylesheetAssemblyFindings(neutralBuildFile, unsafe)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('mutable collection method'),
+        expect.stringContaining('mutable collection iterator'),
+        expect.stringContaining('mutable Map constructor'),
+        expect.stringContaining('mutable string method'),
+        expect.stringContaining('mutable URL constructor'),
+        expect.stringContaining('missing final CSS composition'),
+      ]),
+    );
+
+    expect(
+      neutralStylesheetAssemblyFindings(
+        buildSecurityIntrinsicsFile,
+        'export function buildSecurityPathJoin(...values: string[]): string { return nativePathJoin(...values); }',
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('path join must snapshot variadic inputs'),
+        expect.stringContaining('path resolution must snapshot variadic inputs'),
+        expect.stringContaining('boot-pinned isAbsolute'),
       ]),
     );
   });

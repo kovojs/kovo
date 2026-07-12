@@ -21,6 +21,7 @@ export const staticExportReplayArtifactFile = 'packages/server/src/static-export
 export const staticExportReplayContextFile = 'packages/server/src/static-export-replay-context.ts';
 export const staticExportReplayRequestFile = 'packages/server/src/static-export-request.ts';
 export const buildSecurityIntrinsicsFile = 'packages/server/src/build-security-intrinsics.ts';
+export const neutralBuildFile = 'packages/server/src/neutral-build.ts';
 export const presetRetentionPolicyFile = 'packages/server/src/build.ts';
 
 export const defaultAllowedRuntimeFiles = [
@@ -72,6 +73,9 @@ export function checkFilesystemBoundary(options = {}) {
       staticExportReplayContextFile,
       staticExportReplayRequestFile,
     ],
+  );
+  const neutralStylesheetAssemblyFiles = new Set(
+    options.neutralStylesheetAssemblyFiles ?? [buildSecurityIntrinsicsFile, neutralBuildFile],
   );
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
@@ -139,6 +143,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (staticExportSyntheticRequestFiles.has(filePath)) {
       findings.push(...staticExportSyntheticRequestFindings(filePath, sourceText));
+    }
+    if (neutralStylesheetAssemblyFiles.has(filePath)) {
+      findings.push(...neutralStylesheetAssemblyFindings(filePath, sourceText));
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
@@ -302,6 +309,90 @@ export function staticExportSyntheticRequestFindings(filePath, sourceText) {
     );
   }
 
+  return findings;
+}
+
+export function neutralStylesheetAssemblyFindings(filePath, sourceText) {
+  const findings = [];
+  if (filePath === buildSecurityIntrinsicsFile) {
+    if (
+      !/\bbuildSecurityPathJoin\s*\([^)]*\)\s*:\s*string\s*\{[\s\S]*?snapshotBuildArray\s*\(\s*values\s*,\s*['"]build security path join inputs['"]\s*\)/u.test(
+        sourceText,
+      )
+    ) {
+      findings.push(
+        `${filePath}: build path join must snapshot variadic inputs before boot-pinned dispatch`,
+      );
+    }
+    if (
+      !/\bbuildSecurityPathResolve\s*\([^)]*\)\s*:\s*string\s*\{[\s\S]*?snapshotBuildArray\s*\(\s*values\s*,\s*['"]build security path resolve inputs['"]\s*\)/u.test(
+        sourceText,
+      )
+    ) {
+      findings.push(
+        `${filePath}: build path resolution must snapshot variadic inputs before boot-pinned dispatch`,
+      );
+    }
+    if (!/\bbuildSecurityPathIsAbsolute\s*\(/u.test(sourceText)) {
+      findings.push(`${filePath}: neutral stylesheet confinement must use boot-pinned isAbsolute`);
+    }
+    return findings;
+  }
+
+  const start = sourceText.indexOf('async function materializeNeutralStylesheetAssets');
+  const end = sourceText.indexOf('function isNodeError', start);
+  if (start < 0 || end < 0) {
+    return [`${filePath}: neutral stylesheet authority region is missing`];
+  }
+  const authoritySource = sourceText.slice(start, end);
+  const scanText = stripCommentsAndStrings(authoritySource);
+  const mutablePatterns = [
+    ['collection method', /\.(?:push|join)\s*\(/u],
+    ['collection iterator', /\bfor\s*\(\s*const\s+[^)]*\sof\s/u],
+    ['Map constructor', /\bnew\s+Map(?:\s*<|\s*\()/u],
+    [
+      'Map method',
+      /\b(?:cssByPath|localCssByPath|sources|sourceFileByPath|viteCssBySourceFile)\s*\.\s*(?:forEach|get|has|set)\s*\(/u,
+    ],
+    ['string method', /\.(?:endsWith|slice|startsWith|trim)\s*\(/u],
+    ['URL constructor', /\bnew\s+(?:globalThis\s*\.\s*)?URL\s*\(/u],
+  ];
+  for (let index = 0; index < mutablePatterns.length; index += 1) {
+    const [label, pattern] = mutablePatterns[index];
+    const match = pattern.exec(scanText);
+    if (match !== null) {
+      findings.push(
+        `${filePath}:${lineOf(sourceText, start + match.index)}: post-replay neutral stylesheet authority must not dispatch through mutable ${label}`,
+      );
+    }
+  }
+
+  const requiredControls = [
+    ['dense CSS commit', /\bcommitBuildArrayValue\s*\(\s*chunks\s*,\s*css\s*,/u],
+    ['final CSS composition', /\bsecurityArrayJoin\s*\(\s*dedupedCss\s*,/u],
+    ['pinned Map construction', /\bcreateSecurityMap\s*</u],
+    ['pinned Map traversal', /\bsecurityMapForEach\s*\(\s*cssByPath\s*,/u],
+    ['pinned URL snapshot', /\bbuildSecurityUrlSnapshot\s*\(\s*href\s*,/u],
+    ['app stylesheet snapshot', /\bsnapshotBuildArray\s*\(\s*app\s*\.\s*stylesheets\s*,/u],
+    ['route snapshot', /\bsnapshotBuildArray\s*\(\s*app\s*\.\s*routes\s*,/u],
+    ['pinned CSS trimming', /\bsecurityStringTrim\s*\(\s*chunk\s*\)/u],
+  ];
+  for (let index = 0; index < requiredControls.length; index += 1) {
+    const [label, pattern] = requiredControls[index];
+    if (!pattern.test(authoritySource)) {
+      findings.push(`${filePath}: post-replay neutral stylesheet authority is missing ${label}`);
+    }
+  }
+  if (
+    !/\bfunction\s+neutralPathDirname\s*\([^)]*\)\s*:\s*string\s*\{\s*return\s+buildSecurityPathDirname\s*\(/u.test(
+      sourceText,
+    ) ||
+    !/\bfunction\s+neutralPathIsAbsolute\s*\([^)]*\)\s*:\s*boolean\s*\{\s*return\s+buildSecurityPathIsAbsolute\s*\(/u.test(
+      sourceText,
+    )
+  ) {
+    findings.push(`${filePath}: neutral stylesheet paths must delegate to boot-pinned controls`);
+  }
   return findings;
 }
 
