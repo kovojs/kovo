@@ -8,11 +8,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Severity summary
 
-| Severity | Count | Items  |
-| -------- | ----: | ------ |
-| Critical |   146 | C1-C146 |
-| High     |    35 | H1-H35 |
-| Medium   |    12 | M1-M12 |
+| Severity | Count | Items   |
+| -------- | ----: | ------- |
+| Critical |   151 | C1-C151 |
+| High     |    35 | H1-H35  |
+| Medium   |    12 | M1-M12  |
 
 ## Critical
 
@@ -1806,7 +1806,7 @@ build:dist` passes.
   - **Evidence:** exact modular/generated persisted-getter substitution reloads 6/6 in Chromium,
     Firefox, and WebKit; the full browser matrix passes 399/399.
 
-- [ ] **C137 - Mutable broadcast event data cross-binds private wire across principals.**
+- [x] **C137 - Mutable broadcast event data cross-binds private wire across principals.**
       `packages/browser/src/broadcast.ts`, generated inline loader
   - A late `MessageEvent.prototype.data` getter preserved session A's genuine private mutation body
     but rewrote only its principal stamp to session B. Modular and generated receivers then accepted
@@ -1814,6 +1814,8 @@ build:dist` passes.
   - **Acceptance:** receive paths use a boot-pinned witnessed native data read and one immutable exact
     envelope snapshot before fingerprint comparison or apply. Event/prototype/getter substitution
     cannot change principal, build, query, fragment, or body truth after transport delivery.
+  - **Evidence:** the exact modular/generated cross-principal getter substitution rejects 6/6 in
+    Chromium, Firefox, and WebKit; the complete direct browser matrix passes 411/411.
 
 - [ ] **C138 - Raw-read unwrapping bypasses the read-only SQL choke.**
       `packages/test/src` verifier/harness adapters
@@ -1883,6 +1885,48 @@ build:dist` passes.
     write guards.
   - **Acceptance:** every managed/read-only DB proxy uses a boot-captured witnessed constructor and
     pinned traps/dispatch; late global Proxy replacement cannot expose or return an unwrapped target.
+
+- [ ] **C147 - Mutable Promise resolution commits a rejected asynchronous SQLite transaction.**
+      `packages/test/src` SQLite verifier adapter
+  - Replacing `Promise.resolve` after setup swallowed the rejection from an asynchronous transaction
+    callback, so a real `better-sqlite3` transaction committed its row even though the authored
+    callback failed.
+  - **Acceptance:** transaction callback settlement uses one boot-pinned, witnessed Promise path;
+    late resolve/then/catch substitution cannot turn rejection into commit or skip rollback.
+
+- [x] **C148 - Mutable graph traversal erases default-deny authority facts.**
+      `packages/core/src/graph.ts`
+  - Late `Array.prototype.map`/`flatMap` replacements erased access, authentication, session, and
+    ownership facts before `kovo check`; adjacent live sort/join/filter/some and String operations
+    could reorder or forge the same security graph.
+  - **Acceptance:** graph derivation traverses dense own entries, uses witnessed set/string controls,
+    manually assembles detail text, and deterministically sorts without ambient prototype dispatch.
+  - **Evidence:** the exact late collection/string substitution receives zero calls while preserving
+    every authority fact; the 27-test graph/intrinsic matrix and core dist/DTS build pass.
+
+- [ ] **C149 - Mutable Promise rejection handling suppresses a read-only engine denial.**
+      `packages/test/src` read-only engine verifier
+  - Late `Promise.prototype.then`/`catch` substitution converted a genuine engine rejection into a
+    successful read-only result and skipped the required KV433 fail-closed mapping.
+  - **Acceptance:** engine settlement and rejection normalization use captured native Promise
+    observation so application code cannot suppress a denial or change its framework verdict.
+
+- [ ] **C150 - A query rewrites its integration-fixture read authority after execution.**
+      `packages/test/src/integration/fixture-instance.ts`
+  - A loader performed an undeclared read, then widened `app.queries`/`query.reads`; post-execution
+    live `find`/`map` traversal accepted the changed declaration and let integration verification pass.
+  - **Acceptance:** the fixture snapshots the exact query definition, declared reads, loader, and
+    verification authority before execution using own-data traversal; later mutation or prototype
+    substitution cannot widen coverage.
+
+- [ ] **C151 - Mutable BroadcastChannel dispatch strips a private wire's principal stamp.**
+      `packages/browser/src/broadcast.ts`, generated inline loader
+  - A late `BroadcastChannel.prototype.postMessage` wrapper preserved session A's private body but
+    deleted only its principal. An anonymous sibling then accepted and applied the genuine structured
+    clone; modular and generated exploits reproduce 6/6 across three engines.
+  - **Acceptance:** publishers use a boot-pinned witnessed channel constructor and postMessage over
+    one immutable exact envelope. Late prototype replacement cannot remove or rewrite principal,
+    build, query, fragment, or body truth before transport.
 
 ## High
 

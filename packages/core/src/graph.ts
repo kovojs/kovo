@@ -1,6 +1,16 @@
 import type { DerivationStatus } from './derivation.js';
 
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
+import {
+  securityOwnArrayEntry,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './internal/security-witness-intrinsics.js';
 
 /** @internal */
 export interface TouchSite {
@@ -829,43 +839,108 @@ export interface AccessDerivationInput {
  * (the compiler runs no type checker, §6.6).
  */
 export function deriveAccessExplainFacts(input: AccessDerivationInput): AccessExplainFact[] {
-  return [
-    ...(input.endpoints ?? []).map(endpointAccessFact),
-    ...(input.mutations ?? []).map(mutationAccessFact),
-    ...(input.pages ?? []).map(pageAccessFact),
-    ...(input.queries ?? []).map(queryAccessFact),
-  ].sort(compareAccessExplainFact);
+  const facts: AccessExplainFact[] = [];
+  appendDerivedFacts(facts, input.endpoints, 'endpoints', endpointAccessFact);
+  appendDerivedFacts(facts, input.mutations, 'mutations', mutationAccessFact);
+  appendDerivedFacts(facts, input.pages, 'pages', pageAccessFact);
+  appendDerivedFacts(facts, input.queries, 'queries', queryAccessFact);
+  return stableSortGraphFacts(facts, compareAccessExplainFact);
 }
 
 /** @internal Derive guarded/unguarded posture as producer-owned facts (SPEC.md §10.2). */
 export function deriveAuthPostureFacts(input: AccessDerivationInput): AuthPostureFact[] {
   const decided = decidedAccessKeys(deriveAccessExplainFacts(input));
-  return [
-    ...(input.endpoints ?? []).map((endpoint) => endpointAuthPostureFact(endpoint, decided)),
-    ...(input.mutations ?? []).map((mutation) => mutationAuthPostureFact(mutation, decided)),
-    ...(input.pages ?? []).map((page) => pageAuthPostureFact(page, decided)),
-    ...(input.queries ?? []).map((query) => queryAuthPostureFact(query, decided)),
-  ].sort(compareAuthPostureFact);
+  const facts: AuthPostureFact[] = [];
+  appendDerivedFacts(facts, input.endpoints, 'endpoints', (endpoint) =>
+    endpointAuthPostureFact(endpoint, decided),
+  );
+  appendDerivedFacts(facts, input.mutations, 'mutations', (mutation) =>
+    mutationAuthPostureFact(mutation, decided),
+  );
+  appendDerivedFacts(facts, input.pages, 'pages', (page) => pageAuthPostureFact(page, decided));
+  appendDerivedFacts(facts, input.queries, 'queries', (query) =>
+    queryAuthPostureFact(query, decided),
+  );
+  return stableSortGraphFacts(facts, compareAuthPostureFact);
 }
 
 /** @internal Derive ambient session authority posture for KV418 producers (SPEC.md §9.1). */
 export function deriveSessionAuthorityFacts(input: AccessDerivationInput): SessionAuthorityFact[] {
-  return [
-    ...(input.endpoints ?? []).map(endpointSessionAuthorityFact),
-    ...(input.mutations ?? []).map(mutationSessionAuthorityFact),
-  ].sort(compareSessionAuthorityFact);
+  const facts: SessionAuthorityFact[] = [];
+  appendDerivedFacts(facts, input.endpoints, 'endpoints', endpointSessionAuthorityFact);
+  appendDerivedFacts(facts, input.mutations, 'mutations', mutationSessionAuthorityFact);
+  return stableSortGraphFacts(facts, compareSessionAuthorityFact);
 }
 
 /** @internal Derive owner-domain guard posture for KV414 producers (SPEC.md §10.3). */
 export function deriveOwnershipPostureFacts(input: AccessDerivationInput): OwnershipPostureFact[] {
-  return [
-    ...(input.queries ?? []).flatMap((query) =>
-      ownershipPostureFactsForGuards('query', query.query, query.guards ?? []),
-    ),
-    ...(input.mutations ?? []).flatMap((mutation) =>
-      ownershipPostureFactsForGuards('mutation', mutation.key, mutation.guards ?? []),
-    ),
-  ].sort(compareOwnershipPostureFact);
+  const facts: OwnershipPostureFact[] = [];
+  appendOwnershipPostureFacts(facts, input.queries, 'queries', 'query');
+  appendOwnershipPostureFacts(facts, input.mutations, 'mutations', 'mutation');
+  return stableSortGraphFacts(facts, compareOwnershipPostureFact);
+}
+
+function appendDerivedFacts<Input, Fact>(
+  facts: Fact[],
+  values: readonly Input[] | undefined,
+  label: string,
+  derive: (value: Input) => Fact,
+): void {
+  if (values === undefined) return;
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) {
+      throw new TypeError(`Kovo graph derivation rejected sparse ${label} at index ${index}`);
+    }
+    facts[facts.length] = derive(entry.value);
+  }
+}
+
+function stableSortGraphFacts<Fact>(
+  facts: Fact[],
+  compare: (left: Fact, right: Fact) => number,
+): Fact[] {
+  for (let index = 1; index < facts.length; index += 1) {
+    const current = facts[index]!;
+    let cursor = index - 1;
+    while (cursor >= 0 && compare(facts[cursor]!, current) > 0) {
+      facts[cursor + 1] = facts[cursor]!;
+      cursor -= 1;
+    }
+    facts[cursor + 1] = current;
+  }
+  return facts;
+}
+
+function compareGraphString(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
+function joinGraphStrings(values: readonly string[], separator: string, start = 0): string {
+  let result = '';
+  for (let index = start; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) {
+      throw new TypeError(`Kovo graph derivation rejected sparse string list at index ${index}`);
+    }
+    if (index !== start) result += separator;
+    result += entry.value;
+  }
+  return result;
+}
+
+function joinNonEmptyGraphStrings(values: readonly string[], separator: string): string {
+  let result = '';
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) {
+      throw new TypeError(`Kovo graph derivation rejected sparse detail list at index ${index}`);
+    }
+    if (entry.value === '') continue;
+    if (result !== '') result += separator;
+    result += entry.value;
+  }
+  return result;
 }
 
 function explicitAccessExplainFact(
@@ -900,7 +975,7 @@ function explicitAccessExplainFact(
 
   return {
     decision: 'guard',
-    detail: `access=guards guards=${access.guards.join(',')}`,
+    detail: `access=guards guards=${joinGraphStrings(access.guards, ',')}`,
     kind,
     name,
     source: 'access',
@@ -969,16 +1044,21 @@ function missingAccessFact(kind: AccessExplainFact['kind'], name: string): Acces
 
 function compareAccessExplainFact(left: AccessExplainFact, right: AccessExplainFact): number {
   return (
-    left.kind.localeCompare(right.kind) ||
-    left.name.localeCompare(right.name) ||
-    left.decision.localeCompare(right.decision)
+    compareGraphString(left.kind, right.kind) ||
+    compareGraphString(left.name, right.name) ||
+    compareGraphString(left.decision, right.decision)
   );
 }
 
 function decidedAccessKeys(access: readonly AccessExplainFact[]): ReadonlySet<string> {
-  const keys = new Set<string>();
-  for (const fact of access) {
-    if (fact.decision !== 'missing') keys.add(accessKey(fact.kind, fact.name));
+  const keys = securitySet<string>();
+  for (let index = 0; index < access.length; index += 1) {
+    const entry = securityOwnArrayEntry(access, index);
+    if (!entry.ok) {
+      throw new TypeError(`Kovo graph derivation rejected sparse access facts at index ${index}`);
+    }
+    const fact = entry.value;
+    if (fact.decision !== 'missing') securitySetAdd(keys, accessKey(fact.kind, fact.name));
   }
   return keys;
 }
@@ -994,15 +1074,18 @@ function endpointAuthPostureFact(
   const kind = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
   const name = endpoint.name ?? endpoint.path;
   return {
-    detail: [
-      `method=${endpoint.method ?? 'ANY'}`,
-      `path=${endpoint.path}`,
-      `mount=${endpoint.mount ?? 'exact'}`,
-      `auth=${endpointAuthDetail(endpoint)}`,
-      `csrf=${endpoint.csrf ?? 'checked'}`,
-    ].join(' '),
+    detail: joinGraphStrings(
+      [
+        `method=${endpoint.method ?? 'ANY'}`,
+        `path=${endpoint.path}`,
+        `mount=${endpoint.mount ?? 'exact'}`,
+        `auth=${endpointAuthDetail(endpoint)}`,
+        `csrf=${endpoint.csrf ?? 'checked'}`,
+      ],
+      ' ',
+    ),
     guarded:
-      decided.has(accessKey(kind, name)) ||
+      securitySetHas(decided, accessKey(kind, name)) ||
       hasSessionAuthGuard(endpoint.guards ?? []) ||
       endpointHasAuth(endpoint),
     kind,
@@ -1016,17 +1099,18 @@ function mutationAuthPostureFact(
   decided: ReadonlySet<string>,
 ): AuthPostureFact {
   return {
-    detail: [
-      `guards=${listFactValues(mutation.guards)}`,
-      mutation.auth === undefined ? '' : `auth=${mutation.auth}`,
-      `writes=${listFactValues(mutation.writes)}`,
-      `invalidates=${listFactValues(mutation.invalidates)}`,
-      `manual-invalidates=${listFactValues(mutation.manualInvalidates)}`,
-    ]
-      .filter(Boolean)
-      .join(' '),
+    detail: joinNonEmptyGraphStrings(
+      [
+        `guards=${listFactValues(mutation.guards)}`,
+        mutation.auth === undefined ? '' : `auth=${mutation.auth}`,
+        `writes=${listFactValues(mutation.writes)}`,
+        `invalidates=${listFactValues(mutation.invalidates)}`,
+        `manual-invalidates=${listFactValues(mutation.manualInvalidates)}`,
+      ],
+      ' ',
+    ),
     guarded:
-      decided.has(accessKey('mutation', mutation.key)) ||
+      securitySetHas(decided, accessKey('mutation', mutation.key)) ||
       hasSessionAuthGuard(mutation.guards ?? []) ||
       mutation.auth !== undefined,
     kind: 'mutation',
@@ -1037,11 +1121,13 @@ function mutationAuthPostureFact(
 
 function pageAuthPostureFact(page: PageExplain, decided: ReadonlySet<string>): AuthPostureFact {
   return {
-    detail: [
-      `guards=${listFactValues(page.guards)}`,
-      `queries=${listFactValues(page.queries)}`,
-    ].join(' '),
-    guarded: decided.has(accessKey('page', page.route)) || hasSessionAuthGuard(page.guards ?? []),
+    detail: joinGraphStrings(
+      [`guards=${listFactValues(page.guards)}`, `queries=${listFactValues(page.queries)}`],
+      ' ',
+    ),
+    guarded:
+      securitySetHas(decided, accessKey('page', page.route)) ||
+      hasSessionAuthGuard(page.guards ?? []),
     kind: 'page',
     name: page.route,
     source: 'access-posture',
@@ -1050,12 +1136,13 @@ function pageAuthPostureFact(page: PageExplain, decided: ReadonlySet<string>): A
 
 function queryAuthPostureFact(query: QueryReadSet, decided: ReadonlySet<string>): AuthPostureFact {
   return {
-    detail: [
-      `guards=${listFactValues(query.guards)}`,
-      `reads=${listFactValues(query.domains)}`,
-    ].join(' '),
+    detail: joinGraphStrings(
+      [`guards=${listFactValues(query.guards)}`, `reads=${listFactValues(query.domains)}`],
+      ' ',
+    ),
     guarded:
-      decided.has(accessKey('query', query.query)) || hasSessionAuthGuard(query.guards ?? []),
+      securitySetHas(decided, accessKey('query', query.query)) ||
+      hasSessionAuthGuard(query.guards ?? []),
     kind: 'query',
     name: query.query,
     source: 'access-posture',
@@ -1082,37 +1169,63 @@ function mutationSessionAuthorityFact(mutation: MutationExplain): SessionAuthori
     referencesSession:
       mutation.session !== undefined ||
       mutation.auth === 'authed' ||
-      mutation.auth?.startsWith('role:') === true ||
+      (mutation.auth !== undefined && securityStringStartsWith(mutation.auth, 'role:')) ||
       hasSessionAuthorityGuard(mutation.guards ?? []),
     source: 'session-authority',
   };
 }
 
-function ownershipPostureFactsForGuards(
+function appendOwnershipPostureFacts<Entry extends QueryReadSet | MutationExplain>(
+  facts: OwnershipPostureFact[],
+  entries: readonly Entry[] | undefined,
+  label: string,
   kind: OwnershipPostureFact['kind'],
-  name: string,
-  guards: readonly string[],
-): OwnershipPostureFact[] {
-  return guards.flatMap((guard) => {
-    const parsed = ownsGuardFact(guard);
-    if (!parsed) return [];
-    return [{ ...parsed, kind, name, ownerGuarded: true, source: 'ownership-posture' as const }];
-  });
+): void {
+  if (entries === undefined) return;
+  for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+    const entry = securityOwnArrayEntry(entries, entryIndex);
+    if (!entry.ok) {
+      throw new TypeError(`Kovo graph derivation rejected sparse ${label} at index ${entryIndex}`);
+    }
+    const name =
+      kind === 'query' ? (entry.value as QueryReadSet).query : (entry.value as MutationExplain).key;
+    const guards = entry.value.guards ?? [];
+    for (let guardIndex = 0; guardIndex < guards.length; guardIndex += 1) {
+      const guardEntry = securityOwnArrayEntry(guards, guardIndex);
+      if (!guardEntry.ok) {
+        throw new TypeError(
+          `Kovo graph derivation rejected sparse ${kind} guards at index ${guardIndex}`,
+        );
+      }
+      const parsed = ownsGuardFact(guardEntry.value);
+      if (parsed) {
+        facts[facts.length] = {
+          ...parsed,
+          kind,
+          name,
+          ownerGuarded: true,
+          source: 'ownership-posture',
+        };
+      }
+    }
+  }
 }
 
 function ownsGuardFact(guard: string): Pick<OwnershipPostureFact, 'domain' | 'key'> | undefined {
-  if (guard.startsWith('owns:')) {
-    const parts = guard.slice('owns:'.length).split(':');
-    const domain = parts[0]?.trim();
+  if (securityStringStartsWith(guard, 'owns:')) {
+    const parts = securityStringSplit(securityStringSlice(guard, 'owns:'.length), ':');
+    const domain = parts[0] === undefined ? undefined : securityStringTrim(parts[0]);
     if (!domain) return undefined;
-    const key = parts.slice(1).join(':').trim();
+    const key = securityStringTrim(joinGraphStrings(parts, ':', 1));
     return key ? { domain, key } : { domain };
   }
-  if (guard.startsWith('owns(') && guard.endsWith(')')) {
-    const [domainPart, keyPart] = guard.slice('owns('.length, -1).split(',');
-    const domain = domainPart?.trim();
+  if (securityStringStartsWith(guard, 'owns(') && securityStringSlice(guard, -1) === ')') {
+    const parts = securityStringSplit(securityStringSlice(guard, 'owns('.length, -1), ',');
+    const domainPart = parts[0];
+    const keyPart = parts[1];
+    const domain = domainPart === undefined ? undefined : securityStringTrim(domainPart);
     if (!domain) return undefined;
-    const key = keyPart?.trim();
+    const key = keyPart === undefined ? undefined : securityStringTrim(keyPart);
     return key ? { domain, key } : { domain };
   }
   return undefined;
@@ -1122,9 +1235,9 @@ function endpointHasAuth(endpoint: EndpointExplain): boolean {
   if (!endpoint.auth) return false;
   return (
     endpoint.auth === 'authed' ||
-    endpoint.auth.startsWith('role:') ||
-    endpoint.auth.startsWith('custom:') ||
-    endpoint.auth.startsWith('verifier:')
+    securityStringStartsWith(endpoint.auth, 'role:') ||
+    securityStringStartsWith(endpoint.auth, 'custom:') ||
+    securityStringStartsWith(endpoint.auth, 'verifier:')
   );
 }
 
@@ -1136,32 +1249,43 @@ function endpointAuthDetail(endpoint: EndpointExplain): string {
 }
 
 function hasSessionAuthGuard(guards: readonly string[]): boolean {
-  return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
+  for (let index = 0; index < guards.length; index += 1) {
+    const entry = securityOwnArrayEntry(guards, index);
+    if (!entry.ok) return false;
+    if (entry.value === 'authed' || securityStringStartsWith(entry.value, 'role:')) return true;
+  }
+  return false;
 }
 
 function hasSessionAuthorityGuard(guards: readonly string[]): boolean {
-  return guards.some(
-    (guard) =>
-      guard === 'authed' ||
-      guard.startsWith('role:') ||
-      guard === 'owns' ||
-      ownsGuardFact(guard) !== undefined,
-  );
+  for (let index = 0; index < guards.length; index += 1) {
+    const entry = securityOwnArrayEntry(guards, index);
+    if (!entry.ok) return false;
+    if (
+      entry.value === 'authed' ||
+      securityStringStartsWith(entry.value, 'role:') ||
+      entry.value === 'owns' ||
+      ownsGuardFact(entry.value) !== undefined
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function listFactValues(values: readonly string[] | undefined): string {
-  return values === undefined || values.length === 0 ? '-' : values.join(',');
+  return values === undefined || values.length === 0 ? '-' : joinGraphStrings(values, ',');
 }
 
 function compareAuthPostureFact(left: AuthPostureFact, right: AuthPostureFact): number {
-  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+  return compareGraphString(left.kind, right.kind) || compareGraphString(left.name, right.name);
 }
 
 function compareSessionAuthorityFact(
   left: SessionAuthorityFact,
   right: SessionAuthorityFact,
 ): number {
-  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+  return compareGraphString(left.kind, right.kind) || compareGraphString(left.name, right.name);
 }
 
 function compareOwnershipPostureFact(
@@ -1169,10 +1293,10 @@ function compareOwnershipPostureFact(
   right: OwnershipPostureFact,
 ): number {
   return (
-    left.kind.localeCompare(right.kind) ||
-    left.name.localeCompare(right.name) ||
-    left.domain.localeCompare(right.domain) ||
-    (left.key ?? '').localeCompare(right.key ?? '')
+    compareGraphString(left.kind, right.kind) ||
+    compareGraphString(left.name, right.name) ||
+    compareGraphString(left.domain, right.domain) ||
+    compareGraphString(left.key ?? '', right.key ?? '')
   );
 }
 

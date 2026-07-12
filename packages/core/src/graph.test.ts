@@ -192,6 +192,116 @@ describe('kovo graph input validation', () => {
     ]);
   });
 
+  it('does not let late collection traversal erase derived authority facts', () => {
+    const endpoints = [
+      {
+        access: { kind: 'verified-machine-auth' as const },
+        auth: 'webhook-verifier',
+        csrf: 'exempt' as const,
+        path: '/webhooks/stripe',
+      },
+    ];
+    const mutations = [
+      { access: { guards: ['authed'], kind: 'guard-chain' as const }, key: 'cart/add' },
+    ];
+    const queries = [{ domains: ['order'], guards: ['owns:order:arg:id'], query: 'orderById' }];
+    const originalMap = Array.prototype.map;
+    const originalFlatMap = Array.prototype.flatMap;
+    const originalFilter = Array.prototype.filter;
+    const originalJoin = Array.prototype.join;
+    const originalSome = Array.prototype.some;
+    const originalSort = Array.prototype.sort;
+    const originalStartsWith = String.prototype.startsWith;
+    const originalSlice = String.prototype.slice;
+    const originalSplit = String.prototype.split;
+    const originalTrim = String.prototype.trim;
+    const originalLocaleCompare = String.prototype.localeCompare;
+    let poisonHits = 0;
+    let accessFacts: ReturnType<typeof deriveAccessExplainFacts> = [];
+    let authFacts: ReturnType<typeof deriveAuthPostureFacts> = [];
+    let sessionFacts: ReturnType<typeof deriveSessionAuthorityFacts> = [];
+    let ownershipFacts: ReturnType<typeof deriveOwnershipPostureFacts> = [];
+
+    try {
+      Array.prototype.map = function eraseAuthorityFacts(callback, thisArg) {
+        if (this === endpoints || this === mutations || this === queries) {
+          poisonHits += 1;
+          return [];
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      Array.prototype.flatMap = function eraseOwnershipFacts(callback, thisArg) {
+        if (this === queries) {
+          poisonHits += 1;
+          return [];
+        }
+        return Reflect.apply(originalFlatMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.flatMap;
+      Array.prototype.filter = function eraseDetails() {
+        poisonHits += 1;
+        return [];
+      } as typeof Array.prototype.filter;
+      Array.prototype.join = function forgeDetails() {
+        poisonHits += 1;
+        return 'forged';
+      } as typeof Array.prototype.join;
+      Array.prototype.some = function eraseGuards() {
+        poisonHits += 1;
+        return false;
+      } as typeof Array.prototype.some;
+      Array.prototype.sort = function eraseOrdering() {
+        poisonHits += 1;
+        this.length = 0;
+        return this;
+      } as typeof Array.prototype.sort;
+      String.prototype.startsWith = function eraseStringGuard() {
+        poisonHits += 1;
+        return false;
+      } as typeof String.prototype.startsWith;
+      String.prototype.slice = function forgeStringSlice() {
+        poisonHits += 1;
+        return '';
+      } as typeof String.prototype.slice;
+      String.prototype.split = function forgeStringParts() {
+        poisonHits += 1;
+        return [];
+      } as typeof String.prototype.split;
+      String.prototype.trim = function forgeTrimmedString() {
+        poisonHits += 1;
+        return '';
+      } as typeof String.prototype.trim;
+      String.prototype.localeCompare = function eraseOrdering() {
+        poisonHits += 1;
+        return 0;
+      } as typeof String.prototype.localeCompare;
+
+      accessFacts = deriveAccessExplainFacts({ endpoints, mutations, queries });
+      authFacts = deriveAuthPostureFacts({ endpoints, mutations, queries });
+      sessionFacts = deriveSessionAuthorityFacts({ endpoints, mutations });
+      ownershipFacts = deriveOwnershipPostureFacts({ queries });
+    } finally {
+      Array.prototype.map = originalMap;
+      Array.prototype.flatMap = originalFlatMap;
+      Array.prototype.filter = originalFilter;
+      Array.prototype.join = originalJoin;
+      Array.prototype.some = originalSome;
+      Array.prototype.sort = originalSort;
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.slice = originalSlice;
+      String.prototype.split = originalSplit;
+      String.prototype.trim = originalTrim;
+      String.prototype.localeCompare = originalLocaleCompare;
+    }
+
+    expect(accessFacts).toHaveLength(3);
+    expect(authFacts).toHaveLength(3);
+    expect(sessionFacts).toHaveLength(2);
+    expect(ownershipFacts).toEqual([
+      expect.objectContaining({ domain: 'order', name: 'orderById', ownerGuarded: true }),
+    ]);
+    expect(poisonHits).toBe(0);
+  });
+
   it('accepts durable task facts as graph arrays', () => {
     expect(
       validateKovoExplainInput({
