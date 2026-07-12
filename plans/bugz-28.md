@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     5 | C1-C5 |
+| Critical |     6 | C1-C6 |
 | High     |    10 | H1-H10 |
 | Medium   |     4 | M1-M4 |
 
@@ -56,6 +56,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** secret encoding, view extraction, and constant-time byte comparison use
     boot-pinned, semantically checked controls with indexed traversal; unequal string/byte secrets
     remain unequal under hostile import order and late poison while equal controls pass.
+
+- [ ] **C6 - A mutable CSRF token parser can substitute a cached victim token.**
+      `packages/server/src/csrf.ts`
+  - A selective late `String.prototype.split` override returned the parts of a genuine cached victim
+    token while validating the unrelated submitted string `v1.attacker.attacker`; synchronizer-token
+    validation returned true for the victim session.
+  - **Acceptance:** token minting/parsing, base64url validation, byte conversion, active-key lookup,
+    and purpose selection use boot-pinned, semantically checked exact-byte operations; cached-token
+    substitution rejects under hostile import order and late poison while genuine rotation works.
 
 ## High
 
