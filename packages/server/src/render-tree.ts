@@ -92,9 +92,12 @@ export type ComponentRegistryInput = Record<
   ComponentRegistryEntry | Component<ComponentDefinitionInput>
 >;
 
+declare const componentRegistryBrand: unique symbol;
+
 /** A closed, branded set of pre-approved components produced by {@link renderRegistry} (SPEC §4.10). */
 export interface ComponentRegistry {
-  readonly __kovoComponentRegistry: true;
+  /** Type-only nominal guard; runtime authority is the module-private render-registry witness. */
+  readonly [componentRegistryBrand]: true;
   readonly entries: ReadonlyMap<string, ComponentRegistryEntry>;
 }
 
@@ -167,7 +170,6 @@ export function renderRegistry(input: ComponentRegistryInput): ComponentRegistry
   }
 
   const registry = witnessFreeze({
-    __kovoComponentRegistry: true as const,
     entries: witnessFreeze(publicEntries) as ReadonlyMap<string, ComponentRegistryEntry>,
   }) as ComponentRegistry;
   witnessWeakMapSet(registrySnapshots, registry, entries);
