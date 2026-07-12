@@ -36,6 +36,8 @@ const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeNumberIsFinite = NativeNumber.isFinite;
 const nativeNumberParseInt = NativeNumber.parseInt;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
+const nativeObjectCreate = NativeObject.create;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
@@ -138,6 +140,20 @@ function bootstrapSelfCheckPasses(): boolean {
     }
     if (apply(nativeNumberParseInt, NativeNumber, ['12', 10]) !== 12) return false;
     if (apply(nativeNumberIsFinite, NativeNumber, [12]) !== true) return false;
+    const nullRecord = apply<object>(nativeObjectCreate, NativeObject, [null]);
+    if (apply(nativeObjectGetPrototypeOf, NativeObject, [nullRecord]) !== null) return false;
+    const committed: string[] = [];
+    if (
+      apply(nativeObjectDefineProperty, NativeObject, [
+        committed,
+        0,
+        { configurable: true, enumerable: true, value: 'safe', writable: true },
+      ]) !== committed ||
+      descriptor(committed, 0)?.value !== 'safe' ||
+      committed.length !== 1
+    ) {
+      return false;
+    }
     const promise = apply<Promise<string>>(nativePromiseResolve, NativePromise, ['safe']);
     return typeof apply(nativePromiseThen, promise, [(value: string) => value]) === 'object';
   } catch {
@@ -185,6 +201,78 @@ export function staticAnalysisArrayLength(value: readonly unknown[], label: stri
     throw new NativeTypeError(`${label} must have a bounded stable length.`);
   }
   return before.value;
+}
+
+export function staticAnalysisArraySet<Value>(
+  values: Value[],
+  index: number,
+  value: Value,
+  label: string,
+): void {
+  assertDataPlaneStaticAnalysisIntrinsics();
+  if (!apply(nativeNumberIsSafeInteger, NativeNumber, [index]) || index < 0 || index >= 1_000_000) {
+    throw new NativeTypeError(`${label} index must be a bounded non-negative integer.`);
+  }
+  const beforeLength = staticAnalysisArrayLength(values, label);
+  apply(nativeObjectDefineProperty, NativeObject, [
+    values,
+    index,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = descriptor(values, index);
+  const expectedLength = index >= beforeLength ? index + 1 : beforeLength;
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    !apply(nativeObjectIs, NativeObject, [committed.value, value]) ||
+    staticAnalysisArrayLength(values, label) !== expectedLength
+  ) {
+    throw new NativeTypeError(`${label} own-data commit failed.`);
+  }
+}
+
+export function staticAnalysisArrayAppend<Value>(
+  values: Value[],
+  value: Value,
+  label: string,
+): void {
+  staticAnalysisArraySet(values, staticAnalysisArrayLength(values, label), value, label);
+}
+
+export function staticAnalysisNullRecord<Value>(): Record<string, Value> {
+  assertDataPlaneStaticAnalysisIntrinsics();
+  const record = apply<Record<string, Value>>(nativeObjectCreate, NativeObject, [null]);
+  if (apply(nativeObjectGetPrototypeOf, NativeObject, [record]) !== null) {
+    throw new NativeTypeError('Static-analysis null record construction failed.');
+  }
+  return record;
+}
+
+export function staticAnalysisDefineDataProperty<Value>(
+  record: Record<string, Value>,
+  key: string,
+  value: Value,
+  label: string,
+): void {
+  assertDataPlaneStaticAnalysisIntrinsics();
+  apply(nativeObjectDefineProperty, NativeObject, [
+    record,
+    key,
+    { configurable: true, enumerable: true, value, writable: true },
+  ]);
+  const committed = descriptor(record, key);
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    !apply(nativeObjectIs, NativeObject, [committed.value, value])
+  ) {
+    throw new NativeTypeError(`${label} own-data commit failed.`);
+  }
 }
 
 export function staticAnalysisOwnDataValue(
@@ -321,7 +409,12 @@ export function staticAnalysisPromiseAll<Value>(
     if (value === undefined) {
       throw new NativeTypeError(`Static-analysis Promise inputs[${index}] must be dense.`);
     }
-    source[index] = value as Promise<Value>;
+    staticAnalysisArraySet(
+      source,
+      index,
+      value as Promise<Value>,
+      'Static-analysis Promise source',
+    );
   }
   return new NativePromise<Value[]>((resolvePromise, rejectPromise) => {
     const results: Value[] = [];
@@ -334,7 +427,7 @@ export function staticAnalysisPromiseAll<Value>(
       const promise = apply<Promise<Value>>(nativePromiseResolve, NativePromise, [source[index]]);
       apply(nativePromiseThen, promise, [
         (value: Value) => {
-          results[index] = value;
+          staticAnalysisArraySet(results, index, value, 'Static-analysis Promise results');
           remaining -= 1;
           if (remaining === 0) resolvePromise(results);
         },

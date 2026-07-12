@@ -328,6 +328,45 @@ describe('capability-url: one-time tokens via a replay store', () => {
     }
   });
 
+  it('C243 does not let an inherited entry setter evict an unexpired replay id', () => {
+    let now = 1;
+    const store = createMemoryCapabilityReplayStore({ now: () => now });
+    expect(store.consume('token-id', 100)).toBe(true);
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (Array.isArray(value) && value[0] === 'token-id') {
+            poisonHits += 1;
+            nativeDefineProperty(this, '0', {
+              configurable: true,
+              enumerable: true,
+              value: ['token-id', 0],
+              writable: true,
+            });
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      now = 2;
+      expect(store.size()).toBe(1);
+      expect(store.consume('token-id', 100)).toBe(false);
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+    }
+    expect(poisonHits).toBe(0);
+  });
+
   it('a one-time token fails closed when no replay store is provided', async () => {
     const { token } = await signCapability(SECRET, { key: 'a.pdf', oneTime: true }, 0);
     const result = await verifyCapability(

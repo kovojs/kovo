@@ -476,7 +476,31 @@ function rawMapEntries(map: Map<unknown, unknown>): Array<[unknown, unknown]> {
   while (true) {
     const result = apply<IteratorResult<[unknown, unknown]>>(mapIteratorNext, iterator, []);
     if (result.done) return entries;
-    entries[entries.length] = [result.value[0], result.value[1]];
+    const entry: [unknown, unknown] = [result.value[0], result.value[1]];
+    const index = entries.length;
+    apply(nativeObjectDefineProperty, NativeObject, [
+      entries,
+      index,
+      {
+        configurable: true,
+        enumerable: true,
+        value: entry,
+        writable: true,
+      },
+    ]);
+    const committed = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [entries, index],
+    );
+    if (
+      committed === undefined ||
+      !('value' in committed) ||
+      committed.value !== entry ||
+      entries.length !== index + 1
+    ) {
+      throw new NativeTypeError('Capability Map entry own-data commit failed.');
+    }
   }
 }
 

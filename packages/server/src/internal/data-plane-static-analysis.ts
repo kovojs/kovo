@@ -33,10 +33,13 @@ import {
 } from '@kovojs/core/internal/query-shape-source';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
+  staticAnalysisArrayAppend,
   staticAnalysisArrayIsArray,
   staticAnalysisArrayLength,
+  staticAnalysisArraySet,
   staticAnalysisCanonicalJson,
   staticAnalysisCreatePromise,
+  staticAnalysisDefineDataProperty,
   staticAnalysisHmacSha256,
   staticAnalysisJsonParse,
   staticAnalysisMapGet,
@@ -45,6 +48,7 @@ import {
   staticAnalysisMathMin,
   staticAnalysisNumberIsFinite,
   staticAnalysisNumberParseInt,
+  staticAnalysisNullRecord,
   staticAnalysisObjectKeys,
   staticAnalysisOwnDataValue,
   staticAnalysisPromiseAll,
@@ -230,10 +234,14 @@ export function dataPlaneSourceFiles(sourceDir: string, root: string): DataPlane
   const files: DataPlaneSourceFile[] = [];
   for (let index = 0; index < paths.length; index += 1) {
     const filePath = paths[index]!;
-    files[files.length] = {
-      fileName: slashPath(relative(root, filePath)),
-      source: readFileSync(filePath, 'utf8'),
-    };
+    staticAnalysisArrayAppend(
+      files,
+      {
+        fileName: slashPath(relative(root, filePath)),
+        source: readFileSync(filePath, 'utf8'),
+      },
+      'Static-analysis discovered files',
+    );
   }
   return files;
 }
@@ -353,7 +361,11 @@ export async function staticDataPlaneBuildFacts(
   for (let index = 0; index < rawSqlDiagnostics.length; index += 1) {
     const facts = sqlSafetyDiagnosticFact(rawSqlDiagnostics[index]);
     for (let factIndex = 0; factIndex < facts.length; factIndex += 1) {
-      sqlSafetyDiagnostics[sqlSafetyDiagnostics.length] = facts[factIndex]!;
+      staticAnalysisArrayAppend(
+        sqlSafetyDiagnostics,
+        facts[factIndex]!,
+        'Static-analysis SQL diagnostics',
+      );
     }
   }
   const result: StaticDataPlaneBuildFacts = {
@@ -460,18 +472,22 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
   for (let index = 0; index < sqlDiagnostics.length; index += 1) {
     const projected = sqlSafetyDiagnosticFact(sqlDiagnostics[index]);
     for (let projectedIndex = 0; projectedIndex < projected.length; projectedIndex += 1) {
-      raw[raw.length] = projected[projectedIndex]!;
+      staticAnalysisArrayAppend(raw, projected[projectedIndex]!, 'Vite SQL diagnostics');
     }
   }
   const toctouFacts = projectToctouFacts(staticFacts.toctouFacts);
   for (let index = 0; index < toctouFacts.length; index += 1) {
     const fact = toctouFacts[index]!;
-    raw[raw.length] = {
-      code: 'KV429',
-      message: `${diagnosticDefinitions.KV429.message} ${fact.name ?? '<anonymous>'} writes ${fact.table}.${fact.column} without a compare-and-set/version guard.`,
-      severity: 'error',
-      site: fact.site,
-    };
+    staticAnalysisArrayAppend(
+      raw,
+      {
+        code: 'KV429',
+        message: `${diagnosticDefinitions.KV429.message} ${fact.name ?? '<anonymous>'} writes ${fact.table}.${fact.column} without a compare-and-set/version guard.`,
+        severity: 'error',
+        site: fact.site,
+      },
+      'Vite data-plane diagnostics',
+    );
   }
   const diagnostics: DataPlaneDiagnostic[] = [];
   for (let index = 0; index < raw.length; index += 1) {
@@ -489,10 +505,15 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
     };
     let insertAt = diagnostics.length;
     while (insertAt > 0 && projected.site < diagnostics[insertAt - 1]!.site) {
-      diagnostics[insertAt] = diagnostics[insertAt - 1]!;
+      staticAnalysisArraySet(
+        diagnostics,
+        insertAt,
+        diagnostics[insertAt - 1]!,
+        'Vite data-plane diagnostics',
+      );
       insertAt -= 1;
     }
-    diagnostics[insertAt] = projected;
+    staticAnalysisArraySet(diagnostics, insertAt, projected, 'Vite data-plane diagnostics');
   }
   return diagnostics;
 }
@@ -622,10 +643,15 @@ function dataPlaneStaticAnalysisError(
     const name = files[index]!.fileName;
     let insertAt = sampleNames.length;
     while (insertAt > 0 && name < sampleNames[insertAt - 1]!) {
-      sampleNames[insertAt] = sampleNames[insertAt - 1]!;
+      staticAnalysisArraySet(
+        sampleNames,
+        insertAt,
+        sampleNames[insertAt - 1]!,
+        'Static-analysis sample names',
+      );
       insertAt -= 1;
     }
-    sampleNames[insertAt] = name;
+    staticAnalysisArraySet(sampleNames, insertAt, name, 'Static-analysis sample names');
   }
   let sample = '';
   const sampleLength = staticAnalysisMathMin(3, sampleNames.length);
@@ -648,10 +674,15 @@ function dataPlaneAnalysisCacheIdentity(files: readonly DataPlaneSourceFile[]): 
     const entry = { path: portableCacheFilePath(file.fileName), source: file.source };
     let insertAt = entries.length;
     while (insertAt > 0 && entry.path < entries[insertAt - 1]!.path) {
-      entries[insertAt] = entries[insertAt - 1]!;
+      staticAnalysisArraySet(
+        entries,
+        insertAt,
+        entries[insertAt - 1]!,
+        'Static-analysis cache entries',
+      );
       insertAt -= 1;
     }
-    entries[insertAt] = entry;
+    staticAnalysisArraySet(entries, insertAt, entry, 'Static-analysis cache entries');
   }
   return staticAnalysisCanonicalJson({
     analyzerIdentity: staticDataPlaneAnalyzerIdentity(),
@@ -672,10 +703,14 @@ function staticDataPlaneAnalyzerIdentity(): string {
       const analyzerSources = sourceFilePathsUnder(srcDir);
       for (let index = 0; index < analyzerSources.length; index += 1) {
         const file = analyzerSources[index]!;
-        sources[sources.length] = {
-          path: slashPath(relative(packageRoot, file)),
-          source: readFileIfExists(file),
-        };
+        staticAnalysisArrayAppend(
+          sources,
+          {
+            path: slashPath(relative(packageRoot, file)),
+            source: readFileIfExists(file),
+          },
+          'Static-analysis analyzer sources',
+        );
       }
     }
   }
@@ -867,11 +902,15 @@ function queryShapeFactsFromQueryReadFacts(facts: readonly QueryReadFactLike[]):
     const shape = staticAnalysisOwnDataValue(fact, 'shape', 'Static query-read fact');
     const site = staticAnalysisOwnDataValue(fact, 'site', 'Static query-read fact');
     if (typeof query !== 'string' || shape === undefined || !isCompilerQueryShape(shape)) continue;
-    result[result.length] = {
-      query,
-      shape,
-      source: typeof site === 'string' ? site : query,
-    };
+    staticAnalysisArrayAppend(
+      result,
+      {
+        query,
+        shape,
+        source: typeof site === 'string' ? site : query,
+      },
+      'Static-analysis query-shape facts',
+    );
   }
   return result;
 }
@@ -913,10 +952,10 @@ function insertQueryShapeFact(result: QueryShapeFact[], fact: QueryShapeFact): v
     ) {
       break;
     }
-    result[insertAt] = previous;
+    staticAnalysisArraySet(result, insertAt, previous, 'Static-analysis query-shape facts');
     insertAt -= 1;
   }
-  result[insertAt] = fact;
+  staticAnalysisArraySet(result, insertAt, fact, 'Static-analysis query-shape facts');
 }
 
 function mergeCompilerQueryShapeFact(
@@ -944,12 +983,19 @@ function mergeCompilerQueryShapes(
       : staticShape;
   }
   if (isPlainCompilerShapeObject(staticShape) && isPlainCompilerShapeObject(outputShape)) {
-    const merged: Record<string, QueryShapeFact['shape']> = {};
+    const merged = staticAnalysisNullRecord<QueryShapeFact['shape']>();
     const outputKeys = staticAnalysisObjectKeys(outputShape);
     for (let index = 0; index < outputKeys.length; index += 1) {
       const key = outputKeys[index]!;
       const value = staticAnalysisOwnDataValue(outputShape, key, 'Output query shape');
-      if (value !== undefined) merged[key] = value as QueryShapeFact['shape'];
+      if (value !== undefined) {
+        staticAnalysisDefineDataProperty(
+          merged,
+          key,
+          value as QueryShapeFact['shape'],
+          'Output query shape',
+        );
+      }
     }
     const staticKeys = staticAnalysisObjectKeys(staticShape);
     for (let index = 0; index < staticKeys.length; index += 1) {
@@ -959,9 +1005,14 @@ function mergeCompilerQueryShapes(
       const outputValue = staticAnalysisOwnDataValue(outputShape, key, 'Output query shape') as
         | QueryShapeFact['shape']
         | undefined;
-      merged[key] = outputValue
-        ? mergeCompilerQueryShapes(value as QueryShapeFact['shape'], outputValue)
-        : (value as QueryShapeFact['shape']);
+      staticAnalysisDefineDataProperty(
+        merged,
+        key,
+        outputValue
+          ? mergeCompilerQueryShapes(value as QueryShapeFact['shape'], outputValue)
+          : (value as QueryShapeFact['shape']),
+        'Merged query shape',
+      );
     }
     return merged;
   }
@@ -990,23 +1041,29 @@ async function outputSchemaQueryShapeFactsAsync(
   );
   if (workerCount <= 1) return outputSchemaQueryShapeFactsSerial(files);
   const chunks: DataPlaneSourceFile[][] = [];
-  for (let index = 0; index < workerCount; index += 1) chunks[index] = [];
+  for (let index = 0; index < workerCount; index += 1) {
+    staticAnalysisArrayAppend(chunks, [], 'Static-analysis worker chunks');
+  }
   for (let index = 0; index < files.length; index += 1) {
     const chunk = chunks[index % workerCount]!;
-    chunk[chunk.length] = files[index]!;
+    staticAnalysisArrayAppend(chunk, files[index]!, 'Static-analysis worker chunk');
   }
   const tasks: Promise<readonly QueryShapeFact[]>[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index]!;
     if (chunk.length === 0) continue;
-    tasks[tasks.length] = outputSchemaQueryShapeFactsWithWorkerFallback(chunk, files);
+    staticAnalysisArrayAppend(
+      tasks,
+      outputSchemaQueryShapeFactsWithWorkerFallback(chunk, files),
+      'Static-analysis worker tasks',
+    );
   }
   const facts = await staticAnalysisPromiseAll(tasks);
   const result: QueryShapeFact[] = [];
   for (let index = 0; index < facts.length; index += 1) {
     const chunkFacts = facts[index]!;
     for (let factIndex = 0; factIndex < chunkFacts.length; factIndex += 1) {
-      result[result.length] = chunkFacts[factIndex]!;
+      staticAnalysisArrayAppend(result, chunkFacts[factIndex]!, 'Static-analysis worker facts');
     }
   }
   return result;
@@ -1215,7 +1272,9 @@ function buildStaticAnalysisSourceFiles(
   const result: DataPlaneSourceFile[] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index]!;
-    if (isBuildStaticAnalysisSourceFile(file)) result[result.length] = file;
+    if (isBuildStaticAnalysisSourceFile(file)) {
+      staticAnalysisArrayAppend(result, file, 'Static-analysis build source files');
+    }
   }
   return result;
 }
@@ -1237,7 +1296,7 @@ function snapshotDataPlaneSourceFiles(
     if (typeof fileName !== 'string' || typeof source !== 'string') {
       throw new TypeError(`${label}[${index}] must contain own string fileName/source values.`);
     }
-    snapshot[snapshot.length] = { fileName, source };
+    staticAnalysisArrayAppend(snapshot, { fileName, source }, 'Static-analysis source snapshot');
   }
   return snapshot;
 }
@@ -1249,7 +1308,7 @@ function snapshotDenseArray<Value>(values: readonly Value[], label: string): Val
   for (let index = 0; index < length; index += 1) {
     const value = staticAnalysisOwnDataValue(values, index, label);
     if (value === undefined) throw new TypeError(`${label}[${index}] must be a dense own value.`);
-    snapshot[snapshot.length] = value as Value;
+    staticAnalysisArrayAppend(snapshot, value as Value, label);
   }
   return snapshot;
 }
@@ -1268,15 +1327,19 @@ function sourceFilesUnder(dir: string, root: string): DataPlaneSourceFile[] {
     if (staticAnalysisStatsIsDirectory(stat)) {
       const nested = sourceFilesUnder(path, root);
       for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
-        files[files.length] = nested[nestedIndex]!;
+        staticAnalysisArrayAppend(files, nested[nestedIndex]!, 'Static-analysis directory files');
       }
       continue;
     }
     if (!isDataPlaneAppSourcePath(entry, { includeDeclarations: false })) continue;
-    files[files.length] = {
-      fileName: slashPath(relative(root, path)),
-      source: readFileSync(path, 'utf8'),
-    };
+    staticAnalysisArrayAppend(
+      files,
+      {
+        fileName: slashPath(relative(root, path)),
+        source: readFileSync(path, 'utf8'),
+      },
+      'Static-analysis directory files',
+    );
   }
   return files;
 }
@@ -1294,11 +1357,13 @@ function dataPlaneSourceFilePaths(directory: string): string[] {
       if (isIgnoredDataPlaneDirectory(entry)) continue;
       const nested = dataPlaneSourceFilePaths(path);
       for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
-        paths[paths.length] = nested[nestedIndex]!;
+        staticAnalysisArrayAppend(paths, nested[nestedIndex]!, 'Static-analysis source paths');
       }
       continue;
     }
-    if (isDataPlaneAppSourcePath(entry, { includeDeclarations: true })) paths[paths.length] = path;
+    if (isDataPlaneAppSourcePath(entry, { includeDeclarations: true })) {
+      staticAnalysisArrayAppend(paths, path, 'Static-analysis source paths');
+    }
   }
   return paths;
 }
@@ -1373,12 +1438,16 @@ function projectToctouFacts(values: readonly ToctouFactLike[]): CoreGraph.Toctou
     ) {
       throw new TypeError('Static TOCTOU fact must use own string authority fields.');
     }
-    facts[facts.length] = {
-      column,
-      ...(name === undefined ? {} : { name }),
-      site,
-      table,
-    };
+    staticAnalysisArrayAppend(
+      facts,
+      {
+        column,
+        ...(name === undefined ? {} : { name }),
+        site,
+        table,
+      },
+      'Static-analysis TOCTOU facts',
+    );
   }
   return facts;
 }
@@ -1418,10 +1487,10 @@ function sourceFilePathsUnder(directory: string): string[] {
     if (staticAnalysisStatsIsDirectory(stat)) {
       const nested = sourceFilePathsUnder(path);
       for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
-        paths[paths.length] = nested[nestedIndex]!;
+        staticAnalysisArrayAppend(paths, nested[nestedIndex]!, 'Static-analysis project paths');
       }
     } else if (staticAnalysisRegExpTest(/\.[cm]?[jt]sx?$/u, entry)) {
-      paths[paths.length] = path;
+      staticAnalysisArrayAppend(paths, path, 'Static-analysis project paths');
     }
   }
   return paths;
@@ -1432,10 +1501,15 @@ function sortStrings(values: string[]): void {
     const value = values[index]!;
     let insertAt = index;
     while (insertAt > 0 && value < values[insertAt - 1]!) {
-      values[insertAt] = values[insertAt - 1]!;
+      staticAnalysisArraySet(
+        values,
+        insertAt,
+        values[insertAt - 1]!,
+        'Static-analysis sorted strings',
+      );
       insertAt -= 1;
     }
-    values[insertAt] = value;
+    staticAnalysisArraySet(values, insertAt, value, 'Static-analysis sorted strings');
   }
 }
 

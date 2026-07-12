@@ -6,7 +6,11 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { staticAnalysisPromiseAll } from './data-plane-static-analysis-intrinsics.js';
+import {
+  staticAnalysisDefineDataProperty,
+  staticAnalysisNullRecord,
+  staticAnalysisPromiseAll,
+} from './data-plane-static-analysis-intrinsics.js';
 
 type DataPlaneStaticAnalysisModule = typeof import('./data-plane-static-analysis.js');
 
@@ -51,6 +55,68 @@ describe('data-plane static analysis aggregate ABI', () => {
       Promise.resolve = nativeResolve;
     }
     await expect(pending!).resolves.toEqual(['first', 'second']);
+  });
+
+  it('C244 does not let inherited numeric setters replace analyzer inputs or results', async () => {
+    const first = Promise.resolve('first');
+    const values = [first, Promise.resolve('second')];
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    let pending: Promise<string[]>;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === first || value === 'first') {
+            poisonHits += 1;
+            nativeDefineProperty(this, '0', {
+              configurable: true,
+              enumerable: true,
+              value: value === first ? Promise.resolve('forged') : 'forged',
+              writable: true,
+            });
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      pending = staticAnalysisPromiseAll(values);
+      await expect(pending).resolves.toEqual(['first', 'second']);
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+    }
+    expect(poisonHits).toBe(0);
+  });
+
+  it('C246 commits query-shape keys to null-prototype own data', () => {
+    const record = staticAnalysisNullRecord<string>();
+    const prototypeDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'role');
+    let setterHits = 0;
+    try {
+      Object.defineProperty(Object.prototype, 'role', {
+        configurable: true,
+        set() {
+          setterHits += 1;
+        },
+      });
+      staticAnalysisDefineDataProperty(record, 'role', 'member', 'test query shape');
+      staticAnalysisDefineDataProperty(record, '__proto__', 'literal', 'test query shape');
+    } finally {
+      if (prototypeDescriptor === undefined) delete Object.prototype.role;
+      else Object.defineProperty(Object.prototype, 'role', prototypeDescriptor);
+    }
+
+    expect(setterHits).toBe(0);
+    expect(Object.getPrototypeOf(record)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(record, 'role')?.value).toBe('member');
+    expect(Object.getOwnPropertyDescriptor(record, '__proto__')?.value).toBe('literal');
   });
 
   it('keeps compiler query-shape facts exact after app-time source-array map replacement', async () => {

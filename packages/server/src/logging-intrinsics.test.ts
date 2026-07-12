@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 import {
+  loggingDiagnosticUrlParts,
   loggingNeutralizeControlCharacters,
   loggingReplaceAllLiteral,
 } from './logging-intrinsics.js';
@@ -28,6 +29,39 @@ describe('logging intrinsic membrane', () => {
       String.prototype.indexOf = originalIndexOf;
       String.prototype.slice = originalSlice;
     }
+  });
+
+  it('C245 does not let an inherited setter inject or erase diagnostic URL keys', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let parts: ReturnType<typeof loggingDiagnosticUrlParts>;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'code') {
+            nativeDefineProperty(this, '0', {
+              configurable: true,
+              enumerable: true,
+              value: 'forged%0aline',
+              writable: true,
+            });
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      parts = loggingDiagnosticUrlParts('/callback?code=SECRET&state=STATE');
+    } finally {
+      if (originalDescriptor === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+    }
+    expect(parts).toBeUndefined();
   });
 
   it('fails closed when a redaction control was poisoned before framework import', () => {

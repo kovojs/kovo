@@ -17,7 +17,10 @@ const nativeArrayIsArray = NativeArray.isArray;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeObjectGetOwnPropertyNames = NativeObject.getOwnPropertyNames;
+const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectConstruct = NativeReflect.construct;
 const nativeRegExpExec = RegExp.prototype.exec;
@@ -220,10 +223,36 @@ export interface LoggingDiagnosticUrlParts {
 export function loggingDiagnosticUrlParts(value: string): LoggingDiagnosticUrlParts | undefined {
   assertLoggingIntrinsics();
   try {
+    if (arrayPrototypeHasIndexedProperty()) return undefined;
     return readUrlParts(constructUrl(value));
   } catch {
     return undefined;
   }
+}
+
+function arrayPrototypeHasIndexedProperty(): boolean {
+  let owner: object | null = NativeArray.prototype;
+  for (let depth = 0; owner !== null && depth < 8; depth += 1) {
+    const names = apply<string[]>(nativeObjectGetOwnPropertyNames, NativeObject, [owner]);
+    for (let index = 0; index < names.length; index += 1) {
+      const name = names[index];
+      if (name !== undefined && isCanonicalArrayIndexName(name)) return true;
+    }
+    owner = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+  }
+  return owner !== null;
+}
+
+function isCanonicalArrayIndexName(value: string): boolean {
+  if (value.length === 0 || (value.length > 1 && value[0] === '0')) return false;
+  let numeric = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    if (code < 0x30 || code > 0x39) return false;
+    numeric = numeric * 10 + code - 0x30;
+    if (numeric > 0xffff_fffe) return false;
+  }
+  return true;
 }
 
 export function loggingHasAbsoluteUrlScheme(value: string): boolean {
@@ -270,9 +299,31 @@ function readUrlParts(url: URL): LoggingDiagnosticUrlParts {
   while (true) {
     const result = apply<IteratorResult<string>>(nativeUrlSearchParamsIteratorNext, iterator, []);
     if (result.done) break;
-    encodedQueryKeys[encodedQueryKeys.length] = apply<string>(nativeEncodeURIComponent, undefined, [
-      result.value,
+    const encoded = apply<string>(nativeEncodeURIComponent, undefined, [result.value]);
+    const index = encodedQueryKeys.length;
+    apply(nativeObjectDefineProperty, NativeObject, [
+      encodedQueryKeys,
+      index,
+      {
+        configurable: true,
+        enumerable: true,
+        value: encoded,
+        writable: true,
+      },
     ]);
+    const committed = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [encodedQueryKeys, index],
+    );
+    if (
+      committed === undefined ||
+      !('value' in committed) ||
+      committed.value !== encoded ||
+      encodedQueryKeys.length !== index + 1
+    ) {
+      throw new TypeError('Kovo logging query-key own-data commit failed.');
+    }
   }
   return {
     encodedQueryKeys,
