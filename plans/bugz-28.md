@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    81 | C1-C81 |
+| Critical |    91 | C1-C91 |
 | High     |    35 | H1-H35 |
 | Medium   |    12 | M1-M12 |
 
@@ -972,7 +972,7 @@ vitest.bugz.config.ts` passes 32 tests; the all-preset late JSON/Function/RegExp
     native getter, Node output, and Vercel output poison-first regressions; `packages/server` `vp run
 build:dist` passes.
 
-- [ ] **C77 - Drizzle relational queries bypass the managed secret-read boundary.**
+- [x] **C77 - Drizzle relational queries bypass the managed secret-read boundary.**
       `packages/server/src/secret-read-boundary.ts`
   - `createSecretBoxingReadDb()` governs callable top-level builder methods but returned the
     non-function `db.query` namespace unchanged. A real better-sqlite3 database wrapped around
@@ -982,6 +982,10 @@ build:dist` passes.
     terminal methods, prepared/placeholder execution, nested relation output, and exact SQL/origin
     metadata; every secret-bearing relational result is boxed or fails closed, and no non-function
     namespace can escape the read boundary merely because it was reached through a property.
+  - **Evidence:** the 27-test real better-sqlite3/PGlite boundary suite plus an independent
+    cross-engine precision pass box secret fields across direct, nested, extras, sync, and prepared
+    terminals while preserving public fields and correct findFirst/findMany result shapes. The
+    separately reproduced raw relational session escape is tracked as C86.
 
 - [x] **C78 - Mutable response-policy closure replaces reviewed mutation failure HTML.**
       `packages/server/src/app-mutation-responses.ts`
@@ -998,7 +1002,7 @@ build:dist` passes.
     policy, retains the safe 422 page, rejects unknown/CSRF fields, and keeps every nested snapshot
     frozen.
 
-- [ ] **C79 - Parameter-bearing prepared reads skip secret classification.**
+- [x] **C79 - Parameter-bearing prepared reads skip secret classification.**
       `packages/server/src/secret-read-boundary.ts`
   - The managed read proxy treated a terminal as classifiable only when invoked with zero arguments.
     A real Drizzle better-sqlite3 prepared select invoked as `prepared.all({})` therefore inherited an
@@ -1009,8 +1013,11 @@ build:dist` passes.
   - **Acceptance:** every prepared terminal classifies and executes one exact SQL/parameter snapshot
     regardless of argument count, or fails closed to deep secret boxing; placeholder values cannot
     turn a terminal into an ordinary chain method or desynchronize column origins from execution.
+  - **Evidence:** the same real-engine matrix covers parameter-bearing all/get/values/execute and
+    relational prepare/execute; aliases and secret fields are boxed, public-only projections remain
+    public, and genuine thenable/result semantics are retained.
 
-- [ ] **C80 - SQLite relational `sync()` is an unclassified read terminal.**
+- [x] **C80 - SQLite relational `sync()` is an unclassified read terminal.**
       `packages/server/src/secret-read-boundary.ts`
   - The managed read terminal allowlist omitted Drizzle's supported relational
     `.sync(placeholderValues)`. A real better-sqlite3 query that excluded the physical secret column
@@ -1019,8 +1026,10 @@ build:dist` passes.
   - **Acceptance:** recognize `sync` as a terminal, bind its placeholder values to one exact SQL and
     origin snapshot, deep-box aliases/nested relations, and fail closed when exact classification is
     unavailable; the terminal cannot inherit an empty boundary merely because it is synchronous.
+  - **Evidence:** real better-sqlite3 `sync({})` extras/alias coverage in the 27-test boundary suite
+    returns boxed secret-derived values; the independent full-file rerun passes.
 
-- [ ] **C81 - Mutable URLSearchParams iteration substitutes guarded query capability bytes.**
+- [x] **C81 - Mutable URLSearchParams iteration substitutes guarded query capability bytes.**
       `packages/server/src/{query,request-body-intrinsics}.ts`
   - A selective late `URLSearchParams.prototype[Symbol.iterator]` replacement changed the submitted
     `attacker-submitted` token into a cached valid victim capability before schema validation and
@@ -1031,6 +1040,120 @@ build:dist` passes.
     current URLs consume one bounded exact snapshot through boot-pinned controls; late/import-order
     poison cannot substitute or cross-bind any query key/value while genuine repeated parameters
     retain their existing schema behavior.
+  - **Evidence:** 47 focused query/input tests plus an independent cached-capability, stateful generic
+    iterable, dense-array, and native URLSearchParams poison matrix keep the attacker bytes bound to
+    schema, guards, loader, and current URL; the server distribution build passes.
+
+- [x] **C82 - Mutable route search carriers substitute cached capability bytes.**
+      `packages/server/src/{app-document,request-body-intrinsics}.ts`
+  - A late `URL.prototype.searchParams` getter and `URLSearchParams.prototype[Symbol.iterator]`
+    replacement changed a route request's submitted `attacker-submitted` token into a cached victim
+    capability before route search validation. The real document rendered `victim-account` even
+    though those authority bytes were absent from the request URL.
+  - **Acceptance:** route search extraction consumes the same bounded native URL snapshot selected
+    at ingress, uses boot-pinned getter/iterator controls and exact dense entries, and cannot be
+    cross-bound through late URL or URLSearchParams prototype replacement.
+  - **Evidence:** 55 focused ingress/document/query tests and an independent combined global URL,
+    Request URL, URL searchParams, entries, and iterator-next poison matrix retain only the submitted
+    attacker token; no cached victim capability reaches validation or rendering.
+
+- [ ] **C83 - The authorization census exposes an unclassified relational read namespace.**
+      `packages/server/src/managed-db.ts`
+  - `createAuthorizationCensusDb()` returned the raw Drizzle `db.query` namespace. A census that was
+    allowed to inspect one table could therefore call an unclassified table's relational
+    `findMany()` successfully instead of failing closed with KV414.
+  - **Acceptance:** census proxies recursively govern relational namespaces and every terminal from
+    one immutable table-identity snapshot; undeclared relational reads fail with KV414 while
+    declared read enumeration retains its exact observed-table evidence.
+
+- [x] **C84 - Mutable URL and Request method controls cross-bind ingress authority.**
+      `packages/server/src/{app-request,app-dispatch,app-document,request-body-intrinsics}.ts`
+  - Replacing the global `URL` constructor after handler construction rewrote a real request for
+    `/public?token=attacker` into `/capability?token=victim`; the real route returned
+    `victim-account`. A late `Request.prototype.method` getter could likewise present an unsafe POST
+    as GET to route matching, CSRF/method enforcement, or response finalization.
+  - **Acceptance:** native Request URL/method accessors, URL construction, URL component accessors,
+    dispatch, normalization, CSRF method checks, and response method posture share one boot-pinned
+    ingress snapshot; no late global/prototype replacement can change the selected route, authority
+    bytes, allowed method, or response semantics.
+  - **Evidence:** the 249-test independent app/CSRF/carrier/posture matrix keeps a post-snapshot
+    OPTIONS/GET request out of a state-changing mutation, refuses route/HSTS/document-channel
+    substitution, and retains exact method/URL semantics through lifecycle carriers and finalization.
+
+- [ ] **C85 - Managed replica handles expose raw primary and replica databases.**
+      `packages/server/src/managed-db.ts`
+  - Drizzle `withReplicas()` attaches `$primary` and `$replicas` handles. The managed write proxy
+    returned those properties raw, so an allowlist-limited handle could execute a cross-table
+    `DELETE` through `$primary.execute()` without KV422; replica handles escaped the same boundary.
+  - **Acceptance:** primary/replica namespaces are recursively wrapped with the identical immutable
+    posture and allowlists, or rejected when their exact authority cannot be preserved; no attached
+    Drizzle database handle can bypass table or SQL governance through a non-builder property.
+
+- [ ] **C86 - Relational builders expose a raw Drizzle session with write authority.**
+      `packages/server/src/secret-read-boundary.ts`
+  - A managed read handle recursively wrapped relational terminal methods but exposed the builder's
+    internal `session` property. With a real better-sqlite3 database, authored code reached
+    `db.query.victims.session.run(sql.raw('DELETE ...'))`; the delete executed without any read-only,
+    table-allowlist, or SQL-provenance rejection.
+  - **Acceptance:** relational builder property access is default-deny outside the explicitly
+    governed query surface; no adapter/session/dialect/raw database handle escapes through own,
+    inherited, symbol, reflected, or attached properties, while supported relational terminals
+    retain correct dialect semantics.
+
+- [ ] **C87 - An authored Vite alias replaces the trusted dev app-shell integration.**
+      `packages/{cli,server}/src`
+  - The secured `kovo dev` runner bootstrapped before authored config, but its trusted plugin later
+    called `server.ssrLoadModule('@kovojs/server/internal/app-shell-vite')`. An authored
+    `resolve.alias` redirected that bare specifier to an attacker module; real HTTP returned
+    `<main data-attacker>ALIASED FRAMEWORK</main>` from attacker-installed middleware instead of the
+    reviewed app shell.
+  - **Acceptance:** the bootstrapped exact physical framework graph supplies the dev integration to
+    the first-party plugin by closed identity; authored aliases, resolvers, plugins, SSR externalize
+    rules, or virtual modules cannot replace any compiler/data-plane/server trust-root export after
+    bootstrap.
+
+- [x] **C88 - Mutable endpoint cloning cross-binds `actAs()` database authority.**
+      `packages/server/src/endpoint.ts`
+  - `requestWithEndpointPrincipalPosture()` called live `request.clone()` and
+    `Object.defineProperty()` after endpoint code began. A handler replaced `Request.prototype.clone`
+    so `ctx.actAs('machine-principal')` gave the DB provider a cached victim Request carrying
+    `sid=victim`; late Headers and property-definition controls could also substitute browser or
+    principal authority at the same sink.
+  - **Evidence:** the full endpoint path now invokes the captured Request clone, pins the cloned
+    Request/Headers surface, and installs posture through witnessed definition; the exact clone,
+    cookie-getter, and principal-property substitution regression gives the provider no cookie and
+    the requested machine principal.
+
+- [ ] **C89 - Array species hooks rewrite guard-approved lifecycle session values.**
+      `packages/server/src/request-carrier.ts`
+  - Deep-closed session arrays owned captured native methods and private iterators, but still
+    inherited the live `array.constructor`. A selective constructor getter returned an attacker
+    `Symbol.species`; the species Proxy rewrote index zero while `pinnedRoles.map(...)` constructed
+    its result, changing the guard-approved `member` role into `admin` for later handler code.
+  - **Acceptance:** every handler-visible operation on lifecycle arrays, including species-creating
+    map/filter/slice/concat/flat families, is bound to immutable framework-owned construction and
+    exact own elements; inherited constructor/species/prototype mutation cannot replace values.
+
+- [x] **C90 - Mutable lifecycle attachment makes authenticated documents shared-cacheable.**
+      `packages/server/src/{route,app-document}.ts`
+  - An unguarded route resolved a plain authenticated session and rendered private content, then
+    route code selectively made live `Object.defineProperty` ignore the framework's
+    `lifecycleRequest` attachment. Document finalization fell back to the anonymous raw request,
+    omitted both `Cache-Control: no-store` and `Vary: Cookie`, and exposed the per-principal page to
+    shared-cache replay.
+  - **Evidence:** lifecycle attachment now uses the boot-captured definition witness; the exact
+    no-op attack retains the resolved principal signal and the authenticated document remains
+    `no-store` with `Vary: Cookie` across the 61-test document/route matrix.
+
+- [x] **C91 - Mutable database-handle attachment removes engine security wrappers.**
+      `packages/server/src/{sqlite-runtime,postgres-runtime}.ts`
+  - SQLite and request-scoped Postgres runtimes attached their module-private readonly and
+    declared-write factories through live `Object.defineProperty`. A selective no-op left the raw
+    application database without the wrapper factories, so later `managedDb()` resolution could
+    fall back to a generic handle without the runtime's secret metadata and engine authorizer.
+  - **Evidence:** both runtimes now attach the security capabilities through witnessed definition;
+    the selective SQLite reproduction retains the exact secret-boxing readonly handle and
+    declared-write factory even while ambient `Object.defineProperty` refuses both symbols.
 
 ## High
 
