@@ -553,7 +553,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the same matrix and build pass; the independent route-page replacement proof keeps
     the exact navigation stamp and emits no raw event-bearing markup.
 
-- [ ] **C49 - Mutable render-tree composition replaces escaped output at a trusted HTML sink.**
+- [x] **C49 - Mutable render-tree composition replaces escaped output at a trusted HTML sink.**
       `packages/server/src/render-tree.ts`
   - `renderTree()` escaped a literal text node and then concatenated its final parts through the live
     `Array.prototype.join`. A selective late replacement returned raw event-bearing markup, which the
@@ -561,8 +561,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** AST traversal, asynchronous component settlement, text output, and final
     composition use boot-pinned exact controls and dense own-data snapshots; no mutable application-
     realm intrinsic can add or replace bytes after escaping.
+  - **Evidence:** the 32-test render-tree/double-escape matrix and server dist+DTS build pass; the
+    independent late-join proof retains the exact escaped `safe-marker` bytes.
 
-- [ ] **C50 - Structural and mutable render registries dispatch unapproved components.**
+- [x] **C50 - Structural and mutable render registries dispatch unapproved components.**
       `packages/server/src/render-tree.ts`
   - The claimed closed registry was only a public structural object containing a public `Map`.
     Forging that shape or selectively replacing `Map.prototype.get` dispatched an event-bearing
@@ -570,8 +572,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** `renderRegistry()` proves component provenance, snapshots stable own-data entries,
     and mints a module-private registry witness; `renderTree()` dispatches only through that private
     immutable snapshot and rejects structural forgeries or ambiguous registry input.
+  - **Evidence:** the same matrix/build pass with public-map mutation, late `Map.get`, forged registry,
+    accessor entry, forged component, isomorphic component, cyclic AST, and depth-bound regressions;
+    both independent unapproved-dispatch proofs now fail closed.
 
-- [ ] **C51 - Mutable XML parser controls retag untrusted input as an approved component.**
+- [x] **C51 - Mutable XML parser controls retag untrusted input as an approved component.**
       `packages/server/src/render-tree.ts`
   - A selective late `String.prototype.slice` replacement changed the parsed tag from `evil` to
     `approved`. The closed registry then rendered the approved component even though those tag bytes
@@ -579,6 +584,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** source scanning, name/entity decoding, parser state, node construction, and
     registry lookup consume boot-pinned exact values; late/import-order intrinsic replacement cannot
     retag, add, or remove source structure before dispatch.
+  - **Evidence:** the same matrix/build pass with late slice, duplicate/prototype-named attribute,
+    source/depth/attribute bounds, and parser exactness coverage; the independent retag proof
+    leaves `<evil/>` unknown and emits no registered component output.
 
 - [ ] **C52 - Mutable static-export protocol decoding suppresses server-only markup diagnostics.**
       `packages/server/src/{static-export-protocol,static-export-document-refs,static-export}.ts`
@@ -1018,9 +1026,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C49-C53,
-H20, and H27-H28 are active compiler-cache, static-analysis, static-export, render-tree, and
-build-output fixes.
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C52-C53,
+H20, and H27-H28 are active compiler-cache, static-analysis, static-export, and build-output fixes.
 Integrated
 evidence is
 green at
