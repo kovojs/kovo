@@ -2318,11 +2318,11 @@ function createRequestScopedDb(
     normalizeTableName: normalizePolicyTable,
     tableNames: pgTablePolicyNames,
   });
-  Object.defineProperty(governedDb, kovoReadonlyDbHandle, {
+  witnessDefineProperty(governedDb, kovoReadonlyDbHandle, {
     configurable: true,
     value: () => createRequestScopedReadonlyDb(client, config, metadata, scope, request),
   });
-  Object.defineProperty(governedDb, kovoDeclaredWriteDbHandle, {
+  witnessDefineProperty(governedDb, kovoDeclaredWriteDbHandle, {
     configurable: true,
     value: (policy: DeclaredWritePolicy) =>
       createDeclaredWriteDb(governedDb, policy, {

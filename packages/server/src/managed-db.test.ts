@@ -2966,6 +2966,48 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     }
   });
 
+  it('pins SQLite runtime security handles through captured property definition', () => {
+    const db = { select: () => ({ from: () => [] }) };
+    const nativeDefineProperty = Object.defineProperty;
+    Object.defineProperty = ((target, property, descriptor) =>
+      property === kovoReadonlyDbHandle || property === kovoDeclaredWriteDbHandle
+        ? target
+        : Reflect.apply(nativeDefineProperty, Object, [
+            target,
+            property,
+            descriptor,
+          ])) as typeof Object.defineProperty;
+
+    let runtime: ReturnType<typeof createSqliteAppRuntimeDb<typeof db>>;
+    try {
+      runtime = createSqliteAppRuntimeDb({
+        db,
+        metadata: {
+          allColumnKeys: new Set(),
+          columnSources: new Map(),
+          governedColumnKeysByTable: new Map(),
+          governedColumnNamesByTable: new Map(),
+          secretColumnKeys: new Set(),
+          secretColumnKeysByTable: new Map(),
+          secretColumnNames: new Set(),
+          secretColumnNamesByTable: new Map(),
+          secretTableNames: new Set(),
+        },
+        normalizeTableName: (table) => table,
+        sqliteAuthorizer: {
+          constants: nodeSqliteConstants,
+          openDatabase: () => new NodeSqliteDatabaseSync(':memory:'),
+        },
+        tableNames: () => [],
+      });
+    } finally {
+      Object.defineProperty = nativeDefineProperty;
+    }
+
+    expect(runtime.db[kovoReadonlyDbHandle]()).toBe(runtime.readonlyDb);
+    expect(typeof runtime.db[kovoDeclaredWriteDbHandle]).toBe('function');
+  });
+
   it('rejects parsed request input copied to governed columns in managed Drizzle writes', async () => {
     const log: unknown[] = [];
     const handle = governedWriteHandle(log);
