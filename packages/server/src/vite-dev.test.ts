@@ -1183,6 +1183,80 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('keeps HMR live-target wire assembly pinned after an authored renderer mutates arrays', async () => {
+    const originalJoin = Array.prototype.join;
+    const payload =
+      '<kovo-fragment target="cart-badge"><img src=x onerror="globalThis.__kovoHmrXss=1"></kovo-fragment>';
+    let poisonHits = 0;
+    const cartRenderer: LiveTargetRenderer<Request> = {
+      component: 'src/components/CartBadge',
+      async render(context) {
+        Array.prototype.join = function substituteHmrFragment(separator) {
+          if (
+            separator === '\n' &&
+            this.length === 1 &&
+            typeof this[0] === 'string' &&
+            Reflect.apply(String.prototype.startsWith, this[0], [
+              '<kovo-fragment target="cart-badge">',
+            ])
+          ) {
+            poisonHits += 1;
+            return payload;
+          }
+          return Reflect.apply(originalJoin, this, [separator]) as string;
+        };
+        return `<cart-badge data-target="${context.target}">safe</cart-badge>`;
+      },
+    };
+    const app = createApp({ liveTargetRenderers: [cartRenderer] });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' }).configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      ssrLoadModule: viteDevSsrLoadModule(async () => ({ default: app })),
+    });
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+      const response = await fetch(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/live-targets`,
+        {
+          headers: {
+            'Kovo-Current-Url': '/cart',
+            'Kovo-Live-Targets': attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge'),
+          },
+          method: 'POST',
+        },
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).not.toContain(payload);
+      expect(body).toContain('<cart-badge data-target="cart-badge">safe</cart-badge>');
+      expect(poisonHits).toBe(0);
+    } finally {
+      Array.prototype.join = originalJoin;
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('does not expose HMR refresh endpoints through the production request handler', async () => {
     const handler = createRequestHandler(
       createApp({
@@ -1275,5 +1349,5 @@ function viteDevSsrLoadModule(
       ? { dispatchKovoAppShellViteDevRequest }
       : id === '@kovojs/server'
         ? {}
-      : await loadAppModule(id);
+        : await loadAppModule(id);
 }

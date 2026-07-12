@@ -24,6 +24,7 @@ import { renderFragmentWireHtml } from './wire-html.js';
 import type { ServerErrorDiagnosticContext } from './diagnostics.js';
 import { scrubConsoleArgs } from './logging.js';
 import {
+  securityArrayJoin,
   securityStringIncludes,
   securityStringIndexOf,
   securityStringSlice,
@@ -611,7 +612,7 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     );
   }
 
-  return new Response(chunks.join('\n'), {
+  return new Response(securityArrayJoin(chunks, '\n'), {
     headers: hmrRefreshHeaders(
       app,
       'live-targets',
