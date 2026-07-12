@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   171 | C1-C171 |
+| Critical |   235 | C1-C235 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2096,27 +2096,639 @@ build:dist` passes.
   - **Evidence:** the 30-test storage matrix exercises every carrier family under late substitution;
     core dist/DTS plus filesystem, sink, single-choke, TCB, API, and diff gates pass.
 
-- [ ] **C169 - Mutable public-asset ordering publishes a private sibling file.**
+- [x] **C169 - Mutable public-asset ordering publishes a private sibling file.**
       `packages/cli/src/commands/build-export.ts`
   - A selective late `Array.prototype.sort` replaced `/mark.svg` with `/server-secret.env`; the real
     static export then copied the secret file into the public artifact under the expected asset path.
   - **Acceptance:** public-root discovery, relative-path ownership, deterministic ordering, and copy
     inputs use boot-pinned dense controls; late collection mutation cannot add, replace, or redirect an
     asset outside the exact public root.
+  - **Evidence:** the exact real-export substitution receives zero calls, emits only `/mark.svg`, and
+    omits the sibling secret; 139 focused static-export/bootstrap tests and all build boundary gates pass.
 
-- [ ] **C170 - A split-view Drizzle table reports one domain and executes another.**
+- [x] **C170 - A split-view Drizzle table reports one domain and executes another.**
       `packages/test/src` managed database verifier
   - A Proxy-backed table exposed `cart` to verifier classification but `audit` to the retained adapter,
     letting an operation pass declared-read checks while the engine executed against a different table.
   - **Acceptance:** table carriers are rejected when proxied and their exact table identity is captured
     once through witnessed Drizzle controls before both observation and adapter dispatch.
+  - **Evidence:** the exact Proxy split-view regressions and adjacent managed-query controls pass in
+    the 232-test verifier matrix; the retained adapter sees the same witnessed table as classification.
 
-- [ ] **C171 - Mutable BroadcastChannel retirement reopens a closed private subscription.**
+- [x] **C171 - Mutable BroadcastChannel retirement reopens a closed private subscription.**
       `packages/browser/src/broadcast.ts`, generated inline loader
   - Late `onmessage = null` and `close()` interposition made `MutationBroadcast.close()` retire only an
     attacker wrapper; a subsequent private message still reached and updated the closed subscriber.
   - **Acceptance:** retirement flips an immediate private state bit and uses captured clear/close
     controls; late method/setter replacement and close-before-ready races cannot deliver after close.
+  - **Evidence:** exact late retirement, close-before-ready, and pre-init regressions pass 9/9 across
+    three engines; full browser matrices pass 441/441 and 751/751 plus inline-loader and TT gates.
+
+- [x] **C172 - Mutable post-replay path resolution redirects static export outside its root.**
+      `packages/server/src/{static-export,artifact-output-manifest}.ts`, core filesystem boundary
+  - A route replaced CommonJS `node:path.resolve`, synchronized the ESM binding, and made export
+    re-resolve its already validated output root as an outside directory; full generated HTML was
+    written outside while the configured safe directory remained bypassed. A lower artifact-output
+    seam can rebind both root and target the same way.
+  - **Acceptance:** static/Vite/artifact output roots and every downstream target derive once through
+    boot-pinned path controls and remain bound to the confined output capability after app replay.
+  - **Evidence:** 62 focused cross-package output/filesystem tests plus the exact synchronized path-
+    binding replay prove both configured and lower artifact roots remain confined; builds and gates pass.
+
+- [x] **C173 - Mutable filesystem-stat predicates permit writes through a symlink parent.**
+      `packages/core/src/internal/filesystem.ts`
+  - Late `Stats.prototype.isSymbolicLink = () => false` plus `isDirectory = () => true` made the real
+    output boundary accept a symlinked parent and write `escaped.txt` into its outside target.
+  - **Acceptance:** Stats/Dirent brands, kind predicates, identity/size/time facts, and every root,
+    parent, target, read, delete, and traversal decision use boot-pinned witnessed controls.
+  - **Evidence:** the exact late Stats prototype proof fails closed without creating the outside file;
+    the 50-test integrated filesystem/storage matrix and core/server builds pass.
+
+- [x] **C174 - Mutable FileHandle methods substitute outside bytes after path validation.**
+      `packages/core/src/internal/filesystem.ts`
+  - A late `FileHandle.prototype.readFile` replacement ran after exact realpath/open confinement and
+    returned a sibling secret instead of the bytes from the validated inside handle.
+  - **Acceptance:** handle stat/read/stream/close operations are pinned or dispatched through exact
+    builtin controls bound to the validated handle; no late FileHandle method is authority-bearing.
+  - **Evidence:** the exact late FileHandle replacement receives zero calls and the confined read
+    returns `inside`; the 50-test integrated filesystem/storage matrix passes.
+
+- [x] **C175 - Mutable node:path bindings escape the core output filesystem boundary.**
+      `packages/core/src/internal/filesystem.ts`
+  - Selective CommonJS `node:path.resolve` replacement plus `syncBuiltinESMExports()` returned an
+    outside target during candidate construction and a forged inside path during containment. The
+    real boundary completed successfully and wrote outside its pinned root.
+  - **Acceptance:** every path primitive used for root capture, confinement, parent walking, staging,
+    copy, rename, delete, and traversal is captured and witnessed before application evaluation.
+  - **Evidence:** the synchronized `node:path` replacement receives zero calls and no outside target is
+    written; the 50-test integrated matrix plus filesystem/sink/single-choke gates pass.
+
+- [x] **C176 - Empty-auth navigation retains the previous broadcast principal.**
+      `packages/browser/src` modular and generated enhanced-mutation paths
+  - The supported successful empty-auth fallback performed hard navigation without retiring mutation
+    broadcast authority. A real installed channel remained open with its receiver attached, so old-
+    principal envelopes could still apply during delayed or cancelled navigation.
+  - **Acceptance:** accepted auth/session-change fallbacks synchronously retire the principal channel
+    before sanitized navigation in modular and generated paths; non-auth redirects remain unchanged.
+  - **Evidence:** 107 focused modular/generated transition tests, full Node browser 752/752, and the
+    three-engine browser matrix 441/441 pass with retirement ordered before navigation.
+
+- [x] **C177 - Mutable structural lowering suppresses required text escaping.**
+      `packages/compiler/src/lower/structural-jsx.ts`
+  - A selective late `Array.prototype.some` reported that an ordinary `<h2 class="title">` already
+    carried a generated binding. The real compiler then emitted `{product.name}` without `escapeText`,
+    reopening raw server text interpolation for query-controlled markup.
+  - **Acceptance:** static-text element/attribute/child traversal, binding exclusion, expression and
+    trusted-composition classification, render-input lookup, and output-fact insertion use captured
+    dense controls; late collection/string/Set mutation cannot suppress an escape.
+  - **Evidence:** the exact substitution receives zero calls and retains `escapeText(product.name)`;
+    112 structural/text/query/output security tests and compiler dist/DTS pass.
+
+- [x] **C178 - Mutable structural helper emission injects executable server source.**
+      `packages/compiler/src/lower/structural-jsx.ts`
+  - A selective late `Array.prototype.join` replaced the one compiler-owned `escapeText` import name
+    with a complete import terminator plus `globalThis.KOVO_COMPILER_INJECTION = true`. The real
+    generated server module contained the injected executable statement.
+  - **Acceptance:** helper/runtime import selection, dedupe, ordering, joining, derive assembly, and
+    replacement insertion use captured dense controls; app code cannot contribute compiler source.
+  - **Evidence:** the exact join receives zero calls and generated source contains only the canonical
+    import; 113 structural/output tests, compiler dist/DTS, and all classifier corpus/routing gates pass.
+
+- [x] **C179 - Mutable Node filesystem/crypto bindings replace validation and write operations.**
+      `packages/core/src/internal/filesystem.ts`
+  - `syncBuiltinESMExports()` updates the live imported `node:fs/promises` functions and
+    `node:crypto.randomUUID`; late replacements can falsify lstat/realpath/stat, redirect file sinks,
+    or inject separators into supposedly private temporary names.
+  - **Acceptance:** every filesystem/crypto operation and temporary-name byte is captured and
+    witnessed in one private membrane before authored code; synchronized builtin exports are inert.
+  - **Evidence:** late synchronized fs/path/crypto replacement regressions pass in the 62-test focused
+    matrix; core/server builds and filesystem, sink, single-choke, and TCB gates pass.
+
+- [x] **C180 - Reauthentication navigation retains the expired broadcast principal.**
+      `packages/browser/src` modular and generated enhanced-mutation paths
+  - A 401 `Kovo-Reauth` response hard-navigated toward login without closing the old principal's
+    mutation broadcast. Cancelled/delayed navigation left the real channel and receiver live.
+  - **Acceptance:** reauthentication synchronously retires principal authority before safe/unsafe
+    directive sanitization and navigation in modular/generated paths; ordinary navigation is unchanged.
+  - **Evidence:** 113 focused branch/ordering tests, full Node browser 758/758, and three-engine
+    browser 441/441 pass with retirement before every reauth navigation form.
+
+- [x] **C181 - Mutable inline-derive emission injects executable server and client source.**
+      `packages/compiler/src/lower/structural-jsx.ts`, `packages/compiler/src/emit/client.ts`
+  - Replacing `Array.prototype.join` only for derive parameters `['now', 'cart']` closed the generated
+    arrow function, injected a global statement, and commented out the remainder. Both emitted server
+    and client modules contained executable `KOVO_DERIVE_INJECTION` source.
+  - **Acceptance:** inline derive inputs, parameters, exports, state/output facts, and corresponding
+    client derive emission use captured JSON/array/dense controls from one immutable fact.
+  - **Evidence:** the exact join receives zero calls and neither module contains injected source;
+    140 derive/structural/output tests and compiler dist/DTS pass.
+
+- [x] **C182 - Caller-controlled staging prefixes escape the output capability.**
+      `packages/core/src/internal/filesystem.ts`
+  - `createStagingRoot('../../../escaped-staging-')` joined the unvalidated prefix beneath the root's
+    sibling parent and made `mkdtemp` create a directory several ancestors outside that authority.
+  - **Acceptance:** staging prefixes are strict nonempty single filename segments with no dot/parent,
+    separator, absolute, or control-byte form; the final template remains beneath the pinned sibling.
+  - **Evidence:** parent, absolute, separator, dot, and control-bearing prefix regressions reject before
+    `mkdtemp`; valid private staging remains green in the focused filesystem/output matrix.
+
+- [x] **C183 - Mutable bfcache guard enrollment suppresses persisted-page retirement.**
+      `packages/browser/src` session/bfcache security controls
+  - Late `Document.prototype.querySelector` hid a genuine `kovo-session` meta, while a separate late
+    `EventTarget.prototype.addEventListener` replacement suppressed only `pageshow` enrollment. All
+    six three-engine probes delivered persisted pages with zero reloads.
+  - **Acceptance:** real-document session lookup and EventTarget add/remove/dispatch use boot-pinned
+    witnessed controls; structural test seams remain explicit and disposal is exact.
+  - **Evidence:** both late-poison attacks pass 6/6 across Chromium, Firefox, and WebKit; focused Node
+    passes 35/35, focused browser 36/36, and the full browser matrix passes 447/447.
+
+- [x] **C184 - Mutable client-handler emission injects executable browser source.**
+      `packages/compiler/src/emit/client.ts`
+  - A selective `Array.prototype.map` replaced the exact `emitHandlerExport` traversal with
+    `globalThis.KOVO_HANDLER_INJECTION = true`; the generated immutable client module contained and
+    would execute that statement instead of the reviewed handler.
+  - **Acceptance:** handler/import/constant/state-derive traversal and top-level client block assembly
+    use captured dense controls; emitted source derives only from the snapshotted lowering facts.
+  - **Evidence:** the exact map receives zero calls and the canonical handler remains; 100 handler/
+    capture/query/structural tests and compiler dist/DTS pass.
+
+- [x] **C185 - Mutable ReadStream dispatch substitutes bytes from a validated descriptor.**
+      `packages/core/src/internal/filesystem.ts`
+  - Replacing `fs.ReadStream.prototype._read` after boundary construction made a confined stream read
+    yield `FORGED` instead of `INSIDE`, despite the underlying opened descriptor remaining valid.
+  - **Acceptance:** confined streaming uses a private numeric-fd Web stream over pinned read,
+    controller, cancel, EOF, and close controls, with no late ReadStream prototype dispatch.
+  - **Evidence:** the exact `_read` replacement receives zero calls and yields only validated descriptor
+    bytes; focused filesystem/output tests, package builds, and authority gates pass.
+
+- [x] **C186 - Default Trusted Types policy blocks the navigation-security witness.**
+      `packages/browser/src` navigation security intrinsics
+  - Under Kovo's default Trusted Types CSP, framework initialization assigned raw text through
+    `innerHTML` while self-testing DOM controls. The import failed, so ordinary mutation forms fell
+    back to native 303 submission without the enhanced navigation security layer.
+  - **Acceptance:** the self-witness uses Trusted-Types-compatible DOM construction and proves the
+    exact pinned controls under the default policy in every supported browser engine.
+  - **Evidence:** the default-CSP integration proof loads the versioned runtime, transitions the
+    bootstrap sentinel to the installed runtime with zero TT violations, and the full browser matrix
+    passes 453/453 plus 1/1 Playwright integration.
+
+- [x] **C187 - Mutable request URL views select a more permissive verifier scope.**
+      `packages/test/src` request and response verification
+  - Late `Request.url` and `URL.pathname` getter replacement can make pre-dispatch verification
+    classify a request under a different, more permissive route scope; adjacent response error/RegExp
+    seams can similarly change what the verifier reports after execution.
+  - **Acceptance:** request identity, canonical pathname, scope selection, and response/error matching
+    consume one boot-pinned witnessed snapshot that cannot diverge across dispatch and verification.
+  - **Evidence:** exact Request/URL getter and response classifier regressions remain bound to their
+    original scope; the integrated packages/test matrix passes 245/245 and browser passes 381/381.
+
+- [x] **C188 - Mutable async-iterator dispatch deletes unrelated static-export files.**
+      `packages/core/src/internal/filesystem.ts`, server/script output staging
+  - Static cleanup consumed framework enumeration through `for await`. Replacing the shared async-
+    iterator protocol made cleanup yield an unrelated in-root user file, which was then deleted.
+  - **Acceptance:** authority-bearing enumeration returns a promised dense snapshot; cleanup rejects
+    iterable/proxy ambiguity and consumes only indexed framework-owned names without protocol dispatch.
+  - **Evidence:** the exact poisoned iterator is rejected before any delete, valid cleanup remains green,
+    and 7 server plus 12 script/gate tests and the filesystem boundary gate pass after integration.
+
+- [x] **C189 - Symlinked fixture asset roots redefine the trusted containment root.**
+      `packages/test/src` integration fixture serving
+  - Canonical containment began at `realpath(dist/assets)`, so symlinking the entire `dist` or `assets`
+    directory outside the fixture established the outside directory itself as trusted and served it.
+  - **Acceptance:** canonical fixture, dist, and assets roots form one witnessed containment chain;
+    root-level symlinks fail closed before fixture content is served.
+  - **Evidence:** both dist-root and assets-root symlink regressions reject outside content; fixture
+    static-security tests pass 6/6 within the 245-test package matrix.
+
+- [x] **C190 - Split-view static-export artifacts substitute executable output after validation.**
+      `packages/server/src/static-export-output.ts`
+  - Proxy-backed artifact arrays exposed reviewed bodies to target validation, then returned malicious
+    script HTML when planned writes indexed the original plan, placing unreviewed bytes in `writes`.
+  - **Acceptance:** all artifact families are snapshotted once into a private dense bundle used by both
+    target validation and write construction; no live caller array is re-read.
+  - **Evidence:** the exact Proxy split-view plan retains only `REVIEWED`, all returned artifact/write
+    arrays and the plan are frozen, and 43 static-export/output tests plus server build and gates pass.
+
+- [x] **C191 - Mutable integration database hooks bypass lifecycle verification.**
+      `packages/test/src` integration fixture database bridge
+  - Capability hooks were captured only after seed execution and cross-SSR hook properties remained
+    configurable. A retained seed/app database could replace the PGlite reader/write hook before
+    lifecycle resolution, hiding engine reads or committing writes before post-hoc rejection.
+  - **Acceptance:** exact hooks are captured before seed, bridge/raw-read properties are sealed, and
+    retained seed or app references cannot replace any verifier observation or dispatch control.
+  - **Evidence:** retained seed/app references cannot replace sealed private capability shells; engine
+    reads/writes remain observed across 245 package tests and the real manual fixture.
+
+- [x] **C192 - Mutable manifest traversal accepts stale flat static-export documents.**
+      `packages/server/src/static-export-result.ts`
+  - Selective late `Array.map`/`filter` replacement made a real `/about.html` manifest appear as the
+    required `/about/index.html` directory-index shape, allowing stale compatibility output after replay.
+  - **Acceptance:** inventory, route-document matching, header copies, dry/write signatures, and Set/
+    string/JSON facts consume private own-data snapshots without mutable collection or serialization dispatch.
+  - **Evidence:** exact flat-output and JSON/toJSON drift regressions remain blocking; 23 manifest/Vite
+    build tests, 10 direct manifest tests, server build, and authority gates pass.
+
+- [x] **C193 - Mutable handler-param projection injects executable client source.**
+      `packages/compiler/src/emit/client.ts`, `packages/compiler/src/types.ts`
+  - A selective late `Array.map` replaced the reviewed `item.id` parameter projection with a forged
+    attribute name that terminated `ctx.params`, injected a global statement, and commented out the rest.
+  - **Acceptance:** element parameters, accesses, references, replacement selection/dedupe, identifier
+    normalization, and emitted body assembly use pinned dense/string/RegExp controls.
+  - **Evidence:** the exact projection replacement receives zero calls and the canonical handler remains;
+    155 compiler/handler/output tests, compiler dist/DTS, and diff checks pass.
+
+- [x] **C194 - Enhanced mutation dispatch loses its scheduled request binding.**
+      browser runtime and integration request scheduling
+  - A real enhanced manual mutation reaches its handler with an undefined scheduled request and crashes
+    at `request.db`, preventing the intended request-scoped verifier path from completing.
+  - **Acceptance:** enhanced dispatch binds the exact scheduled request through handler execution and
+    verification; ordinary enhanced and no-JS controls retain equivalent authority and outcomes.
+  - **Evidence:** app-mutation/verifier tests pass 42/42; the exact Playwright enhanced raw-write case
+    reaches request-scoped verification and completes with the expected rejection, while TT control passes.
+
+- [x] **C195 - Mutable handler-param attribute emission injects raw server markup.**
+      `packages/compiler/src/emit/server-render.ts`, `packages/compiler/src/types.ts`
+  - A selective late parameter `Array.map` replaced the reviewed quantity attribute with a tag-closing
+    string and raw `<img>`; the real lowered server module contained the injected attacker markup.
+  - **Acceptance:** parameter snapshots, type stamps, attribute escaping/assembly, chained handlers,
+    module allowlists, and output-context facts use pinned dense/string/Set controls over one fact set.
+  - **Evidence:** the exact replacement receives zero calls and only canonical escaped attributes emit;
+    155 compiler/handler/output tests and compiler dist/DTS pass.
+
+- [x] **C196 - Mutable endpoint-ref diagnostics disable static-export L0/L1 blocking.**
+      static-export route protocol blocker
+  - Replacing `Array.map` for mutation/query endpoint references produced zero diagnostics. Export then
+    succeeded and wrote `/cart/index.html` containing a live `/_m/cart/add` form.
+  - **Acceptance:** endpoint references are snapshotted and indexed into deterministic diagnostics;
+    no mutable collection method can erase L0/L1 protocol blockers after route evaluation.
+  - **Evidence:** the exact late-map route remains KV229-blocked with no output; 14/14 endpoint and
+    filesystem-boundary tests, server build, and all build authority gates pass.
+
+- [x] **C197 - Mutable query-dependency projection injects executable server source.**
+      `packages/compiler/src/emit/server-render.ts`
+  - A selective late `Array.map` replaced compiler-owned dynamic dependency expressions with a global
+    assignment. The real server module executed it inside the generated `kovo-deps` expression.
+  - **Acceptance:** query entries/tokens, dedupe, dynamic/static rendering, JSON literals, and host
+    stamp assembly use pinned dense/Set/string controls without caller collection dispatch.
+  - **Evidence:** the exact projection receives zero calls and canonical query-key expressions remain;
+    196 compiler/stamp/handler/output tests and compiler dist/DTS pass.
+
+- [x] **C198 - Mutable handler-patch traversal replaces reviewed server markup.**
+      `packages/compiler/src/emit/server-render.ts`
+  - Replacing the exact `handlerSourceReplacement` map returned a forged source span and raw `<img>`;
+    the real lowered server module used the attacker patch instead of the reviewed handler attribute.
+  - **Acceptance:** handler partitioning, chained/host patch construction, output-context projection,
+    conflict diagnostics, and final patch accumulation use indexed snapshots and pinned identity sets.
+  - **Evidence:** the exact replacement receives zero calls and the canonical handler attribute emits;
+    the 196-test compiler matrix and dist/DTS build pass.
+
+- [x] **C199 - Mutable template-literal escaping injects executable server statements.**
+      `packages/compiler/src/emit/server-render.ts`
+  - A selective final `String.replaceAll` closed `renderSource()`'s generated template literal,
+    executed a global assignment, and returned a new template before the wrapper function closed.
+  - **Acceptance:** backslash, backtick, and interpolation escaping use boot-pinned string controls;
+    final server-source wrapping cannot add bytes after escaping.
+  - **Evidence:** the exact final replacement receives zero calls and no injected statement appears;
+    the 196-test compiler matrix and compiler dist/DTS pass.
+
+- [x] **C200 - Mutable artifact accumulation substitutes bytes after static-export approval.**
+      `packages/server/src/static-export.ts` and build intrinsics
+  - A first route replaced `Array.push` so the next route's post-KV229 artifact commit substituted HTML
+    containing a live mutation form; the unapproved bytes reached the real output directory.
+  - **Acceptance:** approved artifacts commit through a boot-pinned own-data append that bypasses live
+    methods and inherited numeric setters, preserving exactly the bytes inspected by the blocker.
+  - **Evidence:** the exact two-route substitution retains approved HTML and writes no live form;
+    19/19 focused tests, server build, and filesystem/import/API/export/choke/TCB gates pass.
+
+- [x] **C201 - Inherited fixture MIME entries turn unknown assets into active HTML.**
+      `packages/test/src` integration fixture server
+  - Fixture code can add an unknown extension to `Object.prototype`; the prototype-bearing MIME table
+    then serves that otherwise octet-stream asset as `text/html`, changing passive bytes into active content.
+  - **Acceptance:** MIME authority is a frozen null-prototype own-data table and lookup rejects inherited,
+    accessor, unstable, or unknown entries while preserving reviewed known types.
+  - **Evidence:** prototype-polluted unknown extensions remain octet-stream while reviewed MIME types
+    retain exact headers; static-security tests pass 6/6 and packages/test passes 245/245.
+
+- [x] **C202 - Mutable preset retention filtering suppresses mandatory deploy-skew diagnostics.**
+      `packages/server/src/build.ts`
+  - A static route replaced `Array.filter` after neutral export; node preset inspection then omitted
+    required KV417 even though the build emitted a versioned client module needing deploy retention.
+  - **Acceptance:** preset retention classification snapshots client modules and uses pinned indexed
+    suffix checks; route evaluation cannot suppress a required policy diagnostic.
+  - **Evidence:** the exact neutral-build/preset regression retains KV417; build tests pass 32/32,
+    filesystem gate tests 11/11, server build, and all authority gates pass.
+
+- [x] **C203 - Mutable form-attribute search suppresses repeatable mutation identity.**
+      `packages/compiler/src/emit/mutation-form.ts`
+  - Selective late `Array.some` fabricated an authored `key` on a repeatable enhanced mutation form.
+    KV238 disappeared and typed lowering proceeded instead of blocking ambiguous per-item identity.
+  - **Acceptance:** form/error/control discovery, key and field diagnostics, schema sets/maps, stream
+    targets, source replacements, CSRF imports, and explain facts use pinned dense/scalar controls.
+  - **Evidence:** the exact poison receives zero calls, KV238 remains, and no mutation action emits;
+    172 mutation/stamp/registry/diagnostic/compiler tests plus compiler dist/DTS pass.
+
+- [x] **C204 - Database proxy descriptors vend raw unobserved authority.**
+      `packages/test/src` verifier database membrane, with production managed-DB parity under review
+  - The verifier Proxy traps `get` but not `getOwnPropertyDescriptor`; reading the descriptor value for
+    `query`, `write`, or the capability symbol returns the raw adapter function and bypasses observation.
+  - **Acceptance:** every reflective path exposes the same wrapped, witnessed operations as ordinary
+    property access; descriptors cannot vend a writer or unobserved reader behind the verifier.
+  - **Evidence:** root, nested, prepared, inherited-data, accessor, and non-configurable descriptor
+    regressions fail closed or expose only observed methods; the 245-test verifier package matrix passes.
+
+- [x] **C205 - Mutable built-in preset aggregation erases blocking deploy diagnostics.**
+      node, Vercel, and Cloudflare preset inspectors
+  - Live iterator/spread/push and RegExp dispatch can erase KV417/KV445/KV446 and Cloudflare unsupported-
+    Node-API findings after their underlying classifiers run, making preset inspection fail open.
+  - **Acceptance:** all built-in preset classification and diagnostic aggregation uses boot-pinned
+    snapshots, indexed commits, and RegExp controls with deterministic nonempty blocking results.
+  - **Evidence:** exact iterator, push, and RegExp suppression proofs retain KV417/KV445/KV446,
+    missing-handler, and Cloudflare blocked-module errors; 47/47 build/gate tests and all gates pass.
+
+- [x] **C206 - Mutable semantic normalization blesses visible server-render drift.**
+      `packages/compiler/src/emit/render-equivalence.ts`
+  - A selective late `String.replace` rewrote only the actual semantic render from `attacker` to
+    `reviewed`; the real equivalence gate returned `ok: true` for visibly different server output.
+  - **Acceptance:** semantic parsing, tag/attribute normalization, authored-token comparison, child/
+    form/query rendering, sorting, JSON, VM evaluation, and final comparison use boot-pinned controls.
+  - **Evidence:** the exact normalization replacement receives zero calls and the drift remains
+    blocking; 162 render-equivalence/compiler/stamp/output tests and compiler dist/DTS pass.
+
+- [x] **C207 - Mutable live-target export traversal injects executable server source.**
+      `packages/compiler/src/emit/live-target-renderers.ts`
+  - A selective late `Array.map` replaced the compiler-owned live-target renderer export with a global
+    assignment; the executable statement landed inside the real lowered server module.
+  - **Acceptance:** fact/query/import traversal, TypeScript AST import augmentation, identifiers, JSON,
+    slicing, escaping, and final export assembly use boot-pinned dense/scalar controls.
+  - **Evidence:** the exact replacement receives zero calls and only the canonical renderer emits;
+    163 compiler/stamp/registry/query tests and compiler dist/DTS pass.
+
+- [x] **C208 - Mutable Cloudflare TOML assembly replaces reviewed deploy configuration.**
+      Cloudflare preset emission
+  - Route-time `Array.join` replacement can substitute the final `wrangler.toml` after its fields were
+    reviewed, changing worker `main`, routes, bindings, or compatibility configuration on disk.
+  - **Acceptance:** every TOML field/line/array and final composition uses pinned snapshots and scalar
+    escaping; the emitted bytes are exactly the reviewed preset configuration.
+  - **Evidence:** the exact route-time join and option-mutation proof retains the reviewed worker,
+    date, routes, and bindings; 49/49 build/gate tests, server build, and authority gates pass.
+
+- [x] **C209 - Mutable bootstrap import traversal injects executable client source.**
+      `packages/compiler/src/emit/bootstrap.ts`
+  - A selective late `Array.map` replaced the compiler-owned component import line with a global
+    assignment; the attacker statement landed at top level in the emitted app client bootstrap.
+  - **Acceptance:** input facts, hashes/aliases, imports/specifiers, query/clock plans, JSON, dedupe, and
+    final source assembly use boot-pinned compiler controls without caller collection dispatch.
+  - **Evidence:** the exact import replacement receives zero calls and the canonical aliased import
+    remains; 90 bootstrap/compiler/query tests and compiler dist/DTS pass.
+
+- [x] **C210 - Mutable native form submission diverts enhanced-mutation fallback.**
+      modular, bootstrap, and generated deferred browser paths
+  - After bootstrap enrollment, late replacement of `HTMLFormElement.prototype.submit` intercepts the
+    runtime-import rejection fallback in Chromium, Firefox, and WebKit after default submission was prevented.
+  - **Acceptance:** genuine form fallback uses a boot-captured witnessed native submit control in every
+    runtime path; explicit structural test fakes remain supported without granting authored authority.
+  - **Evidence:** 468 direct browser tests pass across Chromium, Firefox, and WebKit; the 96 focused
+    fallback proofs, 49 Node inline/form tests, browser build, generated loader checks, and security
+    gates prove late and pre-import replacement cannot intercept genuine native fallback.
+
+- [x] **C211 - Nested test database handles escape verifier observation.**
+      `packages/test/src` database verifier
+  - Test verification recognizes only a subset of nested driver handles; `db.session` and replica-style
+    handles can expose raw SQL execution without the observation membrane used by production.
+  - **Acceptance:** the full nested driver-handle family recursively enters the same reflective verifier
+    membrane, or fails closed when its topology cannot be witnessed.
+  - **Evidence:** session, pglite/sqlite/client/$client, $primary, and frozen replica read/write proofs
+    remain observed; malformed/late-mutated carriers fail closed and packages/test passes 247/247.
+
+- [x] **C212 - Mutable typed mutation-form assembly injects raw server markup.**
+      `packages/compiler/src/emit/server-emit-shared.ts`
+  - Selective late `Array.join` replaced reviewed generated method/action/mutation attributes with a
+    tag-closing raw `<img>`; the lowered server module contained the attacker element.
+  - **Acceptance:** form binding/key/schema discovery, attributes, conflicts, CSRF/idem replacements,
+    targets, template escaping, output facts, and final assembly use boot-pinned compiler controls.
+  - **Evidence:** the exact join receives zero calls and canonical form attributes remain; 209 central
+    compiler/form/registry/handler tests and compiler dist/DTS pass.
+
+- [x] **C213 - Mutable Node preset package inputs emit an attacker dependency graph.**
+      Node preset runtime package and lockfile emission
+  - Route-time `JSON.parse` replacement injected attacker name/packageManager/dependencies into emitted
+    `package.json`; separately, iterator replacement suppressed the runtime lockfile copy.
+  - **Acceptance:** package parsing, own-data manifest/dependency snapshots, key traversal, and lockfile
+    selection/copy use pinned controls after route evaluation.
+  - **Evidence:** both real node.emit attacks retain reviewed package metadata and the lockfile; 51/51
+    build/gate tests, server build, supply-chain check, and all authority gates pass.
+
+- [x] **C214 - Drizzle read builders escape test-verifier observation.**
+      `packages/test/src` database verifier
+  - `db.select().from(table)` and relational `db.query.<table>.findMany()` return raw builders/namespaces,
+    so undeclared reads can execute while readset verification reports no observation.
+  - **Acceptance:** select/with and relational builder families use the same witnessed recursive membrane
+    as production, with table identity bound before execution and reflective paths fail closed.
+  - **Evidence:** select/selectDistinct/join/count/with/CTE and relational namespace/builder proofs
+    observe exact readsets while raw/unresolvable/malformed paths fail KV407; packages/test passes
+    249/249 with the focused 68-test matrix, dist build, and classifier/guarantee gates green.
+
+- [x] **C215 - Mutable post-replay request construction cross-binds static-export routes.**
+      `packages/server/src/static-export-request.ts`
+  - A first route can replace the live `URL`/`Request` globals after replay setup so a later public
+    target is rendered with a privileged sibling request body while retaining the public artifact path.
+  - **Acceptance:** synthetic URL/Request construction and the returned pathname/target identity use
+    boot-pinned, witnessed controls; route evaluation cannot cross-bind request authority or output bytes.
+  - **Evidence:** the exact two-route proof retains `/public` request identity and bytes under late
+    `URL`/`Request` replacement; 31 static-export/build/gate tests, server build, and filesystem,
+    import, API, export, single-choke, and TCB gates pass.
+
+- [x] **C216 - Mutable platform-attribute traversal injects executable JSX.**
+      `packages/compiler/src/lower/{platform,structural-jsx}.ts`
+  - A selective late `Array.prototype.map` replaced the reviewed dialog command attributes with a
+    tag-closing name; the real lowered server module gained an attacker-authored `<img>` element.
+  - **Acceptance:** platform target recognition, substitution lookup, typed attribute projection,
+    conflict diagnostics, and substitution recording use boot-pinned dense/exact controls only.
+  - **Evidence:** the exact late `Array.map` injection receives zero calls and canonical dialog
+    attributes remain; 150 compiler/platform/merge/structural tests and compiler dist/DTS pass.
+
+- [x] **C217 - Mutable replay dispatch diverts a captured browser interaction.**
+      modular, bootstrap, and generated early-event replay paths
+  - After bootstrap capture and successful runtime installation, a late replacement of
+    `EventTarget.prototype.dispatchEvent` consumes the replayed click in Chromium, Firefox, and WebKit.
+  - **Acceptance:** genuine replay uses a boot-captured witnessed native dispatch control in every
+    runtime path; own-data structural test fakes remain supported without granting authored authority.
+  - **Evidence:** 474 direct browser tests pass across Chromium, Firefox, and WebKit; the focused
+    36 cross-engine attack/fail-closed proofs, 45 Node generated/security tests, regenerated-loader
+    check, browser build, and security gates prove replay never redispatches through the late realm.
+
+- [x] **C218 - Mutable post-route stylesheet assembly can replace reviewed static CSS.**
+      static-export stylesheet collection and final artifact assembly
+  - Route code runs before stylesheet accumulation; live `Array.push`/iteration/join controls can
+    suppress or replace reviewed chunks in the CSS artifact subsequently linked from exported HTML.
+  - **Acceptance:** post-replay stylesheet collection, deduplication, ordering, and final bytes use
+    boot-pinned dense controls and remain exact under late/import-order prototype replacement.
+  - **Evidence:** the exact route poison proof retains approved app/build CSS and the public link
+    under combined Array/Map/String/URL replacement; 60 build/static-export tests, server build,
+    source gate, and filesystem/import/API/export/choke/TCB/supply-chain gates pass.
+
+- [x] **C219 - Drizzle write builders hide joined and returning read authority.**
+      `packages/test/src` mutation verifier database membrane
+  - `db.update(table).from(other)` observes only the target write while joined/from and `returning()`
+    reads remain on the raw builder; insert-select callback builders share the unobserved path.
+  - **Acceptance:** every write-builder stage recursively enters the reflective membrane and records
+    exact write and read identities before execution; unresolved/ambiguous builder shapes fail KV407.
+  - **Evidence:** red-before-fix update-from/returning and callback insert-select proofs now record
+    exact DML/source reads or fail before dispatch; packages/test passes 255/255, the focused 106-test
+    matrix, dist build, and classifier/guarantee/census/brand gates pass.
+
+- [x] **C220 - Mutable final JSX IR printing injects executable server markup.**
+      `packages/compiler/src/jsx-ir.ts`
+  - A selective late `Array.prototype.map` replaced the final reviewed platform attribute list with
+    a tag-closing string; the emitted server module gained an attacker-authored `<img>` element.
+  - **Acceptance:** IR construction, parent/child ownership, changed-root selection, attribute/child
+    printing, replacement ordering, and final source strings use boot-pinned dense/exact controls.
+  - **Evidence:** the exact final `Array.map` injection receives zero calls and canonical reviewed
+    attributes remain; 201 compiler/IR/platform/state/style tests and compiler dist/DTS pass.
+
+- [x] **C221 - Public Trusted Types policy cache forges browser output bytes.**
+      modular raw-HTML and generated response-fragment application paths
+  - A caller-owned `globalThis.__kovo_tt` object with `createHTML()` replaces framework-safe bytes
+    with attacker markup in Chromium, Firefox, and WebKit before the DOM sink sees the value.
+  - **Acceptance:** policy creation/cache identity is module-private and boot-owned in modular and
+    generated paths; host factory controls are witnessed and caller globals can never mint output.
+  - **Evidence:** 483 cross-engine browser and 760 Node browser tests pass; modular/generated/cache-
+    preclaim attacks preserve exact safe bytes across Chromium, Firefox, and WebKit, with regenerated
+    loader, strict-CSP Playwright, browser build, parity, sink, and security gates green.
+
+- [x] **C222 - Mutable structural derive discovery injects executable client source.**
+      `packages/compiler/src/lower/structural-jsx.ts`
+  - A selective late `Array.prototype.map` modified the real safe `state.label` derive candidate;
+    an attacker global assignment was emitted into both server render source and the client module.
+  - **Acceptance:** structural attribute/text/reactive discovery, root/input derivation, naming,
+    fact recording, and source assembly use boot-pinned dense/map/set/scalar controls end to end.
+  - **Evidence:** the exact derive-candidate `Array.map` attack receives zero calls and the emitted
+    expression remains `state.label`; 211 structural/platform/state/style/compiler tests and
+    compiler dist/DTS pass, with no live compiler-time collection/scalar dispatch left in the owner.
+
+- [x] **C223 - Mutable post-route public-asset classification can publish an external symlink.**
+      neutral static public-asset copy
+  - Public traversal runs after route code and consumes live directory iteration plus mutable
+    `Dirent.isDirectory()`/`isFile()` controls, allowing an otherwise-skipped symlink to be treated
+    as a file and copied from outside the Vite public root into the static artifact.
+  - **Acceptance:** enumeration, entry classification, realpath containment, identity/race checks,
+    and copying use boot-pinned filesystem evidence; symlinks and ambiguous entries fail closed.
+  - **Evidence:** the exact real external-secret symlink proof now rejects KV229; 98 filesystem/build
+    tests cover late/pre-import poison plus file/directory replacement races, with core/server builds,
+    source gate, and filesystem/import/API/export/choke/TCB/supply-chain gates green.
+
+- [x] **C224 - Mutable primitive composition injects executable server markup.**
+      `packages/compiler/src/lower/{primitive-composition,attribute-merge}.ts`
+  - A selective late `Array.prototype.map` replaced reviewed primitive `id`/`type` facts with a
+    tag-closing IR attribute; the emitted server module gained an attacker-authored `<img>` element.
+  - **Acceptance:** candidate discovery, child ownership, attribute parsing/merge/conflict policy,
+    IDREF rewriting, diagnostics, IR projection, and unwrap assembly use boot-pinned controls.
+  - **Evidence:** the exact primitive IR `Array.map` injection receives zero calls and canonical
+    `id`/`type` survive; 188 composition/merge/output/compiler tests and compiler dist/DTS pass,
+    with no live collection/scalar dispatch left in either composition owner.
+
+- [x] **C225 - Transaction callbacks receive a raw unobserved database.**
+      `packages/test/src` verifier database membrane
+  - `db.transaction(callback)` is a generic passthrough, so the callback's transaction DB executes
+    raw Drizzle/read/write operations while the verifier records nothing and coverage passes.
+  - **Acceptance:** transaction/savepoint callback databases, nested results, reflection, rollback,
+    and managed-DB composition recursively use the same verifier membrane or fail KV407 before use.
+  - **Evidence:** async/nested/savepoint/raw-SQL/config/reflection/rollback proofs now observe or fail
+    before authority; packages/test passes 262/262, focused 57/57, dist build, and classifier,
+    guarantee, census, and brand gates pass.
+
+- [x] **C226 - Mutable static-navigation projection injects executable server source.**
+      `packages/compiler/src/lower/{navigation,navigation-lowering}.ts`
+  - A selective late `Array.prototype.map` replaced the reviewed standalone `href()` source patch;
+    the emitted server module evaluated an attacker global assignment before returning `/products/p1`.
+  - **Acceptance:** static href call/attribute discovery, argument/object validation, route-pattern
+    construction, replacement ordering, IR mutation, escaping, and source patches use pinned controls.
+  - **Evidence:** the exact standalone replacement `Array.map` attack receives zero calls and the
+    source remains the reviewed JSON href; 155 navigation/structural/output/compiler tests and
+    compiler dist/DTS pass, with both navigation owners free of live compiler-time dispatch.
+
+- [x] **C227 - Mutable TrustedHTML coercion replaces bytes after exact policy minting.**
+      `packages/browser/src/security-output.ts` and generated output paths
+  - After C221's private exact-byte policy mint, a late `TrustedHTML.prototype.toString` replacement
+    changed sanitized safe markup into attacker `<img>` bytes in Chromium, Firefox, and WebKit.
+  - **Acceptance:** platform TrustedHTML brand/stringification is boot-captured and witnessed; direct,
+    sanitized, modular, and generated carriers retain exact bytes or fail closed without generic coercion.
+  - **Evidence:** the late stringifier substitution now preserves exact minted bytes or rejects the
+    carrier across Chromium, Firefox, and WebKit; browser 495, Node browser 760, focused 57, strict-
+    CSP Playwright, regenerated parity, build, sink, and security gates pass.
+
+- [x] **C228 - Inherited numeric setters erase durable-task build metadata.**
+      neutral build task/manifest/meta assembly and preset consumption
+  - After route replay, `tasks[tasks.length] = record` invokes an inherited numeric Array setter;
+    a selective setter can erase an authored durable task, mark the build static-only, and make
+    presets omit the server/JobRunner deployment path.
+  - **Acceptance:** every post-replay task/route/manifest/meta collection uses pinned dense own-data
+    commits; inherited setters, iterators, or late collection poison cannot erase deployment authority.
+  - **Evidence:** the real neutral/Vercel proof retains `receipt/send`, non-static posture, function,
+    and JobRunner under late/pre-import setters; 65 build/preset tests, server build, touched-file
+    checks, source gate, and filesystem/import/API/export/choke/TCB/supply-chain/guarantee gates pass.
+
+- [x] **C229 - Raw prepared `execute` methods bypass verifier observation.**
+      `packages/test/src` database verifier membrane
+  - Root/nested `prepare(statement)` handles observe only a small terminal subset; `execute()` reaches
+    the adapter and performs a write while verifier coverage records no operation and passes.
+  - **Acceptance:** all prepared read/write/result/iterator/thenable terminals bind statement identity
+    and enter the recursive reflective membrane before dispatch, including managed-DB composition.
+  - **Evidence:** prepared execute/values/sync/iterator/stream/thenable/reflection proofs now observe
+    or fail before dispatch in both managed composition orders; packages/test passes 269/269, dist
+    build, and classifier/guarantee/census/brand gates pass.
+
+- [ ] **C230 - Mutable browser fetch transport substitutes post-validation response bytes.**
+      modular and generated navigation/query/live-target/mutation fetch paths
+  - Security controls pin Response/Headers/DOMParser getters but re-read `scope.fetch`; a late global
+    replacement returns attacker response bytes that the otherwise-pinned response reader accepts.
+  - **Acceptance:** browser fetch, promise, and response carrier identity are boot-captured/witnessed
+    in every transport path; late/pre-init replacement or foreign carriers fail closed across parity.
+
+- [x] **C231 - Mutable static-spread projection injects executable server markup.**
+      `packages/compiler/src/lower/primitive-spreads.ts`
+  - A selective late `Array.prototype.map` replaced reviewed `{ id, title }` spread facts with a
+    tag-closing IR name; the emitted server module gained an attacker-authored `<img>` element.
+  - **Acceptance:** spread/entry discovery, literal parsing, numeric/scalar validation, removal,
+    projection, and IR insertion use boot-pinned dense/scalar controls without prototype dispatch.
+  - **Evidence:** the exact static-spread `Array.map` injection receives zero calls and reviewed
+    `id`/`title` survive; 91 spread/structural/output/style tests and compiler dist/DTS pass, with
+    no live compiler-time collection/scalar dispatch remaining in the owner.
+
+- [x] **C232 - Mutable template-stamp assembly injects executable client source.**
+      `packages/compiler/src/emit/client.ts`
+  - A selective late `Array.prototype.join` replaced reviewed escaped list-template segments with
+    an attacker function; the emitted client render plan executes a global assignment at runtime.
+  - **Acceptance:** client import/constant manifests, query/clock plans, template placeholder sorting,
+    path projection, escaped segments, and final executable source assembly use pinned controls.
+  - **Evidence:** the exact late-`Array.join` template-stamp injection receives zero calls while the
+    escaped `read(["name"])` source survives; all 1,031 compiler tests and compiler dist/DTS pass.
+
+- [x] **C233 - Push-based durable-task snapshots invoke inherited numeric setters.**
+      task runtime security intrinsics and registry snapshots
+  - Even boot-captured `Array.prototype.push` performs ordinary indexed writes; a route-installed
+    inherited numeric setter erases task entries and causes runtime startup/cron integrity failures.
+  - **Acceptance:** all durable-task registry/job/schedule snapshots commit own dense data properties;
+    late/pre-init inherited setters cannot erase, reorder, or cross-bind task runtime facts.
+  - **Evidence:** the exact inherited-setter task proof now starts and dispatches the registered task;
+    6 focused C228/C233 tests, 53 durable-task tests, 15 adjacent runtime tests, server dist/DTS, and
+    the task security source gates pass.
+
+- [x] **C234 - Inherited numeric setters erase compiler security snapshots.**
+      `packages/compiler/src/compiler-security-intrinsics.ts`
+  - `compilerSnapshotDenseArray()` used ordinary indexed assignment; a selective inherited setter
+    swallowed KV210/KV201 diagnostics and made the real unsafe browser-capture compilation pass clean.
+  - **Acceptance:** every compiler intrinsic array producer commits dense own-data properties so
+    inherited setters cannot erase diagnostics, facts, split parts, regex captures, or source inputs.
+  - **Evidence:** the exact selective inherited setter receives zero diagnostic commits and KV210/
+    KV201 remain present; all 1,031 compiler tests and compiler dist/DTS pass.
+
+- [ ] **C235 - Deferred capture descendants execute database authority after verification.**
+      `packages/test/src` verifier capture lifecycle
+  - AsyncLocalStorage descendants retain the recorder after the handler promise settles; a deferred
+    write runs after empty observations pass coverage and after the response/verification boundary.
+  - **Acceptance:** every authority entry checks an active capture epoch before adapter/transaction/
+    probe dispatch; settled descendants fail KV407 while genuinely awaited in-scope work remains valid.
 
 ## High
 
