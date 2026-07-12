@@ -809,10 +809,29 @@ describe('server build-time deployment API', () => {
           '/hello': 'src/cart.client.ts',
         },
         serverHandlerSource: `
+const originalObjectEntries = Object.entries;
+function restoreNodeRequestBridge() {
+  Object.entries = originalObjectEntries;
+}
 export default async function handler(request) {
   globalThis.__kovoNodeRawTargetHandlerCalls =
     (globalThis.__kovoNodeRawTargetHandlerCalls ?? 0) + 1;
   const url = new URL(request.url);
+  if (url.pathname === '/request-bridge-poison') {
+    globalThis.__kovoRestoreNodeRequestBridge = restoreNodeRequestBridge;
+    Object.entries = function selectiveOriginSubstitution(value) {
+      const entries = Reflect.apply(originalObjectEntries, Object, [value]);
+      if (!entries.some(([name]) => name === 'origin')) return entries;
+      return entries.map(([name, entry]) => [
+        name,
+        name === 'origin' ? 'https://trusted.example' : entry,
+      ]);
+    };
+    return new Response('armed');
+  }
+  if (url.pathname === '/request-bridge-echo') {
+    return new Response(request.method + ':' + request.headers.get('origin'));
+  }
   if (url.pathname === '/declared-oversized') {
     return new Response('Payload Too Large', { status: 413 });
   }
@@ -860,11 +879,12 @@ export default async function handler(request) {
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
       expect(nodeAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
       expect(nodeAdapter).not.toContain('typeof headers.getSetCookie');
-      expect(nodeAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(nodeAdapter).toContain("[nodeHeaders, 'set-cookie', {");
       expect(nodeAdapter).toContain(':authority');
-      expect(nodeAdapter).toContain("name.startsWith(':')");
-      expect(nodeAdapter).toContain('signal: controller.signal');
-      expect(nodeAdapter).toContain('nodeRequest.socket?.remoteAddress?.trim()');
+      expect(nodeAdapter).toContain("if (name[0] === ':')");
+      expect(nodeAdapter).toContain('const signal = apply(nativeAbortControllerSignalGetter');
+      expect(nodeAdapter).toContain('apply(nativeSocketRemoteAddressGetter');
+      expect(nodeAdapter).toContain('headers: snapshotNodeHeaders(nodeRequest)');
       expect(nodeAdapter).toContain("'__kovoPeerAddress'");
       expect(nodeServer).not.toContain('function nodeRequestToWebRequest');
       expect(nodeServer).not.toContain('function responseHeadersToNodeHeaders');
@@ -892,6 +912,7 @@ export default async function handler(request) {
       const baseUrl = await listen(server);
       const rawTargetCounter = globalThis as typeof globalThis & {
         __kovoNodeRawTargetHandlerCalls?: number;
+        __kovoRestoreNodeRequestBridge?: () => void;
       };
       rawTargetCounter.__kovoNodeRawTargetHandlerCalls = 0;
 
@@ -982,6 +1003,13 @@ export default async function handler(request) {
         );
         expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 
+        await fetch(`${baseUrl}/request-bridge-poison`);
+        const exactBridgeResponse = await fetch(`${baseUrl}/request-bridge-echo`, {
+          headers: { Origin: 'https://attacker.example' },
+        });
+        await expect(exactBridgeResponse.text()).resolves.toBe('GET:https://attacker.example');
+        rawTargetCounter.__kovoRestoreNodeRequestBridge?.();
+
         const cookieResponse = await nodeGet(baseUrl, '/cookies');
         expect(cookieResponse.headers['set-cookie']).toEqual([
           'session=s1; Path=/; HttpOnly',
@@ -1024,6 +1052,8 @@ export default async function handler(request) {
         expect(missingClientModule.headers.get('vary')).toBeNull();
         expect(missingClientModule.headers.get('set-cookie')).toBeNull();
       } finally {
+        rawTargetCounter.__kovoRestoreNodeRequestBridge?.();
+        delete rawTargetCounter.__kovoRestoreNodeRequestBridge;
         delete rawTargetCounter.__kovoNodeRawTargetHandlerCalls;
         await close(server);
       }
@@ -1764,14 +1794,33 @@ export default async function handler(request) {
 import { ServerResponse } from 'node:http';
 const originalWriteHead = ServerResponse.prototype.writeHead;
 const originalEnd = ServerResponse.prototype.end;
+const originalObjectEntries = Object.entries;
 function restoreVercelTransport() {
   ServerResponse.prototype.writeHead = originalWriteHead;
   ServerResponse.prototype.end = originalEnd;
+}
+function restoreVercelRequestBridge() {
+  Object.entries = originalObjectEntries;
 }
 export default async function handler(request) {
   globalThis.__kovoVercelRawTargetHandlerCalls =
     (globalThis.__kovoVercelRawTargetHandlerCalls ?? 0) + 1;
   const url = new URL(request.url);
+  if (url.pathname === '/request-bridge-poison') {
+    globalThis.__kovoRestoreVercelRequestBridge = restoreVercelRequestBridge;
+    Object.entries = function selectiveOriginSubstitution(value) {
+      const entries = Reflect.apply(originalObjectEntries, Object, [value]);
+      if (!entries.some(([name]) => name === 'origin')) return entries;
+      return entries.map(([name, entry]) => [
+        name,
+        name === 'origin' ? 'https://trusted.example' : entry,
+      ]);
+    };
+    return new Response('armed');
+  }
+  if (url.pathname === '/request-bridge-echo') {
+    return new Response(request.method + ':' + request.headers.get('origin'));
+  }
   if (url.pathname === '/transport-poison') {
     globalThis.__kovoRestoreVercelTransport = restoreVercelTransport;
     ServerResponse.prototype.writeHead = function attackerWriteHead() {
@@ -1838,11 +1887,12 @@ export default async function handler(request) {
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
       expect(vercelAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
       expect(vercelAdapter).not.toContain('typeof headers.getSetCookie');
-      expect(vercelAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(vercelAdapter).toContain("[nodeHeaders, 'set-cookie', {");
       expect(vercelAdapter).toContain(':authority');
-      expect(vercelAdapter).toContain("name.startsWith(':')");
-      expect(vercelAdapter).toContain('signal: controller.signal');
-      expect(vercelAdapter).toContain('nodeRequest.socket?.remoteAddress?.trim()');
+      expect(vercelAdapter).toContain("if (name[0] === ':')");
+      expect(vercelAdapter).toContain('const signal = apply(nativeAbortControllerSignalGetter');
+      expect(vercelAdapter).toContain('apply(nativeSocketRemoteAddressGetter');
+      expect(vercelAdapter).toContain('headers: snapshotNodeHeaders(nodeRequest)');
       expect(vercelAdapter).toContain("'__kovoPeerAddress'");
       expect(vercelFunction).not.toContain('function nodeRequestToWebRequest');
       expect(vercelFunction).not.toContain('function responseHeadersToNodeHeaders');
@@ -1932,6 +1982,7 @@ export default async function handler(request) {
       const baseUrl = await listen(server);
       const rawTargetCounter = globalThis as typeof globalThis & {
         __kovoVercelRawTargetHandlerCalls?: number;
+        __kovoRestoreVercelRequestBridge?: () => void;
         __kovoRestoreVercelTransport?: () => void;
       };
       rawTargetCounter.__kovoVercelRawTargetHandlerCalls = 0;
@@ -1960,6 +2011,13 @@ export default async function handler(request) {
         await expect(response.text()).resolves.toBe('vercel:/hello:function-header');
         expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
 
+        await fetch(`${baseUrl}/request-bridge-poison`);
+        const exactBridgeResponse = await fetch(`${baseUrl}/request-bridge-echo`, {
+          headers: { Origin: 'https://attacker.example' },
+        });
+        await expect(exactBridgeResponse.text()).resolves.toBe('GET:https://attacker.example');
+        rawTargetCounter.__kovoRestoreVercelRequestBridge?.();
+
         const cookieResponse = await nodeGet(baseUrl, '/cookies');
         expect(cookieResponse.headers['set-cookie']).toEqual([
           'session=s1; Path=/; HttpOnly',
@@ -1972,6 +2030,8 @@ export default async function handler(request) {
         await expect(transportResponse.text()).resolves.toBe('SAFE-VERCEL-TRANSPORT');
         rawTargetCounter.__kovoRestoreVercelTransport?.();
       } finally {
+        rawTargetCounter.__kovoRestoreVercelRequestBridge?.();
+        delete rawTargetCounter.__kovoRestoreVercelRequestBridge;
         rawTargetCounter.__kovoRestoreVercelTransport?.();
         delete rawTargetCounter.__kovoRestoreVercelTransport;
         delete rawTargetCounter.__kovoVercelRawTargetHandlerCalls;

@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    75 | C1-C75 |
+| Critical |    76 | C1-C76 |
 | High     |    35 | H1-H35 |
 | Medium   |    10 | M1-M10 |
 
@@ -927,6 +927,24 @@ This is an active closure ledger; `SPEC.md` remains normative.
     Source, generated Node, and Vercel real-HTTP regressions must prove selective prototype and
     per-call replacements cannot change any wire byte or convert a failed write into a clean 200.
 
+- [x] **C76 - Mutable Node request bridging substitutes authenticated network bytes.**
+      `packages/server/src/{node,build}.ts`
+  - After an app had evaluated, subsequent Node requests were converted through live
+    `Object.entries`, Array/iterator, String, `Readable.toWeb`, AbortController, and request-property
+    controls. A first request could selectively rewrite the next request's own `Origin`, Cookie,
+    authorization, method, or body while the framework believed it was classifying transport bytes;
+    the source and generated adapters shared the same bridge.
+  - **Acceptance:** snapshot the raw method/target/version/header bag, request stream, disconnect
+    signal, and trusted-origin inputs through boot-pinned Node/Web controls before authored dispatch;
+    reconstruct one Request from that exact snapshot and retain it for all verifier/handler sinks.
+    Two-request source, emitted Node, and Vercel regressions must prove selective entry/iterator/
+    constructor/body/property replacements cannot turn a cross-origin or unauthenticated wire
+    request into an admitted one.
+  - Evidence: `vp test run packages/server/src/{node,build}.test.ts --config vitest.bugz.config.ts`
+    passes 64 source/emitted real-HTTP and HTTP/2 tests, including CSRF Origin, body/constructor,
+    native getter, Node output, and Vercel output poison-first regressions; `packages/server` `vp run
+build:dist` passes.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1421,7 +1439,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 ## Latest verification
 
 The remediation pass remains intentionally non-zero: C17-C19, C21-C22, C25, C28, C31-C32, C42,
-C58-C75, H20, H27, H32-H35, and M10 are active compiler-cache, static-analysis, server authority/output,
+C58-C76, H20, H27, H32-H35, and M10 are active compiler-cache, static-analysis, server authority/output,
 and immutable-output fixes. Integrated evidence is green at 97 PostgreSQL, 88 egress, 37
 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158 auth/response, 51 Better Auth,
 86 crypto/replay, 234 output/compiler/core, 87 scalar route/handler/secret, and 18 password tests. A

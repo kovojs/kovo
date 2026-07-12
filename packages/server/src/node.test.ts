@@ -11,7 +11,11 @@ import type {
   RequestListener,
   ServerResponse,
 } from 'node:http';
-import { connect as http2Connect, createServer as createHttp2Server } from 'node:http2';
+import {
+  connect as http2Connect,
+  createServer as createHttp2Server,
+  Http2ServerRequest as NativeHttp2ServerRequest,
+} from 'node:http2';
 import { connect as netConnect } from 'node:net';
 import type { AddressInfo, Socket } from 'node:net';
 import { Readable } from 'node:stream';
@@ -22,6 +26,7 @@ import { trustedHtml } from '@kovojs/browser';
 import { createApp, createRequestHandler } from './app.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { mutation } from './mutation.js';
 import { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
@@ -499,6 +504,127 @@ describe('server node adapter', () => {
       expect(response.headers['content-encoding']).toBeUndefined();
     } finally {
       Array.prototype.includes = originalIncludes;
+      await server.close();
+    }
+  });
+
+  it('keeps the wire Origin exact after a prior request poisons header enumeration', async () => {
+    const originalEntries = Object.entries;
+    const originalReflectApply = Reflect.apply;
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const csrf = {
+      secret: 'node-request-bridge-csrf-secret-0123456789',
+      sessionId(request: { headers?: Headers }) {
+        return request.headers?.get('cookie')?.match(/(?:^|;\s*)sid=([^;]+)/)?.[1];
+      },
+    };
+    const appHandler = createRequestHandler(
+      createApp({
+        csrf,
+        mutations: [
+          mutation('account/delete', {
+            handler: mutationHandler,
+            input: s.object({}),
+          }),
+        ],
+      }),
+    );
+    let trustedOrigin = '';
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        if (new URL(request.url).pathname === '/arm') {
+          Object.entries = function selectiveOriginSubstitution(value: object) {
+            const entries = originalReflectApply(originalEntries, Object, [value]);
+            if (entries.some(([name]) => name === 'origin')) {
+              return entries.map(([name, entry]) => [
+                name,
+                name === 'origin' ? trustedOrigin : entry,
+              ]);
+            }
+            return entries;
+          } as typeof Object.entries;
+          return new Response('armed');
+        }
+        return appHandler(request);
+      }),
+    );
+    trustedOrigin = server.origin;
+
+    try {
+      await server.fetch('/arm');
+      const form = new FormData();
+      form.set(
+        'kovo-csrf',
+        csrfToken({ headers: new Headers({ Cookie: 'sid=victim' }) }, csrf, {
+          audience: 'account/delete',
+        }),
+      );
+      const response = await fetch(`${server.origin}/_m/account/delete`, {
+        body: form,
+        headers: {
+          Cookie: 'sid=victim',
+          Origin: 'https://attacker.example',
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBeLessThan(500);
+      expect(mutationHandler).not.toHaveBeenCalled();
+    } finally {
+      Object.entries = originalEntries;
+      await server.close();
+    }
+  });
+
+  it('keeps request body and signal construction exact after prior-request constructor poisoning', async () => {
+    const originalObjectKeys = Object.keys;
+    const originalReadableToWeb = Readable.toWeb;
+    const OriginalAbortController = globalThis.AbortController;
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === '/arm-request-controls') {
+          Object.keys = function selectiveHeaderKeySubstitution(value: object) {
+            const keys = Reflect.apply(originalObjectKeys, Object, [value]);
+            return keys.includes('origin') ? ['origin'] : keys;
+          } as typeof Object.keys;
+          Readable.toWeb = function attackerReadableToWeb() {
+            return Reflect.apply(originalReadableToWeb, Readable, [
+              Readable.from(['ATTACKER-BODY']),
+            ]);
+          } as typeof Readable.toWeb;
+          globalThis.AbortController = class PoisonedAbortController {
+            constructor() {
+              throw new Error('live AbortController reached');
+            }
+          } as typeof AbortController;
+          return new Response('armed');
+        }
+        return new Response(
+          `${request.method}:${request.headers.get('origin')}:${await request.text()}`,
+        );
+      }),
+    );
+
+    try {
+      await server.fetch('/arm-request-controls');
+      const response = await server.fetch('/echo-request-controls', {
+        body: 'VICTIM-BODY',
+        headers: {
+          'Content-Type': 'text/plain',
+          Origin: 'https://attacker.example',
+          'X-Kovo-Proof': 'kept',
+        },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(response.body).toBe('POST:https://attacker.example:VICTIM-BODY');
+    } finally {
+      Object.keys = originalObjectKeys;
+      Readable.toWeb = originalReadableToWeb;
+      globalThis.AbortController = OriginalAbortController;
       await server.close();
     }
   });
@@ -993,6 +1119,106 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
       expect(status).toBe(200);
       expect(body).toBe('ok /h2-path');
     } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('uses boot-captured HTTP/2 request getters after a prior handler poisons the prototypes', async () => {
+    const methodDescriptor = Object.getOwnPropertyDescriptor(
+      NativeHttp2ServerRequest.prototype,
+      'method',
+    )!;
+    const urlDescriptor = Object.getOwnPropertyDescriptor(
+      NativeHttp2ServerRequest.prototype,
+      'url',
+    )!;
+    const headersDescriptor = Object.getOwnPropertyDescriptor(
+      NativeHttp2ServerRequest.prototype,
+      'headers',
+    )!;
+    const httpVersionDescriptor = Object.getOwnPropertyDescriptor(
+      NativeHttp2ServerRequest.prototype,
+      'httpVersion',
+    )!;
+    const poison = (): void => {
+      Object.defineProperty(NativeHttp2ServerRequest.prototype, 'method', {
+        ...methodDescriptor,
+        get: () => 'POST',
+      });
+      Object.defineProperty(NativeHttp2ServerRequest.prototype, 'url', {
+        ...urlDescriptor,
+        get: () => '/forged-target',
+      });
+      Object.defineProperty(NativeHttp2ServerRequest.prototype, 'headers', {
+        ...headersDescriptor,
+        get: () => ({
+          ':authority': 'trusted.example',
+          ':scheme': 'https',
+          origin: 'https://trusted.example',
+        }),
+      });
+      Object.defineProperty(NativeHttp2ServerRequest.prototype, 'httpVersion', {
+        ...httpVersionDescriptor,
+        get: () => '1.0',
+      });
+    };
+    const restore = (): void => {
+      Object.defineProperty(NativeHttp2ServerRequest.prototype, 'method', methodDescriptor);
+      Object.defineProperty(NativeHttp2ServerRequest.prototype, 'url', urlDescriptor);
+      Object.defineProperty(NativeHttp2ServerRequest.prototype, 'headers', headersDescriptor);
+      Object.defineProperty(
+        NativeHttp2ServerRequest.prototype,
+        'httpVersion',
+        httpVersionDescriptor,
+      );
+    };
+    const nodeHandler = toNodeHandler(async (request) => {
+      const url = new URL(request.url);
+      if (url.pathname === '/arm-h2-request-controls') {
+        poison();
+        return new Response('armed');
+      }
+      return new Response(
+        `${request.method}:${url.pathname}:${request.headers.get('origin')}:${url.protocol}`,
+      );
+    });
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+    const exchange = (headers: Record<string, string>): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const request = client.request(headers);
+        let body = '';
+        request.setEncoding('utf8');
+        request.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        request.on('end', () => resolve(body));
+        request.on('error', reject);
+        request.end();
+      });
+
+    try {
+      await expect(
+        exchange({ ':method': 'GET', ':path': '/arm-h2-request-controls' }),
+      ).resolves.toBe('armed');
+      await expect(
+        exchange({
+          ':authority': `127.0.0.1:${address.port}`,
+          ':method': 'GET',
+          ':path': '/exact-h2-target',
+          ':scheme': 'http',
+          origin: 'https://attacker.example',
+        }),
+      ).resolves.toBe('GET:/exact-h2-target:https://attacker.example:http:');
+    } finally {
+      restore();
       client.close();
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),

@@ -625,17 +625,29 @@ function vercelStaticBuildOutputConfig(): unknown {
 function nodeAdapterRuntimeSource(): string {
   return `import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { ServerResponse } from 'node:http';
+import { IncomingMessage, ServerResponse } from 'node:http';
+import { Http2ServerRequest } from 'node:http2';
+import { Socket } from 'node:net';
 
+const NativeAbortController = globalThis.AbortController;
+const NativeAbortSignal = globalThis.AbortSignal;
+const NativeArray = globalThis.Array;
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
 const NativeURL = globalThis.URL;
+const NativeWeakMap = globalThis.WeakMap;
 const nativeReflectApply = Reflect.apply;
+const nativeArrayIsArray = NativeArray.isArray;
+const nativeObjectCreate = Object.create;
 const nativeObjectDefineProperty = Object.defineProperty;
-const nativeObjectEntries = Object.entries;
 const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = Object.getPrototypeOf;
+const nativeObjectKeys = Object.keys;
+const nativeWeakMapGet = NativeWeakMap.prototype.get;
+const nativeWeakMapSet = NativeWeakMap.prototype.set;
+const nativeAbortControllerGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'AbortController');
+const nativeAbortSignalGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'AbortSignal');
 const nativeHeadersGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'Headers');
 const nativeRequestGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'Request');
 const nativeUrlGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'URL');
@@ -649,9 +661,28 @@ const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeR
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
 const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
 const nativeReadableFromWeb = Readable.fromWeb;
+const nativeReadableToWeb = Readable.toWeb;
+const nativeAbortControllerAbort = stablePrototypeFunction(NativeAbortController.prototype, 'abort');
+const nativeAbortControllerSignalGetter = stablePrototypeGetter(NativeAbortController.prototype, 'signal');
+const nativeAbortSignalAbortedGetter = stablePrototypeGetter(NativeAbortSignal.prototype, 'aborted');
+const nativeIncomingMessageHeadersGetter = stablePrototypeGetter(IncomingMessage.prototype, 'headers');
+const nativeIncomingMessageOnce = stablePrototypeFunction(IncomingMessage.prototype, 'once');
+const nativeIncomingMessageOff = stablePrototypeFunction(IncomingMessage.prototype, 'off');
+const nativeIncomingMessageDestroy = stablePrototypeFunction(IncomingMessage.prototype, 'destroy');
+const nativeIncomingMessageDestroyedGetter = stablePrototypeGetter(IncomingMessage.prototype, 'destroyed');
+const nativeHttp2ServerRequestHeadersGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'headers');
+const nativeHttp2ServerRequestMethodGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'method');
+const nativeHttp2ServerRequestUrlGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'url');
+const nativeHttp2ServerRequestHttpVersionGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'httpVersion');
+const nativeHttp2ServerRequestSocketGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'socket');
+const nativeHttp2ServerRequestCompleteGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'complete');
+const nativeSocketOnce = stablePrototypeFunction(Socket.prototype, 'once');
+const nativeSocketOff = stablePrototypeFunction(Socket.prototype, 'off');
+const nativeSocketRemoteAddressGetter = stablePrototypeGetter(Socket.prototype, 'remoteAddress');
 const nativeServerResponseDestroy = stablePrototypeFunction(ServerResponse.prototype, 'destroy');
 const nativeServerResponseEnd = stablePrototypeFunction(ServerResponse.prototype, 'end');
 const nativeServerResponseHeadersSentGetter = stablePrototypeGetter(ServerResponse.prototype, 'headersSent');
+const nativeServerResponseOnce = stablePrototypeFunction(ServerResponse.prototype, 'once');
 const nativeServerResponseWrite = stablePrototypeFunction(ServerResponse.prototype, 'write');
 const nativeServerResponseWriteEarlyHints = stablePrototypeFunction(ServerResponse.prototype, 'writeEarlyHints');
 const nativeServerResponseWriteHead = stablePrototypeFunction(ServerResponse.prototype, 'writeHead');
@@ -660,68 +691,188 @@ const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.proto
 const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
 const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
+const nativeStringTrim = String.prototype.trim;
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
+const nodeRequestSnapshots = new NativeWeakMap();
 
 export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
   if (nodeResponse) pinNodeResponseTransport(nodeResponse);
-  if (unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) {
+  const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+  const pinnedOptions = snapshotNodeHandlerOptions(options);
+  if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
-  const method = nodeRequest.method ?? 'GET';
-  const headers = nodeHeadersToWebHeaders(nodeRequest);
-  const controller = new AbortController();
+  const method = pinnedNodeRequest.method;
+  const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers);
+  const controller = new NativeAbortController();
+  const signal = apply(nativeAbortControllerSignalGetter, controller, []);
   const abort = () => {
-    if (!controller.signal.aborted) controller.abort();
+    if (!apply(nativeAbortSignalAbortedGetter, signal, [])) {
+      apply(nativeAbortControllerAbort, controller, []);
+    }
   };
-  const socket = nodeRequest.socket;
-  nodeRequest.once('aborted', abort);
-  nodeRequest.once('close', abort);
-  socket?.once('close', abort);
+  const socket = pinnedNodeRequest.socket;
+  apply(nativeIncomingMessageOnce, nodeRequest, ['aborted', abort]);
+  apply(nativeIncomingMessageOnce, nodeRequest, ['close', abort]);
+  apply(nativeSocketOnce, socket, ['close', abort]);
   if (nodeResponse) {
     const cleanup = () => {
-      nodeRequest.off('aborted', abort);
-      nodeRequest.off('close', abort);
-      socket?.off('close', abort);
+      apply(nativeIncomingMessageOff, nodeRequest, ['aborted', abort]);
+      apply(nativeIncomingMessageOff, nodeRequest, ['close', abort]);
+      apply(nativeSocketOff, socket, ['close', abort]);
     };
-    nodeResponse.once('close', cleanup);
+    apply(nativeServerResponseOnce, nodeResponse, ['close', cleanup]);
   }
   const init = {
     headers,
     method,
-    signal: controller.signal,
+    signal,
     ...(apply(nativeSetHas, bodylessMethods, [method])
       ? {}
       : {
-          body: Readable.toWeb(nodeRequest),
+          body: apply(nativeReadableToWeb, Readable, [nodeRequest]),
           duplex: 'half',
         }),
   };
 
-  const request = constructNativeRequest(nodeRequestUrl(nodeRequest, options), init);
-  const peerAddress = nodeRequest.socket?.remoteAddress?.trim();
-  if (peerAddress) {
+  const request = constructNativeRequest(nodeRequestUrl(pinnedNodeRequest, pinnedOptions), init);
+  if (pinnedNodeRequest.peerAddress) {
     apply(nativeObjectDefineProperty, Object, [request, '__kovoPeerAddress', {
       configurable: true,
-      value: peerAddress,
+      value: pinnedNodeRequest.peerAddress,
     }]);
   }
   return request;
 }
 
+export function nodeRequestTransportMetadata(nodeRequest) {
+  const pinned = snapshotNodeRequest(nodeRequest);
+  return { httpVersion: pinned.httpVersion, method: pinned.method };
+}
+
+function snapshotNodeHandlerOptions(options) {
+  const origin = optionalOwnDataProperty(options, 'origin');
+  const trustedProxy = optionalOwnDataProperty(options, 'trustedProxy');
+  if (origin !== undefined && typeof origin !== 'string' && typeof origin !== 'function') {
+    throw new TypeError('Kovo Node adapter origin must be a string or function.');
+  }
+  if (trustedProxy !== undefined && typeof trustedProxy !== 'boolean') {
+    throw new TypeError('Kovo Node adapter trustedProxy must be a boolean.');
+  }
+  return {
+    ...(origin === undefined ? {} : { origin }),
+    ...(trustedProxy === undefined ? {} : { trustedProxy }),
+  };
+}
+
+function optionalOwnDataProperty(value, property) {
+  const own = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, property]);
+  if (own === undefined) return undefined;
+  if (!('value' in own)) {
+    throw new TypeError('Kovo Node adapter options must be own data properties.');
+  }
+  return own.value;
+}
+
+function snapshotNodeRequest(nodeRequest) {
+  const existing = apply(nativeWeakMapGet, nodeRequestSnapshots, [nodeRequest]);
+  if (existing !== undefined) return existing;
+  const isHttp2 = hasPrototype(nodeRequest, Http2ServerRequest.prototype);
+  const rawTarget = requestStringProperty(
+    nodeRequest,
+    'url',
+    '/',
+    isHttp2 ? nativeHttp2ServerRequestUrlGetter : undefined,
+  );
+  const method = requestStringProperty(
+    nodeRequest,
+    'method',
+    'GET',
+    isHttp2 ? nativeHttp2ServerRequestMethodGetter : undefined,
+  );
+  const httpVersion = requestStringProperty(
+    nodeRequest,
+    'httpVersion',
+    '1.1',
+    isHttp2 ? nativeHttp2ServerRequestHttpVersionGetter : undefined,
+  );
+  const socketDescriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeRequest, 'socket']);
+  const socket =
+    socketDescriptor === undefined && isHttp2
+      ? apply(nativeHttp2ServerRequestSocketGetter, nodeRequest, [])
+      : socketDescriptor !== undefined && 'value' in socketDescriptor
+        ? socketDescriptor.value
+        : undefined;
+  if (!socket || typeof socket !== 'object') {
+    throw new TypeError('Kovo Node adapter requires a native request socket.');
+  }
+  const peerDescriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [socket, 'remoteAddress']);
+  const remoteAddress =
+    peerDescriptor !== undefined
+      ? 'value' in peerDescriptor
+        ? peerDescriptor.value
+        : undefined
+      : hasPrototype(socket, Socket.prototype)
+        ? apply(nativeSocketRemoteAddressGetter, socket, [])
+        : undefined;
+  if (remoteAddress !== undefined && typeof remoteAddress !== 'string') {
+    throw new TypeError('Kovo Node adapter requires a string socket peer address.');
+  }
+  const peerAddress =
+    typeof remoteAddress === 'string' ? apply(nativeStringTrim, remoteAddress, []) : undefined;
+  const encryptedDescriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [socket, 'encrypted']);
+  const snapshot = {
+    carrier: nodeRequest,
+    encrypted:
+      encryptedDescriptor !== undefined &&
+      'value' in encryptedDescriptor &&
+      encryptedDescriptor.value === true,
+    headers: snapshotNodeHeaders(nodeRequest),
+    httpVersion,
+    method,
+    ...(peerAddress ? { peerAddress } : {}),
+    rawTarget,
+    socket,
+  };
+  apply(nativeWeakMapSet, nodeRequestSnapshots, [nodeRequest, snapshot]);
+  return snapshot;
+}
+
+function requestStringProperty(value, property, fallback, nativeGetter) {
+  const own = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, property]);
+  const propertyValue =
+    own === undefined && nativeGetter !== undefined
+      ? apply(nativeGetter, value, [])
+      : own !== undefined && 'value' in own
+        ? own.value
+        : undefined;
+  if (propertyValue === undefined) return fallback;
+  if (typeof propertyValue !== 'string') {
+    throw new TypeError('Kovo Node adapter requires own string request properties.');
+  }
+  return propertyValue;
+}
+
 function constructNativeRequest(input, init) {
+  const currentAbortController = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'AbortController']);
+  const currentAbortSignal = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'AbortSignal']);
   const currentHeaders = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'Headers']);
   const currentRequest = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'Request']);
   const currentUrl = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'URL']);
-  if (!currentHeaders || !currentRequest || !currentUrl) {
+  if (!currentAbortController || !currentAbortSignal || !currentHeaders || !currentRequest || !currentUrl) {
     throw new TypeError('Kovo Node adapter web platform constructors are unavailable.');
   }
   try {
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortController', nativeAbortControllerGlobalDescriptor]);
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortSignal', nativeAbortSignalGlobalDescriptor]);
     apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', nativeHeadersGlobalDescriptor]);
     apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', nativeRequestGlobalDescriptor]);
     apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', nativeUrlGlobalDescriptor]);
     return new NativeRequest(input, init);
   } finally {
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortController', currentAbortController]);
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'AbortSignal', currentAbortSignal]);
     apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', currentHeaders]);
     apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', currentRequest]);
     apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', currentUrl]);
@@ -730,7 +881,8 @@ function constructNativeRequest(input, init) {
 
 export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
   pinNodeResponseTransport(nodeResponse);
-  if (!unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) return false;
+  const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+  if (!unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) return false;
   armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
   nodeResponse.writeHead(404, {
     'cache-control': 'no-store',
@@ -742,14 +894,42 @@ export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
 }
 
 export function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
-  if (nodeRequest.complete || nodeRequest.destroyed || nodeResponse.destroyed) return;
+  if (nodeRequestComplete(nodeRequest) || nodeRequestDestroyed(nodeRequest) || nodeResponseDestroyed(nodeResponse)) return;
 
-  nodeResponse.shouldKeepAlive = false;
+  const shouldKeepAlive = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeResponse, 'shouldKeepAlive']);
+  if (shouldKeepAlive !== undefined && !('value' in shouldKeepAlive)) {
+    throw new TypeError('Kovo Node adapter requires an own keep-alive state property.');
+  }
+  apply(nativeObjectDefineProperty, Object, [nodeResponse, 'shouldKeepAlive', {
+    ...(shouldKeepAlive ?? { configurable: true, enumerable: true, writable: true }),
+    value: false,
+  }]);
   const closeIncompleteRequest = () => {
-    if (!nodeRequest.complete && !nodeRequest.destroyed) nodeRequest.destroy();
+    if (!nodeRequestComplete(nodeRequest) && !nodeRequestDestroyed(nodeRequest)) {
+      apply(nativeIncomingMessageDestroy, nodeRequest, []);
+    }
   };
-  nodeResponse.once('finish', closeIncompleteRequest);
-  nodeResponse.once('close', closeIncompleteRequest);
+  apply(nativeServerResponseOnce, nodeResponse, ['finish', closeIncompleteRequest]);
+  apply(nativeServerResponseOnce, nodeResponse, ['close', closeIncompleteRequest]);
+}
+
+function nodeRequestComplete(nodeRequest) {
+  const own = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeRequest, 'complete']);
+  if (own !== undefined) return 'value' in own && own.value === true;
+  if (!hasPrototype(nodeRequest, Http2ServerRequest.prototype)) return false;
+  return apply(nativeHttp2ServerRequestCompleteGetter, nodeRequest, []) === true;
+}
+
+function nodeRequestDestroyed(nodeRequest) {
+  const own = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeRequest, 'destroyed']);
+  if (own !== undefined) return 'value' in own && own.value === true;
+  if (!hasPrototype(nodeRequest, IncomingMessage.prototype) && !hasPrototype(nodeRequest, Http2ServerRequest.prototype)) return false;
+  return apply(nativeIncomingMessageDestroyedGetter, nodeRequest, []) === true;
+}
+
+function nodeResponseDestroyed(nodeResponse) {
+  const own = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeResponse, 'destroyed']);
+  return own !== undefined && 'value' in own && own.value === true;
 }
 
 function unsafeReservedMutationRequestTarget(rawTarget) {
@@ -889,10 +1069,10 @@ function snapshotWebResponse(response) {
 }
 
 function nodeRequestUrl(nodeRequest, options) {
-  const rawUrl = nodeRequest.url ?? '/';
+  const rawUrl = nodeRequest.rawTarget;
   const origin =
     typeof options.origin === 'function'
-      ? options.origin(nodeRequest)
+      ? options.origin(nodeRequest.carrier)
       : (options.origin ?? defaultOrigin(nodeRequest, options));
 
   const originUrl = new NativeURL(origin);
@@ -985,32 +1165,103 @@ function defaultOrigin(nodeRequest, options) {
   // E2 (SPEC §9.5): under HTTP/2 the \`Host\` header is often absent — the authority lives in
   // the \`:authority\` pseudo-header instead. Fall back to it (then \`:scheme\`) so URL resolution
   // works for HTTP/2 requests, not just HTTP/1.1.
-  const pseudoHeaders = nodeRequest.headers;
-  const host = nodeRequest.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
+  const host = nodeRequest.headers.host ?? firstHeaderValue(nodeRequest.headers[':authority']) ?? '127.0.0.1';
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
     : undefined;
-  const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
+  const pseudoScheme = firstHeaderValue(nodeRequest.headers[':scheme']);
   const proto =
     forwardedProto ??
     pseudoScheme ??
-    (nodeRequest.socket && nodeRequest.socket.encrypted ? 'https' : 'http');
+    (nodeRequest.encrypted ? 'https' : 'http');
 
-  return proto + '://' + host;
+  return (proto === 'https' ? 'https' : 'http') + '://' + host;
 }
 
-function nodeHeadersToWebHeaders(nodeRequest) {
+function snapshotNodeHeaders(nodeRequest) {
+  const own = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeRequest, 'headers']);
+  let source;
+  if (own !== undefined) {
+    if (!('value' in own) || !own.value || typeof own.value !== 'object') {
+      throw new TypeError('Kovo Node adapter requires an own header bag or native headers getter.');
+    }
+    source = own.value;
+  } else {
+    const headersGetter = hasPrototype(nodeRequest, IncomingMessage.prototype)
+      ? nativeIncomingMessageHeadersGetter
+      : hasPrototype(nodeRequest, Http2ServerRequest.prototype)
+        ? nativeHttp2ServerRequestHeadersGetter
+        : undefined;
+    if (headersGetter === undefined) {
+      throw new TypeError('Kovo Node adapter received an unsupported request carrier.');
+    }
+    source = apply(headersGetter, nodeRequest, []);
+    if (!source || typeof source !== 'object') {
+      throw new TypeError('Kovo Node adapter could not snapshot request headers.');
+    }
+  }
+  const snapshot = apply(nativeObjectCreate, Object, [null]);
+  const names = apply(nativeObjectKeys, Object, [source]);
+  for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+    const name = apply(nativeObjectGetOwnPropertyDescriptor, Object, [names, nameIndex])?.value;
+    if (typeof name !== 'string') throw new TypeError('Invalid Node header-name list.');
+    const sourceDescriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [source, name]);
+    if (sourceDescriptor === undefined || !('value' in sourceDescriptor)) {
+      throw new TypeError('Kovo Node adapter requires own header data properties.');
+    }
+    const value = sourceDescriptor.value;
+    let copied;
+    if (value === undefined || typeof value === 'string') {
+      copied = value;
+    } else if (apply(nativeArrayIsArray, NativeArray, [value])) {
+      copied = [];
+      for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+        const entry = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, valueIndex])?.value;
+        if (typeof entry !== 'string') {
+          throw new TypeError('Kovo Node adapter requires dense string header arrays.');
+        }
+        apply(nativeObjectDefineProperty, Object, [copied, valueIndex, {
+          configurable: true,
+          enumerable: true,
+          value: entry,
+          writable: true,
+        }]);
+      }
+    } else {
+      throw new TypeError('Kovo Node adapter requires string header values.');
+    }
+    apply(nativeObjectDefineProperty, Object, [snapshot, name, {
+      enumerable: true,
+      value: copied,
+    }]);
+  }
+  return snapshot;
+}
+
+function nodeHeadersToWebHeaders(nodeHeaders) {
   const headers = new NativeHeaders();
-  for (const [name, value] of apply(nativeObjectEntries, Object, [nodeRequest.headers])) {
+  const names = apply(nativeObjectKeys, Object, [nodeHeaders]);
+  for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+    const name = apply(nativeObjectGetOwnPropertyDescriptor, Object, [names, nameIndex])?.value;
+    const value = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeHeaders, name])?.value;
     if (value === undefined) continue;
     // E2 (SPEC §9.5): under Node's HTTP/2 compat API \`nodeRequest.headers\` carries pseudo-headers
     // (\`:path\`/\`:method\`/\`:authority\`/\`:scheme\`). The web \`Headers\` constructor throws on any
     // name starting with \`:\`, so copying them unfiltered 500'd every HTTP/2 request. Skip them
     // — they are addressed via \`nodeRequest.method\`/\`nodeRequest.url\`/the \`:authority\` URL fallback.
-    if (name.startsWith(':')) continue;
-    if (Array.isArray(value)) {
-      for (const entry of value) apply(nativeHeadersAppend, headers, [name, entry]);
+    if (name[0] === ':') continue;
+    if (apply(nativeArrayIsArray, NativeArray, [value])) {
+      for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+        const entry = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, valueIndex])?.value;
+        if (typeof entry !== 'string') {
+          throw new TypeError('Kovo Node adapter requires dense string header arrays.');
+        }
+        apply(nativeHeadersAppend, headers, [name, entry]);
+      }
     } else {
+      if (typeof value !== 'string') {
+        throw new TypeError('Kovo Node adapter requires string header values.');
+      }
       apply(nativeHeadersSet, headers, [name, value]);
     }
   }
@@ -1021,18 +1272,37 @@ function responseHeadersToNodeHeaders(headers) {
   // SPEC §9.4/§9.1.1: Node's writeHead accepts string[] for multi-value headers.
   // Headers.forEach combines set-cookie into one entry (comma-joined), so handle
   // it separately via getSetCookie() which preserves each cookie as a distinct value.
-  const nodeHeaders = {};
+  const nodeHeaders = apply(nativeObjectCreate, Object, [null]);
   const setCookies = apply(nativeHeadersGetSetCookie, headers, []);
-  if (setCookies.length > 0) nodeHeaders['set-cookie'] = setCookies;
+  if (setCookies.length > 0) {
+    apply(nativeObjectDefineProperty, Object, [nodeHeaders, 'set-cookie', {
+      enumerable: true,
+      value: setCookies,
+    }]);
+  }
   apply(nativeHeadersForEach, headers, [(value, name) => {
     if (name === 'set-cookie') return;
-    nodeHeaders[name] = value;
+    apply(nativeObjectDefineProperty, Object, [nodeHeaders, name, {
+      enumerable: true,
+      value,
+    }]);
   }]);
   return nodeHeaders;
 }
 
 function firstHeaderValue(value) {
-  return Array.isArray(value) ? value[0] : value;
+  if (!apply(nativeArrayIsArray, NativeArray, [value])) return value;
+  const first = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, 0])?.value;
+  return typeof first === 'string' ? first : undefined;
+}
+
+function hasPrototype(value, expected) {
+  let current = value;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    if (current === expected) return true;
+    current = apply(nativeObjectGetPrototypeOf, Object, [current]);
+  }
+  return false;
 }
 `;
 }
@@ -1047,22 +1317,30 @@ let handlerPromise;
 let nodeAdapterPromise;
 
 module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
+  let closeIncompleteRequest;
   try {
-    const { nodeRequestToWebRequest, rejectUnsafeNodeMutationTarget, writeWebResponseToNode } =
-      await loadNodeAdapter();
+    const {
+      armIncompleteNodeRequestClose,
+      nodeRequestToWebRequest,
+      nodeRequestTransportMetadata,
+      rejectUnsafeNodeMutationTarget,
+      writeWebResponseToNode,
+    } = await loadNodeAdapter();
+    closeIncompleteRequest = armIncompleteNodeRequestClose;
     if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
+    const transport = nodeRequestTransportMetadata(nodeRequest);
     const handler = await loadHandler();
     const request = nodeRequestToWebRequest(nodeRequest, {}, nodeResponse);
     const response = await handler(request);
-    armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
-    await writeWebResponseToNode(response, nodeResponse, request.method, {
-      httpVersion: nodeRequest.httpVersion,
+    closeIncompleteRequest(nodeRequest, nodeResponse);
+    await writeWebResponseToNode(response, nodeResponse, transport.method, {
+      httpVersion: transport.httpVersion,
     });
   } catch {
     if (nodeResponse.headersSent) {
       nodeResponse.destroy();
     } else {
-      armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+      closeIncompleteRequest?.(nodeRequest, nodeResponse);
       nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
       nodeResponse.end('Internal Server Error');
     }
@@ -1077,15 +1355,6 @@ async function loadHandler() {
 async function loadNodeAdapter() {
   nodeAdapterPromise ||= import('./node-adapter.mjs');
   return nodeAdapterPromise;
-}
-function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
-  if (nodeRequest.complete || nodeRequest.destroyed || nodeResponse.destroyed) return;
-  nodeResponse.shouldKeepAlive = false;
-  const closeIncompleteRequest = () => {
-    if (!nodeRequest.complete && !nodeRequest.destroyed) nodeRequest.destroy();
-  };
-  nodeResponse.once('finish', closeIncompleteRequest);
-  nodeResponse.once('close', closeIncompleteRequest);
 }
 function isImmutableStaticAssetPath(pathname) {
   return nativeReflectApply(nativeStringStartsWith, pathname, ['/c/']) ||
