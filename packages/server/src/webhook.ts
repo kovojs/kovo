@@ -30,7 +30,21 @@ import {
 import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
-import { reserveReplayBeforeRun } from './replay.js';
+import { reserveReplayBeforeRun, type MutationReplayStoreOptions } from './replay.js';
+import {
+  requestStateExactCompositeKey,
+  requestStateIgnorePromiseRejection,
+  requestStateIsSafeInteger,
+  requestStateMax,
+  requestStateNow,
+} from './request-state-intrinsics.js';
+import {
+  createWitnessMap,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+} from './security-witness-intrinsics.js';
 import {
   parseUntrustedJsonBodyBytes,
   revealUntrustedRequestValue,
@@ -300,27 +314,57 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
  * `(webhook, provider-event-id)`, concurrent `get()` calls wait for the committed response, and
  * `abort()` releases a failed in-flight reservation so the provider can retry.
  */
-export function createMemoryWebhookReplayStore(): WebhookReplayStore {
-  const responses = new Map<
-    string,
-    | {
-        pending: Promise<WebhookWireResponse>;
-        reject(reason?: unknown): void;
-        resolve(response: WebhookWireResponse): void;
+export function createMemoryWebhookReplayStore(
+  options: MutationReplayStoreOptions = {},
+): WebhookReplayStore {
+  const maxEntries = options.maxEntries ?? 1_000;
+  const maxPending = options.maxPending ?? requestStateMax(maxEntries, 256);
+  const ttlMs = options.ttlMs ?? 5 * 60_000;
+  assertWebhookReplayStoreOptions({ maxEntries, maxPending, ttlMs });
+  const responses = createWitnessMap<string, WebhookReplayRecord>();
+  let committedCount = 0;
+  let pendingCount = 0;
+
+  function evictExpiredCommitted(): void {
+    const now = requestStateNow();
+    witnessMapForEach(responses, (record, key) => {
+      if (record.kind === 'committed' && record.expiresAt <= now) {
+        witnessMapDelete(responses, key);
+        committedCount -= 1;
       }
-    | { response: WebhookWireResponse }
-  >();
+    });
+  }
+
+  function evictCommittedOverCapacity(): void {
+    while (committedCount > maxEntries) {
+      let oldestCommitted: string | undefined;
+      witnessMapForEach(responses, (record, key) => {
+        if (oldestCommitted === undefined && record.kind === 'committed') oldestCommitted = key;
+      });
+      if (oldestCommitted === undefined) return;
+      witnessMapDelete(responses, oldestCommitted);
+      committedCount -= 1;
+    }
+  }
 
   return {
     get(scope, idem) {
-      const record = responses.get(webhookReplayKey(scope, idem));
+      const key = webhookReplayKey(scope, idem);
+      const record = witnessMapGet(responses, key);
       if (record === undefined) return undefined;
-      if ('pending' in record) return record.pending;
+      if (record.kind === 'committed' && record.expiresAt <= requestStateNow()) {
+        witnessMapDelete(responses, key);
+        committedCount -= 1;
+        return undefined;
+      }
+      if (record.kind === 'pending') return record.pending;
       return record.response;
     },
     reserve(scope, idem) {
+      evictExpiredCommitted();
       const key = webhookReplayKey(scope, idem);
-      if (responses.has(key)) return undefined;
+      if (witnessMapGet(responses, key) !== undefined) return undefined;
+      if (pendingCount >= maxPending) return undefined;
 
       let resolvePending: (response: WebhookWireResponse) => void = () => undefined;
       let rejectPending: (reason?: unknown) => void = () => undefined;
@@ -328,32 +372,106 @@ export function createMemoryWebhookReplayStore(): WebhookReplayStore {
         resolvePending = resolve;
         rejectPending = reject;
       });
-      pending.catch(() => undefined);
+      requestStateIgnorePromiseRejection(pending);
+      const generation = {};
       const record = {
+        generation,
+        kind: 'pending' as const,
         pending,
         reject: rejectPending,
         resolve: resolvePending,
       };
-      responses.set(key, record);
+      witnessMapSet(responses, key, record);
+      pendingCount += 1;
 
       return {
         abort() {
-          if (responses.get(key) === record) responses.delete(key);
+          const current = witnessMapGet(responses, key);
+          if (
+            current !== record ||
+            current.kind !== 'pending' ||
+            current.generation !== generation
+          ) {
+            return;
+          }
+          witnessMapDelete(responses, key);
+          pendingCount -= 1;
           rejectPending(new Error('Webhook replay reservation aborted.'));
         },
         commit(response: WebhookWireResponse) {
-          responses.set(key, { response });
+          const current = witnessMapGet(responses, key);
+          if (
+            current !== record ||
+            current.kind !== 'pending' ||
+            current.generation !== generation
+          ) {
+            return;
+          }
+          pendingCount -= 1;
+          committedCount += 1;
+          witnessMapDelete(responses, key);
+          witnessMapSet(responses, key, {
+            expiresAt: requestStateNow() + ttlMs,
+            kind: 'committed',
+            response,
+          });
           resolvePending(response);
+          evictCommittedOverCapacity();
         },
       };
     },
     set(scope, idem, response) {
+      evictExpiredCommitted();
       const key = webhookReplayKey(scope, idem);
-      const existing = responses.get(key);
-      responses.set(key, { response });
-      if (existing && 'pending' in existing) existing.resolve(response);
+      const existing = witnessMapGet(responses, key);
+      if (existing?.kind === 'pending') {
+        pendingCount -= 1;
+        committedCount += 1;
+      } else if (existing === undefined) {
+        committedCount += 1;
+      }
+      witnessMapDelete(responses, key);
+      witnessMapSet(responses, key, {
+        expiresAt: requestStateNow() + ttlMs,
+        kind: 'committed',
+        response,
+      });
+      if (existing?.kind === 'pending') existing.resolve(response);
+      evictCommittedOverCapacity();
     },
   };
+}
+
+type WebhookReplayRecord =
+  | { expiresAt: number; kind: 'committed'; response: WebhookWireResponse }
+  | {
+      generation: object;
+      kind: 'pending';
+      pending: Promise<WebhookWireResponse>;
+      reject(reason?: unknown): void;
+      resolve(response: WebhookWireResponse): void;
+    };
+
+function assertWebhookReplayStoreOptions(options: {
+  maxEntries: number;
+  maxPending: number;
+  ttlMs: number;
+}): void {
+  if (!requestStateIsSafeInteger(options.maxEntries) || options.maxEntries < 0) {
+    throw new TypeError(
+      'createMemoryWebhookReplayStore({ maxEntries }) must be a non-negative integer.',
+    );
+  }
+  if (!requestStateIsSafeInteger(options.maxPending) || options.maxPending < 0) {
+    throw new TypeError(
+      'createMemoryWebhookReplayStore({ maxPending }) must be a non-negative integer.',
+    );
+  }
+  if (!requestStateIsSafeInteger(options.ttlMs) || options.ttlMs < 0) {
+    throw new TypeError(
+      'createMemoryWebhookReplayStore({ ttlMs }) must be a non-negative integer.',
+    );
+  }
 }
 
 /**
@@ -1152,7 +1270,7 @@ function webhookReplayScope(name: string): string {
 }
 
 function webhookReplayKey(scope: string, idem: string): string {
-  return `${scope}\0${idem}`;
+  return requestStateExactCompositeKey(scope, idem);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

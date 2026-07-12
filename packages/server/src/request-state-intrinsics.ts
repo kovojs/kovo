@@ -12,6 +12,7 @@ const NativeHeaders = globalThis.Headers;
 const NativeMath = globalThis.Math;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
+const NativePromise = globalThis.Promise;
 const NativeReflect = globalThis.Reflect;
 const NativeString = globalThis.String;
 const NativeURL = globalThis.URL;
@@ -23,6 +24,8 @@ const nativeDateGetTime = NativeDate.prototype.getTime;
 const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeMathCeil = NativeMath.ceil;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
+const nativePromiseCatch = NativePromise.prototype.catch;
+const nativePromiseThen = NativePromise.prototype.then;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
@@ -66,6 +69,13 @@ function capturedRequestStateControlsAreSound(): boolean {
       return false;
     }
     if (apply(nativeMathCeil, NativeMath, [1.01]) !== 2) return false;
+    const promiseControl = new NativePromise<string>((resolve) => resolve('accepted'));
+    if (!(apply(nativePromiseThen, promiseControl, [(value: string) => value]) instanceof NativePromise)) {
+      return false;
+    }
+    if (!(apply(nativePromiseCatch, promiseControl, [() => 'rejected']) instanceof NativePromise)) {
+      return false;
+    }
     if (apply(nativeStringTrim, '  kovo  ', []) !== 'kovo') return false;
     if (apply(nativeStringStartsWith, '/safe', ['/']) !== true) return false;
     if (apply(nativeStringStartsWith, 'unsafe', ['/']) !== false) return false;
@@ -151,6 +161,19 @@ export function requestStateRetryAfterSeconds(remainingMs: number): number {
 export function requestStateString(value: unknown): string {
   assertRequestStateIntrinsics();
   return apply(NativeString, undefined, [value]);
+}
+
+export function requestStatePromiseThen<Value, Result>(
+  promise: Promise<Value>,
+  onFulfilled: (value: Value) => Result | PromiseLike<Result>,
+): Promise<Result> {
+  assertRequestStateIntrinsics();
+  return apply(nativePromiseThen, promise, [onFulfilled]);
+}
+
+export function requestStateIgnorePromiseRejection(promise: Promise<unknown>): void {
+  assertRequestStateIntrinsics();
+  apply(nativePromiseCatch, promise, [() => undefined]);
 }
 
 export function requestStateTrim(value: string): string {

@@ -119,6 +119,104 @@ describe('server webhook primitive', () => {
     expect(store.get('webhook:public-store', 'evt_1')).toBe(response);
   });
 
+  it('keeps committed webhook truth under selective Map.get/has and clock poisoning', () => {
+    const store = createPublicMemoryWebhookReplayStore({ ttlMs: 60_000 });
+    const response: WebhookWireResponse = { body: 'committed', headers: {}, status: 200 };
+    store.set('webhook:public-store', 'evt_1', response);
+
+    const originalDateNow = Date.now;
+    const originalMapGet = Map.prototype.get;
+    const originalMapHas = Map.prototype.has;
+    let duplicateReservation: WebhookReplayReservation | undefined;
+    let replayed: ReturnType<typeof store.get> = undefined;
+    try {
+      Date.now = () => originalDateNow() + 365 * 24 * 60 * 60_000;
+      Map.prototype.get = function (key: unknown) {
+        if (typeof key === 'string' && key.includes('public-store') && key.includes('evt_1')) {
+          return undefined;
+        }
+        return originalMapGet.call(this, key);
+      };
+      Map.prototype.has = function (key: unknown) {
+        if (typeof key === 'string' && key.includes('public-store') && key.includes('evt_1')) {
+          return false;
+        }
+        return originalMapHas.call(this, key);
+      };
+
+      duplicateReservation = store.reserve('webhook:public-store', 'evt_1');
+      replayed = store.get('webhook:public-store', 'evt_1');
+    } finally {
+      Date.now = originalDateNow;
+      Map.prototype.get = originalMapGet;
+      Map.prototype.has = originalMapHas;
+    }
+
+    expect(duplicateReservation).toBeUndefined();
+    expect(replayed).toBe(response);
+  });
+
+  it('generation-fences a superseded webhook reservation from newer committed truth', async () => {
+    const store = createPublicMemoryWebhookReplayStore();
+    const stale = store.reserve('webhook:public-store', 'evt_1');
+    const joined = store.get('webhook:public-store', 'evt_1');
+    const newer: WebhookWireResponse = { body: 'newer', headers: {}, status: 200 };
+    store.set('webhook:public-store', 'evt_1', newer);
+
+    await expect(joined).resolves.toBe(newer);
+    stale?.commit({ body: 'stale', headers: {}, status: 200 });
+    expect(store.get('webhook:public-store', 'evt_1')).toBe(newer);
+  });
+
+  it('length-frames webhook scope and event ids without NUL collisions', () => {
+    const store = createPublicMemoryWebhookReplayStore();
+    const first: WebhookWireResponse = { body: 'first', headers: {}, status: 200 };
+    const second: WebhookWireResponse = { body: 'second', headers: {}, status: 200 };
+    store.set('webhook\0event', 'tail', first);
+    store.set('webhook', 'event\0tail', second);
+
+    expect(store.get('webhook\0event', 'tail')).toBe(first);
+    expect(store.get('webhook', 'event\0tail')).toBe(second);
+  });
+
+  it('bounds committed and pending webhook replay state and expires only committed truth', async () => {
+    const store = createPublicMemoryWebhookReplayStore({
+      maxEntries: 1,
+      maxPending: 1,
+      ttlMs: 5,
+    });
+    const first: WebhookWireResponse = { body: 'first', headers: {}, status: 200 };
+    const second: WebhookWireResponse = { body: 'second', headers: {}, status: 200 };
+    store.set('scope', 'first', first);
+    store.set('scope', 'second', second);
+    expect(store.get('scope', 'first')).toBeUndefined();
+    expect(store.get('scope', 'second')).toBe(second);
+
+    const pending = store.reserve('scope', 'pending');
+    expect(pending).toBeDefined();
+    expect(store.reserve('scope', 'other-pending')).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(store.reserve('scope', 'other-pending')).toBeUndefined();
+    pending?.abort?.();
+
+    const replacement = store.reserve('scope', 'other-pending');
+    expect(replacement).toBeDefined();
+    replacement?.abort?.();
+    expect(store.get('scope', 'second')).toBeUndefined();
+  });
+
+  it('rejects unsafe webhook replay capacity and ttl values', () => {
+    expect(() => createPublicMemoryWebhookReplayStore({ maxEntries: Number.NaN })).toThrow(
+      /maxEntries.*non-negative integer/u,
+    );
+    expect(() => createPublicMemoryWebhookReplayStore({ maxPending: -1 })).toThrow(
+      /maxPending.*non-negative integer/u,
+    );
+    expect(() => createPublicMemoryWebhookReplayStore({ ttlMs: 1.5 })).toThrow(
+      /ttlMs.*non-negative integer/u,
+    );
+  });
+
   it('declares a registry-visible POST endpoint with resolved verifier metadata', () => {
     const verifier = hmacSignature({
       encoding: 'hex',

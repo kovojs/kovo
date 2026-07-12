@@ -11,15 +11,28 @@ import {
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { formLikeToRecord } from './schema.js';
 import {
+  createWitnessMap,
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessIsArray,
   witnessJsonStringifyPrimitive,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
   witnessObjectKeys,
   witnessReflectApply,
   witnessSortStrings,
 } from './security-witness-intrinsics.js';
+import {
+  requestStateExactCompositeKey,
+  requestStateIgnorePromiseRejection,
+  requestStateIsSafeInteger,
+  requestStateMax,
+  requestStateNow,
+  requestStatePromiseThen,
+} from './request-state-intrinsics.js';
 
 const NativeArrayBuffer = ArrayBuffer;
 const NativeFormData = FormData;
@@ -173,9 +186,10 @@ export function createMemoryMutationReplayStore<
   // throttles legitimate concurrency under a deliberately tiny `maxEntries` (e.g. the A6
   // maxEntries-pressure scenario, where several pending records must coexist under
   // `maxEntries:2`) while still bounding the default-config peak to `maxEntries` (1000).
-  const maxPending = options.maxPending ?? Math.max(maxEntries, 256);
+  const maxPending = options.maxPending ?? requestStateMax(maxEntries, 256);
   const ttlMs = options.ttlMs ?? 5 * 60_000;
-  const responses = new Map<string, MutationReplayRecord<Response>>();
+  assertMutationReplayStoreOptions({ maxEntries, maxPending, ttlMs });
+  const responses = createWitnessMap<string, MutationReplayRecord<Response>>();
 
   // SPEC §10.3 (M7): pending and committed state have independent bounds/lifetimes. Pending
   // reservations never expire or get capacity-evicted; maxPending keeps that state bounded.
@@ -184,36 +198,36 @@ export function createMemoryMutationReplayStore<
   let committedCount = 0;
 
   function evictExpiredCommitted(): void {
-    const now = Date.now();
-    for (const [key, record] of responses) {
-      if (!('pending' in record) && record.expiresAt <= now) {
-        responses.delete(key);
+    const now = requestStateNow();
+    witnessMapForEach(responses, (record, key) => {
+      if (record.kind === 'committed' && record.expiresAt <= now) {
+        witnessMapDelete(responses, key);
         committedCount -= 1;
       }
-    }
+    });
   }
 
   function evictCommittedOverCapacity(): void {
-    while (committedCount > Math.max(0, maxEntries)) {
-      let evicted = false;
-      for (const [key, record] of responses) {
-        if ('pending' in record) continue;
-        responses.delete(key);
-        committedCount -= 1;
-        evicted = true;
-        break;
-      }
-      if (!evicted) return;
+    while (committedCount > maxEntries) {
+      let oldestCommitted: string | undefined;
+      witnessMapForEach(responses, (record, key) => {
+        if (oldestCommitted === undefined && record.kind === 'committed') {
+          oldestCommitted = key;
+        }
+      });
+      if (oldestCommitted === undefined) return;
+      witnessMapDelete(responses, oldestCommitted);
+      committedCount -= 1;
     }
   }
 
   return {
     get(scope, idem, fingerprint) {
       const key = mutationReplayKey(scope, idem);
-      const record = responses.get(key);
+      const record = witnessMapGet(responses, key);
       if (!record) return undefined;
-      if (!('pending' in record) && record.expiresAt <= Date.now()) {
-        responses.delete(key);
+      if (record.kind === 'committed' && record.expiresAt <= requestStateNow()) {
+        witnessMapDelete(responses, key);
         committedCount -= 1;
         return undefined;
       }
@@ -222,8 +236,8 @@ export function createMemoryMutationReplayStore<
         throw new MutationReplayConflictError();
       }
 
-      if ('pending' in record) {
-        return record.pending.then(cloneMutationReplayResponse);
+      if (record.kind === 'pending') {
+        return requestStatePromiseThen(record.pending, cloneMutationReplayResponse);
       }
 
       return cloneMutationReplayResponse(record.response);
@@ -231,7 +245,7 @@ export function createMemoryMutationReplayStore<
     reserve(scope, idem, fingerprint) {
       evictExpiredCommitted();
       const key = mutationReplayKey(scope, idem);
-      const existing = responses.get(key);
+      const existing = witnessMapGet(responses, key);
       if (existing) {
         if (!fingerprintsMatch(existing.fingerprint, fingerprint)) {
           throw new MutationReplayConflictError();
@@ -253,22 +267,32 @@ export function createMemoryMutationReplayStore<
       });
       // Swallow rejections so an aborted reservation with no awaiter never raises
       // an unhandled-rejection warning; awaiting callers still observe the reject.
-      pending.catch(() => undefined);
+      requestStateIgnorePromiseRejection(pending);
+      const generation = {};
       const record: MutationReplayRecord<Response> = {
         fingerprint,
+        generation,
+        kind: 'pending',
         pending,
         reject: rejectPending,
         resolve: resolvePending,
       };
-      responses.set(key, record);
+      witnessMapSet(responses, key, record);
       pendingCount += 1;
 
       return {
         abort() {
           // Release only this reservation generation. A stale abort must not remove or reject
           // a newer committed/pending generation installed under the same key.
-          if (responses.get(key) !== record) return;
-          responses.delete(key);
+          const current = witnessMapGet(responses, key);
+          if (
+            current !== record ||
+            current.kind !== 'pending' ||
+            current.generation !== generation
+          ) {
+            return;
+          }
+          witnessMapDelete(responses, key);
           pendingCount -= 1;
           rejectPending(new MutationReplayAbortedError());
         },
@@ -276,15 +300,23 @@ export function createMemoryMutationReplayStore<
           // Generation fence (M7): an aborted/superseded reservation has lost ownership of this
           // key and may never overwrite newer truth. `set()` resolves its waiters when it
           // supersedes a pending record, so a stale commit can safely become a no-op.
-          if (responses.get(key) !== record) return;
+          const current = witnessMapGet(responses, key);
+          if (
+            current !== record ||
+            current.kind !== 'pending' ||
+            current.generation !== generation
+          ) {
+            return;
+          }
           const cloned = cloneMutationReplayResponse(response);
           pendingCount -= 1;
           committedCount += 1;
           // Delete/reinsert so FIFO capacity order reflects commit time, not reservation time.
-          responses.delete(key);
-          responses.set(key, {
-            expiresAt: Date.now() + ttlMs,
+          witnessMapDelete(responses, key);
+          witnessMapSet(responses, key, {
+            expiresAt: requestStateNow() + ttlMs,
             fingerprint,
+            kind: 'committed',
             response: cloned,
           });
           resolvePending(cloned);
@@ -295,30 +327,47 @@ export function createMemoryMutationReplayStore<
     set(scope, idem, response, fingerprint) {
       evictExpiredCommitted();
       const key = mutationReplayKey(scope, idem);
-      const existing = responses.get(key);
+      const existing = witnessMapGet(responses, key);
       if (existing && !fingerprintsMatch(existing.fingerprint, fingerprint)) {
         throw new MutationReplayConflictError();
       }
       const cloned = cloneMutationReplayResponse(response);
-      if (existing && 'pending' in existing) {
+      if (existing?.kind === 'pending') {
         pendingCount -= 1;
         committedCount += 1;
       } else if (!existing) {
         committedCount += 1;
       }
       // Refresh insertion order/TTL for an existing committed record too.
-      responses.delete(key);
-      responses.set(key, {
-        expiresAt: Date.now() + ttlMs,
+      witnessMapDelete(responses, key);
+      witnessMapSet(responses, key, {
+        expiresAt: requestStateNow() + ttlMs,
         fingerprint,
+        kind: 'committed',
         response: cloned,
       });
-      if (existing && 'pending' in existing) existing.resolve(cloned);
+      if (existing?.kind === 'pending') existing.resolve(cloned);
       // Capacity eviction is committed-only. Pending records stay joined until their owner
       // explicitly commits/aborts; total state remains bounded by maxEntries + maxPending.
       evictCommittedOverCapacity();
     },
   };
+}
+
+function assertMutationReplayStoreOptions(options: {
+  maxEntries: number;
+  maxPending: number;
+  ttlMs: number;
+}): void {
+  if (!requestStateIsSafeInteger(options.maxEntries) || options.maxEntries < 0) {
+    throw new TypeError('createMemoryMutationReplayStore({ maxEntries }) must be a non-negative integer.');
+  }
+  if (!requestStateIsSafeInteger(options.maxPending) || options.maxPending < 0) {
+    throw new TypeError('createMemoryMutationReplayStore({ maxPending }) must be a non-negative integer.');
+  }
+  if (!requestStateIsSafeInteger(options.ttlMs) || options.ttlMs < 0) {
+    throw new TypeError('createMemoryMutationReplayStore({ ttlMs }) must be a non-negative integer.');
+  }
 }
 
 export async function mutationReplayContext<Request, Response extends MutationReplayResponse>(
@@ -534,9 +583,16 @@ export async function commitReservedMutationReplay<Response extends MutationRepl
 }
 
 type MutationReplayRecord<Response extends MutationReplayResponse> =
-  | { expiresAt: number; fingerprint: string | undefined; response: Response }
+  | {
+      expiresAt: number;
+      fingerprint: string | undefined;
+      kind: 'committed';
+      response: Response;
+    }
   | {
       fingerprint: string | undefined;
+      generation: object;
+      kind: 'pending';
       pending: Promise<Response>;
       // Explicit abort settles joined awaiters; capacity and TTL never evict pending records.
       reject(reason?: unknown): void;
@@ -577,7 +633,7 @@ function mutationReplayScope<Request>(
 }
 
 function mutationReplayKey(scope: string, idem: string): string {
-  return `${scope}\0${idem}`;
+  return requestStateExactCompositeKey(scope, idem);
 }
 
 /**

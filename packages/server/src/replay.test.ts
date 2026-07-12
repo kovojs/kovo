@@ -147,65 +147,52 @@ describe('server mutation replay store', () => {
     ).toBe('/');
   });
 
-  it('bounds memory mutation replay records by ttl and entry count', () => {
-    vi.useFakeTimers();
-    try {
-      const replayStore = createMemoryMutationReplayStore({ maxEntries: 1, ttlMs: 100 });
-      const first = {
-        body: 'first',
-        headers: { 'Kovo-Idem': 'idem_01' },
-        status: 200,
-      } as const;
-      const second = {
-        body: 'second',
-        headers: { 'Kovo-Idem': 'idem_02' },
-        status: 200,
-      } as const;
+  it('bounds memory mutation replay records by ttl and entry count', async () => {
+    const replayStore = createMemoryMutationReplayStore({ maxEntries: 1, ttlMs: 5 });
+    const first = {
+      body: 'first',
+      headers: { 'Kovo-Idem': 'idem_01' },
+      status: 200,
+    } as const;
+    const second = {
+      body: 'second',
+      headers: { 'Kovo-Idem': 'idem_02' },
+      status: 200,
+    } as const;
 
-      replayStore.set('session-a', 'idem_01', first);
-      replayStore.set('session-a', 'idem_02', second);
+    replayStore.set('session-a', 'idem_01', first);
+    replayStore.set('session-a', 'idem_02', second);
 
-      expect(replayStore.get('session-a', 'idem_01')).toBeUndefined();
-      expect(replayStore.get('session-a', 'idem_02')).toEqual(second);
+    expect(replayStore.get('session-a', 'idem_01')).toBeUndefined();
+    expect(replayStore.get('session-a', 'idem_02')).toEqual(second);
 
-      vi.advanceTimersByTime(100);
-
-      expect(replayStore.get('session-a', 'idem_02')).toBeUndefined();
-    } finally {
-      vi.useRealTimers();
-    }
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(replayStore.get('session-a', 'idem_02')).toBeUndefined();
   });
 
   it('M7: pending reservations outlive ttl and committed ttl starts at commit', async () => {
-    vi.useFakeTimers();
-    try {
-      const replayStore = createMemoryMutationReplayStore({
-        maxEntries: 1,
-        maxPending: 1,
-        ttlMs: 10,
-      });
-      const reservation = replayStore.reserve('scope', 'idem', 'fingerprint');
-      expect(reservation).toBeDefined();
-      const joined = replayStore.get('scope', 'idem', 'fingerprint');
-      expect(joined).toBeInstanceOf(Promise);
+    const replayStore = createMemoryMutationReplayStore({
+      maxEntries: 1,
+      maxPending: 1,
+      ttlMs: 10,
+    });
+    const reservation = replayStore.reserve('scope', 'idem', 'fingerprint');
+    expect(reservation).toBeDefined();
+    const joined = replayStore.get('scope', 'idem', 'fingerprint');
+    expect(joined).toBeInstanceOf(Promise);
 
-      vi.advanceTimersByTime(100);
-      // The in-flight generation neither expires nor frees maxPending capacity.
-      expect(replayStore.reserve('scope', 'idem', 'fingerprint')).toBeUndefined();
-      expect(replayStore.reserve('scope', 'other', 'fingerprint')).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    // The in-flight generation neither expires nor frees maxPending capacity.
+    expect(replayStore.reserve('scope', 'idem', 'fingerprint')).toBeUndefined();
+    expect(replayStore.reserve('scope', 'other', 'fingerprint')).toBeUndefined();
 
-      const response = { body: 'settled', headers: {}, status: 200 } as const;
-      reservation!.commit(response);
-      await expect(joined).resolves.toEqual(response);
-      expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
+    const response = { body: 'settled', headers: {}, status: 200 } as const;
+    reservation!.commit(response);
+    await expect(joined).resolves.toEqual(response);
+    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
 
-      vi.advanceTimersByTime(9);
-      expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
-      vi.advanceTimersByTime(1);
-      expect(replayStore.get('scope', 'idem', 'fingerprint')).toBeUndefined();
-    } finally {
-      vi.useRealTimers();
-    }
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(replayStore.get('scope', 'idem', 'fingerprint')).toBeUndefined();
   });
 
   it('M7: a superseded reservation commit is generation-fenced from newer truth', async () => {
@@ -235,6 +222,75 @@ describe('server mutation replay store', () => {
     replacement!.commit(newer);
 
     expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(newer);
+  });
+
+  it('keeps committed replay truth under selective Map.get poisoning', () => {
+    const replayStore = createMemoryMutationReplayStore({ ttlMs: 60_000 });
+    const response = { body: 'committed', headers: {}, status: 200 } as const;
+    replayStore.set('scope', 'idem', response, 'fingerprint');
+
+    const originalMapGet = Map.prototype.get;
+    let duplicateReservation: ReturnType<typeof replayStore.reserve> = undefined;
+    let replayed: ReturnType<typeof replayStore.get> = undefined;
+    try {
+      Map.prototype.get = function (key: unknown) {
+        if (typeof key === 'string' && key.includes('scope') && key.includes('idem')) {
+          return undefined;
+        }
+        return originalMapGet.call(this, key);
+      };
+      duplicateReservation = replayStore.reserve('scope', 'idem', 'fingerprint');
+      replayed = replayStore.get('scope', 'idem', 'fingerprint');
+    } finally {
+      Map.prototype.get = originalMapGet;
+    }
+
+    expect(duplicateReservation).toBeUndefined();
+    expect(replayed).toEqual(response);
+  });
+
+  it('does not let a late Date.now advance expire committed replay truth', () => {
+    const replayStore = createMemoryMutationReplayStore({ ttlMs: 60_000 });
+    const response = { body: 'committed', headers: {}, status: 200 } as const;
+    replayStore.set('scope', 'idem', response, 'fingerprint');
+
+    const originalDateNow = Date.now;
+    let replayed: ReturnType<typeof replayStore.get> = undefined;
+    let duplicateReservation: ReturnType<typeof replayStore.reserve> = undefined;
+    try {
+      Date.now = () => originalDateNow() + 365 * 24 * 60 * 60_000;
+      replayed = replayStore.get('scope', 'idem', 'fingerprint');
+      duplicateReservation = replayStore.reserve('scope', 'idem', 'fingerprint');
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    expect(replayed).toEqual(response);
+    expect(duplicateReservation).toBeUndefined();
+  });
+
+  it('length-frames replay scope and idempotency keys without NUL collisions', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const first = { body: 'first', headers: {}, status: 200 } as const;
+    const second = { body: 'second', headers: {}, status: 200 } as const;
+
+    replayStore.set('scope\0idem', 'tail', first);
+    replayStore.set('scope', 'idem\0tail', second);
+
+    expect(replayStore.get('scope\0idem', 'tail')).toEqual(first);
+    expect(replayStore.get('scope', 'idem\0tail')).toEqual(second);
+  });
+
+  it('rejects unsafe replay capacities and ttl values', () => {
+    expect(() => createMemoryMutationReplayStore({ maxEntries: Number.NaN })).toThrow(
+      /maxEntries.*non-negative integer/u,
+    );
+    expect(() => createMemoryMutationReplayStore({ maxPending: -1 })).toThrow(
+      /maxPending.*non-negative integer/u,
+    );
+    expect(() => createMemoryMutationReplayStore({ ttlMs: 1.5 })).toThrow(
+      /ttlMs.*non-negative integer/u,
+    );
   });
 
   it('does not treat a missing stored fingerprint as a wildcard for byte-sensitive requests', () => {
