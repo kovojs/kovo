@@ -236,6 +236,24 @@ describe('server mutation replay store', () => {
 
     expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(newer);
   });
+
+  it('does not treat a missing stored fingerprint as a wildcard for byte-sensitive requests', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const response = { body: 'legacy', headers: {}, status: 200 } as const;
+    replayStore.set('scope', 'settled', response);
+    const pending = replayStore.reserve('scope', 'pending');
+
+    expect(() => replayStore.get('scope', 'settled', 'sha256:request')).toThrow(
+      /different request fingerprint/u,
+    );
+    expect(() => replayStore.get('scope', 'pending', 'sha256:request')).toThrow(
+      /different request fingerprint/u,
+    );
+    expect(() => replayStore.reserve('scope', 'settled', 'sha256:request')).toThrow(
+      /different request fingerprint/u,
+    );
+    pending?.abort?.();
+  });
 });
 
 describe('server mutation response replay', () => {
@@ -571,16 +589,207 @@ describe('server mutation response replay', () => {
     expect(second.body).toBe(first.body);
   });
 
-  it('keeps replay fingerprints body-sensitive for untrusted tagged scalar fields', () => {
-    expect(canonicalRequestFingerprint({ productId: untrusted('p1') })).not.toBe(
-      canonicalRequestFingerprint({ productId: untrusted('p2') }),
-    );
-    expect(canonicalRequestFingerprint({ productId: untrusted('p1') })).toBe(
-      canonicalRequestFingerprint({ productId: 'p1' }),
-    );
+  it('hashes upload bytes so same-metadata files conflict while true duplicates replay (M8)', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const observedBytes: string[] = [];
+    const upload = mutation('files/upload', {
+      input: s.object({ upload: s.file() }),
+      async handler(input) {
+        writes += 1;
+        observedBytes.push(new TextDecoder().decode(await input.upload.arrayBuffer()));
+        return { accepted: input.upload.name };
+      },
+    });
+    const request = {
+      idem: 'idem_upload_bytes',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+    const body = (bytes: string) => {
+      const form = new FormData();
+      form.append(
+        'upload',
+        new File([bytes], 'same-name.txt', {
+          type: 'text/plain',
+        }),
+      );
+      return form;
+    };
+
+    const first = await renderMutationResponse(upload, { ...request, rawInput: body('AAAA') });
+    const duplicate = await renderMutationResponse(upload, {
+      ...request,
+      rawInput: body('AAAA'),
+    });
+    const divergent = await renderMutationResponse(upload, {
+      ...request,
+      rawInput: body('BBBB'),
+    });
+
+    expect(first.status).toBe(200);
+    expect(duplicate).toEqual(first);
+    expect(divergent.status).toBe(422);
+    expect(divergent.body).toContain('IDEMPOTENCY_CONFLICT');
+    expect(writes).toBe(1);
+    // Fingerprinting reads Blob/File bytes non-destructively; the handler still receives them.
+    expect(observedBytes).toEqual(['AAAA']);
   });
 
-  it('neutralizes rotating CSRF tokens before comparing precomputed replay fingerprints (L5)', () => {
+  it('includes FormData field multiplicity, order, and upload metadata in the fingerprint (M8)', async () => {
+    const file = (name: string, type = 'text/plain') => new File(['SAME'], name, { type });
+    const form = (entries: readonly (readonly [string, string | File])[]) => {
+      const body = new FormData();
+      for (const [name, value] of entries) body.append(name, value);
+      return body;
+    };
+    const ordered = form([
+      ['tag', 'a'],
+      ['upload', file('same.txt')],
+      ['tag', 'b'],
+    ]);
+    const identical = form([
+      ['tag', 'a'],
+      ['upload', file('same.txt')],
+      ['tag', 'b'],
+    ]);
+    const reordered = form([
+      ['tag', 'b'],
+      ['upload', file('same.txt')],
+      ['tag', 'a'],
+    ]);
+    const missingDuplicate = form([
+      ['tag', 'a'],
+      ['upload', file('same.txt')],
+    ]);
+    const renamed = form([
+      ['tag', 'a'],
+      ['upload', file('other.txt')],
+      ['tag', 'b'],
+    ]);
+    const differentType = form([
+      ['tag', 'a'],
+      ['upload', file('same.txt', 'application/octet-stream')],
+      ['tag', 'b'],
+    ]);
+
+    const fingerprint = await canonicalRequestFingerprint(ordered);
+    await expect(canonicalRequestFingerprint(identical)).resolves.toBe(fingerprint);
+    await expect(canonicalRequestFingerprint(reordered)).resolves.not.toBe(fingerprint);
+    await expect(canonicalRequestFingerprint(missingDuplicate)).resolves.not.toBe(fingerprint);
+    await expect(canonicalRequestFingerprint(renamed)).resolves.not.toBe(fingerprint);
+    await expect(canonicalRequestFingerprint(differentType)).resolves.not.toBe(fingerprint);
+  });
+
+  it('fails closed before handler execution when upload-byte fingerprinting fails (M8)', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const upload = mutation('files/broken-upload', {
+      input: s.object({ upload: s.file() }),
+      handler() {
+        writes += 1;
+        return { accepted: true };
+      },
+    });
+    let uploadReads = 0;
+    const brokenUpload = {
+      async arrayBuffer(): Promise<ArrayBuffer> {
+        uploadReads += 1;
+        if (uploadReads === 1) return new TextEncoder().encode('DATA').buffer;
+        throw new Error('simulated upload read failure');
+      },
+      name: 'broken.txt',
+      size: 4,
+      type: 'text/plain',
+    };
+
+    await expect(
+      renderMutationResponse(upload, {
+        idem: 'idem_broken_upload',
+        rawInput: { upload: brokenUpload },
+        replayStore,
+        request: { sessionId: 's1' },
+      }),
+    ).rejects.toThrow(/Unable to read upload bytes for replay fingerprint/u);
+    expect(uploadReads).toBe(2);
+    expect(writes).toBe(0);
+  });
+
+  it('does not hash upload bytes before CSRF rejects the request (M8)', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let uploadReads = 0;
+    let writes = 0;
+    const csrf = {
+      field: 'csrf',
+      secret: 'upload-replay-csrf-secret-0123456789abcdef',
+      sessionId: (request: { sessionId: string }) => request.sessionId,
+    };
+    const upload = mutation('files/csrf-upload', {
+      csrf,
+      input: s.object({ upload: s.file() }),
+      handler() {
+        writes += 1;
+        return { accepted: true };
+      },
+    });
+
+    const response = await renderMutationResponse(upload, {
+      idem: 'idem_csrf_upload',
+      rawInput: {
+        csrf: 'invalid',
+        upload: {
+          async arrayBuffer(): Promise<ArrayBuffer> {
+            uploadReads += 1;
+            return new TextEncoder().encode('DATA').buffer;
+          },
+          name: 'data.txt',
+          size: 4,
+          type: 'text/plain',
+        },
+      },
+      replayStore,
+      request: { sessionId: 's1' },
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body).toContain('data-error-code="CSRF"');
+    expect(uploadReads).toBe(0);
+    expect(writes).toBe(0);
+  });
+
+  it('fails closed when the SHA-256 upload digest operation rejects (M8)', async () => {
+    const digest = vi.fn(async () => {
+      throw new Error('simulated digest failure');
+    });
+    vi.stubGlobal('crypto', { subtle: { digest } });
+    try {
+      await expect(
+        canonicalRequestFingerprint({
+          upload: {
+            async arrayBuffer() {
+              return new TextEncoder().encode('DATA').buffer;
+            },
+            name: 'data.txt',
+            size: 4,
+            type: 'text/plain',
+          },
+        }),
+      ).rejects.toThrow(/Unable to digest upload bytes for replay fingerprint/u);
+      expect(digest).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps replay fingerprints body-sensitive for untrusted tagged scalar fields', async () => {
+    const p1 = await canonicalRequestFingerprint({ productId: untrusted('p1') });
+    const p2 = await canonicalRequestFingerprint({ productId: untrusted('p2') });
+    const plainP1 = await canonicalRequestFingerprint({ productId: 'p1' });
+    expect(p1).not.toBe(p2);
+    expect(p1).toBe(plainP1);
+  });
+
+  it('neutralizes rotating CSRF tokens before comparing precomputed replay fingerprints (L5)', async () => {
     const replayStore = createMemoryMutationReplayStore();
     const csrf = {
       secret: 'replay-csrf-secret-0123456789-abcdef',
@@ -594,26 +803,26 @@ describe('server mutation response replay', () => {
     const firstBody = bodyFor();
     const secondBody = bodyFor();
 
-    const first = mutationReplayContext(csrf, {
+    const first = await mutationReplayContext(csrf, {
       idem: 'idem_rotating_csrf',
       mutationKey: 'cart/add',
       rawInput: firstBody,
       replayStore,
       request,
-      requestFingerprint: canonicalRequestFingerprint(firstBody),
+      requestFingerprint: await canonicalRequestFingerprint(firstBody),
     });
-    const second = mutationReplayContext(csrf, {
+    const second = await mutationReplayContext(csrf, {
       idem: 'idem_rotating_csrf',
       mutationKey: 'cart/add',
       rawInput: secondBody,
       replayStore,
       request,
-      requestFingerprint: canonicalRequestFingerprint(secondBody),
+      requestFingerprint: await canonicalRequestFingerprint(secondBody),
     });
 
     expect(first.fingerprint).toBe(second.fingerprint);
-    expect(first.fingerprint).not.toBe(canonicalRequestFingerprint(firstBody));
-    expect(second.fingerprint).not.toBe(canonicalRequestFingerprint(secondBody));
+    expect(first.fingerprint).not.toBe(await canonicalRequestFingerprint(firstBody));
+    expect(second.fingerprint).not.toBe(await canonicalRequestFingerprint(secondBody));
   });
 
   it('scopes replay records by mutation key so a sibling mutation does not replay another', async () => {

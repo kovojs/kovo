@@ -44,29 +44,29 @@ describe('mutation wire headers', () => {
     });
   });
 
-  // L3 (SPEC §9.1): the precomputed `requestFingerprint` must be body-sensitive for a
-  // FormData/multipart body. Before the fix, canonicalJson(formData) === "{}" for EVERY
-  // multipart body here, so the conflict defense downstream never fired (the enhanced JS
-  // client always submits FormData).
-  it('precomputes a body-sensitive replay fingerprint for FormData wire requests', () => {
-    const fingerprintFor = (productId: string): string | undefined => {
-      const body = new FormData();
-      body.set('productId', productId);
-      return mutationWireRequestFromHeaders({
-        headers: {},
-        rawInput: body,
-        request: { sessionId: 's1' },
-      }).requestFingerprint;
+  it('defers upload replay hashing until the post-CSRF/schema/guard lifecycle', () => {
+    let uploadReads = 0;
+    const rawInput = {
+      upload: {
+        async arrayBuffer() {
+          uploadReads += 1;
+          return new Uint8Array([1]).buffer;
+        },
+        name: 'one.bin',
+        size: 1,
+        type: 'application/octet-stream',
+      },
     };
 
-    const a = fingerprintFor('p1');
-    const b = fingerprintFor('p2');
-    const aAgain = fingerprintFor('p1');
+    const wireRequest = mutationWireRequestFromHeaders({
+      headers: {},
+      rawInput,
+      request: { sessionId: 's1' },
+    });
 
-    expect(a).not.toBe('{}');
-    expect(a).not.toBe(b);
-    expect(a).toBe(aAgain);
-    expect(a).toBe('{"productId":"p1"}');
+    expect(wireRequest.requestFingerprint).toBeUndefined();
+    expect(wireRequest.rawInput).toBe(rawInput);
+    expect(uploadReads).toBe(0);
   });
 
   it('builds mutation wire requests from iterable HTTP headers', () => {
@@ -116,7 +116,6 @@ describe('mutation wire headers', () => {
       ],
       liveTargets: [{ deps: ['product:p1'], target: 'product-form:p1' }],
       rawInput: { productId: 'p1', quantity: 99 },
-      requestFingerprint: '{"productId":"p1","quantity":99}',
       replayStore,
       request: { sessionId: 's1' },
       stream: true,

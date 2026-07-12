@@ -10,7 +10,7 @@ import type { MutationFail, MutationSuccess } from './mutation.js';
 import type { TaskScheduler } from './mutation/definition.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
-import { canonicalRequestFingerprint, type MutationReplayStore } from './replay.js';
+import type { MutationReplayStore } from './replay.js';
 import {
   readHeader,
   type FrameworkWireBody,
@@ -395,10 +395,8 @@ export function mutationWireRequestFromHeaders<Request>(
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
-    // L3 (SPEC §9.1): use the shared FormData/upload-aware fingerprint so a multipart body
-    // produces a body-sensitive value instead of "{}" (the local canonicalJson below stays
-    // for the attestation payload, which only ever sees plain objects).
-    requestFingerprint: canonicalRequestFingerprint(options.rawInput),
+    // Replay fingerprinting is intentionally deferred into the post-CSRF/schema/guard lifecycle
+    // policy. Upload-byte hashing here would let invalid requests spend digest work before gates.
     ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),

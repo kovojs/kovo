@@ -274,7 +274,7 @@ export function createMemoryMutationReplayStore<
   };
 }
 
-export function mutationReplayContext<Request, Response extends MutationReplayResponse>(
+export async function mutationReplayContext<Request, Response extends MutationReplayResponse>(
   csrf: CsrfReplayScope<Request>,
   wireRequest: {
     idem?: string;
@@ -284,11 +284,11 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
     request: Request;
     requestFingerprint?: string;
   },
-): MutationReplayContext<Response> {
+): Promise<MutationReplayContext<Response>> {
   const sessionScope = mutationReplayScope(csrf, wireRequest.request);
   return {
     ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
-    ...replayFingerprint(csrf, wireRequest),
+    ...(await replayFingerprint(csrf, wireRequest)),
     ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
     // Security finding M4: fold the mutation key into the replay scope so
     // idempotency is per-(session, mutation, idem). Without this, one mutation's
@@ -298,16 +298,18 @@ export function mutationReplayContext<Request, Response extends MutationReplayRe
   };
 }
 
-function replayFingerprint<Request>(
+async function replayFingerprint<Request>(
   csrf: CsrfReplayScope<Request>,
   wireRequest: { rawInput?: unknown; request: Request; requestFingerprint?: string },
-): { fingerprint?: string } {
+): Promise<{ fingerprint?: string }> {
   if (wireRequest.rawInput === undefined) {
     return wireRequest.requestFingerprint === undefined
       ? {}
       : { fingerprint: wireRequest.requestFingerprint };
   }
-  return { fingerprint: canonicalRequestFingerprint(canonicalReplayInput(csrf, wireRequest)) };
+  return {
+    fingerprint: await canonicalRequestFingerprint(canonicalReplayInput(csrf, wireRequest)),
+  };
 }
 
 function canonicalReplayInput<Request>(
@@ -319,6 +321,21 @@ function canonicalReplayInput<Request>(
   if (!csrfBinding) return wireRequest.rawInput;
 
   const field = csrf.field ?? 'kovo-csrf';
+  if (wireRequest.rawInput instanceof FormData) {
+    let found = false;
+    const entries: Array<readonly [string, unknown]> = [];
+    for (const [name, value] of wireRequest.rawInput.entries()) {
+      if (name === field) {
+        found = true;
+        entries.push([name, `csrf-binding:${csrfBinding}`]);
+      } else {
+        // Request provenance wrappers are intentionally not coercible. Preserve each value as-is
+        // in a module-private carrier; canonicalJson reveals it at the internal fingerprint choke.
+        entries.push([name, value]);
+      }
+    }
+    return found ? new ReplayFormDataFingerprintInput(entries) : wireRequest.rawInput;
+  }
   const record = formLikeToRecord(wireRequest.rawInput);
   if (!(field in record)) return wireRequest.rawInput;
 
@@ -515,48 +532,81 @@ function mutationReplayKey(scope: string, idem: string): string {
 /**
  * Canonicalize a mutation request body into the stable fingerprint string used to detect
  * idempotency-key reuse-with-different-input (SPEC §9.1 {@link MutationReplayConflictError}).
- * Shared with the wire precompute in `mutation-wire.ts` so the precomputed
- * `requestFingerprint` and any store-side recompute agree on the same value for the same body.
+ * The replay boundary computes from raw input after the lifecycle gates, so caller-provided
+ * precomputed strings are never security authority. Rotating CSRF tokens are normalized to their
+ * stable binding before canonicalization.
  *
- * L3 (bugz-3): a `FormData`/multipart body exposes no own-enumerable keys, so the naive
- * `Object.keys()` walk below produced `canonicalJson(formData) === "{}"` for EVERY multipart
- * submission — the enhanced JS client always submits FormData — collapsing all bodies to one
- * fingerprint so the conflict defense never fired. Canonicalize FormData (and nested File/Blob
- * uploads) to a record first, mirroring how the idem token and CSRF field are already read off
- * FormData via {@link formLikeToRecord}, so distinct bodies fingerprint distinctly and identical
- * bodies match.
+ * M8 (bugz-26, SPEC §9.1/§10.3): upload fingerprints include a SHA-256 digest of immutable
+ * `arrayBuffer()` bytes plus metadata. This boundary is asynchronous by necessity. FormData is
+ * canonicalized as its ordered entry list rather than a record so field multiplicity and global
+ * order remain part of the collision decision. Reading Blob/File bytes does not consume them, so
+ * schema parsing and the handler still observe the original upload. Any read/digest failure rejects
+ * before replay reservation or handler execution.
  */
-export function canonicalRequestFingerprint(value: unknown): string {
+export async function canonicalRequestFingerprint(value: unknown): Promise<string> {
   return canonicalJson(value);
 }
 
-function canonicalJson(value: unknown): string {
+async function canonicalJson(value: unknown): Promise<string> {
   // SPEC §5.2 rule 11 / §9.1: request provenance tags are author-time guardrails. The replay
   // fingerprint compares the validated wire value, so reveal wrappers at this internal choke
   // before structural canonicalization.
   if (isUntrusted(value)) {
     return canonicalJson(revealUntrusted(value, 'validated request-derived replay fingerprint'));
   }
-  // L3 (SPEC §9.1): a FormData body has no own-enumerable keys — canonicalize its entries to
-  // a record (mirroring formLikeToRecord) before the structural walk so the fingerprint is
-  // body-sensitive instead of always "{}".
-  if (value instanceof FormData) return canonicalJson(formLikeToRecord(value));
-  // A File/Blob can only be hashed asynchronously, but the fingerprint is computed
-  // synchronously on the conflict path; reduce an upload to its stable descriptor so two
-  // different uploads under one idem still diverge (conflict) while a re-submit of the
-  // identical file matches (replay). This is strictly stronger than dropping file entries.
-  if (isUploadLike(value)) return canonicalJson(uploadFingerprint(value));
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
-  return `{${Object.keys(value)
-    .sort()
-    .map(
-      (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
-    )
-    .join(',')}}`;
+  if (value instanceof ReplayFormDataFingerprintInput) {
+    return canonicalFormDataEntries(value.entries);
+  }
+  if (value instanceof FormData) return canonicalFormDataEntries(value.entries());
+  if (isUploadLike(value)) return `upload:${JSON.stringify(await uploadFingerprint(value))}`;
+  if (value === undefined) return 'undefined';
+  if (value === null || typeof value !== 'object') {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) {
+      throw new MutationReplayFingerprintError(
+        `Unsupported replay fingerprint value of type ${typeof value}.`,
+      );
+    }
+    return encoded;
+  }
+  if (Array.isArray(value)) {
+    const entries: string[] = [];
+    for (const entry of value) entries.push(await canonicalJson(entry));
+    return `[${entries.join(',')}]`;
+  }
+  const fields: string[] = [];
+  for (const key of Object.keys(value).sort()) {
+    fields.push(
+      `${JSON.stringify(key)}:${await canonicalJson((value as Record<string, unknown>)[key])}`,
+    );
+  }
+  return `{${fields.join(',')}}`;
 }
 
-function isUploadLike(value: unknown): value is { name?: unknown; size?: unknown; type?: unknown } {
+class ReplayFormDataFingerprintInput {
+  constructor(readonly entries: readonly (readonly [string, unknown])[]) {}
+}
+
+async function canonicalFormDataEntries(
+  formEntries: Iterable<readonly [string, unknown]>,
+): Promise<string> {
+  const entries: string[] = [];
+  for (const [name, entry] of formEntries) {
+    // Embed each child fingerprint as a JSON string so separators inside metadata or field names
+    // cannot create an ambiguous chosen-prefix representation.
+    entries.push(JSON.stringify([name, await canonicalJson(entry)]));
+  }
+  return `formdata:[${entries.join(',')}]`;
+}
+
+interface ReplayUploadLike {
+  arrayBuffer(): Promise<ArrayBuffer>;
+  name?: unknown;
+  size: number;
+  type?: unknown;
+}
+
+function isUploadLike(value: unknown): value is ReplayUploadLike {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -565,22 +615,69 @@ function isUploadLike(value: unknown): value is { name?: unknown; size?: unknown
   );
 }
 
-function uploadFingerprint(value: { name?: unknown; size?: unknown; type?: unknown }): {
+async function uploadFingerprint(value: ReplayUploadLike): Promise<{
   __kovoUpload: true;
+  digest: string;
   name: string | null;
-  size: number | null;
+  size: number;
   type: string | null;
-} {
+}> {
+  let bytes: ArrayBuffer;
+  try {
+    bytes = await value.arrayBuffer();
+  } catch (error) {
+    throw new MutationReplayFingerprintError(
+      'Unable to read upload bytes for replay fingerprint.',
+      {
+        cause: error,
+      },
+    );
+  }
+  if (!(bytes instanceof ArrayBuffer) || bytes.byteLength !== value.size) {
+    throw new MutationReplayFingerprintError(
+      'Upload bytes did not match declared metadata while computing replay fingerprint.',
+    );
+  }
+
+  let digest: ArrayBuffer;
+  try {
+    digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  } catch (error) {
+    throw new MutationReplayFingerprintError(
+      'Unable to digest upload bytes for replay fingerprint.',
+      {
+        cause: error,
+      },
+    );
+  }
+
   return {
     __kovoUpload: true,
+    digest: bytesToHex(new Uint8Array(digest)),
     name: typeof value.name === 'string' ? value.name : null,
-    size: typeof value.size === 'number' ? value.size : null,
+    size: value.size,
     type: typeof value.type === 'string' ? value.type : null,
   };
 }
 
+function bytesToHex(bytes: Uint8Array): string {
+  let output = '';
+  for (const byte of bytes) output += byte.toString(16).padStart(2, '0');
+  return output;
+}
+
+class MutationReplayFingerprintError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'MutationReplayFingerprintError';
+  }
+}
+
 function fingerprintsMatch(left: string | undefined, right: string | undefined): boolean {
-  return left === undefined || right === undefined || left === right;
+  // Missing fingerprint state is not a compatibility wildcard: allowing `undefined` to match a
+  // byte-sensitive fingerprint would silently replay pre-fix/under-specified records. Both sides
+  // must carry the same posture and exact value (SPEC §10.3 integrity-fault contract).
+  return left === right;
 }
 
 function cloneMutationReplayResponse<Response extends MutationReplayResponse>(

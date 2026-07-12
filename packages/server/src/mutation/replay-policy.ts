@@ -83,17 +83,20 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   csrf: CsrfOptions<Request> | false | undefined;
   mutationKey: string;
   request: MutationWireRequest<Request>;
-}): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> {
-  const context = mutationReplayContext(mode.csrf ?? false, {
-    ...mode.request,
-    mutationKey: mode.mutationKey,
-  });
+}): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> | undefined {
+  if (!mode.request.idem || !mode.request.replayStore) return undefined;
+  let context: ReturnType<typeof mutationReplayContext> | undefined;
+  const replayContext = () =>
+    (context ??= mutationReplayContext(mode.csrf ?? false, {
+      ...mode.request,
+      mutationKey: mode.mutationKey,
+    }));
   return {
     async read() {
-      return enhancedReplayResponseOrConflict(await readMutationReplay(context));
+      return enhancedReplayResponseOrConflict(await readMutationReplay(await replayContext()));
     },
     async reserve() {
-      const result = await reserveMutationReplayBeforeRun(context);
+      const result = await reserveMutationReplayBeforeRun(await replayContext());
       if (result.kind === 'replayed') {
         return {
           kind: 'replayed',
@@ -125,32 +128,36 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   const idem = mode.request.idem ?? readNoJsIdemField(mode.request.rawInput);
   if (!idem || !mode.request.replayStore) return undefined;
 
-  const context = mutationReplayContext(mode.csrf ?? false, {
-    idem,
-    mutationKey: mode.mutationKey,
-    rawInput: mode.request.rawInput,
-    request: mode.request.request,
-    ...(mode.request.requestFingerprint === undefined
-      ? {}
-      : { requestFingerprint: mode.request.requestFingerprint }),
-  });
+  let context: ReturnType<typeof mutationReplayContext> | undefined;
+  const replayContext = () =>
+    (context ??= mutationReplayContext(mode.csrf ?? false, {
+      idem,
+      mutationKey: mode.mutationKey,
+      rawInput: mode.request.rawInput,
+      request: mode.request.request,
+      ...(mode.request.requestFingerprint === undefined
+        ? {}
+        : { requestFingerprint: mode.request.requestFingerprint }),
+    }));
   // Keep response vocabularies separated while deriving both enhanced and no-JS principal/fingerprint
   // facts from the same session-or-anonymous-CSRF binding. csrf:false sessionless no-JS retains its
   // mutation-key fallback for the existing public-machine submission contract.
-  const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
-  const fingerprint = context.fingerprint;
   return {
     async read() {
+      const context = await replayContext();
+      const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
       return noJsReplayResponseOrConflict(
-        await mode.request.replayStore?.get(scope, idem, fingerprint),
+        await mode.request.replayStore?.get(scope, idem, context.fingerprint),
       );
     },
     async reserve() {
+      const context = await replayContext();
+      const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
       const result = await reserveReplayBeforeRun<
         MutationEndpointReplayResponse,
         NoJsMutationReplayReservation
       >({
-        fingerprint,
+        fingerprint: context.fingerprint,
         idem,
         scope,
         store: mode.request.replayStore,
