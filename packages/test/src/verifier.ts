@@ -40,10 +40,13 @@ import {
   verifierGetOwnPropertyDescriptor,
   verifierGetPrototypeOf,
   verifierIsExtensible,
+  verifierIsPromise,
   verifierIsProxy,
   verifierNullRecord,
   verifierObjectKeys,
   verifierOwnKeys,
+  verifierPromiseResolve,
+  verifierPromiseThen,
   verifierReflectGet,
   verifierSet,
   verifierSetAdd,
@@ -67,6 +70,9 @@ export type {
   DbVerificationConfig,
   ObservedDbOperation,
 } from './verifier-observation.js';
+
+const verifierAsyncIteratorProperty = Symbol.asyncIterator;
+const verifierIteratorProperty = Symbol.iterator;
 
 /** @internal Wraps a database to record operations and assert each write is covered by the touch graph. */
 export interface DbVerifier {
@@ -127,7 +133,9 @@ export function createDbVerifier(
   const deleteBaseBuilderProxyCache = verifierWeakMap<object, object>();
   const writePreparedProxyCache = verifierWeakMap<object, object>();
   const sqlHandleProxyCache = verifierWeakMap<object, object>();
+  const preparedSqlProxyCache = verifierWeakMap<object, object>();
   const methodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
+  const preparedSqlMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
   const mutationMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
   const writeEntryMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
   const writeBaseMethodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
@@ -334,6 +342,8 @@ export function createDbVerifier(
                 recorder,
                 sqlHandleProxyCache,
                 methodCache,
+                preparedSqlProxyCache,
+                preparedSqlMethodCache,
                 (transactionDb) => verifier.wrap(transactionDb),
               );
             }
@@ -422,8 +432,9 @@ export function createDbVerifier(
                   value,
                   configSnapshot,
                   recorder,
-                  sqlHandleProxyCache,
-                  methodCache,
+                  preparedSqlProxyCache,
+                  preparedSqlMethodCache,
+                  (preparedResult) => verifier.wrap(preparedResult),
                 ),
               );
             }
@@ -1269,12 +1280,7 @@ function isDrizzleWriteTerminalMethod(property: PropertyKey): boolean {
 }
 
 function isDrizzlePreparedExecutionMethod(property: PropertyKey): boolean {
-  return (
-    isPreparedStatementExecutionMethod(property) ||
-    property === 'execute' ||
-    property === 'sync' ||
-    property === 'values'
-  );
+  return isVerifierPreparedExecutionMethod(property);
 }
 
 function blockedReadBuilderProperty(property: PropertyKey): () => never {
@@ -1470,6 +1476,8 @@ function wrapSqlHandle<Handle extends object>(
   recorder: ObservationRecorder,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  preparedProxyCache: WeakMap<object, object>,
+  preparedMethodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
   wrapDb: (transactionDb: object) => object,
 ): Handle {
   const cached = verifierWeakMapGet(proxyCache, handle);
@@ -1534,7 +1542,15 @@ function wrapSqlHandle<Handle extends object>(
 
       if (prop === 'prepare' && typeof value === 'function') {
         return cachedMethod(target, prop, value, methodCache, () =>
-          observablePrepareMethod(target, value, config, recorder, proxyCache, methodCache),
+          observablePrepareMethod(
+            target,
+            value,
+            config,
+            recorder,
+            preparedProxyCache,
+            preparedMethodCache,
+            wrapDb,
+          ),
         );
       }
 
@@ -1569,21 +1585,29 @@ function observablePrepareMethod(
   recorder: ObservationRecorder,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  wrapDb: (preparedResult: object) => object,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
+    if (args.length !== 0) {
+      throw verifierTypeError(
+        'KV407: Kovo DB verifier prepare() accepts exactly one SQL statement.',
+      );
+    }
     const statementSnapshot = snapshotVerifierSqlStatement(statement);
-    const prepared = verifierApply<unknown>(value, target, [statementSnapshot, ...args]);
-    return typeof prepared === 'object' && prepared !== null
-      ? wrapPreparedSqlStatement(
-          prepared,
-          target,
-          statementSnapshot,
-          config,
-          recorder,
-          proxyCache,
-          methodCache,
-        )
-      : prepared;
+    const prepared = verifierApply<unknown>(value, target, [statementSnapshot]);
+    if (typeof prepared !== 'object' || prepared === null) {
+      throw verifierTypeError('KV407: Kovo DB verifier prepare() must return a statement object.');
+    }
+    return wrapPreparedSqlStatement(
+      prepared,
+      target,
+      statementSnapshot,
+      config,
+      recorder,
+      proxyCache,
+      methodCache,
+      wrapDb,
+    );
   };
 }
 
@@ -1595,6 +1619,7 @@ function wrapPreparedSqlStatement<Statement extends object>(
   recorder: ObservationRecorder,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  wrapDb: (preparedResult: object) => object,
 ): Statement {
   const cached = verifierWeakMapGet(proxyCache, statementHandle);
   if (cached) return cached as Statement;
@@ -1602,25 +1627,63 @@ function wrapPreparedSqlStatement<Statement extends object>(
   let proxy!: Statement;
   proxy = createFrameworkManagedSqlDispatchProxy(statementHandle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
-      const value = verifierReflectGet(target, prop, receiver);
+      const value = preparedStatementPropertyValue(target, prop, receiver);
+      if (prop === 'then' && value === undefined) return undefined;
 
-      if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
+      if (isVerifierPreparedExecutionMethod(prop) && typeof value === 'function') {
         return cachedMethod(target, prop, value, methodCache, () =>
-          observablePreparedSqlMethod(executionTarget, target, value, statement, config, recorder),
+          observablePreparedSqlMethod(
+            executionTarget,
+            target,
+            value,
+            statement,
+            config,
+            recorder,
+            wrapDb,
+          ),
         );
       }
 
-      return typeof value === 'function'
-        ? cachedMethod(
-            target,
-            prop,
-            value,
+      if (isPreparedConfigurationMethod(prop) && typeof value === 'function') {
+        return cachedMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
+          const configured = verifierApply<unknown>(value, target, args);
+          if (typeof configured !== 'object' || configured === null) {
+            throw verifierTypeError(
+              `KV407: prepared statement ${verifierString(prop)}() must return an object.`,
+            );
+          }
+          return wrapPreparedSqlStatement(
+            configured,
+            executionTarget,
+            statement,
+            config,
+            recorder,
+            proxyCache,
             methodCache,
-            () =>
-              (...args: unknown[]) =>
-                verifierApply(value, target, args),
-          )
-        : value;
+            wrapDb,
+          );
+        });
+      }
+
+      if (prop === 'columns' && typeof value === 'function') {
+        return cachedMethod(
+          target,
+          prop,
+          value,
+          methodCache,
+          () =>
+            (...args: unknown[]) =>
+              wrapPreparedExecutionResult(verifierApply(value, target, args), wrapDb),
+        );
+      }
+
+      if (typeof value === 'object' && value !== null) {
+        throw verifierTypeError(
+          `KV407: Kovo DB verifier blocked prepared-statement authority property ${verifierString(prop)}.`,
+        );
+      }
+      if (typeof value === 'function') return blockedPreparedStatementProperty(prop);
+      return value;
     },
     getOwnPropertyDescriptor(target, prop) {
       return safeReflectedOwnDescriptor(target, prop, () => verifierReflectGet(proxy, prop, proxy));
@@ -1632,6 +1695,103 @@ function wrapPreparedSqlStatement<Statement extends object>(
 
   verifierWeakMapSet(proxyCache, statementHandle, proxy);
   return proxy;
+}
+
+function preparedStatementPropertyValue(
+  target: object,
+  property: PropertyKey,
+  receiver: object,
+): unknown {
+  // Framework-managed SQL handles are themselves proxies. Their witnessed get trap is the
+  // authority choke, so preserve that composition; reject accessor execution on ordinary raw
+  // statement objects before it can run outside observation (SPEC §11.2).
+  if (verifierIsProxy(target)) return verifierReflectGet(target, property, receiver);
+  const located = inheritedPropertyDescriptor(target, property);
+  if (located === undefined) return undefined;
+  if (!('value' in located.descriptor)) {
+    throw verifierTypeError(
+      `KV407: Kovo DB verifier prepared-statement property ${verifierString(property)} must be data-backed.`,
+    );
+  }
+  return located.descriptor.value;
+}
+
+function isVerifierPreparedExecutionMethod(property: PropertyKey): boolean {
+  return (
+    isPreparedStatementExecutionMethod(property) ||
+    property === 'catch' ||
+    property === 'execute' ||
+    property === 'finally' ||
+    property === 'iterator' ||
+    property === 'stream' ||
+    property === 'sync' ||
+    property === 'then' ||
+    property === 'values' ||
+    property === verifierAsyncIteratorProperty ||
+    property === verifierIteratorProperty
+  );
+}
+
+function isPreparedConfigurationMethod(property: PropertyKey): boolean {
+  return (
+    property === 'bind' ||
+    property === 'expand' ||
+    property === 'pluck' ||
+    property === 'raw' ||
+    property === 'safeIntegers'
+  );
+}
+
+function blockedPreparedStatementProperty(property: PropertyKey): () => never {
+  return () => {
+    throw verifierTypeError(
+      `KV407: Kovo DB verifier blocked unsupported prepared-statement property ${verifierString(property)}.`,
+    );
+  };
+}
+
+function wrapPreparedExecutionResult(
+  result: unknown,
+  wrapDb: (preparedResult: object) => object,
+): unknown {
+  if (typeof result !== 'object' || result === null) return result;
+  if (verifierIsPromise(result)) {
+    return verifierPromiseThen(result, (resolved) => wrapPreparedExecutionResult(resolved, wrapDb));
+  }
+  if (verifierIsProxy(result)) {
+    throw verifierTypeError(
+      'KV407: Kovo DB verifier prepared execution must not return a Proxy authority carrier.',
+    );
+  }
+  if (preparedResultHasMethod(result, 'then')) {
+    return verifierPromiseThen(verifierPromiseResolve(result as PromiseLike<unknown>), (resolved) =>
+      wrapPreparedExecutionResult(resolved, wrapDb),
+    );
+  }
+  if (
+    preparedResultHasMethod(result, 'exec') ||
+    preparedResultHasMethod(result, 'execute') ||
+    preparedResultHasMethod(result, 'prepare') ||
+    preparedResultHasMethod(result, 'query') ||
+    preparedResultHasMethod(result, 'read') ||
+    preparedResultHasMethod(result, 'sql') ||
+    preparedResultHasMethod(result, 'transaction') ||
+    preparedResultHasMethod(result, 'write')
+  ) {
+    return wrapDb(result);
+  }
+  return result;
+}
+
+function preparedResultHasMethod(result: object, property: PropertyKey): boolean {
+  const located = inheritedPropertyDescriptor(result, property);
+  if (located === undefined) return false;
+  if (!('value' in located.descriptor)) {
+    throw verifierTypeError(
+      `KV407: prepared execution result authority property ${verifierString(property)} must be data-backed.`,
+    );
+  }
+  return typeof located.descriptor.value === 'function';
 }
 
 function safeReflectedOwnDescriptor(
@@ -1707,12 +1867,13 @@ function observablePreparedSqlMethod(
   statement: unknown,
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
+  wrapDb: (preparedResult: object) => object,
 ): (...args: unknown[]) => unknown {
   return (...args: unknown[]) => {
     return observeSqlExecution(
       executionTarget,
       statement,
-      () => verifierApply(value, target, args),
+      () => wrapPreparedExecutionResult(verifierApply(value, target, args), wrapDb),
       config,
       recorder,
     );

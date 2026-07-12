@@ -71,6 +71,7 @@ const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeUtilIsPromise = NodeUtilTypes.isPromise;
 const nativeUtilIsProxy = NodeUtilTypes.isProxy;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapHas = NativeWeakMap.prototype.has;
@@ -152,10 +153,13 @@ function capturedControlsAreSound(): boolean {
     const response = new NativeResponse('safe', { status: 201 });
     const request = new NativeRequest('https://example.test/safe?value=1');
     const url = new NativeURL('https://example.test/safe?value=1');
+    const promise = apply<Promise<void>>(nativePromiseResolve, NativePromise, [undefined]);
     return (
       proxy.safe === 7 &&
       apply(nativeUtilIsProxy, NodeUtilTypes, [proxy]) === true &&
       apply(nativeUtilIsProxy, NodeUtilTypes, [target]) === false &&
+      apply(nativeUtilIsPromise, NodeUtilTypes, [promise]) === true &&
+      apply(nativeUtilIsPromise, NodeUtilTypes, [{}]) === false &&
       apply(nativeWeakMapHas, weak, [weakKey]) === true &&
       apply(nativeWeakMapGet, weak, [weakKey]) === weakValue &&
       apply(nativeMapHas, map, ['safe']) === true &&
@@ -404,6 +408,11 @@ export function verifierIsArray(value: unknown): value is unknown[] {
 export function verifierIsProxy(value: unknown): boolean {
   assertVerifierSecurityIntrinsics();
   return apply(nativeUtilIsProxy, NodeUtilTypes, [value]) === true;
+}
+
+export function verifierIsPromise(value: unknown): value is Promise<unknown> {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeUtilIsPromise, NodeUtilTypes, [value]) === true;
 }
 
 export function verifierArrayPush<T>(values: T[], value: T): number {
