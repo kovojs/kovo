@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    18 | H1-H18 |
+| High     |    19 | H1-H19 |
 | Medium   |     8 | M1-M8 |
 
 ## Critical
@@ -279,6 +279,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     and promise settlement use boot-pinned, semantically checked controls; late/import-order poison
     cannot replace/reorder bytes or desynchronize the emitted document from its CSP metadata.
 
+- [ ] **H19 - Mutable mutation-wire assembly can replace an authenticated response body.**
+      `packages/server/src/{mutation-wire,mutation/wire-response,mutation/targets}.ts`
+  - A selective late `Array.prototype.join` override targeting the final query/fragment chunk array
+    replaced a genuine successful mutation delta with an attacker-authored `<kovo-fragment>` carrying
+    raw event markup. The result retained status 200 and the framework wire-body brand/path.
+  - **Acceptance:** header/target parsing, exact renderer/query selection, change and principal-
+    transition classification, JSON/control escaping, chunk traversal/ordering, final body assembly,
+    and failure/reauth redirects use boot-pinned, semantically checked controls; poison cannot replace
+    wire bytes, cross-bind targets, or suppress required build/session transition metadata.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -355,8 +365,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H18, and M7-M8 are active
-capability, request-carrier, response/deferred output, task/guard, request-limit, and replay fixes.
+The remediation pass remains intentionally non-zero: C10-C12, H15-H19, and M7-M8 are active
+capability, request-carrier, response/deferred/mutation output, task/guard, request-limit, and replay
+fixes.
 Integrated
 evidence is
 green at
