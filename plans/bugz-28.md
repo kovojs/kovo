@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |    14 | C1-C14 |
+| Critical |    15 | C1-C15 |
 | High     |    24 | H1-H24 |
 | Medium   |     9 | M1-M9 |
 
@@ -153,6 +153,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     semantically checked controls; late/import-order poison cannot alias keys or forge sidecar truth.
   - **Evidence:** the 30-test storage/filesystem-codec matrix passes; the independent real-filesystem
     exploit now returns no attacker object while the victim bytes remain available under their key.
+
+- [ ] **C15 - Mutable canonical JSON serialization can replace validated durable-task arguments.**
+      `packages/core/src/json-clone.ts`, `packages/server/src/task-queue.ts`
+  - A selective late `JSON.stringify` replacement recognized the already-validated victim task
+    arguments and substituted an attacker principal plus a destructive operation. The real
+    PostgreSQL queue adapter placed those forged JSON bytes in its parameterized `_kovo_jobs` write.
+  - **Acceptance:** JSON shape validation/canonicalization, final serialization, UTF-8 byte length,
+    and task queue argument cloning consume pinned exact values and fail closed on unsupported data;
+    late/import-order JSON/encoder/number/collection poison cannot replace validated arguments or
+    undercount bounded canonical data.
 
 ## High
 
@@ -468,8 +478,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: H15 and H17-H24 are active response/deferred/
-mutation/client output, task, and browser-navigation fixes.
+The remediation pass remains intentionally non-zero: C15, H15, and H17-H24 are active canonical
+JSON, response/deferred/mutation/client output, task, and browser-navigation fixes.
 Integrated
 evidence is
 green at
