@@ -149,6 +149,15 @@ describe('core security witness intrinsics', () => {
        RegExp.prototype.test = function (value) { return value === 'https://kovo.test' ? false : Reflect.apply(test, this, [value]); };`,
     ],
     [
+      'URI/JSON methods',
+      `const encode = globalThis.encodeURIComponent;
+       const decode = globalThis.decodeURIComponent;
+       const stringify = JSON.stringify;
+       globalThis.encodeURIComponent = (value) => value === 'a/b c' ? 'forged' : encode(value);
+       globalThis.decodeURIComponent = (value) => value === 'a%2Fb%20c' ? 'forged' : decode(value);
+       JSON.stringify = (value, replacer, space) => value?.kovo === 418 ? 'forged' : stringify(value, replacer, space);`,
+    ],
+    [
       'Reflect.apply/Function@@hasInstance',
       `const original = Reflect.apply;
        const hasInstance = Function.prototype[Symbol.hasInstance];

@@ -12,6 +12,8 @@ import {
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import {
+  securityRegExpTest,
+  securityStringSlice,
   securityWeakMap,
   securityWeakMapDelete,
   securityWeakMapGet,
@@ -187,12 +189,15 @@ function parseHandlerReferences(
   refs: string | null,
 ): { ref: KovoModuleRef<'handler'>; source: string }[] {
   if (refs === null) return [];
-  const sources = refs.split(/\s+/);
   const parsed: { ref: KovoModuleRef<'handler'>; source: string }[] = [];
-  for (let index = 0; index < sources.length; index += 1) {
-    const source = sources[index];
-    if (!source) continue;
-    parsed[parsed.length] = { ref: assertKovoModuleRef(source, 'handler'), source };
+  let start = 0;
+  for (let index = 0; index <= refs.length; index += 1) {
+    if (index < refs.length && !securityRegExpTest(/\s/u, refs[index] ?? '')) continue;
+    if (index > start) {
+      const source = securityStringSlice(refs, start, index);
+      parsed[parsed.length] = { ref: assertKovoModuleRef(source, 'handler'), source };
+    }
+    start = index + 1;
   }
   return parsed;
 }

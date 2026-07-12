@@ -6,6 +6,7 @@ import {
   readElementParams,
   readElementState,
   readElementStateHost,
+  writeElementState,
 } from './handler-context.js';
 import type { EventElementLike } from './events.js';
 
@@ -46,6 +47,59 @@ class FakeElement implements EventElementLike {
 }
 
 describe('handler context module', () => {
+  it('keeps handler params and state pinned after scalar and iterator poisoning', () => {
+    const element = new FakeElement({
+      'data-p-__proto__': 'safe-data',
+      'data-p-quantity': '2',
+      'kovo-param-types': 'quantity:number',
+      'kovo-state': '{"count":1}',
+    });
+    const originalStartsWith = String.prototype.startsWith;
+    const originalSlice = String.prototype.slice;
+    const originalSplit = String.prototype.split;
+    const originalReplace = String.prototype.replace;
+    const originalExec = RegExp.prototype.exec;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalNumber = globalThis.Number;
+    const originalParse = JSON.parse;
+    const originalStringify = JSON.stringify;
+    let params: ReturnType<typeof readElementParams> | undefined;
+    let state: ReturnType<typeof readElementState> | undefined;
+    try {
+      String.prototype.startsWith = () => false;
+      String.prototype.slice = () => '__proto__';
+      String.prototype.split = () => ['admin:boolean'];
+      String.prototype.replace = () => 'admin';
+      RegExp.prototype.exec = () => null;
+      Array.prototype[Symbol.iterator] = function () {
+        return { next: () => ({ done: true, value: undefined }) } as ArrayIterator<unknown>;
+      };
+      globalThis.Number = (() => 999) as unknown as NumberConstructor;
+      JSON.parse = () => ({ admin: true });
+      JSON.stringify = () => '{"admin":true}';
+
+      params = readElementParams(element);
+      state = readElementState(element);
+      writeElementState(element, { count: 2 });
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.slice = originalSlice;
+      String.prototype.split = originalSplit;
+      String.prototype.replace = originalReplace;
+      RegExp.prototype.exec = originalExec;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      globalThis.Number = originalNumber;
+      JSON.parse = originalParse;
+      JSON.stringify = originalStringify;
+    }
+
+    expect(Object.getPrototypeOf(params)).toBeNull();
+    expect(params?.['__proto__']).toBe('safe-data');
+    expect(params?.quantity).toBe(2);
+    expect(state).toEqual({ count: 1 });
+    expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
+  });
+
   it('defaults missing or malformed serialized state to an empty object', () => {
     expect(readElementState(new FakeElement({}))).toEqual({});
     expect(readElementState(new FakeElement({ 'kovo-state': '{' }))).toEqual({});

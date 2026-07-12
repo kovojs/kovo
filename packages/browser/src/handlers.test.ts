@@ -23,6 +23,47 @@ const restoreClientModuleManifest = installTestClientModuleManifest([
 afterAll(restoreClientModuleManifest);
 
 describe('delegated handler reference dispatch', () => {
+  it('keeps handler ref selection pinned after string and regexp prototype poisoning', async () => {
+    const pass = vi.fn();
+    const privileged = vi.fn();
+    const source = '/c/pass.client.js#pass';
+    const originalSplit = String.prototype.split;
+    const originalSlice = String.prototype.slice;
+    const originalLastIndexOf = String.prototype.lastIndexOf;
+    const originalExec = RegExp.prototype.exec;
+    const originalTest = RegExp.prototype.test;
+    const element = new FakeElement({ 'on:click': source });
+    const importModule = vi.fn(async () => ({ pass, privileged }));
+    try {
+      String.prototype.split = function (separator, limit) {
+        return this === source
+          ? ['/c/pass.client.js#privileged']
+          : Reflect.apply(originalSplit, this, [separator, limit]);
+      };
+      String.prototype.slice = function (start, end) {
+        return this === source
+          ? '/c/pass.client.js#privileged'
+          : Reflect.apply(originalSlice, this, [start, end]);
+      };
+      String.prototype.lastIndexOf = function (search, position) {
+        return this === source ? 1 : Reflect.apply(originalLastIndexOf, this, [search, position]);
+      };
+      RegExp.prototype.exec = () => null;
+      RegExp.prototype.test = () => false;
+
+      await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+    } finally {
+      String.prototype.split = originalSplit;
+      String.prototype.slice = originalSlice;
+      String.prototype.lastIndexOf = originalLastIndexOf;
+      RegExp.prototype.exec = originalExec;
+      RegExp.prototype.test = originalTest;
+    }
+
+    expect(pass).toHaveBeenCalledOnce();
+    expect(privileged).not.toHaveBeenCalled();
+  });
+
   it('imports and invokes a url#export handler only when a matching event arrives', async () => {
     const handler = vi.fn();
     const importModule = vi.fn(async () => ({ CartBadge$button_click: handler }));

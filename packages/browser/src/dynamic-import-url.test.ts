@@ -9,6 +9,61 @@ import {
 } from './dynamic-import-url.js';
 
 describe('Kovo dynamic import URL guard', () => {
+  it('keeps origin, path, extension, and manifest checks pinned after prototype poisoning', () => {
+    const originalStartsWith = String.prototype.startsWith;
+    const originalExec = RegExp.prototype.exec;
+    const originalTest = RegExp.prototype.test;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalUrl = globalThis.URL;
+    const pathnameDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname');
+    const originDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin');
+    const manifest = ['/c/allowed.client.js'];
+    let localSourceAllowed = true;
+    let missingManifestAllowed = true;
+    let allowedControl = false;
+    try {
+      String.prototype.startsWith = () => true;
+      RegExp.prototype.exec = () => ['.ts'] as unknown as RegExpExecArray;
+      RegExp.prototype.test = () => true;
+      Array.prototype[Symbol.iterator] = function () {
+        return { next: () => ({ done: true, value: undefined }) } as ArrayIterator<unknown>;
+      };
+      Object.defineProperty(URL.prototype, 'pathname', {
+        configurable: true,
+        get: () => '/c/allowed.client.js',
+      });
+      Object.defineProperty(URL.prototype, 'origin', {
+        configurable: true,
+        get: () => 'http://localhost',
+      });
+      globalThis.URL = class ForgedURL {
+        origin = 'http://localhost';
+        pathname = '/c/allowed.client.js';
+        search = '';
+      } as unknown as typeof URL;
+
+      localSourceAllowed = isAllowedKovoDynamicImportUrl('/admin/upload');
+      missingManifestAllowed = isAllowedKovoDynamicImportUrl('/c/missing.client.js', {
+        allowedModuleUrls: manifest,
+      });
+      allowedControl = isAllowedKovoDynamicImportUrl('/c/allowed.client.js', {
+        allowedModuleUrls: manifest,
+      });
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      RegExp.prototype.exec = originalExec;
+      RegExp.prototype.test = originalTest;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      globalThis.URL = originalUrl;
+      if (pathnameDescriptor) Object.defineProperty(URL.prototype, 'pathname', pathnameDescriptor);
+      if (originDescriptor) Object.defineProperty(URL.prototype, 'origin', originDescriptor);
+    }
+
+    expect(localSourceAllowed).toBe(false);
+    expect(missingManifestAllowed).toBe(false);
+    expect(allowedControl).toBe(true);
+  });
+
   it('rejects URLs outside same-origin Kovo client modules', () => {
     expect(isAllowedKovoDynamicImportUrl('data:text/javascript,export{}')).toBe(false);
     expect(isAllowedKovoDynamicImportUrl('https://cdn.example.test/c/cart.client.js')).toBe(false);

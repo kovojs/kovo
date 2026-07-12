@@ -145,6 +145,48 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(secret(7).equals(8)).toBe(false);
   });
 
+  it('keeps secret equality pinned after byte encoder, view, and iterator poisoning', () => {
+    const stringToken = secret('correct-token');
+    const byteToken = secret(new Uint8Array([1, 2, 3, 4]));
+    const originalEncode = TextEncoder.prototype.encode;
+    const originalIsView = ArrayBuffer.isView;
+    const originalIterator = Uint8Array.prototype[Symbol.iterator];
+    const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype) as object;
+    const bufferDescriptor = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'buffer');
+    let validString = false;
+    let invalidString = true;
+    let validBytes = false;
+    let invalidBytes = true;
+    try {
+      TextEncoder.prototype.encode = () => new Uint8Array();
+      ArrayBuffer.isView = (() => false) as typeof ArrayBuffer.isView;
+      Uint8Array.prototype[Symbol.iterator] = function () {
+        return { next: () => ({ done: true, value: undefined }) } as ArrayIterator<number>;
+      };
+      Object.defineProperty(typedArrayPrototype, 'buffer', {
+        configurable: true,
+        get: () => new ArrayBuffer(0),
+      });
+
+      validString = stringToken.equals('correct-token');
+      invalidString = stringToken.equals('forged-token!');
+      validBytes = byteToken.equals(new Uint8Array([1, 2, 3, 4]));
+      invalidBytes = byteToken.equals(new Uint8Array([9, 9, 9, 9]));
+    } finally {
+      TextEncoder.prototype.encode = originalEncode;
+      ArrayBuffer.isView = originalIsView;
+      Uint8Array.prototype[Symbol.iterator] = originalIterator;
+      if (bufferDescriptor) {
+        Object.defineProperty(typedArrayPrototype, 'buffer', bufferDescriptor);
+      }
+    }
+
+    expect(validString).toBe(true);
+    expect(invalidString).toBe(false);
+    expect(validBytes).toBe(true);
+    expect(invalidBytes).toBe(false);
+  });
+
   it('is idempotent: secret(secret(x)) does not double-wrap', () => {
     const inner = secret('x');
     expect(secret(inner)).toBe(inner);

@@ -12,6 +12,7 @@ const IntrinsicWeakSet = WeakSet;
 const IntrinsicMap = Map;
 const IntrinsicSet = Set;
 const IntrinsicObject = Object;
+const IntrinsicNumber = Number;
 
 const intrinsicReflectApply = Reflect.apply;
 const intrinsicWeakMapGet = WeakMap.prototype.get;
@@ -33,7 +34,9 @@ const intrinsicObjectFreeze = Object.freeze;
 const intrinsicObjectIsFrozen = Object.isFrozen;
 const intrinsicObjectIsExtensible = Object.isExtensible;
 const intrinsicObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const intrinsicObjectGetPrototypeOf = Object.getPrototypeOf;
 const intrinsicObjectDefineProperties = Object.defineProperties;
+const intrinsicObjectCreate = Object.create;
 const intrinsicObjectKeys = Object.keys;
 const intrinsicObjectHasOwnProperty = Object.prototype.hasOwnProperty;
 const intrinsicString = String;
@@ -42,8 +45,11 @@ const intrinsicStringTrim = String.prototype.trim;
 const intrinsicStringSlice = String.prototype.slice;
 const intrinsicStringIndexOf = String.prototype.indexOf;
 const intrinsicStringCharCodeAt = String.prototype.charCodeAt;
+const intrinsicStringStartsWith = String.prototype.startsWith;
 const intrinsicStringToLowerCase = String.prototype.toLowerCase;
 const intrinsicRegExpExec = RegExp.prototype.exec;
+const intrinsicJsonParse = JSON.parse;
+const intrinsicJsonStringify = JSON.stringify;
 const intrinsicFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 
 function invoke<T>(target: (...args: any[]) => unknown, receiver: unknown, args: unknown[]): T {
@@ -107,6 +113,7 @@ const definePropertiesResult = invoke<object>(intrinsicObjectDefineProperties, I
     },
   },
 ]);
+const nullRecordControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
 
 function failIntrinsic(name: string): never {
   throw new TypeError(`Kovo security intrinsic integrity check failed: ${name}`);
@@ -249,7 +256,8 @@ function assertDefinePropertiesIntegrity(): void {
     keys.length !== 1 ||
     keys[0] !== 'visible' ||
     invoke(intrinsicObjectHasOwnProperty, definePropertiesControl, ['visible']) !== true ||
-    invoke(intrinsicObjectHasOwnProperty, definePropertiesControl, ['missing']) !== false
+    invoke(intrinsicObjectHasOwnProperty, definePropertiesControl, ['missing']) !== false ||
+    invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [nullRecordControl]) !== null
   ) {
     failIntrinsic('Object.defineProperties');
   }
@@ -260,6 +268,7 @@ function assertStringIntegrity(): void {
   if (
     invoke(intrinsicString, undefined, ['kovo-security-control']) !== 'kovo-security-control' ||
     invoke(intrinsicString, undefined, [418]) !== '418' ||
+    invoke(IntrinsicNumber, undefined, ['42']) !== 42 ||
     invoke(intrinsicStringReplaceAll, '<&<', ['<', '!']) !== '!&!' ||
     invoke(intrinsicStringTrim, ' \tKovo\n', []) !== 'Kovo' ||
     invoke(intrinsicStringSlice, 'Kovo-security', [5, 13]) !== 'security' ||
@@ -268,12 +277,16 @@ function assertStringIntegrity(): void {
     invoke(intrinsicStringCharCodeAt, 'Kovo', [0]) !== 0x4b ||
     invoke(intrinsicStringCharCodeAt, 'Kovo', [99]) ===
       invoke(intrinsicStringCharCodeAt, 'Kovo', [99]) ||
+    invoke(intrinsicStringStartsWith, 'kovo/security', ['kovo/', 0]) !== true ||
+    invoke(intrinsicStringStartsWith, 'kovo/security', ['security', 0]) !== false ||
     invoke(intrinsicStringToLowerCase, 'JaVaScRiPt', []) !== 'javascript' ||
     match?.[0] !== 'https:' ||
     match[1] !== 'https' ||
     invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null ||
     invoke(intrinsicRegExpExec, /^https:/, ['https://kovo.test']) === null ||
-    invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null
+    invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null ||
+    invoke(intrinsicJsonStringify, JSON, [{ kovo: 418 }]) !== '{"kovo":418}' ||
+    invoke<{ kovo?: unknown }>(intrinsicJsonParse, JSON, ['{"kovo":418}']).kovo !== 418
   ) {
     failIntrinsic('String');
   }
@@ -471,6 +484,15 @@ export function securityGetOwnPropertyDescriptor(
   );
 }
 
+export function securityNullRecord<Value = unknown>(): Record<string, Value> {
+  assertCapturedSecurityControls();
+  const record = invoke<Record<string, Value>>(intrinsicObjectCreate, IntrinsicObject, [null]);
+  if (invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [record]) !== null) {
+    failIntrinsic('Object.create(null)');
+  }
+  return record;
+}
+
 export function securityObjectKeys(value: object): string[] {
   assertCapturedSecurityControls();
   return invoke<string[]>(intrinsicObjectKeys, IntrinsicObject, [value]);
@@ -484,6 +506,21 @@ export function securityHasOwn(value: object, key: PropertyKey): boolean {
 export function securityString(value: unknown): string {
   assertCapturedSecurityControls();
   return invoke(intrinsicString, undefined, [value]);
+}
+
+export function securityNumber(value: unknown): number {
+  assertCapturedSecurityControls();
+  return invoke(IntrinsicNumber, undefined, [value]);
+}
+
+export function securityJsonParse<Value = unknown>(value: string): Value {
+  assertCapturedSecurityControls();
+  return invoke<Value>(intrinsicJsonParse, JSON, [value]);
+}
+
+export function securityJsonStringify(value: unknown): string | undefined {
+  assertCapturedSecurityControls();
+  return invoke<string | undefined>(intrinsicJsonStringify, JSON, [value]);
 }
 
 export function securityStringReplaceAll(
@@ -515,6 +552,11 @@ export function securityStringCharCodeAt(value: string, index: number): number {
   return invoke(intrinsicStringCharCodeAt, value, [index]);
 }
 
+export function securityStringStartsWith(value: string, search: string, position = 0): boolean {
+  assertCapturedSecurityControls();
+  return invoke(intrinsicStringStartsWith, value, [search, position]) === true;
+}
+
 export function securityStringToLowerCase(value: string): string {
   assertCapturedSecurityControls();
   return invoke(intrinsicStringToLowerCase, value, []);
@@ -533,6 +575,16 @@ export function securityRegExpTest(pattern: RegExp, value: string): boolean {
 export function securityHasInstance(constructor: Function, value: unknown): boolean {
   assertCapturedSecurityControls();
   return invoke(intrinsicFunctionHasInstance, constructor, [value]) === true;
+}
+
+export function securityOwnArrayEntry<T>(
+  values: readonly T[],
+  index: number,
+): { ok: true; value: T } | { ok: false } {
+  const descriptor = securityGetOwnPropertyDescriptor(values, index);
+  return descriptor !== undefined && 'value' in descriptor
+    ? { ok: true, value: descriptor.value as T }
+    : { ok: false };
 }
 
 export function applySecurityIntrinsic<T>(

@@ -1,20 +1,58 @@
 import { createBoundedRuntimeAuditCollector } from './internal/security-markers.js';
 import {
   freezeSecurityValue,
+  securityApply,
   securityDefineProperty,
   securityIsArray,
   securityIsError,
   securityIsMap,
   securityIsSet,
+  securityHasInstance,
   securityGetOwnPropertyDescriptor,
+  securityGetPrototypeOf,
   securityMapForEach,
   securityObjectIs,
   securityObjectKeys,
   securitySetForEach,
+  securityStringTrim,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetHas,
 } from '#security-witness-intrinsics';
+
+const IntrinsicArrayBuffer = ArrayBuffer;
+const IntrinsicDataView = DataView;
+const IntrinsicTextEncoder = TextEncoder;
+const IntrinsicUint8Array = Uint8Array;
+const intrinsicArrayBufferIsView = IntrinsicArrayBuffer.isView;
+const comparableTextEncoder = new IntrinsicTextEncoder();
+const intrinsicTextEncoderEncode = IntrinsicTextEncoder.prototype.encode;
+const typedArrayPrototype = securityGetPrototypeOf(IntrinsicUint8Array.prototype);
+const intrinsicTypedArrayBuffer =
+  typedArrayPrototype === null
+    ? undefined
+    : securityGetOwnPropertyDescriptor(typedArrayPrototype, 'buffer')?.get;
+const intrinsicTypedArrayByteOffset =
+  typedArrayPrototype === null
+    ? undefined
+    : securityGetOwnPropertyDescriptor(typedArrayPrototype, 'byteOffset')?.get;
+const intrinsicTypedArrayByteLength =
+  typedArrayPrototype === null
+    ? undefined
+    : securityGetOwnPropertyDescriptor(typedArrayPrototype, 'byteLength')?.get;
+const intrinsicDataViewBuffer = securityGetOwnPropertyDescriptor(
+  IntrinsicDataView.prototype,
+  'buffer',
+)?.get;
+const intrinsicDataViewByteOffset = securityGetOwnPropertyDescriptor(
+  IntrinsicDataView.prototype,
+  'byteOffset',
+)?.get;
+const intrinsicDataViewByteLength = securityGetOwnPropertyDescriptor(
+  IntrinsicDataView.prototype,
+  'byteLength',
+)?.get;
+const capturedComparableByteControlsSound = verifyComparableByteControls();
 
 declare const secretBrand: unique symbol;
 declare const untrustedBrand: unique symbol;
@@ -435,7 +473,7 @@ export function isRedacted(value: unknown): value is RedactedValue<unknown> {
 
 function validateRevealReason(reason: SecretRevealReason | undefined): void {
   const text = typeof reason === 'string' ? reason : reason?.justification;
-  if (typeof text !== 'string' || text.trim() === '') {
+  if (typeof text !== 'string' || securityStringTrim(text) === '') {
     throw new Error('Secret/Untrusted reveal requires a non-empty justification.');
   }
 }
@@ -444,7 +482,7 @@ function recordSecretReveal(reason: SecretRevealReason | undefined): void {
   const text = typeof reason === 'string' ? reason : reason?.justification;
   secretRevealAuditFacts.record({
     kind: 'secret-reveal',
-    reason: text?.trim() ?? '<missing>',
+    reason: text === undefined ? '<missing>' : securityStringTrim(text),
     revealedAt: new Date().toISOString(),
   });
 }
@@ -499,7 +537,7 @@ export interface DeclareOffWireOptions {
  * static recognition and for the audit ledger, not to transform the value.
  */
 export function publishToClient<T>(value: T, options: PublishToClientOptions): T {
-  if (!options.reason.trim()) {
+  if (!securityStringTrim(options.reason)) {
     throw new Error('publishToClient requires a non-empty reason.');
   }
   return value;
@@ -515,7 +553,7 @@ export function publishToClient<T>(value: T, options: PublishToClientOptions): T
  * mutation response.
  */
 export function declareOffWire(run: () => void, options: DeclareOffWireOptions): void {
-  if (!options.justification.trim()) {
+  if (!securityStringTrim(options.justification)) {
     throw new Error('declareOffWire requires a non-empty justification.');
   }
   run();
@@ -527,11 +565,34 @@ interface ComparableBytes {
 }
 
 function comparableBytes(value: unknown): ComparableBytes | null {
-  if (typeof value === 'string') return { bytes: new TextEncoder().encode(value), kind: 'string' };
-  if (value instanceof ArrayBuffer) return { bytes: new Uint8Array(value), kind: 'bytes' };
-  if (ArrayBuffer.isView(value)) {
+  if (!capturedComparableByteControlsSound) return null;
+  if (typeof value === 'string') {
     return {
-      bytes: new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+      bytes: securityApply<Uint8Array>(intrinsicTextEncoderEncode, comparableTextEncoder, [value]),
+      kind: 'string',
+    };
+  }
+  if (securityHasInstance(IntrinsicArrayBuffer, value)) {
+    return { bytes: new IntrinsicUint8Array(value as ArrayBuffer), kind: 'bytes' };
+  }
+  if (securityApply<boolean>(intrinsicArrayBufferIsView, IntrinsicArrayBuffer, [value]) === true) {
+    const view = value as ArrayBufferView;
+    const dataView = securityHasInstance(IntrinsicDataView, view);
+    const bufferGetter = dataView ? intrinsicDataViewBuffer : intrinsicTypedArrayBuffer;
+    const byteOffsetGetter = dataView ? intrinsicDataViewByteOffset : intrinsicTypedArrayByteOffset;
+    const byteLengthGetter = dataView ? intrinsicDataViewByteLength : intrinsicTypedArrayByteLength;
+    if (
+      bufferGetter === undefined ||
+      byteOffsetGetter === undefined ||
+      byteLengthGetter === undefined
+    ) {
+      return null;
+    }
+    const buffer = securityApply<ArrayBufferLike>(bufferGetter, view, []);
+    const byteOffset = securityApply<number>(byteOffsetGetter, view, []);
+    const byteLength = securityApply<number>(byteLengthGetter, view, []);
+    return {
+      bytes: new IntrinsicUint8Array(buffer, byteOffset, byteLength),
       kind: 'bytes',
     };
   }
@@ -539,36 +600,50 @@ function comparableBytes(value: unknown): ComparableBytes | null {
 }
 
 function fixedDigestEqual(left: ComparableBytes, right: ComparableBytes): boolean {
-  const leftDigest = digestComparableBytes(left);
-  const rightDigest = digestComparableBytes(right);
-  let mismatch = 0;
-  for (let index = 0; index < leftDigest.length; index += 1) {
-    mismatch |= (leftDigest[index] ?? 0) ^ (rightDigest[index] ?? 0);
+  const length = left.bytes.length > right.bytes.length ? left.bytes.length : right.bytes.length;
+  let mismatch = left.bytes.length ^ right.bytes.length;
+  for (let index = 0; index < length; index += 1) {
+    mismatch |= (left.bytes[index] ?? 0) ^ (right.bytes[index] ?? 0);
   }
   return mismatch === 0;
 }
 
-function digestComparableBytes(value: ComparableBytes): Uint8Array {
-  const state = new Uint32Array([
-    0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35, 0x27d4eb2f, 0x165667b1, 0xd3a2646c, 0xfd7046c5,
-  ]);
-  digestByte(state, value.kind === 'string' ? 0x73 : 0x62);
-  digestByte(state, 0);
-  for (const byte of value.bytes) digestByte(state, byte);
-
-  const digest = new Uint8Array(32);
-  const view = new DataView(digest.buffer);
-  for (let index = 0; index < state.length; index += 1) {
-    view.setUint32(index * 4, state[index] ?? 0, true);
-  }
-  return digest;
-}
-
-function digestByte(state: Uint32Array, byte: number): void {
-  for (let index = 0; index < state.length; index += 1) {
-    const previous = state[index] ?? 0;
-    const mixed = Math.imul(previous ^ ((byte + index * 0x9e) & 0xff), 0x01000193);
-    state[index] = (mixed ^ (mixed >>> 13) ^ Math.imul(index + 1, 0x85ebca6b)) >>> 0;
+function verifyComparableByteControls(): boolean {
+  try {
+    if (
+      intrinsicTypedArrayBuffer === undefined ||
+      intrinsicTypedArrayByteOffset === undefined ||
+      intrinsicTypedArrayByteLength === undefined ||
+      intrinsicDataViewBuffer === undefined ||
+      intrinsicDataViewByteOffset === undefined ||
+      intrinsicDataViewByteLength === undefined
+    ) {
+      return false;
+    }
+    const encoded = securityApply<Uint8Array>(intrinsicTextEncoderEncode, comparableTextEncoder, [
+      'Kovo',
+    ]);
+    const bytes = new IntrinsicUint8Array(4);
+    const dataView = new IntrinsicDataView(bytes.buffer, 1, 2);
+    return (
+      encoded.length === 4 &&
+      encoded[0] === 0x4b &&
+      encoded[1] === 0x6f &&
+      encoded[2] === 0x76 &&
+      encoded[3] === 0x6f &&
+      securityApply<boolean>(intrinsicArrayBufferIsView, IntrinsicArrayBuffer, [bytes]) === true &&
+      securityApply<boolean>(intrinsicArrayBufferIsView, IntrinsicArrayBuffer, [dataView]) ===
+        true &&
+      securityApply<boolean>(intrinsicArrayBufferIsView, IntrinsicArrayBuffer, [{}]) === false &&
+      securityApply<ArrayBufferLike>(intrinsicTypedArrayBuffer, bytes, []) === bytes.buffer &&
+      securityApply<number>(intrinsicTypedArrayByteOffset, bytes, []) === 0 &&
+      securityApply<number>(intrinsicTypedArrayByteLength, bytes, []) === 4 &&
+      securityApply<ArrayBufferLike>(intrinsicDataViewBuffer, dataView, []) === bytes.buffer &&
+      securityApply<number>(intrinsicDataViewByteOffset, dataView, []) === 1 &&
+      securityApply<number>(intrinsicDataViewByteLength, dataView, []) === 2
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -609,7 +684,7 @@ export type TrustedRevealValue<T> = T extends Secret<infer Value> ? Value : T;
  * server-side projections that never select the secret.
  */
 export function trustedReveal<T>(value: T, options: TrustedRevealOptions): TrustedRevealValue<T> {
-  if (!options.justification.trim()) {
+  if (!securityStringTrim(options.justification)) {
     throw new Error('trustedReveal requires a non-empty justification.');
   }
   // Unwrap a runtime secret box so the reveal yields the value, not the poisoned

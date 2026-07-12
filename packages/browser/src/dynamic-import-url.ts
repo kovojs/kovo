@@ -1,13 +1,36 @@
 import type { KovoModuleRef } from '@kovojs/core/internal/module-ref';
 
 import {
+  applySecurityIntrinsic,
+  securityGetOwnPropertyDescriptor,
+  securityOwnArrayEntry,
+  securityRegExpTest,
   securitySet,
   securitySetAdd,
   securitySetHas,
+  securityStringSlice,
+  securityStringStartsWith,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetHas,
 } from './security-witness-intrinsics.js';
+
+const IntrinsicURL = URL;
+const intrinsicUrlOrigin = securityGetOwnPropertyDescriptor(IntrinsicURL.prototype, 'origin')?.get;
+const intrinsicUrlPathname = securityGetOwnPropertyDescriptor(
+  IntrinsicURL.prototype,
+  'pathname',
+)?.get;
+const intrinsicUrlSearch = securityGetOwnPropertyDescriptor(IntrinsicURL.prototype, 'search')?.get;
+const intrinsicUrlProtocol = securityGetOwnPropertyDescriptor(
+  IntrinsicURL.prototype,
+  'protocol',
+)?.get;
+const intrinsicUrlHostname = securityGetOwnPropertyDescriptor(
+  IntrinsicURL.prototype,
+  'hostname',
+)?.get;
+const capturedUrlControlsSound = verifyCapturedUrlControls();
 
 export interface DynamicImportUrlOptions {
   allowedModuleUrls?: readonly string[];
@@ -86,35 +109,37 @@ export function isAllowedKovoDynamicImportUrl(
 ): boolean {
   const parsed = parseImportUrl(url);
   if (!parsed) return false;
-  if (parsed.origin !== currentOrigin()) return false;
+  if (urlOrigin(parsed) !== currentOrigin()) return false;
   if (isAllowedLocalDevSourceModuleUrl(parsed)) return true;
-  if (!parsed.pathname.startsWith('/c/')) return false;
+  if (!securityStringStartsWith(urlPathname(parsed), '/c/')) return false;
 
   const manifest = allowedClientModuleUrlManifest(options.allowedModuleUrls);
   // SPEC §4.7/§4.8/§6.6: a missing/empty compiler-owned registry is deny, never a
   // wildcard for every same-origin /c/ module. Local Vite source modules retain their explicit
   // development-only branch above.
-  if (manifest.size === 0) return false;
-
   return securitySetHas(manifest, canonicalImportUrl(parsed));
 }
 
 function isAllowedLocalDevSourceModuleUrl(url: URL): boolean {
   if (!isLocalDevOrigin(url)) return false;
-  if (url.pathname.startsWith('/c/')) return false;
-  return /\.(?:[cm]?tsx?)$/.test(url.pathname);
+  const pathname = urlPathname(url);
+  if (securityStringStartsWith(pathname, '/c/')) return false;
+  return securityRegExpTest(/\.(?:[cm]?tsx?)$/, pathname);
 }
 
 function isLocalDevOrigin(url: URL): boolean {
+  const protocol = urlProtocol(url);
+  const hostname = urlHostname(url);
   return (
-    url.protocol === 'http:' &&
-    (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1')
+    protocol === 'http:' &&
+    (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1')
   );
 }
 
 function parseImportUrl(value: string): URL | null {
+  if (!capturedUrlControlsSound) return null;
   try {
-    return new URL(value, currentHref());
+    return new IntrinsicURL(value, currentHref());
   } catch {
     return null;
   }
@@ -125,7 +150,7 @@ function currentHref(): string {
 }
 
 function currentOrigin(): string {
-  return globalThis.location?.origin ?? new URL(currentHref()).origin;
+  return globalThis.location?.origin ?? urlOrigin(new IntrinsicURL(currentHref()));
 }
 
 function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<string> {
@@ -133,11 +158,14 @@ function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<strin
   if (!values || values.length === 0) return securitySet();
 
   const allowed = securitySet<string>();
-  for (const value of values) {
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok || typeof entry.value !== 'string') continue;
+    const value = entry.value;
     const parsed = parseImportUrl(value);
     if (!parsed) continue;
-    if (parsed.origin !== currentOrigin()) continue;
-    if (!parsed.pathname.startsWith('/c/')) continue;
+    if (urlOrigin(parsed) !== currentOrigin()) continue;
+    if (!securityStringStartsWith(urlPathname(parsed), '/c/')) continue;
     securitySetAdd(allowed, canonicalImportUrl(parsed));
   }
   return allowed;
@@ -146,18 +174,81 @@ function allowedClientModuleUrlManifest(explicit?: readonly string[]): Set<strin
 function documentModulepreloadClientModules(): readonly string[] | undefined {
   if (typeof document === 'undefined') return undefined;
   const markers = document.querySelectorAll?.('[data-kovo-module-allowlist]');
-  if (!markers || typeof markers[Symbol.iterator] !== 'function') return undefined;
+  if (!markers) return undefined;
 
   const hrefs: string[] = [];
-  for (const marker of markers as Iterable<{ getAttribute?: (name: string) => string | null }>) {
+  for (let index = 0; index < markers.length; index += 1) {
+    const marker = markers[index] as { getAttribute?: (name: string) => string | null } | undefined;
+    if (marker === undefined) continue;
     const declared = marker.getAttribute?.('data-kovo-module-allowlist');
-    if (declared) hrefs.push(...declared.split(/\s+/).filter(Boolean));
+    if (declared) appendWhitespaceTokens(hrefs, declared);
     const href = marker.getAttribute?.('href');
-    if (!declared && href) hrefs.push(href);
+    if (!declared && href) hrefs[hrefs.length] = href;
   }
   return hrefs;
 }
 
 function canonicalImportUrl(url: URL): string {
-  return `${url.origin}${url.pathname}${url.search}`;
+  return `${urlOrigin(url)}${urlPathname(url)}${urlSearch(url)}`;
+}
+
+function urlOrigin(url: URL): string {
+  return readUrlField(intrinsicUrlOrigin, url);
+}
+
+function urlPathname(url: URL): string {
+  return readUrlField(intrinsicUrlPathname, url);
+}
+
+function urlSearch(url: URL): string {
+  return readUrlField(intrinsicUrlSearch, url);
+}
+
+function urlProtocol(url: URL): string {
+  return readUrlField(intrinsicUrlProtocol, url);
+}
+
+function urlHostname(url: URL): string {
+  return readUrlField(intrinsicUrlHostname, url);
+}
+
+function readUrlField(getter: (() => string) | undefined, url: URL): string {
+  if (!capturedUrlControlsSound || getter === undefined) {
+    throw new TypeError('Kovo dynamic import URL controls are unavailable.');
+  }
+  return applySecurityIntrinsic<string>(getter, url, []);
+}
+
+function verifyCapturedUrlControls(): boolean {
+  if (
+    intrinsicUrlOrigin === undefined ||
+    intrinsicUrlPathname === undefined ||
+    intrinsicUrlSearch === undefined ||
+    intrinsicUrlProtocol === undefined ||
+    intrinsicUrlHostname === undefined
+  ) {
+    return false;
+  }
+  try {
+    const control = new IntrinsicURL('/c/control.client.js?q=1', 'http://localhost/base');
+    return (
+      applySecurityIntrinsic<string>(intrinsicUrlOrigin, control, []) === 'http://localhost' &&
+      applySecurityIntrinsic<string>(intrinsicUrlPathname, control, []) ===
+        '/c/control.client.js' &&
+      applySecurityIntrinsic<string>(intrinsicUrlSearch, control, []) === '?q=1' &&
+      applySecurityIntrinsic<string>(intrinsicUrlProtocol, control, []) === 'http:' &&
+      applySecurityIntrinsic<string>(intrinsicUrlHostname, control, []) === 'localhost'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function appendWhitespaceTokens(target: string[], value: string): void {
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    if (index < value.length && !securityRegExpTest(/\s/u, value[index] ?? '')) continue;
+    if (index > start) target[target.length] = securityStringSlice(value, start, index);
+    start = index + 1;
+  }
 }

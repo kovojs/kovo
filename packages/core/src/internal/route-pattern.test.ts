@@ -9,6 +9,74 @@ import {
 } from './route-pattern.js';
 
 describe('core internal route pattern contract', () => {
+  it('keeps canonical matching and href encoding pinned after scalar and iterator poisoning', () => {
+    const routes = [{ path: '/public' }, { path: '/admin' }];
+    expect(matchRoute(routes, '/public')?.route.path).toBe('/public');
+    const originalSplit = String.prototype.split;
+    const originalReplace = String.prototype.replace;
+    const originalStartsWith = String.prototype.startsWith;
+    const originalSlice = String.prototype.slice;
+    const originalJoin = Array.prototype.join;
+    const originalPop = Array.prototype.pop;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    const originalMax = Math.max;
+    const originalEncode = globalThis.encodeURIComponent;
+    const originalDecode = globalThis.decodeURIComponent;
+    const originalStringify = JSON.stringify;
+    const originalKeys = Object.keys;
+    let normalization: ReturnType<typeof normalizePathname> | undefined;
+    let match: ReturnType<typeof matchRoute> = undefined;
+    let authorityMatch: ReturnType<typeof matchRoute> = undefined;
+    let href = '';
+    try {
+      String.prototype.split = () => ['forged'];
+      String.prototype.replace = function (search, replacement) {
+        return this === '/public'
+          ? '/admin'
+          : Reflect.apply(originalReplace, this, [search, replacement]);
+      };
+      String.prototype.startsWith = () => false;
+      String.prototype.slice = () => 'forged';
+      Array.prototype.join = () => '/admin';
+      Array.prototype.pop = () => 'forged';
+      Array.prototype[Symbol.iterator] = function () {
+        return { next: () => ({ done: true, value: undefined }) } as ArrayIterator<unknown>;
+      };
+      Math.max = () => 0;
+      globalThis.encodeURIComponent = () => 'javascript:forged';
+      globalThis.decodeURIComponent = () => '..';
+      JSON.stringify = () => 'forged';
+      Object.keys = () => [];
+
+      normalization = normalizePathname('/tenant//a/../safe/?ignored=1');
+      authorityMatch = matchRoute(routes, '/public');
+      match = matchRoute([{ path: '/tenant/:__proto__' }], '/tenant/value%2Fpart');
+      href = buildRoutePatternHref('/tenant/:id', {
+        params: { id: 'value/part' },
+        search: { q: 'a b' },
+      });
+    } finally {
+      String.prototype.split = originalSplit;
+      String.prototype.replace = originalReplace;
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.slice = originalSlice;
+      Array.prototype.join = originalJoin;
+      Array.prototype.pop = originalPop;
+      Array.prototype[Symbol.iterator] = originalIterator;
+      Math.max = originalMax;
+      globalThis.encodeURIComponent = originalEncode;
+      globalThis.decodeURIComponent = originalDecode;
+      JSON.stringify = originalStringify;
+      Object.keys = originalKeys;
+    }
+
+    expect(normalization?.pathname).toBe('/tenant/safe');
+    expect(authorityMatch?.route.path).toBe('/public');
+    expect(match?.params['__proto__']).toBe('value/part');
+    expect(Object.getPrototypeOf(match?.params)).toBeNull();
+    expect(href).toBe('/tenant/value%2Fpart?q=a+b');
+  });
+
   it('parses and normalizes route patterns once for hrefs, matching, export, and ambiguity checks', () => {
     expect(parseRoutePattern('/docs//:slug/./:file.name/')).toEqual({
       hasParams: true,

@@ -1,4 +1,15 @@
 import {
+  securityDecodeURIComponent,
+  securityEncodeURIComponent,
+  securityGetOwnPropertyDescriptor,
+  securityJsonStringify,
+  securityNullRecord,
+  securityObjectKeys,
+  securityOwnArrayEntry,
+  securityString,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapSet,
@@ -60,7 +71,9 @@ export interface RouteAmbiguity {
 
 /** @internal Runtime mirror of the `PathParamNames` type grammar. */
 export function routePatternParamNameFromSegment(segment: string): string | undefined {
-  return segment.startsWith(':') && segment.length > 1 ? segment.slice(1) : undefined;
+  return securityStringStartsWith(segment, ':') && segment.length > 1
+    ? securityStringSlice(segment, 1)
+    : undefined;
 }
 
 /** @internal Parse and normalize an authored route pattern. */
@@ -100,8 +113,8 @@ export function substituteRoutePatternParams(
     const value =
       segment.kind === 'static'
         ? segment.value
-        : encodeURIComponent(
-            routeSearchValueToString(params[segment.name ?? segment.value.slice(1)]),
+        : securityEncodeURIComponent(
+            routeSearchValueToString(params[segment.name ?? securityStringSlice(segment.value, 1)]),
           );
     rendered += `${index === 0 ? '' : '/'}${value}`;
   }
@@ -117,32 +130,54 @@ export function buildRoutePatternHref(
   } = {},
 ): string {
   const pathname = substituteRoutePatternParams(path, options.params ?? {});
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(options.search ?? {})) {
+  const search = options.search ?? {};
+  const keys = securityObjectKeys(search);
+  let query = '';
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) continue;
+    const descriptor = securityGetOwnPropertyDescriptor(search, key);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const value = descriptor.value;
     if (value === null || value === undefined) continue;
-    search.set(key, routeSearchValueToString(value));
+    query += `${query === '' ? '' : '&'}${encodeSearchPart(key)}=${encodeSearchPart(
+      routeSearchValueToString(value),
+    )}`;
   }
-
-  const query = search.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
 
 /** @internal Canonicalize request pathnames before matching or static export. */
 export function normalizePathname(pathname: string): PathnameNormalization {
   const inputPathname = pathname;
-  const withoutSearchOrHash = pathname.split(/[?#]/, 1)[0] ?? '';
-  const absolutePathname = withoutSearchOrHash.startsWith('/')
+  const boundary = firstPathBoundary(pathname);
+  const withoutSearchOrHash = boundary < 0 ? pathname : securityStringSlice(pathname, 0, boundary);
+  const absolutePathname = securityStringStartsWith(withoutSearchOrHash, '/')
     ? withoutSearchOrHash
     : `/${withoutSearchOrHash}`;
   // SPEC §9.5: route dispatch works on one canonical pathname. Collapse leading
   // authority-forming slash/backslash runs and internal slash runs before matching
   // so redirects cannot become protocol-relative and params cannot receive empty
   // smuggled segments.
-  const slashCollapsed = `/${absolutePathname.replace(/[/\\]+/g, '/').replace(/^\/+/, '')}`;
+  let slashCollapsed = '/';
+  let previousSlash = true;
+  for (let index = 0; index < absolutePathname.length; index += 1) {
+    const character = absolutePathname[index] ?? '';
+    const slash = character === '/' || character === '\\';
+    if (slash) {
+      if (!previousSlash) slashCollapsed += '/';
+    } else {
+      slashCollapsed += character;
+    }
+    previousSlash = slash;
+  }
   const dotSegmentsRemoved = removeDotSegments(slashCollapsed);
+  let trailingEnd = dotSegmentsRemoved.length;
+  while (trailingEnd > 1 && dotSegmentsRemoved[trailingEnd - 1] === '/') trailingEnd -= 1;
   const trailingTrimmed =
-    dotSegmentsRemoved === '/' ? '/' : dotSegmentsRemoved.replace(/\/+$/, '') || '/';
+    trailingEnd === dotSegmentsRemoved.length
+      ? dotSegmentsRemoved
+      : securityStringSlice(dotSegmentsRemoved, 0, trailingEnd);
   const normalized = trailingTrimmed;
 
   if (normalized === absolutePathname) {
@@ -174,8 +209,9 @@ export function matchRoute<Route extends RouteLike>(
   let match: { params: Record<string, string>; route: CompiledRoute<Route> } | undefined;
   const compiled = compileRoutes(routes);
   for (let index = 0; index < compiled.length; index += 1) {
-    const route = compiled[index];
-    if (route === undefined) continue;
+    const routeEntry = securityOwnArrayEntry(compiled, index);
+    if (!routeEntry.ok) continue;
+    const route = routeEntry.value;
     const params = matchCompiledRoute(route, pathnameSegments);
     if (!params) continue;
     if (!match || compareCompiledRouteSpecificity(route, match.route) < 0) {
@@ -198,12 +234,14 @@ export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly Rou
   const ambiguities: RouteAmbiguity[] = [];
 
   for (let leftIndex = 0; leftIndex < compiledRoutes.length; leftIndex += 1) {
-    const left = compiledRoutes[leftIndex];
-    if (!left) continue;
+    const leftEntry = securityOwnArrayEntry(compiledRoutes, leftIndex);
+    if (!leftEntry.ok) continue;
+    const left = leftEntry.value;
 
     for (let rightIndex = leftIndex + 1; rightIndex < compiledRoutes.length; rightIndex += 1) {
-      const right = compiledRoutes[rightIndex];
-      if (!right) continue;
+      const rightEntry = securityOwnArrayEntry(compiledRoutes, rightIndex);
+      if (!rightEntry.ok) continue;
+      const right = rightEntry.value;
       const witnessPath = routeAmbiguityWitness(left, right);
       if (!witnessPath) continue;
 
@@ -252,8 +290,8 @@ function compileRoutes<Route extends RouteLike>(
   const cached = securityWeakMapGet(routeTableCache, routes);
   const paths: string[] = [];
   for (let index = 0; index < routes.length; index += 1) {
-    const route = routes[index];
-    if (route !== undefined) paths[index] = route.path;
+    const routeEntry = securityOwnArrayEntry(routes, index);
+    if (routeEntry.ok) paths[index] = routeEntry.value.path;
   }
   if (cached && pathsEqual(cached.paths, paths)) {
     return cached.compiled as readonly CompiledRoute<Route>[];
@@ -261,8 +299,8 @@ function compileRoutes<Route extends RouteLike>(
 
   const compiled: CompiledRoute<Route>[] = [];
   for (let index = 0; index < routes.length; index += 1) {
-    const route = routes[index];
-    if (route !== undefined) compiled[index] = compileRoute(route, index);
+    const routeEntry = securityOwnArrayEntry(routes, index);
+    if (routeEntry.ok) compiled[index] = compileRoute(routeEntry.value, index);
   }
   securityWeakMapSet(routeTableCache, routes, { compiled, paths });
   return compiled;
@@ -287,7 +325,8 @@ function pathsEqual(left: readonly string[], right: readonly string[]): boolean 
 }
 
 function compareCompiledRouteSpecificity(left: CompiledRoute, right: CompiledRoute): number {
-  const segmentCount = Math.max(left.segments.length, right.segments.length);
+  const segmentCount =
+    left.segments.length > right.segments.length ? left.segments.length : right.segments.length;
 
   for (let index = 0; index < segmentCount; index += 1) {
     const leftSegment = left.segments[index];
@@ -306,7 +345,7 @@ function matchCompiledRoute(
 ): Record<string, string> | undefined {
   if (route.segments.length !== pathnameSegments.length) return undefined;
 
-  const params: Record<string, string> = {};
+  const params = securityNullRecord<string>();
   for (let index = 0; index < route.segments.length; index += 1) {
     const routeSegment = route.segments[index];
     const pathnameSegment = pathnameSegments[index];
@@ -319,12 +358,12 @@ function matchCompiledRoute(
 
     let decoded: string;
     try {
-      decoded = decodeURIComponent(pathnameSegment);
+      decoded = securityDecodeURIComponent(pathnameSegment);
     } catch {
       return undefined;
     }
     if (decoded === '.' || decoded === '..') return undefined;
-    params[routeSegment.name ?? routeSegment.value.slice(1)] = decoded;
+    params[routeSegment.name ?? securityStringSlice(routeSegment.value, 1)] = decoded;
   }
 
   return params;
@@ -374,37 +413,77 @@ function routeAmbiguityWitness(left: CompiledRoute, right: CompiledRoute): strin
     witnessSegments[witnessSegments.length] = leftSegment.name ? `:${leftSegment.name}` : ':param';
   }
 
-  return `/${witnessSegments.join('/')}`;
+  return `/${joinPathSegments(witnessSegments)}`;
 }
 
 function splitPathSegments(pathname: string): readonly string[] {
   if (pathname === '/') return [];
-  return pathname.slice(1).split('/');
+  return securityStringSplit(securityStringSlice(pathname, 1), '/');
 }
 
 function removeDotSegments(pathname: string): string {
-  const segments = pathname.split('/');
+  const segments = securityStringSplit(pathname, '/');
   const output: string[] = [];
 
-  for (const segment of segments) {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segmentEntry = securityOwnArrayEntry(segments, index);
+    if (!segmentEntry.ok) continue;
+    const segment = segmentEntry.value;
     if (segment === '.') continue;
     if (segment === '..') {
-      if (output.length > 1) output.pop();
+      if (output.length > 1) output.length -= 1;
       continue;
     }
     output[output.length] = segment;
   }
 
-  const joined = output.join('/');
-  return joined.startsWith('/') ? joined : `/${joined}`;
+  const joined = joinPathSegments(output);
+  return securityStringStartsWith(joined, '/') ? joined : `/${joined}`;
 }
 
 function routeSearchValueToString(value: unknown): string {
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return String(value);
+    return securityString(value);
   }
   if (typeof value === 'symbol') return value.description ?? '';
-  return JSON.stringify(value) ?? '';
+  return securityJsonStringify(value) ?? '';
+}
+
+function firstPathBoundary(value: string): number {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '?' || value[index] === '#') return index;
+  }
+  return -1;
+}
+
+function joinPathSegments(segments: readonly string[]): string {
+  let joined = '';
+  for (let index = 0; index < segments.length; index += 1) {
+    const entry = securityOwnArrayEntry(segments, index);
+    if (!entry.ok) continue;
+    joined += `${index === 0 ? '' : '/'}${entry.value}`;
+  }
+  return joined;
+}
+
+function encodeSearchPart(value: string): string {
+  const encoded = securityEncodeURIComponent(value);
+  let formEncoded = '';
+  for (let index = 0; index < encoded.length; index += 1) {
+    if (securityStringStartsWith(encoded, '%20', index)) {
+      formEncoded += '+';
+      index += 2;
+      continue;
+    }
+    const character = encoded[index] ?? '';
+    if (character === '!') formEncoded += '%21';
+    else if (character === "'") formEncoded += '%27';
+    else if (character === '(') formEncoded += '%28';
+    else if (character === ')') formEncoded += '%29';
+    else if (character === '~') formEncoded += '%7E';
+    else formEncoded += character;
+  }
+  return formEncoded;
 }

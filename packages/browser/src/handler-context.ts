@@ -7,10 +7,20 @@ import {
   securityMapForEach,
   securityMapGet,
   securityMapSet,
+  securityJsonParse,
+  securityJsonStringify,
+  securityNullRecord,
+  securityNumber,
+  securityRegExpExec,
+  securityRegExpTest,
   securitySet,
   securitySetAdd,
   securitySetForEach,
   securitySetHas,
+  securityStringCharCodeAt,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringStartsWith,
   securityWeakMap,
   securityWeakMapDelete,
   securityWeakMapGet,
@@ -77,12 +87,14 @@ export function createDelegatedHandlerContext(
 /** @internal Read an island element's `data-p-*` params into a typed params object (SPEC §4.3). */
 export function readElementParams(element: EventElementLike): Record<string, ElementParamValue> {
   const paramTypes = readElementParamTypes(element.getAttribute?.('kovo-param-types'));
-  const params: Record<string, ElementParamValue> = {};
+  const params = securityNullRecord<ElementParamValue>();
 
-  for (const attribute of domAttributes(element.attributes)) {
-    if (!attribute.name.startsWith('data-p-')) continue;
+  const attributes = domAttributes(element.attributes);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute === undefined || !securityStringStartsWith(attribute.name, 'data-p-')) continue;
 
-    const name = camelCase(attribute.name.slice('data-p-'.length));
+    const name = camelCase(securityStringSlice(attribute.name, 'data-p-'.length));
     params[name] = coerceElementParam(attribute.value, paramTypes[name]);
   }
 
@@ -90,18 +102,31 @@ export function readElementParams(element: EventElementLike): Record<string, Ele
 }
 
 function readElementParamTypes(value: string | null | undefined): Record<string, string> {
-  const types: Record<string, string> = {};
+  const types = securityNullRecord<string>();
+  if (value === null || value === undefined) return types;
 
-  for (const entry of value?.split(/[\s,]+/) ?? []) {
-    const [name, type] = entry.split(':');
-    if (name && type) types[name] = type;
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const delimiter =
+      index === value.length ||
+      value[index] === ',' ||
+      securityRegExpTest(/\s/u, value[index] ?? '');
+    if (!delimiter) continue;
+    if (index > start) {
+      const entry = securityStringSlice(value, start, index);
+      const colon = securityStringIndexOf(entry, ':');
+      if (colon > 0 && colon < entry.length - 1) {
+        types[securityStringSlice(entry, 0, colon)] = securityStringSlice(entry, colon + 1);
+      }
+    }
+    start = index + 1;
   }
 
   return types;
 }
 
 function coerceElementParam(value: string, type: string | undefined): ElementParamValue {
-  if (type === 'number') return Number(value);
+  if (type === 'number') return securityNumber(value);
   if (type === 'boolean') return value === 'true';
 
   return value;
@@ -114,7 +139,7 @@ export function readElementState(element: EventElementLike): JsonValue {
   if (!state) return {};
 
   try {
-    return JSON.parse(state) as JsonValue;
+    return securityJsonParse<JsonValue>(state);
   } catch {
     return {};
   }
@@ -122,7 +147,8 @@ export function readElementState(element: EventElementLike): JsonValue {
 
 /** @internal Serialize island state back onto the element's `kovo-state` attribute (SPEC §4.3). */
 export function writeElementState(element: EventElementLike, state: JsonValue): void {
-  element.setAttribute?.('kovo-state', JSON.stringify(state));
+  const serialized = securityJsonStringify(state);
+  if (serialized !== undefined) element.setAttribute?.('kovo-state', serialized);
 }
 
 export function readElementStateHost(element: EventElementLike): EventElementLike | null {
@@ -167,7 +193,9 @@ export function abortRemovedIslandSignals(
   });
   const controllers = islandSignalControllersFor(scope);
 
-  for (const id of removed) {
+  for (let index = 0; index < removed.length; index += 1) {
+    const id = removed[index];
+    if (id === undefined) continue;
     const controller = securityMapGet(controllers, id);
     if (!controller) continue;
 
@@ -192,14 +220,14 @@ function kovoComponentIds(html: string): Set<string> {
   let offset = 0;
 
   while (offset < html.length) {
-    const start = html.indexOf('<', offset);
+    const start = securityStringIndexOf(html, '<', offset);
     if (start === -1) break;
     if (html[start + 1] === '/') {
       offset = start + 2;
       continue;
     }
 
-    const tagName = /^<[a-z][a-z0-9-]*/i.exec(html.slice(start));
+    const tagName = securityRegExpExec(/^<[a-z][a-z0-9-]*/i, securityStringSlice(html, start));
     if (!tagName) {
       offset = start + 1;
       continue;
@@ -207,7 +235,7 @@ function kovoComponentIds(html: string): Set<string> {
 
     const close = tagClose(html, start + tagName[0].length);
     if (close === undefined) break;
-    const tag = html.slice(start, close + 1);
+    const tag = securityStringSlice(html, start, close + 1);
     const identity = islandSignalIdentity(
       readAttribute(tag, 'kovo-c'),
       readAttribute(tag, 'kovo-key'),
@@ -227,9 +255,24 @@ function islandSignalIdentity(
 ): string | null {
   if (!component) return null;
   const instance = key ?? id;
-  return instance ? [component, instance].join('\0') : component;
+  return instance ? `${component}\0${instance}` : component;
 }
 
 function camelCase(value: string): string {
-  return value.replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
+  let camel = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    if (character === '-' && index + 1 < value.length) {
+      const next = value[index + 1] ?? '';
+      const code = securityStringCharCodeAt(next, 0);
+      if ((code >= 0x61 && code <= 0x7a) || (code >= 0x30 && code <= 0x39)) {
+        camel +=
+          code >= 0x61 && code <= 0x7a ? ('ABCDEFGHIJKLMNOPQRSTUVWXYZ'[code - 0x61] ?? '') : next;
+        index += 1;
+        continue;
+      }
+    }
+    camel += character;
+  }
+  return camel;
 }

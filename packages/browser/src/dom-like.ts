@@ -77,13 +77,18 @@ export function domAttributes(
   attributes: DomAttributeListLike | null | undefined,
 ): DomAttributeLike[] {
   if (!attributes) return [];
-  if (isIterable(attributes)) return [...attributes];
-
-  return Array.from({ length: attributes.length }, (_, index) => attributes[index]).filter(
-    (attribute): attribute is DomAttributeLike => Boolean(attribute),
-  );
-}
-
-function isIterable(value: DomAttributeListLike): value is Iterable<DomAttributeLike> {
-  return typeof (value as Iterable<DomAttributeLike>)[Symbol.iterator] === 'function';
+  const length = (attributes as ArrayLike<DomAttributeLike>).length;
+  if (typeof length !== 'number' || length < 0 || length % 1 !== 0) return [];
+  const result: DomAttributeLike[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const attribute = (attributes as ArrayLike<DomAttributeLike>)[index];
+    if (
+      attribute !== undefined &&
+      typeof attribute.name === 'string' &&
+      typeof attribute.value === 'string'
+    ) {
+      result[result.length] = attribute;
+    }
+  }
+  return result;
 }

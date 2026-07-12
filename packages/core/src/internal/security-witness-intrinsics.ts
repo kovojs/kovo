@@ -36,6 +36,7 @@ const intrinsicObjectIsExtensible = Object.isExtensible;
 const intrinsicObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const intrinsicObjectGetPrototypeOf = Object.getPrototypeOf;
 const intrinsicObjectDefineProperty = Object.defineProperty;
+const intrinsicObjectCreate = Object.create;
 const intrinsicObjectHasOwnProperty = Object.prototype.hasOwnProperty;
 const intrinsicObjectPropertyIsEnumerable = Object.prototype.propertyIsEnumerable;
 const intrinsicObjectKeys = Object.keys;
@@ -51,6 +52,9 @@ const intrinsicStringSplit = String.prototype.split;
 const intrinsicStringToLowerCase = String.prototype.toLowerCase;
 const intrinsicStringToUpperCase = String.prototype.toUpperCase;
 const intrinsicRegExpExec = RegExp.prototype.exec;
+const intrinsicEncodeURIComponent = globalThis.encodeURIComponent;
+const intrinsicDecodeURIComponent = globalThis.decodeURIComponent;
+const intrinsicJsonStringify = JSON.stringify;
 const intrinsicFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 
 function invoke<T>(
@@ -111,6 +115,7 @@ const definePropertyResult = invoke<object>(intrinsicObjectDefineProperty, Intri
   { configurable: false, enumerable: false, value: objectControlValue, writable: false },
 ]);
 const nullPrototypeControl = { __proto__: null } as object;
+const createdNullPrototypeControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
 class HasInstanceControl {}
 const hasInstancePositive = new HasInstanceControl();
 const hasInstanceNegative = {};
@@ -265,6 +270,8 @@ function assertObjectIntegrity(): void {
     invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [objectControl]) !==
       IntrinsicObject.prototype ||
     invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [nullPrototypeControl]) !== null ||
+    invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [createdNullPrototypeControl]) !==
+      null ||
     invoke(intrinsicObjectHasOwnProperty, objectControl, ['visible']) !== true ||
     invoke(intrinsicObjectHasOwnProperty, objectControl, ['missing']) !== false ||
     invoke(intrinsicObjectPropertyIsEnumerable, objectControl, ['visible']) !== true ||
@@ -326,6 +333,9 @@ function assertStringIntegrity(): void {
     lastSegment?.value !== 'file' ||
     invoke(intrinsicStringToLowerCase, 'JaVaScRiPt', []) !== 'javascript' ||
     invoke(intrinsicStringToUpperCase, 'x-kovo', []) !== 'X-KOVO' ||
+    invoke(intrinsicEncodeURIComponent, undefined, ['a/b c']) !== 'a%2Fb%20c' ||
+    invoke(intrinsicDecodeURIComponent, undefined, ['a%2Fb%20c']) !== 'a/b c' ||
+    invoke(intrinsicJsonStringify, JSON, [{ kovo: 418 }]) !== '{"kovo":418}' ||
     match?.[0] !== 'https:' ||
     match[1] !== 'https' ||
     invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null ||
@@ -527,6 +537,21 @@ export function securityStringSplit(value: string, separator: string): string[] 
   return invoke(intrinsicStringSplit, value, [separator]);
 }
 
+export function securityEncodeURIComponent(value: string): string {
+  assertCapturedSecurityControls();
+  return invoke(intrinsicEncodeURIComponent, undefined, [value]);
+}
+
+export function securityDecodeURIComponent(value: string): string {
+  assertCapturedSecurityControls();
+  return invoke(intrinsicDecodeURIComponent, undefined, [value]);
+}
+
+export function securityJsonStringify(value: unknown): string | undefined {
+  assertCapturedSecurityControls();
+  return invoke<string | undefined>(intrinsicJsonStringify, JSON, [value]);
+}
+
 export function securityStringToLowerCase(value: string): string {
   assertCapturedSecurityControls();
   return invoke(intrinsicStringToLowerCase, value, []);
@@ -557,6 +582,13 @@ export function securityGetOwnPropertyDescriptor(
     IntrinsicObject,
     [value, key],
   );
+}
+
+export function securityNullRecord<Value = unknown>(): Record<string, Value> {
+  assertCapturedSecurityControls();
+  const value = invoke<Record<string, Value>>(intrinsicObjectCreate, IntrinsicObject, [null]);
+  if (securityGetPrototypeOf(value) !== null) failIntrinsic('Object.create(null)');
+  return value;
 }
 
 export function securityGetPrototypeOf(value: object): object | null {

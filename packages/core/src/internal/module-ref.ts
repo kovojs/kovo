@@ -4,6 +4,8 @@
  * imports, so parsing and formatting live in one core contract.
  */
 
+import { securityRegExpTest, securityStringSlice } from '#security-witness-intrinsics';
+
 /** @internal Kovo module reference families carried on the wire. */
 export type KovoModuleRefKind = 'derive' | 'handler';
 
@@ -28,11 +30,11 @@ export function parseKovoModuleRef<Kind extends KovoModuleRefKind>(
   value: string,
   kind: Kind,
 ): KovoModuleRef<Kind> | undefined {
-  const hashIndex = value.lastIndexOf('#');
+  const hashIndex = lastCharacterIndex(value, '#');
   if (hashIndex <= 0 || hashIndex === value.length - 1) return undefined;
 
-  const url = value.slice(0, hashIndex);
-  const exportName = value.slice(hashIndex + 1);
+  const url = securityStringSlice(value, 0, hashIndex);
+  const exportName = securityStringSlice(value, hashIndex + 1);
   if (!url || !exportName) return undefined;
 
   return { exportName, kind, url };
@@ -43,12 +45,17 @@ export function parseKovoModuleRefList<Kind extends KovoModuleRefKind>(
   value: string | null | undefined,
   kind: Kind,
 ): KovoModuleRef<Kind>[] {
-  return (
-    value
-      ?.split(/\s+/)
-      .filter(Boolean)
-      .map((item) => assertKovoModuleRef(item, kind)) ?? []
-  );
+  if (value === null || value === undefined) return [];
+  const refs: KovoModuleRef<Kind>[] = [];
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    if (index < value.length && !securityRegExpTest(/\s/u, value[index] ?? '')) continue;
+    if (index > start) {
+      refs[refs.length] = assertKovoModuleRef(securityStringSlice(value, start, index), kind);
+    }
+    start = index + 1;
+  }
+  return refs;
 }
 
 /** @internal Parse or throw with a stable malformed-reference message. */
@@ -63,11 +70,18 @@ export function assertKovoModuleRef<Kind extends KovoModuleRefKind>(
 
 /** @internal Format a structured module ref at the final wire edge. */
 export function formatKovoModuleRef(ref: KovoModuleRef): string {
-  if (!ref.url || ref.url.includes('#')) {
+  if (!ref.url || lastCharacterIndex(ref.url, '#') >= 0) {
     throw new Error(`Kovo module ref URL must be non-empty and contain no hash: ${ref.url}`);
   }
   if (!ref.exportName) {
     throw new Error(`Kovo module ref export name must be non-empty for ${ref.url}`);
   }
   return `${ref.url}#${ref.exportName}`;
+}
+
+function lastCharacterIndex(value: string, expected: string): number {
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    if (value[index] === expected) return index;
+  }
+  return -1;
 }
