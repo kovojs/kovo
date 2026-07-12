@@ -16,6 +16,7 @@ export const protocolFreeFilesystemEnumerationFiles = [
   'packages/server/src/output-staging.ts',
   'packages/server/src/static-export-output.ts',
 ];
+export const staticExportEndpointBlockerFile = 'packages/server/src/static-export-document.ts';
 
 export const defaultAllowedRuntimeFiles = [
   filesystemBoundaryFile,
@@ -53,6 +54,9 @@ export function checkFilesystemBoundary(options = {}) {
   const allowedFiles = new Set([...allowedRuntimeFiles, ...allowedToolingFiles]);
   const protocolFreeEnumerationFiles = new Set(
     options.protocolFreeEnumerationFiles ?? protocolFreeFilesystemEnumerationFiles,
+  );
+  const staticExportEndpointBlockerFiles = new Set(
+    options.staticExportEndpointBlockerFiles ?? [staticExportEndpointBlockerFile],
   );
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
@@ -100,6 +104,10 @@ export function checkFilesystemBoundary(options = {}) {
       }
     }
 
+    if (staticExportEndpointBlockerFiles.has(filePath)) {
+      findings.push(...staticExportEndpointBlockerFindings(filePath, sourceText));
+    }
+
     if (!allowed && usesPathConfinementPrimitive(scanText, importedPathNames)) {
       findings.push(
         `${filePath}:${lineOf(sourceText, firstPathPrimitiveIndex(scanText, importedPathNames))}: path confinement primitives must route through ${filesystemBoundaryFile}`,
@@ -115,6 +123,38 @@ export function checkFilesystemBoundary(options = {}) {
         ? 'OK filesystem access routes through the framework filesystem boundary'
         : `${findings.length} filesystem boundary violation(s)`,
   };
+}
+
+export function staticExportEndpointBlockerFindings(filePath, sourceText) {
+  const scanText = stripCommentsAndStrings(sourceText);
+  const findings = [];
+  const mutableDispatch =
+    /\b(?:protocol\s*\.\s*)?endpointRefs\s*\.\s*(?:every|filter|find|findIndex|forEach|map|reduce|reduceRight|some)\s*\(/u.exec(
+      scanText,
+    );
+  if (mutableDispatch !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableDispatch.index)}: static-export endpoint blocker must not dispatch through mutable collection methods`,
+    );
+  }
+
+  if (!/\bsnapshotBuildArray\s*\(\s*protocol\s*\.\s*endpointRefs\s*,/u.test(scanText)) {
+    findings.push(
+      `${filePath}: static-export endpoint blocker must snapshot the complete endpoint-ref ledger after app evaluation`,
+    );
+  }
+
+  if (
+    !/\bfor\s*\(\s*let\s+[A-Za-z_$][\w$]*\s*=\s*0\s*;[^;]*<\s*endpointRefs\s*\.\s*length\s*;[^)]*\+=\s*1\s*\)/u.test(
+      scanText,
+    )
+  ) {
+    findings.push(
+      `${filePath}: static-export endpoint blocker must traverse its pinned endpoint refs with an indexed loop`,
+    );
+  }
+
+  return findings;
 }
 
 export function main(options = {}) {

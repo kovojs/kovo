@@ -57,6 +57,38 @@ describe('server static export', () => {
     }
   });
 
+  it('C196 keeps server endpoint references blocking after late Array.map replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-endpoint-map-'));
+    const originalMap = Array.prototype.map;
+    try {
+      const app = createApp({
+        routes: [
+          route('/cart', {
+            page() {
+              Array.prototype.map = function (callback, thisArg) {
+                const first = (this as unknown[])[0] as { phase?: unknown } | undefined;
+                if (first?.phase === 'mutation' || first?.phase === 'query') return [];
+                return Reflect.apply(originalMap, this, [callback, thisArg]);
+              } as typeof Array.prototype.map;
+              return trustedHtml(
+                '<main><form method="post" action="/_m/cart/add"><button>Add</button></form></main>',
+              );
+            },
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'KV229',
+        diagnostics: [expect.objectContaining({ routePath: '/cart' })],
+      });
+      await expect(readFile(path.join(outDir, 'cart', 'index.html'))).rejects.toThrow();
+    } finally {
+      Array.prototype.map = originalMap;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('skips route documents with server endpoint references when non-exportable routes are skipped', async () => {
     const app = createApp({
       routes: [

@@ -5,6 +5,8 @@ import {
   defaultAllowedToolingFiles,
   filesystemBoundaryFile,
   filesystemIntrinsicsFile,
+  staticExportEndpointBlockerFile,
+  staticExportEndpointBlockerFindings,
 } from './check-filesystem-boundary.mjs';
 
 function runFixture(files, overrides = {}) {
@@ -85,6 +87,37 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
     expect(result.findings).toContain(
       `${outputStaging}:1: filesystem authority enumeration must use snapshotted arrays, not mutable async-iterator protocol dispatch`,
     );
+  });
+
+  it('C196 pins the static-export endpoint blocker to snapshot and indexed traversal', () => {
+    const result = checkFilesystemBoundary({
+      allowedRuntimeFiles: [filesystemBoundaryFile],
+      allowedToolingFiles: [],
+      exists: (relativePath) => relativePath === filesystemBoundaryFile,
+      readText: (relativePath) =>
+        relativePath === staticExportEndpointBlockerFile
+          ? 'const diagnostics = protocol.endpointRefs.map(toDiagnostic);'
+          : 'export const boundary = true;',
+      sourceFiles: [filesystemBoundaryFile, staticExportEndpointBlockerFile],
+    });
+
+    expect(result.findings).toContain(
+      `${staticExportEndpointBlockerFile}:1: static-export endpoint blocker must not dispatch through mutable collection methods`,
+    );
+    expect(
+      staticExportEndpointBlockerFindings(
+        staticExportEndpointBlockerFile,
+        `
+          const endpointRefs = snapshotBuildArray(
+            protocol.endpointRefs,
+            'static-export route document endpoint references',
+          );
+          for (let index = 0; index < endpointRefs.length; index += 1) {
+            diagnostics[diagnostics.length] = toDiagnostic(endpointRefs[index]);
+          }
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('rejects raw fs access outside the filesystem boundary', () => {
