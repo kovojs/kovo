@@ -336,7 +336,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
       `packages/browser/src/{reauth-directive,mutation-fetch}.ts` and the emitted inline loader
   - A selective late `String.prototype.startsWith` override made
     `sanitizeReauthDirective('//evil.example/phish')` return the attacker target instead of `/`;
-    the enhanced 401 path hands that result directly to `location.assign()`.
+    the enhanced 401 path hands that result directly to `location.assign()`. Separately, replacing
+    `decodeURIComponent` made the successful-auth fallback accept `/\\evil.example/phish` and hand
+    the browser-normalized cross-origin authority to the same sink.
   - **Acceptance:** response-header identity/reads, status classification, directive decode and exact
     path validation, redirect application, auth-success fallback, session transition retirement, and
     the emitted inline-loader closure use boot-pinned controls; late/import-order poison cannot
