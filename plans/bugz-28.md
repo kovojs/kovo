@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     3 | C1-C3 |
+| Critical |     4 | C1-C4 |
 | High     |     6 | H1-H6 |
 | Medium   |     4 | M1-M4 |
 
@@ -42,6 +42,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** logical-key parsing, relative-path rejection, and every read/write/copy/rename/
     delete containment decision use boot-pinned, semantically checked operations and exact path bytes;
     a real outside sentinel must remain unchanged under hostile import order and late poison.
+
+- [ ] **C4 - Mutable Math controls can authenticate a forged HMAC signature.**
+      `packages/core/src/verifier.ts`
+  - Setting `Math.max` to return zero made the constant-time equality loop compare no bytes and
+    accept an invalid equal-length signature; mutable `Math.floor`/`Math.abs` also defeated timestamp
+    tolerance.
+  - **Acceptance:** signature parsing, byte comparison, and replay-tolerance arithmetic use primitive
+    operations or boot-pinned, semantically checked controls; real forged-signature and expired-event
+    regressions remain rejected under hostile import order and late poison while valid controls pass.
 
 ## High
 
