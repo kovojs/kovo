@@ -3,6 +3,7 @@ import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
+import { normalizeAppMutationResponseOptions } from './app-mutation-responses.js';
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { guards } from './guards.js';
@@ -130,6 +131,115 @@ describe('server app mutation request boundary', () => {
       'must be a stable own data property',
     );
     expect(reads).toBe(0);
+  });
+
+  it('keeps mutation response policy closed when ambient Object.freeze is selectively replaced', async () => {
+    const save = mutation('freeze-poison/save', {
+      csrf: false,
+      input: s.object({ value: s.string() }),
+      handler: (input) => input,
+    });
+    const originalFreeze = Object.freeze;
+    const safeFailurePage = () => '<main>safe validation failure</main>';
+    let capturedPolicy: { renderFailurePage: () => string } | undefined;
+    Object.freeze = ((value: unknown) => {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        (value as { renderFailurePage?: unknown }).renderFailurePage === safeFailurePage
+      ) {
+        capturedPolicy = value as { renderFailurePage: () => string };
+        return value;
+      }
+      return originalFreeze(value);
+    }) as typeof Object.freeze;
+
+    let app: ReturnType<typeof createApp>;
+    try {
+      app = createApp({
+        mutationResponses: {
+          'freeze-poison/save': { renderFailurePage: safeFailurePage },
+        },
+        mutations: [save],
+      });
+    } finally {
+      Object.freeze = originalFreeze;
+    }
+
+    if (capturedPolicy !== undefined) {
+      capturedPolicy.renderFailurePage = () =>
+        '<img src=x onerror="globalThis.kovoFreezePoisoned=true">';
+    }
+    expect(capturedPolicy).toBeUndefined();
+
+    const form = new FormData();
+    const request = new Request('https://example.test/_m/freeze-poison/save', {
+      body: form,
+      method: 'POST',
+    });
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'freeze-poison/save',
+    );
+    expect(response.status).toBe(422);
+    expect(await response.text()).toBe('<main>safe validation failure</main>');
+  });
+
+  it('normalizes nested response policy through pinned Object, Reflect, Array, and Set controls', () => {
+    const originalArrayIsArray = Array.isArray;
+    const originalFreeze = Object.freeze;
+    const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    const originalObjectKeys = Object.keys;
+    const originalOwnKeys = Reflect.ownKeys;
+    const originalSetHas = Set.prototype.has;
+    Array.isArray = () => false;
+    Object.freeze = ((value: unknown) => value) as typeof Object.freeze;
+    Object.getOwnPropertyDescriptor = (() => ({
+      configurable: true,
+      enumerable: true,
+      value: 'attacker-substituted',
+      writable: true,
+    })) as typeof Object.getOwnPropertyDescriptor;
+    Object.keys = () => [];
+    Reflect.ownKeys = () => ['csrf'];
+    Set.prototype.has = () => false;
+
+    let normalized: ReturnType<typeof normalizeAppMutationResponseOptions>;
+    try {
+      normalized = normalizeAppMutationResponseOptions({
+        failureStylesheets: [{ href: '/safe.css', preload: true }],
+        failureTarget: 'safe-form',
+        fragmentRenderers: [
+          {
+            errorBoundary: { render: () => trustedHtml('<output>safe boundary</output>') },
+            render: () => trustedHtml('<output>safe fragment</output>'),
+            stylesheets: ['/fragment.css'],
+            target: 'safe-fragment',
+          },
+        ],
+        redirectTo: { location: '/safe', status: 303 },
+      });
+    } finally {
+      Set.prototype.has = originalSetHas;
+      Reflect.ownKeys = originalOwnKeys;
+      Object.keys = originalObjectKeys;
+      Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
+      Object.freeze = originalFreeze;
+      Array.isArray = originalArrayIsArray;
+    }
+
+    expect(normalized.failureTarget).toBe('safe-form');
+    expect(normalized.redirectTo).toEqual({ location: '/safe', status: 303 });
+    expect(normalized.failureStylesheets).toEqual([{ href: '/safe.css', preload: true }]);
+    expect(normalized.fragmentRenderers?.[0]?.target).toBe('safe-fragment');
+    expect(Object.isFrozen(normalized)).toBe(true);
+    expect(Object.isFrozen(normalized.failureStylesheets)).toBe(true);
+    expect(Object.isFrozen(normalized.failureStylesheets?.[0])).toBe(true);
+    expect(Object.isFrozen(normalized.fragmentRenderers)).toBe(true);
+    expect(Object.isFrozen(normalized.fragmentRenderers?.[0])).toBe(true);
+    expect(Object.isFrozen(normalized.fragmentRenderers?.[0]?.errorBoundary)).toBe(true);
   });
 
   it('decodes JSON mutation bodies through schemas without prototype-pollution side effects', async () => {

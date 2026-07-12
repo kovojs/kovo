@@ -5,35 +5,133 @@ import type {
 } from './app-types.js';
 import type { StylesheetAsset } from './hints.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from './mutation-wire.js';
+import {
+  createWitnessSet,
+  witnessCreateNullRecord,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectKeys,
+  witnessOwnKeys,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessString,
+} from './security-witness-intrinsics.js';
 
-const responseOptionFields = new Set<PropertyKey>([
-  'failureStylesheets',
-  'failureTarget',
-  'fragmentRenderers',
-  'redirectTo',
-  'renderFailureFragment',
-  'renderFailurePage',
-]);
+const responseOptionFields = createWitnessSet<PropertyKey>();
+witnessSetAdd(responseOptionFields, 'failureStylesheets');
+witnessSetAdd(responseOptionFields, 'failureTarget');
+witnessSetAdd(responseOptionFields, 'fragmentRenderers');
+witnessSetAdd(responseOptionFields, 'redirectTo');
+witnessSetAdd(responseOptionFields, 'renderFailureFragment');
+witnessSetAdd(responseOptionFields, 'renderFailurePage');
 
 /** Snapshot app mutation response configuration before the request lifecycle opens (SPEC §9.5). */
 export function snapshotAppMutationResponses(value: unknown): AppMutationResponses {
   const source = ownDataRecord(value, 'createApp mutationResponses');
-  const snapshot: Record<string, AppMutationResponsePolicy> = Object.create(null) as Record<
+  const snapshot = witnessCreateNullRecord<AppMutationResponsePolicy>() as Record<
     string,
     AppMutationResponsePolicy
   >;
-  for (const key of Object.keys(source)) {
+  const keys = witnessObjectKeys(source);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
     const policy = ownDataValue(source, key, `createApp mutationResponses.${key}`);
-    if (typeof policy === 'function') {
-      snapshot[key] = policy as AppMutationResponsePolicy;
-      continue;
-    }
-    snapshot[key] = normalizeAppMutationResponseOptions(
-      policy,
-      `createApp mutationResponses.${key}`,
-    );
+    const normalized =
+      typeof policy === 'function'
+        ? (policy as AppMutationResponsePolicy)
+        : normalizeAppMutationResponseOptions(
+            policy,
+            `createApp mutationResponses.${key}`,
+          );
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: true,
+      value: normalized,
+      writable: true,
+    });
   }
-  return Object.freeze(snapshot);
+  return witnessFreeze(snapshot);
+}
+
+function supportedResponseOptionKeys(source: object, label: string): void {
+  const keys = witnessOwnKeys(source);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (key === 'csrf') {
+      throw new TypeError(
+        `${label}.csrf is forbidden: response decoration cannot replace pre-body CSRF posture (SPEC §6.6/§10.3).`,
+      );
+    }
+    if (!witnessSetHas(responseOptionFields, key)) {
+      throw new TypeError(
+        `${label}.${witnessString(key)} is not a supported response decoration option.`,
+      );
+    }
+  }
+}
+
+function frozenResponseOptions(
+  options: AppMutationResponseOptions,
+): AppMutationResponseOptions {
+  return witnessFreeze(options) as AppMutationResponseOptions;
+}
+
+function frozenFragmentRenderers(
+  renderers: FragmentRenderer[],
+): readonly FragmentRenderer[] {
+  return witnessFreeze(renderers);
+}
+
+function frozenStylesheets(
+  stylesheets: (string | StylesheetAsset)[],
+): readonly (string | StylesheetAsset)[] {
+  return witnessFreeze(stylesheets);
+}
+
+function frozenErrorBoundary(boundary: ErrorBoundaryRenderer): ErrorBoundaryRenderer {
+  return witnessFreeze(boundary) as ErrorBoundaryRenderer;
+}
+
+function frozenStylesheet(stylesheet: StylesheetAsset): StylesheetAsset {
+  return witnessFreeze(stylesheet) as StylesheetAsset;
+}
+
+function frozenRedirect(
+  redirect: { location: string; status: 303 },
+): NonNullable<AppMutationResponseOptions['redirectTo']> {
+  return witnessFreeze(redirect) as NonNullable<AppMutationResponseOptions['redirectTo']>;
+}
+
+function snapshotDenseValues(value: unknown, label: string): readonly unknown[] {
+  if (!witnessIsArray(value)) throw new TypeError(`${label} must be a dense array.`);
+  const result: unknown[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    witnessDefineProperty(result, index, {
+      configurable: true,
+      enumerable: true,
+      value: ownDataValue(value, index, `${label}[${index}]`),
+      writable: true,
+    });
+  }
+  return result;
+}
+
+function ownDataRecord(value: unknown, label: string): Record<PropertyKey, unknown> {
+  if (typeof value !== 'object' || value === null || witnessIsArray(value)) {
+    throw new TypeError(`${label} must be a stable own-data object.`);
+  }
+  return value as Record<PropertyKey, unknown>;
+}
+
+function ownDataValue(source: object, key: PropertyKey, label: string): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(source, key);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${label} must be a stable own data property.`);
+  }
+  return descriptor.value;
 }
 
 /** Validate and close a static or post-lifecycle response decoration. */
@@ -42,16 +140,7 @@ export function normalizeAppMutationResponseOptions(
   label = 'mutation response policy',
 ): AppMutationResponseOptions {
   const source = ownDataRecord(value, label);
-  for (const key of Reflect.ownKeys(source)) {
-    if (key === 'csrf') {
-      throw new TypeError(
-        `${label}.csrf is forbidden: response decoration cannot replace pre-body CSRF posture (SPEC §6.6/§10.3).`,
-      );
-    }
-    if (!responseOptionFields.has(key)) {
-      throw new TypeError(`${label}.${String(key)} is not a supported response decoration option.`);
-    }
-  }
+  supportedResponseOptionKeys(source, label);
 
   const failureTarget = ownDataValue(source, 'failureTarget', `${label}.failureTarget`);
   const failureStylesheets = ownDataValue(
@@ -80,7 +169,7 @@ export function normalizeAppMutationResponseOptions(
   const normalizedRedirect =
     redirectTo === undefined ? undefined : normalizeRedirectDecoration(redirectTo, label);
 
-  return Object.freeze({
+  return frozenResponseOptions({
     ...(failureTarget === undefined ? {} : { failureTarget }),
     ...(failureStylesheets === undefined
       ? {}
@@ -117,11 +206,17 @@ export function normalizeAppMutationResponseOptions(
 }
 
 function snapshotFragmentRenderers(value: unknown, label: string): readonly FragmentRenderer[] {
-  return Object.freeze(
-    denseArray(value, label).map((entry, index) =>
-      snapshotFragmentRenderer(entry, `${label}[${index}]`),
-    ),
-  );
+  const entries = snapshotDenseValues(value, label);
+  const renderers: FragmentRenderer[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    witnessDefineProperty(renderers, index, {
+      configurable: true,
+      enumerable: true,
+      value: snapshotFragmentRenderer(entries[index], `${label}[${index}]`),
+      writable: true,
+    });
+  }
+  return frozenFragmentRenderers(renderers);
 }
 
 function snapshotFragmentRenderer(value: unknown, label: string): FragmentRenderer {
@@ -141,7 +236,7 @@ function snapshotFragmentRenderer(value: unknown, label: string): FragmentRender
   if (updateCoverage !== undefined && updateCoverage !== 'fragment' && updateCoverage !== 'plan') {
     throw new TypeError(`${label}.updateCoverage must be fragment or plan.`);
   }
-  return Object.freeze({
+  return witnessFreeze({
     target,
     render: render as FragmentRenderer['render'],
     ...(mode === undefined ? {} : { mode }),
@@ -162,18 +257,25 @@ function snapshotErrorBoundary(value: unknown, label: string): ErrorBoundaryRend
   if (typeof render !== 'function' || (target !== undefined && typeof target !== 'string')) {
     throw new TypeError(`${label} requires a render function and optional string target.`);
   }
-  return Object.freeze({
+  return frozenErrorBoundary({
     render: render as ErrorBoundaryRenderer['render'],
     ...(target === undefined ? {} : { target }),
   });
 }
 
 function snapshotStylesheets(value: unknown, label: string): readonly (string | StylesheetAsset)[] {
-  return Object.freeze(
-    denseArray(value, label).map((entry, index) =>
-      typeof entry === 'string' ? entry : snapshotStylesheet(entry, `${label}[${index}]`),
-    ),
-  );
+  const entries = snapshotDenseValues(value, label);
+  const stylesheets: (string | StylesheetAsset)[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    witnessDefineProperty(stylesheets, index, {
+      configurable: true,
+      enumerable: true,
+      value: typeof entry === 'string' ? entry : snapshotStylesheet(entry, `${label}[${index}]`),
+      writable: true,
+    });
+  }
+  return frozenStylesheets(stylesheets);
 }
 
 function snapshotStylesheet(value: unknown, label: string): StylesheetAsset {
@@ -184,23 +286,19 @@ function snapshotStylesheet(value: unknown, label: string): StylesheetAsset {
   const deferFull = ownDataValue(source, 'deferFull', `${label}.deferFull`);
   const preload = ownDataValue(source, 'preload', `${label}.preload`);
   if (typeof href !== 'string') throw new TypeError(`${label}.href must be a string.`);
-  for (const [field, entry] of [
-    ['criticalCss', criticalCss],
-    ['cspHash', cspHash],
-  ] as const) {
-    if (entry !== undefined && typeof entry !== 'string') {
-      throw new TypeError(`${label}.${field} must be a string.`);
-    }
+  if (criticalCss !== undefined && typeof criticalCss !== 'string') {
+    throw new TypeError(`${label}.criticalCss must be a string.`);
   }
-  for (const [field, entry] of [
-    ['deferFull', deferFull],
-    ['preload', preload],
-  ] as const) {
-    if (entry !== undefined && typeof entry !== 'boolean') {
-      throw new TypeError(`${label}.${field} must be boolean.`);
-    }
+  if (cspHash !== undefined && typeof cspHash !== 'string') {
+    throw new TypeError(`${label}.cspHash must be a string.`);
   }
-  return Object.freeze({
+  if (deferFull !== undefined && typeof deferFull !== 'boolean') {
+    throw new TypeError(`${label}.deferFull must be boolean.`);
+  }
+  if (preload !== undefined && typeof preload !== 'boolean') {
+    throw new TypeError(`${label}.preload must be boolean.`);
+  }
+  return frozenStylesheet({
     href,
     ...(criticalCss === undefined ? {} : { criticalCss: criticalCss as string }),
     ...(cspHash === undefined ? {} : { cspHash: cspHash as string }),
@@ -217,7 +315,7 @@ function normalizeRedirectDecoration(
   if (typeof value === 'function') {
     return value as NonNullable<AppMutationResponseOptions['redirectTo']>;
   }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || witnessIsArray(value)) {
     throw new TypeError(`${label}.redirectTo must be a string, redirect value, or function.`);
   }
   const source = value as Record<PropertyKey, unknown>;
@@ -226,28 +324,5 @@ function normalizeRedirectDecoration(
   if (typeof location !== 'string' || status !== 303) {
     throw new TypeError(`${label}.redirectTo must contain string location and status 303.`);
   }
-  return Object.freeze({ location, status });
-}
-
-function denseArray(value: unknown, label: string): readonly unknown[] {
-  if (!Array.isArray(value)) throw new TypeError(`${label} must be a dense array.`);
-  const result: unknown[] = [];
-  for (let index = 0; index < value.length; index += 1) {
-    result.push(ownDataValue(value, index, `${label}[${index}]`));
-  }
-  return result;
-}
-
-function ownDataRecord(value: unknown, label: string): Record<PropertyKey, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a stable own-data object.`);
-  }
-  return value as Record<PropertyKey, unknown>;
-}
-
-function ownDataValue(source: object, key: PropertyKey, label: string): unknown {
-  const descriptor = Object.getOwnPropertyDescriptor(source, key);
-  if (descriptor === undefined) return undefined;
-  if (!('value' in descriptor)) throw new TypeError(`${label} must be a stable own data property.`);
-  return descriptor.value;
+  return frozenRedirect({ location, status });
 }
