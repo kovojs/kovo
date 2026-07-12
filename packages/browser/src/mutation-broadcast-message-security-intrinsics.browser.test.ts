@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { installMutationBroadcast, type BroadcastLike } from './broadcast.js';
+import { installMutationBroadcast } from './broadcast.js';
 import { inlineKovoLoaderInstallerSource } from './inline-loader.js';
 import { createQueryStore } from './query-store.js';
 
@@ -33,21 +33,38 @@ function envelope(body: string, principal: string) {
   };
 }
 
-it('keeps the modular cross-principal discard pinned after late MessageEvent data poisoning', () => {
+it('keeps the modular cross-principal discard pinned after late MessageEvent data poisoning', async () => {
   // C137 / SPEC §9.3: the receiver must compare the principal from the
   // boot-read, immutable envelope that carries the original private wire.
   const descriptor = Object.getOwnPropertyDescriptor(MessageEvent.prototype, 'data');
   if (!descriptor?.get) throw new Error('MessageEvent.data getter unavailable');
-  const channel: BroadcastLike = {
-    onmessage: null,
-    postMessage() {},
-  };
+  const onMessageDescriptor = Object.getOwnPropertyDescriptor(
+    BroadcastChannel.prototype,
+    'onmessage',
+  );
+  if (!onMessageDescriptor?.get) throw new Error('BroadcastChannel.onmessage getter unavailable');
+  const channelName = `kovo:c137:${crypto.randomUUID()}`;
+  const receiver = new BroadcastChannel(channelName);
+  channels.push(receiver);
   const store = createQueryStore();
-  installMutationBroadcast({ channel, principal: 'session-B', store });
+  installMutationBroadcast({ channel: receiver, principal: 'session-B', store });
+  let handler: ((event: MessageEvent<unknown>) => void) | null = null;
+  await vi.waitFor(() => {
+    handler = Reflect.apply(onMessageDescriptor.get!, receiver, []);
+    expect(handler).toBeTypeOf('function');
+  });
+  if (!handler) throw new Error('mutation broadcast handler unavailable');
+  Reflect.apply(handler, receiver, [
+    new MessageEvent('message', {
+      data: envelope(privateQueryBody('SESSION-B READY'), 'session-B'),
+    }),
+  ]);
+  expect(store.get('account')).toEqual({ secret: 'SESSION-B READY' });
+  store.delete('account');
   const privateEnvelope = envelope(privateQueryBody('SESSION-A PRIVATE'), 'session-A');
   const message = new MessageEvent('message', { data: privateEnvelope });
 
-  channel.onmessage?.(message);
+  Reflect.apply(handler, receiver, [message]);
   expect(store.get('account')).toBeUndefined();
 
   let poisonCalls = 0;
@@ -60,7 +77,7 @@ it('keeps the modular cross-principal discard pinned after late MessageEvent dat
     },
   });
   try {
-    channel.onmessage?.(message);
+    Reflect.apply(handler, receiver, [message]);
   } finally {
     Object.defineProperty(MessageEvent.prototype, 'data', descriptor);
   }
@@ -68,11 +85,11 @@ it('keeps the modular cross-principal discard pinned after late MessageEvent dat
   expect(poisonCalls).toBe(0);
   expect(store.get('account')).toBeUndefined();
 
-  channel.onmessage?.(
+  Reflect.apply(handler, receiver, [
     new MessageEvent('message', {
       data: envelope(privateQueryBody('SESSION-B CONTROL'), 'session-B'),
     }),
-  );
+  ]);
   expect(store.get('account')).toEqual({ secret: 'SESSION-B CONTROL' });
 });
 

@@ -846,11 +846,13 @@ function installInlineKovoLoader(im) {
     bc = bns.createMutationBroadcastChannel('kovo:mutation-response');
   } catch {}
   if (bc) {
-    bc.onmessage = (event) => {
-      const data = bns.snapshotMutationBroadcastEnvelope(event);
-      if (!data || data.principal !== sfp) return;
-      ab(data.body, data.buildToken);
-    };
+    bns.observePromiseRejection(
+      bns.setMutationBroadcastMessageHandler(bc, (event) => {
+        const data = bns.snapshotMutationBroadcastEnvelope(event);
+        if (!data || data.principal !== sfp) return;
+        ab(data.body, data.buildToken);
+      }),
+    );
   }
   const pb = (body, changes) => {
     if (!bc) return;

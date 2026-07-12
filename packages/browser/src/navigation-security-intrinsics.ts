@@ -1225,6 +1225,39 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     }
   }
 
+  async function setMutationBroadcastMessageHandler(
+    channel: object,
+    handler: ((event: MessageEvent<unknown>) => void) | null,
+  ): Promise<void> {
+    if (handler !== null && typeof handler !== 'function') {
+      throw new TypeError('Kovo mutation broadcast message handler is invalid.');
+    }
+    if (!NativeDocument) {
+      // Explicit Node conformance seam: browser realms always take the captured,
+      // witnessed WebIDL setter below.
+      (channel as { onmessage: ((event: MessageEvent<unknown>) => void) | null }).onmessage =
+        handler;
+      return;
+    }
+    // The async witness validates constructor → setter → MessageEvent.data delivery.
+    // Do not expose the application handler before that chain is proven: a poisoned
+    // pre-boot setter could otherwise forge a brand-valid MessageEvent synchronously.
+    if (!broadcastControlsVerified) await requireBroadcastControls();
+    if (!broadcastChannelName || !broadcastChannelOnMessageSetter) {
+      throw new TypeError('Kovo mutation broadcast controls are unavailable.');
+    }
+    let name: unknown;
+    try {
+      name = call<unknown>(broadcastChannelName, channel, []);
+    } catch {
+      throw new TypeError('Kovo mutation broadcast channel is not platform-owned.');
+    }
+    if (typeof name !== 'string') {
+      throw new TypeError('Kovo mutation broadcast channel name is invalid.');
+    }
+    call(broadcastChannelOnMessageSetter, channel, [handler]);
+  }
+
   async function postMutationBroadcastEnvelope(channel: object, value: unknown): Promise<void> {
     // Copy before the first await: callers cannot mutate, accessor-swap, or retain
     // an extra field across the asynchronous boot witness boundary.
@@ -2030,6 +2063,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     snapshotElementChildren,
     snapshotMutationBroadcastEnvelopeData,
     snapshotMutationBroadcastEnvelope,
+    setMutationBroadcastMessageHandler,
     postMutationBroadcastEnvelope,
     observePromiseRejection,
     trim,

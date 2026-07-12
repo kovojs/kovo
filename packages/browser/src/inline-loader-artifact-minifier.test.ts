@@ -91,12 +91,14 @@ describe('inline loader minified artifact', () => {
 
   it('keeps mutation broadcast envelopes on the immutable MessageEvent snapshot', () => {
     // C137 / SPEC §9.3: the principal comparison and private wire body must
-    // originate from one boot-read snapshot, never repeated event.data reads.
+    // originate from one boot-read snapshot, and C164 keeps the application
+    // callback behind the witnessed setter rather than a live assignment.
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'const data=bns.snapshotMutationBroadcastEnvelope(event);if(!data||data.principal!==sfp)return;ab(data.body,data.buildToken)',
+      'bns.setMutationBroadcastMessageHandler(bc,(event)=>{const data=bns.snapshotMutationBroadcastEnvelope(event);if(!data||data.principal!==sfp)return;ab(data.body,data.buildToken);})',
     );
     expect(inlineKovoLoaderInstallerSource).not.toContain('const data=event.data');
     expect(inlineKovoLoaderInstallerSource).not.toContain('bmsg(');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('bc.onmessage=(event)');
   });
 
   it('keeps mutation broadcast publish on the witnessed exact-envelope controls', () => {

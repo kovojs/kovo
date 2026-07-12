@@ -145,7 +145,7 @@ export function installMutationBroadcast(
   // so without this the receive path would merge a cross-build delta onto a stale
   // base — exactly the long-open-tab redeploy skew base-version validation catches.
   const pageBuildToken = options.buildToken ?? readPageBuildToken();
-  options.channel.onmessage = (event) => {
+  const onMessage = (event: { data: unknown }) => {
     const data = browserBroadcastSecurity.snapshotMutationBroadcastEnvelope(event);
     if (!data) return;
     // bugs-1 F13 / SPEC §9.3: discard a rebroadcast from a different principal so one
@@ -184,6 +184,9 @@ export function installMutationBroadcast(
       options.onChanges?.(changes);
     }
   };
+  browserBroadcastSecurity.observePromiseRejection(
+    browserBroadcastSecurity.setMutationBroadcastMessageHandler(options.channel, onMessage),
+  );
 
   return {
     close() {
