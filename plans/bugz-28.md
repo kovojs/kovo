@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    47 | C1-C47 |
+| Critical |    48 | C1-C48 |
 | High     |    29 | H1-H29 |
 | Medium   |     9 | M1-M9  |
 
@@ -540,6 +540,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     boot-pinned dense own-data snapshots; token and visible descriptors bind the same exact values,
     and no late/import-order intrinsic replacement can add bytes after escaping.
 
+- [ ] **C48 - Mutable route/layout stamp replacement injects raw executable markup.**
+      `packages/server/src/route.ts`
+  - A compiled route page returned a reviewed rendered root with an existing navigation stamp. The
+    route stamp sink called live `String.prototype.replace` after escaping; a selective replacement
+    substituted `><img onerror=...>` and `renderRoutePageResponse()` published the raw handler.
+  - **Acceptance:** compiled navigation/layout metadata, rendered-root parsing, dependency tokens,
+    attribute lookup/replacement, and final opening-tag assembly use boot-pinned dense snapshots;
+    page/region/layout stamps cannot add or replace post-choke bytes under late/import-order poison.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -947,8 +956,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C47,
-H20, and H27-H28 are active compiler-cache, static-analysis, static-export, JSX stamp, and
+The remediation pass remains intentionally non-zero: C23-C28, C31-C32, C36-C37, C41-C42, C47-C48,
+H20, and H27-H28 are active compiler-cache, static-analysis, static-export, JSX/route stamp, and
 build-output fixes.
 Integrated
 evidence is
