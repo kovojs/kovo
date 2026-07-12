@@ -264,6 +264,10 @@ export async function renderAppRouteDocumentResponse({
       // resolved (a stamped `kovo-session` fingerprint) even under a non-rolling provider.
       // `renderRouteDocumentResponse` carries this floor onto file/stream outcomes too (M2).
       ...(noStore ? { noStore: true } : {}),
+      ...((routeResponse.status === 404 && routeHasBoundary(route, 'notFound')) ||
+      (routeResponse.status === 500 && routeHasBoundary(route, 'error'))
+        ? { wrapNonOk: true }
+        : {}),
       // SPEC §4.4 / plans/better-js-loader.md: enhanced navigation has already
       // installed the inline loader, so its negotiated document variant omits the
       // stable bootstrap bytes while retaining a complete parseable document.

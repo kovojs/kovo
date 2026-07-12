@@ -1224,12 +1224,15 @@ export async function renderRoutePageResponse<
           routePath: definition.path,
         });
       }
-      return renderRouteBoundaryResponse(
-        result.boundary,
-        result.status,
+      return attachLifecycleRequest(
+        await renderRouteBoundaryResponse(
+          result.boundary,
+          result.status,
+          lifecycleRequest,
+          render,
+          result.thrown === undefined ? {} : { error: result.thrown },
+        ),
         lifecycleRequest,
-        render,
-        result.thrown === undefined ? {} : { error: result.thrown },
       );
     }
 

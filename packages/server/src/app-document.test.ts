@@ -1241,6 +1241,47 @@ describe('server app document boundary', () => {
     expect(headerValue(response.headers, 'vary')).toBe('Cookie');
   });
 
+  it.each([
+    { kind: 'notFound' as const, status: 404 as const },
+    { kind: 'error' as const, status: 500 as const },
+  ])(
+    'keeps authenticated $kind route boundaries private without a rolling cookie',
+    async ({ kind, status }) => {
+      const privateRoute = route(`/private-${kind}`, {
+        boundaries: {
+          [kind]: ({ request }) =>
+            trustedHtml(
+              `<main data-private-boundary>${(
+                request as { session: { user: { id: string } } }
+              ).session.user.id}</main>`,
+            ),
+        },
+        page() {
+          if (kind === 'error') throw new Error('private boundary probe');
+          return notFound();
+        },
+      });
+      const request = new Request(`https://shop.example.test/private-${kind}`);
+      const app = createApp({
+        routes: [privateRoute],
+        sessionProvider: () => ({ user: { id: 'victim-user' } }),
+      });
+
+      const response = await renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request,
+        route: privateRoute,
+        url: new URL(request.url),
+      });
+
+      expect(response.status).toBe(status);
+      expect(response.body).toContain('victim-user');
+      expect(headerValue(response.headers, 'cache-control')).toBe('no-store');
+      expect(headerValue(response.headers, 'vary')).toBe('Cookie');
+    },
+  );
+
   it('keeps the rolling-cookie cache floor on matched 200, 403, and 500 route outcomes', async () => {
     const okRoute = route('/rolling-ok', { page: () => trustedHtml('<main>ok</main>') });
     const forbiddenRoute = route('/rolling-forbidden', {
