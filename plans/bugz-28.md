@@ -272,14 +272,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     the entire Unicode-escaped identifier syntax, including schema-qualified, six-digit, custom
     `UESCAPE`, and comment-adjacent variants, while benign non-ASCII identifiers retain coverage.
 
-- [ ] **M4 - Mutable diagnostic String/Array controls re-expose credentials and log injection.**
+- [x] **M4 - Mutable diagnostic String/Array controls re-expose credentials and log injection.**
       `packages/server/src/{diagnostics,logging}.ts` and generated Node copies
   - Selective late `String.prototype.replaceAll` kept a full URL with userinfo, query secrets, and
     fragment in diagnostic text; selective `String.prototype.replace` preserved an attacker newline
     in the log-neutralization choke.
-  - **Acceptance:** secret discovery, URL scrubbing, replacement, traversal, and control-character
-    neutralization use boot-pinned, semantically checked operations in live and emitted paths; hostile
-    import-order and late-poison tests keep credentials absent and each event on one line.
+  - **Evidence:** the 46-test live diagnostics matrix plus the 174-test emitted Node/adapter/strict
+    matrix pin secret discovery, URL/header/cookie scrubbing, descriptor traversal, replacement, and
+    control neutralization. Live and closure-complete emitted paths retain useful sanitized detail,
+    omit tagged/nested/request credentials, and keep each event on one line under combined poison.
 
 - [x] **M5 - Mutable `Math.max` can disable the file-aware streamed-body ceiling.**
       `packages/server/src/app-request.ts`
@@ -322,9 +323,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C11, H15-H16, M4, and M7-M8 are active
-capability, generated/live diagnostics, task/guard, request-limit, and replay fixes. Integrated
-evidence is green at
+The remediation pass remains intentionally non-zero: C10-C11, H15-H16, and M7-M8 are active
+capability, task/guard, request-limit, and replay fixes. Integrated evidence is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
 route/handler/secret, and 18 password tests.
