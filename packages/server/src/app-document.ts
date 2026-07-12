@@ -43,7 +43,7 @@ import {
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
 import type { KovoApp } from './app-types.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
-import { requestForAuthorityNeutralMetadata } from './request-carrier.js';
+import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import {
   witnessGetOwnPropertyDescriptor,
@@ -180,8 +180,9 @@ export async function renderAppRouteDocumentResponse({
   // the request (not the whole cookie header), so non-session cookie churn (CSRF rotation, theme)
   // does not produce different fingerprints for the same user across tabs. We do NOT re-resolve via
   // sessionProvider here (it already ran once for the guarded route).
-  const sessionRequest =
-    routeResponse.lifecycleRequest instanceof Request ? routeResponse.lifecycleRequest : request;
+  const sessionRequest = isNativeRequest(routeResponse.lifecycleRequest)
+    ? routeResponse.lifecycleRequest
+    : request;
   const principalPosture = principalPostureFromRequest(sessionRequest);
   const sessionFingerprint =
     principalPosture.kind === 'proven'

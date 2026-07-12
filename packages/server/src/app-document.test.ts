@@ -1529,7 +1529,13 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
   it('an unguarded route with a plain-value session provider (no Set-Cookie) is still no-store', async () => {
     // bugz-3 L2 / SPEC §9.4 + §9.5: a resolved session identity stamps kovo-session and makes
     // the document per-principal even when the provider does not emit a rolling Set-Cookie.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    let lifecycleRequest: unknown;
+    const homeRoute = route('/', {
+      page: (_context, request) => {
+        lifecycleRequest = request;
+        return trustedHtml('<main>Home</main>');
+      },
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider: () => ({ user: { id: 'u1' } }),
@@ -1544,6 +1550,7 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     });
 
     expect(response.status).toBe(200);
+    expect(lifecycleRequest).toBeInstanceOf(Request);
     expect(response.headers['Set-Cookie']).toBeUndefined();
     expect(response.headers['Cache-Control']).toBe('no-store');
     expect(response.headers.Vary).toBe('Cookie');

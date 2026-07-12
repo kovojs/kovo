@@ -3,6 +3,7 @@ import {
   createWitnessSet,
   createWitnessWeakMap,
   witnessCreateNullRecord,
+  witnessCreateWithPrototype,
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
@@ -22,6 +23,7 @@ import {
 const NativeAbortController = AbortController;
 const NativeHeaders = Headers;
 const NativeRequest = Request;
+const nativeRequestPrototype = NativeRequest.prototype;
 const authorityNeutralCloneFactories = createWitnessWeakMap<Request, () => Request>();
 const authorityNeutralMetadataSources = createWitnessWeakMap<Request, Request>();
 const pinnedRequestCarrierSnapshots = createWitnessWeakMap<object, PinnedRequestCarrierSnapshot>();
@@ -138,7 +140,17 @@ export function pinnedRequestCarrier<Request>(
     });
   }
 
-  const carrierTarget = witnessCreateNullRecord();
+  const nativeMetadataSource =
+    objectLike && isNativeRequest(target)
+      ? requestForAuthorityNeutralMetadata(target as Request & globalThis.Request)
+      : undefined;
+  // Preserve the Web Request runtime identity expected by framework and app code without putting
+  // the live Request itself behind the Proxy. The prototype-only target has no native authority or
+  // internal slots: every observable value still comes from the one pinned snapshot above.
+  const carrierTarget =
+    nativeMetadataSource === undefined
+      ? witnessCreateNullRecord()
+      : witnessCreateWithPrototype<Record<PropertyKey, unknown>>(nativeRequestPrototype);
   const carrier = new Proxy(carrierTarget, {
     get(_target, property) {
       return witnessMapGet(properties, property)?.value;
@@ -161,6 +173,13 @@ export function pinnedRequestCarrier<Request>(
     },
   });
   witnessWeakMapSet(pinnedRequestCarrierSnapshots, carrier, { ownKeys, properties });
+  if (nativeMetadataSource !== undefined) {
+    witnessWeakMapSet(
+      authorityNeutralMetadataSources,
+      carrier as unknown as globalThis.Request,
+      nativeMetadataSource,
+    );
+  }
   return carrier as Request & object;
 }
 
