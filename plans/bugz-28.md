@@ -327,7 +327,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 158-test app/guard/request-state matrix passes; the independent late-poison
     protocol-relative proof now receives `/`, and all three rate-window bypass proofs fail closed.
 
-- [ ] **H17 - Mutable response-header controls admit forbidden browser state and redirects.**
+- [x] **H17 - Mutable response-header controls admit forbidden browser state and redirects.**
       `packages/server/src/{response,app-system-response}.ts`
   - Replacing `Set.prototype.has` made a real `respond.file()` outcome forward its app-supplied
     `Set-Cookie` through the reserved-header floor into the final Web Response. Selective
@@ -337,8 +337,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cloning/merging, filename and control escaping, Location URL parsing/allowlist comparison, and
     final system-response header insertion use boot-pinned, semantically checked exact bytes; late
     and import-order poison cannot emit reserved Set-Cookie/content controls or an unapproved target.
+  - **Evidence:** the full 3,035-test server suite and focused 98-test integration matrix pass; the
+    independent reserved-Set-Cookie and protocol-relative Location proofs now drop or replace the
+    hostile values with `/` under late collection/String/URL replacement.
 
-- [ ] **H18 - Mutable deferred-stream assembly can replace the complete document.**
+- [x] **H18 - Mutable deferred-stream assembly can replace the complete document.**
       `packages/server/src/deferred-stream.ts`
   - A selective late `Array.prototype.join` override targeting the final array made
     `renderDeferredStream()` replace a safe shell, query/fragment chunks, boundary, cleanup script,
@@ -347,6 +350,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     fragment/query serialization, CSP hash pairing, final assembly, TextEncoder/controller methods,
     and promise settlement use boot-pinned, semantically checked controls; late/import-order poison
     cannot replace/reorder bytes or desynchronize the emitted document from its CSP metadata.
+  - **Evidence:** the same full/focused matrices plus dist, import, API, wire-output, guarantee,
+    security-test-build, and single-choke gates pass; the independent final-join proof retains the
+    safe shell, exact fragment, matching CSP scripts, boundary, and close bytes.
 
 - [ ] **H19 - Mutable mutation-wire assembly can replace an authenticated response body.**
       `packages/server/src/{mutation-wire,mutation/wire-response,mutation/targets}.ts`
@@ -378,7 +384,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     path construction use boot-pinned, semantically checked operations; late/import-order poison
     cannot skip, replace, or reorder any declared validation while genuine inputs remain compatible.
 
-- [ ] **H22 - Mutable page-hint assembly can replace escaped hints with raw script.**
+- [x] **H22 - Mutable page-hint assembly can replace escaped hints with raw script.**
       `packages/server/src/hints.ts`
   - A selective late `Array.prototype.join` override targeting the final hint array replaced a safe
     compiler-versioned modulepreload with `<script src="/attacker.js"></script>`. The returned raw
@@ -387,6 +393,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     dedupe/order maps, escaping, CSP hashes, Early Hints, and final HTML/header assembly use
     boot-pinned, semantically checked controls; late/import-order poison cannot replace or reorder
     bytes, admit unsafe URLs/CSS, or desynchronize output from its CSP metadata.
+  - **Evidence:** the same matrices and gates pass; the independent selective final-join proof emits
+    only the escaped compiler-versioned modulepreload and no attacker script bytes.
 
 - [x] **H23 - Mutable enhanced-navigation URL controls apply cross-origin HTML in the live realm.**
       `packages/browser/src/enhanced-navigation.ts` and the emitted inline loader
@@ -519,8 +527,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17, H15, and H17-H22 are active response/
-deferred/mutation/client output, task, and schema fixes.
+The remediation pass remains intentionally non-zero: C17, H15, and H19-H21 are active mutation/
+client output, task, and schema fixes.
 Integrated
 evidence is
 green at
