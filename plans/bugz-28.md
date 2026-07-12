@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    20 | C1-C20 |
+| Critical |    21 | C1-C21 |
 | High     |    26 | H1-H26 |
 | Medium   |     9 | M1-M9  |
 
@@ -222,6 +222,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     no `Symbol.for()` value acts as an output authority brand, and the cross-package form-helper
     bridge accepts only structured helper operations that reconstruct escaped output inside the
     server choke; app code cannot mint or launder arbitrary raw HTML through casts or global access.
+
+- [ ] **C21 - Predictable pre-import entropy forges authenticated rendered-HTML markers.**
+      `packages/server/src/html.ts`
+  - Replacing CommonJS `node:crypto.randomBytes` with known constant bytes and synchronizing the
+    builtin ESM exports before importing the renderer made the private coercion-marker HMAC key
+    predictable. An app-authored string carrying a correctly signed v2 marker then made
+    `renderHtmlValue()` emit raw attacker markup instead of escaped text.
+  - **Acceptance:** the coercion-marker secret uses boot-pinned, semantically verified
+    cryptographic entropy; marker prefix/suffix discovery, slicing, alphabet checks, base64 decode,
+    HMAC construction, comparison, recursion, and final text/raw assembly use exact pinned controls;
+    hostile pre-import or late controls cannot forge a marker while genuine rendered composition
+    remains byte-stable and bounded.
 
 ## High
 
@@ -588,7 +600,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C18-C20 and H26 are active command/crypto and
+The remediation pass remains intentionally non-zero: C18-C21 and H26 are active command/crypto and
 JSX output-authority fixes.
 Integrated
 evidence is
