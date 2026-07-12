@@ -30,6 +30,20 @@ import {
   securityClassifier,
 } from '@kovojs/core/internal/security-markers';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
+import {
+  witnessCreateNullRecord,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessIsArray,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessOwnKeys,
+  witnessReflectApply,
+  witnessReflectGet,
+  witnessSetForEach,
+} from './security-witness-intrinsics.js';
 
 declare const readerDbBrand: unique symbol;
 declare const writerDbBrand: unique symbol;
@@ -292,7 +306,7 @@ export interface AuthorizationCensusDbOptions {
   tableNames: (table: unknown) => readonly string[];
 }
 
-const READ_CAPABILITY_PROPERTIES = new Set<string>([
+const READ_CAPABILITY_PROPERTIES = [
   '$count',
   '$with',
   'crossOwnerRead',
@@ -301,8 +315,8 @@ const READ_CAPABILITY_PROPERTIES = new Set<string>([
   'select',
   'selectDistinct',
   'with',
-]);
-const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
+] as const;
+const DENIED_READ_CAPABILITY_PROPERTIES = [
   '$client',
   'batch',
   'client',
@@ -313,8 +327,8 @@ const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
   'sqlite',
   'transaction',
   'update',
-]);
-const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
+] as const;
+const CALLABLE_READ_CAPABILITY_PROPERTIES = [
   '$count',
   '$with',
   'crossOwnerRead',
@@ -322,7 +336,7 @@ const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
   'select',
   'selectDistinct',
   'with',
-]);
+] as const;
 
 /**
  * Create a framework-owned declared-write DB wrapper (SPEC §10.3/§11.2). Generated adapters pass
@@ -337,33 +351,60 @@ export const createDeclaredWriteDb = securityClassifier(
     policy: ManagedSqlWritePolicy,
     options: DeclaredWriteDbOptions,
   ): Db {
+    const runtimePolicy = snapshotManagedWritePolicy(policy);
+    const runtimeOptions = snapshotDeclaredWriteOptions(options);
+    const allowedTables = normalizedStringArray(
+      runtimePolicy.tables ?? [],
+      runtimeOptions.normalizeTableName,
+      'declared write tables',
+    );
     return new Proxy(db as Record<PropertyKey, unknown>, {
       get(target, prop, receiver) {
-        const value = Reflect.get(target, prop, receiver);
-        if (isDeclaredWriteDirectSqlMethod(prop, options) && typeof value === 'function') {
+        const value = witnessReflectGet(target, prop, receiver);
+        if (isDeclaredWriteDirectSqlMethod(prop, runtimeOptions) && typeof value === 'function') {
           return (statement: unknown, ...args: unknown[]) => {
-            assertSqliteDeclaredWriteStatementAllowed(statement, args, policy, options);
-            return Reflect.apply(value, target, [statement, ...args]);
+            assertSqliteDeclaredWriteStatementAllowed(
+              statement,
+              args,
+              runtimePolicy,
+              runtimeOptions,
+              allowedTables,
+            );
+            return witnessReflectApply(value, target, prependManagedArgument(statement, args));
           };
         }
         if (isDeclaredWriteDrizzleMethod(prop) && typeof value === 'function') {
           return (table: unknown, ...args: unknown[]) => {
-            const tableNames = options.tableNames(table);
-            assertDeclaredWriteTablesAllowed(tableNames, policy, options);
-            const builder = Reflect.apply(value, target, [table, ...args]);
+            const tableNames = runtimeOptions.tableNames(table);
+            assertDeclaredWriteTablesAllowed(
+              tableNames,
+              runtimePolicy,
+              runtimeOptions,
+              allowedTables,
+            );
+            const builder = witnessReflectApply(value, target, prependManagedArgument(table, args));
             return prop === 'delete'
               ? builder
-              : declaredWriteBuilder(builder, prop, tableNames, options);
+              : declaredWriteBuilder(builder, prop, tableNames, runtimeOptions);
           };
         }
         if (prop === 'transaction' && typeof value === 'function') {
           return (callback: (tx: unknown) => unknown, ...args: unknown[]) =>
-            Reflect.apply(value, target, [
-              (tx: unknown) => callback(createDeclaredWriteDb(tx as object, policy, options)),
-              ...args,
-            ]);
+            witnessReflectApply(
+              value,
+              target,
+              prependManagedArgument(
+                (tx: unknown) =>
+                  witnessReflectApply(callback, undefined, [
+                    createDeclaredWriteDb(tx as object, runtimePolicy, runtimeOptions),
+                  ]),
+                args,
+              ),
+            );
         }
-        return typeof value === 'function' ? value.bind(target) : value;
+        return typeof value === 'function'
+          ? (...args: unknown[]) => witnessReflectApply(value, target, args)
+          : value;
       },
     }) as Db;
   },
@@ -441,16 +482,192 @@ export class KovoReadonlyHandleError extends Error {
   }
 }
 
+function snapshotManagedWritePolicy(policy: ManagedSqlWritePolicy): ManagedSqlWritePolicy {
+  return witnessFreeze({
+    ...(policy.capability === undefined ? {} : { capability: policy.capability }),
+    ...(policy.dialect === undefined ? {} : { dialect: policy.dialect }),
+    ...(policy.engineReadonly === undefined ? {} : { engineReadonly: policy.engineReadonly }),
+    ...(policy.tables === undefined
+      ? {}
+      : { tables: snapshotStringArray(policy.tables, 'declared write tables') }),
+    ...(policy.touches === undefined
+      ? {}
+      : { touches: snapshotStringArray(policy.touches, 'declared write touches') }),
+  });
+}
+
+function snapshotDeclaredWriteOptions(options: DeclaredWriteDbOptions): DeclaredWriteDbOptions {
+  const normalizeTableName = ownFunctionDataProperty(options, 'normalizeTableName');
+  const tableNames = ownFunctionDataProperty(options, 'tableNames');
+  const runtime: DeclaredWriteDbOptions = {
+    dialectLabel: ownStringDataProperty(options, 'dialectLabel'),
+    normalizeTableName(table) {
+      const normalized = witnessReflectApply<unknown>(normalizeTableName, options, [table]);
+      if (typeof normalized !== 'string') {
+        throw new TypeError('declared-write table normalization must return a string.');
+      }
+      return normalized;
+    },
+    tableNames(table) {
+      const names = witnessReflectApply<unknown>(tableNames, options, [table]);
+      return snapshotStringArray(names, 'observed declared-write table names');
+    },
+  };
+  if (options.governedColumns !== undefined) runtime.governedColumns = options.governedColumns;
+  if (options.sqliteAuthorizer !== undefined) {
+    runtime.sqliteAuthorizer = snapshotSqliteAuthorizer(options.sqliteAuthorizer);
+  }
+  return witnessFreeze(runtime);
+}
+
+function snapshotSqliteAuthorizer(
+  authorizer: DeclaredWriteSqliteAuthorizerOptions,
+): DeclaredWriteSqliteAuthorizerOptions {
+  const openDatabase = ownFunctionDataProperty(authorizer, 'openDatabase');
+  const constantsDescriptor = witnessGetOwnPropertyDescriptor(authorizer, 'constants');
+  if (
+    constantsDescriptor === undefined ||
+    !('value' in constantsDescriptor) ||
+    typeof constantsDescriptor.value !== 'object' ||
+    constantsDescriptor.value === null
+  ) {
+    throw new TypeError('SQLite authorizer constants must be an own object data property.');
+  }
+  const constants = constantsDescriptor.value as DeclaredWriteSqliteAuthorizerConstants;
+  const snapshot = witnessCreateNullRecord<number>() as Record<string, number>;
+  const keys = witnessOwnKeys(constants);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (typeof key !== 'string') continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(constants, key);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'number'
+    ) {
+      throw new TypeError(
+        `SQLite authorizer constant ${key} must be an own numeric data property.`,
+      );
+    }
+    witnessDefineProperty(snapshot, key, {
+      enumerable: true,
+      value: descriptor.value,
+    });
+  }
+  return witnessFreeze({
+    constants: witnessFreeze(snapshot) as unknown as DeclaredWriteSqliteAuthorizerConstants,
+    openDatabase() {
+      const database = witnessReflectApply<unknown>(openDatabase, authorizer, []);
+      if (typeof database !== 'object' || database === null) {
+        throw new TypeError('SQLite authorizer openDatabase() must return a database handle.');
+      }
+      return database as DeclaredWriteSqliteAuthorizerDatabase;
+    },
+  });
+}
+
+function ownFunctionDataProperty(value: object, property: PropertyKey): Function {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'function'
+  ) {
+    throw new TypeError(`${String(property)} must be an own function data property.`);
+  }
+  return descriptor.value;
+}
+
+function inheritedFunctionDataProperty(value: object, property: PropertyKey): Function {
+  let current: object | null = value;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError(`${String(property)} must resolve to a function data property.`);
+      }
+      return descriptor.value;
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  throw new TypeError(`${String(property)} function is unavailable.`);
+}
+
+function ownStringDataProperty(value: object, property: PropertyKey): string {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
+    throw new TypeError(`${String(property)} must be an own string data property.`);
+  }
+  return descriptor.value;
+}
+
+const SQLITE_WRITE_AUTHORIZER_CONSTANT_KEYS = [
+  'SQLITE_ALTER_TABLE',
+  'SQLITE_ATTACH',
+  'SQLITE_CREATE_INDEX',
+  'SQLITE_CREATE_TABLE',
+  'SQLITE_CREATE_TEMP_INDEX',
+  'SQLITE_CREATE_TEMP_TABLE',
+  'SQLITE_CREATE_TEMP_TRIGGER',
+  'SQLITE_CREATE_TEMP_VIEW',
+  'SQLITE_CREATE_TRIGGER',
+  'SQLITE_CREATE_VIEW',
+  'SQLITE_CREATE_VTABLE',
+  'SQLITE_DELETE',
+  'SQLITE_DENY',
+  'SQLITE_DETACH',
+  'SQLITE_DROP_INDEX',
+  'SQLITE_DROP_TABLE',
+  'SQLITE_DROP_TEMP_INDEX',
+  'SQLITE_DROP_TEMP_TABLE',
+  'SQLITE_DROP_TEMP_TRIGGER',
+  'SQLITE_DROP_TEMP_VIEW',
+  'SQLITE_DROP_TRIGGER',
+  'SQLITE_DROP_VIEW',
+  'SQLITE_DROP_VTABLE',
+  'SQLITE_INSERT',
+  'SQLITE_OK',
+  'SQLITE_PRAGMA',
+  'SQLITE_REINDEX',
+  'SQLITE_UPDATE',
+] as const satisfies readonly (keyof DeclaredWriteSqliteAuthorizerConstants)[];
+
+function assertSqliteWriteAuthorizerConstants(
+  constants: DeclaredWriteSqliteAuthorizerConstants,
+): void {
+  for (let index = 0; index < SQLITE_WRITE_AUTHORIZER_CONSTANT_KEYS.length; index += 1) {
+    const key = SQLITE_WRITE_AUTHORIZER_CONSTANT_KEYS[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(constants, key);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'number'
+    ) {
+      throw new TypeError(`SQLite declared-write authorizer is missing numeric ${key}.`);
+    }
+  }
+}
+
 const assertDeclaredWriteTablesAllowed = securityClassifier(
   'server.managed-db.declared-write-tables',
   function (
     tableNames: readonly string[],
     policy: ManagedSqlWritePolicy,
     options: DeclaredWriteDbOptions,
+    allowed: readonly string[],
   ): void {
-    const allowed = new Set((policy.tables ?? []).map(options.normalizeTableName));
-    const normalized = tableNames.map(options.normalizeTableName);
-    if (normalized.some((table) => allowed.has(table))) return;
+    const normalized = normalizedStringArray(
+      tableNames,
+      options.normalizeTableName,
+      'observed write tables',
+    );
+    for (let index = 0; index < normalized.length; index += 1) {
+      if (stringListHas(allowed, normalized[index]!)) return;
+    }
 
     throw new Error(
       [
@@ -469,6 +686,7 @@ const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
     params: readonly unknown[],
     policy: ManagedSqlWritePolicy,
     options: DeclaredWriteDbOptions,
+    allowed: readonly string[],
   ): void {
     const carrier = sqlCarrierFromValue(statement, params);
     const sqliteAuthorizer = options.sqliteAuthorizer;
@@ -477,31 +695,54 @@ const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
         'KV406: SQLite declared-write authorizer could not resolve executable SQL text (SPEC §10.3/§11.2).',
       );
     }
+    assertSqliteWriteAuthorizerConstants(sqliteAuthorizer.constants);
 
     const sqlite = sqliteAuthorizer.openDatabase();
+    const setAuthorizer = inheritedFunctionDataProperty(sqlite, 'setAuthorizer');
+    const prepare = inheritedFunctionDataProperty(sqlite, 'prepare');
+    const close = inheritedFunctionDataProperty(sqlite, 'close');
+    if (
+      typeof setAuthorizer !== 'function' ||
+      typeof prepare !== 'function' ||
+      typeof close !== 'function'
+    ) {
+      throw new Error('KV406: SQLite declared-write authorizer methods are unavailable.');
+    }
     try {
-      sqlite.setAuthorizer((action, objectName, _columnName, databaseName, triggerOrView) => {
-        if (isSqliteDdlAction(action, sqliteAuthorizer.constants)) {
-          return sqliteAuthorizer.constants.SQLITE_DENY;
-        }
-        if (!isSqliteWriteAction(action, sqliteAuthorizer.constants)) {
-          return sqliteAuthorizer.constants.SQLITE_OK;
-        }
+      witnessReflectApply(setAuthorizer, sqlite, [
+        (
+          action: number,
+          objectName: string | null,
+          _columnName: string | null,
+          databaseName: string | null,
+          triggerOrView: string | null,
+        ) => {
+          if (isSqliteDdlAction(action, sqliteAuthorizer.constants)) {
+            return sqliteAuthorizer.constants.SQLITE_DENY;
+          }
+          if (!isSqliteWriteAction(action, sqliteAuthorizer.constants)) {
+            return sqliteAuthorizer.constants.SQLITE_OK;
+          }
 
-        const table = `${databaseName ?? 'main'}.${objectName ?? '<unknown>'}`;
-        const allowed = new Set((policy.tables ?? []).map(options.normalizeTableName));
-        if (allowed.has(table)) return sqliteAuthorizer.constants.SQLITE_OK;
-        if (
-          triggerOrView === null &&
-          (objectName === 'sqlite_sequence' || objectName === 'sqlite_stat1')
-        ) {
-          return sqliteAuthorizer.constants.SQLITE_OK;
-        }
-        return sqliteAuthorizer.constants.SQLITE_DENY;
-      });
-      sqlite.prepare(carrier.text);
+          const table = options.normalizeTableName(
+            `${databaseName ?? 'main'}.${objectName ?? '<unknown>'}`,
+          );
+          if (stringListHas(allowed, table)) return sqliteAuthorizer.constants.SQLITE_OK;
+          if (
+            triggerOrView === null &&
+            (objectName === 'sqlite_sequence' || objectName === 'sqlite_stat1')
+          ) {
+            return sqliteAuthorizer.constants.SQLITE_OK;
+          }
+          return sqliteAuthorizer.constants.SQLITE_DENY;
+        },
+      ]);
+      witnessReflectApply(prepare, sqlite, [carrier.text]);
     } catch (error) {
-      if (error instanceof Error && /not authorized/i.test(error.message)) {
+      if (
+        error instanceof Error &&
+        intrinsicStringIncludes(asciiLower(error.message), 'not authorized')
+      ) {
         throw new Error(
           [
             'KV406: SQLite authorizer rejected a declared-write statement outside the mutation registry tables (SPEC §10.3/§11.2).',
@@ -512,7 +753,7 @@ const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
       }
       throw error;
     } finally {
-      sqlite.close();
+      witnessReflectApply(close, sqlite, []);
     }
   },
 );
@@ -691,13 +932,35 @@ function assertAuthorizationCensusTablesAllowed(
   tableNames: readonly string[],
   options: AuthorizationCensusDbOptions,
 ): void {
-  for (const tableName of tableNames) {
+  for (let tableIndex = 0; tableIndex < tableNames.length; tableIndex += 1) {
+    const tableName = tableNames[tableIndex]!;
     const normalizedNames = authorizationCensusLookupNames(tableName, options);
-    const inSchema = normalizedNames.some((name) => options.metadata.schemaTableNames?.has(name));
+    const schemaNames: string[] = [];
+    if (options.metadata.schemaTableNames !== undefined) {
+      witnessSetForEach(options.metadata.schemaTableNames as Set<string>, (name) => {
+        if (!stringListHas(schemaNames, name)) appendManagedValue(schemaNames, name);
+      });
+    }
+    let inSchema = false;
+    for (let index = 0; index < normalizedNames.length; index += 1) {
+      if (stringListHas(schemaNames, normalizedNames[index]!)) inSchema = true;
+    }
     if (!inSchema) continue;
-    const classifications = normalizedNames.flatMap(
-      (name) => options.metadata.authorizationClassificationsByTable?.get(name) ?? [],
-    );
+    const classifications: SqliteAuthorizationClassification[] = [];
+    const classificationMap = options.metadata.authorizationClassificationsByTable;
+    for (let index = 0; index < normalizedNames.length; index += 1) {
+      const values =
+        classificationMap === undefined
+          ? undefined
+          : witnessMapGet(
+              classificationMap as Map<string, readonly SqliteAuthorizationClassification[]>,
+              normalizedNames[index]!,
+            );
+      if (values === undefined) continue;
+      for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+        appendManagedValue(classifications, values[valueIndex]!);
+      }
+    }
     if (classifications.length === 1) continue;
     const reason =
       classifications.length === 0
@@ -827,9 +1090,15 @@ function assertGovernedWritePayloadAllowed(
   context: GovernedWritePayloadContext,
 ): void {
   const governed = governedWriteColumnsForTables(context.tableNames, context.options);
-  if (governed.size === 0) return;
-  if (Array.isArray(payload)) {
-    for (const row of payload) assertGovernedWriteObjectAllowed(row, governed, context);
+  if (governed.length === 0) return;
+  if (witnessIsArray(payload)) {
+    for (let index = 0; index < payload.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(payload, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new Error('KV438: governed write payload arrays must be dense own data properties.');
+      }
+      assertGovernedWriteObjectAllowed(descriptor.value, governed, context);
+    }
     return;
   }
   assertGovernedWriteObjectAllowed(payload, governed, context);
@@ -837,13 +1106,19 @@ function assertGovernedWritePayloadAllowed(
 
 function assertGovernedWriteObjectAllowed(
   payload: unknown,
-  governed: ReadonlySet<string>,
+  governed: readonly string[],
   context: GovernedWritePayloadContext,
 ): void {
   if (!isRecord(payload)) return;
-  for (const key of Reflect.ownKeys(payload)) {
-    if (typeof key !== 'string' || !governed.has(key)) continue;
-    const value = Reflect.get(payload, key);
+  const keys = witnessOwnKeys(payload);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (typeof key !== 'string' || !stringListHas(governed, key)) continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(payload, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new Error('KV438: governed write values must be own data properties.');
+    }
+    const value = descriptor.value;
     const provenance = requestInputProvenanceForValue(value);
     if (provenance === undefined) continue;
     throw new Error(
@@ -858,20 +1133,30 @@ function assertGovernedWriteObjectAllowed(
 function governedWriteColumnsForTables(
   tableNames: readonly string[],
   options: DeclaredWriteDbOptions,
-): ReadonlySet<string> {
+): readonly string[] {
   const metadata = options.governedColumns;
-  if (metadata === undefined) return new Set();
-  const normalizedTargets = new Set(tableNames.map(options.normalizeTableName));
-  const governed = new Set<string>();
-  for (const [table, columns] of metadata.governedColumnKeysByTable) {
-    if (!normalizedTargets.has(options.normalizeTableName(table))) continue;
-    for (const column of columns) governed.add(column);
-  }
-  for (const [table, columns] of metadata.governedColumnNamesByTable) {
-    if (!normalizedTargets.has(options.normalizeTableName(table))) continue;
-    for (const column of columns) governed.add(column);
-  }
-  return governed;
+  if (metadata === undefined) return [];
+  const normalizedTargets = normalizedStringArray(
+    tableNames,
+    options.normalizeTableName,
+    'governed write target tables',
+  );
+  const governed: string[] = [];
+  const collect = (table: string, columns: ReadonlySet<string>): void => {
+    if (!stringListHas(normalizedTargets, options.normalizeTableName(table))) return;
+    witnessSetForEach(columns as Set<string>, (column) => {
+      if (!stringListHas(governed, column)) appendManagedValue(governed, column);
+    });
+  };
+  witnessMapForEach(
+    metadata.governedColumnKeysByTable as Map<string, ReadonlySet<string>>,
+    (columns, table) => collect(table, columns),
+  );
+  witnessMapForEach(
+    metadata.governedColumnNamesByTable as Map<string, ReadonlySet<string>>,
+    (columns, table) => collect(table, columns),
+  );
+  return witnessFreeze(governed);
 }
 
 function isDeclaredWriteDirectSqlMethod(
@@ -1208,14 +1493,14 @@ function dataPropertyValue(
   return descriptor.value;
 }
 
-const APP_POSTGRES_ALLOWED_COMMANDS = new Set(['delete', 'insert', 'select', 'update', 'with']);
-const APP_POSTGRES_TRANSACTION_COMMANDS = new Set([
+const APP_POSTGRES_ALLOWED_COMMANDS = ['delete', 'insert', 'select', 'update', 'with'] as const;
+const APP_POSTGRES_TRANSACTION_COMMANDS = [
   'begin',
   'commit',
   'release',
   'rollback',
   'savepoint',
-]);
+] as const;
 
 function assertAppPostgresTextAllowed(text: string): void {
   const shape = scanAppPostgresStatementShape(text);
@@ -1234,13 +1519,12 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
   let statementHasToken = false;
   let trailingOnly = false;
   for (let index = 0; index < sql.length; index += 1) {
-    const char = sql.charAt(index);
-    const next = sql.charAt(index + 1);
+    const char = sql[index] ?? '';
+    const next = sql[index + 1] ?? '';
     if (char === '-' && next === '-') {
       cleaned += ' ';
       index += 2;
-      while (index < sql.length && sql.charAt(index) !== '\n' && sql.charAt(index) !== '\r')
-        index += 1;
+      while (index < sql.length && sql[index] !== '\n' && sql[index] !== '\r') index += 1;
       if (index < sql.length) cleaned += '\n';
       continue;
     }
@@ -1249,7 +1533,7 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
       index += 2;
       let closed = false;
       for (; index < sql.length; index += 1) {
-        if (sql.charAt(index) === '*' && sql.charAt(index + 1) === '/') {
+        if (sql[index] === '*' && sql[index + 1] === '/') {
           closed = true;
           index += 1;
           break;
@@ -1262,8 +1546,8 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
     if (char === "'") {
       cleaned += ' ';
       for (index += 1; index < sql.length; index += 1) {
-        if (sql.charAt(index) === "'") {
-          if (sql.charAt(index + 1) === "'") {
+        if (sql[index] === "'") {
+          if (sql[index + 1] === "'") {
             index += 1;
             continue;
           }
@@ -1281,7 +1565,7 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
       index = quoted.endIndex;
       continue;
     }
-    if ((char === 'U' || char === 'u') && next === '&' && sql.charAt(index + 2) === '"') {
+    if ((char === 'U' || char === 'u') && next === '&' && sql[index + 2] === '"') {
       return {
         ok: false,
         // SPEC §10.3: PostgreSQL resolves escapes inside U&"..." before function lookup, so an
@@ -1290,11 +1574,10 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
       };
     }
     if (char === '$') {
-      const tagMatch = /^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/u.exec(sql.slice(index));
-      if (tagMatch !== null) {
-        const tag = tagMatch[0];
+      const tag = postgresDollarQuoteTag(sql, index);
+      if (tag !== undefined) {
         cleaned += ' ';
-        const end = sql.indexOf(tag, index + tag.length);
+        const end = intrinsicStringIndexOf(sql, tag, index + tag.length);
         if (end === -1) return { ok: false, reason: 'unterminated dollar-quoted literal' };
         index = end + tag.length - 1;
         cleaned += ' ';
@@ -1312,7 +1595,7 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
       cleaned += ' ';
       continue;
     }
-    if (/\S/u.test(char)) {
+    if (!isSqlWhitespace(char)) {
       if (trailingOnly) return { ok: false, reason: 'multiple SQL statements' };
       statementHasToken = true;
     }
@@ -1320,14 +1603,14 @@ function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
   }
   if (statementHasToken) statementCount += 1;
   if (statementCount !== 1) return { ok: false, reason: 'expected exactly one SQL statement' };
-  const command = /^\s*([A-Za-z]+)/u.exec(cleaned)?.[1]?.toLowerCase();
-  if (command !== undefined && APP_POSTGRES_TRANSACTION_COMMANDS.has(command)) {
+  const command = firstAsciiSqlWord(cleaned);
+  if (command !== undefined && stringListHas(APP_POSTGRES_TRANSACTION_COMMANDS, command)) {
     return appPostgresTransactionControlShape(cleaned, command);
   }
-  if (command === undefined || !APP_POSTGRES_ALLOWED_COMMANDS.has(command)) {
+  if (command === undefined || !stringListHas(APP_POSTGRES_ALLOWED_COMMANDS, command)) {
     return { ok: false, reason: 'statement command is not in the app SQL allowlist' };
   }
-  if (/\b(?:pg_catalog\.)?set_config\s*\(/iu.test(cleaned)) {
+  if (sqlContainsFunctionCall(cleaned, 'set_config')) {
     return { ok: false, reason: 'app SQL cannot change framework transaction settings' };
   }
   return { command, ok: true };
@@ -1339,16 +1622,16 @@ function scanSqlDoubleQuotedIdentifier(
 ): { endIndex: number; identifier: string } | undefined {
   let identifier = '';
   for (let index = startIndex + 1; index < sql.length; index += 1) {
-    const char = sql.charAt(index);
+    const char = sql[index] ?? '';
     if (char === '"') {
-      if (sql.charAt(index + 1) === '"') {
+      if (sql[index + 1] === '"') {
         identifier += '"';
         index += 1;
         continue;
       }
       return {
         endIndex: index,
-        identifier: /^[A-Za-z_][A-Za-z0-9_]*$/u.test(identifier) ? identifier : ' ',
+        identifier: isSqlIdentifier(identifier) ? identifier : ' ',
       };
     }
     identifier += char;
@@ -1360,16 +1643,240 @@ function appPostgresTransactionControlShape(
   cleaned: string,
   command: string,
 ): AppPostgresStatementShape {
-  const patterns: Record<string, RegExp> = {
-    begin: /^\s*begin(?:\s+(?:work|transaction))?\s*$/iu,
-    commit: /^\s*commit(?:\s+(?:work|transaction))?\s*$/iu,
-    release: /^\s*release(?:\s+savepoint)?\s+[A-Za-z_][A-Za-z0-9_$]*\s*$/iu,
-    rollback:
-      /^\s*rollback(?:\s+(?:work|transaction))?(?:\s+to(?:\s+savepoint)?\s+[A-Za-z_][A-Za-z0-9_$]*)?\s*$/iu,
-    savepoint: /^\s*savepoint\s+[A-Za-z_][A-Za-z0-9_$]*\s*$/iu,
-  };
-  if (patterns[command]?.test(cleaned) === true) return { command, ok: true };
+  const tokens = sqlControlTokens(cleaned);
+  if (tokens === undefined || tokens[0] !== command) {
+    return { ok: false, reason: 'unsupported transaction control statement' };
+  }
+  const tail = tokens.length - 1;
+  if (
+    ((command === 'begin' || command === 'commit') &&
+      (tail === 0 || (tail === 1 && (tokens[1] === 'work' || tokens[1] === 'transaction')))) ||
+    (command === 'savepoint' && tail === 1) ||
+    (command === 'release' && (tail === 1 || (tail === 2 && tokens[1] === 'savepoint'))) ||
+    (command === 'rollback' && rollbackControlTokensAreAllowed(tokens))
+  ) {
+    return { command, ok: true };
+  }
   return { ok: false, reason: 'unsupported transaction control statement' };
+}
+
+function postgresDollarQuoteTag(sql: string, start: number): string | undefined {
+  if (sql[start] !== '$') return undefined;
+  if (sql[start + 1] === '$') return '$$';
+  const first = sql[start + 1] ?? '';
+  if (!isAsciiIdentifierStart(first)) return undefined;
+  let tag = `$${first}`;
+  let index = start + 2;
+  while (
+    index < sql.length &&
+    (isAsciiIdentifierStart(sql[index]!) || (sql[index]! >= '0' && sql[index]! <= '9'))
+  ) {
+    tag += sql[index]!;
+    index += 1;
+  }
+  if (sql[index] !== '$') return undefined;
+  return `${tag}$`;
+}
+
+function intrinsicStringIndexOf(value: string, search: string, start = 0): number {
+  if (search.length === 0) return start <= value.length ? start : value.length;
+  for (let index = start; index + search.length <= value.length; index += 1) {
+    let matches = true;
+    for (let offset = 0; offset < search.length; offset += 1) {
+      if (value[index + offset] !== search[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return index;
+  }
+  return -1;
+}
+
+function firstAsciiSqlWord(value: string): string | undefined {
+  let index = 0;
+  while (index < value.length && isSqlWhitespace(value[index]!)) index += 1;
+  if (!isAsciiLetter(value[index] ?? '')) return undefined;
+  let word = '';
+  while (index < value.length && isAsciiLetter(value[index]!)) {
+    word += asciiLowerCharacter(value[index]!);
+    index += 1;
+  }
+  return word;
+}
+
+function sqlContainsFunctionCall(sql: string, expected: string): boolean {
+  let index = 0;
+  while (index < sql.length) {
+    if (!isAsciiIdentifierStart(sql[index]!)) {
+      index += 1;
+      continue;
+    }
+    let identifier = '';
+    while (index < sql.length && isAsciiIdentifierContinue(sql[index]!)) {
+      identifier += asciiLowerCharacter(sql[index]!);
+      index += 1;
+    }
+    while (index < sql.length && isSqlWhitespace(sql[index]!)) index += 1;
+    if (identifier === expected && sql[index] === '(') return true;
+  }
+  return false;
+}
+
+function sqlControlTokens(sql: string): string[] | undefined {
+  const tokens: string[] = [];
+  let index = 0;
+  while (index < sql.length) {
+    if (isSqlWhitespace(sql[index]!)) {
+      index += 1;
+      continue;
+    }
+    if (!isAsciiIdentifierStart(sql[index]!)) return undefined;
+    let token = '';
+    while (index < sql.length && isAsciiIdentifierContinue(sql[index]!)) {
+      token += asciiLowerCharacter(sql[index]!);
+      index += 1;
+    }
+    tokens[tokens.length] = token;
+  }
+  return tokens;
+}
+
+function rollbackControlTokensAreAllowed(tokens: readonly string[]): boolean {
+  let index = 1;
+  if (tokens[index] === 'work' || tokens[index] === 'transaction') index += 1;
+  if (index === tokens.length) return true;
+  if (tokens[index] !== 'to') return false;
+  index += 1;
+  if (tokens[index] === 'savepoint') index += 1;
+  return index + 1 === tokens.length;
+}
+
+function stringListHas(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
+}
+
+function snapshotStringArray(value: unknown, label: string): readonly string[] {
+  if (!witnessIsArray(value)) throw new TypeError(`${label} must be an array.`);
+  const snapshot: string[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError(`${label}[${index}] must be an own string data property.`);
+    }
+    appendManagedValue(snapshot, descriptor.value);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function normalizedStringArray(
+  values: readonly string[],
+  normalize: (value: string) => string,
+  label: string,
+): readonly string[] {
+  const source = snapshotStringArray(values, label);
+  const normalized: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const value = normalize(source[index]!);
+    if (typeof value !== 'string') throw new TypeError(`${label} normalization must be a string.`);
+    if (!stringListHas(normalized, value)) appendManagedValue(normalized, value);
+  }
+  return witnessFreeze(normalized);
+}
+
+function appendManagedValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function prependManagedArgument(first: unknown, rest: readonly unknown[]): readonly unknown[] {
+  const args: unknown[] = [];
+  appendManagedValue(args, first);
+  for (let index = 0; index < rest.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(rest, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('managed DB arguments must be dense own data properties.');
+    }
+    appendManagedValue(args, descriptor.value);
+  }
+  return args;
+}
+
+function asciiLower(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    result += asciiLowerCharacter(value[index]!);
+  }
+  return result;
+}
+
+function intrinsicStringIncludes(value: string, search: string): boolean {
+  if (search.length === 0) return true;
+  for (let index = 0; index + search.length <= value.length; index += 1) {
+    let matches = true;
+    for (let offset = 0; offset < search.length; offset += 1) {
+      if (value[index + offset] !== search[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return true;
+  }
+  return false;
+}
+
+function isSqlIdentifier(value: string): boolean {
+  if (value.length === 0 || !isAsciiIdentifierStart(value[0]!)) return false;
+  for (let index = 1; index < value.length; index += 1) {
+    if (!isAsciiIdentifierContinue(value[index]!)) return false;
+  }
+  return true;
+}
+
+function isAsciiIdentifierStart(value: string): boolean {
+  return isAsciiLetter(value) || value === '_';
+}
+
+function isAsciiIdentifierContinue(value: string): boolean {
+  return isAsciiIdentifierStart(value) || (value >= '0' && value <= '9') || value === '$';
+}
+
+function isAsciiLetter(value: string): boolean {
+  const lower = asciiLowerCharacter(value);
+  return lower >= 'a' && lower <= 'z';
+}
+
+function asciiLowerCharacter(value: string): string {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < upper.length; index += 1) {
+    if (upper[index] === value) return lower[index]!;
+  }
+  return value;
+}
+
+function isSqlWhitespace(value: string): boolean {
+  return (
+    value === ' ' ||
+    value === '\t' ||
+    value === '\n' ||
+    value === '\r' ||
+    value === '\f' ||
+    value === '\v' ||
+    value === '\u00a0' ||
+    value === '\ufeff'
+  );
 }
 
 function scopedPostgresExec(options: PostgresScopedClientOptions, query: string): Promise<unknown> {
@@ -1556,6 +2063,7 @@ export function readonlyDb<Db extends object>(
   db: Db,
   options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions } = {},
 ): Reader<Db> {
+  const runtimeOptions = snapshotReadonlyCapabilityOptions(options);
   const readDb = readonlyDbTarget(db);
   const safe = wrapManagedDbForSqlSafety(
     readDb,
@@ -1565,7 +2073,78 @@ export function readonlyDb<Db extends object>(
       engineReadonly: readDb !== db,
     }),
   );
-  return readonlyCapabilityDb(safe as object, options) as unknown as Reader<Db>;
+  return readonlyCapabilityDb(safe as object, runtimeOptions) as unknown as Reader<Db>;
+}
+
+function snapshotReadonlyCapabilityOptions(options: {
+  crossOwnerRead?: CrossOwnerReadPolicyOptions;
+  rawRead?: RawReadPolicyOptions;
+}): {
+  crossOwnerRead?: CrossOwnerReadPolicyOptions;
+  rawRead?: RawReadPolicyOptions;
+} {
+  const snapshot: {
+    crossOwnerRead?: CrossOwnerReadPolicyOptions;
+    rawRead?: RawReadPolicyOptions;
+  } = {};
+  if (options.crossOwnerRead !== undefined) {
+    snapshot.crossOwnerRead = snapshotCrossOwnerReadPolicy(options.crossOwnerRead);
+  }
+  if (options.rawRead !== undefined) snapshot.rawRead = snapshotRawReadPolicy(options.rawRead);
+  return witnessFreeze(snapshot);
+}
+
+function snapshotRawReadPolicy(policy: RawReadPolicyOptions): RawReadPolicyOptions {
+  const normalizeTableName = ownFunctionDataProperty(policy, 'normalizeTableName');
+  const snapshot: RawReadPolicyOptions = {
+    dialectLabel: ownStringDataProperty(policy, 'dialectLabel'),
+    normalizeTableName(table) {
+      const value = witnessReflectApply<unknown>(normalizeTableName, policy, [table]);
+      if (typeof value !== 'string') throw new TypeError('rawRead table normalization failed.');
+      return value;
+    },
+  };
+  if (policy.ownerTables !== undefined) {
+    snapshot.ownerTables = snapshotStringArray(policy.ownerTables, 'rawRead owner tables');
+  }
+  if (policy.sqliteAuthorizer !== undefined) {
+    snapshot.sqliteAuthorizer = snapshotSqliteAuthorizer(policy.sqliteAuthorizer);
+  }
+  if (policy.executeMethod !== undefined) snapshot.executeMethod = policy.executeMethod;
+  if (policy.executeSql !== undefined) {
+    const execute = policy.executeSql;
+    snapshot.executeSql = (statement) => witnessReflectApply(execute, policy, [statement]);
+  }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotCrossOwnerReadPolicy(
+  policy: CrossOwnerReadPolicyOptions,
+): CrossOwnerReadPolicyOptions {
+  const normalizeTableName = ownFunctionDataProperty(policy, 'normalizeTableName');
+  const snapshot: CrossOwnerReadPolicyOptions = {
+    dialectLabel: ownStringDataProperty(policy, 'dialectLabel'),
+    normalizeTableName(table) {
+      const value = witnessReflectApply<unknown>(normalizeTableName, policy, [table]);
+      if (typeof value !== 'string') {
+        throw new TypeError('crossOwnerRead table normalization failed.');
+      }
+      return value;
+    },
+    ownerTables: snapshotStringArray(policy.ownerTables, 'crossOwnerRead owner tables'),
+  };
+  if (policy.adminClient !== undefined) snapshot.adminClient = policy.adminClient;
+  if (policy.executeMethod !== undefined) snapshot.executeMethod = policy.executeMethod;
+  if (policy.executeSql !== undefined) {
+    const execute = policy.executeSql;
+    snapshot.executeSql = (statement) => witnessReflectApply(execute, policy, [statement]);
+  }
+  if (policy.hasRole !== undefined) {
+    const hasRole = policy.hasRole;
+    snapshot.hasRole = (role) => witnessReflectApply(hasRole, policy, [role]);
+  }
+  if (policy.principal !== undefined) snapshot.principal = policy.principal;
+  return witnessFreeze(snapshot);
 }
 
 function readonlyCapabilityDb<Db extends object>(
@@ -1577,8 +2156,10 @@ function readonlyCapabilityDb<Db extends object>(
     get(target, prop, receiver) {
       if (prop === 'then') return undefined;
       if (typeof prop === 'string') {
-        if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
-        if (!READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
+        if (stringListHas(DENIED_READ_CAPABILITY_PROPERTIES, prop)) {
+          return readonlyCapabilityError(prop);
+        }
+        if (!stringListHas(READ_CAPABILITY_PROPERTIES, prop)) return readonlyCapabilityError(prop);
         if (prop === 'crossOwnerRead')
           return readonlyCrossOwnerRead(target, receiver, options, preserveInnerCapabilities);
         if (prop === 'rawRead')
@@ -1588,7 +2169,7 @@ function readonlyCapabilityDb<Db extends object>(
           if (typeof value === 'function') return readonlyCapabilityError(prop);
           return value;
         }
-        if (!CALLABLE_READ_CAPABILITY_PROPERTIES.has(prop)) {
+        if (!stringListHas(CALLABLE_READ_CAPABILITY_PROPERTIES, prop)) {
           return readonlyCapabilityError(prop);
         }
         return typeof value === 'function' ? value.bind(target) : value;
@@ -1746,46 +2327,73 @@ function assertRawReadObservedTablesAllowed(
     );
   }
 
-  const observed = new Set<string>();
+  const observed: string[] = [];
   const sqlite = sqliteAuthorizer.openDatabase();
+  const setAuthorizer = inheritedFunctionDataProperty(sqlite, 'setAuthorizer');
+  const prepare = inheritedFunctionDataProperty(sqlite, 'prepare');
+  const close = inheritedFunctionDataProperty(sqlite, 'close');
   try {
-    sqlite.setAuthorizer((action, objectName, _columnName, databaseName) => {
-      if (action === readAction && objectName !== null) {
-        observed.add(policy.normalizeTableName(`${databaseName ?? 'main'}.${objectName}`));
-      }
-      return sqliteAuthorizer.constants.SQLITE_OK;
-    });
-    sqlite.prepare(sql);
+    witnessReflectApply(setAuthorizer, sqlite, [
+      (
+        action: number,
+        objectName: string | null,
+        _columnName: string | null,
+        databaseName: string | null,
+      ) => {
+        if (action === readAction && objectName !== null) {
+          const table = policy.normalizeTableName(`${databaseName ?? 'main'}.${objectName}`);
+          if (!stringListHas(observed, table)) appendManagedValue(observed, table);
+        }
+        return sqliteAuthorizer.constants.SQLITE_OK;
+      },
+    ]);
+    witnessReflectApply(prepare, sqlite, [sql]);
   } finally {
-    sqlite.close();
+    witnessReflectApply(close, sqlite, []);
   }
 
-  const declared = new Set(declaration.reads.map(policy.normalizeTableName));
-  const unexpected = [...observed].filter((table) => !declared.has(table));
+  const declared = normalizedStringArray(
+    declaration.reads,
+    policy.normalizeTableName,
+    'rawRead declared tables',
+  );
+  const unexpected: string[] = [];
+  for (let index = 0; index < observed.length; index += 1) {
+    const table = observed[index]!;
+    if (!stringListHas(declared, table)) appendManagedValue(unexpected, table);
+  }
   if (unexpected.length > 0) {
     throw new Error(
       [
         `KV410: ${policy.dialectLabel} rawRead observed table(s) outside the declared reads set (SPEC §10.2/§10.3).`,
-        `  observed: ${[...observed].sort().join(', ') || '<none>'}`,
-        `  declared reads: ${[...declared].sort().join(', ') || '<none>'}`,
+        `  observed: ${observed.join(', ') || '<none>'}`,
+        `  declared reads: ${declared.join(', ') || '<none>'}`,
       ].join('\n'),
     );
   }
 
-  const ownerTables = new Set((policy.ownerTables ?? []).map(policy.normalizeTableName));
+  const ownerTables = normalizedStringArray(
+    policy.ownerTables ?? [],
+    policy.normalizeTableName,
+    'rawRead owner tables',
+  );
   const scoped = declaration.actAs !== undefined || publicRead !== undefined;
-  const ownerReads = [...observed].filter((table) => ownerTables.has(table));
+  const ownerReads: string[] = [];
+  for (let index = 0; index < observed.length; index += 1) {
+    const table = observed[index]!;
+    if (stringListHas(ownerTables, table)) appendManagedValue(ownerReads, table);
+  }
   if (!scoped && ownerReads.length > 0) {
     throw new Error(
       [
         `KV414: ${policy.dialectLabel} rawRead of owner-scoped table(s) requires actAs or declarePublicRead scope (SPEC §10.3).`,
-        `  owner tables: ${[...new Set(ownerReads)].sort().join(', ')}`,
+        `  owner tables: ${ownerReads.join(', ')}`,
       ].join('\n'),
     );
   }
   if (publicRead !== undefined) {
     recordPublicReadAuditFact(publicRead, declaration, policy, {
-      observedReads: [...observed],
+      observedReads: observed,
       ownerReads,
     });
   }
@@ -1904,18 +2512,26 @@ function assertCrossOwnerReadAllowed(
   policy: CrossOwnerReadPolicyOptions,
 ): void {
   const observed = policy.normalizeTableName(observedTable);
-  const declared = new Set(declaration.reads.map(policy.normalizeTableName));
-  const optedIn = new Set(policy.ownerTables.map(policy.normalizeTableName));
-  if (!declared.has(observed)) {
+  const declared = normalizedStringArray(
+    declaration.reads,
+    policy.normalizeTableName,
+    'crossOwnerRead declared tables',
+  );
+  const optedIn = normalizedStringArray(
+    policy.ownerTables,
+    policy.normalizeTableName,
+    'crossOwnerRead owner tables',
+  );
+  if (!stringListHas(declared, observed)) {
     throw new Error(
       [
         `KV414: ${policy.dialectLabel} crossOwnerRead observed a table outside the declared reads set (SPEC §10.3).`,
         `  observed: ${observed}`,
-        `  declared reads: ${[...declared].sort().join(', ') || '<none>'}`,
+        `  declared reads: ${declared.join(', ') || '<none>'}`,
       ].join('\n'),
     );
   }
-  if (!optedIn.has(observed)) {
+  if (!stringListHas(optedIn, observed)) {
     throw new Error(
       `KV414: ${policy.dialectLabel} crossOwnerRead table ${observed} is not opted in with kovo_admin_scope (SPEC §10.3).`,
     );
@@ -2025,9 +2641,11 @@ function managedReadCapabilityOptions(options: ManagedDbOptions): {
     crossOwnerRead?: CrossOwnerReadPolicyOptions;
     rawRead?: RawReadPolicyOptions;
   } = {};
-  if (options.crossOwnerRead !== undefined) readOptions.crossOwnerRead = options.crossOwnerRead;
-  if (options.rawRead !== undefined) readOptions.rawRead = options.rawRead;
-  return readOptions;
+  if (options.crossOwnerRead !== undefined) {
+    readOptions.crossOwnerRead = snapshotCrossOwnerReadPolicy(options.crossOwnerRead);
+  }
+  if (options.rawRead !== undefined) readOptions.rawRead = snapshotRawReadPolicy(options.rawRead);
+  return witnessFreeze(readOptions);
 }
 
 function resolveReadonlyDbTarget<Db>(raw: Db): { fromHook: boolean; target: Db } {

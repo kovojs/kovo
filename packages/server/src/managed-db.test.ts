@@ -1,13 +1,20 @@
 import { execFileSync, type ExecFileSyncOptionsWithBufferEncoding } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  DatabaseSync as NodeSqliteDatabaseSync,
+  constants as nodeSqliteConstants,
+} from 'node:sqlite';
 import { PGlite } from '@electric-sql/pglite';
+import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
 import { StringChunk, and, asc, count, eq, sql as drizzleSql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { getTableConfig, sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
 import {
   KovoReadonlyHandleError,
   createAuthorizationCensusDb,
@@ -32,6 +39,7 @@ import { query } from './api/data.js';
 import { domain } from './domain.js';
 import { runWithRequestInputProvenance } from './request-input-provenance.js';
 import { trustedAssign, serverValue } from './write-governance.js';
+import { createSqliteAppRuntimeDb } from './sqlite-runtime.js';
 
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle.
 //
@@ -2502,6 +2510,131 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['insert:contacts']);
   });
 
+  it('keeps declared Drizzle writes closed after late Set.has replacement', async () => {
+    const writes: string[] = [];
+    const raw = {
+      insert(table: { name: string }) {
+        writes.push(table.name);
+        return { values: async () => 'inserted' };
+      },
+    };
+    const handle = createDeclaredWriteDb(
+      raw,
+      { tables: ['public.allowed'], touches: ['allowed'] },
+      {
+        dialectLabel: 'proof',
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: (table) => [(table as { name: string }).name],
+      },
+    );
+    const nativeHas = Set.prototype.has;
+    let error: unknown;
+    try {
+      Set.prototype.has = function (): boolean {
+        return true;
+      };
+      try {
+        await handle.insert({ name: 'victim_accounts' }).values();
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Set.prototype.has = nativeHas;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('KV406');
+    expect(writes).toEqual([]);
+  });
+
+  it('real SQLite declared writes and raw reads ignore poisoned Set.has authority', () => {
+    const allowed = sqliteTable('allowed', { id: sqliteText('id').primaryKey() });
+    const victim = sqliteTable('victim_accounts', {
+      id: sqliteText('id').primaryKey(),
+      secret: sqliteText('secret').notNull(),
+    });
+    const dataDir = mkdtempSync(join(process.cwd(), '.tmp-kovo-sqlite-'));
+    const sqliteFile = join(dataDir, 'authority.sqlite');
+    const client = new Database(sqliteFile);
+    client.exec(
+      "CREATE TABLE allowed (id text primary key); CREATE TABLE victim_accounts (id text primary key, secret text not null); INSERT INTO victim_accounts VALUES ('v1', 'victim-secret');",
+    );
+    const db = drizzle({ client });
+    const runtime = createSqliteAppRuntimeDb({
+      db,
+      metadata: {
+        allColumnKeys: new Set(['id', 'secret']),
+        columnSources: new Map(),
+        governedColumnKeysByTable: new Map(),
+        governedColumnNamesByTable: new Map(),
+        secretColumnKeys: new Set(),
+        secretColumnKeysByTable: new Map(),
+        secretColumnNames: new Set(),
+        secretColumnNamesByTable: new Map(),
+        secretTableNames: new Set(),
+      },
+      normalizeTableName: (table) => (table.includes('.') ? table : `main.${table}`),
+      sqliteAuthorizer: {
+        constants: nodeSqliteConstants,
+        openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile),
+      },
+      sqliteColumnOrigins: client,
+      tableNames: (table) => [`main.${getTableConfig(table as typeof allowed).name}`],
+    });
+    const writer = managedDb(runtime.db, 'write', {
+      sqlWritePolicy: { tables: ['allowed'], touches: ['allowed'] },
+    }) as typeof db;
+    const rawRead = runtime.readonlyDb.rawRead as <Row>(
+      statement: unknown,
+      declaration: { actAs?: string; reads: readonly string[] },
+    ) => Row[];
+    const statement = trustedSql(sql.raw('select id, secret from victim_accounts'), {
+      justification: 'real SQLite undeclared raw-read regression',
+    });
+
+    try {
+      expect(() => writer.insert(victim).values({ id: 'v2', secret: 'stolen' }).run()).toThrow(
+        /KV406/u,
+      );
+      expect(() => rawRead(statement, { actAs: 'attacker', reads: ['allowed'] })).toThrow(
+        /outside the declared reads set/u,
+      );
+
+      const nativeHas = Set.prototype.has;
+      let writeError: unknown;
+      let readError: unknown;
+      try {
+        Set.prototype.has = function (): boolean {
+          return true;
+        };
+        try {
+          writer.insert(victim).values({ id: 'v2', secret: 'stolen' }).run();
+        } catch (caught) {
+          writeError = caught;
+        }
+        try {
+          rawRead(statement, { actAs: 'attacker', reads: ['allowed'] });
+        } catch (caught) {
+          readError = caught;
+        }
+      } finally {
+        Set.prototype.has = nativeHas;
+      }
+
+      expect(writeError).toBeInstanceOf(Error);
+      expect((writeError as Error).message).toContain('KV406');
+      expect(readError).toBeInstanceOf(Error);
+      expect((readError as Error).message).toContain('outside the declared reads set');
+      expect(client.prepare('select id from victim_accounts order by id').all()).toEqual([
+        { id: 'v1' },
+      ]);
+      void allowed;
+    } finally {
+      client.close();
+      rmSync(dataDir, { force: true, recursive: true });
+    }
+  });
+
   it('rejects parsed request input copied to governed columns in managed Drizzle writes', async () => {
     const log: unknown[] = [];
     const handle = governedWriteHandle(log);
@@ -2756,6 +2889,45 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     }
 
     expect(log).toEqual([]);
+  });
+
+  it('keeps scoped-principal SQL control closed after late RegExp replacement', () => {
+    // SPEC §6.6/§10.3: principal-setting SQL is classified by a fixed scanner rather than
+    // app-replaceable RegExp methods. The engine ACL remains a second, independent door.
+    const queries: string[] = [];
+    const tx = {
+      exec: async (_sql: string) => undefined,
+      query: async (statement: string) => {
+        queries.push(statement);
+        return [];
+      },
+    };
+    const scoped = createPostgresScopedClient(
+      {
+        transaction: async <Result>(callback: (value: typeof tx) => Promise<Result>) =>
+          callback(tx),
+      },
+      { principal: 'attacker', role: false },
+    ) as unknown as { query(sql: string, values?: readonly unknown[]): Promise<unknown> };
+    const attackerSql = "SELECT pg_catalog.set_config('kovo.principal', $1, true)";
+    const nativeTest = RegExp.prototype.test;
+    let error: unknown;
+    try {
+      RegExp.prototype.test = function (): boolean {
+        return false;
+      };
+      try {
+        void scoped.query(attackerSql, ['victim']);
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      RegExp.prototype.test = nativeTest;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('cannot change framework transaction settings');
+    expect(queries).toEqual([]);
   });
 
   it('rejects Unicode-escaped set_config before it can replace the scoped Postgres principal', async () => {
@@ -3607,7 +3779,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('keeps the managed raw-driver escape denial before nested handle wrapping (source gate)', () => {
     const source = readFileSync(new URL('./sql-safe-handle.ts', import.meta.url), 'utf8');
     const denial = source.indexOf('isManagedRawDriverEscapeProperty(prop)');
-    const firstReflectGet = source.indexOf('Reflect.get(target, prop, receiver)');
+    const firstReflectGet = source.indexOf('witnessReflectGet(target, prop, receiver)');
     const nestedWrap = source.indexOf('isNestedSqlHandleProperty(prop)');
 
     expect(denial).toBeGreaterThanOrEqual(0);
