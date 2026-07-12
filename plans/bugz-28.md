@@ -12,7 +12,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | -------- | ----: | ----- |
 | Critical |     8 | C1-C8 |
 | High     |    13 | H1-H13 |
-| Medium   |     5 | M1-M5 |
+| Medium   |     6 | M1-M6 |
 
 ## Critical
 
@@ -228,10 +228,21 @@ This is an active closure ledger; `SPEC.md` remains normative.
     comparison; an oversized stream is cancelled with 413 and the mutation handler is not called
     under late `Math.max` poison.
 
+- [ ] **M6 - Mutable PHC parsing can authenticate a non-Argon2id password digest.**
+      `packages/server/src/password.ts`
+  - Selective late `String.prototype.startsWith`/`split` overrides substituted the structural facts
+    of an Argon2id digest while the original Argon2i string reached `@node-rs/argon2`; both
+    `isArgon2idPasswordDigest()` and `verifyPassword()` accepted the downgraded algorithm with
+    `needsRehash: false`.
+  - **Acceptance:** parse the exact submitted digest with boot-pinned, semantically checked scalar
+    operations and collection storage; reject Argon2i/Argon2d, malformed, duplicate, substituted,
+    and import-order-poisoned PHC strings while preserving genuine Argon2id verify/rehash behavior.
+
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, H7, H9-H10, and M4 are active
-document/cookie/CSRF, Better Auth, and generated-diagnostics fixes. Integrated evidence is green at
+The remediation pass remains intentionally non-zero: C6, H7, H9-H10, M4, and M6 are active
+document/cookie/CSRF, Better Auth, generated-diagnostics, and password fixes. Integrated evidence is
+green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 86 crypto/replay, 234 output/compiler/core, and 87 scalar route/handler/secret tests.
 A complete fresh sweep of the final integrated tree is still required.
