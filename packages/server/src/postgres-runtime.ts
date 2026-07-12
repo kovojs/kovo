@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { types as nodeUtilTypes } from 'node:util';
 
 import { PGlite } from '@electric-sql/pglite';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
@@ -30,29 +31,38 @@ import {
 import { requestPassedRoleGuard } from './guards.js';
 import {
   securityArrayIsArray,
+  securityArrayJoin,
   securityArraySort,
   securityJsonStringify,
   securityObjectKeys,
+  securityRegExpTest,
+  securityStringIncludes,
   securityStringReplaceAll,
   securityStringSplit,
   securityStringStartsWith,
+  securityStringTrim,
 } from './response-security-intrinsics.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
 import {
   createWitnessMap,
   createWitnessSet,
+  createWitnessWeakMap,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
+  witnessOwnKeys,
   witnessMapGet,
   witnessMapForEach,
   witnessMapHas,
   witnessMapSet,
   witnessSetAdd,
+  witnessSetDelete,
   witnessSetHas,
   witnessSetForEach,
   witnessSetSize,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import { ensureRecurringTaskSchema } from './task-cron.js';
 import {
@@ -61,6 +71,7 @@ import {
   grantDurableTaskWriterRole,
 } from './task-queue.js';
 
+const postgresIsProxy = nodeUtilTypes.isProxy;
 const DEFAULT_DATA_DIR = '.kovo/pglite';
 const DEFAULT_ADMIN_ROLE = 'kovo_admin';
 const DEFAULT_READER_ROLE = 'kovo_reader';
@@ -69,8 +80,8 @@ const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
 const postgresSystemDbBrand: unique symbol = Symbol('kovo.postgres-system-db');
-const postgresSystemDbValues = new WeakMap<KovoPostgresSystemDb, KovoPostgresRuntimeDb>();
-const FRAMEWORK_INTERNAL_REACHABLE_TABLES = new Set([
+const postgresSystemDbValues = createWitnessWeakMap<KovoPostgresSystemDb, KovoPostgresRuntimeDb>();
+const FRAMEWORK_INTERNAL_REACHABLE_TABLES = postgresStringSet([
   '_kovo_jobs',
   '_kovo_task_cron_occurrences',
   SCHEMA_STATE_TABLE,
@@ -93,8 +104,8 @@ const POSTGRES_ELEVATED_ROLE_ATTRIBUTES = [
 // this explicit benign don't-care set. Any other `pg_*` predefined-role membership fails closed and
 // is named. This is an ALLOWLIST (member-of-only-known-safe), NOT a denylist of known-bad roles, so
 // a NEW `pg_*` predefined role in a future PostgreSQL release fails closed by default.
-const POSTGRES_BENIGN_PREDEFINED_ROLES: ReadonlySet<string> = new Set<string>([]);
-const POSTGRES_CLASSIFIED_ROLE_COLUMNS = new Set([
+const POSTGRES_BENIGN_PREDEFINED_ROLES: ReadonlySet<string> = createWitnessSet<string>();
+const POSTGRES_CLASSIFIED_ROLE_COLUMNS = postgresStringSet([
   'rolname',
   'rolsuper',
   'rolinherit',
@@ -139,7 +150,8 @@ const POSTGRES_REACHABLE_RELATIONS_SQL = [
   'JOIN existing_roles r ON true',
   "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
   'ORDER BY n.nspname, c.relname, r.rolname',
-].join(' ');
+];
+const POSTGRES_REACHABLE_RELATIONS_QUERY = postgresJoin(POSTGRES_REACHABLE_RELATIONS_SQL, ' ');
 const PRODUCTION_PGLITE_ERROR =
   'production requires a least-privilege external Postgres via KOVO_DATABASE_URL; PGlite is dev/test-only and runs in-process as superuser';
 const RUNTIME_LEAST_PRIVILEGE_ERROR = 'runtime must be a least-privilege login role';
@@ -156,6 +168,269 @@ type PgForeignKey = PgTableConfig['foreignKeys'][number];
 const POSTGRES_POLICY_DIALECT = new PgDialect();
 const postgresRuntimeRequire = createRequire(import.meta.url);
 let postgresPolicySqlParser: typeof import('pgsql-ast-parser') | undefined;
+
+function postgresDenseArrayLength(values: readonly unknown[], label = 'Postgres array'): number {
+  if (postgresIsProxy(values)) {
+    throw new TypeError(`${label} must not be a Proxy.`);
+  }
+  const descriptor = witnessGetOwnPropertyDescriptor(values, 'length');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'number' ||
+    descriptor.value < 0 ||
+    descriptor.value % 1 !== 0
+  ) {
+    throw new TypeError(`${label} must expose a bounded own data length.`);
+  }
+  return descriptor.value;
+}
+
+function postgresDenseArrayValue<Value>(
+  values: readonly Value[],
+  index: number,
+  label = 'Postgres array',
+): Value {
+  const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`${label} must contain dense own data elements.`);
+  }
+  return descriptor.value;
+}
+
+function appendPostgresValue<Value>(values: Value[], value: Value): void {
+  const length = postgresDenseArrayLength(values);
+  witnessDefineProperty(values, length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function postgresMapDense<Input, Output>(
+  values: readonly Input[],
+  map: (value: Input, index: number) => Output,
+  label = 'Postgres mapped array',
+): Output[] {
+  const output: Output[] = [];
+  const length = postgresDenseArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    appendPostgresValue(output, map(postgresDenseArrayValue(values, index, label), index));
+  }
+  return output;
+}
+
+function appendPostgresDenseValues<Value>(
+  target: Value[],
+  source: readonly Value[],
+  label = 'Postgres appended array',
+): void {
+  const length = postgresDenseArrayLength(source, label);
+  for (let index = 0; index < length; index += 1) {
+    appendPostgresDenseValue(target, postgresDenseArrayValue(source, index, label));
+  }
+}
+
+function postgresFilterDense<Value>(
+  values: readonly Value[],
+  include: (value: Value, index: number) => boolean,
+  label = 'Postgres filtered array',
+): Value[] {
+  const output: Value[] = [];
+  const length = postgresDenseArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = postgresDenseArrayValue(values, index, label);
+    if (include(value, index)) appendPostgresValue(output, value);
+  }
+  return output;
+}
+
+function postgresSomeDense<Value>(
+  values: readonly Value[],
+  predicate: (value: Value, index: number) => boolean,
+  label = 'Postgres searched array',
+): boolean {
+  const length = postgresDenseArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    if (predicate(postgresDenseArrayValue(values, index, label), index)) return true;
+  }
+  return false;
+}
+
+function postgresJoin(values: readonly unknown[], separator: string): string {
+  return securityArrayJoin(values, separator);
+}
+
+function postgresStringSet(values: readonly string[]): Set<string> {
+  const output = createWitnessSet<string>();
+  const length = postgresDenseArrayLength(values, 'Postgres string set source');
+  for (let index = 0; index < length; index += 1) {
+    witnessSetAdd(output, postgresDenseArrayValue(values, index, 'Postgres string set source'));
+  }
+  return output;
+}
+
+function postgresSetValues<Value>(values: ReadonlySet<Value>): Value[] {
+  const output: Value[] = [];
+  witnessSetForEach(values as Set<Value>, (value) => appendPostgresValue(output, value));
+  return output;
+}
+
+function postgresMapValues<Key, Value>(values: ReadonlyMap<Key, Value>): Value[] {
+  const output: Value[] = [];
+  witnessMapForEach(values as Map<Key, Value>, (value) => appendPostgresValue(output, value));
+  return output;
+}
+
+function postgresOwnDataValues(values: object): unknown[] {
+  const output: unknown[] = [];
+  const keys = witnessOwnKeys(values);
+  const length = postgresDenseArrayLength(keys, 'Postgres object key snapshot');
+  for (let index = 0; index < length; index += 1) {
+    const key = postgresDenseArrayValue(keys, index, 'Postgres object key snapshot');
+    if (typeof key !== 'string') continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(values, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Postgres object values must use own data properties.');
+    }
+    appendPostgresValue(output, descriptor.value);
+  }
+  return output;
+}
+
+function postgresOwnDataEntries(values: object): [string, unknown][] {
+  const output: [string, unknown][] = [];
+  const keys = witnessOwnKeys(values);
+  const length = postgresDenseArrayLength(keys, 'Postgres object entry keys');
+  for (let index = 0; index < length; index += 1) {
+    const key = postgresDenseArrayValue(keys, index, 'Postgres object entry keys');
+    if (typeof key !== 'string') continue;
+    const descriptor = witnessGetOwnPropertyDescriptor(values, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Postgres object entries must use own data properties.');
+    }
+    appendPostgresValue(output, [key, descriptor.value]);
+  }
+  return output;
+}
+
+function postgresOwnDataSnapshot<Value extends object>(value: Value, label: string): Value {
+  // A Proxy controls ownKeys and property descriptors themselves, so descriptor-first copying is
+  // not sufficient for security-authoritative schema/config carriers. Reject it before the single
+  // immutable snapshot rather than trusting an attacker-selected partial view (SPEC §10.3).
+  if (postgresIsProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy.`);
+  }
+  const snapshot = witnessCreateNullRecord<unknown>();
+  const keys = witnessOwnKeys(value);
+  const keyCount = postgresDenseArrayLength(keys, `${label} keys`);
+  for (let index = 0; index < keyCount; index += 1) {
+    const key = postgresDenseArrayValue(keys, index, `${label} keys`);
+    const descriptor = witnessGetOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`${label} properties must be own data.`);
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: descriptor.enumerable === true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return witnessFreeze(snapshot) as Value;
+}
+
+function snapshotPostgresRuntimeConfigInput<Input extends PostgresRuntimeConfigInput>(
+  input: Input,
+  overrides?: Partial<PostgresRuntimeConfigInput>,
+): Input {
+  if (!isRecord(input)) {
+    throw new TypeError('KV433: Postgres runtime options must be an own-data object.');
+  }
+  const source = postgresOwnDataSnapshot(input, 'Postgres runtime options');
+  const snapshot = witnessCreateNullRecord<unknown>();
+  const keys = witnessOwnKeys(source);
+  const keyCount = postgresDenseArrayLength(keys, 'Postgres runtime option keys');
+  for (let index = 0; index < keyCount; index += 1) {
+    const key = postgresDenseArrayValue(keys, index, 'Postgres runtime option keys');
+    const descriptor = witnessGetOwnPropertyDescriptor(source, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Postgres runtime option properties must remain own data.');
+    }
+    witnessDefineProperty(snapshot, key, {
+      configurable: true,
+      enumerable: descriptor.enumerable === true,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  if (overrides !== undefined) {
+    const overrideKeys = witnessOwnKeys(overrides);
+    const overrideCount = postgresDenseArrayLength(overrideKeys, 'Postgres runtime override keys');
+    for (let index = 0; index < overrideCount; index += 1) {
+      const key = postgresDenseArrayValue(overrideKeys, index, 'Postgres runtime override keys');
+      const descriptor = witnessGetOwnPropertyDescriptor(overrides, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Postgres runtime override properties must be own data.');
+      }
+      witnessDefineProperty(snapshot, key, {
+        configurable: true,
+        enumerable: descriptor.enumerable === true,
+        value: descriptor.value,
+        writable: true,
+      });
+    }
+  }
+  const schema = postgresOwnDataValue(snapshot, 'schema');
+  if (!isRecord(schema)) {
+    throw new TypeError('KV433: Postgres runtime schema must be an own-data object.');
+  }
+  witnessDefineProperty(snapshot, 'schema', {
+    configurable: true,
+    enumerable: true,
+    value: postgresOwnDataSnapshot(schema, 'Postgres runtime schema'),
+    writable: true,
+  });
+  return witnessFreeze(snapshot) as Input;
+}
+
+function snapshotPostgresQueryRows<Row extends QueryResultRow>(
+  rows: readonly Row[],
+  label: string,
+): Row[] {
+  if (postgresIsProxy(rows)) {
+    throw new TypeError(`${label} must not be a Proxy.`);
+  }
+  const snapshot: Row[] = [];
+  const rowCount = postgresDenseArrayLength(rows, label);
+  for (let index = 0; index < rowCount; index += 1) {
+    const row = postgresDenseArrayValue(rows, index, label);
+    if (!isRecord(row)) {
+      throw new TypeError(`${label} entries must be own-data records.`);
+    }
+    appendPostgresValue(snapshot, postgresOwnDataSnapshot(row, `${label} entry`) as Row);
+  }
+  return snapshot;
+}
+
+function snapshotPostgresQueryParams(
+  params: readonly unknown[] | undefined,
+): unknown[] | undefined {
+  if (params === undefined) return undefined;
+  if (postgresIsProxy(params)) {
+    throw new TypeError('Postgres query parameters must not be a Proxy.');
+  }
+  const snapshot: unknown[] = [];
+  const paramCount = postgresDenseArrayLength(params, 'Postgres query parameters');
+  for (let index = 0; index < paramCount; index += 1) {
+    appendPostgresValue(
+      snapshot,
+      postgresDenseArrayValue(params, index, 'Postgres query parameters'),
+    );
+  }
+  return snapshot;
+}
 
 interface DeclaredWritePolicy {
   tables?: readonly string[];
@@ -506,7 +781,7 @@ export function declarePublicRelation(
     reason: normalized.reason,
     ...(normalized.site === undefined ? {} : { site: normalized.site }),
   };
-  return Object.freeze(declaration);
+  return witnessFreeze(declaration);
 }
 
 /** One reviewed SQL migration file applied by the Postgres migration runner. */
@@ -568,7 +843,7 @@ export function usePostgresSystemDb<Result>(
   capability: KovoPostgresSystemDb,
   use: (db: KovoPostgresRuntimeDb) => Result,
 ): Result {
-  const db = postgresSystemDbValues.get(capability);
+  const db = witnessWeakMapGet(postgresSystemDbValues, capability);
   if (db === undefined) {
     throw new Error(
       'KV414: invalid Postgres system DB capability; use createPostgresAppRuntimeDb().systemDb(...) (SPEC §10.3).',
@@ -699,10 +974,10 @@ export function createPostgresAppRuntimeDb(
 }
 
 function createPostgresSystemDb(db: KovoPostgresRuntimeDb): KovoPostgresSystemDb {
-  const capability = Object.freeze({
+  const capability = witnessFreeze({
     [postgresSystemDbBrand]: { scope: 'postgres-system-db' as const },
   });
-  postgresSystemDbValues.set(capability, db);
+  witnessWeakMapSet(postgresSystemDbValues, capability, db);
   return capability;
 }
 
@@ -713,12 +988,12 @@ function createPostgresSystemDb(db: KovoPostgresRuntimeDb): KovoPostgresSystemDb
 export async function provisionPostgresAppDb(
   options: KovoPostgresProvisionOptions,
 ): Promise<KovoPostgresPostureReport> {
-  const config = resolvePostgresRuntimeConfig({
-    ...options,
+  const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
     driver: 'node-postgres',
     postureCheckOnBoot: false,
     provisionOnBoot: true,
   });
+  const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = extractKovoRuntimeDbMetadata(schemaTables);
@@ -728,12 +1003,12 @@ export async function provisionPostgresAppDb(
       applySchemaDdl: false,
       config,
       metadata,
-      migrations: options.migrations ?? [],
-      runtimeLoginRole: runtimeLoginRoleFromDatabaseUrl(options.runtimeDatabaseUrl),
+      migrations: safeOptions.migrations ?? [],
+      runtimeLoginRole: runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl),
       schemaDdl: schemaDdl(schemaTables),
       schemaTables,
     });
-    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(options.runtimeDatabaseUrl);
+    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl);
     return await checkRuntimeDbPosture(client.sql, {
       config,
       metadata,
@@ -752,11 +1027,11 @@ export async function provisionPostgresAppDb(
 export async function migratePostgresAppDb(
   options: KovoPostgresMigrateOptions,
 ): Promise<KovoPostgresMigrationRunReport> {
-  const config = resolvePostgresRuntimeConfig({
-    ...options,
+  const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
     postureCheckOnBoot: false,
     provisionOnBoot: false,
   });
+  const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = extractKovoRuntimeDbMetadata(schemaTables);
@@ -766,12 +1041,12 @@ export async function migratePostgresAppDb(
       applySchemaDdl: false,
       config,
       metadata,
-      migrations: options.migrations,
-      runtimeLoginRole: runtimeLoginRoleFromDatabaseUrl(options.runtimeDatabaseUrl),
+      migrations: safeOptions.migrations,
+      runtimeLoginRole: runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl),
       schemaDdl: schemaDdl(schemaTables),
       schemaTables,
     });
-    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(options.runtimeDatabaseUrl);
+    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl);
     const posture = await checkRuntimeDbPosture(client.sql, {
       config,
       metadata,
@@ -792,11 +1067,11 @@ export async function migratePostgresAppDb(
 export async function planPostgresAppDbMigration(
   options: KovoPostgresMigrationPlanOptions,
 ): Promise<KovoPostgresMigrationPlan> {
-  const config = resolvePostgresRuntimeConfig({
-    ...options,
+  const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
     postureCheckOnBoot: false,
     provisionOnBoot: false,
   });
+  const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const client = createRuntimeClient(config);
@@ -814,11 +1089,16 @@ export async function planPostgresAppDbMigration(
 export async function checkPostgresAppDbPosture(
   options: KovoPostgresAppRuntimeOptions,
 ): Promise<KovoPostgresPostureReport> {
-  const config = resolvePostgresRuntimeConfig({
-    ...options,
-    driver: options.driver ?? 'node-postgres',
+  const optionDriver = postgresOwnDataValue(
+    options as unknown as Record<PropertyKey, unknown>,
+    'driver',
+  );
+  const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
+    driver:
+      optionDriver === undefined ? 'node-postgres' : (optionDriver as KovoPostgresRuntimeDriver),
     provisionOnBoot: false,
   });
+  const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   assertPostgresRuntimeSchemaSupported(schemaTables);
   const metadata = extractKovoRuntimeDbMetadata(schemaTables);
@@ -876,12 +1156,13 @@ async function initializeRuntimeDb(
           `KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR}: ${report.issues[0].detail} (SPEC §10.3).`,
         );
       }
-      throw new Error(
-        [
-          'KV433: Postgres app database posture check failed during boot (SPEC §10.3).',
-          ...report.issues.map((issue) => `  ${issue.code}: ${issue.detail}`),
-        ].join('\n'),
-      );
+      const lines = ['KV433: Postgres app database posture check failed during boot (SPEC §10.3).'];
+      const issueCount = postgresDenseArrayLength(report.issues, 'Postgres posture issues');
+      for (let index = 0; index < issueCount; index += 1) {
+        const issue = postgresDenseArrayValue(report.issues, index, 'Postgres posture issues');
+        appendPostgresDenseValue(lines, `  ${issue.code}: ${issue.detail}`);
+      }
+      throw new Error(postgresJoin(lines, '\n'));
     }
   } else if (input.config.postureCheckOptOut !== undefined) {
     postgresPostureCheckOptOutFacts.record({
@@ -903,6 +1184,10 @@ async function provisionRuntimeDb(
     schemaTables: readonly PgTable[];
   },
 ): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
+  // SPEC §10.3: snapshot and checksum every reviewed migration before the provisioner opens a
+  // transaction or performs any role/catalog write. The exact frozen SQL bytes checked here are
+  // the only bytes the transaction may execute.
+  const migrations = normalizePostgresMigrations(input.migrations);
   let migrationReport: { applied: readonly string[]; skipped: readonly string[] } = {
     applied: [],
     skipped: [],
@@ -921,7 +1206,7 @@ async function provisionRuntimeDb(
       await withPostgresAppDdlSearchPath(tx, () => tx.exec(input.schemaDdl));
     }
     migrationReport = await withPostgresAppDdlSearchPath(tx, () =>
-      applyPostgresMigrations(tx, input.migrations),
+      applyPostgresMigrations(tx, migrations),
     );
     if (!input.applySchemaDdl) await assertPostgresSchemaTablesExist(tx, input.schemaTables);
     await tx.exec(
@@ -950,7 +1235,10 @@ async function provisionRuntimeDb(
     await withPostgresAppDdlSearchPath(tx, () => ensurePostgresSchemaStateTable(tx));
     await grantPostgresRuntimeLoginRole(tx, roleTopology);
     await withPostgresAppDdlSearchPath(tx, async () => {
-      for (const statement of input.config.seedSql) await tx.exec(statement);
+      const seedCount = postgresDenseArrayLength(input.config.seedSql, 'Postgres seed SQL');
+      for (let index = 0; index < seedCount; index += 1) {
+        await tx.exec(postgresDenseArrayValue(input.config.seedSql, index, 'Postgres seed SQL'));
+      }
     });
     await applyPostgresCreationAuthorityDefaultDeny(tx, input.config, input.runtimeLoginRole);
   });
@@ -1014,26 +1302,38 @@ async function checkRuntimeDbPostureTransaction(
       ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
       : input.runtimeLoginRole;
   if (runtimeLoginRole !== undefined) {
-    issues.push(
-      ...(await postgresRuntimeLoginPostureIssues(client, input.config, runtimeLoginRole)),
+    appendPostgresDenseValues(
+      issues,
+      await postgresRuntimeLoginPostureIssues(client, input.config, runtimeLoginRole),
+      'Postgres runtime login posture issues',
     );
   }
-  issues.push(
-    ...(await postgresAppRoleClosurePostureIssues(client, input.config, runtimeLoginRole)),
+  appendPostgresDenseValues(
+    issues,
+    await postgresAppRoleClosurePostureIssues(client, input.config, runtimeLoginRole),
+    'Postgres role closure posture issues',
   );
-  issues.push(...(await postgresRoleAttributeVersionIssues(client)));
+  appendPostgresDenseValues(
+    issues,
+    await postgresRoleAttributeVersionIssues(client),
+    'Postgres role attribute issues',
+  );
   if (input.config.driver === 'node-postgres') {
-    issues.push(
-      ...(await postgresRuntimeMembershipIssues(
-        client,
-        input.config.roleTopology,
-        runtimeLoginRole,
-      )),
+    appendPostgresDenseValues(
+      issues,
+      await postgresRuntimeMembershipIssues(client, input.config.roleTopology, runtimeLoginRole),
+      'Postgres runtime membership issues',
     );
   }
 
-  for (const relation of await missingPostgresSchemaTables(client, input.schemaTables)) {
-    issues.push({
+  const missingRelations = await missingPostgresSchemaTables(client, input.schemaTables);
+  const missingRelationCount = postgresDenseArrayLength(
+    missingRelations,
+    'Missing Postgres relations',
+  );
+  for (let index = 0; index < missingRelationCount; index += 1) {
+    const relation = postgresDenseArrayValue(missingRelations, index, 'Missing Postgres relations');
+    appendPostgresDenseValue(issues, {
       code: 'KV433_SCHEMA_TABLE',
       detail: `${relation} is missing; run \`kovo db generate\` and \`kovo db migrate\` before provisioning/checking posture`,
     });
@@ -1042,54 +1342,91 @@ async function checkRuntimeDbPostureTransaction(
   // SPEC §10.3 (C10): policy posture is an exact catalog allowlist, not the
   // presence of a familiar name. A same-named allow-all/PUBLIC policy or an
   // additional permissive policy changes the effective OR-composed RLS boundary.
-  for (const protectedTable of resolveProtectedPostgresTables(
-    input.schemaTables,
-    input.metadata,
-  ).values()) {
+  const protectedTables = postgresMapValues(
+    resolveProtectedPostgresTables(input.schemaTables, input.metadata),
+  );
+  const protectedTableCount = postgresDenseArrayLength(
+    protectedTables,
+    'Protected Postgres tables',
+  );
+  for (let protectedIndex = 0; protectedIndex < protectedTableCount; protectedIndex += 1) {
+    const protectedTable = postgresDenseArrayValue(
+      protectedTables,
+      protectedIndex,
+      'Protected Postgres tables',
+    );
     const rls = await safeQuery<{ relforcerowsecurity: boolean; relrowsecurity: boolean }>(
       client,
-      [
-        'SELECT c.relrowsecurity, c.relforcerowsecurity',
-        'FROM pg_class c',
-        'JOIN pg_namespace n ON n.oid = c.relnamespace',
-        'WHERE n.nspname = $1 AND c.relname = $2',
-        "AND c.relkind IN ('r', 'p')",
-      ].join(' '),
+      postgresJoin(
+        [
+          'SELECT c.relrowsecurity, c.relforcerowsecurity',
+          'FROM pg_class c',
+          'JOIN pg_namespace n ON n.oid = c.relnamespace',
+          'WHERE n.nspname = $1 AND c.relname = $2',
+          "AND c.relkind IN ('r', 'p')",
+        ],
+        ' ',
+      ),
       [protectedTable.schemaName, protectedTable.tableName],
     );
-    const row = rls?.rows[0];
+    const row =
+      rls === undefined || postgresDenseArrayLength(rls.rows, 'Postgres RLS rows') === 0
+        ? undefined
+        : postgresDenseArrayValue(rls.rows, 0, 'Postgres RLS rows');
     if (row?.relrowsecurity !== true || row.relforcerowsecurity !== true) {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_FORCE_RLS',
         detail: `${protectedTable.schemaName}.${protectedTable.tableName} must have row-level security enabled and forced`,
       });
     }
-    issues.push(
-      ...(await postgresProtectedPolicyPostureIssues(client, protectedTable, input.config)),
+    appendPostgresDenseValues(
+      issues,
+      await postgresProtectedPolicyPostureIssues(client, protectedTable, input.config),
+      'Protected Postgres policy posture issues',
     );
   }
 
-  for (const table of input.schemaTables) {
+  const schemaTableCount = postgresDenseArrayLength(input.schemaTables, 'Postgres schema tables');
+  for (let tableIndex = 0; tableIndex < schemaTableCount; tableIndex += 1) {
+    const table = postgresDenseArrayValue(input.schemaTables, tableIndex, 'Postgres schema tables');
     const tableConfig = getTableConfig(table);
     const tableName = tableConfig.name;
     const tableReference = quoteQualified(tableSchemaName(tableConfig), tableName);
-    const secretColumns = input.metadata.secretColumnNamesByTable.get(tableName) ?? new Set();
-    for (const column of secretColumns) {
-      for (const role of [input.config.readerRole, input.config.writerRole]) {
+    const secretColumns =
+      witnessMapGet(input.metadata.secretColumnNamesByTable, tableName) ??
+      createWitnessSet<string>();
+    const secretColumnValues = postgresSetValues(secretColumns);
+    const secretColumnCount = postgresDenseArrayLength(
+      secretColumnValues,
+      'Postgres secret columns',
+    );
+    const roles = [input.config.readerRole, input.config.writerRole];
+    for (let columnIndex = 0; columnIndex < secretColumnCount; columnIndex += 1) {
+      const column = postgresDenseArrayValue(
+        secretColumnValues,
+        columnIndex,
+        'Postgres secret columns',
+      );
+      for (let roleIndex = 0; roleIndex < 2; roleIndex += 1) {
+        const role = postgresDenseArrayValue(roles, roleIndex, 'Postgres secret grant roles');
         const grant = await safeQuery<{ can_select: boolean }>(
           client,
-          ["SELECT has_column_privilege($1, $2, $3, 'SELECT') AS can_select"].join(' '),
+          "SELECT has_column_privilege($1, $2, $3, 'SELECT') AS can_select",
           [role, tableReference, column],
         );
         if (grant === undefined) {
-          issues.push({
+          appendPostgresDenseValue(issues, {
             code: 'KV433_REACHABILITY_AUDIT',
             detail: `could not verify effective secret-column privilege for ${role} on ${tableName}.${column}`,
           });
           continue;
         }
-        if (grant.rows[0]?.can_select === true) {
-          issues.push({
+        const grantRow =
+          postgresDenseArrayLength(grant.rows, 'Postgres secret grant rows') === 0
+            ? undefined
+            : postgresDenseArrayValue(grant.rows, 0, 'Postgres secret grant rows');
+        if (grantRow?.can_select === true) {
+          appendPostgresDenseValue(issues, {
             code: 'KV435_SECRET_COLUMN_GRANT',
             detail: `${role} must not have effective SELECT on ${tableName}.${column}`,
           });
@@ -1098,9 +1435,21 @@ async function checkRuntimeDbPostureTransaction(
     }
   }
 
-  issues.push(...(await auditPostgresReachableClosure(client, input)));
-  issues.push(...(await auditPostgresReachableRoutines(client, input.config, runtimeLoginRole)));
-  issues.push(...(await auditPostgresUnexpectedPrivileges(client, input.config, runtimeLoginRole)));
+  appendPostgresDenseValues(
+    issues,
+    await auditPostgresReachableClosure(client, input),
+    'Postgres reachable closure issues',
+  );
+  appendPostgresDenseValues(
+    issues,
+    await auditPostgresReachableRoutines(client, input.config, runtimeLoginRole),
+    'Postgres reachable routine issues',
+  );
+  appendPostgresDenseValues(
+    issues,
+    await auditPostgresUnexpectedPrivileges(client, input.config, runtimeLoginRole),
+    'Postgres unexpected privilege issues',
+  );
 
   return {
     driver: input.config.driver,
@@ -1120,12 +1469,15 @@ async function postgresProtectedPolicyPostureIssues(
 ): Promise<KovoPostgresPostureIssue[]> {
   const policies = await safeQuery<PostgresPolicyRow>(
     client,
-    [
-      'SELECT schemaname, tablename, policyname, permissive, roles::text[] AS roles, cmd, qual, with_check',
-      'FROM pg_catalog.pg_policies',
-      'WHERE schemaname = $1 AND tablename = $2',
-      'ORDER BY policyname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT schemaname, tablename, policyname, permissive, roles::text[] AS roles, cmd, qual, with_check',
+        'FROM pg_catalog.pg_policies',
+        'WHERE schemaname = $1 AND tablename = $2',
+        'ORDER BY policyname',
+      ],
+      ' ',
+    ),
     [table.schemaName, table.tableName],
   );
   if (policies === undefined) {
@@ -1214,7 +1566,7 @@ async function postgresProtectedPolicyPostureIssues(
   if (unexpected.length > 0) {
     appendPostgresDenseValue(issues, {
       code: 'KV433_POLICY_SET',
-      detail: `${table.schemaName}.${table.tableName} has unexpected RLS policies outside the exact Kovo allowlist: ${unexpected.join(', ')}`,
+      detail: `${table.schemaName}.${table.tableName} has unexpected RLS policies outside the exact Kovo allowlist: ${postgresJoin(unexpected, ', ')}`,
     });
   }
   return issues;
@@ -1263,7 +1615,11 @@ function canonicalPostgresPolicyExpression(expression: string | null): string | 
     postgresPolicySqlParser ??= postgresRuntimeRequire(
       'pgsql-ast-parser',
     ) as typeof import('pgsql-ast-parser');
-    const [statement] = postgresPolicySqlParser.parse(`SELECT 1 WHERE ${expression}`);
+    const statements = postgresPolicySqlParser.parse(`SELECT 1 WHERE ${expression}`);
+    const statement =
+      postgresDenseArrayLength(statements, 'Parsed Postgres policy statements') === 0
+        ? undefined
+        : postgresDenseArrayValue(statements, 0, 'Parsed Postgres policy statements');
     if (statement?.type !== 'select' || statement.where === undefined) return undefined;
     return securityJsonStringify(normalizePostgresPolicyAst(statement.where));
   } catch {
@@ -1340,15 +1696,14 @@ async function auditPostgresReachableClosure(
 ): Promise<KovoPostgresPostureIssue[]> {
   const issues: KovoPostgresPostureIssue[] = [];
   const protectedTables = resolveProtectedPostgresTables(input.schemaTables, input.metadata);
-  const protectedRelations = new Set(
-    [...protectedTables.values()].map((table) =>
-      postgresRelationKey(table.schemaName, table.tableName),
-    ),
+  const protectedRelations = createWitnessSet<string>();
+  witnessMapForEach(protectedTables, (table) =>
+    witnessSetAdd(protectedRelations, postgresRelationKey(table.schemaName, table.tableName)),
   );
   const allowlistedRelations = postgresReachabilityAllowlist(input.schemaTables, input.metadata);
   const allowlistedSequences = await postgresProtectedSerialSequences(client, protectedRelations);
   if (allowlistedSequences === undefined) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_REACHABILITY_AUDIT',
       detail: 'could not enumerate protected-table serial/identity sequence dependencies',
     });
@@ -1357,7 +1712,7 @@ async function auditPostgresReachableClosure(
   const publicRelations = input.config.publicRelations;
   const reachableRows = await safeQuery<PostgresReachableRelationRow>(
     client,
-    POSTGRES_REACHABLE_RELATIONS_SQL,
+    POSTGRES_REACHABLE_RELATIONS_QUERY,
     [
       input.config.readerRole,
       input.config.writerRole,
@@ -1366,7 +1721,7 @@ async function auditPostgresReachableClosure(
     ],
   );
   if (reachableRows === undefined) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_REACHABILITY_AUDIT',
       detail:
         'could not enumerate app-role relation reachability from pg_class/effective privilege checks',
@@ -1376,26 +1731,36 @@ async function auditPostgresReachableClosure(
 
   const reachable = reachableRelationsFromRows(reachableRows.rows);
 
-  for (const relation of reachable.values()) {
+  const reachableValues = postgresMapValues(reachable);
+  const reachableCount = postgresDenseArrayLength(reachableValues, 'Postgres reachable relations');
+  for (let index = 0; index < reachableCount; index += 1) {
+    const relation = postgresDenseArrayValue(
+      reachableValues,
+      index,
+      'Postgres reachable relations',
+    );
     const relationKey = postgresRelationKey(relation.schema, relation.table);
-    const declaredPublicRelation = publicRelations.get(relationKey);
+    const declaredPublicRelation = witnessMapGet(publicRelations, relationKey);
     if (declaredPublicRelation !== undefined) {
       if (relation.relkind === 'v' || relation.relkind === 'm' || relation.relkind === 'f') {
         continue;
       }
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_PUBLIC_RELATION',
         detail: `${relation.schema}.${relation.table} is declared public, but relkind ${relation.relkind} can carry Kovo RLS; use schema public/reference metadata or FORCE RLS instead`,
       });
       continue;
     }
     if (relation.relkind === 'r' || relation.relkind === 'p') {
-      if (relation.schema === 'public' && FRAMEWORK_INTERNAL_REACHABLE_TABLES.has(relation.table)) {
+      if (
+        relation.schema === 'public' &&
+        witnessSetHas(FRAMEWORK_INTERNAL_REACHABLE_TABLES, relation.table)
+      ) {
         continue;
       }
-      if (allowlistedRelations.has(relationKey)) continue;
-      if (!protectedRelations.has(relationKey)) {
-        issues.push({
+      if (witnessSetHas(allowlistedRelations, relationKey)) continue;
+      if (!witnessSetHas(protectedRelations, relationKey)) {
+        appendPostgresDenseValue(issues, {
           code: 'KV433_REACHABLE_TABLE',
           detail: `${relation.schema}.${relation.table} is reachable by an app role but is not a Kovo-protected table`,
         });
@@ -1403,7 +1768,7 @@ async function auditPostgresReachableClosure(
       }
       const policy = await postgresHasLiveKovoPolicy(client, relation.schema, relation.table);
       if (relation.relrowsecurity !== true || relation.relforcerowsecurity !== true || !policy) {
-        issues.push({
+        appendPostgresDenseValue(issues, {
           code: 'KV433_REACHABLE_TABLE',
           detail: `${relation.schema}.${relation.table} is reachable by an app role but lacks FORCE RLS and a live Kovo policy`,
         });
@@ -1411,44 +1776,54 @@ async function auditPostgresReachableClosure(
       continue;
     }
     if (relation.relkind === 'v') {
-      issues.push(
-        ...(await auditPostgresReachableView(
+      appendPostgresDenseValues(
+        issues,
+        await auditPostgresReachableView(
           client,
           relation,
           protectedRelations,
           allowlistedRelations,
-        )),
+        ),
+        'Postgres reachable view issues',
       );
       continue;
     }
     if (relation.relkind === 'm') {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_REACHABLE_OBJECT',
-        detail: `${relation.schema}.${relation.table} is reachable by ${relation.roles.join(', ')} but materialized views cannot enforce row-level security`,
+        detail: `${relation.schema}.${relation.table} is reachable by ${postgresJoin(relation.roles, ', ')} but materialized views cannot enforce row-level security`,
       });
       continue;
     }
     if (relation.relkind === 'S') {
-      if (allowlistedSequences.has(postgresRelationKey(relation.schema, relation.table))) continue;
-      issues.push({
+      if (
+        witnessSetHas(allowlistedSequences, postgresRelationKey(relation.schema, relation.table))
+      ) {
+        continue;
+      }
+      appendPostgresDenseValue(issues, {
         code: 'KV433_REACHABLE_OBJECT',
-        detail: `${relation.schema}.${relation.table} is a sequence reachable by ${relation.roles.join(', ')} but does not back a protected table serial/identity column`,
+        detail: `${relation.schema}.${relation.table} is a sequence reachable by ${postgresJoin(relation.roles, ', ')} but does not back a protected table serial/identity column`,
       });
       continue;
     }
     if (relation.relkind === 'f') {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_REACHABLE_OBJECT',
-        detail: `${relation.schema}.${relation.table} is reachable by ${relation.roles.join(', ')} but foreign tables cannot prove Kovo row-level security`,
+        detail: `${relation.schema}.${relation.table} is reachable by ${postgresJoin(relation.roles, ', ')} but foreign tables cannot prove Kovo row-level security`,
       });
       continue;
     }
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_REACHABLE_OBJECT',
       detail: `${relation.schema}.${relation.table} is reachable by an app role with unsupported relkind ${relation.relkind}`,
     });
   }
-  issues.push(...(await auditPostgresAttachedCode(client, reachable, input.config)));
+  appendPostgresDenseValues(
+    issues,
+    await auditPostgresAttachedCode(client, reachable, input.config),
+    'Postgres attached code issues',
+  );
   return issues;
 }
 
@@ -1457,8 +1832,10 @@ async function auditPostgresAttachedCode(
   reachable: ReadonlyMap<string, PostgresReachableRelation>,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<KovoPostgresPostureIssue[]> {
-  const writableRelations = [...reachable.values()].filter((relation) =>
-    postgresRelationIsWritable(relation),
+  const writableRelations = postgresFilterDense(
+    postgresMapValues(reachable),
+    (relation) => postgresRelationIsWritable(relation),
+    'Writable Postgres reachable relations',
   );
   if (writableRelations.length === 0) return [];
   const writeClosure = await postgresWritePropagationClosure(client, config);
@@ -1471,97 +1848,100 @@ async function auditPostgresAttachedCode(
       },
     ];
   }
-  if (writeClosure.size === 0) return [];
+  if (witnessSetSize(writeClosure as Set<string>) === 0) return [];
 
   // SPEC §10.3 (C10/C13): expression attachment is a recursive executable
   // dependency graph. In particular, CHECK/index/policy expressions depend on
   // pg_operator first; stopping at direct pg_proc edges misses its oprcode.
   const attachedRows = await safeQuery<PostgresAttachedCodeRow>(
     client,
-    [
-      'WITH RECURSIVE attached_roots(mechanism, relation_oid, classid, objid) AS (',
-      "  SELECT 'rewrite rule', rewrite.ev_class, 'pg_rewrite'::regclass, rewrite.oid",
-      '  FROM pg_rewrite rewrite',
-      '  JOIN pg_class rewrite_rel ON rewrite_rel.oid = rewrite.ev_class',
-      '  JOIN pg_namespace rewrite_ns ON rewrite_ns.oid = rewrite_rel.relnamespace',
-      "  WHERE rewrite_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      '  UNION ALL',
-      "  SELECT CASE WHEN constraint_row.contype = 'c' THEN 'CHECK/domain constraint function'",
-      "    ELSE 'constraint expression function' END,",
-      "    constraint_row.conrelid, 'pg_constraint'::regclass, constraint_row.oid",
-      '  FROM pg_constraint constraint_row',
-      '  JOIN pg_class constraint_rel ON constraint_rel.oid = constraint_row.conrelid',
-      '  JOIN pg_namespace constraint_ns ON constraint_ns.oid = constraint_rel.relnamespace',
-      '  WHERE constraint_row.conrelid <> 0',
-      "  AND constraint_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      '  UNION ALL',
-      "  SELECT 'CHECK/domain constraint function', attr.attrelid,",
-      "    'pg_constraint'::regclass, constraint_row.oid",
-      '  FROM pg_attribute attr',
-      '  JOIN pg_class domain_rel ON domain_rel.oid = attr.attrelid',
-      '  JOIN pg_namespace domain_ns ON domain_ns.oid = domain_rel.relnamespace',
-      '  JOIN pg_constraint constraint_row ON constraint_row.contypid = attr.atttypid',
-      '  WHERE attr.attnum > 0 AND attr.attisdropped = false',
-      "  AND domain_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      '  UNION ALL',
-      "  SELECT 'default/generated expression function', attrdef.adrelid,",
-      "    'pg_attrdef'::regclass, attrdef.oid",
-      '  FROM pg_attrdef attrdef',
-      '  JOIN pg_class attrdef_rel ON attrdef_rel.oid = attrdef.adrelid',
-      '  JOIN pg_namespace attrdef_ns ON attrdef_ns.oid = attrdef_rel.relnamespace',
-      "  WHERE attrdef_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      '  UNION ALL',
-      "  SELECT 'index/predicate expression function', index_row.indrelid,",
-      "    'pg_class'::regclass, index_row.indexrelid",
-      '  FROM pg_index index_row',
-      '  JOIN pg_class index_table ON index_table.oid = index_row.indrelid',
-      '  JOIN pg_namespace index_ns ON index_ns.oid = index_table.relnamespace',
-      "  WHERE index_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      '  UNION ALL',
-      "  SELECT 'RLS policy expression function', policy.polrelid,",
-      "    'pg_policy'::regclass, policy.oid",
-      '  FROM pg_policy policy',
-      '  JOIN pg_class policy_rel ON policy_rel.oid = policy.polrelid',
-      '  JOIN pg_namespace policy_ns ON policy_ns.oid = policy_rel.relnamespace',
-      "  WHERE policy_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      '),',
-      'executable_dependencies(mechanism, relation_oid, classid, objid) AS (',
-      '  SELECT roots.mechanism, roots.relation_oid, dep.refclassid, dep.refobjid',
-      '  FROM attached_roots roots',
-      '  JOIN pg_depend dep ON dep.classid = roots.classid AND dep.objid = roots.objid',
-      "  WHERE dep.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass,",
-      "    'pg_cast'::regclass, 'pg_type'::regclass)",
-      '  UNION',
-      '  SELECT closure.mechanism, closure.relation_oid, dep.refclassid, dep.refobjid',
-      '  FROM executable_dependencies closure',
-      '  JOIN pg_depend dep ON dep.classid = closure.classid AND dep.objid = closure.objid',
-      "  WHERE closure.classid IN ('pg_operator'::regclass, 'pg_cast'::regclass, 'pg_type'::regclass)",
-      "  AND dep.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass,",
-      "    'pg_cast'::regclass, 'pg_type'::regclass)",
-      '),',
-      'attached_routines(mechanism, relation_oid, routine_oid) AS (',
-      "  SELECT CASE WHEN trigger.tgconstraint <> 0 THEN 'CONSTRAINT trigger'",
-      "    WHEN (trigger.tgtype & 64) <> 0 THEN 'INSTEAD OF trigger'",
-      "    ELSE 'DML trigger' END, trigger.tgrelid, trigger.tgfoid",
-      '  FROM pg_trigger trigger',
-      '  WHERE trigger.tgisinternal = false',
-      '  UNION',
-      '  SELECT DISTINCT mechanism, relation_oid, objid',
-      '  FROM executable_dependencies',
-      "  WHERE classid = 'pg_proc'::regclass",
-      ')',
-      'SELECT routines.mechanism, rel_ns.nspname AS relation_schema,',
-      'rel.relname AS relation_name, proc_ns.nspname AS routine_schema,',
-      'proc.proname AS routine_name',
-      'FROM attached_routines routines',
-      'JOIN pg_class rel ON rel.oid = routines.relation_oid',
-      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
-      'JOIN pg_proc proc ON proc.oid = routines.routine_oid',
-      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
-      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'ORDER BY relation_schema, relation_name, mechanism, routine_schema, routine_name',
-    ].join(' '),
+    postgresJoin(
+      [
+        'WITH RECURSIVE attached_roots(mechanism, relation_oid, classid, objid) AS (',
+        "  SELECT 'rewrite rule', rewrite.ev_class, 'pg_rewrite'::regclass, rewrite.oid",
+        '  FROM pg_rewrite rewrite',
+        '  JOIN pg_class rewrite_rel ON rewrite_rel.oid = rewrite.ev_class',
+        '  JOIN pg_namespace rewrite_ns ON rewrite_ns.oid = rewrite_rel.relnamespace',
+        "  WHERE rewrite_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        '  UNION ALL',
+        "  SELECT CASE WHEN constraint_row.contype = 'c' THEN 'CHECK/domain constraint function'",
+        "    ELSE 'constraint expression function' END,",
+        "    constraint_row.conrelid, 'pg_constraint'::regclass, constraint_row.oid",
+        '  FROM pg_constraint constraint_row',
+        '  JOIN pg_class constraint_rel ON constraint_rel.oid = constraint_row.conrelid',
+        '  JOIN pg_namespace constraint_ns ON constraint_ns.oid = constraint_rel.relnamespace',
+        '  WHERE constraint_row.conrelid <> 0',
+        "  AND constraint_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        '  UNION ALL',
+        "  SELECT 'CHECK/domain constraint function', attr.attrelid,",
+        "    'pg_constraint'::regclass, constraint_row.oid",
+        '  FROM pg_attribute attr',
+        '  JOIN pg_class domain_rel ON domain_rel.oid = attr.attrelid',
+        '  JOIN pg_namespace domain_ns ON domain_ns.oid = domain_rel.relnamespace',
+        '  JOIN pg_constraint constraint_row ON constraint_row.contypid = attr.atttypid',
+        '  WHERE attr.attnum > 0 AND attr.attisdropped = false',
+        "  AND domain_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        '  UNION ALL',
+        "  SELECT 'default/generated expression function', attrdef.adrelid,",
+        "    'pg_attrdef'::regclass, attrdef.oid",
+        '  FROM pg_attrdef attrdef',
+        '  JOIN pg_class attrdef_rel ON attrdef_rel.oid = attrdef.adrelid',
+        '  JOIN pg_namespace attrdef_ns ON attrdef_ns.oid = attrdef_rel.relnamespace',
+        "  WHERE attrdef_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        '  UNION ALL',
+        "  SELECT 'index/predicate expression function', index_row.indrelid,",
+        "    'pg_class'::regclass, index_row.indexrelid",
+        '  FROM pg_index index_row',
+        '  JOIN pg_class index_table ON index_table.oid = index_row.indrelid',
+        '  JOIN pg_namespace index_ns ON index_ns.oid = index_table.relnamespace',
+        "  WHERE index_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        '  UNION ALL',
+        "  SELECT 'RLS policy expression function', policy.polrelid,",
+        "    'pg_policy'::regclass, policy.oid",
+        '  FROM pg_policy policy',
+        '  JOIN pg_class policy_rel ON policy_rel.oid = policy.polrelid',
+        '  JOIN pg_namespace policy_ns ON policy_ns.oid = policy_rel.relnamespace',
+        "  WHERE policy_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        '),',
+        'executable_dependencies(mechanism, relation_oid, classid, objid) AS (',
+        '  SELECT roots.mechanism, roots.relation_oid, dep.refclassid, dep.refobjid',
+        '  FROM attached_roots roots',
+        '  JOIN pg_depend dep ON dep.classid = roots.classid AND dep.objid = roots.objid',
+        "  WHERE dep.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass,",
+        "    'pg_cast'::regclass, 'pg_type'::regclass)",
+        '  UNION',
+        '  SELECT closure.mechanism, closure.relation_oid, dep.refclassid, dep.refobjid',
+        '  FROM executable_dependencies closure',
+        '  JOIN pg_depend dep ON dep.classid = closure.classid AND dep.objid = closure.objid',
+        "  WHERE closure.classid IN ('pg_operator'::regclass, 'pg_cast'::regclass, 'pg_type'::regclass)",
+        "  AND dep.refclassid IN ('pg_proc'::regclass, 'pg_operator'::regclass,",
+        "    'pg_cast'::regclass, 'pg_type'::regclass)",
+        '),',
+        'attached_routines(mechanism, relation_oid, routine_oid) AS (',
+        "  SELECT CASE WHEN trigger.tgconstraint <> 0 THEN 'CONSTRAINT trigger'",
+        "    WHEN (trigger.tgtype & 64) <> 0 THEN 'INSTEAD OF trigger'",
+        "    ELSE 'DML trigger' END, trigger.tgrelid, trigger.tgfoid",
+        '  FROM pg_trigger trigger',
+        '  WHERE trigger.tgisinternal = false',
+        '  UNION',
+        '  SELECT DISTINCT mechanism, relation_oid, objid',
+        '  FROM executable_dependencies',
+        "  WHERE classid = 'pg_proc'::regclass",
+        ')',
+        'SELECT routines.mechanism, rel_ns.nspname AS relation_schema,',
+        'rel.relname AS relation_name, proc_ns.nspname AS routine_schema,',
+        'proc.proname AS routine_name',
+        'FROM attached_routines routines',
+        'JOIN pg_class rel ON rel.oid = routines.relation_oid',
+        'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
+        'JOIN pg_proc proc ON proc.oid = routines.routine_oid',
+        'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
+        "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        'ORDER BY relation_schema, relation_name, mechanism, routine_schema, routine_name',
+      ],
+      ' ',
+    ),
   );
   if (attachedRows === undefined) {
     return [
@@ -1571,12 +1951,24 @@ async function auditPostgresAttachedCode(
       },
     ];
   }
-  return attachedRows.rows
-    .filter((row) => writeClosure.has(postgresRelationKey(row.relation_schema, row.relation_name)))
-    .map((row) => ({
+  const issues: KovoPostgresPostureIssue[] = [];
+  const rowCount = postgresDenseArrayLength(attachedRows.rows, 'Postgres attached code rows');
+  for (let index = 0; index < rowCount; index += 1) {
+    const row = postgresDenseArrayValue(attachedRows.rows, index, 'Postgres attached code rows');
+    if (
+      !witnessSetHas(
+        writeClosure as Set<string>,
+        postgresRelationKey(row.relation_schema, row.relation_name),
+      )
+    ) {
+      continue;
+    }
+    appendPostgresDenseValue(issues, {
       code: 'KV433_ATTACHED_CODE',
       detail: `${row.relation_schema}.${row.relation_name} has ${row.mechanism} reaching app-authored routine ${row.routine_schema}.${row.routine_name}; attached code is app-role-reachable through writable relation side effects (SPEC §10.3)`,
-    }));
+    });
+  }
+  return issues;
 }
 
 async function postgresWritePropagationClosure(
@@ -1585,82 +1977,94 @@ async function postgresWritePropagationClosure(
 ): Promise<ReadonlySet<string> | undefined> {
   const closureRows = await safeQuery<PostgresWritePropagationClosureRow>(
     client,
-    [
-      'WITH RECURSIVE app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid',
-      '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
-      '),',
-      'direct_writable(oid) AS (',
-      '  SELECT DISTINCT c.oid',
-      '  FROM pg_class c',
-      '  JOIN pg_namespace n ON n.oid = c.relnamespace',
-      '  JOIN existing_roles r ON true',
-      "  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
-      "  AND c.relkind IN ('r', 'p', 'v', 'm', 'f')",
-      '  AND (',
-      "    has_table_privilege(r.oid, c.oid, 'INSERT')",
-      "    OR has_table_privilege(r.oid, c.oid, 'UPDATE')",
-      "    OR has_table_privilege(r.oid, c.oid, 'DELETE')",
-      '    OR EXISTS (',
-      '      SELECT 1 FROM pg_attribute a',
-      '      WHERE a.attrelid = c.oid',
-      '      AND a.attnum > 0',
-      '      AND NOT a.attisdropped',
-      "      AND (has_column_privilege(r.oid, c.oid, a.attname, 'INSERT')",
-      "        OR has_column_privilege(r.oid, c.oid, a.attname, 'UPDATE'))",
-      '    )',
-      '  )',
-      '),',
-      'propagation_edges(source_oid, target_oid) AS (',
-      '  SELECT constraint_row.confrelid, constraint_row.conrelid',
-      '  FROM pg_constraint constraint_row',
-      "  WHERE constraint_row.contype = 'f'",
-      "  AND (constraint_row.confdeltype IN ('c', 'n', 'd')",
-      "    OR constraint_row.confupdtype IN ('c', 'n', 'd'))",
-      '  UNION',
-      '  SELECT inherits.inhparent, inherits.inhrelid',
-      '  FROM pg_inherits inherits',
-      '  UNION',
-      '  SELECT rewrite.ev_class, dep.refobjid',
-      '  FROM pg_rewrite rewrite',
-      "  JOIN pg_depend dep ON dep.classid = 'pg_rewrite'::regclass AND dep.objid = rewrite.oid",
-      "    AND dep.refclassid = 'pg_class'::regclass",
-      '  JOIN pg_class target_rel ON target_rel.oid = dep.refobjid',
-      "  WHERE target_rel.relkind IN ('r', 'p', 'v', 'm', 'f')",
-      '  AND dep.refobjid <> rewrite.ev_class',
-      '),',
-      'closure(oid) AS (',
-      '  SELECT oid FROM direct_writable',
-      '  UNION',
-      '  SELECT propagation_edges.target_oid',
-      '  FROM closure',
-      '  JOIN propagation_edges ON propagation_edges.source_oid = closure.oid',
-      ')',
-      'SELECT DISTINCT n.nspname AS relation_schema, c.relname AS relation_name',
-      'FROM closure',
-      'JOIN pg_class c ON c.oid = closure.oid',
-      'JOIN pg_namespace n ON n.oid = c.relnamespace',
-      "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'ORDER BY n.nspname, c.relname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'WITH RECURSIVE app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT r.oid',
+        '  FROM pg_roles r',
+        '  JOIN app_roles a ON a.role_name = r.rolname',
+        '),',
+        'direct_writable(oid) AS (',
+        '  SELECT DISTINCT c.oid',
+        '  FROM pg_class c',
+        '  JOIN pg_namespace n ON n.oid = c.relnamespace',
+        '  JOIN existing_roles r ON true',
+        "  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
+        "  AND c.relkind IN ('r', 'p', 'v', 'm', 'f')",
+        '  AND (',
+        "    has_table_privilege(r.oid, c.oid, 'INSERT')",
+        "    OR has_table_privilege(r.oid, c.oid, 'UPDATE')",
+        "    OR has_table_privilege(r.oid, c.oid, 'DELETE')",
+        '    OR EXISTS (',
+        '      SELECT 1 FROM pg_attribute a',
+        '      WHERE a.attrelid = c.oid',
+        '      AND a.attnum > 0',
+        '      AND NOT a.attisdropped',
+        "      AND (has_column_privilege(r.oid, c.oid, a.attname, 'INSERT')",
+        "        OR has_column_privilege(r.oid, c.oid, a.attname, 'UPDATE'))",
+        '    )',
+        '  )',
+        '),',
+        'propagation_edges(source_oid, target_oid) AS (',
+        '  SELECT constraint_row.confrelid, constraint_row.conrelid',
+        '  FROM pg_constraint constraint_row',
+        "  WHERE constraint_row.contype = 'f'",
+        "  AND (constraint_row.confdeltype IN ('c', 'n', 'd')",
+        "    OR constraint_row.confupdtype IN ('c', 'n', 'd'))",
+        '  UNION',
+        '  SELECT inherits.inhparent, inherits.inhrelid',
+        '  FROM pg_inherits inherits',
+        '  UNION',
+        '  SELECT rewrite.ev_class, dep.refobjid',
+        '  FROM pg_rewrite rewrite',
+        "  JOIN pg_depend dep ON dep.classid = 'pg_rewrite'::regclass AND dep.objid = rewrite.oid",
+        "    AND dep.refclassid = 'pg_class'::regclass",
+        '  JOIN pg_class target_rel ON target_rel.oid = dep.refobjid',
+        "  WHERE target_rel.relkind IN ('r', 'p', 'v', 'm', 'f')",
+        '  AND dep.refobjid <> rewrite.ev_class',
+        '),',
+        'closure(oid) AS (',
+        '  SELECT oid FROM direct_writable',
+        '  UNION',
+        '  SELECT propagation_edges.target_oid',
+        '  FROM closure',
+        '  JOIN propagation_edges ON propagation_edges.source_oid = closure.oid',
+        ')',
+        'SELECT DISTINCT n.nspname AS relation_schema, c.relname AS relation_name',
+        'FROM closure',
+        'JOIN pg_class c ON c.oid = closure.oid',
+        'JOIN pg_namespace n ON n.oid = c.relnamespace',
+        "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
+        'ORDER BY n.nspname, c.relname',
+      ],
+      ' ',
+    ),
     [config.readerRole, config.writerRole, config.adminRole, config.systemRole],
   );
   if (closureRows === undefined) return undefined;
-  return new Set(
-    closureRows.rows.map((row) => postgresRelationKey(row.relation_schema, row.relation_name)),
+  const closure = createWitnessSet<string>();
+  const closureCount = postgresDenseArrayLength(
+    closureRows.rows,
+    'Postgres write propagation rows',
   );
+  for (let index = 0; index < closureCount; index += 1) {
+    const row = postgresDenseArrayValue(closureRows.rows, index, 'Postgres write propagation rows');
+    witnessSetAdd(closure, postgresRelationKey(row.relation_schema, row.relation_name));
+  }
+  return closure;
 }
 
 function postgresRelationIsWritable(relation: PostgresReachableRelation): boolean {
-  return relation.privileges.some(
+  return postgresSomeDense(
+    relation.privileges,
     (privilege) =>
       privilege === 'INSERT' ||
       privilege === 'UPDATE' ||
       privilege === 'DELETE' ||
       privilege === 'INSERT_COLUMN' ||
       privilege === 'UPDATE_COLUMN',
+    'Postgres relation privileges',
   );
 }
 
@@ -1672,34 +2076,46 @@ async function auditPostgresReachableView(
 ): Promise<KovoPostgresPostureIssue[]> {
   const issues: KovoPostgresPostureIssue[] = [];
   const dependencies = await postgresViewDependencies(client, relation.schema, relation.table);
-  const protectedDependencies = dependencies.filter((dependency) =>
-    protectedRelations.has(postgresRelationKey(dependency.table_schema, dependency.table_name)),
+  const protectedDependencies = postgresFilterDense(
+    dependencies,
+    (dependency) =>
+      witnessSetHas(
+        protectedRelations as Set<string>,
+        postgresRelationKey(dependency.table_schema, dependency.table_name),
+      ),
+    'Protected Postgres view dependencies',
   );
   if (!postgresViewIsSecurityInvoker(relation)) {
-    issues.push({
+    const firstProtectedDependency =
+      postgresDenseArrayLength(protectedDependencies) === 0
+        ? undefined
+        : postgresDenseArrayValue(protectedDependencies, 0, 'Protected Postgres view dependencies');
+    appendPostgresDenseValue(issues, {
       code: 'KV433_REACHABLE_VIEW',
       detail:
         protectedDependencies.length > 0
-          ? `reachable non-security_invoker view ${relation.table} over owner table ${protectedDependencies[0]?.table_name}`
+          ? `reachable non-security_invoker view ${relation.table} over owner table ${firstProtectedDependency?.table_name}`
           : `reachable non-security_invoker view ${relation.schema}.${relation.table} cannot be proven RLS-safe`,
     });
     return issues;
   }
   if (dependencies.length === 0) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_REACHABLE_VIEW',
       detail: `reachable security_invoker view ${relation.schema}.${relation.table} has no provable base-table dependency set`,
     });
     return issues;
   }
-  for (const dependency of dependencies) {
+  const dependencyCount = postgresDenseArrayLength(dependencies, 'Postgres view dependencies');
+  for (let index = 0; index < dependencyCount; index += 1) {
+    const dependency = postgresDenseArrayValue(dependencies, index, 'Postgres view dependencies');
     const dependencyKey = postgresRelationKey(dependency.table_schema, dependency.table_name);
     if (
-      !allowlistedRelations.has(dependencyKey) &&
-      (!protectedRelations.has(dependencyKey) ||
+      !witnessSetHas(allowlistedRelations as Set<string>, dependencyKey) &&
+      (!witnessSetHas(protectedRelations as Set<string>, dependencyKey) ||
         !(await postgresBaseTableHasProtectedPosture(client, dependency)))
     ) {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_REACHABLE_VIEW',
         detail: `reachable security_invoker view ${relation.table} depends on unproven table ${dependency.table_name}`,
       });
@@ -1711,7 +2127,7 @@ async function auditPostgresReachableView(
 function reachableRelationsFromRows(
   rows: readonly PostgresReachableRelationRow[],
 ): ReadonlyMap<string, PostgresReachableRelation> {
-  const reachable = new Map<
+  const reachable = createWitnessMap<
     string,
     PostgresCatalogRelation & {
       privileges: Set<string>;
@@ -1720,22 +2136,23 @@ function reachableRelationsFromRows(
       table: string;
     }
   >();
-  for (const row of rows) {
-    const privileges = [
-      row.can_select ? 'SELECT' : undefined,
-      row.can_insert ? 'INSERT' : undefined,
-      row.can_update ? 'UPDATE' : undefined,
-      row.can_delete ? 'DELETE' : undefined,
-      row.can_select_column ? 'SELECT_COLUMN' : undefined,
-      row.can_insert_column ? 'INSERT_COLUMN' : undefined,
-      row.can_update_column ? 'UPDATE_COLUMN' : undefined,
-      row.can_use_sequence ? 'USAGE_SEQUENCE' : undefined,
-      row.can_select_sequence ? 'SELECT_SEQUENCE' : undefined,
-      row.can_update_sequence ? 'UPDATE_SEQUENCE' : undefined,
-    ].filter((privilege): privilege is string => privilege !== undefined);
+  const rowCount = postgresDenseArrayLength(rows, 'Postgres reachable relation rows');
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const row = postgresDenseArrayValue(rows, rowIndex, 'Postgres reachable relation rows');
+    const privileges: string[] = [];
+    if (row.can_select) appendPostgresDenseValue(privileges, 'SELECT');
+    if (row.can_insert) appendPostgresDenseValue(privileges, 'INSERT');
+    if (row.can_update) appendPostgresDenseValue(privileges, 'UPDATE');
+    if (row.can_delete) appendPostgresDenseValue(privileges, 'DELETE');
+    if (row.can_select_column) appendPostgresDenseValue(privileges, 'SELECT_COLUMN');
+    if (row.can_insert_column) appendPostgresDenseValue(privileges, 'INSERT_COLUMN');
+    if (row.can_update_column) appendPostgresDenseValue(privileges, 'UPDATE_COLUMN');
+    if (row.can_use_sequence) appendPostgresDenseValue(privileges, 'USAGE_SEQUENCE');
+    if (row.can_select_sequence) appendPostgresDenseValue(privileges, 'SELECT_SEQUENCE');
+    if (row.can_update_sequence) appendPostgresDenseValue(privileges, 'UPDATE_SEQUENCE');
     if (privileges.length === 0) continue;
     const key = `${row.schema_name}.${row.table_name}`;
-    let relation = reachable.get(key);
+    let relation = witnessMapGet(reachable, key);
     if (relation === undefined) {
       relation = {
         relforcerowsecurity: row.relforcerowsecurity,
@@ -1746,24 +2163,40 @@ function reachableRelationsFromRows(
         schema_name: row.schema_name,
         table: row.table_name,
         table_name: row.table_name,
-        privileges: new Set<string>(),
-        roles: new Set<string>(),
+        privileges: createWitnessSet<string>(),
+        roles: createWitnessSet<string>(),
       };
-      reachable.set(key, relation);
+      witnessMapSet(reachable, key, relation);
     }
-    relation.roles.add(row.role_name);
-    for (const privilege of privileges) relation.privileges.add(privilege);
+    witnessSetAdd(relation.roles, row.role_name);
+    const privilegeCount = postgresDenseArrayLength(privileges, 'Postgres reachable privileges');
+    for (let privilegeIndex = 0; privilegeIndex < privilegeCount; privilegeIndex += 1) {
+      witnessSetAdd(
+        relation.privileges,
+        postgresDenseArrayValue(privileges, privilegeIndex, 'Postgres reachable privileges'),
+      );
+    }
   }
-  return new Map(
-    [...reachable].map(([key, relation]) => [
-      key,
-      {
-        ...relation,
-        privileges: [...relation.privileges].sort(),
-        roles: [...relation.roles].sort(),
-      },
-    ]),
-  );
+  const snapshot = createWitnessMap<string, PostgresReachableRelation>();
+  witnessMapForEach(reachable, (relation, key) => {
+    const privileges = postgresSetValues(relation.privileges);
+    const roles = postgresSetValues(relation.roles);
+    securityArraySort(privileges, (left, right) => (left === right ? 0 : left < right ? -1 : 1));
+    securityArraySort(roles, (left, right) => (left === right ? 0 : left < right ? -1 : 1));
+    witnessMapSet(snapshot, key, {
+      privileges,
+      relforcerowsecurity: relation.relforcerowsecurity,
+      relkind: relation.relkind,
+      reloptions: relation.reloptions,
+      relrowsecurity: relation.relrowsecurity,
+      roles,
+      schema: relation.schema,
+      schema_name: relation.schema_name,
+      table: relation.table,
+      table_name: relation.table_name,
+    });
+  });
+  return snapshot;
 }
 
 async function provisionPostgresFrameworkTaskStore(
@@ -1794,23 +2227,26 @@ async function auditPostgresReachableRoutines(
   if (auditedIdentities.length === 0) return [];
   const routineRows = await safeQuery<PostgresReachableRoutineRow>(
     client,
-    [
-      'WITH audited_roles(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid, r.rolname',
-      '  FROM pg_roles r',
-      '  JOIN audited_roles a ON a.role_name = r.rolname',
-      ')',
-      'SELECT DISTINCT n.nspname AS routine_schema, p.proname AS routine_name,',
-      'r.rolname AS role_name',
-      'FROM pg_proc p',
-      'JOIN pg_namespace n ON n.oid = p.pronamespace',
-      'JOIN existing_roles r ON true',
-      "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'AND p.prosecdef = true',
-      "AND has_function_privilege(r.oid, p.oid, 'EXECUTE')",
-      'ORDER BY n.nspname, p.proname, r.rolname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'WITH audited_roles(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT r.oid, r.rolname',
+        '  FROM pg_roles r',
+        '  JOIN audited_roles a ON a.role_name = r.rolname',
+        ')',
+        'SELECT DISTINCT n.nspname AS routine_schema, p.proname AS routine_name,',
+        'r.rolname AS role_name',
+        'FROM pg_proc p',
+        'JOIN pg_namespace n ON n.oid = p.pronamespace',
+        'JOIN existing_roles r ON true',
+        "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
+        'AND p.prosecdef = true',
+        "AND has_function_privilege(r.oid, p.oid, 'EXECUTE')",
+        'ORDER BY n.nspname, p.proname, r.rolname',
+      ],
+      ' ',
+    ),
     [auditedIdentities],
   );
   if (routineRows === undefined) {
@@ -1849,13 +2285,16 @@ async function postgresAuditedIdentityNames(
   }
   const rows = await safeQuery<{ rolname: string }>(
     client,
-    [
-      'SELECT DISTINCT role.rolname',
-      'FROM pg_catalog.pg_roles login',
-      'JOIN pg_catalog.pg_roles role ON role.oid = login.oid OR pg_catalog.pg_has_role(login.oid, role.oid, $2)',
-      'WHERE login.rolname = $1',
-      'ORDER BY role.rolname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT DISTINCT role.rolname',
+        'FROM pg_catalog.pg_roles login',
+        'JOIN pg_catalog.pg_roles role ON role.oid = login.oid OR pg_catalog.pg_has_role(login.oid, role.oid, $2)',
+        'WHERE login.rolname = $1',
+        'ORDER BY role.rolname',
+      ],
+      ' ',
+    ),
     [runtimeLoginRole, 'MEMBER'],
   );
   return rows === undefined
@@ -1871,19 +2310,22 @@ async function postgresAppAuthorityIdentityNames(
   const roots = postgresAppAuthorityRootNames(config, runtimeLoginRole);
   const rows = await safeQuery<{ rolname: string }>(
     client,
-    [
-      'WITH root_names(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roots AS (',
-      '  SELECT DISTINCT root.oid',
-      '  FROM pg_catalog.pg_roles root',
-      '  JOIN root_names input ON input.role_name = root.rolname',
-      ')',
-      'SELECT DISTINCT candidate.rolname',
-      'FROM existing_roots root',
-      'JOIN pg_catalog.pg_roles candidate',
-      "ON candidate.oid = root.oid OR pg_catalog.pg_has_role(root.oid, candidate.oid, 'MEMBER')",
-      'ORDER BY candidate.rolname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'WITH root_names(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roots AS (',
+        '  SELECT DISTINCT root.oid',
+        '  FROM pg_catalog.pg_roles root',
+        '  JOIN root_names input ON input.role_name = root.rolname',
+        ')',
+        'SELECT DISTINCT candidate.rolname',
+        'FROM existing_roots root',
+        'JOIN pg_catalog.pg_roles candidate',
+        "ON candidate.oid = root.oid OR pg_catalog.pg_has_role(root.oid, candidate.oid, 'MEMBER')",
+        'ORDER BY candidate.rolname',
+      ],
+      ' ',
+    ),
     [roots],
   );
   return rows === undefined
@@ -1948,27 +2390,33 @@ async function postgresAppRoleClosurePostureIssues(
 
   const roleRows = await safeQuery<PostgresRoleClosureRow>(
     client,
-    [
-      'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb,',
-      "(role.oid < 16384 OR role.rolname LIKE 'pg\\_%') AS is_predefined",
-      'FROM pg_catalog.pg_roles role',
-      'WHERE role.rolname = ANY($1::text[])',
-      'ORDER BY role.rolname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb,',
+        "(role.oid < 16384 OR role.rolname LIKE 'pg\\_%') AS is_predefined",
+        'FROM pg_catalog.pg_roles role',
+        'WHERE role.rolname = ANY($1::text[])',
+        'ORDER BY role.rolname',
+      ],
+      ' ',
+    ),
     [auditedIdentities],
   );
   const adminOptionRows = await safeQuery<PostgresAdminOptionRow>(
     client,
-    [
-      'WITH audited_names(role_name) AS (SELECT unnest($1::text[]))',
-      'SELECT member_role.rolname AS member_role, granted_role.rolname AS role_name',
-      'FROM pg_catalog.pg_auth_members membership',
-      'JOIN pg_catalog.pg_roles member_role ON member_role.oid = membership.member',
-      'JOIN audited_names audited ON audited.role_name = member_role.rolname',
-      'JOIN pg_catalog.pg_roles granted_role ON granted_role.oid = membership.roleid',
-      'WHERE membership.admin_option = true',
-      'ORDER BY member_role.rolname, granted_role.rolname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'WITH audited_names(role_name) AS (SELECT unnest($1::text[]))',
+        'SELECT member_role.rolname AS member_role, granted_role.rolname AS role_name',
+        'FROM pg_catalog.pg_auth_members membership',
+        'JOIN pg_catalog.pg_roles member_role ON member_role.oid = membership.member',
+        'JOIN audited_names audited ON audited.role_name = member_role.rolname',
+        'JOIN pg_catalog.pg_roles granted_role ON granted_role.oid = membership.roleid',
+        'WHERE membership.admin_option = true',
+        'ORDER BY member_role.rolname, granted_role.rolname',
+      ],
+      ' ',
+    ),
     [auditedIdentities],
   );
   if (roleRows === undefined || adminOptionRows === undefined) {
@@ -2038,72 +2486,75 @@ async function postgresUnexpectedCreationAuthorityRows(
 ): Promise<readonly PostgresUnexpectedPrivilegeRow[] | undefined> {
   const rows = await safeQuery<PostgresUnexpectedPrivilegeRow>(
     client,
-    [
-      'WITH audited_names(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT role.oid, role.rolname',
-      '  FROM pg_catalog.pg_roles role',
-      '  JOIN audited_names audited ON audited.role_name = role.rolname',
-      '), unsafe_schema_authority AS (',
-      "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
-      "  'CREATE'::text AS privilege_type, role.rolname::text AS role_name",
-      '  FROM pg_catalog.pg_namespace namespace',
-      '  CROSS JOIN existing_roles role',
-      "  WHERE namespace.nspname <> 'information_schema'",
-      "  AND namespace.nspname !~ '^pg_'",
-      "  AND pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'CREATE')",
-      '), unsafe_schema_ownership AS (',
-      "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
-      "  'OWNER-CREATE'::text AS privilege_type, role.rolname::text AS role_name",
-      '  FROM pg_catalog.pg_namespace namespace',
-      '  JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = namespace.nspowner',
-      '  CROSS JOIN existing_roles role',
-      "  WHERE namespace.nspname <> 'information_schema'",
-      "  AND namespace.nspname !~ '^pg_'",
-      "  AND (role.oid = owner_role.oid OR pg_catalog.pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
-      '), unsafe_database_authority AS (',
-      "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
-      '  privilege.privilege_type::text, role.rolname::text AS role_name',
-      '  FROM pg_catalog.pg_database database',
-      '  CROSS JOIN existing_roles role',
-      "  CROSS JOIN (VALUES ('CREATE'), ('TEMPORARY')) AS privilege(privilege_type)",
-      '  WHERE database.datname = pg_catalog.current_database()',
-      '  AND pg_catalog.has_database_privilege(role.oid, database.oid, privilege.privilege_type)',
-      '), unsafe_database_ownership AS (',
-      "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
-      '  privilege.privilege_type::text, role.rolname::text AS role_name',
-      '  FROM pg_catalog.pg_database database',
-      '  JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = database.datdba',
-      '  CROSS JOIN existing_roles role',
-      "  CROSS JOIN (VALUES ('OWNER-CREATE'), ('OWNER-TEMPORARY')) AS privilege(privilege_type)",
-      '  WHERE database.datname = pg_catalog.current_database()',
-      "  AND (role.oid = owner_role.oid OR pg_catalog.pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
-      '), public_schema_authority AS (',
-      "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
-      "  acl.privilege_type::text, 'PUBLIC'::text AS role_name",
-      '  FROM pg_catalog.pg_namespace namespace',
-      "  CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(namespace.nspacl, pg_catalog.acldefault('n', namespace.nspowner))) acl",
-      "  WHERE namespace.nspname <> 'information_schema'",
-      "  AND namespace.nspname !~ '^pg_'",
-      '  AND acl.grantee = 0',
-      "  AND acl.privilege_type = 'CREATE'",
-      '), public_database_authority AS (',
-      "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
-      "  acl.privilege_type::text, 'PUBLIC'::text AS role_name",
-      '  FROM pg_catalog.pg_database database',
-      "  CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(database.datacl, pg_catalog.acldefault('d', database.datdba))) acl",
-      '  WHERE database.datname = pg_catalog.current_database()',
-      '  AND acl.grantee = 0',
-      "  AND acl.privilege_type IN ('CREATE', 'TEMPORARY')",
-      ')',
-      'SELECT * FROM unsafe_schema_authority',
-      'UNION ALL SELECT * FROM unsafe_schema_ownership',
-      'UNION ALL SELECT * FROM unsafe_database_authority',
-      'UNION ALL SELECT * FROM unsafe_database_ownership',
-      'UNION ALL SELECT * FROM public_schema_authority',
-      'UNION ALL SELECT * FROM public_database_authority',
-      'ORDER BY object_kind, object_name, privilege_type, role_name',
-    ].join(' '),
+    postgresJoin(
+      [
+        'WITH audited_names(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT role.oid, role.rolname',
+        '  FROM pg_catalog.pg_roles role',
+        '  JOIN audited_names audited ON audited.role_name = role.rolname',
+        '), unsafe_schema_authority AS (',
+        "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
+        "  'CREATE'::text AS privilege_type, role.rolname::text AS role_name",
+        '  FROM pg_catalog.pg_namespace namespace',
+        '  CROSS JOIN existing_roles role',
+        "  WHERE namespace.nspname <> 'information_schema'",
+        "  AND namespace.nspname !~ '^pg_'",
+        "  AND pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'CREATE')",
+        '), unsafe_schema_ownership AS (',
+        "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
+        "  'OWNER-CREATE'::text AS privilege_type, role.rolname::text AS role_name",
+        '  FROM pg_catalog.pg_namespace namespace',
+        '  JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = namespace.nspowner',
+        '  CROSS JOIN existing_roles role',
+        "  WHERE namespace.nspname <> 'information_schema'",
+        "  AND namespace.nspname !~ '^pg_'",
+        "  AND (role.oid = owner_role.oid OR pg_catalog.pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
+        '), unsafe_database_authority AS (',
+        "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
+        '  privilege.privilege_type::text, role.rolname::text AS role_name',
+        '  FROM pg_catalog.pg_database database',
+        '  CROSS JOIN existing_roles role',
+        "  CROSS JOIN (VALUES ('CREATE'), ('TEMPORARY')) AS privilege(privilege_type)",
+        '  WHERE database.datname = pg_catalog.current_database()',
+        '  AND pg_catalog.has_database_privilege(role.oid, database.oid, privilege.privilege_type)',
+        '), unsafe_database_ownership AS (',
+        "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
+        '  privilege.privilege_type::text, role.rolname::text AS role_name',
+        '  FROM pg_catalog.pg_database database',
+        '  JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = database.datdba',
+        '  CROSS JOIN existing_roles role',
+        "  CROSS JOIN (VALUES ('OWNER-CREATE'), ('OWNER-TEMPORARY')) AS privilege(privilege_type)",
+        '  WHERE database.datname = pg_catalog.current_database()',
+        "  AND (role.oid = owner_role.oid OR pg_catalog.pg_has_role(role.oid, owner_role.oid, 'MEMBER'))",
+        '), public_schema_authority AS (',
+        "  SELECT 'schema'::text AS object_kind, namespace.nspname::text AS object_name,",
+        "  acl.privilege_type::text, 'PUBLIC'::text AS role_name",
+        '  FROM pg_catalog.pg_namespace namespace',
+        "  CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(namespace.nspacl, pg_catalog.acldefault('n', namespace.nspowner))) acl",
+        "  WHERE namespace.nspname <> 'information_schema'",
+        "  AND namespace.nspname !~ '^pg_'",
+        '  AND acl.grantee = 0',
+        "  AND acl.privilege_type = 'CREATE'",
+        '), public_database_authority AS (',
+        "  SELECT 'database'::text AS object_kind, database.datname::text AS object_name,",
+        "  acl.privilege_type::text, 'PUBLIC'::text AS role_name",
+        '  FROM pg_catalog.pg_database database',
+        "  CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(database.datacl, pg_catalog.acldefault('d', database.datdba))) acl",
+        '  WHERE database.datname = pg_catalog.current_database()',
+        '  AND acl.grantee = 0',
+        "  AND acl.privilege_type IN ('CREATE', 'TEMPORARY')",
+        ')',
+        'SELECT * FROM unsafe_schema_authority',
+        'UNION ALL SELECT * FROM unsafe_schema_ownership',
+        'UNION ALL SELECT * FROM unsafe_database_authority',
+        'UNION ALL SELECT * FROM unsafe_database_ownership',
+        'UNION ALL SELECT * FROM public_schema_authority',
+        'UNION ALL SELECT * FROM public_database_authority',
+        'ORDER BY object_kind, object_name, privilege_type, role_name',
+      ],
+      ' ',
+    ),
     [auditedIdentities],
   );
   return rows?.rows;
@@ -2129,85 +2580,100 @@ async function auditPostgresUnexpectedPrivileges(
     ];
   }
   const queries = [
-    [
-      'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid, r.rolname',
-      '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
-      ')',
-      "SELECT 'foreign_data_wrapper' AS object_kind, f.fdwname AS object_name,",
-      'acl.privilege_type, r.rolname AS role_name',
-      'FROM pg_foreign_data_wrapper f',
-      'CROSS JOIN LATERAL aclexplode(f.fdwacl) acl',
-      'JOIN existing_roles r ON true',
-      "WHERE acl.privilege_type = 'USAGE'",
-      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
-    ].join(' '),
-    [
-      'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid, r.rolname',
-      '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
-      ')',
-      "SELECT 'foreign_server' AS object_kind, s.srvname AS object_name,",
-      'acl.privilege_type, r.rolname AS role_name',
-      'FROM pg_foreign_server s',
-      'CROSS JOIN LATERAL aclexplode(s.srvacl) acl',
-      'JOIN existing_roles r ON true',
-      "WHERE acl.privilege_type = 'USAGE'",
-      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
-    ].join(' '),
-    [
-      'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid, r.rolname',
-      '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
-      ')',
-      "SELECT 'language' AS object_kind, l.lanname AS object_name,",
-      'acl.privilege_type, r.rolname AS role_name',
-      'FROM pg_language l',
-      'CROSS JOIN LATERAL aclexplode(l.lanacl) acl',
-      'JOIN existing_roles r ON true',
-      "WHERE l.lanname NOT IN ('internal')",
-      "AND acl.privilege_type = 'USAGE'",
-      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
-    ].join(' '),
-    [
-      'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid, r.rolname',
-      '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
-      ')',
-      "SELECT 'large_object' AS object_kind, m.oid::text AS object_name,",
-      'acl.privilege_type, r.rolname AS role_name',
-      'FROM pg_largeobject_metadata m',
-      'CROSS JOIN LATERAL aclexplode(m.lomacl) acl',
-      'JOIN existing_roles r ON true',
-      "WHERE acl.privilege_type IN ('SELECT', 'UPDATE')",
-      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
-    ].join(' '),
-    [
-      'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid, r.rolname',
-      '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
-      '), expanded_default_acl AS (',
-      '  SELECT n.nspname, d.defaclobjtype, acl.grantee, acl.privilege_type',
-      '  FROM pg_default_acl d',
-      '  LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace',
-      '  CROSS JOIN LATERAL aclexplode(d.defaclacl) acl',
-      ')',
-      "SELECT 'default_acl' AS object_kind,",
-      "COALESCE(nspname, '*') || ':' || defaclobjtype::text AS object_name,",
-      'privilege_type, r.rolname AS role_name',
-      'FROM expanded_default_acl acl',
-      "JOIN existing_roles r ON acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE')",
-    ].join(' '),
+    postgresJoin(
+      [
+        'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT r.oid, r.rolname',
+        '  FROM pg_roles r',
+        '  JOIN app_roles a ON a.role_name = r.rolname',
+        ')',
+        "SELECT 'foreign_data_wrapper' AS object_kind, f.fdwname AS object_name,",
+        'acl.privilege_type, r.rolname AS role_name',
+        'FROM pg_foreign_data_wrapper f',
+        'CROSS JOIN LATERAL aclexplode(f.fdwacl) acl',
+        'JOIN existing_roles r ON true',
+        "WHERE acl.privilege_type = 'USAGE'",
+        "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+      ],
+      ' ',
+    ),
+    postgresJoin(
+      [
+        'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT r.oid, r.rolname',
+        '  FROM pg_roles r',
+        '  JOIN app_roles a ON a.role_name = r.rolname',
+        ')',
+        "SELECT 'foreign_server' AS object_kind, s.srvname AS object_name,",
+        'acl.privilege_type, r.rolname AS role_name',
+        'FROM pg_foreign_server s',
+        'CROSS JOIN LATERAL aclexplode(s.srvacl) acl',
+        'JOIN existing_roles r ON true',
+        "WHERE acl.privilege_type = 'USAGE'",
+        "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+      ],
+      ' ',
+    ),
+    postgresJoin(
+      [
+        'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT r.oid, r.rolname',
+        '  FROM pg_roles r',
+        '  JOIN app_roles a ON a.role_name = r.rolname',
+        ')',
+        "SELECT 'language' AS object_kind, l.lanname AS object_name,",
+        'acl.privilege_type, r.rolname AS role_name',
+        'FROM pg_language l',
+        'CROSS JOIN LATERAL aclexplode(l.lanacl) acl',
+        'JOIN existing_roles r ON true',
+        "WHERE l.lanname NOT IN ('internal')",
+        "AND acl.privilege_type = 'USAGE'",
+        "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+      ],
+      ' ',
+    ),
+    postgresJoin(
+      [
+        'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT r.oid, r.rolname',
+        '  FROM pg_roles r',
+        '  JOIN app_roles a ON a.role_name = r.rolname',
+        ')',
+        "SELECT 'large_object' AS object_kind, m.oid::text AS object_name,",
+        'acl.privilege_type, r.rolname AS role_name',
+        'FROM pg_largeobject_metadata m',
+        'CROSS JOIN LATERAL aclexplode(m.lomacl) acl',
+        'JOIN existing_roles r ON true',
+        "WHERE acl.privilege_type IN ('SELECT', 'UPDATE')",
+        "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+      ],
+      ' ',
+    ),
+    postgresJoin(
+      [
+        'WITH app_roles(role_name) AS (SELECT unnest($1::text[])),',
+        'existing_roles AS (',
+        '  SELECT DISTINCT r.oid, r.rolname',
+        '  FROM pg_roles r',
+        '  JOIN app_roles a ON a.role_name = r.rolname',
+        '), expanded_default_acl AS (',
+        '  SELECT n.nspname, d.defaclobjtype, acl.grantee, acl.privilege_type',
+        '  FROM pg_default_acl d',
+        '  LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace',
+        '  CROSS JOIN LATERAL aclexplode(d.defaclacl) acl',
+        ')',
+        "SELECT 'default_acl' AS object_kind,",
+        "COALESCE(nspname, '*') || ':' || defaclobjtype::text AS object_name,",
+        'privilege_type, r.rolname AS role_name',
+        'FROM expanded_default_acl acl',
+        "JOIN existing_roles r ON acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE')",
+      ],
+      ' ',
+    ),
   ];
   const issues: KovoPostgresPostureIssue[] = [];
   const creationAuthorityRows = await postgresUnexpectedCreationAuthorityRows(
@@ -2215,32 +2681,49 @@ async function auditPostgresUnexpectedPrivileges(
     auditedIdentities,
   );
   if (creationAuthorityRows === undefined) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_REACHABILITY_AUDIT',
       detail:
         'could not enumerate effective non-system-schema CREATE or current-database CREATE/TEMPORARY authority',
     });
   } else {
-    for (const row of creationAuthorityRows) {
-      issues.push({
+    const creationRowCount = postgresDenseArrayLength(
+      creationAuthorityRows,
+      'Postgres creation authority rows',
+    );
+    for (let index = 0; index < creationRowCount; index += 1) {
+      const row = postgresDenseArrayValue(
+        creationAuthorityRows,
+        index,
+        'Postgres creation authority rows',
+      );
+      appendPostgresDenseValue(issues, {
         code: 'KV433_UNEXPECTED_PRIVILEGE',
         detail: `${row.role_name} has effective ${row.privilege_type} on ${row.object_kind} ${row.object_name}; runtime, reader, writer, PUBLIC, and every assumable role must not create unaudited schemas, objects, or temporary shadow relations`,
       });
     }
   }
-  for (const query of queries) {
+  const queryCount = postgresDenseArrayLength(queries, 'Postgres privilege audit queries');
+  for (let queryIndex = 0; queryIndex < queryCount; queryIndex += 1) {
+    const query = postgresDenseArrayValue(queries, queryIndex, 'Postgres privilege audit queries');
     const rows = await safeQuery<PostgresUnexpectedPrivilegeRow>(client, query, [
       auditedIdentities,
     ]);
     if (rows === undefined) {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_REACHABILITY_AUDIT',
         detail: 'could not enumerate unexpected app-role ACL-bearing catalog privileges',
       });
       continue;
     }
-    for (const row of rows.rows) {
-      issues.push({
+    const rowCount = postgresDenseArrayLength(rows.rows, 'Postgres unexpected privilege rows');
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const row = postgresDenseArrayValue(
+        rows.rows,
+        rowIndex,
+        'Postgres unexpected privilege rows',
+      );
+      appendPostgresDenseValue(issues, {
         code: 'KV433_UNEXPECTED_PRIVILEGE',
         detail: `${row.role_name} has ${row.privilege_type} on ${row.object_kind} ${row.object_name}; app roles may only reach audited relations, columns, routines, and protected-table sequences`,
       });
@@ -2255,28 +2738,37 @@ async function postgresProtectedSerialSequences(
 ): Promise<ReadonlySet<string> | undefined> {
   const rows = await safeQuery<PostgresReachableSequenceRow>(
     client,
-    [
-      'SELECT DISTINCT seq_ns.nspname AS sequence_schema, seq.relname AS sequence_name',
-      ', tbl_ns.nspname AS table_schema, tbl.relname AS table_name',
-      'FROM pg_class seq',
-      'JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace',
-      'JOIN pg_depend dep ON dep.classid = $1::regclass AND dep.objid = seq.oid',
-      'JOIN pg_class tbl ON tbl.oid = dep.refobjid',
-      'JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace',
-      "WHERE seq.relkind = 'S'",
-      "AND dep.deptype IN ('a', 'i')",
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT DISTINCT seq_ns.nspname AS sequence_schema, seq.relname AS sequence_name',
+        ', tbl_ns.nspname AS table_schema, tbl.relname AS table_name',
+        'FROM pg_class seq',
+        'JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace',
+        'JOIN pg_depend dep ON dep.classid = $1::regclass AND dep.objid = seq.oid',
+        'JOIN pg_class tbl ON tbl.oid = dep.refobjid',
+        'JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace',
+        "WHERE seq.relkind = 'S'",
+        "AND dep.deptype IN ('a', 'i')",
+      ],
+      ' ',
+    ),
     ['pg_class'],
   );
-  return rows === undefined
-    ? undefined
-    : new Set(
-        rows.rows
-          .filter((row) =>
-            protectedRelations.has(postgresRelationKey(row.table_schema, row.table_name)),
-          )
-          .map((row) => postgresRelationKey(row.sequence_schema, row.sequence_name)),
-      );
+  if (rows === undefined) return undefined;
+  const sequences = createWitnessSet<string>();
+  const rowCount = postgresDenseArrayLength(rows.rows, 'Postgres protected sequence rows');
+  for (let index = 0; index < rowCount; index += 1) {
+    const row = postgresDenseArrayValue(rows.rows, index, 'Postgres protected sequence rows');
+    if (
+      witnessSetHas(
+        protectedRelations as Set<string>,
+        postgresRelationKey(row.table_schema, row.table_name),
+      )
+    ) {
+      witnessSetAdd(sequences, postgresRelationKey(row.sequence_schema, row.sequence_name));
+    }
+  }
+  return sequences;
 }
 
 function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
@@ -2480,11 +2972,11 @@ function createRequestScopedReadonlyDb(
   const readSql = client.readonlySql(scope.principal, config.readerRole, scope.roleSetting);
   const privilegedReadSql = client.readonlySql(scope.principal, false, scope.roleSetting);
   const adminReadDb =
-    config.crossOwnerReadTables.size === 0
+    witnessSetSize(config.crossOwnerReadTables) === 0
       ? undefined
       : client.drizzleReadonlyDb(scope.principal, config.readerRole, 'admin');
   const adminReadSql =
-    config.crossOwnerReadTables.size === 0
+    witnessSetSize(config.crossOwnerReadTables) === 0
       ? undefined
       : client.readonlySql(scope.principal, config.readerRole, 'admin');
   const crossOwnerRead =
@@ -2494,23 +2986,29 @@ function createRequestScopedReadonlyDb(
           adminClient: adminReadDb as object,
           dialectLabel: client.label,
           executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
-            (await adminReadSql.query(statement.text, [...statement.params])).rows,
+            (
+              await adminReadSql.query(
+                statement.text,
+                snapshotPostgresQueryParams(statement.params),
+              )
+            ).rows,
           hasRole: (role: 'admin') => requestPassedRoleGuard(request, role),
           normalizeTableName: normalizePolicyTable,
-          ownerTables: [...config.crossOwnerReadTables],
+          ownerTables: postgresSetValues(config.crossOwnerReadTables),
           ...(scope.principal === undefined ? {} : { principal: scope.principal }),
         };
   const rawRead = {
     dialectLabel: client.label,
     executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
-      (await readSql.query(statement.text, [...statement.params])).rows,
+      (await readSql.query(statement.text, snapshotPostgresQueryParams(statement.params))).rows,
     normalizeTableName: normalizePolicyTable,
     ownerTables: postgresOwnerScopedTableNames(metadata),
   };
   const privilegedRawRead = {
     dialectLabel: client.label,
     executeSql: async (statement: { params: readonly unknown[]; text: string }) =>
-      (await privilegedReadSql.query(statement.text, [...statement.params])).rows,
+      (await privilegedReadSql.query(statement.text, snapshotPostgresQueryParams(statement.params)))
+        .rows,
     normalizeTableName: normalizePolicyTable,
     ownerTables: postgresOwnerScopedTableNames(metadata),
   };
@@ -2653,6 +3151,12 @@ class NodePostgresTransactionClient implements RuntimeSqlClient {
 function resolvePostgresRuntimeConfig(
   options: PostgresRuntimeConfigInput,
 ): ResolvedPostgresRuntimeConfig {
+  return resolvePostgresRuntimeConfigSnapshot(snapshotPostgresRuntimeConfigInput(options));
+}
+
+function resolvePostgresRuntimeConfigSnapshot(
+  options: PostgresRuntimeConfigInput,
+): ResolvedPostgresRuntimeConfig {
   const driver = resolveDriver(options);
   const databaseUrl = options.databaseUrl ?? process.env.KOVO_DATABASE_URL;
   const adminDatabaseUrl = options.adminDatabaseUrl ?? process.env.KOVO_DB_ADMIN_URL;
@@ -2712,7 +3216,11 @@ function resolvePostgresPostureCheck(
     return { onBoot: options.postureCheckOnBoot };
   }
 
-  const postureCheck = options.postureCheck;
+  const postureCheckValue = options.postureCheck;
+  const postureCheck =
+    postureCheckValue === undefined || !isRecord(postureCheckValue)
+      ? postureCheckValue
+      : postgresOwnDataSnapshot(postureCheckValue, 'Postgres posture-check options');
   if (postureCheck === undefined) return { onBoot: defaultOnBoot };
   if (!isRecord(postureCheck)) {
     throw new Error(
@@ -2730,7 +3238,7 @@ function resolvePostgresPostureCheck(
   }
 
   const justification = postureCheck.justification;
-  if (typeof justification !== 'string' || justification.trim() === '') {
+  if (typeof justification !== 'string' || securityStringTrim(justification) === '') {
     throw new Error(
       'KV433: postureCheck: { onBoot: false } requires a non-empty justification for kovo explain --capabilities (SPEC §10.3).',
     );
@@ -2739,8 +3247,10 @@ function resolvePostgresPostureCheck(
   return {
     onBoot: false,
     optOut: {
-      justification: justification.trim(),
-      ...(typeof site === 'string' && site.trim() !== '' ? { site: site.trim() } : {}),
+      justification: securityStringTrim(justification),
+      ...(typeof site === 'string' && securityStringTrim(site) !== ''
+        ? { site: securityStringTrim(site) }
+        : {}),
     },
   };
 }
@@ -2751,8 +3261,18 @@ function nonEmptyEnv(name: string): string | undefined {
 }
 
 function normalizeStringSet(values: readonly string[] | undefined): ReadonlySet<string> {
-  if (values === undefined) return new Set();
-  return new Set(values.map((value) => value.trim()).filter((value) => value !== ''));
+  const normalized = createWitnessSet<string>();
+  if (values === undefined) return normalized;
+  const valueCount = postgresDenseArrayLength(values, 'Postgres string-list option');
+  for (let index = 0; index < valueCount; index += 1) {
+    const value = postgresDenseArrayValue(values, index, 'Postgres string-list option');
+    if (typeof value !== 'string') {
+      throw new TypeError('KV433: Postgres string-list options must contain strings.');
+    }
+    const trimmed = securityStringTrim(value);
+    if (trimmed !== '') witnessSetAdd(normalized, trimmed);
+  }
+  return normalized;
 }
 
 function normalizedPublicRelationDeclaration(
@@ -2761,38 +3281,57 @@ function normalizedPublicRelationDeclaration(
   if (!isRecord(value)) {
     throw new Error('KV433: declarePublicRelation requires a declaration object (SPEC §10.3).');
   }
-  const relation = normalizePostgresRelationName(value.relation);
-  const reason = value.reason;
-  if (typeof reason !== 'string' || reason.trim() === '') {
+  const declaration = postgresOwnDataSnapshot(value, 'Postgres public-relation declaration');
+  const relation = normalizePostgresRelationName(declaration.relation);
+  const reason = declaration.reason;
+  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
     throw new Error('KV433: declarePublicRelation requires a non-empty reason (SPEC §10.3).');
   }
-  const site = value.site;
-  if (site !== undefined && (typeof site !== 'string' || site.trim() === '')) {
+  const site = declaration.site;
+  if (site !== undefined && (typeof site !== 'string' || securityStringTrim(site) === '')) {
     throw new Error('KV433: declarePublicRelation site must be a non-empty string.');
   }
   return {
     relation,
-    reason: reason.trim(),
-    ...(site === undefined ? {} : { site: site.trim() }),
+    reason: securityStringTrim(reason),
+    ...(site === undefined ? {} : { site: securityStringTrim(site) }),
   };
 }
 
 function normalizePublicRelationDeclarations(
   declarations: readonly KovoPostgresPublicRelationDeclaration[] | undefined,
 ): ReadonlyMap<string, KovoPostgresPublicRelationDeclaration> {
-  const publicRelations = new Map<string, KovoPostgresPublicRelationDeclaration>();
+  const publicRelations = createWitnessMap<string, KovoPostgresPublicRelationDeclaration>();
   if (declarations === undefined) return publicRelations;
-  for (const declaration of declarations) {
+  const declarationCount = postgresDenseArrayLength(
+    declarations,
+    'Postgres public-relation declarations',
+  );
+  for (let index = 0; index < declarationCount; index += 1) {
+    const rawDeclaration = postgresDenseArrayValue(
+      declarations,
+      index,
+      'Postgres public-relation declarations',
+    );
+    if (!isRecord(rawDeclaration)) {
+      throw new Error(
+        'KV433: publicRelations entries must be created with declarePublicRelation(...) (SPEC §10.3).',
+      );
+    }
+    const declaration = postgresOwnDataSnapshot(
+      rawDeclaration,
+      'Postgres public-relation declaration',
+    ) as KovoPostgresPublicRelationDeclaration;
     if (!isPublicRelationDeclaration(declaration)) {
       throw new Error(
         'KV433: publicRelations entries must be created with declarePublicRelation(...) (SPEC §10.3).',
       );
     }
     const key = normalizePostgresRelationName(declaration.relation);
-    if (publicRelations.has(key)) {
+    if (witnessMapHas(publicRelations, key)) {
       throw new Error(`KV433: duplicate declarePublicRelation entry for ${key}.`);
     }
-    publicRelations.set(key, declaration);
+    witnessMapSet(publicRelations, key, declaration);
   }
   return publicRelations;
 }
@@ -2800,31 +3339,33 @@ function normalizePublicRelationDeclarations(
 function isPublicRelationDeclaration(
   value: unknown,
 ): value is KovoPostgresPublicRelationDeclaration {
-  return (
-    isRecord(value) &&
-    Reflect.get(value, publicPostgresRelationBrand) !== undefined &&
-    typeof Reflect.get(value, 'relation') === 'string' &&
-    typeof Reflect.get(value, 'reason') === 'string'
-  );
+  if (!isRecord(value)) return false;
+  const brand = postgresOwnDataValue(value, publicPostgresRelationBrand);
+  const relation = postgresOwnDataValue(value, 'relation');
+  const reason = postgresOwnDataValue(value, 'reason');
+  return brand !== undefined && typeof relation === 'string' && typeof reason === 'string';
 }
 
 function normalizePostgresRelationName(relation: unknown): string {
   if (typeof relation !== 'string') {
     throw new Error('KV433: declarePublicRelation relation must be a string (SPEC §10.3).');
   }
-  const parts = relation
-    .trim()
-    .split('.')
-    .map((part) => part.trim());
+  const rawParts = securityStringSplit(securityStringTrim(relation), '.');
+  const parts = postgresMapDense(
+    rawParts,
+    (part) => securityStringTrim(part),
+    'Postgres public-relation name parts',
+  );
   if (parts.length === 1) {
-    const [table] = parts;
+    const table = postgresDenseArrayValue(parts, 0, 'Postgres public-relation name parts');
     if (table === undefined) {
       throw new Error('KV433: declarePublicRelation relation must name a relation.');
     }
     return postgresRelationKey('public', normalizedIdentifierPart(table));
   }
   if (parts.length === 2) {
-    const [schema, table] = parts;
+    const schema = postgresDenseArrayValue(parts, 0, 'Postgres public-relation name parts');
+    const table = postgresDenseArrayValue(parts, 1, 'Postgres public-relation name parts');
     if (schema === undefined || table === undefined) {
       throw new Error('KV433: declarePublicRelation relation must name a relation.');
     }
@@ -2836,7 +3377,7 @@ function normalizePostgresRelationName(relation: unknown): string {
 }
 
 function normalizedIdentifierPart(part: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_$]*$/u.test(part)) {
+  if (!securityRegExpTest(/^[A-Za-z_][A-Za-z0-9_$]*$/u, part)) {
     throw new Error(
       `KV433: declarePublicRelation relation part ${JSON.stringify(
         part,
@@ -2868,20 +3409,33 @@ function resolveDriver(options: KovoPostgresAppRuntimeOptions): KovoPostgresReso
 
 function normalizeSeedSql(seedSql: string | readonly string[] | undefined): readonly string[] {
   if (seedSql === undefined) return [];
-  return typeof seedSql === 'string' ? [seedSql] : seedSql;
+  if (typeof seedSql === 'string') return witnessFreeze([seedSql]);
+  const statements: string[] = [];
+  const statementCount = postgresDenseArrayLength(seedSql, 'Postgres seed SQL');
+  for (let index = 0; index < statementCount; index += 1) {
+    const statement = postgresDenseArrayValue(seedSql, index, 'Postgres seed SQL');
+    if (typeof statement !== 'string') {
+      throw new TypeError('KV433: Postgres seedSql entries must be strings.');
+    }
+    appendPostgresValue(statements, statement);
+  }
+  return witnessFreeze(statements);
 }
 
 function postgresTablesFromSchema(schema: Record<string, unknown>): PgTable[] {
   const tables: PgTable[] = [];
-  const seen = new Set<unknown>();
-  for (const value of Object.values(schema)) {
-    if (seen.has(value)) continue;
+  const seen = createWitnessSet<unknown>();
+  const values = postgresOwnDataValues(schema);
+  const valueCount = postgresDenseArrayLength(values, 'Postgres schema values');
+  for (let index = 0; index < valueCount; index += 1) {
+    const value = postgresDenseArrayValue(values, index, 'Postgres schema values');
+    if (witnessSetHas(seen, value)) continue;
     const table = asPgTable(value);
     if (table === undefined) continue;
-    tables.push(table);
-    seen.add(value);
+    appendPostgresValue(tables, table);
+    witnessSetAdd(seen, value);
   }
-  if (tables.length === 0) {
+  if (postgresDenseArrayLength(tables, 'Postgres schema tables') === 0) {
     throw new Error('KV433: Postgres runtime could not derive any Drizzle pgTable exports.');
   }
   return tables;
@@ -2890,19 +3444,36 @@ function postgresTablesFromSchema(schema: Record<string, unknown>): PgTable[] {
 function postgresRelationSchemaFromModule(
   schema: Record<string, unknown>,
 ): Record<string, PgTable> {
-  const tables: Record<string, PgTable> = {};
-  const seen = new Set<unknown>();
-  for (const [name, value] of Object.entries(schema)) {
-    if (seen.has(value)) continue;
+  const tables = witnessCreateNullRecord<PgTable>();
+  const seen = createWitnessSet<unknown>();
+  const entries = postgresOwnDataEntries(schema);
+  const entryCount = postgresDenseArrayLength(entries, 'Postgres relation schema entries');
+  for (let index = 0; index < entryCount; index += 1) {
+    const entry: [string, unknown] = postgresDenseArrayValue(
+      entries,
+      index,
+      'Postgres relation schema entries',
+    );
+    const name = postgresDenseArrayValue(entry, 0, 'Postgres relation schema entry');
+    if (typeof name !== 'string') {
+      throw new TypeError('Postgres relation schema entry names must be strings.');
+    }
+    const value = postgresDenseArrayValue(entry, 1, 'Postgres relation schema entry');
+    if (witnessSetHas(seen, value)) continue;
     const table = asPgTable(value);
     if (table === undefined) continue;
-    tables[name] = table;
-    seen.add(value);
+    witnessDefineProperty(tables, name, {
+      configurable: true,
+      enumerable: true,
+      value: table,
+      writable: true,
+    });
+    witnessSetAdd(seen, value);
   }
-  if (Object.keys(tables).length === 0) {
+  if (securityObjectKeys(tables).length === 0) {
     throw new Error('KV433: Postgres runtime could not derive any Drizzle pgTable exports.');
   }
-  return tables;
+  return witnessFreeze(tables);
 }
 
 function asPgTable(value: unknown): PgTable | undefined {
@@ -2915,12 +3486,29 @@ function asPgTable(value: unknown): PgTable | undefined {
 }
 
 function schemaDdl(tables: readonly PgTable[]): string {
-  return [
-    ...tables.map(createTableDdl),
-    ...tables.flatMap((table) =>
-      getTableConfig(table).columns.map((column) => addColumnDdl(table, column)),
-    ),
-  ].join('\n');
+  const statements: string[] = [];
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres schema DDL tables');
+  for (let tableIndex = 0; tableIndex < tableCount; tableIndex += 1) {
+    appendPostgresValue(
+      statements,
+      createTableDdl(postgresDenseArrayValue(tables, tableIndex, 'Postgres schema DDL tables')),
+    );
+  }
+  for (let tableIndex = 0; tableIndex < tableCount; tableIndex += 1) {
+    const table = postgresDenseArrayValue(tables, tableIndex, 'Postgres schema DDL tables');
+    const columns = getTableConfig(table).columns;
+    const columnCount = postgresDenseArrayLength(columns, 'Postgres schema DDL columns');
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      appendPostgresValue(
+        statements,
+        addColumnDdl(
+          table,
+          postgresDenseArrayValue(columns, columnIndex, 'Postgres schema DDL columns'),
+        ),
+      );
+    }
+  }
+  return postgresJoin(statements, '\n');
 }
 
 interface ExistingPostgresTable {
@@ -2939,32 +3527,60 @@ async function planRuntimeDbMigration(
   const down: string[] = [];
   const operations: string[] = [];
 
-  for (const table of schemaTables) {
+  const tableCount = postgresDenseArrayLength(schemaTables, 'Postgres migration-plan tables');
+  for (let tableIndex = 0; tableIndex < tableCount; tableIndex += 1) {
+    const table = postgresDenseArrayValue(
+      schemaTables,
+      tableIndex,
+      'Postgres migration-plan tables',
+    );
     const config = getTableConfig(table);
     const schemaName = tableSchemaName(config);
-    const existing = existingTables.get(`${schemaName}.${config.name}`);
+    const existing = witnessMapGet(existingTables, `${schemaName}.${config.name}`);
     if (existing === undefined) {
-      up.push(createTableMigrationDdl(table));
-      down.unshift(`DROP TABLE ${quoteTable(config)};`);
-      operations.push(`create table ${schemaName}.${config.name}`);
+      appendPostgresValue(up, createTableMigrationDdl(table));
+      appendPostgresValue(down, `DROP TABLE ${quoteTable(config)};`);
+      appendPostgresValue(operations, `create table ${schemaName}.${config.name}`);
       continue;
     }
 
-    for (const column of config.columns) {
-      if (existing.columns.has(column.name)) continue;
-      up.push(addColumnMigrationDdl(table, column));
-      down.unshift(`ALTER TABLE ${quoteTable(config)} DROP COLUMN ${quoteIdent(column.name)};`);
-      operations.push(`add column ${schemaName}.${config.name}.${column.name}`);
+    const columnCount = postgresDenseArrayLength(config.columns, 'Postgres migration-plan columns');
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const column = postgresDenseArrayValue(
+        config.columns,
+        columnIndex,
+        'Postgres migration-plan columns',
+      );
+      if (witnessSetHas(existing.columns, column.name)) continue;
+      appendPostgresValue(up, addColumnMigrationDdl(table, column));
+      appendPostgresValue(
+        down,
+        `ALTER TABLE ${quoteTable(config)} DROP COLUMN ${quoteIdent(column.name)};`,
+      );
+      appendPostgresValue(operations, `add column ${schemaName}.${config.name}.${column.name}`);
     }
   }
 
-  const empty = up.length === 0;
+  const upCount = postgresDenseArrayLength(up, 'Postgres up migration statements');
+  const downInReverseOrder: string[] = [];
+  const downCount = postgresDenseArrayLength(down, 'Postgres down migration statements');
+  for (let index = downCount - 1; index >= 0; index -= 1) {
+    appendPostgresValue(
+      downInReverseOrder,
+      postgresDenseArrayValue(down, index, 'Postgres down migration statements'),
+    );
+  }
+  const empty = upCount === 0;
   return {
-    downSql: empty ? '-- No generated schema changes to roll back.\n' : `${down.join('\n')}\n`,
+    downSql: empty
+      ? '-- No generated schema changes to roll back.\n'
+      : `${postgresJoin(downInReverseOrder, '\n')}\n`,
     driver,
     empty,
-    operations,
-    upSql: empty ? '-- No supported additive schema changes detected.\n' : `${up.join('\n')}\n`,
+    operations: witnessFreeze(operations),
+    upSql: empty
+      ? '-- No supported additive schema changes detected.\n'
+      : `${postgresJoin(up, '\n')}\n`,
   };
 }
 
@@ -2972,25 +3588,45 @@ async function currentPostgresTables(
   client: RuntimeSqlClient,
 ): Promise<ReadonlyMap<string, ExistingPostgresTable>> {
   const tables = await client.query<{ table_name: string; table_schema: string }>(
-    [
-      'SELECT table_schema, table_name',
-      'FROM information_schema.tables',
-      "WHERE table_schema NOT IN ('information_schema', 'pg_catalog')",
-      "AND table_type = 'BASE TABLE'",
-    ].join(' '),
-  );
-  const byName = new Map<string, ExistingPostgresTable>();
-  for (const row of tables.rows) {
-    const columns = await client.query<{ column_name: string }>(
+    postgresJoin(
       [
-        'SELECT column_name',
-        'FROM information_schema.columns',
-        'WHERE table_schema = $1 AND table_name = $2',
-      ].join(' '),
+        'SELECT table_schema, table_name',
+        'FROM information_schema.tables',
+        "WHERE table_schema NOT IN ('information_schema', 'pg_catalog')",
+        "AND table_type = 'BASE TABLE'",
+      ],
+      ' ',
+    ),
+  );
+  const byName = createWitnessMap<string, ExistingPostgresTable>();
+  const rowCount = postgresDenseArrayLength(tables.rows, 'Postgres current-table rows');
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const row = postgresOwnDataSnapshot(
+      postgresDenseArrayValue(tables.rows, rowIndex, 'Postgres current-table rows'),
+      'Postgres current-table row',
+    );
+    const columns = await client.query<{ column_name: string }>(
+      postgresJoin(
+        [
+          'SELECT column_name',
+          'FROM information_schema.columns',
+          'WHERE table_schema = $1 AND table_name = $2',
+        ],
+        ' ',
+      ),
       [row.table_schema, row.table_name],
     );
-    byName.set(`${row.table_schema}.${row.table_name}`, {
-      columns: new Set(columns.rows.map((column) => column.column_name)),
+    const columnNames = createWitnessSet<string>();
+    const columnRowCount = postgresDenseArrayLength(columns.rows, 'Postgres current-column rows');
+    for (let columnIndex = 0; columnIndex < columnRowCount; columnIndex += 1) {
+      const column = postgresOwnDataSnapshot(
+        postgresDenseArrayValue(columns.rows, columnIndex, 'Postgres current-column rows'),
+        'Postgres current-column row',
+      );
+      witnessSetAdd(columnNames, column.column_name);
+    }
+    witnessMapSet(byName, `${row.table_schema}.${row.table_name}`, {
+      columns: columnNames,
       schema: row.table_schema,
       table: row.table_name,
     });
@@ -3000,15 +3636,37 @@ async function currentPostgresTables(
 
 function createTableDdl(table: PgTable): string {
   const config = getTableConfig(table);
-  const definitions = [
-    ...config.columns.map((column) => columnDdl(column, { createTable: true })),
-    ...config.foreignKeys.map((foreignKey) => foreignKeyDdl(foreignKey)),
-  ];
-  return `CREATE TABLE IF NOT EXISTS ${quoteTable(config)} (${definitions.join(', ')});`;
+  const definitions: string[] = [];
+  const columnCount = postgresDenseArrayLength(config.columns, 'Postgres table DDL columns');
+  for (let index = 0; index < columnCount; index += 1) {
+    appendPostgresValue(
+      definitions,
+      columnDdl(postgresDenseArrayValue(config.columns, index, 'Postgres table DDL columns'), {
+        createTable: true,
+      }),
+    );
+  }
+  const foreignKeyCount = postgresDenseArrayLength(
+    config.foreignKeys,
+    'Postgres table DDL foreign keys',
+  );
+  for (let index = 0; index < foreignKeyCount; index += 1) {
+    appendPostgresValue(
+      definitions,
+      foreignKeyDdl(
+        postgresDenseArrayValue(config.foreignKeys, index, 'Postgres table DDL foreign keys'),
+      ),
+    );
+  }
+  return `CREATE TABLE IF NOT EXISTS ${quoteTable(config)} (${postgresJoin(definitions, ', ')});`;
 }
 
 function createTableMigrationDdl(table: PgTable): string {
-  return createTableDdl(table).replace('CREATE TABLE IF NOT EXISTS', 'CREATE TABLE');
+  return securityStringReplaceAll(
+    createTableDdl(table),
+    'CREATE TABLE IF NOT EXISTS',
+    'CREATE TABLE',
+  );
 }
 
 function addColumnDdl(table: PgTable, column: PgColumn): string {
@@ -3025,16 +3683,18 @@ function addColumnMigrationDdl(table: PgTable, column: PgColumn): string {
 }
 
 function columnDdl(column: PgColumn, options: { createTable: boolean }): string {
-  return [
+  const tokens = [
     quoteIdent(column.name),
     columnTypeDdl(column),
     options.createTable && column.primary ? 'PRIMARY KEY' : '',
     column.notNull ? 'NOT NULL' : '',
     options.createTable && column.isUnique ? 'UNIQUE' : '',
     columnDefaultDdl(column),
-  ]
-    .filter(Boolean)
-    .join(' ');
+  ];
+  return postgresJoin(
+    postgresFilterDense(tokens, (token) => token !== '', 'Postgres column DDL tokens'),
+    ' ',
+  );
 }
 
 function columnTypeDdl(column: PgColumn): string {
@@ -3070,10 +3730,22 @@ function columnDefaultDdl(column: PgColumn): string {
 
 function foreignKeyDdl(foreignKey: PgForeignKey): string {
   const reference = foreignKey.reference();
-  const columns = reference.columns.map((column) => quoteIdent(column.name)).join(', ');
-  const foreignColumns = reference.foreignColumns
-    .map((column) => quoteIdent(column.name))
-    .join(', ');
+  const columns = postgresJoin(
+    postgresMapDense(
+      reference.columns,
+      (column) => quoteIdent(column.name),
+      'Postgres foreign-key columns',
+    ),
+    ', ',
+  );
+  const foreignColumns = postgresJoin(
+    postgresMapDense(
+      reference.foreignColumns,
+      (column) => quoteIdent(column.name),
+      'Postgres foreign-key target columns',
+    ),
+    ', ',
+  );
   const onDelete = foreignKey.onDelete === 'no action' ? '' : ` ON DELETE ${foreignKey.onDelete}`;
   const onUpdate = foreignKey.onUpdate === 'no action' ? '' : ` ON UPDATE ${foreignKey.onUpdate}`;
   return `FOREIGN KEY (${columns}) REFERENCES ${quoteTable(
@@ -3082,25 +3754,47 @@ function foreignKeyDdl(foreignKey: PgForeignKey): string {
 }
 
 function sortTablesByForeignKeyDependencies(tables: readonly PgTable[]): PgTable[] {
-  const pending = new Set<PgTable>(tables);
+  const pending = createWitnessSet<PgTable>();
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres dependency-sort tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    witnessSetAdd(
+      pending,
+      postgresDenseArrayValue(tables, index, 'Postgres dependency-sort tables'),
+    );
+  }
   const sorted: PgTable[] = [];
 
-  while (pending.size > 0) {
+  while (witnessSetSize(pending) > 0) {
     let progressed = false;
-    for (const table of pending) {
-      const dependencies = getTableConfig(table).foreignKeys.map(
-        (foreignKey) => foreignKey.reference().foreignTable,
+    const pendingTables = postgresSetValues(pending);
+    const pendingCount = postgresDenseArrayLength(pendingTables, 'Pending Postgres tables');
+    for (let index = 0; index < pendingCount; index += 1) {
+      const table = postgresDenseArrayValue(pendingTables, index, 'Pending Postgres tables');
+      const foreignKeys = getTableConfig(table).foreignKeys;
+      const blocked = postgresSomeDense(
+        foreignKeys,
+        (foreignKey) => {
+          const dependency = foreignKey.reference().foreignTable;
+          return dependency !== table && witnessSetHas(pending, dependency);
+        },
+        'Postgres dependency-sort foreign keys',
       );
-      if (dependencies.some((dependency) => dependency !== table && pending.has(dependency))) {
+      if (blocked) {
         continue;
       }
-      sorted.push(table);
-      pending.delete(table);
+      appendPostgresValue(sorted, table);
+      witnessSetDelete(pending, table);
       progressed = true;
     }
     if (!progressed) {
-      const names = [...pending].map((table) => getTableConfig(table).name).join(', ');
-      throw new Error(`KV433: cannot order Postgres tables with cyclic foreign keys: ${names}.`);
+      const names = postgresMapDense(
+        postgresSetValues(pending),
+        (table) => getTableConfig(table).name,
+        'Cyclic Postgres tables',
+      );
+      throw new Error(
+        `KV433: cannot order Postgres tables with cyclic foreign keys: ${postgresJoin(names, ', ')}.`,
+      );
     }
   }
 
@@ -3109,7 +3803,10 @@ function sortTablesByForeignKeyDependencies(tables: readonly PgTable[]): PgTable
 
 async function ensurePostgresRole(client: RuntimeTransactionClient, role: string): Promise<void> {
   const result = await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [role]);
-  if (result.rows.length === 0) await client.exec(`CREATE ROLE ${quoteIdent(role)}`);
+  const rows = snapshotPostgresQueryRows(result.rows, 'Postgres role-existence rows');
+  if (postgresDenseArrayLength(rows, 'Postgres role-existence rows') === 0) {
+    await client.exec(`CREATE ROLE ${quoteIdent(role)}`);
+  }
 }
 
 function resolvePostgresRoleTopology(input: {
@@ -3152,8 +3849,8 @@ function postgresRoleTopologyWithRuntimeLogin(
 ): PostgresRoleTopology {
   if (runtimeLoginRole === undefined || runtimeLoginRole === '') return topology;
   return witnessFreeze({
-    ...topology,
     membershipEdges: postgresRuntimeMembershipEdges(topology, runtimeLoginRole),
+    roles: topology.roles,
   });
 }
 
@@ -3191,12 +3888,7 @@ function postgresTopologyRoles(
 }
 
 function appendPostgresDenseValue<Value>(values: Value[], value: Value): void {
-  witnessDefineProperty(values, values.length, {
-    configurable: true,
-    enumerable: true,
-    value,
-    writable: true,
-  });
+  appendPostgresValue(values, value);
 }
 
 function postgresDenseValue<Value>(values: readonly Value[], index: number, label: string): Value {
@@ -3232,12 +3924,20 @@ async function preflightPostgresRoleTopology(
     if (!witnessSetHas(existing, role.name)) appendPostgresDenseValue(missing, role);
   }
   if (missing.length > 0) {
+    const missingLabels = postgresMapDense(
+      missing,
+      (role) => `${role.purpose}Role=${role.name}`,
+      'Missing adopted Postgres roles',
+    );
     throw new Error(
-      [
-        'KV433_ROLE_TOPOLOGY: adopted Postgres roles must exist before provisioning (SPEC §10.3).',
-        `missing: ${missing.map((role) => `${role.purpose}Role=${role.name}`).join(', ')}`,
-        'Set KOVO_DB_READER_ROLE, KOVO_DB_WRITER_ROLE, KOVO_DB_ADMIN_ROLE, and KOVO_DB_SYSTEM_ROLE to pre-created roles, or allow Kovo to create its default roles.',
-      ].join(' '),
+      postgresJoin(
+        [
+          'KV433_ROLE_TOPOLOGY: adopted Postgres roles must exist before provisioning (SPEC §10.3).',
+          `missing: ${postgresJoin(missingLabels, ', ')}`,
+          'Set KOVO_DB_READER_ROLE, KOVO_DB_WRITER_ROLE, KOVO_DB_ADMIN_ROLE, and KOVO_DB_SYSTEM_ROLE to pre-created roles, or allow Kovo to create its default roles.',
+        ],
+        ' ',
+      ),
     );
   }
   const attributeRows = await postgresRoleAttributeRows(client, adoptedRoleNames);
@@ -3249,13 +3949,24 @@ async function preflightPostgresRoleTopology(
     }
   }
   if (privileged.length > 0) {
+    const attributeLabels = postgresMapDense(
+      POSTGRES_ELEVATED_ROLE_ATTRIBUTES,
+      (attribute) => `NO${attribute.label}`,
+      'Postgres elevated role attribute labels',
+    );
+    const privilegedRoleDetails = postgresMapDense(
+      privileged,
+      postgresRoleAttributeDetail,
+      'Privileged adopted Postgres roles',
+    );
     throw new Error(
-      [
-        `KV433_ROLE_TOPOLOGY: adopted Postgres roles must have no elevated role attributes (${POSTGRES_ELEVATED_ROLE_ATTRIBUTES.map(
-          (attribute) => `NO${attribute.label}`,
-        ).join(', ')}) (SPEC §10.3).`,
-        `offending: ${privileged.map(postgresRoleAttributeDetail).join(', ')}`,
-      ].join(' '),
+      postgresJoin(
+        [
+          `KV433_ROLE_TOPOLOGY: adopted Postgres roles must have no elevated role attributes (${postgresJoin(attributeLabels, ', ')}) (SPEC §10.3).`,
+          `offending: ${postgresJoin(privilegedRoleDetails, ', ')}`,
+        ],
+        ' ',
+      ),
     );
   }
 }
@@ -3282,8 +3993,9 @@ async function existingPostgresRoles(
     [roles],
   );
   const existing = createWitnessSet<string>();
-  for (let index = 0; index < result.rows.length; index += 1) {
-    const row = postgresDenseValue(result.rows, index, 'Postgres existing role rows');
+  const rows = snapshotPostgresQueryRows(result.rows, 'Postgres existing role rows');
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = postgresDenseValue(rows, index, 'Postgres existing role rows');
     witnessSetAdd(existing, row.rolname);
   }
   return existing;
@@ -3295,13 +4007,16 @@ async function postgresRoleAttributeRows(
 ): Promise<readonly PostgresRoleAttributeRow[]> {
   if (roles.length === 0) return [];
   const result = await client.query<PostgresRoleAttributeRow>(
-    [
-      'SELECT rolname, rolsuper, rolbypassrls, rolreplication, rolcreaterole, rolcreatedb',
-      'FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[])',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT rolname, rolsuper, rolbypassrls, rolreplication, rolcreaterole, rolcreatedb',
+        'FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[])',
+      ],
+      ' ',
+    ),
     [roles],
   );
-  return result.rows;
+  return snapshotPostgresQueryRows(result.rows, 'Postgres role attribute rows');
 }
 
 function postgresRoleElevatedAttributes(row: PostgresRoleAttributeRow): readonly string[] {
@@ -3319,7 +4034,7 @@ function postgresRoleElevatedAttributes(row: PostgresRoleAttributeRow): readonly
 
 function postgresRoleAttributeDetail(row: PostgresRoleAttributeRow): string {
   const attributes = postgresRoleElevatedAttributes(row);
-  return `${row.rolname}(${attributes.join('+')})`;
+  return `${row.rolname}(${postgresJoin(attributes, '+')})`;
 }
 
 async function postgresRoleAttributeVersionIssues(
@@ -3327,15 +4042,18 @@ async function postgresRoleAttributeVersionIssues(
 ): Promise<KovoPostgresPostureIssue[]> {
   const rows = await safeQuery<{ attname: string }>(
     client,
-    [
-      'SELECT attname',
-      'FROM pg_attribute',
-      "WHERE attrelid = 'pg_catalog.pg_roles'::regclass",
-      'AND attnum > 0',
-      'AND attisdropped = false',
-      "AND attname LIKE 'rol%'",
-      'ORDER BY attname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT attname',
+        'FROM pg_attribute',
+        "WHERE attrelid = 'pg_catalog.pg_roles'::regclass",
+        'AND attnum > 0',
+        'AND attisdropped = false',
+        "AND attname LIKE 'rol%'",
+        'ORDER BY attname',
+      ],
+      ' ',
+    ),
   );
   if (rows === undefined) {
     return [
@@ -3358,9 +4076,7 @@ async function postgresRoleAttributeVersionIssues(
   return [
     {
       code: 'KV433_ROLE_ATTRIBUTE_SET',
-      detail: `pg_roles exposes unclassified role-attribute column(s): ${unclassified.join(
-        ', ',
-      )}; classify each as elevated or benign before trusting runtime identity posture (SPEC §10.3)`,
+      detail: `pg_roles exposes unclassified role-attribute column(s): ${postgresJoin(unclassified, ', ')}; classify each as elevated or benign before trusting runtime identity posture (SPEC §10.3)`,
     },
   ];
 }
@@ -3386,12 +4102,15 @@ async function postgresRuntimeLoginPostureIssues(
     PostgresRoleAttributeRow & { can_admin: boolean; can_system: boolean }
   >(
     client,
-    [
-      'SELECT r.rolname, r.rolsuper, r.rolbypassrls, r.rolreplication, r.rolcreaterole, r.rolcreatedb,',
-      "(SELECT pg_has_role(r.oid, admin.oid, 'MEMBER') FROM pg_roles admin WHERE admin.rolname = $2) AS can_admin,",
-      "(SELECT pg_has_role(r.oid, system_role.oid, 'MEMBER') FROM pg_roles system_role WHERE system_role.rolname = $3) AS can_system",
-      'FROM pg_roles r WHERE r.rolname = $1',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT r.rolname, r.rolsuper, r.rolbypassrls, r.rolreplication, r.rolcreaterole, r.rolcreatedb,',
+        "(SELECT pg_has_role(r.oid, admin.oid, 'MEMBER') FROM pg_roles admin WHERE admin.rolname = $2) AS can_admin,",
+        "(SELECT pg_has_role(r.oid, system_role.oid, 'MEMBER') FROM pg_roles system_role WHERE system_role.rolname = $3) AS can_system",
+        'FROM pg_roles r WHERE r.rolname = $1',
+      ],
+      ' ',
+    ),
     [runtimeLoginRole, config.adminRole, config.systemRole],
   );
   const login = roleRows?.rows[0];
@@ -3431,15 +4150,18 @@ async function postgresRuntimeLoginPostureIssues(
   // predefined-role MEMBERSHIP in addition to the role-ATTRIBUTE allowlist.
   const assumableRows = await safeQuery<PostgresRoleAttributeRow & { is_predefined: boolean }>(
     client,
-    [
-      'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb,',
-      "(role.oid < 16384 OR role.rolname LIKE 'pg\\_%') AS is_predefined",
-      'FROM pg_roles login',
-      'JOIN pg_roles role ON role.oid <> login.oid',
-      'WHERE login.rolname = $1',
-      "AND pg_has_role(login.oid, role.oid, 'MEMBER')",
-      'ORDER BY role.rolname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT role.rolname, role.rolsuper, role.rolbypassrls, role.rolreplication, role.rolcreaterole, role.rolcreatedb,',
+        "(role.oid < 16384 OR role.rolname LIKE 'pg\\_%') AS is_predefined",
+        'FROM pg_roles login',
+        'JOIN pg_roles role ON role.oid <> login.oid',
+        'WHERE login.rolname = $1',
+        "AND pg_has_role(login.oid, role.oid, 'MEMBER')",
+        'ORDER BY role.rolname',
+      ],
+      ' ',
+    ),
     [runtimeLoginRole],
   );
   const frameworkRoles = createWitnessSet<string>();
@@ -3482,14 +4204,17 @@ async function postgresRuntimeLoginPostureIssues(
 
   const adminOptionRows = await safeQuery<{ role_name: string }>(
     client,
-    [
-      'SELECT role.rolname AS role_name',
-      'FROM pg_auth_members member',
-      'JOIN pg_roles login ON login.oid = member.member',
-      'JOIN pg_roles role ON role.oid = member.roleid',
-      'WHERE login.rolname = $1 AND member.admin_option = true',
-      'ORDER BY role.rolname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT role.rolname AS role_name',
+        'FROM pg_auth_members member',
+        'JOIN pg_roles login ON login.oid = member.member',
+        'JOIN pg_roles role ON role.oid = member.roleid',
+        'WHERE login.rolname = $1 AND member.admin_option = true',
+        'ORDER BY role.rolname',
+      ],
+      ' ',
+    ),
     [runtimeLoginRole],
   );
   if (adminOptionRows === undefined) {
@@ -3517,11 +4242,14 @@ async function postgresRuntimeMembershipIssues(
   const issues: KovoPostgresPostureIssue[] = [];
   const rows = await safeQuery<{ can_reader: boolean; can_writer: boolean; runtime_login: string }>(
     client,
-    [
-      'SELECT COALESCE($3::text, current_user) AS runtime_login,',
-      "(SELECT pg_has_role(COALESCE($3::text, current_user), reader.oid, 'USAGE') FROM pg_roles reader WHERE reader.rolname = $1) AS can_reader,",
-      "(SELECT pg_has_role(COALESCE($3::text, current_user), writer.oid, 'USAGE') FROM pg_roles writer WHERE writer.rolname = $2) AS can_writer",
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT COALESCE($3::text, current_user) AS runtime_login,',
+        "(SELECT pg_has_role(COALESCE($3::text, current_user), reader.oid, 'USAGE') FROM pg_roles reader WHERE reader.rolname = $1) AS can_reader,",
+        "(SELECT pg_has_role(COALESCE($3::text, current_user), writer.oid, 'USAGE') FROM pg_roles writer WHERE writer.rolname = $2) AS can_writer",
+      ],
+      ' ',
+    ),
     [topology.roles.reader.name, topology.roles.writer.name, runtimeLoginRole ?? null],
   );
   const row = rows?.rows[0];
@@ -3553,7 +4281,8 @@ async function currentPostgresLogin(client: RuntimeTransactionClient): Promise<s
     client,
     'SELECT current_user AS runtime_login',
   );
-  return result?.rows[0]?.runtime_login;
+  if (result === undefined || result.rows.length === 0) return undefined;
+  return postgresDenseArrayValue(result.rows, 0, 'Postgres current-login rows').runtime_login;
 }
 
 function postgresRoleTopologyReport(
@@ -3606,10 +4335,13 @@ async function assertPostgresSchemaTablesExist(
   const missing = await missingPostgresSchemaTables(client, tables);
   if (missing.length === 0) return;
   throw new Error(
-    [
-      'KV433_SCHEMA_TABLE: Postgres schema tables are missing; run `kovo db generate` and `kovo db migrate` before `kovo db provision` (SPEC §10.3).',
-      `missing: ${missing.join(', ')}`,
-    ].join(' '),
+    postgresJoin(
+      [
+        'KV433_SCHEMA_TABLE: Postgres schema tables are missing; run `kovo db generate` and `kovo db migrate` before `kovo db provision` (SPEC §10.3).',
+        `missing: ${postgresJoin(missing, ', ')}`,
+      ],
+      ' ',
+    ),
   );
 }
 
@@ -3618,21 +4350,28 @@ async function missingPostgresSchemaTables(
   tables: readonly PgTable[],
 ): Promise<readonly string[]> {
   const missing: string[] = [];
-  for (const table of tables) {
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres required schema tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const table = postgresDenseArrayValue(tables, index, 'Postgres required schema tables');
     const config = getTableConfig(table);
     const schema = tableSchemaName(config);
     const result = await safeQuery<{ exists: number }>(
       client,
-      [
-        'SELECT 1 AS exists',
-        'FROM pg_class c',
-        'JOIN pg_namespace n ON n.oid = c.relnamespace',
-        'WHERE n.nspname = $1 AND c.relname = $2',
-        "AND c.relkind IN ('r', 'p')",
-      ].join(' '),
+      postgresJoin(
+        [
+          'SELECT 1 AS exists',
+          'FROM pg_class c',
+          'JOIN pg_namespace n ON n.oid = c.relnamespace',
+          'WHERE n.nspname = $1 AND c.relname = $2',
+          "AND c.relkind IN ('r', 'p')",
+        ],
+        ' ',
+      ),
       [schema, config.name],
     );
-    if ((result?.rows.length ?? 0) === 0) missing.push(`${schema}.${config.name}`);
+    if ((result?.rows.length ?? 0) === 0) {
+      appendPostgresValue(missing, `${schema}.${config.name}`);
+    }
   }
   return missing;
 }
@@ -3676,7 +4415,11 @@ async function postgresRoleMembershipExists(
     "SELECT pg_has_role($1::text, $2::text, 'USAGE') AS has_membership",
     [edge.memberRole, edge.role],
   );
-  return result.rows[0]?.has_membership === true;
+  const rows = snapshotPostgresQueryRows(result.rows, 'Postgres role-membership rows');
+  return (
+    rows.length > 0 &&
+    postgresDenseArrayValue(rows, 0, 'Postgres role-membership rows').has_membership === true
+  );
 }
 
 function runtimeLoginRoleFromDatabaseUrl(databaseUrl: string | undefined): string | undefined {
@@ -3718,7 +4461,11 @@ async function runtimeConnectionLeastPrivilegeIssue(
   const current = await client.query<{ runtime_login: string }>(
     'SELECT current_user AS runtime_login',
   );
-  const runtimeLogin = current.rows[0]?.runtime_login;
+  const currentRows = snapshotPostgresQueryRows(current.rows, 'Postgres runtime-login rows');
+  const runtimeLogin =
+    currentRows.length === 0
+      ? undefined
+      : postgresDenseArrayValue(currentRows, 0, 'Postgres runtime-login rows').runtime_login;
   if (runtimeLogin === undefined) {
     return {
       code: 'KV433_RUNTIME_ROLE',
@@ -3742,12 +4489,12 @@ function currentNodeEnv(): string | undefined {
 
 async function applyPostgresMigrations(
   client: RuntimeTransactionClient,
-  migrations: readonly KovoPostgresMigration[],
+  normalized: readonly NormalizedPostgresMigration[],
 ): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
-  const normalized = normalizePostgresMigrations(migrations);
   const applied: string[] = [];
   const skipped: string[] = [];
-  if (normalized.length === 0) return { applied, skipped };
+  const migrationCount = postgresDenseArrayLength(normalized, 'Normalized Postgres migrations');
+  if (migrationCount === 0) return { applied, skipped };
 
   await client.exec(
     `CREATE TABLE IF NOT EXISTS ${quoteIdent(
@@ -3755,31 +4502,55 @@ async function applyPostgresMigrations(
     )} (id text PRIMARY KEY, checksum text NOT NULL, applied_at timestamp NOT NULL DEFAULT now())`,
   );
 
-  for (const migration of normalized) {
+  for (let index = 0; index < migrationCount; index += 1) {
+    const migration = postgresDenseArrayValue(normalized, index, 'Normalized Postgres migrations');
+    const id = migration.id;
+    const sql = migration.sql;
+    const checksum = migration.checksum;
+    if (postgresMigrationChecksum(sql) !== checksum) {
+      throw new Error(
+        `KV433_MIGRATION_CHECKSUM: Postgres migration ${id} bytes changed after validation (SPEC §10.3).`,
+      );
+    }
     const existing = await client.query<{ checksum: string }>(
       `SELECT checksum FROM ${quoteIdent(MIGRATIONS_TABLE)} WHERE id = $1`,
-      [migration.id],
+      [id],
     );
-    const existingChecksum = existing.rows[0]?.checksum;
+    const existingRow =
+      postgresDenseArrayLength(existing.rows, 'Postgres migration ledger rows') === 0
+        ? undefined
+        : postgresDenseArrayValue(existing.rows, 0, 'Postgres migration ledger rows');
+    const existingChecksum =
+      existingRow === undefined
+        ? undefined
+        : postgresOwnDataValue(existingRow as Record<PropertyKey, unknown>, 'checksum');
     if (existingChecksum !== undefined) {
-      if (existingChecksum !== migration.checksum) {
+      if (typeof existingChecksum !== 'string') {
         throw new Error(
-          [
-            `KV433_MIGRATION_CHECKSUM: Postgres migration ${migration.id} changed after it was applied.`,
-            `expected ${existingChecksum}, saw ${migration.checksum} (SPEC §10.3).`,
-          ].join(' '),
+          `KV433_MIGRATION_CHECKSUM: Postgres migration ${id} has an invalid stored checksum (SPEC §10.3).`,
         );
       }
-      skipped.push(migration.id);
+      if (existingChecksum !== checksum) {
+        throw new Error(
+          postgresJoin(
+            [
+              `KV433_MIGRATION_CHECKSUM: Postgres migration ${id} changed after it was applied.`,
+              `expected ${existingChecksum}, saw ${checksum} (SPEC §10.3).`,
+            ],
+            ' ',
+          ),
+        );
+      }
+      appendPostgresValue(skipped, id);
       continue;
     }
 
-    await client.exec(migration.sql);
+    await client.exec(sql);
     await client.query(
       `INSERT INTO ${quoteIdent(MIGRATIONS_TABLE)} (id, checksum) VALUES ($1, $2)`,
-      [migration.id, migration.checksum],
+      [id, checksum],
     );
-    applied.push(migration.id);
+    appendPostgresValue(applied, id);
   }
 
   return { applied, skipped };
@@ -3791,23 +4562,44 @@ interface NormalizedPostgresMigration extends KovoPostgresMigration {
 
 function normalizePostgresMigrations(
   migrations: readonly KovoPostgresMigration[],
-): NormalizedPostgresMigration[] {
-  const seen = new Set<string>();
-  return migrations.map((migration) => {
-    const id = migration.id.trim();
+): readonly NormalizedPostgresMigration[] {
+  const seen = createWitnessSet<string>();
+  const normalized: NormalizedPostgresMigration[] = [];
+  const migrationCount = postgresDenseArrayLength(migrations, 'Postgres migration input');
+  for (let index = 0; index < migrationCount; index += 1) {
+    const migration = postgresDenseArrayValue(migrations, index, 'Postgres migration input');
+    if (!isRecord(migration)) {
+      throw new TypeError(
+        'KV433_MIGRATION_SQL: Postgres migration entries must be own-data objects.',
+      );
+    }
+    const snapshot = postgresOwnDataSnapshot(migration, 'Postgres migration');
+    const rawId = postgresOwnDataValue(snapshot, 'id');
+    const rawSql = postgresOwnDataValue(snapshot, 'sql');
+    if (typeof rawId !== 'string') {
+      throw new TypeError('KV433_MIGRATION_ID: Postgres migration id must be a string.');
+    }
+    if (typeof rawSql !== 'string') {
+      throw new TypeError('KV433_MIGRATION_SQL: Postgres migration SQL must be a string.');
+    }
+    const id = securityStringTrim(rawId);
     if (id === '') {
       throw new Error('KV433_MIGRATION_ID: Postgres migration id must be non-empty.');
     }
-    if (seen.has(id)) {
+    if (witnessSetHas(seen, id)) {
       throw new Error(`KV433_MIGRATION_ID: duplicate Postgres migration id ${id}.`);
     }
-    seen.add(id);
-    const sqlText = migration.sql.trim();
+    witnessSetAdd(seen, id);
+    const sqlText = securityStringTrim(rawSql);
     if (sqlText === '') {
       throw new Error(`KV433_MIGRATION_SQL: Postgres migration ${id} has no SQL.`);
     }
-    return { checksum: postgresMigrationChecksum(sqlText), id, sql: sqlText };
-  });
+    appendPostgresValue(
+      normalized,
+      witnessFreeze({ checksum: postgresMigrationChecksum(sqlText), id, sql: sqlText }),
+    );
+  }
+  return witnessFreeze(normalized);
 }
 
 function postgresMigrationChecksum(sqlText: string): string {
@@ -3888,12 +4680,16 @@ async function applyPostgresCreationAuthorityDefaultDeny(
     runtimeLoginRole,
   );
   if (identityIssues.length > 0) {
-    throw new Error(
-      [
-        'KV433_RUNTIME_ROLE: Postgres provisioning refuses an unsafe reader/writer/runtime role closure (SPEC §10.3).',
-        ...identityIssues.map((issue) => `${issue.code}: ${issue.detail}`),
-      ].join(' '),
+    const issueDetails = postgresMapDense(
+      identityIssues,
+      (issue) => `${issue.code}: ${issue.detail}`,
+      'Postgres identity closure issues',
     );
+    const lines = [
+      'KV433_RUNTIME_ROLE: Postgres provisioning refuses an unsafe reader/writer/runtime role closure (SPEC §10.3).',
+    ];
+    appendPostgresDenseValues(lines, issueDetails, 'Postgres identity closure issues');
+    throw new Error(postgresJoin(lines, ' '));
   }
 
   // SPEC §10.3 (C9/C10): CREATE/TEMP are graph-expanding privileges. Revoke them from PUBLIC and
@@ -3923,22 +4719,30 @@ async function applyPostgresCreationAuthorityDefaultDeny(
     )}`;
   }
   const schemas = await client.query<{ schema_name: string }>(
-    [
-      'SELECT nspname AS schema_name',
-      'FROM pg_catalog.pg_namespace',
-      "WHERE nspname <> 'information_schema'",
-      "AND nspname !~ '^pg_'",
-      'ORDER BY nspname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT nspname AS schema_name',
+        'FROM pg_catalog.pg_namespace',
+        "WHERE nspname <> 'information_schema'",
+        "AND nspname !~ '^pg_'",
+        'ORDER BY nspname',
+      ],
+      ' ',
+    ),
   );
-  for (let index = 0; index < schemas.rows.length; index += 1) {
-    const row = postgresDenseValue(schemas.rows, index, 'Postgres schema authority rows');
+  const schemaRows = snapshotPostgresQueryRows(schemas.rows, 'Postgres schema authority rows');
+  for (let index = 0; index < schemaRows.length; index += 1) {
+    const row = postgresDenseValue(schemaRows, index, 'Postgres schema authority rows');
     await client.exec(`REVOKE CREATE ON SCHEMA ${quoteIdent(row.schema_name)} FROM ${grantees}`);
   }
   const database = await client.query<{ database_name: string }>(
     'SELECT pg_catalog.current_database() AS database_name',
   );
-  const databaseName = database.rows[0]?.database_name;
+  const databaseRows = snapshotPostgresQueryRows(database.rows, 'Postgres database-name rows');
+  const databaseName =
+    databaseRows.length === 0
+      ? undefined
+      : postgresDenseArrayValue(databaseRows, 0, 'Postgres database-name rows').database_name;
   if (databaseName === undefined) {
     throw new Error(
       'KV433_REACHABILITY_AUDIT: could not identify the current database while provisioning (SPEC §10.3).',
@@ -3955,15 +4759,17 @@ async function applyPostgresCreationAuthorityDefaultDeny(
     );
   }
   if (remaining.length > 0) {
-    throw new Error(
-      [
-        'KV433_UNEXPECTED_PRIVILEGE: Postgres provisioning could not remove app-reachable CREATE/TEMPORARY authority (SPEC §10.3).',
-        ...remaining.map(
-          (row) =>
-            `${row.role_name} has effective ${row.privilege_type} on ${row.object_kind} ${row.object_name}`,
-        ),
-      ].join(' '),
+    const remainingDetails = postgresMapDense(
+      remaining,
+      (row) =>
+        `${row.role_name} has effective ${row.privilege_type} on ${row.object_kind} ${row.object_name}`,
+      'Postgres remaining creation authority',
     );
+    const lines = [
+      'KV433_UNEXPECTED_PRIVILEGE: Postgres provisioning could not remove app-reachable CREATE/TEMPORARY authority (SPEC §10.3).',
+    ];
+    appendPostgresDenseValues(lines, remainingDetails, 'Postgres creation-authority issues');
+    throw new Error(postgresJoin(lines, ' '));
   }
 }
 
@@ -4251,58 +5057,62 @@ function resolveProtectedPostgresTables(
   tables: readonly PgTable[],
   metadata: KovoRuntimeDbMetadata,
 ): ReadonlyMap<string, ProtectedPostgresTable> {
-  const tableConfigs = new Map<string, PgTableConfig>();
-  for (const table of tables) {
+  const tableConfigs = createWitnessMap<string, PgTableConfig>();
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres protected-table schema');
+  for (let index = 0; index < tableCount; index += 1) {
+    const table = postgresDenseArrayValue(tables, index, 'Postgres protected-table schema');
     const config = getTableConfig(table);
-    const previous = tableConfigs.get(config.name);
+    const previous = witnessMapGet(tableConfigs, config.name);
     if (previous !== undefined && tableSchemaName(previous) !== tableSchemaName(config)) {
       throw new Error(
         `KV414: duplicate Postgres table name ${config.name} across schemas is ambiguous in Kovo metadata (SPEC §10.3).`,
       );
     }
-    tableConfigs.set(config.name, config);
+    witnessMapSet(tableConfigs, config.name, config);
   }
-  const protectedTables = new Map<string, ProtectedPostgresTable>();
-  for (const [tableName, owner] of metadata.ownerSourcesByTable) {
-    const tableConfig = tableConfigs.get(tableName);
-    if (tableConfig === undefined) continue;
-    protectedTables.set(tableName, {
+  const protectedTables = createWitnessMap<string, ProtectedPostgresTable>();
+  witnessMapForEach(metadata.ownerSourcesByTable, (owner, tableName) => {
+    const tableConfig = witnessMapGet(tableConfigs, tableName);
+    if (tableConfig === undefined) return;
+    witnessMapSet(protectedTables, tableName, {
       kind: 'owner',
       predicate: `${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true)`,
       schemaName: tableSchemaName(tableConfig),
       tableName,
     });
-  }
-  for (const [tableName, ownerVia] of metadata.ownerViaSourcesByTable) {
-    const tableConfig = tableConfigs.get(tableName);
-    if (tableConfig === undefined) continue;
+  });
+  witnessMapForEach(metadata.ownerViaSourcesByTable, (ownerVia, tableName) => {
+    const tableConfig = witnessMapGet(tableConfigs, tableName);
+    if (tableConfig === undefined) return;
     const predicate = ownerPredicateForTable(metadata, ownerVia.parentTable, {
       parentKeyColumnName: ownerVia.parentKeyColumnName,
       parentMatchExpression: `${quoteIdent(tableName)}.${quoteIdent(ownerVia.fkColumnName)}`,
-      visited: new Set([tableName]),
+      visited: postgresStringSet([tableName]),
     });
     if (predicate === undefined) {
       throw new Error(
         `KV414: ownerVia table ${tableName} cannot resolve parent chain through ${ownerVia.parentTable} to an owner column (SPEC §10.3).`,
       );
     }
-    protectedTables.set(tableName, {
+    witnessMapSet(protectedTables, tableName, {
       kind: 'ownerVia',
       predicate,
       schemaName: tableSchemaName(tableConfig),
       tableName,
     });
-  }
-  for (const { predicate, tableName } of customAuthzPolicyPredicatesByTable(tables).values()) {
-    const tableConfig = tableConfigs.get(tableName);
-    if (tableConfig === undefined) continue;
-    protectedTables.set(tableName, {
+  });
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (policy) => {
+    const predicate = policy.predicate;
+    const tableName = policy.tableName;
+    const tableConfig = witnessMapGet(tableConfigs, tableName);
+    if (tableConfig === undefined) return;
+    witnessMapSet(protectedTables, tableName, {
       kind: 'authzPolicy',
       predicate,
       schemaName: tableSchemaName(tableConfig),
       tableName,
     });
-  }
+  });
   return protectedTables;
 }
 
@@ -4315,21 +5125,24 @@ function ownerPredicateForTable(
     visited: Set<string>;
   },
 ): string | undefined {
-  if (input.visited.has(tableName)) return undefined;
-  input.visited.add(tableName);
-  const parentAlias = quoteIdent(`kovo_parent_${tableName}_${input.visited.size}`);
-  const owner = metadata.ownerSourcesByTable.get(tableName);
+  if (witnessSetHas(input.visited, tableName)) return undefined;
+  witnessSetAdd(input.visited, tableName);
+  const parentAlias = quoteIdent(`kovo_parent_${tableName}_${witnessSetSize(input.visited)}`);
+  const owner = witnessMapGet(metadata.ownerSourcesByTable, tableName);
   if (owner !== undefined) {
-    return [
-      'EXISTS (SELECT 1 FROM',
-      `${quoteIdent(tableName)} ${parentAlias}`,
-      'WHERE',
-      `${parentAlias}.${quoteIdent(input.parentKeyColumnName)} = ${input.parentMatchExpression}`,
-      'AND',
-      `${parentAlias}.${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true))`,
-    ].join(' ');
+    return postgresJoin(
+      [
+        'EXISTS (SELECT 1 FROM',
+        `${quoteIdent(tableName)} ${parentAlias}`,
+        'WHERE',
+        `${parentAlias}.${quoteIdent(input.parentKeyColumnName)} = ${input.parentMatchExpression}`,
+        'AND',
+        `${parentAlias}.${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true))`,
+      ],
+      ' ',
+    );
   }
-  const ownerVia = metadata.ownerViaSourcesByTable.get(tableName);
+  const ownerVia = witnessMapGet(metadata.ownerViaSourcesByTable, tableName);
   if (ownerVia === undefined) return undefined;
   const nested = ownerPredicateForTable(metadata, ownerVia.parentTable, {
     parentKeyColumnName: ownerVia.parentKeyColumnName,
@@ -4337,15 +5150,18 @@ function ownerPredicateForTable(
     visited: input.visited,
   });
   if (nested === undefined) return undefined;
-  return [
-    'EXISTS (SELECT 1 FROM',
-    `${quoteIdent(tableName)} ${parentAlias}`,
-    'WHERE',
-    `${parentAlias}.${quoteIdent(input.parentKeyColumnName)} = ${input.parentMatchExpression}`,
-    'AND',
-    nested,
-    ')',
-  ].join(' ');
+  return postgresJoin(
+    [
+      'EXISTS (SELECT 1 FROM',
+      `${quoteIdent(tableName)} ${parentAlias}`,
+      'WHERE',
+      `${parentAlias}.${quoteIdent(input.parentKeyColumnName)} = ${input.parentMatchExpression}`,
+      'AND',
+      nested,
+      ')',
+    ],
+    ' ',
+  );
 }
 
 async function applyPostgresRlsPolicies(
@@ -4355,7 +5171,17 @@ async function applyPostgresRlsPolicies(
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
-  for (const protectedTable of protectedTables.values()) {
+  const protectedTableValues = postgresMapValues(protectedTables);
+  const protectedTableCount = postgresDenseArrayLength(
+    protectedTableValues,
+    'Postgres RLS protected tables',
+  );
+  for (let index = 0; index < protectedTableCount; index += 1) {
+    const protectedTable = postgresDenseArrayValue(
+      protectedTableValues,
+      index,
+      'Postgres RLS protected tables',
+    );
     const { predicate, schemaName, tableName } = protectedTable;
     const table = quoteQualified(schemaName, tableName);
     await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
@@ -4364,28 +5190,37 @@ async function applyPostgresRlsPolicies(
     await client.exec(`DROP POLICY IF EXISTS kovo_authz_policy ON ${table}`);
     await client.exec(`DROP POLICY IF EXISTS kovo_system_scope ON ${table}`);
     await client.exec(
-      [
-        `CREATE POLICY ${
-          protectedTable.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope'
-        } ON ${table}`,
-        `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
-        `USING (${predicate}) WITH CHECK (${predicate})`,
-      ].join(' '),
+      postgresJoin(
+        [
+          `CREATE POLICY ${
+            protectedTable.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope'
+          } ON ${table}`,
+          `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
+          `USING (${predicate}) WITH CHECK (${predicate})`,
+        ],
+        ' ',
+      ),
     );
     await client.exec(
-      [
-        `CREATE POLICY kovo_system_scope ON ${table}`,
-        `FOR ALL TO ${quoteIdent(config.systemRole)}`,
-        'USING (true) WITH CHECK (true)',
-      ].join(' '),
+      postgresJoin(
+        [
+          `CREATE POLICY kovo_system_scope ON ${table}`,
+          `FOR ALL TO ${quoteIdent(config.systemRole)}`,
+          'USING (true) WITH CHECK (true)',
+        ],
+        ' ',
+      ),
     );
   }
-  for (const tableObject of tables) {
+  const crossOwnerReadableTables = postgresCrossOwnerReadableTableNames(tables, metadata);
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres RLS schema tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const tableObject = postgresDenseArrayValue(tables, index, 'Postgres RLS schema tables');
     const tableConfig = getTableConfig(tableObject);
     const table = quoteTable(tableConfig);
     await client.exec(`DROP POLICY IF EXISTS kovo_admin_scope ON ${table}`);
-    if (!config.crossOwnerReadTables.has(tableConfig.name)) continue;
-    if (!postgresCrossOwnerReadableTableNames(tables, metadata).has(tableConfig.name)) {
+    if (!witnessSetHas(config.crossOwnerReadTables, tableConfig.name)) continue;
+    if (!witnessSetHas(crossOwnerReadableTables, tableConfig.name)) {
       throw new Error(
         `KV414: crossOwnerRead table ${tableConfig.name} must be owner, ownerVia, or custom authzPolicy scoped (SPEC §10.3).`,
       );
@@ -4393,11 +5228,14 @@ async function applyPostgresRlsPolicies(
     await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
     await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
     await client.exec(
-      [
-        `CREATE POLICY kovo_admin_scope ON ${table}`,
-        `FOR SELECT TO ${quoteIdent(config.adminRole)}`,
-        'USING (true)',
-      ].join(' '),
+      postgresJoin(
+        [
+          `CREATE POLICY kovo_admin_scope ON ${table}`,
+          `FOR SELECT TO ${quoteIdent(config.adminRole)}`,
+          'USING (true)',
+        ],
+        ' ',
+      ),
     );
   }
 }
@@ -4406,18 +5244,31 @@ async function applyPostgresViewSecurityInvoker(
   client: RuntimeTransactionClient,
   tables: readonly PgTable[],
 ): Promise<void> {
-  const appTableNames = new Set(tables.map((table) => getTableConfig(table).name));
+  const appTableNames = createWitnessSet<string>();
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres view-security tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    witnessSetAdd(
+      appTableNames,
+      getTableConfig(postgresDenseArrayValue(tables, index, 'Postgres view-security tables')).name,
+    );
+  }
   const schemas = postgresSchemaNames(tables);
   if (schemas.length === 0) return;
-  const schemaPlaceholders = schemas.map((_, index) => `$${index + 1}`).join(', ');
+  const schemaPlaceholders = postgresJoin(
+    postgresMapDense(schemas, (_schema, index) => `$${index + 1}`, 'Postgres view schemas'),
+    ', ',
+  );
   const views = await safeQuery<{ table_name: string; table_schema: string }>(
     client,
-    [
-      'SELECT table_schema, table_name',
-      'FROM information_schema.views',
-      `WHERE table_schema IN (${schemaPlaceholders})`,
-      'ORDER BY table_schema, table_name',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT table_schema, table_name',
+        'FROM information_schema.views',
+        `WHERE table_schema IN (${schemaPlaceholders})`,
+        'ORDER BY table_schema, table_name',
+      ],
+      ' ',
+    ),
     schemas,
   );
   if (views === undefined) {
@@ -4425,9 +5276,17 @@ async function applyPostgresViewSecurityInvoker(
       'KV433_REACHABILITY_AUDIT: could not enumerate app-schema views before Postgres provision.',
     );
   }
-  for (const view of views.rows) {
+  const viewCount = postgresDenseArrayLength(views.rows, 'Postgres app view rows');
+  for (let index = 0; index < viewCount; index += 1) {
+    const view = postgresDenseArrayValue(views.rows, index, 'Postgres app view rows');
     const dependencies = await postgresViewDependencies(client, view.table_schema, view.table_name);
-    if (dependencies.some((dependency) => appTableNames.has(dependency.table_name))) {
+    if (
+      postgresSomeDense(
+        dependencies,
+        (dependency) => witnessSetHas(appTableNames, dependency.table_name),
+        'Postgres view dependencies',
+      )
+    ) {
       await client.exec(
         `ALTER VIEW ${quoteQualified(view.table_schema, view.table_name)} SET (security_invoker = true)`,
       );
@@ -4438,10 +5297,16 @@ async function applyPostgresViewSecurityInvoker(
 function customAuthzPolicyPredicatesByTable(
   tables: readonly PgTable[],
 ): ReadonlyMap<string, AuthzPolicyPredicate> {
-  const predicates = new Map<string, AuthzPolicyPredicate>();
-  for (const table of tables) {
+  const predicates = createWitnessMap<string, AuthzPolicyPredicate>();
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres authz-policy tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const table = postgresDenseArrayValue(tables, index, 'Postgres authz-policy tables');
     const tableName = getTableConfig(table).name;
-    const authzPolicy = kovoDomainAnnotation(table)?.authzPolicy;
+    const annotation = kovoDomainAnnotation(table);
+    const authzPolicy =
+      annotation === undefined
+        ? undefined
+        : postgresOwnDataValue(annotation as Record<PropertyKey, unknown>, 'authzPolicy');
     if (authzPolicy === undefined || typeof authzPolicy === 'string') continue;
     if (!isDrizzleSqlLike(authzPolicy)) {
       throw unsupportedAuthzPolicyError(
@@ -4449,9 +5314,11 @@ function customAuthzPolicyPredicatesByTable(
         'expected authzPolicy to be a Drizzle sql`...` predicate or a string justification',
       );
     }
-    predicates.set(tableName, {
-      dependencyTableNames: authzPolicyUsedTableNames(authzPolicy).filter(
+    witnessMapSet(predicates, tableName, {
+      dependencyTableNames: postgresFilterDense(
+        authzPolicyUsedTableNames(authzPolicy),
         (dependency) => dependency !== tableName,
+        'Postgres authz-policy dependencies',
       ),
       predicate: renderCustomAuthzPolicyPredicate(tableName, authzPolicy),
       tableName,
@@ -4480,24 +5347,42 @@ function renderCustomAuthzPolicyPredicate(tableName: string, authzPolicy: unknow
     throw unsupportedAuthzPolicyError(tableName, `could not render predicate SQL: ${reason}`);
   }
   const params = query.params ?? [];
-  if (params.length > 0) {
+  if (postgresDenseArrayLength(params, 'Postgres authz-policy parameters') > 0) {
     throw unsupportedAuthzPolicyError(
       tableName,
       'predicate SQL must not contain bound parameters; inline only reviewed literal SQL chunks',
     );
   }
-  if (typeof query.sql !== 'string' || query.sql.trim() === '') {
+  if (typeof query.sql !== 'string' || securityStringTrim(query.sql) === '') {
     throw unsupportedAuthzPolicyError(tableName, 'predicate SQL rendered to an empty statement');
   }
-  return query.sql.trim();
+  return securityStringTrim(query.sql);
 }
 
 function customAuthzPolicyDependencyTableNames(tables: readonly PgTable[]): ReadonlySet<string> {
-  const dependencyTableNames = new Set<string>();
-  for (const { dependencyTableNames: dependencies } of customAuthzPolicyPredicatesByTable(
-    tables,
-  ).values()) {
-    for (const dependency of dependencies) dependencyTableNames.add(dependency);
+  const dependencyTableNames = createWitnessSet<string>();
+  const policies = postgresMapValues(customAuthzPolicyPredicatesByTable(tables));
+  const policyCount = postgresDenseArrayLength(policies, 'Postgres authz policies');
+  for (let policyIndex = 0; policyIndex < policyCount; policyIndex += 1) {
+    const dependencies = postgresDenseArrayValue(
+      policies,
+      policyIndex,
+      'Postgres authz policies',
+    ).dependencyTableNames;
+    const dependencyCount = postgresDenseArrayLength(
+      dependencies,
+      'Postgres authz-policy dependencies',
+    );
+    for (let dependencyIndex = 0; dependencyIndex < dependencyCount; dependencyIndex += 1) {
+      witnessSetAdd(
+        dependencyTableNames,
+        postgresDenseArrayValue(
+          dependencies,
+          dependencyIndex,
+          'Postgres authz-policy dependencies',
+        ),
+      );
+    }
   }
   return dependencyTableNames;
 }
@@ -4506,35 +5391,41 @@ function postgresReachabilityAllowlist(
   tables: readonly PgTable[],
   metadata: KovoRuntimeDbMetadata,
 ): ReadonlySet<string> {
-  const allowlisted = new Set<string>();
-  const tableConfigs = new Map(
-    tables.map((table) => {
-      const config = getTableConfig(table);
-      return [config.name, config] as const;
-    }),
-  );
+  const allowlisted = createWitnessSet<string>();
+  const tableConfigs = createWitnessMap<string, PgTableConfig>();
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres reachability-allowlist tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const config = getTableConfig(
+      postgresDenseArrayValue(tables, index, 'Postgres reachability-allowlist tables'),
+    );
+    witnessMapSet(tableConfigs, config.name, config);
+  }
   const addDeclaredTable = (tableName: string): void => {
-    const config = tableConfigs.get(tableName);
+    const config = witnessMapGet(tableConfigs, tableName);
     if (config !== undefined) {
-      allowlisted.add(postgresRelationKey(tableSchemaName(config), config.name));
+      witnessSetAdd(allowlisted, postgresRelationKey(tableSchemaName(config), config.name));
     }
   };
-  const protectedAuthzPolicyTables = new Set(customAuthzPolicyPredicatesByTable(tables).keys());
-  for (const [tableName, classifications] of metadata.authorizationClassificationsByTable) {
+  const protectedAuthzPolicyTables = createWitnessSet<string>();
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_policy, tableName) =>
+    witnessSetAdd(protectedAuthzPolicyTables, tableName),
+  );
+  witnessMapForEach(metadata.authorizationClassificationsByTable, (classifications, tableName) => {
     if (
-      classifications.some(
+      postgresSomeDense(
+        classifications,
         (classification) =>
           classification === 'public' ||
           classification === 'reference' ||
-          (classification === 'authzPolicy' && !protectedAuthzPolicyTables.has(tableName)),
+          (classification === 'authzPolicy' &&
+            !witnessSetHas(protectedAuthzPolicyTables, tableName)),
+        'Postgres reachability classifications',
       )
     ) {
       addDeclaredTable(tableName);
     }
-  }
-  for (const tableName of customAuthzPolicyDependencyTableNames(tables)) {
-    addDeclaredTable(tableName);
-  }
+  });
+  witnessSetForEach(customAuthzPolicyDependencyTableNames(tables), addDeclaredTable);
   return allowlisted;
 }
 
@@ -4545,16 +5436,21 @@ async function postgresCatalogRelation(
 ): Promise<PostgresCatalogRelation | undefined> {
   const result = await safeQuery<PostgresCatalogRelation>(
     client,
-    [
-      'SELECT n.nspname AS schema_name, c.relname AS table_name, c.relkind,',
-      'c.relrowsecurity, c.relforcerowsecurity, c.reloptions',
-      'FROM pg_class c',
-      'JOIN pg_namespace n ON n.oid = c.relnamespace',
-      'WHERE n.nspname = $1 AND c.relname = $2',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT n.nspname AS schema_name, c.relname AS table_name, c.relkind,',
+        'c.relrowsecurity, c.relforcerowsecurity, c.reloptions',
+        'FROM pg_class c',
+        'JOIN pg_namespace n ON n.oid = c.relnamespace',
+        'WHERE n.nspname = $1 AND c.relname = $2',
+      ],
+      ' ',
+    ),
     [schema, table],
   );
-  return result?.rows[0];
+  return result === undefined || result.rows.length === 0
+    ? undefined
+    : postgresDenseArrayValue(result.rows, 0, 'Postgres catalog relation rows');
 }
 
 async function postgresHasLiveKovoPolicy(
@@ -4564,11 +5460,14 @@ async function postgresHasLiveKovoPolicy(
 ): Promise<boolean> {
   const result = await safeQuery(
     client,
-    [
-      'SELECT 1 FROM pg_policies',
-      'WHERE schemaname = $1 AND tablename = $2',
-      "AND policyname IN ('kovo_owner_scope', 'kovo_authz_policy', 'kovo_admin_scope')",
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT 1 FROM pg_policies',
+        'WHERE schemaname = $1 AND tablename = $2',
+        "AND policyname IN ('kovo_owner_scope', 'kovo_authz_policy', 'kovo_admin_scope')",
+      ],
+      ' ',
+    ),
     [schema, table],
   );
   return (result?.rows.length ?? 0) > 0;
@@ -4591,7 +5490,11 @@ async function postgresBaseTableHasProtectedPosture(
 }
 
 function postgresViewIsSecurityInvoker(relation: PostgresCatalogRelation): boolean {
-  return (relation.reloptions ?? []).some((option) => option === 'security_invoker=true');
+  return postgresSomeDense(
+    relation.reloptions ?? [],
+    (option) => option === 'security_invoker=true',
+    'Postgres relation options',
+  );
 }
 
 async function postgresViewDependencies(
@@ -4601,40 +5504,59 @@ async function postgresViewDependencies(
 ): Promise<readonly PostgresViewDependency[]> {
   const usage = await safeQuery<PostgresViewDependency>(
     client,
-    [
-      'SELECT DISTINCT base_ns.nspname AS table_schema, base.relname AS table_name',
-      'FROM pg_class view_rel',
-      'JOIN pg_namespace view_ns ON view_ns.oid = view_rel.relnamespace',
-      'JOIN pg_rewrite rewrite ON rewrite.ev_class = view_rel.oid',
-      'JOIN pg_depend dep ON dep.classid = $3::regclass',
-      '  AND dep.objid = rewrite.oid',
-      '  AND dep.refclassid = $4::regclass',
-      'JOIN pg_class base ON base.oid = dep.refobjid',
-      'JOIN pg_namespace base_ns ON base_ns.oid = base.relnamespace',
-      'WHERE view_ns.nspname = $1 AND view_rel.relname = $2',
-      'AND base.oid <> view_rel.oid',
-      "AND base_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'ORDER BY base_ns.nspname, base.relname',
-    ].join(' '),
+    postgresJoin(
+      [
+        'SELECT DISTINCT base_ns.nspname AS table_schema, base.relname AS table_name',
+        'FROM pg_class view_rel',
+        'JOIN pg_namespace view_ns ON view_ns.oid = view_rel.relnamespace',
+        'JOIN pg_rewrite rewrite ON rewrite.ev_class = view_rel.oid',
+        'JOIN pg_depend dep ON dep.classid = $3::regclass',
+        '  AND dep.objid = rewrite.oid',
+        '  AND dep.refclassid = $4::regclass',
+        'JOIN pg_class base ON base.oid = dep.refobjid',
+        'JOIN pg_namespace base_ns ON base_ns.oid = base.relnamespace',
+        'WHERE view_ns.nspname = $1 AND view_rel.relname = $2',
+        'AND base.oid <> view_rel.oid',
+        "AND base_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+        'ORDER BY base_ns.nspname, base.relname',
+      ],
+      ' ',
+    ),
     [schema, table, 'pg_rewrite', 'pg_class'],
   );
   return usage?.rows ?? [];
 }
 
 function authzPolicyUsedTableNames(authzPolicy: DrizzleSqlLike): string[] {
-  return Array.isArray(authzPolicy.usedTables)
-    ? authzPolicy.usedTables.filter(
-        (tableName): tableName is string => typeof tableName === 'string',
-      )
-    : [];
+  const usedTables = postgresOwnDataValue(
+    authzPolicy as unknown as Record<PropertyKey, unknown>,
+    'usedTables',
+  );
+  if (!securityArrayIsArray(usedTables)) return [];
+  const tableNames: string[] = [];
+  const tableCount = postgresDenseArrayLength(usedTables, 'Postgres authz-policy used tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const tableName = postgresDenseArrayValue(
+      usedTables,
+      index,
+      'Postgres authz-policy used tables',
+    );
+    if (typeof tableName === 'string') appendPostgresValue(tableNames, tableName);
+  }
+  return tableNames;
 }
 
 function isDrizzleSqlLike(value: unknown): value is DrizzleSqlLike {
+  if (
+    value === null ||
+    (typeof value !== 'object' && typeof value !== 'function') ||
+    postgresIsProxy(value)
+  ) {
+    return false;
+  }
+  const queryChunks = postgresOwnDataValue(value as Record<PropertyKey, unknown>, 'queryChunks');
   return (
-    value !== null &&
-    (typeof value === 'object' || typeof value === 'function') &&
-    Array.isArray((value as DrizzleSqlLike).queryChunks) &&
-    typeof (value as DrizzleSqlLike).toQuery === 'function'
+    securityArrayIsArray(queryChunks) && typeof (value as DrizzleSqlLike).toQuery === 'function'
   );
 }
 
@@ -4645,16 +5567,30 @@ function unsupportedAuthzPolicyError(tableName: string, detail: string): Error {
 }
 
 function kovoDomainAnnotation(table: PgTable): KovoDomainAnnotation | undefined {
-  for (const value of [
-    ...Object.values(table as unknown as Record<string, unknown>),
-    ...Object.getOwnPropertySymbols(table).map((symbol) => Reflect.get(table as object, symbol)),
-  ]) {
+  if (postgresIsProxy(table as unknown as object)) {
+    throw new TypeError('Postgres schema tables must not be Proxies.');
+  }
+  const values: unknown[] = [];
+  const keys = witnessOwnKeys(table as unknown as object);
+  const keyCount = postgresDenseArrayLength(keys, 'Postgres table annotation keys');
+  for (let index = 0; index < keyCount; index += 1) {
+    const key = postgresDenseArrayValue(keys, index, 'Postgres table annotation keys');
+    const descriptor = witnessGetOwnPropertyDescriptor(table as unknown as object, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Postgres schema table properties must be own data.');
+    }
+    appendPostgresValue(values, descriptor.value);
+  }
+  const valueCount = postgresDenseArrayLength(values, 'Postgres table annotation values');
+  for (let index = 0; index < valueCount; index += 1) {
+    const value = postgresDenseArrayValue(values, index, 'Postgres table annotation values');
     if (
       value !== null &&
       (typeof value === 'object' || typeof value === 'function') &&
-      'domain' in value
+      !postgresIsProxy(value) &&
+      postgresOwnDataValue(value as Record<PropertyKey, unknown>, 'domain') !== undefined
     ) {
-      return value as KovoDomainAnnotation;
+      return postgresOwnDataSnapshot(value, 'Postgres Kovo domain annotation');
     }
   }
   return undefined;
@@ -4666,7 +5602,8 @@ async function safeQuery<Row extends QueryResultRow>(
   params?: readonly unknown[],
 ): Promise<{ rows: Row[] } | undefined> {
   try {
-    return await client.query<Row>(query, params === undefined ? undefined : [...params]);
+    const result = await client.query<Row>(query, snapshotPostgresQueryParams(params));
+    return { rows: snapshotPostgresQueryRows(result.rows, 'Postgres catalog rows') };
   } catch {
     return undefined;
   }
@@ -4674,12 +5611,32 @@ async function safeQuery<Row extends QueryResultRow>(
 
 function pgTablePolicyNames(table: unknown): string[] {
   try {
+    if (
+      (typeof table === 'object' || typeof table === 'function') &&
+      table !== null &&
+      postgresIsProxy(table)
+    ) {
+      throw new TypeError('Postgres declared-write tables must not be Proxies.');
+    }
     const config = getTableConfig(table as PgTable);
-    const schema = (config as { schema?: unknown }).schema;
+    const schema = postgresOwnDataValue(
+      config as unknown as Record<PropertyKey, unknown>,
+      'schema',
+    );
     const schemaName = typeof schema === 'string' ? schema : undefined;
     const names = [config.name, normalizePolicyTable(config.name)];
-    if (schemaName !== undefined) names.push(`${schemaName}.${config.name}`);
-    return [...new Set(names)];
+    if (schemaName !== undefined) appendPostgresValue(names, `${schemaName}.${config.name}`);
+    const unique = createWitnessSet<string>();
+    const output: string[] = [];
+    const nameCount = postgresDenseArrayLength(names, 'Postgres policy table names');
+    for (let index = 0; index < nameCount; index += 1) {
+      const name = postgresDenseArrayValue(names, index, 'Postgres policy table names');
+      if (!witnessSetHas(unique, name)) {
+        witnessSetAdd(unique, name);
+        appendPostgresValue(output, name);
+      }
+    }
+    return output;
   } catch {
     throw new Error(
       'KV406: Postgres declared-write fallback could not resolve a Drizzle write table (SPEC §10.3/§11.2).',
@@ -4688,16 +5645,26 @@ function pgTablePolicyNames(table: unknown): string[] {
 }
 
 function normalizePolicyTable(table: string): string {
-  return table.includes('.') ? table : `public.${table}`;
+  return securityStringIncludes(table, '.') ? table : `public.${table}`;
 }
 
 function tableSchemaName(config: PgTableConfig): string {
-  const schema = (config as { schema?: unknown }).schema;
+  const schema = postgresOwnDataValue(config as unknown as Record<PropertyKey, unknown>, 'schema');
   return typeof schema === 'string' && schema !== '' ? schema : 'public';
 }
 
 function postgresSchemaNames(tables: readonly PgTable[]): readonly string[] {
-  return [...new Set(tables.map((table) => tableSchemaName(getTableConfig(table))))];
+  const schemas = createWitnessSet<string>();
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres schema-name tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    witnessSetAdd(
+      schemas,
+      tableSchemaName(
+        getTableConfig(postgresDenseArrayValue(tables, index, 'Postgres schema-name tables')),
+      ),
+    );
+  }
+  return postgresSetValues(schemas);
 }
 
 function postgresScopedClientOptions(

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -251,6 +252,101 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('does not dispatch a one-shot Array.join poison while committing owner RLS', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-primordial-'));
+    roots.push(dataDir);
+    const nativeJoin = Array.prototype.join;
+    let triggered = 0;
+    Array.prototype.join = function (this: unknown[], separator?: string): string {
+      if (
+        this.length === 3 &&
+        typeof this[0] === 'string' &&
+        this[0].startsWith('CREATE POLICY kovo_owner_scope') &&
+        typeof this[2] === 'string' &&
+        this[2].startsWith('USING (')
+      ) {
+        triggered += 1;
+        Array.prototype.join = nativeJoin;
+        return Reflect.apply(
+          nativeJoin,
+          [this[0], this[1], 'USING (true) WITH CHECK (true)'],
+          [separator],
+        );
+      }
+      return Reflect.apply(nativeJoin, this, [separator]);
+    } as typeof Array.prototype.join;
+
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: { notes },
+      seedSql: [
+        'INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES ' +
+          "('n1', 'u1', 's1', 'One'), ('n2', 'u2', 's2', 'Two')",
+      ],
+    });
+    try {
+      await runtime.ready;
+      await expect(
+        runtime
+          .db({ principalPosture: actAsRuntimePrincipal('u1') })
+          .select({ id: notes.id })
+          .from(notes),
+      ).resolves.toEqual([{ id: 'n1' }]);
+      expect(triggered).toBe(0);
+    } finally {
+      Array.prototype.join = nativeJoin;
+      await runtime.close();
+    }
+
+    const committedPolicy = await queryPglite<{ qual: string; with_check: string }>(
+      dataDir,
+      [
+        'SELECT qual, with_check FROM pg_policies',
+        "WHERE schemaname = 'public' AND tablename = 'kovo_runtime_notes'",
+        "AND policyname = 'kovo_owner_scope'",
+      ].join(' '),
+    );
+    expect(committedPolicy.rows).toHaveLength(1);
+    expect(committedPolicy.rows[0]?.qual).toContain('"ownerId"');
+    expect(committedPolicy.rows[0]?.qual).toContain(
+      "current_setting('kovo.principal'::text, true)",
+    );
+    expect(committedPolicy.rows[0]?.with_check).toBe(committedPolicy.rows[0]?.qual);
+  });
+
+  it('rejects a Proxy schema before its first ownKeys trap can hide a protected table', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-schema-proxy-'));
+    roots.push(dataDir);
+    const schemaTarget = { labels, notes };
+    let triggered = 0;
+    const handler: ProxyHandler<typeof schemaTarget> = {
+      ownKeys() {
+        triggered += 1;
+        handler.ownKeys = Reflect.ownKeys;
+        return ['labels'];
+      },
+    };
+    const proxySchema = new Proxy(schemaTarget, handler);
+
+    expect(() =>
+      createPostgresAppRuntimeDb({
+        dataDir,
+        driver: 'pglite',
+        schema: proxySchema,
+        seedSql: [
+          [
+            'CREATE TABLE kovo_runtime_notes (id text PRIMARY KEY, "ownerId" text NOT NULL, "secretNote" text NOT NULL, title text NOT NULL)',
+            'GRANT SELECT ON kovo_runtime_notes TO kovo_reader, kovo_writer',
+            'INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES ' +
+              "('n1', 'u1', 's1', 'One'), ('n2', 'u2', 's2', 'Two')",
+          ].join('; '),
+        ],
+      }),
+    ).toThrow(/Postgres runtime schema must not be a Proxy/);
+    expect(triggered).toBe(0);
   });
 
   it('refuses production boot on in-process PGlite', () => {
@@ -841,6 +937,49 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(report.applied).toEqual(['001_create_schema_after_roles']);
     expect(report.posture.ok).toBe(true);
     expect(report.posture.issues).toEqual([]);
+  });
+
+  it('does not dispatch a one-shot Array.map poison while binding reviewed migration bytes', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-migration-primordial-'));
+    roots.push(dataDir);
+    const reviewedSql =
+      'CREATE TABLE kovo_runtime_notes (id text PRIMARY KEY, "ownerId" text NOT NULL, "secretNote" text NOT NULL, title text NOT NULL)';
+    const poisonedSql = `${reviewedSql}; CREATE TABLE kovo_unreviewed_marker (id text PRIMARY KEY)`;
+    const migrations = [{ id: '001_reviewed', sql: reviewedSql }];
+    const nativeMap = Array.prototype.map;
+    let triggered = 0;
+    Array.prototype.map = function (this: unknown[], callback, thisArg) {
+      if (this === migrations) {
+        triggered += 1;
+        Array.prototype.map = nativeMap;
+        return [
+          {
+            checksum: createHash('sha256').update(poisonedSql).digest('hex'),
+            id: '001_reviewed',
+            sql: poisonedSql,
+          },
+        ];
+      }
+      return Reflect.apply(nativeMap, this, [callback, thisArg]);
+    } as typeof Array.prototype.map;
+
+    try {
+      const report = await migratePostgresAppDb({
+        dataDir,
+        driver: 'pglite',
+        migrations,
+        schema: { notes },
+      });
+      const marker = await queryPglite<{ marker: string | null }>(
+        dataDir,
+        "SELECT to_regclass('public.kovo_unreviewed_marker')::text AS marker",
+      );
+      expect(triggered).toBe(0);
+      expect(report.posture.ok).toBe(true);
+      expect(marker.rows).toEqual([{ marker: null }]);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
   });
 
   it('rolls back migration SQL and bookkeeping when provision reassertion fails', async () => {
@@ -3003,6 +3142,60 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('keeps audited crossOwnerRead parameters bound under a one-shot array iterator poison', async () => {
+    drainCrossOwnerReadAuditFacts();
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-cross-owner-params-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      crossOwnerReadTables: ['kovo_runtime_notes'],
+      dataDir,
+      driver: 'pglite',
+      schema: { notes },
+      seedSql: [
+        'INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES ' +
+          "('n1', 'u1', 's1', 'One'), ('n2', 'u2', 's2', 'Two')",
+      ],
+    });
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    let triggered = 0;
+    try {
+      await runtime.ready;
+      const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
+      const readDb = managedDb(runtime.db(request), 'read');
+      expect(await guards.role<typeof request>('admin')(request)).toBe(true);
+      Array.prototype[Symbol.iterator] = function* (this: unknown[]) {
+        if (this.length === 1 && this[0] === 'u1') {
+          triggered += 1;
+          Array.prototype[Symbol.iterator] = nativeIterator;
+          yield 'u2';
+          return;
+        }
+        yield* Reflect.apply(nativeIterator, this, []);
+      } as (typeof Array.prototype)[Symbol.iterator];
+
+      const result = await readDb.crossOwnerRead<{ id: string }>(
+        sql`SELECT id FROM ${notes} WHERE ${notes.ownerId} = ${'u1'} ORDER BY id`,
+        {
+          reads: ['kovo_runtime_notes'],
+          reason: 'verify reviewed parameter binding',
+          role: 'admin',
+        },
+      );
+      expect(triggered).toBe(0);
+      expect(rowsOf(result)).toEqual([{ id: 'n1' }]);
+      expect(drainCrossOwnerReadAuditFacts()).toEqual([
+        expect.objectContaining({
+          declaredReads: ['public.kovo_runtime_notes'],
+          observedRead: 'public.kovo_runtime_notes',
+          reason: 'verify reviewed parameter binding',
+        }),
+      ]);
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+      await runtime.close();
+    }
   });
 
   it('refuses a same-named admin policy broadened to PUBLIC', async () => {
