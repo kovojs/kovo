@@ -16,7 +16,10 @@ import {
   createWitnessWeakSet,
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
+  witnessGetOwnPropertyDescriptors,
+  witnessIsArray,
   witnessObjectKeys,
+  witnessOwnKeys,
   witnessSetAdd,
   witnessSetForEach,
   witnessSetHas,
@@ -127,26 +130,27 @@ function normalizeSqlitePlaceholders(statement: string): string {
     }
 
     if (char === '-' && next === '-') {
-      const end = statement.indexOf('\n', index + 2);
-      if (end === -1) return normalized + statement.slice(index);
-      normalized += statement.slice(index, end + 1);
+      const end = intrinsicStringIndexOf(statement, '\n', index + 2);
+      if (end === -1) return normalized + intrinsicStringSlice(statement, index);
+      normalized += intrinsicStringSlice(statement, index, end + 1);
       index = end;
       continue;
     }
 
     if (char === '/' && next === '*') {
-      const end = statement.indexOf('*/', index + 2);
-      if (end === -1) return normalized + statement.slice(index);
-      normalized += statement.slice(index, end + 2);
+      const end = intrinsicStringIndexOf(statement, '*/', index + 2);
+      if (end === -1) return normalized + intrinsicStringSlice(statement, index);
+      normalized += intrinsicStringSlice(statement, index, end + 2);
       index = end + 1;
       continue;
     }
 
     if (char === '?') {
       let digitEnd = index + 1;
-      while (/\d/.test(statement[digitEnd] ?? '')) digitEnd += 1;
-      const explicitIndex = statement.slice(index + 1, digitEnd);
-      parameterIndex = explicitIndex === '' ? parameterIndex + 1 : Number(explicitIndex);
+      while (isAsciiDigit(statement[digitEnd] ?? '')) digitEnd += 1;
+      const explicitIndex = intrinsicStringSlice(statement, index + 1, digitEnd);
+      parameterIndex =
+        explicitIndex === '' ? parameterIndex + 1 : parseUnsignedDecimal(explicitIndex);
       normalized += `$${parameterIndex}`;
       index = digitEnd - 1;
       continue;
@@ -170,11 +174,11 @@ function readQuoted(
         index += 2;
         continue;
       }
-      return [statement.slice(start, index + 1), index];
+      return [intrinsicStringSlice(statement, start, index + 1), index];
     }
     index += 1;
   }
-  return [statement.slice(start), statement.length - 1];
+  return [intrinsicStringSlice(statement, start), statement.length - 1];
 }
 
 const classifyParsedStatement = securityClassifier(
@@ -345,7 +349,11 @@ function writeTablesForDelete(
 }
 
 function writeTablesForTruncate(statement: TruncateTableStatement): ParsedSqlWriteTarget[] {
-  return statement.tables.map((table) => tableName(table));
+  const targets: ParsedSqlWriteTarget[] = [];
+  for (let index = 0; index < statement.tables.length; index += 1) {
+    appendSqlClassifierValue(targets, tableName(statement.tables[index]!));
+  }
+  return targets;
 }
 
 function writeTablesForWith(
@@ -401,7 +409,14 @@ function writeTablesForNestedStatements(
   cteAliases: ReadonlySet<string>,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
-  return values.flatMap((value) => writeTablesForNestedStatement(value, cteAliases, dialect));
+  const targets: ParsedSqlWriteTarget[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const nested = writeTablesForNestedStatement(values[index], cteAliases, dialect);
+    for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
+      appendSqlClassifierValue(targets, nested[nestedIndex]!);
+    }
+  }
+  return targets;
 }
 
 function writeTablesForNestedStatement(
@@ -409,8 +424,20 @@ function writeTablesForNestedStatement(
   cteAliases: ReadonlySet<string>,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => writeTablesForNestedStatement(item, cteAliases, dialect));
+  if (witnessIsArray(value)) {
+    const targets: ParsedSqlWriteTarget[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        appendSqlClassifierValue(targets, UNTABLED_SQL_WRITE);
+        continue;
+      }
+      const nested = writeTablesForNestedStatement(descriptor.value, cteAliases, dialect);
+      for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
+        appendSqlClassifierValue(targets, nested[nestedIndex]!);
+      }
+    }
+    return targets;
   }
   if (!value || typeof value !== 'object') return [];
 
@@ -527,12 +554,24 @@ function collectUnprovenSqlFunctionCalls(
     if (!isProvenPureSqlFunction(value.function, dialect)) witnessSetAdd(calls, name);
   }
 
-  for (const child of Object.values(value)) {
-    if (Array.isArray(child)) {
-      for (const item of child) collectUnprovenSqlFunctionCalls(item, dialect, calls, seen);
-      continue;
+  const descriptors = witnessGetOwnPropertyDescriptors(value);
+  const keys = witnessOwnKeys(descriptors);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(descriptors, keys[keyIndex]!);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    const property = descriptor.value as PropertyDescriptor;
+    if (!('value' in property)) continue;
+    const child = property.value;
+    if (witnessIsArray(child)) {
+      for (let index = 0; index < child.length; index += 1) {
+        const item = witnessGetOwnPropertyDescriptor(child, index);
+        if (item !== undefined && 'value' in item) {
+          collectUnprovenSqlFunctionCalls(item.value, dialect, calls, seen);
+        }
+      }
+    } else {
+      collectUnprovenSqlFunctionCalls(child, dialect, calls, seen);
     }
-    collectUnprovenSqlFunctionCalls(child, dialect, calls, seen);
   }
 }
 
@@ -552,8 +591,8 @@ function isProvenPureSqlFunction(
   name: QName,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): boolean {
-  const functionName = name.name.toLowerCase();
-  if (name.schema !== undefined && name.schema.toLowerCase() !== 'pg_catalog') return false;
+  const functionName = asciiLower(name.name);
+  if (name.schema !== undefined && asciiLower(name.schema) !== 'pg_catalog') return false;
   if (dialect === 'sqlite') return witnessSetHas(SQLITE_PROVEN_PURE_SQL_FUNCTIONS, functionName);
   if (dialect === 'postgres')
     return witnessSetHas(POSTGRES_PROVEN_PURE_SQL_FUNCTIONS, functionName);
@@ -666,7 +705,9 @@ function formatErrorMessage(error: unknown): string {
 }
 
 function compareSqlWriteTargets(left: ParsedSqlWriteTarget, right: ParsedSqlWriteTarget): number {
-  return sqlWriteTargetSortKey(left).localeCompare(sqlWriteTargetSortKey(right));
+  const leftKey = sqlWriteTargetSortKey(left);
+  const rightKey = sqlWriteTargetSortKey(right);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
 }
 
 function sqlWriteTargetSortKey(target: ParsedSqlWriteTarget): string {
@@ -691,6 +732,108 @@ const unparsedSqliteWriteStatement = securityClassifier(
 );
 
 function firstSqlToken(statement: string): string | undefined {
-  const match = /^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*([a-z]+)/iu.exec(statement);
-  return match?.[1]?.toLowerCase();
+  let index = 0;
+  for (;;) {
+    while (index < statement.length && isSqlWhitespace(statement[index]!)) index += 1;
+    if (statement[index] === '-' && statement[index + 1] === '-') {
+      const end = intrinsicStringIndexOf(statement, '\n', index + 2);
+      if (end === -1) return undefined;
+      index = end + 1;
+      continue;
+    }
+    if (statement[index] === '/' && statement[index + 1] === '*') {
+      const end = intrinsicStringIndexOf(statement, '*/', index + 2);
+      if (end === -1) return undefined;
+      index = end + 2;
+      continue;
+    }
+    break;
+  }
+  let token = '';
+  while (index < statement.length && isAsciiLetter(statement[index]!)) {
+    token += asciiLowerCharacter(statement[index]!);
+    index += 1;
+  }
+  return token === '' ? undefined : token;
+}
+
+function intrinsicStringIndexOf(value: string, search: string, start = 0): number {
+  if (search.length === 0) return start <= value.length ? start : value.length;
+  for (let index = start; index + search.length <= value.length; index += 1) {
+    let matches = true;
+    for (let offset = 0; offset < search.length; offset += 1) {
+      if (value[index + offset] !== search[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return index;
+  }
+  return -1;
+}
+
+function intrinsicStringSlice(value: string, start: number, end = value.length): string {
+  let result = '';
+  const boundedStart = start < 0 ? 0 : start > value.length ? value.length : start;
+  const boundedEnd = end < boundedStart ? boundedStart : end > value.length ? value.length : end;
+  for (let index = boundedStart; index < boundedEnd; index += 1) result += value[index]!;
+  return result;
+}
+
+function parseUnsignedDecimal(value: string): number {
+  let result = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const digit = value[index]!;
+    if (!isAsciiDigit(digit)) return 0;
+    let numeric = 0;
+    while (`${numeric}` !== digit && numeric < 9) numeric += 1;
+    result = result * 10 + numeric;
+  }
+  return result;
+}
+
+function asciiLower(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    result += asciiLowerCharacter(value[index]!);
+  }
+  return result;
+}
+
+function asciiLowerCharacter(value: string): string {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < upper.length; index += 1) {
+    if (upper[index] === value) return lower[index]!;
+  }
+  return value;
+}
+
+function isAsciiLetter(value: string): boolean {
+  const lower = asciiLowerCharacter(value);
+  return lower >= 'a' && lower <= 'z';
+}
+
+function isAsciiDigit(value: string): boolean {
+  return value >= '0' && value <= '9';
+}
+
+function isSqlWhitespace(value: string): boolean {
+  return (
+    value === ' ' ||
+    value === '\t' ||
+    value === '\n' ||
+    value === '\r' ||
+    value === '\f' ||
+    value === '\v' ||
+    value === '\u00a0' ||
+    value === '\u1680' ||
+    (value >= '\u2000' && value <= '\u200a') ||
+    value === '\u2028' ||
+    value === '\u2029' ||
+    value === '\u202f' ||
+    value === '\u205f' ||
+    value === '\u3000' ||
+    value === '\ufeff'
+  );
 }

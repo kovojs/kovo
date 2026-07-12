@@ -1082,6 +1082,35 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('cannot skip raw SQL builder validation through late Array.map replacement', () => {
+    const accepted: unknown[] = [];
+    const raw = {
+      select(projection?: unknown) {
+        accepted.push(projection);
+        return { from: () => [] };
+      },
+    };
+    const handle = managedDb(raw, 'write') as unknown as typeof raw;
+    const nativeMap = Array.prototype.map;
+    let error: unknown;
+    try {
+      Array.prototype.map = function <Value>(): Value[] {
+        return this as Value[];
+      };
+      try {
+        handle.select({ leaked: sql.raw('(select classified from secrets)') });
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('KV422');
+    expect(accepted).toEqual([]);
+  });
+
   it('rejects untrusted sql.raw fragments across managed Drizzle builder fast paths', () => {
     const log: string[] = [];
     const builder = {
@@ -2309,6 +2338,51 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['execute']);
+  });
+
+  it('cannot hide a second destructive write target through Array.map replacement', () => {
+    const executed: unknown[] = [];
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          executed.push(statement);
+          return statement;
+        },
+      },
+      'write',
+      { sqlWritePolicy: { dialect: 'postgres', tables: ['allowed'], touches: ['allowed'] } },
+    ) as unknown as { query(statement: unknown): unknown };
+    const carrier = stampTrustedSql(
+      { text: 'truncate table allowed, victim_accounts', values: [] },
+      'declared-table completeness regression',
+    );
+    const nativeMap = Array.prototype.map;
+    let error: unknown;
+    try {
+      Array.prototype.map = function <Value, Result>(
+        callback: (value: Value, index: number, array: Value[]) => Result,
+      ): Result[] {
+        if (
+          this.length === 2 &&
+          (this[0] as { name?: unknown } | undefined)?.name === 'allowed' &&
+          (this[1] as { name?: unknown } | undefined)?.name === 'victim_accounts'
+        ) {
+          return [callback(this[0] as Value, 0, this as Value[])];
+        }
+        return Reflect.apply(nativeMap, this, [callback]) as Result[];
+      };
+      try {
+        handle.query(carrier);
+      } catch (caught) {
+        error = caught;
+      }
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('KV406');
+    expect(executed).toEqual([]);
   });
 
   it('threads declared write policy to engine-capable adapters before parser-blind builders run', async () => {

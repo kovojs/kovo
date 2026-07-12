@@ -71,6 +71,33 @@ describe('parseSqlWriteTables', () => {
       }),
     ).toEqual(['otherschema.contacts']);
   });
+
+  it('keeps every TRUNCATE target after selective Array.map replacement', () => {
+    // SPEC §6.6 C13/§10.3: the parsed target list is a default-deny authority fact.
+    // Index the exact parser-owned snapshot rather than delegating completeness to app code.
+    const nativeMap = Array.prototype.map;
+    try {
+      Array.prototype.map = function <Value, Result>(
+        callback: (value: Value, index: number, array: Value[]) => Result,
+      ): Result[] {
+        if (
+          this.length === 2 &&
+          (this[0] as { name?: unknown } | undefined)?.name === 'allowed' &&
+          (this[1] as { name?: unknown } | undefined)?.name === 'victim_accounts'
+        ) {
+          return [callback(this[0] as Value, 0, this as Value[])];
+        }
+        return Reflect.apply(nativeMap, this, [callback]) as Result[];
+      };
+      expect(
+        parseSqlWriteTables('TRUNCATE TABLE allowed, victim_accounts', {
+          dialect: 'postgres',
+        }),
+      ).toEqual(['allowed', 'victim_accounts']);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+  });
 });
 
 describe('classifyStatement', () => {

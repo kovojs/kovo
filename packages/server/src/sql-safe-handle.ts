@@ -35,10 +35,17 @@ import {
   createWitnessSet,
   createWitnessWeakMap,
   createWitnessWeakSet,
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
+  witnessGetOwnPropertyDescriptors,
+  witnessGetPrototypeOf,
+  witnessIsArray,
   witnessObjectKeys,
+  witnessOwnKeys,
+  witnessReflectApply,
+  witnessReflectGet,
   witnessMapGet,
   witnessMapSet,
   witnessSetAdd,
@@ -51,10 +58,7 @@ import {
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
-const nativeArrayIsArray = Array.isArray;
-if (!nativeArrayIsArray([]) || nativeArrayIsArray({})) {
-  throw new TypeError('Kovo managed SQL array controls were modified before initialization.');
-}
+const intrinsicObjectPrototype = witnessGetPrototypeOf({});
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
 export interface ManagedSqlWritePolicy {
@@ -231,7 +235,7 @@ function wrapDbAdapter(
         );
       }
 
-      const value = Reflect.get(target, prop, receiver);
+      const value = witnessReflectGet(target, prop, receiver);
 
       if (isNestedSqlHandleProperty(prop) && typeof value === 'object' && value !== null) {
         return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
@@ -324,7 +328,7 @@ function guardedSqlBuilderEntry(
   secretWriteBoundary: boolean,
 ): Function {
   return (...args: unknown[]) => {
-    const builder = value.apply(target, guardedSqlBuilderArguments(args));
+    const builder = witnessReflectApply<unknown>(value, target, guardedSqlBuilderArguments(args));
     return isRecord(builder)
       ? wrapSqlBuilderSafety(builder, proxyCache, methodCache, secretWriteBoundary)
       : builder;
@@ -342,13 +346,17 @@ function wrapSqlBuilderSafety(
 
   const proxy = new Proxy(builder as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
+      const value = witnessReflectGet(target, prop, receiver);
       if (typeof value !== 'function') return value;
       return cachedSqlSafetyMethod(target, prop, value, methodCache, () => (...args: unknown[]) => {
         if (secretWriteBoundary && (prop === 'values' || prop === 'set')) {
           assertNoSecretDbWriteValue(args);
         }
-        const result = value.apply(target, guardedSqlBuilderArguments(args));
+        const result = witnessReflectApply<unknown>(
+          value,
+          target,
+          guardedSqlBuilderArguments(args),
+        );
         return isRecord(result) && !isPromiseLike(result)
           ? wrapSqlBuilderSafety(result, proxyCache, methodCache, secretWriteBoundary)
           : result;
@@ -360,19 +368,29 @@ function wrapSqlBuilderSafety(
 }
 
 function guardedSqlBuilderArguments(args: readonly unknown[]): unknown[] {
-  return args.map((argument) => {
+  const guarded: unknown[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(args, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new Error(
+        'KV422: managed SQL builder received a sparse or accessor-backed argument list (SPEC §6.6/§10.2).',
+      );
+    }
+    const argument = descriptor.value;
     if (typeof argument === 'function') {
-      return function (this: unknown, ...callbackArgs: unknown[]) {
-        const result = argument.apply(this, callbackArgs);
+      appendSqlSafetyValue(guarded, function (this: unknown, ...callbackArgs: unknown[]) {
+        const result = witnessReflectApply<unknown>(argument, this, callbackArgs);
         const canonical = canonicalizeNativeDrizzleCountStar(result);
         assertNoUnsafeRawSqlBuilderValue(canonical);
         return canonical;
-      };
+      });
+      continue;
     }
     const canonical = canonicalizeNativeDrizzleCountStar(argument);
     assertNoUnsafeRawSqlBuilderValue(canonical);
-    return canonical;
-  });
+    appendSqlSafetyValue(guarded, canonical);
+  }
+  return guarded;
 }
 
 /**
@@ -397,15 +415,18 @@ function canonicalizeNativeDrizzleCountStar(
     return canonical;
   }
 
-  if (nativeArrayIsArray(value)) {
+  if (witnessIsArray(value)) {
     const clone: unknown[] = [];
     witnessWeakMapSet(seen, value, clone);
     let changed = false;
     for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) continue;
-      const item = canonicalizeNativeDrizzleCountStar(value[index], seen);
-      clone[index] = item;
-      if (item !== value[index]) changed = true;
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw nativeDrizzleProvenanceError();
+      }
+      const item = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
+      appendSqlSafetyValue(clone, item);
+      if (item !== descriptor.value) changed = true;
     }
     if (!changed) {
       witnessWeakMapSet(seen, value, value);
@@ -420,28 +441,31 @@ function canonicalizeNativeDrizzleCountStar(
   try {
     kinds = nativeDrizzleEntityKinds(value);
     if (witnessSetSize(kinds) > 0) return value;
-    prototype = Object.getPrototypeOf(value) as object | null;
-    if (prototype !== Object.prototype && prototype !== null) return value;
-    descriptors = Object.getOwnPropertyDescriptors(value);
+    prototype = witnessGetPrototypeOf(value);
+    if (prototype !== intrinsicObjectPrototype && prototype !== null) return value;
+    descriptors = witnessGetOwnPropertyDescriptors(value);
   } catch {
     throw nativeDrizzleProvenanceError();
   }
 
-  const clone = Object.create(prototype) as Record<PropertyKey, unknown>;
+  const clone =
+    prototype === null ? witnessCreateNullRecord() : ({} as Record<PropertyKey, unknown>);
   witnessWeakMapSet(seen, value, clone);
   let changed = false;
   let hasAccessor = false;
-  for (const key of Reflect.ownKeys(descriptors)) {
-    const descriptor = Reflect.get(descriptors, key) as PropertyDescriptor | undefined;
+  const descriptorKeys = witnessOwnKeys(descriptors);
+  for (let keyIndex = 0; keyIndex < descriptorKeys.length; keyIndex += 1) {
+    const key = descriptorKeys[keyIndex]!;
+    const descriptor = witnessReflectGet(descriptors, key) as PropertyDescriptor | undefined;
     if (!descriptor) continue;
     if (!('value' in descriptor)) {
       hasAccessor = true;
-      Object.defineProperty(clone, key, descriptor);
+      witnessDefineProperty(clone, key, descriptor);
       continue;
     }
     const item = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
     if (item !== descriptor.value) changed = true;
-    Object.defineProperty(clone, key, { ...descriptor, value: item });
+    witnessDefineProperty(clone, key, { ...descriptor, value: item });
   }
   if (!changed) {
     witnessWeakMapSet(seen, value, value);
@@ -459,11 +483,11 @@ function canonicalNativeDrizzleCountStar(value: object): object | undefined {
   try {
     const kinds = nativeDrizzleEntityKinds(value);
     if (witnessSetHas(kinds, 'SQL')) {
-      const chunks = Object.getOwnPropertyDescriptor(value, 'queryChunks');
+      const chunks = witnessGetOwnPropertyDescriptor(value, 'queryChunks');
       if (
         chunks !== undefined &&
         'value' in chunks &&
-        nativeArrayIsArray(chunks.value) &&
+        witnessIsArray(chunks.value) &&
         isNativeDrizzleCountStarIntrinsic(chunks.value)
       ) {
         return registerFrameworkCanonicalNativeSql(drizzleCount());
@@ -472,11 +496,13 @@ function canonicalNativeDrizzleCountStar(value: object): object | undefined {
     }
 
     if (!witnessSetHas(kinds, 'SQL.Aliased')) return undefined;
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    const statement = Reflect.get(descriptors, 'sql') as PropertyDescriptor | undefined;
-    const fieldAlias = Reflect.get(descriptors, 'fieldAlias') as PropertyDescriptor | undefined;
-    const origin = Reflect.get(descriptors, 'origin') as PropertyDescriptor | undefined;
-    const selection = Reflect.get(descriptors, 'isSelectionField') as
+    const descriptors = witnessGetOwnPropertyDescriptors(value);
+    const statement = witnessReflectGet(descriptors, 'sql') as PropertyDescriptor | undefined;
+    const fieldAlias = witnessReflectGet(descriptors, 'fieldAlias') as
+      | PropertyDescriptor
+      | undefined;
+    const origin = witnessReflectGet(descriptors, 'origin') as PropertyDescriptor | undefined;
+    const selection = witnessReflectGet(descriptors, 'isSelectionField') as
       | PropertyDescriptor
       | undefined;
     if (
@@ -495,11 +521,11 @@ function canonicalNativeDrizzleCountStar(value: object): object | undefined {
     ) {
       return undefined;
     }
-    const chunks = Object.getOwnPropertyDescriptor(statement.value, 'queryChunks');
+    const chunks = witnessGetOwnPropertyDescriptor(statement.value, 'queryChunks');
     if (
       !chunks ||
       !('value' in chunks) ||
-      !nativeArrayIsArray(chunks.value) ||
+      !witnessIsArray(chunks.value) ||
       !isNativeDrizzleCountStarIntrinsic(chunks.value)
     ) {
       return undefined;
@@ -519,20 +545,26 @@ function registerFrameworkCanonicalNativeSql<T extends object>(value: T): T {
 function freezeFrameworkCanonicalNativeSql(value: object, seen: WeakSet<object>): void {
   if (witnessWeakSetHas(seen, value)) return;
   witnessWeakSetAdd(seen, value);
-  for (const descriptor of Reflect.ownKeys(Object.getOwnPropertyDescriptors(value)).map((key) =>
-    Object.getOwnPropertyDescriptor(value, key),
-  )) {
+  const descriptors = witnessGetOwnPropertyDescriptors(value);
+  const keys = witnessOwnKeys(descriptors);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const descriptor = witnessReflectGet(descriptors, keys[keyIndex]!) as
+      | PropertyDescriptor
+      | undefined;
     if (!descriptor || !('value' in descriptor)) continue;
-    if (nativeArrayIsArray(descriptor.value)) {
-      for (const item of descriptor.value) {
-        if (isRecord(item)) freezeFrameworkCanonicalNativeSql(item, seen);
+    if (witnessIsArray(descriptor.value)) {
+      for (let index = 0; index < descriptor.value.length; index += 1) {
+        const item = witnessGetOwnPropertyDescriptor(descriptor.value, index);
+        if (item !== undefined && 'value' in item && isRecord(item.value)) {
+          freezeFrameworkCanonicalNativeSql(item.value, seen);
+        }
       }
-      Object.freeze(descriptor.value);
+      witnessFreeze(descriptor.value);
     } else if (isRecord(descriptor.value)) {
       freezeFrameworkCanonicalNativeSql(descriptor.value, seen);
     }
   }
-  Object.freeze(value);
+  witnessFreeze(value);
 }
 
 /**
@@ -579,23 +611,35 @@ function assertNoUnsafeRawSqlBuilderValue(
     return;
   }
 
-  if (nativeArrayIsArray(value)) {
-    for (const item of value) assertNoUnsafeRawSqlBuilderValue(item, seen);
+  if (witnessIsArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new Error(
+          'KV422: managed SQL builder received a sparse or accessor-backed SQL carrier (SPEC §6.6/§10.2).',
+        );
+      }
+      assertNoUnsafeRawSqlBuilderValue(descriptor.value, seen);
+    }
     return;
   }
 
   let prototype: object | null;
   let descriptors: Record<PropertyKey, PropertyDescriptor>;
   try {
-    prototype = Object.getPrototypeOf(value) as object | null;
-    if (prototype !== Object.prototype && prototype !== null) return;
-    descriptors = Object.getOwnPropertyDescriptors(value);
+    prototype = witnessGetPrototypeOf(value);
+    if (prototype !== intrinsicObjectPrototype && prototype !== null) return;
+    descriptors = witnessGetOwnPropertyDescriptors(value);
   } catch {
     throw new Error(
       'KV422: managed SQL builder received a carrier whose nested SQL provenance could not be inspected (SPEC §6.6/§10.2).',
     );
   }
-  for (const descriptor of Reflect.ownKeys(descriptors).map((key) => descriptors[key])) {
+  const keys = witnessOwnKeys(descriptors);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const descriptor = witnessReflectGet(descriptors, keys[keyIndex]!) as
+      | PropertyDescriptor
+      | undefined;
     if (descriptor && 'value' in descriptor) {
       assertNoUnsafeRawSqlBuilderValue(descriptor.value, seen);
     }
@@ -616,10 +660,13 @@ function nativeDrizzleSqlCarrierVerdict(
 
     if (witnessSetHas(kinds, 'SQL')) {
       const frameworkWitness = validateManagedSqlStatement(value).ok;
-      const chunks = Object.getOwnPropertyDescriptor(value, 'queryChunks');
-      if (!chunks || !('value' in chunks) || !nativeArrayIsArray(chunks.value)) return 'unsafe';
+      const chunks = witnessGetOwnPropertyDescriptor(value, 'queryChunks');
+      if (!chunks || !('value' in chunks) || !witnessIsArray(chunks.value)) return 'unsafe';
       let structured = false;
-      for (const chunk of chunks.value as unknown[]) {
+      for (let index = 0; index < chunks.value.length; index += 1) {
+        const chunkDescriptor = witnessGetOwnPropertyDescriptor(chunks.value, index);
+        if (chunkDescriptor === undefined || !('value' in chunkDescriptor)) return 'unsafe';
+        const chunk = chunkDescriptor.value;
         if (typeof chunk !== 'object' || chunk === null) {
           // Drizzle turns primitive interpolations into bound parameters while rendering.
           structured = true;
@@ -629,8 +676,8 @@ function nativeDrizzleSqlCarrierVerdict(
         if (verdict === 'unsafe') return 'unsafe';
         if (verdict === 'safe') structured = true;
         if (verdict === undefined) {
-          const prototype = Object.getPrototypeOf(chunk) as object | null;
-          if (prototype === Object.prototype || prototype === null) {
+          const prototype = witnessGetPrototypeOf(chunk);
+          if (prototype === intrinsicObjectPrototype || prototype === null) {
             if (plainSqlWrapperSurface(chunk)) return 'unsafe';
             structured = true;
           } else return 'unsafe';
@@ -658,15 +705,20 @@ function nativeDrizzleSqlCarrierVerdict(
     // SQL.Aliased and future Drizzle wrappers remain closed by inspecting their own data fields
     // without invoking accessors. This prevents a new non-plain wrapper from restoring the former
     // prototype early-return around a nested raw SQL/Name carrier.
-    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const descriptors = witnessGetOwnPropertyDescriptors(value);
     let foundSql = false;
     let foundStringChunk = false;
-    for (const descriptor of Reflect.ownKeys(descriptors).map(
-      (key) => Reflect.get(descriptors, key) as PropertyDescriptor | undefined,
-    )) {
+    const keys = witnessOwnKeys(descriptors);
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      const descriptor = witnessReflectGet(descriptors, keys[keyIndex]!) as
+        | PropertyDescriptor
+        | undefined;
       if (!descriptor || !('value' in descriptor)) continue;
-      const items = nativeArrayIsArray(descriptor.value) ? descriptor.value : [descriptor.value];
-      for (const item of items) {
+      const items = witnessIsArray(descriptor.value) ? descriptor.value : [descriptor.value];
+      for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+        const itemDescriptor = witnessGetOwnPropertyDescriptor(items, itemIndex);
+        if (itemDescriptor === undefined || !('value' in itemDescriptor)) return 'unsafe';
+        const item = itemDescriptor.value;
         if (typeof item !== 'object' || item === null) continue;
         const verdict = nativeDrizzleSqlCarrierVerdict(item, seen);
         if (verdict === 'unsafe') return 'unsafe';
@@ -692,12 +744,12 @@ function isNativeDrizzleCountStarIntrinsic(chunks: readonly unknown[]): boolean 
 
 function nativeDrizzleRawSqlEquals(value: unknown, text: string): boolean {
   if (typeof value !== 'object' || value === null) return false;
-  if (!nativeDrizzleEntityKinds(value).has('SQL')) return false;
-  const chunks = Object.getOwnPropertyDescriptor(value, 'queryChunks');
+  if (!witnessSetHas(nativeDrizzleEntityKinds(value), 'SQL')) return false;
+  const chunks = witnessGetOwnPropertyDescriptor(value, 'queryChunks');
   return (
     chunks !== undefined &&
     'value' in chunks &&
-    nativeArrayIsArray(chunks.value) &&
+    witnessIsArray(chunks.value) &&
     chunks.value.length === 1 &&
     nativeDrizzleStringChunkEquals(chunks.value[0], text)
   );
@@ -705,12 +757,12 @@ function nativeDrizzleRawSqlEquals(value: unknown, text: string): boolean {
 
 function nativeDrizzleStringChunkEquals(value: unknown, text: string): boolean {
   if (typeof value !== 'object' || value === null) return false;
-  if (!nativeDrizzleEntityKinds(value).has('StringChunk')) return false;
-  const chunk = Object.getOwnPropertyDescriptor(value, 'value');
+  if (!witnessSetHas(nativeDrizzleEntityKinds(value), 'StringChunk')) return false;
+  const chunk = witnessGetOwnPropertyDescriptor(value, 'value');
   return (
     chunk !== undefined &&
     'value' in chunk &&
-    nativeArrayIsArray(chunk.value) &&
+    witnessIsArray(chunk.value) &&
     chunk.value.length === 1 &&
     chunk.value[0] === text
   );
@@ -725,37 +777,39 @@ function nativeDrizzleProvenanceError(): Error {
 function plainSqlWrapperSurface(value: object): boolean {
   let current: object | null = value;
   while (current !== null) {
-    const descriptor = Object.getOwnPropertyDescriptor(current, 'getSQL');
+    const descriptor = witnessGetOwnPropertyDescriptor(current, 'getSQL');
     if (descriptor !== undefined) {
       return !('value' in descriptor) || typeof descriptor.value === 'function';
     }
-    current = Object.getPrototypeOf(current) as object | null;
-    if (current === Object.prototype) break;
+    current = witnessGetPrototypeOf(current);
+    if (current === intrinsicObjectPrototype) break;
   }
   return false;
 }
 
 function nativeDrizzleEntityKinds(value: object): Set<string> {
   const kinds = createWitnessSet<string>();
-  let prototype = Object.getPrototypeOf(value) as object | null;
-  while (prototype !== null && prototype !== Object.prototype) {
-    const constructor = Object.getOwnPropertyDescriptor(prototype, 'constructor');
+  let prototype = witnessGetPrototypeOf(value);
+  while (prototype !== null && prototype !== intrinsicObjectPrototype) {
+    const constructor = witnessGetOwnPropertyDescriptor(prototype, 'constructor');
     if (constructor && 'value' in constructor && typeof constructor.value === 'function') {
-      const descriptors = Object.getOwnPropertyDescriptors(constructor.value as object);
-      for (const key of Reflect.ownKeys(descriptors)) {
+      const descriptors = witnessGetOwnPropertyDescriptors(constructor.value as object);
+      const keys = witnessOwnKeys(descriptors);
+      for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+        const key = keys[keyIndex]!;
         if (
           typeof key !== 'symbol' ||
           (Symbol.keyFor(key) ?? key.description) !== 'drizzle:entityKind'
         ) {
           continue;
         }
-        const descriptor = Reflect.get(descriptors, key) as PropertyDescriptor | undefined;
+        const descriptor = witnessReflectGet(descriptors, key) as PropertyDescriptor | undefined;
         if (descriptor && 'value' in descriptor && typeof descriptor.value === 'string') {
           witnessSetAdd(kinds, descriptor.value);
         }
       }
     }
-    prototype = Object.getPrototypeOf(prototype) as object | null;
+    prototype = witnessGetPrototypeOf(prototype);
   }
   return kinds;
 }
@@ -768,7 +822,10 @@ function guardedSqlMethod(
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
     const snapshot = enforceManagedSql(statement, mode, writePolicy);
-    return wrapReadonlyEngineResult(() => value.call(target, snapshot, ...args), writePolicy);
+    return wrapReadonlyEngineResult(
+      () => witnessReflectApply(value, target, prependSqlSafetyArgument(snapshot, args)),
+      writePolicy,
+    );
   };
 }
 
@@ -779,7 +836,7 @@ function guardedReadWithMethod(
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
 ): Function {
   return (...args: unknown[]) => {
-    const builder = value.apply(target, args);
+    const builder = witnessReflectApply<unknown>(value, target, args);
     return isRecord(builder) ? wrapReadWithBuilder(builder, proxyCache, methodCache) : builder;
   };
 }
@@ -793,7 +850,7 @@ function guardedWriteWithMethod(
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): Function {
   return (...args: unknown[]) => {
-    const builder = value.apply(target, args);
+    const builder = witnessReflectApply<unknown>(value, target, args);
     return isRecord(builder)
       ? wrapDbAdapter(
           builder,
@@ -825,9 +882,17 @@ function wrapReadWithBuilder(
           );
         };
       }
-      const property = Reflect.get(target, prop, receiver);
+      const property = witnessReflectGet(target, prop, receiver);
       return typeof property === 'function'
-        ? cachedSqlSafetyMethod(target, prop, property, methodCache, () => property.bind(target))
+        ? cachedSqlSafetyMethod(
+            target,
+            prop,
+            property,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                witnessReflectApply(property, target, args),
+          )
         : property;
     },
   });
@@ -852,7 +917,10 @@ function guardedUnknownSqlMethod(
       writePolicy,
       strictSqlTarget,
     );
-    return wrapReadonlyEngineResult(() => value.apply(target, snappedArgs), writePolicy);
+    return wrapReadonlyEngineResult(
+      () => witnessReflectApply(value, target, snappedArgs),
+      writePolicy,
+    );
   };
 }
 
@@ -865,14 +933,24 @@ function snapshotAmbiguousSqlMethodArguments(
 ): readonly unknown[] {
   let foundStatement = false;
   let changed = false;
-  const snappedArgs = args.map((arg) => {
-    if (!isSqlStatementCandidate(arg)) return arg;
+  const snappedArgs: unknown[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(args, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new Error(
+        'KV422: managed SQL method received a sparse or accessor-backed argument list (SPEC §6.6/§10.2).',
+      );
+    }
+    const arg = descriptor.value;
+    if (!isSqlStatementCandidate(arg)) {
+      appendSqlSafetyValue(snappedArgs, arg);
+      continue;
+    }
     foundStatement = true;
     const snapshot = enforceManagedSql(arg, mode, writePolicy);
-    if (snapshot === arg) return arg;
-    changed = true;
-    return snapshot;
-  });
+    if (snapshot !== arg) changed = true;
+    appendSqlSafetyValue(snappedArgs, snapshot);
+  }
   if (foundStatement) {
     return changed ? snappedArgs : args;
   }
@@ -886,9 +964,26 @@ function snapshotAmbiguousSqlMethodArguments(
 
 function isSqlCapabilityMethodName(prop: PropertyKey): boolean {
   if (typeof prop !== 'string') return true;
-  return /sql|query|execute|statement|prepare|insert|update|delete|run|exec|all|get|values/i.test(
-    prop,
-  );
+  const lower = asciiLower(prop);
+  const tokens = [
+    'sql',
+    'query',
+    'execute',
+    'statement',
+    'prepare',
+    'insert',
+    'update',
+    'delete',
+    'run',
+    'exec',
+    'all',
+    'get',
+    'values',
+  ] as const;
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (intrinsicStringIncludes(lower, tokens[index]!)) return true;
+  }
+  return false;
 }
 
 function describeSqlMethod(prop: PropertyKey): string {
@@ -909,7 +1004,9 @@ function guardedTransactionMethod(
         'KV433: read-only SQL capability cannot open db.transaction from a query loader (SPEC §10.3/§11.2).',
       );
     }
-    if (typeof callback !== 'function') return value.call(target, callback, ...args);
+    if (typeof callback !== 'function') {
+      return witnessReflectApply(value, target, prependSqlSafetyArgument(callback, args));
+    }
     if (args.length === 0) {
       const sqlite = runSqliteAsyncTransaction(
         target,
@@ -919,11 +1016,16 @@ function guardedTransactionMethod(
       if (sqlite) return sqlite;
     }
     return runQueuedManagedTransaction(target, () =>
-      value.call(
+      witnessReflectApply(
+        value,
         target,
-        (tx: unknown) =>
-          callback(wrapTransactionDb(tx, mode, proxyCache, methodCache, writePolicy)),
-        ...args,
+        prependSqlSafetyArgument(
+          (tx: unknown) =>
+            witnessReflectApply(callback, undefined, [
+              wrapTransactionDb(tx, mode, proxyCache, methodCache, writePolicy),
+            ]),
+          args,
+        ),
       ),
     );
   };
@@ -1095,7 +1197,7 @@ function guardedPrepareMethod(
   return (statement: unknown, ...args: unknown[]) => {
     const snapshot = enforceManagedSql(statement, mode, writePolicy);
     const prepared = wrapReadonlyEngineResult(
-      () => value.call(target, snapshot, ...args),
+      () => witnessReflectApply(value, target, prependSqlSafetyArgument(snapshot, args)),
       writePolicy,
     );
     return typeof prepared === 'object' && prepared !== null
@@ -1116,7 +1218,7 @@ function wrapPreparedSqlStatement(
 
   const proxy = new Proxy(statementHandle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
+      const value = witnessReflectGet(target, prop, receiver);
       if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
         return cachedSqlSafetyMethod(
           target,
@@ -1125,12 +1227,20 @@ function wrapPreparedSqlStatement(
           methodCache,
           () =>
             (...args: unknown[]) =>
-              wrapReadonlyEngineResult(() => value.apply(target, args), writePolicy),
+              wrapReadonlyEngineResult(() => witnessReflectApply(value, target, args), writePolicy),
         );
       }
 
       return typeof value === 'function'
-        ? cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target))
+        ? cachedSqlSafetyMethod(
+            target,
+            prop,
+            value,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                witnessReflectApply(value, target, args),
+          )
         : value;
     },
   });
@@ -1277,16 +1387,20 @@ const classifyManagedSql = securityClassifier(
 );
 
 function formatSqlWriteTargets(targets: readonly ParsedSqlWriteTarget[]): string {
-  return targets
-    .map((target) => (target === UNTABLED_SQL_WRITE ? '<untabled write>' : target))
-    .join(', ');
+  let formatted = '';
+  for (let index = 0; index < targets.length; index += 1) {
+    if (index > 0) formatted += ', ';
+    const target = targets[index]!;
+    formatted += target === UNTABLED_SQL_WRITE ? '<untabled write>' : target;
+  }
+  return formatted;
 }
 
 function normalizeManagedSqlTableName(
   table: string,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): string {
-  if (table.includes('.')) return table;
+  if (intrinsicStringIncludes(table, '.')) return table;
   return `${dialect === 'sqlite' ? 'main' : 'public'}.${table}`;
 }
 
@@ -1317,7 +1431,7 @@ function containsSecret(value: unknown, seen: WeakSet<object>): boolean {
   if (typeof value !== 'object' || value === null) return false;
   if (witnessWeakSetHas(seen, value)) return false;
   witnessWeakSetAdd(seen, value);
-  if (nativeArrayIsArray(value)) {
+  if (witnessIsArray(value)) {
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = witnessGetOwnPropertyDescriptor(value, index);
       if (
@@ -1373,18 +1487,107 @@ function isSqlStatementCandidate(value: unknown): boolean {
   if (typeof value === 'string') return looksLikeSqlStatement(value);
   if (typeof value !== 'object' || value === null) return false;
 
-  const record = value as Record<PropertyKey, unknown>;
+  const text = witnessGetOwnPropertyDescriptor(value, 'text');
+  const sql = witnessGetOwnPropertyDescriptor(value, 'sql');
+  const chunks = witnessGetOwnPropertyDescriptor(value, 'queryChunks');
+  const getSql = witnessGetOwnPropertyDescriptor(value, 'getSQL');
   return (
-    typeof record.text === 'string' ||
-    typeof record.sql === 'string' ||
-    nativeArrayIsArray(record.queryChunks) ||
-    typeof record.getSQL === 'function'
+    (text !== undefined && 'value' in text && typeof text.value === 'string') ||
+    (sql !== undefined && 'value' in sql && typeof sql.value === 'string') ||
+    (chunks !== undefined && 'value' in chunks && witnessIsArray(chunks.value)) ||
+    (getSql !== undefined && 'value' in getSql && typeof getSql.value === 'function')
   );
 }
 
 function looksLikeSqlStatement(value: string): boolean {
-  return /^(?:alter|begin|call|commit|create|delete|drop|exec|execute|explain|insert|merge|pragma|replace|rollback|savepoint|select|truncate|update|vacuum|with)\b/iu.test(
-    value.trimStart(),
+  const first = firstSqlWord(value);
+  const statements = [
+    'alter',
+    'begin',
+    'call',
+    'commit',
+    'create',
+    'delete',
+    'drop',
+    'exec',
+    'execute',
+    'explain',
+    'insert',
+    'merge',
+    'pragma',
+    'replace',
+    'rollback',
+    'savepoint',
+    'select',
+    'truncate',
+    'update',
+    'vacuum',
+    'with',
+  ] as const;
+  for (let index = 0; index < statements.length; index += 1) {
+    if (statements[index] === first) return true;
+  }
+  return false;
+}
+
+function firstSqlWord(value: string): string {
+  let index = 0;
+  while (index < value.length && isSqlWhitespace(value[index]!)) index += 1;
+  let word = '';
+  while (index < value.length && isAsciiLetter(value[index]!)) {
+    word += asciiLowerCharacter(value[index]!);
+    index += 1;
+  }
+  return word;
+}
+
+function asciiLower(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    result += asciiLowerCharacter(value[index]!);
+  }
+  return result;
+}
+
+function asciiLowerCharacter(value: string): string {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < upper.length; index += 1) {
+    if (upper[index] === value) return lower[index]!;
+  }
+  return value;
+}
+
+function intrinsicStringIncludes(value: string, search: string): boolean {
+  if (search.length === 0) return true;
+  for (let index = 0; index + search.length <= value.length; index += 1) {
+    let matches = true;
+    for (let offset = 0; offset < search.length; offset += 1) {
+      if (value[index + offset] !== search[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return true;
+  }
+  return false;
+}
+
+function isAsciiLetter(value: string): boolean {
+  const lower = asciiLowerCharacter(value);
+  return lower >= 'a' && lower <= 'z';
+}
+
+function isSqlWhitespace(value: string): boolean {
+  return (
+    value === ' ' ||
+    value === '\t' ||
+    value === '\n' ||
+    value === '\r' ||
+    value === '\f' ||
+    value === '\v' ||
+    value === '\u00a0' ||
+    value === '\ufeff'
   );
 }
 
@@ -1427,4 +1630,19 @@ function appendSqlSafetyValue<Value>(values: Value[], value: Value): void {
     value,
     writable: true,
   });
+}
+
+function prependSqlSafetyArgument(first: unknown, rest: readonly unknown[]): readonly unknown[] {
+  const args: unknown[] = [];
+  appendSqlSafetyValue(args, first);
+  for (let index = 0; index < rest.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(rest, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new Error(
+        'KV422: managed SQL invocation received a sparse or accessor-backed argument list (SPEC §6.6/§10.2).',
+      );
+    }
+    appendSqlSafetyValue(args, descriptor.value);
+  }
+  return args;
 }
