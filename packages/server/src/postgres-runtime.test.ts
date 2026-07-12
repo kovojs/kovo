@@ -3769,6 +3769,57 @@ describe('createPostgresAppRuntimeDb', () => {
     ).toThrow(/fresh own-data method/);
   });
 
+  it('rejects transitive Pool.newClient and Client queue prototype substitution', async () => {
+    const pool = new Pool({
+      connectionString: 'postgres://127.0.0.1:1/kovo_internal_driver_probe',
+      connectionTimeoutMillis: 50,
+    });
+    __testPostgresRuntimeInternals.createNodePostgresRuntimeClient(pool);
+    const client = new Client({
+      connectionString: 'postgres://127.0.0.1:1/kovo_internal_driver_probe',
+    }) as Client & { release(error?: Error | boolean): void };
+    Object.defineProperty(client, 'release', {
+      configurable: true,
+      enumerable: false,
+      value: () => undefined,
+      writable: true,
+    });
+    type InternalPoolPrototype = {
+      newClient(pending: {
+        callback(error?: Error, client?: Client, release?: () => void): void;
+      }): void;
+    };
+    type InternalClientPrototype = {
+      _pulseQueryQueue(): void;
+    };
+    const poolPrototype = Pool.prototype as unknown as InternalPoolPrototype;
+    const clientPrototype = Client.prototype as unknown as InternalClientPrototype;
+    const nativeNewClient = poolPrototype.newClient;
+    const nativePulseQueryQueue = clientPrototype._pulseQueryQueue;
+    let poolHookCalls = 0;
+    let clientHookCalls = 0;
+    poolPrototype.newClient = (pending) => {
+      poolHookCalls += 1;
+      pending.callback(undefined, client, client.release);
+    };
+    clientPrototype._pulseQueryQueue = () => {
+      clientHookCalls += 1;
+    };
+    try {
+      expect(() =>
+        (pool as unknown as InternalPoolPrototype).newClient({
+          callback: () => undefined,
+        }),
+      ).toThrow(/Client\._pulseQueryQueue changed after framework bootstrap/);
+      expect(poolHookCalls).toBe(0);
+      expect(clientHookCalls).toBe(0);
+    } finally {
+      poolPrototype.newClient = nativeNewClient;
+      clientPrototype._pulseQueryQueue = nativePulseQueryQueue;
+      await pool.end();
+    }
+  });
+
   it('keeps nested rollback ownership distinct under late clock and RNG replacement', async () => {
     const db = new PGlite();
     const originalNow = Date.now;

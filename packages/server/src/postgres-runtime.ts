@@ -219,6 +219,16 @@ const postgresClientQuery = capturePostgresCallable(
   'query',
   'node-postgres Client.query',
 );
+const postgresPoolPrototypeMethods = capturePostgresPrototypeMethods(
+  Pool.prototype,
+  'node-postgres Pool',
+  'newClient',
+);
+const postgresClientPrototypeMethods = capturePostgresPrototypeMethods(
+  Client.prototype,
+  'node-postgres Client',
+  '_pulseQueryQueue',
+);
 
 function capturePostgresPolicySqlToQuery(): PgDialect['sqlToQuery'] {
   const descriptor = witnessGetOwnPropertyDescriptor(PgDialect.prototype, 'sqlToQuery');
@@ -275,6 +285,39 @@ function capturePostgresOwnCallable(
     throw new TypeError(`${label} must be a fresh own-data method.`);
   }
   return descriptor.value;
+}
+
+function capturePostgresPrototypeMethods(
+  prototype: object,
+  label: string,
+  terminalProperty: PropertyKey,
+): ReadonlyMap<PropertyKey, Function> {
+  if (postgresIsProxy(prototype)) throw new TypeError(`${label} prototype must not be a Proxy.`);
+  const methods = createWitnessMap<PropertyKey, Function>();
+  let owner: object | null = prototype;
+  while (owner !== null) {
+    if (postgresIsProxy(owner)) throw new TypeError(`${label} method owner must not be a Proxy.`);
+    const keys = witnessOwnKeys(owner);
+    const keyCount = postgresDenseArrayLength(keys, `${label} prototype keys`);
+    for (let index = 0; index < keyCount; index += 1) {
+      const key = postgresDenseArrayValue(keys, index, `${label} prototype keys`);
+      if (key === 'constructor' || witnessMapHas(methods, key)) continue;
+      const descriptor = witnessGetOwnPropertyDescriptor(owner, key);
+      if (
+        descriptor !== undefined &&
+        'value' in descriptor &&
+        typeof descriptor.value === 'function'
+      ) {
+        witnessMapSet(methods, key, descriptor.value);
+      }
+    }
+    if (witnessMapHas(methods, terminalProperty)) break;
+    owner = witnessGetPrototypeOf(owner);
+  }
+  if (!witnessMapHas(methods, terminalProperty)) {
+    throw new TypeError(`${label}.${String(terminalProperty)} is unavailable.`);
+  }
+  return methods;
 }
 
 function postgresSha256(value: string): string {
@@ -3012,6 +3055,7 @@ function pinPostgresPgliteTransactionClient(transaction: unknown): RuntimeTransa
 function pinNodePostgresPool(pool: Pool): Pool {
   if (postgresIsProxy(pool)) throw new TypeError('node-postgres Pool must not be a Proxy.');
   if (witnessWeakMapGet(postgresPinnedNodePools, pool) === true) return pool;
+  defineCapturedNodePostgresPoolInternals(pool);
   defineCapturedPostgresMethod(pool, 'end', postgresPoolEnd, pool);
   defineCapturedPostgresMethod(pool, 'query', postgresPoolQuery, pool);
   witnessDefineProperty(pool, 'connect', {
@@ -3022,6 +3066,41 @@ function pinNodePostgresPool(pool: Pool): Pool {
   });
   witnessWeakMapSet(postgresPinnedNodePools, pool, true);
   return pool;
+}
+
+function defineCapturedNodePostgresPoolInternals(pool: Pool): void {
+  witnessMapForEach(postgresPoolPrototypeMethods, (method, property) => {
+    if (property === 'connect' || property === 'query' || property === 'end') return;
+    witnessDefineProperty(pool, property, {
+      configurable: false,
+      enumerable: false,
+      value: (...args: unknown[]) => {
+        if (property === 'newClient') {
+          assertPostgresPrototypeMethods(
+            Client.prototype,
+            postgresClientPrototypeMethods,
+            'node-postgres Client',
+          );
+        }
+        return witnessReflectApply(method, pool, args);
+      },
+      writable: false,
+    });
+  });
+}
+
+function assertPostgresPrototypeMethods(
+  prototype: object,
+  expected: ReadonlyMap<PropertyKey, Function>,
+  label: string,
+): void {
+  if (postgresIsProxy(prototype)) throw new TypeError(`${label} prototype must not be a Proxy.`);
+  witnessMapForEach(expected, (method, property) => {
+    const descriptor = witnessGetOwnPropertyDescriptor(prototype, property);
+    if (descriptor === undefined || !('value' in descriptor) || descriptor.value !== method) {
+      throw new TypeError(`${label}.${String(property)} changed after framework bootstrap.`);
+    }
+  });
 }
 
 function invokePinnedNodePostgresConnect(pool: Pool, args: readonly unknown[]): unknown {
@@ -3085,6 +3164,10 @@ function pinNodePostgresPoolClient(client: PoolClient): PoolClient {
   }
   snapshotNodePostgresPoolClientRelease(client);
   if (witnessWeakMapGet(postgresPinnedNodeClients, client) !== true) {
+    witnessMapForEach(postgresClientPrototypeMethods, (method, property) => {
+      if (property === 'query') return;
+      defineCapturedPostgresMethod(client, property, method, client);
+    });
     defineCapturedPostgresMethod(client, 'query', postgresClientQuery, client);
     witnessWeakMapSet(postgresPinnedNodeClients, client, true);
   }
