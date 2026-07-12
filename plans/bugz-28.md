@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    61 | C1-C61 |
+| Critical |    62 | C1-C62 |
 | High     |    31 | H1-H31 |
 | Medium   |     9 | M1-M9  |
 
@@ -720,6 +720,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     erase request/query/unprovable provenance or a blocking diagnostic, while static literals and
     explicit audited reasons retain their intended verdicts.
 
+- [ ] **C62 - Mutable confidentiality traversal suppresses secret query-wire errors.**
+      `packages/compiler/src/validate/confidentiality.ts`
+  - A selective late `Array.prototype.flatMap` replacement erased the component query-name
+    traversal. The real compiler emitted no KV435 diagnostic for a declared query shape containing
+    `{ kind: 'secret', shape: 'string' }`, allowing the secret field to remain on the client query
+    wire instead of blocking the build.
+  - **Acceptance:** component query-name collection, missing-fact diagnostics, recursive shape/
+    wrapper/object/array traversal, path assembly, and final diagnostic collection use boot-pinned
+    collection/reflection/string controls over immutable shape facts; late/import-order mutation
+    cannot erase a secret/table-row path or missing production fact, while explicitly revealed and
+    public scalar shapes retain their intended verdicts.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1150,7 +1162,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C61, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C62, H20, H27,
 and H31 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
