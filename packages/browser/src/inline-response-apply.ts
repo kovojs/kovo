@@ -1,5 +1,9 @@
 import type { ElementChunk, InlineMutationResponseBodyChunks } from './wire-response-scanner.js';
-import { p, type HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
+import {
+  p,
+  type HtmlResponseFragmentApplyTarget,
+  type HtmlResponseFragmentSecurityControls,
+} from './response-fragment-apply.js';
 
 export interface InlineQueryEventInit {
   detail: {
@@ -9,6 +13,7 @@ export interface InlineQueryEventInit {
 
 export interface InlineMutationResponseApplyOptions {
   findFragmentTarget(target: string): HtmlResponseFragmentApplyTarget | null | undefined;
+  security: HtmlResponseFragmentSecurityControls;
 }
 
 export function applyInlineMutationResponseChunks(
@@ -18,5 +23,5 @@ export function applyInlineMutationResponseChunks(
   // SPEC.md §4.4/§9.1: the generated inline loader applies already-decoded
   // mutation response chunks through this runtime-owned fragment helper
   // closure, not a forked inline-only fragment apply path.
-  return p(chunks.fragments, (target) => options.findFragmentTarget(target));
+  return p(chunks.fragments, (target) => options.findFragmentTarget(target), options.security);
 }

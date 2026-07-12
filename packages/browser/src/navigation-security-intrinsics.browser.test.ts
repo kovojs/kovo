@@ -3,6 +3,31 @@ import { describe, expect, it } from 'vitest';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 describe('browser navigation security controls', () => {
+  it('pins mutation decoding and DOM commits after late intrinsic replacement', () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const nativeDecode = TextDecoder.prototype.decode;
+    const nativeReplaceWith = Element.prototype.replaceWith;
+    const current = document.createElement('main');
+    const next = document.createElement('section');
+    current.setAttribute('kovo-fragment-target', 'late-control');
+    document.body.append(current);
+
+    TextDecoder.prototype.decode = () => 'ATTACKER-SUBSTITUTED';
+    Element.prototype.replaceWith = function () {};
+    try {
+      const decoder = controls.createTextDecoder();
+      expect(controls.decodeText(decoder, new TextEncoder().encode('SERVER-SAFE'))).toBe(
+        'SERVER-SAFE',
+      );
+      controls.replaceElement(current, next);
+      expect(document.body.firstElementChild).toBe(next);
+    } finally {
+      TextDecoder.prototype.decode = nativeDecode;
+      Element.prototype.replaceWith = nativeReplaceWith;
+      document.body.replaceChildren();
+    }
+  });
+
   it('keeps URL, Headers, and DOMParser decisions pinned after late replacement', () => {
     const controls = createBrowserNavigationSecurityControls();
     const originDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')!;
@@ -76,6 +101,33 @@ describe('browser navigation security controls', () => {
       );
     } finally {
       Object.defineProperty(Node.prototype, 'cloneNode', cloneNodeDescriptor);
+    }
+  });
+
+  it('fails closed when mutation decoder or exact DOM commit methods were poisoned before capture', () => {
+    const nativeDecode = TextDecoder.prototype.decode;
+    const nativeReplaceWith = Element.prototype.replaceWith;
+
+    TextDecoder.prototype.decode = function poisonedDecode(
+      input?: AllowSharedBufferSource,
+    ): string {
+      return input === undefined ? '' : 'ATTACKER-SUBSTITUTED';
+    } as typeof TextDecoder.prototype.decode;
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      TextDecoder.prototype.decode = nativeDecode;
+    }
+
+    Element.prototype.replaceWith = function poisonedReplaceWith(): void {};
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      Element.prototype.replaceWith = nativeReplaceWith;
     }
   });
 });

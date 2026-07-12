@@ -48,7 +48,7 @@ describe('inline loader response apply source', () => {
     );
     expect(inlineResponseApplyReadableSource).not.toContain('element.innerHTML = html');
     expect(inlineResponseApplyReadableSource).toContain(
-      'return p(chunks.fragments, (target) => options.findFragmentTarget(target));',
+      'return p(chunks.fragments, (target) => options.findFragmentTarget(target), options.security);',
     );
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableApply);

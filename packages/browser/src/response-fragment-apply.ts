@@ -1,6 +1,14 @@
 import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 
 import type { FragmentChunk } from './wire-response-scanner.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
+type BrowserNavigationSecurityControls = ReturnType<typeof createBrowserNavigationSecurityControls>;
+
+export type HtmlResponseFragmentSecurityControls = Pick<
+  BrowserNavigationSecurityControls,
+  'appendElementChildren' | 'prependElementChildren' | 'replaceElement' | 'replaceElementChildren'
+>;
 
 // SF-WIRE (secure-framework Tier 3, Trusted Types — WIRED): the `p` and `d` helpers
 // below (their `insertAdjacentHTML('beforeend', …)` and `t.innerHTML = h` raw-HTML write
@@ -123,13 +131,15 @@ export function applyResponseFragments<Target>(
 export function applyHtmlResponseFragments(
   fragments: readonly FragmentChunk[],
   findFragmentTarget: (target: string) => HtmlResponseFragmentApplyTarget | null | undefined,
+  security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
 ): string[] {
-  return p(fragments, findFragmentTarget);
+  return p(fragments, findFragmentTarget, security);
 }
 
 export function p(
   fs: readonly FragmentChunk[],
   f: (target: string) => HtmlResponseFragmentApplyTarget | null | undefined,
+  security: HtmlResponseFragmentSecurityControls,
 ): string[] {
   // SPEC.md §4.4/§9.1: generated inline apply and modular decoded fragment
   // tests share the DOM HTML adapter instead of carrying an inline-only clone.
@@ -148,7 +158,6 @@ export function p(
       // dangerous attributes/URLs on the inserted children (SPEC §4.4/§9.1/§6.6).
       const t = document.createElement('template');
       t.innerHTML = trustedHtml(renderedFragmentHtmlContent(x.html));
-      for (const n of t.content.children) g(n);
       if (x.mode === 'prepend') {
         // SPEC §9.3/§13.2: insert keyed rows at the START, deduped by kovo-key (a
         // row whose key is already present is skipped, never re-inserted), and keep
@@ -168,13 +177,19 @@ export function p(
         }
         const top = e.scrollTop;
         const height = e.scrollHeight;
-        e.prepend(...ins);
+        for (let index = 0; index < ins.length; index += 1) {
+          const node = ins[index];
+          if (node) g(node);
+        }
+        security.prependElementChildren(e, ins);
         e.scrollTop = top + (e.scrollHeight - height);
       } else {
-        e.append(...t.content.childNodes);
+        const nodes = Array.from(t.content.childNodes);
+        for (const n of t.content.children) g(n);
+        security.appendElementChildren(e, nodes);
       }
     } else {
-      d(e, x.html);
+      d(e, x.html, security);
     }
     a[a.length] = x.target;
   }
@@ -182,7 +197,11 @@ export function p(
   return a;
 }
 
-function d(e: HtmlResponseFragmentApplyTarget, h: RenderedFragmentHtml): void {
+function d(
+  e: HtmlResponseFragmentApplyTarget,
+  h: RenderedFragmentHtml,
+  security: HtmlResponseFragmentSecurityControls,
+): void {
   const t = document.createElement('template');
   t.innerHTML = trustedHtml(renderedFragmentHtmlContent(h));
   const n = firstMorphElement(t.content);
@@ -196,9 +215,9 @@ function d(e: HtmlResponseFragmentApplyTarget, h: RenderedFragmentHtml): void {
   }
 
   if (n) {
-    m(e, g(n));
+    m(e, n, security);
   } else {
-    e.replaceChildren();
+    security.replaceElementChildren(e, []);
   }
   (s as HTMLElement | null)?.focus();
   for (const x of q) if (x.isConnected) x.scrollTop = (x as HTMLElement & { s: number }).s;
@@ -225,9 +244,11 @@ function k(e: Element): string | null {
   return e.getAttribute('kovo-key');
 }
 
-function m(c: Element, n: Element): Element {
-  if (c.tagName !== n.tagName || k(c) !== k(n)) {
-    c.replaceWith(n);
+function m(c: Element, n: Element, security: HtmlResponseFragmentSecurityControls): Element {
+  const replace = c.tagName !== n.tagName || k(c) !== k(n);
+  g(n);
+  if (replace) {
+    security.replaceElement(c, n);
     return n;
   }
 
@@ -242,7 +263,7 @@ function m(c: Element, n: Element): Element {
   // rewriting its children/value.
   if ((c as HTMLInputElement | HTMLTextAreaElement).selectionStart != null) return c;
 
-  u(c, n);
+  u(c, n, security);
   return c;
 }
 
@@ -344,7 +365,7 @@ export const __responseFragmentApplySanitizerParityForTests = {
   sanitizeSrcset: y,
 };
 
-function u(c: Element, n: Element): void {
+function u(c: Element, n: Element, security: HtmlResponseFragmentSecurityControls): void {
   const b = new Map(
     Array.from(c.children)
       .map((child) => [k(child), child] as const)
@@ -354,11 +375,11 @@ function u(c: Element, n: Element): void {
     if (x instanceof Element) {
       const z = k(x);
       const v = z ? b.get(z) : undefined;
-      return v ? m(v, x) : g(x.cloneNode(true) as Element);
+      return v ? m(v, x, security) : g(x.cloneNode(true) as Element);
     }
 
     return x.cloneNode(true) as ChildNode;
   });
 
-  c.replaceChildren(...r);
+  security.replaceElementChildren(c, r);
 }

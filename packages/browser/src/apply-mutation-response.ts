@@ -24,6 +24,12 @@ import {
 import type { ImportHandlerModule } from './handlers.js';
 import { reportRuntimeError } from './error-policy.js';
 import { readAttribute } from './wire-html.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
+// SPEC §6.6/§9.1: streaming response bytes remain server truth only when the decoder
+// constructor and decode method are captured during framework module initialization,
+// before any authored client module can replace browser-realm intrinsics.
+const mutationResponseSecurity = createBrowserNavigationSecurityControls();
 
 type RuntimeStreamTextOptions = StreamTextBufferOptions & {
   buffer?: StreamTextBuffer;
@@ -177,7 +183,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
     return emptyAppliedMutationResponse(options.root);
   }
   const reader = body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = mutationResponseSecurity.createTextDecoder();
   const streamAbortController =
     options.streamText?.signal === undefined ? new AbortController() : undefined;
   const streamTextBuffer =
@@ -248,7 +254,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
         await reader.cancel();
         throw abortStreamError(abortSignal);
       }
-      const chunk = decoder.decode(read.value, { stream: true });
+      const chunk = mutationResponseSecurity.decodeText(decoder, read.value, { stream: true });
       rawForDone += chunk;
       pending += chunk;
       const result = flushCompleteMutationResponsePrefix(
@@ -259,7 +265,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
       aggregate = mergeAppliedMutationResponses(aggregate, result.applied);
     }
 
-    const tail = decoder.decode();
+    const tail = mutationResponseSecurity.decodeText(decoder);
     rawForDone += tail;
     pending += tail;
     if (pending.length > 0) {

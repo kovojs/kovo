@@ -2229,11 +2229,16 @@ describe('sink-policy gate', () => {
           e.append(...t.content.childNodes);
         }
       }
-      function d(e, h) {
+      function d(e, h, security) {
         const t = document.createElement('template');
         t.innerHTML = trustedHtml(h);
         const n = firstMorphElement(t.content);
-        if (n) m(e, g(n));
+        if (n) m(e, n, security);
+      }
+      function m(c, n, security) {
+        const replace = c.tagName !== n.tagName;
+        g(n);
+        if (replace) security.replaceElement(c, n);
       }
       function r(n: string): boolean {
         return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(n);
@@ -2249,7 +2254,7 @@ describe('sink-policy gate', () => {
       validResponseApply
         .replace('t.innerHTML = trustedHtml(x.html);', 't.innerHTML = x.html;')
         .replace('for (const n of t.content.children) g(n);', '')
-        .replace('if (n) m(e, g(n));', 'if (n) m(e, n);')
+        .replace('g(n);', '')
         .replace(
           'return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(n);',
           'return /^on[^:]|^(srcdoc)$/.test(n);',

@@ -21,8 +21,12 @@ import { applyStreamTextChunks, StreamTextBuffer, type StreamTextRoot } from './
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest(['/c/markdown.client.js']);
+const originalTextDecoderDecode = TextDecoder.prototype.decode;
 afterAll(restoreClientModuleManifest);
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  TextDecoder.prototype.decode = originalTextDecoderDecode;
+  vi.unstubAllGlobals();
+});
 
 type FragmentSnapshot = {
   html: string;
@@ -352,6 +356,42 @@ describe('decoded mutation response apply', () => {
     ]);
     expect(applied.queries).toEqual(['chat']);
     expect(applied.streams).toEqual(['assistant:a1']);
+  });
+
+  it('keeps streamed server bytes authoritative after a late one-shot TextDecoder poison', async () => {
+    // C107 / SPEC §6.6 rule 5 and §9.1: the response build token classifies the
+    // network body, so a mutable decoder must not substitute different wire truth.
+    const safeWire =
+      '<kovo-fragment target="victim"><p>SERVER-SAFE</p></kovo-fragment><kovo-done></kovo-done>';
+    const safeBytes = new TextEncoder().encode(safeWire);
+    const target = new FakeMorphTarget();
+    const root = new FakeMorphRoot();
+    root.targets.set('victim', target);
+
+    TextDecoder.prototype.decode = function poisonedDecode(
+      this: TextDecoder,
+      input?: AllowSharedBufferSource,
+    ): string {
+      if (input !== undefined) {
+        TextDecoder.prototype.decode = originalTextDecoderDecode;
+        return '<kovo-fragment target="victim"><p>ATTACKER-SUBSTITUTED</p></kovo-fragment><kovo-done></kovo-done>';
+      }
+      return Reflect.apply(originalTextDecoderDecode, this, []);
+    } as typeof TextDecoder.prototype.decode;
+
+    await applyStreamingMutationResponseBodyToRuntime({
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(safeBytes);
+          controller.close();
+        },
+      }),
+      root,
+      store: createQueryStore(),
+    });
+
+    expect(target.html).toBe('<p>SERVER-SAFE</p>');
+    expect(target.html).not.toContain('ATTACKER-SUBSTITUTED');
   });
 
   it('reverts query truth and hard-recovers fragments on a non-complete <kovo-done> (I1)', async () => {

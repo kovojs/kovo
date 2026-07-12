@@ -7,6 +7,7 @@ import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.
 import { createQueryStore } from './client.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
 import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { applyInlineQueryEventToRuntime } from './query-events.js';
 import type { InlineQueryEvent } from './query-events.js';
 import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
@@ -446,6 +447,7 @@ export function expectInlineOracleResponseApplyContract(
             null
           );
         },
+        security: createBrowserNavigationSecurityControls(),
       },
     );
 

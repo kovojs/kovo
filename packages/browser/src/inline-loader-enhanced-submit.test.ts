@@ -994,7 +994,7 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
-    'streams inline enhanced mutation text through %s',
+    'streams inline enhanced mutation text through a boot-pinned decoder in %s',
     async (_name, installSource) => {
       // SPEC.md §4.4/§9.1: the always-loaded submit path must request and
       // incrementally apply streaming mutation text for compiler-marked forms.
@@ -1010,6 +1010,7 @@ describe('inline loader enhanced submit source', () => {
         importModule: globalRecord.__kovoInlineImport,
       };
       const listeners = new Map<string, (event: unknown) => void>();
+      const nativeTextDecoderDecode = TextDecoder.prototype.decode;
       const formData = { kind: 'stream-form-data' };
       const streamTargetAttrs = new Map<string, string>([
         ['data-stream-renderer', '/c/client.ts#renderMarkdownStream'],
@@ -1078,6 +1079,18 @@ describe('inline loader enhanced submit source', () => {
         globalRecord.fetch = inlineFetch;
 
         installSource(importModule, globalRecord);
+        // C107 / SPEC §6.6 rule 5: authored code runs after loader bootstrap and
+        // cannot substitute different wire truth through a one-shot decoder poison.
+        TextDecoder.prototype.decode = function poisonedDecode(
+          this: TextDecoder,
+          input?: AllowSharedBufferSource,
+        ): string {
+          if (input !== undefined) {
+            TextDecoder.prototype.decode = nativeTextDecoderDecode;
+            return '<kovo-text target="assistant:a1">ATTACKER-SUBSTITUTED</kovo-text><kovo-done></kovo-done>';
+          }
+          return Reflect.apply(nativeTextDecoderDecode, this, []);
+        } as typeof TextDecoder.prototype.decode;
         listeners.get('submit')?.({
           preventDefault: vi.fn(),
           target: {
@@ -1109,6 +1122,7 @@ describe('inline loader enhanced submit source', () => {
         expect(streamTargetAttrs.get('data-rendered-markdown')).toBe('table');
         expect(importModule).toHaveBeenCalledWith('/c/client.ts');
       } finally {
+        TextDecoder.prototype.decode = nativeTextDecoderDecode;
         Object.assign(globalRecord, {
           FormData: originals.FormData,
           TextDecoder: originals.TextDecoder,

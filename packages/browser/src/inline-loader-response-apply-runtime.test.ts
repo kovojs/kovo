@@ -10,6 +10,7 @@ import {
 } from './inline-loader-response-apply-fixture.js';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
 
 function fragmentHtml(html: string): RenderedFragmentHtml {
@@ -91,6 +92,7 @@ describe('inline loader response apply runtime', () => {
           findFragmentTarget(target) {
             return (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null;
           },
+          security: createBrowserNavigationSecurityControls(),
         },
       );
 

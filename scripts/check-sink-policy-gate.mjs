@@ -623,7 +623,13 @@ export function responseFragmentApplyInvariantFindings(filePath, text) {
     );
   }
 
-  if (!/\bm\s*\(\s*e\s*,\s*g\s*\(\s*n\s*\)\s*\)\s*;/.test(source)) {
+  const legacySanitizedReplace = /\bm\s*\(\s*e\s*,\s*g\s*\(\s*n\s*\)\s*\)\s*;/.test(source);
+  const pinnedSanitizedReplace =
+    /\bm\s*\(\s*e\s*,\s*n\s*,\s*security\s*\)\s*;/.test(source) &&
+    /\bfunction\s+m\s*\([^)]*\bsecurity\b[^)]*\)\s*(?::\s*[^\{]+)?\{[\s\S]*?\bg\s*\(\s*n\s*\)\s*;[\s\S]*?\bsecurity\s*\.\s*replaceElement\s*\(\s*c\s*,\s*n\s*\)/.test(
+      source,
+    );
+  if (!legacySanitizedReplace && !pinnedSanitizedReplace) {
     findings.push(
       `${filePath}: replace-mode response fragments must sanitize the parsed morph root before DOM insertion`,
     );

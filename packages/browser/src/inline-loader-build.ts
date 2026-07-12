@@ -668,7 +668,7 @@ function installInlineKovoLoader(im) {
         y.a?.abort();
       }
     }
-    applyInlineMutationResponseChunks({ fragments }, { findFragmentTarget: ft });
+    applyInlineMutationResponseChunks({ fragments }, { findFragmentTarget: ft, security: bns });
   };
   const ab = (body, build = kb()) => {
     const chunks = readInlineMutationResponseBodyChunks(body);
@@ -787,16 +787,16 @@ function installInlineKovoLoader(im) {
   };
   const asr = async (body) => {
     const reader = body.getReader();
-    const decoder = new TextDecoder();
+    const decoder = bns.createTextDecoder();
     const state = { done: false, queries: [] };
     let pending = '';
     try {
       while (true) {
         const read = await reader.read();
         if (read.done) break;
-        pending = cp(pending + decoder.decode(read.value, { stream: true }), state);
+        pending = cp(pending + bns.decodeText(decoder, read.value, { stream: true }), state);
       }
-      pending += decoder.decode();
+      pending += bns.decodeText(decoder);
       if (pending.trim()) {
         sfail();
         throw Error('Streaming mutation ended with an incomplete wire element');

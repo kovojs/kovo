@@ -9,6 +9,21 @@ import { kovoSetSafeAttribute } from './security-output.js';
 import { securityStringTrim } from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+
+// SPEC §6.6 rule 6: capture and validate the DOM commit methods while the framework
+// module graph is initializing, before authored client modules can replace realm intrinsics.
+const browserDomSecurity =
+  typeof document === 'undefined' || typeof Element === 'undefined'
+    ? undefined
+    : createBrowserNavigationSecurityControls();
+
+function requireBrowserDomSecurity(): NonNullable<typeof browserDomSecurity> {
+  if (!browserDomSecurity) {
+    throw new TypeError('Kovo DOM morph security controls are unavailable.');
+  }
+  return browserDomSecurity;
+}
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface MorphTarget {
@@ -45,20 +60,22 @@ export class DomMorphTarget implements MorphTarget {
   }
 
   appendHtml(html: string): void {
+    const security = requireBrowserDomSecurity();
     const template = document.createElement('template');
     // SF (secure-framework Tier 3): route framework-assembled HTML through Kovo's sole
     // Trusted Types policy so this sink survives a strict `require-trusted-types-for`
     // CSP on Chromium (transparent passthrough elsewhere — see trusted-types.ts).
     template.innerHTML = kovoCreateHTML(securityStringTrim(html));
+    const nodes = Array.from(template.content.childNodes);
     sanitizeDomFragment(template.content);
-    this.element.append(...Array.from(template.content.childNodes));
+    security.appendElementChildren(this.element, nodes);
   }
 
   prependHtml(html: string): void {
+    const security = requireBrowserDomSecurity();
     const template = document.createElement('template');
     // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
     template.innerHTML = kovoCreateHTML(securityStringTrim(html));
-    sanitizeDomFragment(template.content);
     // SPEC §9.3/§13.2: dedupe prepended rows by kovo-key (a key already present is
     // skipped, never re-inserted), insert the rest at the START in wire order, and
     // preserve the scroll anchor — the target is treated as the scroll container, so
@@ -81,11 +98,16 @@ export class DomMorphTarget implements MorphTarget {
     }).filter((node) => !this.element.contains(node));
     const scrollTop = this.element.scrollTop;
     const scrollHeight = this.element.scrollHeight;
-    this.element.prepend(...insert);
+    // Build the insertion plan before the final sanitizer pass. The captured native
+    // commit runs immediately afterward, so no authored accessor/method can mutate a
+    // node after validation but before adoption (SPEC §6.6 classify-and-pin).
+    sanitizeDomFragment(template.content);
+    security.prependElementChildren(this.element, insert);
     this.element.scrollTop = scrollTop + (this.element.scrollHeight - scrollHeight);
   }
 
   replaceWithHtml(html: string): void {
+    const security = requireBrowserDomSecurity();
     const template = document.createElement('template');
     // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
     template.innerHTML = kovoCreateHTML(securityStringTrim(html));
@@ -94,7 +116,7 @@ export class DomMorphTarget implements MorphTarget {
     const scrollStates = captureDomScrollStates(this.element);
 
     if (!next) {
-      this.element.replaceChildren();
+      security.replaceElementChildren(this.element, []);
       return;
     }
 
@@ -212,10 +234,14 @@ export function morphStructuralTree(
 
 /** @internal Reconcile a DOM element in place against its next shape, preserving focus/state (SPEC §9.1). */
 export function morphDomElement(current: Element, next: Element): Element {
+  const security = requireBrowserDomSecurity();
+  // Resolve the reuse plan before validation. On replacement, the final sanitizer
+  // pass is followed only by the boot-pinned native replaceWith invocation.
+  const canReuse = canReuseDomElement(current, next);
   sanitizeDomElementTree(next);
 
-  if (!canReuseDomElement(current, next)) {
-    current.replaceWith(next);
+  if (!canReuse) {
+    security.replaceElement(current, next);
     return next;
   }
 
@@ -459,6 +485,7 @@ function restoreDomScrollStates(states: ReturnType<typeof captureDomScrollStates
 }
 
 function morphDomChildren(current: Element, next: Element): void {
+  const security = requireBrowserDomSecurity();
   const nextChildren = [...next.childNodes];
   const desiredNodes = reconcileKeyed([...current.childNodes], nextChildren, {
     create(nextChild) {
@@ -478,13 +505,9 @@ function morphDomChildren(current: Element, next: Element): void {
     },
   });
 
-  for (const [index, desiredNode] of desiredNodes.entries()) {
-    current.insertBefore(desiredNode, current.childNodes[index] ?? null);
-  }
-
-  for (const child of Array.from(current.childNodes)) {
-    if (!desiredNodes.includes(child)) child.remove();
-  }
+  // `replaceChildren` adopts the already-reconciled node plan in one boot-pinned native
+  // commit. Reused keyed nodes retain identity; removed nodes are discarded atomically.
+  security.replaceElementChildren(current, desiredNodes);
 }
 
 function cloneDomChildNode(child: ChildNode): ChildNode {

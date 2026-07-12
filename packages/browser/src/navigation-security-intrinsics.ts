@@ -7,12 +7,13 @@ export interface NavigationUrlFacts {
 }
 
 /**
- * Boot-pinned browser controls for navigation and authentication response decisions.
+ * Boot-pinned browser controls for navigation, mutation decoding, and DOM response commits.
  *
- * SPEC §6.5/§8: applications share the browser realm with the loader, so mutable globals and
- * prototype methods are not an authority boundary. This closure captures the platform controls,
- * proves representative accepting/rejecting semantics, and keeps the inline-loader extraction
- * closure-complete (the generator extracts this declaration beside enhanced navigation).
+ * SPEC §6.5/§6.6/§8/§9.1: applications share the browser realm with the loader, so mutable globals
+ * and prototype methods are not an authority boundary. This closure captures the platform
+ * controls, proves representative accepting/rejecting semantics, and keeps the inline-loader
+ * extraction closure-complete (the generator extracts this declaration beside enhanced
+ * navigation and mutation response handling).
  *
  * @internal
  */
@@ -29,6 +30,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeElement = scope.Element;
   const NativeNode = scope.Node;
   const NativeDocumentFragment = scope.DocumentFragment;
+  const NativeTextDecoder = scope.TextDecoder;
+  const NativeUint8Array = scope.Uint8Array;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -74,6 +77,16 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const elementOuterHtml = NativeElement ? getter(NativeElement.prototype, 'outerHTML') : undefined;
   const elementRemove = NativeElement ? valueMethod(NativeElement.prototype, 'remove') : undefined;
+  const elementAppend = NativeElement ? valueMethod(NativeElement.prototype, 'append') : undefined;
+  const elementPrepend = NativeElement
+    ? valueMethod(NativeElement.prototype, 'prepend')
+    : undefined;
+  const elementReplaceChildren = NativeElement
+    ? valueMethod(NativeElement.prototype, 'replaceChildren')
+    : undefined;
+  const elementReplaceWith = NativeElement
+    ? valueMethod(NativeElement.prototype, 'replaceWith')
+    : undefined;
   const nodeCloneNode = NativeNode ? valueMethod(NativeNode.prototype, 'cloneNode') : undefined;
   const nodeAppendChild = NativeNode ? valueMethod(NativeNode.prototype, 'appendChild') : undefined;
   const documentCreateElement = NativeDocument
@@ -81,6 +94,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const elementSetAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'setAttribute')
+    : undefined;
+  const textDecoderDecode = NativeTextDecoder
+    ? valueMethod(NativeTextDecoder.prototype, 'decode')
     : undefined;
   const locationObject = scope.location;
   const documentObject = scope.document;
@@ -271,6 +287,58 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       }
     }
     return typeof value === 'string' ? value : undefined;
+  }
+
+  function appendElementChildren(element: Element, nodes: readonly (Node | string)[]): void {
+    const method = elementAppend ?? stableMethod(element, 'append');
+    if (!method) throw new TypeError('Kovo DOM append control is unavailable.');
+    call(method, element, nodes);
+  }
+
+  function prependElementChildren(element: Element, nodes: readonly (Node | string)[]): void {
+    const method = elementPrepend ?? stableMethod(element, 'prepend');
+    if (!method) throw new TypeError('Kovo DOM prepend control is unavailable.');
+    call(method, element, nodes);
+  }
+
+  function replaceElement(current: Element, next: Element): void {
+    const method = elementReplaceWith ?? stableMethod(current, 'replaceWith');
+    if (!method) throw new TypeError('Kovo DOM replace control is unavailable.');
+    call(method, current, [next]);
+  }
+
+  function replaceElementChildren(element: Element, nodes: readonly (Node | string)[]): void {
+    const method = elementReplaceChildren ?? stableMethod(element, 'replaceChildren');
+    if (!method) {
+      throw new TypeError('Kovo DOM replace-children control is unavailable.');
+    }
+    call(method, element, nodes);
+  }
+
+  function createTextDecoder(): TextDecoder {
+    if (!controlsSound || !NativeTextDecoder || !textDecoderDecode) {
+      throw new TypeError('Kovo mutation stream decoder control is unavailable.');
+    }
+    return new NativeTextDecoder();
+  }
+
+  function decodeText(
+    decoder: TextDecoder,
+    input?: AllowSharedBufferSource,
+    options?: TextDecodeOptions,
+  ): string {
+    if (!textDecoderDecode) {
+      throw new TypeError('Kovo mutation stream decoder control is unavailable.');
+    }
+    const value = call<unknown>(
+      textDecoderDecode,
+      decoder,
+      input === undefined ? [] : options === undefined ? [input] : [input, options],
+    );
+    if (typeof value !== 'string') {
+      throw new TypeError('Kovo mutation stream decoder returned invalid data.');
+    }
+    return value;
   }
 
   function readLocationString(
@@ -630,7 +698,10 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         !urlOrigin ||
         !urlPathname ||
         !urlSearch ||
-        !urlHash
+        !urlHash ||
+        !NativeTextDecoder ||
+        !NativeUint8Array ||
+        !textDecoderDecode
       ) {
         return false;
       }
@@ -661,6 +732,19 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       ) {
         return false;
       }
+      const decoderControl = new NativeTextDecoder();
+      const decoderBytes = new NativeUint8Array([
+        60, 107, 111, 118, 111, 45, 100, 111, 110, 101, 32, 114, 101, 97, 115, 111, 110, 61, 34,
+        115, 101, 99, 117, 114, 105, 116, 121, 45, 99, 111, 110, 116, 114, 111, 108, 34, 62, 60, 47,
+        107, 111, 118, 111, 45, 100, 111, 110, 101, 62,
+      ]);
+      if (
+        apply(textDecoderDecode, decoderControl, [decoderBytes, { stream: true }]) !==
+          '<kovo-done reason="security-control"></kovo-done>' ||
+        apply(textDecoderDecode, decoderControl, []) !== ''
+      ) {
+        return false;
+      }
       if (NativeHeaders && headersGet) {
         const headers = new NativeHeaders({ 'X-Kovo-Control': 'yes' });
         if (
@@ -676,6 +760,10 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !elementSetAttribute ||
           !elementOuterHtml ||
           !elementRemove ||
+          !elementAppend ||
+          !elementPrepend ||
+          !elementReplaceChildren ||
+          !elementReplaceWith ||
           !nodeCloneNode ||
           !nodeAppendChild ||
           !elementQuerySelector
@@ -684,17 +772,34 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         }
         const snapshotControl = apply<unknown>(documentCreateElement, documentObject, ['section']);
         const nestedControl = apply<unknown>(documentCreateElement, documentObject, ['span']);
+        const appendControl = apply<unknown>(documentCreateElement, documentObject, ['i']);
+        const prependControl = apply<unknown>(documentCreateElement, documentObject, ['b']);
+        const replacementControl = apply<unknown>(documentCreateElement, documentObject, [
+          'article',
+        ]);
         if (
           snapshotControl === null ||
           typeof snapshotControl !== 'object' ||
           nestedControl === null ||
-          typeof nestedControl !== 'object'
+          typeof nestedControl !== 'object' ||
+          appendControl === null ||
+          typeof appendControl !== 'object' ||
+          prependControl === null ||
+          typeof prependControl !== 'object' ||
+          replacementControl === null ||
+          typeof replacementControl !== 'object'
         ) {
           return false;
         }
         apply(elementSetAttribute, snapshotControl, ['kovo-nav-segment', 'security-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-nav-segment', 'nested-control']);
         apply(elementSetAttribute, nestedControl, ['kovo-fragment-target', 'security-live-target']);
+        apply(elementSetAttribute, appendControl, ['data-kovo-commit', 'append']);
+        apply(elementSetAttribute, prependControl, ['data-kovo-commit', 'prepend']);
+        apply(elementSetAttribute, replacementControl, [
+          'kovo-fragment-target',
+          'security-live-target',
+        ]);
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
         const expectedSnapshot =
           '<section kovo-nav-segment="security-control"><span kovo-nav-segment="nested-control" kovo-fragment-target="security-live-target"></span></section>';
@@ -717,6 +822,24 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         if (nestedClone === null || typeof nestedClone !== 'object') return false;
         apply(elementRemove, nestedClone, []);
         if (apply(elementOuterHtml, snapshotClone, []) !== expectedWithoutNested) return false;
+
+        apply(elementAppend, snapshotControl, [appendControl]);
+        apply(elementPrepend, snapshotControl, [prependControl]);
+        if (
+          apply(elementOuterHtml, snapshotControl, []) !==
+          '<section kovo-nav-segment="security-control"><b data-kovo-commit="prepend"></b><span kovo-nav-segment="nested-control" kovo-fragment-target="security-live-target"></span><i data-kovo-commit="append"></i></section>'
+        ) {
+          return false;
+        }
+        apply(elementReplaceChildren, snapshotControl, [nestedControl]);
+        if (apply(elementOuterHtml, snapshotControl, []) !== expectedSnapshot) return false;
+        apply(elementReplaceWith, nestedControl, [replacementControl]);
+        if (
+          apply(elementOuterHtml, snapshotControl, []) !==
+          '<section kovo-nav-segment="security-control"><article kovo-fragment-target="security-live-target"></article></section>'
+        ) {
+          return false;
+        }
       }
       return true;
     } catch {
@@ -732,11 +855,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   }
 
   return {
+    appendElementChildren,
     call,
     cloneElement,
+    createTextDecoder,
     currentPathTarget,
     currentUrl,
     decodeComponent,
+    decodeText,
     fetchDocument,
     fetchValue,
     hardNavigate,
@@ -745,6 +871,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     navigateSameOrigin,
     parseHtmlDocument,
     parseUrl,
+    prependElementChildren,
     queryOne,
     readAttribute,
     readElementOuterHtml,
@@ -755,6 +882,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     readResponseText,
     reload,
     removeElement,
+    replaceElement,
+    replaceElementChildren,
     safeSameOriginPath,
     upper,
   };
