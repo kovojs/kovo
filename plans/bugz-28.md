@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   151 | C1-C151 |
+| Critical |   156 | C1-C156 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -1817,7 +1817,7 @@ build:dist` passes.
   - **Evidence:** the exact modular/generated cross-principal getter substitution rejects 6/6 in
     Chromium, Firefox, and WebKit; the complete direct browser matrix passes 411/411.
 
-- [ ] **C138 - Raw-read unwrapping bypasses the read-only SQL choke.**
+- [x] **C138 - Raw-read unwrapping bypasses the read-only SQL choke.**
       `packages/test/src` verifier/harness adapters
   - `readonlyDb(...).rawRead` exposed the framework-managed raw target before execution, allowing a
     mutable adapter to execute DML outside statement classification; SQLite/PGlite engine denials
@@ -1825,6 +1825,8 @@ build:dist` passes.
   - **Acceptance:** raw reads retain the managed read-only membrane through final dispatch, snapshot
     SQL/values/metadata once, reject write-capable statements before engine effects, and normalize
     every engine denial to the framework's fail-closed verdict.
+  - **Evidence:** the exact managed raw-read/engine-denial regressions pass in the 158-test managed DB
+    matrix; server dist/DTS and the API surface gate pass.
 
 - [ ] **C139 - Mutable SQL-observation collections erase a real read.**
       `packages/test/src/{sql-observer,verifier-observation}.ts`
@@ -1834,13 +1836,15 @@ build:dist` passes.
     use captured controls over exact snapshots; no collection replacement can omit or reclassify a
     database effect.
 
-- [ ] **C140 - Mutable side-effect fingerprints hide trigger and cascade writes.**
+- [x] **C140 - Mutable side-effect fingerprints hide trigger and cascade writes.**
       `packages/test/src` engine side-effect verifier
   - Targeted `Function.prototype.call` redirection plus constant `JSON.stringify` fingerprints hid
     same-row-count trigger/cascade updates from the engine before/after net while verification passed.
   - **Acceptance:** engine queries, row snapshots, canonical fingerprints, equality, and effect-net
     construction use pinned exact controls and collision-resistant identity; any ambiguity fails
     coverage closed.
+  - **Evidence:** the exact trigger/cascade fingerprint substitutions fail closed in the 158-test
+    managed DB matrix; server dist/DTS and the API surface gate pass.
 
 - [ ] **C141 - A query mutates its declared reads after executing an undeclared read.**
       `packages/test/src` query harness
@@ -1878,21 +1882,25 @@ build:dist` passes.
   - **Acceptance:** mutation identity, touch-graph key, graph entry, domains, and table policy are
     snapshotted before handler execution and remain the sole verification authority.
 
-- [ ] **C146 - A late Proxy replacement removes server database membranes.**
+- [x] **C146 - A late Proxy replacement removes server database membranes.**
       `packages/server/src` managed DB adapters
   - `wrapDbAdapter` and `readonlyCapabilityDb` constructed live global `Proxy` instances after app
     code could replace the constructor; returning the raw target removes KV422/KV433 method and
     write guards.
   - **Acceptance:** every managed/read-only DB proxy uses a boot-captured witnessed constructor and
     pinned traps/dispatch; late global Proxy replacement cannot expose or return an unwrapped target.
+  - **Evidence:** late Proxy substitution receives no managed/read-only construction dispatch in the
+    158-test managed DB matrix; server dist/DTS and the API surface gate pass.
 
-- [ ] **C147 - Mutable Promise resolution commits a rejected asynchronous SQLite transaction.**
+- [x] **C147 - Mutable Promise resolution commits a rejected asynchronous SQLite transaction.**
       `packages/test/src` SQLite verifier adapter
   - Replacing `Promise.resolve` after setup swallowed the rejection from an asynchronous transaction
     callback, so a real `better-sqlite3` transaction committed its row even though the authored
     callback failed.
   - **Acceptance:** transaction callback settlement uses one boot-pinned, witnessed Promise path;
     late resolve/then/catch substitution cannot turn rejection into commit or skip rollback.
+  - **Evidence:** the real `better-sqlite3` rejection rolls back under late Promise replacement in the
+    158-test managed DB matrix; server dist/DTS and the API surface gate pass.
 
 - [x] **C148 - Mutable graph traversal erases default-deny authority facts.**
       `packages/core/src/graph.ts`
@@ -1904,12 +1912,14 @@ build:dist` passes.
   - **Evidence:** the exact late collection/string substitution receives zero calls while preserving
     every authority fact; the 27-test graph/intrinsic matrix and core dist/DTS build pass.
 
-- [ ] **C149 - Mutable Promise rejection handling suppresses a read-only engine denial.**
+- [x] **C149 - Mutable Promise rejection handling suppresses a read-only engine denial.**
       `packages/test/src` read-only engine verifier
   - Late `Promise.prototype.then`/`catch` substitution converted a genuine engine rejection into a
     successful read-only result and skipped the required KV433 fail-closed mapping.
   - **Acceptance:** engine settlement and rejection normalization use captured native Promise
     observation so application code cannot suppress a denial or change its framework verdict.
+  - **Evidence:** the exact late then/catch substitution retains the engine denial and KV433 mapping
+    in the 158-test managed DB matrix; server dist/DTS and the API surface gate pass.
 
 - [ ] **C150 - A query rewrites its integration-fixture read authority after execution.**
       `packages/test/src/integration/fixture-instance.ts`
@@ -1927,6 +1937,53 @@ build:dist` passes.
   - **Acceptance:** publishers use a boot-pinned witnessed channel constructor and postMessage over
     one immutable exact envelope. Late prototype replacement cannot remove or rewrite principal,
     build, query, fragment, or body truth before transport.
+
+- [ ] **C152 - A mutable Response constructor converts verifier failure into HTTP success.**
+      `packages/test/src/integration/fixture-instance.ts`
+  - A query loader replaced `globalThis.Response` with a constructor that returned status 200.
+    `verificationFailureResponse()` then converted a real KV407 response into successful attacker
+    content instead of retaining the framework's failure status.
+  - **Acceptance:** integration verification responses use a boot-captured, semantically witnessed
+    Response constructor and exact status/body/header snapshot; late global replacement cannot turn
+    any verifier failure into success.
+
+- [ ] **C153 - A retained seed adapter escapes integration verifier observation.**
+      `packages/test/src/integration/fixture-instance.ts`
+  - `seed(rawDb)` retained the unwrapped adapter; a later query used that handle for an undeclared
+    product read, while the verifier observed zero operations and returned HTTP 200 despite declaring
+    only the cart domain.
+  - **Acceptance:** the fixture constructs the verifier before seeding and passes only its wrapped
+    adapter; retained setup handles remain observed during later query/page/mutation execution.
+
+- [x] **C154 - Mutable authoring-surface traversal suppresses the KV235 internal-import gate.**
+      `packages/compiler/src/validate/authoring-surface.ts`
+  - A selective late `Array.prototype.filter` erased the real non-public Kovo import from the
+    authoring-surface pass. A local re-export can then launder an internal raw-output capability past
+    the source module that KV235 is required to reject under SPEC.md §5.2.
+  - **Acceptance:** module/call/render traversal, internal/generated specifier classification, IR
+    header recognition, diagnostics, and help assembly use boot-pinned compiler controls over dense
+    own-data facts; late collection/string/RegExp replacement cannot suppress KV235.
+  - **Evidence:** the exact internal-import filter receives zero calls and KV235 remains blocking;
+    124 compiler/Vite/route tests, compiler dist/DTS, and all classifier routing/corpus gates pass.
+
+- [x] **C155 - Mutable CSS attachment substitutes a forged closed-app route.**
+      `packages/cli/src/commands/build-export.ts`, generated build handler
+  - During CLI CSS attachment, a late `Array.prototype.map` replaced the genuine snapshotted
+    `app.routes` with `/forged-admin`, making the build's route authority disagree with the closed app.
+  - **Acceptance:** stylesheet manifests, closed app arrays, route lookup, and generated handler
+    reconstruction use boot-pinned dense controls; late collection/Map/String substitution cannot add,
+    remove, or replace a route while attaching CSS.
+  - **Evidence:** the exact substitution receives zero calls; the 9-test build-export security-order
+    matrix and component/per-route CSS integration controls pass.
+
+- [ ] **C156 - Encoded integration asset traversal discloses a sibling directory.**
+      `packages/test/src/integration-server.ts`
+  - `tryServeBuiltAsset()` used string-prefix containment. The request
+    `/assets/..%2f..%2fdist-secret%2fsecret.txt` normalized into the sibling `dist-secret` directory
+    and returned its secret bytes over HTTP.
+  - **Acceptance:** decoded asset paths resolve beneath the exact assets root with separator-aware
+    relative containment and pinned URL/path controls; encoded separators, traversal, and prefix
+    collisions fail closed before any filesystem read.
 
 ## High
 

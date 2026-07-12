@@ -1241,6 +1241,44 @@ export const CartBadge = component({
     ]);
   });
 
+  it('does not let late collection traversal suppress the KV235 internal-import gate', () => {
+    const nativeFilter = Array.prototype.filter;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+
+    try {
+      Array.prototype.filter = function eraseInternalImportDiagnostics(callback, thisArg) {
+        for (let index = 0; index < this.length; index += 1) {
+          const value = this[index] as { specifier?: unknown } | undefined;
+          if (value?.specifier === '@kovojs/server/internal/html') {
+            poisonHits += 1;
+            return [];
+          }
+        }
+        return Reflect.apply(nativeFilter, this, [callback, thisArg]);
+      } as typeof Array.prototype.filter;
+
+      result = compileComponentModule({
+        fileName: 'src/unsafe-helper.tsx',
+        source: `
+import { component } from '@kovojs/core';
+import { renderedHtml } from '@kovojs/server/internal/html';
+
+export const Unsafe = component({
+  render: ({ request }) => <section>{renderedHtml(request.body)}</section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+
+    expect(result?.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'KV235' })]),
+    );
+    expect(poisonHits).toBe(0);
+  });
+
   it('blocks app-authored access to the closed-app derivation capability', () => {
     const result = compileComponentModule({
       fileName: 'forged-app.tsx',
