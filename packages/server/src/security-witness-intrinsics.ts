@@ -390,6 +390,11 @@ export function witnessCreateNullRecord<Value = unknown>(): Record<PropertyKey, 
   return apply(nativeObjectCreate, NativeObject, [null]);
 }
 
+export function witnessCreateWithPrototype<Value extends object>(prototype: object | null): Value {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeObjectCreate, NativeObject, [prototype]);
+}
+
 export function witnessGetOwnPropertyDescriptors(value: object): PropertyDescriptorMap {
   assertSecurityWitnessIntrinsics();
   return apply(nativeObjectGetOwnPropertyDescriptors, NativeObject, [value]);

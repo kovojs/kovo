@@ -1274,6 +1274,27 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ]);
       expect(executablePropertyReads).toBe(0);
 
+      const splitTable = new Proxy(publicData, {
+        get(target, property, receiver) {
+          if (property === Symbol.for('drizzle:Name')) return 'secrets';
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      expect(handle.select({ total: count() }).from(splitTable).get()).toEqual({ total: 1 });
+
+      const splitProjection = new Proxy(
+        { label: publicData.label },
+        {
+          get(target, property, receiver) {
+            if (property === 'label') {
+              return drizzleSql.raw('(select classified from secrets)').as('label');
+            }
+            return Reflect.get(target, property, receiver);
+          },
+        },
+      );
+      expect(handle.select(splitProjection).from(publicData).get()).toEqual({ label: 'public' });
+
       const evil = rawDb
         .select({ leaked: drizzleSql.raw('classified').as('leaked') })
         .from(secrets)

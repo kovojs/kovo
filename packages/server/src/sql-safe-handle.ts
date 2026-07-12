@@ -22,12 +22,14 @@ import {
 } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import {
+  Column,
   count as drizzleCount,
   Name,
   Param,
   Placeholder,
   SQL,
   StringChunk,
+  Table,
 } from 'drizzle-orm';
 import {
   classifyStatement,
@@ -44,6 +46,7 @@ import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessCreateNullRecord,
+  witnessCreateWithPrototype,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -84,6 +87,17 @@ const nativeSymbolDescription = witnessReflectGet(symbolDescriptionDescriptor, '
 const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
 const DRIZZLE_TABLE_SCHEMA = Symbol.for('drizzle:Schema');
 const DRIZZLE_TABLE_IS_ALIAS = Symbol.for('drizzle:IsAlias');
+const DRIZZLE_TABLE_COLUMNS = Symbol.for('drizzle:Columns');
+const DRIZZLE_TABLE_BASE_NAME = Symbol.for('drizzle:BaseName');
+const snapshotColumnIdentity = witnessFreeze(
+  witnessDefineProperty(
+    function (value: unknown): unknown {
+      return value;
+    },
+    'isNoop',
+    { value: true },
+  ),
+);
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
 export interface ManagedSqlWritePolicy {
@@ -449,11 +463,12 @@ function canonicalizeNativeDrizzleCountStar(
     witnessWeakMapSet(seen, value, structuredSql);
     return structuredSql;
   }
+  const schemaEntity = canonicalNativeDrizzleSchemaEntity(value, seen);
+  if (schemaEntity !== undefined) return schemaEntity;
 
   if (witnessIsArray(value)) {
     const clone: unknown[] = [];
     witnessWeakMapSet(seen, value, clone);
-    let changed = false;
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = witnessGetOwnPropertyDescriptor(value, index);
       if (descriptor === undefined || !('value' in descriptor)) {
@@ -461,13 +476,8 @@ function canonicalizeNativeDrizzleCountStar(
       }
       const item = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
       appendSqlSafetyValue(clone, item);
-      if (item !== descriptor.value) changed = true;
     }
-    if (!changed) {
-      witnessWeakMapSet(seen, value, value);
-      return value;
-    }
-    return clone;
+    return witnessFreeze(clone);
   }
 
   let kinds: Set<string>;
@@ -484,34 +494,211 @@ function canonicalizeNativeDrizzleCountStar(
   }
 
   const clone =
-    prototype === null ? witnessCreateNullRecord() : ({} as Record<PropertyKey, unknown>);
+    prototype === null || prototype === intrinsicObjectPrototype
+      ? witnessCreateNullRecord()
+      : witnessCreateWithPrototype<Record<PropertyKey, unknown>>(prototype);
   witnessWeakMapSet(seen, value, clone);
-  let changed = false;
-  let hasAccessor = false;
   const descriptorKeys = witnessOwnKeys(descriptors);
   for (let keyIndex = 0; keyIndex < descriptorKeys.length; keyIndex += 1) {
     const key = descriptorKeys[keyIndex]!;
     const descriptor = witnessReflectGet(descriptors, key) as PropertyDescriptor | undefined;
     if (!descriptor) continue;
     if (!('value' in descriptor)) {
-      hasAccessor = true;
-      witnessDefineProperty(clone, key, descriptor);
-      continue;
+      throw new Error(
+        'KV422: managed SQL builder cannot snapshot an accessor-backed argument container (SPEC §6.6/§10.2).',
+      );
     }
     const item = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
-    if (item !== descriptor.value) changed = true;
-    witnessDefineProperty(clone, key, { ...descriptor, value: item });
+    witnessDefineProperty(clone, key, {
+      configurable: descriptor.configurable ?? false,
+      enumerable: descriptor.enumerable ?? false,
+      value: item,
+      writable: descriptor.writable ?? false,
+    });
   }
-  if (!changed) {
-    witnessWeakMapSet(seen, value, value);
-    return value;
+  return witnessFreeze(clone);
+}
+
+function canonicalNativeDrizzleSchemaEntity(
+  value: object,
+  seen: WeakMap<object, unknown>,
+): object | undefined {
+  const kinds = nativeDrizzleEntityKinds(value);
+  if (witnessSetHas(kinds, 'Table')) return reconstructNativeDrizzleTableEntity(value, seen);
+  if (witnessSetHas(kinds, 'Column')) return reconstructNativeDrizzleColumnEntity(value, seen);
+  return undefined;
+}
+
+function reconstructNativeDrizzleTableEntity(
+  value: object,
+  seen: WeakMap<object, unknown>,
+): object {
+  const existing = witnessWeakMapGet(seen, value);
+  if (isRecord(existing)) return existing;
+  const name = requiredOwnString(value, DRIZZLE_TABLE_NAME);
+  const schema = optionalOwnString(value, DRIZZLE_TABLE_SCHEMA);
+  const baseName = optionalOwnString(value, DRIZZLE_TABLE_BASE_NAME) ?? name;
+  const alias = requiredOwnBoolean(value, DRIZZLE_TABLE_IS_ALIAS);
+  const columnsDescriptor = witnessGetOwnPropertyDescriptor(value, DRIZZLE_TABLE_COLUMNS);
+  if (
+    columnsDescriptor === undefined ||
+    !('value' in columnsDescriptor) ||
+    !isRecord(columnsDescriptor.value)
+  ) {
+    throw nativeDrizzleProvenanceError();
   }
-  if (hasAccessor) {
-    throw new Error(
-      'KV422: managed SQL builder cannot reconstruct a count projection through an accessor-backed carrier (SPEC §6.6/§10.2).',
-    );
+
+  const table = new Table(name, schema, baseName);
+  witnessWeakMapSet(seen, value, table);
+  witnessDefineProperty(table, DRIZZLE_TABLE_IS_ALIAS, { value: alias, writable: false });
+  const tableDescriptors = witnessGetOwnPropertyDescriptors(value);
+  const tableKeys = witnessOwnKeys(tableDescriptors);
+  for (let index = 0; index < tableKeys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(tableKeys, index);
+    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const property = keyDescriptor.value;
+    if (
+      property === DRIZZLE_TABLE_COLUMNS ||
+      property === DRIZZLE_TABLE_NAME ||
+      property === DRIZZLE_TABLE_SCHEMA ||
+      property === DRIZZLE_TABLE_BASE_NAME ||
+      property === DRIZZLE_TABLE_IS_ALIAS ||
+      witnessGetOwnPropertyDescriptor(columnsDescriptor.value, property) !== undefined
+    ) {
+      continue;
+    }
+    const descriptor = witnessReflectGet(tableDescriptors, property) as
+      | PropertyDescriptor
+      | undefined;
+    if (descriptor === undefined || !('value' in descriptor)) throw nativeDrizzleProvenanceError();
+    const copied = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
+    witnessDefineProperty(table, property, {
+      configurable: descriptor.configurable ?? false,
+      enumerable: descriptor.enumerable ?? false,
+      value: copied,
+      writable: descriptor.writable ?? false,
+    });
   }
-  return clone;
+  const columns = witnessCreateNullRecord<object>();
+  const keys = witnessObjectKeys(columnsDescriptor.value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const key = keyDescriptor.value;
+    const columnDescriptor = witnessGetOwnPropertyDescriptor(columnsDescriptor.value, key);
+    if (
+      columnDescriptor === undefined ||
+      !('value' in columnDescriptor) ||
+      !isRecord(columnDescriptor.value) ||
+      !witnessSetHas(nativeDrizzleEntityKinds(columnDescriptor.value), 'Column')
+    ) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const column = reconstructNativeDrizzleColumnEntity(columnDescriptor.value, seen, table);
+    witnessDefineProperty(columns, key, {
+      enumerable: true,
+      value: column,
+    });
+    witnessDefineProperty(table, key, {
+      enumerable: true,
+      value: column,
+    });
+  }
+  witnessDefineProperty(table, DRIZZLE_TABLE_COLUMNS, { value: witnessFreeze(columns) });
+  return witnessFreeze(table);
+}
+
+function reconstructNativeDrizzleColumnEntity(
+  value: object,
+  seen: WeakMap<object, unknown>,
+  forcedTable?: object,
+): object {
+  const existing = witnessWeakMapGet(seen, value);
+  if (isRecord(existing)) return existing;
+  const tableDescriptor = witnessGetOwnPropertyDescriptor(value, 'table');
+  if (
+    tableDescriptor === undefined ||
+    !('value' in tableDescriptor) ||
+    !isRecord(tableDescriptor.value)
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  const table = forcedTable ?? reconstructNativeDrizzleTableEntity(tableDescriptor.value, seen);
+  const column = witnessCreateWithPrototype<Record<PropertyKey, unknown>>(Column.prototype);
+  witnessWeakMapSet(seen, value, column);
+  const descriptors = witnessGetOwnPropertyDescriptors(value);
+  const keys = witnessOwnKeys(descriptors);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+      throw nativeDrizzleProvenanceError();
+    }
+    const property = keyDescriptor.value;
+    if (
+      property === 'config' ||
+      property === 'table' ||
+      property === 'mapFromDriverValue' ||
+      property === 'mapToDriverValue'
+    ) {
+      continue;
+    }
+    const descriptor = witnessReflectGet(descriptors, property) as PropertyDescriptor | undefined;
+    if (descriptor === undefined || !('value' in descriptor)) throw nativeDrizzleProvenanceError();
+    const copied = canonicalizeNativeDrizzleCountStar(descriptor.value, seen);
+    witnessDefineProperty(column, property, {
+      configurable: descriptor.configurable ?? false,
+      enumerable: descriptor.enumerable ?? false,
+      value: copied,
+      writable: descriptor.writable ?? false,
+    });
+  }
+  const configDescriptor = witnessGetOwnPropertyDescriptor(value, 'config');
+  if (
+    configDescriptor === undefined ||
+    !('value' in configDescriptor) ||
+    !isRecord(configDescriptor.value)
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  const config = canonicalizeNativeDrizzleCountStar(configDescriptor.value, seen);
+  if (!isRecord(config)) throw nativeDrizzleProvenanceError();
+  witnessDefineProperty(column, 'config', { value: config });
+  witnessDefineProperty(column, 'table', { value: table });
+  witnessDefineProperty(column, 'mapFromDriverValue', { value: snapshotColumnIdentity });
+  witnessDefineProperty(column, 'mapToDriverValue', { value: snapshotColumnIdentity });
+  return witnessFreeze(column);
+}
+
+function requiredOwnString(value: object, property: PropertyKey): string {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    throw nativeDrizzleProvenanceError();
+  }
+  return descriptor.value;
+}
+
+function optionalOwnString(value: object, property: PropertyKey): string | undefined {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    (descriptor.value !== undefined && typeof descriptor.value !== 'string')
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  return descriptor.value;
+}
+
+function requiredOwnBoolean(value: object, property: PropertyKey): boolean {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'boolean') {
+    throw nativeDrizzleProvenanceError();
+  }
+  return descriptor.value;
 }
 
 function canonicalPinnedDrizzleSql(value: object): object | undefined {
