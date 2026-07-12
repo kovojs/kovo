@@ -155,7 +155,7 @@ describe('@kovojs/test query verifier', () => {
     ]);
   });
 
-  it('leaves opaque adapter statement objects unobserved while passing them through', () => {
+  it('rejects opaque adapter statement objects that cannot share a verifier snapshot', () => {
     const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
     const calls: unknown[] = [];
     const db = verifier.wrap({
@@ -173,8 +173,8 @@ describe('@kovojs/test query verifier', () => {
       },
     };
 
-    expect(db.exec(opaqueStatement)).toEqual(['exec-ok']);
-    expect(calls).toEqual([opaqueStatement]);
+    expect(() => db.exec(opaqueStatement)).toThrow(/require own string text or sql/);
+    expect(calls).toEqual([]);
     expect(verifier.observed).toEqual([]);
   });
 

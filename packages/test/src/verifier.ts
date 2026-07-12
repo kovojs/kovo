@@ -23,6 +23,31 @@ import {
   type ObservationRecorder,
   type ObservedDbOperation,
 } from './verifier-observation.js';
+import {
+  assertVerifierSecurityIntrinsics,
+  verifierApply,
+  verifierArrayJoin,
+  verifierDenseArraySnapshot,
+  verifierFreeze,
+  verifierGetOwnPropertyDescriptor,
+  verifierObjectKeys,
+  verifierProxy,
+  verifierReflectGet,
+  verifierSet,
+  verifierSetAdd,
+  verifierSetValues,
+  verifierString,
+  verifierWeakMap,
+  verifierWeakMapGet,
+  verifierWeakMapSet,
+} from './verifier-security-intrinsics.js';
+import {
+  snapshotDbVerificationConfig,
+  snapshotDomains,
+  snapshotObservedOperations,
+  snapshotTouchGraph,
+  snapshotVerifierSqlStatement,
+} from './verifier-snapshots.js';
 
 export type {
   DbObservationOptions,
@@ -64,40 +89,57 @@ export function createDbVerifier(
   touchGraph: CoreGraph.TouchGraph,
   config: DbVerificationConfig,
 ): DbVerifier {
+  assertVerifierSecurityIntrinsics();
+  const touchGraphSnapshot = snapshotTouchGraph(touchGraph);
+  const configSnapshot = snapshotDbVerificationConfig(config);
   const recorder = createObservationRecorder();
-  const rootProxyCache = new WeakMap<object, object>();
-  const sqlHandleProxyCache = new WeakMap<object, object>();
-  const methodCache = new WeakMap<object, Map<PropertyKey, CachedMethod>>();
+  const rootProxyCache = verifierWeakMap<object, object>();
+  const sqlHandleProxyCache = verifierWeakMap<object, object>();
+  const methodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
 
   return {
     assertCovered(touchGraphKey?: string): void {
-      assertObservedWritesCovered(recorder.observed, touchGraph, config, touchGraphKey);
+      assertObservedWritesCovered(
+        recorder.observed,
+        touchGraphSnapshot,
+        configSnapshot,
+        touchGraphKey,
+      );
     },
     assertCoveredOperations(
       observed: readonly ObservedDbOperation[],
       touchGraphKey?: string,
     ): void {
-      assertObservedWritesCovered(observed, touchGraph, config, touchGraphKey);
+      assertObservedWritesCovered(
+        snapshotObservedOperations(observed),
+        touchGraphSnapshot,
+        configSnapshot,
+        touchGraphKey,
+      );
     },
     assertCoveredSince(start: number, touchGraphKey?: string): void {
       assertObservedWritesCovered(
-        recorder.observed.slice(start),
-        touchGraph,
-        config,
+        recorder.slice(start),
+        touchGraphSnapshot,
+        configSnapshot,
         touchGraphKey,
       );
     },
     assertReadsCovered(domains: readonly string[]): void {
-      assertObservedReadsCovered(recorder.observed, domains, config);
+      assertObservedReadsCovered(recorder.observed, snapshotDomains(domains), configSnapshot);
     },
     assertReadsCoveredOperations(
       observed: readonly ObservedDbOperation[],
       domains: readonly string[],
     ): void {
-      assertObservedReadsCovered(observed, domains, config);
+      assertObservedReadsCovered(
+        snapshotObservedOperations(observed),
+        snapshotDomains(domains),
+        configSnapshot,
+      );
     },
     assertReadsCoveredSince(start: number, domains: readonly string[]): void {
-      assertObservedReadsCovered(recorder.observed.slice(start), domains, config);
+      assertObservedReadsCovered(recorder.slice(start), snapshotDomains(domains), configSnapshot);
     },
     capture<T>(
       callback: () => T | Promise<T>,
@@ -105,35 +147,37 @@ export function createDbVerifier(
       return recorder.capture(callback);
     },
     diagnostics(): DbVerificationDiagnostic[] {
-      return diagnosticsForObservations(recorder.observed, touchGraph);
+      return diagnosticsForObservations(recorder.observed, touchGraphSnapshot);
     },
-    observed: recorder.observed,
+    get observed(): readonly ObservedDbOperation[] {
+      return recorder.observed;
+    },
     wrap<Db>(db: Db): Db {
       if (typeof db !== 'object' || db === null) return db;
-      const cached = rootProxyCache.get(db);
+      const cached = verifierWeakMapGet(rootProxyCache, db);
       if (cached) return cached as Db;
 
       // SPEC.md §11.4: verification observes calls that cross the harness
       // DB seam. A raw handle captured before wrap() never reaches this proxy;
       // tests must pass and use the wrapped harness DB handle instead.
-      const proxy = new Proxy(db as Record<string, unknown>, {
+      const proxy = verifierProxy(db as Record<string, unknown>, {
         get(target, prop, receiver) {
           if (prop === '__kovoObserved') return recorder.observed;
-          const value = Reflect.get(target, prop, receiver);
+          const value = verifierReflectGet(target, prop, receiver);
 
           if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
-            return wrapSqlHandle(value, config, recorder, sqlHandleProxyCache, methodCache);
+            return wrapSqlHandle(value, configSnapshot, recorder, sqlHandleProxyCache, methodCache);
           }
 
           if (prop === 'read' && typeof value === 'function') {
             return cachedMethod(target, prop, value, methodCache, () =>
-              observableTableMethod('read', target, value, config, recorder),
+              observableTableMethod('read', target, value, configSnapshot, recorder),
             );
           }
 
           if (prop === 'write' && typeof value === 'function') {
             return cachedMethod(target, prop, value, methodCache, () =>
-              observableTableMethod('write', target, value, config, recorder),
+              observableTableMethod('write', target, value, configSnapshot, recorder),
             );
           }
 
@@ -146,13 +190,13 @@ export function createDbVerifier(
             typeof value === 'function'
           ) {
             return cachedMethod(target, prop, value, methodCache, () =>
-              observableTableMethod('write', target, value, config, recorder),
+              observableTableMethod('write', target, value, configSnapshot, recorder),
             );
           }
 
           if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
             return cachedMethod(target, prop, value, methodCache, () =>
-              observableSqlMethod(target, value, config, recorder),
+              observableSqlMethod(target, value, configSnapshot, recorder),
             );
           }
 
@@ -162,7 +206,7 @@ export function createDbVerifier(
             (isDbAdapterLike(target) || isSqlHandleLike(target))
           ) {
             return cachedMethod(target, prop, value, methodCache, () =>
-              observableSqlMethod(target, value, config, recorder),
+              observableSqlMethod(target, value, configSnapshot, recorder),
             );
           }
 
@@ -171,7 +215,7 @@ export function createDbVerifier(
               observablePrepareMethod(
                 target,
                 value,
-                config,
+                configSnapshot,
                 recorder,
                 sqlHandleProxyCache,
                 methodCache,
@@ -180,12 +224,20 @@ export function createDbVerifier(
           }
 
           return typeof value === 'function'
-            ? cachedMethod(target, prop, value, methodCache, () => value.bind(target))
+            ? cachedMethod(
+                target,
+                prop,
+                value,
+                methodCache,
+                () =>
+                  (...args: unknown[]) =>
+                    verifierApply(value, target, args),
+              )
             : value;
         },
       });
 
-      rootProxyCache.set(db, proxy);
+      verifierWeakMapSet(rootProxyCache, db, proxy);
       return proxy as Db;
     },
   };
@@ -198,12 +250,12 @@ function wrapSqlHandle<Handle extends object>(
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
 ): Handle {
-  const cached = proxyCache.get(handle);
+  const cached = verifierWeakMapGet(proxyCache, handle);
   if (cached) return cached as Handle;
 
-  const proxy = new Proxy(handle as Record<PropertyKey, unknown>, {
+  const proxy = verifierProxy(handle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
+      const value = verifierReflectGet(target, prop, receiver);
 
       if (prop === 'transaction' && typeof value === 'function') {
         return cachedMethod(
@@ -215,22 +267,23 @@ function wrapSqlHandle<Handle extends object>(
             async (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) => {
               const before = await tableObservationSnapshots(
                 target,
-                Object.keys(config.domainByTable),
+                verifierObjectKeys(config.domainByTable),
                 config.sqlDialect,
               );
-              const start = recorder.observed.length;
-              const result = await value.call(
-                target,
+              const start = recorder.length();
+              const result = await verifierApply(value, target, [
                 (tx: object) =>
-                  callback(wrapSqlHandle(tx, config, recorder, proxyCache, methodCache)),
+                  verifierApply(callback, undefined, [
+                    wrapSqlHandle(tx, config, recorder, proxyCache, methodCache),
+                  ]),
                 ...args,
-              );
+              ]);
               await observeSqlEngineSideEffects(
                 target,
                 '<transaction>',
                 config,
                 recorder,
-                recorder.observed.slice(start),
+                recorder.slice(start),
                 before,
               );
               return result;
@@ -254,12 +307,20 @@ function wrapSqlHandle<Handle extends object>(
       }
 
       return typeof value === 'function'
-        ? cachedMethod(target, prop, value, methodCache, () => value.bind(target))
+        ? cachedMethod(
+            target,
+            prop,
+            value,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                verifierApply(value, target, args),
+          )
         : value;
     },
   }) as Handle;
 
-  proxyCache.set(handle, proxy);
+  verifierWeakMapSet(proxyCache, handle, proxy);
   return proxy;
 }
 
@@ -272,12 +333,13 @@ function observablePrepareMethod(
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
-    const prepared = value.call(target, statement, ...args);
+    const statementSnapshot = snapshotVerifierSqlStatement(statement);
+    const prepared = verifierApply<unknown>(value, target, [statementSnapshot, ...args]);
     return typeof prepared === 'object' && prepared !== null
       ? wrapPreparedSqlStatement(
           prepared,
           target,
-          statement,
+          statementSnapshot,
           config,
           recorder,
           proxyCache,
@@ -296,12 +358,12 @@ function wrapPreparedSqlStatement<Statement extends object>(
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
 ): Statement {
-  const cached = proxyCache.get(statementHandle);
+  const cached = verifierWeakMapGet(proxyCache, statementHandle);
   if (cached) return cached as Statement;
 
-  const proxy = new Proxy(statementHandle as Record<PropertyKey, unknown>, {
+  const proxy = verifierProxy(statementHandle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
+      const value = verifierReflectGet(target, prop, receiver);
 
       if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
         return cachedMethod(target, prop, value, methodCache, () =>
@@ -310,12 +372,20 @@ function wrapPreparedSqlStatement<Statement extends object>(
       }
 
       return typeof value === 'function'
-        ? cachedMethod(target, prop, value, methodCache, () => value.bind(target))
+        ? cachedMethod(
+            target,
+            prop,
+            value,
+            methodCache,
+            () =>
+              (...args: unknown[]) =>
+                verifierApply(value, target, args),
+          )
         : value;
     },
   }) as Statement;
 
-  proxyCache.set(statementHandle, proxy);
+  verifierWeakMapSet(proxyCache, statementHandle, proxy);
   return proxy;
 }
 
@@ -331,7 +401,7 @@ function observablePreparedSqlMethod(
     return observeSqlExecution(
       executionTarget,
       statement,
-      () => value.call(target, ...args),
+      () => verifierApply(value, target, args),
       config,
       recorder,
     );
@@ -360,13 +430,22 @@ export function assertOwnerRowsScoped(options: {
   principal: unknown;
   domain: string;
 }): void {
-  const leaked = options.rows.filter((row) => row[options.ownerColumn] !== options.principal);
-  if (leaked.length === 0) return;
+  const { domain, owners, principal } = snapshotOwnerScopeInputs(options);
+  const foreignOwnerSet = verifierSet<string>();
+  let leakedCount = 0;
+  for (let index = 0; index < owners.length; index += 1) {
+    const owner = owners[index];
+    if (owner !== principal) {
+      leakedCount += 1;
+      verifierSetAdd(foreignOwnerSet, verifierString(owner));
+    }
+  }
+  if (leakedCount === 0) return;
 
-  const foreignOwners = [...new Set(leaked.map((row) => String(row[options.ownerColumn])))];
+  const foreignOwners = verifierSetValues(foreignOwnerSet);
   throw new Error(
-    `KV414 (runtime §11.2): a query returned ${leaked.length} ${options.domain} row(s) owned by ` +
-      `${foreignOwners.join(', ')}, not the session principal ${String(options.principal)} — IDOR.`,
+    `KV414 (runtime §11.2): a query returned ${leakedCount} ${domain} row(s) owned by ` +
+      `${verifierArrayJoin(foreignOwners, ', ')}, not the session principal ${verifierString(principal)} — IDOR.`,
   );
 }
 
@@ -388,12 +467,75 @@ export function assertOwnerWritesScoped(options: {
   principal: unknown;
   domain: string;
 }): void {
-  const leaked = options.rows.filter((row) => row[options.ownerColumn] !== options.principal);
-  if (leaked.length === 0) return;
+  const { domain, owners, principal } = snapshotOwnerScopeInputs(options);
+  const foreignOwnerSet = verifierSet<string>();
+  let leakedCount = 0;
+  for (let index = 0; index < owners.length; index += 1) {
+    const owner = owners[index];
+    if (owner !== principal) {
+      leakedCount += 1;
+      verifierSetAdd(foreignOwnerSet, verifierString(owner));
+    }
+  }
+  if (leakedCount === 0) return;
 
-  const foreignOwners = [...new Set(leaked.map((row) => String(row[options.ownerColumn])))];
+  const foreignOwners = verifierSetValues(foreignOwnerSet);
   throw new Error(
-    `KV414 (runtime §11.2): a mutation wrote ${leaked.length} ${options.domain} row(s) owned by ` +
-      `${foreignOwners.join(', ')}, not the session principal ${String(options.principal)} — IDOR.`,
+    `KV414 (runtime §11.2): a mutation wrote ${leakedCount} ${domain} row(s) owned by ` +
+      `${verifierArrayJoin(foreignOwners, ', ')}, not the session principal ${verifierString(principal)} — IDOR.`,
   );
+}
+
+function snapshotOwnerScopeInputs(options: {
+  rows: readonly Record<string, unknown>[];
+  ownerColumn: string;
+  principal: unknown;
+  domain: string;
+}): {
+  domain: string;
+  ownerColumn: string;
+  owners: readonly unknown[];
+  principal: unknown;
+} {
+  const rowsDescriptor = verifierGetOwnPropertyDescriptor(options, 'rows');
+  const columnDescriptor = verifierGetOwnPropertyDescriptor(options, 'ownerColumn');
+  const principalDescriptor = verifierGetOwnPropertyDescriptor(options, 'principal');
+  const domainDescriptor = verifierGetOwnPropertyDescriptor(options, 'domain');
+  if (
+    rowsDescriptor === undefined ||
+    !('value' in rowsDescriptor) ||
+    columnDescriptor === undefined ||
+    !('value' in columnDescriptor) ||
+    typeof columnDescriptor.value !== 'string' ||
+    principalDescriptor === undefined ||
+    !('value' in principalDescriptor) ||
+    domainDescriptor === undefined ||
+    !('value' in domainDescriptor) ||
+    typeof domainDescriptor.value !== 'string'
+  ) {
+    throw new TypeError('Kovo owner-scope verification requires stable own-data inputs.');
+  }
+  const ownerColumn = columnDescriptor.value;
+  const owners = verifierDenseArraySnapshot(
+    rowsDescriptor.value,
+    'owner-scope rows',
+    (row, index) => {
+      if (typeof row !== 'object' || row === null) {
+        throw new TypeError(`Kovo owner-scope row ${index} must be an object.`);
+      }
+      const owner = verifierGetOwnPropertyDescriptor(row, ownerColumn);
+      if (owner === undefined || !('value' in owner)) {
+        throw new TypeError(
+          `Kovo owner-scope row ${index}.${ownerColumn} must be a stable own data property.`,
+        );
+      }
+      return owner.value;
+    },
+  );
+  return verifierFreeze({
+    domain: domainDescriptor.value,
+    ownerColumn,
+    owners,
+    principal: principalDescriptor.value,
+  });
 }

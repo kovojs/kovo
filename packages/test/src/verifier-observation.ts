@@ -1,5 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 import {
   hasTableCountHandle,
   observeSqlEngineSideEffects,
@@ -9,6 +7,27 @@ import {
   tableObservationSnapshots,
   tableObservationSnapshotsSync,
 } from './sql-observer.js';
+import {
+  verifierApply,
+  verifierArrayPush,
+  verifierArraySlice,
+  verifierAsyncStorage,
+  verifierAsyncStorageGetStore,
+  verifierAsyncStorageRun,
+  verifierFreeze,
+  verifierGetOwnPropertyDescriptor,
+  verifierMap,
+  verifierMapGet,
+  verifierMapSize,
+  verifierMapSet,
+  verifierObjectKeys,
+  verifierPromiseResolve,
+  verifierPromiseThen,
+  verifierReflectGet,
+  verifierWeakMapGet,
+  verifierWeakMapSet,
+} from './verifier-security-intrinsics.js';
+import { snapshotObservedOperation, snapshotVerifierSqlStatement } from './verifier-snapshots.js';
 
 /** @internal Verification config: which tables map to which domains/keys (SPEC.md §11). */
 export interface DbVerificationConfig {
@@ -36,11 +55,13 @@ export interface DbObservationOptions {
 }
 
 export interface ObservationRecorder {
-  observed: ObservedDbOperation[];
+  readonly observed: readonly ObservedDbOperation[];
   capture<T>(
     callback: () => T | Promise<T>,
   ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
+  length(): number;
   record(operation: ObservedDbOperation): void;
+  slice(start: number): readonly ObservedDbOperation[];
 }
 
 interface ObservationScope {
@@ -54,20 +75,30 @@ export interface CachedMethod {
 
 export function createObservationRecorder(): ObservationRecorder {
   const observed: ObservedDbOperation[] = [];
-  const storage = new AsyncLocalStorage<ObservationScope>();
+  const storage = verifierAsyncStorage<ObservationScope>();
 
   return {
-    observed,
+    get observed(): readonly ObservedDbOperation[] {
+      return verifierFreeze(verifierArraySlice(observed));
+    },
     async capture<T>(
       callback: () => T | Promise<T>,
     ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
       const scope: ObservationScope = { observed: [] };
-      const result = await storage.run(scope, callback);
-      return { observed: Object.freeze(scope.observed.slice()), result };
+      const result = await verifierAsyncStorageRun(storage, scope, callback);
+      return { observed: verifierFreeze(verifierArraySlice(scope.observed)), result };
+    },
+    length(): number {
+      return observed.length;
     },
     record(operation: ObservedDbOperation): void {
-      observed.push(operation);
-      storage.getStore()?.observed.push(operation);
+      const snapshot = snapshotObservedOperation(operation);
+      verifierArrayPush(observed, snapshot);
+      const scope = verifierAsyncStorageGetStore(storage);
+      if (scope !== undefined) verifierArrayPush(scope.observed, snapshot);
+    },
+    slice(start: number): readonly ObservedDbOperation[] {
+      return verifierFreeze(verifierArraySlice(observed, start));
     },
   };
 }
@@ -79,17 +110,17 @@ export function cachedMethod(
   methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
   create: () => unknown,
 ): unknown {
-  let cachedForTarget = methodCache.get(target);
+  let cachedForTarget = verifierWeakMapGet(methodCache, target);
   if (!cachedForTarget) {
-    cachedForTarget = new Map();
-    methodCache.set(target, cachedForTarget);
+    cachedForTarget = verifierMap();
+    verifierWeakMapSet(methodCache, target, cachedForTarget);
   }
 
-  const cached = cachedForTarget.get(prop);
+  const cached = verifierMapGet(cachedForTarget, prop);
   if (cached?.original === original) return cached.wrapped;
 
   const wrapped = create();
-  cachedForTarget.set(prop, { original, wrapped });
+  verifierMapSet(cachedForTarget, prop, verifierFreeze({ original, wrapped }));
   return wrapped;
 }
 
@@ -102,7 +133,7 @@ export function observableTableMethod(
 ): (table: unknown, ...args: unknown[]) => unknown {
   return (table: unknown, ...args: unknown[]) => {
     observeTableIfString(kind, table, args, config, recorder);
-    return value.call(target, table, ...args);
+    return verifierApply(value, target, [table, ...args]);
   };
 }
 
@@ -113,10 +144,11 @@ export function observableSqlMethod(
   recorder: ObservationRecorder,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
+    const statementSnapshot = snapshotVerifierSqlStatement(statement);
     return observeSqlExecution(
       target,
-      statement,
-      () => value.call(target, statement, ...args),
+      statementSnapshot,
+      () => verifierApply(value, target, [statementSnapshot, ...args]),
       config,
       recorder,
     );
@@ -138,11 +170,11 @@ export function observeSqlExecution(
   // unrecognized destructive statements slip past `assertCovered()` green.
   const syncBefore = tableObservationSnapshotsSync(
     target,
-    Object.keys(config.domainByTable),
+    verifierObjectKeys(config.domainByTable),
     config.sqlDialect,
   );
   if (syncBefore !== null) {
-    if (syncBefore.size === 0) return execute();
+    if (verifierMapSize(syncBefore) === 0) return execute();
     const result = execute();
     observeSqlEngineSideEffectsSync(target, sql, config, recorder, explicitOperations, syncBefore);
     return result;
@@ -154,13 +186,13 @@ export function observeSqlExecution(
   // executed before the mutating call), then run the statement and compare.
   const before = tableObservationSnapshots(
     target,
-    Object.keys(config.domainByTable),
+    verifierObjectKeys(config.domainByTable),
     config.sqlDialect,
   );
-  return Promise.resolve(before).then((counts) => {
-    if (counts.size === 0) return execute();
+  return verifierPromiseThen(verifierPromiseResolve(before), (counts) => {
+    if (verifierMapSize(counts) === 0) return execute();
 
-    return Promise.resolve(execute()).then(async (result) => {
+    return verifierPromiseThen(verifierPromiseResolve(execute()), async (result) => {
       await observeSqlEngineSideEffects(target, sql, config, recorder, explicitOperations, counts);
       return result;
     });
@@ -176,7 +208,7 @@ const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
 function tableNameOf(table: unknown): string | undefined {
   if (typeof table === 'string') return table;
   if (typeof table === 'object' && table !== null) {
-    const name = (table as Record<symbol, unknown>)[DRIZZLE_TABLE_NAME];
+    const name = verifierReflectGet(table, DRIZZLE_TABLE_NAME, table);
     if (typeof name === 'string') return name;
   }
   return undefined;
@@ -213,14 +245,29 @@ function observe(
 }
 
 function observationOptions(args: readonly unknown[]): DbObservationOptions | undefined {
-  const last = args.at(-1);
+  const last = args.length === 0 ? undefined : args[args.length - 1];
 
-  if (typeof last !== 'object' || last === null || (!('branch' in last) && !('rowKey' in last))) {
+  if (typeof last !== 'object' || last === null) {
     return undefined;
   }
 
-  const rowKey = (last as { rowKey?: unknown }).rowKey;
-  const branch = (last as { branch?: unknown }).branch;
+  const rowKeyDescriptor = verifierGetOwnPropertyDescriptor(last, 'rowKey');
+  const branchDescriptor = verifierGetOwnPropertyDescriptor(last, 'branch');
+  if (rowKeyDescriptor === undefined && branchDescriptor === undefined) return undefined;
+  if (
+    (rowKeyDescriptor !== undefined && !('value' in rowKeyDescriptor)) ||
+    (branchDescriptor !== undefined && !('value' in branchDescriptor))
+  ) {
+    throw new TypeError('Kovo DB observation options require stable own data properties.');
+  }
+  const rowKey =
+    rowKeyDescriptor !== undefined && 'value' in rowKeyDescriptor
+      ? rowKeyDescriptor.value
+      : undefined;
+  const branch =
+    branchDescriptor !== undefined && 'value' in branchDescriptor
+      ? branchDescriptor.value
+      : undefined;
 
   return {
     ...(typeof branch === 'string' ? { branch } : {}),
