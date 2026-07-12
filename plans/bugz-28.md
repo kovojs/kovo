@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
 | Critical |    19 | C1-C19 |
-| High     |    25 | H1-H25 |
+| High     |    26 | H1-H26 |
 | Medium   |     9 | M1-M9  |
 
 ## Critical
@@ -468,6 +468,17 @@ This is an active closure ledger; `SPEC.md` remains normative.
     dist+dts build pass; the four shipped inline variants retain pinned 128-bit bytes after live
     crypto replacement and reject hostile constant sources instead of consulting a clock.
 
+- [ ] **H26 - Mutable JSX form-helper replacement can inject raw executable response bytes.**
+      `packages/server/src/{jsx-context,jsx-runtime}.ts`
+  - Deferred `<FieldError>` output is first represented by a framework-private comment and then
+    expanded inside a rendered `<form>`. A selective late `String.prototype.replace` recognized that
+    comment and returned raw `<img onerror=...>` bytes; the framework wrapped the result as rendered
+    HTML, so the event handler reached the response without output escaping.
+  - **Acceptance:** request-local helper tokens and ids, registry construction/lookup/deletion,
+    placeholder detection/parsing/assembly, exact helper kind/props binding, async render isolation,
+    final form composition, and cryptographic token minting use boot-pinned semantically checked
+    controls; late/import-order poison cannot add raw bytes or cross-bind one helper/form to another.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -560,8 +571,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17-C19, H15, and H19 are active command/
-crypto, mutation-output, and durable-task fixes.
+The remediation pass remains intentionally non-zero: C17-C19, H15, H19, and H26 are active command/
+crypto, response/mutation-output, and durable-task fixes.
 Integrated
 evidence is
 green at
