@@ -594,10 +594,13 @@ export function responseFragmentApplyInvariantFindings(filePath, text) {
     );
   }
 
-  const trustedHtmlSinkRoutes = source.match(/\binnerHTML\s*=\s*trustedHtml\s*\(/g) ?? [];
+  const trustedHtmlSinkRoutes =
+    source.match(
+      /\bsecurity\s*\.\s*createFragmentContent\s*\(\s*trustedHtml\s*\(\s*renderedFragmentHtmlContent\s*\(/g,
+    ) ?? [];
   if (trustedHtmlSinkRoutes.length !== 2) {
     findings.push(
-      `${filePath}: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found ${trustedHtmlSinkRoutes.length}`,
+      `${filePath}: response-fragment HTML sink must route exactly two membrane parse inputs through trustedHtml(); found ${trustedHtmlSinkRoutes.length}`,
     );
   }
 
@@ -614,32 +617,43 @@ export function responseFragmentApplyInvariantFindings(filePath, text) {
   }
 
   if (
-    !/\bfor\s*\(\s*const\s+n\s+of\s+t\s*\.\s*content\s*\.\s*children\s*\)\s*g\s*\(\s*n\s*\)\s*;/.test(
+    !/\bconst\s+nodes\s*=\s*security\s*\.\s*snapshotChildNodes\s*\(\s*content\s*\)\s*;[\s\S]{0,500}\bg\s*\(\s*node\s+as\s+Element\s*,\s*security\s*\)\s*;[\s\S]{0,300}\bsecurity\s*\.\s*appendElementChildren\s*\(\s*e\s*,\s*nodes\s*\)/.test(
       source,
     )
   ) {
     findings.push(
-      `${filePath}: append-mode response fragments must sanitize parsed children before DOM insertion`,
+      `${filePath}: append-mode response fragments must sanitize the exact membrane snapshot before DOM insertion`,
     );
   }
 
   const legacySanitizedReplace = /\bm\s*\(\s*e\s*,\s*g\s*\(\s*n\s*\)\s*\)\s*;/.test(source);
   const pinnedSanitizedReplace =
     /\bm\s*\(\s*e\s*,\s*n\s*,\s*security\s*\)\s*;/.test(source) &&
-    /\bfunction\s+m\s*\([^)]*\bsecurity\b[^)]*\)\s*(?::\s*[^\{]+)?\{[\s\S]*?\bg\s*\(\s*n\s*\)\s*;[\s\S]*?\bsecurity\s*\.\s*replaceElement\s*\(\s*c\s*,\s*n\s*\)/.test(
+    /\bfunction\s+m\s*\([^)]*\bsecurity\b[^)]*\)\s*(?::\s*[^{]+)?\{[\s\S]*?\bg\s*\(\s*n\s*,\s*security\s*\)\s*;[\s\S]*?\bsecurity\s*\.\s*replaceElement\s*\(\s*c\s*,\s*n\s*\)/.test(
       source,
     );
   if (!legacySanitizedReplace && !pinnedSanitizedReplace) {
     findings.push(
-      `${filePath}: replace-mode response fragments must sanitize the parsed morph root before DOM insertion`,
+      `${filePath}: replace-mode response fragments must sanitize the exact parsed morph root before DOM insertion`,
     );
   }
 
-  if (
-    !/\^on\[\^:\]\|\^\(srcdoc\|dangerouslysetinnerhtml\|innerhtml\|outerhtml\|inserthtml\|insertadjacenthtml\)\$/.test(
+  const blocksEventAttributes =
+    /\bn\s*\.\s*length\s*>\s*2[\s\S]{0,120}\bn\s*\[\s*0\s*\]\s*===\s*['"]o['"][\s\S]{0,120}\bn\s*\[\s*1\s*\]\s*===\s*['"]n['"][\s\S]{0,120}\bn\s*\[\s*2\s*\]\s*!==\s*['"]:['"]/.test(
       source,
-    )
-  ) {
+    );
+  const blockedRawAttributeNames = [
+    'srcdoc',
+    'dangerouslysetinnerhtml',
+    'innerhtml',
+    'outerhtml',
+    'inserthtml',
+    'insertadjacenthtml',
+  ];
+  const blocksRawHtmlAttributes = blockedRawAttributeNames.every((name) =>
+    new RegExp(`\\bn\\s*===\\s*['"]${name}['"]`).test(source),
+  );
+  if (!blocksEventAttributes || !blocksRawHtmlAttributes) {
     findings.push(
       `${filePath}: response-fragment sanitizer denylist must keep event, srcdoc, and raw HTML attributes blocked`,
     );

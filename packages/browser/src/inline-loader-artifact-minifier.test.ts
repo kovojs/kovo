@@ -90,13 +90,14 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineKovoLoaderInstallerSource).toContain("dq('kovo:query',{detail:{qs:ok}});");
     expect(inlineKovoLoaderInstallerSource).toContain(
-      `for(const x of fragments){if(x.mode==='append')continue;const e=ft(x.target);if(e)for(const y of qa(e,'[kovo-c]')){const html=renderedFragmentHtmlContent(x.html);if(html.includes('kovo-c="'+y.getAttribute('kovo-c')+'"')&&(!y.getAttribute('kovo-key')&&!y.getAttribute('id')||html.includes('kovo-key="'+y.getAttribute('kovo-key')+'"')||html.includes('id="'+y.getAttribute('id')+'"')))continue;y.a?.abort();}}ai({fragments},{ff:ft});`,
+      `for(const x of fragments){if(x.mode==='append')continue;const e=ft(x.target);if(e)for(const y of qa(e,'[kovo-c]')){const html=renderedFragmentHtmlContent(x.html);if(html.includes('kovo-c="'+y.getAttribute('kovo-c')+'"')&&(!y.getAttribute('kovo-key')&&!y.getAttribute('id')||html.includes('kovo-key="'+y.getAttribute('kovo-key')+'"')||html.includes('id="'+y.getAttribute('id')+'"')))continue;y.a?.abort();}}ai({fragments},{ff:ft,security:bns});`,
     );
-    expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n)');
+    expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n,security)');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'return p(chunks.fragments,(target)=>options.ff(target))',
+      'return p(chunks.fragments,(target)=>options.ff(target),options.security)',
     );
-    expect(inlineKovoLoaderInstallerSource).toContain('function p(fs,f)');
+    expect(inlineKovoLoaderInstallerSource).toContain('function p(fs,f,security)');
+    expect(inlineKovoLoaderInstallerSource).toContain('morph:(cur,next)=>m(cur,next,bns)');
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-key')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('innerHTML=html');
     expect(inlineKovoLoaderInstallerSource).not.toContain('applyResponseChunks');

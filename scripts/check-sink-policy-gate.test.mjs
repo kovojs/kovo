@@ -2220,28 +2220,38 @@ describe('sink-policy gate', () => {
         const t = (globalThis as any).trustedTypes;
         return t ? t.createPolicy('kovo', { createHTML: (s: string) => s }).createHTML(h) : h;
       }
-      export function p(fs, f) {
+      export function p(fs, f, security) {
         for (const x of fs) {
           const e = f(x.target);
-          const t = document.createElement('template');
-          t.innerHTML = trustedHtml(x.html);
-          for (const n of t.content.children) g(n);
-          e.append(...t.content.childNodes);
+          const content = security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(x.html)));
+          const nodes = security.snapshotChildNodes(content);
+          for (let index = 0; index < nodes.length; index += 1) {
+            const node = nodes[index];
+            if (node && security.readElementTagName(node) !== undefined) g(node as Element, security);
+          }
+          security.appendElementChildren(e, nodes);
         }
       }
       function d(e, h, security) {
-        const t = document.createElement('template');
-        t.innerHTML = trustedHtml(h);
-        const n = firstMorphElement(t.content);
+        const content = security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(h)));
+        const n = firstMorphElement(content);
         if (n) m(e, n, security);
       }
       function m(c, n, security) {
         const replace = c.tagName !== n.tagName;
-        g(n);
+        g(n, security);
         if (replace) security.replaceElement(c, n);
       }
       function r(n: string): boolean {
-        return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(n);
+        return (
+          (n.length > 2 && n[0] === 'o' && n[1] === 'n' && n[2] !== ':') ||
+          n === 'srcdoc' ||
+          n === 'dangerouslysetinnerhtml' ||
+          n === 'innerhtml' ||
+          n === 'outerhtml' ||
+          n === 'inserthtml' ||
+          n === 'insertadjacenthtml'
+        );
       }
     `;
 
@@ -2252,21 +2262,21 @@ describe('sink-policy gate', () => {
     const findings = responseFragmentApplyInvariantFindings(
       'response-fragment-apply.ts',
       validResponseApply
-        .replace('t.innerHTML = trustedHtml(x.html);', 't.innerHTML = x.html;')
-        .replace('for (const n of t.content.children) g(n);', '')
-        .replace('g(n);', '')
         .replace(
-          'return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(n);',
-          'return /^on[^:]|^(srcdoc)$/.test(n);',
+          'security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(x.html)))',
+          'security.createFragmentContent(renderedFragmentHtmlContent(x.html))',
         )
+        .replace('g(node as Element, security);', '')
+        .replace('g(n, security);', '')
+        .replace("n === 'insertadjacenthtml'", "n === 'insertadjacenthtml-drift'")
         .concat('\ne.insertAdjacentHTML("beforeend", html);'),
     );
 
     expect(findings).toEqual([
       'response-fragment-apply.ts: response-fragment HTML sink must not use insertAdjacentHTML; parse through the template sanitizer path',
-      'response-fragment-apply.ts: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found 1',
-      'response-fragment-apply.ts: append-mode response fragments must sanitize parsed children before DOM insertion',
-      'response-fragment-apply.ts: replace-mode response fragments must sanitize the parsed morph root before DOM insertion',
+      'response-fragment-apply.ts: response-fragment HTML sink must route exactly two membrane parse inputs through trustedHtml(); found 1',
+      'response-fragment-apply.ts: append-mode response fragments must sanitize the exact membrane snapshot before DOM insertion',
+      'response-fragment-apply.ts: replace-mode response fragments must sanitize the exact parsed morph root before DOM insertion',
       'response-fragment-apply.ts: response-fragment sanitizer denylist must keep event, srcdoc, and raw HTML attributes blocked',
     ]);
   });

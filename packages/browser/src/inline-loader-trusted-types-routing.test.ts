@@ -15,8 +15,8 @@ describe('inline loader Trusted Types routing gate', () => {
     // SPEC.md §6.6: Trusted Types is the Chromium runtime-DiD layer; sanitizer parity remains
     // the cross-browser XSS floor. Keep their status gates separate so one cannot mask the other.
     const sanitizerOnlyDrift = inlineResponseApplyReadableSource.replace(
-      'outerhtml|inserthtml|insertadjacenthtml',
-      'outerhtml|inserthtml',
+      "n === 'insertadjacenthtml'",
+      "n === 'insertadjacenthtml-drift'",
     );
     const readableInstaller = buildInlineKovoLoaderInstallerReadableSource(
       inlineWireParserReadableSource,
@@ -39,13 +39,10 @@ describe('inline loader Trusted Types routing gate', () => {
   it('fails when inline raw-HTML sinks stop routing through the Trusted Types shim', () => {
     const unroutedApply = inlineResponseApplyReadableSource
       .replace(
-        't.innerHTML = trustedHtml(renderedFragmentHtmlContent(x.html))',
-        't.innerHTML = renderedFragmentHtmlContent(x.html)',
+        'trustedHtml(renderedFragmentHtmlContent(x.html))',
+        'renderedFragmentHtmlContent(x.html)',
       )
-      .replace(
-        't.innerHTML = trustedHtml(renderedFragmentHtmlContent(h))',
-        't.innerHTML = renderedFragmentHtmlContent(h)',
-      );
+      .replace('trustedHtml(renderedFragmentHtmlContent(h))', 'renderedFragmentHtmlContent(h)');
     const readableInstaller = buildInlineKovoLoaderInstallerReadableSource(
       inlineWireParserReadableSource,
       unroutedApply,
@@ -59,7 +56,7 @@ describe('inline loader Trusted Types routing gate', () => {
         unroutedApply,
       ),
     ).toThrow(
-      'Trusted Types routing must wrap both readable response-apply innerHTML sinks; found 0',
+      'Trusted Types routing must wrap both readable response-apply raw-HTML inputs; found 0',
     );
   });
 

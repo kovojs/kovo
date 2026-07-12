@@ -272,7 +272,7 @@ function installInlineKovoLoader(im) {
       if (r(n)) el.removeAttribute?.(name);
       else {
         let r = fb(val);
-        if (n === 'style' && c(r)) {
+        if (n === 'style' && c(r, bns)) {
           el.removeAttribute?.(name);
         } else if (n === 'srcset' || n === 'imagesrcset') {
           const a = s(r);
@@ -577,7 +577,7 @@ function installInlineKovoLoader(im) {
     applyHead: ch,
     applyStylePromotion: () => ps(),
     document: doc,
-    morph: m,
+    morph: (current, next) => m(current, next, bns),
     onSessionTransition: () => retireBroadcast(),
     queryAll: qa,
     replayScripts: rscr,
@@ -1688,12 +1688,22 @@ function assertInlineKovoLoaderTrustedTypesRoutingForSource({
 }: InlineKovoLoaderTrustedTypesRoutingAssertion): void {
   const sinkRoutes =
     mode === 'readable'
-      ? countSubstring(applySource, 'innerHTML = trustedHtml(')
-      : countSubstring(installerSource, 'innerHTML=th(') +
-        countSubstring(installerSource, 'innerHTML=trustedHtml(');
+      ? countSubstring(applySource, 'trustedHtml(renderedFragmentHtmlContent(')
+      : countSubstring(applySource, 'th(renderedFragmentHtmlContent(') +
+        countSubstring(applySource, 'trustedHtml(renderedFragmentHtmlContent(');
   if (sinkRoutes !== 2) {
     throw new Error(
-      `Inline Kovo loader Trusted Types routing must wrap both ${mode} response-apply innerHTML sinks; found ${sinkRoutes}.`,
+      `Inline Kovo loader Trusted Types routing must wrap both ${mode} response-apply raw-HTML inputs; found ${sinkRoutes}.`,
+    );
+  }
+
+  const capturedSetter =
+    mode === 'readable'
+      ? installerSource.includes('const elementInnerHtmlSetter =')
+      : installerSource.includes('const elementInnerHtmlSetter=');
+  if (!capturedSetter) {
+    throw new Error(
+      `Inline Kovo loader ${mode} Trusted Types routing is missing the captured innerHTML setter.`,
     );
   }
 

@@ -7,7 +7,31 @@ type BrowserNavigationSecurityControls = ReturnType<typeof createBrowserNavigati
 
 export type HtmlResponseFragmentSecurityControls = Pick<
   BrowserNavigationSecurityControls,
-  'appendElementChildren' | 'prependElementChildren' | 'replaceElement' | 'replaceElementChildren'
+  | 'appendElementChildren'
+  | 'charCode'
+  | 'cloneDomNode'
+  | 'createFragmentContent'
+  | 'elementContains'
+  | 'hasElementAttribute'
+  | 'indexOf'
+  | 'lower'
+  | 'prependElementChildren'
+  | 'queryAllElements'
+  | 'readAttribute'
+  | 'readDocumentActiveElement'
+  | 'readElementTagName'
+  | 'readNodeIsConnected'
+  | 'regExpExec'
+  | 'regExpTest'
+  | 'removeElementAttribute'
+  | 'replaceElement'
+  | 'replaceElementChildren'
+  | 'setElementAttribute'
+  | 'slice'
+  | 'snapshotChildNodes'
+  | 'snapshotElementAttributes'
+  | 'snapshotElementChildren'
+  | 'trim'
 >;
 
 // SF-WIRE (secure-framework Tier 3, Trusted Types — WIRED): the `p` and `d` helpers
@@ -156,8 +180,9 @@ export function p(
       // the raw-HTML write goes through the inlined `trustedHtml` shim so it mints a TrustedHTML
       // under the strict CSP's `require-trusted-types-for 'script'`, and g() still neutralizes
       // dangerous attributes/URLs on the inserted children (SPEC §4.4/§9.1/§6.6).
-      const t = document.createElement('template');
-      t.innerHTML = trustedHtml(renderedFragmentHtmlContent(x.html));
+      const content = security.createFragmentContent(
+        trustedHtml(renderedFragmentHtmlContent(x.html)),
+      );
       if (x.mode === 'prepend') {
         // SPEC §9.3/§13.2: insert keyed rows at the START, deduped by kovo-key (a
         // row whose key is already present is skipped, never re-inserted), and keep
@@ -165,27 +190,38 @@ export function p(
         // shifted by the inserted height to keep existing ("load older") content
         // visually fixed (no jump). Inert-until-touched holds as for append.
         const ex = new Set<string>();
-        for (const c of e.children) {
-          const ck = k(c);
+        const currentRows = security.snapshotElementChildren(e);
+        for (let index = 0; index < currentRows.length; index += 1) {
+          const current = currentRows[index];
+          if (!current) continue;
+          const ck = k(current, security);
           if (ck !== null) ex.add(ck);
         }
         const ins: Element[] = [];
-        for (const n of Array.from(t.content.children)) {
-          const nk = k(n);
+        const incoming = security.snapshotElementChildren(content);
+        for (let index = 0; index < incoming.length; index += 1) {
+          const n = incoming[index];
+          if (!n) continue;
+          const nk = k(n, security);
           if (nk !== null && ex.has(nk)) continue;
-          ins.push(n);
+          ins[ins.length] = n;
         }
         const top = e.scrollTop;
         const height = e.scrollHeight;
         for (let index = 0; index < ins.length; index += 1) {
           const node = ins[index];
-          if (node) g(node);
+          if (node) g(node, security);
         }
         security.prependElementChildren(e, ins);
         e.scrollTop = top + (e.scrollHeight - height);
       } else {
-        const nodes = Array.from(t.content.childNodes);
-        for (const n of t.content.children) g(n);
+        const nodes = security.snapshotChildNodes(content);
+        for (let index = 0; index < nodes.length; index += 1) {
+          const node = nodes[index];
+          if (node && security.readElementTagName(node) !== undefined) {
+            g(node as Element, security);
+          }
+        }
         security.appendElementChildren(e, nodes);
       }
     } else {
@@ -202,15 +238,18 @@ function d(
   h: RenderedFragmentHtml,
   security: HtmlResponseFragmentSecurityControls,
 ): void {
-  const t = document.createElement('template');
-  t.innerHTML = trustedHtml(renderedFragmentHtmlContent(h));
-  const n = firstMorphElement(t.content);
-  const s = e.contains(document.activeElement) ? document.activeElement : null;
+  const content = security.createFragmentContent(trustedHtml(renderedFragmentHtmlContent(h)));
+  const n = firstMorphElement(content, security);
+  const active = security.readDocumentActiveElement();
+  const s = active && security.elementContains(e, active) ? active : null;
   const q: HTMLElement[] = [];
-  for (const x of e.querySelectorAll<HTMLElement>('[kovo-key]')) {
+  const keyed = security.queryAllElements(e, '[kovo-key]');
+  for (let index = 0; index < keyed.length; index += 1) {
+    const x = keyed[index] as HTMLElement | undefined;
+    if (!x) continue;
     if (x.scrollTop) {
       (x as HTMLElement & { s?: number }).s = x.scrollTop;
-      q.push(x);
+      q[q.length] = x;
     }
   }
 
@@ -220,43 +259,80 @@ function d(
     security.replaceElementChildren(e, []);
   }
   (s as HTMLElement | null)?.focus();
-  for (const x of q) if (x.isConnected) x.scrollTop = (x as HTMLElement & { s: number }).s;
+  for (let index = 0; index < q.length; index += 1) {
+    const x = q[index];
+    if (x && security.readNodeIsConnected(x)) {
+      x.scrollTop = (x as HTMLElement & { s: number }).s;
+    }
+  }
 }
 
-function firstMorphElement(content: DocumentFragment): Element | undefined {
-  for (const child of content.children) {
-    if (isFragmentResourceHint(child)) continue;
+function firstMorphElement(
+  content: DocumentFragment,
+  security: HtmlResponseFragmentSecurityControls,
+): Element | undefined {
+  const children = security.snapshotElementChildren(content);
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
+    if (!child || isFragmentResourceHint(child, security)) continue;
     return child;
   }
   return undefined;
 }
 
-function isFragmentResourceHint(element: Element): boolean {
+function isFragmentResourceHint(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
   return (
-    element.tagName === 'LINK' &&
-    (element.getAttribute('rel') ?? '')
-      .split(/\s+/)
-      .some((token) => token.toLowerCase() === 'stylesheet')
+    security.readElementTagName(element) === 'LINK' &&
+    hasStylesheetRelToken(security.readAttribute(element, 'rel') ?? '', security)
   );
 }
 
-function k(e: Element): string | null {
-  return e.getAttribute('kovo-key');
+function hasStylesheetRelToken(
+  value: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index < value.length ? security.charCode(value, index) : 0x20;
+    const whitespace = code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+    if (!whitespace) continue;
+    if (start < index && security.lower(security.slice(value, start, index)) === 'stylesheet') {
+      return true;
+    }
+    start = index + 1;
+  }
+  return false;
+}
+
+function k(e: Element, security: HtmlResponseFragmentSecurityControls): string | null {
+  return security.readAttribute(e, 'kovo-key');
 }
 
 function m(c: Element, n: Element, security: HtmlResponseFragmentSecurityControls): Element {
-  const replace = c.tagName !== n.tagName || k(c) !== k(n);
-  g(n);
+  const replace =
+    security.readElementTagName(c) !== security.readElementTagName(n) ||
+    k(c, security) !== k(n, security);
+  g(n, security);
   if (replace) {
     security.replaceElement(c, n);
     return n;
   }
 
-  for (let i = c.attributes.length; i--; ) {
-    const a = c.attributes[i];
-    if (a && !n.hasAttribute(a.name)) c.removeAttribute(a.name);
+  const currentAttributes = security.snapshotElementAttributes(c);
+  for (let index = currentAttributes.length; index--; ) {
+    const attribute = currentAttributes[index];
+    if (attribute && !security.hasElementAttribute(n, attribute.name)) {
+      security.removeElementAttribute(c, attribute.name);
+    }
   }
-  for (const a of n.attributes) sa(c, a.name, a.value);
+  const nextAttributes = security.snapshotElementAttributes(n);
+  for (let index = 0; index < nextAttributes.length; index += 1) {
+    const attribute = nextAttributes[index];
+    if (attribute) sa(c, attribute.name, attribute.value, security);
+  }
 
   // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned
   // selection state because keyed morph reuses the live element and skips
@@ -267,67 +343,118 @@ function m(c: Element, n: Element, security: HtmlResponseFragmentSecurityControl
   return c;
 }
 
-function sa(e: Element, name: string, v: string): void {
-  const n = name.toLowerCase();
+function sa(
+  e: Element,
+  name: string,
+  v: string,
+  security: HtmlResponseFragmentSecurityControls,
+): void {
+  const n = security.lower(name);
   if (r(n)) {
-    e.removeAttribute(name);
+    security.removeElementAttribute(e, name);
     return;
   }
-  if (n === 'style' && c(v)) {
-    e.removeAttribute(name);
+  if (n === 'style' && c(v, security)) {
+    security.removeElementAttribute(e, name);
     return;
   }
   if (n === 'srcset' || n === 'imagesrcset') {
-    const s = y(v);
-    if (s) e.setAttribute(name, s);
-    else e.removeAttribute(name);
+    const s = y(v, security);
+    if (s) security.setElementAttribute(e, name, s);
+    else security.removeElementAttribute(e, name);
     return;
   }
-  if (/^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/.test(n)) {
-    if (w(v)) {
-      e.setAttribute(name, '#');
+  if (isUrlAttributeName(n)) {
+    if (w(v, security)) {
+      security.setElementAttribute(e, name, '#');
       return;
     }
   }
-  e.setAttribute(name, v);
+  security.setElementAttribute(e, name, v);
 }
 
 function r(n: string): boolean {
-  return /^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/.test(
-    n,
+  return (
+    (n.length > 2 && n[0] === 'o' && n[1] === 'n' && n[2] !== ':') ||
+    n === 'srcdoc' ||
+    n === 'dangerouslysetinnerhtml' ||
+    n === 'innerhtml' ||
+    n === 'outerhtml' ||
+    n === 'inserthtml' ||
+    n === 'insertadjacenthtml'
   );
 }
 
-function g(e: Element): Element {
-  for (const x of [e, ...e.querySelectorAll('*')]) {
-    for (const a of Array.from(x.attributes)) sa(x, a.name, a.value);
+function isUrlAttributeName(n: string): boolean {
+  return (
+    n === 'href' ||
+    n === 'src' ||
+    n === 'action' ||
+    n === 'formaction' ||
+    n === 'poster' ||
+    n === 'background' ||
+    n === 'cite' ||
+    n === 'data' ||
+    n === 'ping' ||
+    n === 'xlink:href'
+  );
+}
+
+function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element {
+  const descendants = security.queryAllElements(e, '*');
+  for (let elementIndex = -1; elementIndex < descendants.length; elementIndex += 1) {
+    const x = elementIndex < 0 ? e : descendants[elementIndex];
+    if (!x) continue;
+    const attributes = security.snapshotElementAttributes(x);
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex];
+      if (attribute) sa(x, attribute.name, attribute.value, security);
+    }
   }
   return e;
 }
 
-function y(v: string): string | null {
+/** @internal Sanitize one parsed response element tree through the shared output membrane. */
+export function sanitizeHtmlResponseElementTree(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
+): Element {
+  return g(element, security);
+}
+
+/** @internal Apply one response attribute through the shared pinned sanitizer policy. */
+export function setSafeHtmlResponseAttribute(
+  element: Element,
+  name: string,
+  value: string,
+  security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
+): void {
+  sa(element, name, value, security);
+}
+
+function y(v: string, security: HtmlResponseFragmentSecurityControls): string | null {
   const r: string[] = [];
   let q: '"' | "'" | undefined;
   let d = 0;
   let s = 0;
   const a = (p: string) => {
-    const x = p.trim();
+    const x = security.trim(p);
     if (!x) return;
-    if (w(x)) return;
+    if (w(x, security)) return;
     let i = -1;
     for (let j = 0; j < x.length; j += 1) {
-      const c = x.charCodeAt(j);
+      const c = security.charCode(x, j);
       if (c === 9 || c === 10 || c === 12 || c === 13 || c === 32) {
         i = j;
         break;
       }
     }
-    const u = i < 0 ? x : x.slice(0, i);
+    const u = i < 0 ? x : security.slice(x, 0, i);
     const u2 =
-      (u.startsWith('"') && u.endsWith('"')) || (u.startsWith("'") && u.endsWith("'"))
-        ? u.slice(1, -1)
+      (u[0] === '"' && u[u.length - 1] === '"') || (u[0] === "'" && u[u.length - 1] === "'")
+        ? security.slice(u, 1, -1)
         : u;
-    if (!w(u2)) r.push(x);
+    if (!w(u2, security)) r[r.length] = x;
   };
   for (let i = 0; i < v.length; i += 1) {
     const x = v[i];
@@ -337,49 +464,100 @@ function y(v: string): string | null {
     else if (x === '(') d += 1;
     else if (x === ')' && d > 0) d -= 1;
     else if (x === ',' && d === 0) {
-      a(v.slice(s, i));
+      a(security.slice(v, s, i));
       s = i + 1;
     }
   }
-  a(v.slice(s));
-  return r.length ? r.join(', ') : null;
+  a(security.slice(v, s));
+  if (r.length === 0) return null;
+  let result = '';
+  for (let index = 0; index < r.length; index += 1) {
+    const candidate = r[index];
+    if (candidate !== undefined) result += (result === '' ? '' : ', ') + candidate;
+  }
+  return result || null;
 }
 
-function c(v: string): boolean {
+function c(v: string, security: HtmlResponseFragmentSecurityControls): boolean {
   const p = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"']*?))\s*\)/gi;
   let m: RegExpExecArray | null;
-  while ((m = p.exec(v)) !== null) if (w((m[1] ?? m[2] ?? m[3] ?? '').trim())) return true;
-  return /\bexpression\s*\(/i.test(v) || /-moz-binding\s*:/i.test(v);
+  while ((m = security.regExpExec(p, v)) !== null) {
+    if (w(security.trim(m[1] ?? m[2] ?? m[3] ?? ''), security)) return true;
+  }
+  return (
+    security.regExpTest(/\bexpression\s*\(/i, v) || security.regExpTest(/-moz-binding\s*:/i, v)
+  );
 }
 
-function w(v: string): boolean {
-  // eslint-disable-next-line no-control-regex -- Short spelling keeps SPEC.md §4.4 inline-loader budget stable.
-  const s = v.replace(/[\x00-\x20]/g, '').toLowerCase();
-  return /^[a-z][a-z0-9+.-]*:/.test(s) && !/^(https?|ftp|mailto|tel):/.test(s);
+function w(v: string, security: HtmlResponseFragmentSecurityControls): boolean {
+  let normalized = '';
+  for (let index = 0; index < v.length; index += 1) {
+    if (security.charCode(v, index) > 0x20) normalized += v[index];
+  }
+  const s = security.lower(normalized);
+  const colon = security.indexOf(s, ':');
+  if (colon <= 0) return false;
+  for (let index = 0; index < colon; index += 1) {
+    const code = security.charCode(s, index);
+    const letter = code >= 0x61 && code <= 0x7a;
+    const digit = code >= 0x30 && code <= 0x39;
+    if (!letter && (index === 0 || (!digit && code !== 0x2b && code !== 0x2e && code !== 0x2d))) {
+      return false;
+    }
+  }
+  const scheme = security.slice(s, 0, colon);
+  return (
+    scheme !== 'http' &&
+    scheme !== 'https' &&
+    scheme !== 'ftp' &&
+    scheme !== 'mailto' &&
+    scheme !== 'tel'
+  );
 }
 
 export const __responseFragmentApplySanitizerParityForTests = {
-  hasUnsafeCssText: c,
-  hasUnsafeUrlScheme: w,
-  sanitizeAttribute: sa,
-  sanitizeSrcset: y,
+  hasUnsafeCssText(value: string): boolean {
+    return c(value, createBrowserNavigationSecurityControls());
+  },
+  hasUnsafeUrlScheme(value: string): boolean {
+    return w(value, createBrowserNavigationSecurityControls());
+  },
+  sanitizeAttribute(e: Element, name: string, value: string): void {
+    sa(e, name, value, createBrowserNavigationSecurityControls());
+  },
+  sanitizeSrcset(value: string): string | null {
+    return y(value, createBrowserNavigationSecurityControls());
+  },
 };
 
 function u(c: Element, n: Element, security: HtmlResponseFragmentSecurityControls): void {
-  const b = new Map(
-    Array.from(c.children)
-      .map((child) => [k(child), child] as const)
-      .filter((entry): entry is [string, Element] => entry[0] !== null),
-  );
-  const r = Array.from(n.childNodes).map((x) => {
-    if (x instanceof Element) {
-      const z = k(x);
-      const v = z ? b.get(z) : undefined;
-      return v ? m(v, x, security) : g(x.cloneNode(true) as Element);
+  const current = security.snapshotElementChildren(c);
+  const next = security.snapshotChildNodes(n);
+  const desired: ChildNode[] = [];
+  for (let nextIndex = 0; nextIndex < next.length; nextIndex += 1) {
+    const nextNode = next[nextIndex];
+    if (!nextNode) continue;
+    if (security.readElementTagName(nextNode) !== undefined) {
+      const nextElement = nextNode as Element;
+      const key = k(nextElement, security);
+      let match: Element | undefined;
+      if (key !== null) {
+        for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
+          const candidate = current[currentIndex];
+          if (candidate && k(candidate, security) === key) {
+            match = candidate;
+            break;
+          }
+        }
+      }
+      const resolved = match
+        ? m(match, nextElement, security)
+        : g(security.cloneDomNode(nextElement, true) as Element, security);
+      desired[desired.length] = resolved;
+    } else {
+      desired[desired.length] = security.cloneDomNode(nextNode, true) as ChildNode;
     }
+  }
 
-    return x.cloneNode(true) as ChildNode;
-  });
-
-  security.replaceElementChildren(c, r);
+  security.replaceElementChildren(c, desired);
 }

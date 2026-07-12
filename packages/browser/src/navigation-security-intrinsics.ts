@@ -20,6 +20,7 @@ export interface NavigationUrlFacts {
 export function createBrowserNavigationSecurityControls(scope: typeof globalThis = globalThis) {
   const NativeObject = Object;
   const NativeReflect = Reflect;
+  const NativeRegExp = RegExp;
   const NativeString = String;
   const NativeURL = URL;
   const NativeHeaders = scope.Headers;
@@ -30,12 +31,19 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeElement = scope.Element;
   const NativeNode = scope.Node;
   const NativeDocumentFragment = scope.DocumentFragment;
+  const NativeHTMLTemplateElement = scope.HTMLTemplateElement;
+  const NativeHTMLCollection = scope.HTMLCollection;
+  const NativeNodeList = scope.NodeList;
+  const NativeNamedNodeMap = scope.NamedNodeMap;
+  const NativeAttr = scope.Attr;
   const NativeTextDecoder = scope.TextDecoder;
   const NativeUint8Array = scope.Uint8Array;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
   const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
   const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+  const nativeRegExpExec = NativeRegExp.prototype.exec;
+  const nativeRegExpTest = NativeRegExp.prototype.test;
   const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
   const nativeStringIndexOf = NativeString.prototype.indexOf;
   const nativeStringSlice = NativeString.prototype.slice;
@@ -72,9 +80,26 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const fragmentQuerySelector = NativeDocumentFragment
     ? valueMethod(NativeDocumentFragment.prototype, 'querySelector')
     : undefined;
+  const elementQuerySelectorAll = NativeElement
+    ? valueMethod(NativeElement.prototype, 'querySelectorAll')
+    : undefined;
   const elementGetAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'getAttribute')
     : undefined;
+  const elementHasAttribute = NativeElement
+    ? valueMethod(NativeElement.prototype, 'hasAttribute')
+    : undefined;
+  const elementRemoveAttribute = NativeElement
+    ? valueMethod(NativeElement.prototype, 'removeAttribute')
+    : undefined;
+  const elementAttributes = NativeElement
+    ? getter(NativeElement.prototype, 'attributes')
+    : undefined;
+  const elementChildren = NativeElement ? getter(NativeElement.prototype, 'children') : undefined;
+  const elementInnerHtmlSetter = NativeElement
+    ? setter(NativeElement.prototype, 'innerHTML')
+    : undefined;
+  const elementTagName = NativeElement ? getter(NativeElement.prototype, 'tagName') : undefined;
   const elementOuterHtml = NativeElement ? getter(NativeElement.prototype, 'outerHTML') : undefined;
   const elementRemove = NativeElement ? valueMethod(NativeElement.prototype, 'remove') : undefined;
   const elementAppend = NativeElement ? valueMethod(NativeElement.prototype, 'append') : undefined;
@@ -89,8 +114,36 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const nodeCloneNode = NativeNode ? valueMethod(NativeNode.prototype, 'cloneNode') : undefined;
   const nodeAppendChild = NativeNode ? valueMethod(NativeNode.prototype, 'appendChild') : undefined;
+  const nodeChildNodes = NativeNode ? getter(NativeNode.prototype, 'childNodes') : undefined;
+  const nodeContains = NativeNode ? valueMethod(NativeNode.prototype, 'contains') : undefined;
+  const nodeIsConnected = NativeNode ? getter(NativeNode.prototype, 'isConnected') : undefined;
+  const fragmentChildren = NativeDocumentFragment
+    ? getter(NativeDocumentFragment.prototype, 'children')
+    : undefined;
+  const templateContent = NativeHTMLTemplateElement
+    ? getter(NativeHTMLTemplateElement.prototype, 'content')
+    : undefined;
+  const htmlCollectionLength = NativeHTMLCollection
+    ? getter(NativeHTMLCollection.prototype, 'length')
+    : undefined;
+  const htmlCollectionItem = NativeHTMLCollection
+    ? valueMethod(NativeHTMLCollection.prototype, 'item')
+    : undefined;
+  const nodeListLength = NativeNodeList ? getter(NativeNodeList.prototype, 'length') : undefined;
+  const nodeListItem = NativeNodeList ? valueMethod(NativeNodeList.prototype, 'item') : undefined;
+  const namedNodeMapLength = NativeNamedNodeMap
+    ? getter(NativeNamedNodeMap.prototype, 'length')
+    : undefined;
+  const namedNodeMapItem = NativeNamedNodeMap
+    ? valueMethod(NativeNamedNodeMap.prototype, 'item')
+    : undefined;
+  const attrName = NativeAttr ? getter(NativeAttr.prototype, 'name') : undefined;
+  const attrValue = NativeAttr ? getter(NativeAttr.prototype, 'value') : undefined;
   const documentCreateElement = NativeDocument
     ? valueMethod(NativeDocument.prototype, 'createElement')
+    : undefined;
+  const documentActiveElement = NativeDocument
+    ? getter(NativeDocument.prototype, 'activeElement')
     : undefined;
   const elementSetAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'setAttribute')
@@ -129,6 +182,11 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   function getter(value: object, property: PropertyKey): (() => unknown) | undefined {
     const found = descriptor(value, property);
     return typeof found?.get === 'function' ? found.get : undefined;
+  }
+
+  function setter(value: object, property: PropertyKey): ((value: unknown) => void) | undefined {
+    const found = descriptor(value, property);
+    return typeof found?.set === 'function' ? found.set : undefined;
   }
 
   function valueMethod(value: object, property: PropertyKey): Function | undefined {
@@ -224,6 +282,173 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     return typeof value === 'string' ? value : null;
   }
 
+  function readDomProperty(
+    value: object,
+    property: PropertyKey,
+    platformGetters: readonly (((...args: never[]) => unknown) | undefined)[],
+  ): unknown {
+    for (let index = 0; index < platformGetters.length; index += 1) {
+      const fieldGetter = platformGetters[index];
+      if (!fieldGetter) continue;
+      try {
+        return apply(fieldGetter, value, []);
+      } catch {}
+    }
+    const own = readOwnData(value, property);
+    if (own !== undefined) return own;
+    const custom = stableGetter(value, property);
+    if (!custom) return undefined;
+    try {
+      return apply(custom, value, []);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function snapshotIndexedCollection<T>(
+    collection: unknown,
+    lengthGetters: readonly (((...args: never[]) => unknown) | undefined)[],
+    itemMethods: readonly (Function | undefined)[],
+  ): T[] {
+    if (!controlsSound || collection === null || typeof collection !== 'object') return [];
+    const rawLength = readDomProperty(collection, 'length', lengthGetters);
+    if (
+      typeof rawLength !== 'number' ||
+      rawLength < 0 ||
+      rawLength > 100_000 ||
+      rawLength % 1 !== 0
+    ) {
+      throw new TypeError('Kovo DOM collection length is invalid.');
+    }
+    const snapshot: T[] = [];
+    for (let index = 0; index < rawLength; index += 1) {
+      let entry: unknown;
+      let read = false;
+      for (let methodIndex = 0; methodIndex < itemMethods.length; methodIndex += 1) {
+        const item = itemMethods[methodIndex];
+        if (!item) continue;
+        try {
+          entry = apply(item, collection, [index]);
+          read = true;
+          break;
+        } catch {}
+      }
+      if (!read) entry = readOwnData(collection, String(index));
+      if (entry === null || entry === undefined) {
+        throw new TypeError('Kovo DOM collection item is unavailable.');
+      }
+      snapshot[index] = entry as T;
+    }
+    return snapshot;
+  }
+
+  function snapshotChildNodes(value: object): ChildNode[] {
+    const collection = readDomProperty(value, 'childNodes', [nodeChildNodes]);
+    return snapshotIndexedCollection<ChildNode>(collection, [nodeListLength], [nodeListItem]);
+  }
+
+  function snapshotElementChildren(value: object): Element[] {
+    const collection = readDomProperty(value, 'children', [elementChildren, fragmentChildren]);
+    return snapshotIndexedCollection<Element>(
+      collection,
+      [htmlCollectionLength],
+      [htmlCollectionItem],
+    );
+  }
+
+  function snapshotElementAttributes(element: object): { name: string; value: string }[] {
+    const collection = readDomProperty(element, 'attributes', [elementAttributes]);
+    const attributes = snapshotIndexedCollection<object>(
+      collection,
+      [namedNodeMapLength],
+      [namedNodeMapItem],
+    );
+    const snapshot: { name: string; value: string }[] = [];
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index];
+      if (!attribute) continue;
+      const name = readDomProperty(attribute, 'name', [attrName]);
+      const value = readDomProperty(attribute, 'value', [attrValue]);
+      if (typeof name !== 'string' || typeof value !== 'string') {
+        throw new TypeError('Kovo DOM attribute snapshot is invalid.');
+      }
+      snapshot[snapshot.length] = { name, value };
+    }
+    return snapshot;
+  }
+
+  function queryAllElements(root: object, selector: string): Element[] {
+    let collection: unknown;
+    if (elementQuerySelectorAll) {
+      try {
+        collection = apply(elementQuerySelectorAll, root, [selector]);
+      } catch {}
+    }
+    if (collection === undefined) {
+      const custom = stableMethod(root, 'querySelectorAll');
+      if (!custom) return [];
+      collection = apply(custom, root, [selector]);
+    }
+    return snapshotIndexedCollection<Element>(collection, [nodeListLength], [nodeListItem]);
+  }
+
+  function readElementTagName(element: object): string | undefined {
+    const value = readDomProperty(element, 'tagName', [elementTagName]);
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  function hasElementAttribute(element: object, name: string): boolean {
+    const method = elementHasAttribute ?? stableMethod(element, 'hasAttribute');
+    if (!method) throw new TypeError('Kovo DOM has-attribute control is unavailable.');
+    return call<unknown>(method, element, [name]) === true;
+  }
+
+  function setElementAttribute(element: object, name: string, value: string): void {
+    const method = elementSetAttribute ?? stableMethod(element, 'setAttribute');
+    if (!method) throw new TypeError('Kovo DOM set-attribute control is unavailable.');
+    call(method, element, [name, value]);
+  }
+
+  function removeElementAttribute(element: object, name: string): void {
+    const method = elementRemoveAttribute ?? stableMethod(element, 'removeAttribute');
+    if (!method) throw new TypeError('Kovo DOM remove-attribute control is unavailable.');
+    call(method, element, [name]);
+  }
+
+  function elementContains(element: object, node: object | null): boolean {
+    const method = nodeContains ?? stableMethod(element, 'contains');
+    if (!method) throw new TypeError('Kovo DOM contains control is unavailable.');
+    return call<unknown>(method, element, [node]) === true;
+  }
+
+  function createFragmentContent(html: string): DocumentFragment {
+    if (!documentObject) throw new TypeError('Kovo DOM document control is unavailable.');
+    const create = documentCreateElement ?? stableMethod(documentObject, 'createElement');
+    if (!create) throw new TypeError('Kovo DOM template control is unavailable.');
+    const template = call<unknown>(create, documentObject, ['template']);
+    if (template === null || typeof template !== 'object') {
+      throw new TypeError('Kovo DOM template creation returned invalid data.');
+    }
+    const write = elementInnerHtmlSetter ?? stableSetter(template, 'innerHTML');
+    if (!write) throw new TypeError('Kovo DOM template HTML control is unavailable.');
+    call(write, template, [html]);
+    const content = readDomProperty(template, 'content', [templateContent]);
+    if (content === null || typeof content !== 'object') {
+      throw new TypeError('Kovo DOM template content is unavailable.');
+    }
+    return content as DocumentFragment;
+  }
+
+  function readDocumentActiveElement(): Element | null {
+    if (!documentObject) return null;
+    const value = readDomProperty(documentObject, 'activeElement', [documentActiveElement]);
+    return value !== null && typeof value === 'object' ? (value as Element) : null;
+  }
+
+  function readNodeIsConnected(node: object): boolean {
+    return readDomProperty(node, 'isConnected', [nodeIsConnected]) === true;
+  }
+
   function cloneElement(element: unknown): Element | undefined {
     if (!controlsSound || element === null || typeof element !== 'object') return undefined;
     let value: unknown;
@@ -243,6 +468,16 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       }
     }
     return value !== null && typeof value === 'object' ? (value as Element) : undefined;
+  }
+
+  function cloneDomNode(node: object, deep = false): Node {
+    const method = nodeCloneNode ?? stableMethod(node, 'cloneNode');
+    if (!method) throw new TypeError('Kovo DOM clone control is unavailable.');
+    const value = call<unknown>(method, node, [deep]);
+    if (value === null || typeof value !== 'object') {
+      throw new TypeError('Kovo DOM clone control returned invalid data.');
+    }
+    return value as Node;
   }
 
   function removeElement(element: unknown): boolean {
@@ -445,6 +680,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
 
   function charCode(value: string, index: number): number {
     return apply(nativeStringCharCodeAt, value, [index]);
+  }
+
+  function regExpExec(pattern: RegExp, value: string): RegExpExecArray | null {
+    return apply(nativeRegExpExec, pattern, [value]);
+  }
+
+  function regExpTest(pattern: RegExp, value: string): boolean {
+    return apply(nativeRegExpTest, pattern, [value]);
   }
 
   function hasUnsafePathCode(value: string): boolean {
@@ -693,6 +936,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         typeof nativeReflectApply !== 'function' ||
         typeof nativeObjectGetOwnPropertyDescriptor !== 'function' ||
         typeof nativeObjectGetPrototypeOf !== 'function' ||
+        typeof nativeRegExpExec !== 'function' ||
+        typeof nativeRegExpTest !== 'function' ||
         typeof nativeDecodeURIComponent !== 'function' ||
         !urlHref ||
         !urlOrigin ||
@@ -727,6 +972,10 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         indexOf('text/html; charset=utf-8', ';') !== 9 ||
         slice('/safe', 0, 1) !== '/' ||
         charCode('\\', 0) !== 0x5c ||
+        regExpExec(/security-(control)/, 'kovo-security-control')?.[1] !== 'control' ||
+        regExpExec(/security-(control)/, 'kovo-security-negative') !== null ||
+        regExpTest(/^kovo-security-control$/, 'kovo-security-control') !== true ||
+        regExpTest(/^kovo-security-control$/, 'kovo-security-negative') !== false ||
         apply(nativeDecodeURIComponent, undefined, ['/%5Cevil.example']) !== '/\\evil.example' ||
         apply(nativeDecodeURIComponent, undefined, ['/%2F%2Fevil.example']) !== '///evil.example'
       ) {
@@ -758,6 +1007,13 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         if (
           !documentCreateElement ||
           !elementSetAttribute ||
+          !elementGetAttribute ||
+          !elementHasAttribute ||
+          !elementRemoveAttribute ||
+          !elementAttributes ||
+          !elementChildren ||
+          !elementInnerHtmlSetter ||
+          !elementTagName ||
           !elementOuterHtml ||
           !elementRemove ||
           !elementAppend ||
@@ -766,7 +1022,22 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !elementReplaceWith ||
           !nodeCloneNode ||
           !nodeAppendChild ||
-          !elementQuerySelector
+          !nodeChildNodes ||
+          !nodeContains ||
+          !nodeIsConnected ||
+          !fragmentChildren ||
+          !templateContent ||
+          !htmlCollectionLength ||
+          !htmlCollectionItem ||
+          !nodeListLength ||
+          !nodeListItem ||
+          !namedNodeMapLength ||
+          !namedNodeMapItem ||
+          !attrName ||
+          !attrValue ||
+          !documentActiveElement ||
+          !elementQuerySelector ||
+          !elementQuerySelectorAll
         ) {
           return false;
         }
@@ -777,6 +1048,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         const replacementControl = apply<unknown>(documentCreateElement, documentObject, [
           'article',
         ]);
+        const templateControl = apply<unknown>(documentCreateElement, documentObject, ['template']);
         if (
           snapshotControl === null ||
           typeof snapshotControl !== 'object' ||
@@ -787,7 +1059,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           prependControl === null ||
           typeof prependControl !== 'object' ||
           replacementControl === null ||
-          typeof replacementControl !== 'object'
+          typeof replacementControl !== 'object' ||
+          templateControl === null ||
+          typeof templateControl !== 'object'
         ) {
           return false;
         }
@@ -801,6 +1075,64 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           'security-live-target',
         ]);
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
+        apply(elementInnerHtmlSetter, templateControl, [
+          '<strong data-kovo-template-control="yes">safe</strong>',
+        ]);
+        const templateFragment = apply<unknown>(templateContent, templateControl, []);
+        if (templateFragment === null || typeof templateFragment !== 'object') return false;
+        const templateChildren = apply<unknown>(fragmentChildren, templateFragment, []);
+        const templateNodes = apply<unknown>(nodeChildNodes, templateFragment, []);
+        if (
+          templateChildren === null ||
+          typeof templateChildren !== 'object' ||
+          templateNodes === null ||
+          typeof templateNodes !== 'object' ||
+          apply<unknown>(htmlCollectionLength, templateChildren, []) !== 1 ||
+          apply<unknown>(nodeListLength, templateNodes, []) !== 1
+        ) {
+          return false;
+        }
+        const templateChild = apply<unknown>(htmlCollectionItem, templateChildren, [0]);
+        const templateNode = apply<unknown>(nodeListItem, templateNodes, [0]);
+        if (
+          templateChild === null ||
+          typeof templateChild !== 'object' ||
+          templateNode !== templateChild ||
+          apply<unknown>(elementTagName, templateChild, []) !== 'STRONG' ||
+          apply<unknown>(elementHasAttribute, templateChild, ['data-kovo-template-control']) !==
+            true ||
+          apply<unknown>(elementGetAttribute, templateChild, ['data-kovo-template-control']) !==
+            'yes' ||
+          apply<unknown>(nodeContains, templateFragment, [templateChild]) !== true ||
+          apply<unknown>(nodeIsConnected, templateChild, []) !== false
+        ) {
+          return false;
+        }
+        const templateAttributes = apply<unknown>(elementAttributes, templateChild, []);
+        if (templateAttributes === null || typeof templateAttributes !== 'object') return false;
+        if (apply<unknown>(namedNodeMapLength, templateAttributes, []) !== 1) return false;
+        const templateAttribute = apply<unknown>(namedNodeMapItem, templateAttributes, [0]);
+        if (
+          templateAttribute === null ||
+          typeof templateAttribute !== 'object' ||
+          apply<unknown>(attrName, templateAttribute, []) !== 'data-kovo-template-control' ||
+          apply<unknown>(attrValue, templateAttribute, []) !== 'yes'
+        ) {
+          return false;
+        }
+        const descendants = apply<unknown>(elementQuerySelectorAll, snapshotControl, ['*']);
+        if (
+          descendants === null ||
+          typeof descendants !== 'object' ||
+          apply<unknown>(nodeListLength, descendants, []) !== 1 ||
+          apply<unknown>(nodeListItem, descendants, [0]) !== nestedControl
+        ) {
+          return false;
+        }
+        apply(elementRemoveAttribute, templateChild, ['data-kovo-template-control']);
+        if (apply<unknown>(elementHasAttribute, templateChild, ['data-kovo-template-control'])) {
+          return false;
+        }
         const expectedSnapshot =
           '<section kovo-nav-segment="security-control"><span kovo-nav-segment="nested-control" kovo-fragment-target="security-live-target"></span></section>';
         const expectedWithoutNested = '<section kovo-nav-segment="security-control"></section>';
@@ -857,7 +1189,10 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   return {
     appendElementChildren,
     call,
+    charCode,
+    cloneDomNode,
     cloneElement,
+    createFragmentContent,
     createTextDecoder,
     currentPathTarget,
     currentUrl,
@@ -866,25 +1201,42 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     fetchDocument,
     fetchValue,
     hardNavigate,
+    hasElementAttribute,
+    elementContains,
     isHtmlContentType,
     isTrimmedAsciiEqual,
+    indexOf,
+    lower,
     navigateSameOrigin,
     parseHtmlDocument,
     parseUrl,
     prependElementChildren,
     queryOne,
+    queryAllElements,
     readAttribute,
+    readDocumentActiveElement,
     readElementOuterHtml,
+    readElementTagName,
     readHeader,
     readFormDataValue,
     readDocumentField,
     readResponseField,
     readResponseText,
+    regExpExec,
+    regExpTest,
+    readNodeIsConnected,
+    removeElementAttribute,
     reload,
     removeElement,
     replaceElement,
     replaceElementChildren,
     safeSameOriginPath,
+    setElementAttribute,
+    slice,
+    snapshotChildNodes,
+    snapshotElementAttributes,
+    snapshotElementChildren,
+    trim,
     upper,
   };
 }

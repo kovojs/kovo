@@ -4,8 +4,11 @@ import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-c
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
 import { reconcileKeyed } from './keyed-reconciler.js';
-import { applyResponseFragments } from './response-fragment-apply.js';
-import { kovoSetSafeAttribute } from './security-output.js';
+import {
+  applyResponseFragments,
+  sanitizeHtmlResponseElementTree,
+  setSafeHtmlResponseAttribute,
+} from './response-fragment-apply.js';
 import { securityStringTrim } from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
@@ -61,57 +64,57 @@ export class DomMorphTarget implements MorphTarget {
 
   appendHtml(html: string): void {
     const security = requireBrowserDomSecurity();
-    const template = document.createElement('template');
     // SF (secure-framework Tier 3): route framework-assembled HTML through Kovo's sole
     // Trusted Types policy so this sink survives a strict `require-trusted-types-for`
     // CSP on Chromium (transparent passthrough elsewhere — see trusted-types.ts).
-    template.innerHTML = kovoCreateHTML(securityStringTrim(html));
-    const nodes = Array.from(template.content.childNodes);
-    sanitizeDomFragment(template.content);
+    const content = security.createFragmentContent(kovoCreateHTML(securityStringTrim(html)));
+    const nodes = security.snapshotChildNodes(content);
+    sanitizeDomNodes(nodes, security);
     security.appendElementChildren(this.element, nodes);
   }
 
   prependHtml(html: string): void {
     const security = requireBrowserDomSecurity();
-    const template = document.createElement('template');
     // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
-    template.innerHTML = kovoCreateHTML(securityStringTrim(html));
+    const content = security.createFragmentContent(kovoCreateHTML(securityStringTrim(html)));
     // SPEC §9.3/§13.2: dedupe prepended rows by kovo-key (a key already present is
     // skipped, never re-inserted), insert the rest at the START in wire order, and
     // preserve the scroll anchor — the target is treated as the scroll container, so
     // its scrollTop is shifted by the inserted height to keep existing ("load older")
     // content visually fixed (no jump). Inert-until-touched holds as for append.
-    const insert = reconcileKeyed([...this.element.children], [...template.content.children], {
-      create(node) {
-        return node;
-      },
-      currentKey(child) {
-        return domMorphKey(child);
-      },
-      match(current) {
-        return current;
-      },
-      nextKey(node) {
-        return domMorphKey(node);
-      },
-      preserveUnkeyed: false,
-    }).filter((node) => !this.element.contains(node));
+    const current = security.snapshotElementChildren(this.element);
+    const incoming = security.snapshotElementChildren(content);
+    const insert: Element[] = [];
+    for (let incomingIndex = 0; incomingIndex < incoming.length; incomingIndex += 1) {
+      const node = incoming[incomingIndex];
+      if (!node) continue;
+      const key = domMorphKey(node, security);
+      let present = false;
+      if (key !== null) {
+        for (let currentIndex = 0; currentIndex < current.length; currentIndex += 1) {
+          const currentNode = current[currentIndex];
+          if (currentNode && domMorphKey(currentNode, security) === key) {
+            present = true;
+            break;
+          }
+        }
+      }
+      if (!present) insert[insert.length] = node;
+    }
     const scrollTop = this.element.scrollTop;
     const scrollHeight = this.element.scrollHeight;
-    // Build the insertion plan before the final sanitizer pass. The captured native
-    // commit runs immediately afterward, so no authored accessor/method can mutate a
-    // node after validation but before adoption (SPEC §6.6 classify-and-pin).
-    sanitizeDomFragment(template.content);
+    // Sanitize the exact dense adoption plan, not a related live fragment collection.
+    // The boot-pinned commit runs immediately afterward (SPEC §6.6 classify-and-pin).
+    sanitizeDomNodes(insert, security);
     security.prependElementChildren(this.element, insert);
     this.element.scrollTop = scrollTop + (this.element.scrollHeight - scrollHeight);
   }
 
   replaceWithHtml(html: string): void {
     const security = requireBrowserDomSecurity();
-    const template = document.createElement('template');
     // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
-    template.innerHTML = kovoCreateHTML(securityStringTrim(html));
-    const next = firstMorphElement(template.content);
+    const content = security.createFragmentContent(kovoCreateHTML(securityStringTrim(html)));
+    const next = firstMorphElement(content, security);
     const activeState = captureActiveDomState(this.element);
     const scrollStates = captureDomScrollStates(this.element);
 
@@ -126,21 +129,38 @@ export class DomMorphTarget implements MorphTarget {
   }
 }
 
-function firstMorphElement(content: DocumentFragment): Element | null {
-  for (const child of content.children) {
-    if (isFragmentResourceHint(child)) continue;
+function firstMorphElement(
+  content: DocumentFragment,
+  security = requireBrowserDomSecurity(),
+): Element | null {
+  const children = security.snapshotElementChildren(content);
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
+    if (!child || isFragmentResourceHint(child, security)) continue;
     return child;
   }
   return null;
 }
 
-function isFragmentResourceHint(element: Element): boolean {
+function isFragmentResourceHint(element: Element, security = requireBrowserDomSecurity()): boolean {
   return (
-    element.tagName === 'LINK' &&
-    (element.getAttribute('rel') ?? '')
-      .split(/\s+/)
-      .some((token) => token.toLowerCase() === 'stylesheet')
+    security.readElementTagName(element) === 'LINK' &&
+    hasStylesheetRelToken(security.readAttribute(element, 'rel') ?? '', security)
   );
+}
+
+function hasStylesheetRelToken(value: string, security = requireBrowserDomSecurity()): boolean {
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index < value.length ? security.charCode(value, index) : 0x20;
+    const whitespace = code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+    if (!whitespace) continue;
+    if (start < index && security.lower(security.slice(value, start, index)) === 'stylesheet') {
+      return true;
+    }
+    start = index + 1;
+  }
+  return false;
 }
 
 /** @internal A {@link MorphRoot} over a live DOM {@link FragmentTargetRoot} (SPEC §9.1). */
@@ -237,40 +257,40 @@ export function morphDomElement(current: Element, next: Element): Element {
   const security = requireBrowserDomSecurity();
   // Resolve the reuse plan before validation. On replacement, the final sanitizer
   // pass is followed only by the boot-pinned native replaceWith invocation.
-  const canReuse = canReuseDomElement(current, next);
-  sanitizeDomElementTree(next);
+  const canReuse = canReuseDomElement(current, next, security);
+  sanitizeDomElementTree(next, security);
 
   if (!canReuse) {
     security.replaceElement(current, next);
     return next;
   }
 
-  syncDomAttributes(current, next);
-  if (current.getAttribute('kovo-state') !== null) {
+  syncDomAttributes(current, next, security);
+  if (security.readAttribute(current, 'kovo-state') !== null) {
     return current;
   }
-  if (isActiveDomFormControl(current)) {
+  if (isActiveDomFormControl(current, security)) {
     return current;
   }
 
-  morphDomChildren(current, next);
+  morphDomChildren(current, next, security);
   return current;
 }
 
 /** @internal Sanitize a parsed DOM tree before adopting new response HTML (SPEC §4.8). */
-export function sanitizeDomElementTree(element: Element): Element {
-  for (const current of [element, ...element.querySelectorAll('*')]) {
-    for (const attribute of Array.from(current.attributes)) {
-      kovoSetSafeAttribute(current, attribute.name, attribute.value);
-    }
-  }
-
-  return element;
+export function sanitizeDomElementTree(
+  element: Element,
+  security = requireBrowserDomSecurity(),
+): Element {
+  return sanitizeHtmlResponseElementTree(element, security);
 }
 
-function sanitizeDomFragment(fragment: DocumentFragment): void {
-  for (const element of Array.from(fragment.children)) {
-    sanitizeDomElementTree(element);
+function sanitizeDomNodes(nodes: readonly Node[], security = requireBrowserDomSecurity()): void {
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    if (node && security.readElementTagName(node) !== undefined) {
+      sanitizeDomElementTree(node as Element, security);
+    }
   }
 }
 
@@ -382,35 +402,55 @@ function cloneBrowserState(state: StructuralMorphBrowserState): StructuralMorphB
   };
 }
 
-function canReuseDomElement(current: Element, next: Element): boolean {
-  const currentKey = domMorphKey(current);
-  const nextKey = domMorphKey(next);
+function canReuseDomElement(
+  current: Element,
+  next: Element,
+  security = requireBrowserDomSecurity(),
+): boolean {
+  const currentKey = domMorphKey(current, security);
+  const nextKey = domMorphKey(next, security);
 
-  return current.tagName === next.tagName && currentKey === nextKey;
-}
-
-function domMorphKey(element: Element): string | null {
-  return element.getAttribute('kovo-key') ?? element.getAttribute('data-key');
-}
-
-function syncDomAttributes(current: Element, next: Element): void {
-  const currentState = current.getAttribute('kovo-state');
-
-  for (const name of Array.from(current.attributes, (attribute) => attribute.name)) {
-    if (name === 'kovo-state' && currentState !== null) continue;
-    if (!next.hasAttribute(name)) current.removeAttribute(name);
-  }
-
-  for (const attribute of next.attributes) {
-    if (attribute.name === 'kovo-state' && currentState !== null) continue;
-    kovoSetSafeAttribute(current, attribute.name, attribute.value);
-  }
-}
-
-function isActiveDomFormControl(element: Element): boolean {
   return (
-    document.activeElement === element &&
-    (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)
+    security.readElementTagName(current) === security.readElementTagName(next) &&
+    currentKey === nextKey
+  );
+}
+
+function domMorphKey(element: Element, security = requireBrowserDomSecurity()): string | null {
+  return security.readAttribute(element, 'kovo-key') ?? security.readAttribute(element, 'data-key');
+}
+
+function syncDomAttributes(
+  current: Element,
+  next: Element,
+  security = requireBrowserDomSecurity(),
+): void {
+  const currentState = security.readAttribute(current, 'kovo-state');
+
+  const currentAttributes = security.snapshotElementAttributes(current);
+  for (let index = 0; index < currentAttributes.length; index += 1) {
+    const attribute = currentAttributes[index];
+    if (!attribute) continue;
+    if (attribute.name === 'kovo-state' && currentState !== null) continue;
+    if (!security.hasElementAttribute(next, attribute.name)) {
+      security.removeElementAttribute(current, attribute.name);
+    }
+  }
+
+  const nextAttributes = security.snapshotElementAttributes(next);
+  for (let index = 0; index < nextAttributes.length; index += 1) {
+    const attribute = nextAttributes[index];
+    if (!attribute) continue;
+    if (attribute.name === 'kovo-state' && currentState !== null) continue;
+    setSafeHtmlResponseAttribute(current, attribute.name, attribute.value, security);
+  }
+}
+
+function isActiveDomFormControl(element: Element, security = requireBrowserDomSecurity()): boolean {
+  const tagName = security.readElementTagName(element);
+  return (
+    security.readDocumentActiveElement() === element &&
+    (tagName === 'INPUT' || tagName === 'TEXTAREA')
   );
 }
 
@@ -424,9 +464,10 @@ interface ActiveDomState {
 }
 
 function captureActiveDomState(root: Element): ActiveDomState | null {
-  const element = document.activeElement;
+  const security = requireBrowserDomSecurity();
+  const element = security.readDocumentActiveElement();
 
-  if (!(element instanceof HTMLElement) || !root.contains(element)) {
+  if (!(element instanceof HTMLElement) || !security.elementContains(root, element)) {
     return null;
   }
 
@@ -445,7 +486,8 @@ function captureActiveDomState(root: Element): ActiveDomState | null {
 }
 
 function restoreActiveDomState(state: ActiveDomState | null): void {
-  if (!state || !state.element.isConnected) return;
+  const security = requireBrowserDomSecurity();
+  if (!state || !security.readNodeIsConnected(state.element)) return;
 
   state.element.focus();
   if (
@@ -466,7 +508,10 @@ function restoreActiveDomState(state: ActiveDomState | null): void {
 }
 
 function captureDomScrollStates(root: Element) {
-  return [...root.querySelectorAll<HTMLElement>('[kovo-key], [data-key]')]
+  const security = requireBrowserDomSecurity();
+  return security
+    .queryAllElements(root, '[kovo-key], [data-key]')
+    .map((element) => element as HTMLElement)
     .filter((element) => element.scrollLeft !== 0 || element.scrollTop !== 0)
     .map((element) => ({
       element,
@@ -476,41 +521,97 @@ function captureDomScrollStates(root: Element) {
 }
 
 function restoreDomScrollStates(states: ReturnType<typeof captureDomScrollStates>): void {
+  const security = requireBrowserDomSecurity();
   for (const state of states) {
-    if (!state.element.isConnected) continue;
+    if (!security.readNodeIsConnected(state.element)) continue;
 
     state.element.scrollLeft = state.scrollLeft;
     state.element.scrollTop = state.scrollTop;
   }
 }
 
-function morphDomChildren(current: Element, next: Element): void {
-  const security = requireBrowserDomSecurity();
-  const nextChildren = [...next.childNodes];
-  const desiredNodes = reconcileKeyed([...current.childNodes], nextChildren, {
-    create(nextChild) {
-      return cloneDomChildNode(nextChild);
-    },
-    currentKey(child) {
-      return child instanceof Element ? domMorphKey(child) : null;
-    },
-    match(currentChild, nextChild) {
-      if (currentChild instanceof Element && nextChild instanceof Element) {
-        return morphDomElement(currentChild, nextChild);
-      }
-      return cloneDomChildNode(nextChild);
-    },
-    nextKey(child) {
-      return child instanceof Element ? domMorphKey(child) : null;
-    },
-  });
+function morphDomChildren(
+  current: Element,
+  next: Element,
+  security = requireBrowserDomSecurity(),
+): void {
+  const currentChildren = security.snapshotChildNodes(current);
+  const nextChildren = security.snapshotChildNodes(next);
+  const desiredNodes: ChildNode[] = [];
+  const usedCurrent: ChildNode[] = [];
+  let unkeyedCursor = 0;
 
+  for (let nextIndex = 0; nextIndex < nextChildren.length; nextIndex += 1) {
+    const nextChild = nextChildren[nextIndex];
+    if (!nextChild) continue;
+    const nextKey =
+      security.readElementTagName(nextChild) !== undefined
+        ? domMorphKey(nextChild as Element, security)
+        : null;
+    let matched: ChildNode | undefined;
+
+    if (nextKey === null) {
+      while (unkeyedCursor < currentChildren.length) {
+        const candidate = currentChildren[unkeyedCursor];
+        unkeyedCursor += 1;
+        if (!candidate) continue;
+        const candidateKey =
+          security.readElementTagName(candidate) !== undefined
+            ? domMorphKey(candidate as Element, security)
+            : null;
+        if (candidateKey !== null || includesDomNode(usedCurrent, candidate)) continue;
+        matched = candidate;
+        break;
+      }
+    } else {
+      for (let currentIndex = 0; currentIndex < currentChildren.length; currentIndex += 1) {
+        const candidate = currentChildren[currentIndex];
+        if (
+          candidate &&
+          security.readElementTagName(candidate) !== undefined &&
+          domMorphKey(candidate as Element, security) === nextKey
+        ) {
+          matched = candidate;
+          break;
+        }
+      }
+    }
+
+    if (!matched || includesDomNode(usedCurrent, matched)) {
+      desiredNodes[desiredNodes.length] = cloneDomChildNode(nextChild, security);
+      continue;
+    }
+
+    usedCurrent[usedCurrent.length] = matched;
+    if (
+      security.readElementTagName(matched) !== undefined &&
+      security.readElementTagName(nextChild) !== undefined
+    ) {
+      desiredNodes[desiredNodes.length] = morphDomElement(matched as Element, nextChild as Element);
+    } else {
+      desiredNodes[desiredNodes.length] = cloneDomChildNode(nextChild, security);
+    }
+  }
+
+  // Reconciliation itself is not an authority boundary: sanitize the exact dense
+  // output plan immediately before the boot-pinned replaceChildren commit.
+  sanitizeDomNodes(desiredNodes, security);
   // `replaceChildren` adopts the already-reconciled node plan in one boot-pinned native
   // commit. Reused keyed nodes retain identity; removed nodes are discarded atomically.
   security.replaceElementChildren(current, desiredNodes);
 }
 
-function cloneDomChildNode(child: ChildNode): ChildNode {
-  if (child instanceof Element) return sanitizeDomElementTree(child.cloneNode(true) as Element);
-  return child.cloneNode(true) as ChildNode;
+function includesDomNode(nodes: readonly ChildNode[], candidate: ChildNode): boolean {
+  for (let index = 0; index < nodes.length; index += 1) {
+    if (nodes[index] === candidate) return true;
+  }
+  return false;
+}
+
+function cloneDomChildNode(child: ChildNode, security = requireBrowserDomSecurity()): ChildNode {
+  const clone = security.cloneDomNode(child, true) as ChildNode;
+  if (security.readElementTagName(clone) !== undefined) {
+    return sanitizeDomElementTree(clone as Element, security);
+  }
+  return clone;
 }
