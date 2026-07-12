@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    62 | C1-C62 |
+| Critical |    63 | C1-C63 |
 | High     |    32 | H1-H32 |
 | Medium   |     9 | M1-M9  |
 
@@ -732,6 +732,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     cannot erase a secret/table-row path or missing production fact, while explicitly revealed and
     public scalar shapes retain their intended verdicts.
 
+- [ ] **C63 - Mutable compiler validator dispatch erases every blocking security diagnostic.**
+      `packages/compiler/src/validate/pipeline.ts`
+  - `collectCompilerDiagnostics()` dispatched the complete validator registry through live
+    `Array.prototype.flatMap`. A selective late replacement returned an empty result for that
+    registry, so the real compiler emitted no KV236 diagnostic for a literal
+    `dangerouslySetInnerHTML` XSS sink—and likewise skipped every other validator in one step.
+  - **Acceptance:** validator registry construction/order, invocation, result shape validation,
+    diagnostic accumulation, and returned diagnostics use boot-pinned collection/reflection
+    controls; late/import-order mutation cannot skip, replace, reorder, or erase any validator or
+    blocking result, and a malformed/throwing validator fails the compile closed rather than
+    yielding a partial green result.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1174,7 +1186,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C62, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C63, H20, H27,
 and H31-H32 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
