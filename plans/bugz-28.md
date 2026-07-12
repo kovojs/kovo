@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    66 | C1-C66 |
+| Critical |    67 | C1-C67 |
 | High     |    32 | H1-H32 |
 | Medium   |     9 | M1-M9  |
 
@@ -783,6 +783,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
     late/import-order mutation cannot hide or reclassify a RAWTEXT/output sink, while static literal
     text and genuine reviewed trusted values retain their documented behavior.
 
+- [ ] **C67 - Endpoint authentication verifies different body bytes than the handler executes.**
+      `packages/server/src/endpoint.ts`
+  - `runEndpointAuth()` read the verifier body through live `Request.prototype.arrayBuffer`. In a
+    full public `createRequestHandler` proof, a custom verifier accepted only `signed-safe` while the
+    submitted body was `dangerous`; late and pre-import reader substitutions supplied `signed-safe`
+    only to auth, after which the handler read and executed `dangerous` and returned 200 instead of
+    the control 401.
+  - **Acceptance:** ingress method/URL/headers/body, size limiting, executable verifier input,
+    CSRF/schema parsing, and handler reconstruction consume one framework-owned immutable request
+    snapshot through boot-pinned semantically checked readers; no late/import-order mutation or
+    clone/body-use ordering can make auth approve different bytes from those dispatched, across
+    custom and HMAC verifier paths.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1225,7 +1238,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C66, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C67, H20, H27,
 and H31-H32 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
