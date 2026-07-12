@@ -14,6 +14,7 @@ import {
 } from './request-carrier.js';
 import {
   requestStateHeaderGet,
+  requestStateIgnorePromiseRejection,
   requestStateIsSafeInteger,
   requestStateNow,
   requestStateOptionalRateLimitKey,
@@ -26,13 +27,23 @@ import {
 import {
   createWitnessMap,
   createWitnessWeakMap,
+  createWitnessWeakSet,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessIsArray,
   witnessMapDelete,
   witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
   witnessMapSize,
+  witnessReflectApply,
+  witnessReflectGet,
   witnessWeakMapGet,
   witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 export type LoadShedSurface = AppSystemResponseSurface;
@@ -100,13 +111,52 @@ const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   windowMs: DEFAULT_WINDOW_MS,
 });
 const requestPeerAddressProperty = '__kovoPeerAddress';
+const NativeHeaders = globalThis.Headers;
+const NativeRequest = globalThis.Request;
+const NativeUint8Array = globalThis.Uint8Array;
 const readNativeRequestBody = requestIntrinsicGetter<ReadableStream<Uint8Array> | null>('body');
 const readNativeRequestHeaders = requestIntrinsicGetter<Headers>('headers');
 const readNativeRequestMethod = requestIntrinsicGetter<string>('method');
 const readNativeRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
 const readNativeRequestUrl = requestIntrinsicGetter<string>('url');
 
+const streamControlRequest = createNativeRequest('https://kovo.invalid/body-control', {
+  body: 'control',
+  method: 'POST',
+});
+const streamControl = readNativeRequestBody(streamControlRequest);
+if (streamControl === null)
+  throw new TypeError('The Web Request implementation lacks body streams.');
+const nativeStreamGetReader = inheritedFunctionDataProperty(streamControl, 'getReader');
+const streamReaderControl = witnessReflectApply<ReadableStreamDefaultReader<Uint8Array>>(
+  nativeStreamGetReader,
+  streamControl,
+  [],
+);
+const nativeStreamReaderRead = inheritedFunctionDataProperty(streamReaderControl, 'read');
+const nativeStreamReaderCancel = inheritedFunctionDataProperty(streamReaderControl, 'cancel');
+const nativeStreamReaderReleaseLock = inheritedFunctionDataProperty(
+  streamReaderControl,
+  'releaseLock',
+);
+witnessReflectApply(nativeStreamReaderReleaseLock, streamReaderControl, []);
+
+const headersControl = new NativeHeaders({ 'X-Kovo-Control': 'accepted' });
+const nativeHeadersEntries = inheritedFunctionDataProperty(headersControl, 'entries');
+const headersIteratorControl = witnessReflectApply<object>(
+  nativeHeadersEntries,
+  headersControl,
+  [],
+);
+const nativeHeadersIteratorNext = inheritedFunctionDataProperty(headersIteratorControl, 'next');
+const nativeTypedArrayByteLength = inheritedAccessorGetter(
+  NativeUint8Array.prototype,
+  'byteLength',
+);
+const nativeTypedArrayBuffer = inheritedAccessorGetter(NativeUint8Array.prototype, 'buffer');
+
 const rateStates = createWitnessWeakMap<KovoApp, AppRateState>();
+const verifiedBodyRequests = createWitnessWeakSet<Request>();
 
 export function normalizeAppRequestLimits(
   options: AppRequestLimitOptions | false | undefined,
@@ -360,6 +410,7 @@ export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: nu
 
 /** @internal */
 export function requestWithBodyLimit(request: Request, maxBodyBytes: number | false): Request {
+  if (witnessWeakSetHas(verifiedBodyRequests, request)) return request;
   if (maxBodyBytes === false || request.body === null) return request;
   const limited = new Proxy(request, {
     get(target, property) {
@@ -429,11 +480,51 @@ export async function requestWithVerifiedBodyLimit(
     signal: readNativeRequestSignal(request),
   });
   copyRequestPeerAddress(request, verified);
+  witnessWeakSetAdd(verifiedBodyRequests, verified);
   return verified;
 }
 
+/** Framework-owned verifier input reconstructed from one exact Request snapshot (SPEC §6.6). */
+export interface RequestVerifierInput {
+  headers: Headers;
+  payload: Uint8Array;
+}
+
+/**
+ * Clone and read verifier bytes through the same boot-pinned stream controls as the body limiter.
+ * Header lookup is an immutable own method over an exact entry snapshot, so a verifier cannot
+ * authenticate a stateful `Headers.prototype.get` result that the dispatched request never held.
+ * @internal
+ */
+export async function requestVerifierInput(request: Request): Promise<RequestVerifierInput> {
+  const source = cloneNativeRequest(request);
+  const buffer = await readLimitedArrayBuffer(source, 9_007_199_254_740_991);
+  const payload = new NativeUint8Array(buffer);
+  const headers = new NativeHeaders(readNativeRequestHeaders(request));
+  const entries = snapshotHeaderEntries(headers);
+  witnessDefineProperty(headers, 'get', {
+    enumerable: true,
+    value(name: string): string | null {
+      if (typeof name !== 'string') return null;
+      const expected = asciiLower(name);
+      for (let index = 0; index < entries.length; index += 1) {
+        const descriptor = witnessGetOwnPropertyDescriptor(entries, index);
+        if (descriptor === undefined || !('value' in descriptor)) return null;
+        const entry = descriptor.value;
+        if (entry[0] === expected) return entry[1];
+      }
+      return null;
+    },
+    writable: false,
+  });
+  return witnessFreeze({
+    headers: witnessFreeze(headers),
+    payload,
+  });
+}
+
 function copyRequestPeerAddress(source: Request, target: Request): void {
-  const descriptor = Object.getOwnPropertyDescriptor(source, requestPeerAddressProperty);
+  const descriptor = witnessGetOwnPropertyDescriptor(source, requestPeerAddressProperty);
   if (
     descriptor === undefined ||
     !('value' in descriptor) ||
@@ -443,7 +534,7 @@ function copyRequestPeerAddress(source: Request, target: Request): void {
   ) {
     return;
   }
-  Object.defineProperty(target, requestPeerAddressProperty, descriptor);
+  witnessDefineProperty(target, requestPeerAddressProperty, descriptor);
 }
 
 async function readLimitedArrayBuffer(
@@ -451,39 +542,178 @@ async function readLimitedArrayBuffer(
   maxBodyBytes: number,
 ): Promise<ArrayBuffer> {
   const body = readNativeRequestBody(request);
-  if (body === null) return new ArrayBuffer(0);
-  const reader = body.getReader();
+  if (body === null) {
+    const empty = new NativeUint8Array(0);
+    return witnessReflectApply(nativeTypedArrayBuffer, empty, []);
+  }
+  const reader = witnessReflectApply<ReadableStreamDefaultReader<Uint8Array>>(
+    nativeStreamGetReader,
+    body,
+    [],
+  );
   const chunks: Uint8Array[] = [];
   let total = 0;
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value === undefined) continue;
-    total += value.byteLength;
-    if (total > maxBodyBytes) {
-      void reader.cancel().catch(() => undefined);
-      throw new RequestBodyLimitExceededError(maxBodyBytes);
+  try {
+    for (let count = 0; count <= 1_000_000; count += 1) {
+      const result = await witnessReflectApply<Promise<ReadableStreamReadResult<Uint8Array>>>(
+        nativeStreamReaderRead,
+        reader,
+        [],
+      );
+      const done = ownDataProperty(result, 'done');
+      if (done === true) break;
+      const value = ownDataProperty(result, 'value');
+      if (done !== false || typeof value !== 'object' || value === null) {
+        throw new TypeError('Kovo received an invalid request body stream chunk.');
+      }
+      let length: number;
+      try {
+        length = typedArrayByteLength(value as Uint8Array);
+      } catch {
+        throw new TypeError('Kovo received an invalid request body stream chunk.');
+      }
+      if (length > maxBodyBytes - total) {
+        const cancellation = witnessReflectApply<Promise<unknown>>(
+          nativeStreamReaderCancel,
+          reader,
+          [],
+        );
+        requestStateIgnorePromiseRejection(cancellation);
+        throw new RequestBodyLimitExceededError(maxBodyBytes);
+      }
+      total += length;
+      appendLoadShedValue(chunks, value as Uint8Array);
+      if (count === 1_000_000) {
+        throw new TypeError('Kovo refused a request body with too many stream chunks.');
+      }
     }
-    chunks.push(value);
+  } finally {
+    witnessReflectApply(nativeStreamReaderReleaseLock, reader, []);
   }
 
-  const bytes = new Uint8Array(total);
+  const bytes = new NativeUint8Array(total);
   let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+    const chunkDescriptor = witnessGetOwnPropertyDescriptor(chunks, chunkIndex);
+    if (chunkDescriptor === undefined || !('value' in chunkDescriptor)) {
+      throw new TypeError('Kovo request body chunk snapshot is incomplete.');
+    }
+    const chunk = chunkDescriptor.value;
+    const length = typedArrayByteLength(chunk);
+    for (let index = 0; index < length; index += 1) {
+      bytes[offset] = chunk[index]!;
+      offset += 1;
+    }
   }
-  return bytes.buffer;
+  return witnessReflectApply(nativeTypedArrayBuffer, bytes, []);
 }
 
 function requestIntrinsicGetter<Value>(property: string): (request: Request) => Value {
-  const descriptor = Object.getOwnPropertyDescriptor(Request.prototype, property);
-  const getter = descriptor ? (Reflect.get(descriptor, 'get') as unknown) : undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(NativeRequest.prototype, property);
+  const getter = descriptor ? witnessReflectGet(descriptor, 'get') : undefined;
   if (typeof getter !== 'function') {
     throw new TypeError(`The Web Request implementation lacks a ${property} getter.`);
   }
-  return (request) => Reflect.apply(getter, request, []) as Value;
+  return (request) => witnessReflectApply(getter, request, []) as Value;
+}
+
+function inheritedFunctionDataProperty(value: object, property: PropertyKey): Function {
+  let current: object | null = value;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError(`The Web platform ${String(property)} method is unavailable.`);
+      }
+      return descriptor.value;
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  throw new TypeError(`The Web platform ${String(property)} method is unavailable.`);
+}
+
+function inheritedAccessorGetter(value: object, property: PropertyKey): Function {
+  let current: object | null = value;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(current, property);
+    if (descriptor !== undefined) {
+      const getter = witnessReflectGet(descriptor, 'get');
+      if (typeof getter !== 'function') {
+        throw new TypeError(`The Web platform ${String(property)} getter is unavailable.`);
+      }
+      return getter;
+    }
+    current = witnessGetPrototypeOf(current);
+  }
+  throw new TypeError(`The Web platform ${String(property)} getter is unavailable.`);
+}
+
+function ownDataProperty(value: unknown, property: PropertyKey): unknown {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError('Kovo expected an object data carrier.');
+  }
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`Kovo expected own data property ${String(property)}.`);
+  }
+  return descriptor.value;
+}
+
+function typedArrayByteLength(value: Uint8Array): number {
+  const length = witnessReflectApply<unknown>(nativeTypedArrayByteLength, value, []);
+  if (typeof length !== 'number' || length < 0 || length % 1 !== 0) {
+    throw new TypeError('Kovo received an invalid typed-array byte length.');
+  }
+  return length;
+}
+
+function appendLoadShedValue<Value>(values: Value[], value: Value): void {
+  witnessDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function snapshotHeaderEntries(headers: Headers): readonly (readonly [string, string])[] {
+  const entries: (readonly [string, string])[] = [];
+  const iterator = witnessReflectApply<object>(nativeHeadersEntries, headers, []);
+  for (let count = 0; count <= 100_000; count += 1) {
+    const result = witnessReflectApply<unknown>(nativeHeadersIteratorNext, iterator, []);
+    const done = ownDataProperty(result, 'done');
+    if (done === true) return witnessFreeze(entries);
+    if (done !== false) throw new TypeError('Kovo received an invalid Headers iterator result.');
+    const value = ownDataProperty(result, 'value');
+    if (!witnessIsArray(value) || value.length !== 2) {
+      throw new TypeError('Kovo received an invalid Headers entry.');
+    }
+    const name = ownDataProperty(value, 0);
+    const headerValue = ownDataProperty(value, 1);
+    if (typeof name !== 'string' || typeof headerValue !== 'string') {
+      throw new TypeError('Kovo received a non-string Headers entry.');
+    }
+    const entry = witnessFreeze([asciiLower(name), headerValue] as const);
+    appendLoadShedValue(entries, entry);
+    if (count === 100_000) throw new TypeError('Kovo refused an unbounded Headers carrier.');
+  }
+  throw new TypeError('Kovo refused an unbounded Headers carrier.');
+}
+
+function asciiLower(value: string): string {
+  let result = '';
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+    const character = value[valueIndex]!;
+    let mapped = character;
+    for (let index = 0; index < upper.length; index += 1) {
+      if (upper[index] === character) mapped = lower[index]!;
+    }
+    result += mapped;
+  }
+  return result;
 }
 
 function countedBody(

@@ -5,6 +5,7 @@ import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './aut
 import { runAccessDecisionGuards, type DbProvider, type ResolvedGuardFailure } from './guards.js';
 import { managedDb, type Reader, type Writer } from './managed-db.js';
 import { markEndpointSelfVerifying, markEndpointVerifierExecuted } from './endpoint-auth-proof.js';
+import { requestVerifierInput } from './app-load-shed.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
@@ -637,13 +638,10 @@ export async function runEndpointAuth(
 
   let verified = false;
   try {
-    const authRequest = endpointRequestWithoutSession(request.clone(), {
+    const authRequest = endpointRequestWithoutSession(request, {
       stripAuthorization: definition.csrf?.exempt === true,
     });
-    verified = await auth.verify({
-      headers: authRequest.headers,
-      payload: new Uint8Array(await authRequest.arrayBuffer()),
-    });
+    verified = await auth.verify(await requestVerifierInput(authRequest));
   } catch {
     verified = false;
   }

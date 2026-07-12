@@ -4,6 +4,7 @@ import type {
   WebhookVerifier,
 } from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
+import { requestVerifierInput } from './app-load-shed.js';
 import {
   actAsNonRequestPrincipal,
   declareSystemPrincipal,
@@ -893,7 +894,8 @@ export async function runWebhook<
   options: RunWebhookOptions = {},
 ): Promise<WebhookRunResult<WebhookInputFor<InputSchema>, Value>> {
   const endpointRequest = endpointRequestWithoutSession(request, { stripAuthorization: true });
-  const rawBody = new Uint8Array(await endpointRequest.arrayBuffer());
+  const verifierInput = await requestVerifierInput(endpointRequest);
+  const rawBody = verifierInput.payload;
   // L10-1 (SPEC §9.1:860-862): verification is fail-closed. An app-authored
   // `verify()`/`payload`/`tolerance.timestamp` callback (core/src/verifier.ts) may
   // THROW on a malformed signature header instead of returning false; that thrown
@@ -902,7 +904,11 @@ export async function runWebhook<
   // `false` result, never surfacing which check failed.
   let verification: boolean;
   try {
-    verification = await verifyWebhook(declaration.webhookDefinition, endpointRequest, rawBody);
+    verification = await verifyWebhook(
+      declaration.webhookDefinition,
+      verifierInput.headers,
+      rawBody,
+    );
   } catch {
     verification = false;
   }
@@ -1219,7 +1225,7 @@ function webhookVerifierScheme(verifier: WebhookVerifier): string {
 
 async function verifyWebhook(
   definition: WebhookVerificationFields,
-  request: EndpointRequest,
+  headers: Headers,
   rawBody: Uint8Array,
 ): Promise<boolean> {
   if (definition.verify === 'none') return true;
@@ -1228,7 +1234,7 @@ async function verifyWebhook(
   }
 
   return definition.verify.verify({
-    headers: request.headers,
+    headers,
     payload: rawBody,
   });
 }
