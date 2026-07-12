@@ -36,6 +36,7 @@ const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeSetDelete = NativeSet.prototype.delete;
 const nativeSetForEach = NativeSet.prototype.forEach;
+const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -122,6 +123,10 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeSetHas, set, [key]) !== false) return false;
 
     const record = { visible: value } as { hidden?: object; visible: object };
+    const nullRecord = apply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
+      null,
+    ]);
+    if (apply(nativeObjectGetPrototypeOf, NativeObject, [nullRecord]) !== null) return false;
     apply(nativeObjectDefineProperty, NativeObject, [record, 'hidden', { value }]);
     const descriptor = apply<PropertyDescriptor | undefined>(
       nativeObjectGetOwnPropertyDescriptor,
@@ -362,6 +367,11 @@ export function witnessGetOwnPropertyDescriptor(
 ): PropertyDescriptor | undefined {
   assertSecurityWitnessIntrinsics();
   return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+}
+
+export function witnessCreateNullRecord<Value = unknown>(): Record<PropertyKey, Value> {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeObjectCreate, NativeObject, [null]);
 }
 
 export function witnessGetOwnPropertyDescriptors(value: object): PropertyDescriptorMap {

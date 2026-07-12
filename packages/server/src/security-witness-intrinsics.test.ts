@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 import {
+  witnessCreateNullRecord,
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessFreeze,
@@ -21,6 +22,7 @@ const moduleUrl = new URL('./security-witness-intrinsics.ts', import.meta.url).h
 describe('server security witness intrinsics', () => {
   it('keeps private receipt semantics after evaluated app code poisons ambient prototypes', () => {
     const originalWeakMapGet = WeakMap.prototype.get;
+    const originalObjectCreate = Object.create;
     const originalIsArray = Array.isArray;
     const originalReplaceAll = String.prototype.replaceAll;
     const originalStartsWith = String.prototype.startsWith;
@@ -32,6 +34,7 @@ describe('server security witness intrinsics', () => {
     const originalFreeze = Object.freeze;
     try {
       WeakMap.prototype.get = () => ({ forged: true });
+      Object.create = (() => ({})) as typeof Object.create;
       Array.isArray = () => false;
       String.prototype.replaceAll = () => '<script>poisoned</script>';
       String.prototype.startsWith = () => true;
@@ -50,6 +53,7 @@ describe('server security witness intrinsics', () => {
       const other = {};
       const value = {};
       const map = createWitnessWeakMap<object, object>();
+      expect(Object.getPrototypeOf(witnessCreateNullRecord())).toBeNull();
       witnessWeakMapSet(map, key, value);
       expect(witnessWeakMapGet(map, key)).toBe(value);
       expect(witnessWeakMapGet(map, other)).toBeUndefined();
@@ -67,6 +71,7 @@ describe('server security witness intrinsics', () => {
       expect(witnessRegExpTest(/^safe$/, 'unsafe')).toBe(false);
     } finally {
       WeakMap.prototype.get = originalWeakMapGet;
+      Object.create = originalObjectCreate;
       Array.isArray = originalIsArray;
       String.prototype.replaceAll = originalReplaceAll;
       String.prototype.startsWith = originalStartsWith;
