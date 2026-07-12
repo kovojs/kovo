@@ -31,6 +31,7 @@ import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
   type ResponseHeaders,
+  type ServerResponseBase,
 } from './response.js';
 import {
   mutationWireRequestFromHeaders,
@@ -955,9 +956,9 @@ export async function renderNoJsMutationResponse<
 }
 
 /** @internal Final browser-state choke for csrf-exempt and pre-verification mutation responses. */
-export function mutationResponseWithoutBrowserState<Response extends { headers: ResponseHeaders }>(
-  response: Response,
-): Response {
+export function mutationResponseWithoutBrowserState<
+  Response extends ServerResponseBase<unknown, ResponseHeaders>,
+>(response: Response): Response {
   let removed = false;
   const headers: ResponseHeaders = {};
   for (const [name, value] of Object.entries(response.headers)) {
