@@ -53,6 +53,25 @@ describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
     expect(isFragmentHtml(browserFragment)).toBe(false);
     expect(isRenderedFragmentHtml(serverFragment)).toBe(false);
   });
+
+  it('pins and freezes fragment bytes before privileged sinks consume them', () => {
+    const serverFragment = createFragmentHtml('<section>server-safe</section>');
+    const browserFragment = createRenderedFragmentHtml('<section>browser-safe</section>');
+
+    expect(Object.isFrozen(serverFragment)).toBe(true);
+    expect(Object.isFrozen(browserFragment)).toBe(true);
+    expect(Reflect.set(serverFragment as object, 'html', '<script>server-xss</script>')).toBe(
+      false,
+    );
+    expect(Reflect.set(browserFragment as object, 'html', '<script>browser-xss</script>')).toBe(
+      false,
+    );
+    expect(() =>
+      Object.defineProperty(serverFragment, 'html', { value: '<script>xss</script>' }),
+    ).toThrow();
+    expect(fragmentHtmlContent(serverFragment)).toBe('<section>server-safe</section>');
+    expect(renderedFragmentHtmlContent(browserFragment)).toBe('<section>browser-safe</section>');
+  });
 });
 
 describe('shared runtime sink policy', () => {

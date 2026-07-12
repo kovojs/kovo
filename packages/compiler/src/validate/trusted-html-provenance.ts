@@ -72,6 +72,7 @@ export const validateTrustedHtmlProvenance = securityClassifier(
             ...enclosingRenderProvenanceBindings(node, bindingsByRender),
             depth: 0,
             trustedTypeNames: trustedTypeLocalNames(sourceFile),
+            usePosition: value.getStart(sourceFile),
             visited: new Set<ts.Node>(),
           });
           if (provenance === null) {
@@ -125,6 +126,8 @@ interface ClassifyContext {
   readonly requestSlotRoots: ReadonlySet<string>;
   readonly depth: number;
   readonly trustedTypeNames: TrustedTypeLocalNames;
+  /** Original sink-value position; alias/initializer recursion must still see writes before use. */
+  readonly usePosition?: number;
   readonly visited: Set<ts.Node>;
 }
 
@@ -209,6 +212,7 @@ function validateJsxAttributeTrustedProvenance(
     ...bindings,
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
+    usePosition: value.getStart(sourceFile),
     visited: new Set<ts.Node>(),
   });
   if (verdict.kind === 'proven-safe') return [];
@@ -665,6 +669,8 @@ function classifyMemberRoot(
     // symbol/AST shape; a random in-scope value named `request` is not proof of request provenance.
     const localRoot = localBinding(cursor, cursor.text);
     if (localRoot !== undefined && !bindingIsRenderParameter(localRoot.binding, ctx.render)) {
+      const mutation = localCarrierMutationProvenance(cursor, localRoot.binding, firstMember, ctx);
+      if (mutation !== undefined) return mutation;
       if (localRoot.initializer !== undefined && ctx.depth < MAX_ALIAS_DEPTH) {
         return classifyExpression(localRoot.initializer, { ...ctx, depth: ctx.depth + 1 });
       }
@@ -692,6 +698,8 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
   // A same-scope `const name = <expr>` shadows any param/query binding: follow the alias/derive.
   const local = localBinding(id, id.text);
   if (local !== undefined && !bindingIsRenderParameter(local.binding, ctx.render)) {
+    const mutation = localCarrierMutationProvenance(id, local.binding, undefined, ctx);
+    if (mutation !== undefined) return mutation;
     if (
       local.initializer !== undefined &&
       ctx.depth < MAX_ALIAS_DEPTH &&
@@ -707,6 +715,387 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
   if (ctx.queryDataRoots.has(id.text)) return 'query';
   if (ctx.requestBindings.has(id.text)) return 'request';
   return 'unprovable';
+}
+
+interface CarrierMemberTarget {
+  readonly computedKey?: ts.Expression;
+  readonly key: string | null;
+}
+
+/**
+ * H3 / SPEC §6.6 rule 5: following only a carrier's initializer is unsound once authored code can
+ * write through that identity before the trust sink. Scan the enclosing execution scope up to the
+ * original sink position, follow simple aliases, classify recognized writes, and fail closed when
+ * the carrier escapes to code whose mutation behavior is not locally provable.
+ */
+function localCarrierMutationProvenance(
+  root: ts.Identifier,
+  binding: ts.Node,
+  targetMember: string | undefined,
+  ctx: ClassifyContext,
+): Provenance | undefined {
+  const sourceFile = root.getSourceFile();
+  const start = binding.getEnd();
+  const end = ctx.usePosition ?? root.getStart(sourceFile);
+  if (end <= start) return undefined;
+
+  const scope = carrierMutationScope(binding, ctx);
+  const aliases = new Set([identifierName(root)]);
+
+  // Discover direct identity aliases to a fixed point before classifying writes. This covers
+  // `const b = a`, `let b = a`, and later `b = a` without confusing destructured property values
+  // with the carrier object itself.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    visitCarrierRange(scope, sourceFile, start, end, (node) => {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        if (expressionIsCarrierAlias(node.initializer, aliases) && !aliases.has(node.name.text)) {
+          aliases.add(node.name.text);
+          changed = true;
+        }
+        return;
+      }
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(unwrap(node.left)) &&
+        expressionIsCarrierAlias(node.right, aliases)
+      ) {
+        const name = identifierName(unwrap(node.left) as ts.Identifier);
+        if (!aliases.has(name)) {
+          aliases.add(name);
+          changed = true;
+        }
+      }
+    });
+  }
+
+  let found: Provenance | null = null;
+  const record = (provenance: Provenance | null): void => {
+    if (provenance !== null) found = firstProvenance([found, provenance]);
+  };
+
+  visitCarrierRange(scope, sourceFile, start, end, (node) => {
+    if (ts.isBinaryExpression(node) && isAssignmentOperatorKind(node.operatorToken.kind)) {
+      const left = unwrap(node.left);
+      if (ts.isIdentifier(left) && aliases.has(identifierName(left))) {
+        record(classifyExpression(node.right, mutationClassifyContext(ctx)) ?? 'unprovable');
+        return;
+      }
+      if (ts.isPropertyAccessExpression(left) || ts.isElementAccessExpression(left)) {
+        const target = carrierMemberTarget(left, aliases);
+        if (target && carrierMutationTargetsMember(target, targetMember)) {
+          const keyProvenance = target.computedKey
+            ? classifyExpression(target.computedKey, mutationClassifyContext(ctx))
+            : null;
+          const valueProvenance = classifyExpression(node.right, mutationClassifyContext(ctx));
+          record(
+            target.key === null
+              ? (firstProvenance([keyProvenance, valueProvenance, 'unprovable']) ?? 'unprovable')
+              : valueProvenance,
+          );
+        }
+      }
+      return;
+    }
+
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (ts.isPropertyAccessExpression(unwrap(node.operand)) ||
+        ts.isElementAccessExpression(unwrap(node.operand)))
+    ) {
+      const target = carrierMemberTarget(
+        unwrap(node.operand) as ts.PropertyAccessExpression | ts.ElementAccessExpression,
+        aliases,
+      );
+      if (target && carrierMutationTargetsMember(target, targetMember)) record('unprovable');
+      return;
+    }
+
+    if (ts.isDeleteExpression(node)) {
+      const expression = unwrap(node.expression);
+      if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
+        const target = carrierMemberTarget(expression, aliases);
+        if (target && carrierMutationTargetsMember(target, targetMember)) record('unprovable');
+      }
+      return;
+    }
+
+    if (ts.isCallExpression(node)) {
+      if (isStaticMethodCall(node, 'Object', 'assign')) {
+        if (node.arguments[0] && expressionIsCarrierAlias(node.arguments[0], aliases)) {
+          for (const source of node.arguments.slice(1)) {
+            record(objectAssignmentProvenance(source, targetMember, ctx));
+          }
+        }
+        return;
+      }
+      if (isStaticMethodCall(node, 'Reflect', 'set')) {
+        if (node.arguments[0] && expressionIsCarrierAlias(node.arguments[0], aliases)) {
+          const key = node.arguments[1];
+          const value = node.arguments[2];
+          const staticKey = key === undefined ? null : staticStringValue(key);
+          if (targetMember === undefined || staticKey === null || staticKey === targetMember) {
+            const keyProvenance = key
+              ? classifyExpression(key, mutationClassifyContext(ctx))
+              : 'unprovable';
+            const valueProvenance = value
+              ? classifyExpression(value, mutationClassifyContext(ctx))
+              : 'unprovable';
+            record(
+              staticKey === null
+                ? (firstProvenance([keyProvenance, valueProvenance, 'unprovable']) ?? 'unprovable')
+                : valueProvenance,
+            );
+          }
+        }
+        return;
+      }
+      if (isStaticMethodCall(node, 'Object', 'defineProperty')) {
+        if (node.arguments[0] && expressionIsCarrierAlias(node.arguments[0], aliases)) {
+          const key = node.arguments[1];
+          const descriptor = node.arguments[2];
+          const staticKey = key === undefined ? null : staticStringValue(key);
+          if (targetMember === undefined || staticKey === null || staticKey === targetMember) {
+            const keyProvenance = key
+              ? classifyExpression(key, mutationClassifyContext(ctx))
+              : 'unprovable';
+            const descriptorProvenance = descriptor
+              ? propertyDescriptorProvenance(descriptor, ctx)
+              : 'unprovable';
+            record(
+              staticKey === null
+                ? (firstProvenance([keyProvenance, descriptorProvenance, 'unprovable']) ??
+                    'unprovable')
+                : descriptorProvenance,
+            );
+          }
+        }
+        return;
+      }
+      if (isStaticMethodCall(node, 'Object', 'defineProperties')) {
+        if (node.arguments[0] && expressionIsCarrierAlias(node.arguments[0], aliases)) {
+          const descriptors = node.arguments[1];
+          record(
+            descriptors
+              ? objectDescriptorMapProvenance(descriptors, targetMember, ctx)
+              : 'unprovable',
+          );
+        }
+        return;
+      }
+
+      const calleeTarget =
+        ts.isPropertyAccessExpression(unwrap(node.expression)) ||
+        ts.isElementAccessExpression(unwrap(node.expression))
+          ? carrierMemberTarget(
+              unwrap(node.expression) as ts.PropertyAccessExpression | ts.ElementAccessExpression,
+              aliases,
+            )
+          : undefined;
+      const passesCarrier = node.arguments.some((argument) =>
+        expressionIsCarrierAlias(
+          ts.isSpreadElement(argument) ? argument.expression : argument,
+          aliases,
+        ),
+      );
+      if (calleeTarget || passesCarrier) record('unprovable');
+      return;
+    }
+
+    if (ts.isReturnStatement(node) && node.expression) {
+      if (expressionIsCarrierAlias(node.expression, aliases)) record('unprovable');
+    }
+  });
+
+  return found ?? undefined;
+}
+
+function mutationClassifyContext(ctx: ClassifyContext): ClassifyContext {
+  return {
+    ...ctx,
+    depth: ctx.depth + 1,
+    visited: new Set(ctx.visited),
+  };
+}
+
+function carrierMutationScope(binding: ts.Node, ctx: ClassifyContext): ts.Node {
+  if (
+    ctx.render !== undefined &&
+    (ctx.usePosition ?? -1) >= ctx.render.getStart() &&
+    (ctx.usePosition ?? Number.POSITIVE_INFINITY) < ctx.render.end
+  ) {
+    return ctx.render;
+  }
+  let cursor: ts.Node | undefined = binding.parent;
+  while (cursor) {
+    if (isFunctionLikeWithParameters(cursor) || ts.isSourceFile(cursor)) return cursor;
+    cursor = cursor.parent;
+  }
+  return binding.getSourceFile();
+}
+
+function visitCarrierRange(
+  scope: ts.Node,
+  sourceFile: ts.SourceFile,
+  start: number,
+  end: number,
+  visitor: (node: ts.Node) => void,
+): void {
+  const visit = (node: ts.Node): void => {
+    if (node !== scope && isFunctionLikeWithParameters(node)) return;
+    if (node.end <= start || node.getStart(sourceFile) >= end) return;
+    visitor(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+}
+
+function expressionIsCarrierAlias(
+  expression: ts.Expression,
+  aliases: ReadonlySet<string>,
+): boolean {
+  const value = unwrap(expression);
+  return ts.isIdentifier(value) && aliases.has(identifierName(value));
+}
+
+function carrierMemberTarget(
+  expression: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  aliases: ReadonlySet<string>,
+): CarrierMemberTarget | undefined {
+  let cursor: ts.Expression = expression;
+  let firstMember: string | null = null;
+  let computedKey: ts.Expression | undefined;
+  while (ts.isPropertyAccessExpression(cursor) || ts.isElementAccessExpression(cursor)) {
+    if (ts.isPropertyAccessExpression(cursor)) {
+      firstMember = cursor.name.text;
+      computedKey = undefined;
+      cursor = unwrap(cursor.expression);
+    } else {
+      const key = elementAccessName(cursor.argumentExpression);
+      firstMember = key;
+      computedKey = key === null ? cursor.argumentExpression : undefined;
+      cursor = unwrap(cursor.expression);
+    }
+  }
+  if (!ts.isIdentifier(cursor) || !aliases.has(identifierName(cursor))) return undefined;
+  return { ...(computedKey === undefined ? {} : { computedKey }), key: firstMember };
+}
+
+function carrierMutationTargetsMember(
+  target: CarrierMemberTarget,
+  member: string | undefined,
+): boolean {
+  return member === undefined || target.key === null || target.key === member;
+}
+
+function isAssignmentOperatorKind(kind: ts.SyntaxKind): boolean {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+
+function isStaticMethodCall(call: ts.CallExpression, receiver: string, method: string): boolean {
+  const callee = unwrap(call.expression);
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(unwrap(callee.expression)) &&
+    identifierName(unwrap(callee.expression) as ts.Identifier) === receiver &&
+    callee.name.text === method
+  );
+}
+
+function objectAssignmentProvenance(
+  expression: ts.Expression,
+  targetMember: string | undefined,
+  ctx: ClassifyContext,
+): Provenance | null {
+  const value = unwrap(expression);
+  if (targetMember === undefined || !ts.isObjectLiteralExpression(value)) {
+    return (
+      classifyExpression(expression, mutationClassifyContext(ctx)) ??
+      (ts.isObjectLiteralExpression(value) ? null : 'unprovable')
+    );
+  }
+
+  const provenances: Array<Provenance | null> = [];
+  for (const property of value.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      provenances.push(
+        classifyExpression(property.expression, mutationClassifyContext(ctx)) ?? 'unprovable',
+      );
+      continue;
+    }
+    const name = propertyNameText(property.name);
+    if (name === null) {
+      provenances.push('unprovable');
+      continue;
+    }
+    if (name !== targetMember) continue;
+    if (ts.isPropertyAssignment(property)) {
+      provenances.push(classifyExpression(property.initializer, mutationClassifyContext(ctx)));
+    } else if (ts.isShorthandPropertyAssignment(property)) {
+      provenances.push(classifyIdentifier(property.name, mutationClassifyContext(ctx)));
+    } else {
+      provenances.push('unprovable');
+    }
+  }
+  return firstProvenance(provenances);
+}
+
+function propertyDescriptorProvenance(
+  expression: ts.Expression,
+  ctx: ClassifyContext,
+): Provenance | null {
+  const value = unwrap(expression);
+  if (!ts.isObjectLiteralExpression(value)) return 'unprovable';
+  const provenances: Array<Provenance | null> = [];
+  for (const property of value.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      provenances.push('unprovable');
+      continue;
+    }
+    const name = propertyNameText(property.name);
+    if (name === 'value') {
+      if (ts.isPropertyAssignment(property)) {
+        provenances.push(classifyExpression(property.initializer, mutationClassifyContext(ctx)));
+      } else if (ts.isShorthandPropertyAssignment(property)) {
+        provenances.push(classifyIdentifier(property.name, mutationClassifyContext(ctx)));
+      } else {
+        provenances.push('unprovable');
+      }
+    } else if (name === 'get' || name === 'set' || name === null) {
+      provenances.push('unprovable');
+    }
+  }
+  return firstProvenance(provenances);
+}
+
+function objectDescriptorMapProvenance(
+  expression: ts.Expression,
+  targetMember: string | undefined,
+  ctx: ClassifyContext,
+): Provenance | null {
+  const value = unwrap(expression);
+  if (targetMember === undefined || !ts.isObjectLiteralExpression(value)) return 'unprovable';
+  const provenances: Array<Provenance | null> = [];
+  for (const property of value.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      provenances.push('unprovable');
+      continue;
+    }
+    const name = propertyNameText(property.name);
+    if (name === null) {
+      provenances.push('unprovable');
+      continue;
+    }
+    if (name !== targetMember) continue;
+    if (ts.isPropertyAssignment(property)) {
+      provenances.push(propertyDescriptorProvenance(property.initializer, ctx));
+    } else {
+      provenances.push('unprovable');
+    }
+  }
+  return firstProvenance(provenances);
 }
 
 /**
@@ -986,6 +1375,7 @@ function expressionHasTrustedUrlType(
     ...EMPTY_RENDER_BINDINGS,
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
+    usePosition: expression.getStart(sourceFile),
     visited: new Set<ts.Node>(),
   };
   return expressionHasTrustedType(expression, sink, ctx);
@@ -1003,6 +1393,7 @@ function bindingHasTrustedUrlType(sourceFile: ts.SourceFile, binding: ts.Node): 
     ...EMPTY_RENDER_BINDINGS,
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
+    usePosition: binding.getStart(sourceFile),
     visited: new Set<ts.Node>(),
   };
   return bindingHasTrustedType(binding, sink, ctx);

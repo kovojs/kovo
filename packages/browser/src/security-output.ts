@@ -71,6 +71,12 @@ export interface TrustedHtml {
 // recognized by raw HTML / URL sinks.
 const trustedHtmlValues = new WeakSet<object>();
 const trustedUrlValues = new WeakSet<object>();
+// SPEC §6.6 rule 5: the public carrier is only an ergonomic view. Raw sinks consume the exact
+// bytes snapshotted when Kovo minted (or first accepted) the capability, never a later read from a
+// mutable `.value` field or foreign TrustedHTML wrapper.
+const trustedHtmlSnapshots = new WeakMap<object, string>();
+const trustedUrlSnapshots = new WeakMap<object, string>();
+const browserTrustedHtmlSnapshots = new WeakMap<object, string>();
 
 /**
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
@@ -79,17 +85,19 @@ export function trustedHtml(
   value: string | BrowserTrustedHTML,
   metadata?: TrustedOutputMetadataInput,
 ): TrustedHtml {
+  const snapshot = trustedHtmlValueContent(value);
   const trusted = {
     ...trustedOutputMetadata(metadata),
-    value,
+    value: snapshot,
   } as TrustedHtml;
-  const stringify = () => trustedHtmlValueContent(value);
+  const stringify = () => snapshot;
   Object.defineProperties(trusted, {
     [Symbol.toPrimitive]: { value: stringify },
     toString: { value: stringify },
   });
+  trustedHtmlSnapshots.set(trusted, snapshot);
   trustedHtmlValues.add(trusted);
-  return trusted;
+  return Object.freeze(trusted);
 }
 
 /**
@@ -130,7 +138,12 @@ export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): 
  * raw HTML.
  */
 export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
-  return typeof value === 'object' && value !== null && trustedHtmlValues.has(value);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    trustedHtmlValues.has(value) &&
+    trustedHtmlSnapshots.has(value)
+  );
 }
 
 /**
@@ -154,9 +167,11 @@ export interface TrustedUrl {
  * brand is visible in source and `kovo explain`.
  */
 export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
-  const trusted = { ...trustedOutputMetadata(metadata), value } as TrustedUrl;
+  const snapshot = String(value);
+  const trusted = { ...trustedOutputMetadata(metadata), value: snapshot } as TrustedUrl;
+  trustedUrlSnapshots.set(trusted, snapshot);
   trustedUrlValues.add(trusted);
-  return trusted;
+  return Object.freeze(trusted);
 }
 
 /**
@@ -166,7 +181,12 @@ export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput)
  * author-vouched URL.
  */
 export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
-  return typeof value === 'object' && value !== null && trustedUrlValues.has(value);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    trustedUrlValues.has(value) &&
+    trustedUrlSnapshots.has(value)
+  );
 }
 
 /**
@@ -186,8 +206,8 @@ export function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTM
  * Unwraps trusted raw HTML values and safely no-ops untrusted dynamic values.
  */
 export function kovoTrustedHtmlContent(value: unknown): string {
-  if (isKovoTrustedHtml(value)) return trustedHtmlValueContent(value.value);
-  if (isBrowserTrustedHtml(value)) return value.toString();
+  if (isKovoTrustedHtml(value)) return trustedHtmlSnapshots.get(value) ?? '';
+  if (isBrowserTrustedHtml(value)) return snapshotBrowserTrustedHtml(value);
 
   return '';
 }
@@ -207,7 +227,7 @@ export function kovoEscapeHtml(value: unknown): string {
  * Neutralizes unsafe URL schemes for generated URL-bearing attributes.
  */
 export function kovoSafeUrl(value: unknown): string {
-  if (isKovoTrustedUrl(value)) return value.value;
+  if (isKovoTrustedUrl(value)) return trustedUrlSnapshots.get(value) ?? '#';
   const rendered = formatOutputValue(value);
   const decision = decideRuntimeAttributeWrite('href', rendered);
   drainRuntimeSinkSecurityEvent(decision.event);
@@ -288,7 +308,15 @@ function formatOutputValue(value: unknown): string {
 }
 
 function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
-  return typeof value === 'string' ? value : value.toString();
+  return typeof value === 'string' ? value : String(value);
+}
+
+function snapshotBrowserTrustedHtml(value: BrowserTrustedHTML): string {
+  const existing = browserTrustedHtmlSnapshots.get(value);
+  if (existing !== undefined) return existing;
+  const snapshot = String(value);
+  browserTrustedHtmlSnapshots.set(value, snapshot);
+  return snapshot;
 }
 
 function trustedOutputMetadata(

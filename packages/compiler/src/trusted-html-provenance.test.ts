@@ -370,6 +370,108 @@ export const C = component({
     ).toHaveLength(1);
   });
 
+  it('flags query writes into an initially-clean HTML/URL carrier before trust construction', () => {
+    const writeBodies = [
+      `carrier.body = post.body; carrier.href = post.href;`,
+      `carrier['body'] = post.body; carrier['href'] = post.href;`,
+      `const alias = carrier; alias.body = post.body; alias.href = post.href;`,
+      `const { body, href } = post; carrier.body = body; carrier.href = href;`,
+      `Object.assign(carrier, { body: post.body, href: post.href });`,
+      `Reflect.set(carrier, 'body', post.body); Reflect.set(carrier, 'href', post.href);`,
+      `Object.defineProperty(carrier, 'body', { value: post.body }); Object.defineProperty(carrier, 'href', { value: post.href });`,
+      `const body = post.body; const href = post.href; Object.defineProperty(carrier, 'body', { value: body }); Object.defineProperty(carrier, 'href', { value: href });`,
+      `if (post.enabled) { carrier.body = post.body; } else { carrier.href = post.href; }`,
+    ];
+
+    for (const writes of writeBodies) {
+      const messages = kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const carrier = { body: '<b>safe</b>', href: '/safe' };
+    ${writes}
+    return <article>{trustedHtml(carrier.body)}<a href={trustedUrl(carrier.href)}>read</a></article>;
+  },
+});
+`);
+      expect(messages, writes).toHaveLength(2);
+      expect(messages.some((message) => message.includes('query-derived data'))).toBe(true);
+    }
+  });
+
+  it('fails closed for dynamic property writes and escaped mutable carriers', () => {
+    const cases = [
+      `const key = post.field; carrier[key] = post.body;`,
+      `mutateCarrier(carrier);`,
+      `Object.defineProperties(carrier, descriptorsFromElsewhere);`,
+    ];
+    for (const writes of cases) {
+      const messages = kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+declare const mutateCarrier: (value: object) => void;
+declare const descriptorsFromElsewhere: PropertyDescriptorMap;
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const carrier: Record<string, string> = { body: '<b>safe</b>', href: '/safe' };
+    ${writes}
+    return <article>{trustedHtml(carrier.body)}<a href={trustedUrl(carrier.href)}>read</a></article>;
+  },
+});
+`);
+      expect(messages, writes).toHaveLength(2);
+    }
+  });
+
+  it('flags writes through an imported cross-file carrier identity', () => {
+    const messages = kv426(
+      `
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+import { carrier } from './carrier';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    carrier.body = post.body;
+    carrier.href = post.href;
+    return <article>{trustedHtml(carrier.body)}<a href={trustedUrl(carrier.href)}>read</a></article>;
+  },
+});
+`,
+      'pages/probe.tsx',
+      [
+        {
+          fileName: 'pages/carrier.ts',
+          source: `export const carrier = { body: '<b>safe</b>', href: '/safe' };`,
+        },
+      ],
+    );
+
+    expect(messages).toHaveLength(2);
+    expect(messages.every((message) => message.includes('query-derived data'))).toBe(true);
+  });
+
+  it('keeps genuinely static carrier writes and writes after the sink green', () => {
+    expect(
+      kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const carrier = { body: '<b>safe</b>', href: '/safe', other: '' };
+    carrier.body = '<em>still safe</em>';
+    Object.assign(carrier, { href: '/docs' });
+    carrier.other = post.body;
+    const rendered = <article>{trustedHtml(carrier.body)}<a href={trustedUrl(carrier.href)}>read</a></article>;
+    carrier.body = post.body;
+    carrier.href = post.href;
+    return rendered;
+  },
+});
+`),
+    ).toHaveLength(0);
+  });
+
   it('flags ternary branches that carry query-derived data', () => {
     expect(
       kv426(`

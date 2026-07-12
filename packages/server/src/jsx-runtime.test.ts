@@ -850,6 +850,27 @@ describe('server jsx runtime', () => {
     );
   });
 
+  it('renders the bytes pinned when trusted HTML and URL carriers were minted', () => {
+    let nestedBytes = '<em>browser-safe</em>';
+    const nested = {
+      [Symbol.toStringTag]: 'TrustedHTML',
+      toString: () => nestedBytes,
+    } as const;
+    const markup = trustedHtml(nested);
+    const url = trustedUrl('javascript:reviewed()');
+
+    expect(Reflect.set(markup as object, 'value', '<script>alert(1)</script>')).toBe(false);
+    expect(Reflect.set(url as object, 'value', 'javascript:alert(1)')).toBe(false);
+    nestedBytes = '<img src=x onerror=alert(1)>';
+
+    expect(html(jsx('section', { rawHtml: markup }))).toBe(
+      '<section><em>browser-safe</em></section>',
+    );
+    expect(html(jsx('a', { href: url, children: 'reviewed' }))).toBe(
+      '<a href="javascript:reviewed()">reviewed</a>',
+    );
+  });
+
   it('drops TrustedUrl values placed on non-URL attributes at runtime', () => {
     expect(
       html(

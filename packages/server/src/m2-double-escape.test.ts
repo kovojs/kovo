@@ -2,7 +2,13 @@ import { component, type ComponentRenderResult } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { renderComponent } from './component-render.js';
-import { escapeText, renderHtmlValue } from './html.js';
+import {
+  escapeText,
+  fragmentHtml,
+  renderedHtml,
+  renderFragmentHtmlValue,
+  renderHtmlValue,
+} from './html.js';
 import { jsx } from './jsx-runtime.js';
 import { renderServerRenderable } from './renderable.js';
 import { renderTree, renderRegistry } from './render-tree.js';
@@ -61,5 +67,44 @@ describe('bugz.md M2 / bugz-3 L5: compiler escapeText single-escape (SPEC §4.5/
     const html = renderHtmlValue(escapeText('AT&T'));
     expect(html).toBe('AT&amp;T');
     expect(html).not.toContain(PREFIX);
+  });
+
+  it('G) pins and freezes RenderedHtml bytes before HTML and fragment sinks consume them', () => {
+    const rendered = renderedHtml('<strong>server-safe</strong>');
+
+    expect(Object.isFrozen(rendered)).toBe(true);
+    expect(Reflect.set(rendered as unknown as object, 'html', '<script>alert(1)</script>')).toBe(
+      false,
+    );
+    expect(() =>
+      Object.defineProperty(rendered, 'html', { value: '<img src=x onerror=alert(1)>' }),
+    ).toThrow();
+    expect(renderHtmlValue(rendered)).toBe('<strong>server-safe</strong>');
+    expect(renderFragmentHtmlValue(fragmentHtml(rendered))).toBe('<strong>server-safe</strong>');
+  });
+
+  it('H) keeps repeated and nested RenderedHtml + string composition stateless and single-escaped', () => {
+    const inner = renderedHtml('<strong>safe</strong>');
+    const composed = inner + ' AT&T';
+
+    expect(renderHtmlValue(composed)).toBe('<strong>safe</strong> AT&amp;T');
+    // A self-contained authenticated marker remains valid without retaining the source in a Map.
+    expect(renderHtmlValue(composed)).toBe('<strong>safe</strong> AT&amp;T');
+    expect(renderHtmlValue(composed + composed)).toBe(
+      '<strong>safe</strong> AT&amp;T<strong>safe</strong> AT&amp;T',
+    );
+
+    const nested = renderedHtml(composed) + ' tail';
+    expect(renderHtmlValue(nested)).toBe('<strong>safe</strong> AT&T tail');
+    expect(renderHtmlValue(nested)).not.toContain(PREFIX);
+  });
+
+  it('I) refuses a tampered self-contained RenderedHtml coercion marker', () => {
+    const composed = renderedHtml('<script>reviewed()</script>') + ' tail';
+    const tampered = composed.replace(/([A-Za-z0-9_-])(?=[A-Za-z0-9_-]*\uE001)/, (char) =>
+      char === 'A' ? 'B' : 'A',
+    );
+
+    expect(renderHtmlValue(tampered)).not.toContain('<script>reviewed()</script>');
   });
 });

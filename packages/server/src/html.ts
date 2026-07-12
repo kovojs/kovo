@@ -1,3 +1,6 @@
+import { Buffer } from 'node:buffer';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
   createFragmentHtml,
@@ -29,11 +32,12 @@ export function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
 }
 
-const coercedRenderedHtmlPrefix = `\uE000kovo-rendered-html:${Math.random().toString(36).slice(2)}:`;
+const coercedRenderedHtmlPrefix = '\uE000kovo-rendered-html:v2:';
 const coercedRenderedHtmlSuffix = '\uE001';
-const coercedRenderedHtmlValues = new Map<string, string>();
+const coercedRenderedHtmlSecret = randomBytes(32);
 const renderedHtmlValues = new WeakSet<object>();
-let coercedRenderedHtmlId = 0;
+const renderedHtmlSnapshots = new WeakMap<object, string>();
+const maxCoercedRenderedHtmlDepth = 32;
 
 /** @internal framework-rendered HTML, distinct from app-authored text strings. */
 export type RenderedHtml = string & {
@@ -45,32 +49,39 @@ export type RenderedHtml = string & {
 
 /** @internal create a branded framework-rendered HTML value. */
 export function renderedHtml(html: string): RenderedHtml {
+  const snapshot = String(html);
   const rendered = {
-    html,
+    html: snapshot,
     [Symbol.toPrimitive](hint: string) {
-      return hint === 'default' ? coerceRenderedHtml(html) : html;
+      return hint === 'default' ? coerceRenderedHtml(snapshot) : snapshot;
     },
     toString() {
-      return html;
+      return snapshot;
     },
     toJSON() {
-      return html;
+      return snapshot;
     },
   };
+  renderedHtmlSnapshots.set(rendered, snapshot);
   renderedHtmlValues.add(rendered);
-  return rendered as unknown as RenderedHtml;
+  return Object.freeze(rendered) as unknown as RenderedHtml;
 }
 
 /** @internal true for values produced by the server JSX/runtime HTML renderer. */
 export function isRenderedHtml(value: unknown): value is RenderedHtml {
-  return typeof value === 'object' && value !== null && renderedHtmlValues.has(value);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    renderedHtmlValues.has(value) &&
+    renderedHtmlSnapshots.has(value)
+  );
 }
 
 export type { FragmentHtml } from '@kovojs/core/internal/sink-policy';
 
 /** @internal Convert framework-rendered JSX or explicit trustedHtml() into fragment wire HTML. */
 export function fragmentHtml(value: RenderedHtml | object): FragmentHtml {
-  if (isRenderedHtml(value)) return createFragmentHtml(value.html);
+  if (isRenderedHtml(value)) return createFragmentHtml(renderedHtmlSnapshot(value));
   const trusted = kovoTrustedHtmlContent(value);
   return createFragmentHtml(trusted);
 }
@@ -90,7 +101,7 @@ export function generatedFragmentHtml(html: string): FragmentHtml {
 /** @internal Accept an already-branded/generated/trusted value and mint fragment wire HTML. */
 export function generatedFragmentHtmlValue(value: unknown): FragmentHtml {
   if (isFragmentHtml(value)) return value;
-  if (isRenderedHtml(value)) return createFragmentHtml(value.html);
+  if (isRenderedHtml(value)) return createFragmentHtml(renderedHtmlSnapshot(value));
   if (typeof value === 'object' && value !== null) {
     const trusted = kovoTrustedHtmlContent(value);
     if (trusted !== '') return createFragmentHtml(trusted);
@@ -110,7 +121,7 @@ export function renderFragmentHtmlValue(value: FragmentHtml): string {
  */
 export function renderHtmlValue(value: unknown): string {
   if (value === null || value === undefined) return '';
-  if (isRenderedHtml(value)) return value.html;
+  if (isRenderedHtml(value)) return renderedHtmlSnapshot(value);
   if (typeof value === 'object') {
     const trustedHtml = kovoTrustedHtmlContent(value);
     if (trustedHtml !== '') return trustedHtml;
@@ -137,7 +148,7 @@ export function renderRouteHtml(value: unknown): string {
 /** @internal escape text while preserving framework-rendered HTML coerced via `+`. */
 export function escapeTextWithRenderedHtml(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
-  if (isRenderedHtml(value)) return coerceRenderedHtml(value.html);
+  if (isRenderedHtml(value)) return coerceRenderedHtml(renderedHtmlSnapshot(value));
   if (Array.isArray(value)) return value.map((item) => escapeTextWithRenderedHtml(item)).join('');
 
   // Mirrors renderJsxChildren's scalar coercion so escaped text stays byte-identical for safe values.
@@ -151,14 +162,19 @@ export function unwrapCoercedRenderedHtml(value: string): string {
 }
 
 function coerceRenderedHtml(html: string): string {
-  const marker = `${coercedRenderedHtmlPrefix}${(coercedRenderedHtmlId += 1)}${coercedRenderedHtmlSuffix}`;
-  coercedRenderedHtmlValues.set(marker, html);
-  return marker;
+  // M11 / SPEC §6.6 + §9.5: a process-global Map retained the complete HTML for every default-hint
+  // coercion forever. Carry the bytes in an authenticated, self-contained marker instead. The
+  // per-process HMAC preserves the old non-forgeable capability property while leaving no strong
+  // reference behind after the composed string becomes unreachable.
+  const payload = Buffer.from(html, 'utf8').toString('base64url');
+  const signature = coercedRenderedHtmlSignature(payload);
+  return `${coercedRenderedHtmlPrefix}${payload}.${signature}${coercedRenderedHtmlSuffix}`;
 }
 
 function renderStringWithCoercedRenderedHtml(
   value: string,
   renderText: (text: string) => string,
+  depth = 0,
 ): string {
   if (!value.includes(coercedRenderedHtmlPrefix)) return renderText(value);
 
@@ -179,12 +195,44 @@ function renderStringWithCoercedRenderedHtml(
     }
 
     const marker = value.slice(markerStart, markerEnd + coercedRenderedHtmlSuffix.length);
-    const rendered = coercedRenderedHtmlValues.get(marker);
-    html += rendered === undefined ? renderText(marker) : rendered;
+    const rendered = decodeCoercedRenderedHtml(marker);
+    html +=
+      rendered === undefined
+        ? renderText(marker)
+        : depth >= maxCoercedRenderedHtmlDepth
+          ? rendered
+          : renderStringWithCoercedRenderedHtml(rendered, (text) => text, depth + 1);
     offset = markerEnd + coercedRenderedHtmlSuffix.length;
   }
 
   return html;
+}
+
+function renderedHtmlSnapshot(value: RenderedHtml): string {
+  return renderedHtmlSnapshots.get(value as unknown as object) ?? '';
+}
+
+function coercedRenderedHtmlSignature(payload: string): string {
+  return createHmac('sha256', coercedRenderedHtmlSecret).update(payload).digest('base64url');
+}
+
+function decodeCoercedRenderedHtml(marker: string): string | undefined {
+  const encoded = marker.slice(
+    coercedRenderedHtmlPrefix.length,
+    marker.length - coercedRenderedHtmlSuffix.length,
+  );
+  const divider = encoded.lastIndexOf('.');
+  if (divider < 0) return undefined;
+  const payload = encoded.slice(0, divider);
+  const signature = encoded.slice(divider + 1);
+  if (!/^[A-Za-z0-9_-]*$/.test(payload) || !/^[A-Za-z0-9_-]+$/.test(signature)) {
+    return undefined;
+  }
+
+  const expected = Buffer.from(coercedRenderedHtmlSignature(payload), 'base64url');
+  const received = Buffer.from(signature, 'base64url');
+  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return undefined;
+  return Buffer.from(payload, 'base64url').toString('utf8');
 }
 
 /**

@@ -169,6 +169,58 @@ describe('runtime output-context helpers', () => {
     expect(kovoTrustedHtmlContent({ toString: () => '<i>not branded</i>' })).toBe('');
   });
 
+  it('pins trusted carrier bytes and freezes public wrappers before raw sinks consume them', () => {
+    let browserBytes = '<i>browser-safe</i>';
+    const browserCarrier = {
+      [Symbol.toStringTag]: 'TrustedHTML',
+      toString: () => browserBytes,
+    } as const;
+    const html = trustedHtml(browserCarrier);
+    const url = trustedUrl('javascript:reviewed()');
+    const rich = safeRichHtml('<p>safe</p><script>blocked()</script>');
+
+    expect(Object.isFrozen(html)).toBe(true);
+    expect(Object.isFrozen(url)).toBe(true);
+    expect(Object.isFrozen(rich)).toBe(true);
+    expect(Reflect.set(html as object, 'value', '<img src=x onerror=alert(1)>')).toBe(false);
+    expect(Reflect.set(url as object, 'value', 'javascript:alert(1)')).toBe(false);
+    expect(() => Object.assign(rich, { value: '<script>alert(1)</script>' })).toThrow();
+    expect(() =>
+      Object.defineProperty(html, 'value', { value: '<script>alert(1)</script>' }),
+    ).toThrow();
+
+    // Mutating the nested foreign TrustedHTML-like source also cannot change the eager snapshot.
+    browserBytes = '<img src=x onerror=alert(1)>';
+    expect(kovoTrustedHtmlContent(html)).toBe('<i>browser-safe</i>');
+    expect(kovoSafeUrl(url)).toBe('javascript:reviewed()');
+    expect(kovoTrustedHtmlContent(rich)).toBe('<p>safe</p>');
+  });
+
+  it('pins a genuine browser TrustedHTML instance on first acceptance', () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'TrustedHTML');
+    class MutableTrustedHTML {
+      readonly [Symbol.toStringTag] = 'TrustedHTML' as const;
+      value = '<strong>first</strong>';
+      toString(): string {
+        return this.value;
+      }
+    }
+    Object.defineProperty(globalThis, 'TrustedHTML', {
+      configurable: true,
+      value: MutableTrustedHTML,
+    });
+    try {
+      const browserValue = new MutableTrustedHTML();
+      expect(isBrowserTrustedHtml(browserValue)).toBe(true);
+      expect(kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+      browserValue.value = '<img src=x onerror=alert(1)>';
+      expect(kovoTrustedHtmlContent(browserValue)).toBe('<strong>first</strong>');
+    } finally {
+      if (previous === undefined) delete (globalThis as { TrustedHTML?: unknown }).TrustedHTML;
+      else Object.defineProperty(globalThis, 'TrustedHTML', previous);
+    }
+  });
+
   it('sanitizes CMS rich HTML before returning a trusted HTML brand', () => {
     const rich = safeRichHtml(
       '<p onclick="steal()">Hello <strong>world</strong><script>alert(1)</script>' +

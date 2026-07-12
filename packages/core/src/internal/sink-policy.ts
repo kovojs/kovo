@@ -148,6 +148,8 @@ export const RAW_HTML_SINK_NAMES = [
 const srcsetAttributeNames = new Set<string>(SRCSET_ATTRIBUTE_NAMES);
 const rawHtmlSinkNames = new Set<string>(RAW_HTML_SINK_NAMES);
 const blessedSinkWitnesses = new Map<string, WeakSet<object>>();
+const fragmentHtmlSnapshots = new WeakMap<object, string>();
+const renderedFragmentHtmlSnapshots = new WeakMap<object, string>();
 let runtimeSinkSecurityEventHandler: RuntimeSinkSecurityEventHandler | undefined;
 
 /** @internal Mint a non-forgeable runtime witness for a framework-owned sink capability. */
@@ -184,7 +186,8 @@ export function isBlessedSink<Sink extends string>(
  * fragment apply sanitizers still own fail-closed DOM adoption.
  */
 export function createFragmentHtml(html: string): FragmentHtml {
-  return blessSink('server:fragment-html', fragmentHtmlObject(html));
+  const fragment = fragmentHtmlObject(html, fragmentHtmlSnapshots);
+  return blessSink('server:fragment-html', fragment);
 }
 
 /** @internal True for server-side fragment HTML minted by {@link createFragmentHtml}. */
@@ -194,12 +197,13 @@ export function isFragmentHtml(value: unknown): value is FragmentHtml {
 
 /** @internal Unwrap server-side fragment HTML for the wire emitter. */
 export function fragmentHtmlContent(value: FragmentHtml): string {
-  return value.html;
+  return fragmentHtmlSnapshots.get(value) ?? '';
 }
 
 /** @internal Mint browser-decoded fragment HTML before it reaches DOM raw-HTML sinks. */
 export function createRenderedFragmentHtml(html: string): RenderedFragmentHtml {
-  return blessSink('browser:response-fragment-html', fragmentHtmlObject(html));
+  const fragment = fragmentHtmlObject(html, renderedFragmentHtmlSnapshots);
+  return blessSink('browser:response-fragment-html', fragment);
 }
 
 /** @internal True for browser-side fragment HTML minted by {@link createRenderedFragmentHtml}. */
@@ -209,7 +213,7 @@ export function isRenderedFragmentHtml(value: unknown): value is RenderedFragmen
 
 /** @internal Unwrap browser-side fragment HTML for the framework DOM adapter. */
 export function renderedFragmentHtmlContent(value: RenderedFragmentHtml): string {
-  return value.html;
+  return renderedFragmentHtmlSnapshots.get(value) ?? '';
 }
 
 /** @internal Install a test/dev hook for blocked runtime sink events. */
@@ -484,20 +488,26 @@ function redactedPreview(value: string): string {
   return `<redacted:${value.length}>`;
 }
 
-function fragmentHtmlObject(html: string): {
+function fragmentHtmlObject(
+  html: string,
+  snapshots: WeakMap<object, string>,
+): {
   readonly html: string;
   toJSON(): string;
   toString(): string;
 } {
-  return {
-    html,
+  const snapshot = String(html);
+  const fragment = {
+    html: snapshot,
     toJSON() {
-      return html;
+      return snapshot;
     },
     toString() {
-      return html;
+      return snapshot;
     },
   };
+  snapshots.set(fragment, snapshot);
+  return Object.freeze(fragment);
 }
 
 function isDevelopmentOrTestRuntime(): boolean {
