@@ -23,6 +23,13 @@ import { generatedFragmentHtml } from './html.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 import type { ServerErrorDiagnosticContext } from './diagnostics.js';
 import { scrubConsoleArgs } from './logging.js';
+import {
+  securityStringIncludes,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringStartsWith,
+  securityStringToLowerCase,
+} from './response-security-intrinsics.js';
 
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
@@ -842,21 +849,26 @@ function shouldInjectKovoHmrScript(
   body: unknown,
 ): boolean {
   if (status < 200 || status >= 600) return false;
-  if (typeof body === 'string' && body.includes(kovoHmrClientPath)) return false;
-  return (contentType ?? '').toLowerCase().includes('text/html');
+  if (typeof body === 'string' && securityStringIncludes(body, kovoHmrClientPath)) return false;
+  return securityStringIncludes(securityStringToLowerCase(contentType ?? ''), 'text/html');
 }
 
 function isKovoFragmentOrQueryReadRequest(request: IncomingMessage): boolean {
   // SPEC §9.4 / §9.5.1: dev HMR injection is for full documents; fragment and typed-read
   // HTML chunks are app-shell wire responses and must stay inspectable as emitted.
-  if (readHeader(request.headers, 'Kovo-Fragment')?.toLowerCase() === 'true') return true;
+  const fragment = readHeader(request.headers, 'Kovo-Fragment');
+  if (fragment !== undefined && securityStringToLowerCase(fragment) === 'true') return true;
   if (!request.url) return false;
-  return new URL(request.url, 'http://kovo.local').pathname.startsWith('/_q/');
+  return securityStringStartsWith(new URL(request.url, 'http://kovo.local').pathname, '/_q/');
 }
 
 function injectKovoHmrScript(html: string): string {
-  if (html.includes(kovoHmrClientPath)) return html;
-  if (html.includes('</head>')) return html.replace('</head>', `${kovoHmrClientScript}</head>`);
+  if (securityStringIncludes(html, kovoHmrClientPath)) return html;
+  const closingHead = '</head>';
+  const closingHeadIndex = securityStringIndexOf(html, closingHead);
+  if (closingHeadIndex >= 0) {
+    return `${securityStringSlice(html, 0, closingHeadIndex)}${kovoHmrClientScript}${securityStringSlice(html, closingHeadIndex)}`;
+  }
   return `${kovoHmrClientScript}${html}`;
 }
 

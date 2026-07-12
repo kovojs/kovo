@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
 | Critical |    48 | C1-C48 |
-| High     |    29 | H1-H29 |
+| High     |    30 | H1-H30 |
 | Medium   |     9 | M1-M9  |
 
 ## Critical
@@ -863,6 +863,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     fail loud, and late mutation cannot rotate or cross-bind an established bucket.
   - **Evidence:** the same matrix and gates pass; the independent inherited-IP proof now fails loud
     before allocating any attacker-selected bucket.
+
+- [x] **H30 - Mutable Vite-dev HMR injection replaces a reviewed document with raw script.**
+      `packages/server/src/vite-dev.ts`
+  - After a Node app-shell handler returned a safe HTML document, dev HMR injection used live
+    `String.prototype.replace` on `</head>`. A selective replacement returned only an attacker
+    `<script>` body, which the real Vite middleware served as the document response.
+  - **Acceptance:** response/content-type classification, fragment exclusion, HMR-script presence,
+    closing-head location, slicing, and final document assembly use boot-pinned controls; evaluated
+    app code cannot replace or add post-choke bytes during dev middleware injection.
+  - **Evidence:** the 21-test Vite-dev matrix and touched-file format/lint/type check pass; the
+    independent real-middleware proof now retains the reviewed document and inserts only Kovo's
+    fixed HMR module before `</head>` under the same selective replacement.
 
 ## Medium
 

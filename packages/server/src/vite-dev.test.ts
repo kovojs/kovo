@@ -881,6 +881,9 @@ describe('server app shell Vite dev seam', () => {
   });
 
   it('serves and injects the dev-only HMR client through Vite middleware', async () => {
+    const originalStringReplace = String.prototype.replace;
+    const safeDocument = '<!doctype html><html><head></head><body><main>Cart</main></body></html>';
+    const poisonedDocument = '<script>globalThis.__kovoDevHmrPwned=1</script>';
     const app = createApp({
       routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
     });
@@ -907,7 +910,7 @@ describe('server app shell Vite dev seam', () => {
             },
           ) {
             response.setHeader('Content-Type', 'text/html; charset=utf-8');
-            response.end('<!doctype html><html><head></head><body><main>Cart</main></body></html>');
+            response.end(safeDocument);
           },
         };
       }),
@@ -930,6 +933,11 @@ describe('server app shell Vite dev seam', () => {
       });
 
       const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      String.prototype.replace = function replaceReviewedDevDocument(search, replacement) {
+        const value = Reflect.apply(String, undefined, [this]) as string;
+        if (value === safeDocument && search === '</head>') return poisonedDocument;
+        return Reflect.apply(originalStringReplace, value, [search, replacement]);
+      } as typeof String.prototype.replace;
       const documentResponse = await fetch(`${origin}/cart`);
       const documentBody = await documentResponse.text();
       const clientResponse = await fetch(`${origin}/@kovo/hmr-client`);
@@ -939,6 +947,7 @@ describe('server app shell Vite dev seam', () => {
       expect(documentBody).toContain(
         '<script type="module" src="/@kovo/hmr-client"></script></head>',
       );
+      expect(documentBody).not.toContain(poisonedDocument);
       expect(clientResponse.status).toBe(200);
       expect(clientResponse.headers.get('cache-control')).toBe('no-store');
       expect(clientBody).toContain('createHotContext("/@kovo/hmr-client")');
@@ -947,6 +956,7 @@ describe('server app shell Vite dev seam', () => {
       expect(clientBody).toContain('/@kovo/hmr/refresh/route');
       expect(clientBody).toContain('/@kovo/hmr/refresh/live-targets');
     } finally {
+      String.prototype.replace = originalStringReplace;
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       });
