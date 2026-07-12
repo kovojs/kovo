@@ -4,7 +4,11 @@ import { domain } from './domain.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { mutation } from './mutation.js';
-import { mutationWithRuntimeRegistryFacts, runtimeRegistryFacts } from './registry-facts.js';
+import {
+  mutationWithRuntimeRegistryFacts,
+  runtimeLiveTargetQueryBindings,
+  runtimeRegistryFacts,
+} from './registry-facts.js';
 import {
   runtimeRegistryWireFactsFromGraph,
   serializeRuntimeRegistryWireModule,
@@ -13,6 +17,98 @@ import { query } from './query.js';
 import { s } from './schema.js';
 
 describe('runtimeRegistryFacts', () => {
+  it('resolves live-target query facts without mutable Array find/map/flatMap dispatch', () => {
+    const publicQuery = query('registryFactsPublic', {
+      load: () => ({ public: true }),
+      reads: [],
+    });
+    const protectedQuery = query('registryFactsProtected', {
+      guard: () => false,
+      load: () => ({ protected: true }),
+      reads: [],
+    });
+    const facts = { liveTargetRenderers: [], queries: [publicQuery, protectedQuery] };
+    const renderer = {
+      component: 'components/registry-facts/protected',
+      queries: ['registryFactsProtected'],
+      render: () => '<protected-panel></protected-panel>',
+    };
+    const definitionRenderer = {
+      component: 'components/registry-facts/protected-definition',
+      queryDefinitions: [protectedQuery],
+      render: () => '<protected-definition></protected-definition>',
+    };
+    const originalFind = Array.prototype.find;
+    const originalFlatMap = Array.prototype.flatMap;
+    const originalMap = Array.prototype.map;
+    Array.prototype.find = function (predicate, thisArg) {
+      if (this === facts.queries) return publicQuery;
+      return originalFind.call(this, predicate, thisArg);
+    } as typeof Array.prototype.find;
+    Array.prototype.flatMap = function (callback, thisArg) {
+      if (this === renderer.queries) return [{ query: publicQuery }];
+      return originalFlatMap.call(this, callback, thisArg);
+    } as typeof Array.prototype.flatMap;
+    Array.prototype.map = function (callback, thisArg) {
+      if (this === definitionRenderer.queryDefinitions) return [{ query: publicQuery }];
+      return originalMap.call(this, callback, thisArg);
+    } as typeof Array.prototype.map;
+    try {
+      expect(runtimeLiveTargetQueryBindings(renderer, facts)).toEqual([{ query: protectedQuery }]);
+      expect(runtimeLiveTargetQueryBindings(definitionRenderer, facts)).toEqual([
+        { query: protectedQuery },
+      ]);
+    } finally {
+      Array.prototype.find = originalFind;
+      Array.prototype.flatMap = originalFlatMap;
+      Array.prototype.map = originalMap;
+    }
+  });
+
+  it('constructs live-target and mutation facts through dense own traversal', () => {
+    const catalogQuery = query('registryFactsDenseCatalog', {
+      load: () => ({ rows: [] as string[] }),
+      reads: [],
+    });
+    const renderers = [
+      {
+        component: 'components/registry-facts/dense-catalog',
+        queryDefinitions: [catalogQuery],
+        render: () => '<dense-catalog></dense-catalog>',
+      },
+    ];
+    const mutations = [
+      mutation('registry-facts/dense-write', {
+        csrf: false,
+        handler: (input) => input,
+        input: s.object({ value: s.string() }),
+      }),
+    ];
+    const originalFlatMap = Array.prototype.flatMap;
+    const originalMap = Array.prototype.map;
+    Array.prototype.flatMap = function (callback, thisArg) {
+      if (this === renderers) return [];
+      return originalFlatMap.call(this, callback, thisArg);
+    } as typeof Array.prototype.flatMap;
+    Array.prototype.map = function (callback, thisArg) {
+      if (this === mutations) return [];
+      return originalMap.call(this, callback, thisArg);
+    } as typeof Array.prototype.map;
+    try {
+      const facts = runtimeRegistryFacts({
+        liveTargetRenderers: renderers,
+        mutations,
+        queries: [],
+      });
+      expect(facts.queries).toEqual([catalogQuery]);
+      expect(facts.mutations).toHaveLength(1);
+      expect(facts.mutations[0]?.key).toBe('registry-facts/dense-write');
+    } finally {
+      Array.prototype.flatMap = originalFlatMap;
+      Array.prototype.map = originalMap;
+    }
+  });
+
   it('folds generated query reads into app and live-target queries once', () => {
     const fallback = domain('registry-facts-fallback');
     const catalogQuery = query('registryFactsCatalog', {

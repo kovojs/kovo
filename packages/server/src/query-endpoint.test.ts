@@ -14,6 +14,39 @@ import {
 import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
+  it('cannot cross-bind a guarded query to a public sibling through poisoned Array.find', async () => {
+    const publicLoad = vi.fn(() => ({ source: 'public' }));
+    const protectedLoad = vi.fn(() => ({ source: 'protected' }));
+    const publicQuery = query('public-registry-query', {
+      access: publicAccess('public sibling used by registry poisoning regression'),
+      load: publicLoad,
+      reads: [],
+    });
+    const protectedQuery = query('protected-registry-query', {
+      guard: () => false,
+      load: protectedLoad,
+      reads: [],
+    });
+    const registry = { queries: [publicQuery, protectedQuery] };
+    const originalFind = Array.prototype.find;
+    Array.prototype.find = function (predicate, thisArg) {
+      if (this === registry.queries) return publicQuery;
+      return originalFind.call(this, predicate, thisArg);
+    } as typeof Array.prototype.find;
+    try {
+      const response = await renderQueryRegistryEndpointResponse(
+        registry,
+        'protected-registry-query',
+        { request: {} },
+      );
+      expect(response.status).toBe(303);
+      expect(publicLoad).not.toHaveBeenCalled();
+      expect(protectedLoad).not.toHaveBeenCalled();
+    } finally {
+      Array.prototype.find = originalFind;
+    }
+  });
+
   it('uses compiler-assigned derived query keys for /_q and kovo-query wire identity', async () => {
     const cart = assignDerivedQueryKey(
       query({
@@ -481,7 +514,7 @@ describe('query endpoints', () => {
       });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('[kovo] query-endpoint failed query=product'),
-        thrown,
+        expect.stringContaining('database password leaked in stack'),
       );
     } finally {
       errorSpy.mockRestore();

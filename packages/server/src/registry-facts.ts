@@ -9,6 +9,22 @@ import {
 } from './query.js';
 import type { MutationRegistry } from './mutation/definition.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
+import {
+  appendDenseOwnArrayValue,
+  denseOwnArrayForEach,
+  denseOwnRegistryEntryByExactKey,
+} from './registry-lookup.js';
+import {
+  createWitnessMap,
+  createWitnessSet,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapHas,
+  witnessMapSet,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessSortStrings,
+} from './security-witness-intrinsics.js';
 
 /** @internal Normalized generated/app registry facts consumed by runtime dispatch paths. */
 export interface RuntimeRegistryFacts<Request = unknown> {
@@ -50,11 +66,19 @@ export function runtimeRegistryFacts<Request, Mutation>(
     liveTargetRendererQueries(input.liveTargetRenderers),
     routeLayoutQueries(input.routes ?? []),
   );
-  const mutations = input.mutations.map((definition) =>
-    mutationWithRuntimeRegistryFacts(definition, {
-      liveTargetRenderers: input.liveTargetRenderers,
-      queries,
-    }),
+  const mutations: RuntimeMutationDefinition<Mutation>[] = [];
+  denseOwnArrayForEach(
+    input.mutations,
+    (definition) => {
+      appendDenseOwnArrayValue(
+        mutations,
+        mutationWithRuntimeRegistryFacts(definition, {
+          liveTargetRenderers: input.liveTargetRenderers,
+          queries,
+        }),
+      );
+    },
+    'App mutation registry facts',
   );
 
   return {
@@ -104,59 +128,87 @@ export function runtimeLiveTargetQueryBindings<Request>(
   };
   if (rendererWithBindings.queryBindings) return rendererWithBindings.queryBindings;
   if (renderer.queryDefinitions) {
-    return renderer.queryDefinitions.map((queryDefinition) => ({
-      query: normalizeRuntimeQuery(queryDefinition),
-    }));
+    const bindings: RuntimeLiveTargetQueryBinding[] = [];
+    denseOwnArrayForEach(
+      renderer.queryDefinitions,
+      (queryDefinition) => {
+        appendDenseOwnArrayValue(bindings, { query: normalizeRuntimeQuery(queryDefinition) });
+      },
+      'Live-target query definitions',
+    );
+    return bindings;
   }
 
-  return (renderer.queries ?? []).flatMap((queryKey) => {
-    const queryDefinition = facts.queries.find((candidate) => candidate.key === queryKey);
-    return queryDefinition === undefined ? [] : [{ query: queryDefinition }];
-  });
+  const bindings: RuntimeLiveTargetQueryBinding[] = [];
+  denseOwnArrayForEach(
+    renderer.queries ?? [],
+    (queryKey) => {
+      if (typeof queryKey !== 'string') {
+        throw new TypeError('Live-target query keys must be stable strings.');
+      }
+      const queryDefinition = denseOwnRegistryEntryByExactKey(
+        facts.queries,
+        queryKey,
+        'Runtime query registry',
+      );
+      if (queryDefinition !== undefined)
+        appendDenseOwnArrayValue(bindings, { query: queryDefinition });
+    },
+    'Live-target query keys',
+  );
+  return bindings;
 }
 
 function normalizeRuntimeQueries<Request>(
   options: { allowStaticInstances: boolean },
   ...groups: readonly (readonly QueryDefinition<string, unknown, unknown, Request>[])[]
 ): readonly QueryDefinition<string, unknown, unknown, Request>[] {
-  const queries = new Map<string, QueryDefinition<string, unknown, unknown, Request>>();
-  const originalObjects = new Set<QueryDefinition<string, unknown, unknown, Request>>();
+  const queries = createWitnessMap<string, QueryDefinition<string, unknown, unknown, Request>>();
+  const originalObjects = createWitnessSet<QueryDefinition<string, unknown, unknown, Request>>();
 
-  for (const group of groups) {
-    for (const queryDefinition of group) {
-      assertQueryKeyAssigned(queryDefinition);
-      const normalized = normalizeRuntimeQuery(queryDefinition);
-      const identity = runtimeQueryIdentity(normalized, options);
-      const existing = queries.get(identity);
-      if (existing === undefined) {
-        queries.set(identity, normalized);
-        originalObjects.add(queryDefinition);
-        continue;
-      }
-      const merged = mergeRuntimeQueryFacts(existing, normalized);
-      if (merged !== undefined) {
-        queries.set(identity, merged);
-        continue;
-      }
-      if (
-        existing === normalized ||
-        existing === queryDefinition ||
-        originalObjects.has(queryDefinition) ||
-        compatibleRuntimeQueries(existing, normalized)
-      ) {
-        continue;
-      }
+  denseOwnArrayForEach(
+    groups,
+    (group) => {
+      denseOwnArrayForEach(
+        group,
+        (queryDefinition) => {
+          assertQueryKeyAssigned(queryDefinition);
+          const normalized = normalizeRuntimeQuery(queryDefinition);
+          const identity = runtimeQueryIdentity(normalized, options);
+          const existing = witnessMapGet(queries, identity);
+          if (existing === undefined) {
+            witnessMapSet(queries, identity, normalized);
+            witnessSetAdd(originalObjects, queryDefinition);
+            return;
+          }
+          const merged = mergeRuntimeQueryFacts(existing, normalized);
+          if (merged !== undefined) {
+            witnessMapSet(queries, identity, merged);
+            return;
+          }
+          if (
+            existing === normalized ||
+            existing === queryDefinition ||
+            witnessSetHas(originalObjects, queryDefinition) ||
+            compatibleRuntimeQueries(existing, normalized)
+          ) {
+            return;
+          }
 
-      throw new Error(
-        `Runtime registry facts received two queries with the same key "${normalized.key}". ` +
-          'Query keys address one typed read for /_q dispatch, kovo-query hydration, kovo-deps, ' +
-          'live-target renderers, and generated query registries (SPEC §4.1, §6.1); duplicate ' +
-          'definitions are ambiguous. Rename or move one exported query so its derived key is unique.',
+          throw new Error(
+            `Runtime registry facts received two queries with the same key "${normalized.key}". ` +
+              'Query keys address one typed read for /_q dispatch, kovo-query hydration, kovo-deps, ' +
+              'live-target renderers, and generated query registries (SPEC §4.1, §6.1); duplicate ' +
+              'definitions are ambiguous. Rename or move one exported query so its derived key is unique.',
+          );
+        },
+        'Runtime query fact group',
       );
-    }
-  }
+    },
+    'Runtime query fact groups',
+  );
 
-  return [...queries.values()];
+  return witnessMapValues(queries);
 }
 
 function mergeRuntimeQueryFacts<Request>(
@@ -171,16 +223,24 @@ function mergeRuntimeQueryFacts<Request>(
     return undefined;
   }
 
-  const reads = new Map<string, NonNullable<typeof left.reads>[number]>();
-  for (const read of left.reads ?? []) reads.set(read.key, read);
+  const reads = createWitnessMap<string, NonNullable<typeof left.reads>[number]>();
+  denseOwnArrayForEach(
+    left.reads ?? [],
+    (read) => witnessMapSet(reads, read.key, read),
+    'Runtime query read facts',
+  );
   let added = false;
-  for (const read of right.reads ?? []) {
-    if (reads.has(read.key)) continue;
-    reads.set(read.key, read);
-    added = true;
-  }
+  denseOwnArrayForEach(
+    right.reads ?? [],
+    (read) => {
+      if (witnessMapHas(reads, read.key)) return;
+      witnessMapSet(reads, read.key, read);
+      added = true;
+    },
+    'Runtime query read facts',
+  );
 
-  return added ? { ...left, reads: [...reads.values()] } : left;
+  return added ? { ...left, reads: witnessMapValues(reads) } : left;
 }
 
 function runtimeQueryIdentity(
@@ -198,18 +258,33 @@ function compatibleRuntimeQueries(
   left: QueryDefinition<string, unknown, unknown, unknown>,
   right: QueryDefinition<string, unknown, unknown, unknown>,
 ): boolean {
-  return (
-    left.key === right.key &&
-    left.load === right.load &&
-    left.instanceKey === right.instanceKey &&
-    runtimeReadKeys(left).join('\0') === runtimeReadKeys(right).join('\0')
-  );
+  if (
+    left.key !== right.key ||
+    left.load !== right.load ||
+    left.instanceKey !== right.instanceKey
+  ) {
+    return false;
+  }
+  const leftReadKeys = runtimeReadKeys(left);
+  const rightReadKeys = runtimeReadKeys(right);
+  if (leftReadKeys.length !== rightReadKeys.length) return false;
+  for (let index = 0; index < leftReadKeys.length; index += 1) {
+    if (leftReadKeys[index] !== rightReadKeys[index]) return false;
+  }
+  return true;
 }
 
 function runtimeReadKeys(
   definition: QueryDefinition<string, unknown, unknown, unknown>,
 ): readonly string[] {
-  return (definition.reads ?? []).map((read) => read.key).sort();
+  const keys: string[] = [];
+  denseOwnArrayForEach(
+    definition.reads ?? [],
+    (read) => appendDenseOwnArrayValue(keys, read.key),
+    'Runtime query read facts',
+  );
+  witnessSortStrings(keys);
+  return keys;
 }
 
 function normalizeRuntimeQuery<Query extends QueryDefinition<string, any, any, any>>(
@@ -225,24 +300,35 @@ function mergeRuntimeMutationRegistry(
     queries: readonly RegisteredQueryDefinition[];
   },
 ): MutationRegistry {
-  const queriesByKey = new Map<string, RegisteredQueryDefinition>();
+  const queriesByKey = createWitnessMap<string, RegisteredQueryDefinition>();
 
-  for (const queryDefinition of registry?.queries ?? []) {
-    const generatedQueryDefinition = normalizeRuntimeQuery(queryDefinition);
-    queriesByKey.set(
-      runtimeQueryIdentity(generatedQueryDefinition, { allowStaticInstances: true }),
-      generatedQueryDefinition,
-    );
-  }
-  for (const queryDefinition of facts.queries) {
-    const identity = runtimeQueryIdentity(queryDefinition, { allowStaticInstances: true });
-    if (!queriesByKey.has(identity)) queriesByKey.set(identity, queryDefinition);
-  }
+  denseOwnArrayForEach(
+    registry?.queries ?? [],
+    (queryDefinition) => {
+      const generatedQueryDefinition = normalizeRuntimeQuery(queryDefinition);
+      witnessMapSet(
+        queriesByKey,
+        runtimeQueryIdentity(generatedQueryDefinition, { allowStaticInstances: true }),
+        generatedQueryDefinition,
+      );
+    },
+    'Mutation query registry',
+  );
+  denseOwnArrayForEach(
+    facts.queries,
+    (queryDefinition) => {
+      const identity = runtimeQueryIdentity(queryDefinition, { allowStaticInstances: true });
+      if (!witnessMapHas(queriesByKey, identity)) {
+        witnessMapSet(queriesByKey, identity, queryDefinition);
+      }
+    },
+    'Runtime query registry',
+  );
 
   return {
     ...registry,
     ...(facts.inferredTouches.length === 0 ? {} : { inferredTouches: facts.inferredTouches }),
-    queries: [...queriesByKey.values()],
+    queries: witnessMapValues(queriesByKey),
   };
 }
 
@@ -261,7 +347,19 @@ function assertQueryKeyAssigned(
 function liveTargetRendererQueries<Request>(
   renderers: readonly LiveTargetRenderer<Request>[],
 ): readonly QueryDefinition<string, unknown, unknown, Request>[] {
-  return renderers.flatMap((renderer) => renderer.queryDefinitions ?? []);
+  const queries: QueryDefinition<string, unknown, unknown, Request>[] = [];
+  denseOwnArrayForEach(
+    renderers,
+    (renderer) => {
+      denseOwnArrayForEach(
+        renderer.queryDefinitions ?? [],
+        (queryDefinition) => appendDenseOwnArrayValue(queries, queryDefinition),
+        'Live-target query definitions',
+      );
+    },
+    'Live-target renderer registry',
+  );
+  return queries;
 }
 
 function routeLayoutQueries<Request>(
@@ -300,4 +398,10 @@ function layoutChain(
   }
 
   return chain;
+}
+
+function witnessMapValues<Key, Value>(map: Map<Key, Value>): Value[] {
+  const values: Value[] = [];
+  witnessMapForEach(map, (value) => appendDenseOwnArrayValue(values, value));
+  return values;
 }

@@ -317,6 +317,37 @@ describe('server app matched dispatch boundary', () => {
     },
   );
 
+  it('does not skip endpoint CSRF when app code poisons method uppercasing', async () => {
+    let handlerCalls = 0;
+    const updateEmail = endpoint('/account/poisoned-method', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('updated');
+      },
+      method: 'POST',
+      reason: 'post-import request method poisoning regression',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      csrf: { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' },
+      endpoints: [updateEmail],
+    });
+    const request = new Request('https://shop.example.test/account/poisoned-method', {
+      body: new URLSearchParams({ email: 'ada@example.com' }),
+      method: 'POST',
+    });
+    const originalToUpperCase = String.prototype.toUpperCase;
+    String.prototype.toUpperCase = () => 'GET';
+    try {
+      const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+      expect(response.status).toBe(422);
+      await expect(response.text()).resolves.toBe('CSRF');
+      expect(handlerCalls).toBe(0);
+    } finally {
+      String.prototype.toUpperCase = originalToUpperCase;
+    }
+  });
+
   it('allows default endpoint CSRF requests with a valid token', async () => {
     let handlerCalls = 0;
     const updateEmail = endpoint('/account/email', {
@@ -832,6 +863,36 @@ describe('server app matched dispatch boundary', () => {
     expect(response.headers.get('allow')).toBe('GET, HEAD');
     expect(loadCalls).toBe(0);
   });
+
+  it.each([
+    ['GET', 'POST', 200, 1],
+    ['HEAD', 'POST', 200, 1],
+    ['POST', 'GET', 405, 0],
+  ] as const)(
+    'pins /_q method %s classification when app uppercasing reports %s',
+    async (method, poisonedMethod, expectedStatus, expectedLoads) => {
+      let loadCalls = 0;
+      const cart = query('poisoned-method-cart', {
+        load() {
+          loadCalls += 1;
+          return { count: 1 };
+        },
+        reads: [],
+      });
+      const app = createApp({ queries: [cart] });
+      const request = new Request('https://shop.example.test/_q/poisoned-method-cart', { method });
+      const originalToUpperCase = String.prototype.toUpperCase;
+      String.prototype.toUpperCase = () => poisonedMethod;
+      try {
+        const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+        expect(response.status).toBe(expectedStatus);
+        expect(loadCalls).toBe(expectedLoads);
+        if (expectedStatus === 405) expect(response.headers.get('allow')).toBe('GET, HEAD');
+      } finally {
+        String.prototype.toUpperCase = originalToUpperCase;
+      }
+    },
+  );
 });
 
 function matchedAppRequest(

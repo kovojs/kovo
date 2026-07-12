@@ -23,6 +23,47 @@ function attestedLiveTargetHeader(
 }
 
 describe('server app mutation request boundary', () => {
+  it('uses the pinned request method classifier after app prototype poisoning', async () => {
+    const handler = vi.fn(() => ({ ok: true }));
+    const app = createApp({
+      mutations: [
+        mutation('method/write', {
+          csrf: false,
+          handler,
+          input: s.object({}),
+        }),
+      ],
+    });
+    const originalToUpperCase = String.prototype.toUpperCase;
+    String.prototype.toUpperCase = () => 'POST';
+    try {
+      const getRequest = new Request('https://example.test/_m/method/write', { method: 'GET' });
+      const getResponse = await handleAppMutationRequest(
+        app,
+        getRequest,
+        new URL(getRequest.url),
+        'method/write',
+      );
+      expect(getResponse.status).toBe(405);
+      expect(handler).not.toHaveBeenCalled();
+
+      const postRequest = new Request('https://example.test/_m/method/write', {
+        body: new FormData(),
+        method: 'POST',
+      });
+      const postResponse = await handleAppMutationRequest(
+        app,
+        postRequest,
+        new URL(postRequest.url),
+        'method/write',
+      );
+      expect(postResponse.status).toBe(303);
+      expect(handler).toHaveBeenCalledTimes(1);
+    } finally {
+      String.prototype.toUpperCase = originalToUpperCase;
+    }
+  });
+
   it('resolves mutation response options from exact-key policies', async () => {
     const seen: string[] = [];
     const addToCart = mutation('cart/add', {

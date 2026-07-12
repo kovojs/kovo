@@ -49,6 +49,48 @@ describe('server app shell dispatch table', () => {
     });
   });
 
+  it('uses pinned static dispatch traversal and path controls after prototype poisoning', () => {
+    const originalIterator = Array.prototype[Symbol.iterator];
+    Array.prototype[Symbol.iterator] = function () {
+      if (
+        this.length === 6 &&
+        (this[0] as { phase?: string } | undefined)?.phase === 'mutation' &&
+        (this[5] as { phase?: string } | undefined)?.phase === 'route'
+      ) {
+        return originalIterator.call([]);
+      }
+      return originalIterator.call(this);
+    } as (typeof Array.prototype)[Symbol.iterator];
+    let iteratorResult;
+    try {
+      iteratorResult = matchShellDispatch({ method: 'POST', pathname: '/_m/cart/add' });
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+    expect(iteratorResult).toMatchObject({ key: 'cart/add', kind: 'mutation' });
+
+    const originalStartsWith = String.prototype.startsWith;
+    const originalSlice = String.prototype.slice;
+    String.prototype.startsWith = function (search, position) {
+      if (originalSlice.call(this, 0) === '/_m/cart/add' && search === '/_m/') return false;
+      return originalStartsWith.call(this, search, position);
+    };
+    String.prototype.slice = function (start, end) {
+      if (originalSlice.call(this, 0) === '/_m/cart/add' && start === 4 && end === undefined) {
+        return 'wrong-registry-key';
+      }
+      return originalSlice.call(this, start, end);
+    };
+    let pathResult;
+    try {
+      pathResult = matchShellDispatch({ method: 'POST', pathname: '/_m/cart/add' });
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.slice = originalSlice;
+    }
+    expect(pathResult).toMatchObject({ key: 'cart/add', kind: 'mutation' });
+  });
+
   it('dispatches endpoint exact mounts before endpoint prefix mounts', () => {
     const exactEndpoint = endpoint('/auth/callback', {
       handler: () => new Response('exact'),
@@ -160,6 +202,48 @@ describe('server app shell dispatch table', () => {
       kind: 'endpoint',
       methodAllowed: true,
     });
+  });
+
+  it('cannot cross-bind endpoint posture or authorize a method through Array.find/some poisoning', () => {
+    const publicMachineEndpoint = endpoint('/machine', {
+      csrf: false,
+      csrfJustification: 'machine endpoint sibling for dispatch poisoning regression',
+      handler: () => new Response('public-machine-handler'),
+      method: 'POST',
+      reason: 'machine endpoint sibling for dispatch poisoning regression',
+      response: rawTextResponse,
+    });
+    const protectedEndpoint = endpoint('/account', {
+      handler: () => new Response('protected-account-handler'),
+      method: 'POST',
+      reason: 'protected endpoint for dispatch poisoning regression',
+      response: rawTextResponse,
+    });
+    const endpoints = [publicMachineEndpoint, protectedEndpoint];
+    const originalFind = Array.prototype.find;
+    const originalSome = Array.prototype.some;
+    Array.prototype.find = function (predicate, thisArg) {
+      if (this === endpoints) return publicMachineEndpoint;
+      return originalFind.call(this, predicate, thisArg);
+    } as typeof Array.prototype.find;
+    Array.prototype.some = () => true;
+    try {
+      expect(matchShellDispatch({ endpoints, method: 'POST', pathname: '/account' })).toMatchObject(
+        {
+          endpoint: protectedEndpoint,
+          kind: 'endpoint',
+          methodAllowed: true,
+        },
+      );
+      expect(matchShellDispatch({ endpoints, method: 'GET', pathname: '/account' })).toMatchObject({
+        endpoint: protectedEndpoint,
+        kind: 'endpoint',
+        methodAllowed: false,
+      });
+    } finally {
+      Array.prototype.find = originalFind;
+      Array.prototype.some = originalSome;
+    }
   });
 
   it('falls through to the 404 dispatch phase with canonical pathname metadata', () => {

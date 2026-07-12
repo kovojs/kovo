@@ -4,6 +4,9 @@ import {
   type PathnameNormalization,
   type RouteLike,
 } from './match.js';
+import { canonicalRequestMethod } from './request-method.js';
+import { denseOwnArrayFind } from './registry-lookup.js';
+import { witnessStringStartsWith } from './security-witness-intrinsics.js';
 
 /**
  * @internal Shell-dispatch engine input shape (SPEC.md §6.x dispatch order). The minimal
@@ -151,17 +154,18 @@ export function matchShellDispatch<
   Endpoint extends EndpointLike = EndpointLike,
 >(input: ShellDispatchInput<Route, Endpoint>): ShellDispatchMatch<Route, Endpoint> {
   const normalization = normalizePathname(input.pathname);
-  const method = input.method?.toUpperCase();
+  const method = input.method === undefined ? undefined : canonicalRequestMethod(input.method);
   let endpointMethodMismatch:
     | Extract<ShellDispatchMatch<Route, Endpoint>, { kind: 'endpoint' }>
     | undefined;
 
-  for (const entry of shellDispatchMatchingTable) {
+  for (let entryIndex = 0; entryIndex < shellDispatchMatchingTable.length; entryIndex += 1) {
+    const entry = shellDispatchMatchingTable[entryIndex]!;
     if (entry.kind === 'reserved') {
-      if (!normalization.pathname.startsWith(entry.prefix)) continue;
+      if (!witnessStringStartsWith(normalization.pathname, entry.prefix)) continue;
       return {
         entry,
-        key: normalization.pathname.slice(entry.prefix.length),
+        key: requestPathRange(normalization.pathname, entry.prefix.length),
         kind: entry.phase,
         normalization,
         pathname: normalization.pathname,
@@ -169,15 +173,26 @@ export function matchShellDispatch<
     }
 
     if (entry.kind === 'endpoint') {
-      const endpoint = (input.endpoints ?? []).find(
+      const endpoint = denseOwnArrayFind(
+        input.endpoints ?? [],
         (candidate) =>
           candidate.mount === entry.mount && endpointPathMatches(candidate, normalization.pathname),
+        'App endpoint registry',
       );
       if (!endpoint) continue;
       const allowedMethods = endpointAllowedMethods(endpoint);
       const methodAllowed =
         method === undefined ||
-        allowedMethods.some((candidate) => candidate.toUpperCase() === method);
+        denseOwnArrayFind(
+          allowedMethods,
+          (candidate) => {
+            if (typeof candidate !== 'string') {
+              throw new TypeError('Endpoint allowed methods must contain only strings.');
+            }
+            return canonicalRequestMethod(candidate) === method;
+          },
+          'Endpoint allowed methods',
+        ) !== undefined;
       const match = {
         allowedMethods,
         endpoint,
@@ -226,13 +241,19 @@ export function matchShellDispatch<
 function endpointAllowedMethods(endpoint: EndpointLike): readonly string[] {
   if (endpoint.allowedMethods !== undefined) return endpoint.allowedMethods;
   if (endpoint.method === undefined) return [];
-  const method = endpoint.method.toUpperCase();
+  const method = canonicalRequestMethod(endpoint.method);
   return method === 'GET' ? ['GET', 'HEAD'] : [method];
 }
 
 function endpointPathMatches(endpoint: EndpointLike, pathname: string): boolean {
   const endpointPath = normalizePathname(endpoint.path).pathname;
   if (endpoint.mount === 'exact') return pathname === endpointPath;
-  if (endpointPath === '/') return pathname.startsWith('/');
-  return pathname === endpointPath || pathname.startsWith(`${endpointPath}/`);
+  if (endpointPath === '/') return witnessStringStartsWith(pathname, '/');
+  return pathname === endpointPath || witnessStringStartsWith(pathname, `${endpointPath}/`);
+}
+
+function requestPathRange(value: string, start: number): string {
+  let result = '';
+  for (let index = start; index < value.length; index += 1) result += value[index];
+  return result;
 }

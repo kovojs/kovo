@@ -34,6 +34,7 @@ import {
 import { renderQueryWireHtml } from './wire-html.js';
 import type { Reader } from './managed-db.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
+import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 
 interface QueryDeltaListMeta {
   domain: string;
@@ -668,7 +669,11 @@ export const renderQueryRegistryEndpointResponse = wireEmitter(
     queryKey: string,
     endpointRequest: QueryEndpointRequest<Request>,
   ): Promise<QueryEndpointResponse> {
-    const definition = registry.queries.find((queryDefinition) => queryDefinition.key === queryKey);
+    const definition = denseOwnRegistryEntryByExactKey(
+      registry.queries,
+      queryKey,
+      'Query endpoint registry',
+    );
 
     if (!definition) {
       return withQueryCacheHeaders({

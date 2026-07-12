@@ -29,6 +29,7 @@ import {
 import { appTaskScheduler } from './task-runtime.js';
 import { readCsrfCarrierFromRequest } from './untrusted-request-body.js';
 import { runWebhook, type WebhookDeclaration } from './webhook.js';
+import { canonicalRequestMethod } from './request-method.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
@@ -59,7 +60,7 @@ export async function dispatchMatchedAppRequest({
     // SPEC §9.4: /_q/ is a credentialed GET endpoint. Reject non-GET/HEAD methods
     // with 405 so state-unsafe verbs (POST, DELETE …) cannot use the query channel
     // as a no-CSRF read path.
-    const method = request.method.toUpperCase();
+    const method = canonicalRequestMethod(request.method);
     if (method !== 'GET' && method !== 'HEAD') {
       return methodNotAllowedWebResponse(request, ['GET', 'HEAD']);
     }
@@ -199,7 +200,7 @@ async function validateEndpointCsrf(
 }
 
 function requiresCsrf(method: string): boolean {
-  const upper = method.toUpperCase();
+  const upper = canonicalRequestMethod(method);
   return upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
 }
 

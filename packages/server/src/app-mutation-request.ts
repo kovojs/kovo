@@ -34,6 +34,8 @@ import {
 } from './response-posture.js';
 import { appTaskScheduler } from './task-runtime.js';
 import { readUntrustedRequestBody, revealUntrustedRequestValue } from './untrusted-request-body.js';
+import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
+import { canonicalRequestMethod } from './request-method.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -41,11 +43,15 @@ export async function handleAppMutationRequest(
   url: URL,
   mutationKey: string,
 ): Promise<Response> {
-  if (request.method.toUpperCase() !== 'POST') {
+  if (canonicalRequestMethod(request.method) !== 'POST') {
     return methodNotAllowedWebResponse(request, ['POST']);
   }
 
-  const mutation = app.mutations.find((candidate) => candidate.key === mutationKey);
+  const mutation = denseOwnRegistryEntryByExactKey(
+    app.mutations,
+    mutationKey,
+    'App mutation registry',
+  );
   if (!mutation) {
     const errorShellRequest = requestMetadataWithoutAmbientAuthority(request);
     return serverResponseToWebResponse(

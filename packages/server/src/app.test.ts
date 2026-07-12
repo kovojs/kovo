@@ -833,6 +833,72 @@ describe('server createApp request shell', () => {
     expect(app.mutations.map((candidate) => candidate.key)).toEqual(['cart/add', 'cart/remove']);
   });
 
+  it('cannot cross-bind a protected mutation to a public sibling through poisoned Array.find', async () => {
+    const publicHandler = vi.fn((input) => input);
+    const protectedHandler = vi.fn((input) => input);
+    const publicMutation = mutation('registry/public-write', {
+      access: publicAccess('public sibling used by registry poisoning regression'),
+      csrf: false,
+      handler: publicHandler,
+      input: s.object({ value: s.string() }),
+    });
+    const protectedMutation = mutation('registry/protected-write', {
+      access: [() => false],
+      handler: protectedHandler,
+      input: s.object({ value: s.string() }),
+    });
+    const app = createApp({ mutations: [publicMutation, protectedMutation] });
+    const handler = createRequestHandler(app);
+    const originalFind = Array.prototype.find;
+    Array.prototype.find = function (predicate, thisArg) {
+      if (this === app.mutations) return publicMutation;
+      return originalFind.call(this, predicate, thisArg);
+    } as typeof Array.prototype.find;
+    try {
+      const response = await handler(
+        new Request('https://example.test/_m/registry/protected-write', {
+          body: JSON.stringify({ value: 'must-not-dispatch' }),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        }),
+      );
+      expect(response.status).toBe(422);
+      expect(publicHandler).not.toHaveBeenCalled();
+      expect(protectedHandler).not.toHaveBeenCalled();
+    } finally {
+      Array.prototype.find = originalFind;
+    }
+  });
+
+  it('rejects percent-spelled mutation keys after String.includes poisoning', async () => {
+    const mutationHandler = vi.fn((input) => input);
+    const handler = createRequestHandler(
+      createApp({
+        mutations: [
+          mutation('%61', {
+            csrf: false,
+            handler: mutationHandler,
+            input: s.object({}),
+          }),
+        ],
+      }),
+    );
+    const originalIncludes = String.prototype.includes;
+    String.prototype.includes = () => false;
+    try {
+      const response = await handler(
+        new Request('https://example.test/_m/%61', {
+          body: new FormData(),
+          method: 'POST',
+        }),
+      );
+      expect(response.status).toBe(404);
+      expect(mutationHandler).not.toHaveBeenCalled();
+    } finally {
+      String.prototype.includes = originalIncludes;
+    }
+  });
+
   it('injects compiler-registered query reads into app queries', () => {
     const catalogQuery = query('generatedCatalog', {
       load: () => ({ items: [] as string[] }),
@@ -1494,6 +1560,57 @@ describe('server createApp request shell', () => {
     expect(rejected.status).toBe(422);
     await expect(rejected.text()).resolves.toContain('Expected file &lt;= 8 bytes');
     expect(mutationHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the file-aware mutation body cap finite after Math.max poisoning', async () => {
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const handler = createRequestHandler(
+      createApp({
+        mutations: [
+          mutation('upload/poisoned-cap', {
+            csrf: false,
+            handler: mutationHandler,
+            input: s.object({ avatar: s.file().maxBytes(8) }),
+          }),
+        ],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: 1,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: false },
+        },
+      }),
+    );
+    let pulls = 0;
+    let cancellations = 0;
+    const body = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancellations += 1;
+      },
+      pull(controller) {
+        pulls += 1;
+        if (pulls === 1) controller.enqueue(new Uint8Array(1_048_585));
+        else controller.close();
+      },
+    });
+    const originalMax = Math.max;
+    Math.max = () => 1 / 0;
+    try {
+      const response = await handler(
+        new Request('https://example.test/_m/upload/poisoned-cap', {
+          body,
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          duplex: 'half',
+        } as RequestInit),
+      );
+      expect(response.status).toBe(413);
+      expect(cancellations).toBe(1);
+      expect(mutationHandler).not.toHaveBeenCalled();
+    } finally {
+      Math.max = originalMax;
+    }
   });
 
   it('rejects oversized streamed endpoint bodies before dispatch', async () => {

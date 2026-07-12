@@ -28,6 +28,7 @@ import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import { schemaMaxUploadBytes, type Schema } from './schema.js';
 import { mutationResponseWithoutBrowserState } from './mutation.js';
+import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
@@ -185,7 +186,11 @@ function requestBodyLimitForMatch(
   const baseLimit = app.requestLimits.maxBodyBytes;
   if (baseLimit === false || match.kind !== 'mutation') return baseLimit;
 
-  const mutation = app.mutations.find((candidate) => candidate.key === reservedKey);
+  const mutation = denseOwnRegistryEntryByExactKey(
+    app.mutations,
+    reservedKey ?? '',
+    'App mutation registry',
+  );
   if (mutation === undefined) return baseLimit;
   const uploadBytes = schemaMaxUploadBytes(mutation.input as Schema<unknown>);
   if (uploadBytes === undefined) return baseLimit;
@@ -193,7 +198,8 @@ function requestBodyLimitForMatch(
   // SPEC §6.3/§9.1: a declared file limit is the field-level validation contract. Keep the global
   // pre-dispatch floor, but raise it enough for multipart envelope bytes so the schema can return
   // the typed 422 field error instead of a misleading bare 413 for ordinary bounded uploads.
-  return Math.max(baseLimit, uploadBytes + FILE_MUTATION_BODY_OVERHEAD_BYTES);
+  const uploadBodyLimit = uploadBytes + FILE_MUTATION_BODY_OVERHEAD_BYTES;
+  return baseLimit >= uploadBodyLimit ? baseLimit : uploadBodyLimit;
 }
 
 function resolveReservedDispatchKey(
@@ -203,7 +209,7 @@ function resolveReservedDispatchKey(
     // Mutation form actions are emitted directly from the canonical registry key.
     // Reject percent-encoded aliases before any policy callback so a protected key
     // cannot be classified under one spelling and dispatched under another.
-    return match.key.includes('%') ? undefined : match.key;
+    return requestPathContainsPercent(match.key) ? undefined : match.key;
   }
   if (match.kind !== 'query') return undefined;
   try {
@@ -211,6 +217,13 @@ function resolveReservedDispatchKey(
   } catch {
     return undefined;
   }
+}
+
+function requestPathContainsPercent(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '%') return true;
+  }
+  return false;
 }
 
 function loadShedSurface(kind: string): LoadShedSurface {
