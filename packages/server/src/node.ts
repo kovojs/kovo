@@ -46,16 +46,9 @@ export type NodeRequestHandler = (
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
 const NativeURL = globalThis.URL;
-const nativeHeadersGlobalDescriptor = witnessGetOwnPropertyDescriptor(globalThis, 'Headers');
-const nativeRequestGlobalDescriptor = witnessGetOwnPropertyDescriptor(globalThis, 'Request');
-const nativeUrlGlobalDescriptor = witnessGetOwnPropertyDescriptor(globalThis, 'URL');
-if (
-  nativeHeadersGlobalDescriptor === undefined ||
-  nativeRequestGlobalDescriptor === undefined ||
-  nativeUrlGlobalDescriptor === undefined
-) {
-  throw new TypeError('Kovo Node adapter requires intact web platform constructors.');
-}
+const nativeHeadersGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'Headers');
+const nativeRequestGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'Request');
+const nativeUrlGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'URL');
 const nativeHeadersAppend = NativeHeaders.prototype.append;
 const nativeHeadersDelete = NativeHeaders.prototype.delete;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
@@ -63,29 +56,33 @@ const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
 const nativeHeadersHas = NativeHeaders.prototype.has;
 const nativeHeadersSet = NativeHeaders.prototype.set;
-const nativeUrlHashGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'hash')?.get;
-const nativeUrlHrefGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'href')?.get;
-const nativeUrlOriginGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
-const nativeUrlPathnameGetter = witnessGetOwnPropertyDescriptor(
-  NativeURL.prototype,
-  'pathname',
-)?.get;
-const nativeUrlSearchGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'search')?.get;
-if (
-  nativeUrlHashGetter === undefined ||
-  nativeUrlHrefGetter === undefined ||
-  nativeUrlOriginGetter === undefined ||
-  nativeUrlPathnameGetter === undefined ||
-  nativeUrlSearchGetter === undefined
-) {
-  throw new TypeError('Kovo Node adapter requires intact URL intrinsic accessors.');
-}
+const nativeUrlHashGetter = requiredGetter(NativeURL.prototype, 'hash');
+const nativeUrlHrefGetter = requiredGetter(NativeURL.prototype, 'href');
+const nativeUrlOriginGetter = requiredGetter(NativeURL.prototype, 'origin');
+const nativeUrlPathnameGetter = requiredGetter(NativeURL.prototype, 'pathname');
+const nativeUrlSearchGetter = requiredGetter(NativeURL.prototype, 'search');
 
 const bodylessMethods = createWitnessSet<string>();
 witnessSetAdd(bodylessMethods, 'GET');
 witnessSetAdd(bodylessMethods, 'HEAD');
 const requestPeerAddressProperty = '__kovoPeerAddress';
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
+
+function requiredPropertyDescriptor(value: object, property: PropertyKey): PropertyDescriptor {
+  const propertyDescriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (propertyDescriptor === undefined) {
+    throw new TypeError('Kovo Node adapter requires intact web platform constructors.');
+  }
+  return propertyDescriptor;
+}
+
+function requiredGetter(value: object, property: PropertyKey): () => unknown {
+  const intrinsicGetter = witnessGetOwnPropertyDescriptor(value, property)?.get;
+  if (intrinsicGetter === undefined) {
+    throw new TypeError('Kovo Node adapter requires intact URL intrinsic accessors.');
+  }
+  return intrinsicGetter;
+}
 
 /**
  * Adapt a Web-standard `RequestHandler` (from `createRequestHandler`) to a Node
@@ -369,6 +366,7 @@ function rawRequestTargetHasScheme(value: string): boolean {
   if (value.length < 2 || !isAsciiAlpha(value[0])) return false;
   for (let index = 1; index < value.length; index += 1) {
     const character = value[index];
+    if (character === undefined) return false;
     if (character === ':') return true;
     if (
       !isAsciiAlpha(character) &&

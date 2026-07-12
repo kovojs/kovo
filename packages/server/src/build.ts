@@ -8,7 +8,6 @@ import {
 
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
-import { sanitizeDiagnosticText, sanitizeDiagnosticUrl } from './logging.js';
 import {
   staticHostHeaders,
   staticHostImmutableAssetPathPattern,
@@ -985,12 +984,11 @@ const immutableAssetHeaders = ${JSON.stringify(staticHostHeaders('immutableAsset
 const revalidatingAssetHeaders = ${JSON.stringify(staticHostHeaders('revalidatingAsset'))};
 const documentStaticHeaders = ${JSON.stringify(staticHostHeaders('document'))};
 const staticErrorHeaders = ${JSON.stringify(staticHostHeaders('errorDocument'))};
-const bodylessMethods = new Set(['GET', 'HEAD']);
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (bodylessMethods.has(request.method) && env.ASSETS) {
+    if (isBodylessMethod(request.method) && env.ASSETS) {
       const assetResponse = await env.ASSETS.fetch(request);
       if (assetResponse.status !== 404) {
         const headers = new Headers(assetResponse.headers);
@@ -1016,6 +1014,10 @@ export default {
     return handler(request);
   },
 };
+
+function isBodylessMethod(method) {
+  return method === 'GET' || method === 'HEAD';
+}
 
 function applyHeaders(headers, policy) {
   for (const [name, value] of Object.entries(policy)) {
@@ -1110,6 +1112,621 @@ function tomlString(value: string): string {
   return JSON.stringify(value);
 }
 
+/**
+ * Closure-complete logging membrane embedded in generated Node output. The factory is evaluated
+ * before the app handler is dynamically imported, so all controls are captured before evaluated
+ * app code can replace shared-realm globals or prototypes (SPEC §6.6).
+ */
+function generatedNodeDiagnosticFactory(): (
+  error: unknown,
+  nodeRequest: {
+    headers?: Record<string, string | readonly string[] | undefined>;
+    method?: string;
+    url?: string;
+  },
+  webRequestUrl?: string,
+) => { error: unknown; method: string; url: string } {
+  const NativeArray = globalThis.Array;
+  const NativeBuffer = Buffer;
+  const NativeError = globalThis.Error;
+  const NativeObject = globalThis.Object;
+  const NativeReflect = globalThis.Reflect;
+  const NativeString = globalThis.String;
+  const NativeURL = globalThis.URL;
+  const NativeURLSearchParams = globalThis.URLSearchParams;
+  const NativeWeakMap = globalThis.WeakMap;
+  const nativeArrayIsArray = NativeArray.isArray;
+  const nativeBufferFrom = NativeBuffer.from;
+  const nativeBufferToString = NativeBuffer.prototype.toString;
+  const nativeDecodeURIComponent = globalThis.decodeURIComponent;
+  const nativeEncodeURIComponent = globalThis.encodeURIComponent;
+  const nativeObjectCreate = NativeObject.create;
+  const nativeObjectDefineProperty = NativeObject.defineProperty;
+  const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+  const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+  const nativeObjectKeys = NativeObject.keys;
+  const nativeObjectPrototype = NativeObject.prototype;
+  const nativeReflectApply = NativeReflect.apply;
+  const nativeReflectConstruct = NativeReflect.construct;
+  const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
+  const nativeStringFromCharCode = NativeString.fromCharCode;
+  const nativeStringIndexOf = NativeString.prototype.indexOf;
+  const nativeStringSlice = NativeString.prototype.slice;
+  const nativeWeakMapGet = NativeWeakMap.prototype.get;
+  const nativeWeakMapSet = NativeWeakMap.prototype.set;
+
+  function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
+    return nativeReflectApply(fn, receiver, args) as Return;
+  }
+
+  function descriptor(value: object, property: PropertyKey): PropertyDescriptor | undefined {
+    return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  }
+
+  function getter(prototype: object, property: PropertyKey): Function | undefined {
+    return descriptor(prototype, property)?.get;
+  }
+
+  const nativeUrlHashGetter = getter(NativeURL.prototype, 'hash');
+  const nativeUrlHrefGetter = getter(NativeURL.prototype, 'href');
+  const nativeUrlPathnameGetter = getter(NativeURL.prototype, 'pathname');
+  const nativeUrlSearchGetter = getter(NativeURL.prototype, 'search');
+  const nativeUrlSearchParamsGetter = getter(NativeURL.prototype, 'searchParams');
+  const nativeUrlSearchParamsEntries = NativeURLSearchParams.prototype.entries;
+  const nativeUrlSearchParamsKeys = NativeURLSearchParams.prototype.keys;
+  let nativeUrlSearchParamsIteratorNext: Function | undefined;
+  try {
+    const probe = new NativeURLSearchParams('probe=value');
+    const iterator = apply<IterableIterator<string>>(nativeUrlSearchParamsKeys, probe, []);
+    nativeUrlSearchParamsIteratorNext = iterator.next;
+  } catch {
+    nativeUrlSearchParamsIteratorNext = undefined;
+  }
+  const errorStackGetter = descriptor(new NativeError('probe'), 'stack')?.get;
+
+  function append<Value>(values: Value[], value: Value): void {
+    apply(nativeObjectDefineProperty, NativeObject, [
+      values,
+      values.length,
+      {
+        configurable: true,
+        enumerable: true,
+        value,
+        writable: true,
+      },
+    ]);
+  }
+
+  function controlsAreSound(): boolean {
+    try {
+      const record = { value: 'ok' };
+      const weak = new NativeWeakMap<object, unknown>();
+      apply(nativeWeakMapSet, weak, [record, record]);
+      const parts = diagnosticUrlParts('/probe?code=secret&next=value#fragment');
+      return (
+        apply(nativeArrayIsArray, NativeArray, [[]]) === true &&
+        apply(nativeArrayIsArray, NativeArray, [{}]) === false &&
+        descriptor(record, 'value')?.value === 'ok' &&
+        apply(nativeWeakMapGet, weak, [record]) === record &&
+        apply(nativeStringIndexOf, 'safe token', ['token', 0]) === 5 &&
+        apply(nativeStringSlice, 'safe token', [5]) === 'token' &&
+        apply(nativeStringCharCodeAt, '\n', [0]) === 10 &&
+        parts?.pathname === '/probe' &&
+        parts.encodedQueryKeys[0] === 'code' &&
+        parts.encodedQueryKeys[1] === 'next'
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function assertControls(): void {
+    if (!controlsSound) {
+      throw new TypeError('Generated Node diagnostic controls are unavailable.');
+    }
+  }
+
+  function constructUrl(value: string): URL {
+    return apply(nativeReflectConstruct, NativeReflect, [
+      NativeURL,
+      [value, 'https://kovo.invalid'],
+    ]);
+  }
+
+  interface DiagnosticUrlParts {
+    encodedQueryKeys: string[];
+    entries: Array<readonly [string, string]>;
+    hash: string;
+    href: string;
+    pathname: string;
+    search: string;
+  }
+
+  function diagnosticUrlParts(value: string): DiagnosticUrlParts | undefined {
+    try {
+      if (
+        nativeUrlHashGetter === undefined ||
+        nativeUrlHrefGetter === undefined ||
+        nativeUrlPathnameGetter === undefined ||
+        nativeUrlSearchGetter === undefined ||
+        nativeUrlSearchParamsGetter === undefined ||
+        nativeUrlSearchParamsIteratorNext === undefined
+      ) {
+        return undefined;
+      }
+      const url = constructUrl(value);
+      const searchParams = apply<URLSearchParams>(nativeUrlSearchParamsGetter, url, []);
+      const keyIterator = apply<IterableIterator<string>>(
+        nativeUrlSearchParamsKeys,
+        searchParams,
+        [],
+      );
+      const encodedQueryKeys: string[] = [];
+      for (;;) {
+        const result = apply<IteratorResult<string>>(
+          nativeUrlSearchParamsIteratorNext,
+          keyIterator,
+          [],
+        );
+        if (result.done) break;
+        append(encodedQueryKeys, apply(nativeEncodeURIComponent, undefined, [result.value]));
+      }
+      const entryIterator = apply<IterableIterator<[string, string]>>(
+        nativeUrlSearchParamsEntries,
+        searchParams,
+        [],
+      );
+      const entries: Array<readonly [string, string]> = [];
+      for (;;) {
+        const result = apply<IteratorResult<[string, string]>>(
+          nativeUrlSearchParamsIteratorNext,
+          entryIterator,
+          [],
+        );
+        if (result.done) break;
+        append(entries, [result.value[0], result.value[1]]);
+      }
+      return {
+        encodedQueryKeys,
+        entries,
+        hash: apply(nativeUrlHashGetter, url, []),
+        href: apply(nativeUrlHrefGetter, url, []),
+        pathname: apply(nativeUrlPathnameGetter, url, []),
+        search: apply(nativeUrlSearchGetter, url, []),
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  const controlsSound = controlsAreSound();
+
+  function sanitizeUrl(value: string): string {
+    assertControls();
+    const parts = diagnosticUrlParts(value);
+    if (parts === undefined) return '/';
+    let query = '';
+    for (let index = 0; index < parts.encodedQueryKeys.length; index += 1) {
+      query += `${index === 0 ? '?' : '&'}${parts.encodedQueryKeys[index]}`;
+    }
+    return `${parts.pathname}${query}`;
+  }
+
+  function replaceAllLiteral(value: string, search: string, replacement: string): string {
+    if (search === '') return value;
+    let result = '';
+    let cursor = 0;
+    for (;;) {
+      const match = apply<number>(nativeStringIndexOf, value, [search, cursor]);
+      if (match < 0) return result + apply<string>(nativeStringSlice, value, [cursor]);
+      result += apply<string>(nativeStringSlice, value, [cursor, match]) + replacement;
+      cursor = match + search.length;
+    }
+  }
+
+  function hasAbsoluteScheme(value: string): boolean {
+    if (value.length < 2 || !asciiAlpha(charCode(value, 0))) return false;
+    for (let index = 1; index < value.length; index += 1) {
+      const code = charCode(value, index);
+      if (code === 0x3a) return true;
+      if (
+        !asciiAlpha(code) &&
+        !(code >= 0x30 && code <= 0x39) &&
+        code !== 0x2b &&
+        code !== 0x2d &&
+        code !== 0x2e
+      ) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function sanitizeText(value: string, requestUrls: readonly string[]): string {
+    let result = value;
+    const replacements: Array<readonly [string, string]> = [];
+    for (let index = 0; index < requestUrls.length; index += 1) {
+      const requestUrl = requestUrls[index]!;
+      const parts = diagnosticUrlParts(requestUrl);
+      if (parts === undefined) continue;
+      const safe = sanitizeUrl(requestUrl);
+      insertReplacement(replacements, requestUrl, safe);
+      insertReplacement(replacements, `${parts.pathname}${parts.search}${parts.hash}`, safe);
+      if (hasAbsoluteScheme(requestUrl)) insertReplacement(replacements, parts.href, safe);
+    }
+    for (let index = 0; index < replacements.length; index += 1) {
+      const replacement = replacements[index]!;
+      if (replacement[0] !== '' && replacement[0] !== replacement[1]) {
+        result = replaceAllLiteral(result, replacement[0], replacement[1]);
+      }
+    }
+    return result;
+  }
+
+  function insertReplacement(
+    replacements: Array<readonly [string, string]>,
+    unsafe: string,
+    safe: string,
+  ): void {
+    let index = replacements.length;
+    while (index > 0 && replacements[index - 1]![0].length < unsafe.length) {
+      replacements[index] = replacements[index - 1]!;
+      index -= 1;
+    }
+    replacements[index] = [unsafe, safe];
+  }
+
+  function charCode(value: string, index: number): number {
+    return apply(nativeStringCharCodeAt, value, [index]);
+  }
+
+  function asciiAlpha(code: number): boolean {
+    return (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
+  }
+
+  function asciiLower(value: string): string {
+    let result = '';
+    for (let index = 0; index < value.length; index += 1) {
+      const code = charCode(value, index);
+      result +=
+        code >= 0x41 && code <= 0x5a
+          ? apply<string>(nativeStringFromCharCode, NativeString, [code + 0x20])
+          : apply<string>(nativeStringSlice, value, [index, index + 1]);
+    }
+    return result;
+  }
+
+  function normalizeName(value: string): string {
+    let result = '';
+    for (let index = 0; index < value.length; index += 1) {
+      let code = charCode(value, index);
+      if (code >= 0x41 && code <= 0x5a) code += 0x20;
+      if ((code >= 0x61 && code <= 0x7a) || (code >= 0x30 && code <= 0x39)) {
+        result += apply<string>(nativeStringFromCharCode, NativeString, [code]);
+      }
+    }
+    return result;
+  }
+
+  const secretNameParts = [
+    'access',
+    'auth',
+    'authorization',
+    'cap',
+    'code',
+    'cookie',
+    'credential',
+    'csrf',
+    'idem',
+    'key',
+    'password',
+    'secret',
+    'session',
+    'signature',
+    'state',
+    'token',
+  ];
+
+  function nameCarriesSecret(value: string): boolean {
+    const normalized = normalizeName(value);
+    for (let index = 0; index < secretNameParts.length; index += 1) {
+      if (apply<number>(nativeStringIndexOf, normalized, [secretNameParts[index]!, 0]) >= 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function nameCarriesUrl(value: string): boolean {
+    const normalized = normalizeName(value);
+    const endings = ['location', 'referer', 'referrer', 'uri', 'url'];
+    for (let index = 0; index < endings.length; index += 1) {
+      const ending = endings[index]!;
+      if (
+        normalized.length >= ending.length &&
+        apply<string>(nativeStringSlice, normalized, [normalized.length - ending.length]) === ending
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function trimRange(value: string, start: number, end: number): string {
+    while (start < end && whitespace(charCode(value, start))) start += 1;
+    while (end > start && whitespace(charCode(value, end - 1))) end -= 1;
+    return apply(nativeStringSlice, value, [start, end]);
+  }
+
+  function whitespace(code: number): boolean {
+    return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d;
+  }
+
+  function cookieValues(value: string): string[] {
+    const values: string[] = [];
+    let start = 0;
+    while (start <= value.length) {
+      let end = apply<number>(nativeStringIndexOf, value, [';', start]);
+      if (end < 0) end = value.length;
+      const separator = apply<number>(nativeStringIndexOf, value, ['=', start]);
+      if (separator >= start && separator < end) {
+        const raw = trimRange(value, separator + 1, end);
+        if (raw !== '') {
+          append(values, raw);
+          let unquoted = raw;
+          if (raw.length >= 2 && raw[0] === '"' && raw[raw.length - 1] === '"') {
+            unquoted = apply(nativeStringSlice, raw, [1, raw.length - 1]);
+          }
+          if (unquoted !== raw) append(values, unquoted);
+          try {
+            const decoded = apply<string>(nativeDecodeURIComponent, undefined, [unquoted]);
+            if (decoded !== unquoted) append(values, decoded);
+          } catch {}
+        }
+      }
+      if (end === value.length) break;
+      start = end + 1;
+    }
+    return values;
+  }
+
+  function authorizationValues(value: string): string[] {
+    const values: string[] = [];
+    let start = 0;
+    while (start < value.length && whitespace(charCode(value, start))) start += 1;
+    let separator = start;
+    while (separator < value.length && !whitespace(charCode(value, separator))) separator += 1;
+    const scheme = asciiLower(apply(nativeStringSlice, value, [start, separator]));
+    const payload = trimRange(value, separator, value.length);
+    if (payload === '') return values;
+    append(values, payload);
+    if (scheme === 'basic') {
+      try {
+        const buffer = apply<Buffer>(nativeBufferFrom, NativeBuffer, [payload, 'base64']);
+        const decoded = apply<string>(nativeBufferToString, buffer, ['utf8']);
+        append(values, decoded);
+        const colon = apply<number>(nativeStringIndexOf, decoded, [':', 0]);
+        if (colon >= 0) {
+          append(values, apply(nativeStringSlice, decoded, [0, colon]));
+          append(values, apply(nativeStringSlice, decoded, [colon + 1]));
+        }
+      } catch {}
+    }
+    return values;
+  }
+
+  function rawQueryValues(value: string): string[] {
+    const values: string[] = [];
+    const question = apply<number>(nativeStringIndexOf, value, ['?', 0]);
+    if (question < 0) return values;
+    let end = apply<number>(nativeStringIndexOf, value, ['#', question + 1]);
+    if (end < 0) end = value.length;
+    let start = question + 1;
+    while (start <= end) {
+      let pairEnd = apply<number>(nativeStringIndexOf, value, ['&', start]);
+      if (pairEnd < 0 || pairEnd > end) pairEnd = end;
+      const separator = apply<number>(nativeStringIndexOf, value, ['=', start]);
+      if (separator >= start && separator < pairEnd) {
+        let key = apply<string>(nativeStringSlice, value, [start, separator]);
+        try {
+          key = apply(nativeDecodeURIComponent, undefined, [replaceAllLiteral(key, '+', ' ')]);
+        } catch {}
+        if (nameCarriesSecret(key)) {
+          const item = apply<string>(nativeStringSlice, value, [separator + 1, pairEnd]);
+          if (item !== '') append(values, item);
+        }
+      }
+      if (pairEnd === end) break;
+      start = pairEnd + 1;
+    }
+    return values;
+  }
+
+  function diagnosticInputs(
+    nodeRequest: {
+      headers?: Record<string, string | readonly string[] | undefined>;
+      url?: string;
+    },
+    webRequestUrl?: string,
+  ): { secretValues: string[]; urls: string[] } {
+    const urls: string[] = [];
+    append(urls, typeof nodeRequest.url === 'string' ? nodeRequest.url : '/');
+    if (typeof webRequestUrl === 'string') append(urls, webRequestUrl);
+    const secretValues: string[] = [];
+    const headers = nodeRequest.headers ?? {};
+    const keys = apply<string[]>(nativeObjectKeys, NativeObject, [headers]);
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      const name = keys[keyIndex]!;
+      const headerDescriptor = descriptor(headers, name);
+      if (headerDescriptor === undefined || !('value' in headerDescriptor)) continue;
+      const rawValue = headerDescriptor.value;
+      const values: Array<string | undefined> = apply(nativeArrayIsArray, NativeArray, [rawValue])
+        ? rawValue
+        : [rawValue];
+      for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+        const item = values[valueIndex];
+        if (typeof item !== 'string' || item === '') continue;
+        if (nameCarriesUrl(name)) append(urls, item);
+        if (!nameCarriesSecret(name)) continue;
+        append(secretValues, item);
+        const authValues = authorizationValues(item);
+        for (let index = 0; index < authValues.length; index += 1) {
+          append(secretValues, authValues[index]!);
+        }
+        if (apply<number>(nativeStringIndexOf, normalizeName(name), ['cookie', 0]) >= 0) {
+          const extracted = cookieValues(item);
+          for (let index = 0; index < extracted.length; index += 1) {
+            append(secretValues, extracted[index]!);
+          }
+        }
+      }
+    }
+    for (let urlIndex = 0; urlIndex < urls.length; urlIndex += 1) {
+      const url = urls[urlIndex]!;
+      const parts = diagnosticUrlParts(url);
+      if (parts !== undefined) {
+        for (let index = 0; index < parts.entries.length; index += 1) {
+          const entry = parts.entries[index]!;
+          if (nameCarriesSecret(entry[0]) && entry[1] !== '') append(secretValues, entry[1]);
+        }
+      }
+      const rawValues = rawQueryValues(url);
+      for (let index = 0; index < rawValues.length; index += 1) {
+        append(secretValues, rawValues[index]!);
+      }
+    }
+    return { secretValues, urls };
+  }
+
+  function neutralizeControls(value: string): string {
+    let result = '';
+    let cursor = 0;
+    const hex = '0123456789abcdef';
+    for (let index = 0; index < value.length; index += 1) {
+      const code = charCode(value, index);
+      if (!(code <= 0x1f || (code >= 0x7f && code <= 0x9f))) continue;
+      result += apply<string>(nativeStringSlice, value, [cursor, index]) + '\\u';
+      result += hex[(code >>> 12) & 0xf] + hex[(code >>> 8) & 0xf];
+      result += hex[(code >>> 4) & 0xf] + hex[code & 0xf];
+      cursor = index + 1;
+    }
+    return cursor === 0 ? value : result + apply<string>(nativeStringSlice, value, [cursor]);
+  }
+
+  function sanitizeString(
+    value: string,
+    inputs: { secretValues: string[]; urls: string[] },
+  ): string {
+    let sanitized = sanitizeText(value, inputs.urls);
+    const values: string[] = [];
+    for (let index = 0; index < inputs.secretValues.length; index += 1) {
+      const item = inputs.secretValues[index]!;
+      if (item === '') continue;
+      let insertion = values.length;
+      while (insertion > 0 && values[insertion - 1]!.length < item.length) {
+        values[insertion] = values[insertion - 1]!;
+        insertion -= 1;
+      }
+      values[insertion] = item;
+    }
+    for (let index = 0; index < values.length; index += 1) {
+      sanitized = replaceAllLiteral(sanitized, values[index]!, '[redacted]');
+    }
+    return neutralizeControls(sanitized);
+  }
+
+  function safeErrorDetail(error: unknown): unknown {
+    if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+    try {
+      const stack = descriptor(error as object, 'stack');
+      if (stack !== undefined && 'value' in stack && typeof stack.value === 'string') {
+        return stack.value;
+      }
+      if (
+        stack !== undefined &&
+        !('value' in stack) &&
+        stack.get === errorStackGetter &&
+        typeof errorStackGetter === 'function'
+      ) {
+        const value = apply<unknown>(errorStackGetter, error, []);
+        return typeof value === 'string' ? value : '[redacted]';
+      }
+      return error;
+    } catch {
+      return '[redacted]';
+    }
+  }
+
+  function secretDisplayValue(value: object): boolean {
+    try {
+      const tag = descriptor(value, Symbol.toStringTag);
+      return tag !== undefined && 'value' in tag && tag.value === 'Secret';
+    } catch {
+      return false;
+    }
+  }
+
+  function scrub(
+    value: unknown,
+    inputs: { secretValues: string[]; urls: string[] },
+    seen: WeakMap<object, unknown>,
+  ): unknown {
+    if (typeof value === 'string') return sanitizeString(value, inputs);
+    if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
+    try {
+      if (secretDisplayValue(value)) return '[secret]';
+      const existing = apply<unknown>(nativeWeakMapGet, seen, [value]);
+      if (existing !== undefined) return existing;
+      const array = apply<boolean>(nativeArrayIsArray, NativeArray, [value]);
+      const prototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [value]);
+      if (!array && prototype !== nativeObjectPrototype && prototype !== null) return '[redacted]';
+      const next = array
+        ? []
+        : apply<Record<string, unknown>>(nativeObjectCreate, NativeObject, [prototype]);
+      apply(nativeWeakMapSet, seen, [value, next]);
+      const keys = apply<string[]>(nativeObjectKeys, NativeObject, [value]);
+      for (let index = 0; index < keys.length; index += 1) {
+        const key = keys[index]!;
+        const itemDescriptor = descriptor(value, key);
+        const item =
+          itemDescriptor !== undefined && 'value' in itemDescriptor
+            ? scrub(itemDescriptor.value, inputs, seen)
+            : '[redacted]';
+        apply(nativeObjectDefineProperty, NativeObject, [
+          next,
+          sanitizeString(key, inputs),
+          {
+            configurable: true,
+            enumerable: true,
+            value: item,
+            writable: true,
+          },
+        ]);
+      }
+      return next;
+    } catch {
+      return '[redacted]';
+    }
+  }
+
+  return (error, nodeRequest, webRequestUrl) => {
+    assertControls();
+    const inputs = diagnosticInputs(nodeRequest, webRequestUrl);
+    const method =
+      typeof nodeRequest.method === 'string'
+        ? sanitizeString(nodeRequest.method, inputs)
+        : 'UNKNOWN';
+    const url = sanitizeUrl(typeof nodeRequest.url === 'string' ? nodeRequest.url : '/');
+    const detail = safeErrorDetail(error);
+    const record = { error: detail, method, url };
+    return scrub(record, inputs, new NativeWeakMap<object, unknown>()) as {
+      error: unknown;
+      method: string;
+      url: string;
+    };
+  };
+}
+
 function nodeServerSource(): string {
   return `import { readFile, realpath, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -1123,11 +1740,8 @@ import {
   rejectUnsafeNodeMutationTarget,
   writeWebResponseToNode,
 } from './node-adapter.mjs';
-import handler from './server/handler.mjs';
 
-const sanitizeDiagnosticUrl = (${sanitizeDiagnosticUrl.toString()});
-const sanitizeDiagnosticText = (${sanitizeDiagnosticText.toString()});
-const nativeErrorStackGetter = Object.getOwnPropertyDescriptor(new Error(), 'stack')?.get;
+const createNodeDiagnosticRecord = (${generatedNodeDiagnosticFactory.toString()})();
 
 const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
 const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
@@ -1136,23 +1750,38 @@ const immutableAssetHeaders = ${JSON.stringify(staticHostHeaders('immutableAsset
 const revalidatingAssetHeaders = ${JSON.stringify(staticHostHeaders('revalidatingAsset'))};
 const documentStaticHeaders = ${JSON.stringify(staticHostHeaders('document'))};
 const staticErrorDocumentHeaders = ${JSON.stringify(staticHostHeaders('errorDocument'))};
-const bodylessMethods = new Set(['GET', 'HEAD']);
 const headersTimeoutMs = 10_000;
 const requestTimeoutMs = 30_000;
 const rootedFileCapabilities = new Map();
+let handlerPromise;
+
+async function importHandler() {
+  const module = await import('./server/handler.mjs');
+  return module.default;
+}
+
+function loadHandler() {
+  handlerPromise ??= importHandler();
+  return handlerPromise;
+}
+
+function isBodylessMethod(method) {
+  return method === 'GET' || method === 'HEAD';
+}
 
 export function createKovoNodeServer(options = {}) {
   const server = createServer(async (nodeRequest, nodeResponse) => {
     let diagnosticRequestUrl;
     try {
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
-      if (bodylessMethods.has(nodeRequest.method ?? 'GET')) {
+      if (isBodylessMethod(nodeRequest.method ?? 'GET')) {
         armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       }
       if (await maybeServeStatic(nodeRequest, nodeResponse)) return;
 
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
       diagnosticRequestUrl = request.url;
+      const handler = await loadHandler();
       const response = await handler(request);
       armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       await writeWebResponseToNode(response, nodeResponse, request.method, {
@@ -1176,14 +1805,7 @@ export function createKovoNodeServer(options = {}) {
 
 function logUnhandledNodeError(error, nodeRequest, webRequestUrl) {
   try {
-    const inputs = nodeDiagnosticInputs(nodeRequest, webRequestUrl);
-    const method = nodeRequest.method ?? 'UNKNOWN';
-    const url = sanitizeDiagnosticUrl(nodeRequest.url ?? '/');
-    const detail = safeNodeDiagnosticErrorDetail(error);
-    console.error(
-      '[kovo] unhandled node server error',
-      scrubConsoleValue({ method, url, error: detail }, inputs),
-    );
+    console.error('[kovo] unhandled node server error', createNodeDiagnosticRecord(error, nodeRequest, webRequestUrl));
   } catch {
     try {
       console.error('[kovo] unhandled node server error', {
@@ -1195,216 +1817,9 @@ function logUnhandledNodeError(error, nodeRequest, webRequestUrl) {
   }
 }
 
-function nodeDiagnosticInputs(nodeRequest, webRequestUrl) {
-  const urls = [nodeRequest.url ?? '/'];
-  if (typeof webRequestUrl === 'string') urls.push(webRequestUrl);
-  const secretValues = [];
-  for (const url of urls) secretValues.push(...nodeDiagnosticUrlValues(url));
-
-  for (const [name, rawValue] of Object.entries(nodeRequest.headers ?? {})) {
-    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
-    for (const value of values) {
-      if (typeof value !== 'string' || value === '') continue;
-      if (nodeDiagnosticNameCarriesUrl(name)) urls.push(value);
-      if (!nodeDiagnosticNameCarriesSecret(name)) continue;
-      secretValues.push(value, ...nodeDiagnosticAuthorizationValues(value));
-      if (normalizeNodeDiagnosticName(name).includes('cookie')) {
-        secretValues.push(...nodeDiagnosticCookieValues(value));
-      }
-    }
-  }
-
-  for (const url of urls) secretValues.push(...nodeDiagnosticUrlValues(url));
-  return {
-    secretValues: [...new Set(secretValues.filter((value) => value !== ''))],
-    urls: [...new Set(urls)],
-  };
-}
-
-function normalizeNodeDiagnosticName(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function nodeDiagnosticNameCarriesSecret(value) {
-  const normalized = normalizeNodeDiagnosticName(value);
-  return [
-    'access',
-    'auth',
-    'authorization',
-    'cap',
-    'code',
-    'cookie',
-    'credential',
-    'csrf',
-    'idem',
-    'key',
-    'password',
-    'secret',
-    'session',
-    'signature',
-    'state',
-    'token',
-  ].some((part) => normalized.includes(part));
-}
-
-function nodeDiagnosticNameCarriesUrl(value) {
-  const normalized = normalizeNodeDiagnosticName(value);
-  return (
-    normalized.endsWith('location') ||
-    normalized.endsWith('referer') ||
-    normalized.endsWith('referrer') ||
-    normalized.endsWith('uri') ||
-    normalized.endsWith('url')
-  );
-}
-
-function nodeDiagnosticCookieValues(value) {
-  return value.split(';').flatMap((part) => {
-    const separator = part.indexOf('=');
-    if (separator < 0) return [];
-    const raw = part.slice(separator + 1).trim();
-    if (raw === '') return [];
-    const unquoted =
-      raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')
-        ? raw.slice(1, -1).replace(/\\\\(["\\\\])/g, '$1')
-        : raw;
-    try {
-      return [...new Set([raw, unquoted, decodeURIComponent(unquoted)])];
-    } catch {
-      return [...new Set([raw, unquoted])];
-    }
-  });
-}
-
-function nodeDiagnosticAuthorizationValues(value) {
-  const match = /^\\s*(basic|bearer|digest|negotiate)\\s+(.+)$/i.exec(value);
-  if (!match || !match[1] || !match[2]) return [];
-  const scheme = match[1].toLowerCase();
-  const payload = match[2].trim();
-  const values = [payload];
-  if (scheme === 'basic') {
-    try {
-      const decoded = Buffer.from(payload, 'base64').toString('utf8');
-      values.push(decoded);
-      const separator = decoded.indexOf(':');
-      if (separator >= 0) values.push(decoded.slice(0, separator), decoded.slice(separator + 1));
-    } catch {}
-  }
-  if (scheme === 'digest') {
-    for (const field of payload.matchAll(/(?:^|,)\\s*[^=,]+=(?:"([^"]*)"|([^,]*))/g)) {
-      const fieldValue = (field[1] ?? field[2])?.trim();
-      if (fieldValue) values.push(fieldValue);
-    }
-  }
-  return [...new Set(values.filter((item) => item !== ''))];
-}
-
-function nodeDiagnosticUrlValues(value) {
-  let parsed;
-  try {
-    parsed = new URL(value, 'https://kovo.invalid');
-  } catch {
-    return [];
-  }
-  const values = [...parsed.searchParams.entries()]
-    .filter(([key]) => nodeDiagnosticNameCarriesSecret(key))
-    .map(([, item]) => item)
-    .filter((item) => item !== '');
-  const rawValues = parsed.search
-    .slice(1)
-    .split('&')
-    .flatMap((pair) => {
-      const separator = pair.indexOf('=');
-      if (separator < 0) return [];
-      let key = pair.slice(0, separator);
-      try {
-        key = decodeURIComponent(key.replace(/\\+/g, ' '));
-      } catch {}
-      return nodeDiagnosticNameCarriesSecret(key) ? [pair.slice(separator + 1)] : [];
-    })
-    .filter((item) => item !== '');
-  return [...values, ...rawValues];
-}
-
-function safeNodeDiagnosticErrorDetail(error) {
-  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(error, 'stack');
-    if (descriptor && 'value' in descriptor && typeof descriptor.value === 'string') {
-      return descriptor.value;
-    }
-    if (
-      descriptor &&
-      !('value' in descriptor) &&
-      descriptor.get === nativeErrorStackGetter &&
-      typeof nativeErrorStackGetter === 'function'
-    ) {
-      const stack = Reflect.apply(nativeErrorStackGetter, error, []);
-      return typeof stack === 'string' ? stack : '[redacted]';
-    }
-    return error;
-  } catch {
-    return '[redacted]';
-  }
-}
-
-function scrubConsoleValue(value, inputs, seen = new WeakMap()) {
-  if (isSecretDisplayValue(value)) return '[secret]';
-  if (typeof value === 'string') return sanitizeNodeDiagnosticString(value, inputs);
-  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
-  if (seen.has(value)) return seen.get(value);
-  if (!Array.isArray(value) && !isPlainConsoleObject(value)) return '[redacted]';
-
-  const next = Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));
-  seen.set(value, next);
-  for (const key of Object.keys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor) continue;
-    const sanitizedKey = sanitizeNodeDiagnosticString(key, inputs);
-    const sanitized =
-      'value' in descriptor
-        ? scrubConsoleValue(descriptor.value, inputs, seen)
-        : '[redacted]';
-    Object.defineProperty(next, sanitizedKey, {
-      configurable: true,
-      enumerable: true,
-      value: sanitized,
-      writable: true,
-    });
-  }
-  return next;
-}
-
-function sanitizeNodeDiagnosticString(value, inputs) {
-  let sanitized = sanitizeDiagnosticText(value, inputs.urls, sanitizeDiagnosticUrl);
-  for (const secretValue of [...inputs.secretValues].sort(
-    (left, right) => right.length - left.length,
-  )) {
-    sanitized = sanitized.replaceAll(secretValue, '[redacted]');
-  }
-  return sanitized.replace(/[\\u0000-\\u001f\\u007f-\\u009f]/g, (char) =>
-    '\\\\u' + char.charCodeAt(0).toString(16).padStart(4, '0'),
-  );
-}
-
-function isSecretDisplayValue(value) {
-  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return false;
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(value, Symbol.toStringTag);
-    return !!descriptor && 'value' in descriptor && descriptor.value === 'Secret';
-  } catch {
-    return false;
-  }
-}
-
-function isPlainConsoleObject(value) {
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
 async function maybeServeStatic(nodeRequest, nodeResponse) {
   const method = nodeRequest.method ?? 'GET';
-  if (!bodylessMethods.has(method)) return false;
+  if (!isBodylessMethod(method)) return false;
 
   const pathname = staticPathname(nodeRequest);
   if (pathname === undefined) return false;

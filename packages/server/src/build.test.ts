@@ -874,6 +874,9 @@ export default async function handler(request) {
       expect(nodeServer).toContain('server.headersTimeout = headersTimeoutMs;');
       expect(nodeServer).toContain('server.requestTimeout = requestTimeoutMs;');
       expect(nodeServer).toContain("'[kovo] unhandled node server error'");
+      expect(nodeServer).toContain('const createNodeDiagnosticRecord = (');
+      expect(nodeServer).toContain("await import('./server/handler.mjs')");
+      expect(nodeServer).not.toContain('sanitizeDiagnosticUrl.toString');
 
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
@@ -920,6 +923,30 @@ export default async function handler(request) {
         expect(canonicalMutationPath).toContain('HTTP/1.1 200');
         expect(canonicalMutationPath).toContain('route:/_m/a/b:');
         expect(rawTargetCounter.__kovoNodeRawTargetHandlerCalls).toBe(1);
+
+        const originalSetHas = Set.prototype.has;
+        Set.prototype.has = function (value) {
+          const bodylessClassifier =
+            this.size === 2 &&
+            originalSetHas.call(this, 'GET') &&
+            originalSetHas.call(this, 'HEAD');
+          if (bodylessClassifier && value === 'POST') return true;
+          if (bodylessClassifier && value === 'GET') return false;
+          return originalSetHas.call(this, value);
+        } as typeof Set.prototype.has;
+        try {
+          const poisonedPost = await rawHttpExchange(
+            baseUrl,
+            'POST /assets/cart.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
+          );
+          expect(poisonedPost).toContain('route:/assets/cart.css:');
+          expect(poisonedPost).not.toContain('body { color: navy; }');
+
+          const poisonedGet = await fetch(`${baseUrl}/assets/cart.css`);
+          await expect(poisonedGet.text()).resolves.toBe('body { color: navy; }');
+        } finally {
+          Set.prototype.has = originalSetHas;
+        }
 
         const declaredOversized = await rawHttpExchange(
           baseUrl,
@@ -1248,6 +1275,106 @@ export default async function handler(request) {
       expect(JSON.stringify(consoleErrors)).not.toContain('HEADER_SECRET_SHOULD_NOT_LOG');
       expect(JSON.stringify(consoleErrors)).not.toContain(basicPassword);
     } finally {
+      console.error = originalConsoleError;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps generated Node diagnostics useful under selective ambient intrinsic poisoning', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-poisoned-errors-'));
+    const originalConsoleError = console.error;
+    const consoleErrors: unknown[][] = [];
+    const poisonGlobal = globalThis as typeof globalThis & {
+      __kovoRestoreGeneratedLoggingPoison?: () => void;
+    };
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const originalReplaceAll = String.prototype.replaceAll;
+const originalSort = Array.prototype.sort;
+function restoreLoggingPoison() {
+  Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
+  String.prototype.replaceAll = originalReplaceAll;
+  Array.prototype.sort = originalSort;
+}
+export default async function handler(request) {
+  globalThis.__kovoRestoreGeneratedLoggingPoison = restoreLoggingPoison;
+  Object.getOwnPropertyDescriptor = function (_target, property) {
+    if (property === 'stack') throw new Error('ambient descriptor reached generated logger');
+    return Reflect.apply(originalGetOwnPropertyDescriptor, Object, arguments);
+  };
+  String.prototype.replaceAll = function (search, replacement) {
+    if (search === 'POISON_LOG_SECRET') {
+      throw new Error('ambient replaceAll reached generated logger');
+    }
+    return Reflect.apply(originalReplaceAll, this, [search, replacement]);
+  };
+  Array.prototype.sort = function (compare) {
+    for (let index = 0; index < this.length; index += 1) {
+      if (this[index] === 'POISON_LOG_SECRET') {
+        throw new Error('ambient sort reached generated logger');
+      }
+    }
+    return Reflect.apply(originalSort, this, [compare]);
+  };
+  throw new Error(
+    'generated poison at ' + request.url +
+    ' token=POISON_LOG_SECRET\\nFORGED-LINE\\u001b[31m'
+  );
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
+
+      try {
+        const response = await fetch(`${baseUrl}/poison?apiKey=POISON_LOG_SECRET`, {
+          method: 'POST',
+        });
+        poisonGlobal.__kovoRestoreGeneratedLoggingPoison?.();
+        expect(response.status).toBe(500);
+        await expect(response.text()).resolves.toBe('Internal Server Error');
+      } finally {
+        poisonGlobal.__kovoRestoreGeneratedLoggingPoison?.();
+        delete poisonGlobal.__kovoRestoreGeneratedLoggingPoison;
+        console.error = originalConsoleError;
+        await close(server);
+      }
+
+      expect(consoleErrors).toHaveLength(1);
+      expect(consoleErrors[0]?.[1]).toMatchObject({
+        method: 'POST',
+        url: '/poison?apiKey',
+      });
+      const loggedError = (consoleErrors[0]?.[1] as { error?: unknown } | undefined)?.error;
+      expect(String(loggedError)).toContain('generated poison at /poison?apiKey');
+      expect(String(loggedError)).toContain('token=[redacted]');
+      expect(String(loggedError)).toContain('\\u000aFORGED-LINE\\u001b[31m');
+      expect(String(loggedError)).not.toContain('POISON_LOG_SECRET');
+      expect(String(loggedError)).not.toContain('\n');
+      expect(String(loggedError)).not.toContain('\u001b');
+    } finally {
+      poisonGlobal.__kovoRestoreGeneratedLoggingPoison?.();
+      delete poisonGlobal.__kovoRestoreGeneratedLoggingPoison;
       console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });
     }
@@ -2069,6 +2196,48 @@ export default async function handler(request) {
           ): Promise<Response> | Response;
         };
       };
+
+      const originalSetHas = Set.prototype.has;
+      Set.prototype.has = function (value) {
+        const bodylessClassifier =
+          this.size === 2 && originalSetHas.call(this, 'GET') && originalSetHas.call(this, 'HEAD');
+        if (bodylessClassifier && value === 'POST') return true;
+        if (bodylessClassifier && value === 'GET') return false;
+        return originalSetHas.call(this, value);
+      } as typeof Set.prototype.has;
+      try {
+        let postAssetCalls = 0;
+        const poisonedPost = await workerModule.default.fetch(
+          new Request('https://worker.test/assets/cart.css', { method: 'POST' }),
+          {
+            ASSETS: {
+              fetch: async () => {
+                postAssetCalls += 1;
+                return new Response('STATIC_POST_MUST_NOT_WIN');
+              },
+            },
+          },
+        );
+        await expect(poisonedPost.text()).resolves.toBe('cloudflare:/assets/cart.css');
+        expect(postAssetCalls).toBe(0);
+
+        let getAssetCalls = 0;
+        const poisonedGet = await workerModule.default.fetch(
+          new Request('https://worker.test/assets/cart.css'),
+          {
+            ASSETS: {
+              fetch: async () => {
+                getAssetCalls += 1;
+                return new Response('STATIC_GET_MUST_WIN');
+              },
+            },
+          },
+        );
+        await expect(poisonedGet.text()).resolves.toBe('STATIC_GET_MUST_WIN');
+        expect(getAssetCalls).toBe(1);
+      } finally {
+        Set.prototype.has = originalSetHas;
+      }
 
       const assetResponse = await workerModule.default.fetch(
         new Request('https://worker.test/assets/cart.css'),
