@@ -1152,7 +1152,7 @@ build:dist` passes.
   - **Evidence:** the 194-test mutation/wire/guard matrix and server dist/DTS build pass; the
     independent final-join proof retains the genuine authenticated query truth.
 
-- [ ] **H20 - Mutable client-module and render-plan controls can cross-bind immutable code or
+- [x] **H20 - Mutable client-module and render-plan controls can cross-bind immutable code or
       collapse build truth.** `packages/server/src/{client-modules,loader-runtime-client-module,vite-build}.ts`,
       `packages/core/src/internal/render-plan-token.ts`
   - A selective late `Map.prototype.get` override made the immutable URL registered for
@@ -1169,13 +1169,12 @@ build:dist` passes.
     parsing, and runtime-href registration use boot-pinned, semantically checked controls; neither
     chosen collisions nor late/import-order poison can cross-bind module bytes, forge an unchanged
     build token, or alias unversioned/out-of-registry paths.
-  - **Evidence:** the 106-test client-module/static-export/app matrix, 31-test core/compiler/server
-    render-plan matrix, core/server dist+dts builds, and import/API/wire-output gates pass. The two
-    independent proofs now retain exact public module bytes and distinct fingerprints for projected
-    shapes with versus without the privileged field under selective Map/final-join replacement.
-  - **Remaining:** the server Vite source-version path now pins full source identity and the
-    independent synchronized-crypto proof produces distinct hrefs. The core/compiler 32-bit FNV
-    collision remains open, so this combined item cannot close yet.
+  - **Evidence:** `pnpm exec vitest run --config vitest.bugz.config.ts
+    packages/core/src/internal/client-module-url.content-identity.test.ts
+    packages/core/src/internal/render-plan-token.test.ts packages/compiler/src/handler-lowering.test.ts
+    packages/server/src/client-modules.test.ts packages/server/src/vite-build.test.ts` passes; fixed
+    32-bit FNV collisions produce distinct 256-bit versions and poisoned collection/hash controls
+    cannot cross-bind module bytes or render-plan fingerprints.
 
 - [x] **H21 - Mutable schema-validator traversal can skip every declared refinement.**
       `packages/server/src/schema.ts`
@@ -1254,7 +1253,7 @@ build:dist` passes.
   - **Evidence:** the 140-test focused matrix passes; the independent selective replacement proof
     cannot replace the structured helper operation with attacker markup.
 
-- [ ] **H27 - Truncated CSS hashes alias distinct deploy assets.**
+- [x] **H27 - Truncated CSS hashes alias distinct deploy assets.**
       `packages/compiler/src/css.ts`
   - CSS split chunks truncated SHA-256 to 32 bits. Two fixed distinct valid CSS sources both emitted
     the real `/assets/base-36fabc25.css` path even though their complete bytes and CSP hashes differ,
@@ -1263,6 +1262,9 @@ build:dist` passes.
     immutable deployment identity, and manifest/href generation, CSP hashes, static output, and
     delivery accounting consume the same exact byte snapshot; fixed collision regressions produce
     distinct paths without weakening ordinary deterministic builds.
+  - **Evidence:** `pnpm exec vitest run --config vitest.bugz.config.ts
+    packages/compiler/src/css.test.ts` passes; its fixed 32-bit-prefix collision emits distinct
+    256-bit paths while manifest, CSP, and byte-accounting assertions remain green.
 
 - [x] **H28 - Mutable static-header storage injects deployable Set-Cookie.**
       `packages/server/src/{static-export-headers,static-export-output}.ts`
