@@ -30,16 +30,31 @@ import {
   type Reader,
 } from './managed-db.js';
 import { requestPassedRoleGuard } from './guards.js';
-import { securityStringReplaceAll } from './response-security-intrinsics.js';
+import {
+  securityArrayIsArray,
+  securityArraySort,
+  securityJsonStringify,
+  securityObjectKeys,
+  securityStringReplaceAll,
+  securityStringSplit,
+  securityStringStartsWith,
+} from './response-security-intrinsics.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
 import {
+  createWitnessMap,
   createWitnessSet,
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessMapGet,
+  witnessMapForEach,
+  witnessMapHas,
+  witnessMapSet,
   witnessSetAdd,
   witnessSetHas,
+  witnessSetForEach,
+  witnessSetSize,
 } from './security-witness-intrinsics.js';
 import { ensureRecurringTaskSchema } from './task-cron.js';
 import {
@@ -1151,8 +1166,8 @@ async function postgresProtectedPolicyPostureIssues(
       withCheck: 'true',
     },
   ];
-  if (config.crossOwnerReadTables.has(table.tableName)) {
-    expected.push({
+  if (witnessSetHas(config.crossOwnerReadTables, table.tableName)) {
+    appendPostgresDenseValue(expected, {
       cmd: 'SELECT',
       issueCode: 'KV433_ADMIN_POLICY',
       name: 'kovo_admin_scope',
@@ -1164,11 +1179,16 @@ async function postgresProtectedPolicyPostureIssues(
   }
 
   const issues: KovoPostgresPostureIssue[] = [];
-  const actualByName = new Map(policies.rows.map((policy) => [policy.policyname, policy]));
-  for (const expectedPolicy of expected) {
-    const actual = actualByName.get(expectedPolicy.name);
+  const actualByName = createWitnessMap<string, PostgresPolicyRow>();
+  for (let index = 0; index < policies.rows.length; index += 1) {
+    const policy = postgresDenseValue(policies.rows, index, 'Postgres policy rows');
+    witnessMapSet(actualByName, policy.policyname, policy);
+  }
+  for (let index = 0; index < expected.length; index += 1) {
+    const expectedPolicy = postgresDenseValue(expected, index, 'Expected Postgres policies');
+    const actual = witnessMapGet(actualByName, expectedPolicy.name);
     if (actual === undefined || !postgresPolicyMatchesExpected(actual, expectedPolicy)) {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: expectedPolicy.issueCode,
         detail:
           actual === undefined
@@ -1178,13 +1198,23 @@ async function postgresProtectedPolicyPostureIssues(
     }
   }
 
-  const expectedNames = new Set(expected.map((policy) => policy.name));
-  const unexpected = policies.rows
-    .filter((policy) => !expectedNames.has(policy.policyname))
-    .map((policy) => policy.policyname)
-    .sort();
+  const expectedNames = createWitnessSet<string>();
+  for (let index = 0; index < expected.length; index += 1) {
+    witnessSetAdd(
+      expectedNames,
+      postgresDenseValue(expected, index, 'Expected Postgres policies').name,
+    );
+  }
+  const unexpected: string[] = [];
+  for (let index = 0; index < policies.rows.length; index += 1) {
+    const policy = postgresDenseValue(policies.rows, index, 'Postgres policy rows');
+    if (!witnessSetHas(expectedNames, policy.policyname)) {
+      appendPostgresDenseValue(unexpected, policy.policyname);
+    }
+  }
+  securityArraySort(unexpected, (left, right) => (left === right ? 0 : left < right ? -1 : 1));
   if (unexpected.length > 0) {
-    issues.push({
+    appendPostgresDenseValue(issues, {
       code: 'KV433_POLICY_SET',
       detail: `${table.schemaName}.${table.tableName} has unexpected RLS policies outside the exact Kovo allowlist: ${unexpected.join(', ')}`,
     });
@@ -1212,12 +1242,21 @@ function postgresPolicyMatchesExpected(
 }
 
 function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
-  const normalizedLeft = [...new Set(left)].sort();
-  const normalizedRight = [...new Set(right)].sort();
-  return (
-    normalizedLeft.length === normalizedRight.length &&
-    normalizedLeft.every((value, index) => value === normalizedRight[index])
-  );
+  const normalizedLeft = createWitnessSet<string>();
+  const normalizedRight = createWitnessSet<string>();
+  for (let index = 0; index < left.length; index += 1) {
+    witnessSetAdd(normalizedLeft, postgresDenseValue(left, index, 'Postgres policy roles'));
+  }
+  for (let index = 0; index < right.length; index += 1) {
+    witnessSetAdd(normalizedRight, postgresDenseValue(right, index, 'Expected policy roles'));
+  }
+  if (witnessSetSize(normalizedLeft) !== witnessSetSize(normalizedRight)) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!witnessSetHas(normalizedRight, postgresDenseValue(left, index, 'Postgres policy roles'))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function canonicalPostgresPolicyExpression(expression: string | null): string | null | undefined {
@@ -1228,29 +1267,69 @@ function canonicalPostgresPolicyExpression(expression: string | null): string | 
     ) as typeof import('pgsql-ast-parser');
     const [statement] = postgresPolicySqlParser.parse(`SELECT 1 WHERE ${expression}`);
     if (statement?.type !== 'select' || statement.where === undefined) return undefined;
-    return JSON.stringify(normalizePostgresPolicyAst(statement.where));
+    return securityJsonStringify(normalizePostgresPolicyAst(statement.where));
   } catch {
     return undefined;
   }
 }
 
 function normalizePostgresPolicyAst(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(normalizePostgresPolicyAst);
+  if (securityArrayIsArray(value)) {
+    const normalized: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      appendPostgresDenseValue(
+        normalized,
+        normalizePostgresPolicyAst(postgresDenseValue(value, index, 'Postgres policy AST array')),
+      );
+    }
+    return normalized;
+  }
   if (value === null || typeof value !== 'object') return value;
   const record = value as Record<string, unknown>;
-  const castTarget = record.to as { name?: unknown } | undefined;
-  const operand = record.operand as { type?: unknown } | undefined;
+  const castTarget = postgresOwnDataValue(record, 'to') as { name?: unknown } | undefined;
+  const operand = postgresOwnDataValue(record, 'operand') as { type?: unknown } | undefined;
   // PostgreSQL deparsing adds implicit `::text` casts around string literals.
   // Removing only that catalog-added representation difference keeps predicate
   // comparison structural and fail-closed without whitespace/parenthesis tricks.
-  if (record.type === 'cast' && castTarget?.name === 'text' && operand?.type === 'string') {
-    return normalizePostgresPolicyAst(record.operand);
+  if (
+    postgresOwnDataValue(record, 'type') === 'cast' &&
+    castTarget !== undefined &&
+    postgresOwnDataValue(castTarget, 'name') === 'text' &&
+    operand !== undefined &&
+    postgresOwnDataValue(operand, 'type') === 'string'
+  ) {
+    return normalizePostgresPolicyAst(operand);
   }
-  const normalized: Record<string, unknown> = {};
-  for (const key of Object.keys(record).sort()) {
-    if (record[key] !== undefined) normalized[key] = normalizePostgresPolicyAst(record[key]);
+  const normalized = witnessCreateNullRecord<unknown>();
+  const keys = securityObjectKeys(record);
+  securityArraySort(keys, (left, right) => (left === right ? 0 : left < right ? -1 : 1));
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = postgresDenseValue(keys, index, 'Postgres policy AST keys');
+    const entry = postgresOwnDataValue(record, key);
+    if (entry !== undefined) {
+      witnessDefineProperty(normalized, key, {
+        configurable: true,
+        enumerable: true,
+        value: normalizePostgresPolicyAst(entry),
+        writable: true,
+      });
+    }
   }
   return normalized;
+}
+
+function postgresOwnDataValue(
+  record: Record<PropertyKey, unknown>,
+  property: PropertyKey,
+): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(record, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(
+      `Postgres security metadata property ${String(property)} must be own data.`,
+    );
+  }
+  return descriptor.value;
 }
 
 async function auditPostgresReachableClosure(
@@ -1745,10 +1824,15 @@ async function auditPostgresReachableRoutines(
       },
     ];
   }
-  return routineRows.rows.map((row) => ({
-    code: 'KV433_REACHABLE_ROUTINE',
-    detail: `${row.routine_schema}.${row.routine_name} is a SECURITY DEFINER routine executable by ${row.role_name}; routine reachability has no vetted Kovo allowlist`,
-  }));
+  const issues: KovoPostgresPostureIssue[] = [];
+  for (let index = 0; index < routineRows.rows.length; index += 1) {
+    const row = postgresDenseValue(routineRows.rows, index, 'Postgres reachable routine rows');
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_REACHABLE_ROUTINE',
+      detail: `${row.routine_schema}.${row.routine_name} is a SECURITY DEFINER routine executable by ${row.role_name}; routine reachability has no vetted Kovo allowlist`,
+    });
+  }
+  return issues;
 }
 
 async function postgresAuditedIdentityNames(
@@ -1757,9 +1841,13 @@ async function postgresAuditedIdentityNames(
   runtimeLoginRole: string | undefined,
 ): Promise<readonly string[] | undefined> {
   if (runtimeLoginRole === undefined || runtimeLoginRole === '') {
-    return [
-      ...new Set([config.readerRole, config.writerRole, config.adminRole, config.systemRole]),
-    ].sort();
+    const identities: string[] = [];
+    const seen = createWitnessSet<string>();
+    appendUniquePostgresIdentity(identities, seen, config.readerRole);
+    appendUniquePostgresIdentity(identities, seen, config.writerRole);
+    appendUniquePostgresIdentity(identities, seen, config.adminRole);
+    appendUniquePostgresIdentity(identities, seen, config.systemRole);
+    return identities;
   }
   const rows = await safeQuery<{ rolname: string }>(
     client,
@@ -1772,7 +1860,9 @@ async function postgresAuditedIdentityNames(
     ].join(' '),
     [runtimeLoginRole, 'MEMBER'],
   );
-  return rows?.rows.map((row) => row.rolname);
+  return rows === undefined
+    ? undefined
+    : postgresIdentityNamesFromRows(rows.rows, 'Postgres audited identity rows');
 }
 
 async function postgresAppAuthorityIdentityNames(
@@ -1780,9 +1870,7 @@ async function postgresAppAuthorityIdentityNames(
   config: ResolvedPostgresRuntimeConfig,
   runtimeLoginRole: string | undefined,
 ): Promise<readonly string[] | undefined> {
-  const roots = [config.readerRole, config.writerRole, runtimeLoginRole]
-    .filter((role): role is string => role !== undefined && role !== '')
-    .filter((role, index, roles) => roles.indexOf(role) === index);
+  const roots = postgresAppAuthorityRootNames(config, runtimeLoginRole);
   const rows = await safeQuery<{ rolname: string }>(
     client,
     [
@@ -1800,7 +1888,44 @@ async function postgresAppAuthorityIdentityNames(
     ].join(' '),
     [roots],
   );
-  return rows?.rows.map((row) => row.rolname);
+  return rows === undefined
+    ? undefined
+    : postgresIdentityNamesFromRows(rows.rows, 'Postgres app authority identity rows');
+}
+
+function postgresAppAuthorityRootNames(
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): string[] {
+  const roots: string[] = [];
+  const seen = createWitnessSet<string>();
+  appendUniquePostgresIdentity(roots, seen, config.readerRole);
+  appendUniquePostgresIdentity(roots, seen, config.writerRole);
+  if (runtimeLoginRole !== undefined) {
+    appendUniquePostgresIdentity(roots, seen, runtimeLoginRole);
+  }
+  return roots;
+}
+
+function appendUniquePostgresIdentity(
+  identities: string[],
+  seen: Set<string>,
+  identity: string,
+): void {
+  if (identity === '' || witnessSetHas(seen, identity)) return;
+  witnessSetAdd(seen, identity);
+  appendPostgresDenseValue(identities, identity);
+}
+
+function postgresIdentityNamesFromRows(
+  rows: readonly { rolname: string }[],
+  label: string,
+): string[] {
+  const identities: string[] = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    appendPostgresDenseValue(identities, postgresDenseValue(rows, index, label).rolname);
+  }
+  return identities;
 }
 
 async function postgresAppRoleClosurePostureIssues(
@@ -1859,15 +1984,15 @@ async function postgresAppRoleClosurePostureIssues(
   }
 
   const issues: KovoPostgresPostureIssue[] = [];
-  const frameworkRoles = new Set([
-    config.readerRole,
-    config.writerRole,
-    config.adminRole,
-    config.systemRole,
-  ]);
-  for (const role of roleRows.rows) {
+  const frameworkRoles = createWitnessSet<string>();
+  witnessSetAdd(frameworkRoles, config.readerRole);
+  witnessSetAdd(frameworkRoles, config.writerRole);
+  witnessSetAdd(frameworkRoles, config.adminRole);
+  witnessSetAdd(frameworkRoles, config.systemRole);
+  for (let index = 0; index < roleRows.rows.length; index += 1) {
+    const role = postgresDenseValue(roleRows.rows, index, 'Postgres role closure rows');
     if (role.rolname === config.adminRole || role.rolname === config.systemRole) {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_RUNTIME_ROLE',
         detail: `reader/writer/runtime assumable-role closure reaches privileged framework role ${role.rolname}`,
       });
@@ -1878,16 +2003,16 @@ async function postgresAppRoleClosurePostureIssues(
       // capability. The exact schema/database owner branch in the creation-authority audit below
       // rejects it with the owned object named, so do not replace that stronger diagnostic here.
       role.rolname !== 'pg_database_owner' &&
-      !frameworkRoles.has(role.rolname) &&
-      !POSTGRES_BENIGN_PREDEFINED_ROLES.has(role.rolname)
+      !witnessSetHas(frameworkRoles, role.rolname) &&
+      !witnessSetHas(POSTGRES_BENIGN_PREDEFINED_ROLES, role.rolname)
     ) {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_RUNTIME_ROLE',
         detail: `reader/writer/runtime assumable-role closure includes PostgreSQL predefined role ${role.rolname}; predefined roles are denied unless explicitly classified benign`,
       });
     }
     if (postgresRoleElevatedAttributes(role).length > 0) {
-      issues.push({
+      appendPostgresDenseValue(issues, {
         code: 'KV433_RUNTIME_ROLE',
         detail: `reader/writer/runtime assumable-role closure includes ${postgresRoleAttributeDetail(
           role,
@@ -1895,8 +2020,13 @@ async function postgresAppRoleClosurePostureIssues(
       });
     }
   }
-  for (const row of adminOptionRows.rows) {
-    issues.push({
+  for (let index = 0; index < adminOptionRows.rows.length; index += 1) {
+    const row = postgresDenseValue(
+      adminOptionRows.rows,
+      index,
+      'Postgres closure admin-option rows',
+    );
+    appendPostgresDenseValue(issues, {
       code: 'KV433_RUNTIME_ROLE',
       detail: `${row.member_role} in the reader/writer/runtime assumable-role closure holds ADMIN OPTION on ${row.role_name}`,
     });
@@ -3693,9 +3823,17 @@ async function applyPostgresDefaultDenyPrivileges(
   tables: readonly PgTable[],
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
-  const schemas = new Set<string>();
-  for (const table of tables) schemas.add(tableSchemaName(getTableConfig(table)));
-  for (const schema of schemas) {
+  const schemas = createWitnessSet<string>();
+  for (let index = 0; index < tables.length; index += 1) {
+    witnessSetAdd(
+      schemas,
+      tableSchemaName(getTableConfig(postgresDenseValue(tables, index, 'Postgres schema tables'))),
+    );
+  }
+  const schemaNames: string[] = [];
+  witnessSetForEach(schemas, (schema) => appendPostgresDenseValue(schemaNames, schema));
+  for (let index = 0; index < schemaNames.length; index += 1) {
+    const schema = postgresDenseValue(schemaNames, index, 'Postgres schema names');
     await client.exec(
       `ALTER DEFAULT PRIVILEGES IN SCHEMA ${quoteIdent(schema)} REVOKE ALL ON TABLES FROM PUBLIC`,
     );
@@ -3766,13 +3904,28 @@ async function applyPostgresCreationAuthorityDefaultDeny(
   // only the explicitly configured app identities. Undeclared roles may be shared with another app;
   // Kovo never rewrites their ACLs. Their authority remains visible through the full closure audit
   // below and therefore aborts and rolls back provisioning instead.
-  const revocationIdentities = [config.readerRole, config.writerRole, runtimeLoginRole]
-    .filter((role): role is string => role !== undefined && role !== '')
-    .filter((role, index, roles) => roles.indexOf(role) === index);
-  const revocationRoles = revocationIdentities.filter(
-    (role) => role !== config.adminRole && role !== config.systemRole && !role.startsWith('pg_'),
-  );
-  const grantees = ['PUBLIC', ...revocationRoles.map(quoteIdent)].join(', ');
+  const revocationIdentities = postgresAppAuthorityRootNames(config, runtimeLoginRole);
+  const revocationRoles: string[] = [];
+  for (let index = 0; index < revocationIdentities.length; index += 1) {
+    const role = postgresDenseValue(
+      revocationIdentities,
+      index,
+      'Postgres creation-authority identities',
+    );
+    if (
+      role !== config.adminRole &&
+      role !== config.systemRole &&
+      !securityStringStartsWith(role, 'pg_')
+    ) {
+      appendPostgresDenseValue(revocationRoles, role);
+    }
+  }
+  let grantees = 'PUBLIC';
+  for (let index = 0; index < revocationRoles.length; index += 1) {
+    grantees += `, ${quoteIdent(
+      postgresDenseValue(revocationRoles, index, 'Postgres creation-authority roles'),
+    )}`;
+  }
   const schemas = await client.query<{ schema_name: string }>(
     [
       'SELECT nspname AS schema_name',
@@ -3782,7 +3935,8 @@ async function applyPostgresCreationAuthorityDefaultDeny(
       'ORDER BY nspname',
     ].join(' '),
   );
-  for (const row of schemas.rows) {
+  for (let index = 0; index < schemas.rows.length; index += 1) {
+    const row = postgresDenseValue(schemas.rows, index, 'Postgres schema authority rows');
     await client.exec(`REVOKE CREATE ON SCHEMA ${quoteIdent(row.schema_name)} FROM ${grantees}`);
   }
   const database = await client.query<{ database_name: string }>(
@@ -3826,28 +3980,48 @@ async function applyPostgresReaderColumnPrivileges(
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
   const readableTables = postgresReaderReadableTableNames(tables, metadata, protectedTables);
   const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables);
-  for (const table of tables) {
+  for (let index = 0; index < tables.length; index += 1) {
+    const table = postgresDenseValue(tables, index, 'Postgres reader privilege tables');
     const tableConfig = getTableConfig(table);
     const secretColumns =
-      metadata.secretColumnNamesByTable.get(tableConfig.name) ?? new Set<string>();
-    const publicColumns = tableConfig.columns
-      .map((column) => column.name)
-      .filter((column) => !secretColumns.has(column));
+      witnessMapGet(metadata.secretColumnNamesByTable, tableConfig.name) ??
+      createWitnessSet<string>();
+    const publicColumns = postgresPublicColumnNames(tableConfig, secretColumns);
     await client.exec(`REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM PUBLIC`);
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.readerRole)}`,
     );
     if (
-      (readableTables.has(tableConfig.name) || authzPolicyDependencyTables.has(tableConfig.name)) &&
+      (witnessSetHas(readableTables, tableConfig.name) ||
+        witnessSetHas(authzPolicyDependencyTables, tableConfig.name)) &&
       publicColumns.length > 0
     ) {
       await client.exec(
-        `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
-          tableConfig,
-        )} TO ${quoteIdent(config.readerRole)}`,
+        `GRANT SELECT (${postgresQuotedIdentifierList(publicColumns)}) ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(config.readerRole)}`,
       );
     }
   }
+}
+
+function postgresPublicColumnNames(
+  table: PgTableConfig,
+  secretColumns: ReadonlySet<string>,
+): string[] {
+  const publicColumns: string[] = [];
+  for (let index = 0; index < table.columns.length; index += 1) {
+    const column = postgresDenseValue(table.columns, index, 'Postgres table columns').name;
+    if (!witnessSetHas(secretColumns, column)) appendPostgresDenseValue(publicColumns, column);
+  }
+  return publicColumns;
+}
+
+function postgresQuotedIdentifierList(values: readonly string[]): string {
+  let result = '';
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) result += ', ';
+    result += quoteIdent(postgresDenseValue(values, index, 'Postgres identifier list'));
+  }
+  return result;
 }
 
 function postgresReaderReadableTableNames(
@@ -3855,28 +4029,44 @@ function postgresReaderReadableTableNames(
   metadata: KovoRuntimeDbMetadata,
   protectedTables: ReadonlyMap<string, ProtectedPostgresTable>,
 ): ReadonlySet<string> {
-  const readableTables = new Set<string>();
-  for (const tableName of protectedTables.keys()) readableTables.add(tableName);
-  const authzPolicyTables = new Set(customAuthzPolicyPredicatesByTable(tables).keys());
-  for (const [tableName, classifications] of metadata.authorizationClassificationsByTable) {
-    if (
-      classifications.some(
-        (classification) =>
-          classification === 'public' ||
-          classification === 'reference' ||
-          (classification === 'authzPolicy' && !authzPolicyTables.has(tableName)),
-      )
-    ) {
-      readableTables.add(tableName);
+  const readableTables = createWitnessSet<string>();
+  witnessMapForEach(protectedTables, (_table, tableName) =>
+    witnessSetAdd(readableTables, tableName),
+  );
+  const authzPolicyTables = createWitnessSet<string>();
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_predicate, tableName) =>
+    witnessSetAdd(authzPolicyTables, tableName),
+  );
+  witnessMapForEach(metadata.authorizationClassificationsByTable, (classifications, tableName) => {
+    for (let index = 0; index < classifications.length; index += 1) {
+      const classification = postgresDenseValue(
+        classifications,
+        index,
+        'Postgres authorization classifications',
+      );
+      if (
+        classification === 'public' ||
+        classification === 'reference' ||
+        (classification === 'authzPolicy' && !witnessSetHas(authzPolicyTables, tableName))
+      ) {
+        witnessSetAdd(readableTables, tableName);
+        break;
+      }
     }
-  }
+  });
   return readableTables;
 }
 
 function postgresOwnerScopedTableNames(metadata: KovoRuntimeDbMetadata): readonly string[] {
-  return [
-    ...new Set([...metadata.ownerSourcesByTable.keys(), ...metadata.ownerViaSourcesByTable.keys()]),
-  ];
+  const names: string[] = [];
+  const seen = createWitnessSet<string>();
+  witnessMapForEach(metadata.ownerSourcesByTable, (_source, name) =>
+    appendUniquePostgresIdentity(names, seen, name),
+  );
+  witnessMapForEach(metadata.ownerViaSourcesByTable, (_source, name) =>
+    appendUniquePostgresIdentity(names, seen, name),
+  );
+  return names;
 }
 
 async function applyPostgresWriterTablePrivileges(
@@ -3888,17 +4078,17 @@ async function applyPostgresWriterTablePrivileges(
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
   const writableTables = postgresWriterWritableTableNames(tables, metadata, protectedTables);
   const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables);
-  for (const table of tables) {
+  for (let index = 0; index < tables.length; index += 1) {
+    const table = postgresDenseValue(tables, index, 'Postgres writer privilege tables');
     const tableConfig = getTableConfig(table);
     const secretColumns =
-      metadata.secretColumnNamesByTable.get(tableConfig.name) ?? new Set<string>();
-    const publicColumns = tableConfig.columns
-      .map((column) => column.name)
-      .filter((column) => !secretColumns.has(column));
+      witnessMapGet(metadata.secretColumnNamesByTable, tableConfig.name) ??
+      createWitnessSet<string>();
+    const publicColumns = postgresPublicColumnNames(tableConfig, secretColumns);
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.writerRole)}`,
     );
-    if (writableTables.has(tableConfig.name)) {
+    if (witnessSetHas(writableTables, tableConfig.name)) {
       await client.exec(
         `GRANT INSERT, UPDATE, DELETE ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(
           config.writerRole,
@@ -3906,16 +4096,15 @@ async function applyPostgresWriterTablePrivileges(
       );
       if (publicColumns.length > 0) {
         await client.exec(
-          `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
-            tableConfig,
-          )} TO ${quoteIdent(config.writerRole)}`,
+          `GRANT SELECT (${postgresQuotedIdentifierList(publicColumns)}) ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(config.writerRole)}`,
         );
       }
-    } else if (authzPolicyDependencyTables.has(tableConfig.name) && publicColumns.length > 0) {
+    } else if (
+      witnessSetHas(authzPolicyDependencyTables, tableConfig.name) &&
+      publicColumns.length > 0
+    ) {
       await client.exec(
-        `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
-          tableConfig,
-        )} TO ${quoteIdent(config.writerRole)}`,
+        `GRANT SELECT (${postgresQuotedIdentifierList(publicColumns)}) ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(config.writerRole)}`,
       );
     }
   }
@@ -3934,8 +4123,15 @@ async function applyPostgresWriterSequencePrivileges(
     postgresDeclaredRelationKeys(tables, writableTables),
   );
   if (sequences === undefined) return;
-  for (const sequence of sequences) {
-    const [schema, name] = sequence.split('.', 2);
+  const sequenceNames: string[] = [];
+  witnessSetForEach(sequences, (sequence) => appendPostgresDenseValue(sequenceNames, sequence));
+  for (let index = 0; index < sequenceNames.length; index += 1) {
+    const sequence = postgresDenseValue(sequenceNames, index, 'Postgres writer sequences');
+    const parts = securityStringSplit(sequence, '.');
+    const schema =
+      parts.length > 0 ? postgresDenseValue(parts, 0, 'Postgres sequence parts') : undefined;
+    const name =
+      parts.length > 1 ? postgresDenseValue(parts, 1, 'Postgres sequence parts') : undefined;
     if (schema === undefined || name === undefined) continue;
     await client.exec(
       `GRANT USAGE ON SEQUENCE ${quoteQualified(schema, name)} TO ${quoteIdent(config.writerRole)}`,
@@ -3950,7 +4146,8 @@ async function applyPostgresPrivilegedRolePrivileges(
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
-  for (const table of tables) {
+  for (let index = 0; index < tables.length; index += 1) {
+    const table = postgresDenseValue(tables, index, 'Postgres privileged-role tables');
     const tableConfig = getTableConfig(table);
     const tableName = tableConfig.name;
     await client.exec(
@@ -3959,20 +4156,17 @@ async function applyPostgresPrivilegedRolePrivileges(
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.systemRole)}`,
     );
-    if (config.crossOwnerReadTables.has(tableName)) {
-      const secretColumns = metadata.secretColumnNamesByTable.get(tableName) ?? new Set<string>();
-      const publicColumns = tableConfig.columns
-        .map((column) => column.name)
-        .filter((column) => !secretColumns.has(column));
+    if (witnessSetHas(config.crossOwnerReadTables, tableName)) {
+      const secretColumns =
+        witnessMapGet(metadata.secretColumnNamesByTable, tableName) ?? createWitnessSet<string>();
+      const publicColumns = postgresPublicColumnNames(tableConfig, secretColumns);
       if (publicColumns.length > 0) {
         await client.exec(
-          `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
-            tableConfig,
-          )} TO ${quoteIdent(config.adminRole)}`,
+          `GRANT SELECT (${postgresQuotedIdentifierList(publicColumns)}) ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(config.adminRole)}`,
         );
       }
     }
-    if (protectedTables.has(tableName)) {
+    if (witnessMapHas(protectedTables, tableName)) {
       await client.exec(
         `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(
           config.systemRole,
@@ -3980,17 +4174,21 @@ async function applyPostgresPrivilegedRolePrivileges(
       );
     }
   }
-  const sequences = await postgresProtectedSerialSequences(
-    client,
-    new Set(
-      [...protectedTables.values()].map((table) =>
-        postgresRelationKey(table.schemaName, table.tableName),
-      ),
-    ),
+  const protectedRelations = createWitnessSet<string>();
+  witnessMapForEach(protectedTables, (table) =>
+    witnessSetAdd(protectedRelations, postgresRelationKey(table.schemaName, table.tableName)),
   );
+  const sequences = await postgresProtectedSerialSequences(client, protectedRelations);
   if (sequences === undefined) return;
-  for (const sequence of sequences) {
-    const [schema, name] = sequence.split('.', 2);
+  const sequenceNames: string[] = [];
+  witnessSetForEach(sequences, (sequence) => appendPostgresDenseValue(sequenceNames, sequence));
+  for (let index = 0; index < sequenceNames.length; index += 1) {
+    const sequence = postgresDenseValue(sequenceNames, index, 'Postgres system sequences');
+    const parts = securityStringSplit(sequence, '.');
+    const schema =
+      parts.length > 0 ? postgresDenseValue(parts, 0, 'Postgres sequence parts') : undefined;
+    const name =
+      parts.length > 1 ? postgresDenseValue(parts, 1, 'Postgres sequence parts') : undefined;
     if (schema === undefined || name === undefined) continue;
     await client.exec(
       `GRANT USAGE ON SEQUENCE ${quoteQualified(schema, name)} TO ${quoteIdent(config.systemRole)}`,
@@ -4003,18 +4201,26 @@ function postgresWriterWritableTableNames(
   metadata: KovoRuntimeDbMetadata,
   protectedTables: ReadonlyMap<string, ProtectedPostgresTable>,
 ): ReadonlySet<string> {
-  const writableTables = new Set<string>();
-  for (const tableName of protectedTables.keys()) writableTables.add(tableName);
-  const authzPolicyTables = new Set(customAuthzPolicyPredicatesByTable(tables).keys());
-  for (const [tableName, classifications] of metadata.authorizationClassificationsByTable) {
-    if (
-      classifications.some(
-        (classification) => classification === 'authzPolicy' && !authzPolicyTables.has(tableName),
-      )
-    ) {
-      writableTables.add(tableName);
+  const writableTables = createWitnessSet<string>();
+  witnessMapForEach(protectedTables, (_table, tableName) =>
+    witnessSetAdd(writableTables, tableName),
+  );
+  const authzPolicyTables = createWitnessSet<string>();
+  witnessMapForEach(customAuthzPolicyPredicatesByTable(tables), (_predicate, tableName) =>
+    witnessSetAdd(authzPolicyTables, tableName),
+  );
+  witnessMapForEach(metadata.authorizationClassificationsByTable, (classifications, tableName) => {
+    for (let index = 0; index < classifications.length; index += 1) {
+      if (
+        postgresDenseValue(classifications, index, 'Postgres authorization classifications') ===
+          'authzPolicy' &&
+        !witnessSetHas(authzPolicyTables, tableName)
+      ) {
+        witnessSetAdd(writableTables, tableName);
+        break;
+      }
     }
-  }
+  });
   return writableTables;
 }
 
@@ -4022,22 +4228,26 @@ function postgresDeclaredRelationKeys(
   tables: readonly PgTable[],
   tableNames: ReadonlySet<string>,
 ): ReadonlySet<string> {
-  return new Set(
-    tables
-      .map((table) => getTableConfig(table))
-      .filter((config) => tableNames.has(config.name))
-      .map((config) => postgresRelationKey(tableSchemaName(config), config.name)),
-  );
+  const relations = createWitnessSet<string>();
+  for (let index = 0; index < tables.length; index += 1) {
+    const config = getTableConfig(
+      postgresDenseValue(tables, index, 'Postgres declared relation tables'),
+    );
+    if (witnessSetHas(tableNames, config.name)) {
+      witnessSetAdd(relations, postgresRelationKey(tableSchemaName(config), config.name));
+    }
+  }
+  return relations;
 }
 
 function postgresCrossOwnerReadableTableNames(
   tables: readonly PgTable[],
   metadata: KovoRuntimeDbMetadata,
 ): ReadonlySet<string> {
-  const readableTables = new Set<string>();
-  for (const tableName of resolveProtectedPostgresTables(tables, metadata).keys()) {
-    readableTables.add(tableName);
-  }
+  const readableTables = createWitnessSet<string>();
+  witnessMapForEach(resolveProtectedPostgresTables(tables, metadata), (_table, tableName) =>
+    witnessSetAdd(readableTables, tableName),
+  );
   return readableTables;
 }
 
