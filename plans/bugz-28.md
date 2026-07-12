@@ -12,7 +12,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | -------- | ----: | ----- |
 | Critical |     9 | C1-C9 |
 | High     |    14 | H1-H14 |
-| Medium   |     6 | M1-M6 |
+| Medium   |     7 | M1-M7 |
 
 ## Critical
 
@@ -257,10 +257,20 @@ This is an active closure ledger; `SPEC.md` remains normative.
     operations and collection storage; reject Argon2i/Argon2d, malformed, duplicate, substituted,
     and import-order-poisoned PHC strings while preserving genuine Argon2id verify/rehash behavior.
 
+- [ ] **M7 - Mutable rate-limit state and clock controls reset enforced request windows.**
+      `packages/server/src/app-load-shed.ts`
+  - A selective late `WeakMap.prototype.get` override made each request allocate fresh private
+    per-app rate state; replacing `Date.now` with an advanced value expired the active bucket. In
+    both independent proofs, a second mutation stayed admitted under a configured maximum of one.
+  - **Acceptance:** per-app/store/bucket operations, time reads, client-key parsing, numeric bounds,
+    LRU eviction, and retry calculations use boot-pinned, semantically checked controls; late and
+    import-order poison cannot reset windows, cross-bind clients, or exceed the configured key cap.
+
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, H9-H10, M4, and M6 are active
-document/cookie/CSRF, generated-diagnostics, and password fixes. Integrated evidence is green at
+The remediation pass remains intentionally non-zero: C6, H9-H10, M4, and M6-M7 are active
+document/cookie/CSRF, generated-diagnostics, password, and request-limit fixes. Integrated evidence
+is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
 route/handler/secret tests.
