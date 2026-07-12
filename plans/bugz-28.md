@@ -10,8 +10,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    54 | C1-C54 |
-| High     |    30 | H1-H30 |
+| Critical |    57 | C1-C57 |
+| High     |    31 | H1-H31 |
 | Medium   |     9 | M1-M9  |
 
 ## Critical
@@ -641,6 +641,37 @@ This is an active closure ledger; `SPEC.md` remains normative.
     independent full-app no-op pin proof now retains the rejecting custom verifier, returns 401 to
     the unsigned request, and never runs the handler after both definition and verifier mutation.
 
+- [ ] **C55 - Sanitized rich HTML can mint Kovo state and client-module execution authority.**
+      `packages/browser/src/{security-output,query-bindings,dynamic-import-url,stream-text}.ts`
+  - `safeRichHtml()` retained every `data-*` attribute, including `data-bind`, stream renderer
+    controls, and `data-kovo-module-allowlist`. A real three-engine CMS fragment read a victim-local
+    private state field into the attacker node, self-authorized an otherwise forbidden private client
+    module, dispatched its renderer, and reached raw DOM output.
+  - **Acceptance:** the sanitizer strips the complete reserved Kovo control/stamp vocabulary from
+    untrusted rich markup while preserving ordinary inert `data-*`; sanitized bytes cannot create
+    bindings, stream dispatch, module allowlists, handlers, morph targets, or any other framework
+    authority under casing, namespace, or encoding aliases.
+
+- [ ] **C56 - Mutable live-property classification turns a safe binding into `innerHTML` XSS.**
+      `packages/browser/src/bind-prop.ts`
+  - The compiler-emitted `data-bind-prop:open` path used live/inherited Object and String operations
+    to resolve its closed allowlist. Selective late prototype pollution reclassified `open` as
+    `innerHTML`; Chromium, Firefox, and WebKit all parsed the supplied image and executed `onerror`.
+  - **Acceptance:** property normalization, exact allowlist lookup, coercion, and final assignment use
+    boot-pinned own-data controls over one closed mapping; inherited/accessor/prototype mutation and
+    late/import-order poison cannot select any property outside the reviewed live-property set.
+
+- [ ] **C57 - Mutable fragment byte extraction replaces witnessed HTML with document authority.**
+      `packages/browser/src/{wire-response-scanner,apply-mutation-response,morph,response-fragment-apply}.ts`
+  - Selective late `String.slice` replaced safe inline fragment bytes before the rendered-fragment
+    carrier was minted; independently, late `String.trim` replaced bytes after witnessed unwrap in
+    modular morph. Both real three-engine paths inserted `<base href="https://attacker.example/">`
+    and changed `document.baseURI` for subsequent relative requests.
+  - **Acceptance:** wire tokenization, offsets, exact substring extraction, carrier mint/unwrap,
+    normalization, template parsing, and morph insertion use one boot-pinned byte snapshot; no
+    mutable intrinsic runs between authority validation and the final DOM sink, and ambiguous bytes
+    fail closed without changing the document.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -969,6 +1000,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     independent real-middleware proof now retains the reviewed document and inserts only Kovo's
     fixed HMR module before `</head>` under the same selective replacement.
 
+- [ ] **H31 - Mutable navigation equality retains revoked privileged segment content.**
+      `packages/browser/src/enhanced-navigation.ts`
+  - Enhanced navigation compared cloned segment `outerHTML` through the live DOM getter. A selective
+    replacement made changed same-build/same-session page segments appear equal; all three engines
+    advanced history while retaining `PRIVILEGED-OLD` and dropping the incoming `ACCESS-REVOKED`
+    content.
+  - **Acceptance:** fetched/current segment identity and equality consume stable framework-owned
+    snapshots with boot-pinned DOM/string controls; changed or ambiguous segments morph/replace (or
+    fail closed to full navigation), and prototype poisoning cannot preserve stale privileged DOM.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -1061,8 +1102,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, H20, and H27 are active
-compiler-cache, static-analysis, compiler-Vite, and immutable-output fixes.
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C57, H20, H27,
+and H31 are active compiler-cache, static-analysis, compiler-Vite, browser authority/output, and
+immutable-output fixes.
 Integrated
 evidence is
 green at
