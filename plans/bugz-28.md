@@ -177,7 +177,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 33-test wire-JSON/TCB/query-HTML matrix passes; the independent serializer
     replacement proof now emits only the classified `{ count: 1 }` truth.
 
-- [ ] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
+- [x] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
       `packages/server/src/task-queue.ts`
   - Replacing `Date.now` and `Math.random` with constants made two distinct memory-queue enqueues
     receive the same job id, so the second task silently replaced the first queued task and args.
@@ -191,8 +191,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
     probes, then returns known bytes for the first real call. The current task membrane accepts it and
     mints the predictable identity `job_6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b`; second-use replay
     detection cannot protect the first job or lease authority.
+  - Resolution evidence: the supported bootstrap now captures task entropy before the app graph;
+    `security-bootstrap-selective.test.ts` proves the same length/call-selective first identity is
+    unpredictable, and the 156-test entropy/command/output matrix passes queue and lease fences.
 
-- [ ] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
+- [x] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
       `packages/server/src/command.ts`
   - `cmd()` froze the reviewed Node argv, but `runCommand()` later spread it through the live
     `Array.prototype[Symbol.iterator]`. A selective late iterator returned attacker `-e` source for
@@ -206,8 +209,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
     strings required by the current self-check, delegates every ordinary call, and substitutes only
     the reviewed proof command. `runCommand()` accepts the controls and executes
     `ATTACKER-CODE-EXECUTED` instead of `SAFE`.
+  - Resolution evidence: the command-capable supported profile captures the sink before authored
+    evaluation; the selective exact-argv `execFile` replacement proof returns only `SAFE`, and the
+    156-test focused matrix passes genuine allowlisted execution and fail-closed controls.
 
-- [ ] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
+- [x] **C19 - A synchronized Node crypto replacement can force AES-GCM IV reuse.**
       `packages/server/src/confidential-at-rest.ts`
   - Replacing CommonJS `node:crypto.randomBytes` with a constant function and calling
     `syncBuiltinESMExports()` updated the live ESM binding consumed by `encryptAtRest()`. Two distinct
@@ -221,6 +227,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     boot probes but returns a known first 12-byte application IV. The current membrane accepts it
     and emits the predictable `a2tra2tra2tra2tr` IV; the replay window resets with the process and
     therefore does not prevent cross-restart nonce reuse under the same key.
+  - Resolution evidence: bootstrap-first capture precedes synchronized builtin mutation; the
+    selective first 12-byte IV proof remains unpredictable and the confidential-at-rest suite
+    passes synchronized replacement, non-repetition, byte snapshot, and envelope cases.
 
 - [x] **C20 - A public global bridge exposes the framework's raw-HTML mint.**
       `packages/core/src/index.ts`, `packages/server/src/jsx-runtime.ts`
@@ -236,7 +245,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     import/API/security gates pass; the independent global-mint proof can no longer obtain a generic
     raw-HTML constructor and its attacker markup stays escaped.
 
-- [ ] **C21 - Predictable pre-import entropy forges authenticated rendered-HTML markers.**
+- [x] **C21 - Predictable pre-import entropy forges authenticated rendered-HTML markers.**
       `packages/server/src/html.ts`
   - Replacing CommonJS `node:crypto.randomBytes` with known constant bytes and synchronizing the
     builtin ESM exports before importing the renderer made the private coercion-marker HMAC key
@@ -250,8 +259,11 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Reopened evidence:** a selective pre-import `crypto.getRandomValues` delegates the membrane's
     12-byte control but returns known bytes for the real 32-byte marker key. The current full renderer
     accepts the resulting forged v2 HMAC marker and emits raw attacker SVG.
+  - Resolution evidence: the supported server bootstrap captures capability entropy before the
+    renderer/app graph; the same length-selective forged-marker proof remains escaped, direct
+    corrupted pre-bootstrap controls fail closed, and the focused HTML/output matrix passes.
 
-- [ ] **C22 - Predictable pre-import response entropy collapses upload object authority.**
+- [x] **C22 - Predictable pre-import response entropy collapses upload object authority.**
       `packages/server/src/{response-security-intrinsics,upload-sniff,csrf,deferred-stream}.ts`
   - The shared response membrane accepted constant `randomBytes` and a constant valid-shaped v4
     `randomUUID` after CommonJS replacement plus `syncBuiltinESMExports()` before import. Two real
@@ -267,6 +279,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
     path mints the predictable key
     `avatars/6b6b6b6b-6b6b-4b6b-ab6b-6b6b6b6b6b6b`; detecting its second repetition is too late to
     protect the first authority.
+  - Resolution evidence: bootstrap-first capture now precedes every supported app graph; the same
+    first 16-byte selective upload proof is unpredictable, and the response/upload/CSRF/deferred
+    suites pass required bit floors, non-repetition, and late synchronized builtin replacements.
 
 - [x] **C23 - Mutable static-route planning publishes guarded session content.**
       `packages/server/src/{static-export-route-plan,static-export-replay,static-export}.ts`
