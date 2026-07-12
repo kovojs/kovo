@@ -463,11 +463,19 @@ function postgresScopedClientFacade<Client extends object>(
   options: PostgresScopedClientOptions,
 ): Client {
   const target = client as Record<PropertyKey, unknown>;
+  const transactionMethod = postgresTransactionMethod(target);
   const facade = witnessCreateNullRecord<unknown>();
   witnessDefineProperty(facade, 'query', {
     enumerable: true,
     value(query: unknown, params?: unknown[], queryOptions?: unknown) {
-      return scopedPostgresQuery(target, options, query, params, queryOptions);
+      return scopedPostgresQuery(
+        target,
+        transactionMethod,
+        options,
+        query,
+        params,
+        queryOptions,
+      );
     },
   });
   witnessDefineProperty(facade, 'exec', {
@@ -479,7 +487,7 @@ function postgresScopedClientFacade<Client extends object>(
   witnessDefineProperty(facade, 'transaction', {
     enumerable: true,
     value<Result>(callback: (tx: unknown) => Promise<Result> | Result, ...args: unknown[]) {
-      return scopedPostgresTransaction(target, options, callback, args);
+      return scopedPostgresTransaction(target, transactionMethod, options, callback, args);
     },
   });
   defineBlockedPostgresProperties(facade, POSTGRES_BLOCKED_CLIENT_PROPERTIES);
@@ -1706,12 +1714,12 @@ function isPostgresTransactionClient(value: unknown): value is PostgresTransacti
 
 function scopedPostgresTransaction(
   target: Record<PropertyKey, unknown>,
+  transactionMethod: Function | undefined,
   options: PostgresScopedClientOptions,
   callback: unknown,
   args: readonly unknown[],
 ): unknown {
-  const value = optionalStrictInheritedFunctionDataProperty(target, 'transaction');
-  if (value === undefined) {
+  if (transactionMethod === undefined) {
     throw new KovoReadonlyHandleError(
       'KV433: Postgres scoped transaction nesting requires a transaction-capable driver handle (SPEC §10.3).',
     );
@@ -1729,7 +1737,11 @@ function scopedPostgresTransaction(
     }
     return runScopedPostgresTransactionCallback(tx, options, callback);
   };
-  return witnessReflectApply(value, target, prependManagedArgument(scopedCallback, args));
+  return witnessReflectApply(
+    transactionMethod,
+    target,
+    prependManagedArgument(scopedCallback, args),
+  );
 }
 
 async function runScopedPostgresTransactionCallback<Result>(
@@ -1737,18 +1749,19 @@ async function runScopedPostgresTransactionCallback<Result>(
   options: PostgresScopedClientOptions,
   callback: Function,
 ): Promise<Result> {
-  await runPostgresTransactionControl(tx, options);
+  const controls = pinPostgresTransactionControls(tx);
+  await runPostgresTransactionControl(tx, controls, options);
   return witnessReflectApply(callback, undefined, [
-    scopedPostgresTransactionClient(tx, options),
+    scopedPostgresTransactionClient(tx, controls, options),
   ]) as Result;
 }
 
 function scopedPostgresTransactionClient(
   tx: PostgresTransactionClient,
+  controls: PostgresTransactionControls,
   options: PostgresScopedClientOptions,
 ): PostgresTransactionClient {
   const target = tx as Record<PropertyKey, unknown>;
-  const queryMethod = inheritedFunctionDataProperty(target, 'query');
   const facade = witnessCreateNullRecord<unknown>();
   witnessDefineProperty(facade, 'query', {
     enumerable: true,
@@ -1756,7 +1769,7 @@ function scopedPostgresTransactionClient(
       const snapshot = postgresQuerySnapshot(query, params);
       assertAppPostgresTextAllowed(snapshot.text);
       return witnessReflectApply(
-        queryMethod,
+        controls.query,
         target,
         postgresQueryExecutionArgs(snapshot, queryOptions),
       );
@@ -1771,7 +1784,13 @@ function scopedPostgresTransactionClient(
   witnessDefineProperty(facade, 'transaction', {
     enumerable: true,
     value<Result>(callback: (nested: unknown) => Promise<Result> | Result, ...args: unknown[]) {
-      return scopedPostgresTransaction(target, options, callback, args);
+      return scopedPostgresTransaction(
+        target,
+        controls.transaction,
+        options,
+        callback,
+        args,
+      );
     },
   });
   defineBlockedPostgresProperties(facade, POSTGRES_BLOCKED_TRANSACTION_PROPERTIES);
@@ -1780,6 +1799,7 @@ function scopedPostgresTransactionClient(
 
 function scopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
+  transactionMethod: Function,
   options: PostgresScopedClientOptions,
   query: unknown,
   params?: unknown[],
@@ -1787,21 +1807,28 @@ function scopedPostgresQuery(
 ): Promise<unknown> {
   const snapshot = postgresQuerySnapshot(query, params);
   assertAppPostgresTextAllowed(snapshot.text);
-  return executeScopedPostgresQuery(client, options, snapshot, queryOptions);
+  return executeScopedPostgresQuery(
+    client,
+    transactionMethod,
+    options,
+    snapshot,
+    queryOptions,
+  );
 }
 
 async function executeScopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
+  transactionMethod: Function,
   options: PostgresScopedClientOptions,
   snapshot: PostgresQuerySnapshot,
   queryOptions: unknown,
 ): Promise<unknown> {
-  const result = await postgresTransaction(client, async (tx) => {
-    await runPostgresTransactionControl(tx, options);
-    const queryMethod = inheritedFunctionDataProperty(tx, 'query');
+  const result = await postgresTransaction(client, transactionMethod, async (tx) => {
+    const controls = pinPostgresTransactionControls(tx);
+    await runPostgresTransactionControl(tx, controls, options);
     try {
       return await witnessReflectApply<Promise<unknown>>(
-        queryMethod,
+        controls.query,
         tx,
         postgresQueryExecutionArgs(snapshot, queryOptions),
       );
@@ -2365,43 +2392,62 @@ function scopedPostgresExec(options: PostgresScopedClientOptions, query: string)
 
 function postgresTransaction<Result>(
   client: Record<PropertyKey, unknown>,
+  transaction: Function,
   callback: (tx: PostgresTransactionClient) => Promise<Result>,
 ): Promise<Result> {
-  let transaction: Function;
+  return witnessReflectApply(transaction, client, [callback]) as Promise<Result>;
+}
+
+interface PostgresTransactionControls {
+  readonly exec: Function;
+  readonly query: Function;
+  readonly transaction: Function | undefined;
+}
+
+function postgresTransactionMethod(client: Record<PropertyKey, unknown>): Function {
   try {
-    transaction = inheritedFunctionDataProperty(client, 'transaction');
+    return inheritedFunctionDataProperty(client, 'transaction');
   } catch {
     throw new KovoReadonlyHandleError(
       'KV433: Postgres read-only client requires a transaction-capable driver handle (SPEC §10.3/§11.2).',
     );
   }
-  return witnessReflectApply(transaction, client, [callback]) as Promise<Result>;
+}
+
+function pinPostgresTransactionControls(
+  tx: PostgresTransactionClient,
+): PostgresTransactionControls {
+  const target = tx as Record<PropertyKey, unknown>;
+  return witnessFreeze({
+    exec: inheritedFunctionDataProperty(target, 'exec'),
+    query: inheritedFunctionDataProperty(target, 'query'),
+    transaction: optionalStrictInheritedFunctionDataProperty(target, 'transaction'),
+  });
 }
 
 async function runPostgresTransactionControl(
   tx: PostgresTransactionClient,
+  controls: PostgresTransactionControls,
   options: PostgresScopedClientOptions,
 ): Promise<void> {
-  const exec = inheritedFunctionDataProperty(tx, 'exec');
-  const query = inheritedFunctionDataProperty(tx, 'query');
   if (options.readOnly === true) {
-    await witnessReflectApply<Promise<unknown>>(exec, tx, ['SET TRANSACTION READ ONLY']);
+    await witnessReflectApply<Promise<unknown>>(controls.exec, tx, ['SET TRANSACTION READ ONLY']);
   }
   if (options.principal !== undefined) {
-    await witnessReflectApply<Promise<unknown>>(query, tx, [
+    await witnessReflectApply<Promise<unknown>>(controls.query, tx, [
       "SELECT set_config('kovo.principal', $1, true)",
       [options.principal],
     ]);
   }
   if (options.roleSetting !== undefined) {
-    await witnessReflectApply<Promise<unknown>>(query, tx, [
+    await witnessReflectApply<Promise<unknown>>(controls.query, tx, [
       "SELECT set_config('kovo.role', $1, true)",
       [options.roleSetting],
     ]);
   }
   if (options.role !== false && options.role !== undefined) {
     const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
-    await witnessReflectApply<Promise<unknown>>(exec, tx, [
+    await witnessReflectApply<Promise<unknown>>(controls.exec, tx, [
       `SET LOCAL ROLE ${quote(options.role)}`,
     ]);
   }

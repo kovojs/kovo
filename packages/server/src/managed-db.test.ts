@@ -3042,6 +3042,77 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     }
   });
 
+  it('pins the real PGlite transaction control before retained raw-client mutation', async () => {
+    // SPEC §6.6 C9/§10.3: the exact transaction control that establishes the read-only frame is
+    // authority-bearing. A retained raw client must not be able to swap that control after the
+    // scoped facade has been constructed.
+    const client = new PGlite();
+    await client.waitReady;
+    try {
+      await client.exec('CREATE TABLE tx_swap_proof (id integer primary key, secret text)');
+      const scoped = createPostgresReadonlyClient(client, { readerRole: false }) as typeof client;
+      const rawQuery = client.query;
+      let replacementReached = false;
+      Object.defineProperty(client, 'transaction', {
+        configurable: true,
+        value<Result>(callback: (tx: unknown) => Promise<Result>) {
+          replacementReached = true;
+          return callback({
+            exec: async () => undefined,
+            query: (...args: unknown[]) => Reflect.apply(rawQuery, client, args),
+          });
+        },
+      });
+
+      await expect(
+        scoped.query("insert into tx_swap_proof values (1, 'BYPASS')"),
+      ).rejects.toThrow();
+      expect(replacementReached).toBe(false);
+      await expect(client.query('select * from tx_swap_proof')).resolves.toMatchObject({ rows: [] });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('pins transaction query and exec controls before the first awaited control statement', async () => {
+    const log: string[] = [];
+    const tx = {
+      exec(statement: string) {
+        log.push(`original-exec:${statement}`);
+        tx.exec = async (next: string) => {
+          log.push(`replacement-exec:${next}`);
+        };
+        tx.query = async (next: string) => {
+          log.push(`replacement-query:${next}`);
+          return [{ leaked: 'BYPASS' }];
+        };
+        return Promise.resolve();
+      },
+      query(statement: string) {
+        log.push(`original-query:${statement}`);
+        return Promise.resolve([{ id: 'safe' }]);
+      },
+    };
+    const client = {
+      transaction<Result>(callback: (value: typeof tx) => Promise<Result>) {
+        return callback(tx);
+      },
+    };
+    const scoped = createPostgresScopedClient(client, {
+      principal: 'user-1',
+      readOnly: true,
+      role: 'kovo_reader',
+    });
+
+    await expect(scoped.query('select id from contacts')).resolves.toEqual([{ id: 'safe' }]);
+    expect(log).toEqual([
+      'original-exec:SET TRANSACTION READ ONLY',
+      `original-query:SELECT set_config('kovo.principal', $1, true)`,
+      'original-exec:SET LOCAL ROLE "kovo_reader"',
+      'original-query:select id from contacts',
+    ]);
+  });
+
   it('server-owned Postgres scoped client parameterizes the principal before assuming the app role', async () => {
     const log: string[] = [];
     const client = {
