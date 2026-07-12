@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     9 | C1-C9 |
+| Critical |    10 | C1-C10 |
 | High     |    15 | H1-H15 |
 | Medium   |     8 | M1-M8 |
 
@@ -87,6 +87,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 51-test Better Auth matrix requires exact own-data envelope fields, maps the
     provider's genuine bare session under inherited pollution, and forwards cookies only from a
     validated framework-shaped envelope.
+
+- [ ] **C10 - Mutable capability-token controls can forge signed storage claims.**
+      `packages/server/src/capability-url.ts`
+  - A selective late `TextEncoder.prototype.encode` override reduced canonical signing payloads to
+    empty bytes while preserving the outer JSON payload. A genuine token minted for `public.pdf`
+    then retained a valid signature after its payload key was rewritten to `private.pdf`, and the
+    real verifier returned `ok: true` for the substituted storage authority.
+  - The same independent proof set rolled `Date.now` back to accept an expired bearer and replaced
+    `Map.prototype.has` to consume a one-time token twice.
+  - **Acceptance:** exact claims, canonical bytes, payload/base64 parsing, signature bytes, clock,
+    nonce generation, and replay Map/TTL use boot-pinned, semantically checked controls; late and
+    import-order poison cannot substitute key/method/scope/audience, extend expiry, or reuse a
+    one-time token, while genuine scoped/rotated tokens retain round-trip behavior.
 
 ## High
 
@@ -288,9 +301,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C6, H9-H10, H15, M4, and M7-M8 are active
-document/cookie/CSRF, generated/live diagnostics, task, request-limit, and replay fixes. Integrated
-evidence is green at
+The remediation pass remains intentionally non-zero: C6, C10, H9-H10, H15, M4, and M7-M8 are
+active document/cookie/CSRF, capability, generated/live diagnostics, task, request-limit, and replay
+fixes. Integrated evidence is green at
 97 PostgreSQL, 88 egress, 37 filesystem/storage, 180 request-dispatch, 198 app/schema/document, 158
 auth/response, 51 Better Auth, 86 crypto/replay, 234 output/compiler/core, and 87 scalar
 route/handler/secret, and 18 password tests.
