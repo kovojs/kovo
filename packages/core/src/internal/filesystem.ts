@@ -26,6 +26,12 @@ import * as path from 'node:path';
 import { Readable } from 'node:stream';
 
 import { blessSink, isBlessedSink } from './sink-policy.js';
+import {
+  fileSystemArrayIncludesExact,
+  fileSystemStringIncludes,
+  fileSystemStringSplit,
+  fileSystemStringStartsWith,
+} from './filesystem-intrinsics.js';
 
 type FileSystemBoundarySink = 'filesystem-boundary';
 
@@ -168,7 +174,9 @@ export function isFrameworkFileSystemBoundary(value: unknown): boolean {
 
 /** @internal Resolve a relative child path only when it stays under the root. */
 export function confinedPath(root: string, relativePath: string): string | undefined {
-  if (relativePath.includes('\0') || path.isAbsolute(relativePath)) return undefined;
+  if (fileSystemStringIncludes(relativePath, '\0') || path.isAbsolute(relativePath)) {
+    return undefined;
+  }
   const resolvedRoot = path.resolve(root);
   const candidate = path.resolve(resolvedRoot, relativePath);
   return containsPath(resolvedRoot, candidate) ? candidate : undefined;
@@ -182,7 +190,12 @@ export function pathRelativeToRoot(root: string, targetPath: string): string | u
     return undefined;
   }
   const relativePath = path.relative(resolvedRoot, resolvedTarget);
-  if (relativePath === '' || relativePath.split(path.sep).includes('..')) return undefined;
+  if (
+    relativePath === '' ||
+    fileSystemArrayIncludesExact(fileSystemStringSplit(relativePath, path.sep), '..')
+  ) {
+    return undefined;
+  }
   return relativePath;
 }
 
@@ -190,7 +203,10 @@ export function pathRelativeToRoot(root: string, targetPath: string): string | u
 export function containsPath(root: string, targetPath: string): boolean {
   const resolvedRoot = path.resolve(root);
   const resolvedTarget = path.resolve(targetPath);
-  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`);
+  return (
+    resolvedTarget === resolvedRoot ||
+    fileSystemStringStartsWith(resolvedTarget, `${resolvedRoot}${path.sep}`)
+  );
 }
 
 /**
@@ -359,9 +375,10 @@ async function ensureDescendantDirectories(
 ): Promise<boolean> {
   await verifyPinnedDirectory(anchor, 'ancestor');
   const relativePath = descendantRelativePath(anchor.lexicalPath, targetPath);
-  const segments = relativePath === '' ? [] : relativePath.split(path.sep);
+  const segments = relativePath === '' ? [] : fileSystemStringSplit(relativePath, path.sep);
   let current = anchor.lexicalPath;
-  for (const segment of segments) {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
     current = path.join(current, segment);
     let currentStat: Stats;
     try {
@@ -563,7 +580,7 @@ function descendantRelativePath(ancestorPath: string, descendantPath: string): s
   const relativePath = path.relative(ancestorPath, descendantPath);
   if (
     relativePath === '..' ||
-    relativePath.startsWith(`..${path.sep}`) ||
+    fileSystemStringStartsWith(relativePath, `..${path.sep}`) ||
     path.isAbsolute(relativePath)
   ) {
     throw new Error(
@@ -860,7 +877,8 @@ async function* confinedDirectoryEntries(
     if (isMissingPathError(error)) return;
     throw error;
   }
-  for (const entry of entries) {
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
     const childRelativePath = path.join(relativePath, entry.name);
     yield {
       kind: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
@@ -872,9 +890,11 @@ async function* confinedDirectoryEntries(
 
 async function ensureParentsStayDirectories(root: string, targetPath: string): Promise<void> {
   const relativeDirectory = pathRelativeToRoot(root, path.dirname(targetPath));
-  const segments = relativeDirectory === undefined ? [] : relativeDirectory.split(path.sep);
+  const segments =
+    relativeDirectory === undefined ? [] : fileSystemStringSplit(relativeDirectory, path.sep);
   let current = path.resolve(root);
-  for (const segment of segments) {
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
     current = path.join(current, segment);
     let parentStat: Awaited<ReturnType<typeof lstat>>;
     try {

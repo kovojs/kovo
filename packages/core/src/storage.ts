@@ -1,6 +1,20 @@
 import { createHash } from 'node:crypto';
 
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
+import {
+  createFileSystemMap,
+  fileSystemArrayJoin,
+  fileSystemArraySome,
+  fileSystemMapDelete,
+  fileSystemMapGet,
+  fileSystemMapSet,
+  fileSystemObjectValues,
+  fileSystemStringEndsWith,
+  fileSystemStringIncludes,
+  fileSystemStringSplit,
+  fileSystemStringStartsWith,
+  fileSystemStringToLowerCase,
+} from './internal/filesystem-intrinsics.js';
 
 /** The accepted body shapes when writing an object: a string, raw bytes, or a byte stream. */
 export type StorageBody = string | ArrayBuffer | ArrayBufferView | ReadableStream<Uint8Array>;
@@ -172,16 +186,16 @@ const fileSystemObjectPrefix = 'kovo-storage-v1';
  * @returns A `StorageCapability` backed by a `Map`.
  */
 export function createMemoryStorage(options: MemoryStorageOptions = {}): StorageCapability {
-  const objects = new Map<string, StoredMemoryObject>();
+  const objects = createFileSystemMap<string, StoredMemoryObject>();
   const now = options.now ?? (() => new Date());
 
   return {
     async delete(key) {
-      objects.delete(normalizeStorageKey(key));
+      fileSystemMapDelete(objects, normalizeStorageKey(key));
     },
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const object = objects.get(normalizedKey);
+      const object = fileSystemMapGet(objects, normalizedKey);
       if (object === undefined) return undefined;
 
       return {
@@ -193,7 +207,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
       const normalizedKey = normalizeStorageKey(key);
       const bytes = await storageBodyToBytes(body);
       const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, now());
-      objects.set(normalizedKey, {
+      fileSystemMapSet(objects, normalizedKey, {
         body: copyBytes(bytes),
         info,
       });
@@ -201,12 +215,12 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
     },
     async stat(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const object = objects.get(normalizedKey);
+      const object = fileSystemMapGet(objects, normalizedKey);
       return object === undefined ? undefined : copyInfo(object.info);
     },
     async stream(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const object = objects.get(normalizedKey);
+      const object = fileSystemMapGet(objects, normalizedKey);
       if (object === undefined) return undefined;
 
       return {
@@ -227,7 +241,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
  */
 export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
   const fileSystem = createFrameworkOutputFileSystemBoundary(options.root);
-  const writeLocks = new Map<string, Promise<void>>();
+  const writeLocks = createFileSystemMap<string, Promise<void>>();
 
   return {
     async delete(key) {
@@ -418,11 +432,12 @@ export function createReadOnlyStorageCapability(
  */
 export function normalizeStorageKey(key: string): string {
   if (key.length === 0) throw new Error('Storage key must not be empty.');
-  if (key.includes('\0')) throw new Error('Storage key must not contain null bytes.');
-  if (key.startsWith('/')) throw new Error('Storage key must be relative.');
+  if (fileSystemStringIncludes(key, '\0'))
+    throw new Error('Storage key must not contain null bytes.');
+  if (fileSystemStringStartsWith(key, '/')) throw new Error('Storage key must be relative.');
 
-  const parts = key.split('/');
-  if (parts.some((part) => part.length === 0 || part === '.' || part === '..')) {
+  const parts = fileSystemStringSplit(key, '/');
+  if (fileSystemArraySome(parts, (part) => part.length === 0 || part === '.' || part === '..')) {
     throw new Error('Storage key must not contain empty, current, or parent path segments.');
   }
 
@@ -434,11 +449,16 @@ export function normalizeStorageKey(key: string): string {
   // disagree on whether the keys can exist. Reject the reserved suffix here so the rule is uniform
   // across all three adapters regardless of backend (Part 3 bug L1).
   const finalSegment = parts[parts.length - 1] ?? '';
-  if (finalSegment.toLowerCase().endsWith(sidecarSuffix.toLowerCase())) {
+  if (
+    fileSystemStringEndsWith(
+      fileSystemStringToLowerCase(finalSegment),
+      fileSystemStringToLowerCase(sidecarSuffix),
+    )
+  ) {
     throw new Error(`Storage key must not end with the reserved suffix "${sidecarSuffix}".`);
   }
 
-  return parts.join('/');
+  return fileSystemArrayJoin(parts, '/');
 }
 
 /**
@@ -463,13 +483,14 @@ export async function storageBodyToBytes(body: StorageBody): Promise<Uint8Array>
   while (true) {
     const result = await reader.read();
     if (result.done) break;
-    chunks.push(result.value);
+    chunks[chunks.length] = result.value;
     length += result.value.byteLength;
   }
 
   const bytes = new Uint8Array(length);
   let offset = 0;
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index]!;
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
@@ -573,7 +594,10 @@ function isFileSystemMetadataRecord(value: unknown): value is FileSystemMetadata
     (typeof record.metadata !== 'object' ||
       record.metadata === null ||
       Array.isArray(record.metadata) ||
-      Object.values(record.metadata).some((entry) => typeof entry !== 'string'))
+      fileSystemArraySome(
+        fileSystemObjectValues(record.metadata),
+        (entry) => typeof entry !== 'string',
+      ))
   )
     return false;
   return true;
@@ -615,7 +639,7 @@ async function withFileSystemWriteLock<T>(
   filePath: string,
   run: () => Promise<T>,
 ): Promise<T> {
-  const previous = locks.get(filePath) ?? Promise.resolve();
+  const previous = fileSystemMapGet(locks, filePath) ?? Promise.resolve();
   let releaseCurrent: () => void = () => undefined;
   const current = new Promise<void>((resolve) => {
     releaseCurrent = resolve;
@@ -624,13 +648,13 @@ async function withFileSystemWriteLock<T>(
     () => current,
     () => current,
   );
-  locks.set(filePath, lock);
+  fileSystemMapSet(locks, filePath, lock);
   await previous.catch(() => undefined);
   try {
     return await run();
   } finally {
     releaseCurrent();
-    if (locks.get(filePath) === lock) locks.delete(filePath);
+    if (fileSystemMapGet(locks, filePath) === lock) fileSystemMapDelete(locks, filePath);
   }
 }
 
@@ -680,11 +704,13 @@ function storageBodySize(body: StorageBody): number | undefined {
 }
 
 function normalizeStoragePrefix(prefix: string): string {
-  return prefix
-    .split('/')
-    .filter((part) => part.length > 0)
-    .map(normalizeStorageKey)
-    .join('/');
+  const rawParts = fileSystemStringSplit(prefix, '/');
+  const normalizedParts: string[] = [];
+  for (let index = 0; index < rawParts.length; index += 1) {
+    const part = rawParts[index]!;
+    if (part.length > 0) normalizedParts[normalizedParts.length] = normalizeStorageKey(part);
+  }
+  return fileSystemArrayJoin(normalizedParts, '/');
 }
 
 function s3ObjectKey(prefix: string | undefined, key: string): string {

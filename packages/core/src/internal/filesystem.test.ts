@@ -11,7 +11,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -85,6 +85,46 @@ describe('framework filesystem boundary', () => {
     } finally {
       await rm(root, { force: true, recursive: true });
       await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps output writes confined after late String/Array prototype poisoning', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-intrinsic-confinement-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+    const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+    const outsideTarget = resolve(outside, 'escaped.txt');
+    const rootPrefix = `${resolve(root)}${sep}`;
+    const originalStartsWith = String.prototype.startsWith;
+    const originalIncludes = Array.prototype.includes;
+    let outcome: unknown;
+    try {
+      String.prototype.startsWith = function (search, position) {
+        if (this.valueOf() === outsideTarget && search === rootPrefix) return true;
+        if (originalStartsWith.call(this.valueOf(), '..') && search === `..${sep}`) return false;
+        return originalStartsWith.call(this, search, position);
+      };
+      Array.prototype.includes = function (search, fromIndex) {
+        if (search === '..') return false;
+        return originalIncludes.call(this, search, fromIndex);
+      };
+      outcome = await fileSystem
+        .writeFile(`../${basename(outside)}/escaped.txt`, 'ESCAPED')
+        .catch((error: unknown) => error);
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      Array.prototype.includes = originalIncludes;
+    }
+
+    try {
+      expect(outcome).toBeInstanceOf(Error);
+      await expect(readFile(outsideTarget, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      await fileSystem.writeFile('safe.txt', 'safe');
+      await expect(readFile(join(root, 'safe.txt'), 'utf8')).resolves.toBe('safe');
+    } finally {
+      await rm(base, { force: true, recursive: true });
     }
   });
 

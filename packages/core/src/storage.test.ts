@@ -362,6 +362,53 @@ describe('storage adapters', () => {
     await expect(storage.put('/absolute.txt', 'x')).rejects.toThrow(/relative/u);
   });
 
+  it('keeps traversal normalization closed after late String/Array prototype poisoning', () => {
+    const originalStartsWith = String.prototype.startsWith;
+    const originalSome = Array.prototype.some;
+    let outcome: unknown;
+    try {
+      String.prototype.startsWith = function (search, position) {
+        if (this.valueOf() === '../escape.txt' && search === '/') return false;
+        return originalStartsWith.call(this, search, position);
+      };
+      Array.prototype.some = function (callback, thisArg) {
+        if (this.length === 2 && this[0] === '..' && this[1] === 'escape.txt') return false;
+        return originalSome.call(this, callback, thisArg);
+      };
+      try {
+        outcome = normalizeStorageKey('../escape.txt');
+      } catch (error) {
+        outcome = error;
+      }
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      Array.prototype.some = originalSome;
+    }
+
+    expect(outcome).toBeInstanceOf(Error);
+  });
+
+  it('keeps memory object identity exact after late Map.get poisoning', async () => {
+    const storage = createMemoryStorage();
+    await storage.put('tenant/victim.txt', 'VICTIM');
+    const originalGet = Map.prototype.get;
+    let attackerRead: Awaited<ReturnType<typeof storage.get>>;
+    try {
+      Map.prototype.get = function (key) {
+        if (key === 'tenant/attacker.txt') return originalGet.call(this, 'tenant/victim.txt');
+        return originalGet.call(this, key);
+      };
+      attackerRead = await storage.get('tenant/attacker.txt');
+    } finally {
+      Map.prototype.get = originalGet;
+    }
+
+    expect(attackerRead).toBeUndefined();
+    await expect(storage.get('tenant/victim.txt')).resolves.toMatchObject({
+      key: 'tenant/victim.txt',
+    });
+  });
+
   it('fails closed instead of serving a blob when its exact-key sidecar is malformed', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-sidecar-'));
     try {
