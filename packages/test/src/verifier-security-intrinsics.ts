@@ -34,7 +34,6 @@ const nativeReflectGet = NativeReflect.get;
 const nativeReflectOwnKeys = NativeReflect.ownKeys;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
-const nativeArrayPush = NativeArray.prototype.push;
 const nativeArraySlice = NativeArray.prototype.slice;
 const nativeArraySort = NativeArray.prototype.sort;
 const nativeJsonStringify = NativeJSON.stringify;
@@ -417,7 +416,34 @@ export function verifierIsPromise(value: unknown): value is Promise<unknown> {
 
 export function verifierArrayPush<T>(values: T[], value: T): number {
   assertVerifierSecurityIntrinsics();
-  return apply(nativeArrayPush, values, [value]);
+  const lengthDescriptor = verifierGetOwnPropertyDescriptor(values, 'length');
+  const length =
+    lengthDescriptor !== undefined && 'value' in lengthDescriptor
+      ? lengthDescriptor.value
+      : undefined;
+  if (
+    typeof length !== 'number' ||
+    !apply(nativeNumberIsSafeInteger, NativeNumber, [length]) ||
+    length < 0 ||
+    length >= 1_000_000
+  ) {
+    throw new NativeTypeError('Kovo verifier array append requires a bounded stable length.');
+  }
+  apply(nativeObjectDefineProperty, NativeObject, [
+    values,
+    length,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = verifierGetOwnPropertyDescriptor(values, String(length));
+  if (committed === undefined || !('value' in committed) || committed.value !== value) {
+    throw new NativeTypeError('Kovo verifier array append failed its own-data commit.');
+  }
+  return length + 1;
 }
 
 export function verifierArraySlice<T>(values: readonly T[], start = 0, end?: number): T[] {

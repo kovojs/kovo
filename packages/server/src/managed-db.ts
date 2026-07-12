@@ -455,9 +455,12 @@ export const registerFrameworkManagedDbHooks = securityClassifier(
   'server.managed-db.register-framework-hooks',
   function (
     target: object,
-    createReadonly: () => unknown,
-    createDeclaredWrite: (policy: ManagedSqlWritePolicy) => unknown,
+    createReadonly: (() => unknown) | undefined,
+    createDeclaredWrite: ((policy: ManagedSqlWritePolicy) => unknown) | undefined,
   ): void {
+    if (createReadonly === undefined && createDeclaredWrite === undefined) {
+      throw new Error('At least one framework managed DB hook must be registered.');
+    }
     if (witnessWeakMapGet(authorizationCensusFrameworkHooks, target) !== undefined) {
       throw new Error('Framework managed DB hooks were already registered for this handle.');
     }
@@ -1249,8 +1252,8 @@ const postgresRlsSilentDenyDiagnostics =
 const authorizationCensusFrameworkHooks = createWitnessWeakMap<
   object,
   Readonly<{
-    declaredWrite?: Function;
-    readonly?: Function;
+    declaredWrite?: ((policy: ManagedSqlWritePolicy) => unknown) | undefined;
+    readonly?: (() => unknown) | undefined;
   }>
 >();
 const frameworkReadonlyCapabilityHandles = createWitnessWeakSet<object>();

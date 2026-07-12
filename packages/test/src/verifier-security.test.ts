@@ -128,6 +128,50 @@ describe('@kovojs/test verifier shared-realm security', () => {
     expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('KV407', 'audit'));
   });
 
+  it('C139 cannot erase a SQL read through an inherited numeric setter', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { audit_log: 'audit' } });
+    const db = verifier.wrap({
+      query() {
+        return [];
+      },
+    });
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (
+            value !== null &&
+            typeof value === 'object' &&
+            (value as { kind?: unknown }).kind === 'read' &&
+            (value as { table?: unknown }).table === 'audit_log'
+          ) {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      db.query({ text: 'select * from audit_log', values: [] });
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('KV407', 'audit'));
+  });
+
   it('pins Function.call so a covered table cannot be rewritten at dispatch', () => {
     const actualTables: string[] = [];
     const raw = {
@@ -271,6 +315,22 @@ describe('@kovojs/test verifier shared-realm security', () => {
         /reserved for the framework lifecycle/u,
       );
     }
+  });
+
+  it('C239 rejects accessor-backed adapter capability hooks without invoking them', () => {
+    let reads = 0;
+    const raw = {};
+    Object.defineProperty(raw, kovoDeclaredWriteDbHandle, {
+      get() {
+        reads += 1;
+        return () => raw;
+      },
+    });
+
+    expect(() => createDbVerifier({}, { domainByTable: {} }).wrap(raw)).toThrow(
+      /capability.*must be a function data property/u,
+    );
+    expect(reads).toBe(0);
   });
 
   it('C204 keeps reflected prepared-statement execution inside observation', () => {

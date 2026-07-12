@@ -9,6 +9,7 @@ import {
   createFrameworkManagedSqlDispatchProxy,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
+  registerFrameworkManagedDbHooks,
 } from '@kovojs/server/internal/execution';
 import { observeSqlEngineSideEffects, tableObservationSnapshots } from './sql-observer.js';
 import {
@@ -254,6 +255,8 @@ export function createDbVerifier(
       if (typeof db !== 'object' || db === null) return db;
       const cached = verifierWeakMapGet(rootProxyCache, db);
       if (cached) return cached as Db;
+      const readonlyCapability = verifierAdapterCapabilityHook(db, kovoReadonlyDbHandle);
+      const declaredWriteCapability = verifierAdapterCapabilityHook(db, kovoDeclaredWriteDbHandle);
 
       // SPEC.md §11.4: verification observes calls that cross the harness
       // DB seam. A raw handle captured before wrap() never reaches this proxy;
@@ -265,20 +268,36 @@ export function createDbVerifier(
           get(target, prop, receiver) {
             if (prop === '__kovoObserved') return recorder.observed;
             recorder.assertActive();
-            const value = verifierReflectGet(target, prop, receiver);
-
-            if (
-              (prop === kovoReadonlyDbHandle || prop === kovoDeclaredWriteDbHandle) &&
-              typeof value === 'function'
-            ) {
+            const capability =
+              prop === kovoReadonlyDbHandle
+                ? readonlyCapability
+                : prop === kovoDeclaredWriteDbHandle
+                  ? declaredWriteCapability
+                  : undefined;
+            if (prop === kovoReadonlyDbHandle || prop === kovoDeclaredWriteDbHandle) {
+              if (capability === undefined) return undefined;
               return recorder.bindAuthority(
-                cachedMethod(target, prop, value, methodCache, () => () => {
+                cachedMethod(target, prop, capability, methodCache, () => () => {
                   throw verifierTypeError(
                     'Kovo DB verifier adapter capability hooks are reserved for the framework lifecycle.',
                   );
                 }),
               );
             }
+            const located = inheritedPropertyDescriptor(target, prop);
+            if (
+              located !== undefined &&
+              !('value' in located.descriptor) &&
+              verifierRootAuthorityPropertyRequiresData(prop)
+            ) {
+              throw verifierTypeError(
+                `KV422: Kovo DB verifier property ${verifierString(prop)} is accessor-backed and cannot cross the managed SQL authority boundary.`,
+              );
+            }
+            const value =
+              located === undefined || !('value' in located.descriptor)
+                ? verifierReflectGet(target, prop, receiver)
+                : located.descriptor.value;
 
             if (isDrizzleSelectEntry(prop) && typeof value === 'function') {
               return recorder.bindAuthority(
@@ -520,6 +539,27 @@ export function createDbVerifier(
       );
 
       verifierWeakMapSet(rootProxyCache, db, proxy);
+      if (readonlyCapability !== undefined || declaredWriteCapability !== undefined) {
+        registerFrameworkManagedDbHooks(
+          proxy,
+          readonlyCapability === undefined
+            ? undefined
+            : () => {
+                recorder.assertActive();
+                return recorder.bindAuthority(
+                  verifier.wrap(verifierApply<unknown>(readonlyCapability, db, [])),
+                );
+              },
+          declaredWriteCapability === undefined
+            ? undefined
+            : (policy) => {
+                recorder.assertActive();
+                return recorder.bindAuthority(
+                  verifier.wrap(verifierApply<unknown>(declaredWriteCapability, db, [policy])),
+                );
+              },
+        );
+      }
       return proxy as Db;
     },
   };
@@ -1382,6 +1422,27 @@ function isDrizzleSelectEntry(property: PropertyKey): boolean {
   return property === 'select' || property === 'selectDistinct' || property === 'selectDistinctOn';
 }
 
+function verifierRootAuthorityPropertyRequiresData(property: PropertyKey): boolean {
+  return (
+    isPreparedStatementExecutionMethod(property) ||
+    isDrizzleSelectEntry(property) ||
+    property === '$count' ||
+    property === '$with' ||
+    property === 'delete' ||
+    property === 'exec' ||
+    property === 'execute' ||
+    property === 'insert' ||
+    property === 'prepare' ||
+    property === 'query' ||
+    property === 'read' ||
+    property === 'sql' ||
+    property === 'transaction' ||
+    property === 'update' ||
+    property === 'with' ||
+    property === 'write'
+  );
+}
+
 function isDrizzleReadTableMethod(property: PropertyKey): boolean {
   return (
     property === 'from' ||
@@ -1941,6 +2002,20 @@ function inheritedPropertyDescriptor(
     throw verifierTypeError('Kovo DB verifier adapter prototype chain exceeds the bounded limit.');
   }
   return undefined;
+}
+
+function verifierAdapterCapabilityHook(
+  target: object,
+  property: typeof kovoReadonlyDbHandle | typeof kovoDeclaredWriteDbHandle,
+): Function | undefined {
+  const resolved = inheritedPropertyDescriptor(target, property);
+  if (resolved === undefined) return undefined;
+  if (!('value' in resolved.descriptor) || typeof resolved.descriptor.value !== 'function') {
+    throw verifierTypeError(
+      `Kovo DB verifier adapter capability ${verifierString(property)} must be a function data property.`,
+    );
+  }
+  return resolved.descriptor.value;
 }
 
 function observablePreparedSqlMethod(

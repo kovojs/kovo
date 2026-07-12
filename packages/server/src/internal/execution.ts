@@ -35,6 +35,7 @@ export {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   managedDb,
+  registerFrameworkManagedDbHooks,
   readonlyDb,
   type KovoDeclaredWriteDbCapable,
   type KovoReadonlyDbCapable,
