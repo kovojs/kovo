@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    21 | C1-C21 |
+| Critical |    24 | C1-C24 |
 | High     |    26 | H1-H26 |
 | Medium   |     9 | M1-M9  |
 
@@ -177,7 +177,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 33-test wire-JSON/TCB/query-HTML matrix passes; the independent serializer
     replacement proof now emits only the classified `{ count: 1 }` truth.
 
-- [x] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
+- [ ] **C17 - Mutable task identifiers collapse queued identity and expired-lease authority.**
       `packages/server/src/task-queue.ts`
   - Replacing `Date.now` and `Math.random` with constants made two distinct memory-queue enqueues
     receive the same job id, so the second task silently replaced the first queued task and args.
@@ -189,6 +189,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     import-order poison can overwrite a sibling job or reuse expired worker authority.
   - **Evidence:** the 64-test durable-task matrix plus server dist/DTS, import, and API gates pass;
     the independent collision and stale-lease proofs now receive distinct 128-bit crypto identities.
+  - **Reopened:** the checkpoint called the imported ESM `randomBytes` live binding directly. A
+    late CommonJS replacement plus `syncBuiltinESMExports()` still made two enqueues receive the same
+    job id and overwrite the first; the crypto function itself must be boot-pinned and regression-
+    tested against synchronized replacement before this item can close.
 
 - [ ] **C18 - Mutable command-argument iteration can replace reviewed privileged execution.**
       `packages/server/src/command.ts`
@@ -234,6 +238,42 @@ This is an active closure ledger; `SPEC.md` remains normative.
     HMAC construction, comparison, recursion, and final text/raw assembly use exact pinned controls;
     hostile pre-import or late controls cannot forge a marker while genuine rendered composition
     remains byte-stable and bounded.
+
+- [ ] **C22 - Predictable pre-import response entropy collapses upload object authority.**
+      `packages/server/src/{response-security-intrinsics,upload-sniff,csrf,deferred-stream}.ts`
+  - The shared response membrane accepted constant `randomBytes` and a constant valid-shaped v4
+    `randomUUID` after CommonJS replacement plus `syncBuiltinESMExports()` before import. Two real
+    `mintStorageKey('avatars')` calls then returned the same supposedly collision-free opaque key,
+    allowing a later upload to overwrite or cross-bind the earlier object; the same source feeds
+    no-JS replay identities, anonymous CSRF bindings, and deferred boundaries.
+  - **Acceptance:** entropy function identities are boot-pinned and hostile synchronized/pre-import
+    sources fail closed; every security identity uses the required random-bit floor and runtime
+    non-repetition controls, including at least 128 random bits for no-JS idempotency; upload keys,
+    anonymous bindings, replay identities, and stream boundaries cannot repeat or become predictable.
+
+- [ ] **C23 - Mutable static-route planning publishes guarded session content.**
+      `packages/server/src/{static-export-route-plan,static-export-replay,static-export}.ts`
+  - A selective late array iterator substituted an explicitly public clone only while
+    `staticExportRoutePlan()` traversed `app.routes`, then restored normal iteration. Real replay
+    subsequently matched the original guarded route, passed its session provider, and wrote
+    `victim:server-only-account-token` into public `account/index.html`; the unpoisoned control
+    rejects the same app with KV229.
+  - **Acceptance:** app/route provenance, dense route snapshots, guard/access/session posture,
+    concrete target planning, diagnostic suppression, replay matching, artifact collection, and
+    final publication share boot-pinned exact identities; planning and replay cannot observe
+    different declarations under late/import-order poison, and guarded/session content is never
+    emitted to a static host.
+
+- [ ] **C24 - Mutable artifact staging replaces reviewed immutable client modules.**
+      `packages/server/src/{output-staging,vite-client-module-output}.ts`
+  - The output manifest hashed a reviewed safe client module, but staging later used the live
+    `entries.map()` result without hashing the staged bytes. A selective replacement supplied
+    attacker JavaScript only to the staging callback, and the real app-shell writer committed it
+    under the reviewed immutable `/c/__v/build-1/account.client.js` target.
+  - **Acceptance:** entry/source/content snapshots, target and manifest construction, hashing,
+    changed/stale detection, staging traversal, copy/write, pre-commit revalidation, rename, cleanup,
+    filesystem/path controls, and Promise settlement use boot-pinned exact operations; committed
+    bytes must match their reviewed manifest hash and cannot be substituted after validation.
 
 ## High
 
@@ -600,8 +640,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C18-C21 and H26 are active command/crypto and
-JSX output-authority fixes.
+The remediation pass remains intentionally non-zero: C17-C24 and H26 are active task, command,
+crypto, JSX output-authority, static-export, and build-output fixes.
 Integrated
 evidence is
 green at
