@@ -2,7 +2,10 @@ import { definedProps } from './defined-props.js';
 import { reportMalformedJson } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
+import { createMutationIdemSecurityControls } from './mutation-idem-intrinsics.js';
 import type { MutationChangeRecord } from './optimism.js';
+
+const mutationIdemSecurity = createMutationIdemSecurityControls();
 
 /** @internal Minimal response shape exposing the headers read for mutation changes (SPEC §9.1). */
 export interface MutationResponseHeaderLike {
@@ -88,16 +91,5 @@ export function createMutationIdem(): string {
   // (≥128 bits from a cryptographic source) for each logical submit. randomUUID is preferred;
   // when it is unavailable we fall back to 16 cryptographic-random bytes (still ≥128 bits) — never
   // to a predictable Date.now()+counter, which would weaken the per-(principal,mutation,idem) replay key.
-  const cryptoApi = globalThis.crypto;
-  const randomUuid = cryptoApi?.randomUUID?.bind(cryptoApi);
-  if (randomUuid) return randomUuid();
-  if (cryptoApi?.getRandomValues) {
-    const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
-    let hex = '';
-    for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
-    return `idem_${hex}`;
-  }
-  throw new Error(
-    'createMutationIdem requires a cryptographic source (crypto.randomUUID or crypto.getRandomValues); SPEC §10.3 forbids a predictable idem token.',
-  );
+  return mutationIdemSecurity.createMutationIdem();
 }

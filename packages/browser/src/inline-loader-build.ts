@@ -29,6 +29,9 @@ const enhancedNavigationSourcePath = fileURLToPath(
 const navigationSecurityIntrinsicsSourcePath = fileURLToPath(
   new URL('./navigation-security-intrinsics.ts', import.meta.url),
 );
+const mutationIdemIntrinsicsSourcePath = fileURLToPath(
+  new URL('./mutation-idem-intrinsics.ts', import.meta.url),
+);
 const documentLifecycleSourcePath = fileURLToPath(
   new URL('./document-lifecycle.ts', import.meta.url),
 );
@@ -65,10 +68,17 @@ const inlineHelperSpecs = {
     label: 'enhanced navigation',
     readableParityLabel: 'canonical enhanced navigation helper closure',
     minifiedParityLabel: 'canonical minified enhanced navigation helper closure',
-    rootFunctionNames: ['installEnhancedNavigationRuntime'],
+    rootFunctionNames: [
+      'createMutationIdemSecurityControls',
+      'installEnhancedNavigationRuntime',
+    ],
     sourceFileName: 'enhanced-navigation.ts',
     sourcePath: enhancedNavigationSourcePath,
-    sourcePaths: [navigationSecurityIntrinsicsSourcePath, enhancedNavigationSourcePath],
+    sourcePaths: [
+      mutationIdemIntrinsicsSourcePath,
+      navigationSecurityIntrinsicsSourcePath,
+      enhancedNavigationSourcePath,
+    ],
   },
   documentLifecycle: {
     label: 'document lifecycle',
@@ -131,10 +141,8 @@ function installInlineKovoLoader(im) {
   const events = ${JSON.stringify([...delegatedEvents])};
   const doc = document;
   const bns = createBrowserNavigationSecurityControls();
-  let ic = 0;
-  const ci = () =>
-    crypto.randomUUID?.() ||
-    'i' + Date.now().toString(36) + (ic += 1).toString(36);
+  const mis = createMutationIdemSecurityControls();
+  const ci = () => mis.createMutationIdem();
   const rh = (el) =>
     el.closest?.('[kovo-state]') ?? (el.getAttribute?.('kovo-state') === null ? null : el);
   const rs = (el) => {

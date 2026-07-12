@@ -761,6 +761,7 @@ describe('inline loader enhanced submit source', () => {
         },
       ];
       const modularRoot = new InlineParityRoot();
+      const parityIdem = '00000000-0000-4000-8000-000000000003';
       const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
         headers: {
           get() {
@@ -777,7 +778,7 @@ describe('inline loader enhanced submit source', () => {
         fetch: modularFetch,
         form,
         formData,
-        idem: 'idem_form_parity',
+        idem: parityIdem,
         root: modularRoot,
         store: createQueryStore(),
       });
@@ -801,9 +802,15 @@ describe('inline loader enhanced submit source', () => {
       }));
 
       try {
+        let randomUuidCall = 0;
         Object.defineProperty(globalThis, 'crypto', {
           configurable: true,
-          value: { randomUUID: () => 'idem_form_parity' },
+          value: {
+            randomUUID: () => {
+              randomUuidCall += 1;
+              return `00000000-0000-4000-8000-${String(randomUuidCall).padStart(12, '0')}`;
+            },
+          },
         });
         globalRecord.DOMParser = class DOMParser {
           parseFromString() {

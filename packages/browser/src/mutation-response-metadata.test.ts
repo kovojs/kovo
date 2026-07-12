@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createMutationIdemSecurityControls } from './mutation-idem-intrinsics.js';
 import {
   createMutationIdem,
   isMutationBroadcastMessage,
@@ -36,36 +37,39 @@ describe('mutation response metadata', () => {
     // (≥128 bits from a cryptographic source) per logical submit. randomUUID is preferred; absent
     // it, getRandomValues must be used — NEVER a predictable Date.now()+counter.
     const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
-    const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
 
     try {
+      const first = createMutationIdem();
       Object.defineProperty(globalThis, 'crypto', {
         configurable: true,
-        value: { randomUUID: () => 'crypto-idem' },
+        value: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },
       });
-      expect(createMutationIdem()).toBe('crypto-idem');
+      const second = createMutationIdem();
+      expect(first).toMatch(/^(?:[0-9a-f-]{36}|idem_[0-9a-f]{32})$/i);
+      expect(second).toMatch(/^(?:[0-9a-f-]{36}|idem_[0-9a-f]{32})$/i);
+      expect(second).not.toBe(first);
 
-      // No randomUUID, but getRandomValues present → 16 random bytes as hex (≥128 bits), and the
-      // value must NOT be the old predictable timestamp/counter format.
-      Object.defineProperty(globalThis, 'crypto', {
-        configurable: true,
-        value: {
-          getRandomValues: (array: Uint8Array) => {
-            for (let index = 0; index < array.length; index += 1)
-              array[index] = (index * 37 + 11) & 0xff;
+      let randomCall = 0;
+      const randomControls = createMutationIdemSecurityControls({
+        crypto: {
+          getRandomValues(array: Uint8Array) {
+            randomCall += 1;
+            for (let index = 0; index < array.length; index += 1) {
+              array[index] = (index * 37 + randomCall * 11) & 0xff;
+            }
             return array;
           },
         },
-      });
-      const fallback = createMutationIdem();
+      } as typeof globalThis);
+      const fallback = randomControls.createMutationIdem();
       expect(fallback).toMatch(/^idem_[0-9a-f]{32}$/); // 16 bytes = 128 bits of hex
       expect(fallback).not.toMatch(/loyw3v28/); // not Date.now()-derived
 
       // No cryptographic source at all → throw rather than degrade to a predictable token.
-      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
-      expect(() => createMutationIdem()).toThrow(/cryptographic source/);
+      const unavailable = createMutationIdemSecurityControls({ crypto: undefined } as unknown as
+        typeof globalThis);
+      expect(() => unavailable.createMutationIdem()).toThrow(/cryptographic source/);
     } finally {
-      now.mockRestore();
       if (cryptoDescriptor) {
         Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
       } else {
