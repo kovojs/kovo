@@ -28,7 +28,7 @@ hop that was not part of the original decision.
 
 ## High
 
-- [ ] **H1 - Framework-minted privileged output carriers re-read mutable public fields, allowing
+- [x] **H1 - Framework-minted privileged output carriers re-read mutable public fields, allowing
       attacker markup or denied URL schemes after the trust decision.**
       `packages/browser/src/security-output.ts:62-90,132-210`,
       `packages/server/src/html.ts:35-66,111-116`,
@@ -49,6 +49,9 @@ hop that was not part of the original decision.
     wrappers; harden internal `FragmentHtml`/`RenderedFragmentHtml` carriers in the same sweep.
     Assignment, `Object.assign`, `Reflect.set`, `defineProperty`, and a mutable nested source must
     either throw or leave the originally pinned safe bytes at every real sink.
+  - **Evidence:** the source-aliased browser/core/server/compiler suite passes 146 tests; four
+    declaration builds and the sink-policy, security-brand, classifier, verdict-routing, and
+    37-mutant security gates pass.
 
 - [x] **H2 - `createApp()` retains a mutable structured `DocumentConfig`, so request code can inject
       raw document-head/body markup after app closure.**
@@ -72,7 +75,7 @@ hop that was not part of the original decision.
 packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 tests) proves
     constructor sealing, app-time reconstruction, CSP input isolation, and accessor rejection.
 
-- [ ] **H3 - KV426 follows an ordinary carrier's clean initializer and ignores later property
+- [x] **H3 - KV426 follows an ordinary carrier's clean initializer and ignores later property
       writes that load query/request data before `trustedHtml()` or `trustedUrl()`.**
       `packages/compiler/src/validate/trusted-html-provenance.ts:638-720`
   - `classifyMemberRoot()` resolves `carrier.body`/`carrier.href` through the declaration initializer
@@ -89,6 +92,9 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     computed property writes, aliases, destructuring, `Object.assign`, `Reflect.set`,
     `defineProperty`, branches, and escaped/cross-file carriers; fail closed when mutation cannot be
     disproved, with HTML and URL positive/negative controls.
+  - **Evidence:** `packages/compiler/src/trusted-html-provenance.test.ts` passes within the
+    source-aliased 146-test integration run, including alias, branch, computed, reflection,
+    definition, escape, imported-carrier, and post-sink controls.
 
 - [ ] **H4 - Same-build enhanced navigation can install a new principal's document while retaining
       the old BroadcastChannel principal closure.**
@@ -320,7 +326,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     capability, OAuth/reset, encoded, duplicate, and case-variant sensitive parameters, and ensure
     errors cannot reintroduce the raw URL.
 
-- [ ] **M11 - `RenderedHtml + string` composition retains every full rendered value forever in a
+- [x] **M11 - `RenderedHtml + string` composition retains every full rendered value forever in a
       process-global marker map.** `packages/server/src/html.ts:32-36,47-52,153-187`
   - Default-hint coercion creates a unique marker and inserts the full HTML into a global
     `Map<string,string>`. Marker resolution reads but never deletes, bounds, or scopes the entry.
@@ -336,6 +342,9 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     request/render-scoped marker storage with guaranteed cleanup (or another bounded stateless
     representation); forced-GC growth at N and 2N requests must stay near the array control while
     repeated-marker, nested-JSX, and single-escape correctness tests remain green.
+  - **Evidence:** stateless authenticated marker regressions pass in the 146-test integration run;
+    forced-GC batches retained 0.004 MB control, 0.078 MB for the first 250 coercions, and 0.023 MB
+    for the second 250 (the reproduced vulnerable path retained about 9 MB per batch).
 
 ## Low
 
