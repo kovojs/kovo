@@ -44,6 +44,7 @@ const NativeRequest = globalThis.Request;
 const NativeReadableStream = globalThis.ReadableStream;
 const NativeTextDecoder = globalThis.TextDecoder;
 const NativeUint8Array = globalThis.Uint8Array;
+const NativeURLSearchParams = globalThis.URLSearchParams;
 const nativeIteratorSymbol: typeof Symbol.iterator = Symbol.iterator;
 
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
@@ -59,6 +60,18 @@ const nativeFormDataEntries = stablePlatformMethod(NativeFormData.prototype, 'en
 const nativeFormDataGet = stablePlatformMethod(NativeFormData.prototype, 'get');
 const nativeFormDataGetAll = stablePlatformMethod(NativeFormData.prototype, 'getAll');
 const nativeFormDataValues = stablePlatformMethod(NativeFormData.prototype, 'values');
+const nativeUrlSearchParamsEntries = stablePlatformMethod(
+  NativeURLSearchParams.prototype,
+  'entries',
+);
+const nativeUrlSearchParamsAppend = stablePlatformMethod(
+  NativeURLSearchParams.prototype,
+  'append',
+);
+const nativeUrlSearchParamsToString = stablePlatformMethod(
+  NativeURLSearchParams.prototype,
+  'toString',
+);
 const nativeBlobArrayBuffer = stablePlatformMethod(NativeBlob.prototype, 'arrayBuffer');
 const nativeBlobSize = stablePlatformAccessor(NativeBlob.prototype, 'size');
 const nativeBlobType = stablePlatformAccessor(NativeBlob.prototype, 'type');
@@ -115,6 +128,19 @@ const valuesIteratorControl = witnessReflectApply<object>(
 );
 const nativeFormDataEntriesNext = stablePlatformMethod(entriesIteratorControl, 'next');
 const nativeFormDataValuesNext = stablePlatformMethod(valuesIteratorControl, 'next');
+const urlSearchParamsIteratorControl = new NativeURLSearchParams([
+  ['control', 'genuine'],
+  ['second', 'value'],
+]);
+const urlSearchParamsEntriesIteratorControl = witnessReflectApply<object>(
+  nativeUrlSearchParamsEntries,
+  urlSearchParamsIteratorControl,
+  [],
+);
+const nativeUrlSearchParamsEntriesNext = stablePlatformMethod(
+  urlSearchParamsEntriesIteratorControl,
+  'next',
+);
 
 function stablePlatformMethod(source: object, property: PropertyKey): Function {
   let owner: object | null = source;
@@ -190,6 +216,29 @@ function capturedRequestControlsAreSound(): boolean {
     const values = formDataValuesUnchecked(form);
     if (values.length !== 2 || values[0] !== 'submitted' || values[1] !== 'second') return false;
     if (!isInstanceUnchecked(NativeFormData, form) || isInstanceUnchecked(NativeFormData, {})) {
+      return false;
+    }
+    const searchParams = new NativeURLSearchParams([
+      ['control', 'genuine'],
+      ['second', 'value'],
+    ]);
+    const appendedSearchParams = new NativeURLSearchParams();
+    witnessReflectApply(nativeUrlSearchParamsAppend, appendedSearchParams, ['control', 'genuine']);
+    witnessReflectApply(nativeUrlSearchParamsAppend, appendedSearchParams, ['second', 'value']);
+    const searchEntries = urlSearchParamsEntriesUnchecked(searchParams);
+    if (
+      !isInstanceUnchecked(NativeURLSearchParams, searchParams) ||
+      isInstanceUnchecked(NativeURLSearchParams, {}) ||
+      searchEntries.length !== 2 ||
+      searchEntries[0]?.[0] !== 'control' ||
+      searchEntries[0]?.[1] !== 'genuine' ||
+      searchEntries[1]?.[0] !== 'second' ||
+      searchEntries[1]?.[1] !== 'value' ||
+      witnessReflectApply(nativeUrlSearchParamsToString, searchParams, []) !==
+        'control=genuine&second=value' ||
+      witnessReflectApply(nativeUrlSearchParamsToString, appendedSearchParams, []) !==
+        'control=genuine&second=value'
+    ) {
       return false;
     }
 
@@ -795,6 +844,79 @@ export function requestIsRequest(value: unknown): value is Request {
 export function requestIsFormData(value: unknown): value is FormData {
   assertRequestBodyIntrinsics();
   return isInstanceUnchecked(NativeFormData, value);
+}
+
+export function requestIsUrlSearchParams(value: unknown): value is URLSearchParams {
+  assertRequestBodyIntrinsics();
+  return isInstanceUnchecked(NativeURLSearchParams, value);
+}
+
+export function requestUrlSearchParamsEntries(
+  searchParams: URLSearchParams,
+): readonly (readonly [string, string])[] {
+  assertRequestBodyIntrinsics();
+  if (!isInstanceUnchecked(NativeURLSearchParams, searchParams)) {
+    throw new TypeError('Kovo query search input must be a genuine URLSearchParams carrier.');
+  }
+  return urlSearchParamsEntriesUnchecked(searchParams);
+}
+
+export function requestSerializeUrlSearchParamsEntries(
+  entries: readonly (readonly [string, string])[],
+): string {
+  assertRequestBodyIntrinsics();
+  const searchParams = new NativeURLSearchParams();
+  for (let index = 0; index < entries.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(entries, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      !securityArrayIsArray(descriptor.value) ||
+      descriptor.value.length !== 2 ||
+      typeof descriptor.value[0] !== 'string' ||
+      typeof descriptor.value[1] !== 'string'
+    ) {
+      throw new TypeError('Kovo query search entries must be stable string pairs.');
+    }
+    witnessReflectApply(nativeUrlSearchParamsAppend, searchParams, [
+      descriptor.value[0],
+      descriptor.value[1],
+    ]);
+  }
+  return witnessReflectApply(nativeUrlSearchParamsToString, searchParams, []);
+}
+
+function urlSearchParamsEntriesUnchecked(
+  searchParams: URLSearchParams,
+): readonly (readonly [string, string])[] {
+  const iterator = witnessReflectApply<object>(
+    nativeUrlSearchParamsEntries,
+    searchParams,
+    [],
+  );
+  const entries: (readonly [string, string])[] = [];
+  for (let count = 0; count <= 100_000; count += 1) {
+    const result = witnessReflectApply<{ done?: unknown; value?: unknown }>(
+      nativeUrlSearchParamsEntriesNext,
+      iterator,
+      [],
+    );
+    if (typeof result !== 'object' || result === null) {
+      throw new TypeError('Kovo received an invalid URLSearchParams iterator result.');
+    }
+    if (result.done === true) return entries;
+    if (
+      result.done !== false ||
+      !securityArrayIsArray(result.value) ||
+      result.value.length !== 2 ||
+      typeof result.value[0] !== 'string' ||
+      typeof result.value[1] !== 'string'
+    ) {
+      throw new TypeError('Kovo received an invalid URLSearchParams entry.');
+    }
+    securityArrayPush(entries, [result.value[0], result.value[1]] as const);
+  }
+  throw new TypeError('Kovo refused an unbounded URLSearchParams carrier.');
 }
 
 export function requestIsBlob(value: unknown): value is Blob {

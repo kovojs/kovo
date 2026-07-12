@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken, validateCsrfToken } from './csrf.js';
-import { assertRequestBodyAsyncIntrinsics } from './request-body-intrinsics.js';
+import {
+  assertRequestBodyAsyncIntrinsics,
+  requestSerializeUrlSearchParamsEntries,
+  requestUrlSearchParamsEntries,
+} from './request-body-intrinsics.js';
 import { formLikeToRecord } from './schema.js';
 import {
   parseUntrustedJsonBodyBytes,
@@ -16,6 +20,46 @@ import {
 const intrinsicModuleUrl = new URL('./request-body-intrinsics.ts', import.meta.url).href;
 
 describe('request body carrier intrinsic closure', () => {
+  it('pins URLSearchParams entry and serialization controls for guarded query input', () => {
+    const submitted = new URLSearchParams([['token', 'attacker-submitted']]);
+    const victim = new URLSearchParams([['token', 'victim-capability']]);
+    const nativeAppend = URLSearchParams.prototype.append;
+    const nativeEntries = URLSearchParams.prototype.entries;
+    const nativeIterator = URLSearchParams.prototype[Symbol.iterator];
+    const nativeToString = URLSearchParams.prototype.toString;
+    const iteratorPrototype = Object.getPrototypeOf(
+      Reflect.apply(nativeEntries, submitted, []),
+    ) as { next: (...args: unknown[]) => IteratorResult<[string, string]> };
+    const nativeNext = iteratorPrototype.next;
+    let entries: readonly (readonly [string, string])[];
+    let serialized: string;
+    try {
+      URLSearchParams.prototype.append = function poisonedAppend() {
+        Reflect.apply(nativeAppend, this, ['token', 'victim-capability']);
+      };
+      URLSearchParams.prototype.entries = function poisonedEntries() {
+        return Reflect.apply(nativeEntries, victim, []);
+      };
+      URLSearchParams.prototype[Symbol.iterator] = function poisonedIterator() {
+        return Reflect.apply(nativeIterator, victim, []);
+      };
+      URLSearchParams.prototype.toString = () => 'token=victim-capability';
+      iteratorPrototype.next = () => ({ done: true, value: undefined });
+
+      entries = requestUrlSearchParamsEntries(submitted);
+      serialized = requestSerializeUrlSearchParamsEntries(entries);
+    } finally {
+      iteratorPrototype.next = nativeNext;
+      URLSearchParams.prototype.toString = nativeToString;
+      URLSearchParams.prototype[Symbol.iterator] = nativeIterator;
+      URLSearchParams.prototype.entries = nativeEntries;
+      URLSearchParams.prototype.append = nativeAppend;
+    }
+
+    expect(entries).toEqual([['token', 'attacker-submitted']]);
+    expect(serialized).toBe('token=attacker-submitted');
+  });
+
   it('does not replace the submitted FormData token through a poisoned entries method', () => {
     const request = { sessionId: 'victim-session' };
     const csrf = {

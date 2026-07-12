@@ -36,6 +36,12 @@ import type { Reader } from './managed-db.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import {
+  requestIsUrlSearchParams,
+  requestSerializeUrlSearchParamsEntries,
+  requestUrlSearchParamsEntries,
+} from './request-body-intrinsics.js';
+import { securityEncodeURIComponent } from './response-security-intrinsics.js';
+import {
   createWitnessWeakMap,
   witnessCreateNullRecord,
   witnessDefineProperty,
@@ -43,6 +49,7 @@ import {
   witnessGetPrototypeOf,
   witnessIsArray,
   witnessObjectKeys,
+  witnessReflectApply,
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
@@ -59,6 +66,7 @@ const MAX_QUERY_RESULT_NODES = 100_000;
 const MAX_QUERY_RESULT_ESTIMATED_BYTES = 4 * 1_024 * 1_024;
 const MAX_QUERY_BIGINT_MAGNITUDE = 10n ** 4_096n;
 const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
+const queryIteratorSymbol: typeof Symbol.iterator = Symbol.iterator;
 const intrinsicArrayPrototype = witnessGetPrototypeOf([]);
 const intrinsicObjectPrototype = witnessGetPrototypeOf({});
 
@@ -572,12 +580,12 @@ export const renderQueryEndpointResponse = wireEmitter(
     definition: QueryDefinition<Key, Value, Input, Request>,
     endpointRequest: QueryEndpointRequest<Request>,
   ): Promise<QueryEndpointResponse> {
-    const rawInput = tagUntrustedRequestValue(
-      querySearchInputToRecord(endpointRequest.search ?? {}),
-    );
+    let searchEntries: readonly QuerySearchEntry[] = [];
     let result: QueryEndpointResult<Value, Input>;
     let lifecycleRequest: Request = endpointRequest.request;
     try {
+      searchEntries = snapshotQuerySearchInputEntries(endpointRequest.search ?? {});
+      const rawInput = tagUntrustedRequestValue(querySearchInputToRecord(searchEntries));
       lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
         ...(endpointRequest.clientIp === undefined ? {} : { clientIp: endpointRequest.clientIp }),
         ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
@@ -616,7 +624,7 @@ export const renderQueryEndpointResponse = wireEmitter(
         ...endpointRequest,
         currentUrl:
           endpointRequest.currentUrl ??
-          queryEndpointCurrentUrl(definition.key, endpointRequest.search ?? {}),
+          queryEndpointCurrentUrl(definition.key, searchEntries),
       });
       // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
       // cache posture — an anon 403 must not be cached and replayed to an authed user.
@@ -971,50 +979,158 @@ function validationFailurePayload(error: SchemaValidationErrorLike): ValidationF
   return { issues: error.issues };
 }
 
-function querySearchInputToRecord(search: QuerySearchInput): Record<string, unknown> {
-  return entriesToRecord(querySearchInputEntries(search));
+type QuerySearchEntry = readonly [string, string];
+
+function querySearchInputToRecord(entries: readonly QuerySearchEntry[]): Record<string, unknown> {
+  return entriesToRecord(entries);
 }
 
-function querySearchInputEntries(search: QuerySearchInput): Iterable<readonly [string, unknown]> {
-  if (search instanceof URLSearchParams || Symbol.iterator in search) return search;
+function snapshotQuerySearchInputEntries(search: QuerySearchInput): readonly QuerySearchEntry[] {
+  if (requestIsUrlSearchParams(search)) return requestUrlSearchParamsEntries(search);
+  if (witnessIsArray(search)) return snapshotDenseQuerySearchEntries(search);
 
-  return Object.entries(search).flatMap(([key, value]) =>
-    value === undefined
-      ? []
-      : Array.isArray(value)
-        ? value.map((item) => [key, item] as const)
-        : [[key, value] as const],
-  );
-}
-
-function queryEndpointCurrentUrl(queryKey: string, search: QuerySearchInput): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of querySearchInputEntries(search)) {
-    appendSearchParams(params, key, value);
+  const iterator = stableQueryIteratorMethod(search);
+  if (iterator !== undefined) return snapshotIterableQuerySearchEntries(search, iterator);
+  if (typeof search !== 'object' || search === null) {
+    throw new TypeError('Kovo query search input must be a stable record or pair iterable.');
   }
 
-  const queryString = params.toString();
-  return `/_q/${encodeURIComponent(queryKey)}${queryString ? `?${queryString}` : ''}`;
+  const entries: QuerySearchEntry[] = [];
+  const keys = witnessObjectKeys(search);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const key = keys[keyIndex]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(search, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo query search records must contain stable own data properties.');
+    }
+    const value = descriptor.value;
+    if (value === undefined) continue;
+    if (typeof value === 'string') {
+      appendQuerySearchEntry(entries, key, value);
+      continue;
+    }
+    if (!witnessIsArray(value)) {
+      throw new TypeError('Kovo query search record values must be strings or string arrays.');
+    }
+    for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+      const valueDescriptor = witnessGetOwnPropertyDescriptor(value, valueIndex);
+      if (
+        valueDescriptor === undefined ||
+        !('value' in valueDescriptor) ||
+        typeof valueDescriptor.value !== 'string'
+      ) {
+        throw new TypeError('Kovo query search arrays must contain dense stable strings.');
+      }
+      appendQuerySearchEntry(entries, key, valueDescriptor.value);
+    }
+  }
+  return entries;
 }
 
-function appendSearchParams(params: URLSearchParams, key: string, value: unknown): void {
-  if (value === undefined || value === null) return;
-  if (Array.isArray(value)) {
-    for (const item of value) appendSearchParams(params, key, item);
-    return;
+function snapshotDenseQuerySearchEntries(search: readonly unknown[]): readonly QuerySearchEntry[] {
+  const entries: QuerySearchEntry[] = [];
+  for (let index = 0; index < search.length; index += 1) {
+    const pair = stableOwnDataValue(search, index, `query search entry ${index}`);
+    if (!witnessIsArray(pair) || pair.length !== 2) {
+      throw new TypeError('Kovo query search arrays must contain dense string pairs.');
+    }
+    const key = stableOwnDataValue(pair, 0, 'query search entry key');
+    const value = stableOwnDataValue(pair, 1, 'query search entry value');
+    if (typeof key !== 'string' || typeof value !== 'string') {
+      throw new TypeError('Kovo query search arrays must contain dense string pairs.');
+    }
+    appendQuerySearchEntry(entries, key, value);
   }
-
-  params.append(key, searchParamValue(value));
+  return entries;
 }
 
-function searchParamValue(value: unknown): string {
-  if (value === undefined || value === null) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return `${value}`;
+function stableQueryIteratorMethod(value: unknown): Function | undefined {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    return undefined;
   }
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, queryIteratorSymbol);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError('Kovo query search iterator must be a stable data method.');
+      }
+      return descriptor.value;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  return undefined;
+}
 
-  return JSON.stringify(value) ?? '';
+function snapshotIterableQuerySearchEntries(
+  search: object,
+  iteratorMethod: Function,
+): readonly QuerySearchEntry[] {
+  const iterator = witnessReflectApply<unknown>(iteratorMethod, search, []);
+  if ((typeof iterator !== 'object' && typeof iterator !== 'function') || iterator === null) {
+    throw new TypeError('Kovo query search iterator factory returned an invalid carrier.');
+  }
+  const next = stableDataMethod(iterator, 'next', 'query search iterator');
+  const entries: QuerySearchEntry[] = [];
+  for (let count = 0; count <= 100_000; count += 1) {
+    const result = witnessReflectApply<unknown>(next, iterator, []);
+    if (typeof result !== 'object' || result === null) {
+      throw new TypeError('Kovo query search iterator returned an invalid result.');
+    }
+    const done = stableOwnDataValue(result, 'done', 'query search iterator result.done');
+    if (done === true) return entries;
+    if (done !== false && done !== undefined) {
+      throw new TypeError('Kovo query search iterator returned an invalid state.');
+    }
+    const pair = stableOwnDataValue(result, 'value', 'query search iterator result.value');
+    if (!witnessIsArray(pair) || pair.length !== 2) {
+      throw new TypeError('Kovo query search iterable must yield string pairs.');
+    }
+    const key = stableOwnDataValue(pair, 0, 'query search entry key');
+    const value = stableOwnDataValue(pair, 1, 'query search entry value');
+    if (typeof key !== 'string' || typeof value !== 'string') {
+      throw new TypeError('Kovo query search iterable must yield string pairs.');
+    }
+    appendQuerySearchEntry(entries, key, value);
+  }
+  throw new TypeError('Kovo refused an unbounded query search carrier.');
+}
+
+function stableDataMethod(value: object, key: PropertyKey, label: string): Function {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, key);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError(`${label}.${String(key)} must be a stable data method.`);
+      }
+      return descriptor.value;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  throw new TypeError(`${label}.${String(key)} is unavailable.`);
+}
+
+function stableOwnDataValue(value: object, key: PropertyKey, label: string): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, key);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`${label} must be a stable own data property.`);
+  }
+  return descriptor.value;
+}
+
+function appendQuerySearchEntry(entries: QuerySearchEntry[], key: string, value: string): void {
+  witnessDefineProperty(entries, entries.length, {
+    configurable: true,
+    enumerable: true,
+    value: [key, value] as const,
+    writable: true,
+  });
+}
+
+function queryEndpointCurrentUrl(queryKey: string, entries: readonly QuerySearchEntry[]): string {
+  const queryString = requestSerializeUrlSearchParamsEntries(entries);
+  return `/_q/${securityEncodeURIComponent(queryKey)}${queryString ? `?${queryString}` : ''}`;
 }
 
 const renderQueryEndpointChunk = wireEmitter('server.wire.query-endpoint-chunk', function <

@@ -295,6 +295,98 @@ describe('query endpoints', () => {
     });
   });
 
+  it('does not let a late URLSearchParams iterator substitute guarded query capability bytes', async () => {
+    const victimCapability = 'victim-query-capability';
+    const capabilityQuery = query('capabilityLookup', {
+      args: s.object({ token: s.string() }),
+      guard: (request: { args?: { token?: string } }) =>
+        request.args?.token === victimCapability,
+      load: (input: { token: string }) => ({ account: 'victim-account', token: input.token }),
+      reads: [],
+    });
+    const search = new URLSearchParams([['token', 'attacker-submitted']]);
+    const originalIterator = URLSearchParams.prototype[Symbol.iterator];
+    URLSearchParams.prototype[Symbol.iterator] = function iterator() {
+      if (this === search) {
+        return [['token', victimCapability] as const][Symbol.iterator]();
+      }
+      return originalIterator.call(this);
+    };
+
+    let response: Awaited<ReturnType<typeof renderQueryEndpointResponse>>;
+    try {
+      response = await renderQueryEndpointResponse(capabilityQuery, { request: {}, search });
+    } finally {
+      URLSearchParams.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(response.status).toBe(303);
+    expect(response.body).not.toContain('victim-account');
+    expect(response.body).not.toContain(victimCapability);
+  });
+
+  it('uses one exact query-pair iterable snapshot for guards and the failure current URL', async () => {
+    const victimCapability = 'second-pass-victim-capability';
+    let iteratorCalls = 0;
+    const search = {
+      [Symbol.iterator]() {
+        iteratorCalls += 1;
+        const token = iteratorCalls === 1 ? 'attacker-submitted' : victimCapability;
+        let emitted = false;
+        return {
+          next(): IteratorResult<readonly [string, string]> {
+            if (emitted) return { done: true, value: undefined };
+            emitted = true;
+            return { done: false, value: ['token', token] as const };
+          },
+        };
+      },
+    };
+    const capabilityQuery = query('iterableCapabilityLookup', {
+      args: s.object({ token: s.string() }),
+      guard: (request: { args?: { token?: string } }) =>
+        request.args?.token === victimCapability,
+      load: () => ({ account: 'victim-account' }),
+      reads: [],
+    });
+
+    const response = await renderQueryEndpointResponse(capabilityQuery, { request: {}, search });
+
+    expect(response.status).toBe(303);
+    expect(iteratorCalls).toBe(1);
+    expect(response.headers.Location).toContain('attacker-submitted');
+    expect(response.headers.Location).not.toContain(victimCapability);
+    expect(response.body).not.toContain('victim-account');
+  });
+
+  it('reads dense query-pair arrays without their mutable iterator', async () => {
+    const victimCapability = 'array-victim-capability';
+    const search = [['token', 'attacker-submitted'] as const];
+    const capabilityQuery = query('arrayCapabilityLookup', {
+      args: s.object({ token: s.string() }),
+      guard: (request: { args?: { token?: string } }) =>
+        request.args?.token === victimCapability,
+      load: () => ({ account: 'victim-account' }),
+      reads: [],
+    });
+    const originalIterator = Array.prototype[Symbol.iterator];
+    Array.prototype[Symbol.iterator] = function iterator() {
+      return originalIterator.call(
+        this === search ? [['token', victimCapability] as const] : this,
+      );
+    };
+    let response: Awaited<ReturnType<typeof renderQueryEndpointResponse>>;
+    try {
+      response = await renderQueryEndpointResponse(capabilityQuery, { request: {}, search });
+    } finally {
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
+
+    expect(response.status).toBe(303);
+    expect(response.body).not.toContain('victim-account');
+    expect(response.body).not.toContain(victimCapability);
+  });
+
   it('caps unbounded query list results and surfaces a wire warning', async () => {
     const catalogQuery = query('catalogList', {
       load: () => ({
