@@ -1273,6 +1273,77 @@ export default async function handler() {
     }
   });
 
+  it('pins emitted Node response writers before an authored handler can replace the transport', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-native-transport-'));
+    const poisonGlobal = globalThis as typeof globalThis & {
+      __kovoRestoreEmittedNodeTransport?: () => void;
+    };
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+import { ServerResponse } from 'node:http';
+const originalWriteHead = ServerResponse.prototype.writeHead;
+const originalEnd = ServerResponse.prototype.end;
+
+function restore() {
+  ServerResponse.prototype.writeHead = originalWriteHead;
+  ServerResponse.prototype.end = originalEnd;
+}
+
+export default async function handler() {
+  globalThis.__kovoRestoreEmittedNodeTransport = restore;
+  ServerResponse.prototype.writeHead = function attackerWriteHead() {
+    return Reflect.apply(originalWriteHead, this, [202, 'ATTACKER', {
+      'content-type': 'text/html; charset=utf-8',
+      'set-cookie': 'admin=attacker; Path=/; HttpOnly',
+    }]);
+  };
+  ServerResponse.prototype.end = function attackerEnd() {
+    return Reflect.apply(originalEnd, this, ['<script>emittedNativeTransportAttacker()</script>']);
+  };
+  return new Response('SAFE-EMITTED-NATIVE-TRANSPORT', {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+    status: 200,
+  });
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+
+      try {
+        const response = await fetch(baseUrl);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('set-cookie')).toBeNull();
+        await expect(response.text()).resolves.toBe('SAFE-EMITTED-NATIVE-TRANSPORT');
+      } finally {
+        poisonGlobal.__kovoRestoreEmittedNodeTransport?.();
+        delete poisonGlobal.__kovoRestoreEmittedNodeTransport;
+        await close(server);
+      }
+    } finally {
+      poisonGlobal.__kovoRestoreEmittedNodeTransport?.();
+      delete poisonGlobal.__kovoRestoreEmittedNodeTransport;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('does not serialize attacker source through a late Function.toString replacement', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-source-injection-'));
     const originalFunctionToString = Function.prototype.toString;
@@ -1690,10 +1761,33 @@ export default async function handler(request) {
           '/hello': 'src/cart.client.ts',
         },
         serverHandlerSource: `
+import { ServerResponse } from 'node:http';
+const originalWriteHead = ServerResponse.prototype.writeHead;
+const originalEnd = ServerResponse.prototype.end;
+function restoreVercelTransport() {
+  ServerResponse.prototype.writeHead = originalWriteHead;
+  ServerResponse.prototype.end = originalEnd;
+}
 export default async function handler(request) {
   globalThis.__kovoVercelRawTargetHandlerCalls =
     (globalThis.__kovoVercelRawTargetHandlerCalls ?? 0) + 1;
   const url = new URL(request.url);
+  if (url.pathname === '/transport-poison') {
+    globalThis.__kovoRestoreVercelTransport = restoreVercelTransport;
+    ServerResponse.prototype.writeHead = function attackerWriteHead() {
+      return Reflect.apply(originalWriteHead, this, [202, 'ATTACKER', {
+        'content-type': 'text/html; charset=utf-8',
+        'set-cookie': 'admin=attacker; Path=/; HttpOnly',
+      }]);
+    };
+    ServerResponse.prototype.end = function attackerEnd() {
+      return Reflect.apply(originalEnd, this, ['<script>vercelTransportAttacker()</script>']);
+    };
+    return new Response('SAFE-VERCEL-TRANSPORT', {
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+      status: 200,
+    });
+  }
   if (url.pathname === '/cookies') {
     const headers = new Headers({ 'content-type': 'text/plain; charset=utf-8' });
     headers.append('set-cookie', 'session=s1; Path=/; HttpOnly');
@@ -1838,6 +1932,7 @@ export default async function handler(request) {
       const baseUrl = await listen(server);
       const rawTargetCounter = globalThis as typeof globalThis & {
         __kovoVercelRawTargetHandlerCalls?: number;
+        __kovoRestoreVercelTransport?: () => void;
       };
       rawTargetCounter.__kovoVercelRawTargetHandlerCalls = 0;
 
@@ -1870,7 +1965,15 @@ export default async function handler(request) {
           'session=s1; Path=/; HttpOnly',
           'csrf=c1; Path=/; SameSite=Strict',
         ]);
+
+        const transportResponse = await fetch(`${baseUrl}/transport-poison`);
+        expect(transportResponse.status).toBe(200);
+        expect(transportResponse.headers.get('set-cookie')).toBeNull();
+        await expect(transportResponse.text()).resolves.toBe('SAFE-VERCEL-TRANSPORT');
+        rawTargetCounter.__kovoRestoreVercelTransport?.();
       } finally {
+        rawTargetCounter.__kovoRestoreVercelTransport?.();
+        delete rawTargetCounter.__kovoRestoreVercelTransport;
         delete rawTargetCounter.__kovoVercelRawTargetHandlerCalls;
         await close(server);
       }

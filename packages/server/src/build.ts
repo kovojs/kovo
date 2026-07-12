@@ -625,6 +625,7 @@ function vercelStaticBuildOutputConfig(): unknown {
 function nodeAdapterRuntimeSource(): string {
   return `import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { ServerResponse } from 'node:http';
 
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
@@ -634,6 +635,7 @@ const nativeReflectApply = Reflect.apply;
 const nativeObjectDefineProperty = Object.defineProperty;
 const nativeObjectEntries = Object.entries;
 const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const nativeObjectGetPrototypeOf = Object.getPrototypeOf;
 const nativeHeadersGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'Headers');
 const nativeRequestGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'Request');
 const nativeUrlGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'URL');
@@ -647,6 +649,12 @@ const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeR
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
 const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
 const nativeReadableFromWeb = Readable.fromWeb;
+const nativeServerResponseDestroy = stablePrototypeFunction(ServerResponse.prototype, 'destroy');
+const nativeServerResponseEnd = stablePrototypeFunction(ServerResponse.prototype, 'end');
+const nativeServerResponseHeadersSentGetter = stablePrototypeGetter(ServerResponse.prototype, 'headersSent');
+const nativeServerResponseWrite = stablePrototypeFunction(ServerResponse.prototype, 'write');
+const nativeServerResponseWriteEarlyHints = stablePrototypeFunction(ServerResponse.prototype, 'writeEarlyHints');
+const nativeServerResponseWriteHead = stablePrototypeFunction(ServerResponse.prototype, 'writeHead');
 const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
 const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'href').get;
 const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
@@ -656,6 +664,7 @@ const bodylessMethods = new Set(['GET', 'HEAD']);
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
 
 export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
+  if (nodeResponse) pinNodeResponseTransport(nodeResponse);
   if (unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
@@ -720,6 +729,7 @@ function constructNativeRequest(input, init) {
 }
 
 export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
+  pinNodeResponseTransport(nodeResponse);
   if (!unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) return false;
   armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
   nodeResponse.writeHead(404, {
@@ -841,6 +851,7 @@ function rawRequestTargetHasEncodedPathControl(value) {
 }
 
 export async function writeWebResponseToNode(response, nodeResponse, method = 'GET', options = {}) {
+  pinNodeResponseTransport(nodeResponse);
   // SPEC §6.6 rule 5: read the complete authored Response exactly once through boot-captured
   // accessors. The transport never consults its mutable prototype again after this snapshot.
   const pinnedResponse = snapshotWebResponse(response);
@@ -907,6 +918,61 @@ function canonicalRelativeRequestTarget(rawTarget) {
 
 function apply(fn, receiver, args) {
   return nativeReflectApply(fn, receiver, args);
+}
+
+function stablePrototypeFunction(prototype, property) {
+  let owner = prototype;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [owner, property]);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError('Kovo generated Node transport control is unavailable.');
+      }
+      return descriptor.value;
+    }
+    owner = apply(nativeObjectGetPrototypeOf, Object, [owner]);
+  }
+  throw new TypeError('Kovo generated Node transport control is unavailable.');
+}
+
+function stablePrototypeGetter(prototype, property) {
+  let owner = prototype;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [owner, property]);
+    if (descriptor !== undefined) {
+      if (typeof descriptor.get !== 'function') {
+        throw new TypeError('Kovo generated Node transport getter is unavailable.');
+      }
+      return descriptor.get;
+    }
+    owner = apply(nativeObjectGetPrototypeOf, Object, [owner]);
+  }
+  throw new TypeError('Kovo generated Node transport getter is unavailable.');
+}
+
+function pinNodeResponseTransport(nodeResponse) {
+  pinNodeResponseMethod(nodeResponse, 'destroy', nativeServerResponseDestroy);
+  pinNodeResponseMethod(nodeResponse, 'end', nativeServerResponseEnd);
+  pinNodeResponseMethod(nodeResponse, 'write', nativeServerResponseWrite);
+  pinNodeResponseMethod(nodeResponse, 'writeEarlyHints', nativeServerResponseWriteEarlyHints);
+  pinNodeResponseMethod(nodeResponse, 'writeHead', nativeServerResponseWriteHead);
+  if (apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeResponse, 'headersSent']) === undefined) {
+    apply(nativeObjectDefineProperty, Object, [nodeResponse, 'headersSent', {
+      configurable: true,
+      get() { return apply(nativeServerResponseHeadersSentGetter, this, []); },
+    }]);
+  }
+}
+
+function pinNodeResponseMethod(nodeResponse, property, value) {
+  if (apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeResponse, property]) !== undefined) {
+    return;
+  }
+  apply(nativeObjectDefineProperty, Object, [nodeResponse, property, {
+    configurable: true,
+    value,
+    writable: false,
+  }]);
 }
 
 function urlHash(url) { return apply(nativeUrlHashGetter, url, []); }

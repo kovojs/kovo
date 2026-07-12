@@ -1,17 +1,27 @@
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createBrotliCompress, createGzip } from 'node:zlib';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import {
+  ServerResponse as NativeServerResponse,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
+import { Http2ServerResponse as NativeHttp2ServerResponse } from 'node:http2';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
 import { trustedNodeRequestScheme } from './request-scheme.js';
 import {
+  createWitnessWeakMap,
   createWitnessSet,
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessIsArray,
   witnessReflectApply,
   witnessSetAdd,
   witnessSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 
 /** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
@@ -46,6 +56,7 @@ export type NodeRequestHandler = (
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
+const NativeString = globalThis.String;
 const NativeURL = globalThis.URL;
 const nativeHeadersGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'Headers');
 const nativeRequestGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'Request');
@@ -61,6 +72,51 @@ const nativeResponseBodyGetter = requiredGetter(NativeResponse.prototype, 'body'
 const nativeResponseHeadersGetter = requiredGetter(NativeResponse.prototype, 'headers');
 const nativeResponseStatusGetter = requiredGetter(NativeResponse.prototype, 'status');
 const nativeResponseStatusTextGetter = requiredGetter(NativeResponse.prototype, 'statusText');
+const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
+const nativeStringFromCharCode = NativeString.fromCharCode;
+const nativeRequestMethodGetter = requiredGetter(NativeRequest.prototype, 'method');
+const nativeServerResponseDestroy = stablePrototypeFunction(
+  NativeServerResponse.prototype,
+  'destroy',
+);
+const nativeServerResponseEnd = stablePrototypeFunction(NativeServerResponse.prototype, 'end');
+const nativeServerResponseHeadersSent = stablePrototypeGetter(
+  NativeServerResponse.prototype,
+  'headersSent',
+);
+const nativeServerResponseWriteEarlyHints = stablePrototypeFunction(
+  NativeServerResponse.prototype,
+  'writeEarlyHints',
+);
+const nativeServerResponseWriteHead = stablePrototypeFunction(
+  NativeServerResponse.prototype,
+  'writeHead',
+);
+const nativeServerResponseWrite = stablePrototypeFunction(NativeServerResponse.prototype, 'write');
+const nativeHttp2ServerResponseDestroy = stablePrototypeFunction(
+  NativeHttp2ServerResponse.prototype,
+  'destroy',
+);
+const nativeHttp2ServerResponseEnd = stablePrototypeFunction(
+  NativeHttp2ServerResponse.prototype,
+  'end',
+);
+const nativeHttp2ServerResponseHeadersSent = stablePrototypeGetter(
+  NativeHttp2ServerResponse.prototype,
+  'headersSent',
+);
+const nativeHttp2ServerResponseWrite = stablePrototypeFunction(
+  NativeHttp2ServerResponse.prototype,
+  'write',
+);
+const nativeHttp2ServerResponseWriteEarlyHints = stablePrototypeFunction(
+  NativeHttp2ServerResponse.prototype,
+  'writeEarlyHints',
+);
+const nativeHttp2ServerResponseWriteHead = stablePrototypeFunction(
+  NativeHttp2ServerResponse.prototype,
+  'writeHead',
+);
 const nativeReadableFromWeb = Readable.fromWeb;
 const nativePipeline = pipeline;
 const nativeCreateBrotliCompress = createBrotliCompress;
@@ -76,6 +132,7 @@ witnessSetAdd(bodylessMethods, 'GET');
 witnessSetAdd(bodylessMethods, 'HEAD');
 const requestPeerAddressProperty = '__kovoPeerAddress';
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
+const nodeResponseTransports = createWitnessWeakMap<ServerResponse, NodeResponseTransport>();
 
 function requiredPropertyDescriptor(value: object, property: PropertyKey): PropertyDescriptor {
   const propertyDescriptor = witnessGetOwnPropertyDescriptor(value, property);
@@ -93,6 +150,147 @@ function requiredGetter(value: object, property: PropertyKey): () => unknown {
   return intrinsicGetter;
 }
 
+function stablePrototypeFunction(value: object, property: PropertyKey): Function {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError('Kovo Node response transport control is unavailable.');
+      }
+      return descriptor.value;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  throw new TypeError('Kovo Node response transport control is unavailable.');
+}
+
+function stablePrototypeGetter(value: object, property: PropertyKey): Function {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      if (typeof descriptor.get !== 'function') {
+        throw new TypeError('Kovo Node response transport getter is unavailable.');
+      }
+      return descriptor.get;
+    }
+    owner = witnessGetPrototypeOf(owner);
+  }
+  throw new TypeError('Kovo Node response transport getter is unavailable.');
+}
+
+interface NodeResponseTransport {
+  readonly destroy?: Function;
+  readonly end: Function;
+  readonly headersSent: Function;
+  readonly writeEarlyHints?: Function;
+  readonly writeHead: Function;
+  readonly write?: Function;
+}
+
+const nativeHttp1ResponseTransport: NodeResponseTransport = {
+  destroy: nativeServerResponseDestroy,
+  end: nativeServerResponseEnd,
+  headersSent: nativeServerResponseHeadersSent,
+  write: nativeServerResponseWrite,
+  writeEarlyHints: nativeServerResponseWriteEarlyHints,
+  writeHead: nativeServerResponseWriteHead,
+};
+const nativeHttp2ResponseTransport: NodeResponseTransport = {
+  destroy: nativeHttp2ServerResponseDestroy,
+  end: nativeHttp2ServerResponseEnd,
+  headersSent: nativeHttp2ServerResponseHeadersSent,
+  write: nativeHttp2ServerResponseWrite,
+  writeEarlyHints: nativeHttp2ServerResponseWriteEarlyHints,
+  writeHead: nativeHttp2ServerResponseWriteHead,
+};
+
+function pinNodeResponseTransport(response: ServerResponse): NodeResponseTransport {
+  const existing = witnessWeakMapGet(nodeResponseTransports, response);
+  if (existing !== undefined) return existing;
+  const nativeTransport = nativeResponseTransport(response);
+  const destroy = selectNodeResponseFunction(response, 'destroy', nativeTransport?.destroy);
+  const write = selectNodeResponseFunction(response, 'write', nativeTransport?.write);
+  const writeEarlyHints = selectNodeResponseFunction(
+    response,
+    'writeEarlyHints',
+    nativeTransport?.writeEarlyHints,
+  );
+  const transport: NodeResponseTransport = {
+    ...(destroy === undefined ? {} : { destroy }),
+    end: requiredNodeResponseFunction(response, 'end', nativeTransport?.end),
+    headersSent:
+      nativeTransport?.headersSent ??
+      function ownHeadersSent(this: ServerResponse): boolean {
+        return witnessGetOwnPropertyDescriptor(this, 'headersSent')?.value === true;
+      },
+    ...(writeEarlyHints === undefined ? {} : { writeEarlyHints }),
+    writeHead: requiredNodeResponseFunction(response, 'writeHead', nativeTransport?.writeHead),
+    ...(write === undefined ? {} : { write }),
+  };
+  if (nativeTransport !== undefined) pinNativeNodeResponseMethods(response, transport);
+  witnessWeakMapSet(nodeResponseTransports, response, transport);
+  return transport;
+}
+
+function nativeResponseTransport(response: ServerResponse): NodeResponseTransport | undefined {
+  let current: object | null = response;
+  for (let depth = 0; current !== null && depth < 16; depth += 1) {
+    if (current === NativeServerResponse.prototype) return nativeHttp1ResponseTransport;
+    if (current === NativeHttp2ServerResponse.prototype) return nativeHttp2ResponseTransport;
+    current = witnessGetPrototypeOf(current);
+  }
+  return undefined;
+}
+
+function pinNativeNodeResponseMethods(
+  response: ServerResponse,
+  transport: NodeResponseTransport,
+): void {
+  pinNativeNodeResponseMethod(response, 'destroy', transport.destroy);
+  pinNativeNodeResponseMethod(response, 'end', transport.end);
+  pinNativeNodeResponseMethod(response, 'write', transport.write);
+  pinNativeNodeResponseMethod(response, 'writeEarlyHints', transport.writeEarlyHints);
+  pinNativeNodeResponseMethod(response, 'writeHead', transport.writeHead);
+}
+
+function pinNativeNodeResponseMethod(
+  response: ServerResponse,
+  property: PropertyKey,
+  value: Function | undefined,
+): void {
+  if (value === undefined || witnessGetOwnPropertyDescriptor(response, property) !== undefined)
+    return;
+  witnessDefineProperty(response, property, {
+    configurable: true,
+    value,
+    writable: false,
+  });
+}
+
+function selectNodeResponseFunction(
+  response: ServerResponse,
+  property: PropertyKey,
+  nativeFunction: Function | undefined,
+): Function | undefined {
+  const own = witnessGetOwnPropertyDescriptor(response, property);
+  if (own !== undefined && 'value' in own && typeof own.value === 'function') return own.value;
+  return nativeFunction;
+}
+
+function requiredNodeResponseFunction(
+  response: ServerResponse,
+  property: PropertyKey,
+  nativeFunction: Function | undefined,
+): Function {
+  const selected = selectNodeResponseFunction(response, property, nativeFunction);
+  if (selected === undefined) {
+    throw new TypeError(`Kovo Node response transport ${String(property)} is unavailable.`);
+  }
+  return selected;
+}
+
 /**
  * Adapt a Web-standard `RequestHandler` (from `createRequestHandler`) to a Node
  * `http`/`https` `(req, res)` listener, translating between Node and Web
@@ -107,11 +305,11 @@ export function toNodeHandler(
   options: NodeHandlerOptions = {},
 ): NodeRequestHandler {
   return async (nodeRequest, nodeResponse) => {
+    const responseTransport = pinNodeResponseTransport(nodeResponse);
     try {
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
-      const response = await handler(request);
-      armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+      const requestMethod = witnessReflectApply<string>(nativeRequestMethodGetter, request, []);
       // L16-2 (RFC 8297): thread the request's HTTP version so 103 Early Hints is gated to
       // HTTP/1.1+ clients (an HTTP/1.0 peer cannot parse interim 1xx responses).
       const acceptEncoding = firstHeaderValue(nodeRequest.headers['accept-encoding']);
@@ -122,20 +320,28 @@ export function toNodeHandler(
         httpVersion: nodeRequest.httpVersion,
       };
 
-      await writeWebResponseToNode(response, nodeResponse, request.method, writeOptions);
+      const response = await handler(request);
+      armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+
+      await writeWebResponseToNode(response, nodeResponse, requestMethod, writeOptions);
     } catch {
       // E1 (SPEC §9.5/§9.2): once the response head is committed (`headersSent`), a 200's
       // status/body are already on the wire. Appending "Internal Server Error" here would
       // corrupt that committed body (a mid-stream render error yielding HTTP 200
       // "partial-Internal Server Error"). Tear the socket instead so the client observes a
       // truncated/aborted transfer rather than a clean 200 carrying injected error text.
-      if (nodeResponse.headersSent) {
-        nodeResponse.destroy();
+      if (witnessReflectApply<boolean>(responseTransport.headersSent, nodeResponse, [])) {
+        if (responseTransport.destroy !== undefined) {
+          witnessReflectApply(responseTransport.destroy, nodeResponse, []);
+        }
         return;
       }
       armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
-      nodeResponse.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-      nodeResponse.end('Internal Server Error');
+      witnessReflectApply(responseTransport.writeHead, nodeResponse, [
+        500,
+        { 'Content-Type': 'text/plain; charset=utf-8' },
+      ]);
+      witnessReflectApply(responseTransport.end, nodeResponse, ['Internal Server Error']);
     }
   };
 }
@@ -145,6 +351,7 @@ export function nodeRequestToWebRequest(
   options: NodeHandlerOptions = {},
   nodeResponse?: ServerResponse,
 ): Request {
+  if (nodeResponse !== undefined) pinNodeResponseTransport(nodeResponse);
   if (unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
@@ -229,6 +436,7 @@ export async function writeWebResponseToNode(
   method = 'GET',
   options: WriteWebResponseToNodeOptions = {},
 ): Promise<void> {
+  const responseTransport = pinNodeResponseTransport(nodeResponse);
   // SPEC §6.6 rule 5: the final transport pins the complete Response once. Authored code may
   // share this realm, so no status/header/body getter is re-read after this boundary decision.
   const pinnedResponse = snapshotWebResponse(response);
@@ -248,17 +456,23 @@ export async function writeWebResponseToNode(
   if (
     options.earlyHints !== false &&
     earlyHints &&
-    typeof nodeResponse.writeEarlyHints === 'function' &&
+    responseTransport.writeEarlyHints !== undefined &&
     // L16-2 (RFC 8297): 103 Early Hints is HTTP/1.1+; an HTTP/1.0 client cannot parse a 1xx
     // interim response, so emitting one desynchronizes the connection. Suppress for '1.0'.
     options.httpVersion !== '1.0'
   ) {
-    nodeResponse.writeEarlyHints({ link: nodeEarlyHintsLinkValue(earlyHints) });
+    witnessReflectApply(responseTransport.writeEarlyHints, nodeResponse, [
+      { link: nodeEarlyHintsLinkValue(earlyHints) },
+    ]);
   }
 
-  nodeResponse.writeHead(pinnedResponse.status, pinnedResponse.statusText, headers);
+  witnessReflectApply(responseTransport.writeHead, nodeResponse, [
+    pinnedResponse.status,
+    pinnedResponse.statusText,
+    headers,
+  ]);
   if (method === 'HEAD' || pinnedResponse.body === null) {
-    nodeResponse.end();
+    witnessReflectApply(responseTransport.end, nodeResponse, []);
     return;
   }
   const source = witnessReflectApply<Readable>(nativeReadableFromWeb, Readable, [
@@ -337,13 +551,17 @@ function rejectUnsafeNodeMutationTarget(
 ): boolean {
   if (!unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) return false;
 
+  const responseTransport = pinNodeResponseTransport(nodeResponse);
   armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
-  nodeResponse.writeHead(404, {
-    'Cache-Control': 'no-store',
-    'Content-Type': 'text/plain; charset=utf-8',
-    'X-Content-Type-Options': 'nosniff',
-  });
-  nodeResponse.end('Not Found');
+  witnessReflectApply(responseTransport.writeHead, nodeResponse, [
+    404,
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  ]);
+  witnessReflectApply(responseTransport.end, nodeResponse, ['Not Found']);
   return true;
 }
 
@@ -516,48 +734,185 @@ function responseCompression(
 
 function isSensitiveResponse(headers: Headers): boolean {
   const cacheControl = getHeader(headers, 'Cache-Control') ?? '';
-  if (/\b(no-transform|no-store|private)\b/i.test(cacheControl)) return true;
+  if (
+    cacheControlHasDirective(cacheControl, 'no-transform') ||
+    cacheControlHasDirective(cacheControl, 'no-store') ||
+    cacheControlHasDirective(cacheControl, 'private')
+  ) {
+    return true;
+  }
   if (hasHeader(headers, 'Set-Cookie')) return true;
   const vary = getHeader(headers, 'Vary') ?? '';
-  return vary
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .includes('cookie');
+  return commaSeparatedTokenContains(vary, 'cookie');
 }
 
 function preferredCompression(acceptEncoding: string): 'br' | 'gzip' | undefined {
   const encodings = parseAcceptEncoding(acceptEncoding);
-  const wildcard = encodings.get('*') ?? 0;
-  const br = encodings.get('br') ?? wildcard;
-  const gzip = encodings.get('gzip') ?? wildcard;
+  const wildcard = encodings.wildcard ?? 0;
+  const br = encodings.br ?? wildcard;
+  const gzip = encodings.gzip ?? wildcard;
   if (br <= 0 && gzip <= 0) return undefined;
   return br >= gzip && br > 0 ? 'br' : 'gzip';
 }
 
-function parseAcceptEncoding(value: string): Map<string, number> {
-  const encodings = new Map<string, number>();
-  for (const rawEntry of value.split(',')) {
-    const entry = rawEntry.trim();
-    if (!entry) continue;
-    const [rawName, ...params] = entry.split(';');
-    const name = rawName?.trim().toLowerCase();
-    if (!name) continue;
-    let q = 1;
-    for (const param of params) {
-      const [rawKey, rawValue] = param.trim().split('=');
-      if (rawKey?.toLowerCase() !== 'q') continue;
-      const parsed = Number(rawValue);
-      q = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0;
+interface ParsedAcceptEncoding {
+  br?: number;
+  gzip?: number;
+  wildcard?: number;
+}
+
+function parseAcceptEncoding(value: string): ParsedAcceptEncoding {
+  const encodings: ParsedAcceptEncoding = {
+    br: undefined,
+    gzip: undefined,
+    wildcard: undefined,
+  };
+  let entryStart = 0;
+  while (entryStart <= value.length) {
+    const entryEnd = findAscii(value, ',', entryStart);
+    const boundedEnd = entryEnd < 0 ? value.length : entryEnd;
+    const semicolon = findAscii(value, ';', entryStart, boundedEnd);
+    const nameEnd = semicolon < 0 ? boundedEnd : semicolon;
+    const name = asciiLower(trimAsciiRange(value, entryStart, nameEnd));
+    let quality = 1000;
+    let parameterStart = semicolon < 0 ? boundedEnd : semicolon + 1;
+    while (parameterStart < boundedEnd) {
+      const nextSemicolon = findAscii(value, ';', parameterStart, boundedEnd);
+      const parameterEnd = nextSemicolon < 0 ? boundedEnd : nextSemicolon;
+      const equals = findAscii(value, '=', parameterStart, parameterEnd);
+      if (equals >= 0) {
+        const key = asciiLower(trimAsciiRange(value, parameterStart, equals));
+        if (key === 'q')
+          quality = parseEncodingQuality(trimAsciiRange(value, equals + 1, parameterEnd));
+      }
+      parameterStart = parameterEnd + 1;
     }
-    encodings.set(name, q);
+    if (name === 'br') encodings.br = quality;
+    else if (name === 'gzip') encodings.gzip = quality;
+    else if (name === '*') encodings.wildcard = quality;
+    if (entryEnd < 0) break;
+    entryStart = entryEnd + 1;
   }
   return encodings;
 }
 
+function parseEncodingQuality(value: string): number {
+  if (value === '0' || value === '0.') return 0;
+  if (value === '1' || value === '1.') return 1000;
+  if (value.length < 3 || value[1] !== '.' || value.length > 5) return 0;
+  if (value[0] === '1') {
+    for (let index = 2; index < value.length; index += 1) {
+      if (value[index] !== '0') return 0;
+    }
+    return 1000;
+  }
+  if (value[0] !== '0') return 0;
+  let quality = 0;
+  let scale = 100;
+  for (let index = 2; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === undefined || character < '0' || character > '9') return 0;
+    quality += (stringCharCodeAt(character, 0) - 48) * scale;
+    scale /= 10;
+  }
+  return quality;
+}
+
+function cacheControlHasDirective(value: string, directive: string): boolean {
+  let start = 0;
+  while (start <= value.length) {
+    const comma = findAscii(value, ',', start);
+    const end = comma < 0 ? value.length : comma;
+    let nameStart = start;
+    while (nameStart < end && asciiWhitespace(value[nameStart])) nameStart += 1;
+    let nameEnd = nameStart;
+    while (nameEnd < end) {
+      const character = value[nameEnd];
+      if (character === '=' || character === ';' || character === ' ' || character === '\t') {
+        break;
+      }
+      nameEnd += 1;
+    }
+    if (asciiLower(trimAsciiRange(value, nameStart, nameEnd)) === directive) return true;
+    if (comma < 0) return false;
+    start = comma + 1;
+  }
+  return false;
+}
+
+function commaSeparatedTokenContains(value: string, expected: string): boolean {
+  let start = 0;
+  while (start <= value.length) {
+    const comma = findAscii(value, ',', start);
+    const end = comma < 0 ? value.length : comma;
+    if (asciiLower(trimAsciiRange(value, start, end)) === expected) return true;
+    if (comma < 0) return false;
+    start = comma + 1;
+  }
+  return false;
+}
+
+function findAscii(value: string, expected: string, start: number, limit = value.length): number {
+  for (let index = start; index < limit; index += 1) {
+    if (value[index] === expected) return index;
+  }
+  return -1;
+}
+
+function trimAsciiRange(value: string, start: number, end: number): string {
+  while (start < end && asciiWhitespace(value[start])) start += 1;
+  while (end > start && asciiWhitespace(value[end - 1])) end -= 1;
+  let result = '';
+  for (let index = start; index < end; index += 1) result += value[index];
+  return result;
+}
+
+function asciiWhitespace(value: string | undefined): boolean {
+  return value === ' ' || value === '\t' || value === '\r' || value === '\n';
+}
+
+function asciiLower(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]!;
+    result +=
+      character >= 'A' && character <= 'Z'
+        ? witnessReflectApply<string>(nativeStringFromCharCode, NativeString, [
+            stringCharCodeAt(character, 0) + 32,
+          ])
+        : character;
+  }
+  return result;
+}
+
+function stringCharCodeAt(value: string, index: number): number {
+  return witnessReflectApply(nativeStringCharCodeAt, value, [index]);
+}
+
+function stringStartsWith(value: string, prefix: string): boolean {
+  if (prefix.length > value.length) return false;
+  for (let index = 0; index < prefix.length; index += 1) {
+    if (value[index] !== prefix[index]) return false;
+  }
+  return true;
+}
+
+function stringEndsWith(value: string, suffix: string): boolean {
+  if (suffix.length > value.length) return false;
+  const offset = value.length - suffix.length;
+  for (let index = 0; index < suffix.length; index += 1) {
+    if (value[offset + index] !== suffix[index]) return false;
+  }
+  return true;
+}
+
 function isCompressibleContentType(contentType: string): boolean {
-  const type = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  const semicolon = findAscii(contentType, ';', 0);
+  const type = asciiLower(
+    trimAsciiRange(contentType, 0, semicolon < 0 ? contentType.length : semicolon),
+  );
   return (
-    type.startsWith('text/') ||
+    stringStartsWith(type, 'text/') ||
     type === 'application/javascript' ||
     type === 'application/json' ||
     type === 'application/ld+json' ||
@@ -566,8 +921,8 @@ function isCompressibleContentType(contentType: string): boolean {
     type === 'application/xhtml+xml' ||
     type === 'application/xml' ||
     type === 'image/svg+xml' ||
-    type.endsWith('+json') ||
-    type.endsWith('+xml')
+    stringEndsWith(type, '+json') ||
+    stringEndsWith(type, '+xml')
   );
 }
 
@@ -577,8 +932,9 @@ function appendVary(headers: Headers, token: string): void {
     setHeader(headers, 'Vary', token);
     return;
   }
-  const tokens = existing.split(',').map((entry) => entry.trim().toLowerCase());
-  if (!tokens.includes(token.toLowerCase())) setHeader(headers, 'Vary', `${existing}, ${token}`);
+  if (!commaSeparatedTokenContains(existing, asciiLower(token))) {
+    setHeader(headers, 'Vary', `${existing}, ${token}`);
+  }
 }
 
 function nodeEarlyHintsLinkValue(header: string): string | string[] {
@@ -734,5 +1090,5 @@ function setHeader(headers: Headers, name: string, value: string): void {
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+  return witnessIsArray(value) ? value[0] : value;
 }

@@ -1,5 +1,10 @@
 import { EventEmitter } from 'node:events';
-import { Agent, request as httpRequest, createServer } from 'node:http';
+import {
+  Agent,
+  request as httpRequest,
+  createServer,
+  ServerResponse as NativeServerResponse,
+} from 'node:http';
 import type {
   IncomingHttpHeaders,
   IncomingMessage,
@@ -466,6 +471,38 @@ describe('server node adapter', () => {
     }
   });
 
+  it('keeps Vary-Cookie responses uncompressed after authored collection poisoning', async () => {
+    const originalIncludes = Array.prototype.includes;
+    const originalReflectApply = Reflect.apply;
+    const server = await serveWithNode(
+      toNodeHandler(async () => {
+        Array.prototype.includes = function selectiveSensitiveTokenOmission(
+          searchElement: unknown,
+          fromIndex?: number,
+        ): boolean {
+          if (searchElement === 'cookie' && this.length === 1 && this[0] === 'cookie') return false;
+          return originalReflectApply(originalIncludes, this, [searchElement, fromIndex]);
+        };
+        return new Response('COOKIE-BOUND-SECRET'.repeat(128), {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            Vary: 'Cookie',
+          },
+        });
+      }),
+    );
+
+    try {
+      const response = await server.fetch('/vary-cookie-poison', {
+        headers: { 'Accept-Encoding': 'br,gzip' },
+      });
+      expect(response.headers['content-encoding']).toBeUndefined();
+    } finally {
+      Array.prototype.includes = originalIncludes;
+      await server.close();
+    }
+  });
+
   it('serves a SPEC §9.5 app shell surface through node:http', async () => {
     const cart = domain('cart');
     const db = { count: 0 };
@@ -760,7 +797,10 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
   it('pins the final Response fields before authored prototype replacements can substitute output', async () => {
     const properties = ['body', 'headers', 'status', 'statusText'] as const;
     const descriptors = new Map(
-      properties.map((property) => [property, Object.getOwnPropertyDescriptor(Response.prototype, property)!]),
+      properties.map((property) => [
+        property,
+        Object.getOwnPropertyDescriptor(Response.prototype, property)!,
+      ]),
     );
     const safe = new Response('SAFE-RESPONSE', {
       headers: { 'content-type': 'text/plain; charset=utf-8' },
@@ -799,6 +839,43 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
       for (const property of properties) {
         Object.defineProperty(Response.prototype, property, descriptors.get(property)!);
       }
+      await server.close();
+    }
+  });
+
+  it('pins native response writers before an authored handler can replace the transport', async () => {
+    const originalWriteHead = NativeServerResponse.prototype.writeHead;
+    const originalEnd = NativeServerResponse.prototype.end;
+    const server = await serveWithNode(
+      toNodeHandler(async () => {
+        NativeServerResponse.prototype.writeHead = function attackerWriteHead() {
+          return Reflect.apply(originalWriteHead, this, [
+            202,
+            'ATTACKER',
+            {
+              'content-type': 'text/html; charset=utf-8',
+              'set-cookie': 'admin=attacker; Path=/; HttpOnly',
+            },
+          ]);
+        } as typeof NativeServerResponse.prototype.writeHead;
+        NativeServerResponse.prototype.end = function attackerEnd() {
+          return Reflect.apply(originalEnd, this, ['<script>nativeTransportAttacker()</script>']);
+        } as typeof NativeServerResponse.prototype.end;
+        return new Response('SAFE-NATIVE-TRANSPORT', {
+          headers: { 'content-type': 'text/plain; charset=utf-8' },
+          status: 200,
+        });
+      }),
+    );
+
+    try {
+      const response = await fetch(server.origin);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('set-cookie')).toBeNull();
+      await expect(response.text()).resolves.toBe('SAFE-NATIVE-TRANSPORT');
+    } finally {
+      NativeServerResponse.prototype.writeHead = originalWriteHead;
+      NativeServerResponse.prototype.end = originalEnd;
       await server.close();
     }
   });
