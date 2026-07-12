@@ -21,7 +21,11 @@ import { query } from './query.js';
 import { layout, route } from './route.js';
 import { task } from './task.js';
 import { runtimeRegistryFacts } from './registry-facts.js';
-import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
+import {
+  isDocumentConfig,
+  resolveDocumentDeclaration,
+  snapshotDocumentConfig,
+} from './document-structured.js';
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
 export type {
@@ -278,20 +282,136 @@ function refuseOrWarnUnauditedDisabledEgress(
 function normalizeAppDocumentOptions(
   document: CreateAppOptions['document'] | undefined,
 ): KovoApp['document'] {
-  if (document === undefined) return {};
+  if (document === undefined) return Object.freeze({});
   if (isDocumentConfig(document) || typeof document === 'function') {
     const structured = resolveDocumentDeclaration(document);
-    return {
-      ...(structured?.lang === undefined ? {} : { lang: structured.lang }),
-      ...(structured === undefined ? {} : { structured }),
-    };
+    if (structured === undefined || !isDocumentConfig(structured)) {
+      throw new TypeError(
+        'createApp({ document }) structured declarations must return Document(...) (SPEC §9.5).',
+      );
+    }
+    const snapshot = snapshotDocumentConfig(structured);
+    return Object.freeze({
+      ...(snapshot.lang === undefined ? {} : { lang: snapshot.lang }),
+      structured: snapshot,
+    });
   }
-  if ('template' in document) {
+  if (typeof document !== 'object' || document === null || Array.isArray(document)) {
+    throw new TypeError('createApp({ document }) must be a stable options object (SPEC §9.5).');
+  }
+  const record = document as unknown as Record<PropertyKey, unknown>;
+  if (Object.getOwnPropertyDescriptor(record, 'template') !== undefined) {
     throw new TypeError(
       'createApp({ document.template }) is not supported. Use structured document primitives such as Document, Head, BodyStart, and BodyEnd (SPEC.md §9.5).',
     );
   }
-  return document;
+  const lang = appDocumentOwnDataValue(record, 'lang');
+  if (lang !== undefined && typeof lang !== 'string') {
+    throw new TypeError('createApp({ document.lang }) must be a string (SPEC §9.5).');
+  }
+  const csp = appDocumentOwnDataValue(record, 'csp');
+  const structured = appDocumentOwnDataValue(record, 'structured');
+  if (structured !== undefined && !isDocumentConfig(structured)) {
+    throw new TypeError(
+      'createApp({ document.structured }) requires a genuine Document(...) config (SPEC §9.5).',
+    );
+  }
+  return Object.freeze({
+    ...(csp === undefined ? {} : { csp: snapshotAppDocumentCsp(csp) }),
+    ...(lang === undefined ? {} : { lang }),
+    ...(structured === undefined ? {} : { structured: snapshotDocumentConfig(structured) }),
+  });
+}
+
+function snapshotAppDocumentCsp(value: unknown): NonNullable<KovoApp['document']['csp']> {
+  const record = appDocumentRecord(value, 'document.csp');
+  const allowlist = appDocumentOwnDataValue(record, 'allowlist');
+  const reporting = appDocumentOwnDataValue(record, 'reporting');
+  const trustedTypes = appDocumentOwnDataValue(record, 'trustedTypes');
+  if (trustedTypes !== undefined && typeof trustedTypes !== 'boolean') {
+    throw new TypeError('createApp document.csp.trustedTypes must be boolean (SPEC §6.6).');
+  }
+  if (reporting !== undefined && reporting !== false && typeof reporting !== 'object') {
+    throw new TypeError('createApp document.csp.reporting must be false or an options object.');
+  }
+  return Object.freeze({
+    ...(allowlist === undefined ? {} : { allowlist: snapshotAppDocumentCspAllowlist(allowlist) }),
+    ...(reporting === undefined
+      ? {}
+      : {
+          reporting:
+            reporting === false ? false : snapshotAppDocumentCspReporting(reporting as object),
+        }),
+    ...(trustedTypes === undefined ? {} : { trustedTypes }),
+  });
+}
+
+function snapshotAppDocumentCspAllowlist(
+  value: unknown,
+): NonNullable<NonNullable<KovoApp['document']['csp']>['allowlist']> {
+  const record = appDocumentRecord(value, 'document.csp.allowlist');
+  const snapshot: Record<string, readonly string[]> = {};
+  for (const field of ['connectSrc', 'frameSrc', 'imgSrc', 'scriptSrc', 'styleSrc'] as const) {
+    const entries = appDocumentOwnDataValue(record, field);
+    if (entries !== undefined) {
+      snapshot[field] = snapshotAppDocumentStringArray(entries, `document.csp.allowlist.${field}`);
+    }
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotAppDocumentCspReporting(
+  value: object,
+): Exclude<NonNullable<KovoApp['document']['csp']>['reporting'], false | undefined> {
+  const record = appDocumentRecord(value, 'document.csp.reporting');
+  const maxAgeSeconds = appDocumentOwnDataValue(record, 'maxAgeSeconds');
+  if (
+    maxAgeSeconds !== undefined &&
+    (typeof maxAgeSeconds !== 'number' || !Number.isFinite(maxAgeSeconds) || maxAgeSeconds < 0)
+  ) {
+    throw new TypeError('createApp document.csp.reporting.maxAgeSeconds must be non-negative.');
+  }
+  return Object.freeze(maxAgeSeconds === undefined ? {} : { maxAgeSeconds });
+}
+
+function snapshotAppDocumentStringArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`createApp ${label} must be a dense string array.`);
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError(`createApp ${label} must contain stable own strings.`);
+    }
+    snapshot.push(descriptor.value);
+  }
+  return Object.freeze(snapshot);
+}
+
+function appDocumentRecord(value: unknown, label: string): Record<PropertyKey, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`createApp ${label} must be a stable own-data object.`);
+  }
+  return value as Record<PropertyKey, unknown>;
+}
+
+function appDocumentOwnDataValue(
+  record: Record<PropertyKey, unknown>,
+  property: PropertyKey,
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(record, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(
+      `createApp document.${String(property)} must be a stable own data property (SPEC §9.5).`,
+    );
+  }
+  return descriptor.value;
 }
 
 /**

@@ -4,6 +4,7 @@ import { trustedHtml } from '@kovojs/browser';
 import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
 import { Defer, defer } from './deferred-region.js';
+import { Document, Head, Meta } from './document-structured.js';
 import { guards } from './guards.js';
 import { renderedHtml, renderHtmlValue } from './html.js';
 import { stylesheet } from './hints.js';
@@ -514,6 +515,57 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     expect(csp).not.toContain('frame-ancestors https://evil.test');
     // The legitimate per-fetch append still went through.
     expect(csp).toContain('https://cdn.analytics.test');
+  });
+
+  it('snapshots structured shell and CSP inputs before request dispatch (bugz-26 H2)', async () => {
+    const scriptSources = ['https://cdn.safe.test'];
+    const structured = Document({
+      children: Head({ children: Meta({ content: 'yes', name: 'safe-shell' }) }),
+    });
+    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const app = createApp({
+      document: {
+        csp: { allowlist: { scriptSrc: scriptSources } },
+        structured,
+      },
+      routes: [homeRoute],
+    });
+
+    expect(app.document.structured).not.toBe(structured);
+    expect(Object.isFrozen(app.document)).toBe(true);
+    expect(Object.isFrozen(app.document.structured)).toBe(true);
+    expect(Reflect.set(structured.head, 0, '<script>globalThis.pwned=true</script>')).toBe(false);
+    scriptSources[0] = 'https://evil.test';
+
+    const request = new Request('https://example.test/');
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request,
+      route: homeRoute,
+      url: new URL(request.url),
+    });
+    const csp = cspHeader(response.headers);
+    expect(response.body).toContain('<meta content="yes" name="safe-shell">');
+    expect(response.body).not.toContain('globalThis.pwned');
+    expect(csp).toContain('https://cdn.safe.test');
+    expect(csp).not.toContain('https://evil.test');
+  });
+
+  it('rejects accessor-backed document options without invoking author code', () => {
+    let reads = 0;
+    const document = Object.defineProperty({}, 'csp', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return { allowlist: { scriptSrc: ['https://evil.test'] } };
+      },
+    });
+
+    expect(() => createApp({ document: document as never })).toThrow(
+      'must be a stable own data property',
+    );
+    expect(reads).toBe(0);
   });
 });
 

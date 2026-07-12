@@ -201,6 +201,37 @@ describe('server app shell document assembly', () => {
     expect(document.csp.styles).toContain(styleHash);
   });
 
+  it('seals structured document bytes and nested metadata at construction (bugz-26 H2)', () => {
+    const structured = Document({
+      children: [
+        HtmlAttrs({ 'data-shell': 'safe' }),
+        Head({
+          children: InlineScript({
+            children: 'document.documentElement.dataset.safe="yes";',
+            id: 'safe-shell',
+            run: 'beforePaint',
+          }),
+        }),
+      ],
+      lang: 'en-US',
+    });
+
+    expect(Object.isFrozen(structured)).toBe(true);
+    expect(Object.isFrozen(structured.head)).toBe(true);
+    expect(Object.isFrozen(structured.htmlAttrs)).toBe(true);
+    expect(Object.isFrozen(structured.csp)).toBe(true);
+    expect(Object.isFrozen(structured.csp.scripts)).toBe(true);
+    expect(Reflect.set(structured.head, 0, '<script>globalThis.pwned=true</script>')).toBe(false);
+    expect(Reflect.set(structured.htmlAttrs, 'data-shell', 'attacker')).toBe(false);
+    expect(Reflect.set(structured.csp.scripts, 0, 'sha256-attacker')).toBe(false);
+
+    const rendered = renderDocument({ body: '<main>Home</main>', document: structured });
+    expect(rendered.html).toContain('data-shell="safe"');
+    expect(rendered.html).not.toContain('globalThis.pwned');
+    expect(rendered.html).not.toContain('data-shell="attacker"');
+    expect(rendered.csp.scripts).not.toContain('sha256-attacker');
+  });
+
   it('preserves structured document primitives through the automatic JSX runtime', () => {
     const source = 'document.documentElement.dataset.theme="dark";';
     const hash = cspSha256(source);

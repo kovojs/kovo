@@ -16,11 +16,11 @@ state, not the temporary proof files.
 
 ## Severity summary
 
-| Severity | Count | Items |
-| -------- | ----: | ----- |
-| High     |     6 | H1-H6 |
+| Severity | Count | Items  |
+| -------- | ----: | ------ |
+| High     |     6 | H1-H6  |
 | Medium   |    11 | M1-M11 |
-| Low      |     2 | L1-L2 |
+| Low      |     2 | L1-L2  |
 
 The dominant pattern is mutable or lossy proof currency: Kovo validates one value or identity, then
 a later sink consumes mutable bytes, a weaker serialization, a reconstructed object, or a transport
@@ -50,7 +50,7 @@ hop that was not part of the original decision.
     Assignment, `Object.assign`, `Reflect.set`, `defineProperty`, and a mutable nested source must
     either throw or leave the originally pinned safe bytes at every real sink.
 
-- [ ] **H2 - `createApp()` retains a mutable structured `DocumentConfig`, so request code can inject
+- [x] **H2 - `createApp()` retains a mutable structured `DocumentConfig`, so request code can inject
       raw document-head/body markup after app closure.**
       `packages/server/src/document-structured.ts:19-22,81-120,261-311`,
       `packages/server/src/app.ts:278-287`, `packages/server/src/app-snapshot.ts:269-302`,
@@ -68,6 +68,9 @@ hop that was not part of the original decision.
   - **Acceptance:** reconstruct from stable own data descriptors and deep-freeze the document config,
     head/body arrays, shell attrs, and CSP arrays during `createApp()`; later mutation of the
     original config or nodes must not change output, and getters/proxies must not be re-read.
+  - **Evidence:** `pnpm exec vitest --run packages/server/src/document.test.ts
+packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 tests) proves
+    constructor sealing, app-time reconstruction, CSP input isolation, and accessor rejection.
 
 - [ ] **H3 - KV426 follows an ordinary carrier's clean initializer and ignores later property
       writes that load query/request data before `trustedHtml()` or `trustedUrl()`.**
@@ -378,4 +381,4 @@ hop that was not part of the original decision.
 ## Latest verification
 
 Discovery proofs were independently reproduced at the base SHA in throwaway worktrees. Production
-fix verification is intentionally blank until each checkbox is implemented and tested.
+fix evidence is recorded under each completed checkbox; broader integration gates remain pending.

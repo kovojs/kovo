@@ -262,6 +262,53 @@ export function isDocumentConfig(value: unknown): value is DocumentConfig {
   return typeof value === 'object' && value !== null && documentConfigProofs.has(value);
 }
 
+/**
+ * Reconstruct a genuine structured document through immutable own-data snapshots.
+ *
+ * SPEC §6.6/§9.5: `createApp()` closes request-time security topology. A genuine WeakSet witness
+ * proves which constructor created a document, but it must not authorize later bytes read from
+ * mutable public arrays/records. Rebuild every nested value once so request code cannot mutate a
+ * previously validated document shell after app assembly.
+ *
+ * @internal
+ */
+export function snapshotDocumentConfig(value: DocumentConfig): DocumentConfig {
+  if (!isDocumentConfig(value)) {
+    throw new TypeError(
+      'Structured document snapshots require a genuine Document(...) config (SPEC §9.5).',
+    );
+  }
+  const lang = ownDataValue(value, 'lang', 'document.lang');
+  if (lang !== undefined && typeof lang !== 'string') {
+    throw new TypeError('Structured document lang must be a string (SPEC §9.5).');
+  }
+  return sealDocumentConfig({
+    [documentConfigSentinel]: true,
+    bodyAttrs: snapshotDocumentShellAttributes(
+      ownDataValue(value, 'bodyAttrs', 'document.bodyAttrs'),
+      'document.bodyAttrs',
+    ),
+    bodyEnd: snapshotDocumentStringArray(
+      ownDataValue(value, 'bodyEnd', 'document.bodyEnd'),
+      'document.bodyEnd',
+    ),
+    bodyStart: snapshotDocumentStringArray(
+      ownDataValue(value, 'bodyStart', 'document.bodyStart'),
+      'document.bodyStart',
+    ),
+    csp: snapshotCspInlineMetadata(ownDataValue(value, 'csp', 'document.csp')),
+    head: snapshotDocumentStringArray(
+      ownDataValue(value, 'head', 'document.head'),
+      'document.head',
+    ),
+    htmlAttrs: snapshotDocumentShellAttributes(
+      ownDataValue(value, 'htmlAttrs', 'document.htmlAttrs'),
+      'document.htmlAttrs',
+    ),
+    ...(lang === undefined ? {} : { lang }),
+  });
+}
+
 /** @internal */
 export function resolveDocumentDeclaration(
   value: DocumentDeclaration | undefined,
@@ -287,13 +334,112 @@ export function renderShellAttributes(attributes: DocumentShellAttributes): stri
 }
 
 function documentConfig(config: DocumentConfig): DocumentConfig {
-  documentConfigProofs.add(config);
-  return config;
+  return sealDocumentConfig(config);
 }
 
 function markDocumentNode(node: DocumentNode): DocumentNode {
-  documentNodeProofs.add(node);
-  return node;
+  const sealed = Object.freeze({
+    ...node,
+    ...(node.attrs === undefined
+      ? {}
+      : { attrs: snapshotDocumentShellAttributes(node.attrs, 'document node attrs') }),
+    ...(node.csp === undefined ? {} : { csp: snapshotCspInlineMetadata(node.csp) }),
+  }) as DocumentNode;
+  documentNodeProofs.add(sealed);
+  return sealed;
+}
+
+function sealDocumentConfig(config: DocumentConfig): DocumentConfig {
+  const sealed = Object.freeze({
+    ...config,
+    bodyAttrs: snapshotDocumentShellAttributes(config.bodyAttrs, 'document.bodyAttrs'),
+    bodyEnd: snapshotDocumentStringArray(config.bodyEnd, 'document.bodyEnd'),
+    bodyStart: snapshotDocumentStringArray(config.bodyStart, 'document.bodyStart'),
+    csp: snapshotCspInlineMetadata(config.csp),
+    head: snapshotDocumentStringArray(config.head, 'document.head'),
+    htmlAttrs: snapshotDocumentShellAttributes(config.htmlAttrs, 'document.htmlAttrs'),
+  }) as DocumentConfig;
+  documentConfigProofs.add(sealed);
+  return sealed;
+}
+
+function snapshotDocumentStringArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${label} must be a dense array of strings (SPEC §9.5).`);
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError(`${label} must contain stable own string values (SPEC §9.5).`);
+    }
+    snapshot.push(descriptor.value);
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotDocumentShellAttributes(value: unknown, label: string): DocumentShellAttributes {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${label} must be a plain own-data attribute record (SPEC §9.5).`);
+  }
+  const snapshot: DocumentShellAttributes = {};
+  for (const key of Object.keys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`${label}.${key} must be a stable own data property (SPEC §9.5).`);
+    }
+    const attribute = descriptor.value;
+    if (
+      attribute !== undefined &&
+      typeof attribute !== 'boolean' &&
+      typeof attribute !== 'number' &&
+      typeof attribute !== 'string'
+    ) {
+      throw new TypeError(`${label}.${key} has an unsupported attribute value (SPEC §9.5).`);
+    }
+    snapshot[key] = attribute;
+  }
+  return Object.freeze(snapshot);
+}
+
+function snapshotCspInlineMetadata(value: unknown): CspInlineMetadata {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError('Structured document CSP metadata must be an own-data record (SPEC §9.5).');
+  }
+  const scripts = snapshotDocumentStringArray(
+    ownDataValue(value, 'scripts', 'document.csp.scripts'),
+    'document.csp.scripts',
+  );
+  const styles = snapshotDocumentStringArray(
+    ownDataValue(value, 'styles', 'document.csp.styles'),
+    'document.csp.styles',
+  );
+  const styleAttributes = ownDataValue(value, 'styleAttributes', 'document.csp.styleAttributes');
+  return Object.freeze({
+    scripts,
+    styles,
+    ...(styleAttributes === undefined
+      ? {}
+      : {
+          styleAttributes: snapshotDocumentStringArray(
+            styleAttributes,
+            'document.csp.styleAttributes',
+          ),
+        }),
+  });
+}
+
+function ownDataValue(value: object, property: PropertyKey, label: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${label} must be a stable own data property (SPEC §9.5).`);
+  }
+  return descriptor.value;
 }
 
 function documentNode(
