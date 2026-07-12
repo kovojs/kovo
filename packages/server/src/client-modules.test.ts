@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import {
   clientModuleContentVersion,
   clientModuleHrefForSourceFile,
@@ -13,6 +14,16 @@ import {
   renderVersionedClientModuleResponse,
   versionedClientModuleHref,
 } from './client-modules.js';
+import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
+
+const clientModuleUrlIntrinsicsUrl = new URL(
+  '../../core/src/internal/client-module-url-intrinsics.ts',
+  import.meta.url,
+).href;
+const clientModuleRegistryIntrinsicsUrl = new URL(
+  './client-module-registry-intrinsics.ts',
+  import.meta.url,
+).href;
 
 // ─── D1 + DEPLOY-3: render-plan fingerprint & never-empty token ───────────────
 
@@ -140,6 +151,207 @@ describe('versioned client modules', () => {
       body: 'export const version = "old";',
       status: 200,
     });
+  });
+
+  it('keeps exact immutable module ownership after late Map.get cross-binding', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const publicHref = registry.put({
+      path: '/c/public.client.js',
+      source: 'export const role = "public";',
+      version: 'public-v1',
+    });
+    registry.put({
+      path: '/c/admin.client.js',
+      source: 'export const token = "ADMIN_SECRET";',
+      version: 'admin-v1',
+    });
+    const originalGet = Map.prototype.get;
+    Map.prototype.get = function (key: unknown) {
+      if (key === '/c/public.client.js\0public-v1') {
+        return originalGet.call(this, '/c/admin.client.js\0admin-v1');
+      }
+      return originalGet.call(this, key);
+    };
+
+    try {
+      expect(registry.resolve(publicHref)).toMatchObject({
+        body: 'export const role = "public";',
+        status: 200,
+      });
+    } finally {
+      Map.prototype.get = originalGet;
+    }
+  });
+
+  it('recomputes build tokens from exact sorted inputs after late sort, join, and hash poisoning', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    registry.put({ path: '/c/a.client.js', source: 'export {};', version: 'a-v1' });
+    const first = registry.buildToken();
+    const hashPrototype = Object.getPrototypeOf(createHash('sha256')) as {
+      digest: (...args: unknown[]) => unknown;
+      update: (...args: unknown[]) => unknown;
+    };
+    const originalDigest = hashPrototype.digest;
+    const originalUpdate = hashPrototype.update;
+    const originalJoin = Array.prototype.join;
+    const originalSort = Array.prototype.sort;
+    Array.prototype.join = () => 'FORGED_BUILD_INPUT';
+    Array.prototype.sort = function () {
+      return this;
+    };
+    hashPrototype.update = function () {
+      return this;
+    };
+    hashPrototype.digest = () => '0'.repeat(64);
+
+    try {
+      registry.put({ path: '/c/z.client.js', source: 'export {};', version: 'z-v2' });
+      const second = registry.buildToken();
+      registry.setRenderPlanFingerprint?.('shape-v2');
+      const third = registry.buildToken();
+      expect(second).not.toBe(first);
+      expect(third).not.toBe(second);
+      expect(third).toMatch(/^[0-9a-f]{16}$/);
+    } finally {
+      hashPrototype.digest = originalDigest;
+      hashPrototype.update = originalUpdate;
+      Array.prototype.join = originalJoin;
+      Array.prototype.sort = originalSort;
+    }
+  });
+
+  it('pins URL path/version reconstruction after late URL and scalar poisoning', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const publicHref = registry.put({
+      path: '/c/public.client.js',
+      source: 'export const role = "public";',
+      version: 'public/v1',
+    });
+    registry.put({
+      path: '/c/admin.client.js',
+      source: 'export const role = "admin";',
+      version: 'admin-v1',
+    });
+    const pathnameDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname')!;
+    const originalSearchGet = URLSearchParams.prototype.get;
+    const originalDecode = globalThis.decodeURIComponent;
+    const originalEncode = globalThis.encodeURIComponent;
+    const originalIndexOf = String.prototype.indexOf;
+    const originalSlice = String.prototype.slice;
+    const originalStartsWith = String.prototype.startsWith;
+    Object.defineProperty(URL.prototype, 'pathname', {
+      configurable: true,
+      get: () => '/c/__v/admin-v1/admin.client.js',
+    });
+    URLSearchParams.prototype.get = () => 'admin-v1';
+    globalThis.decodeURIComponent = () => 'admin-v1';
+    globalThis.encodeURIComponent = () => 'admin-v1';
+    String.prototype.indexOf = () => -1;
+    String.prototype.slice = () => '/c/admin.client.js';
+    String.prototype.startsWith = () => true;
+
+    try {
+      expect(renderVersionedClientModuleResponse(registry, publicHref)).toMatchObject({
+        body: 'export const role = "public";',
+        status: 200,
+      });
+    } finally {
+      String.prototype.startsWith = originalStartsWith;
+      String.prototype.slice = originalSlice;
+      String.prototype.indexOf = originalIndexOf;
+      globalThis.encodeURIComponent = originalEncode;
+      globalThis.decodeURIComponent = originalDecode;
+      URLSearchParams.prototype.get = originalSearchGet;
+      Object.defineProperty(URL.prototype, 'pathname', pathnameDescriptor);
+    }
+  });
+
+  it('snapshots registration inputs instead of re-reading later caller mutation', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const input = {
+      contentType: 'application/javascript',
+      path: '/c/public.client.js',
+      source: 'export const role = "public";',
+      version: 'public-v1',
+    };
+    const href = registry.put(input);
+    input.contentType = 'text/html';
+    input.path = '/c/admin.client.js';
+    input.source = '<script>attack()</script>';
+    input.version = 'admin-v1';
+
+    expect(registry.resolve(href)).toMatchObject({
+      body: 'export const role = "public";',
+      headers: { 'Content-Type': 'application/javascript' },
+      status: 200,
+    });
+  });
+
+  it('keeps loader runtime registry identity after late WeakMap cross-binding', () => {
+    const puts: string[] = [];
+    const victimRegistry = {
+      buildToken: () => 'victim',
+      entries: () => [],
+      put: () => {
+        puts[puts.length] = 'victim';
+        return '/c/__v/victim/runtime.client.js';
+      },
+      resolve: () => ({ body: 'Not Found', headers: {}, status: 404 as const }),
+    };
+    const attackerRegistry = {
+      ...victimRegistry,
+      put: () => '/c/__v/attacker/admin.client.js',
+    };
+    ensureKovoLoaderRuntimeClientModule(attackerRegistry);
+    const originalGet = WeakMap.prototype.get;
+    const originalSet = WeakMap.prototype.set;
+    WeakMap.prototype.get = () => '/c/__v/attacker/admin.client.js';
+    WeakMap.prototype.set = function () {
+      return this;
+    };
+
+    let href: string;
+    try {
+      href = ensureKovoLoaderRuntimeClientModule(victimRegistry);
+    } finally {
+      WeakMap.prototype.get = originalGet;
+      WeakMap.prototype.set = originalSet;
+    }
+    expect(href!).toBe('/c/__v/victim/runtime.client.js');
+    expect(puts).toEqual(['victim']);
+  });
+
+  it('fails closed when URL normalization controls were poisoned before their import', async () => {
+    const pathnameDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname')!;
+    Object.defineProperty(URL.prototype, 'pathname', {
+      configurable: true,
+      get: () => '/c/forged.client.js',
+    });
+    try {
+      const controls = await import(`${clientModuleUrlIntrinsicsUrl}?preimport-url-poison`);
+      expect(() =>
+        controls.snapshotClientModuleUrl('/c/safe.client.js', 'https://kovo.local'),
+      ).toThrow(/client-module URL controls are unavailable/);
+    } finally {
+      Object.defineProperty(URL.prototype, 'pathname', pathnameDescriptor);
+    }
+  });
+
+  it('fails closed when build-token hash controls were poisoned before their import', async () => {
+    const prototype = Object.getPrototypeOf(createHash('sha256')) as {
+      update: (...args: unknown[]) => unknown;
+    };
+    const originalUpdate = prototype.update;
+    prototype.update = function () {
+      return this;
+    };
+    try {
+      await expect(
+        import(`${clientModuleRegistryIntrinsicsUrl}?preimport-hash-poison`),
+      ).rejects.toThrow(/hash controls failed their semantic check/);
+    } finally {
+      prototype.update = originalUpdate;
+    }
   });
 
   it('AUD-007: rejects count-based retention that can evict below the 24-hour floor', () => {

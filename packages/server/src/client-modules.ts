@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   clientModulePath,
   parseVersionedClientModuleTarget,
@@ -9,8 +8,17 @@ import {
   computeRenderPlanFingerprint,
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
+import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
+import {
+  createWitnessMap,
+  witnessFreeze,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessSortStrings,
+} from './security-witness-intrinsics.js';
 
 // FN1 (plans/compiler-refactoring.md): the render-plan grammar version + fingerprint
 // are the single source of truth in `@kovojs/core` so the compiler (KV416) and the
@@ -119,10 +127,13 @@ export function createMemoryVersionedClientModuleRegistry(
   options: MemoryVersionedClientModuleRegistryOptions = {},
 ): VersionedClientModuleRegistry {
   assertDeploySkewRetentionOptions(options);
-  const modules = new Map<string, VersionedClientModuleInput>();
-  const versionsByPath = new Map<string, string[]>();
+  const modules = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
+  const versionsByPath = createWitnessMap<string, string[]>();
   // Shape fingerprint threaded in from the build pipeline (SPEC §5.2.1 rule 1).
-  let renderPlanFingerprint: string | undefined = options.renderPlanFingerprint;
+  let renderPlanFingerprint = optionalRegistryString(
+    options.renderPlanFingerprint,
+    'render-plan fingerprint',
+  );
   // Cache: recompute whenever versionsByPath or renderPlanFingerprint changes.
   let cachedBuildToken: string | undefined;
   let buildTokenGeneration = 0;
@@ -140,47 +151,50 @@ export function createMemoryVersionedClientModuleRegistry(
       //      (SPEC §5.2.1 rule 1).
       //   2. Fold in the optional projected-shape fingerprint if one was supplied.
       //   3. Fold in sorted "path@version" pairs (original module-hash input).
-      const entries: string[] = [];
-      for (const [path, versions] of versionsByPath) {
-        for (const version of versions) {
-          entries.push(`${path}@${version}`);
+      const tokenEntries: string[] = [];
+      witnessMapForEach(versionsByPath, (versions, path) => {
+        for (let index = 0; index < versions.length; index += 1) {
+          tokenEntries[tokenEntries.length] = `${path}@${versions[index]!}`;
         }
-      }
-      entries.sort();
-      const hash = createHash('sha256');
-      hash.update(RENDER_PLAN_GRAMMAR_VERSION);
-      hash.update('\0');
-      if (renderPlanFingerprint !== undefined) {
-        hash.update(renderPlanFingerprint);
-        hash.update('\0');
-      }
-      hash.update(entries.join('\n'));
-      const token = hash.digest('hex').slice(0, 16);
+      });
+      witnessSortStrings(tokenEntries);
+      const token = clientModuleBuildTokenHash(
+        RENDER_PLAN_GRAMMAR_VERSION,
+        renderPlanFingerprint,
+        tokenEntries,
+      );
       cachedBuildToken = token;
       lastTokenGeneration = buildTokenGeneration;
       return token;
     },
     setRenderPlanFingerprint(fingerprint: string) {
-      renderPlanFingerprint = fingerprint;
+      renderPlanFingerprint = registryString(fingerprint, 'render-plan fingerprint');
       // Invalidate the cached token so the next buildToken() call recomputes.
       cachedBuildToken = undefined;
       buildTokenGeneration += 1;
     },
     entries() {
-      return [...modules.values()]
-        .map((module) => ({ ...module }))
-        .sort((left, right) => {
-          const pathOrder = left.path.localeCompare(right.path);
-          return pathOrder === 0 ? left.version.localeCompare(right.version) : pathOrder;
-        });
+      const entries: VersionedClientModuleInput[] = [];
+      witnessMapForEach(modules, (module) => {
+        entries[entries.length] = cloneClientModule(module);
+      });
+      sortClientModuleEntries(entries);
+      return entries;
     },
     put(module) {
-      const path = clientModulePath(module.path);
-      const href = versionedClientModuleHref(path, module.version);
-      const key = versionedClientModuleKey(path, module.version);
+      const snapshot = snapshotClientModuleInput(module);
+      const path = clientModulePath(snapshot.path);
+      const href = versionedClientModuleHref(path, snapshot.version);
+      const key = versionedClientModuleKey(path, snapshot.version);
+      const stored = witnessFreeze({
+        ...(snapshot.contentType === undefined ? {} : { contentType: snapshot.contentType }),
+        path,
+        source: snapshot.source,
+        version: snapshot.version,
+      });
 
-      modules.set(key, { ...module, path });
-      rememberClientModuleVersion(versionsByPath, path, module.version);
+      witnessMapSet(modules, key, stored);
+      rememberClientModuleVersion(versionsByPath, path, snapshot.version);
       buildTokenGeneration += 1;
 
       return href;
@@ -189,7 +203,10 @@ export function createMemoryVersionedClientModuleRegistry(
       const target = parseVersionedClientModuleTarget(href);
       if (target === undefined) return missingClientModuleResponse();
 
-      const module = modules.get(versionedClientModuleKey(target.path, target.version));
+      const module = witnessMapGet(
+        modules,
+        versionedClientModuleKey(target.path, target.version),
+      );
       if (!module) return missingClientModuleResponse();
 
       // SPEC §6.6: versioned emitted module URLs are immutable and retained across deploys.
@@ -216,10 +233,10 @@ export function renderVersionedClientModuleResponse(
   const href = typeof request === 'string' ? request : request.url;
   if (!href) return missingClientModuleResponse();
 
-  let url: URL;
+  let target;
   try {
-    url = new URL(href, 'https://kovo.local');
-    clientModulePath(href);
+    target = parseVersionedClientModuleTarget(href);
+    if (target === undefined) return missingClientModuleResponse();
   } catch (error) {
     if (typeof request !== 'string') {
       reportServerError(request.onError, error, {
@@ -230,9 +247,9 @@ export function renderVersionedClientModuleResponse(
     return missingClientModuleResponse();
   }
 
-  if (parseVersionedClientModuleTarget(href) === undefined) return missingClientModuleResponse();
-
-  return registry.resolve(`${url.pathname}${url.search}${url.hash}`);
+  // Reconstruct a fixed canonical target from the one parsed path/version snapshot. The custom
+  // registry never receives the caller-owned URL carrier after its classification (SPEC §6.6).
+  return registry.resolve(sharedVersionedClientModuleHref(target.path, target.version));
 }
 
 function missingClientModuleResponse(): VersionedClientModuleResponse {
@@ -252,9 +269,76 @@ function rememberClientModuleVersion(
   path: string,
   version: string,
 ): void {
-  const versions = versionsByPath.get(path) ?? [];
-  if (!versions.includes(version)) versions.push(version);
-  versionsByPath.set(path, versions);
+  const versions = witnessMapGet(versionsByPath, path) ?? [];
+  let alreadyPresent = false;
+  for (let index = 0; index < versions.length; index += 1) {
+    if (versions[index] === version) {
+      alreadyPresent = true;
+      break;
+    }
+  }
+  if (!alreadyPresent) versions[versions.length] = version;
+  witnessMapSet(versionsByPath, path, versions);
+}
+
+function snapshotClientModuleInput(module: VersionedClientModuleInput): VersionedClientModuleInput {
+  if (typeof module !== 'object' || module === null) {
+    throw new TypeError('Client module input must be an object.');
+  }
+  const path = registryString(module.path, 'path');
+  const source = registryString(module.source, 'source');
+  const version = registryString(module.version, 'version');
+  if (version.length === 0) throw new TypeError('Client module version must not be empty.');
+  const contentType = optionalRegistryString(module.contentType, 'content type');
+  return witnessFreeze({
+    ...(contentType === undefined ? {} : { contentType }),
+    path,
+    source,
+    version,
+  });
+}
+
+function cloneClientModule(
+  module: Readonly<VersionedClientModuleInput>,
+): VersionedClientModuleInput {
+  return {
+    ...(module.contentType === undefined ? {} : { contentType: module.contentType }),
+    path: module.path,
+    source: module.source,
+    version: module.version,
+  };
+}
+
+function sortClientModuleEntries(entries: VersionedClientModuleInput[]): void {
+  for (let index = 1; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    let insertAt = index;
+    while (insertAt > 0 && compareClientModules(entry, entries[insertAt - 1]!) < 0) {
+      entries[insertAt] = entries[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    entries[insertAt] = entry;
+  }
+}
+
+function compareClientModules(
+  left: VersionedClientModuleInput,
+  right: VersionedClientModuleInput,
+): number {
+  if (left.path < right.path) return -1;
+  if (left.path > right.path) return 1;
+  if (left.version < right.version) return -1;
+  if (left.version > right.version) return 1;
+  return 0;
+}
+
+function registryString(value: unknown, name: string): string {
+  if (typeof value !== 'string') throw new TypeError(`Client module ${name} must be a string.`);
+  return value;
+}
+
+function optionalRegistryString(value: unknown, name: string): string | undefined {
+  return value === undefined ? undefined : registryString(value, name);
 }
 
 function assertDeploySkewRetentionOptions(

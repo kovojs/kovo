@@ -4,14 +4,19 @@ import {
   kovoDeferredRuntimeModuleVersion,
 } from '@kovojs/browser/internal/inline-loader';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
+import {
+  createWitnessWeakMap,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
-const registeredRuntimeHrefs = new WeakMap<VersionedClientModuleRegistry, string>();
+const registeredRuntimeHrefs = createWitnessWeakMap<VersionedClientModuleRegistry, string>();
 
 /** @internal Register the framework-owned deferred loader runtime in the app's `/c/` registry. */
 export function ensureKovoLoaderRuntimeClientModule(
   registry: VersionedClientModuleRegistry,
 ): string {
-  const existing = registeredRuntimeHrefs.get(registry);
+  const existing = witnessWeakMapGet(registeredRuntimeHrefs, registry);
   if (existing !== undefined) return existing;
 
   const href = registry.put({
@@ -19,6 +24,6 @@ export function ensureKovoLoaderRuntimeClientModule(
     source: kovoDeferredRuntimeModuleSource,
     version: kovoDeferredRuntimeModuleVersion,
   });
-  registeredRuntimeHrefs.set(registry, href);
+  witnessWeakMapSet(registeredRuntimeHrefs, registry, href);
   return href;
 }
