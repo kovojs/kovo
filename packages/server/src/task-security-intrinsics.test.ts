@@ -100,6 +100,39 @@ describe('durable-task intrinsic membrane (SPEC §9.6/§10.3)', () => {
     expect(timerRan).toBe(true);
   });
 
+  it('C233 commits asynchronous task collection results without inherited setter dispatch', async () => {
+    const originalZero = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    const nativeDefineProperty = Object.defineProperty;
+    let setterCalls = 0;
+    let results: string[] = [];
+
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          if (value === 'approved-result') {
+            setterCalls += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+
+      results = await taskPromiseAll([Promise.resolve('approved-result')]);
+    } finally {
+      if (originalZero === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalZero);
+    }
+
+    expect(results).toEqual(['approved-result']);
+    expect(setterCalls).toBe(0);
+  });
+
   it('is available under ordinary initialization', () => {
     expect(() => assertTaskSecurityIntrinsics()).not.toThrow();
   });

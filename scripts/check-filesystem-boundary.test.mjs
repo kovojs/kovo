@@ -22,6 +22,8 @@ import {
   staticExportReplayContextFile,
   staticExportReplayRequestFile,
   staticExportSyntheticRequestFindings,
+  taskArrayCommitFindings,
+  taskSecurityIntrinsicsFile,
 } from './check-filesystem-boundary.mjs';
 
 function runFixture(files, overrides = {}) {
@@ -334,6 +336,42 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         expect.stringContaining('missing pinned route entry metadata'),
       ]),
     );
+  });
+
+  it('C233 pins durable-task arrays to own-data indexed commits', () => {
+    expect(
+      taskArrayCommitFindings(
+        taskSecurityIntrinsicsFile,
+        `
+          const nativeArrayPush = Array.prototype.push;
+          export function taskArrayPush(values, value) {
+            Reflect.apply(nativeArrayPush, values, [value]);
+          }
+          export function taskPromiseAll(values) {
+            const results = [];
+            results[index] = result;
+          }
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('prototype-visible [[Set]]'),
+        expect.stringContaining('must not dispatch through inherited numeric setters'),
+        expect.stringContaining('missing descriptor-indexed array commit'),
+        expect.stringContaining('missing Promise.all result commit'),
+      ]),
+    );
+
+    expect(
+      taskArrayCommitFindings(
+        'packages/server/src/task-runner.ts',
+        'function collect(running, job) { running.push(job); }',
+      ),
+    ).toEqual([
+      expect.stringContaining(
+        'durable-task collections must not append through mutable Array.push',
+      ),
+    ]);
   });
 
   it('C202 pins deploy-skew retention classification to the emitted module snapshot', () => {

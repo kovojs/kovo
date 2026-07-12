@@ -60,7 +60,6 @@ const NativeURL = globalThis.URL;
 const nativeNodeRandomBytes = nodeRandomBytes;
 
 const nativeArrayIsArray = NativeArray.isArray;
-const nativeArrayPush = NativeArray.prototype.push;
 const nativeArrayReverse = NativeArray.prototype.reverse;
 const nativeArraySlice = NativeArray.prototype.slice;
 const nativeArraySort = NativeArray.prototype.sort;
@@ -125,6 +124,58 @@ function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]
   return witnessReflectApply<Return>(fn, receiver, args);
 }
 
+function defineTaskArrayIndex<Value>(
+  values: Value[],
+  index: number,
+  value: Value,
+  label: string,
+): void {
+  if (!witnessIsArray(values)) {
+    throw new TypeError(`${label} target must be an array.`);
+  }
+  const lengthDescriptor = witnessGetOwnPropertyDescriptor(values, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number'
+  ) {
+    throw new TypeError(`${label} target must expose an own data length.`);
+  }
+  const length = lengthDescriptor.value;
+  if (index < 0 || index > length || index >= 4_294_967_295 || index % 1 !== 0) {
+    throw new TypeError(`${label} index must preserve dense array bounds.`);
+  }
+  witnessDefineProperty(values, index, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
+function commitTaskArrayIndex<Value>(
+  values: Value[],
+  index: number,
+  value: Value,
+  label: string,
+): void {
+  assertTaskSecurityIntrinsics();
+  defineTaskArrayIndex(values, index, value, label);
+}
+
+function commitTaskArrayValue<Value>(values: Value[], value: Value, label: string): void {
+  assertTaskSecurityIntrinsics();
+  const lengthDescriptor = witnessGetOwnPropertyDescriptor(values, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !('value' in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== 'number'
+  ) {
+    throw new TypeError(`${label} target must expose an own data length.`);
+  }
+  defineTaskArrayIndex(values, lengthDescriptor.value, value, label);
+}
+
 function capturedTaskControlsAreSound(): boolean {
   try {
     assertSecurityWitnessIntrinsics();
@@ -148,7 +199,8 @@ function capturedTaskControlsAreSound(): boolean {
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
     const values = ['b', 'a'];
-    if (apply(nativeArrayPush, values, ['c']) !== 3) return false;
+    defineTaskArrayIndex(values, values.length, 'c', 'Durable task control array');
+    if (values.length !== 3) return false;
     apply(nativeArraySort, values, []);
     if (values[0] !== 'a' || values[1] !== 'b' || values[2] !== 'c') return false;
     const reversed = apply<string[]>(nativeArraySlice, values, []);
@@ -348,8 +400,7 @@ export function taskWeakMapDelete<Key extends object>(map: WeakMap<Key, unknown>
 }
 
 export function taskArrayPush<Value>(values: Value[], value: Value): void {
-  assertTaskSecurityIntrinsics();
-  apply(nativeArrayPush, values, [value]);
+  commitTaskArrayValue(values, value, 'Durable task array commit');
 }
 
 export function taskArraySlice<Value>(values: readonly Value[], start = 0, end?: number): Value[] {
@@ -445,7 +496,7 @@ export function taskSnapshotCollection<Value>(
       if (descriptor === undefined || !('value' in descriptor)) {
         throw new TypeError(`${label} must be a dense array of own data values.`);
       }
-      apply(nativeArrayPush, result, [descriptor.value as Value]);
+      commitTaskArrayValue(result, descriptor.value as Value, `${label} array snapshot`);
     }
     return result;
   }
@@ -471,7 +522,7 @@ export function taskSnapshotCollection<Value>(
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`${label} record entries must be own data values.`);
     }
-    apply(nativeArrayPush, result, [descriptor.value]);
+    commitTaskArrayValue(result, descriptor.value, `${label} record snapshot`);
   }
   return result;
 }
@@ -492,7 +543,11 @@ function snapshotIterator<Value>(iterator: Iterator<Value>, output: Value[], lab
     if (done !== false && done !== undefined) {
       throw new TypeError(`${label} iterator returned an invalid done marker.`);
     }
-    apply(nativeArrayPush, output, [taskOwnDataValue(step, 'value') as Value]);
+    commitTaskArrayValue(
+      output,
+      taskOwnDataValue(step, 'value') as Value,
+      `${label} iterator snapshot`,
+    );
   }
 }
 
@@ -697,7 +752,7 @@ export function taskPromiseAll<Value>(
       ]);
       apply(nativePromiseThen, promise, [
         (result: Awaited<Value>) => {
-          results[index] = result;
+          commitTaskArrayIndex(results, index, result, 'Durable task Promise.all result');
           remaining -= 1;
           if (remaining === 0) resolve(results);
         },

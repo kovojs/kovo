@@ -1071,7 +1071,10 @@ describe('server build-time deployment API', () => {
     try {
       const app = createApp({
         db: () => ({
-          async query() {
+          async query(text: string) {
+            if (text === 'select now() as now') {
+              return { rows: [{ now: '2026-06-30T07:15:30.000Z' }] };
+            }
             return { rowCount: 0, rows: [] };
           },
         }),
@@ -1144,7 +1147,7 @@ describe('server build-time deployment API', () => {
         staticOnly: false,
         tasks: [{ key: 'receipt/send' }],
       });
-      expect(suppressedTaskCommits).toBeGreaterThan(0);
+      expect(suppressedTaskCommits).toBe(0);
     } finally {
       if (originalZero === undefined) delete Array.prototype[0];
       else nativeDefineProperty(Array.prototype, '0', originalZero);

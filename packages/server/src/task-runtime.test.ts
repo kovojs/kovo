@@ -7,6 +7,8 @@ import { route } from './route.js';
 import { s } from './schema.js';
 import { task, type TaskSchedulingRequest } from './task.js';
 import { createAppTaskRuntime } from './task-runtime.js';
+import { createDurableTaskRunner } from './task-runner.js';
+import { MemoryDurableTaskQueue } from './task-queue.js';
 import type { DurableTaskSqlStatement } from './task-queue.js';
 
 describe('durable task runtime (SPEC §9.6)', () => {
@@ -129,6 +131,77 @@ describe('durable task runtime (SPEC §9.6)', () => {
         'select cron_name from _kovo_task_cron_occurrences where false',
       ]),
     );
+  });
+
+  it('C233 keeps late inherited index setters from suppressing task startup and dispatch', async () => {
+    const originalZero = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    const nativeDefineProperty = Object.defineProperty;
+    const nativeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    let dispatches = 0;
+    let suppressedTaskCommits = 0;
+
+    try {
+      const db = {
+        async query(text: string) {
+          if (text === 'select now() as now') {
+            return { rows: [{ now: '2026-06-30T07:15:30.000Z' }] };
+          }
+          return { rowCount: 0, rows: [] };
+        },
+      };
+      const sendReceipt = task('receipt/send', {
+        input: s.object({}),
+        run() {
+          dispatches += 1;
+        },
+      });
+      const app = createApp({
+        db: () => db,
+        tasks: [sendReceipt],
+      });
+      const runtime = createAppTaskRuntime(app);
+      const store = new MemoryDurableTaskQueue();
+      await store.enqueue({
+        args: {},
+        runAt: new Date('2026-06-30T07:15:30.000Z'),
+        task: sendReceipt.key,
+      });
+
+      // SPEC §6.6/§9.6: authored route code can install this setter after runtime construction but
+      // before the async startup path snapshots registries for cron materialization and dispatch.
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          const key =
+            typeof value === 'object' && value !== null
+              ? nativeGetOwnPropertyDescriptor(value, 'key')?.value
+              : undefined;
+          if (key === 'receipt/send') {
+            suppressedTaskCommits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+
+      await expect(runtime?.ensureStarted(new Request('http://localhost/request'))).resolves.toBe(
+        undefined,
+      );
+      const runner = createDurableTaskRunner({ store, tasks: [sendReceipt] });
+      await runner.runOnce(new Date('2026-06-30T07:15:31.000Z'));
+
+      expect(dispatches).toBe(1);
+      expect(store.snapshot()[0]).toMatchObject({ status: 'succeeded' });
+      expect(suppressedTaskCommits).toBe(0);
+    } finally {
+      if (originalZero === undefined) delete Array.prototype[0];
+      else nativeDefineProperty(Array.prototype, '0', originalZero);
+    }
   });
 
   it('reports task failures through the app onError hook', async () => {

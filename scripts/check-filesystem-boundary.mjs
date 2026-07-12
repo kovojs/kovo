@@ -24,6 +24,16 @@ export const buildSecurityIntrinsicsFile = 'packages/server/src/build-security-i
 export const neutralBuildFile = 'packages/server/src/neutral-build.ts';
 export const neutralMetadataCommitFiles = [buildSecurityIntrinsicsFile, neutralBuildFile];
 export const presetRetentionPolicyFile = 'packages/server/src/build.ts';
+export const taskSecurityIntrinsicsFile = 'packages/server/src/task-security-intrinsics.ts';
+export const taskArrayCommitFiles = [
+  taskSecurityIntrinsicsFile,
+  'packages/server/src/task.ts',
+  'packages/server/src/task-cron.ts',
+  'packages/server/src/task-observability.ts',
+  'packages/server/src/task-queue.ts',
+  'packages/server/src/task-runner.ts',
+  'packages/server/src/task-runtime.ts',
+];
 
 export const defaultAllowedRuntimeFiles = [
   filesystemBoundaryFile,
@@ -84,6 +94,7 @@ export function checkFilesystemBoundary(options = {}) {
   const neutralMetadataCommitFileSet = new Set(
     options.neutralMetadataCommitFiles ?? neutralMetadataCommitFiles,
   );
+  const taskArrayCommitFileSet = new Set(options.taskArrayCommitFiles ?? taskArrayCommitFiles);
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
   );
@@ -159,6 +170,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (neutralMetadataCommitFileSet.has(filePath)) {
       findings.push(...neutralMetadataCommitFindings(filePath, sourceText));
+    }
+    if (taskArrayCommitFileSet.has(filePath)) {
+      findings.push(...taskArrayCommitFindings(filePath, sourceText));
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
@@ -569,6 +583,67 @@ export function neutralPublicAssetCopyFindings(filePath, sourceText) {
     const [label, pattern] = requiredControls[index];
     if (!pattern.test(authoritySource)) {
       findings.push(`${filePath}: post-replay public-asset copy is missing ${label}`);
+    }
+  }
+  return findings;
+}
+
+export function taskArrayCommitFindings(filePath, sourceText) {
+  const findings = [];
+  const scanText = stripCommentsAndStrings(sourceText);
+  const mutableMethodCommit = /\.\s*push\s*\(/u.exec(scanText);
+  if (mutableMethodCommit !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableMethodCommit.index)}: durable-task collections must not append through mutable Array.push`,
+    );
+  }
+  const mutableIndexCommit =
+    /\b[A-Za-z_$][\w$]*\s*\[\s*(?:\d+|[A-Za-z_$][\w$]*(?:\s*\.\s*length)?)\s*\]\s*=/u.exec(
+      scanText,
+    );
+  if (mutableIndexCommit !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableIndexCommit.index)}: durable-task collections must not dispatch through inherited numeric setters`,
+    );
+  }
+
+  if (filePath !== taskSecurityIntrinsicsFile) return findings;
+
+  if (/\bnativeArrayPush\b/u.test(scanText)) {
+    findings.push(
+      `${filePath}: captured Array.push is not a safe task commit because it still performs prototype-visible [[Set]]`,
+    );
+  }
+  const requiredControls = [
+    [
+      'descriptor-indexed array commit',
+      /\bfunction\s+defineTaskArrayIndex\s*<[^>]+>\s*\([\s\S]*?\bwitnessDefineProperty\s*\(\s*values\s*,\s*index\s*,/u,
+    ],
+    [
+      'taskArrayPush own-data delegation',
+      /\bfunction\s+taskArrayPush\s*<[^>]+>\s*\([^)]*\)\s*:\s*void\s*\{\s*commitTaskArrayValue\s*\(/u,
+    ],
+    [
+      'array registry snapshot commit',
+      /\bcommitTaskArrayValue\s*\(\s*result\s*,[\s\S]*?\$\{label\} array snapshot/u,
+    ],
+    [
+      'record registry snapshot commit',
+      /\bcommitTaskArrayValue\s*\(\s*result\s*,[\s\S]*?\$\{label\} record snapshot/u,
+    ],
+    [
+      'iterator snapshot commit',
+      /\bcommitTaskArrayValue\s*\(\s*output\s*,[\s\S]*?\$\{label\} iterator snapshot/u,
+    ],
+    [
+      'Promise.all result commit',
+      /\bcommitTaskArrayIndex\s*\(\s*results\s*,\s*index\s*,\s*result\s*,/u,
+    ],
+  ];
+  for (let index = 0; index < requiredControls.length; index += 1) {
+    const [description, pattern] = requiredControls[index];
+    if (!pattern.test(sourceText)) {
+      findings.push(`${filePath}: durable-task collections are missing ${description}`);
     }
   }
   return findings;
