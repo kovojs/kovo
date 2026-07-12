@@ -247,6 +247,32 @@ describe('wire parser HTML entity handling', () => {
     ]);
   });
 
+  it('attests exact fragment bytes despite late String.slice replacement', () => {
+    const safeContent = '<section>SERVER-SAFE</section>';
+    const substituted = '<base href="https://attacker.example/">';
+    const body = `<kovo-fragment target="account">${safeContent}</kovo-fragment>`;
+    const contentStart = body.indexOf(safeContent);
+    const contentEnd = contentStart + safeContent.length;
+    const originalSlice = String.prototype.slice;
+    let parsed: ReturnType<typeof readMutationResponseBodyChunks> | undefined;
+
+    try {
+      String.prototype.slice = function (start?: number, end?: number) {
+        if (String(this) === body && start === contentStart && end === contentEnd) {
+          return substituted;
+        }
+        return Reflect.apply(originalSlice, this, [start, end]);
+      };
+      parsed = readMutationResponseBodyChunks(body);
+    } finally {
+      String.prototype.slice = originalSlice;
+    }
+
+    expect(fragmentSnapshots(parsed?.fragments ?? [])).toEqual([
+      { html: safeContent, target: 'account' },
+    ]);
+  });
+
   it('preserves malformed query-then-fragment reporting order through the shared core', () => {
     const onError = vi.fn();
 

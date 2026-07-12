@@ -1,3 +1,10 @@
+import {
+  securityJsonStringify,
+  securityNumber,
+  securityString,
+  securityStringToLowerCase,
+} from './security-witness-intrinsics.js';
+
 // SPEC.md §4.8 / data-bind-prop plan: reactive *live-property* binding.
 //
 // `data-bind:<attr>` is attribute-only (setAttribute/removeAttribute). That is
@@ -24,34 +31,42 @@ export const BIND_PROP_PREFIX = 'data-bind-prop:';
  */
 type BindPropKind = 'boolean' | 'number' | 'string';
 
-// SPEC §4.8: closed, security-reviewed allowlist of property-authoritative
-// attributes. Keys are the canonical (case-sensitive) DOM property names; the
-// lookup also accepts the lowercased form HTML attribute parsing produces.
-const BIND_PROP_ALLOWLIST: Readonly<Record<string, BindPropKind>> = {
-  checked: 'boolean',
-  indeterminate: 'boolean',
-  open: 'boolean',
-  scrollLeft: 'number',
-  scrollTop: 'number',
-  selected: 'boolean',
-  value: 'string',
-};
+interface BindPropSpec {
+  kind: BindPropKind;
+  property: keyof BindPropElement;
+}
 
-// HTML attribute names are lowercased by the parser, so `data-bind-prop:scrollTop`
-// is read back as `data-bind-prop:scrolltop`. Map the lowercased suffix back to
-// the canonical cased property name used for `el[prop] = …`.
-const CANONICAL_BY_LOWERCASE: Readonly<Record<string, string>> = Object.fromEntries(
-  Object.keys(BIND_PROP_ALLOWLIST).map((name) => [name.toLowerCase(), name]),
-);
+// SPEC §4.8: classify with exact branches rather than a structurally indexed
+// object. App code shares this realm and may pollute Object.prototype or replace
+// ambient Object/String methods; neither operation may add a property sink to
+// the closed allowlist.
+function bindPropSpec(suffix: string): BindPropSpec | null {
+  switch (securityStringToLowerCase(suffix)) {
+    case 'checked':
+      return { kind: 'boolean', property: 'checked' };
+    case 'indeterminate':
+      return { kind: 'boolean', property: 'indeterminate' };
+    case 'open':
+      return { kind: 'boolean', property: 'open' };
+    case 'scrollleft':
+      return { kind: 'number', property: 'scrollLeft' };
+    case 'scrolltop':
+      return { kind: 'number', property: 'scrollTop' };
+    case 'selected':
+      return { kind: 'boolean', property: 'selected' };
+    case 'value':
+      return { kind: 'string', property: 'value' };
+    default:
+      return null;
+  }
+}
 
 /**
  * Resolve the canonical (cased) property name for a `data-bind-prop:` suffix,
  * or `null` when the property is not on the security allowlist.
  */
 export function canonicalBindProp(suffix: string): string | null {
-  if (Object.prototype.hasOwnProperty.call(BIND_PROP_ALLOWLIST, suffix)) return suffix;
-  const canonical = CANONICAL_BY_LOWERCASE[suffix.toLowerCase()];
-  return canonical ?? null;
+  return bindPropSpec(suffix)?.property ?? null;
 }
 
 /**
@@ -79,21 +94,20 @@ export interface BindPropElement {
  * elements that lack the property are no-ops.
  */
 export function applyBindProp(element: BindPropElement, suffix: string, value: unknown): void {
-  const prop = canonicalBindProp(suffix);
-  if (prop === null) return;
-
-  const kind = BIND_PROP_ALLOWLIST[prop];
-  // The element must actually own the property (e.g. only inputs have `.checked`).
+  const spec = bindPropSpec(suffix);
+  if (spec === null) return;
+  const prop = spec.property;
+  // The element must expose the fixed property (e.g. only inputs have `.checked`).
   if ((element as Record<string, unknown>)[prop] === undefined) return;
 
-  if (kind === 'boolean') {
+  if (spec.kind === 'boolean') {
     // Boolean-presence semantics: present (`''`/`true`) → true; absent
     // (`null`/`undefined`/`false`) → false.
     (element as Record<string, unknown>)[prop] = value != null && value !== false;
     return;
   }
-  if (kind === 'number') {
-    (element as Record<string, unknown>)[prop] = Number(value) || 0;
+  if (spec.kind === 'number') {
+    (element as Record<string, unknown>)[prop] = securityNumber(value) || 0;
     return;
   }
   // string (value). `<progress>` is the exception: its `.value` is not a
@@ -107,15 +121,15 @@ export function applyBindProp(element: BindPropElement, suffix: string, value: u
 
 function isProgressElement(element: BindPropElement): boolean {
   const name = element.localName ?? element.tagName;
-  return typeof name === 'string' && name.toLowerCase() === 'progress';
+  return typeof name === 'string' && securityStringToLowerCase(name) === 'progress';
 }
 
 function formatBindPropString(value: unknown): string {
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return value.toString();
+    return securityString(value);
   }
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'object') return securityJsonStringify(value) ?? '';
   return '';
 }

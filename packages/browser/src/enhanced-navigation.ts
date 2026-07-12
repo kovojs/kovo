@@ -82,10 +82,19 @@ export function installEnhancedNavigationRuntime(
     '|' +
     (security.readAttribute(el, 'kovo-nav-components') || '');
   const nc = (el: Element) => {
-    const copy = el.cloneNode(true) as Element;
+    const copy = security.cloneElement(el);
+    if (!copy) throw new TypeError('Kovo navigation segment snapshot is unavailable.');
     const children = qa(copy, '[kovo-nav-segment]');
-    for (let index = 0; index < children.length; index += 1) children[index]?.remove();
-    return copy.outerHTML;
+    for (let index = 0; index < children.length; index += 1) {
+      if (children[index] && !security.removeElement(children[index])) {
+        throw new TypeError('Kovo navigation segment snapshot is unavailable.');
+      }
+    }
+    const snapshot = security.readElementOuterHtml(copy);
+    if (snapshot === undefined) {
+      throw new TypeError('Kovo navigation segment snapshot is unavailable.');
+    }
+    return snapshot;
   };
   const di = (root: Element) => {
     const ids: Record<string, true> = {};
@@ -104,9 +113,14 @@ export function installEnhancedNavigationRuntime(
   const pi = (segments: Element[], end: number) => {
     const ids: Record<string, true> = {};
     for (let i = 0; i < end; i += 1) {
-      const copy = segments[i]!.cloneNode(true) as Element;
+      const copy = security.cloneElement(segments[i]!);
+      if (!copy) throw new TypeError('Kovo navigation segment snapshot is unavailable.');
       const children = qa(copy, '[kovo-nav-segment]');
-      for (let index = 0; index < children.length; index += 1) children[index]?.remove();
+      for (let index = 0; index < children.length; index += 1) {
+        if (children[index] && !security.removeElement(children[index])) {
+          throw new TypeError('Kovo navigation segment snapshot is unavailable.');
+        }
+      }
       const copyIds = di(copy);
       for (const key in copyIds) ids[key] = true;
     }

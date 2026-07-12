@@ -76,4 +76,62 @@ describe('data-bind-prop allowlist + coercion (SPEC §4.8)', () => {
     applyBindProp(el, 'innerHTML', '<script>alert(1)</script>');
     expect(el.innerHTML).toBe('safe');
   });
+
+  it('keeps the allowlist closed under late prototype and String method pollution', () => {
+    const originalHasOwnCall = Object.getOwnPropertyDescriptor(
+      Object.prototype.hasOwnProperty,
+      'call',
+    );
+    const originalLower = String.prototype.toLowerCase;
+    const originalInnerHtmlLower = Object.getOwnPropertyDescriptor(Object.prototype, 'innerhtml');
+    const originalInnerHtml = Object.getOwnPropertyDescriptor(Object.prototype, 'innerHTML');
+    const writes: string[] = [];
+    const element = { open: false } as Record<string, unknown>;
+    Object.defineProperty(element, 'innerHTML', {
+      configurable: true,
+      get: () => 'safe',
+      set: (value) => writes.push(String(value)),
+    });
+
+    try {
+      const intrinsicHasOwn = Object.prototype.hasOwnProperty;
+      Object.defineProperty(Object.prototype.hasOwnProperty, 'call', {
+        configurable: true,
+        value: (receiver: object, key: PropertyKey) =>
+          key === 'open' ? false : Reflect.apply(intrinsicHasOwn, receiver, [key]),
+        writable: true,
+      });
+      String.prototype.toLowerCase = function () {
+        if (String(this) === 'open') return 'innerhtml';
+        return Reflect.apply(originalLower, this, []);
+      };
+      Object.defineProperty(Object.prototype, 'innerhtml', {
+        configurable: true,
+        value: 'innerHTML',
+        writable: true,
+      });
+      Object.defineProperty(Object.prototype, 'innerHTML', {
+        configurable: true,
+        value: 'string',
+        writable: true,
+      });
+
+      applyBindProp(element, 'open', '<img src=x onerror=owned()>');
+    } finally {
+      if (originalHasOwnCall === undefined) {
+        Reflect.deleteProperty(Object.prototype.hasOwnProperty, 'call');
+      } else {
+        Object.defineProperty(Object.prototype.hasOwnProperty, 'call', originalHasOwnCall);
+      }
+      String.prototype.toLowerCase = originalLower;
+      if (originalInnerHtmlLower === undefined)
+        Reflect.deleteProperty(Object.prototype, 'innerhtml');
+      else Object.defineProperty(Object.prototype, 'innerhtml', originalInnerHtmlLower);
+      if (originalInnerHtml === undefined) Reflect.deleteProperty(Object.prototype, 'innerHTML');
+      else Object.defineProperty(Object.prototype, 'innerHTML', originalInnerHtml);
+    }
+
+    expect(element.open).toBe(true);
+    expect(writes).toEqual([]);
+  });
 });

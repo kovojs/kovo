@@ -24,4 +24,16 @@ describe('server safe rich HTML sanitizer', () => {
       '<p>ok</p>',
     );
   });
+
+  it('does not render browser-runtime control authority from CMS data attributes', () => {
+    expect(
+      renderHtmlValue(
+        safeRichHtml(
+          '<p data-cms-id="post-1" data-bind="state.secret"' +
+            ' data-stream-text="assistant:a1" data-stream-renderer="/c/private.js#render"' +
+            ' data-kovo-module-allowlist="/c/private.js" data-mutation="account/delete">safe</p>',
+        ),
+      ),
+    ).toBe('<p data-cms-id="post-1">safe</p>');
+  });
 });

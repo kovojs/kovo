@@ -6,6 +6,7 @@ import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-t
 import { reconcileKeyed } from './keyed-reconciler.js';
 import { applyResponseFragments } from './response-fragment-apply.js';
 import { kovoSetSafeAttribute } from './security-output.js';
+import { securityStringTrim } from './security-witness-intrinsics.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 
@@ -48,7 +49,7 @@ export class DomMorphTarget implements MorphTarget {
     // SF (secure-framework Tier 3): route framework-assembled HTML through Kovo's sole
     // Trusted Types policy so this sink survives a strict `require-trusted-types-for`
     // CSP on Chromium (transparent passthrough elsewhere — see trusted-types.ts).
-    template.innerHTML = kovoCreateHTML(html.trim());
+    template.innerHTML = kovoCreateHTML(securityStringTrim(html));
     sanitizeDomFragment(template.content);
     this.element.append(...Array.from(template.content.childNodes));
   }
@@ -56,7 +57,7 @@ export class DomMorphTarget implements MorphTarget {
   prependHtml(html: string): void {
     const template = document.createElement('template');
     // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
-    template.innerHTML = kovoCreateHTML(html.trim());
+    template.innerHTML = kovoCreateHTML(securityStringTrim(html));
     sanitizeDomFragment(template.content);
     // SPEC §9.3/§13.2: dedupe prepended rows by kovo-key (a key already present is
     // skipped, never re-inserted), insert the rest at the START in wire order, and
@@ -87,7 +88,7 @@ export class DomMorphTarget implements MorphTarget {
   replaceWithHtml(html: string): void {
     const template = document.createElement('template');
     // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
-    template.innerHTML = kovoCreateHTML(html.trim());
+    template.innerHTML = kovoCreateHTML(securityStringTrim(html));
     const next = firstMorphElement(template.content);
     const activeState = captureActiveDomState(this.element);
     const scrollStates = captureDomScrollStates(this.element);

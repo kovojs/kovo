@@ -427,6 +427,25 @@ describe('runtime output-context helpers', () => {
     );
   });
 
+  it('strips Kovo control-plane data attributes while retaining inert CMS metadata', () => {
+    const rich = safeRichHtml(
+      '<p data-cms-id="post-1" data-profile-id="public"' +
+        ' data-bind="state.privateDraft" data-bind:aria-label="state.secret"' +
+        ' data-bind-list="state.items" data-bind-prop:open="state.open"' +
+        ' data-derive="/c/private.js#derive" data-derive-attr="title"' +
+        ' data-plan="private-plan" data-p-account-id="victim"' +
+        ' data-enhance data-mutation="account/delete" data-mutation-stream="true"' +
+        ' data-stream data-stream-text="assistant:a1"' +
+        ' data-stream-renderer="/c/private.js#render"' +
+        ' data-kovo-module-allowlist="/c/private.js"' +
+        ' data-state="armed" data-key="forged-key">Safe</p>',
+    );
+
+    expect(kovoTrustedHtmlContent(rich)).toBe(
+      '<p data-cms-id="post-1" data-profile-id="public">Safe</p>',
+    );
+  });
+
   it('escapes malformed rich HTML text and closes allowed elements', () => {
     expect(sanitizeRichHtml('<p>one < two <em>three')).toBe('<p>one &lt; two <em>three</em></p>');
   });

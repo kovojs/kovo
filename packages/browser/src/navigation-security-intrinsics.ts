@@ -27,6 +27,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeFormData = scope.FormData;
   const NativeDocument = scope.Document;
   const NativeElement = scope.Element;
+  const NativeNode = scope.Node;
   const NativeDocumentFragment = scope.DocumentFragment;
   const nativeDecodeURIComponent = scope.decodeURIComponent;
   const nativeReflectApply = NativeReflect.apply;
@@ -70,6 +71,15 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     : undefined;
   const elementGetAttribute = NativeElement
     ? valueMethod(NativeElement.prototype, 'getAttribute')
+    : undefined;
+  const elementOuterHtml = NativeElement ? getter(NativeElement.prototype, 'outerHTML') : undefined;
+  const elementRemove = NativeElement ? valueMethod(NativeElement.prototype, 'remove') : undefined;
+  const nodeCloneNode = NativeNode ? valueMethod(NativeNode.prototype, 'cloneNode') : undefined;
+  const documentCreateElement = NativeDocument
+    ? valueMethod(NativeDocument.prototype, 'createElement')
+    : undefined;
+  const elementSetAttribute = NativeElement
+    ? valueMethod(NativeElement.prototype, 'setAttribute')
     : undefined;
   const locationObject = scope.location;
   const documentObject = scope.document;
@@ -195,6 +205,71 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
       name,
     ]);
     return typeof value === 'string' ? value : null;
+  }
+
+  function cloneElement(element: unknown): Element | undefined {
+    if (!controlsSound || element === null || typeof element !== 'object') return undefined;
+    let value: unknown;
+    if (nodeCloneNode) {
+      try {
+        value = apply(nodeCloneNode, element, [true]);
+      } catch {
+        return undefined;
+      }
+    } else {
+      const custom = stableMethod(element, 'cloneNode');
+      if (!custom) return undefined;
+      try {
+        value = apply(custom, element, [true]);
+      } catch {
+        return undefined;
+      }
+    }
+    return value !== null && typeof value === 'object' ? (value as Element) : undefined;
+  }
+
+  function removeElement(element: unknown): boolean {
+    if (!controlsSound || element === null || typeof element !== 'object') return false;
+    if (elementRemove) {
+      try {
+        apply(elementRemove, element, []);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    const custom = stableMethod(element, 'remove');
+    if (!custom) return false;
+    try {
+      apply(custom, element, []);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function readElementOuterHtml(element: unknown): string | undefined {
+    if (!controlsSound || element === null || typeof element !== 'object') return undefined;
+    let value: unknown;
+    if (elementOuterHtml) {
+      try {
+        value = apply(elementOuterHtml, element, []);
+      } catch {
+        return undefined;
+      }
+    } else {
+      const custom = stableGetter(element, 'outerHTML');
+      if (custom) {
+        try {
+          value = apply(custom, element, []);
+        } catch {
+          return undefined;
+        }
+      } else {
+        value = readOwnData(element, 'outerHTML');
+      }
+    }
+    return typeof value === 'string' ? value : undefined;
   }
 
   function readLocationString(
@@ -594,6 +669,29 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           return false;
         }
       }
+      if (NativeDocument && NativeElement && NativeNode && documentObject) {
+        if (
+          !documentCreateElement ||
+          !elementSetAttribute ||
+          !elementOuterHtml ||
+          !elementRemove ||
+          !nodeCloneNode
+        ) {
+          return false;
+        }
+        const snapshotControl = apply<unknown>(documentCreateElement, documentObject, ['div']);
+        if (snapshotControl === null || typeof snapshotControl !== 'object') return false;
+        apply(elementSetAttribute, snapshotControl, ['data-kovo-control', 'yes']);
+        const snapshotClone = apply<unknown>(nodeCloneNode, snapshotControl, [true]);
+        if (
+          snapshotClone === null ||
+          typeof snapshotClone !== 'object' ||
+          apply(elementOuterHtml, snapshotControl, []) !== '<div data-kovo-control="yes"></div>' ||
+          apply(elementOuterHtml, snapshotClone, []) !== '<div data-kovo-control="yes"></div>'
+        ) {
+          return false;
+        }
+      }
       return true;
     } catch {
       return false;
@@ -609,6 +707,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
 
   return {
     call,
+    cloneElement,
     currentPathTarget,
     currentUrl,
     decodeComponent,
@@ -622,12 +721,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     parseUrl,
     queryOne,
     readAttribute,
+    readElementOuterHtml,
     readHeader,
     readFormDataValue,
     readDocumentField,
     readResponseField,
     readResponseText,
     reload,
+    removeElement,
     safeSameOriginPath,
     upper,
   };

@@ -318,25 +318,24 @@ function installInlineKovoLoader(im) {
       el.textContent = fb(val);
     }
   };
-  // SPEC.md §4.8 data-bind-prop: closed allowlist of property-authoritative
-  // props (lowercased suffix -> [cased prop, kind]); 0=bool,1=number,2=string.
-  // The property write complements the SSR attribute and never reaches an unsafe
-  // sink (KV236). bp(el) collects the stamps; wp writes one with coercion.
-  const pa = {
-    checked: ['checked', 0],
-    indeterminate: ['indeterminate', 0],
-    selected: ['selected', 0],
-    open: ['open', 0],
-    scrolltop: ['scrollTop', 1],
-    scrollleft: ['scrollLeft', 1],
-    value: ['value', 2],
-  };
+  // SPEC.md §4.8 data-bind-prop: exact branches keep the property-authoritative
+  // allowlist closed even when app code pollutes Object.prototype. HTML parsers
+  // lowercase attribute names; the camelcase spellings support synthetic roots.
+  // 0=bool,1=number,2=string.
+  const bpc = (suffix) =>
+    suffix === 'checked' ? ['checked', 0] :
+    suffix === 'indeterminate' ? ['indeterminate', 0] :
+    suffix === 'selected' ? ['selected', 0] :
+    suffix === 'open' ? ['open', 0] :
+    suffix === 'scrolltop' || suffix === 'scrollTop' ? ['scrollTop', 1] :
+    suffix === 'scrollleft' || suffix === 'scrollLeft' ? ['scrollLeft', 1] :
+    suffix === 'value' ? ['value', 2] : undefined;
   const bp = (el) =>
     [...(el.attributes || [])].filter(
       (attr) => attr.name.startsWith('data-bind-prop:') && attr.value,
     );
   const wp = (el, suffix, val) => {
-    const spec = pa[suffix] || pa[suffix.toLowerCase()];
+    const spec = bpc(suffix);
     if (!spec) return;
     const prop = spec[0];
     if (el[prop] === undefined) return;
