@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    19 | C1-C19 |
+| Critical |    20 | C1-C20 |
 | High     |    26 | H1-H26 |
 | Medium   |     9 | M1-M9  |
 
@@ -209,6 +209,17 @@ This is an active closure ledger; `SPEC.md` remains normative.
     controls, key/AAD/plaintext byte snapshots, cipher method dispatch, tag/ciphertext assembly, and
     envelope encoding use boot-pinned, semantically verified controls; late synchronized builtins and
     hostile pre-import sources cannot repeat an IV or return a branded non-authenticated envelope.
+
+- [ ] **C20 - A public global bridge exposes the framework's raw-HTML mint.**
+      `packages/core/src/index.ts`, `packages/server/src/jsx-runtime.ts`
+  - Server JSX installation writes `{ renderHtml: renderedHtml }` to the predictable
+    `Symbol.for('kovo.mutationFormHelperRenderContext')` global. Any evaluated app module can read
+    that object and call `renderHtml('<img onerror=...>')`; `renderHtmlValue()` recognizes the result
+    as framework-authored and emits the attacker markup byte-for-byte.
+  - **Acceptance:** no public/global structural object exposes a generic rendered-HTML constructor,
+    no `Symbol.for()` value acts as an output authority brand, and the cross-package form-helper
+    bridge accepts only structured helper operations that reconstruct escaped output inside the
+    server choke; app code cannot mint or launder arbitrary raw HTML through casts or global access.
 
 ## High
 
@@ -571,7 +582,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17-C19, H15, H19, and H26 are active command/
+The remediation pass remains intentionally non-zero: C17-C20, H15, H19, and H26 are active command/
 crypto, response/mutation-output, and durable-task fixes.
 Integrated
 evidence is
