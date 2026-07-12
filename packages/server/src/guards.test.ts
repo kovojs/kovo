@@ -944,9 +944,8 @@ describe('server guard and session primitives', () => {
       }),
     ).resolves.toMatchObject({ status: 200 });
 
-    // One CSRF validation pass currently reads the session id three times internally; the old
-    // lifecycle duplication would run the whole pass twice.
-    expect(csrfSessionReads).toBe(3);
+    // The lifecycle and token comparison share one pinned session identity.
+    expect(csrfSessionReads).toBe(1);
     expect(parseCalls).toBe(1);
     expect(guardCalls).toBe(1);
     expect(handlerCalls).toBe(1);
