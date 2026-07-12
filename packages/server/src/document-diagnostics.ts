@@ -2,6 +2,15 @@ import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { escapeHtml } from './html.js';
 import { renderDocument, type DocumentRoutePageResponse } from './document-core.js';
+import {
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityArrayPush,
+  securityString,
+  securityStringReplaceAll,
+  securityStringSplit,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 
 /** @internal */
 export interface DiagnosticDocumentDiagnostic {
@@ -77,24 +86,34 @@ export function renderDiagnosticDocument(
 function isDiagnosticDocumentOptions(
   input: DiagnosticDocumentOptions | readonly DiagnosticDocumentDiagnostic[],
 ): input is DiagnosticDocumentOptions {
-  return !Array.isArray(input);
+  return !securityArrayIsArray(input);
 }
 
 function renderDiagnosticDocumentBody(
   diagnostics: readonly DiagnosticDocumentDiagnostic[],
   source: DiagnosticDocumentSource | string | undefined,
 ): string {
-  return [
-    '<main class="kovo-diagnostic">',
-    '<style>',
-    diagnosticDocumentStyles(),
-    '</style>',
-    '<h1>Kovo diagnostic</h1>',
-    '<div class="kovo-diagnostic-list">',
-    diagnostics.map((diagnostic) => renderDiagnosticPanel(diagnostic, source)).join(''),
-    '</div>',
-    '</main>',
-  ].join('');
+  const panels: string[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index];
+    if (diagnostic !== undefined) {
+      securityArrayPush(panels, renderDiagnosticPanel(diagnostic, source));
+    }
+  }
+  return securityArrayJoin(
+    [
+      '<main class="kovo-diagnostic">',
+      '<style>',
+      diagnosticDocumentStyles(),
+      '</style>',
+      '<h1>Kovo diagnostic</h1>',
+      '<div class="kovo-diagnostic-list">',
+      securityArrayJoin(panels, ''),
+      '</div>',
+      '</main>',
+    ],
+    '',
+  );
 }
 
 function renderDiagnosticPanel(
@@ -103,21 +122,24 @@ function renderDiagnosticPanel(
 ): string {
   // SPEC §11.3: surfaces render severity from the shared diagnostic registry.
   const severity = diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity;
-  const help = diagnostic.help?.trim();
+  const help = diagnostic.help === undefined ? undefined : securityStringTrim(diagnostic.help);
   const sourceFrame = renderSourceFrame(diagnostic, source);
 
-  return [
-    '<section class="kovo-diagnostic-panel">',
-    '<header>',
-    `<p class="kovo-diagnostic-code">${escapeHtml(diagnostic.code)}</p>`,
-    `<p class="kovo-diagnostic-severity">${escapeHtml(severity)}</p>`,
-    '</header>',
-    `<h2>${escapeHtml(diagnostic.message)}</h2>`,
-    renderDiagnosticLocation(diagnostic),
-    help ? renderDiagnosticHelp(help) : '',
-    sourceFrame,
-    '</section>',
-  ].join('');
+  return securityArrayJoin(
+    [
+      '<section class="kovo-diagnostic-panel">',
+      '<header>',
+      `<p class="kovo-diagnostic-code">${escapeHtml(diagnostic.code)}</p>`,
+      `<p class="kovo-diagnostic-severity">${escapeHtml(severity)}</p>`,
+      '</header>',
+      `<h2>${escapeHtml(diagnostic.message)}</h2>`,
+      renderDiagnosticLocation(diagnostic),
+      help ? renderDiagnosticHelp(help) : '',
+      sourceFrame,
+      '</section>',
+    ],
+    '',
+  );
 }
 
 function renderDiagnosticLocation(diagnostic: DiagnosticDocumentDiagnostic): string {
@@ -128,15 +150,18 @@ function renderDiagnosticLocation(diagnostic: DiagnosticDocumentDiagnostic): str
 }
 
 function renderDiagnosticHelp(help: string): string {
-  const items = help
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => `<li>${escapeHtml(line)}</li>`)
-    .join('');
+  const lines = securityStringSplit(help, '\n');
+  const items: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line === undefined) continue;
+    const trimmed = securityStringTrim(line);
+    if (trimmed !== '') securityArrayPush(items, `<li>${escapeHtml(trimmed)}</li>`);
+  }
+  const renderedItems = securityArrayJoin(items, '');
 
-  if (!items) return '';
-  return `<div class="kovo-diagnostic-help"><h3>Fix menu</h3><ul>${items}</ul></div>`;
+  if (renderedItems === '') return '';
+  return `<div class="kovo-diagnostic-help"><h3>Fix menu</h3><ul>${renderedItems}</ul></div>`;
 }
 
 function renderSourceFrame(
@@ -147,28 +172,46 @@ function renderSourceFrame(
   const start = diagnostic.start;
   if (sourceText === undefined || start === undefined) return '';
 
-  const lines = sourceText.split(/\r\n|\r|\n/);
+  const normalizedSource = securityStringReplaceAll(
+    securityStringReplaceAll(sourceText, '\r\n', '\n'),
+    '\r',
+    '\n',
+  );
+  const lines = securityStringSplit(normalizedSource, '\n');
   const lineIndex = start.line - 1;
   if (lineIndex < 0 || lineIndex >= lines.length) return '';
 
-  const firstLine = Math.max(0, lineIndex - 1);
-  const lastLine = Math.min(lines.length - 1, lineIndex + 1);
-  const width = String(lastLine + 1).length;
+  const firstLine = lineIndex - 1 < 0 ? 0 : lineIndex - 1;
+  const lastLine = lineIndex + 1 > lines.length - 1 ? lines.length - 1 : lineIndex + 1;
+  const width = securityString(lastLine + 1).length;
   const frameLines: string[] = [];
 
   for (let index = firstLine; index <= lastLine; index += 1) {
-    const lineNumber = String(index + 1).padStart(width, ' ');
-    frameLines.push(`${lineNumber} | ${lines[index] ?? ''}`);
+    const lineNumber = leftPadSpaces(securityString(index + 1), width);
+    securityArrayPush(frameLines, `${lineNumber} | ${lines[index] ?? ''}`);
     if (index === lineIndex) {
-      const markerColumn = Math.max(1, start.column);
-      const markerLength = Math.max(1, Math.min(diagnostic.length ?? 1, 80));
-      frameLines.push(
-        `${' '.repeat(width)} | ${' '.repeat(markerColumn - 1)}${'^'.repeat(markerLength)}`,
+      const markerColumn = start.column < 1 ? 1 : start.column;
+      const requestedMarkerLength = diagnostic.length ?? 1;
+      const boundedMarkerLength = requestedMarkerLength > 80 ? 80 : requestedMarkerLength;
+      const markerLength = boundedMarkerLength < 1 ? 1 : boundedMarkerLength;
+      securityArrayPush(
+        frameLines,
+        `${repeatCharacter(' ', width)} | ${repeatCharacter(' ', markerColumn - 1)}${repeatCharacter('^', markerLength)}`,
       );
     }
   }
 
-  return `<pre class="kovo-diagnostic-source"><code>${escapeHtml(frameLines.join('\n'))}</code></pre>`;
+  return `<pre class="kovo-diagnostic-source"><code>${escapeHtml(securityArrayJoin(frameLines, '\n'))}</code></pre>`;
+}
+
+function leftPadSpaces(value: string, width: number): string {
+  return `${repeatCharacter(' ', width - value.length)}${value}`;
+}
+
+function repeatCharacter(character: string, count: number): string {
+  let repeated = '';
+  for (let index = 0; index < count; index += 1) repeated += character;
+  return repeated;
 }
 
 function diagnosticSource(
@@ -192,20 +235,23 @@ function diagnosticSite(diagnostic: DiagnosticDocumentDiagnostic): string | unde
 }
 
 function diagnosticDocumentStyles(): string {
-  return [
-    '.kovo-diagnostic{font-family:ui-sans-serif,system-ui,sans-serif;margin:0 auto;max-width:72rem;padding:2rem;color:#111827}',
-    '.kovo-diagnostic h1{font-size:1.5rem;margin:0 0 1rem}',
-    '.kovo-diagnostic-list{display:grid;gap:1rem}',
-    '.kovo-diagnostic-panel{border:1px solid #d1d5db;border-radius:8px;padding:1rem;background:#fff}',
-    '.kovo-diagnostic-panel header{align-items:center;display:flex;gap:.5rem;margin-bottom:.75rem}',
-    '.kovo-diagnostic-code,.kovo-diagnostic-severity{border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8125rem;margin:0;padding:.125rem .5rem}',
-    '.kovo-diagnostic-code{background:#111827;color:#fff}',
-    '.kovo-diagnostic-severity{background:#fee2e2;color:#991b1b}',
-    '.kovo-diagnostic-panel h2{font-size:1.125rem;line-height:1.4;margin:0}',
-    '.kovo-diagnostic-location{color:#4b5563;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin:.5rem 0 0}',
-    '.kovo-diagnostic-help h3{font-size:.875rem;margin:1rem 0 .25rem}',
-    '.kovo-diagnostic-help ul{margin:.25rem 0 0;padding-left:1.25rem}',
-    '.kovo-diagnostic-source{background:#111827;border-radius:8px;color:#f9fafb;margin:1rem 0 0;overflow:auto;padding:1rem}',
-    '.kovo-diagnostic-source code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.875rem;line-height:1.5}',
-  ].join('');
+  return securityArrayJoin(
+    [
+      '.kovo-diagnostic{font-family:ui-sans-serif,system-ui,sans-serif;margin:0 auto;max-width:72rem;padding:2rem;color:#111827}',
+      '.kovo-diagnostic h1{font-size:1.5rem;margin:0 0 1rem}',
+      '.kovo-diagnostic-list{display:grid;gap:1rem}',
+      '.kovo-diagnostic-panel{border:1px solid #d1d5db;border-radius:8px;padding:1rem;background:#fff}',
+      '.kovo-diagnostic-panel header{align-items:center;display:flex;gap:.5rem;margin-bottom:.75rem}',
+      '.kovo-diagnostic-code,.kovo-diagnostic-severity{border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8125rem;margin:0;padding:.125rem .5rem}',
+      '.kovo-diagnostic-code{background:#111827;color:#fff}',
+      '.kovo-diagnostic-severity{background:#fee2e2;color:#991b1b}',
+      '.kovo-diagnostic-panel h2{font-size:1.125rem;line-height:1.4;margin:0}',
+      '.kovo-diagnostic-location{color:#4b5563;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin:.5rem 0 0}',
+      '.kovo-diagnostic-help h3{font-size:.875rem;margin:1rem 0 .25rem}',
+      '.kovo-diagnostic-help ul{margin:.25rem 0 0;padding-left:1.25rem}',
+      '.kovo-diagnostic-source{background:#111827;border-radius:8px;color:#f9fafb;margin:1rem 0 0;overflow:auto;padding:1rem}',
+      '.kovo-diagnostic-source code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.875rem;line-height:1.5}',
+    ],
+    '',
+  );
 }

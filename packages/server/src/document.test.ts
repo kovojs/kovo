@@ -931,6 +931,38 @@ describe('server app shell document assembly', () => {
     expect(response.body).not.toContain('<pre class="kovo-diagnostic-source"><code>');
   });
 
+  it('keeps diagnostic HTML assembly on boot-pinned controls after app code mutates arrays', () => {
+    const originalMap = Array.prototype.map;
+    const payload = '<img src=x onerror="globalThis.__kovoDiagnosticXss=1">';
+    let body = '';
+
+    try {
+      Array.prototype.map = function poisonedDiagnosticMap(callback, thisArg) {
+        if (
+          this.length === 1 &&
+          typeof this[0] === 'object' &&
+          this[0] !== null &&
+          (this[0] as { code?: unknown }).code === 'KV201'
+        ) {
+          return [payload];
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg]) as unknown[];
+      } as typeof Array.prototype.map;
+
+      body = renderDiagnosticDocument([
+        {
+          code: 'KV201',
+          message: 'Closure captures browser authority.',
+        },
+      ]).body;
+    } finally {
+      Array.prototype.map = originalMap;
+    }
+
+    expect(body).not.toContain(payload);
+    expect(body).toContain('<h2>Closure captures browser authority.</h2>');
+  });
+
   it('renders one error document title while preserving other static meta hints', () => {
     const response = renderErrorDocument({
       hints: {
