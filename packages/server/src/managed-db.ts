@@ -441,19 +441,7 @@ export const createPostgresScopedClient = securityClassifier(
     options: PostgresScopedClientOptions = {},
   ): Client {
     const scopedOptions = snapshotPostgresScopedClientOptions(options);
-    return new Proxy(client as Record<PropertyKey, unknown>, {
-      get(target, prop, receiver) {
-        if (prop === 'query') {
-          return (query: unknown, params?: unknown[], queryOptions?: unknown) =>
-            scopedPostgresQuery(target, scopedOptions, query, params, queryOptions);
-        }
-        if (prop === 'exec') return (query: string) => scopedPostgresExec(scopedOptions, query);
-        if (prop === 'transaction')
-          return scopedPostgresTransaction(target, scopedOptions, receiver);
-        if (prop === 'then') return undefined;
-        throw unsupportedPostgresScopedProperty(prop);
-      },
-    }) as Client;
+    return postgresScopedClientFacade(client, scopedOptions);
   },
 );
 
@@ -467,6 +455,79 @@ export class KovoReadonlyHandleError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'KovoReadonlyHandleError';
+  }
+}
+
+function postgresScopedClientFacade<Client extends object>(
+  client: Client,
+  options: PostgresScopedClientOptions,
+): Client {
+  const target = client as Record<PropertyKey, unknown>;
+  const facade = witnessCreateNullRecord<unknown>();
+  witnessDefineProperty(facade, 'query', {
+    enumerable: true,
+    value(query: unknown, params?: unknown[], queryOptions?: unknown) {
+      return scopedPostgresQuery(target, options, query, params, queryOptions);
+    },
+  });
+  witnessDefineProperty(facade, 'exec', {
+    enumerable: true,
+    value(query: string) {
+      return scopedPostgresExec(options, query);
+    },
+  });
+  witnessDefineProperty(facade, 'transaction', {
+    enumerable: true,
+    value<Result>(callback: (tx: unknown) => Promise<Result> | Result, ...args: unknown[]) {
+      return scopedPostgresTransaction(target, options, callback, args);
+    },
+  });
+  defineBlockedPostgresProperties(facade, POSTGRES_BLOCKED_CLIENT_PROPERTIES);
+  return witnessFreeze(facade) as Client;
+}
+
+const POSTGRES_BLOCKED_CLIENT_PROPERTIES = [
+  'close',
+  'clone',
+  'copyToFS',
+  'describeQuery',
+  'dumpDataDir',
+  'execProtocol',
+  'execProtocolRaw',
+  'execProtocolRawStream',
+  'execProtocolRawSync',
+  'execProtocolStream',
+  'handleExternalCmd',
+  'isInTransaction',
+  'listen',
+  'offNotification',
+  'onNotification',
+  'refreshArrayTypes',
+  'runExclusive',
+  'sql',
+  'syncToFs',
+  'unlisten',
+] as const;
+
+const POSTGRES_BLOCKED_TRANSACTION_PROPERTIES = ['listen', 'rollback', 'sql'] as const;
+
+function defineBlockedPostgresProperties(
+  facade: Record<PropertyKey, unknown>,
+  properties: readonly PropertyKey[],
+): void {
+  for (let index = 0; index < properties.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(properties, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Postgres blocked property list integrity failed.');
+    }
+    const property = descriptor.value;
+    witnessDefineProperty(facade, property, {
+      value() {
+        throw new KovoReadonlyHandleError(
+          `KV433: Postgres scoped property ${String(property)} could bypass the framework transaction role frame (SPEC §10.3/§11.2).`,
+        );
+      },
+    });
   }
 }
 
@@ -1632,40 +1693,49 @@ type PostgresTransactionClient = {
 };
 
 function isPostgresTransactionClient(value: unknown): value is PostgresTransactionClient {
-  return isRecord(value) && typeof value.exec === 'function' && typeof value.query === 'function';
+  if (!isRecord(value)) return false;
+  try {
+    return (
+      optionalStrictInheritedFunctionDataProperty(value, 'exec') !== undefined &&
+      optionalStrictInheritedFunctionDataProperty(value, 'query') !== undefined
+    );
+  } catch {
+    return false;
+  }
 }
 
 function scopedPostgresTransaction(
   target: Record<PropertyKey, unknown>,
   options: PostgresScopedClientOptions,
-  receiver: unknown,
+  callback: unknown,
+  args: readonly unknown[],
 ): unknown {
-  const value = witnessReflectGet(target, 'transaction', receiver);
-  if (typeof value !== 'function') return value;
-  return <Result>(callback: (tx: unknown) => Promise<Result> | Result, ...args: unknown[]) => {
-    if (typeof callback !== 'function') {
+  const value = optionalStrictInheritedFunctionDataProperty(target, 'transaction');
+  if (value === undefined) {
+    throw new KovoReadonlyHandleError(
+      'KV433: Postgres scoped transaction nesting requires a transaction-capable driver handle (SPEC §10.3).',
+    );
+  }
+  if (typeof callback !== 'function') {
+    throw new KovoReadonlyHandleError(
+      'KV414: Postgres scoped transactions require a callback so the framework can establish the request role frame (SPEC §10.3).',
+    );
+  }
+  const scopedCallback = (tx: unknown): unknown => {
+    if (!isPostgresTransactionClient(tx)) {
       throw new KovoReadonlyHandleError(
-        'KV414: Postgres scoped transactions require a callback so the framework can establish the request role frame (SPEC §10.3).',
+        'KV433: Postgres transaction callback did not receive a framework-scopeable query/exec client (SPEC §10.3).',
       );
     }
-    const scopedCallback = (tx: unknown): Promise<Result> | Result => {
-      if (!isPostgresTransactionClient(tx)) {
-        return witnessReflectApply(callback, undefined, [tx]) as Result;
-      }
-      return runScopedPostgresTransactionCallback(tx, options, callback);
-    };
-    return witnessReflectApply(
-      value,
-      target,
-      prependManagedArgument(scopedCallback, args),
-    ) as Result;
+    return runScopedPostgresTransactionCallback(tx, options, callback);
   };
+  return witnessReflectApply(value, target, prependManagedArgument(scopedCallback, args));
 }
 
 async function runScopedPostgresTransactionCallback<Result>(
   tx: PostgresTransactionClient,
   options: PostgresScopedClientOptions,
-  callback: (tx: unknown) => Promise<Result> | Result,
+  callback: Function,
 ): Promise<Result> {
   await runPostgresTransactionControl(tx, options);
   return witnessReflectApply(callback, undefined, [
@@ -1677,37 +1747,35 @@ function scopedPostgresTransactionClient(
   tx: PostgresTransactionClient,
   options: PostgresScopedClientOptions,
 ): PostgresTransactionClient {
-  return new Proxy(tx as Record<PropertyKey, unknown>, {
-    get(target, prop, receiver) {
-      if (prop === 'query') {
-        return (query: unknown, params?: unknown[], queryOptions?: unknown) => {
-          const snapshot = postgresQuerySnapshot(query, params);
-          assertAppPostgresTextAllowed(snapshot.text);
-          const queryMethod = witnessReflectGet(target, 'query', receiver);
-          if (typeof queryMethod !== 'function') {
-            throw new KovoReadonlyHandleError(
-              'KV433: Postgres scoped transaction client requires a callable query method (SPEC §10.3/§11.2).',
-            );
-          }
-          return witnessReflectApply(
-            queryMethod,
-            target,
-            postgresQueryExecutionArgs(snapshot, queryOptions),
-          );
-        };
-      }
-      if (prop === 'exec') return (query: string) => scopedPostgresExec(options, query);
-      if (prop === 'transaction') return scopedPostgresTransaction(target, options, receiver);
-      if (prop === 'then') return undefined;
-      throw unsupportedPostgresScopedProperty(prop);
+  const target = tx as Record<PropertyKey, unknown>;
+  const queryMethod = inheritedFunctionDataProperty(target, 'query');
+  const facade = witnessCreateNullRecord<unknown>();
+  witnessDefineProperty(facade, 'query', {
+    enumerable: true,
+    value(query: unknown, params?: unknown[], queryOptions?: unknown) {
+      const snapshot = postgresQuerySnapshot(query, params);
+      assertAppPostgresTextAllowed(snapshot.text);
+      return witnessReflectApply(
+        queryMethod,
+        target,
+        postgresQueryExecutionArgs(snapshot, queryOptions),
+      );
     },
-  }) as PostgresTransactionClient;
-}
-
-function unsupportedPostgresScopedProperty(property: PropertyKey): KovoReadonlyHandleError {
-  return new KovoReadonlyHandleError(
-    `KV433: Postgres scoped managed clients expose only query() and callback transaction(); property ${String(property)} could bypass the framework transaction role frame (SPEC §10.3/§11.2).`,
-  );
+  });
+  witnessDefineProperty(facade, 'exec', {
+    enumerable: true,
+    value(query: string) {
+      return scopedPostgresExec(options, query);
+    },
+  });
+  witnessDefineProperty(facade, 'transaction', {
+    enumerable: true,
+    value<Result>(callback: (nested: unknown) => Promise<Result> | Result, ...args: unknown[]) {
+      return scopedPostgresTransaction(target, options, callback, args);
+    },
+  });
+  defineBlockedPostgresProperties(facade, POSTGRES_BLOCKED_TRANSACTION_PROPERTIES);
+  return witnessFreeze(facade) as unknown as PostgresTransactionClient;
 }
 
 function scopedPostgresQuery(

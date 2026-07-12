@@ -3011,7 +3011,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       await client.exec('CREATE TABLE scoped_surface_proof (id integer primary key, secret text)');
       const scoped = createPostgresReadonlyClient(client, { readerRole: false }) as typeof client;
 
-      expect(() => scoped.sql).toThrow(/transaction role frame/u);
+      expect(() => scoped.sql`insert into scoped_surface_proof values (1, 'BYPASS')`).toThrow(
+        /transaction role frame/u,
+      );
       for (const method of [
         'describeQuery',
         'execProtocol',
@@ -3020,15 +3022,15 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         'listen',
         'runExclusive',
       ]) {
-        expect(() => (scoped as unknown as Record<string, unknown>)[method]).toThrow(
-          /transaction role frame/u,
-        );
+        expect(() =>
+          ((scoped as unknown as Record<string, unknown>)[method] as () => unknown)(),
+        ).toThrow(/transaction role frame/u);
       }
       await expect(
         scoped.transaction(async (tx) => {
-          expect(() => tx.sql).toThrow(/transaction role frame/u);
-          expect(() => tx.rollback).toThrow(/transaction role frame/u);
-          expect(() => tx.listen).toThrow(/transaction role frame/u);
+          expect(() => tx.sql`select 1`).toThrow(/transaction role frame/u);
+          expect(() => tx.rollback()).toThrow(/transaction role frame/u);
+          expect(() => tx.listen('proof', () => undefined)).toThrow(/transaction role frame/u);
           return tx.query('select count(*)::int as count from scoped_surface_proof');
         }),
       ).resolves.toMatchObject({ rows: [{ count: 0 }] });
@@ -3463,11 +3465,23 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ]);
   });
 
-  it('binds pass-through Postgres client methods to the underlying client', () => {
+  it('binds driver transactions without exposing their underlying client identity', async () => {
     class PrivateFieldClient {
       #ready = true;
 
-      transaction<Result>(callback: (tx: this) => Result): Result {
+      exec(): Promise<void> {
+        if (!this.#ready) throw new Error('not ready');
+        return Promise.resolve();
+      }
+
+      query(): Promise<unknown[]> {
+        if (!this.#ready) throw new Error('not ready');
+        return Promise.resolve([]);
+      }
+
+      transaction<Result>(
+        callback: (tx: this) => Promise<Result> | Result,
+      ): Promise<Result> | Result {
         if (!this.#ready) throw new Error('not ready');
         return callback(this);
       }
@@ -3475,7 +3489,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     const scoped = createPostgresScopedClient(new PrivateFieldClient()) as PrivateFieldClient;
 
-    expect(scoped.transaction((tx) => tx instanceof PrivateFieldClient)).toBe(true);
+    await expect(scoped.transaction((tx) => tx instanceof PrivateFieldClient)).resolves.toBe(false);
   });
 
   it('refuses Secret boxes at builder values and set write boundaries', () => {
