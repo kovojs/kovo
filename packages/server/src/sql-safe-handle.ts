@@ -135,6 +135,7 @@ export type AsyncMutationTransactionCapableDb = {
 };
 
 const managedTransactionQueue = createWitnessWeakMap<object, Promise<void>>();
+const pinnedSqliteTransactionClients = createWitnessWeakMap<object, SqliteTransactionClient>();
 let sqliteSavepointId = 0;
 
 const READ_SQL_BUILDER_FAST_PATH_METHODS = createWitnessSet<PropertyKey>();
@@ -256,6 +257,7 @@ function wrapDbAdapter(
 ): object {
   const cached = witnessWeakMapGet(proxyCache, db);
   if (cached) return cached;
+  if (writePolicy?.capability === 'write') void sqliteTransactionClient(db);
 
   const proxy = new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
@@ -1735,14 +1737,22 @@ export function canRunSqliteAsyncTransaction(db: unknown): boolean {
 function sqliteTransactionClient(db: unknown): SqliteTransactionClient | undefined {
   const target = frameworkManagedDbRawTarget(db) ?? db;
   if (!isRecord(target)) return undefined;
+  const cached = witnessWeakMapGet(pinnedSqliteTransactionClients, target);
+  if (cached !== undefined) return cached;
 
   const direct = pinSqliteTransactionClient(target);
-  if (direct !== undefined) return direct;
+  if (direct !== undefined) {
+    witnessWeakMapSet(pinnedSqliteTransactionClients, target, direct);
+    return direct;
+  }
 
   const client = strictInheritedDataDescriptor(target, '$client');
-  return client !== undefined && 'value' in client
-    ? pinSqliteTransactionClient(client.value)
-    : undefined;
+  const pinned =
+    client !== undefined && 'value' in client
+      ? pinSqliteTransactionClient(client.value)
+      : undefined;
+  if (pinned !== undefined) witnessWeakMapSet(pinnedSqliteTransactionClients, target, pinned);
+  return pinned;
 }
 
 function pinSqliteTransactionClient(value: unknown): SqliteTransactionClient | undefined {
@@ -1801,20 +1811,27 @@ async function runSqliteTransactionControl<Result>(
 ): Promise<Result> {
   // SPEC §10.3: better-sqlite3 transactions are synchronous, but mutation handlers may be async.
   // Keep the transaction open across the awaited handler with framework-owned control statements.
-  const nested =
-    'get' in client.inTransaction && typeof client.inTransaction.get === 'function'
-      ? witnessReflectApply(client.inTransaction.get, client.target, []) === true
-      : 'value' in client.inTransaction && client.inTransaction.value === true;
+  const nested = readPinnedSqliteTransactionState(client);
   const savepoint = nested ? `kovo_mutation_${++sqliteSavepointId}` : undefined;
 
   witnessReflectApply(client.exec, client.target, [
     savepoint === undefined ? 'BEGIN' : `SAVEPOINT ${savepoint}`,
   ]);
+  if (readPinnedSqliteTransactionState(client) !== true) {
+    throw new Error(
+      'KV433: SQLite transaction control did not establish an active frame before mutation code (SPEC §10.3/§11.2).',
+    );
+  }
   try {
     const result = await callback();
     witnessReflectApply(client.exec, client.target, [
       savepoint === undefined ? 'COMMIT' : `RELEASE ${savepoint}`,
     ]);
+    if (readPinnedSqliteTransactionState(client) !== nested) {
+      throw new Error(
+        'KV433: SQLite transaction control did not close the expected frame after mutation code (SPEC §10.3/§11.2).',
+      );
+    }
     return result;
   } catch (error) {
     try {
@@ -1824,6 +1841,11 @@ async function runSqliteTransactionControl<Result>(
       if (savepoint !== undefined) {
         witnessReflectApply(client.exec, client.target, [`RELEASE ${savepoint}`]);
       }
+      if (readPinnedSqliteTransactionState(client) !== nested) {
+        throw new Error(
+          'KV433: SQLite rollback did not restore the prior transaction frame (SPEC §10.3/§11.2).',
+        );
+      }
     } catch (rollbackError) {
       throw new AggregateError(
         [error, rollbackError],
@@ -1832,6 +1854,12 @@ async function runSqliteTransactionControl<Result>(
     }
     throw error;
   }
+}
+
+function readPinnedSqliteTransactionState(client: SqliteTransactionClient): boolean {
+  return 'get' in client.inTransaction && typeof client.inTransaction.get === 'function'
+    ? witnessReflectApply(client.inTransaction.get, client.target, []) === true
+    : 'value' in client.inTransaction && client.inTransaction.value === true;
 }
 
 async function runQueuedManagedTransaction<Result>(

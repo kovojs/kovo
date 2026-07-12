@@ -4133,6 +4133,41 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     client.close();
   });
 
+  it('pins SQLite controls at managed-handle construction before authored code can poison BEGIN', async () => {
+    const client = new Database(':memory:');
+    const nativeExec = Database.prototype.exec;
+    let callbackReached = false;
+    try {
+      client.exec('create table begin_control_proof (id integer primary key)');
+      const handle = wrapManagedDbForSqlSafety(
+        client,
+        undefined,
+        managedSqlExecutionPolicy({ capability: 'write', dialect: 'sqlite' }),
+      ) as Database & {
+        [kovoAsyncMutationTransaction]?: (
+          callback: (transactionDb: unknown) => Promise<unknown>,
+        ) => Promise<unknown>;
+      };
+      Database.prototype.exec = function (): Database {
+        return this;
+      };
+      const transaction = handle[kovoAsyncMutationTransaction];
+      expect(transaction).toBeTypeOf('function');
+      await expect(
+        transaction!(async () => {
+          callbackReached = true;
+          client.prepare('insert into begin_control_proof values (1)').run();
+          throw new Error('handler failure');
+        }),
+      ).rejects.toThrow(/handler failure/u);
+    } finally {
+      Database.prototype.exec = nativeExec;
+    }
+    expect(callbackReached).toBe(true);
+    expect(client.prepare('select id from begin_control_proof').all()).toEqual([]);
+    client.close();
+  });
+
   it('write mode denies unknown methods behind raw driver escape properties before execution', () => {
     const log: string[] = [];
     const handle = managedDb(
