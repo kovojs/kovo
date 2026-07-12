@@ -787,4 +787,136 @@ export const QuantityButton = component({
     );
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject server source through query-dependency projection', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedQueryDependencyMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { kind?: unknown; value?: unknown } | undefined;
+        if (
+          first?.kind === 'expression' &&
+          typeof first.value === 'string' &&
+          callback.name === 'renderQueryDependencyExpressionElement'
+        ) {
+          poisonHits += 1;
+          return ['(globalThis.KOVO_DEP_INJECTION = true)'] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'question-detail.tsx',
+        source: `
+export const QuestionDetail = component({
+  props: { questionId: String },
+  queries: {
+    answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
+    question: questionDetail.args((props) => ({ id: props.questionId })),
+  },
+  render: ({ answers, question }) => <section>{question.title}{answers.length}</section>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_DEP_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
+
+  it('cannot replace a reviewed server handler attribute patch', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedHandlerPatchMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as
+          | { attributeEnd?: unknown; attributeStart?: unknown; exportName?: unknown }
+          | undefined;
+        if (
+          callback.name === 'handlerSourceReplacement' &&
+          typeof first?.attributeStart === 'number' &&
+          typeof first.attributeEnd === 'number' &&
+          typeof first.exportName === 'string'
+        ) {
+          poisonHits += 1;
+          return [
+            {
+              end: first.attributeEnd,
+              replacement:
+                'on:click="safe"><img src=x data-injected=KOVO_HANDLER_PATCH_INJECTION><button data-rest="',
+              start: first.attributeStart,
+            },
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'host-button.tsx',
+        source: `
+import { component } from '@kovojs/core';
+import { track } from './analytics';
+export const HostButton = component({
+  render: () => <button onClick={() => track('click')}>Track</button>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_HANDLER_PATCH_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
+
+  it('cannot inject executable source through server template-literal escaping', () => {
+    const nativeReplaceAll = String.prototype.replaceAll;
+    const nativeApply = Reflect.apply;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      String.prototype.replaceAll = function poisonedServerTemplateReplaceAll(
+        searchValue: string | RegExp,
+        replaceValue: string,
+      ): string {
+        if (
+          searchValue === '${' &&
+          nativeApply(nativeIncludes, this, ['export const TemplateProbe'])
+        ) {
+          poisonHits += 1;
+          return `${this}\`; globalThis.KOVO_TEMPLATE_LITERAL_INJECTION = true; return \``;
+        }
+        return nativeApply(nativeReplaceAll, this, [searchValue, replaceValue]);
+      };
+      result = compileComponentModule({
+        fileName: 'template-probe.tsx',
+        source: `
+import { component } from '@kovojs/core';
+export const TemplateProbe = component({ render: () => <p>Safe</p> });
+`,
+      });
+    } finally {
+      String.prototype.replaceAll = nativeReplaceAll;
+    }
+
+    expect(result?.files.map((file) => file.source).join('\n')).not.toContain(
+      'KOVO_TEMPLATE_LITERAL_INJECTION',
+    );
+    expect(poisonHits).toBe(0);
+  });
 });

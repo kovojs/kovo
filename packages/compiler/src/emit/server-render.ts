@@ -3,10 +3,14 @@ import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/m
 import { compilerIrHeader } from '../ir.js';
 import {
   compilerCreateSet,
+  compilerJsonStringify,
   compilerSetAdd,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringIncludes,
+  compilerStringReplaceAll,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
 import {
   outputContextForAttribute,
@@ -115,76 +119,139 @@ function serverRenderPatches(
     source: string;
   },
 ): ServerRenderLowering {
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Server render handlers');
   const diagnostics: CompilerDiagnostic[] = [];
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
   const stampWrites: ServerRenderStampWriteFact[] = [];
-  const chained = chainedPrimitiveHandlerPatches(handlers, model);
-  const chainedHandlers = new Set(chained.handlers);
-  patches.push(...chained.patches);
-  outputContexts.push(...chained.outputContexts);
-  if (options) diagnostics.push(...handlerStampConflictDiagnostics(handlers, model, options));
+  const chained = chainedPrimitiveHandlerPatches(handlerSnapshot, model);
+  const chainedHandlers = compilerCreateSet<HandlerLowering>();
+  const chainedHandlerSnapshot = compilerSnapshotDenseArray(
+    chained.handlers,
+    'Chained server handlers',
+  );
+  for (let index = 0; index < chainedHandlerSnapshot.length; index += 1) {
+    compilerSetAdd(chainedHandlers, chainedHandlerSnapshot[index]!);
+  }
+  appendServerValues(patches, chained.patches, 'Chained handler patches');
+  appendServerValues(outputContexts, chained.outputContexts, 'Chained handler output contexts');
+  if (options) {
+    appendServerValues(
+      diagnostics,
+      handlerStampConflictDiagnostics(handlerSnapshot, model, options),
+      'Handler stamp diagnostics',
+    );
+  }
   const formLowering = enhancedMutationFormRenderLowering(model, options);
-  diagnostics.push(...formLowering.diagnostics);
-  patches.push(...formLowering.replacements);
-  outputContexts.push(...formLowering.outputContexts);
+  appendServerValues(diagnostics, formLowering.diagnostics, 'Mutation form diagnostics');
+  appendServerValues(patches, formLowering.replacements, 'Mutation form patches');
+  appendServerValues(outputContexts, formLowering.outputContexts, 'Mutation form output contexts');
   const streamTextLowering = streamTextTargetRenderLowering(model, options);
-  diagnostics.push(...streamTextLowering.diagnostics);
-  patches.push(...streamTextLowering.replacements);
-  outputContexts.push(...streamTextLowering.outputContexts);
+  appendServerValues(diagnostics, streamTextLowering.diagnostics, 'Stream text diagnostics');
+  appendServerValues(patches, streamTextLowering.replacements, 'Stream text patches');
+  appendServerValues(
+    outputContexts,
+    streamTextLowering.outputContexts,
+    'Stream text output contexts',
+  );
   const formErrorLowering = mutationFormErrorRenderLowering(model, options);
-  diagnostics.push(...formErrorLowering.diagnostics);
-  patches.push(...formErrorLowering.replacements);
+  appendServerValues(diagnostics, formErrorLowering.diagnostics, 'Mutation error diagnostics');
+  appendServerValues(patches, formErrorLowering.replacements, 'Mutation error patches');
   const triggerLowering = executionTriggerRenderLowering(model, options);
-  patches.push(...triggerLowering.replacements);
-  outputContexts.push(...triggerLowering.outputContexts);
-  const hostHandlers = host
-    ? handlers.filter(
-        (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
-      )
-    : [];
+  appendServerValues(patches, triggerLowering.replacements, 'Execution trigger patches');
+  appendServerValues(
+    outputContexts,
+    triggerLowering.outputContexts,
+    'Execution trigger output contexts',
+  );
+  const hostHandlers: HandlerLowering[] = [];
+  if (host) {
+    for (let index = 0; index < handlerSnapshot.length; index += 1) {
+      const handler = handlerSnapshot[index]!;
+      if (handler.attributeStart >= host.start && handler.attributeEnd <= host.end) {
+        hostHandlers[hostHandlers.length] = handler;
+      }
+    }
+  }
 
-  for (const handler of handlers) {
-    if (chainedHandlers.has(handler)) continue;
-    if (hostHandlers.includes(handler)) continue;
-    patches.push({
+  for (let index = 0; index < handlerSnapshot.length; index += 1) {
+    const handler = handlerSnapshot[index]!;
+    if (compilerSetHas(chainedHandlers, handler)) continue;
+    if (serverArrayIncludesIdentity(hostHandlers, handler)) continue;
+    patches[patches.length] = {
       end: handler.attributeEnd,
       replacement: handlerAttributeReplacement(handler),
       start: handler.attributeStart,
-    });
-    outputContexts.push(...handlerOutputContexts(handler));
+    };
+    appendServerValues(
+      outputContexts,
+      handlerOutputContexts(handler),
+      'Server handler output contexts',
+    );
   }
 
   if (host) {
     const hostElement = componentRenderHostElement(model);
     if (hostElement) {
-      patches.push(
-        ...hostHandlers
-          .filter((handler) => !chainedHandlers.has(handler))
-          .map(handlerSourceReplacement),
-      );
-      outputContexts.push(
-        ...hostHandlers
-          .filter((handler) => !chainedHandlers.has(handler))
-          .flatMap((handler) => handlerOutputContexts(handler)),
-      );
+      for (let index = 0; index < hostHandlers.length; index += 1) {
+        const handler = hostHandlers[index]!;
+        if (compilerSetHas(chainedHandlers, handler)) continue;
+        patches[patches.length] = handlerSourceReplacement(handler);
+        appendServerValues(
+          outputContexts,
+          handlerOutputContexts(handler),
+          'Host handler output contexts',
+        );
+      }
     }
   }
 
-  for (const target of serverRenderComponentStampTargets(model, domComponentName, options)) {
+  const stampTargets = compilerSnapshotDenseArray(
+    serverRenderComponentStampTargets(model, domComponentName, options),
+    'Server component stamp targets',
+  );
+  for (let index = 0; index < stampTargets.length; index += 1) {
+    const target = stampTargets[index]!;
     const hostElement = componentRenderHostElementFor(model, target.component);
     if (!hostElement) continue;
 
     const hostStamps = renderHostStampWrites(target.component, hostElement, target);
-    stampWrites.push(...hostStamps.writes);
-    patches.push(...renderHostStampPatches(hostElement, hostStamps.writes));
-    outputContexts.push(...renderHostStampOutputContexts(hostStamps.writes));
-    if (options)
-      diagnostics.push(...renderHostStampConflictDiagnostics(hostStamps.conflicts, options));
+    appendServerValues(stampWrites, hostStamps.writes, 'Host stamp writes');
+    appendServerValues(
+      patches,
+      renderHostStampPatches(hostElement, hostStamps.writes),
+      'Host stamp patches',
+    );
+    appendServerValues(
+      outputContexts,
+      renderHostStampOutputContexts(hostStamps.writes),
+      'Host stamp output contexts',
+    );
+    if (options) {
+      appendServerValues(
+        diagnostics,
+        renderHostStampConflictDiagnostics(hostStamps.conflicts, options),
+        'Host stamp conflict diagnostics',
+      );
+    }
   }
 
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
+}
+
+function appendServerValues<Value>(target: Value[], values: readonly Value[], label: string): void {
+  const snapshot = compilerSnapshotDenseArray(values, label);
+  for (let index = 0; index < snapshot.length; index += 1) {
+    target[target.length] = snapshot[index]!;
+  }
+}
+
+function serverArrayIncludesIdentity<Value>(values: readonly Value[], expected: Value): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
 }
 
 function serverRenderComponentStampTargets(
@@ -227,25 +294,32 @@ function executionTriggerRenderLowering(
   const unversionedHref = clientModuleUrl(options.fileName);
   const replacements: SourceReplacement[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
-  for (const element of model.jsxElements) {
-    for (const attribute of element.attributes) {
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Execution-trigger JSX elements');
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const element = elements[elementIndex]!;
+    const attributes = compilerSnapshotDenseArray(
+      element.attributes,
+      'Execution-trigger JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex]!;
       if (attribute.executionTriggerName === undefined || attribute.value === undefined) continue;
       const ref = parseKovoModuleRef(attribute.value, 'handler');
       if (!ref || ref.url !== unversionedHref) continue;
 
       const value = formatKovoModuleRef({ ...ref, url: options.clientHref });
-      replacements.push({
+      replacements[replacements.length] = {
         end: attribute.end,
         replacement: `${attribute.name}="${escapeAttribute(value)}" ${clientModuleAllowlistAttribute([value])}`,
         start: attribute.start,
-      });
-      outputContexts.push({
+      };
+      outputContexts[outputContexts.length] = {
         context: outputContextForAttribute(attribute.name),
         expression: value,
         sink: attribute.name,
         source: 'server-render',
         writer: 'execution trigger URL versioning',
-      });
+      };
     }
   }
 
@@ -287,24 +361,39 @@ function chainedPrimitiveHandlerPatches(
   const patches: SourceReplacement[] = [];
   const chainedHandlers: HandlerLowering[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Primitive-chain handlers');
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Primitive-chain JSX elements');
 
-  for (const element of model.jsxElements) {
-    const elementHandlers = handlers.filter(
-      (handler) =>
-        handler.attributeStart >= element.start && handler.attributeEnd <= element.openingEnd,
-    );
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const element = elements[elementIndex]!;
+    const elementHandlers: HandlerLowering[] = [];
+    for (let index = 0; index < handlerSnapshot.length; index += 1) {
+      const handler = handlerSnapshot[index]!;
+      if (handler.attributeStart >= element.start && handler.attributeEnd <= element.openingEnd) {
+        elementHandlers[elementHandlers.length] = handler;
+      }
+    }
     if (elementHandlers.length === 0) continue;
 
-    for (const attribute of element.attributes) {
-      if (!attribute.name.startsWith('on:') || !attribute.value) continue;
+    const attributes = compilerSnapshotDenseArray(
+      element.attributes,
+      'Primitive-chain JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex]!;
+      if (!compilerStringStartsWith(attribute.name, 'on:') || !attribute.value) continue;
 
-      const attributeHandlers = elementHandlers.filter(
-        (handler) => handler.attributeName === attribute.name,
-      );
+      const attributeHandlers: HandlerLowering[] = [];
+      for (let index = 0; index < elementHandlers.length; index += 1) {
+        const handler = elementHandlers[index]!;
+        if (handler.attributeName === attribute.name) {
+          attributeHandlers[attributeHandlers.length] = handler;
+        }
+      }
       if (attributeHandlers.length === 0) continue;
 
       // SPEC.md §4.6: primitive composition chains on:* refs author-first, then primitive.
-      patches.push({
+      patches[patches.length] = {
         end: attribute.end,
         replacement: chainedPrimitiveHandlerAttribute(
           attribute.name,
@@ -312,20 +401,27 @@ function chainedPrimitiveHandlerPatches(
           attributeHandlers,
         ),
         start: attribute.start,
-      });
-      outputContexts.push(
-        {
-          context: 'attribute',
-          expression: attribute.value,
-          sink: attribute.name,
-          source: 'server-render',
-          writer: 'primitive handler chain',
-        },
-        ...attributeHandlers.flatMap((handler) => handlerOutputContexts(handler)),
-      );
-      for (const handler of attributeHandlers) {
-        patches.push({ end: handler.attributeEnd, replacement: '', start: handler.attributeStart });
-        chainedHandlers.push(handler);
+      };
+      outputContexts[outputContexts.length] = {
+        context: 'attribute',
+        expression: attribute.value,
+        sink: attribute.name,
+        source: 'server-render',
+        writer: 'primitive handler chain',
+      };
+      for (let index = 0; index < attributeHandlers.length; index += 1) {
+        const handler = attributeHandlers[index]!;
+        appendServerValues(
+          outputContexts,
+          handlerOutputContexts(handler),
+          'Primitive-chain handler output contexts',
+        );
+        patches[patches.length] = {
+          end: handler.attributeEnd,
+          replacement: '',
+          start: handler.attributeStart,
+        };
+        chainedHandlers[chainedHandlers.length] = handler;
       }
     }
   }
@@ -442,31 +538,33 @@ function renderHostStampPatches(
 ): SourceReplacement[] {
   const patches: SourceReplacement[] = [];
   const insertedAttributes: string[] = [];
+  const writeSnapshot = compilerSnapshotDenseArray(writes, 'Rendered host stamp writes');
 
-  for (const write of writes) {
+  for (let index = 0; index < writeSnapshot.length; index += 1) {
+    const write = writeSnapshot[index]!;
     const rendered = renderHostStampAttribute(write);
     if (write.mode === 'insert') {
-      insertedAttributes.push(rendered);
+      insertedAttributes[insertedAttributes.length] = rendered;
       continue;
     }
     if (write.mode === 'replace') {
-      const existing = hostElement.attributes.find((attribute) => attribute.name === write.attr);
+      const existing = serverElementAttribute(hostElement, write.attr);
       if (!existing) continue;
-      patches.push({
+      patches[patches.length] = {
         end: existing.end,
         replacement: rendered,
         start: existing.start,
-      });
+      };
     }
   }
 
   if (insertedAttributes.length > 0) {
     const insertion = openingTagAttributeInsertion(hostElement, insertedAttributes);
-    patches.push({
+    patches[patches.length] = {
       end: insertion.position,
       replacement: insertion.replacement,
       start: insertion.position,
-    });
+    };
   }
 
   return patches;
@@ -475,13 +573,19 @@ function renderHostStampPatches(
 function renderHostStampOutputContexts(
   writes: readonly ServerRenderStampWriteFact[],
 ): GeneratedOutputWriteFact[] {
-  return writes.map((write) => ({
-    context: 'attribute',
-    expression: write.value,
-    sink: write.attr,
-    source: 'server-render',
-    writer: write.writer,
-  }));
+  const snapshot = compilerSnapshotDenseArray(writes, 'Host stamp output-context writes');
+  const contexts: GeneratedOutputWriteFact[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const write = snapshot[index]!;
+    contexts[contexts.length] = {
+      context: 'attribute',
+      expression: write.value,
+      sink: write.attr,
+      source: 'server-render',
+      writer: write.writer,
+    };
+  }
+  return contexts;
 }
 
 function renderHostStampWrites(
@@ -506,53 +610,59 @@ function renderHostStampWrites(
 
   if (componentIdentity) {
     if (componentIdentity.mode === 'replace') {
-      const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-c');
+      const existing = serverElementAttribute(hostElement, 'kovo-c');
       if (existing) {
-        conflicts.push({ attribute: existing, attr: 'kovo-c', writer: 'host identity stamp' });
+        conflicts[conflicts.length] = {
+          attribute: existing,
+          attr: 'kovo-c',
+          writer: 'host identity stamp',
+        };
       }
     }
-    writes.push(componentIdentity);
+    writes[writes.length] = componentIdentity;
   }
   if (declaredQueryDeps) {
-    writes.push(declaredQueryDeps);
+    writes[writes.length] = declaredQueryDeps;
   }
   if (fragmentTarget) {
     if (fragmentTarget.mode === 'replace') {
-      const existing = hostElement.attributes.find(
-        (attribute) => attribute.name === 'kovo-fragment-target',
-      );
+      const existing = serverElementAttribute(hostElement, 'kovo-fragment-target');
       if (existing) {
-        conflicts.push({
+        conflicts[conflicts.length] = {
           attribute: existing,
           attr: 'kovo-fragment-target',
           writer: 'host fragment target stamp',
-        });
+        };
       }
     }
-    writes.push(fragmentTarget);
+    writes[writes.length] = fragmentTarget;
   }
   if (liveComponent) {
-    writes.push(liveComponent);
+    writes[writes.length] = liveComponent;
   }
   if (stateJson) {
-    const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-state');
+    const existing = serverElementAttribute(hostElement, 'kovo-state');
     if (existing) {
       if (!sameEscapedOrRawAttributeValue(existing.value, stateJson)) {
-        conflicts.push({ attribute: existing, attr: 'kovo-state', writer: 'host state stamp' });
+        conflicts[conflicts.length] = {
+          attribute: existing,
+          attr: 'kovo-state',
+          writer: 'host state stamp',
+        };
       }
-      writes.push({
+      writes[writes.length] = {
         attr: 'kovo-state',
         mode: 'preserve',
         value: stateJson,
         writer: 'host state stamp',
-      });
+      };
     } else {
-      writes.push({
+      writes[writes.length] = {
         attr: 'kovo-state',
         mode: 'insert',
         value: stateJson,
         writer: 'host state stamp',
-      });
+      };
     }
   }
 
@@ -580,9 +690,7 @@ function inferredFragmentTargetStamp(
 ): ServerRenderStampWriteFact | null {
   if (!componentHasInferredFragmentTarget(component)) return null;
 
-  const existing = hostElement.attributes.find(
-    (attribute) => attribute.name === 'kovo-fragment-target',
-  );
+  const existing = serverElementAttribute(hostElement, 'kovo-fragment-target');
   if (existing) {
     return {
       attr: 'kovo-fragment-target',
@@ -605,9 +713,9 @@ function componentIdentityStamp(
   domComponentName: string,
 ): ServerRenderStampWriteFact | null {
   const tagName = hostElement.tag;
-  if (tagName !== tagName.toLowerCase()) return null;
-  if (tagName === domComponentName || tagName.includes('-')) return null;
-  const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-c');
+  if (tagName !== compilerStringToLowerCase(tagName)) return null;
+  if (tagName === domComponentName || compilerStringIncludes(tagName, '-')) return null;
+  const existing = serverElementAttribute(hostElement, 'kovo-c');
   if (existing) {
     return {
       attr: 'kovo-c',
@@ -632,18 +740,34 @@ function declaredQueryDepsStamp(
   const deps = componentQueryDependencyTokens(component);
   if (deps.length === 0) return null;
 
-  const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-deps');
+  const existing = serverElementAttribute(hostElement, 'kovo-deps');
   const existingDeps = splitDepValue(existing?.value ?? '');
-  const mergedDeps = mergeDepValues(
-    existingDeps.map((value) => ({ value })),
-    deps,
-  );
+  const existingTokens: QueryDependencyToken[] = [];
+  for (let index = 0; index < existingDeps.length; index += 1) {
+    existingTokens[existingTokens.length] = { value: existingDeps[index]! };
+  }
+  const mergedDeps = mergeDepValues(existingTokens, deps);
   const depValue = renderQueryDependencyTokens(mergedDeps);
+  let hasExpression = false;
+  for (let index = 0; index < mergedDeps.length; index += 1) {
+    if (mergedDeps[index]!.kind === 'expression') {
+      hasExpression = true;
+      break;
+    }
+  }
+  if (hasExpression) {
+    return {
+      attr: 'kovo-deps',
+      mode: existing ? 'replace' : 'insert',
+      value: depValue,
+      valueKind: 'expression',
+      writer: 'host dependency stamp',
+    };
+  }
   return {
     attr: 'kovo-deps',
     mode: existing ? 'replace' : 'insert',
     value: depValue,
-    ...(mergedDeps.some((dep) => dep.kind === 'expression') ? { valueKind: 'expression' } : {}),
     writer: 'host dependency stamp',
   };
 }
@@ -653,50 +777,84 @@ type QueryDependencyToken =
   | { fallback: string; kind: 'expression'; value: string };
 
 function componentQueryDependencyTokens(component: ComponentModel): QueryDependencyToken[] {
-  return componentOptionObjectEntriesFor(component, 'queries').map((entry) => {
+  const entries = compilerSnapshotDenseArray(
+    componentOptionObjectEntriesFor(component, 'queries'),
+    'Component query dependency entries',
+  );
+  const tokens: QueryDependencyToken[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
     const expression = queryKeyExpressionForBinding(entry);
-    return expression
+    tokens[tokens.length] = expression
       ? { fallback: entry.key, kind: 'expression', value: expression }
       : { value: entry.key };
-  });
+  }
+  return tokens;
 }
 
 function queryKeyExpressionForBinding(entry: ObjectLiteralEntry): string | null {
   const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
   if (!queryExpression) return null;
   if (queryExpression === entry.key || queryExpression === `${entry.key}Query`) return null;
-  return `${queryExpression}.key ?? ${JSON.stringify(entry.key)}`;
+  return `${queryExpression}.key ?? ${serverJsonSource(entry.key, 'Query dependency key')}`;
 }
 
 function mergeDepValues(
   existing: readonly QueryDependencyToken[],
   declared: readonly QueryDependencyToken[],
 ): QueryDependencyToken[] {
-  const seen = new Set<string>();
+  const seen = compilerCreateSet<string>();
   const merged: QueryDependencyToken[] = [];
-  for (const dep of [...existing, ...declared]) {
-    const key = dep.kind === 'expression' ? `expr:${dep.value}` : `lit:${dep.value}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(dep);
+  const groups = [existing, declared];
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const group = compilerSnapshotDenseArray(groups[groupIndex]!, 'Query dependency tokens');
+    for (let index = 0; index < group.length; index += 1) {
+      const dep = group[index]!;
+      const key = dep.kind === 'expression' ? `expr:${dep.value}` : `lit:${dep.value}`;
+      if (compilerSetHas(seen, key)) continue;
+      compilerSetAdd(seen, key);
+      merged[merged.length] = dep;
+    }
   }
   return merged;
 }
 
 function renderQueryDependencyTokens(deps: readonly QueryDependencyToken[]): string {
-  if (!deps.some((dep) => dep.kind === 'expression')) {
-    return deps.map((dep) => dep.value).join(' ');
+  const snapshot = compilerSnapshotDenseArray(deps, 'Rendered query dependency tokens');
+  let hasExpression = false;
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (snapshot[index]!.kind === 'expression') {
+      hasExpression = true;
+      break;
+    }
   }
-  return `[${deps.map(renderQueryDependencyExpressionElement).join(', ')}].join(' ')`;
+  const values: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const dep = snapshot[index]!;
+    values[values.length] = hasExpression ? renderQueryDependencyExpressionElement(dep) : dep.value;
+  }
+  return hasExpression
+    ? `[${joinServerStrings(values, ', ')}].join(' ')`
+    : joinServerStrings(values, ' ');
 }
 
 function renderQueryDependencyExpressionElement(dep: QueryDependencyToken): string {
-  return dep.kind === 'expression' ? `(${dep.value})` : JSON.stringify(dep.value);
+  return dep.kind === 'expression'
+    ? `(${dep.value})`
+    : serverJsonSource(dep.value, 'Query dependency literal');
 }
 
 function staticStateJson(component: ComponentModel): string | null {
   const stateObject = component.stateReturnObject ?? null;
-  return stateObject?.staticValue ? JSON.stringify(stateObject.staticValue) : null;
+  return stateObject?.staticValue
+    ? serverJsonSource(stateObject.staticValue, 'Static component state')
+    : null;
+}
+
+function serverJsonSource(value: unknown, label: string): string {
+  const source = compilerJsonStringify(value);
+  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  return source;
 }
 
 interface HostStampConflict {
@@ -724,15 +882,19 @@ function renderHostStampConflictDiagnostics(
   conflicts: readonly HostStampConflict[],
   options: { fileName: string; source: string },
 ): CompilerDiagnostic[] {
-  return conflicts.map((conflict) =>
-    writerConflictDiagnostic(
+  const snapshot = compilerSnapshotDenseArray(conflicts, 'Host stamp conflicts');
+  const diagnostics: CompilerDiagnostic[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const conflict = snapshot[index]!;
+    diagnostics[diagnostics.length] = writerConflictDiagnostic(
       options,
       conflict.attribute,
       conflict.attr,
       'author JSX',
       conflict.writer,
-    ),
-  );
+    );
+  }
+  return diagnostics;
 }
 
 function handlerStampConflictDiagnostics(
@@ -741,29 +903,42 @@ function handlerStampConflictDiagnostics(
   options: { fileName: string; source: string },
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Handler stamp conflict handlers');
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Handler stamp conflict elements');
 
-  for (const handler of handlers) {
-    const element = model.jsxElements.find(
-      (candidate) =>
-        handler.attributeStart >= candidate.start && handler.attributeEnd <= candidate.openingEnd,
-    );
+  for (let handlerIndex = 0; handlerIndex < handlerSnapshot.length; handlerIndex += 1) {
+    const handler = handlerSnapshot[handlerIndex]!;
+    let element: JsxElementModel | undefined;
+    for (let index = 0; index < elements.length; index += 1) {
+      const candidate = elements[index]!;
+      if (
+        handler.attributeStart >= candidate.start &&
+        handler.attributeEnd <= candidate.openingEnd
+      ) {
+        element = candidate;
+        break;
+      }
+    }
     if (!element) continue;
 
-    const generatedAttrs = [
-      ...handler.params.map((param) => param.attributeName),
-      ...(emitElementParamTypes(handler.params) ? ['kovo-param-types'] : []),
-    ];
-    for (const name of generatedAttrs) {
-      const existing = element.attributes.find((attribute) => attribute.name === name);
+    const params = compilerSnapshotDenseArray(handler.params, 'Handler conflict parameters');
+    const generatedAttrs: string[] = [];
+    for (let index = 0; index < params.length; index += 1) {
+      generatedAttrs[generatedAttrs.length] = params[index]!.attributeName;
+    }
+    if (emitElementParamTypes(params).length > 0) {
+      generatedAttrs[generatedAttrs.length] = 'kovo-param-types';
+    }
+    for (let index = 0; index < generatedAttrs.length; index += 1) {
+      const name = generatedAttrs[index]!;
+      const existing = serverElementAttribute(element, name);
       if (!existing) continue;
-      diagnostics.push(
-        writerConflictDiagnostic(
-          options,
-          existing,
-          name,
-          'author JSX',
-          'event handler param lowering',
-        ),
+      diagnostics[diagnostics.length] = writerConflictDiagnostic(
+        options,
+        existing,
+        name,
+        'author JSX',
+        'event handler param lowering',
       );
     }
   }
@@ -771,11 +946,26 @@ function handlerStampConflictDiagnostics(
   return diagnostics;
 }
 
+function serverElementAttribute(
+  element: JsxElementModel,
+  name: string,
+): JsxAttributeModel | undefined {
+  const attributes = compilerSnapshotDenseArray(element.attributes, 'Server JSX attributes');
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.name === name) return attribute;
+  }
+  return undefined;
+}
+
 function openingTagAttributeInsertion(
   hostElement: JsxElementModel,
   attributes: readonly string[],
 ): { position: number; replacement: string } {
-  const attributeSource = attributes.join(' ');
+  const attributeSource = joinServerStrings(
+    compilerSnapshotDenseArray(attributes, 'Opening-tag attributes'),
+    ' ',
+  );
   if (!hostElement.selfClosing) {
     return { position: hostElement.openingEnd - 1, replacement: ` ${attributeSource}` };
   }
@@ -790,7 +980,11 @@ function openingTagAttributeInsertion(
 }
 
 function templateLiteral(value: string): string {
-  return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')}\``;
+  return `\`${compilerStringReplaceAll(
+    compilerStringReplaceAll(compilerStringReplaceAll(value, '\\', '\\\\'), '`', '\\`'),
+    '${',
+    '\\${',
+  )}\``;
 }
 
 function renderSourceModule(renderedSource: string, exportPrefix: '' | 'export '): string {
