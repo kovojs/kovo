@@ -231,6 +231,28 @@ describe('sink-policy gate', () => {
         'packages/server/src/command.ts',
         `
           const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
+          const commandAllowlists = createWitnessWeakMap();
+          export function cmd(value) {
+            const allowedPrograms = witnessWeakMapGet(commandAllowlists, options.allow);
+            if (!witnessSetHas(allowedPrograms as Set<string>, program)) throw new TypeError();
+            return blessSink(COMMAND_EXEC_FILE_SINK, value);
+          }
+          export function isCommand(value) {
+            return isBlessedSink(COMMAND_EXEC_FILE_SINK, value);
+          }
+          export function runCommand(command) {
+            const execOptions = { shell: false };
+            execFile(command.program, [...command.argv], execOptions, () => {});
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      commandPrimitiveInvariantFindings(
+        'packages/server/src/command.ts',
+        `
+          const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
           const commandAllowlists = new WeakMap();
           export function cmd(value) {
             const allowedPrograms = commandAllowlists.get(options?.allow);
@@ -1636,6 +1658,37 @@ describe('sink-policy gate', () => {
           }
           export function formatLogMessage(strings: TemplateStringsArray, ...values: unknown[]): string {
             return neutralizeLogValue(String.raw(strings, ...values));
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      logChannelNeutralizerInvariantFindings(
+        'packages/server/src/logging.ts',
+        `
+          export function neutralizeLogValue(value: unknown): string {
+            return loggingNeutralizeControlCharacters(loggingString(scrubSecretLifecycleValue(value)));
+          }
+          export function formatLogMessage(strings: TemplateStringsArray, ...values: unknown[]): string {
+            return neutralizeLogValue(values);
+          }
+        `,
+      ),
+    ).toEqual([]);
+    expect(
+      logChannelNeutralizerInvariantFindings(
+        'packages/server/src/logging-intrinsics.ts',
+        `
+          export function loggingNeutralizeControlCharacters(value: string): string {
+            let result = '';
+            for (let index = 0; index < value.length; index += 1) {
+              const code = characterCodeAt(value, index);
+              if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) {
+                result += visibleControlEscape(code);
+              }
+            }
+            return result;
           }
         `,
       ),

@@ -1220,16 +1220,24 @@ const assertSqlWriteTablesAllowed = securityClassifier(
     }
     if (unexpected.length === 0) return;
 
-    throw new Error(
-      [
-        'KV406: raw-SQL write touched table(s) outside the declared mutation registry tables (SPEC §10.3/§11.2).',
-        `  unexpected: ${[...new Set(unexpected)].sort().join(', ')}`,
-        `  declared tables: ${[...new Set(declaredTables ?? [])].sort().join(', ') || '<none>'}`,
-        `  touches: ${[...new Set(writePolicy?.touches ?? [])].sort().join(', ') || '<none>'}`,
-      ].join('\n'),
-    );
+    throwUnexpectedSqlWriteTables(unexpected, declaredTables, writePolicy);
   },
 );
+
+function throwUnexpectedSqlWriteTables(
+  unexpected: readonly string[],
+  declaredTables: readonly string[] | undefined,
+  writePolicy: ManagedSqlWritePolicy,
+): never {
+  throw new Error(
+    [
+      'KV406: raw-SQL write touched table(s) outside the declared mutation registry tables (SPEC §10.3/§11.2).',
+      `  unexpected: ${[...new Set(unexpected)].sort().join(', ')}`,
+      `  declared tables: ${[...new Set(declaredTables ?? [])].sort().join(', ') || '<none>'}`,
+      `  touches: ${[...new Set(writePolicy.touches ?? [])].sort().join(', ') || '<none>'}`,
+    ].join('\n'),
+  );
+}
 
 const assertReadSqlStatement = securityClassifier(
   'server.sql.read-only-statement',

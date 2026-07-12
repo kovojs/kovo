@@ -57,7 +57,10 @@ export const defaultRequestBodyParserChokeFiles = [
 
 export const defaultLogChannelRoots = ['packages/server/src'];
 
-export const defaultLogChannelNeutralizerFiles = ['packages/server/src/logging.ts'];
+export const defaultLogChannelNeutralizerFiles = [
+  'packages/server/src/logging.ts',
+  'packages/server/src/logging-intrinsics.ts',
+];
 
 export const defaultRedirectLocationHeaderFiles = productionSourceRoots;
 
@@ -1673,6 +1676,29 @@ export function logChannelSinkFindings(filePath, text, options = {}) {
 export function logChannelNeutralizerInvariantFindings(filePath, text) {
   const source = stripComments(text);
   const findings = [];
+  const delegatesToPinnedNeutralizer =
+    /\bloggingNeutralizeControlCharacters\s*\(\s*loggingString\s*\(/.test(source);
+  const definesPinnedNeutralizer =
+    /\bexport\s+function\s+loggingNeutralizeControlCharacters\s*\(\s*value\s*:\s*string\s*\)\s*:\s*string/.test(
+      source,
+    );
+
+  if (definesPinnedNeutralizer) {
+    if (
+      !/\bcode\s*<=\s*0x1f\b/.test(source) ||
+      !/\bcode\s*>=\s*0x7f\s*&&\s*code\s*<=\s*0x9f\b/.test(source)
+    ) {
+      findings.push(
+        `${filePath}: pinned log-channel neutralizer must cover ASCII and C1 control characters`,
+      );
+    }
+    if (!/(?:\+=|\+)\s*visibleControlEscape\s*\(\s*code\s*\)/.test(source)) {
+      findings.push(
+        `${filePath}: pinned log-channel neutralizer must replace control characters with visible escapes`,
+      );
+    }
+    return findings;
+  }
 
   if (
     !/\bexport\s+function\s+neutralizeLogValue\s*\(\s*value\s*:\s*unknown\s*\)\s*:\s*string/.test(
@@ -1692,12 +1718,13 @@ export function logChannelNeutralizerInvariantFindings(filePath, text) {
       `${filePath}: log-channel neutralizer must export formatLogMessage() for tagged request log messages`,
     );
   }
-  if (!/\\u0000-\\u001f\\u007f-\\u009f/.test(source)) {
+  if (!delegatesToPinnedNeutralizer && !/\\u0000-\\u001f\\u007f-\\u009f/.test(source)) {
     findings.push(
       `${filePath}: log-channel neutralizer must cover ASCII and C1 control characters`,
     );
   }
   if (
+    !delegatesToPinnedNeutralizer &&
     !/\.replace\s*\(\s*CONTROL_CHARACTER_PATTERN\s*,\s*visibleControlEscape\s*,?\s*\)/.test(source)
   ) {
     findings.push(
@@ -1726,12 +1753,20 @@ export function commandPrimitiveInvariantFindings(filePath, text) {
       `${filePath}: cmd() must mint Command values with the registered command execution witness`,
     );
   }
-  if (!/\bcommandAllowlists\s*\.get\s*\(\s*options\s*\?\.\s*allow\s*\)/.test(source)) {
+  const readsExplicitAllowlist =
+    /\bcommandAllowlists\s*\.get\s*\(\s*options\s*\?\.\s*allow\s*\)/.test(source) ||
+    /\bwitnessWeakMapGet\s*\(\s*commandAllowlists\s*,\s*options\s*\.\s*allow\s*\)/.test(source);
+  if (!readsExplicitAllowlist) {
     findings.push(
       `${filePath}: cmd() must require an explicit commandAllowlist before minting Command values`,
     );
   }
-  if (!/\ballowedPrograms\s*\.has\s*\(\s*program\s*\)/.test(source)) {
+  const checksAllowedProgram =
+    /\ballowedPrograms\s*\.has\s*\(\s*program\s*\)/.test(source) ||
+    /\bwitnessSetHas\s*\(\s*allowedPrograms(?:\s+as\s+Set\s*<\s*string\s*>)?\s*,\s*program\s*\)/.test(
+      source,
+    );
+  if (!checksAllowedProgram) {
     findings.push(`${filePath}: cmd() must deny programs absent from the explicit allowlist`);
   }
   if (!/\bisBlessedSink\s*(?:<[^>()]*>)?\s*\(\s*COMMAND_EXEC_FILE_SINK\s*,/.test(source)) {
