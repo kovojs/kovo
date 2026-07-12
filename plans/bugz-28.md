@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
 | Critical |    62 | C1-C62 |
-| High     |    31 | H1-H31 |
+| High     |    32 | H1-H32 |
 | Medium   |     9 | M1-M9  |
 
 ## Critical
@@ -1070,6 +1070,18 @@ This is an active closure ledger; `SPEC.md` remains normative.
     snapshots with boot-pinned DOM/string controls; changed or ambiguous segments morph/replace (or
     fail closed to full navigation), and prototype poisoning cannot preserve stale privileged DOM.
 
+- [ ] **H32 - Mutable query-result capping publishes unbounded attacker-expanded responses.**
+      `packages/server/src/query.ts`
+  - The API4 result ceiling used live `Array.isArray`, `slice`, `map`, `push`, WeakMap, and object
+    traversal. Selective late mutation made a real `renderQueryEndpointResponse()` publish row 101
+    without the `QUERY_LIST_LIMIT` warning; independently, one source row expanded to 10,000 rows
+    after the cap decision.
+  - **Acceptance:** result shape recognition, graph/cycle traversal, list truncation, reconstruction,
+    amplification accounting, and warning emission use boot-pinned collection/reflection controls
+    over one bounded framework-owned snapshot; late/import-order mutation cannot exceed the API4
+    list/depth/node/byte ceilings or suppress the corresponding warning, while in-bound results
+    retain their wire shape.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -1163,7 +1175,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 ## Latest verification
 
 The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C62, H20, H27,
-and H31 are active compiler-cache, static-analysis, browser/server authority/output, and
+and H31-H32 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
 evidence is
