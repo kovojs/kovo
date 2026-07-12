@@ -48,6 +48,14 @@ import {
 } from '../shared.js';
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 import { executableJavaScriptExpression } from '../javascript-expression.js';
+import {
+  compilerArrayLength,
+  compilerDefineOwnDataProperty,
+  compilerOwnDataValue,
+  compilerSetHas,
+  compilerStringSplit,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 import {
@@ -203,7 +211,6 @@ export function lowerStructuralJsx(
     tree.elements,
     boundElementStarts,
     model,
-    knownQueries,
     outputContexts,
   );
   const escapeApplied = inlineTextEscapeApplied || staticTextEscapeApplied;
@@ -1356,28 +1363,54 @@ function escapeStaticTextInterpolations(
   elements: readonly JsxIrElement[],
   boundElementStarts: ReadonlySet<number>,
   model: ComponentModuleModel,
-  knownQueries: ReadonlySet<string>,
   outputContexts: GeneratedOutputWriteFact[],
 ): boolean {
   let applied = false;
-  for (const element of elements) {
-    if (boundElementStarts.has(element.element.start)) continue;
-    if (
-      element.attributes.some(
-        (attribute) =>
-          attribute.name === 'data-bind' ||
-          attribute.name.startsWith('data-bind:') ||
-          attribute.name === 'data-derive' ||
-          attribute.name === 'data-derive-attr',
-      )
-    ) {
-      continue;
+  const elementLength = compilerArrayLength(elements, 'Static text JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Static text JSX elements',
+    ) as JsxIrElement;
+    if (compilerSetHas(boundElementStarts, element.element.start)) continue;
+
+    let generatedBinding = false;
+    const attributeLength = compilerArrayLength(
+      element.attributes,
+      'Static text JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'Static text JSX attributes',
+      ) as JsxIrAttribute;
+      if (
+        attribute.name === 'data-bind' ||
+        compilerStringStartsWith(attribute.name, 'data-bind:') ||
+        attribute.name === 'data-derive' ||
+        attribute.name === 'data-derive-attr'
+      ) {
+        generatedBinding = true;
+        break;
+      }
     }
-    for (const child of directExpressionChildren(element)) {
+    if (generatedBinding) continue;
+
+    const childLength = compilerArrayLength(element.children, 'Static text JSX children');
+    for (let childIndex = 0; childIndex < childLength; childIndex += 1) {
+      const child = compilerOwnDataValue(
+        element.children,
+        childIndex,
+        'Static text JSX children',
+      ) as JsxIrChild;
+      if (child.kind !== 'expression') continue;
       if (child.replacement) continue;
-      if (!shouldEscapeStaticTextExpression(child.expression, model, knownQueries)) continue;
+      if (!shouldEscapeStaticTextExpression(child.expression, model)) continue;
       child.replacement = `{escapeText(${child.expression.expression})}`;
-      outputContexts.push(
+      appendCompilerFact(
+        outputContexts,
         outputWriteFact({
           context: 'text',
           expression: child.expression.expression,
@@ -1385,6 +1418,7 @@ function escapeStaticTextInterpolations(
           source: 'server-render',
           writer: 'static text interpolation escape',
         }),
+        'Static text output contexts',
       );
       applied = true;
     }
@@ -1395,48 +1429,99 @@ function escapeStaticTextInterpolations(
 function shouldEscapeStaticTextExpression(
   expression: JsxExpressionModel,
   model: ComponentModuleModel,
-  knownQueries: ReadonlySet<string>,
 ): boolean {
   if (expression.solePropertyAccessPath !== undefined) return true;
   if (isExplicitHtmlCompositionExpression(expression, model)) return false;
-  const reactiveRoots = new Set(
-    expression.propertyAccesses
-      .map((access) => queryNameFromPath(access.path))
-      .filter((root): root is string => root !== null),
-  );
-  if (reactiveRoots.has('state')) return true;
-  if ([...reactiveRoots].some((root) => knownQueries.has(root))) return true;
+  if (compilerArrayLength(expression.propertyAccesses, 'Static text property accesses') > 0) {
+    return true;
+  }
 
-  if (reactiveRoots.size > 0) return true;
-  const renderInputNames = new Set(
-    model.components.flatMap((component) => component.renderInputs.map((input) => input.name)),
-  );
-  return expression.references.some((reference) => renderInputNames.has(reference));
+  const referenceLength = compilerArrayLength(expression.references, 'Static text references');
+  const componentLength = compilerArrayLength(model.components, 'Static text components');
+  for (let referenceIndex = 0; referenceIndex < referenceLength; referenceIndex += 1) {
+    const reference = compilerOwnDataValue(
+      expression.references,
+      referenceIndex,
+      'Static text references',
+    ) as string;
+    for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+      const component = compilerOwnDataValue(
+        model.components,
+        componentIndex,
+        'Static text components',
+      ) as ComponentModuleModel['components'][number];
+      const inputLength = compilerArrayLength(
+        component.renderInputs,
+        'Static text render inputs',
+      );
+      for (let inputIndex = 0; inputIndex < inputLength; inputIndex += 1) {
+        const input = compilerOwnDataValue(
+          component.renderInputs,
+          inputIndex,
+          'Static text render inputs',
+        ) as { name: string };
+        if (input.name === reference) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function isExplicitHtmlCompositionExpression(
   expression: JsxExpressionModel,
   model: ComponentModuleModel,
 ): boolean {
-  if (
-    expression.propertyAccesses.some((access) => {
-      const parts = access.path.split('.');
-      return parts.at(-2) === 'definition' && parts.at(-1) === 'render';
-    })
-  ) {
-    return true;
-  }
-  const call = model.calls.find(
-    (item) => item.start >= expression.start && item.end <= expression.end,
+  const accessLength = compilerArrayLength(
+    expression.propertyAccesses,
+    'HTML composition property accesses',
   );
+  for (let accessIndex = 0; accessIndex < accessLength; accessIndex += 1) {
+    const access = compilerOwnDataValue(
+      expression.propertyAccesses,
+      accessIndex,
+      'HTML composition property accesses',
+    ) as { path: string };
+    const parts = compilerStringSplit(access.path, '.');
+    const partLength = compilerArrayLength(parts, 'HTML composition access parts');
+    if (
+      partLength >= 2 &&
+      compilerOwnDataValue(parts, partLength - 2, 'HTML composition access parts') ===
+        'definition' &&
+      compilerOwnDataValue(parts, partLength - 1, 'HTML composition access parts') === 'render'
+    ) {
+      return true;
+    }
+  }
+  let call: ComponentModuleModel['calls'][number] | undefined;
+  const callLength = compilerArrayLength(model.calls, 'HTML composition calls');
+  for (let callIndex = 0; callIndex < callLength; callIndex += 1) {
+    const candidate = compilerOwnDataValue(
+      model.calls,
+      callIndex,
+      'HTML composition calls',
+    ) as ComponentModuleModel['calls'][number];
+    if (candidate.start >= expression.start && candidate.end <= expression.end) {
+      call = candidate;
+      break;
+    }
+  }
   if (!call) return false;
   // SPEC §6.6(1) / §5.2 rule 9: recognize the `trustedHtml`/`safeRichHtml` brand by AST
   // symbol-identity (the local name bound to the real `@kovojs/browser` export), never by the raw
   // call name — so a shadowing local or a same-named foreign import is not treated as trusted
   // HTML composition.
-  if (trustedHtmlBrandLocalNames(model).has(call.name)) return true;
-  const parts = call.name.split('.');
-  return parts.at(-2) === 'definition' && parts.at(-1) === 'render';
+  if (compilerSetHas(trustedHtmlBrandLocalNames(model), call.name)) return true;
+  const parts = compilerStringSplit(call.name, '.');
+  const partLength = compilerArrayLength(parts, 'HTML composition call parts');
+  return (
+    partLength >= 2 &&
+    compilerOwnDataValue(parts, partLength - 2, 'HTML composition call parts') === 'definition' &&
+    compilerOwnDataValue(parts, partLength - 1, 'HTML composition call parts') === 'render'
+  );
+}
+
+function appendCompilerFact<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
 }
 
 function mergeStyle(
@@ -1821,10 +1906,6 @@ function expressionChildren(elements: readonly JsxIrElement[]): JsxIrExpression[
   };
   elements.forEach((element) => element.children.forEach(visit));
   return result;
-}
-
-function directExpressionChildren(element: JsxIrElement): JsxIrExpression[] {
-  return element.children.filter((child): child is JsxIrExpression => child.kind === 'expression');
 }
 
 function soleExpressionChild(element: JsxIrElement): JsxIrExpression | null {

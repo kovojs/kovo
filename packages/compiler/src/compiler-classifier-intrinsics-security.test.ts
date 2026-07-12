@@ -529,4 +529,45 @@ export const PayButton = component({
     }
     expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
   });
+
+  it('cannot suppress required static text escaping through attribute Array.some', () => {
+    const nativeSome = Array.prototype.some;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeStringIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.some = function poisonedStaticTextAttributeSome<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): boolean {
+        const first = this[0] as { name?: unknown } | undefined;
+        const callbackSource = nativeApply<string>(nativeFunctionToString, callback, []);
+        if (
+          this.length === 1 &&
+          first?.name === 'class' &&
+          nativeApply<boolean>(nativeStringIncludes, callbackSource, ['data-derive-attr']) &&
+          nativeApply<boolean>(nativeStringIncludes, callbackSource, ['data-bind'])
+        ) {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeSome, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'product-card.tsx',
+        source: `
+export const ProductCard = component({
+  render: ({ product }) => <h2 class="title">{product.name}</h2>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+
+    expect(result?.files[0]?.source).toContain('{escapeText(product.name)}');
+    expect(poisonHits).toBe(0);
+  });
 });
