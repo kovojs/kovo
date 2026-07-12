@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    20 | H1-H20 |
+| High     |    21 | H1-H21 |
 | Medium   |     8 | M1-M8 |
 
 ## Critical
@@ -300,6 +300,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     boot-pinned, semantically checked controls; late/import-order poison cannot cross-bind module
     bytes, forge an unchanged build token, or alias unversioned/out-of-registry paths.
 
+- [ ] **H21 - Mutable schema-validator traversal can skip every declared refinement.**
+      `packages/server/src/schema.ts`
+  - A selective late `Array.prototype[Symbol.iterator]` override returned an empty iterator only for
+    the private string-check array. A closed `s.string().email().pattern('^[a-z]+$')` schema then
+    accepted and returned `not an email!` without running either refinement.
+  - **Acceptance:** scalar/string/date/file refinements, control/regex/linear-pattern checks,
+    collection and shape-budget traversal, file accept/sniff constraints, numeric parsing, and error
+    path construction use boot-pinned, semantically checked operations; late/import-order poison
+    cannot skip, replace, or reorder any declared validation while genuine inputs remain compatible.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -376,7 +386,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15-H20, and M7-M8 are active
+The remediation pass remains intentionally non-zero: C10-C12, H15-H21, and M7-M8 are active
 capability, request-carrier, response/deferred/mutation/client output, task/guard, request-limit, and
 replay fixes.
 Integrated
