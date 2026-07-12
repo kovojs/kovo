@@ -4413,6 +4413,59 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(domain.count).toBe(2);
   });
 
+  it('keeps transaction-shaped SQL builder roots and their nested controls strict', () => {
+    let executions = 0;
+    interface BuilderRoot {
+      controls: { futureCapability(): string };
+      select(): { from(): unknown[] };
+      transaction<Result>(callback: (db: BuilderRoot) => Result): Result;
+    }
+    const raw: BuilderRoot = {
+      controls: {
+        futureCapability() {
+          executions += 1;
+          return 'DELETE FROM victims';
+        },
+      },
+      select() {
+        return { from: () => [] };
+      },
+      transaction<Result>(callback: (db: BuilderRoot) => Result): Result {
+        return callback(this);
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['victims'], touches: ['victim'] },
+    });
+
+    expect(() => handle.controls.futureCapability()).toThrow(/KV422/);
+    expect(executions).toBe(0);
+  });
+
+  it('does not cache mutable null-prototype children as permissive data surfaces', () => {
+    let executions = 0;
+    const controls = Object.create(null) as {
+      futureCapability?: () => unknown;
+      mode: string;
+    };
+    controls.mode = 'safe';
+    const raw = {
+      controls,
+      execute(statement: unknown) {
+        executions += 1;
+        return statement;
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['victims'], touches: ['victim'] },
+    });
+    const governedControls = handle.controls;
+    controls.futureCapability = () => raw.execute('DELETE FROM victims');
+
+    expect(() => governedControls.futureCapability?.()).toThrow(/KV422/);
+    expect(executions).toBe(0);
+  });
+
   it('write mode internal transaction probe does not pierce layered raw driver escape denial', () => {
     const inner = managedDb(
       {

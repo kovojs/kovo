@@ -2385,11 +2385,11 @@ describe('server createApp request shell', () => {
 
   it('provisions db and session through createApp for routes, queries, and enhanced refresh', async () => {
     interface AppDb {
-      count: number;
       reads: string[];
       select(userId?: string): { count: number };
+      state: { count: number; lastWriter: string };
       transaction<Result>(callback: (db: AppDb) => Result): Result;
-      writes: string[];
+      update(table: string): { set(value: { count: number; lastWriter: string }): void };
     }
 
     type AppRequest = Request & {
@@ -2397,17 +2397,27 @@ describe('server createApp request shell', () => {
       session: { user: { id: string } } | null;
     };
 
+    const state = Object.create(null) as AppDb['state'];
+    state.count = 1;
+    state.lastWriter = '';
     const db: AppDb = {
-      count: 1,
       reads: [],
       select(userId?: string) {
         if (userId) this.reads.push(userId);
-        return { count: this.count };
+        return { count: this.state.count };
       },
+      state,
       transaction<Result>(callback: (transactionDb: AppDb) => Result) {
         return callback(this);
       },
-      writes: [],
+      update() {
+        return {
+          set(value) {
+            state.count = value.count;
+            state.lastWriter = value.lastWriter;
+          },
+        };
+      },
     };
     const cart = domain('cart');
     // SPEC §6.6/§9.1: a session-authenticated mutation must stay CSRF-checked (KV418 forbids the
@@ -2430,9 +2440,12 @@ describe('server createApp request shell', () => {
         touches: [cart],
       },
       handler(input, request: AppRequest) {
-        request.db.count += input.quantity;
-        request.db.writes.push(request.session?.user.id ?? 'anonymous');
-        return { count: request.db.count };
+        const count = request.db.select().count + input.quantity;
+        request.db.update('cart_state').set({
+          count,
+          lastWriter: request.session?.user.id ?? 'anonymous',
+        });
+        return { count };
       },
     });
     const handler = createRequestHandler(
@@ -2510,14 +2523,14 @@ describe('server createApp request shell', () => {
       ].join('\n'),
     );
     expect(db.reads).toEqual(['u1', 'u1']);
-    expect(db.writes).toEqual(['u1']);
+    expect(db.state.lastWriter).toBe('u1');
 
     const endpointResponse = await handler(
       new Request('https://example.test/webhook', { method: 'POST' }),
     );
     expect(endpointResponse.status).toBe(200);
     await expect(endpointResponse.text()).resolves.toBe('endpoint-db:false');
-    expect(db.writes).toEqual(['u1']);
+    expect(db.state.lastWriter).toBe('u1');
   });
 
   it('reruns layout query chunks from generated layout live-target stamps', async () => {

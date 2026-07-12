@@ -1931,19 +1931,28 @@ function isDomainTransactionSurface(target: object): boolean {
 
 function hasDirectManagedSqlAuthoritySurface(target: object): boolean {
   const properties = [
+    '$count',
     '$client',
     '$primary',
     '$replicas',
+    '$with',
     'all',
+    'delete',
     'exec',
     'execute',
     'get',
+    'insert',
     'prepare',
     'query',
     'run',
+    'select',
+    'selectDistinct',
+    'selectDistinctOn',
     'session',
     'sql',
+    'update',
     'values',
+    'with',
   ] as const;
   for (let index = 0; index < properties.length; index += 1) {
     let owner: object | null = target;

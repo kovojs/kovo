@@ -78,7 +78,7 @@ describe('server mutation lifecycle', () => {
       get commits() {
         return state.commits;
       },
-      insert(id: string) {
+      addRow(id: string) {
         rows.push(id);
       },
       get rollbacks() {
@@ -201,7 +201,7 @@ describe('server mutation lifecycle', () => {
       get commits() {
         return state.commits;
       },
-      insert(id: string) {
+      addRow(id: string) {
         rows.push(id);
       },
       get jobs() {
@@ -560,7 +560,7 @@ describe('server mutation lifecycle', () => {
     const addContact = mutation('contacts/add', {
       input: s.object({ id: s.string() }),
       handler(input, request: { db: ReturnType<typeof createTransactionalListDb> }) {
-        request.db.insert(input.id);
+        request.db.addRow(input.id);
         throw new Error('boom');
       },
     });
@@ -629,7 +629,7 @@ describe('server mutation lifecycle', () => {
         input,
         request: { db: ReturnType<typeof createTransactionalTaskDb> } & TaskSchedulingRequest,
       ) {
-        request.db.insert(input.orderId);
+        request.db.addRow(input.orderId);
         const handle = await request.schedule(sendReceipt, { orderId: input.orderId });
         const typedTask: 'receipt/send' = handle.task;
         return typedTask;
@@ -865,7 +865,7 @@ describe('server mutation lifecycle', () => {
         input,
         request: { db: ReturnType<typeof createTransactionalTaskDb> } & TaskSchedulingRequest,
       ) {
-        request.db.insert(input.orderId);
+        request.db.addRow(input.orderId);
         await request.schedule(sendReceipt, { orderId: input.orderId });
         throw new Error('boom');
       },
