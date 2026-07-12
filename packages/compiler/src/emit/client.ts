@@ -3,9 +3,14 @@ import { headlessUiGeneratedHandlerNames } from '../generated/headless-ui-genera
 import {
   compilerArrayJoin,
   compilerArrayLength,
+  compilerCreateMap,
   compilerCreateSet,
   compilerDefineOwnDataProperty,
+  compilerFailClosed,
   compilerJsonStringify,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
   compilerOwnDataValue,
   compilerRegExpExec,
   compilerRegExpReplace,
@@ -160,19 +165,63 @@ export function emitClientModuleImportManifest(
     stateDerives,
     clockUpdatePlans,
   );
-  return clientImportManifestEntries([
-    ...(runtimeImports.length > 0
-      ? [
-          {
-            imports: runtimeImports.map((name) => ({ importedName: name, localName: name })),
-            moduleSpecifier: RUNTIME_GENERATED_IMPORT,
-          },
-        ]
-      : []),
-    ...clientImportDependenciesManifest(
-      handlers.flatMap((handler) => [...(handler.clientImports ?? [])]),
-    ),
-  ]);
+  const entries: ClientModuleImportManifestEntry[] = [];
+  const runtimeLength = compilerArrayLength(runtimeImports, 'Client runtime manifest imports');
+  if (runtimeLength > 0) {
+    const imports: { importedName: string; localName: string }[] = [];
+    for (let index = 0; index < runtimeLength; index += 1) {
+      const name = compilerOwnDataValue(
+        runtimeImports,
+        index,
+        'Client runtime manifest imports',
+      ) as string;
+      appendClientValue(imports, { importedName: name, localName: name }, 'Client runtime manifest imports');
+    }
+    appendClientValue(
+      entries,
+      { imports, moduleSpecifier: RUNTIME_GENERATED_IMPORT },
+      'Client import manifest entries',
+    );
+  }
+  const handlerImports: ClientImportDependency[] = [];
+  const handlerLength = compilerArrayLength(handlers, 'Client manifest handlers');
+  for (let handlerIndex = 0; handlerIndex < handlerLength; handlerIndex += 1) {
+    const handler = compilerOwnDataValue(
+      handlers,
+      handlerIndex,
+      'Client manifest handlers',
+    ) as HandlerLowering;
+    const imports = handler.clientImports ?? [];
+    const importLength = compilerArrayLength(imports, 'Client handler manifest imports');
+    for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+      appendClientValue(
+        handlerImports,
+        compilerOwnDataValue(
+          imports,
+          importIndex,
+          'Client handler manifest imports',
+        ) as ClientImportDependency,
+        'Client handler manifest imports',
+      );
+    }
+  }
+  const dependencyEntries = clientImportDependenciesManifest(handlerImports);
+  const dependencyLength = compilerArrayLength(
+    dependencyEntries,
+    'Client dependency manifest entries',
+  );
+  for (let index = 0; index < dependencyLength; index += 1) {
+    appendClientValue(
+      entries,
+      compilerOwnDataValue(
+        dependencyEntries,
+        index,
+        'Client dependency manifest entries',
+      ) as ClientModuleImportManifestEntry,
+      'Client import manifest entries',
+    );
+  }
+  return clientImportManifestEntries(entries);
 }
 
 /**
@@ -193,21 +242,23 @@ export function rewriteClientModuleRuntimeImportsForBrowser(source: string): str
 function importedRuntimeGeneratedNames(specifiers: string): readonly string[] {
   const parts = compilerStringSplit(specifiers, ',');
   const names: string[] = [];
-  for (let index = 0; index < parts.length; index += 1) {
-    const specifier = compilerStringTrim(parts[index]!);
+  const length = compilerArrayLength(parts, 'Runtime-generated import specifiers');
+  for (let index = 0; index < length; index += 1) {
+    const specifier = compilerStringTrim(
+      compilerOwnDataValue(parts, index, 'Runtime-generated import specifiers') as string,
+    );
     const alias = compilerRegExpExec(/\s+as\s+/i, specifier);
     const name = compilerStringTrim(
       alias === null ? specifier : compilerStringSlice(specifier, 0, alias.index),
     );
     if (name.length === 0) continue;
-    let insertAt = names.length;
-    while (insertAt > 0 && name < names[insertAt - 1]!) {
-      names[insertAt] = names[insertAt - 1]!;
-      insertAt -= 1;
-    }
-    names[insertAt] = name;
+    appendClientValue(names, name, 'Runtime-generated import names');
   }
-  return names;
+  return stableSortedClientValues(
+    names,
+    compilerStringLocaleCompare,
+    'Runtime-generated import names',
+  );
 }
 
 function runtimeGeneratedHelperSource(names: readonly string[]): string {
@@ -225,16 +276,16 @@ function runtimeGeneratedHelperSource(names: readonly string[]): string {
       'Runtime-generated helper registry',
     );
     if (helper === undefined) {
-      missing[missing.length] = name;
+      appendClientValue(missing, name, 'Missing runtime-generated helpers');
       continue;
     }
     if (typeof helper !== 'string') {
-      throw new TypeError(`Runtime-generated helper ${name} must be a source string.`);
+      compilerFailClosed(`Runtime-generated helper ${name} must be a source string.`);
     }
-    helpers[helpers.length] = helper;
+    appendClientValue(helpers, helper, 'Runtime-generated helper source');
   }
   if (missing.length > 0) {
-    throw new Error(
+    compilerFailClosed(
       `Cannot emit browser-resolvable client module helpers for generated ABI import(s): ${compilerArrayJoin(missing, ', ')}`,
     );
   }
@@ -245,7 +296,7 @@ function runtimeGeneratedHelperSource(names: readonly string[]): string {
     const helper = helpers[index]!;
     if (compilerSetHas(seen, helper)) continue;
     compilerSetAdd(seen, helper);
-    uniqueHelpers[uniqueHelpers.length] = helper;
+    appendClientValue(uniqueHelpers, helper, 'Unique runtime-generated helpers');
   }
   return `${compilerArrayJoin(uniqueHelpers, '\n')}\n\n`;
 }
@@ -261,7 +312,7 @@ function runtimeGeneratedHelperNames(names: readonly string[]): readonly string[
   }
   const result: string[] = [];
   const candidates = compilerSnapshotDenseArray(source, 'Runtime-generated helper candidates');
-  candidates[candidates.length] = 'runQueryUpdatePlan';
+  appendClientValue(candidates, 'runQueryUpdatePlan', 'Runtime-generated helper candidates');
   for (let index = 0; index < candidates.length; index += 1) {
     const name = candidates[index]!;
     if (!compilerSetHas(expanded, name)) continue;
@@ -273,14 +324,13 @@ function runtimeGeneratedHelperNames(names: readonly string[]): readonly string[
       }
     }
     if (alreadyPresent) continue;
-    let insertAt = result.length;
-    while (insertAt > 0 && name < result[insertAt - 1]!) {
-      result[insertAt] = result[insertAt - 1]!;
-      insertAt -= 1;
-    }
-    result[insertAt] = name;
+    appendClientValue(result, name, 'Runtime-generated helper names');
   }
-  return result;
+  return stableSortedClientValues(
+    result,
+    compilerStringLocaleCompare,
+    'Runtime-generated helper names',
+  );
 }
 
 const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
@@ -532,46 +582,134 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
 function clientImportDependenciesManifest(
   imports: readonly ClientImportDependency[],
 ): readonly ClientModuleImportManifestEntry[] {
-  const entriesByModule = new Map<string, ClientImportDependency[]>();
-
-  for (const item of dedupeBy(
+  const entriesByModule = compilerCreateMap<string, ClientImportDependency[]>();
+  const unique = dedupeBy(
     imports,
     (entry) => `${entry.moduleSpecifier}\0${entry.importedName}\0${entry.localName}`,
-  )) {
+  );
+  const uniqueLength = compilerArrayLength(unique, 'Unique client dependency imports');
+  for (let index = 0; index < uniqueLength; index += 1) {
+    const item = compilerOwnDataValue(
+      unique,
+      index,
+      'Unique client dependency imports',
+    ) as ClientImportDependency;
     const moduleSpecifier = generatedHandlerModuleSpecifier(item);
-    entriesByModule.set(moduleSpecifier, [...(entriesByModule.get(moduleSpecifier) ?? []), item]);
+    const entries = compilerMapGet(entriesByModule, moduleSpecifier) ?? [];
+    appendClientValue(entries, item, 'Client imports by module');
+    compilerMapSet(entriesByModule, moduleSpecifier, entries);
   }
-
-  return [...entriesByModule]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([moduleSpecifier, entries]) => ({
-      imports: entries
-        .sort((left, right) => left.localName.localeCompare(right.localName))
-        .map((entry) => ({ importedName: entry.importedName, localName: entry.localName })),
-      moduleSpecifier,
-    }));
+  const groups: { entries: ClientImportDependency[]; moduleSpecifier: string }[] = [];
+  compilerMapForEach(entriesByModule, (entries, moduleSpecifier) => {
+    appendClientValue(groups, { entries, moduleSpecifier }, 'Client import module groups');
+  });
+  const sortedGroups = stableSortedClientValues(
+    groups,
+    (left, right) => compilerStringLocaleCompare(left.moduleSpecifier, right.moduleSpecifier),
+    'Client import module groups',
+  );
+  const result: ClientModuleImportManifestEntry[] = [];
+  const groupLength = compilerArrayLength(sortedGroups, 'Client import module groups');
+  for (let groupIndex = 0; groupIndex < groupLength; groupIndex += 1) {
+    const group = compilerOwnDataValue(
+      sortedGroups,
+      groupIndex,
+      'Client import module groups',
+    ) as (typeof sortedGroups)[number];
+    const sortedEntries = stableSortedClientValues(
+      group.entries,
+      (left, right) => compilerStringLocaleCompare(left.localName, right.localName),
+      'Client imports by module',
+    );
+    const projected: { importedName: string; localName: string }[] = [];
+    const entryLength = compilerArrayLength(sortedEntries, 'Client imports by module');
+    for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+      const entry = compilerOwnDataValue(
+        sortedEntries,
+        entryIndex,
+        'Client imports by module',
+      ) as ClientImportDependency;
+      appendClientValue(
+        projected,
+        { importedName: entry.importedName, localName: entry.localName },
+        'Client import manifest specifiers',
+      );
+    }
+    appendClientValue(
+      result,
+      { imports: projected, moduleSpecifier: group.moduleSpecifier },
+      'Client dependency manifest entries',
+    );
+  }
+  return result;
 }
 
 function clientImportManifestEntries(
   entries: readonly ClientModuleImportManifestEntry[],
 ): readonly ClientModuleImportManifestEntry[] {
-  const merged = new Map<string, Map<string, { importedName: string; localName: string }>>();
-  for (const entry of entries) {
-    const imports = merged.get(entry.moduleSpecifier) ?? new Map();
-    for (const item of entry.imports) {
-      imports.set(`${item.importedName}\0${item.localName}`, item);
+  const merged = compilerCreateMap<
+    string,
+    Map<string, { importedName: string; localName: string }>
+  >();
+  const entryLength = compilerArrayLength(entries, 'Client import manifest entries');
+  for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+    const entry = compilerOwnDataValue(
+      entries,
+      entryIndex,
+      'Client import manifest entries',
+    ) as ClientModuleImportManifestEntry;
+    const imports =
+      compilerMapGet(merged, entry.moduleSpecifier) ??
+      compilerCreateMap<string, { importedName: string; localName: string }>();
+    const importLength = compilerArrayLength(entry.imports, 'Client manifest specifiers');
+    for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+      const item = compilerOwnDataValue(
+        entry.imports,
+        importIndex,
+        'Client manifest specifiers',
+      ) as { importedName: string; localName: string };
+      compilerMapSet(imports, `${item.importedName}\0${item.localName}`, item);
     }
-    merged.set(entry.moduleSpecifier, imports);
+    compilerMapSet(merged, entry.moduleSpecifier, imports);
   }
-
-  return [...merged]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([moduleSpecifier, imports]) => ({
-      imports: [...imports.values()].sort((left, right) =>
-        left.localName.localeCompare(right.localName),
-      ),
-      moduleSpecifier,
-    }));
+  const groups: {
+    imports: Map<string, { importedName: string; localName: string }>;
+    moduleSpecifier: string;
+  }[] = [];
+  compilerMapForEach(merged, (imports, moduleSpecifier) => {
+    appendClientValue(groups, { imports, moduleSpecifier }, 'Merged client import groups');
+  });
+  const sortedGroups = stableSortedClientValues(
+    groups,
+    (left, right) => compilerStringLocaleCompare(left.moduleSpecifier, right.moduleSpecifier),
+    'Merged client import groups',
+  );
+  const result: ClientModuleImportManifestEntry[] = [];
+  const groupLength = compilerArrayLength(sortedGroups, 'Merged client import groups');
+  for (let groupIndex = 0; groupIndex < groupLength; groupIndex += 1) {
+    const group = compilerOwnDataValue(
+      sortedGroups,
+      groupIndex,
+      'Merged client import groups',
+    ) as (typeof sortedGroups)[number];
+    const imports: { importedName: string; localName: string }[] = [];
+    compilerMapForEach(group.imports, (item) => {
+      appendClientValue(imports, item, 'Merged client import specifiers');
+    });
+    appendClientValue(
+      result,
+      {
+        imports: stableSortedClientValues(
+          imports,
+          (left, right) => compilerStringLocaleCompare(left.localName, right.localName),
+          'Merged client import specifiers',
+        ),
+        moduleSpecifier: group.moduleSpecifier,
+      },
+      'Merged client import manifest',
+    );
+  }
+  return result;
 }
 
 function runtimeGeneratedImportNames(
@@ -660,15 +798,31 @@ function stableSortedClientValues<Value>(
   compare: (left: Value, right: Value) => number,
   label: string,
 ): Value[] {
-  const sorted = compilerSnapshotDenseArray(values, label);
-  for (let index = 1; index < sorted.length; index += 1) {
-    const value = sorted[index]!;
-    let insertion = index;
-    while (insertion > 0 && compare(sorted[insertion - 1]!, value) > 0) {
-      sorted[insertion] = sorted[insertion - 1]!;
-      insertion -= 1;
+  const source = compilerSnapshotDenseArray(values, label);
+  const selected = compilerCreateSet<number>();
+  const sorted: Value[] = [];
+  const length = compilerArrayLength(source, label);
+  for (let outputIndex = 0; outputIndex < length; outputIndex += 1) {
+    let bestIndex = -1;
+    for (let index = 0; index < length; index += 1) {
+      if (compilerSetHas(selected, index)) continue;
+      if (
+        bestIndex < 0 ||
+        compare(
+          compilerOwnDataValue(source, index, label) as Value,
+          compilerOwnDataValue(source, bestIndex, label) as Value,
+        ) < 0
+      ) {
+        bestIndex = index;
+      }
     }
-    sorted[insertion] = value;
+    if (bestIndex < 0) compilerFailClosed(`${label} could not be sorted deterministically.`);
+    compilerSetAdd(selected, bestIndex);
+    appendClientValue(
+      sorted,
+      compilerOwnDataValue(source, bestIndex, label) as Value,
+      `${label} sorted values`,
+    );
   }
   return sorted;
 }
@@ -898,7 +1052,7 @@ function emitClientFactList<Value>(
 
 function compilerJsonSource(value: unknown, label: string): string {
   const source = compilerJsonStringify(value);
-  if (source === undefined) throw new TypeError(`${label} must be JSON-serializable.`);
+  if (source === undefined) compilerFailClosed(`${label} must be JSON-serializable.`);
   return source;
 }
 
@@ -933,40 +1087,85 @@ function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
   return `{ key: ${compilerJsonSource(stamp.key, 'Template stamp key')}, list: ${compilerJsonSource(stamp.listReadPath, 'Template stamp list path')}, selector: ${compilerJsonSource(stamp.selector, 'Template stamp selector')}, render(item) {
       const record = item && typeof item === "object" ? item : {};
       const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
-      return [${renderSegments.join(', ')}].join("");
+      return [${compilerArrayJoin(renderSegments, ', ')}].join("");
     } }`;
 }
 
 function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
-  const placeholders = [...(stamp.itemBindingPlaceholders ?? [])].sort(
+  const placeholders = stableSortedClientValues(
+    stamp.itemBindingPlaceholders ?? [],
     (left, right) => left.templateStart - right.templateStart,
+    'Template stamp placeholders',
   );
   const segments: string[] = [];
   let cursor = 0;
 
-  for (const placeholder of placeholders) {
+  const placeholderLength = compilerArrayLength(placeholders, 'Template stamp placeholders');
+  for (let placeholderIndex = 0; placeholderIndex < placeholderLength; placeholderIndex += 1) {
+    const placeholder = compilerOwnDataValue(
+      placeholders,
+      placeholderIndex,
+      'Template stamp placeholders',
+    ) as NonNullable<QueryTemplateStampFact['itemBindingPlaceholders']>[number];
     if (placeholder.templateStart < cursor) continue;
     if (placeholder.templateStart > cursor) {
-      segments.push(
+      appendClientValue(
+        segments,
         compilerJsonSource(
-          stamp.template.slice(cursor, placeholder.templateStart),
+          compilerStringSlice(stamp.template, cursor, placeholder.templateStart),
           'Template stamp literal',
         ),
+        'Template stamp render segments',
       );
     }
-    segments.push(
+    const readSegmentFacts = compilerSnapshotDenseArray(
+      placeholder.readSegments,
+      'Template stamp read segments',
+    );
+    const readSegmentNames: string[] = [];
+    const readSegmentLength = compilerArrayLength(
+      readSegmentFacts,
+      'Template stamp read segments',
+    );
+    for (let readIndex = 0; readIndex < readSegmentLength; readIndex += 1) {
+      const readSegment = compilerOwnDataValue(
+        readSegmentFacts,
+        readIndex,
+        'Template stamp read segments',
+      ) as (typeof readSegmentFacts)[number];
+      appendClientValue(
+        readSegmentNames,
+        readSegment.name,
+        'Template stamp read-segment names',
+      );
+    }
+    appendClientValue(
+      segments,
       templateStampHtmlEscapeExpression(
-        `read(${compilerJsonSource(placeholder.readSegments.map((segment) => segment.name), 'Template stamp read segments')})`,
+        `read(${compilerJsonSource(readSegmentNames, 'Template stamp read segments')})`,
       ),
+      'Template stamp render segments',
     );
     cursor = placeholder.templateEnd;
   }
 
   if (cursor < stamp.template.length) {
-    segments.push(compilerJsonSource(stamp.template.slice(cursor), 'Template stamp literal'));
+    appendClientValue(
+      segments,
+      compilerJsonSource(
+        compilerStringSlice(stamp.template, cursor),
+        'Template stamp literal',
+      ),
+      'Template stamp render segments',
+    );
   }
 
-  return segments.length > 0
-    ? segments
-    : [compilerJsonSource(stamp.template, 'Template stamp literal')];
+  if (compilerArrayLength(segments, 'Template stamp render segments') === 0) {
+    appendClientValue(
+      segments,
+      compilerJsonSource(stamp.template, 'Template stamp literal'),
+      'Template stamp render segments',
+    );
+  }
+  return segments;
 }

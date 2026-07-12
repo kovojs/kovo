@@ -10,6 +10,8 @@ import {
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerFailClosed,
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
@@ -74,7 +76,7 @@ export function lowerEventHandlers(
       'Lowered event attributes',
     ) as (typeof attributes)[number] | undefined;
     if (!eventAttribute) {
-      throw new TypeError(`Lowered event attributes[${attributeIndex}] must be dense own data.`);
+      compilerFailClosed(`Lowered event attributes[${attributeIndex}] must be dense own data.`);
     }
     const { attributeEnd, attributeStart, eventName, tag } = eventAttribute;
     // SPEC §5.2: branch on the typed parser fact, not a regex over the raw attribute snippet, and
@@ -97,13 +99,13 @@ export function lowerEventHandlers(
 
     const diagnostics: CompilerDiagnostic[] = [];
     if (!namedHandler) {
-      diagnostics[diagnostics.length] = diagnosticFor(
+      appendHandlerFact(diagnostics, diagnosticFor(
         options.fileName,
         'KV210',
         options.source,
         attributeStart,
         eventName.length,
-      );
+      ), 'Handler diagnostics');
     }
 
     if (
@@ -112,7 +114,7 @@ export function lowerEventHandlers(
         model,
       })
     ) {
-      diagnostics[diagnostics.length] = kv201Diagnostic(
+      appendHandlerFact(diagnostics, kv201Diagnostic(
         options.fileName,
         options.source,
         attributeStart,
@@ -122,11 +124,11 @@ export function lowerEventHandlers(
           expression,
           params,
         },
-      );
+      ), 'Handler diagnostics');
     }
 
     const primaryDiagnostic = diagnostics[diagnostics.length - 1];
-    handlers[handlers.length] = {
+    appendHandlerFact(handlers, {
       attributeName: `on:${eventName}`,
       attributeEnd,
       attributeStart,
@@ -159,7 +161,7 @@ export function lowerEventHandlers(
       exportName,
       isBareNamedHandler: namedHandler,
       params,
-    };
+    }, 'Lowered event handlers');
   }
 
   return handlers;
@@ -176,12 +178,12 @@ function loweredArrowPropertyAccesses(
       index,
       'Handler arrow property accesses',
     ) as PropertyAccessPathModel | undefined;
-    if (!access) throw new TypeError(`Handler arrow property accesses[${index}] must be dense.`);
-    result[result.length] = {
+    if (!access) compilerFailClosed(`Handler arrow property accesses[${index}] must be dense.`);
+    appendHandlerFact(result, {
       end: access.end - arrow.bodySourceStart,
       path: access.path,
       start: access.start - arrow.bodySourceStart,
-    };
+    }, 'Handler arrow property accesses');
   }
   return result;
 }
@@ -197,12 +199,12 @@ function loweredArrowReferences(
       index,
       'Handler arrow references',
     ) as IdentifierReferenceModel | undefined;
-    if (!reference) throw new TypeError(`Handler arrow references[${index}] must be dense.`);
-    result[result.length] = {
+    if (!reference) compilerFailClosed(`Handler arrow references[${index}] must be dense.`);
+    appendHandlerFact(result, {
       end: reference.end - arrow.bodySourceStart,
       name: reference.name,
       start: reference.start - arrow.bodySourceStart,
-    };
+    }, 'Handler arrow references');
   }
   return result;
 }
@@ -259,7 +261,7 @@ function versionHandlerDiagnostics(
   const result: CompilerDiagnostic[] = [];
   for (let index = 0; index < source.length; index += 1) {
     const diagnostic = source[index]!;
-    result[result.length] = diagnostic.help
+    appendHandlerFact(result, diagnostic.help
       ? {
           ...diagnostic,
           help: compilerStringReplaceAll(
@@ -268,7 +270,7 @@ function versionHandlerDiagnostics(
             versionedAttributeValue,
           ),
         }
-      : diagnostic;
+      : diagnostic, 'Handler lowering diagnostics');
   }
   return result;
 }
@@ -301,7 +303,7 @@ function handlerReferenceNames(eventAttribute: {
     const reference = compilerOwnDataValue(bodyReferences, index, 'Handler body references') as
       | IdentifierReferenceModel
       | undefined;
-    if (!reference) throw new TypeError(`Handler body references[${index}] must be own data.`);
+    if (!reference) compilerFailClosed(`Handler body references[${index}] must be own data.`);
     compilerSetAdd(result, reference.name);
   }
   const expressionReferences = eventAttribute.expressionReferences ?? [];
@@ -312,7 +314,7 @@ function handlerReferenceNames(eventAttribute: {
   for (let index = 0; index < expressionReferenceLength; index += 1) {
     const name = compilerOwnDataValue(expressionReferences, index, 'Handler expression references');
     if (typeof name !== 'string') {
-      throw new TypeError(`Handler expression references[${index}] must be an own string.`);
+      compilerFailClosed(`Handler expression references[${index}] must be an own string.`);
     }
     compilerSetAdd(result, name);
   }
@@ -342,12 +344,12 @@ function clientImportDependencies(
     const item = compilerOwnDataValue(namedImports, index, 'Client handler named imports') as
       | NamedImportModel
       | undefined;
-    if (!item) throw new TypeError(`Client handler named imports[${index}] must be own data.`);
+    if (!item) compilerFailClosed(`Client handler named imports[${index}] must be own data.`);
     if (
       compilerSetHas(references, item.localName) &&
       compilerSetHas(emitAllowedImports, item.localName)
     ) {
-      clientImports[clientImports.length] = item;
+      appendHandlerFact(clientImports, item, 'Client handler imports');
     }
   }
 
@@ -367,17 +369,17 @@ function clientConstantDependencies(
       index,
       'Client handler module constants',
     ) as ModuleScopeBindingModel | undefined;
-    if (!item) throw new TypeError(`Client handler module constants[${index}] must be own data.`);
+    if (!item) compilerFailClosed(`Client handler module constants[${index}] must be own data.`);
     if (
       !compilerSetHas(references, item.name) ||
       !compilerSetHas(emitAllowedModuleConstants, item.name)
     ) {
       continue;
     }
-    clientConstants[clientConstants.length] = {
+    appendHandlerFact(clientConstants, {
       name: item.name,
       source: item.source,
-    };
+    }, 'Client handler constants');
   }
 
   return clientConstants.length > 0 ? { clientConstants } : {};
@@ -414,7 +416,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
     const element = compilerOwnDataValue(elements, elementIndex, 'Handler JSX elements') as
       | (typeof elements)[number]
       | undefined;
-    if (!element) throw new TypeError(`Handler JSX elements[${elementIndex}] must be own data.`);
+    if (!element) compilerFailClosed(`Handler JSX elements[${elementIndex}] must be own data.`);
     const attributeLength = compilerArrayLength(element.attributes, 'Handler JSX attributes');
     for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
       const attribute = compilerOwnDataValue(
@@ -423,11 +425,11 @@ function eventAttributes(model: ComponentModuleModel): Array<{
         'Handler JSX attributes',
       ) as (typeof element.attributes)[number] | undefined;
       if (!attribute) {
-        throw new TypeError(`Handler JSX attributes[${attributeIndex}] must be own data.`);
+        compilerFailClosed(`Handler JSX attributes[${attributeIndex}] must be own data.`);
       }
       const eventName = attribute.domEventName;
       if (!eventName || attribute.expression === undefined) continue;
-      attributes[attributes.length] = {
+      appendHandlerFact(attributes, {
         attributeEnd: attribute.end,
         attributeStart: attribute.start,
         eventName,
@@ -446,7 +448,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
           : {}),
         tag: element.tag,
         ...(attribute.zeroArgArrow ? { zeroArgArrow: attribute.zeroArgArrow } : {}),
-      };
+      }, 'Handler event attributes');
     }
   }
 
@@ -495,7 +497,7 @@ export function capturesUnserializableReferences(
     const param = compilerOwnDataValue(elementParams, index, 'Handler element params') as
       | ElementParam
       | undefined;
-    if (!param) throw new TypeError(`Handler element params[${index}] must be dense.`);
+    if (!param) compilerFailClosed(`Handler element params[${index}] must be dense.`);
     const root = referenceRootForElementParam(param);
     if (root !== null) compilerSetAdd(allowed, root);
   }
@@ -507,7 +509,7 @@ export function capturesUnserializableReferences(
       | NamedImportModel
       | undefined;
     if (!item || typeof item.localName !== 'string') {
-      throw new TypeError(`Handler named imports[${index}] must have a local name.`);
+      compilerFailClosed(`Handler named imports[${index}] must have a local name.`);
     }
     compilerSetAdd(allowed, item.localName);
   }
@@ -519,7 +521,7 @@ export function capturesUnserializableReferences(
       | ModuleScopeBindingModel
       | undefined;
     if (!item || typeof item.name !== 'string') {
-      throw new TypeError(`Handler module-scope bindings[${index}] must have a name.`);
+      compilerFailClosed(`Handler module-scope bindings[${index}] must have a name.`);
     }
     compilerSetAdd(allowed, item.name);
   }
@@ -528,7 +530,7 @@ export function capturesUnserializableReferences(
   for (let index = 0; index < referenceLength; index += 1) {
     const name = compilerOwnDataValue(references, index, 'Handler capture references');
     if (typeof name !== 'string') {
-      throw new TypeError(`Handler capture references[${index}] must be a string.`);
+      compilerFailClosed(`Handler capture references[${index}] must be a string.`);
     }
     if (!compilerSetHas(allowed, name)) return true;
   }
@@ -560,7 +562,7 @@ const SAFE_HANDLER_GLOBAL_REFERENCE_SET = compilerSetFromStrings(
 function referenceRootForElementParam(param: ElementParam): string | null {
   const expression = compilerOwnDataValue(param, 'expression', 'Handler element param');
   if (typeof expression !== 'string') {
-    throw new TypeError('Handler element param.expression must be a string.');
+    compilerFailClosed('Handler element param.expression must be a string.');
   }
   const separator = compilerStringIndexOf(expression, '.');
   const root = separator < 0 ? expression : compilerStringSlice(expression, 0, separator);
@@ -571,7 +573,7 @@ function appendAllowedStrings(target: Set<string>, values: readonly string[], la
   const length = compilerArrayLength(values, label);
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label);
-    if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be a string.`);
+    if (typeof value !== 'string') compilerFailClosed(`${label}[${index}] must be a string.`);
     compilerSetAdd(target, value);
   }
 }
@@ -659,12 +661,16 @@ function extractElementParams(
             'Handler call argument property accesses',
           ) as PropertyAccessPathModel | undefined;
           if (!access) {
-            throw new TypeError(
+            compilerFailClosed(
               `Handler call argument property accesses[${accessIndex}] must be dense.`,
             );
           }
           if (serializableMemberExpression(access.path, localNames)) {
-            candidates[candidates.length] = elementParamCandidateFromAccess(access);
+            appendHandlerFact(
+              candidates,
+              elementParamCandidateFromAccess(access),
+              'Handler element-param candidates',
+            );
           }
         }
       }
@@ -684,7 +690,11 @@ function extractElementParams(
           : undefined;
         const reference = simpleCallArgumentReference(references ?? []);
         if (reference && compilerSetHas(eligibleBareReferenceNames, reference)) {
-          candidates[candidates.length] = { expression: reference, terminalName: reference };
+          appendHandlerFact(
+            candidates,
+            { expression: reference, terminalName: reference },
+            'Handler element-param candidates',
+          );
         }
       }
     }
@@ -703,14 +713,14 @@ function extractElementParams(
   const params: ElementParam[] = [];
   for (let index = 0; index < assigned.length; index += 1) {
     const { attributeName, candidate } = assigned[index]!;
-    params[params.length] = {
+    appendHandlerFact(params, {
       attributeName,
       expression: candidate.expression,
       type:
         candidate.type ??
         inferElementParamType(candidate.expression, zeroArgArrow, parsedPropertyAccesses),
       value: `{${candidate.expression}}`,
-    };
+    }, 'Handler element parameters');
   }
   return params;
 }
@@ -724,8 +734,8 @@ function appendElementParamCandidates(
     const value = compilerOwnDataValue(values, index, 'Handler element-param candidates') as
       | ElementParamCandidate
       | undefined;
-    if (!value) throw new TypeError(`Handler element-param candidates[${index}] must be dense.`);
-    target[target.length] = value;
+    if (!value) compilerFailClosed(`Handler element-param candidates[${index}] must be dense.`);
+    appendHandlerFact(target, value, 'Handler element-param candidates');
   }
 }
 
@@ -746,8 +756,9 @@ function assignElementParamAttributeNames(
       index,
       'Handler element-param candidates',
     ) as ElementParamCandidate | undefined;
-    if (!candidate)
-      throw new TypeError(`Handler element-param candidates[${index}] must be dense.`);
+    if (!candidate) {
+      compilerFailClosed(`Handler element-param candidates[${index}] must be dense.`);
+    }
     const preferred = elementParamAttributeNameFromPropertyName(candidate.terminalName);
     let attributeName = preferred;
     if (compilerSetHas(used, attributeName)) {
@@ -759,7 +770,7 @@ function assignElementParamAttributeNames(
       attributeName = `${preferred}-${suffix}`;
     }
     compilerSetAdd(used, attributeName);
-    result[result.length] = { attributeName, candidate };
+    appendHandlerFact(result, { attributeName, candidate }, 'Assigned handler element params');
   }
   return result;
 }
@@ -796,7 +807,7 @@ function inferElementParamType(
     const access = compilerOwnDataValue(propertyAccesses, index, 'Handler property accesses') as
       | PropertyAccessPathModel
       | undefined;
-    if (!access) throw new TypeError(`Handler property accesses[${index}] must be dense.`);
+    if (!access) compilerFailClosed(`Handler property accesses[${index}] must be dense.`);
     if (access.path === sourceExpression && access.inferredType !== undefined) {
       return access.inferredType;
     }
@@ -820,10 +831,14 @@ function serializableMemberExpressions(
       'Serializable handler member expressions',
     ) as PropertyAccessPathModel | undefined;
     if (!access) {
-      throw new TypeError(`Serializable handler member expressions[${index}] must be dense.`);
+      compilerFailClosed(`Serializable handler member expressions[${index}] must be dense.`);
     }
     if (serializableMemberExpression(access.path, localNames)) {
-      result[result.length] = elementParamCandidateFromAccess(access);
+      appendHandlerFact(
+        result,
+        elementParamCandidateFromAccess(access),
+        'Serializable handler member expressions',
+      );
     }
   }
   return result;
@@ -844,16 +859,16 @@ function serializableBareReferences(
       'Serializable handler bare references',
     ) as IdentifierReferenceModel | undefined;
     if (!reference) {
-      throw new TypeError(`Serializable handler bare references[${index}] must be dense.`);
+      compilerFailClosed(`Serializable handler bare references[${index}] must be dense.`);
     }
     if (
       compilerSetHas(eligibleBareReferenceNames, reference.name) &&
       !compilerSetHas(localNames, reference.name)
     ) {
-      result[result.length] = {
+      appendHandlerFact(result, {
         expression: reference.name,
         terminalName: reference.name,
-      };
+      }, 'Serializable handler bare references');
     }
   }
   return result;
@@ -895,10 +910,14 @@ function dedupeElementParamCandidates(
     const value = compilerOwnDataValue(values, index, 'Handler element-param candidates') as
       | ElementParamCandidate
       | undefined;
-    if (!value) throw new TypeError(`Handler element-param candidates[${index}] must be dense.`);
+    if (!value) compilerFailClosed(`Handler element-param candidates[${index}] must be dense.`);
     if (compilerSetHas(seen, value.expression)) continue;
     compilerSetAdd(seen, value.expression);
-    result[result.length] = value;
+    appendHandlerFact(result, value, 'Deduped handler element params');
   }
   return result;
+}
+
+function appendHandlerFact<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
 }

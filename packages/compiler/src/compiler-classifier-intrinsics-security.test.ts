@@ -533,6 +533,44 @@ export const PayButton = component({
     expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
   });
 
+  it('cannot erase compiler snapshots through inherited numeric setters', () => {
+    const nativeDefineProperty = Object.defineProperty;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      nativeDefineProperty(Array.prototype, '0', {
+        configurable: true,
+        set(value: unknown) {
+          const code = (value as { code?: unknown } | null)?.code;
+          if (code === 'KV210' || code === 'KV201') {
+            poisonHits += 1;
+            return;
+          }
+          nativeDefineProperty(this, '0', {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+          });
+        },
+      });
+      result = compileComponentModule({
+        fileName: 'browser-capture.tsx',
+        source: '<button onClick={() => window.alert("x")}>x</button>',
+      });
+    } finally {
+      if (originalDescriptor === undefined) {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0'];
+      } else {
+        nativeDefineProperty(Array.prototype, '0', originalDescriptor);
+      }
+    }
+
+    expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+    expect(poisonHits).toBe(0);
+  });
+
   it('cannot suppress required static text escaping through attribute Array.some', () => {
     const nativeSome = Array.prototype.some;
     const nativeApply = Reflect.apply;
@@ -1451,6 +1489,50 @@ export const SpreadCard = component({
     const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
     expect(lowered).not.toContain('data-kovo-spread-injection');
     expect(lowered).toContain('id="safe" title="reviewed"');
+    expect(poisonHits).toBe(0);
+  });
+
+  it('cannot inject client source through template-stamp segment assembly', () => {
+    const nativeJoin = Array.prototype.join;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.join = function poisonedTemplateStampJoin(separator?: string): string {
+        let hasEscapedRead = false;
+        for (let index = 0; index < this.length; index += 1) {
+          const value = this[index];
+          if (typeof value === 'string' && value.includes('kovoEscapeHtml(read(')) {
+            hasEscapedRead = true;
+          }
+        }
+        if (separator === ', ' && hasEscapedRead) {
+          poisonHits += 1;
+          return '(() => { globalThis.KOVO_TEMPLATE_STAMP_INJECTION = true; return ""; })()';
+        }
+        return nativeApply(nativeJoin, this, [separator]);
+      };
+      result = compileComponentModule({
+        fileName: 'cart-list.tsx',
+        source: `
+export const CartList = component({
+  render: () => (
+    <ul data-bind-list="cart.items" kovo-key="id">
+      <template kovo-stamp>
+        <li kovo-key=""><span data-bind=".name">Item</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.join = nativeJoin;
+    }
+
+    const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(lowered).not.toContain('KOVO_TEMPLATE_STAMP_INJECTION');
+    expect(lowered).toContain('kovoEscapeHtml(read(["name"]))');
     expect(poisonHits).toBe(0);
   });
 });

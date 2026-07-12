@@ -30,10 +30,6 @@ const ALLOWED_REPARSE_FILES: ReadonlyMap<string, string> = new Map([
     'emit/dead-imports.ts',
     'generated-artifact: prunes dead imports over the EMITTED lowered module, not app source',
   ],
-  [
-    'emit/live-target-renderers.ts',
-    'generated-artifact: renderer-export synthesis over the EMITTED lowered module, not app source',
-  ],
 ]);
 
 function compilerSourceFiles(): string[] {

@@ -25,6 +25,8 @@ import {
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerFailClosed,
   compilerMapGet,
   compilerMapSet,
   compilerObjectKeys,
@@ -139,7 +141,7 @@ function compilerMapDense<Value, Result>(
   const source = compilerSnapshotDenseArray(values, label);
   const result: Result[] = [];
   for (let index = 0; index < source.length; index += 1) {
-    result[result.length] = map(source[index]!, index);
+    appendCompileValue(result, map(source[index]!, index), `${label} mapped values`);
   }
   return result;
 }
@@ -154,7 +156,7 @@ function compilerFlatMapDense<Value, Result>(
   for (let index = 0; index < source.length; index += 1) {
     const mapped = compilerSnapshotDenseArray(map(source[index]!, index), `${label} mapped result`);
     for (let mappedIndex = 0; mappedIndex < mapped.length; mappedIndex += 1) {
-      result[result.length] = mapped[mappedIndex]!;
+      appendCompileValue(result, mapped[mappedIndex]!, `${label} flattened values`);
     }
   }
   return result;
@@ -168,7 +170,9 @@ function compilerFilterDense<Value>(
   const source = compilerSnapshotDenseArray(values, label);
   const result: Value[] = [];
   for (let index = 0; index < source.length; index += 1) {
-    if (keep(source[index]!, index)) result[result.length] = source[index]!;
+    if (keep(source[index]!, index)) {
+      appendCompileValue(result, source[index]!, `${label} filtered values`);
+    }
   }
   return result;
 }
@@ -218,16 +222,22 @@ function compilerAppendDense<Value>(
 ): Value[] {
   const result = compilerSnapshotDenseArray(first, `${label} first values`);
   const tail = compilerSnapshotDenseArray(second, `${label} second values`);
-  for (let index = 0; index < tail.length; index += 1) result[result.length] = tail[index]!;
+  for (let index = 0; index < tail.length; index += 1) {
+    appendCompileValue(result, tail[index]!, `${label} appended values`);
+  }
   return result;
 }
 
 function compilerSetValues<Value>(values: ReadonlySet<Value>): Value[] {
   const result: Value[] = [];
   compilerSetForEach(values, (value) => {
-    result[result.length] = value;
+    appendCompileValue(result, value, 'Compiler set values');
   });
   return result;
+}
+
+function appendCompileValue<Value>(target: Value[], value: Value, label: string): void {
+  compilerDefineOwnDataProperty(target, compilerArrayLength(target, label), value);
 }
 
 const KOVO_MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
@@ -789,7 +799,7 @@ function verifyComponentPhase(
     const handler = compilerOwnDataValue(client.versionedHandlers, index, 'Versioned handlers') as
       | HandlerLowering
       | undefined;
-    if (!handler) throw new TypeError(`Versioned handlers[${index}] must be dense own data.`);
+    if (!handler) compilerFailClosed(`Versioned handlers[${index}] must be dense own data.`);
     appendCompilerDiagnostics(
       diagnostics,
       handler.diagnostics ?? [],
@@ -873,8 +883,8 @@ function appendCompilerDiagnostics(
   const length = compilerArrayLength(values, label);
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label) as CompilerDiagnostic | undefined;
-    if (!value) throw new TypeError(`${label}[${index}] must be dense own data.`);
-    output[output.length] = value;
+    if (!value) compilerFailClosed(`${label}[${index}] must be dense own data.`);
+    appendCompileValue(output, value, label);
   }
 }
 
@@ -1596,7 +1606,7 @@ export function collectStateDeriveReferenceFacts(
       const derive = compilerMapGet(derivesByPlaceholder, attribute.value);
       if (!derive) continue;
 
-      references[references.length] = {
+      appendCompileValue(references, {
         attr: attribute.name,
         clientHref,
         exportName: derive.exportName,
@@ -1604,7 +1614,7 @@ export function collectStateDeriveReferenceFacts(
         target: { end: attribute.end, start: attribute.start },
         value: formatKovoModuleRef(kovoModuleRef(clientHref, derive.exportName, 'derive')),
         writer: 'state derive URL versioning',
-      };
+      }, 'State derive references');
     }
   }
 
@@ -1786,9 +1796,9 @@ function sortedRecord(record: Record<string, string>): [string, string][] {
     const key = keys[index]!;
     const value = compilerOwnDataValue(record, key, 'Render-plan token input');
     if (typeof value !== 'string') {
-      throw new TypeError(`Render-plan token input ${key} must be a string.`);
+      compilerFailClosed(`Render-plan token input ${key} must be a string.`);
     }
-    result[result.length] = [key, value];
+    appendCompileValue(result, [key, value], 'Sorted render-plan input');
   }
   return result;
 }
@@ -1845,7 +1855,7 @@ function renderPlanFingerprintInputForOptions(
     const shape = compilerOwnDataValue(shapes, name, 'Compiler query shapes') as
       | QueryShape
       | undefined;
-    if (shape === undefined) throw new TypeError(`Compiler query shape ${name} is undefined.`);
+    if (shape === undefined) compilerFailClosed(`Compiler query shape ${name} is undefined.`);
     input[name] = stableQueryShapeSignature(shape);
   }
   return input;
@@ -1880,14 +1890,14 @@ function stableQueryShapeSignature(shape: QueryShape): string {
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
     const propertyShape = compilerOwnDataValue(objectShape, key, 'Object query shape');
-    frames[frames.length] = encodeRenderPlanFrame(
+    appendCompileValue(frames, encodeRenderPlanFrame(
       'property',
       encodeRenderPlanFrame('name', key) +
         encodeRenderPlanFrame(
           'shape',
           stableQueryShapeSignature((propertyShape ?? 'object') as QueryShape),
         ),
-    );
+    ), 'Object query-shape frames');
   }
   return encodeRenderPlanFrame('object', compilerArrayJoin(frames, ''));
 }
@@ -1943,15 +1953,22 @@ function compilerSetForEachSorted(values: ReadonlySet<string>, result: string[])
   const candidates: string[] = [];
   // `compilerSetForEach` dispatches through the boot-captured Set control.
   compilerSetForEach(values, (value) => {
-    candidates[candidates.length] = value;
+    appendCompileValue(candidates, value, 'Minifier reservation candidates');
   });
-  for (let index = 0; index < candidates.length; index += 1) {
-    const value = candidates[index]!;
-    let insertAt = result.length;
-    while (insertAt > 0 && value < result[insertAt - 1]!) {
-      result[insertAt] = result[insertAt - 1]!;
-      insertAt -= 1;
+  const selected = compilerCreateSet<number>();
+  for (let outputIndex = 0; outputIndex < candidates.length; outputIndex += 1) {
+    let bestIndex = -1;
+    let best = '';
+    for (let index = 0; index < candidates.length; index += 1) {
+      if (compilerSetHas(selected, index)) continue;
+      const value = candidates[index]!;
+      if (bestIndex < 0 || value < best) {
+        bestIndex = index;
+        best = value;
+      }
     }
-    result[insertAt] = value;
+    if (bestIndex < 0) compilerFailClosed('Minifier reservation candidates must be dense.');
+    compilerSetAdd(selected, bestIndex);
+    appendCompileValue(result, best, 'Minifier reservations');
   }
 }

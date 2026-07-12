@@ -230,7 +230,10 @@ export function compilerSnapshotDenseArray<Value>(value: readonly Value[], label
   for (let index = 0; index < length; index += 1) {
     const entry = compilerOwnDataValue(value, index, label);
     if (entry === undefined) throw new NativeTypeError(`${label}[${index}] must be dense.`);
-    snapshot[snapshot.length] = entry as Value;
+    // This helper is also the compiler's mutable working-copy primitive (sorting and appending are
+    // common consumers), so commit an own writable data property without ever consulting an
+    // inherited numeric setter. Final JSON facts use the frozen/non-writable path below.
+    compilerSetOwnDataProperty(snapshot, compilerArrayLength(snapshot, label), entry);
   }
   return snapshot;
 }
@@ -362,11 +365,15 @@ function snapshotJsonValue(
       const snapshot: unknown[] = [];
       for (let index = 0; index < length; index += 1) {
         state.entries += 1;
-        snapshot[index] = snapshotJsonValue(
-          compilerOwnDataValue(value, index, label),
-          `${label}[${index}]`,
-          state,
-          depth + 1,
+        compilerDefineOwnDataProperty(
+          snapshot,
+          index,
+          snapshotJsonValue(
+            compilerOwnDataValue(value, index, label),
+            `${label}[${index}]`,
+            state,
+            depth + 1,
+          ),
         );
       }
       return compilerFreeze(snapshot);
@@ -597,7 +604,11 @@ export function compilerRegExpReplace(
         if (capture !== undefined && typeof capture !== 'string') {
           throw new NativeTypeError('Compiler RegExp captures must be strings or undefined.');
         }
-        captures[captures.length] = capture ?? '';
+        compilerDefineOwnDataProperty(
+          captures,
+          compilerArrayLength(captures, 'Compiler RegExp captures'),
+          capture ?? '',
+        );
       }
       output += apply<string>(replacement, undefined, captures);
     }
@@ -671,10 +682,18 @@ export function compilerStringSplit(value: string, separator: string): string[] 
   while (true) {
     const matchIndex = apply<number>(nativeStringIndexOf, value, [separator, sourceIndex]);
     if (matchIndex < 0) break;
-    result[result.length] = apply(nativeStringSlice, value, [sourceIndex, matchIndex]);
+    compilerDefineOwnDataProperty(
+      result,
+      compilerArrayLength(result, 'Compiler string split result'),
+      apply(nativeStringSlice, value, [sourceIndex, matchIndex]),
+    );
     sourceIndex = matchIndex + separator.length;
   }
-  result[result.length] = apply(nativeStringSlice, value, [sourceIndex]);
+  compilerDefineOwnDataProperty(
+    result,
+    compilerArrayLength(result, 'Compiler string split result'),
+    apply(nativeStringSlice, value, [sourceIndex]),
+  );
   return result;
 }
 
