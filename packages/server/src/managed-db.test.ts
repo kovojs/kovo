@@ -11,15 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
-import {
-  StringChunk,
-  and,
-  asc,
-  count,
-  defineRelations,
-  eq,
-  sql as drizzleSql,
-} from 'drizzle-orm';
+import { StringChunk, and, asc, count, defineRelations, eq, sql as drizzleSql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
 import { integer, pgTable, text, withReplicas as withPostgresReplicas } from 'drizzle-orm/pg-core';
@@ -40,6 +32,7 @@ import {
 } from './managed-db.js';
 import type { AuthorizationCensusDbOptions, Reader, Writer } from './managed-db.js';
 import {
+  createFrameworkManagedSqlDispatchProxy,
   kovoAsyncMutationTransaction,
   managedSqlExecutionPolicy,
   runSqliteAsyncTransaction,
@@ -746,6 +739,33 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['all']);
   });
 
+  it('C138 keeps rawRead inside the managed read-only SQL choke', () => {
+    const log: unknown[] = [];
+    const reader = readonlyDb(
+      {
+        query(statement: unknown) {
+          log.push(statement);
+          return statement;
+        },
+      },
+      {
+        rawRead: {
+          dialectLabel: 'SQLite',
+          executeMethod: 'query',
+          normalizeTableName: (table) => table,
+        },
+      },
+    );
+
+    expect(() =>
+      reader.rawRead(
+        { sql: 'delete from products where id = ?', values: ['p1'] },
+        { reads: ['products'] },
+      ),
+    ).toThrow(/KV433.*mutating statement/s);
+    expect(log).toEqual([]);
+  });
+
   it('rejects SQLite rawRead statements whose observed tables exceed declared reads', () => {
     const log: string[] = [];
     const reader = readonlyDb(fakeDb(log), {
@@ -974,7 +994,7 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       Function.prototype.call = nativeCall;
     }
 
-    expect(rows).toEqual([{ text: 'select label from allowed', values: [] }]);
+    expect(rows).toMatchObject([{ text: 'select label from allowed', values: [] }]);
   });
 
   it('crossOwnerRead reconstructs the admin-client carrier and refuses submit-bearing app values', async () => {
@@ -1193,6 +1213,91 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('C146 pins root and nested managed proxies against late global Proxy replacement', () => {
+    const log: string[] = [];
+    const raw = {
+      insert(table: string) {
+        return {
+          values(value: unknown) {
+            log.push(`insert:${table}:${String(value)}`);
+          },
+        };
+      },
+      query(statement: unknown) {
+        log.push(`query:${String(statement)}`);
+        return statement;
+      },
+    };
+    const NativeProxy = globalThis.Proxy;
+    let reader!: ReturnType<typeof managedDb<typeof raw>>;
+    let writer!: ReturnType<typeof managedDb<typeof raw>>;
+    try {
+      globalThis.Proxy = class BypassProxy {
+        constructor(target: object) {
+          return target;
+        }
+      } as unknown as ProxyConstructor;
+      reader = managedDb(raw, 'read', { sqlWritePolicy: { dialect: 'sqlite' } });
+      writer = managedDb(raw, 'write', {
+        sqlWritePolicy: { dialect: 'sqlite', tables: ['products'], touches: ['product'] },
+      });
+    } finally {
+      globalThis.Proxy = NativeProxy;
+    }
+
+    expect(() => writer.query('select id from products')).toThrow(/KV422: SQL text injection risk/);
+    expect(() => reader.insert('products')).toThrow(KovoReadonlyHandleError);
+
+    const nestedWriter = managedDb(raw, 'write', {
+      sqlWritePolicy: { dialect: 'sqlite', tables: ['products'], touches: ['product'] },
+    });
+    let builder!: ReturnType<typeof nestedWriter.insert>;
+    try {
+      globalThis.Proxy = class BypassProxy {
+        constructor(target: object) {
+          return target;
+        }
+      } as unknown as ProxyConstructor;
+      builder = nestedWriter.insert('products');
+    } finally {
+      globalThis.Proxy = NativeProxy;
+    }
+    expect(() => builder.values(secret('classified'))).toThrow(/KV435/);
+    expect(log).toEqual([]);
+  });
+
+  it('preserves only witnessed adapter read/write helpers across the SQL membrane', () => {
+    const log: string[] = [];
+    const adapter = createFrameworkManagedSqlDispatchProxy(
+      {
+        query(statement: unknown) {
+          log.push('query');
+          return statement;
+        },
+        read(table: string) {
+          log.push(`read:${table}`);
+          return [];
+        },
+        write(table: string) {
+          log.push(`write:${table}`);
+        },
+      },
+      {
+        get(target, property, receiver) {
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    const handle = managedDb(adapter, 'write', {
+      sqlWritePolicy: { dialect: 'sqlite', tables: ['products'], touches: ['product'] },
+    });
+
+    expect(handle.read('products')).toEqual([]);
+    handle.write('products');
+    expect(() => handle.query('select id from products')).toThrow(/KV422: SQL text injection risk/);
+    expect(log).toEqual(['read:products', 'write:products']);
+  });
+
   it('cannot skip raw SQL builder validation through late Array.map replacement', () => {
     const accepted: unknown[] = [];
     const raw = {
@@ -1328,14 +1433,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
       class CustomSqlWrapper {
         getSQL() {
-          return drizzleSql.raw(
-            "exists(select 1 from secrets where classified = 'victim-secret')",
-          );
+          return drizzleSql.raw("exists(select 1 from secrets where classified = 'victim-secret')");
         }
       }
-      expect(() =>
-        handle.select().from(publicData).where(new CustomSqlWrapper()).all(),
-      ).toThrow(/KV422[\s\S]*custom SQLWrapper/u);
+      expect(() => handle.select().from(publicData).where(new CustomSqlWrapper()).all()).toThrow(
+        /KV422[\s\S]*custom SQLWrapper/u,
+      );
       expect(() =>
         handle
           .select()
@@ -2058,6 +2161,51 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(writer.insert('contacts').values()).resolves.toBeUndefined();
 
     expect(log).toEqual(['readonly-target-created', 'writer.insert:contacts:readonly=false']);
+  });
+
+  it('C149 pins async engine rejection mapping against late Promise.catch replacement', async () => {
+    const nativeCatch = Promise.prototype.catch;
+    const nativeReject = Promise.reject;
+    const nativeResolve = Promise.resolve;
+    const nativeThen = Promise.prototype.then;
+    let enginePromise: Promise<unknown> | undefined;
+    const raw = {
+      query() {
+        enginePromise = Reflect.apply(nativeReject, Promise, [
+          new Error('cannot execute INSERT in a read-only transaction'),
+        ]);
+        return enginePromise;
+      },
+    };
+    const handle = wrapManagedDbForSqlSafety(
+      raw,
+      undefined,
+      managedSqlExecutionPolicy({ capability: 'read', engineReadonly: true }),
+    );
+    let error: unknown;
+    let result: unknown;
+    try {
+      Promise.prototype.catch = function (onRejected) {
+        if (this === enginePromise) {
+          Reflect.apply(nativeThen, this, [undefined, () => undefined]);
+          return Reflect.apply(nativeResolve, Promise, ['bypassed']);
+        }
+        return Reflect.apply(nativeCatch, this, [onRejected]);
+      };
+      result = await handle.query(
+        stampTrustedSql(
+          { text: 'insert into products (id) values ($1)', values: ['p1'] },
+          'engine rejection mapping proof',
+        ),
+      );
+    } catch (caught) {
+      error = caught;
+    } finally {
+      Promise.prototype.catch = nativeCatch;
+    }
+
+    expect(error).toMatchObject({ message: expect.stringMatching(/KV433.*engine/s) });
+    expect(result).toBeUndefined();
   });
 
   it('preserves adapter-provided read capabilities from the engine read-only hook', async () => {
@@ -3363,7 +3511,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         scoped.query("insert into tx_swap_proof values (1, 'BYPASS')"),
       ).rejects.toThrow();
       expect(replacementReached).toBe(false);
-      await expect(client.query('select * from tx_swap_proof')).resolves.toMatchObject({ rows: [] });
+      await expect(client.query('select * from tx_swap_proof')).resolves.toMatchObject({
+        rows: [],
+      });
     } finally {
       await client.close();
     }
@@ -4298,10 +4448,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     const primary = new PGlite();
     const replica = new PGlite();
     try {
-      const replicated = withPostgresReplicas(
-        drizzlePostgres({ client: primary }),
-        [drizzlePostgres({ client: replica })],
-      );
+      const replicated = withPostgresReplicas(drizzlePostgres({ client: primary }), [
+        drizzlePostgres({ client: replica }),
+      ]);
       const handle = managedDb(replicated, 'write', {
         sqlWritePolicy: { dialect: 'postgres', tables: ['allowed'], touches: ['allowed'] },
       });
@@ -4338,9 +4487,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       const handle = managedDb(drizzle({ client, relations }), 'read');
 
       await expect(handle.query.victims.findMany()).resolves.toEqual([{ id: 'v1' }]);
-      expect(
-        Object.getOwnPropertyDescriptor(handle.query.victims, 'session'),
-      ).toBeUndefined();
+      expect(Object.getOwnPropertyDescriptor(handle.query.victims, 'session')).toBeUndefined();
       expect(Reflect.ownKeys(handle.query.victims)).not.toContain('session');
       expect(Object.getPrototypeOf(handle.query.victims)).toBeNull();
       expect(() =>
@@ -4353,12 +4500,13 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         }),
       ).toThrow();
       expect(() =>
-        (handle.query.victims as unknown as { session: { run(statement: unknown): unknown } })
-          .session.run(drizzleSql.raw('delete from victim_accounts')),
+        (
+          handle.query.victims as unknown as { session: { run(statement: unknown): unknown } }
+        ).session.run(drizzleSql.raw('delete from victim_accounts')),
       ).toThrow(/raw driver escape db\.session|KV422/);
-      expect(
-        client.prepare('select count(*) as count from victim_accounts').get(),
-      ).toEqual({ count: 1 });
+      expect(client.prepare('select count(*) as count from victim_accounts').get()).toEqual({
+        count: 1,
+      });
     } finally {
       client.close();
     }
@@ -4531,7 +4679,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       client.exec('create table rollback_control_proof (id integer primary key)');
       await expect(
         runSqliteAsyncTransaction(client, client, async (transactionDb) => {
-          (transactionDb as Database).prepare('insert into rollback_control_proof values (1)').run();
+          (transactionDb as Database)
+            .prepare('insert into rollback_control_proof values (1)')
+            .run();
           Database.prototype.exec = function (statement: string): Database {
             return Reflect.apply(nativeExec, this, [
               statement === 'ROLLBACK' ? 'COMMIT' : statement,
@@ -4580,6 +4730,46 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(callbackReached).toBe(true);
     expect(client.prepare('select id from begin_control_proof').all()).toEqual([]);
     client.close();
+  });
+
+  it('C147 pins Promise resolution so rejected async SQLite handlers always roll back', async () => {
+    const client = new Database(':memory:');
+    const nativeResolve = Promise.resolve;
+    const nativeThen = Promise.prototype.then;
+    try {
+      client.exec('create table promise_control_proof (id integer primary key)');
+      const handle = managedDb(client, 'write', {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['promise_control_proof'],
+          touches: ['proof'],
+        },
+      });
+      let error: unknown;
+      try {
+        Promise.resolve = function <Value>(value: Value | PromiseLike<Value>): Promise<Value> {
+          if (value instanceof Promise) {
+            Reflect.apply(nativeThen, value, [undefined, () => undefined]);
+            return Reflect.apply(nativeResolve, Promise, [undefined]) as Promise<Value>;
+          }
+          return Reflect.apply(nativeResolve, Promise, [value]);
+        };
+        await handle.transaction(async () => {
+          client.prepare('insert into promise_control_proof values (1)').run();
+          throw new Error('async handler rejected');
+        });
+      } catch (caught) {
+        error = caught;
+      } finally {
+        Promise.resolve = nativeResolve;
+      }
+
+      expect(error).toMatchObject({ message: 'async handler rejected' });
+      expect(client.prepare('select id from promise_control_proof').all()).toEqual([]);
+    } finally {
+      Promise.resolve = nativeResolve;
+      client.close();
+    }
   });
 
   it('write mode denies unknown methods behind raw driver escape properties before execution', () => {

@@ -55,6 +55,7 @@ import {
   witnessIsArray,
   witnessObjectKeys,
   witnessOwnKeys,
+  witnessProxy,
   witnessReflectApply,
   witnessReflectGet,
   witnessMapGet,
@@ -85,6 +86,7 @@ if (
 }
 const nativeSymbolDescription = witnessReflectGet(symbolDescriptionDescriptor, 'get') as Function;
 const NativePromise = globalThis.Promise;
+const nativePromisePrototype = NativePromise.prototype;
 const nativePromiseResolve = witnessReflectGet(NativePromise, 'resolve') as Function;
 const nativePromiseThen = witnessReflectGet(NativePromise.prototype, 'then') as Function;
 const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
@@ -164,14 +166,24 @@ const frameworkCanonicalNativeSqlValues = createWitnessWeakSet<object>();
 const relationalManagedSqlTargets = createWitnessWeakSet<object>();
 const relationalManagedSqlNamespaces = createWitnessWeakSet<object>();
 const frameworkManagedSqlDispatchProxies = createWitnessWeakSet<object>();
+const frameworkManagedSqlDispatchScopes = createWitnessWeakMap<
+  object,
+  'table-helpers' | 'test-fixture'
+>();
 
-/** Create a package-private managed proxy whose framework get trap may be dispatched internally. */
+/**
+ * Create a repo-internal managed proxy whose framework get trap may be dispatched internally.
+ *
+ * @internal Adapter/test integration only; app-authored code must not mint dispatch authority.
+ */
 export function createFrameworkManagedSqlDispatchProxy<Target extends object>(
   target: Target,
   handler: ProxyHandler<Target>,
+  scope: 'table-helpers' | 'test-fixture' = 'table-helpers',
 ): Target {
-  const proxy = new Proxy(target, handler);
+  const proxy = witnessProxy(target, handler);
   witnessWeakSetAdd(frameworkManagedSqlDispatchProxies, proxy);
+  witnessWeakMapSet(frameworkManagedSqlDispatchScopes, proxy, scope);
   return proxy;
 }
 
@@ -189,6 +201,14 @@ export function frameworkManagedSqlDispatchPropertyValue(
     throw new TypeError('Managed SQL property dispatch requires a framework-owned proxy.');
   }
   return witnessReflectGet(value, property, value);
+}
+
+function frameworkManagedSqlDispatchAllowsHelper(target: object, property: PropertyKey): boolean {
+  const scope = witnessWeakMapGet(frameworkManagedSqlDispatchScopes, target);
+  return (
+    scope === 'test-fixture' ||
+    (scope === 'table-helpers' && (property === 'read' || property === 'write'))
+  );
 }
 
 /**
@@ -289,7 +309,7 @@ function wrapDbAdapter(
   if (cached) return cached;
   if (writePolicy?.capability === 'write') void sqliteTransactionClient(db);
 
-  const proxy = new Proxy(db as Record<PropertyKey, unknown>, {
+  const proxy = witnessProxy(db as Record<PropertyKey, unknown>, {
     defineProperty() {
       return false;
     },
@@ -315,10 +335,7 @@ function wrapDbAdapter(
         );
       }
 
-      if (
-        writePolicy !== undefined &&
-        (prop === 'batch' || prop === 'refreshMaterializedView')
-      ) {
+      if (writePolicy !== undefined && (prop === 'batch' || prop === 'refreshMaterializedView')) {
         throw new Error(
           `KV422: managed DB method ${describeSqlMethod(prop)} is not exposed because Kovo cannot bind its full statement/table set to the declared SQL policy (SPEC §10.2/§10.3).`,
         );
@@ -343,19 +360,20 @@ function wrapDbAdapter(
       }
 
       if (
+        typeof value === 'object' &&
+        value !== null &&
+        frameworkManagedSqlDispatchAllowsHelper(target, prop)
+      ) {
+        return value;
+      }
+
+      if (
         writePolicy !== undefined &&
         strictSqlTarget &&
         typeof value === 'object' &&
         value !== null
       ) {
-        return wrapDbAdapter(
-          value,
-          mode,
-          proxyCache,
-          methodCache,
-          writePolicy,
-          true,
-        );
+        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
       }
 
       if (prop === 'sql' && typeof value === 'function' && isManagedDbAdapterLike(target)) {
@@ -370,29 +388,24 @@ function wrapDbAdapter(
         isRelationalManagedSqlTarget(target) &&
         isRelationalManagedSqlMethod(prop)
       ) {
-        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          (...args: unknown[]) => {
-            const callArgs =
-              prop === 'findMany' || prop === 'findFirst'
-                ? guardedSqlBuilderArguments(args)
-                : snapshotDenseSqlMethodArguments(args);
-            const result = witnessReflectApply<unknown>(value, target, callArgs);
-            if (
-              isRecord(result) &&
-              (isManagedDbAdapterLike(result) || isSqlHandleLike(result))
-            ) {
-              witnessWeakSetAdd(relationalManagedSqlTargets, result);
-              return wrapDbAdapter(
-                result,
-                mode,
-                proxyCache,
-                methodCache,
-                writePolicy,
-                true,
-              );
-            }
-            return result;
-          },
+        return cachedSqlSafetyMethod(
+          target,
+          prop,
+          value,
+          methodCache,
+          () =>
+            (...args: unknown[]) => {
+              const callArgs =
+                prop === 'findMany' || prop === 'findFirst'
+                  ? guardedSqlBuilderArguments(args)
+                  : snapshotDenseSqlMethodArguments(args);
+              const result = witnessReflectApply<unknown>(value, target, callArgs);
+              if (isRecord(result) && (isManagedDbAdapterLike(result) || isSqlHandleLike(result))) {
+                witnessWeakSetAdd(relationalManagedSqlTargets, result);
+                return wrapDbAdapter(result, mode, proxyCache, methodCache, writePolicy, true);
+              }
+              return result;
+            },
         );
       }
 
@@ -431,6 +444,13 @@ function wrapDbAdapter(
       }
 
       if (typeof value !== 'function') return value;
+      // SPEC §11.2: repo-owned adapter/verifier proxies already harden and observe their
+      // non-SQL helper dispatch. Preserve that witnessed get trap instead of reclassifying a
+      // table-oriented read/write helper as an unknown SQL builder. Direct SQL methods above
+      // remain under the ordinary KV422 statement guards.
+      if (frameworkManagedSqlDispatchAllowsHelper(target, prop)) {
+        return value;
+      }
       return cachedSqlSafetyMethod(target, prop, value, methodCache, () => {
         if (isSqlBuilderFastPath(prop, writePolicy)) {
           return guardedSqlBuilderEntry(
@@ -466,13 +486,7 @@ function wrapDbAdapter(
       return false;
     },
     set(target, property, value) {
-      return setManagedSqlDataProperty(
-        target,
-        property,
-        value,
-        writePolicy,
-        strictSqlTarget,
-      );
+      return setManagedSqlDataProperty(target, property, value, writePolicy, strictSqlTarget);
     },
     setPrototypeOf() {
       return false;
@@ -639,7 +653,7 @@ function wrapSqlBuilderSafety(
   const cached = witnessWeakMapGet(proxyCache, builder);
   if (cached) return cached;
 
-  const proxy = new Proxy(builder as Record<PropertyKey, unknown>, {
+  const proxy = witnessProxy(builder as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const value = witnessReflectGet(target, prop, receiver);
       if (typeof value !== 'function') return value;
@@ -1061,7 +1075,11 @@ function reconstructNativeDrizzleColumnEntity(
 
 function requiredOwnString(value: object, property: PropertyKey): string {
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
     throw nativeDrizzleProvenanceError();
   }
   return descriptor.value;
@@ -1081,7 +1099,11 @@ function optionalOwnString(value: object, property: PropertyKey): string | undef
 
 function requiredOwnBoolean(value: object, property: PropertyKey): boolean {
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'boolean') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'boolean'
+  ) {
     throw nativeDrizzleProvenanceError();
   }
   return descriptor.value;
@@ -1143,7 +1165,11 @@ function canonicalPinnedNativeDrizzleIdentifier(value: object): object | undefin
   const kinds = nativeDrizzleEntityKinds(value);
   if (!witnessSetHas(kinds, 'Name') || !validateManagedSqlStatement(value).ok) return undefined;
   const descriptor = witnessGetOwnPropertyDescriptor(value, 'value');
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
     throw nativeDrizzleProvenanceError();
   }
   const identifier = new Name(descriptor.value);
@@ -1236,11 +1262,7 @@ function reconstructNativeDrizzleSql(
     ) {
       throw nativeDrizzleProvenanceError();
     }
-    const canonicalSql = reconstructNativeDrizzleSql(
-      sqlDescriptor.value,
-      reconstructed,
-      active,
-    );
+    const canonicalSql = reconstructNativeDrizzleSql(sqlDescriptor.value, reconstructed, active);
     if (!witnessSetHas(nativeDrizzleEntityKinds(canonicalSql), 'SQL')) {
       throw nativeDrizzleProvenanceError();
     }
@@ -1306,7 +1328,8 @@ function reconstructNativeDrizzleChunk(
     const descriptor = witnessGetOwnPropertyDescriptor(value, 'value');
     if (descriptor === undefined || !('value' in descriptor)) throw nativeDrizzleProvenanceError();
     const parameter =
-      isRecord(descriptor.value) && witnessSetHas(nativeDrizzleEntityKinds(descriptor.value), 'Placeholder')
+      isRecord(descriptor.value) &&
+      witnessSetHas(nativeDrizzleEntityKinds(descriptor.value), 'Placeholder')
         ? reconstructNativeDrizzlePlaceholder(descriptor.value)
         : descriptor.value;
     return witnessFreeze(new Param(parameter));
@@ -1319,7 +1342,11 @@ function reconstructNativeDrizzleChunk(
 
 function reconstructNativeDrizzlePlaceholder(value: object): Placeholder {
   const descriptor = witnessGetOwnPropertyDescriptor(value, 'name');
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
     throw nativeDrizzleProvenanceError();
   }
   return witnessFreeze(new Placeholder(descriptor.value));
@@ -1384,7 +1411,11 @@ function frozenIdentifierSql(parts: readonly string[]): object {
   const chunks: unknown[] = [];
   for (let index = 0; index < parts.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(parts, index);
-    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
       throw nativeDrizzleProvenanceError();
     }
     if (index > 0) appendSqlSafetyValue(chunks, witnessFreeze(new StringChunk('.')));
@@ -1802,7 +1833,7 @@ function wrapReadWithBuilder(
   const cached = witnessWeakMapGet(proxyCache, builder);
   if (cached) return cached;
 
-  const proxy = new Proxy(builder as Record<PropertyKey, unknown>, {
+  const proxy = witnessProxy(builder as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       if (prop === 'then') return undefined;
       if (typeof prop === 'string' && !witnessSetHas(READ_SQL_BUILDER_FAST_PATH_METHODS, prop)) {
@@ -1854,16 +1885,8 @@ function guardedUnknownSqlMethod(
       () => witnessReflectApply(value, target, snappedArgs),
       writePolicy,
     );
-    return isRecord(result) &&
-      (isManagedDbAdapterLike(result) || isSqlHandleLike(result))
-      ? wrapDbAdapter(
-          result,
-          mode,
-          proxyCache,
-          methodCache,
-          writePolicy,
-          strictSqlTarget,
-        )
+    return isRecord(result) && (isManagedDbAdapterLike(result) || isSqlHandleLike(result))
+      ? wrapDbAdapter(result, mode, proxyCache, methodCache, writePolicy, strictSqlTarget)
       : result;
   };
 }
@@ -2031,7 +2054,10 @@ function guardedTransactionMethod(
       const sqlite = runSqliteAsyncTransaction(
         target,
         wrapTransactionDb(target, mode, proxyCache, methodCache, writePolicy),
-        (tx) => Promise.resolve(callback(tx)),
+        (tx) =>
+          witnessReflectApply<Promise<unknown>>(nativePromiseResolve, NativePromise, [
+            witnessReflectApply(callback, undefined, [tx]),
+          ]),
       );
       if (sqlite) return sqlite;
     }
@@ -2139,7 +2165,9 @@ function strictInheritedDataDescriptor(
       if ('value' in descriptor || (allowGetter && typeof descriptor.get === 'function')) {
         return descriptor;
       }
-      throw new TypeError(`SQLite transaction control ${String(property)} must be a data property.`);
+      throw new TypeError(
+        `SQLite transaction control ${String(property)} must be a data property.`,
+      );
     }
     current = witnessGetPrototypeOf(current);
   }
@@ -2236,10 +2264,13 @@ function wrapReadonlyEngineResult<Result>(
 
   try {
     const result = execute();
-    if (isPromiseLike(result)) {
-      return result.catch((error: unknown) => {
-        throw readonlyEngineError(error);
-      }) as Result;
+    if (isNativePromise(result)) {
+      return witnessReflectApply<Promise<unknown>>(nativePromiseThen, result, [
+        (value: unknown) => value,
+        (error: unknown) => {
+          throw readonlyEngineError(error);
+        },
+      ]) as Result;
     }
     return result;
   } catch (error) {
@@ -2257,13 +2288,14 @@ function readonlyEngineError(error: unknown): Error {
   );
 }
 
-function isPromiseLike(value: unknown): value is Promise<unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { then?: unknown }).then === 'function' &&
-    typeof (value as { catch?: unknown }).catch === 'function'
-  );
+function isNativePromise(value: unknown): value is Promise<unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  let prototype = witnessGetPrototypeOf(value);
+  for (let depth = 0; prototype !== null && depth < 16; depth += 1) {
+    if (prototype === nativePromisePrototype) return true;
+    prototype = witnessGetPrototypeOf(prototype);
+  }
+  return false;
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
@@ -2319,7 +2351,7 @@ function wrapPreparedSqlStatement(
   const cached = witnessWeakMapGet(proxyCache, statementHandle);
   if (cached) return cached;
 
-  const proxy = new Proxy(statementHandle as Record<PropertyKey, unknown>, {
+  const proxy = witnessProxy(statementHandle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const value = witnessReflectGet(target, prop, receiver);
       if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {

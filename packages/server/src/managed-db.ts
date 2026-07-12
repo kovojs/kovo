@@ -48,6 +48,7 @@ import {
   witnessMapGet,
   witnessMapSet,
   witnessOwnKeys,
+  witnessProxy,
   witnessRegExpExec,
   witnessReflectApply,
   witnessReflectGet,
@@ -524,14 +525,7 @@ function postgresScopedClientFacade<Client extends object>(
   witnessDefineProperty(facade, 'query', {
     enumerable: true,
     value(query: unknown, params?: unknown[], queryOptions?: unknown) {
-      return scopedPostgresQuery(
-        target,
-        transactionMethod,
-        options,
-        query,
-        params,
-        queryOptions,
-      );
+      return scopedPostgresQuery(target, transactionMethod, options, query, params, queryOptions);
     },
   });
   witnessDefineProperty(facade, 'exec', {
@@ -1380,11 +1374,7 @@ function authorizationCensusRelationalNamespace(
       if (!isRecord(builder)) return builder;
       const table = optionalOwnDataProperty(builder, 'table');
       const names =
-        table === undefined
-          ? typeof prop === 'string'
-            ? [prop]
-            : []
-          : options.tableNames(table);
+        table === undefined ? (typeof prop === 'string' ? [prop] : []) : options.tableNames(table);
       if (names.length === 0) {
         throw new Error(
           'KV414: relational query table identity is not available to the authorization census (SPEC §10.3 DEC-K).',
@@ -1433,15 +1423,9 @@ function authorizationCensusRelationalBuilder(
           throw new TypeError('Relational query methods accept at most one config object.');
         }
         const config =
-          args.length === 0
-            ? undefined
-            : snapshotAuthorizationRelationalValue(args[0], 0);
+          args.length === 0 ? undefined : snapshotAuthorizationRelationalValue(args[0], 0);
         assertAuthorizationRelationalConfigAllowed(builder, config, options, 0);
-        return witnessReflectApply(
-          item,
-          target,
-          config === undefined ? [] : [config],
-        );
+        return witnessReflectApply(item, target, config === undefined ? [] : [config]);
       };
     },
     getOwnPropertyDescriptor(target, prop) {
@@ -1533,7 +1517,9 @@ function authorizationCensusDataPropertyValue(target: object, property: Property
     owner = witnessGetPrototypeOf(owner);
   }
   if (owner !== null) {
-    throw new Error('KV414: authorization census prototype chain exceeds the bounded authority limit.');
+    throw new Error(
+      'KV414: authorization census prototype chain exceeds the bounded authority limit.',
+    );
   }
   return undefined;
 }
@@ -2186,13 +2172,7 @@ function scopedPostgresTransactionClient(
   witnessDefineProperty(facade, 'transaction', {
     enumerable: true,
     value<Result>(callback: (nested: unknown) => Promise<Result> | Result, ...args: unknown[]) {
-      return scopedPostgresTransaction(
-        target,
-        controls.transaction,
-        options,
-        callback,
-        args,
-      );
+      return scopedPostgresTransaction(target, controls.transaction, options, callback, args);
     },
   });
   defineBlockedPostgresProperties(facade, POSTGRES_BLOCKED_TRANSACTION_PROPERTIES);
@@ -2209,13 +2189,7 @@ function scopedPostgresQuery(
 ): Promise<unknown> {
   const snapshot = postgresQuerySnapshot(query, params);
   assertAppPostgresTextAllowed(snapshot.text);
-  return executeScopedPostgresQuery(
-    client,
-    transactionMethod,
-    options,
-    snapshot,
-    queryOptions,
-  );
+  return executeScopedPostgresQuery(client, transactionMethod, options, snapshot, queryOptions);
 }
 
 async function executeScopedPostgresQuery(
@@ -3238,7 +3212,7 @@ function readonlyCapabilityDb<Db extends object>(
   options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions },
   preserveInnerCapabilities = false,
 ): Reader<Db> {
-  const proxy = new Proxy(db, {
+  const proxy = witnessProxy(db, {
     get(target, prop, receiver) {
       const reject = readonlyCapabilityError;
       if (prop === 'then') return undefined;
@@ -3689,7 +3663,11 @@ function rawReadExecutionMethod(
   target: object,
   policy: Pick<RawReadPolicyOptions, 'dialectLabel' | 'executeMethod'>,
 ): Function {
-  const executionTarget = frameworkManagedDbRawTarget(target) ?? target;
+  // SPEC §10.3/§11.2: rawRead is an audited capability on top of the managed SQL choke, not an
+  // escape around it. Retain the managed proxy so non-engine readers receive the statement-shape
+  // allowlist and dedicated engine readers receive KV433 error mapping. Unwrapping here previously
+  // let rawRead invoke the raw adapter method after all managed SQL policy had been discarded.
+  const managedExecutionTarget = frameworkManagedDbRawTarget(target) !== undefined;
   const methods =
     policy.executeMethod === undefined
       ? (['all', 'query', 'execute', 'values'] as const)
@@ -3698,8 +3676,11 @@ function rawReadExecutionMethod(
     const descriptor = witnessGetOwnPropertyDescriptor(methods, index);
     if (descriptor === undefined || !('value' in descriptor)) continue;
     try {
-      const method = inheritedFunctionDataProperty(executionTarget, descriptor.value);
-      return (...args: unknown[]) => witnessReflectApply(method, executionTarget, args);
+      const method = managedExecutionTarget
+        ? witnessReflectGet(target, descriptor.value, target)
+        : inheritedFunctionDataProperty(target, descriptor.value);
+      if (typeof method !== 'function') continue;
+      return (...args: unknown[]) => witnessReflectApply(method, target, args);
     } catch {
       // Keep looking for the next fixed read method.
     }
@@ -3818,10 +3799,7 @@ function resolveReadonlyDbTarget<Db>(raw: Db): {
   target: Db;
 } {
   if (!isRecord(raw)) return { fromHook: false, sealedHook: false, target: raw };
-  const sealedCreateReadonly = witnessWeakMapGet(
-    authorizationCensusFrameworkHooks,
-    raw,
-  )?.readonly;
+  const sealedCreateReadonly = witnessWeakMapGet(authorizationCensusFrameworkHooks, raw)?.readonly;
   const createReadonly =
     sealedCreateReadonly ?? optionalStrictInheritedFunctionDataProperty(raw, kovoReadonlyDbHandle);
   if (createReadonly === undefined) {

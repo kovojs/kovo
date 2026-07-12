@@ -41,4 +41,7 @@ export {
   type ManagedDbMode,
   type Reader,
 } from '../managed-db.js';
-export { frameworkManagedDbRawTarget } from '../sql-safe-handle.js';
+export {
+  createFrameworkManagedSqlDispatchProxy,
+  frameworkManagedDbRawTarget,
+} from '../sql-safe-handle.js';

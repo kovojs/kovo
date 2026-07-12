@@ -14,6 +14,7 @@ const NativeWeakSet = globalThis.WeakSet;
 const NativeMap = globalThis.Map;
 const NativeSet = globalThis.Set;
 const NativeObject = globalThis.Object;
+const NativeProxy = globalThis.Proxy;
 const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeJSON = globalThis.JSON;
@@ -196,6 +197,12 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeReflectGet, NativeReflect, [record, 'visible', record]) !== value) {
       return false;
     }
+    const proxy = new NativeProxy(record, {
+      get(target, property, receiver) {
+        return apply(nativeReflectGet, NativeReflect, [target, property, receiver]);
+      },
+    });
+    if (proxy.visible !== value) return false;
     if (apply(nativeObjectGetPrototypeOf, NativeObject, [record]) !== nativeObjectPrototype) {
       return false;
     }
@@ -450,6 +457,14 @@ export function witnessReflectApply<Return>(
 ): Return {
   assertSecurityWitnessIntrinsics();
   return apply(target, thisArgument, argumentsList);
+}
+
+export function witnessProxy<Target extends object>(
+  target: Target,
+  handler: ProxyHandler<Target>,
+): Target {
+  assertSecurityWitnessIntrinsics();
+  return new NativeProxy(target, handler);
 }
 
 export function witnessString(value: unknown): string {
