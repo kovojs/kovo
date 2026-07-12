@@ -21,6 +21,7 @@ import type {
 import type {
   BetterAuthCredentialMutationValue,
   BetterAuthRequestLike,
+  BetterAuthResponseLike,
   BetterAuthSignInEmailLike,
   BetterAuthSignOutLike,
   BetterAuthSignUpEmailLike,
@@ -30,6 +31,10 @@ import {
   callBetterAuthSignOut,
   callBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
+
+const NativeError = Error;
+const betterAuthCredentialBoundaryFailureMessage =
+  'Better Auth credential provider failed inside the trusted plaintext boundary.';
 
 type MutationWithAssignedKey<Definition, Key extends string> =
   Definition extends MutationDefinition<
@@ -49,6 +54,10 @@ function assignBetterAuthMutationKey<Key extends string, Definition extends { ke
 ): MutationWithAssignedKey<Definition, Key> {
   assignDerivedMutationKey(definition as unknown as MutationDefinition<string>, key);
   return definition as unknown as MutationWithAssignedKey<Definition, Key>;
+}
+
+function betterAuthCredentialBoundaryFailure(): Error {
+  return new NativeError(betterAuthCredentialBoundaryFailureMessage);
 }
 
 /**
@@ -111,7 +120,7 @@ export function betterAuthSignInEmailMutation<
             return context.fail('INVALID_CREDENTIALS', {});
           }
 
-          throw error;
+          throw betterAuthCredentialBoundaryFailure();
         }
       },
     }),
@@ -178,7 +187,7 @@ export function betterAuthSignUpEmailMutation<
             return context.fail('INVALID_CREDENTIALS', {});
           }
 
-          throw error;
+          throw betterAuthCredentialBoundaryFailure();
         }
       },
     }),
@@ -219,7 +228,12 @@ export function betterAuthSignOutMutation<
       redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-out'> }) =>
         result.value.redirectTo,
       async handler(_input, request, context) {
-        const response = await callBetterAuthSignOut(auth, request.headers);
+        let response: BetterAuthResponseLike;
+        try {
+          response = await callBetterAuthSignOut(auth, request.headers);
+        } catch {
+          throw betterAuthCredentialBoundaryFailure();
+        }
 
         forwardBetterAuthSetCookie(response.headers, context);
         setSessionRevocationClearSiteData(context);

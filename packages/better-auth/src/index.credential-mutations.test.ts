@@ -94,6 +94,57 @@ describe('credential mutation helpers', () => {
     }).toThrow(message);
   });
 
+  it.each(['sign-in', 'sign-up'] as const)(
+    'does not let %s provider errors carry submitted passwords out of the trusted boundary',
+    async (kind) => {
+      const password = 'SUBMITTED_PASSWORD_SHOULD_NEVER_LOG';
+      const auth = {
+        api: {
+          signInEmail(input: { body: { password: string } }): never {
+            throw new Error(`provider failed for password=${input.body.password}`);
+          },
+          async signUpEmail(input: { body: { password: string } }): Promise<never> {
+            throw new Error(`provider failed for password=${input.body.password}`);
+          },
+        },
+      };
+      const definition =
+        kind === 'sign-in'
+          ? betterAuthSignInEmailMutation(auth)
+          : betterAuthSignUpEmailMutation(auth);
+      const rawInput =
+        kind === 'sign-in'
+          ? { email: 'ada@example.test', password }
+          : { email: 'ada@example.test', name: 'Ada', password };
+      let thrown: unknown;
+
+      try {
+        await runProtectedCredentialMutation(
+          definition as MutationDefinition<
+            string,
+            Schema<unknown>,
+            Record<string, Schema<unknown>>,
+            { headers: Headers },
+            unknown
+          >,
+          rawInput,
+          { headers: requestHeaders() },
+        );
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toBe(
+        'Better Auth credential provider failed inside the trusted plaintext boundary.',
+      );
+      expect((thrown as Error).cause).toBeUndefined();
+      expect(`${String((thrown as Error).stack)} ${JSON.stringify(thrown)}`).not.toContain(
+        password,
+      );
+    },
+  );
+
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders();

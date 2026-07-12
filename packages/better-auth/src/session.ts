@@ -8,6 +8,10 @@ import {
 } from './internal.js';
 import { callBetterAuthGetSession } from './internal/trusted-plaintext.js';
 
+const NativeError = Error;
+const betterAuthSessionBoundaryFailureMessage =
+  'Better Auth session provider failed inside the trusted plaintext boundary.';
+
 /**
  * The `{ session, user }` pair Better Auth returns for an authenticated request. The
  * adapter maps this into the app's own session value via a `BetterAuthSessionMapper`;
@@ -55,7 +59,16 @@ export function betterAuthSession<
   map: BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue>,
 ): SessionProvider<Request, SessionValue> {
   return async (request): Promise<SessionProviderResult<SessionValue> | SessionValue | null> => {
-    const result = await callBetterAuthGetSession(auth, request.headers);
+    let result:
+      | BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>
+      | BetterAuthSessionPayload<AuthSession, AuthUser>
+      | null
+      | undefined;
+    try {
+      result = await callBetterAuthGetSession(auth, request.headers);
+    } catch {
+      throw new NativeError(betterAuthSessionBoundaryFailureMessage);
+    }
 
     // BACKWARD-COMPAT shape detection: an instance that honors `returnHeaders` returns the
     // `{ response, headers }` envelope; one that ignores it (the example apps, a
