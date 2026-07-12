@@ -1,11 +1,15 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { parseDevArgs, startKovoDevServer } from './commands/dev.js';
+import {
+  isolateAuthoredDevPluginOptions,
+  parseDevArgs,
+  startKovoDevServer,
+} from './commands/dev.js';
 
 const repoRoot = process.cwd();
 const temporaryRoots: string[] = [];
@@ -51,6 +55,61 @@ describe('kovo dev', () => {
     });
   });
 
+  it('isolates plugins without dispatching late map, iterator, or hook getters', () => {
+    const rawPlugin = { name: 'selective-client-hook', resolveId: () => null };
+    const mapDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'map')!;
+    const iteratorDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator)!;
+    let collectionDispatches = 0;
+    let isolated: unknown;
+    try {
+      Object.defineProperty(Array.prototype, 'map', {
+        configurable: true,
+        value() {
+          collectionDispatches += 1;
+          return [rawPlugin];
+        },
+        writable: true,
+      });
+      Object.defineProperty(Array.prototype, Symbol.iterator, {
+        configurable: true,
+        value() {
+          collectionDispatches += 1;
+          throw new Error('selective iterator dispatched');
+        },
+        writable: true,
+      });
+      isolated = isolateAuthoredDevPluginOptions([rawPlugin]);
+    } finally {
+      Object.defineProperty(Array.prototype, 'map', mapDescriptor);
+      Object.defineProperty(Array.prototype, Symbol.iterator, iteratorDescriptor);
+    }
+
+    expect(collectionDispatches).toBe(0);
+    expect(isolated).toHaveLength(1);
+    expect((isolated as unknown[])[0]).not.toBe(rawPlugin);
+
+    let getterExecutions = 0;
+    const hook = {} as { handler: () => null };
+    Object.defineProperty(hook, 'handler', {
+      enumerable: true,
+      get() {
+        getterExecutions += 1;
+        return () => null;
+      },
+    });
+    expect(() =>
+      isolateAuthoredDevPluginOptions([{ name: 'getter-hook', resolveId: hook }]),
+    ).toThrow(
+      /resolveId\.handler (?:changed while it was inspected|must be an own data property)/u,
+    );
+    expect(getterExecutions).toBe(0);
+    expect(() =>
+      isolateAuthoredDevPluginOptions([
+        { name: 'future-hook', futureAuthorityHook: () => null } as never,
+      ]),
+    ).toThrow(/rejects authored Vite plugin property futureAuthorityHook/u);
+  });
+
   it('captures the exact compiler graph before poison-first authored config evaluation', async () => {
     const root = devFixture('bootstrap-order');
     writeFileSync(
@@ -75,13 +134,21 @@ try {
 } finally {
   prototype.update = nativeUpdate;
 }
-export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };
+export default {
+  build: { target: 'esnext' },
+  fmt: { singleQuote: true },
+  lint: { ignorePatterns: ['dist/**'] },
+  run: { cache: { scripts: true } },
+  server: { host: '127.0.0.1', port: 0, strictPort: true },
+  test: { include: ['src/**/*.test.ts'] },
+};
 `,
       'utf8',
     );
 
     const handle = await startKovoDevServer({
       appModulePath: join(root, 'src/app.ts'),
+      configFile: join(root, 'vite.config.ts'),
       mode: 'development',
       root,
       strictPort: false,
@@ -90,6 +157,18 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };
       expect(
         (globalThis as { __kovoDevCompilerIdsDistinct?: unknown }).__kovoDevCompilerIdsDistinct,
       ).toBe(true);
+      expect(handle.server.config.define).toEqual({});
+      expect(handle.server.config.esbuild).not.toBe(false);
+      expect(handle.server.config.experimental.bundledDev).toBe(false);
+      expect(handle.server.config.oxc).not.toBe(false);
+      expect(handle.server.config.rawAssetsInclude).toEqual([]);
+      expect(handle.server.config.resolve.preserveSymlinks).toBe(false);
+      expect(handle.server.config.environments.ssr.consumer).toBe('server');
+      expect(handle.server.config.environments.ssr.dev.moduleRunnerTransform).toBe(true);
+      expect(handle.server.config.environments.ssr.isBundled).toBe(false);
+      expect(handle.server.config.environments.ssr.resolve.external).toEqual([]);
+      expect(handle.server.config.ssr.external).toEqual([]);
+      expect(handle.server.config.ssr.target).toBe('node');
       const origin = handle.server.resolvedUrls?.local[0];
       expect(origin).toBeTruthy();
       const response = await fetch(origin!);
@@ -100,9 +179,36 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };
     }
   }, 30_000);
 
+  it('ignores undeclared Vite config in the real default CLI path', async () => {
+    const root = devFixture('undeclared-config');
+    const marker = join(root, 'undeclared-config-ran.marker');
+    writeFileSync(
+      join(root, 'vite.config.ts'),
+      `import { writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(marker)}, 'executed', 'utf8');
+throw new Error('undeclared Vite config executed');
+`,
+      'utf8',
+    );
+
+    const port = await reservePort();
+    const child = spawnKovoDev(root, port);
+    const output = collectChildOutput(child);
+    try {
+      const response = await fetchWhenReady(`http://127.0.0.1:${port}/`, output, 30_000);
+      const body = await response.text();
+      expect(response.status, output.combined()).toBe(200);
+      expect(body).toContain('<main>Bootstrap safe</main>');
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      await stopChild(child);
+    }
+  }, 40_000);
+
   it('rejects authored app-level hooks that retain root-config or live-server authority', async () => {
     const hookNames = [
       'buildApp',
+      'applyToEnvironment',
       'config',
       'configEnvironment',
       'configResolved',
@@ -129,6 +235,7 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };
       await expect(
         startKovoDevServer({
           appModulePath: join(root, 'src/app.ts'),
+          configFile: join(root, 'vite.config.ts'),
           mode: 'development',
           root,
           strictPort: false,
@@ -137,6 +244,61 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };
         `kovo dev rejects authored Vite plugin ${hookName}: supported plugins are client-environment transforms`,
       );
     }
+
+    const root = devFixture('custom-ssr-environment');
+    writeFileSync(
+      join(root, 'vite.config.ts'),
+      `export default {
+  environments: {
+    ssr: {
+      dev: {
+        createEnvironment() {
+          throw new Error('attacker SSR environment constructed');
+        },
+      },
+    },
+  },
+};\n`,
+      'utf8',
+    );
+    await expect(
+      startKovoDevServer({
+        appModulePath: join(root, 'src/app.ts'),
+        configFile: join(root, 'vite.config.ts'),
+        mode: 'development',
+        root,
+        strictPort: false,
+      }),
+    ).rejects.toThrow(/rejects authored Vite config key environments/u);
+
+    const accessorRoot = devFixture('config-accessor');
+    const marker = join(accessorRoot, 'config-getter-ran.marker');
+    writeFileSync(
+      join(accessorRoot, 'vite.config.ts'),
+      `import { writeFileSync } from 'node:fs';
+const config = {};
+Object.defineProperty(config, 'resolve', {
+  enumerable: true,
+  get() {
+    writeFileSync(${JSON.stringify(marker)}, 'getter executed', 'utf8');
+    return { alias: { 'node:crypto': './attacker.ts' } };
+  },
+});
+export default config;\n`,
+      'utf8',
+    );
+    await expect(
+      startKovoDevServer({
+        appModulePath: join(accessorRoot, 'src/app.ts'),
+        configFile: join(accessorRoot, 'vite.config.ts'),
+        mode: 'development',
+        root: accessorRoot,
+        strictPort: false,
+      }),
+    ).rejects.toThrow(
+      /Authored Vite config\.resolve (?:changed while it was inspected|must be an own data property)/u,
+    );
+    expect(existsSync(marker)).toBe(false);
   }, 40_000);
 
   it('fails closed before a poison-first plugin can replace a live lowerer collection method', async () => {
@@ -153,6 +315,7 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
     await expect(
       startKovoDevServer({
         appModulePath: join(root, 'src/app.ts'),
+        configFile: join(root, 'vite.config.ts'),
         mode: 'development',
         root,
         strictPort: false,
@@ -179,6 +342,7 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
     await expect(
       startKovoDevServer({
         appModulePath: join(root, 'src/app.ts'),
+        configFile: join(root, 'vite.config.ts'),
         mode: 'development',
         root,
         strictPort: false,
@@ -186,31 +350,35 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
     ).rejects.toThrow(/requires authored Vite plugin apply to be the static/u);
   }, 30_000);
 
-  it('makes the real CLI reject authored aliases for Kovo trust-root modules', async () => {
-    const root = devFixture('framework-alias');
-    const attackerPath = join(root, 'attacker-integration.ts');
-    writeAttackerIntegration(attackerPath);
-    writeFileSync(
-      join(root, 'vite.config.ts'),
-      `export default {
+  it('makes the real CLI reject all authored resolver authority', async () => {
+    for (const [name, specifier] of [
+      ['framework', '@kovojs/server/internal/app-shell-vite'],
+      ['node-crypto', 'node:crypto'],
+      ['transitive-vite', 'vite-plus'],
+    ] as const) {
+      const root = devFixture(`${name}-alias`);
+      const attackerPath = join(root, 'attacker-integration.ts');
+      writeAttackerIntegration(attackerPath);
+      writeFileSync(
+        join(root, 'vite.config.ts'),
+        `export default {
   resolve: {
     alias: {
-      '@kovojs/server/internal/app-shell-vite': ${JSON.stringify(attackerPath)},
+      ${JSON.stringify(specifier)}: ${JSON.stringify(attackerPath)},
     },
   },
 };\n`,
-      'utf8',
-    );
+        'utf8',
+      );
 
-    const child = spawnKovoDev(root, await reservePort());
-    const output = collectChildOutput(child);
-    const status = await waitForChildExit(child, 30_000);
+      const child = spawnKovoDev(root, await reservePort(), true);
+      const output = collectChildOutput(child);
+      const status = await waitForChildExit(child, 30_000);
 
-    expect(status).toBe(1);
-    expect(output.stderr).toContain(
-      'kovo dev rejects resolve.alias for @kovojs/server/internal/app-shell-vite',
-    );
-    expect(output.combined()).not.toContain('ALIASED FRAMEWORK');
+      expect(status).toBe(1);
+      expect(output.stderr).toContain('kovo dev rejects authored Vite config key resolve');
+      expect(output.combined()).not.toContain('ALIASED FRAMEWORK');
+    }
   }, 40_000);
 
   it('keeps real CLI SSR loads outside authored resolve/load/transform hooks', async () => {
@@ -252,7 +420,7 @@ export default {
     );
 
     const port = await reservePort();
-    const child = spawnKovoDev(root, port);
+    const child = spawnKovoDev(root, port, true);
     const output = collectChildOutput(child);
     try {
       const response = await fetchWhenReady(`http://127.0.0.1:${port}/`, output, 30_000);
@@ -410,22 +578,22 @@ function writeAttackerIntegration(fileName: string): void {
   writeFileSync(fileName, attackerIntegrationSource(), 'utf8');
 }
 
-function spawnKovoDev(root: string, port: number): ChildProcessWithoutNullStreams {
-  return spawn(
-    join(repoRoot, 'packages/cli/src/bin.ts'),
-    [
-      'dev',
-      './src/app.ts',
-      '--root',
-      root,
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(port),
-      '--strict-port',
-    ],
-    { cwd: root, env: process.env },
-  );
+function spawnKovoDev(
+  root: string,
+  port: number,
+  explicitConfig = false,
+): ChildProcessWithoutNullStreams {
+  const args = ['dev', './src/app.ts', '--root', root];
+  if (explicitConfig) {
+    args[args.length] = '--config';
+    args[args.length] = join(root, 'vite.config.ts');
+  }
+  args[args.length] = '--host';
+  args[args.length] = '127.0.0.1';
+  args[args.length] = '--port';
+  args[args.length] = String(port);
+  args[args.length] = '--strict-port';
+  return spawn(join(repoRoot, 'packages/cli/src/bin.ts'), args, { cwd: root, env: process.env });
 }
 
 function collectChildOutput(child: ChildProcessWithoutNullStreams): {

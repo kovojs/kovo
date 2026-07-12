@@ -28,15 +28,15 @@ import {
   buildObjectKeys,
   buildOwnDataValue,
   buildSnapshotDenseArray,
-  buildStringStartsWith,
 } from './build-security-intrinsics.js';
 
 const NativeFunction = globalThis.Function;
+const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
 const NativePromise = globalThis.Promise;
 const NativeReflect = globalThis.Reflect;
-const NativeRegExp = globalThis.RegExp;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
+const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
@@ -46,6 +46,7 @@ const isolatedAuthoredPlugin = Symbol('Kovo isolated authored Vite plugin');
 
 const AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS = [
   'buildApp',
+  'applyToEnvironment',
   'config',
   'configEnvironment',
   'configResolved',
@@ -55,15 +56,8 @@ const AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS = [
   'hotUpdate',
   'transformIndexHtml',
 ] as const;
-
-const DEFAULT_VITE_CONFIG_FILES = [
-  'vite.config.ts',
-  'vite.config.mts',
-  'vite.config.js',
-  'vite.config.mjs',
-  'vite.config.cts',
-  'vite.config.cjs',
-] as const;
+const SUPPORTED_AUTHORED_CLIENT_PLUGIN_HOOKS = ['load', 'resolveId', 'transform'] as const;
+const IGNORED_NON_DEV_CONFIG_KEYS = ['build', 'fmt', 'lint', 'run', 'test'] as const;
 
 /** @internal Parsed options for the supported `kovo dev` runner. */
 export interface KovoDevOptions {
@@ -152,41 +146,21 @@ export async function startKovoDevServer(options: KovoDevOptions): Promise<KovoD
       throw new TypeError('@kovojs/server/vite kovo() must return a plugin object.');
     }
     const kovoPlugin = freezeFrameworkPlugin(createdPlugin) as PluginOption;
-    const authoredConfig = await loadAuthoredDevConfig(
-      bootstrapServer,
-      configFile,
-      root,
-      options.mode,
+    const authoredConfig = snapshotSupportedAuthoredDevConfig(
+      await loadAuthoredDevConfig(bootstrapServer, configFile, root, options.mode),
     );
-    const authoredPlugins = authoredVitePlugins(authoredConfig).map(isolateAuthoredPluginOption);
-    const [securityProfilePrePlugin, securityProfilePostPlugin] =
-      createDevSecurityProfilePlugins(kovoPlugin);
-    const liveConfig: InlineConfig = {
-      ...authoredConfig,
-      configFile: false,
-      mode: options.mode,
-      plugins: [
-        securityProfilePrePlugin,
-        kovoPlugin,
-        ...authoredPlugins,
-        securityProfilePostPlugin,
-      ],
-      root,
-      server: {
-        ...authoredConfig.server,
-        ...(options.host === undefined ? {} : { host: options.host }),
-        ...(options.port === undefined ? {} : { port: options.port }),
-        ...(options.strictPort ? { strictPort: true } : {}),
-      },
-      ssr: {
-        ...authoredConfig.ssr,
-        // The live app graph is distinct from the config-evaluation graph. Keep all Kovo modules
-        // together so the plugin's configureServer preload and the app share exact identities.
-        noExternal: [/^@kovojs\//],
-      },
-    };
+    const authoredPlugins = isolateAuthoredDevPluginOptions(authoredConfig.plugins);
+    const securityProfile = createDevSecurityProfilePlugins(kovoPlugin);
+    const livePlugins = fixedDevPluginArray(
+      securityProfile.prePlugin,
+      kovoPlugin,
+      authoredPlugins,
+      securityProfile.postPlugin,
+    );
+    const liveConfig = trustedLiveDevConfig(root, options, authoredConfig.server, livePlugins);
 
     liveServer = await createServer(liveConfig);
+    lockLiveDevEnvironmentPluginLists(liveServer.config);
     await liveServer.listen();
     liveServer.printUrls();
 
@@ -241,6 +215,17 @@ interface DevSecurityProfileModule {
 
 interface CompilerSecurityBootstrapModule {
   lockCompilerSecurityRealm(): void;
+}
+
+interface SupportedAuthoredDevConfig {
+  plugins: PluginOption[];
+  server: SupportedAuthoredDevServer;
+}
+
+interface SupportedAuthoredDevServer {
+  host?: boolean | string;
+  port?: number;
+  strictPort?: boolean;
 }
 
 async function preloadDevSecurityProfile(
@@ -316,20 +301,157 @@ async function loadAuthoredDevConfig(
   return value as UserConfig;
 }
 
-function authoredVitePlugins(config: UserConfig): PluginOption[] {
-  const value = buildOwnDataValue(config, 'plugins', 'Authored Vite config');
-  if (value === undefined) return [];
-  if (!buildArrayIsArray(value)) {
-    throw new TypeError('Authored Vite config plugins must be a dense array.');
+function snapshotSupportedAuthoredDevConfig(config: UserConfig): SupportedAuthoredDevConfig {
+  let plugins: PluginOption[] = [];
+  let server: SupportedAuthoredDevServer = {};
+  const keys = buildObjectKeys(config);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const value = buildOwnDataValue(config, key, 'Authored Vite config');
+    if (key === 'plugins') {
+      if (value === undefined) continue;
+      if (!buildArrayIsArray(value)) {
+        throw new TypeError('Authored Vite config plugins must be a dense array.');
+      }
+      plugins = buildSnapshotDenseArray(value as PluginOption[], 'Authored Vite plugins');
+      continue;
+    }
+    if (key === 'server') {
+      server = snapshotSupportedAuthoredDevServer(value);
+      continue;
+    }
+    if (isIgnoredNonDevConfigKey(key)) continue;
+    throw new TypeError(
+      `kovo dev rejects authored Vite config key ${key}: the supported secure config surface is limited to client-only plugins and server host/port/strictPort; build/test/lint/fmt/run sections are ignored.`,
+    );
   }
-  const plugins = buildSnapshotDenseArray(value, 'Authored Vite plugins');
-  const result: PluginOption[] = [];
-  for (let index = 0; index < plugins.length; index += 1) {
-    const plugin = plugins[index] as PluginOption;
-    if (isDirectKovoPlugin(plugin)) continue;
-    result[result.length] = plugin;
+  return { plugins, server };
+}
+
+function isIgnoredNonDevConfigKey(key: string): boolean {
+  for (let index = 0; index < IGNORED_NON_DEV_CONFIG_KEYS.length; index += 1) {
+    if (IGNORED_NON_DEV_CONFIG_KEYS[index] === key) return true;
+  }
+  return false;
+}
+
+function snapshotSupportedAuthoredDevServer(value: unknown): SupportedAuthoredDevServer {
+  if (value === undefined) return {};
+  if (!isRecord(value)) throw new TypeError('Authored Vite config server must be a record.');
+  const result: SupportedAuthoredDevServer = {};
+  const keys = buildObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const entry = buildOwnDataValue(value, key, 'Authored Vite server config');
+    if (key === 'host' && (typeof entry === 'boolean' || typeof entry === 'string')) {
+      result.host = entry;
+      continue;
+    }
+    if (
+      key === 'port' &&
+      typeof entry === 'number' &&
+      nativeApply(nativeNumberIsSafeInteger, NativeNumber, [entry]) &&
+      entry >= 0 &&
+      entry <= 65_535
+    ) {
+      result.port = entry;
+      continue;
+    }
+    if (key === 'strictPort' && typeof entry === 'boolean') {
+      result.strictPort = entry;
+      continue;
+    }
+    throw new TypeError(
+      `kovo dev rejects authored Vite server key ${key}: only host, port, and strictPort are supported.`,
+    );
   }
   return result;
+}
+
+/** @internal Descriptor-witnessed client plugin isolation used by the supported dev runner. */
+export function isolateAuthoredDevPluginOptions(options: readonly PluginOption[]): PluginOption[] {
+  const source = buildSnapshotDenseArray(options, 'Authored Vite plugins');
+  const result: PluginOption[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const option = source[index]!;
+    if (isDirectKovoPlugin(option)) continue;
+    result[result.length] = isolateAuthoredPluginOption(option);
+  }
+  return freezeFrameworkPlugin(result);
+}
+
+function trustedLiveDevConfig(
+  root: string,
+  options: KovoDevOptions,
+  authoredServer: SupportedAuthoredDevServer,
+  plugins: PluginOption[],
+): InlineConfig {
+  const server: NonNullable<InlineConfig['server']> = {};
+  if (authoredServer.host !== undefined) server.host = authoredServer.host;
+  if (authoredServer.port !== undefined) server.port = authoredServer.port;
+  if (authoredServer.strictPort !== undefined) server.strictPort = authoredServer.strictPort;
+  if (options.host !== undefined) server.host = options.host;
+  if (options.port !== undefined) server.port = options.port;
+  if (options.strictPort) server.strictPort = true;
+
+  return {
+    appType: 'custom',
+    assetsInclude: [],
+    configFile: false,
+    define: {},
+    environments: { ssr: trustedSsrEnvironmentConfig() },
+    esbuild: undefined,
+    experimental: { bundledDev: false },
+    logLevel: 'error',
+    mode: options.mode,
+    oxc: undefined,
+    plugins,
+    resolve: trustedRootResolveConfig(),
+    root,
+    server,
+    ssr: trustedSsrConfig(),
+  };
+}
+
+function trustedRootResolveConfig(): NonNullable<InlineConfig['resolve']> {
+  return { alias: [], preserveSymlinks: false, tsconfigPaths: false };
+}
+
+function trustedSsrConfig(): NonNullable<InlineConfig['ssr']> {
+  return {
+    external: [],
+    noExternal: [/^@kovojs\//],
+    optimizeDeps: trustedSsrOptimizeDeps(),
+    target: 'node',
+  };
+}
+
+function trustedSsrEnvironmentConfig(): NonNullable<
+  NonNullable<InlineConfig['environments']>['ssr']
+> {
+  return {
+    consumer: 'server',
+    define: {},
+    dev: { moduleRunnerTransform: true },
+    isBundled: false,
+    optimizeDeps: trustedSsrOptimizeDeps(),
+    resolve: { external: [], noExternal: [/^@kovojs\//] },
+  };
+}
+
+function fixedDevPluginArray(
+  prePlugin: Plugin,
+  kovoPlugin: PluginOption,
+  authoredPlugins: readonly PluginOption[],
+  postPlugin: Plugin,
+): PluginOption[] {
+  const source = buildSnapshotDenseArray(authoredPlugins, 'Isolated authored Vite plugins');
+  const result: PluginOption[] = [prePlugin, kovoPlugin];
+  for (let index = 0; index < source.length; index += 1) {
+    result[result.length] = source[index]!;
+  }
+  result[result.length] = postPlugin;
+  return freezeFrameworkPlugin(result);
 }
 
 /**
@@ -340,9 +462,12 @@ function authoredVitePlugins(config: UserConfig): PluginOption[] {
 function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
   if (option === false || option === null || option === undefined) return option;
   if (buildArrayIsArray(option)) {
-    return buildSnapshotDenseArray(option, 'Nested authored Vite plugin options').map(
-      isolateAuthoredPluginOption,
-    );
+    const source = buildSnapshotDenseArray(option, 'Nested authored Vite plugin options');
+    const nested: PluginOption[] = [];
+    for (let index = 0; index < source.length; index += 1) {
+      nested[nested.length] = isolateAuthoredPluginOption(source[index]!);
+    }
+    return freezeFrameworkPlugin(nested);
   }
   if (isNativePromise(option)) {
     return new NativePromise((resolvePromise, rejectPromise) => {
@@ -383,11 +508,47 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
   const wrapper = nativeApply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
     null,
   ]);
+  const name = buildOwnDataValue(option, 'name', 'Authored Vite plugin');
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new TypeError('Authored Vite plugins must have a non-empty own data name.');
+  }
+  defineFixedData(wrapper, 'name', name, true);
+
+  const enforce = buildOwnDataValue(option, 'enforce', 'Authored Vite plugin');
+  if (enforce !== undefined && enforce !== 'pre' && enforce !== 'post') {
+    throw new TypeError('Authored Vite plugin enforce must be "pre" or "post".');
+  }
+  if (enforce !== undefined) defineFixedData(wrapper, 'enforce', enforce, true);
+
   const keys = buildObjectKeys(option);
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
-    if (key === 'apply' || key === 'applyToEnvironment') continue;
-    defineFixedData(wrapper, key, buildOwnDataValue(option, key, 'Authored Vite plugin'), true);
+    if (
+      key === 'apply' ||
+      key === 'applyToEnvironment' ||
+      key === 'enforce' ||
+      key === 'name' ||
+      isAuthorityBearingAuthoredPluginHook(key)
+    ) {
+      continue;
+    }
+    if (!isSupportedAuthoredClientPluginHook(key)) {
+      throw new TypeError(
+        `kovo dev rejects authored Vite plugin property ${key}: supported client hooks are resolveId, load, and transform.`,
+      );
+    }
+    const value = buildOwnDataValue(option, key, 'Authored Vite plugin');
+    if (typeof value === 'function') {
+      defineFixedData(wrapper, key, value, true);
+      continue;
+    }
+    if (isRecord(value)) {
+      defineFixedData(wrapper, key, snapshotClientPluginHook(value, key), true);
+      continue;
+    }
+    throw new TypeError(
+      `kovo dev rejects authored Vite plugin property ${key}: client hook values must be functions or fixed { handler, order } records.`,
+    );
   }
   const originalCommandApply = buildOwnDataValue(option, 'apply', 'Authored Vite plugin');
   if (typeof originalCommandApply === 'function') {
@@ -408,20 +569,13 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
   if (originalCommandApply !== undefined) {
     defineFixedData(wrapper, 'apply', originalCommandApply, true);
   }
-  const originalApply = buildOwnDataValue(option, 'applyToEnvironment', 'Authored Vite plugin');
-  if (originalApply !== undefined && typeof originalApply !== 'function') {
-    throw new TypeError('Authored Vite plugin applyToEnvironment must be a function.');
-  }
   defineFixedData(
     wrapper,
     'applyToEnvironment',
-    function kovoAuthoredPluginEnvironmentGate(this: unknown, environment: PartialEnvironment) {
+    function kovoAuthoredPluginEnvironmentGate(environment: PartialEnvironment) {
       // The server/compiler/data-plane graph is a framework-owned trust root (SPEC §6.6 rule 6).
       // Authored plugins remain available to Vite's client environment only.
-      if (environment.name !== 'client') return false;
-      return typeof originalApply === 'function'
-        ? nativeApply(originalApply, this, [environment])
-        : true;
+      return environment.name === 'client';
     },
     true,
   );
@@ -429,7 +583,50 @@ function isolateAuthoredPluginOption(option: PluginOption): PluginOption {
   return freezeFrameworkPlugin(wrapper) as Plugin;
 }
 
-function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): readonly [Plugin, Plugin] {
+function isAuthorityBearingAuthoredPluginHook(key: string): boolean {
+  for (let index = 0; index < AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS.length; index += 1) {
+    if (AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS[index] === key) return true;
+  }
+  return false;
+}
+
+function isSupportedAuthoredClientPluginHook(key: string): boolean {
+  for (let index = 0; index < SUPPORTED_AUTHORED_CLIENT_PLUGIN_HOOKS.length; index += 1) {
+    if (SUPPORTED_AUTHORED_CLIENT_PLUGIN_HOOKS[index] === key) return true;
+  }
+  return false;
+}
+
+function snapshotClientPluginHook(value: Record<string, unknown>, hookName: string): object {
+  const keys = buildObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (key !== 'handler' && key !== 'order') {
+      throw new TypeError(
+        `kovo dev rejects authored Vite plugin ${hookName}.${key}: hook records support only fixed handler and order fields.`,
+      );
+    }
+  }
+  const handler = buildOwnDataValue(value, 'handler', `Authored Vite plugin ${hookName}`);
+  if (typeof handler !== 'function') {
+    throw new TypeError(`Authored Vite plugin ${hookName}.handler must be a function.`);
+  }
+  const order = buildOwnDataValue(value, 'order', `Authored Vite plugin ${hookName}`);
+  if (order !== undefined && order !== 'pre' && order !== 'post') {
+    throw new TypeError(`Authored Vite plugin ${hookName}.order must be "pre" or "post".`);
+  }
+  const snapshot = nativeApply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
+    null,
+  ]);
+  defineFixedData(snapshot, 'handler', handler, true);
+  if (order !== undefined) defineFixedData(snapshot, 'order', order, true);
+  return freezeFrameworkPlugin(snapshot);
+}
+
+function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): {
+  postPlugin: Plugin;
+  prePlugin: Plugin;
+} {
   const prePlugin = freezeFrameworkPlugin<Plugin>({
     enforce: 'pre',
     name: 'kovo-security-profile-pre',
@@ -446,45 +643,20 @@ function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): readonly [Pl
     config: {
       order: 'post',
       handler(config) {
-        // Hook-level ordering is explicit because Vite lets `{ order: 'post' }` override plugin
-        // `enforce`. This handler must remain the final config observer even under that spelling.
-        assertNoAuthoredKovoAliases(config.resolve?.alias);
-        if (config.environments) {
-          for (const environmentName of buildObjectKeys(config.environments)) {
-            const environment = buildOwnDataValue(
-              config.environments,
-              environmentName,
-              'Authored Vite environments',
-            );
-            if (!isRecord(environment)) continue;
-            const resolveConfig = buildOwnDataValue(
-              environment,
-              'resolve',
-              `Authored Vite environment ${environmentName}`,
-            );
-            if (isRecord(resolveConfig)) {
-              assertNoAuthoredKovoAliases(
-                buildOwnDataValue(
-                  resolveConfig,
-                  'alias',
-                  `Authored Vite environment ${environmentName} resolve`,
-                ) as UserConfig['resolve'] extends { alias?: infer Alias } ? Alias : never,
-              );
-            }
-          }
-        }
+        // Rebuild every authority-bearing root/SSR option from framework-owned data after the
+        // trusted Kovo hook. Authored config is never spread or merged into this graph.
+        config.assetsInclude = [];
+        config.define = {};
+        config.esbuild = undefined;
+        config.environments = { ssr: trustedSsrEnvironmentConfig() };
+        config.experimental = { bundledDev: false };
+        config.resolve = trustedRootResolveConfig();
+        config.oxc = undefined;
+        config.ssr = trustedSsrConfig();
 
-        // Reassert the exact SSR graph after Vite has merged the authored top-level config.
-        // `external` is cleared because an authored rule can force a second package instance that
-        // the trusted preload did not establish; noExternal keeps Kovo in one protected environment.
-        config.ssr = {
-          ...config.ssr,
-          external: [],
-          noExternal: [/^@kovojs\//],
-        };
-
-        const configuredPlugins = buildArrayIsArray(config.plugins)
-          ? buildSnapshotDenseArray(config.plugins, 'Resolved authored Vite plugins')
+        const configured = buildOwnDataValue(config, 'plugins', 'Vite config');
+        const configuredPlugins = buildArrayIsArray(configured)
+          ? buildSnapshotDenseArray(configured, 'Resolved authored Vite plugins')
           : [];
         const isolated: PluginOption[] = [];
         for (let index = 0; index < configuredPlugins.length; index += 1) {
@@ -494,22 +666,47 @@ function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): readonly [Pl
           }
           isolated[isolated.length] = isolateAuthoredPluginOption(candidate);
         }
-        config.plugins = [prePlugin, kovoPlugin, ...isolated, postPlugin];
+        config.plugins = fixedDevPluginArray(prePlugin, kovoPlugin, isolated, postPlugin);
       },
     },
   };
-  return [prePlugin, freezeFrameworkPlugin(postPlugin)];
+  return { postPlugin: freezeFrameworkPlugin(postPlugin), prePlugin };
+}
+
+function trustedSsrOptimizeDeps(): NonNullable<UserConfig['optimizeDeps']> {
+  return {
+    disabled: true,
+    exclude: [],
+    include: [],
+    noDiscovery: true,
+  };
 }
 
 function lockResolvedDevSecurityProfile(config: ResolvedConfig): void {
   // Vite resolves environments only after configResolved hooks. Lock the exact plugin registry
   // first so a caller hook cannot push an unwrapped SSR plugin, replace a framework hook, or
   // reorder the trusted pre/post profile between those two phases.
-  for (let index = 0; index < config.plugins.length; index += 1) {
-    freezeFrameworkPlugin(config.plugins[index]!);
+  const pluginCarrier = buildOwnDataValue(config, 'plugins', 'Resolved Vite config');
+  if (!buildArrayIsArray(pluginCarrier)) {
+    throw new TypeError('Resolved Vite config must expose a plugin array.');
   }
-  freezeFrameworkPlugin(config.plugins);
-  defineFixedData(config, 'plugins', config.plugins, true);
+  const resolvedPlugins = buildSnapshotDenseArray(pluginCarrier, 'Resolved Vite plugins');
+  for (let index = 0; index < resolvedPlugins.length; index += 1) {
+    freezeFrameworkPlugin(resolvedPlugins[index]!);
+  }
+  freezeFrameworkPlugin(pluginCarrier);
+  defineFixedData(config, 'plugins', pluginCarrier, true);
+  const getSortedPlugins = buildOwnDataValue(config, 'getSortedPlugins', 'Resolved Vite config');
+  const getSortedPluginHooks = buildOwnDataValue(
+    config,
+    'getSortedPluginHooks',
+    'Resolved Vite config',
+  );
+  if (typeof getSortedPlugins !== 'function' || typeof getSortedPluginHooks !== 'function') {
+    throw new TypeError('Resolved Vite config must expose fixed plugin hook selectors.');
+  }
+  defineFixedData(config, 'getSortedPlugins', getSortedPlugins, true);
+  defineFixedData(config, 'getSortedPluginHooks', getSortedPluginHooks, true);
 
   lockResolvedAliases(config.resolve.alias);
   freezeFrameworkPlugin(config.resolve);
@@ -519,7 +716,9 @@ function lockResolvedDevSecurityProfile(config: ResolvedConfig): void {
   freezeFrameworkPlugin(config.ssr);
   defineFixedData(config, 'ssr', config.ssr, true);
 
-  for (const environmentName of buildObjectKeys(config.environments)) {
+  const environmentNames = buildObjectKeys(config.environments);
+  for (let index = 0; index < environmentNames.length; index += 1) {
+    const environmentName = environmentNames[index]!;
     const environment = buildOwnDataValue(
       config.environments,
       environmentName,
@@ -545,6 +744,33 @@ function lockResolvedDevSecurityProfile(config: ResolvedConfig): void {
   defineFixedData(config, 'environments', config.environments, true);
 }
 
+function lockLiveDevEnvironmentPluginLists(config: ResolvedConfig): void {
+  const names = buildObjectKeys(config.environments);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const environment = buildOwnDataValue(
+      config.environments,
+      name,
+      'Live resolved Vite environments',
+    );
+    if (!isRecord(environment)) continue;
+    const plugins = buildOwnDataValue(environment, 'plugins', `Live Vite environment ${name}`);
+    if (!buildArrayIsArray(plugins)) {
+      throw new TypeError(`Live Vite environment ${name} must expose a plugin array.`);
+    }
+    const pluginSnapshot = buildSnapshotDenseArray(
+      plugins,
+      `Live Vite environment ${name} plugins`,
+    );
+    for (let pluginIndex = 0; pluginIndex < pluginSnapshot.length; pluginIndex += 1) {
+      const plugin = pluginSnapshot[pluginIndex];
+      if (isRecord(plugin)) freezeFrameworkPlugin(plugin);
+    }
+    freezeFrameworkPlugin(plugins);
+    defineFixedData(environment, 'plugins', plugins, true);
+  }
+}
+
 function lockResolvedAliases(alias: readonly unknown[]): void {
   const entries = buildSnapshotDenseArray(alias, 'Resolved Vite aliases');
   for (let index = 0; index < entries.length; index += 1) {
@@ -552,49 +778,6 @@ function lockResolvedAliases(alias: readonly unknown[]): void {
     if (isRecord(entry)) freezeFrameworkPlugin(entry);
   }
   freezeFrameworkPlugin(alias);
-}
-
-function assertNoAuthoredKovoAliases(
-  alias: UserConfig['resolve'] extends {
-    alias?: infer Alias;
-  }
-    ? Alias
-    : never,
-): void {
-  if (alias === undefined) return;
-  if (buildArrayIsArray(alias)) {
-    const entries = buildSnapshotDenseArray(alias, 'Authored Vite resolve.alias');
-    for (let index = 0; index < entries.length; index += 1) {
-      const entry = entries[index];
-      if (!isRecord(entry)) {
-        throw new TypeError('Authored Vite resolve.alias entries must be records.');
-      }
-      const find = buildOwnDataValue(entry, 'find', 'Authored Vite resolve.alias entry');
-      if (find instanceof NativeRegExp) {
-        throw new TypeError(
-          'kovo dev rejects RegExp resolve.alias entries because they cannot prove disjointness from the Kovo trust-root graph.',
-        );
-      }
-      if (typeof find !== 'string') {
-        throw new TypeError('Authored Vite resolve.alias find values must be strings.');
-      }
-      assertAliasDoesNotTargetKovo(find);
-    }
-    return;
-  }
-  if (!isRecord(alias)) {
-    throw new TypeError('Authored Vite resolve.alias must be a record or dense array.');
-  }
-  const keys = buildObjectKeys(alias);
-  for (let index = 0; index < keys.length; index += 1) assertAliasDoesNotTargetKovo(keys[index]!);
-}
-
-function assertAliasDoesNotTargetKovo(find: string): void {
-  if (find === '@kovojs' || buildStringStartsWith(find, '@kovojs/')) {
-    throw new TypeError(
-      `kovo dev rejects resolve.alias for ${find}: @kovojs modules belong to the framework trust-root graph.`,
-    );
-  }
 }
 
 function isNativePromise(value: unknown): value is Promise<PluginOption> {
@@ -637,16 +820,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveDevConfigFile(root: string, configured: string | undefined): string | undefined {
-  if (configured !== undefined) {
-    const resolved = resolve(configured);
-    if (!existsSync(resolved)) throw new Error(`kovo dev config does not exist: ${resolved}`);
-    return resolved;
-  }
-  for (const fileName of DEFAULT_VITE_CONFIG_FILES) {
-    const candidate = resolve(root, fileName);
-    if (existsSync(candidate)) return candidate;
-  }
-  return undefined;
+  if (configured === undefined) return undefined;
+  const resolved = resolve(root, configured);
+  if (!existsSync(resolved)) throw new Error(`kovo dev config does not exist: ${resolved}`);
+  return resolved;
 }
 
 function viteAppModuleId(appModulePath: string, root: string): string {

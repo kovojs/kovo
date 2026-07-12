@@ -624,7 +624,10 @@ export const COMMANDS_MANIFEST = [
     async: true,
     flags: [
       { flag: '--root <dir>', description: 'Project root (default: current directory).' },
-      { flag: '--config <file>', description: 'Authored Vite config loaded after bootstrap.' },
+      {
+        flag: '--config <file>',
+        description: 'Explicit restricted client-plugin config loaded after security bootstrap.',
+      },
       { flag: '--host <host>', description: 'Vite listen host override.' },
       { flag: '--port <port>', description: 'Vite listen port override.' },
       { flag: '--strict-port', description: 'Fail instead of selecting another occupied port.' },
