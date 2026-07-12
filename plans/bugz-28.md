@@ -1340,7 +1340,7 @@ build:dist` passes.
     `packages/server/src/build.test.ts` retains the complete static security-header matrix; the
     30-test preset suite passes.
 
-- [ ] **H34 - The supported integration runner races fixture evaluation against bootstrap.**
+- [x] **H34 - The supported integration runner races fixture evaluation against bootstrap.**
       `packages/test/src/integration/boot-fixture.ts`
   - The fixture app and server root were loaded concurrently through the same `ssr.noExternal`
     server. An authored fixture could evaluate first and poison the runner's server/compiler
@@ -1348,6 +1348,9 @@ build:dist` passes.
   - **Acceptance:** load the complete server/compiler profile sequentially in the exact Vite SSR
     graph before the fixture entry. A poison-first fixture regression must prove app evaluation
     cannot influence captured controls while the normal integration suite retains its behavior.
+  - Evidence: the focused fixture-plugin/bootstrap tests pass 3 cases and Chromium passes
+    `bootstrap-order.spec.ts`; the exact `ssr.noExternal` graph loads compiler intrinsics and the
+    server root sequentially before the poison-first authored fixture.
 
 - [x] **H35 - Mutable compression classification re-enables compression for secret responses.**
       `packages/server/src/node.ts`

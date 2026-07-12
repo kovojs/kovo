@@ -57,4 +57,22 @@ describe('kovoFixtureCompilerPlugin', () => {
 
     expect(compile).toHaveBeenCalledTimes(2);
   });
+
+  it('does not classify noExternal framework modules as fixture-authored source', async () => {
+    const compile = vi.fn(() => compileResult('never'));
+    const plugin = kovoFixtureCompilerPlugin(compile);
+    const configResolved = plugin.configResolved as (config: unknown) => void;
+    const transform = plugin.transform as (source: string, id: string) => unknown;
+    configResolved({ root: '/workspace/app' });
+
+    await expect(
+      Promise.resolve(
+        transform(
+          'export function internal() { return "component("; }',
+          '/workspace/packages/compiler/src/internal.ts',
+        ),
+      ),
+    ).resolves.toBeNull();
+    expect(compile).not.toHaveBeenCalled();
+  });
 });

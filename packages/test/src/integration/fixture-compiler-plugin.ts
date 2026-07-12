@@ -92,7 +92,16 @@ export function kovoFixtureStylesheetsForTargets(targets) {
       // Same claim rule as kovoVitePlugin: a `.tsx`/`.ts` module that declares a
       // Kovo component. (The plugin matches the component-call token as source
       // text, so non-component modules must keep it out of comments.)
-      if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
+      // Framework packages are also compiled through this `ssr.noExternal` graph. They are not
+      // fixture-authored source and must never be reclassified by an app compiler pass merely
+      // because implementation text contains the claim token.
+      if (
+        !fixtureAuthoredModule(id, root) ||
+        !/\.[cm]?tsx?$/.test(id) ||
+        !source.includes('component(')
+      ) {
+        return null;
+      }
 
       const fileName = fixtureComponentFileName(id, root);
       const compileOptions = {
@@ -128,6 +137,12 @@ export function kovoFixtureStylesheetsForTargets(targets) {
       return { code: `${code}\n${cssRuntimeRegistration(result.cssAssets)}`, map: null };
     },
   };
+}
+
+function fixtureAuthoredModule(id: string, root: string): boolean {
+  const path = id.split('?')[0]!.replaceAll('\\', '/');
+  const normalizedRoot = root.replaceAll('\\', '/').replace(/\/$/, '');
+  return path.startsWith(`${normalizedRoot}/`);
 }
 
 function fixtureComponentFileName(id: string, root: string): string {

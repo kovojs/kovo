@@ -87,10 +87,21 @@ export async function bootFixture(
 
   let instance: FixtureInstance;
   try {
-    const [module, serverModule] = await Promise.all([
-      vite.ssrLoadModule(entry),
-      vite.ssrLoadModule('@kovojs/server'),
-    ]);
+    // SPEC §6.6 rule 6: establish both security roots in this exact `ssr.noExternal`
+    // module graph before Vite evaluates any authored fixture dependency. A native test-runner
+    // import does not protect the separately instantiated SSR copies.
+    const compilerModule = await vite.ssrLoadModule('@kovojs/compiler/internal');
+    const assertCompilerSecurityIntrinsics = (
+      compilerModule as { assertCompilerSecurityIntrinsics?: unknown }
+    ).assertCompilerSecurityIntrinsics;
+    if (typeof assertCompilerSecurityIntrinsics !== 'function') {
+      throw new TypeError(
+        'Fixture server could not establish @kovojs/compiler security bootstrap in the fixture SSR graph.',
+      );
+    }
+    assertCompilerSecurityIntrinsics();
+    const serverModule = await vite.ssrLoadModule('@kovojs/server');
+    const module = await vite.ssrLoadModule(entry);
     const descriptor = (module as { default?: unknown }).default;
     if (!isFixtureDescriptor(descriptor)) {
       const exportedKeys = JSON.stringify(Object.keys(module));
