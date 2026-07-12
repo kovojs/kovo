@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import * as ts from 'typescript';
 
 import {
@@ -12,6 +10,25 @@ import {
 import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
 
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerJsonStringify,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetDelete,
+  compilerSetHas,
+  compilerSha256Hex,
+  compilerSnapshotDenseArray,
+  compilerStringIncludes,
+  compilerStringSlice,
+  compilerStringStartsWith,
+  compilerStringToLowerCase,
+} from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { normalizeComponentFileName } from '../shared.js';
@@ -441,7 +458,7 @@ export function componentOptionStaticValueFor(
   component: ComponentModel,
   propertyName: string,
 ): StaticLiteralValue | undefined {
-  return component.options.find((option) => option.key === propertyName)?.staticValue;
+  return componentOptionFor(component, propertyName)?.staticValue;
 }
 
 export function inferComponentName(fileName: string, model: ComponentModuleModel): string {
@@ -472,8 +489,8 @@ export function componentOptionStaticTemplateValue(
   model: ComponentModuleModel,
   propertyName: string,
 ): string | undefined {
-  return firstComponentModel(model)?.options.find((option) => option.key === propertyName)
-    ?.staticTemplateValue;
+  const component = firstComponentModel(model);
+  return component ? componentOptionFor(component, propertyName)?.staticTemplateValue : undefined;
 }
 
 export function componentOptionObjectEntries(
@@ -488,9 +505,10 @@ export function componentOptionObjectEntriesFor(
   component: ComponentModel,
   propertyName: string,
 ): ObjectLiteralEntry[] {
-  return [
-    ...(component.options.find((option) => option.key === propertyName)?.objectEntries ?? []),
-  ];
+  return snapshotCompilerModelArray(
+    componentOptionFor(component, propertyName)?.objectEntries ?? [],
+    `Component option ${propertyName} object entries`,
+  );
 }
 
 /**
@@ -501,39 +519,68 @@ export function allComponentOptionObjectEntries(
   model: ComponentModuleModel,
   propertyName: string,
 ): ObjectLiteralEntry[] {
-  return model.components.flatMap(
-    (component) =>
-      component.options.find((option) => option.key === propertyName)?.objectEntries ?? [],
-  );
+  const result: ObjectLiteralEntry[] = [];
+  const components = snapshotCompilerModelArray(model.components, 'Components');
+  for (let index = 0; index < components.length; index += 1) {
+    const entries = componentOptionObjectEntriesFor(components[index]!, propertyName);
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      result[result.length] = entries[entryIndex]!;
+    }
+  }
+  return result;
 }
 
 export function componentOptionObjectKeys(
   model: ComponentModuleModel,
   propertyName: string,
 ): string[] {
-  return componentOptionObjectEntries(model, propertyName).map((entry) => entry.key);
+  return objectEntryKeys(componentOptionObjectEntries(model, propertyName));
 }
 
 export function componentOptionObjectKeysFor(
   component: ComponentModel,
   propertyName: string,
 ): string[] {
-  return componentOptionObjectEntriesFor(component, propertyName).map((entry) => entry.key);
+  return objectEntryKeys(componentOptionObjectEntriesFor(component, propertyName));
 }
 
 export function allComponentOptionObjectKeys(
   model: ComponentModuleModel,
   propertyName: string,
 ): string[] {
-  return allComponentOptionObjectEntries(model, propertyName).map((entry) => entry.key);
+  return objectEntryKeys(allComponentOptionObjectEntries(model, propertyName));
+}
+
+function componentOptionFor(
+  component: ComponentModel,
+  propertyName: string,
+): ComponentOptionEntry | undefined {
+  const options = snapshotCompilerModelArray(component.options, 'Component options');
+  for (let index = 0; index < options.length; index += 1) {
+    if (options[index]!.key === propertyName) return options[index];
+  }
+  return undefined;
+}
+
+function objectEntryKeys(entries: readonly ObjectLiteralEntry[]): string[] {
+  const source = snapshotCompilerModelArray(entries, 'Component option object entries');
+  const keys: string[] = [];
+  for (let index = 0; index < source.length; index += 1) keys[index] = source[index]!.key;
+  return keys;
 }
 
 export function componentRenderInputs(model: ComponentModuleModel): string[] {
-  return componentRenderInputModels(model).map((input) => input.name);
+  const inputs = componentRenderInputModels(model);
+  const names: string[] = [];
+  for (let index = 0; index < inputs.length; index += 1) names[index] = inputs[index]!.name;
+  return names;
 }
 
 export function componentRenderInputModels(model: ComponentModuleModel): RenderInputModel[] {
-  return [...(firstComponentModel(model)?.renderInputs ?? [])];
+  return snapshotCompilerModelArray(
+    firstComponentModel(model)?.renderInputs ?? [],
+    'Component render inputs',
+  );
 }
 
 export function componentRenderSlotsParam(model: ComponentModuleModel): RenderInputModel | null {
@@ -613,7 +660,7 @@ export function componentHasInferredServerRefreshTarget(model: ComponentModuleMo
 }
 
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
-  return [...model.jsxElements];
+  return snapshotCompilerModelArray(model.jsxElements, 'JSX elements');
 }
 
 export function jsxElementChildBody(element: JsxElementModel): JsxElementChildBody | null {
@@ -629,28 +676,46 @@ export function soleJsxExpressionChild(
   const [container] = element.childExpressionContainers;
   if (!container) return null;
 
-  return (
-    model.jsxExpressions.find(
-      (expression) =>
-        expression.containerStart === container.start && expression.containerEnd === container.end,
-    ) ?? null
-  );
+  const expressions = snapshotCompilerModelArray(model.jsxExpressions, 'JSX expressions');
+  for (let index = 0; index < expressions.length; index += 1) {
+    const expression = expressions[index]!;
+    if (
+      expression.containerStart === container.start &&
+      expression.containerEnd === container.end
+    ) {
+      return expression;
+    }
+  }
+  return null;
 }
 
 export function callExpressions(model: ComponentModuleModel): CallExpressionModel[] {
-  return [...model.calls];
+  return snapshotCompilerModelArray(model.calls, 'Call expressions');
 }
 
 export function jsxExpressions(model: ComponentModuleModel): JsxExpressionModel[] {
-  return [...model.jsxExpressions];
+  return snapshotCompilerModelArray(model.jsxExpressions, 'JSX expressions');
+}
+
+function snapshotCompilerModelArray<Value>(values: readonly Value[], label: string): Value[] {
+  const length = compilerArrayLength(values, label);
+  const snapshot: Value[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label) as Value | undefined;
+    if (value === undefined) {
+      throw new TypeError(`${label}[${index}] must be an own compiler model fact.`);
+    }
+    snapshot[index] = value;
+  }
+  return snapshot;
 }
 
 export function jsxComments(model: ComponentModuleModel): JsxCommentModel[] {
-  return [...model.jsxComments];
+  return snapshotCompilerModelArray(model.jsxComments, 'JSX comments');
 }
 
 export function mutationHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
-  return [...model.mutationHandlers];
+  return snapshotCompilerModelArray(model.mutationHandlers, 'Mutation handlers');
 }
 
 /**
@@ -659,7 +724,7 @@ export function mutationHandlers(model: ComponentModuleModel): MutationHandlerMo
  * graph; runtime request neutralization remains the enforcement proof.
  */
 export function mutationSessionAuthorityFacts(model: ComponentModuleModel): SessionAuthorityFact[] {
-  const facts = new Map<string, SessionAuthorityFact>();
+  const facts: SessionAuthorityFact[] = [];
   const addFact = (
     owner: HandlerWriteSinkOwner | undefined,
     referencesSession: boolean,
@@ -670,15 +735,45 @@ export function mutationSessionAuthorityFacts(model: ComponentModuleModel): Sess
     if (ownerName === undefined) return;
     const unresolvedName = ownerName === 'UNRESOLVED';
     const name = unresolvedName ? 'UNRESOLVED' : ownerName;
-    const previous = facts.get(name);
+    let previousIndex = -1;
+    for (let index = 0; index < facts.length; index += 1) {
+      if (facts[index]!.name === name) {
+        previousIndex = index;
+        break;
+      }
+    }
+    const previous = previousIndex < 0 ? undefined : facts[previousIndex];
     if (previous?.referencesSession === true && !referencesSession) return;
-    const handlerFingerprints = referencesSession
-      ? []
-      : [
-          ...(previous?.handlerFingerprints ?? []),
-          ...(handlerFingerprint === undefined ? [] : [handlerFingerprint]),
-        ].filter((value, index, values) => values.indexOf(value) === index);
-    facts.set(name, {
+    const handlerFingerprints: string[] = [];
+    if (!referencesSession) {
+      const previousFingerprints = previous?.handlerFingerprints ?? [];
+      const previousLength = compilerArrayLength(
+        previousFingerprints,
+        'Mutation authority handler fingerprints',
+      );
+      for (let index = 0; index < previousLength; index += 1) {
+        const value = compilerOwnDataValue(
+          previousFingerprints,
+          index,
+          'Mutation authority handler fingerprints',
+        );
+        if (typeof value !== 'string') {
+          throw new TypeError('Mutation authority handler fingerprints must be strings.');
+        }
+        handlerFingerprints[handlerFingerprints.length] = value;
+      }
+      if (handlerFingerprint !== undefined) {
+        let duplicate = false;
+        for (let index = 0; index < handlerFingerprints.length; index += 1) {
+          if (handlerFingerprints[index] === handlerFingerprint) {
+            duplicate = true;
+            break;
+          }
+        }
+        if (!duplicate) handlerFingerprints[handlerFingerprints.length] = handlerFingerprint;
+      }
+    }
+    const fact: SessionAuthorityFact = {
       detail,
       ...(handlerFingerprints.length === 0 ? {} : { handlerFingerprints }),
       kind: 'mutation',
@@ -686,10 +781,17 @@ export function mutationSessionAuthorityFacts(model: ComponentModuleModel): Sess
       referencesSession,
       source: 'session-authority',
       ...(unresolvedName ? { unresolvedName: true as const } : {}),
-    });
+    };
+    if (previousIndex < 0) facts[facts.length] = fact;
+    else facts[previousIndex] = fact;
   };
 
-  for (const handler of model.mutationHandlers) {
+  const handlerLength = compilerArrayLength(model.mutationHandlers, 'Mutation handlers');
+  for (let index = 0; index < handlerLength; index += 1) {
+    const handler = compilerOwnDataValue(model.mutationHandlers, index, 'Mutation handlers') as
+      | MutationHandlerModel
+      | undefined;
+    if (handler === undefined) throw new TypeError(`Mutation handlers[${index}] must be dense.`);
     addFact(
       handler.mutationOwner,
       handler.readsAmbientCookie === true,
@@ -721,7 +823,17 @@ export function mutationSessionAuthorityFacts(model: ComponentModuleModel): Sess
   };
   visit(model.sourceFile);
 
-  return [...facts.values()].sort((left, right) => left.name.localeCompare(right.name));
+  const sorted: SessionAuthorityFact[] = [];
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = facts[index]!;
+    let insertAt = sorted.length;
+    while (insertAt > 0 && fact.name < sorted[insertAt - 1]!.name) {
+      sorted[insertAt] = sorted[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    sorted[insertAt] = fact;
+  }
+  return sorted;
 }
 
 /** @internal Canonicalize a runtime handler's native source for build/source identity proof. */
@@ -738,7 +850,7 @@ function mutationHandlerFingerprint(
   handler: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration,
 ): string | undefined {
   return mutationHandlerSourceFingerprint(
-    source.slice(handler.getStart(sourceFile), handler.getEnd()),
+    compilerStringSlice(source, handler.getStart(sourceFile), handler.getEnd()),
     ts.isMethodDeclaration(handler) ? 'method' : 'expression',
   );
 }
@@ -761,12 +873,19 @@ function mutationHandlerSourceFingerprint(
     fileName: 'kovo-handler-fingerprint.tsx',
     reportDiagnostics: true,
   });
-  if (
-    transpiled.diagnostics?.some(
-      (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
-    )
-  ) {
-    return undefined;
+  const diagnostics = transpiled.diagnostics ?? [];
+  const diagnosticLength = compilerArrayLength(diagnostics, 'Handler transpile diagnostics');
+  for (let index = 0; index < diagnosticLength; index += 1) {
+    const diagnostic = compilerOwnDataValue(diagnostics, index, 'Handler transpile diagnostics') as
+      | ts.Diagnostic
+      | undefined;
+    if (diagnostic === undefined) return undefined;
+    if (
+      compilerOwnDataValue(diagnostic, 'category', 'Handler transpile diagnostic') ===
+      ts.DiagnosticCategory.Error
+    ) {
+      return undefined;
+    }
   }
   const canonicalFile = ts.createSourceFile(
     'kovo-handler-fingerprint.jsx',
@@ -775,42 +894,78 @@ function mutationHandlerSourceFingerprint(
     true,
     ts.ScriptKind.TSX,
   );
-  const statement = canonicalFile.statements.find(ts.isVariableStatement);
+  let statement: ts.VariableStatement | undefined;
+  const statementLength = compilerArrayLength(canonicalFile.statements, 'Canonical statements');
+  for (let index = 0; index < statementLength; index += 1) {
+    const candidate = compilerOwnDataValue(canonicalFile.statements, index, 'Canonical statements');
+    if (candidate !== undefined && ts.isVariableStatement(candidate as ts.Node)) {
+      statement = candidate as ts.VariableStatement;
+      break;
+    }
+  }
   const declaration = statement?.declarationList.declarations[0];
   const initializer = declaration?.initializer;
   if (!initializer) return undefined;
-  const handler =
-    kind === 'method' && ts.isObjectLiteralExpression(initializer)
-      ? initializer.properties.find(ts.isMethodDeclaration)
-      : initializer;
+  let handler: ts.Expression | ts.MethodDeclaration | undefined = initializer;
+  if (kind === 'method' && ts.isObjectLiteralExpression(initializer)) {
+    handler = undefined;
+    const propertyLength = compilerArrayLength(
+      initializer.properties,
+      'Canonical handler properties',
+    );
+    for (let index = 0; index < propertyLength; index += 1) {
+      const candidate = compilerOwnDataValue(
+        initializer.properties,
+        index,
+        'Canonical handler properties',
+      );
+      if (candidate !== undefined && ts.isMethodDeclaration(candidate as ts.Node)) {
+        handler = candidate as ts.MethodDeclaration;
+        break;
+      }
+    }
+  }
   if (!handler) return undefined;
 
-  return createHash('sha256').update(canonicalHandlerAst(handler, canonicalFile)).digest('hex');
+  return compilerSha256Hex(canonicalHandlerAst(handler, canonicalFile));
 }
 
 function canonicalHandlerAst(node: ts.Node, sourceFile: ts.SourceFile): string {
-  const parts: string[] = [];
+  let output = '';
   const visit = (current: ts.Node): void => {
-    parts.push(`${current.kind}:`);
-    if (ts.isIdentifier(current)) parts.push(`id=${current.text};`);
-    else if (ts.isStringLiteralLike(current)) parts.push(`string=${JSON.stringify(current.text)};`);
-    else if (ts.isNumericLiteral(current) || ts.isBigIntLiteral(current)) {
-      parts.push(`number=${current.text};`);
+    output += `${current.kind}:`;
+    if (ts.isIdentifier(current)) output += `id=${current.text};`;
+    else if (ts.isStringLiteralLike(current)) {
+      output += `string=${compilerJsonStringify(current.text)};`;
+    } else if (ts.isNumericLiteral(current) || ts.isBigIntLiteral(current)) {
+      output += `number=${current.text};`;
     } else if (
       ts.isNoSubstitutionTemplateLiteral(current) ||
       ts.isTemplateHead(current) ||
       ts.isTemplateMiddle(current) ||
       ts.isTemplateTail(current)
     ) {
-      parts.push(`template=${JSON.stringify(current.text)};`);
+      output += `template=${compilerJsonStringify(current.text)};`;
     } else if (current.kind === ts.SyntaxKind.RegularExpressionLiteral) {
-      parts.push(`regexp=${current.getText(sourceFile)};`);
+      output += `regexp=${compilerStringSlice(
+        sourceFile.text,
+        current.getStart(sourceFile),
+        current.getEnd(),
+      )};`;
     }
-    for (const child of current.getChildren(sourceFile)) visit(child);
-    parts.push(';');
+    const children = current.getChildren(sourceFile);
+    const childLength = compilerArrayLength(children, 'Canonical handler AST children');
+    for (let index = 0; index < childLength; index += 1) {
+      const child = compilerOwnDataValue(children, index, 'Canonical handler AST children');
+      if (child === undefined) {
+        throw new TypeError(`Canonical handler AST children[${index}] must be dense.`);
+      }
+      visit(child as ts.Node);
+    }
+    output += ';';
   };
   visit(node);
-  return parts.join('');
+  return output;
 }
 
 function mutationHandlerAuthorityIsStaticallyInspectable(call: ts.CallExpression): boolean {
@@ -1396,26 +1551,26 @@ function mutationHandlerModels(
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
   const owner = mutationOwner(sourceFile, call);
-  return handlerPropertyEntries(sourceFile, source, call).map(
-    ({ body, handler, model, parameters }) => {
-      const directDbTargets = mutationDirectDbTargetIdentities(sourceFile, body, parameters);
-      const authorityFingerprint = mutationHandlerFingerprint(sourceFile, source, handler);
-      return {
-        ...model,
-        ...(authorityFingerprint === undefined ? {} : { authorityFingerprint }),
-        handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
-          owner,
-          resolvedTargetFilter: (identity) =>
-            directDbTargets.has(identity) || looksLikeDbTargetIdentity(identity),
-          surface: 'mutation',
-        }),
-        mutationOwner: owner,
-        ...(handlerReadsAmbientCookie(body, parameters)
-          ? { readsAmbientCookie: true as const }
-          : {}),
-      };
-    },
-  );
+  const entries = handlerPropertyEntries(sourceFile, source, call);
+  const result: MutationHandlerModel[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const { body, handler, model, parameters } = entries[index]!;
+    const directDbTargets = mutationDirectDbTargetIdentities(sourceFile, body, parameters);
+    const authorityFingerprint = mutationHandlerFingerprint(sourceFile, source, handler);
+    result[result.length] = {
+      ...model,
+      ...(authorityFingerprint === undefined ? {} : { authorityFingerprint }),
+      handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
+        owner,
+        resolvedTargetFilter: (identity) =>
+          compilerSetHas(directDbTargets, identity) || looksLikeDbTargetIdentity(identity),
+        surface: 'mutation',
+      }),
+      mutationOwner: owner,
+      ...(handlerReadsAmbientCookie(body, parameters) ? { readsAmbientCookie: true as const } : {}),
+    };
+  }
+  return result;
 }
 
 /**
@@ -1428,10 +1583,17 @@ function handlerReadsAmbientCookie(
   body: ts.ConciseBody,
   parameters: ts.NodeArray<ts.ParameterDeclaration>,
 ): boolean {
-  const runtimeParameters =
-    parameters[0] && ts.isIdentifier(parameters[0].name) && parameters[0].name.text === 'this'
-      ? parameters.slice(1)
-      : parameters;
+  const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Mutation handler parameters');
+  const runtimeParameters: ts.ParameterDeclaration[] = [];
+  const runtimeParameterStart =
+    parameterSnapshot[0] &&
+    ts.isIdentifier(parameterSnapshot[0].name) &&
+    parameterSnapshot[0].name.text === 'this'
+      ? 1
+      : 0;
+  for (let index = runtimeParameterStart; index < parameterSnapshot.length; index += 1) {
+    runtimeParameters[runtimeParameters.length] = parameterSnapshot[index]!;
+  }
   if (runtimeParameters[0]?.dotDotDotToken || runtimeParameters[1]?.dotDotDotToken) return true;
   if (handlerReferencesUnprovenFreeAuthority(body, parameters)) return true;
   if (handlerMutatesBrowserState(body, runtimeParameters[2])) return true;
@@ -1439,8 +1601,8 @@ function handlerReadsAmbientCookie(
     return true;
   }
 
-  const requestNames = new Set<string>();
-  const headersNames = new Set<string>();
+  const requestNames = compilerCreateSet<string>();
+  const headersNames = compilerCreateSet<string>();
   const staticStrings = handlerStaticStrings(body);
   const requestParameter = runtimeParameters[1];
   if (requestParameter && requestBindingMayExposeAmbientAuthority(requestParameter.name)) {
@@ -1464,12 +1626,12 @@ function handlerReadsAmbientCookie(
         ts.isIdentifier(node.left)
       ) {
         const kind = requestAuthorityExpressionKind(node.right, requestNames, headersNames);
-        if (kind === 'request' && !requestNames.has(node.left.text)) {
-          requestNames.add(node.left.text);
+        if (kind === 'request' && !compilerSetHas(requestNames, node.left.text)) {
+          compilerSetAdd(requestNames, node.left.text);
           changed = true;
         }
-        if (kind === 'headers' && !headersNames.has(node.left.text)) {
-          headersNames.add(node.left.text);
+        if (kind === 'headers' && !compilerSetHas(headersNames, node.left.text)) {
+          compilerSetAdd(headersNames, node.left.text);
           changed = true;
         }
       }
@@ -1530,20 +1692,25 @@ function handlerMutatesBrowserState(
   if (!contextParameter) return false;
   if (contextParameter.dotDotDotToken) return true;
 
-  const contextNames = new Set<string>();
-  const sinkNames = new Set<string>();
+  const contextNames = compilerCreateSet<string>();
+  const sinkNames = compilerCreateSet<string>();
   if (ts.isIdentifier(contextParameter.name)) {
-    contextNames.add(contextParameter.name.text);
+    compilerSetAdd(contextNames, contextParameter.name.text);
   } else if (ts.isObjectBindingPattern(contextParameter.name)) {
-    for (const element of contextParameter.name.elements) {
+    const elements = compilerSnapshotDenseArray(
+      contextParameter.name.elements,
+      'Mutation context binding elements',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
       if (element.dotDotDotToken) return true;
       const property =
         propertyNameText(element.propertyName) ??
         (ts.isIdentifier(element.name) ? element.name.text : undefined);
       if (property === undefined) return true;
-      if (BROWSER_STATE_MUTATION_SINKS.has(property)) {
+      if (compilerSetHas(BROWSER_STATE_MUTATION_SINKS, property)) {
         if (!ts.isIdentifier(element.name)) return true;
-        sinkNames.add(element.name.text);
+        compilerSetAdd(sinkNames, element.name.text);
       }
     }
   } else {
@@ -1553,7 +1720,7 @@ function handlerMutatesBrowserState(
   let unsafe = false;
   const visit = (node: ts.Node): void => {
     if (unsafe) return;
-    if (ts.isIdentifier(node) && sinkNames.has(node.text)) {
+    if (ts.isIdentifier(node) && compilerSetHas(sinkNames, node.text)) {
       if (ts.isBindingElement(node.parent) && node.parent.name === node) return;
       unsafe = true;
       return;
@@ -1561,17 +1728,17 @@ function handlerMutatesBrowserState(
     if (ts.isExpression(node)) {
       const member = requestAuthorityMember(node);
       const receiver = member && unwrapExpression(member.receiver);
-      if (receiver && ts.isIdentifier(receiver) && contextNames.has(receiver.text)) {
+      if (receiver && ts.isIdentifier(receiver) && compilerSetHas(contextNames, receiver.text)) {
         if (
-          BROWSER_STATE_MUTATION_SINKS.has(member.name) ||
-          !SAFE_MUTATION_CONTEXT_MEMBERS.has(member.name)
+          compilerSetHas(BROWSER_STATE_MUTATION_SINKS, member.name) ||
+          !compilerSetHas(SAFE_MUTATION_CONTEXT_MEMBERS, member.name)
         ) {
           unsafe = true;
         }
         return;
       }
     }
-    if (ts.isIdentifier(node) && contextNames.has(node.text)) {
+    if (ts.isIdentifier(node) && compilerSetHas(contextNames, node.text)) {
       const parent = node.parent;
       if ((ts.isParameter(parent) || ts.isVariableDeclaration(parent)) && parent.name === node) {
         return;
@@ -1593,18 +1760,18 @@ function handlerMutatesBrowserState(
 }
 
 function isProvablyNonAmbientMutationHeader(value: string): boolean {
-  const header = value.toLowerCase();
+  const header = compilerStringToLowerCase(value);
   return (
     header === 'accept' ||
     header === 'content-length' ||
     header === 'content-type' ||
     header === 'user-agent' ||
-    header.includes('signature') ||
-    header.includes('hmac') ||
-    header.startsWith('kovo-') ||
-    header.startsWith('webhook-') ||
-    header.startsWith('x-kovo-') ||
-    header.startsWith('x-machine-')
+    compilerStringIncludes(header, 'signature') ||
+    compilerStringIncludes(header, 'hmac') ||
+    compilerStringStartsWith(header, 'kovo-') ||
+    compilerStringStartsWith(header, 'webhook-') ||
+    compilerStringStartsWith(header, 'x-kovo-') ||
+    compilerStringStartsWith(header, 'x-machine-')
   );
 }
 
@@ -1659,17 +1826,19 @@ function handlerReferencesUnprovenFreeAuthority(
   const root = ts.isFunctionLike(handler) ? handler : body;
   const bindings: HandlerLocalBinding[] = [];
 
-  for (const parameter of parameters) {
+  const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Handler authority parameters');
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    const parameter = parameterSnapshot[index]!;
     recordHandlerBindingName(bindings, parameter.name, root);
   }
   if ((ts.isFunctionExpression(root) || ts.isClassExpression(root)) && root.name !== undefined) {
-    bindings.push({ name: root.name.text, scope: root });
+    bindings[bindings.length] = { name: root.name.text, scope: root };
   }
 
   const collectBindings = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node)) {
       recordHandlerBindingName(bindings, node.name, handlerVariableBindingScope(node, root));
-    } else if (ts.isParameter(node) && !parameters.includes(node)) {
+    } else if (ts.isParameter(node) && !handlerParameterIsDeclared(parameterSnapshot, node)) {
       recordHandlerBindingName(bindings, node.name, node.parent);
     } else if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
       recordHandlerBindingName(bindings, node.variableDeclaration.name, node);
@@ -1679,20 +1848,24 @@ function handlerReferencesUnprovenFreeAuthority(
         ts.isEnumDeclaration(node)) &&
       node.name !== undefined
     ) {
-      bindings.push({ name: node.name.text, scope: handlerLexicalBindingScope(node, root) });
+      bindings[bindings.length] = {
+        name: node.name.text,
+        scope: handlerLexicalBindingScope(node, root),
+      };
     } else if (
       (ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
       node.name !== undefined
     ) {
-      bindings.push({ name: node.name.text, scope: node });
+      bindings[bindings.length] = { name: node.name.text, scope: node };
     }
 
     if (node !== root && ts.isFunctionLike(node) && !ts.isArrowFunction(node)) {
-      bindings.push({ name: 'arguments', scope: node });
+      bindings[bindings.length] = { name: 'arguments', scope: node };
     }
     ts.forEachChild(node, collectBindings);
   };
-  for (const parameter of parameters) {
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    const parameter = parameterSnapshot[index]!;
     if (parameter.initializer !== undefined) collectBindings(parameter.initializer);
   }
   collectBindings(body);
@@ -1707,21 +1880,44 @@ function handlerReferencesUnprovenFreeAuthority(
     if (
       ts.isIdentifier(node) &&
       isRuntimeIdentifierReference(node, root) &&
-      !INERT_FREE_HANDLER_IDENTIFIERS.has(node.text) &&
-      !bindings.some(
-        (binding) => binding.name === node.text && handlerNodeIsWithin(node, binding.scope),
-      )
+      !compilerSetHas(INERT_FREE_HANDLER_IDENTIFIERS, node.text) &&
+      !handlerBindingCoversIdentifier(bindings, node)
     ) {
       unsafe = true;
       return;
     }
     ts.forEachChild(node, visit);
   };
-  for (const parameter of parameters) {
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    const parameter = parameterSnapshot[index]!;
     if (parameter.initializer !== undefined) visit(parameter.initializer);
   }
   visit(body);
   return unsafe;
+}
+
+function handlerParameterIsDeclared(
+  parameters: readonly ts.ParameterDeclaration[],
+  candidate: ts.ParameterDeclaration,
+): boolean {
+  for (let index = 0; index < parameters.length; index += 1) {
+    if (parameters[index] === candidate) return true;
+  }
+  return false;
+}
+
+function handlerBindingCoversIdentifier(
+  bindings: readonly HandlerLocalBinding[],
+  identifier: ts.Identifier,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(bindings, 'Handler-local authority bindings');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const binding = snapshot[index]!;
+    if (binding.name === identifier.text && handlerNodeIsWithin(identifier, binding.scope)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function recordHandlerBindingName(
@@ -1730,10 +1926,12 @@ function recordHandlerBindingName(
   scope: ts.Node,
 ): void {
   if (ts.isIdentifier(name)) {
-    bindings.push({ name: name.text, scope });
+    bindings[bindings.length] = { name: name.text, scope };
     return;
   }
-  for (const element of name.elements) {
+  const elements = compilerSnapshotDenseArray(name.elements, 'Handler binding elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
     if (ts.isOmittedExpression(element)) continue;
     recordHandlerBindingName(bindings, element.name, scope);
   }
@@ -1864,17 +2062,19 @@ function requestBindingMayExposeAmbientAuthority(name: ts.BindingName): boolean 
   if (ts.isIdentifier(name)) return false;
   if (!ts.isObjectBindingPattern(name)) return true;
 
-  for (const element of name.elements) {
+  const elements = compilerSnapshotDenseArray(name.elements, 'Request binding elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
     if (element.dotDotDotToken) return true;
     const property =
       propertyNameText(element.propertyName) ??
       (ts.isIdentifier(element.name) ? element.name.text : undefined);
     if (property === undefined) return true;
-    if (property.toLowerCase() === 'headers') {
+    if (compilerStringToLowerCase(property) === 'headers') {
       if (!ts.isIdentifier(element.name)) return true;
       continue;
     }
-    if (!NON_AMBIENT_REQUEST_MEMBERS.has(property)) return true;
+    if (!compilerSetHas(NON_AMBIENT_REQUEST_MEMBERS, property)) return true;
   }
 
   return false;
@@ -1886,16 +2086,22 @@ function collectRequestParameterAuthority(
   headersNames: Set<string>,
 ): void {
   if (ts.isIdentifier(name)) {
-    requestNames.add(name.text);
+    compilerSetAdd(requestNames, name.text);
     return;
   }
   if (!ts.isObjectBindingPattern(name)) return;
-  for (const element of name.elements) {
+  const elements = compilerSnapshotDenseArray(name.elements, 'Request parameter binding elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
     const property =
       propertyNameText(element.propertyName) ??
       (ts.isIdentifier(element.name) ? element.name.text : undefined);
-    if (property?.toLowerCase() === 'headers' && ts.isIdentifier(element.name)) {
-      headersNames.add(element.name.text);
+    if (
+      property !== undefined &&
+      compilerStringToLowerCase(property) === 'headers' &&
+      ts.isIdentifier(element.name)
+    ) {
+      compilerSetAdd(headersNames, element.name.text);
     }
   }
 }
@@ -1911,23 +2117,26 @@ function collectAuthorityAlias(
   if (ts.isIdentifier(name)) {
     const target =
       kind === 'request' ? requestNames : kind === 'headers' ? headersNames : undefined;
-    if (target && !target.has(name.text)) {
-      target.add(name.text);
+    if (target && !compilerSetHas(target, name.text)) {
+      compilerSetAdd(target, name.text);
       changed = true;
     }
     return changed;
   }
   if (kind !== 'request' || !ts.isObjectBindingPattern(name)) return false;
-  for (const element of name.elements) {
+  const elements = compilerSnapshotDenseArray(name.elements, 'Request alias binding elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
     const property =
       propertyNameText(element.propertyName) ??
       (ts.isIdentifier(element.name) ? element.name.text : undefined);
     if (
-      property?.toLowerCase() === 'headers' &&
+      property !== undefined &&
+      compilerStringToLowerCase(property) === 'headers' &&
       ts.isIdentifier(element.name) &&
-      !headersNames.has(element.name.text)
+      !compilerSetHas(headersNames, element.name.text)
     ) {
-      headersNames.add(element.name.text);
+      compilerSetAdd(headersNames, element.name.text);
       changed = true;
     }
   }
@@ -1941,8 +2150,8 @@ function requestAuthorityExpressionKind(
 ): RequestAuthorityExpressionKind {
   const value = unwrapExpression(expression);
   if (ts.isIdentifier(value)) {
-    if (requestNames.has(value.text)) return 'request';
-    if (headersNames.has(value.text)) return 'headers';
+    if (compilerSetHas(requestNames, value.text)) return 'request';
+    if (compilerSetHas(headersNames, value.text)) return 'headers';
     return undefined;
   }
   if (ts.isCallExpression(value)) {
@@ -1964,7 +2173,8 @@ function requestAuthorityExpressionKind(
     return 'headers';
   }
   const member = requestAuthorityMember(value);
-  return member?.name.toLowerCase() === 'headers' &&
+  return member !== undefined &&
+    compilerStringToLowerCase(member.name) === 'headers' &&
     requestAuthorityExpressionKind(member.receiver, requestNames, headersNames) === 'request'
     ? 'headers'
     : undefined;
@@ -2082,7 +2292,7 @@ function isSafeRequestCarrierUse(
     parent.expression === node
   ) {
     const member = requestAuthorityMember(parent);
-    if (!member || !NON_AMBIENT_REQUEST_MEMBERS.has(member.name)) return false;
+    if (!member || !compilerSetHas(NON_AMBIENT_REQUEST_MEMBERS, member.name)) return false;
     if (member.name !== 'clone') return true;
     return (
       ts.isCallExpression(parent.parent) && unwrapExpression(parent.parent.expression) === parent
@@ -2152,12 +2362,15 @@ function isSafeHeaderCarrierUse(
 }
 
 function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string> {
-  const candidates = new Map<string, ts.Expression>();
-  const invalid = new Set<string>();
+  const candidates = compilerCreateMap<string, ts.Expression>();
+  const invalid = compilerCreateSet<string>();
   const invalidateBindings = (name: ts.BindingName): void => {
     const names: string[] = [];
     collectBindingNames(name, names);
-    for (const binding of names) invalid.add(binding);
+    const snapshot = compilerSnapshotDenseArray(names, 'Invalidated handler bindings');
+    for (let index = 0; index < snapshot.length; index += 1) {
+      compilerSetAdd(invalid, snapshot[index]!);
+    }
   };
 
   const visit = (node: ts.Node): void => {
@@ -2168,8 +2381,11 @@ function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string>
         ts.isVariableDeclarationList(node.parent) &&
         (node.parent.flags & ts.NodeFlags.Const) !== 0
       ) {
-        if (candidates.has(node.name.text)) invalid.add(node.name.text);
-        else candidates.set(node.name.text, node.initializer);
+        if (compilerMapGet(candidates, node.name.text) !== undefined) {
+          compilerSetAdd(invalid, node.name.text);
+        } else {
+          compilerMapSet(candidates, node.name.text, node.initializer);
+        }
       } else {
         invalidateBindings(node.name);
       }
@@ -2179,7 +2395,7 @@ function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string>
       (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
       node.name !== undefined
     ) {
-      invalid.add(node.name.text);
+      compilerSetAdd(invalid, node.name.text);
     }
     if (
       ts.isBinaryExpression(node) &&
@@ -2187,7 +2403,7 @@ function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string>
       node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
     ) {
       const target = unwrapExpression(node.left);
-      if (ts.isIdentifier(target)) invalid.add(target.text);
+      if (ts.isIdentifier(target)) compilerSetAdd(invalid, target.text);
     }
     if (
       (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
@@ -2195,29 +2411,29 @@ function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string>
         node.operator === ts.SyntaxKind.MinusMinusToken)
     ) {
       const target = unwrapExpression(node.operand);
-      if (ts.isIdentifier(target)) invalid.add(target.text);
+      if (ts.isIdentifier(target)) compilerSetAdd(invalid, target.text);
     }
     if (
       (ts.isForInStatement(node) || ts.isForOfStatement(node)) &&
       ts.isIdentifier(node.initializer)
     ) {
-      invalid.add(node.initializer.text);
+      compilerSetAdd(invalid, node.initializer.text);
     }
     ts.forEachChild(node, visit);
   };
   visit(body);
 
-  const values = new Map<string, string>();
-  const resolving = new Set<string>();
+  const values = compilerCreateMap<string, string>();
+  const resolving = compilerCreateSet<string>();
   const resolve = (name: string): string | undefined => {
-    if (invalid.has(name)) return undefined;
-    const known = values.get(name);
+    if (compilerSetHas(invalid, name)) return undefined;
+    const known = compilerMapGet(values, name);
     if (known !== undefined) return known;
-    if (resolving.has(name)) return undefined;
-    const initializer = candidates.get(name);
+    if (compilerSetHas(resolving, name)) return undefined;
+    const initializer = compilerMapGet(candidates, name);
     if (!initializer) return undefined;
 
-    resolving.add(name);
+    compilerSetAdd(resolving, name);
     const expression = unwrapExpression(initializer);
     const value =
       ts.isStringLiteralLike(expression) || ts.isNoSubstitutionTemplateLiteral(expression)
@@ -2225,12 +2441,14 @@ function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string>
         : ts.isIdentifier(expression)
           ? resolve(expression.text)
           : undefined;
-    resolving.delete(name);
-    if (value !== undefined) values.set(name, value);
+    compilerSetDelete(resolving, name);
+    if (value !== undefined) compilerMapSet(values, name, value);
     return value;
   };
 
-  for (const name of candidates.keys()) resolve(name);
+  compilerMapForEach(candidates, (_initializer, name) => {
+    resolve(name);
+  });
   return values;
 }
 
@@ -2241,7 +2459,7 @@ function staticHeaderName(
   if (!expression) return undefined;
   const value = unwrapExpression(expression);
   if (ts.isStringLiteralLike(value) || ts.isNoSubstitutionTemplateLiteral(value)) return value.text;
-  return ts.isIdentifier(value) ? values.get(value.text) : undefined;
+  return ts.isIdentifier(value) ? compilerMapGet(values, value.text) : undefined;
 }
 
 function endpointHandlerModels(
@@ -2271,39 +2489,56 @@ function handlerPropertyEntries(
   source: string,
   call: ts.CallExpression,
 ): HandlerPropertyEntry[] {
-  const options = [...call.arguments].find(ts.isObjectLiteralExpression);
+  let options: ts.ObjectLiteralExpression | undefined;
+  const argumentLength = compilerArrayLength(call.arguments, 'Handler factory arguments');
+  for (let index = 0; index < argumentLength; index += 1) {
+    const argument = compilerOwnDataValue(call.arguments, index, 'Handler factory arguments') as
+      | ts.Expression
+      | undefined;
+    if (!argument) throw new TypeError(`Handler factory arguments[${index}] must be own data.`);
+    if (ts.isObjectLiteralExpression(argument)) {
+      options = argument;
+      break;
+    }
+  }
   if (!options || !ts.isObjectLiteralExpression(options)) return [];
 
-  return options.properties.flatMap<HandlerPropertyEntry>((property) => {
+  const result: HandlerPropertyEntry[] = [];
+  const propertyLength = compilerArrayLength(options.properties, 'Handler factory properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      options.properties,
+      index,
+      'Handler factory properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`Handler factory properties[${index}] must be own data.`);
     if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'handler') {
-      return property.body
-        ? [
-            {
-              body: property.body,
-              handler: property,
-              model: functionBodyModel(sourceFile, source, property.body, property.parameters),
-              parameters: property.parameters,
-            },
-          ]
-        : [];
+      if (property.body) {
+        result[result.length] = {
+          body: property.body,
+          handler: property,
+          model: functionBodyModel(sourceFile, source, property.body, property.parameters),
+          parameters: property.parameters,
+        };
+      }
+      continue;
     }
 
     if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== 'handler') {
-      return [];
+      continue;
     }
 
     const initializer = unwrapExpression(property.initializer);
-    if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return [];
+    if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) continue;
 
-    return [
-      {
-        body: initializer.body,
-        handler: initializer,
-        model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
-        parameters: initializer.parameters,
-      },
-    ];
-  });
+    result[result.length] = {
+      body: initializer.body,
+      handler: initializer,
+      model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
+      parameters: initializer.parameters,
+    };
+  }
+  return result;
 }
 
 function webhookHandlerModels(

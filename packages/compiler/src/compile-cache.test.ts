@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -21,28 +22,71 @@ describe('CompileCache', () => {
     expect(compile).toHaveBeenCalledTimes(1);
   });
 
-  it('folds source with a >=256-bit collision-resistant digest, not a 32-bit FNV-1a', () => {
-    // L8-2 (plans/bug-and-testing-part3.md): the cache key stores no source
-    // preimage, so a hash collision is a stale wrong-output hit. SPEC.md
-    // §5.2.1#1 mandates a collision-resistant hash. Assert the sourceHash in the
-    // emitted key is a SHA-256 hex digest (64 chars / 256 bits), never the prior
-    // 8-char (32-bit) FNV-1a.
-    const key = compileCacheKey({ fileName: 'cart.tsx', source: 'component({})' });
-    const match = /"sourceHash":"([0-9a-f]+)"/.exec(key);
-    expect(match).not.toBeNull();
-    const digest = match?.[1] ?? '';
-    expect(digest).toMatch(/^[0-9a-f]{64}$/);
-    expect(digest.length * 4).toBeGreaterThanOrEqual(256);
-
-    // It is the SHA-256 of the source, with no app-visible FNV-1a constant in
-    // the key path.
-    const expected = createHash('sha256').update('component({})').digest('hex');
-    expect(digest).toBe(expected);
-    expect(key).not.toContain('811c9dc5');
-    expect(key).not.toContain('01000193');
+  it('authorizes hits with the full source and extra-file preimages, never a digest alone', () => {
+    const key = compileCacheKey({
+      extraFiles: [{ fileName: 'shared.ts', source: 'export const shared = 1;' }],
+      fileName: 'cart.tsx',
+      source: 'component({})',
+    });
+    const parsed = JSON.parse(key) as {
+      extraFiles: Array<{ fileName: string; source: string }>;
+      source: string;
+      sourceHash?: unknown;
+    };
+    expect(parsed.source).toBe('component({})');
+    expect(parsed.extraFiles).toEqual([
+      { fileName: 'shared.ts', source: 'export const shared = 1;' },
+    ]);
+    expect(parsed.sourceHash).toBeUndefined();
   });
 
-  it('keys by source hash and the whole passed fact set before a footprint exists', () => {
+  it('does not alias unsafe source to a safe in-memory result through a late createHash replacement', () => {
+    const cache = new CompileCache<{ dependencyFootprint: {}; source: string }>();
+    const safeSource = 'export const Account = component({ render: () => <p>safe</p> });';
+    const unsafeSource =
+      'export const Account = component({ render: () => <script>{adminToken}</script> });';
+    const safeDigest = createHash('sha256').update(safeSource).digest('hex');
+    const compile = vi.fn((source: string) => ({ dependencyFootprint: {}, source }));
+    expect(
+      cache.getOrCreate({ fileName: 'account.tsx', source: safeSource }, () => compile(safeSource)),
+    ).toMatchObject({ source: safeSource });
+
+    const require = createRequire(import.meta.url);
+    const mutableCrypto = require('node:crypto') as {
+      createHash: (typeof import('node:crypto'))['createHash'];
+    };
+    const nativeCreateHash = mutableCrypto.createHash;
+    mutableCrypto.createHash = ((algorithm: string, options?: unknown) => {
+      const real = nativeCreateHash(algorithm, options as never);
+      let input = '';
+      return {
+        digest(encoding: import('node:crypto').BinaryToTextEncoding) {
+          if (input === unsafeSource && encoding === 'hex') return safeDigest;
+          return real.digest(encoding);
+        },
+        update(value: string) {
+          input += value;
+          real.update(value);
+          return this;
+        },
+      };
+    }) as unknown as typeof mutableCrypto.createHash;
+    syncBuiltinESMExports();
+
+    try {
+      expect(
+        cache.getOrCreate({ fileName: 'account.tsx', source: unsafeSource }, () =>
+          compile(unsafeSource),
+        ),
+      ).toMatchObject({ source: unsafeSource });
+      expect(compile).toHaveBeenCalledTimes(2);
+    } finally {
+      mutableCrypto.createHash = nativeCreateHash;
+      syncBuiltinESMExports();
+    }
+  });
+
+  it('keys by exact source and the whole passed fact set before a footprint exists', () => {
     const base = compileCacheKey({
       fileName: 'cart.tsx',
       registryFacts: { queries: { cart: 'CartQuery' } },
@@ -189,6 +233,55 @@ describe('CompileCache', () => {
 
     expect(second).toBe(first);
     expect(compile).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not replay a learned footprint through selective registry Array.filter replacement', () => {
+    const cache = new CompileCache<{
+      dependencyFootprint: CompileDependencyFootprint;
+      value: number;
+    }>();
+    const safeComponents = ['safe/cart-badge'];
+    const unsafeComponents = ['unsafe/cart-badge'];
+    let value = 0;
+    const compile = vi.fn(() => ({
+      dependencyFootprint: {
+        previousRegistryFacts: { components: safeComponents },
+        reads: { previousRegistryComponentDomLeaves: ['cart-badge'] },
+      },
+      value: value++,
+    }));
+    const first = cache.getOrCreate(
+      compileComponentCacheKeyInput({
+        fileName: 'cart.tsx',
+        previousRegistryFacts: { components: safeComponents },
+        source: 'component({})',
+      }),
+      compile,
+    );
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    Array.prototype.filter = function poisonedRegistryFilter(
+      callback: (value: unknown, index: number, array: unknown[]) => unknown,
+      thisArg?: unknown,
+    ): unknown[] {
+      if (this === unsafeComponents) return safeComponents;
+      return nativeApply(nativeFilter, this, [callback, thisArg]);
+    };
+
+    try {
+      const second = cache.getOrCreate(
+        compileComponentCacheKeyInput({
+          fileName: 'cart.tsx',
+          previousRegistryFacts: { components: unsafeComponents },
+          source: 'component({})',
+        }),
+        compile,
+      );
+      expect(second).not.toBe(first);
+      expect(compile).toHaveBeenCalledTimes(2);
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
   });
 
   it('does not reuse learned-footprint entries across production render-plan gates', () => {

@@ -1,19 +1,59 @@
+import {
+  compilerArrayIsArray,
+  compilerArrayLength,
+  compilerJsonStringify,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+} from './compiler-security-intrinsics.js';
+
 /**
  * @internal Deterministic JSON serialization: object keys are sorted and `undefined`
  * values dropped, recursively. FN2 (plans/compiler-refactoring.md): the single shared
- * serializer behind `factHash` (fnv1a), `compilerBuildId` (sha256), and the in-memory /
- * persistent compile caches (sha256), so the four byte-identical copies cannot drift.
- * Only the serializer is shared — each caller keeps its own intentional hash function.
+ * serializer behind compact fingerprints and the exact in-memory/persistent compile-cache
+ * identities. Cache authorization compares the full canonical preimage; any SHA derived from it is
+ * only a display/path locator, so digest collisions cannot become stale-output hits.
  */
 export function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (compilerArrayIsArray(value)) {
+    const length = compilerArrayLength(value, 'Canonical JSON array');
+    let result = '[';
+    for (let index = 0; index < length; index += 1) {
+      if (index > 0) result += ',';
+      const entry = compilerOwnDataValue(value, index, 'Canonical JSON array');
+      // Match JSON's array semantics: an own `undefined` slot (and a sparse hole, which the
+      // compiler treats equivalently here) is `null`, never an omitted byte sequence. Omitting the
+      // value aliased `[]` with `[undefined]` and made mixed arrays produce non-JSON holes, so cache
+      // identity was not injective over the accepted input domain (SPEC §5.2.1).
+      result += entry === undefined ? 'null' : canonicalJson(entry);
+    }
+    return `${result}]`;
+  }
   if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
-      .join(',')}}`;
+    const keys = compilerObjectKeys(value);
+    for (let index = 1; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      let insertAt = index;
+      while (insertAt > 0 && key < keys[insertAt - 1]!) {
+        keys[insertAt] = keys[insertAt - 1]!;
+        insertAt -= 1;
+      }
+      keys[insertAt] = key;
+    }
+    let result = '{';
+    let included = 0;
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const entry = compilerOwnDataValue(value, key, 'Canonical JSON object');
+      if (entry === undefined) continue;
+      if (included > 0) result += ',';
+      const encodedKey = compilerJsonStringify(key);
+      if (encodedKey === undefined) throw new TypeError('Canonical JSON key could not be encoded.');
+      result += `${encodedKey}:${canonicalJson(entry)}`;
+      included += 1;
+    }
+    return `${result}}`;
   }
 
-  return JSON.stringify(value);
+  const encoded = compilerJsonStringify(value);
+  return encoded as string;
 }

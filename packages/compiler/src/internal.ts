@@ -1,4 +1,6 @@
 export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
+/** @internal Supported runners call this before evaluating app/plugin modules. */
+export { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.js';
 export { compilerBuildId, type CompilerBuildIdInput } from './cache-identity.js';
 export { CompileCache, compileComponentCacheKeyInput } from './compile-cache.js';
 export type { CompileCacheKeyInput } from './compile-cache.js';

@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
@@ -400,8 +401,8 @@ export const Recommendations = component({
         {
           "componentName": "css-base",
           "fragmentTargets": [],
-          "href": "/_kovo/base-3b6d05fa.css",
-          "sourceFileName": "base-3b6d05fa.css",
+          "href": "/_kovo/base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
+          "sourceFileName": "base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
           "styleRules": [
             {
               "source": "components/app/shell.tsx#root",
@@ -426,8 +427,8 @@ export const Recommendations = component({
           {
             "componentName": "css-base",
             "fragmentTargets": [],
-            "href": "/_kovo/base-3b6d05fa.css",
-            "sourceFileName": "base-3b6d05fa.css",
+            "href": "/_kovo/base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
+            "sourceFileName": "base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
             "styleRules": [
               {
                 "source": "components/app/shell.tsx#root",
@@ -452,8 +453,8 @@ export const Recommendations = component({
           {
             "componentName": "css-base",
             "fragmentTargets": [],
-            "href": "/_kovo/base-3b6d05fa.css",
-            "sourceFileName": "base-3b6d05fa.css",
+            "href": "/_kovo/base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
+            "sourceFileName": "base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
             "styleRules": [
               {
                 "source": "components/app/shell.tsx#root",
@@ -475,8 +476,8 @@ export const Recommendations = component({
             "fragmentTargets": [
               "components/product/recommendations/recommendations",
             ],
-            "href": "/_kovo/routes/products-id-355be470.css",
-            "sourceFileName": "routes/products-id-355be470.css",
+            "href": "/_kovo/routes/products-id-355be470feda13b57e13f6e16364060323d606bfbed232d1677b64370687a5f3.css",
+            "sourceFileName": "routes/products-id-355be470feda13b57e13f6e16364060323d606bfbed232d1677b64370687a5f3.css",
             "styleRules": [
               {
                 "source": "components/product/recommendations.tsx#root",
@@ -503,8 +504,8 @@ export const Recommendations = component({
         {
           "componentName": "css-base",
           "fragmentTargets": [],
-          "href": "/_kovo/base-3b6d05fa.css",
-          "sourceFileName": "base-3b6d05fa.css",
+          "href": "/_kovo/base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
+          "sourceFileName": "base-3b6d05fa5b4781e95f9f8b4f5524c3676238ee5846961c449c12d79083f31e3c.css",
           "styleRules": [
             {
               "source": "components/app/shell.tsx#root",
@@ -526,8 +527,8 @@ export const Recommendations = component({
           "fragmentTargets": [
             "components/product/recommendations/recommendations",
           ],
-          "href": "/_kovo/fragments/components-product-recommendations-recommendations-355be470.css",
-          "sourceFileName": "fragments/components-product-recommendations-recommendations-355be470.css",
+          "href": "/_kovo/fragments/components-product-recommendations-recommendations-355be470feda13b57e13f6e16364060323d606bfbed232d1677b64370687a5f3.css",
+          "sourceFileName": "fragments/components-product-recommendations-recommendations-355be470feda13b57e13f6e16364060323d606bfbed232d1677b64370687a5f3.css",
           "styleRules": [
             {
               "source": "components/product/recommendations.tsx#root",
@@ -574,12 +575,12 @@ export const Recommendations = component({
       inlinedCriticalCssBytes: homeBytes,
       linkedCssBytes: homeBytes,
       linkedHrefs: [
-        expect.stringMatching(/^\/assets\/base-[a-f0-9]{8}\.css$/),
-        expect.stringMatching(/^\/assets\/routes\/index-[a-f0-9]{8}\.css$/),
+        expect.stringMatching(/^\/assets\/base-[a-f0-9]{64}\.css$/),
+        expect.stringMatching(/^\/assets\/routes\/index-[a-f0-9]{64}\.css$/),
       ],
       linkedSourceFileNames: [
-        expect.stringMatching(/^base-[a-f0-9]{8}\.css$/),
-        expect.stringMatching(/^routes\/index-[a-f0-9]{8}\.css$/),
+        expect.stringMatching(/^base-[a-f0-9]{64}\.css$/),
+        expect.stringMatching(/^routes\/index-[a-f0-9]{64}\.css$/),
       ],
       reachableCssBytes: homeBytes,
       reachableSourceFileNames: ['components/shared.css', 'routes/home.css'],
@@ -592,6 +593,23 @@ export const Recommendations = component({
       reachableSourceFileNames: ['components/shared.css', 'routes/login.css'],
       route: '/login',
     });
+  });
+
+  it('does not alias distinct CSS chunks that collide under a 32-bit SHA-256 prefix', () => {
+    // Fixed collision for the former eight-hex-character immutable asset identity (SPEC §5.2).
+    const first = '.safe{color:teal}/*13ke8a61cbyy0kx7il87*/';
+    const second = '.safe{color:teal}/*124j2o8trkph41og1r10*/';
+    expect(createHash('sha256').update(first).digest('hex').slice(0, 8)).toBe('3678ff79');
+    expect(createHash('sha256').update(second).digest('hex').slice(0, 8)).toBe('3678ff79');
+
+    const hrefFor = (css: string): string | undefined =>
+      collectCssAssetManifest(
+        { cssAssets: [cssAccountingAsset('base.css', 'base', css)] },
+        { split: { baseSourceFileNames: ['base.css'] } },
+      ).chunks?.base[0]?.href;
+    expect(hrefFor(first)).toMatch(/^\/assets\/base-[a-f0-9]{64}\.css$/u);
+    expect(hrefFor(second)).toMatch(/^\/assets\/base-[a-f0-9]{64}\.css$/u);
+    expect(hrefFor(first)).not.toBe(hrefFor(second));
   });
 
   it('flags StyleX atoms delivered to routes that cannot reach them', () => {
@@ -631,7 +649,7 @@ export const Recommendations = component({
       diagnostics: [
         {
           className: 'login-panel',
-          href: expect.stringMatching(/^\/assets\/routes\/login-[a-f0-9]{8}\.css$/),
+          href: expect.stringMatching(/^\/assets\/routes\/login-[a-f0-9]{64}\.css$/),
           moduleFileName: 'routes/login.tsx',
           route: '/',
           source: 'routes/login.tsx#root',
@@ -672,8 +690,8 @@ export const Recommendations = component({
     expect(cssRouteByteAccounting(manifest, homeRoute)).toMatchObject({
       linkedCssBytes: Buffer.byteLength(documentCss, 'utf8') + Buffer.byteLength(homeCss, 'utf8'),
       linkedSourceFileNames: [
-        expect.stringMatching(/^base-[a-f0-9]{8}\.css$/),
-        expect.stringMatching(/^routes\/index-[a-f0-9]{8}\.css$/),
+        expect.stringMatching(/^base-[a-f0-9]{64}\.css$/),
+        expect.stringMatching(/^routes\/index-[a-f0-9]{64}\.css$/),
       ],
       reachableCssBytes: Buffer.byteLength(homeCss, 'utf8'),
       reachableSourceFileNames: ['routes/home.css'],

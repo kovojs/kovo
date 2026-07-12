@@ -3,6 +3,11 @@ import {
   type CompilerDiagnostic,
   type DiagnosticFactory,
 } from '../diagnostics.js';
+import {
+  compilerArrayIsArray,
+  compilerArrayLength,
+  compilerOwnDataValue,
+} from '../compiler-security-intrinsics.js';
 import type { ComponentModuleModel, SourceSpan } from '../scan/parse.js';
 import type { SourceOffsetMap } from '../shared.js';
 import type { CompileComponentOptions, QueryUpdateCoverageFact } from '../types.js';
@@ -212,5 +217,33 @@ export function collectCompilerDiagnostics(context: ValidatorContext): CompilerD
       context.sourceOffsetMap,
     ),
   };
-  return compilerValidators.flatMap((validator) => validator(resolved));
+  // SPEC §2/§5.2: evaluated app code shares the compile realm. Validator dispatch and every
+  // returned diagnostic are therefore dense own-data traversal, never a live Array.flatMap.
+  const diagnostics: CompilerDiagnostic[] = [];
+  const validatorLength = compilerArrayLength(compilerValidators, 'Compiler validators');
+  for (let index = 0; index < validatorLength; index += 1) {
+    const validator = compilerOwnDataValue(compilerValidators, index, 'Compiler validators');
+    if (typeof validator !== 'function') {
+      throw new TypeError(`Compiler validators[${index}] must be an own function.`);
+    }
+    const produced = (validator as CompilerValidator)(resolved);
+    if (!compilerArrayIsArray(produced)) {
+      throw new TypeError(`Compiler validator ${index} must return a diagnostic array.`);
+    }
+    const producedLength = compilerArrayLength(produced, `Compiler validator ${index} diagnostics`);
+    for (let diagnosticIndex = 0; diagnosticIndex < producedLength; diagnosticIndex += 1) {
+      const diagnostic = compilerOwnDataValue(
+        produced,
+        diagnosticIndex,
+        `Compiler validator ${index} diagnostics`,
+      );
+      if (diagnostic === undefined) {
+        throw new TypeError(
+          `Compiler validator ${index} diagnostics[${diagnosticIndex}] must be dense.`,
+        );
+      }
+      diagnostics[diagnostics.length] = diagnostic as CompilerDiagnostic;
+    }
+  }
+  return diagnostics;
 }

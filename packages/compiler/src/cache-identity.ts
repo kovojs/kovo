@@ -1,11 +1,34 @@
-import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {
+  readFileSync as builtinReadFileSync,
+  readdirSync as builtinReaddirSync,
+  statSync as builtinStatSync,
+} from 'node:fs';
+import { dirname as builtinDirname, join as builtinJoin, sep } from 'node:path';
+import { fileURLToPath as builtinFileUrlToPath } from 'node:url';
 
 import { canonicalJson } from './canonical-json.js';
+import {
+  compilerArrayLength,
+  compilerJsonParse,
+  compilerOwnDataValue,
+  compilerRandomUuid,
+  compilerSha256Hex,
+  compilerStatsIsDirectory,
+  compilerStatsIsFile,
+  compilerStringEndsWith,
+  compilerStringSlice,
+  compilerStringStartsWith,
+} from './compiler-security-intrinsics.js';
 
-const compilerBuildIdVersion = 'compiler-build-id/v1';
+const readFileSync = builtinReadFileSync;
+const readdirSync = builtinReaddirSync;
+const statSync = builtinStatSync;
+const dirname = builtinDirname;
+const join = builtinJoin;
+const fileURLToPath = builtinFileUrlToPath;
+
+const compilerBuildIdVersion = 'compiler-build-id/v2';
+const compilerBuildCacheIdentityVersion = 'compiler-build-cache-identity/v2';
 const compilerPackageName = '@kovojs/compiler';
 
 /**
@@ -21,9 +44,10 @@ const compilerPackageName = '@kovojs/compiler';
  * `src/*.ts` (vitest) and from the bundled `dist/*.mjs` artifact.
  */
 function resolveCompilerPackageIdentity(): {
-  distFingerprintDir: string;
   manifestDir: string;
+  moduleDir: string;
   name: string;
+  resolved: boolean;
   version: string;
 } {
   const initialDir = dirname(fileURLToPath(import.meta.url));
@@ -33,9 +57,10 @@ function resolveCompilerPackageIdentity(): {
     const packageManifest = readCompilerPackageManifest(join(dir, 'package.json'));
     if (packageManifest) {
       return {
-        distFingerprintDir: join(dir, 'dist'),
         manifestDir: dir,
+        moduleDir: initialDir,
         name: packageManifest.name,
+        resolved: true,
         version: packageManifest.version,
       };
     }
@@ -45,13 +70,11 @@ function resolveCompilerPackageIdentity(): {
       join(workspaceManifestDir, 'package.json'),
     );
     if (workspaceManifest) {
-      const rootDistDir = join(dir, 'dist');
       return {
-        distFingerprintDir: isWithinPath(initialDir, rootDistDir)
-          ? rootDistDir
-          : join(workspaceManifestDir, 'dist'),
         manifestDir: workspaceManifestDir,
+        moduleDir: initialDir,
         name: workspaceManifest.name,
+        resolved: true,
         version: workspaceManifest.version,
       };
     }
@@ -63,9 +86,10 @@ function resolveCompilerPackageIdentity(): {
   // Defensive fallback: identity is unknown rather than silently a wrong literal, but the
   // cache still moves with the current bundle/source directory when possible.
   return {
-    distFingerprintDir: initialDir,
     manifestDir: initialDir,
+    moduleDir: initialDir,
     name: compilerPackageName,
+    resolved: false,
     version: '0.0.0-unresolved',
   };
 }
@@ -74,12 +98,12 @@ function readCompilerPackageManifest(
   manifestPath: string,
 ): { name: typeof compilerPackageName; version: string } | null {
   try {
-    const parsed = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-      name?: unknown;
-      version?: unknown;
-    };
-    if (parsed.name === compilerPackageName && typeof parsed.version === 'string') {
-      return { name: parsed.name, version: parsed.version };
+    const parsed = compilerJsonParse(readFileSync(manifestPath, 'utf8'));
+    if (!parsed || typeof parsed !== 'object') return null;
+    const name = compilerOwnDataValue(parsed, 'name', 'Compiler package manifest');
+    const version = compilerOwnDataValue(parsed, 'version', 'Compiler package manifest');
+    if (name === compilerPackageName && typeof version === 'string') {
+      return { name, version };
     }
   } catch {
     // Not a readable/parseable compiler manifest.
@@ -88,51 +112,100 @@ function readCompilerPackageManifest(
 }
 
 function isWithinPath(child: string, parent: string): boolean {
-  return child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
+  return (
+    child === parent ||
+    compilerStringStartsWith(
+      child,
+      compilerStringEndsWith(parent, sep) ? parent : `${parent}${sep}`,
+    )
+  );
 }
 
-const { distFingerprintDir: compilerDistFingerprintDir, version: compilerPackageVersion } =
-  resolveCompilerPackageIdentity();
+const compilerPackageIdentity = resolveCompilerPackageIdentity();
+const compilerPackageVersion = compilerPackageIdentity.version;
 
 /**
- * @internal Best-effort content hash of the emitted compiler `dist`, computed
- * once at module load.
- *
- * Folding the dist contents (not just the package.json version) makes the cache
- * namespace move even for an unpublished local rebuild whose version string did
- * not change (B1). It is best-effort: when no `dist` directory exists (dev/test
- * running from `src`), this contributes nothing, and the package.json version
- * alone still guarantees an upgrade is a clean miss. Hashing a sorted manifest
- * of `(relPath, size, mtimeMs)` keeps it cheap and deterministic for a fixed
- * dist tree without reading every byte.
+ * Exact implementation identity used to AUTHORIZE cache hits. Digests are locators/display only:
+ * source-mode execution records every byte below `src`, packaged execution every byte below
+ * `dist`, plus the exact package manifest. If discovery is incomplete, a process-unique identity
+ * deliberately disables cross-process reuse instead of falling back to version-only stale hits.
  */
-function resolveDistContentHash(): string | undefined {
-  const distDir = compilerDistFingerprintDir;
+function resolveCompilerBuildCacheIdentity(): string {
   try {
-    const lines: string[] = [];
-    collectDistManifest(distDir, distDir, lines);
-    if (lines.length === 0) return undefined;
-    lines.sort();
-    return sha256(lines.join('\n')).slice(0, 16);
+    if (!compilerPackageIdentity.resolved) throw new Error('Compiler package root is unresolved.');
+    const sourceRoot = join(compilerPackageIdentity.manifestDir, 'src');
+    const distRoot = join(compilerPackageIdentity.manifestDir, 'dist');
+    const implementationRoot = isWithinPath(compilerPackageIdentity.moduleDir, sourceRoot)
+      ? sourceRoot
+      : isWithinPath(compilerPackageIdentity.moduleDir, distRoot)
+        ? distRoot
+        : compilerPackageIdentity.moduleDir;
+    const implementationFiles: Array<{ path: string; sourceBase64: string }> = [];
+    collectImplementationFiles(implementationRoot, implementationRoot, implementationFiles);
+    if (implementationFiles.length === 0) throw new Error('Compiler implementation is empty.');
+    return canonicalJson({
+      implementationFiles,
+      packageManifestSource: readFileSync(
+        join(compilerPackageIdentity.manifestDir, 'package.json'),
+        'utf8',
+      ),
+      packageName: compilerPackageName,
+      packageVersion: compilerPackageVersion,
+      version: compilerBuildCacheIdentityVersion,
+    });
   } catch {
-    return undefined;
+    return canonicalJson({
+      processIdentity: compilerRandomUuid(),
+      version: `${compilerBuildCacheIdentityVersion}/process-only`,
+    });
   }
 }
 
-function collectDistManifest(rootDir: string, dir: string, lines: string[]): void {
-  for (const name of readdirSync(dir).sort()) {
+function collectImplementationFiles(
+  rootDir: string,
+  dir: string,
+  files: Array<{ path: string; sourceBase64: string }>,
+): void {
+  const names = readdirSync(dir);
+  sortStrings(names);
+  const length = compilerArrayLength(names, 'Compiler implementation directory entries');
+  for (let index = 0; index < length; index += 1) {
+    const name = compilerOwnDataValue(names, index, 'Compiler implementation directory entries');
+    if (typeof name !== 'string') {
+      throw new TypeError('Compiler implementation entry names must be strings.');
+    }
     const absolute = join(dir, name);
     const stats = statSync(absolute);
-    if (stats.isDirectory()) {
-      collectDistManifest(rootDir, absolute, lines);
-    } else if (stats.isFile()) {
-      const relative = absolute.slice(rootDir.length + 1);
-      lines.push(`${relative}:${stats.size}:${Math.trunc(stats.mtimeMs)}`);
+    if (compilerStatsIsDirectory(stats)) {
+      collectImplementationFiles(rootDir, absolute, files);
+    } else if (compilerStatsIsFile(stats)) {
+      const relative = compilerStringSlice(absolute, rootDir.length + 1);
+      files[files.length] = {
+        path: relative,
+        sourceBase64: readFileSync(absolute, 'base64'),
+      };
     }
   }
 }
 
-const compilerDistContentHash = resolveDistContentHash();
+function sortStrings(values: string[]): void {
+  for (let index = 1; index < values.length; index += 1) {
+    const value = values[index]!;
+    let insertAt = index;
+    while (insertAt > 0 && value < values[insertAt - 1]!) {
+      values[insertAt] = values[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    values[insertAt] = value;
+  }
+}
+
+const resolvedCompilerBuildCacheIdentity = resolveCompilerBuildCacheIdentity();
+
+/** @internal Full canonical implementation preimage used for exact cache-hit authorization. */
+export function compilerBuildCacheIdentity(): string {
+  return resolvedCompilerBuildCacheIdentity;
+}
 
 /** @internal Input that contributes to the incremental compiler cache namespace. */
 export interface CompilerBuildIdInput {
@@ -147,23 +220,20 @@ export interface CompilerBuildIdInput {
  * @internal Stable compiler/dependency identity for incremental cache keys.
  *
  * SPEC.md §5.2 keeps emitted artifacts deterministic; the incremental cache must
- * also be versioned so a compiler implementation change becomes a clean miss,
- * never a stale hit. This helper defines that namespace without tying the cache
- * to filesystem layout. The package version (and a best-effort dist content
- * hash) are derived at module load (B1), so an upgraded compiler is guaranteed
- * to produce a different build id.
+ * also be versioned so a compiler implementation change becomes a clean miss. This compact token
+ * is for display/path names; cache correctness compares {@link compilerBuildCacheIdentity} exactly.
  */
 export function compilerBuildId(input: CompilerBuildIdInput = {}): string {
   const payload = {
-    distContentHash: compilerDistContentHash ?? null,
+    compilerBuildCacheIdentity: resolvedCompilerBuildCacheIdentity,
     packageName: compilerPackageName,
     packageVersion: compilerPackageVersion,
     sourceFingerprints: input.sourceFingerprints ?? {},
     version: compilerBuildIdVersion,
   };
-  return `${compilerPackageName}@${compilerPackageVersion}/${sha256(canonicalJson(payload)).slice(0, 16)}`;
+  return `${compilerPackageName}@${compilerPackageVersion}/${sha256(canonicalJson(payload))}`;
 }
 
 function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
+  return compilerSha256Hex(value);
 }

@@ -7,6 +7,18 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 
 import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import {
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 import type { PublishToClientFact } from '../types.js';
 
@@ -96,7 +108,15 @@ export interface ClientCaptureAnalysis {
 function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
   const bindings: ImportBinding[] = [];
 
-  for (const statement of sourceFile.statements) {
+  const statementLength = compilerArrayLength(sourceFile.statements, 'Client-capture statements');
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Client-capture statements',
+    ) as ts.Statement | undefined;
+    if (!statement)
+      throw new TypeError(`Client-capture statements[${statementIndex}] must be dense.`);
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     const moduleSpecifier = statement.moduleSpecifier.text;
@@ -104,33 +124,42 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
     if (!clause) continue;
 
     if (clause.name) {
-      bindings.push({
+      bindings[bindings.length] = {
         importedName: 'default',
         kind: 'default',
         localName: clause.name.text,
         moduleSpecifier,
         source: 'import',
-      });
+      };
     }
 
     const named = clause.namedBindings;
     if (named && ts.isNamespaceImport(named)) {
-      bindings.push({
+      bindings[bindings.length] = {
         importedName: '*',
         kind: 'namespace',
         localName: named.name.text,
         moduleSpecifier,
         source: 'import',
-      });
+      };
     } else if (named && ts.isNamedImports(named)) {
-      for (const element of named.elements) {
-        bindings.push({
+      const elementLength = compilerArrayLength(named.elements, 'Client-capture named imports');
+      for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+        const element = compilerOwnDataValue(
+          named.elements,
+          elementIndex,
+          'Client-capture named imports',
+        ) as ts.ImportSpecifier | undefined;
+        if (!element) {
+          throw new TypeError(`Client-capture named imports[${elementIndex}] must be dense.`);
+        }
+        bindings[bindings.length] = {
           importedName: element.propertyName?.text ?? element.name.text,
           kind: 'named',
           localName: element.name.text,
           moduleSpecifier,
           source: 'import',
-        });
+        };
       }
     }
   }
@@ -139,10 +168,20 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
 }
 
 function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBinding[] {
-  return model.moduleScopeBindings.map((binding) => ({
-    localName: binding.name,
-    source: 'module-constant',
-  }));
+  const bindings: ModuleConstantBinding[] = [];
+  const length = compilerArrayLength(model.moduleScopeBindings, 'Module-scope capture bindings');
+  for (let index = 0; index < length; index += 1) {
+    const binding = compilerOwnDataValue(
+      model.moduleScopeBindings,
+      index,
+      'Module-scope capture bindings',
+    ) as { name?: unknown } | undefined;
+    if (!binding || typeof binding.name !== 'string') {
+      throw new TypeError(`Module-scope capture bindings[${index}] must have an own name.`);
+    }
+    bindings[bindings.length] = { localName: binding.name, source: 'module-constant' };
+  }
+  return bindings;
 }
 
 /** Every event-handler arrow body in the module (the closures lowered into the client bundle). */
@@ -160,7 +199,7 @@ function handlerArrowBodies(sourceFile: ts.SourceFile): ts.Node[] {
     ) {
       const expression = node.initializer.expression;
       if (ts.isArrowFunction(expression) && expression.parameters.length === 0) {
-        bodies.push(expression.body);
+        bodies[bodies.length] = expression.body;
       }
     }
     ts.forEachChild(node, visit);
@@ -174,7 +213,7 @@ function handlerArrowBodies(sourceFile: ts.SourceFile): ts.Node[] {
 // own `jsxDomEventName` recognition exactly, so the gate analyzes precisely the closures that are
 // lowered into the client bundle — no more, no less.
 function isDomEventName(name: string): boolean {
-  return /^on[A-Z][A-Za-z0-9]*$/.test(name);
+  return compilerRegExpTest(/^on[A-Z][A-Za-z0-9]*$/, name);
 }
 
 /**
@@ -190,21 +229,21 @@ function classifyCaptures(
 ): void {
   // Identifiers declared locally inside the handler shadow a module import of the same name; track
   // them so a local `const track = …` is never mistaken for the captured import.
-  const shadowed = new Set<string>();
+  const shadowed = compilerCreateSet<string>();
   collectLocalDeclarations(body, shadowed);
 
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && isValueReferenceIdentifier(node)) {
-      const binding = bindingByName.get(node.text);
-      if (binding && !shadowed.has(node.text)) {
+      const binding = compilerMapGet(bindingByName as Map<string, CaptureBinding>, node.text);
+      if (binding && !compilerSetHas(shadowed, node.text)) {
         const parent = node.parent;
         const callee = isCalleeReferenceIdentifier(node);
         const publishReason = isPublishToClientArgument(node, parent)
           ? publishToClientReason(parent as ts.CallExpression)
           : null;
-        const published = publishReason !== null && publishReason.trim().length > 0;
+        const published = publishReason !== null && compilerStringTrim(publishReason).length > 0;
         if (published) {
-          publishFacts.push({
+          publishFacts[publishFacts.length] = {
             fileName,
             localName: binding.localName,
             moduleSpecifier:
@@ -212,15 +251,15 @@ function classifyCaptures(
             reason: publishReason,
             site: sourceSite(fileName, body.getSourceFile(), node.getStart()),
             start: node.getStart(),
-          });
+          };
         }
-        uses.push({
+        uses[uses.length] = {
           binding,
           callee,
           length: node.getEnd() - node.getStart(),
           published,
           start: node.getStart(),
-        });
+        };
       }
     }
     ts.forEachChild(node, visit);
@@ -255,7 +294,18 @@ function isPublishToClientArgument(node: ts.Identifier, parent: ts.Node): boolea
 function publishToClientReason(call: ts.CallExpression): string {
   const options = call.arguments[1];
   if (!options || !ts.isObjectLiteralExpression(options)) return '';
-  for (const property of options.properties) {
+  const propertyLength = compilerArrayLength(
+    options.properties,
+    'publishToClient reason properties',
+  );
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      options.properties,
+      index,
+      'publishToClient reason properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property)
+      throw new TypeError(`publishToClient reason properties[${index}] must be dense.`);
     if (
       ts.isPropertyAssignment(property) &&
       ts.isIdentifier(property.name) &&
@@ -275,9 +325,11 @@ function sourceSite(fileName: string, sourceFile: ts.SourceFile, position: numbe
 
 function collectLocalDeclarations(root: ts.Node, names: Set<string>): void {
   const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) names.add(node.name.text);
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      compilerSetAdd(names, node.name.text);
+    }
     if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
-      names.add(node.name.text);
+      compilerSetAdd(names, node.name.text);
     }
     ts.forEachChild(node, visit);
   };
@@ -310,13 +362,21 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
   const fileName = sourceFile.fileName;
   const bindings = importBindings(sourceFile);
   const constants = moduleConstantBindings(model);
-  const bindingByName = new Map(
-    [...bindings, ...constants].map((binding) => [binding.localName, binding]),
-  );
+  const bindingByName = compilerCreateMap<string, CaptureBinding>();
+  for (let index = 0; index < bindings.length; index += 1) {
+    const binding = bindings[index]!;
+    compilerMapSet(bindingByName, binding.localName, binding);
+  }
+  for (let index = 0; index < constants.length; index += 1) {
+    const binding = constants[index]!;
+    compilerMapSet(bindingByName, binding.localName, binding);
+  }
 
   const allUses: CaptureUse[] = [];
   const publishFacts: PublishToClientFact[] = [];
-  for (const body of handlerArrowBodies(sourceFile)) {
+  const bodies = handlerArrowBodies(sourceFile);
+  for (let index = 0; index < bodies.length; index += 1) {
+    const body = bodies[index]!;
     classifyCaptures(body, bindingByName, fileName, allUses, publishFacts);
   }
 
@@ -324,35 +384,56 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
   // Same-file serializable module constants are stricter: they are evaluated into `*.client.js`, so
   // every captured use must be explicitly publishToClient-wrapped. A bare callee-position use is
   // not a meaningful client-code channel for a literal constant and remains blocked.
-  const unsafeUses = allUses.filter((use) =>
-    use.binding.source === 'module-constant' ? !use.published : !use.callee && !use.published,
-  );
+  const unsafeUses: CaptureUse[] = [];
+  const blockedImports: string[] = [];
+  const referencedImports: string[] = [];
+  const blockedConstants: string[] = [];
+  const referencedConstants: string[] = [];
+  for (let index = 0; index < allUses.length; index += 1) {
+    const use = allUses[index]!;
+    const unsafe =
+      use.binding.source === 'module-constant' ? !use.published : !use.callee && !use.published;
+    if (unsafe) unsafeUses[unsafeUses.length] = use;
+    const referenced = use.binding.source === 'import' ? referencedImports : referencedConstants;
+    appendUniqueName(referenced, use.binding.localName);
+    if (unsafe) {
+      const blocked = use.binding.source === 'import' ? blockedImports : blockedConstants;
+      appendUniqueName(blocked, use.binding.localName);
+    }
+  }
 
   // Emit is allowed for a binding iff it has NO un-wrapped value-position use anywhere — callee-only
   // captures and publishToClient-wrapped captures keep their import line; everything else is withheld.
-  const blockedImports = new Set(
-    unsafeUses.filter((use) => use.binding.source === 'import').map((use) => use.binding.localName),
-  );
-  const referencedImports = new Set(
-    allUses.filter((use) => use.binding.source === 'import').map((use) => use.binding.localName),
-  );
-  const emitAllowed = new Set([...referencedImports].filter((name) => !blockedImports.has(name)));
-
-  const blockedConstants = new Set(
-    unsafeUses
-      .filter((use) => use.binding.source === 'module-constant')
-      .map((use) => use.binding.localName),
-  );
-  const referencedConstants = new Set(
-    allUses
-      .filter((use) => use.binding.source === 'module-constant')
-      .map((use) => use.binding.localName),
-  );
-  const emitAllowedModuleConstants = new Set(
-    [...referencedConstants].filter((name) => !blockedConstants.has(name)),
-  );
+  const emitAllowed = allowedCaptureNames(referencedImports, blockedImports);
+  const emitAllowedModuleConstants = allowedCaptureNames(referencedConstants, blockedConstants);
 
   return { emitAllowed, emitAllowedModuleConstants, publishFacts, unsafeUses };
+}
+
+function appendUniqueName(names: string[], name: string): void {
+  for (let index = 0; index < names.length; index += 1) {
+    if (names[index] === name) return;
+  }
+  names[names.length] = name;
+}
+
+function allowedCaptureNames(
+  referenced: readonly string[],
+  blocked: readonly string[],
+): Set<string> {
+  const result = compilerCreateSet<string>();
+  for (let index = 0; index < referenced.length; index += 1) {
+    const name = referenced[index]!;
+    let denied = false;
+    for (let blockedIndex = 0; blockedIndex < blocked.length; blockedIndex += 1) {
+      if (blocked[blockedIndex] === name) {
+        denied = true;
+        break;
+      }
+    }
+    if (!denied) compilerSetAdd(result, name);
+  }
+  return result;
 }
 
 /**
@@ -383,13 +464,22 @@ export function validateClientHandlerSecretCapture(
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
   const analysis = analyzeClientCaptures(model);
-  return analysis.unsafeUses.map((use) =>
-    diagnostics.at(
+  const found: CompilerDiagnostic[] = [];
+  const length = compilerArrayLength(analysis.unsafeUses, 'Unsafe client-capture uses');
+  for (let index = 0; index < length; index += 1) {
+    const use = compilerOwnDataValue(analysis.unsafeUses, index, 'Unsafe client-capture uses') as
+      | CaptureUse
+      | undefined;
+    if (!use) {
+      throw new TypeError(`Unsafe client-capture uses[${index}] must be an own capture fact.`);
+    }
+    found[found.length] = diagnostics.at(
       'KV437',
       { length: use.length, start: use.start },
       use.binding.source === 'import'
         ? `import="${use.binding.localName}" from="${use.binding.moduleSpecifier}" form=${use.binding.kind}`
         : `moduleConstant="${use.binding.localName}" scope=same-file`,
-    ),
-  );
+    );
+  }
+  return found;
 }

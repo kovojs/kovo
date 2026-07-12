@@ -56,7 +56,7 @@ export const CartButton = component({
       expect(transformed).toMatchObject({ map: null });
       expect(transformed?.code).toContain('kovo-c="cart-button"');
       expect(transformed?.code).toMatch(
-        /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/src\/cart-button\.client\.js#CartButton\$button_click"/,
+        /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/src\/cart-button\.client\.js#CartButton\$button_click"/,
       );
       expect(transformed?.code).not.toContain('onClick');
     } finally {

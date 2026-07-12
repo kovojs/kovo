@@ -1,7 +1,13 @@
 import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 
 import { findMatchingToken } from './scan/text.js';
+import {
+  compilerCreateMap,
+  compilerMapGet,
+  compilerMapSet,
+  compilerSha256Base64,
+  compilerSha256Hex,
+} from './compiler-security-intrinsics.js';
 import {
   componentOptionStaticTemplateValue,
   componentRenderHostElement,
@@ -10,6 +16,8 @@ import {
 import { cssIrHeader } from './ir.js';
 import { escapeCssString, indent, uniqueSorted } from './shared.js';
 import type { RoutePageFact } from './types.js';
+
+const cssSourceByDigest = compilerCreateMap<string, string>();
 
 /**
  * @internal A scoped-CSS asset reference produced by the compiler (href, optional critical
@@ -527,7 +535,10 @@ function cssAssetCriticalBytes(assets: readonly ComponentCssAsset[]): number {
 }
 
 function hashedChunkFileName(fileName: string, css: string): string {
-  const hash = createHash('sha256').update(css).digest('hex').slice(0, 8);
+  // Immutable CSS asset identity is security-relevant deployment authority. Keep the complete
+  // collision-resistant source digest; a 32-bit prefix admits practical chosen collisions.
+  const hash = compilerSha256Hex(css);
+  assertCssDigestIdentity(hash, css);
   const extensionIndex = fileName.lastIndexOf('.');
   if (extensionIndex <= 0) return `${fileName}-${hash}`;
   return `${fileName.slice(0, extensionIndex)}-${hash}${fileName.slice(extensionIndex)}`;
@@ -607,7 +618,20 @@ function formatFallbackCss(css: string): string {
 }
 
 function cspSha256(value: string): string {
-  return `sha256-${createHash('sha256').update(value).digest('base64')}`;
+  const digest = compilerSha256Base64(value);
+  assertCssDigestIdentity(digest, value);
+  return `sha256-${digest}`;
+}
+
+function assertCssDigestIdentity(digest: string, source: string): void {
+  const existing = compilerMapGet(cssSourceByDigest, digest);
+  if (existing === undefined) {
+    compilerMapSet(cssSourceByDigest, digest, source);
+  } else if (existing !== source) {
+    throw new TypeError(
+      'Kovo CSS content digest collision detected; refusing to cross-bind immutable output.',
+    );
+  }
 }
 
 function escapeStyleText(value: string): string {

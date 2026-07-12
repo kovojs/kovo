@@ -7,6 +7,22 @@ import {
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerRegExpExec,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringIndexOf,
+  compilerStringReplaceAll,
+  compilerStringSlice,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
+import {
   componentRenderInputs,
   jsxElements,
   type ComponentModuleModel,
@@ -40,7 +56,7 @@ export function lowerEventHandlers(
   model: ComponentModuleModel,
 ): HandlerLowering[] {
   const handlers: HandlerLowering[] = [];
-  const anonymousNameCounts = new Map<string, number>();
+  const anonymousNameCounts = compilerCreateMap<string, number>();
   // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: fail-closed, whole-channel emit gate.
   // Only re-emit a captured cross-module import into `*.client.js` when its every value-position use
   // is callee-only (client code) or publishToClient-wrapped (audited escape). Any other captured
@@ -49,7 +65,17 @@ export function lowerEventHandlers(
   const emitAllowedImports = emitAllowedImportLocalNames(model);
   const emitAllowedModuleConstants = emitAllowedModuleConstantNames(model);
 
-  for (const eventAttribute of eventAttributes(model)) {
+  const attributes = eventAttributes(model);
+  const attributeLength = compilerArrayLength(attributes, 'Lowered event attributes');
+  for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+    const eventAttribute = compilerOwnDataValue(
+      attributes,
+      attributeIndex,
+      'Lowered event attributes',
+    ) as (typeof attributes)[number] | undefined;
+    if (!eventAttribute) {
+      throw new TypeError(`Lowered event attributes[${attributeIndex}] must be dense own data.`);
+    }
     const { attributeEnd, attributeStart, eventName, tag } = eventAttribute;
     // SPEC §5.2: branch on the typed parser fact, not a regex over the raw attribute snippet, and
     // use the typed bare-identifier NAME (parenthesization-resistant) for the lowered export name
@@ -63,7 +89,7 @@ export function lowerEventHandlers(
       : extractElementParams(
           eventAttribute.zeroArgArrow,
           eventAttribute.expressionPropertyAccesses,
-          new Set(componentRenderInputs(model)),
+          compilerSetFromStrings(componentRenderInputs(model), 'Component render inputs'),
         );
     const exportName = namedHandler
       ? `${componentName}$${expression}`
@@ -71,8 +97,12 @@ export function lowerEventHandlers(
 
     const diagnostics: CompilerDiagnostic[] = [];
     if (!namedHandler) {
-      diagnostics.push(
-        diagnosticFor(options.fileName, 'KV210', options.source, attributeStart, eventName.length),
+      diagnostics[diagnostics.length] = diagnosticFor(
+        options.fileName,
+        'KV210',
+        options.source,
+        attributeStart,
+        eventName.length,
       );
     }
 
@@ -82,18 +112,21 @@ export function lowerEventHandlers(
         model,
       })
     ) {
-      diagnostics.push(
-        kv201Diagnostic(options.fileName, options.source, attributeStart, {
+      diagnostics[diagnostics.length] = kv201Diagnostic(
+        options.fileName,
+        options.source,
+        attributeStart,
+        {
           attributeName: `on:${eventName}`,
           exportName,
           expression,
           params,
-        }),
+        },
       );
     }
 
     const primaryDiagnostic = diagnostics[diagnostics.length - 1];
-    handlers.push({
+    handlers[handlers.length] = {
       attributeName: `on:${eventName}`,
       attributeEnd,
       attributeStart,
@@ -104,16 +137,8 @@ export function lowerEventHandlers(
         ? {
             arrowBody: {
               kind: eventAttribute.zeroArgArrow.bodyKind,
-              propertyAccesses: eventAttribute.zeroArgArrow.bodyPropertyAccesses.map((access) => ({
-                end: access.end - eventAttribute.zeroArgArrow!.bodySourceStart,
-                path: access.path,
-                start: access.start - eventAttribute.zeroArgArrow!.bodySourceStart,
-              })),
-              references: eventAttribute.zeroArgArrow.bodyReferences.map((reference) => ({
-                end: reference.end - eventAttribute.zeroArgArrow!.bodySourceStart,
-                name: reference.name,
-                start: reference.start - eventAttribute.zeroArgArrow!.bodySourceStart,
-              })),
+              propertyAccesses: loweredArrowPropertyAccesses(eventAttribute.zeroArgArrow),
+              references: loweredArrowReferences(eventAttribute.zeroArgArrow),
               source: eventAttribute.zeroArgArrow.body,
               sourceStart: eventAttribute.zeroArgArrow.bodySourceStart,
             },
@@ -134,10 +159,52 @@ export function lowerEventHandlers(
       exportName,
       isBareNamedHandler: namedHandler,
       params,
-    });
+    };
   }
 
   return handlers;
+}
+
+function loweredArrowPropertyAccesses(
+  arrow: ZeroArgArrowModel,
+): Array<{ end: number; path: string; start: number }> {
+  const result: Array<{ end: number; path: string; start: number }> = [];
+  const length = compilerArrayLength(arrow.bodyPropertyAccesses, 'Handler arrow property accesses');
+  for (let index = 0; index < length; index += 1) {
+    const access = compilerOwnDataValue(
+      arrow.bodyPropertyAccesses,
+      index,
+      'Handler arrow property accesses',
+    ) as PropertyAccessPathModel | undefined;
+    if (!access) throw new TypeError(`Handler arrow property accesses[${index}] must be dense.`);
+    result[result.length] = {
+      end: access.end - arrow.bodySourceStart,
+      path: access.path,
+      start: access.start - arrow.bodySourceStart,
+    };
+  }
+  return result;
+}
+
+function loweredArrowReferences(
+  arrow: ZeroArgArrowModel,
+): Array<{ end: number; name: string; start: number }> {
+  const result: Array<{ end: number; name: string; start: number }> = [];
+  const length = compilerArrayLength(arrow.bodyReferences, 'Handler arrow references');
+  for (let index = 0; index < length; index += 1) {
+    const reference = compilerOwnDataValue(
+      arrow.bodyReferences,
+      index,
+      'Handler arrow references',
+    ) as IdentifierReferenceModel | undefined;
+    if (!reference) throw new TypeError(`Handler arrow references[${index}] must be dense.`);
+    result[result.length] = {
+      end: reference.end - arrow.bodySourceStart,
+      name: reference.name,
+      start: reference.start - arrow.bodySourceStart,
+    };
+  }
+  return result;
 }
 
 export function versionHandlerLowering(
@@ -157,16 +224,10 @@ export function versionHandlerLowering(
     attributeValue: versionedAttributeValue,
     ...(handler.diagnostics
       ? {
-          diagnostics: handler.diagnostics.map((diagnostic) =>
-            diagnostic.help
-              ? {
-                  ...diagnostic,
-                  help: diagnostic.help.replaceAll(
-                    unversionedAttributeValue,
-                    versionedAttributeValue,
-                  ),
-                }
-              : diagnostic,
+          diagnostics: versionHandlerDiagnostics(
+            handler.diagnostics,
+            unversionedAttributeValue,
+            versionedAttributeValue,
           ),
         }
       : {}),
@@ -176,7 +237,8 @@ export function versionHandlerLowering(
             ...handler.diagnostic,
             ...(handler.diagnostic.help
               ? {
-                  help: handler.diagnostic.help.replaceAll(
+                  help: compilerStringReplaceAll(
+                    handler.diagnostic.help,
                     unversionedAttributeValue,
                     versionedAttributeValue,
                   ),
@@ -186,6 +248,29 @@ export function versionHandlerLowering(
         }
       : {}),
   };
+}
+
+function versionHandlerDiagnostics(
+  diagnostics: readonly CompilerDiagnostic[],
+  unversionedAttributeValue: string,
+  versionedAttributeValue: string,
+): CompilerDiagnostic[] {
+  const source = compilerSnapshotDenseArray(diagnostics, 'Handler lowering diagnostics');
+  const result: CompilerDiagnostic[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = source[index]!;
+    result[result.length] = diagnostic.help
+      ? {
+          ...diagnostic,
+          help: compilerStringReplaceAll(
+            diagnostic.help,
+            unversionedAttributeValue,
+            versionedAttributeValue,
+          ),
+        }
+      : diagnostic;
+  }
+  return result;
 }
 
 export function clientModuleUrl(fileName: string, version?: string): string {
@@ -209,14 +294,35 @@ function handlerReferenceNames(eventAttribute: {
   expressionBareIdentifierName?: string;
   zeroArgArrow?: ZeroArgArrowModel;
 }): ReadonlySet<string> {
-  return new Set([
-    ...(eventAttribute.zeroArgArrow?.bodyReferences.map((reference) => reference.name) ?? []),
-    ...(eventAttribute.expressionReferences ?? []),
-    ...(eventAttribute.expressionIsBareIdentifier === true &&
+  const result = compilerCreateSet<string>();
+  const bodyReferences = eventAttribute.zeroArgArrow?.bodyReferences ?? [];
+  const bodyReferenceLength = compilerArrayLength(bodyReferences, 'Handler body references');
+  for (let index = 0; index < bodyReferenceLength; index += 1) {
+    const reference = compilerOwnDataValue(bodyReferences, index, 'Handler body references') as
+      | IdentifierReferenceModel
+      | undefined;
+    if (!reference) throw new TypeError(`Handler body references[${index}] must be own data.`);
+    compilerSetAdd(result, reference.name);
+  }
+  const expressionReferences = eventAttribute.expressionReferences ?? [];
+  const expressionReferenceLength = compilerArrayLength(
+    expressionReferences,
+    'Handler expression references',
+  );
+  for (let index = 0; index < expressionReferenceLength; index += 1) {
+    const name = compilerOwnDataValue(expressionReferences, index, 'Handler expression references');
+    if (typeof name !== 'string') {
+      throw new TypeError(`Handler expression references[${index}] must be an own string.`);
+    }
+    compilerSetAdd(result, name);
+  }
+  if (
+    eventAttribute.expressionIsBareIdentifier === true &&
     eventAttribute.expressionBareIdentifierName !== undefined
-      ? [eventAttribute.expressionBareIdentifierName]
-      : []),
-  ]);
+  ) {
+    compilerSetAdd(result, eventAttribute.expressionBareIdentifierName);
+  }
+  return result;
 }
 
 function clientImportDependencies(
@@ -230,9 +336,20 @@ function clientImportDependencies(
   // `emitAllowedImports` and its `import { STRIPE_SECRET_KEY } from "…"` line is never written into
   // `*.client.js` — the bundler can no longer inline the evaluated secret. (KV437 from
   // validate/client-capture.ts.)
-  const clientImports = namedImports.filter(
-    (item) => references.has(item.localName) && emitAllowedImports.has(item.localName),
-  );
+  const clientImports: NamedImportModel[] = [];
+  const length = compilerArrayLength(namedImports, 'Client handler named imports');
+  for (let index = 0; index < length; index += 1) {
+    const item = compilerOwnDataValue(namedImports, index, 'Client handler named imports') as
+      | NamedImportModel
+      | undefined;
+    if (!item) throw new TypeError(`Client handler named imports[${index}] must be own data.`);
+    if (
+      compilerSetHas(references, item.localName) &&
+      compilerSetHas(emitAllowedImports, item.localName)
+    ) {
+      clientImports[clientImports.length] = item;
+    }
+  }
 
   return clientImports.length > 0 ? { clientImports } : {};
 }
@@ -242,12 +359,26 @@ function clientConstantDependencies(
   references: ReadonlySet<string>,
   emitAllowedModuleConstants: ReadonlySet<string>,
 ): { clientConstants: readonly ClientConstantDependency[] } | {} {
-  const clientConstants = moduleScopeBindings
-    .filter((item) => references.has(item.name) && emitAllowedModuleConstants.has(item.name))
-    .map((item) => ({
+  const clientConstants: ClientConstantDependency[] = [];
+  const length = compilerArrayLength(moduleScopeBindings, 'Client handler module constants');
+  for (let index = 0; index < length; index += 1) {
+    const item = compilerOwnDataValue(
+      moduleScopeBindings,
+      index,
+      'Client handler module constants',
+    ) as ModuleScopeBindingModel | undefined;
+    if (!item) throw new TypeError(`Client handler module constants[${index}] must be own data.`);
+    if (
+      !compilerSetHas(references, item.name) ||
+      !compilerSetHas(emitAllowedModuleConstants, item.name)
+    ) {
+      continue;
+    }
+    clientConstants[clientConstants.length] = {
       name: item.name,
       source: item.source,
-    }));
+    };
+  }
 
   return clientConstants.length > 0 ? { clientConstants } : {};
 }
@@ -277,11 +408,26 @@ function eventAttributes(model: ComponentModuleModel): Array<{
     zeroArgArrow?: ZeroArgArrowModel;
   }> = [];
 
-  for (const element of jsxElements(model)) {
-    for (const attribute of element.attributes) {
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Handler JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(elements, elementIndex, 'Handler JSX elements') as
+      | (typeof elements)[number]
+      | undefined;
+    if (!element) throw new TypeError(`Handler JSX elements[${elementIndex}] must be own data.`);
+    const attributeLength = compilerArrayLength(element.attributes, 'Handler JSX attributes');
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'Handler JSX attributes',
+      ) as (typeof element.attributes)[number] | undefined;
+      if (!attribute) {
+        throw new TypeError(`Handler JSX attributes[${attributeIndex}] must be own data.`);
+      }
       const eventName = attribute.domEventName;
       if (!eventName || attribute.expression === undefined) continue;
-      attributes.push({
+      attributes[attributes.length] = {
         attributeEnd: attribute.end,
         attributeStart: attribute.start,
         eventName,
@@ -300,7 +446,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
           : {}),
         tag: element.tag,
         ...(attribute.zeroArgArrow ? { zeroArgArrow: attribute.zeroArgArrow } : {}),
-      });
+      };
     }
   }
 
@@ -314,8 +460,8 @@ function uniqueAnonymousHandlerName(
   counts: Map<string, number>,
 ): string {
   const base = `${componentName}$${tag}_${eventName}`;
-  const count = (counts.get(base) ?? 0) + 1;
-  counts.set(base, count);
+  const count = (compilerMapGet(counts, base) ?? 0) + 1;
+  compilerMapSet(counts, base, count);
 
   return count === 1 ? base : `${base}_${count}`;
 }
@@ -330,21 +476,63 @@ export function capturesUnserializableReferences(
   references: readonly string[],
   context: CaptureReferenceContext,
 ): boolean {
-  const allowed = new Set([
-    ...SAFE_HANDLER_GLOBAL_REFERENCES,
-    'clearTimeout',
-    'ctx',
-    'event',
-    'setTimeout',
-    'state',
-    'undefined',
-    ...(context.additionalAllowedReferences ?? []),
-    ...(context.elementParams ?? []).flatMap((param) => referenceRootsForElementParam(param)),
-    ...context.model.namedImports.map((item) => item.localName),
-    ...context.model.moduleScopeBindings.map((item) => item.name),
-  ]);
+  const allowed = compilerCreateSet<string>();
+  appendAllowedStrings(allowed, SAFE_HANDLER_GLOBAL_REFERENCES, 'Safe handler globals');
+  appendAllowedStrings(
+    allowed,
+    ['clearTimeout', 'ctx', 'event', 'setTimeout', 'state', 'undefined'],
+    'Framework handler globals',
+  );
+  appendAllowedStrings(
+    allowed,
+    context.additionalAllowedReferences ?? [],
+    'Additional handler references',
+  );
 
-  return references.some((name) => !allowed.has(name));
+  const elementParams = context.elementParams ?? [];
+  const elementParamLength = compilerArrayLength(elementParams, 'Handler element params');
+  for (let index = 0; index < elementParamLength; index += 1) {
+    const param = compilerOwnDataValue(elementParams, index, 'Handler element params') as
+      | ElementParam
+      | undefined;
+    if (!param) throw new TypeError(`Handler element params[${index}] must be dense.`);
+    const root = referenceRootForElementParam(param);
+    if (root !== null) compilerSetAdd(allowed, root);
+  }
+
+  const namedImports = context.model.namedImports;
+  const namedImportLength = compilerArrayLength(namedImports, 'Handler named imports');
+  for (let index = 0; index < namedImportLength; index += 1) {
+    const item = compilerOwnDataValue(namedImports, index, 'Handler named imports') as
+      | NamedImportModel
+      | undefined;
+    if (!item || typeof item.localName !== 'string') {
+      throw new TypeError(`Handler named imports[${index}] must have a local name.`);
+    }
+    compilerSetAdd(allowed, item.localName);
+  }
+
+  const bindings = context.model.moduleScopeBindings;
+  const bindingLength = compilerArrayLength(bindings, 'Handler module-scope bindings');
+  for (let index = 0; index < bindingLength; index += 1) {
+    const item = compilerOwnDataValue(bindings, index, 'Handler module-scope bindings') as
+      | ModuleScopeBindingModel
+      | undefined;
+    if (!item || typeof item.name !== 'string') {
+      throw new TypeError(`Handler module-scope bindings[${index}] must have a name.`);
+    }
+    compilerSetAdd(allowed, item.name);
+  }
+
+  const referenceLength = compilerArrayLength(references, 'Handler capture references');
+  for (let index = 0; index < referenceLength; index += 1) {
+    const name = compilerOwnDataValue(references, index, 'Handler capture references');
+    if (typeof name !== 'string') {
+      throw new TypeError(`Handler capture references[${index}] must be a string.`);
+    }
+    if (!compilerSetHas(allowed, name)) return true;
+  }
+  return false;
 }
 
 const SAFE_HANDLER_GLOBAL_REFERENCES = [
@@ -364,11 +552,34 @@ const SAFE_HANDLER_GLOBAL_REFERENCES = [
   'parseInt',
 ] as const;
 
-const SAFE_HANDLER_GLOBAL_REFERENCE_SET = new Set<string>(SAFE_HANDLER_GLOBAL_REFERENCES);
+const SAFE_HANDLER_GLOBAL_REFERENCE_SET = compilerSetFromStrings(
+  SAFE_HANDLER_GLOBAL_REFERENCES,
+  'Safe handler globals',
+);
 
-function referenceRootsForElementParam(param: ElementParam): string[] {
-  const [root] = param.expression.split('.');
-  return root ? [root] : [];
+function referenceRootForElementParam(param: ElementParam): string | null {
+  const expression = compilerOwnDataValue(param, 'expression', 'Handler element param');
+  if (typeof expression !== 'string') {
+    throw new TypeError('Handler element param.expression must be a string.');
+  }
+  const separator = compilerStringIndexOf(expression, '.');
+  const root = separator < 0 ? expression : compilerStringSlice(expression, 0, separator);
+  return root.length > 0 ? root : null;
+}
+
+function appendAllowedStrings(target: Set<string>, values: readonly string[], label: string): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (typeof value !== 'string') throw new TypeError(`${label}[${index}] must be a string.`);
+    compilerSetAdd(target, value);
+  }
+}
+
+function compilerSetFromStrings(values: readonly string[], label: string): Set<string> {
+  const result = compilerCreateSet<string>();
+  appendAllowedStrings(result, values, label);
+  return result;
 }
 
 interface ElementParamCandidate {
@@ -409,53 +620,113 @@ function kv201Diagnostic(
 function extractElementParams(
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
-  eligibleBareReferenceNames: ReadonlySet<string> = new Set(),
+  eligibleBareReferenceNames: ReadonlySet<string> = compilerCreateSet(),
 ): ElementParam[] {
   const callArgumentKinds = zeroArgArrow?.callArgumentKinds;
-  const localNames = new Set(zeroArgArrow?.bodyLocalNames ?? []);
-  const candidates = callArgumentKinds
-    ? callArgumentKinds.flatMap((kind, index) => {
-        // 'empty'/'state'/'static' arguments never become element params (these typed kinds replace
-        // the old `arg.length === 0`, `arg === 'state'`, and static-value source comparisons).
-        if (kind === 'empty' || kind === 'state' || kind === 'static') return [];
+  const localNames = compilerSetFromStrings(
+    zeroArgArrow?.bodyLocalNames ?? [],
+    'Handler body local names',
+  );
+  const candidates: ElementParamCandidate[] = [];
+  if (callArgumentKinds) {
+    const kindLength = compilerArrayLength(callArgumentKinds, 'Handler call argument kinds');
+    for (let index = 0; index < kindLength; index += 1) {
+      const kind = compilerOwnDataValue(callArgumentKinds, index, 'Handler call argument kinds');
+      // 'empty'/'state'/'static' arguments never become element params (these typed kinds replace
+      // the old `arg.length === 0`, `arg === 'state'`, and static-value source comparisons).
+      if (kind === 'empty' || kind === 'state' || kind === 'static') continue;
 
-        // Any remaining argument (a bare member, or an object/expression that embeds serializable
-        // member accesses such as `{ id: item.id }`) contributes its parsed property accesses.
-        const members =
-          zeroArgArrow?.callArgumentPropertyAccesses?.[index]
-            ?.filter((access) => serializableMemberExpression(access.path, localNames))
-            .map(elementParamCandidateFromAccess) ?? [];
-        if (members.length > 0) return members;
-
-        // Otherwise, only a bare-identifier argument (`kind === 'reference'`) becomes a param, using
-        // its parsed reference name. A nested call like `getQuantity()` is 'other' with no accesses
-        // and is correctly dropped.
-        if (kind === 'reference') {
-          const reference = simpleCallArgumentReference(
-            zeroArgArrow?.callArgumentReferences?.[index] ?? [],
-          );
-          return reference && eligibleBareReferenceNames.has(reference)
-            ? [{ expression: reference, terminalName: reference }]
-            : [];
+      // Any remaining argument (a bare member, or an object/expression that embeds serializable
+      // member accesses such as `{ id: item.id }`) contributes its parsed property accesses.
+      const propertyAccessGroups = zeroArgArrow?.callArgumentPropertyAccesses;
+      const propertyAccesses = propertyAccessGroups
+        ? (compilerOwnDataValue(
+            propertyAccessGroups,
+            index,
+            'Handler call argument property-access groups',
+          ) as readonly PropertyAccessPathModel[] | undefined)
+        : undefined;
+      const candidateCountBefore = candidates.length;
+      if (propertyAccesses) {
+        const accessLength = compilerArrayLength(
+          propertyAccesses,
+          'Handler call argument property accesses',
+        );
+        for (let accessIndex = 0; accessIndex < accessLength; accessIndex += 1) {
+          const access = compilerOwnDataValue(
+            propertyAccesses,
+            accessIndex,
+            'Handler call argument property accesses',
+          ) as PropertyAccessPathModel | undefined;
+          if (!access) {
+            throw new TypeError(
+              `Handler call argument property accesses[${accessIndex}] must be dense.`,
+            );
+          }
+          if (serializableMemberExpression(access.path, localNames)) {
+            candidates[candidates.length] = elementParamCandidateFromAccess(access);
+          }
         }
+      }
+      if (candidates.length > candidateCountBefore) continue;
 
-        return [];
-      })
-    : [
-        ...serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses, localNames),
-        ...serializableBareReferences(zeroArgArrow, eligibleBareReferenceNames, localNames),
-      ];
+      // Otherwise, only a bare-identifier argument (`kind === 'reference'`) becomes a param, using
+      // its parsed reference name. A nested call like `getQuantity()` is 'other' with no accesses
+      // and is correctly dropped.
+      if (kind === 'reference') {
+        const referenceGroups = zeroArgArrow?.callArgumentReferences;
+        const references = referenceGroups
+          ? (compilerOwnDataValue(
+              referenceGroups,
+              index,
+              'Handler call argument reference groups',
+            ) as readonly IdentifierReferenceModel[] | undefined)
+          : undefined;
+        const reference = simpleCallArgumentReference(references ?? []);
+        if (reference && compilerSetHas(eligibleBareReferenceNames, reference)) {
+          candidates[candidates.length] = { expression: reference, terminalName: reference };
+        }
+      }
+    }
+  } else {
+    appendElementParamCandidates(
+      candidates,
+      serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses, localNames),
+    );
+    appendElementParamCandidates(
+      candidates,
+      serializableBareReferences(zeroArgArrow, eligibleBareReferenceNames, localNames),
+    );
+  }
 
-  return assignElementParamAttributeNames(dedupeElementParamCandidates(candidates)).map(
-    ({ attributeName, candidate }) => ({
+  const assigned = assignElementParamAttributeNames(dedupeElementParamCandidates(candidates));
+  const params: ElementParam[] = [];
+  for (let index = 0; index < assigned.length; index += 1) {
+    const { attributeName, candidate } = assigned[index]!;
+    params[params.length] = {
       attributeName,
       expression: candidate.expression,
       type:
         candidate.type ??
         inferElementParamType(candidate.expression, zeroArgArrow, parsedPropertyAccesses),
       value: `{${candidate.expression}}`,
-    }),
-  );
+    };
+  }
+  return params;
+}
+
+function appendElementParamCandidates(
+  target: ElementParamCandidate[],
+  values: readonly ElementParamCandidate[],
+): void {
+  const length = compilerArrayLength(values, 'Handler element-param candidates');
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, 'Handler element-param candidates') as
+      | ElementParamCandidate
+      | undefined;
+    if (!value) throw new TypeError(`Handler element-param candidates[${index}] must be dense.`);
+    target[target.length] = value;
+  }
 }
 
 // SPEC §4.3 / §4.6 (KV231): assign each distinct member expression its OWN `data-p-*` attribute
@@ -466,21 +737,31 @@ function extractElementParams(
 function assignElementParamAttributeNames(
   candidates: readonly ElementParamCandidate[],
 ): Array<{ attributeName: string; candidate: ElementParamCandidate }> {
-  const used = new Set<string>();
-  return candidates.map((candidate) => {
+  const used = compilerCreateSet<string>();
+  const result: Array<{ attributeName: string; candidate: ElementParamCandidate }> = [];
+  const length = compilerArrayLength(candidates, 'Handler element-param candidates');
+  for (let index = 0; index < length; index += 1) {
+    const candidate = compilerOwnDataValue(
+      candidates,
+      index,
+      'Handler element-param candidates',
+    ) as ElementParamCandidate | undefined;
+    if (!candidate)
+      throw new TypeError(`Handler element-param candidates[${index}] must be dense.`);
     const preferred = elementParamAttributeNameFromPropertyName(candidate.terminalName);
     let attributeName = preferred;
-    if (used.has(attributeName)) {
+    if (compilerSetHas(used, attributeName)) {
       attributeName = elementParamAttributeNameFromPath(candidate.expression);
     }
-    if (used.has(attributeName)) {
+    if (compilerSetHas(used, attributeName)) {
       let suffix = 2;
-      while (used.has(`${preferred}-${suffix}`)) suffix += 1;
+      while (compilerSetHas(used, `${preferred}-${suffix}`)) suffix += 1;
       attributeName = `${preferred}-${suffix}`;
     }
-    used.add(attributeName);
-    return { attributeName, candidate };
-  });
+    compilerSetAdd(used, attributeName);
+    result[result.length] = { attributeName, candidate };
+  }
+  return result;
 }
 
 function elementParamCandidateFromAccess(access: PropertyAccessPathModel): ElementParamCandidate {
@@ -496,8 +777,12 @@ function elementParamCandidateFromAccess(access: PropertyAccessPathModel): Eleme
 function simpleCallArgumentReference(
   references: readonly IdentifierReferenceModel[],
 ): string | null {
-  const [reference] = references;
-  return reference && references.length === 1 ? reference.name : null;
+  const length = compilerArrayLength(references, 'Handler call argument references');
+  if (length !== 1) return null;
+  const reference = compilerOwnDataValue(references, 0, 'Handler call argument references') as
+    | IdentifierReferenceModel
+    | undefined;
+  return reference && typeof reference.name === 'string' ? reference.name : null;
 }
 
 function inferElementParamType(
@@ -506,10 +791,16 @@ function inferElementParamType(
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): ElementParamType {
   const propertyAccesses = zeroArgArrow?.bodyPropertyAccesses ?? parsedPropertyAccesses ?? [];
-  const parsedType = propertyAccesses.find(
-    (access) => access.path === sourceExpression && access.inferredType !== undefined,
-  )?.inferredType;
-  if (parsedType) return parsedType;
+  const length = compilerArrayLength(propertyAccesses, 'Handler property accesses');
+  for (let index = 0; index < length; index += 1) {
+    const access = compilerOwnDataValue(propertyAccesses, index, 'Handler property accesses') as
+      | PropertyAccessPathModel
+      | undefined;
+    if (!access) throw new TypeError(`Handler property accesses[${index}] must be dense.`);
+    if (access.path === sourceExpression && access.inferredType !== undefined) {
+      return access.inferredType;
+    }
+  }
 
   return 'string';
 }
@@ -517,11 +808,25 @@ function inferElementParamType(
 function serializableMemberExpressions(
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
-  localNames: ReadonlySet<string> = new Set(),
+  localNames: ReadonlySet<string> = compilerCreateSet(),
 ): ElementParamCandidate[] {
-  return collectSerializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses)
-    .filter((access) => serializableMemberExpression(access.path, localNames))
-    .map(elementParamCandidateFromAccess);
+  const accesses = collectSerializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
+  const result: ElementParamCandidate[] = [];
+  const length = compilerArrayLength(accesses, 'Serializable handler member expressions');
+  for (let index = 0; index < length; index += 1) {
+    const access = compilerOwnDataValue(
+      accesses,
+      index,
+      'Serializable handler member expressions',
+    ) as PropertyAccessPathModel | undefined;
+    if (!access) {
+      throw new TypeError(`Serializable handler member expressions[${index}] must be dense.`);
+    }
+    if (serializableMemberExpression(access.path, localNames)) {
+      result[result.length] = elementParamCandidateFromAccess(access);
+    }
+  }
+  return result;
 }
 
 function serializableBareReferences(
@@ -529,30 +834,44 @@ function serializableBareReferences(
   eligibleBareReferenceNames: ReadonlySet<string>,
   localNames: ReadonlySet<string>,
 ): ElementParamCandidate[] {
-  return (zeroArgArrow?.bodyReferences ?? [])
-    .filter(
-      (reference) =>
-        eligibleBareReferenceNames.has(reference.name) && !localNames.has(reference.name),
-    )
-    .map((reference) => ({
-      expression: reference.name,
-      terminalName: reference.name,
-    }));
+  const references = zeroArgArrow?.bodyReferences ?? [];
+  const result: ElementParamCandidate[] = [];
+  const length = compilerArrayLength(references, 'Serializable handler bare references');
+  for (let index = 0; index < length; index += 1) {
+    const reference = compilerOwnDataValue(
+      references,
+      index,
+      'Serializable handler bare references',
+    ) as IdentifierReferenceModel | undefined;
+    if (!reference) {
+      throw new TypeError(`Serializable handler bare references[${index}] must be dense.`);
+    }
+    if (
+      compilerSetHas(eligibleBareReferenceNames, reference.name) &&
+      !compilerSetHas(localNames, reference.name)
+    ) {
+      result[result.length] = {
+        expression: reference.name,
+        terminalName: reference.name,
+      };
+    }
+  }
+  return result;
 }
 
 function serializableMemberExpression(
   member: string,
-  localNames: ReadonlySet<string> = new Set(),
+  localNames: ReadonlySet<string> = compilerCreateSet(),
 ): boolean {
-  const root = /^[A-Za-z_$][\w$]*/.exec(member)?.[0];
-  if (root && SAFE_HANDLER_GLOBAL_REFERENCE_SET.has(root)) return false;
+  const root = compilerRegExpExec(/^[A-Za-z_$][\w$]*/, member)?.[0];
+  if (root && compilerSetHas(SAFE_HANDLER_GLOBAL_REFERENCE_SET, root)) return false;
   return (
-    (root === undefined || !localNames.has(root)) &&
-    !member.startsWith('state.') &&
-    !member.startsWith('ctx.') &&
-    !member.startsWith('event.') &&
-    !member.startsWith('document.') &&
-    !member.startsWith('window.')
+    (root === undefined || !compilerSetHas(localNames, root)) &&
+    !compilerStringStartsWith(member, 'state.') &&
+    !compilerStringStartsWith(member, 'ctx.') &&
+    !compilerStringStartsWith(member, 'event.') &&
+    !compilerStringStartsWith(member, 'document.') &&
+    !compilerStringStartsWith(member, 'window.')
   );
 }
 
@@ -569,10 +888,17 @@ function collectSerializableMemberExpressions(
 function dedupeElementParamCandidates(
   values: readonly ElementParamCandidate[],
 ): ElementParamCandidate[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    if (seen.has(value.expression)) return false;
-    seen.add(value.expression);
-    return true;
-  });
+  const seen = compilerCreateSet<string>();
+  const result: ElementParamCandidate[] = [];
+  const length = compilerArrayLength(values, 'Handler element-param candidates');
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, 'Handler element-param candidates') as
+      | ElementParamCandidate
+      | undefined;
+    if (!value) throw new TypeError(`Handler element-param candidates[${index}] must be dense.`);
+    if (compilerSetHas(seen, value.expression)) continue;
+    compilerSetAdd(seen, value.expression);
+    result[result.length] = value;
+  }
+  return result;
 }

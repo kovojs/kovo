@@ -29,7 +29,7 @@ export const CartBadge = component({
 function expectHandlerRef(source: string, path: string, exportName: string): void {
   const relativePath = escapeRegExp(path.replace(/^\/c\//, ''));
   expect(source).toMatch(
-    new RegExp(`/c/__v/[0-9a-f]{16}-[0-9a-f]{8}/${relativePath}#${escapeRegExp(exportName)}`),
+    new RegExp(`/c/__v/[0-9a-f]{16}-[0-9a-f]{64}/${relativePath}#${escapeRegExp(exportName)}`),
   );
 }
 
@@ -188,7 +188,7 @@ export const Evil = component({
       'generated/registries.d.ts',
     ]);
     expect(result.hmrImpact?.clientHref).toMatch(
-      /^\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/outside\/evil\.client\.js$/,
+      /^\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/outside\/evil\.client\.js$/,
     );
     expect(result.hmrImpact?.clientHref).not.toContain('..');
     expect(result.files.map((file) => file.fileName).join('\n')).not.toContain('..');

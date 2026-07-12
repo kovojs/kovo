@@ -13,7 +13,7 @@ import {
   securityStringStartsWith,
 } from '#security-witness-intrinsics';
 import {
-  clientModuleImul,
+  clientModuleContentHash,
   clientModuleStringIndexOf,
   snapshotClientModuleUrl,
   type ClientModuleUrlSnapshot,
@@ -86,13 +86,7 @@ export function versionedClientModuleRequestKey(href: string): string | undefine
 /** @internal Deterministic content version used in generated client-module URLs. */
 export function clientModuleContentVersion(source: string): string {
   assertClientModuleScalar(source, 'source');
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= securityStringCharCodeAt(source, index);
-    hash = clientModuleImul(hash, 0x01000193) >>> 0;
-  }
-
-  return fixedHex32(hash);
+  return clientModuleContentHash(source);
 }
 
 function parseClientModuleUrl(href: string): ClientModuleUrlSnapshot {
@@ -142,15 +136,6 @@ function replaceClientModuleSourceExtension(fileName: string): string {
   const match = securityRegExpExec(/\.[cm]?[jt]sx?$/, fileName);
   if (match === null) return fileName;
   return `${securityStringSlice(fileName, 0, match.index)}.client.js`;
-}
-
-function fixedHex32(value: number): string {
-  const alphabet = '0123456789abcdef';
-  let output = '';
-  for (let shift = 28; shift >= 0; shift -= 4) {
-    output += alphabet[(value >>> shift) & 0x0f];
-  }
-  return output;
 }
 
 function assertClientModuleScalar(value: unknown, name: string): asserts value is string {

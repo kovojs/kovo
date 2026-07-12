@@ -10,6 +10,19 @@ import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetForEach,
+  compilerSetHas,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
+import {
   expressionResolvesToTrustedHtmlBrand,
   expressionResolvesToRenderedHtmlRawSink,
   expressionResolvesToTrustedHtmlPureBrand,
@@ -73,18 +86,25 @@ export const validateTrustedHtmlProvenance = securityClassifier(
             depth: 0,
             trustedTypeNames: trustedTypeLocalNames(sourceFile),
             usePosition: value.getStart(sourceFile),
-            visited: new Set<ts.Node>(),
+            visited: compilerCreateSet<ts.Node>(),
           });
           if (provenance === null) {
             // Proven local/static-clean value.
           } else {
-            found.push(rawTrustProvenanceDiagnostic(diagnostics, value, provenance, sink));
+            found[found.length] = rawTrustProvenanceDiagnostic(
+              diagnostics,
+              value,
+              provenance,
+              sink,
+            );
           }
         }
       }
       if (ts.isJsxAttribute(node)) {
-        found.push(
-          ...validateJsxAttributeTrustedProvenance(diagnostics, sourceFile, node, bindingsByRender),
+        appendClassifierInputs(
+          found,
+          validateJsxAttributeTrustedProvenance(diagnostics, sourceFile, node, bindingsByRender),
+          'Trusted JSX diagnostics',
         );
       }
       ts.forEachChild(node, visit);
@@ -213,7 +233,7 @@ function validateJsxAttributeTrustedProvenance(
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
     usePosition: value.getStart(sourceFile),
-    visited: new Set<ts.Node>(),
+    visited: compilerCreateSet<ts.Node>(),
   });
   if (verdict.kind === 'proven-safe') return [];
   const provenance = verdict.kind === 'proven-unsafe' ? verdict.detail : 'unprovable';
@@ -312,7 +332,12 @@ function trustNamespaceImportModule(
 ): TrustNamespaceModule | null {
   const name = identifierName(namespace);
   let moduleSpecifier: TrustNamespaceModule | null = null;
-  for (const statement of sourceFile.statements) {
+  const statementLength = compilerArrayLength(sourceFile.statements, 'Source statements');
+  for (let index = 0; index < statementLength; index += 1) {
+    const statement = compilerOwnDataValue(sourceFile.statements, index, 'Source statements') as
+      | ts.Statement
+      | undefined;
+    if (!statement) throw new TypeError(`Source statements[${index}] must be dense own data.`);
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     const candidate = trustNamespaceModule(literalText(statement.moduleSpecifier));
@@ -343,17 +368,44 @@ function namespaceImportIsShadowed(node: ts.Node, name: string): boolean {
   let cursor: ts.Node | undefined = node.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) && cursor.getStart(sourceFile) < position) {
-      if (cursor.parameters.some((parameter) => bindingNameBinds(parameter.name, name))) {
+      if (
+        classifierArraySome(cursor.parameters, 'Callable parameters', (parameter) =>
+          bindingNameBinds(parameter.name, name),
+        )
+      ) {
         return true;
       }
     }
     if (ts.isBlock(cursor) || ts.isModuleBlock(cursor) || ts.isSourceFile(cursor)) {
-      for (const statement of cursor.statements) {
+      const statementLength = compilerArrayLength(cursor.statements, 'Scope statements');
+      for (let index = 0; index < statementLength; index += 1) {
+        const statement = compilerOwnDataValue(cursor.statements, index, 'Scope statements') as
+          | ts.Statement
+          | undefined;
+        if (!statement) throw new TypeError(`Scope statements[${index}] must be dense own data.`);
         if (statement.getStart(sourceFile) >= position) continue;
         if (ts.isImportDeclaration(statement)) continue;
         if (statementBindsName(statement, name)) return true;
         if (ts.isVariableStatement(statement)) {
-          for (const declaration of statement.declarationList.declarations) {
+          const declarationLength = compilerArrayLength(
+            statement.declarationList.declarations,
+            'Scope declarations',
+          );
+          for (
+            let declarationIndex = 0;
+            declarationIndex < declarationLength;
+            declarationIndex += 1
+          ) {
+            const declaration = compilerOwnDataValue(
+              statement.declarationList.declarations,
+              declarationIndex,
+              'Scope declarations',
+            ) as ts.VariableDeclaration | undefined;
+            if (!declaration) {
+              throw new TypeError(
+                `Scope declarations[${declarationIndex}] must be dense own data.`,
+              );
+            }
             if (
               declaration.getStart(sourceFile) < position &&
               bindingNameBinds(declaration.name, name)
@@ -456,7 +508,7 @@ function classifyTrustedSinkValue(
       const provenance = classifyExpression(value, {
         ...ctx,
         depth: ctx.depth + 1,
-        visited: new Set(ctx.visited),
+        visited: cloneClassifierSet(ctx.visited),
       });
       return provenance === null ? PROVEN_SAFE : provenUnsafe(provenance);
     }
@@ -475,7 +527,7 @@ function classifyTrustedSinkValue(
       return classifyTrustedSinkValue(sourceFile, local.initializer, sink, {
         ...ctx,
         depth: ctx.depth + 1,
-        visited: new Set(ctx.visited),
+        visited: cloneClassifierSet(ctx.visited),
       });
     }
     if (local?.binding !== undefined && bindingHasTrustedType(local.binding, sink, ctx)) {
@@ -499,7 +551,7 @@ function classifyTrustedSinkValue(
 function mayBeTrustedUrlSinkValue(
   sourceFile: ts.SourceFile,
   node: ts.Expression,
-  visited = new Set<ts.Node>(),
+  visited = compilerCreateSet<ts.Node>(),
 ): boolean {
   const expr = unwrap(node);
   if (ts.isCallExpression(expr)) {
@@ -510,8 +562,8 @@ function mayBeTrustedUrlSinkValue(
   const local = localBinding(expr, identifierName(expr));
   if (local === undefined) return false;
   if (bindingHasTrustedUrlType(sourceFile, local.binding)) return true;
-  if (local.initializer === undefined || visited.has(local.initializer)) return false;
-  visited.add(local.initializer);
+  if (local.initializer === undefined || compilerSetHas(visited, local.initializer)) return false;
+  compilerSetAdd(visited, local.initializer);
   return mayBeTrustedUrlSinkValue(sourceFile, local.initializer, visited);
 }
 
@@ -534,46 +586,48 @@ const classifyExpression = securityClassifier(
     }
     if (ts.isConditionalExpression(expr)) {
       return firstProvenance([
-        classifyExpression(expr.condition, { ...ctx, visited: new Set(ctx.visited) }),
-        classifyExpression(expr.whenTrue, { ...ctx, visited: new Set(ctx.visited) }),
-        classifyExpression(expr.whenFalse, { ...ctx, visited: new Set(ctx.visited) }),
+        classifyExpression(expr.condition, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
+        classifyExpression(expr.whenTrue, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
+        classifyExpression(expr.whenFalse, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
       ]);
     }
     if (ts.isBinaryExpression(expr)) {
       return firstProvenance([
-        classifyExpression(expr.left, { ...ctx, visited: new Set(ctx.visited) }),
-        classifyExpression(expr.right, { ...ctx, visited: new Set(ctx.visited) }),
+        classifyExpression(expr.left, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
+        classifyExpression(expr.right, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
       ]);
     }
     if (ts.isTemplateExpression(expr)) {
       return firstProvenance(
-        expr.templateSpans.map((span) =>
-          classifyExpression(span.expression, { ...ctx, visited: new Set(ctx.visited) }),
+        mapClassifierInputs(expr.templateSpans, 'Trusted HTML template spans', (span) =>
+          classifyExpression(span.expression, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
         ),
       );
     }
     if (ts.isCallExpression(expr) || ts.isNewExpression(expr)) {
       const argumentProvenance = firstProvenance(
-        [...(expr.arguments ?? [])].map((arg) =>
-          classifyExpression(arg, { ...ctx, visited: new Set(ctx.visited) }),
+        mapClassifierInputs(expr.arguments ?? [], 'Trusted HTML call arguments', (arg) =>
+          classifyExpression(arg, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
         ),
       );
       const calleeProvenance = classifyExpression(expr.expression, {
         ...ctx,
-        visited: new Set(ctx.visited),
+        visited: cloneClassifierSet(ctx.visited),
       });
       return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';
     }
     if (ts.isArrayLiteralExpression(expr)) {
       return firstProvenance(
-        expr.elements.map((element) =>
-          classifyExpression(element, { ...ctx, visited: new Set(ctx.visited) }),
+        mapClassifierInputs(expr.elements, 'Trusted HTML array elements', (element) =>
+          classifyExpression(element, { ...ctx, visited: cloneClassifierSet(ctx.visited) }),
         ),
       );
     }
     if (ts.isObjectLiteralExpression(expr)) {
       return firstProvenance(
-        expr.properties.map((property) => classifyObjectLiteralProperty(property, ctx)),
+        mapClassifierInputs(expr.properties, 'Trusted HTML object properties', (property) =>
+          classifyObjectLiteralProperty(property, ctx),
+        ),
       );
     }
     if (ts.isPrefixUnaryExpression(expr) || ts.isPostfixUnaryExpression(expr)) {
@@ -587,33 +641,121 @@ const classifyExpression = securityClassifier(
   },
 );
 
+function mapClassifierInputs<Input, Output>(
+  values: readonly Input[],
+  label: string,
+  map: (value: Input) => Output,
+): Output[] {
+  const length = compilerArrayLength(values, label);
+  const output: Output[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (value === undefined) throw new TypeError(`${label}[${index}] must be dense own data.`);
+    output[output.length] = map(value as Input);
+  }
+  return output;
+}
+
+function appendClassifierInputs<Value>(
+  output: Value[],
+  values: readonly Value[],
+  label: string,
+): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (value === undefined) throw new TypeError(`${label}[${index}] must be dense own data.`);
+    output[output.length] = value as Value;
+  }
+}
+
+function classifierArraySome<Value>(
+  values: readonly Value[],
+  label: string,
+  predicate: (value: Value) => boolean,
+): boolean {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (value === undefined) throw new TypeError(`${label}[${index}] must be dense own data.`);
+    if (predicate(value as Value)) return true;
+  }
+  return false;
+}
+
+function classifierArrayFind<Value>(
+  values: readonly Value[],
+  label: string,
+  predicate: (value: Value) => boolean,
+): Value | undefined {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label);
+    if (value === undefined) throw new TypeError(`${label}[${index}] must be dense own data.`);
+    if (predicate(value as Value)) return value as Value;
+  }
+  return undefined;
+}
+
+function cloneClassifierSet<Value>(source: ReadonlySet<Value>): Set<Value> {
+  const clone = compilerCreateSet<Value>();
+  compilerSetForEach(source, (value) => compilerSetAdd(clone, value));
+  return clone;
+}
+
+function classifierSetHasValues<Value>(source: ReadonlySet<Value>): boolean {
+  let found = false;
+  compilerSetForEach(source, () => {
+    found = true;
+  });
+  return found;
+}
+
+function classifierMapHasValues<Key, Value>(source: ReadonlyMap<Key, Value>): boolean {
+  let found = false;
+  compilerMapForEach(source, () => {
+    found = true;
+  });
+  return found;
+}
+
 function classifyObjectLiteralProperty(
   property: ts.ObjectLiteralElementLike,
   ctx: ClassifyContext,
 ): Provenance | null {
   if (ts.isSpreadAssignment(property)) {
     return (
-      classifyExpression(property.expression, { ...ctx, visited: new Set(ctx.visited) }) ??
-      'unprovable'
+      classifyExpression(property.expression, {
+        ...ctx,
+        visited: cloneClassifierSet(ctx.visited),
+      }) ?? 'unprovable'
     );
   }
   if (ts.isPropertyAssignment(property)) {
     const keyProvenance = computedPropertyNameProvenance(property.name, ctx);
     const valueProvenance = classifyExpression(property.initializer, {
       ...ctx,
-      visited: new Set(ctx.visited),
+      visited: cloneClassifierSet(ctx.visited),
     });
     return firstProvenance([keyProvenance, valueProvenance]);
   }
   if (ts.isShorthandPropertyAssignment(property)) {
-    return classifyIdentifier(property.name, { ...ctx, visited: new Set(ctx.visited) });
+    return classifyIdentifier(property.name, { ...ctx, visited: cloneClassifierSet(ctx.visited) });
   }
   return 'unprovable';
 }
 
 function firstProvenance(values: readonly (Provenance | null)[]): Provenance | null {
   let unprovable = false;
-  for (const value of values) {
+  const length = compilerArrayLength(values, 'Provenance candidates');
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, 'Provenance candidates') as
+      | Provenance
+      | null
+      | undefined;
+    if (value === undefined) {
+      throw new TypeError(`Provenance candidates[${index}] must be dense own data.`);
+    }
     if (value === 'query' || value === 'request') return value;
     if (value === 'unprovable') unprovable = true;
   }
@@ -676,15 +818,15 @@ function classifyMemberRoot(
       }
       return 'unprovable';
     }
-    if (ctx.requestBindings.has(cursor.text)) return 'request';
-    if (ctx.requestSlotRoots.has(cursor.text) && firstMember === 'request') {
+    if (compilerSetHas(ctx.requestBindings, cursor.text)) return 'request';
+    if (compilerSetHas(ctx.requestSlotRoots, cursor.text) && firstMember === 'request') {
       return 'request';
     }
-    const queryRootKeys = ctx.queryDataRoots.get(cursor.text);
+    const queryRootKeys = compilerMapGet(ctx.queryDataRoots, cursor.text);
     if (
       queryRootKeys !== undefined &&
       firstMember !== undefined &&
-      queryRootKeys.has(firstMember)
+      compilerSetHas(queryRootKeys, firstMember)
     ) {
       return 'query';
     }
@@ -703,17 +845,17 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
     if (
       local.initializer !== undefined &&
       ctx.depth < MAX_ALIAS_DEPTH &&
-      !ctx.visited.has(local.initializer)
+      !compilerSetHas(ctx.visited, local.initializer)
     ) {
-      ctx.visited.add(local.initializer);
+      compilerSetAdd(ctx.visited, local.initializer);
       return classifyExpression(local.initializer, { ...ctx, depth: ctx.depth + 1 });
     }
     return 'unprovable';
   }
 
-  if (ctx.queryBindings.has(id.text)) return 'query';
-  if (ctx.queryDataRoots.has(id.text)) return 'query';
-  if (ctx.requestBindings.has(id.text)) return 'request';
+  if (compilerSetHas(ctx.queryBindings, id.text)) return 'query';
+  if (compilerMapGet(ctx.queryDataRoots, id.text) !== undefined) return 'query';
+  if (compilerSetHas(ctx.requestBindings, id.text)) return 'request';
   return 'unprovable';
 }
 
@@ -740,7 +882,8 @@ function localCarrierMutationProvenance(
   if (end <= start) return undefined;
 
   const scope = carrierMutationScope(binding, ctx);
-  const aliases = new Set([identifierName(root)]);
+  const aliases = compilerCreateSet<string>();
+  compilerSetAdd(aliases, identifierName(root));
 
   // Discover direct identity aliases to a fixed point before classifying writes. This covers
   // `const b = a`, `let b = a`, and later `b = a` without confusing destructured property values
@@ -750,8 +893,11 @@ function localCarrierMutationProvenance(
     changed = false;
     visitCarrierRange(scope, sourceFile, start, end, (node) => {
       if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-        if (expressionIsCarrierAlias(node.initializer, aliases) && !aliases.has(node.name.text)) {
-          aliases.add(node.name.text);
+        if (
+          expressionIsCarrierAlias(node.initializer, aliases) &&
+          !compilerSetHas(aliases, node.name.text)
+        ) {
+          compilerSetAdd(aliases, node.name.text);
           changed = true;
         }
         return;
@@ -763,8 +909,8 @@ function localCarrierMutationProvenance(
         expressionIsCarrierAlias(node.right, aliases)
       ) {
         const name = identifierName(unwrap(node.left) as ts.Identifier);
-        if (!aliases.has(name)) {
-          aliases.add(name);
+        if (!compilerSetHas(aliases, name)) {
+          compilerSetAdd(aliases, name);
           changed = true;
         }
       }
@@ -779,7 +925,7 @@ function localCarrierMutationProvenance(
   visitCarrierRange(scope, sourceFile, start, end, (node) => {
     if (ts.isBinaryExpression(node) && isAssignmentOperatorKind(node.operatorToken.kind)) {
       const left = unwrap(node.left);
-      if (ts.isIdentifier(left) && aliases.has(identifierName(left))) {
+      if (ts.isIdentifier(left) && compilerSetHas(aliases, identifierName(left))) {
         record(classifyExpression(node.right, mutationClassifyContext(ctx)) ?? 'unprovable');
         return;
       }
@@ -825,7 +971,16 @@ function localCarrierMutationProvenance(
     if (ts.isCallExpression(node)) {
       if (isStaticMethodCall(node, 'Object', 'assign')) {
         if (node.arguments[0] && expressionIsCarrierAlias(node.arguments[0], aliases)) {
-          for (const source of node.arguments.slice(1)) {
+          const argumentLength = compilerArrayLength(node.arguments, 'Object.assign arguments');
+          for (let index = 1; index < argumentLength; index += 1) {
+            const source = compilerOwnDataValue(
+              node.arguments,
+              index,
+              'Object.assign arguments',
+            ) as ts.Expression | undefined;
+            if (!source) {
+              throw new TypeError(`Object.assign arguments[${index}] must be dense own data.`);
+            }
             record(objectAssignmentProvenance(source, targetMember, ctx));
           }
         }
@@ -894,11 +1049,14 @@ function localCarrierMutationProvenance(
               aliases,
             )
           : undefined;
-      const passesCarrier = node.arguments.some((argument) =>
-        expressionIsCarrierAlias(
-          ts.isSpreadElement(argument) ? argument.expression : argument,
-          aliases,
-        ),
+      const passesCarrier = classifierArraySome(
+        node.arguments,
+        'Carrier call arguments',
+        (argument) =>
+          expressionIsCarrierAlias(
+            ts.isSpreadElement(argument) ? argument.expression : argument,
+            aliases,
+          ),
       );
       if (calleeTarget || passesCarrier) record('unprovable');
       return;
@@ -916,7 +1074,7 @@ function mutationClassifyContext(ctx: ClassifyContext): ClassifyContext {
   return {
     ...ctx,
     depth: ctx.depth + 1,
-    visited: new Set(ctx.visited),
+    visited: cloneClassifierSet(ctx.visited),
   };
 }
 
@@ -957,7 +1115,7 @@ function expressionIsCarrierAlias(
   aliases: ReadonlySet<string>,
 ): boolean {
   const value = unwrap(expression);
-  return ts.isIdentifier(value) && aliases.has(identifierName(value));
+  return ts.isIdentifier(value) && compilerSetHas(aliases, identifierName(value));
 }
 
 function carrierMemberTarget(
@@ -979,7 +1137,9 @@ function carrierMemberTarget(
       cursor = unwrap(cursor.expression);
     }
   }
-  if (!ts.isIdentifier(cursor) || !aliases.has(identifierName(cursor))) return undefined;
+  if (!ts.isIdentifier(cursor) || !compilerSetHas(aliases, identifierName(cursor))) {
+    return undefined;
+  }
   return { ...(computedKey === undefined ? {} : { computedKey }), key: firstMember };
 }
 
@@ -1018,25 +1178,39 @@ function objectAssignmentProvenance(
   }
 
   const provenances: Array<Provenance | null> = [];
-  for (const property of value.properties) {
+  const propertyLength = compilerArrayLength(value.properties, 'Object assignment properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      value.properties,
+      index,
+      'Object assignment properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) {
+      throw new TypeError(`Object assignment properties[${index}] must be dense own data.`);
+    }
     if (ts.isSpreadAssignment(property)) {
-      provenances.push(
-        classifyExpression(property.expression, mutationClassifyContext(ctx)) ?? 'unprovable',
-      );
+      provenances[provenances.length] =
+        classifyExpression(property.expression, mutationClassifyContext(ctx)) ?? 'unprovable';
       continue;
     }
     const name = propertyNameText(property.name);
     if (name === null) {
-      provenances.push('unprovable');
+      provenances[provenances.length] = 'unprovable';
       continue;
     }
     if (name !== targetMember) continue;
     if (ts.isPropertyAssignment(property)) {
-      provenances.push(classifyExpression(property.initializer, mutationClassifyContext(ctx)));
+      provenances[provenances.length] = classifyExpression(
+        property.initializer,
+        mutationClassifyContext(ctx),
+      );
     } else if (ts.isShorthandPropertyAssignment(property)) {
-      provenances.push(classifyIdentifier(property.name, mutationClassifyContext(ctx)));
+      provenances[provenances.length] = classifyIdentifier(
+        property.name,
+        mutationClassifyContext(ctx),
+      );
     } else {
-      provenances.push('unprovable');
+      provenances[provenances.length] = 'unprovable';
     }
   }
   return firstProvenance(provenances);
@@ -1049,22 +1223,37 @@ function propertyDescriptorProvenance(
   const value = unwrap(expression);
   if (!ts.isObjectLiteralExpression(value)) return 'unprovable';
   const provenances: Array<Provenance | null> = [];
-  for (const property of value.properties) {
+  const propertyLength = compilerArrayLength(value.properties, 'Property descriptor properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      value.properties,
+      index,
+      'Property descriptor properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) {
+      throw new TypeError(`Property descriptor properties[${index}] must be dense own data.`);
+    }
     if (ts.isSpreadAssignment(property)) {
-      provenances.push('unprovable');
+      provenances[provenances.length] = 'unprovable';
       continue;
     }
     const name = propertyNameText(property.name);
     if (name === 'value') {
       if (ts.isPropertyAssignment(property)) {
-        provenances.push(classifyExpression(property.initializer, mutationClassifyContext(ctx)));
+        provenances[provenances.length] = classifyExpression(
+          property.initializer,
+          mutationClassifyContext(ctx),
+        );
       } else if (ts.isShorthandPropertyAssignment(property)) {
-        provenances.push(classifyIdentifier(property.name, mutationClassifyContext(ctx)));
+        provenances[provenances.length] = classifyIdentifier(
+          property.name,
+          mutationClassifyContext(ctx),
+        );
       } else {
-        provenances.push('unprovable');
+        provenances[provenances.length] = 'unprovable';
       }
     } else if (name === 'get' || name === 'set' || name === null) {
-      provenances.push('unprovable');
+      provenances[provenances.length] = 'unprovable';
     }
   }
   return firstProvenance(provenances);
@@ -1078,21 +1267,28 @@ function objectDescriptorMapProvenance(
   const value = unwrap(expression);
   if (targetMember === undefined || !ts.isObjectLiteralExpression(value)) return 'unprovable';
   const provenances: Array<Provenance | null> = [];
-  for (const property of value.properties) {
+  const propertyLength = compilerArrayLength(value.properties, 'Descriptor map properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(value.properties, index, 'Descriptor map properties') as
+      | ts.ObjectLiteralElementLike
+      | undefined;
+    if (!property) {
+      throw new TypeError(`Descriptor map properties[${index}] must be dense own data.`);
+    }
     if (ts.isSpreadAssignment(property)) {
-      provenances.push('unprovable');
+      provenances[provenances.length] = 'unprovable';
       continue;
     }
     const name = propertyNameText(property.name);
     if (name === null) {
-      provenances.push('unprovable');
+      provenances[provenances.length] = 'unprovable';
       continue;
     }
     if (name !== targetMember) continue;
     if (ts.isPropertyAssignment(property)) {
-      provenances.push(propertyDescriptorProvenance(property.initializer, ctx));
+      provenances[provenances.length] = propertyDescriptorProvenance(property.initializer, ctx);
     } else {
-      provenances.push('unprovable');
+      provenances[provenances.length] = 'unprovable';
     }
   }
   return firstProvenance(provenances);
@@ -1115,7 +1311,7 @@ function localBinding(
   let cursor: ts.Node | undefined = node.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) && cursor.getStart(sourceFile) < position) {
-      const parameter = cursor.parameters.find((candidate) =>
+      const parameter = classifierArrayFind(cursor.parameters, 'Callable parameters', (candidate) =>
         bindingNameBinds(candidate.name, name),
       );
       if (parameter !== undefined) {
@@ -1123,13 +1319,40 @@ function localBinding(
       }
     }
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
-      for (const statement of cursor.statements) {
+      const statementLength = compilerArrayLength(cursor.statements, 'Local scope statements');
+      for (let index = 0; index < statementLength; index += 1) {
+        const statement = compilerOwnDataValue(
+          cursor.statements,
+          index,
+          'Local scope statements',
+        ) as ts.Statement | undefined;
+        if (!statement) {
+          throw new TypeError(`Local scope statements[${index}] must be dense own data.`);
+        }
         if (statement.getStart(sourceFile) >= position) continue;
         if (!ts.isVariableStatement(statement)) {
           if (statementBindsName(statement, name)) return { binding: statement };
           continue;
         }
-        for (const declaration of statement.declarationList.declarations) {
+        const declarationLength = compilerArrayLength(
+          statement.declarationList.declarations,
+          'Local variable declarations',
+        );
+        for (
+          let declarationIndex = 0;
+          declarationIndex < declarationLength;
+          declarationIndex += 1
+        ) {
+          const declaration = compilerOwnDataValue(
+            statement.declarationList.declarations,
+            declarationIndex,
+            'Local variable declarations',
+          ) as ts.VariableDeclaration | undefined;
+          if (!declaration) {
+            throw new TypeError(
+              `Local variable declarations[${declarationIndex}] must be dense own data.`,
+            );
+          }
           if (declaration.getStart(sourceFile) >= position) continue;
           if (
             ts.isIdentifier(declaration.name) &&
@@ -1180,7 +1403,11 @@ function importDeclarationBindsName(statement: ts.ImportDeclaration, name: strin
   if (!bindings) return false;
   if (ts.isNamespaceImport(bindings)) return bindings.name.text === name;
   if (!ts.isNamedImports(bindings)) return false;
-  return bindings.elements.some((element) => element.name.text === name);
+  return classifierArraySome(
+    bindings.elements,
+    'Named import bindings',
+    (element) => element.name.text === name,
+  );
 }
 
 function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
@@ -1198,17 +1425,48 @@ function localCallableDeclaration(
   let cursor: ts.Node | undefined = node.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) && cursor.getStart() < position) {
-      if (cursor.parameters.some((parameter) => bindingNameBinds(parameter.name, name))) {
+      if (
+        classifierArraySome(cursor.parameters, 'Callable parameters', (parameter) =>
+          bindingNameBinds(parameter.name, name),
+        )
+      ) {
         return undefined;
       }
     }
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
-      for (const statement of cursor.statements) {
+      const statementLength = compilerArrayLength(cursor.statements, 'Callable scope statements');
+      for (let index = 0; index < statementLength; index += 1) {
+        const statement = compilerOwnDataValue(
+          cursor.statements,
+          index,
+          'Callable scope statements',
+        ) as ts.Statement | undefined;
+        if (!statement) {
+          throw new TypeError(`Callable scope statements[${index}] must be dense own data.`);
+        }
         if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) {
           return statement;
         }
         if (!ts.isVariableStatement(statement)) continue;
-        for (const declaration of statement.declarationList.declarations) {
+        const declarationLength = compilerArrayLength(
+          statement.declarationList.declarations,
+          'Callable variable declarations',
+        );
+        for (
+          let declarationIndex = 0;
+          declarationIndex < declarationLength;
+          declarationIndex += 1
+        ) {
+          const declaration = compilerOwnDataValue(
+            statement.declarationList.declarations,
+            declarationIndex,
+            'Callable variable declarations',
+          ) as ts.VariableDeclaration | undefined;
+          if (!declaration) {
+            throw new TypeError(
+              `Callable variable declarations[${declarationIndex}] must be dense own data.`,
+            );
+          }
           if (
             declaration.getStart() < position &&
             ts.isIdentifier(declaration.name) &&
@@ -1251,7 +1509,14 @@ function callableParameters(
 
 function directReturnExpression(body: ts.ConciseBody): ts.Expression | undefined {
   if (ts.isExpression(body)) return body;
-  for (const statement of body.statements) {
+  const statementLength = compilerArrayLength(body.statements, 'Callable body statements');
+  for (let index = 0; index < statementLength; index += 1) {
+    const statement = compilerOwnDataValue(body.statements, index, 'Callable body statements') as
+      | ts.Statement
+      | undefined;
+    if (!statement) {
+      throw new TypeError(`Callable body statements[${index}] must be dense own data.`);
+    }
     if (ts.isReturnStatement(statement)) return statement.expression;
   }
   return undefined;
@@ -1267,13 +1532,20 @@ function isFunctionLikeWithParameters(
 
 function bindingNameBinds(name: ts.BindingName, target: string): boolean {
   if (ts.isIdentifier(name)) return name.text === target;
-  return name.elements.some(
+  return classifierArraySome(
+    name.elements,
+    'Binding elements',
     (element) => ts.isBindingElement(element) && bindingNameBinds(element.name, target),
   );
 }
 
 function objectBindingPatternBindsName(pattern: ts.ObjectBindingPattern, name: string): boolean {
-  for (const element of pattern.elements) {
+  const elementLength = compilerArrayLength(pattern.elements, 'Object binding elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(pattern.elements, index, 'Object binding elements') as
+      | ts.BindingElement
+      | undefined;
+    if (!element) throw new TypeError(`Object binding elements[${index}] must be dense own data.`);
     if (ts.isIdentifier(element.name) && identifierName(element.name) === name) return true;
     if (
       (ts.isObjectBindingPattern(element.name) || ts.isArrayBindingPattern(element.name)) &&
@@ -1313,20 +1585,41 @@ function isRawHtmlAttributeName(name: string): name is RawTrustSink['label'] {
 }
 
 function trustedTypeLocalNames(sourceFile: ts.SourceFile): TrustedTypeLocalNames {
-  const trustedHtml = new Set<string>();
-  const trustedUrl = new Set<string>();
-  for (const statement of sourceFile.statements) {
+  const trustedHtml = compilerCreateSet<string>();
+  const trustedUrl = compilerCreateSet<string>();
+  const statementLength = compilerArrayLength(sourceFile.statements, 'Trusted type statements');
+  for (let index = 0; index < statementLength; index += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      index,
+      'Trusted type statements',
+    ) as ts.Statement | undefined;
+    if (!statement)
+      throw new TypeError(`Trusted type statements[${index}] must be dense own data.`);
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     if (literalText(statement.moduleSpecifier) !== BROWSER_MODULE_SPECIFIER) continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !ts.isNamedImports(bindings)) continue;
-    for (const element of bindings.elements) {
+    const elementLength = compilerArrayLength(bindings.elements, 'Trusted type imports');
+    for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+      const element = compilerOwnDataValue(
+        bindings.elements,
+        elementIndex,
+        'Trusted type imports',
+      ) as ts.ImportSpecifier | undefined;
+      if (!element) {
+        throw new TypeError(`Trusted type imports[${elementIndex}] must be dense own data.`);
+      }
       const importedName = element.propertyName
         ? moduleExportNameText(element.propertyName)
         : identifierName(element.name);
-      if (importedName === TRUSTED_HTML_TYPE_EXPORT) trustedHtml.add(identifierName(element.name));
-      if (importedName === TRUSTED_URL_TYPE_EXPORT) trustedUrl.add(identifierName(element.name));
+      if (importedName === TRUSTED_HTML_TYPE_EXPORT) {
+        compilerSetAdd(trustedHtml, identifierName(element.name));
+      }
+      if (importedName === TRUSTED_URL_TYPE_EXPORT) {
+        compilerSetAdd(trustedUrl, identifierName(element.name));
+      }
     }
   }
   return { trustedHtml, trustedUrl };
@@ -1376,7 +1669,7 @@ function expressionHasTrustedUrlType(
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
     usePosition: expression.getStart(sourceFile),
-    visited: new Set<ts.Node>(),
+    visited: compilerCreateSet<ts.Node>(),
   };
   return expressionHasTrustedType(expression, sink, ctx);
 }
@@ -1394,7 +1687,7 @@ function bindingHasTrustedUrlType(sourceFile: ts.SourceFile, binding: ts.Node): 
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
     usePosition: binding.getStart(sourceFile),
-    visited: new Set<ts.Node>(),
+    visited: compilerCreateSet<ts.Node>(),
   };
   return bindingHasTrustedType(binding, sink, ctx);
 }
@@ -1411,7 +1704,7 @@ function typeNodeHasTrustedBrand(
   let found = false;
   const visit = (node: ts.Node): void => {
     if (found) return;
-    if (ts.isIdentifier(node) && expectedNames.has(identifierName(node))) {
+    if (ts.isIdentifier(node) && compilerSetHas(expectedNames, identifierName(node))) {
       found = true;
       return;
     }
@@ -1423,15 +1716,15 @@ function typeNodeHasTrustedBrand(
 
 function staticStringValue(
   argument: ts.Expression | undefined,
-  visited = new Set<ts.Node>(),
+  visited = compilerCreateSet<ts.Node>(),
 ): string | null {
   if (argument === undefined) return null;
   const expr = unwrap(argument);
   if (ts.isStringLiteralLike(expr)) return literalText(expr);
   if (!ts.isIdentifier(expr)) return null;
   const initializer = localConstInitializer(expr, identifierName(expr));
-  if (initializer === undefined || visited.has(initializer)) return null;
-  visited.add(initializer);
+  if (initializer === undefined || compilerSetHas(visited, initializer)) return null;
+  compilerSetAdd(visited, initializer);
   return staticStringValue(initializer, visited);
 }
 
@@ -1439,16 +1732,25 @@ function staticStringValue(
 function hasAuditedReason(call: ts.CallExpression): boolean {
   const metadata = call.arguments[1];
   if (metadata === undefined) return false;
-  if (ts.isStringLiteralLike(metadata)) return metadata.text.trim().length > 0;
+  if (ts.isStringLiteralLike(metadata)) return compilerStringTrim(metadata.text).length > 0;
   if (ts.isObjectLiteralExpression(metadata)) {
-    for (const property of metadata.properties) {
+    const propertyLength = compilerArrayLength(metadata.properties, 'Trust metadata properties');
+    for (let index = 0; index < propertyLength; index += 1) {
+      const property = compilerOwnDataValue(
+        metadata.properties,
+        index,
+        'Trust metadata properties',
+      ) as ts.ObjectLiteralElementLike | undefined;
+      if (!property) {
+        throw new TypeError(`Trust metadata properties[${index}] must be dense own data.`);
+      }
       if (
         ts.isPropertyAssignment(property) &&
         ts.isIdentifier(property.name) &&
         identifierName(property.name) === AUDITED_REASON_PROPERTY &&
         ts.isStringLiteralLike(property.initializer)
       ) {
-        return property.initializer.text.trim().length > 0;
+        return compilerStringTrim(property.initializer.text).length > 0;
       }
     }
   }
@@ -1477,15 +1779,14 @@ function unwrap(node: ts.Expression): ts.Expression {
 function renderProvenanceBindings(
   sourceFile: ts.SourceFile,
 ): Map<ts.Node, RenderProvenanceBindings> {
-  const byRender = new Map<ts.Node, RenderProvenanceBindings>();
+  const byRender = compilerCreateMap<ts.Node, RenderProvenanceBindings>();
   const componentNames = componentFactoryLocalNames(sourceFile);
-  if (componentNames.size === 0) return byRender;
 
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      componentNames.has(node.expression.text) &&
+      compilerSetHas(componentNames, node.expression.text) &&
       node.arguments.length > 0 &&
       node.arguments[0] !== undefined &&
       ts.isObjectLiteralExpression(node.arguments[0])
@@ -1502,19 +1803,40 @@ function collectRenderProvenanceBindings(
   options: ts.ObjectLiteralExpression,
   byRender: Map<ts.Node, RenderProvenanceBindings>,
 ): void {
-  const queryKeys = new Set<string>();
+  const queryKeys = compilerCreateSet<string>();
   let render: RenderFunction | undefined;
 
-  for (const property of options.properties) {
+  const propertyLength = compilerArrayLength(options.properties, 'Component option properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      options.properties,
+      index,
+      'Component option properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) {
+      throw new TypeError(`Component option properties[${index}] must be dense own data.`);
+    }
     if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
     if (
       identifierName(property.name) === QUERIES_PROPERTY &&
       ts.isObjectLiteralExpression(property.initializer)
     ) {
-      for (const entry of property.initializer.properties) {
+      const entryLength = compilerArrayLength(
+        property.initializer.properties,
+        'Component query properties',
+      );
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = compilerOwnDataValue(
+          property.initializer.properties,
+          entryIndex,
+          'Component query properties',
+        ) as ts.ObjectLiteralElementLike | undefined;
+        if (!entry) {
+          throw new TypeError(`Component query properties[${entryIndex}] must be dense own data.`);
+        }
         const key = entry.name;
         const name = key === undefined ? null : propertyNameText(key);
-        if (name !== null) queryKeys.add(name);
+        if (name !== null) compilerSetAdd(queryKeys, name);
       }
     }
     if (
@@ -1527,37 +1849,46 @@ function collectRenderProvenanceBindings(
 
   if (render === undefined) return;
   const dataParam = render.parameters[0];
-  const bindings = new Set<string>();
-  const queryDataRoots = new Map<string, ReadonlySet<string>>();
-  const requestBindings = new Set<string>();
-  const requestSlotRoots = new Set<string>();
+  const bindings = compilerCreateSet<string>();
+  const queryDataRoots = compilerCreateMap<string, ReadonlySet<string>>();
+  const requestBindings = compilerCreateSet<string>();
+  const requestSlotRoots = compilerCreateSet<string>();
 
-  if (dataParam !== undefined && queryKeys.size > 0) {
+  if (dataParam !== undefined && classifierSetHasValues(queryKeys)) {
     if (ts.isObjectBindingPattern(dataParam.name)) {
-      for (const element of dataParam.name.elements) {
+      const elementLength = compilerArrayLength(dataParam.name.elements, 'Render data bindings');
+      for (let index = 0; index < elementLength; index += 1) {
+        const element = compilerOwnDataValue(
+          dataParam.name.elements,
+          index,
+          'Render data bindings',
+        ) as ts.BindingElement | undefined;
+        if (!element) {
+          throw new TypeError(`Render data bindings[${index}] must be dense own data.`);
+        }
         const sourceName = element.propertyName ?? element.name;
         if (
           ts.isIdentifier(sourceName) &&
-          queryKeys.has(sourceName.text) &&
+          compilerSetHas(queryKeys, sourceName.text) &&
           ts.isIdentifier(element.name)
         ) {
-          bindings.add(element.name.text);
+          compilerSetAdd(bindings, element.name.text);
         }
       }
     } else if (ts.isIdentifier(dataParam.name)) {
-      queryDataRoots.set(dataParam.name.text, queryKeys);
+      compilerMapSet(queryDataRoots, dataParam.name.text, queryKeys);
     }
   }
 
   collectRenderRequestBindings(render.parameters[2], requestBindings, requestSlotRoots);
 
   if (
-    bindings.size > 0 ||
-    queryDataRoots.size > 0 ||
-    requestBindings.size > 0 ||
-    requestSlotRoots.size > 0
+    classifierSetHasValues(bindings) ||
+    classifierMapHasValues(queryDataRoots) ||
+    classifierSetHasValues(requestBindings) ||
+    classifierSetHasValues(requestSlotRoots)
   ) {
-    byRender.set(render, {
+    compilerMapSet(byRender, render, {
       queryBindings: bindings,
       queryDataRoots,
       render,
@@ -1574,12 +1905,19 @@ function collectRenderRequestBindings(
 ): void {
   if (slotsParam === undefined) return;
   if (ts.isIdentifier(slotsParam.name)) {
-    slotRoots.add(slotsParam.name.text);
+    compilerSetAdd(slotRoots, slotsParam.name.text);
     return;
   }
   if (!ts.isObjectBindingPattern(slotsParam.name)) return;
 
-  for (const element of slotsParam.name.elements) {
+  const elementLength = compilerArrayLength(slotsParam.name.elements, 'Render slot bindings');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(
+      slotsParam.name.elements,
+      index,
+      'Render slot bindings',
+    ) as ts.BindingElement | undefined;
+    if (!element) throw new TypeError(`Render slot bindings[${index}] must be dense own data.`);
     const sourceName =
       element.propertyName !== undefined
         ? propertyNameText(element.propertyName)
@@ -1589,10 +1927,19 @@ function collectRenderRequestBindings(
     if (sourceName !== 'request') continue;
 
     if (ts.isIdentifier(element.name)) {
-      bindings.add(identifierName(element.name));
+      compilerSetAdd(bindings, identifierName(element.name));
     } else if (ts.isObjectBindingPattern(element.name)) {
-      for (const nested of element.name.elements) {
-        if (ts.isIdentifier(nested.name)) bindings.add(identifierName(nested.name));
+      const nestedLength = compilerArrayLength(element.name.elements, 'Nested request bindings');
+      for (let nestedIndex = 0; nestedIndex < nestedLength; nestedIndex += 1) {
+        const nested = compilerOwnDataValue(
+          element.name.elements,
+          nestedIndex,
+          'Nested request bindings',
+        ) as ts.BindingElement | undefined;
+        if (!nested) {
+          throw new TypeError(`Nested request bindings[${nestedIndex}] must be dense own data.`);
+        }
+        if (ts.isIdentifier(nested.name)) compilerSetAdd(bindings, identifierName(nested.name));
       }
     }
   }
@@ -1605,19 +1952,41 @@ function collectRenderRequestBindings(
  * `@kovojs/core` alias (`import { component as c }`) is additionally resolved by symbol identity.
  */
 function componentFactoryLocalNames(sourceFile: ts.SourceFile): ReadonlySet<string> {
-  const names = new Set<string>([COMPONENT_FACTORY_NAME]);
-  for (const statement of sourceFile.statements) {
+  const names = compilerCreateSet<string>();
+  compilerSetAdd(names, COMPONENT_FACTORY_NAME);
+  const statementLength = compilerArrayLength(
+    sourceFile.statements,
+    'Component factory statements',
+  );
+  for (let index = 0; index < statementLength; index += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      index,
+      'Component factory statements',
+    ) as ts.Statement | undefined;
+    if (!statement) {
+      throw new TypeError(`Component factory statements[${index}] must be dense own data.`);
+    }
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     if (literalText(statement.moduleSpecifier) !== CORE_MODULE_SPECIFIER) continue;
     const named = statement.importClause?.namedBindings;
     if (named && ts.isNamedImports(named)) {
-      for (const element of named.elements) {
+      const elementLength = compilerArrayLength(named.elements, 'Component factory imports');
+      for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+        const element = compilerOwnDataValue(
+          named.elements,
+          elementIndex,
+          'Component factory imports',
+        ) as ts.ImportSpecifier | undefined;
+        if (!element) {
+          throw new TypeError(`Component factory imports[${elementIndex}] must be dense own data.`);
+        }
         const importedName = element.propertyName
           ? moduleExportNameText(element.propertyName)
           : identifierName(element.name);
         if (importedName === COMPONENT_FACTORY_NAME) {
-          names.add(identifierName(element.name));
+          compilerSetAdd(names, identifierName(element.name));
         }
       }
     }
@@ -1644,15 +2013,15 @@ function enclosingRenderProvenanceBindings(
 ): RenderProvenanceBindings {
   let cursor: ts.Node | undefined = node;
   while (cursor) {
-    const bindings = byRender.get(cursor);
+    const bindings = compilerMapGet(byRender, cursor);
     if (bindings !== undefined) return bindings;
     cursor = cursor.parent;
   }
   return EMPTY_RENDER_BINDINGS;
 }
 
-const EMPTY_BINDINGS: ReadonlySet<string> = new Set<string>();
-const EMPTY_QUERY_DATA_ROOTS: ReadonlyMap<string, ReadonlySet<string>> = new Map();
+const EMPTY_BINDINGS: ReadonlySet<string> = compilerCreateSet<string>();
+const EMPTY_QUERY_DATA_ROOTS: ReadonlyMap<string, ReadonlySet<string>> = compilerCreateMap();
 const EMPTY_RENDER_BINDINGS: RenderProvenanceBindings = {
   queryBindings: EMPTY_BINDINGS,
   queryDataRoots: EMPTY_QUERY_DATA_ROOTS,

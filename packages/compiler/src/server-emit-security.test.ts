@@ -143,14 +143,12 @@ export const AddToCartForm = component({
     expect(field).toMatch(/value="[^"]+"/);
   });
 
-  it('A2: Kovo-Idem value is a cryptographic UUID (≥128 bits)', () => {
+  it('A2: Kovo-Idem value carries exactly 128 bits of cryptographic entropy', () => {
     const field = renderMutationIdemField();
     const match = /value="([^"]+)"/.exec(field);
     expect(match).not.toBeNull();
-    // RFC 4122 UUID v4 — 122 bits of cryptographic entropy from crypto.randomUUID().
-    expect(match![1]).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
+    // C22 requires 128 random bits. The server renders the 16-byte value as unpadded base64url.
+    expect(match![1]).toMatch(/^[A-Za-z0-9_-]{22}$/u);
   });
 
   it('A2: Kovo-Idem value differs across two renders (per-submit freshness)', () => {

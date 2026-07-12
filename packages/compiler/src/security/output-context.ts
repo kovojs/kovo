@@ -8,6 +8,19 @@ import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
+  compilerArrayLength,
+  compilerJsonStringify,
+  compilerOwnDataValue,
+  compilerRegExpTest,
+  compilerSetHas,
+  compilerStringIncludes,
+  compilerStringIndexOf,
+  compilerStringSlice,
+  compilerStringStartsWith,
+  compilerStringToLowerCase,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
+import {
   isUrlAttribute,
   expressionResolvesToTrustedHtmlBrand,
   trustedHtmlBrandLocalNames,
@@ -16,6 +29,7 @@ import {
 import { literalStringValue } from '../scan/object.js';
 import {
   jsxElements,
+  jsxExpressions,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -31,7 +45,7 @@ export const runtimeOutputHelpers = {
 } as const;
 
 export function stylePropertyExpression(propertyName: string, valueExpression: string): string {
-  return `${runtimeOutputHelpers.styleProperty}(${JSON.stringify(propertyName)}, ${valueExpression.trim()})`;
+  return `${runtimeOutputHelpers.styleProperty}(${outputJsonString(propertyName)}, ${compilerStringTrim(valueExpression)})`;
 }
 
 export function templateStampHtmlEscapeExpression(valueExpression: string): string {
@@ -47,12 +61,27 @@ export function validateOutputContexts(
 
   const trustedBrandNames = trustedHtmlBrandLocalNames(model);
 
-  for (const element of jsxElements(model)) {
-    found.push(...validateElementAttributes(diagnostics, element, compilerOwnedStyleSpans));
-    found.push(...validateRawtextElementText(diagnostics, model, element, trustedBrandNames));
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Output-context JSX elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = outputArrayValue(elements, index, 'Output-context JSX elements');
+    appendOutputItems(
+      found,
+      validateElementAttributes(diagnostics, element, compilerOwnedStyleSpans),
+      'Output-context attribute diagnostics',
+    );
+    appendOutputItems(
+      found,
+      validateRawtextElementText(diagnostics, model, element, trustedBrandNames),
+      'Output-context RAWTEXT diagnostics',
+    );
   }
 
-  found.push(...validateComponentCssText(diagnostics, model));
+  appendOutputItems(
+    found,
+    validateComponentCssText(diagnostics, model),
+    'Output-context component CSS diagnostics',
+  );
 
   return found;
 }
@@ -74,14 +103,19 @@ function validateRawtextElementText(
   if (element.tag !== 'script' && element.tag !== 'style') return [];
 
   const found: CompilerDiagnostic[] = [];
-  for (const child of directChildExpressions(model, element)) {
+  const children = directChildExpressions(model, element);
+  const childLength = compilerArrayLength(children, 'Direct RAWTEXT child expressions');
+  for (let index = 0; index < childLength; index += 1) {
+    const child = outputArrayValue(children, index, 'Direct RAWTEXT child expressions');
     if (!isDynamicExpression(child) || isTrustedBrandCall(model, child, trustedBrandNames))
       continue;
-    found.push(
-      outputContextDiagnostic(diagnostics, `dynamic <${element.tag}> element text`, {
+    found[found.length] = outputContextDiagnostic(
+      diagnostics,
+      `dynamic <${element.tag}> element text`,
+      {
         start: child.containerStart,
         length: child.containerEnd - child.containerStart,
-      }),
+      },
     );
   }
   return found;
@@ -92,13 +126,40 @@ function directChildExpressions(
   model: ComponentModuleModel,
   element: JsxElementModel,
 ): JsxExpressionModel[] {
-  return element.childExpressionContainers.flatMap((container) => {
-    const expression = model.jsxExpressions.find(
-      (candidate) =>
-        candidate.containerStart === container.start && candidate.containerEnd === container.end,
-    );
-    return expression ? [expression] : [];
-  });
+  const found: JsxExpressionModel[] = [];
+  const containers = element.childExpressionContainers;
+  const expressions = jsxExpressions(model);
+  const containerLength = compilerArrayLength(containers, 'JSX child expression containers');
+  const expressionLength = compilerArrayLength(expressions, 'JSX expressions');
+
+  for (let containerIndex = 0; containerIndex < containerLength; containerIndex += 1) {
+    const container = compilerOwnDataValue(
+      containers,
+      containerIndex,
+      'JSX child expression containers',
+    ) as SourceSpan | undefined;
+    if (!container) {
+      throw new TypeError(
+        `JSX child expression containers[${containerIndex}] must be an own source span.`,
+      );
+    }
+    for (let expressionIndex = 0; expressionIndex < expressionLength; expressionIndex += 1) {
+      const expression = compilerOwnDataValue(expressions, expressionIndex, 'JSX expressions') as
+        | JsxExpressionModel
+        | undefined;
+      if (!expression) {
+        throw new TypeError(`JSX expressions[${expressionIndex}] must be an own expression fact.`);
+      }
+      if (
+        expression.containerStart === container.start &&
+        expression.containerEnd === container.end
+      ) {
+        found[found.length] = expression;
+        break;
+      }
+    }
+  }
+  return found;
 }
 
 /**
@@ -129,7 +190,9 @@ function isTrustedBrandCall(
   expression: JsxExpressionModel,
   trustedBrandNames: ReadonlySet<string>,
 ): boolean {
-  if (expression.callName !== undefined && trustedBrandNames.has(expression.callName)) return true;
+  if (expression.callName !== undefined && compilerSetHas(trustedBrandNames, expression.callName)) {
+    return true;
+  }
   const astExpression = expressionAtSpan(
     ts as FrameworkIdentityTypeScript,
     model.sourceFile,
@@ -144,19 +207,28 @@ export function collectTrustedHtmlOutputContextFacts(
 ): GeneratedOutputWriteFact[] {
   const facts: GeneratedOutputWriteFact[] = [];
 
-  for (const element of jsxElements(model)) {
-    for (const attribute of element.attributes) {
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Trusted HTML JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = outputArrayValue(elements, elementIndex, 'Trusted HTML JSX elements');
+    const attributeLength = compilerArrayLength(element.attributes, 'Trusted HTML attributes');
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = outputArrayValue(
+        element.attributes,
+        attributeIndex,
+        'Trusted HTML attributes',
+      );
       if (!isRawHtmlAttribute(attribute.name) || literalAttributeStringValue(attribute) !== null) {
         continue;
       }
 
-      facts.push({
+      facts[facts.length] = {
         context: 'trusted-html',
         ...(attribute.expression ? { expression: attribute.expression } : {}),
         sink: attribute.name,
         source: 'server-render',
         writer: 'trusted raw HTML attribute',
-      });
+      };
     }
   }
 
@@ -169,91 +241,116 @@ function validateElementAttributes(
   compilerOwnedStyleSpans: readonly SourceSpan[],
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
-  const hasExternalEscape = element.attributes.some((attribute) => attribute.name === 'external');
+  let hasExternalEscape = false;
+  const attributeLength = compilerArrayLength(element.attributes, 'Element attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(element.attributes, index, 'Element attributes');
+    if (attribute.name === 'external') {
+      hasExternalEscape = true;
+      break;
+    }
+  }
 
-  for (const attribute of element.attributes) {
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(element.attributes, index, 'Element attributes');
     if (isUrlAttribute(attribute.name)) {
-      found.push(...validateUrlAttribute(diagnostics, attribute, hasExternalEscape));
+      appendOutputItems(
+        found,
+        validateUrlAttribute(diagnostics, attribute, hasExternalEscape),
+        'URL attribute diagnostics',
+      );
       continue;
     }
 
     if (attribute.name === 'style') {
       if (spanContainsAttribute(compilerOwnedStyleSpans, attribute)) continue;
-      found.push(...validateStyleAttribute(diagnostics, attribute));
+      appendOutputItems(
+        found,
+        validateStyleAttribute(diagnostics, attribute),
+        'Style attribute diagnostics',
+      );
       continue;
     }
 
     if (attribute.name === 'data-bind:style') {
-      found.push(
-        outputContextDiagnostic(diagnostics, 'dynamic style attribute binding', {
+      found[found.length] = outputContextDiagnostic(
+        diagnostics,
+        'dynamic style attribute binding',
+        {
           start: attribute.start,
           length: attribute.end - attribute.start,
-        }),
+        },
       );
       continue;
     }
 
     if (attribute.name === 'data-derive-attr' && attribute.value === 'style') {
-      found.push(
-        outputContextDiagnostic(diagnostics, 'arbitrary dynamic CSS text', {
-          start: attribute.start,
-          length: attribute.end - attribute.start,
-        }),
-      );
+      found[found.length] = outputContextDiagnostic(diagnostics, 'arbitrary dynamic CSS text', {
+        start: attribute.start,
+        length: attribute.end - attribute.start,
+      });
       continue;
     }
 
     if (isRawHtmlAttribute(attribute.name)) {
-      found.push(...validateRawHtmlAttribute(diagnostics, attribute));
+      appendOutputItems(
+        found,
+        validateRawHtmlAttribute(diagnostics, attribute),
+        'Raw HTML attribute diagnostics',
+      );
       continue;
     }
 
     if (attribute.name === 'srcdoc') {
-      found.push(...validateRawHtmlAttribute(diagnostics, attribute));
+      appendOutputItems(
+        found,
+        validateRawHtmlAttribute(diagnostics, attribute),
+        'srcdoc attribute diagnostics',
+      );
       continue;
     }
 
     if (isDirectHtmlEventHandlerAttribute(attribute)) {
-      found.push(
-        outputContextDiagnostic(
-          diagnostics,
-          `${attribute.name} is an event-handler sink (on* attribute)`,
-          { start: attribute.start, length: attribute.end - attribute.start },
-        ),
+      found[found.length] = outputContextDiagnostic(
+        diagnostics,
+        `${attribute.name} is an event-handler sink (on* attribute)`,
+        { start: attribute.start, length: attribute.end - attribute.start },
       );
       continue;
     }
 
     // KV236: dynamic event-handler attributes (data-bind:on* or data-derive-attr on*)
     if (isDynamicEventHandlerAttribute(attribute)) {
-      found.push(
-        outputContextDiagnostic(
-          diagnostics,
-          `${attribute.name} is a dynamic event-handler sink (on* attribute)`,
-          { start: attribute.start, length: attribute.end - attribute.start },
-        ),
+      found[found.length] = outputContextDiagnostic(
+        diagnostics,
+        `${attribute.name} is a dynamic event-handler sink (on* attribute)`,
+        { start: attribute.start, length: attribute.end - attribute.start },
       );
       continue;
     }
 
     // KV236: dynamic srcdoc attribute (data-bind:srcdoc or data-derive-attr srcdoc)
     if (isDynamicSrcdocAttribute(attribute)) {
-      found.push(
-        outputContextDiagnostic(diagnostics, `${attribute.name} is a dynamic srcdoc sink`, {
+      found[found.length] = outputContextDiagnostic(
+        diagnostics,
+        `${attribute.name} is a dynamic srcdoc sink`,
+        {
           start: attribute.start,
           length: attribute.end - attribute.start,
-        }),
+        },
       );
       continue;
     }
 
     // KV236: dynamic formaction attribute (data-bind:formaction or data-derive-attr formaction)
     if (isDynamicFormactionAttribute(attribute)) {
-      found.push(
-        outputContextDiagnostic(diagnostics, `${attribute.name} is a dynamic formaction sink`, {
+      found[found.length] = outputContextDiagnostic(
+        diagnostics,
+        `${attribute.name} is a dynamic formaction sink`,
+        {
           start: attribute.start,
           length: attribute.end - attribute.start,
-        }),
+        },
       );
       continue;
     }
@@ -264,15 +361,19 @@ function validateElementAttributes(
   // attribute, so the same URL-scheme / style-CSS-url / raw-HTML / on* / srcdoc checks must run
   // over its object entries; otherwise the spread is a silent bypass of the sink validation the
   // direct form gets.
-  for (const spread of element.spreadAttributes) {
+  const spreadLength = compilerArrayLength(element.spreadAttributes, 'Element spread attributes');
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = outputArrayValue(element.spreadAttributes, index, 'Element spread attributes');
     if (!spread.objectEntries) continue;
-    found.push(
-      ...validateStaticObjectEntrySinks(
+    appendOutputItems(
+      found,
+      validateStaticObjectEntrySinks(
         diagnostics,
         spread.objectEntries,
         { end: spread.end, start: spread.start },
         hasExternalEscape,
       ),
+      'Spread attribute diagnostics',
     );
   }
 
@@ -283,7 +384,11 @@ function validateElementAttributes(
   // that only the runtime sink-policy floor catches. Only inline `attrs={{…}}` object literals are a
   // merge channel (matching `primitiveCompositionCandidates`' `expressionObjectEntries` gate); a
   // dynamic `attrs` value carries no statically-decidable literal sink and is deferred to runtime.
-  found.push(...validatePrimitiveAttrsEntries(diagnostics, element, hasExternalEscape));
+  appendOutputItems(
+    found,
+    validatePrimitiveAttrsEntries(diagnostics, element, hasExternalEscape),
+    'Primitive attrs diagnostics',
+  );
 
   return found;
 }
@@ -303,15 +408,19 @@ function validatePrimitiveAttrsEntries(
   if (!isComponentTag(element.tag)) return [];
 
   const found: CompilerDiagnostic[] = [];
-  for (const attribute of element.attributes) {
+  const length = compilerArrayLength(element.attributes, 'Primitive attrs attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = outputArrayValue(element.attributes, index, 'Primitive attrs attributes');
     if (attribute.name !== 'attrs' || !attribute.expressionObjectEntries) continue;
-    found.push(
-      ...validateStaticObjectEntrySinks(
+    appendOutputItems(
+      found,
+      validateStaticObjectEntrySinks(
         diagnostics,
         attribute.expressionObjectEntries,
         { end: attribute.end, start: attribute.start },
         hasExternalEscape,
       ),
+      'Primitive attrs entry diagnostics',
     );
   }
   return found;
@@ -333,7 +442,9 @@ function validateStaticObjectEntrySinks(
   hasExternalEscape: boolean,
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
-  for (const entry of entries) {
+  const length = compilerArrayLength(entries, 'Static object sink entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = outputArrayValue(entries, index, 'Static object sink entries');
     if (entry.value === undefined) continue;
     const literal = literalStringValue(entry.value);
     if (literal === null) continue;
@@ -346,18 +457,30 @@ function validateStaticObjectEntrySinks(
     };
 
     if (isUrlAttribute(synthetic.name)) {
-      found.push(...validateUrlAttribute(diagnostics, synthetic, hasExternalEscape));
+      appendOutputItems(
+        found,
+        validateUrlAttribute(diagnostics, synthetic, hasExternalEscape),
+        'Static URL sink diagnostics',
+      );
       continue;
     }
     // SPEC §4.8 / §5.2 #10 (KV236, S4): a synthesized `style` entry is a CSS sink exactly like a
     // direct `style="…"`; route it through the same static CSS-url check (`validateStaticCssText`)
     // so `{...{ style: "background:url('javascript:…')" }}` cannot bypass the direct form's gate.
     if (synthetic.name === 'style') {
-      found.push(...validateStyleAttribute(diagnostics, synthetic));
+      appendOutputItems(
+        found,
+        validateStyleAttribute(diagnostics, synthetic),
+        'Static style sink diagnostics',
+      );
       continue;
     }
     if (isRawHtmlAttribute(synthetic.name)) {
-      found.push(...validateRawHtmlAttribute(diagnostics, synthetic));
+      appendOutputItems(
+        found,
+        validateRawHtmlAttribute(diagnostics, synthetic),
+        'Static raw HTML sink diagnostics',
+      );
       continue;
     }
     // SPEC §4.8 / §5.2 #10 (KV236): use the direct path's exact event-handler predicate
@@ -365,20 +488,22 @@ function validateStaticObjectEntrySinks(
     // `onclick`/`onerror` HTML sink while leaving Kovo's `on:click` binding ref and JSX-style
     // `onClick` untouched — identical accept/reject set to a directly-authored attribute.
     if (isDirectHtmlEventHandlerAttribute(synthetic)) {
-      found.push(
-        outputContextDiagnostic(
-          diagnostics,
-          `${synthetic.name} is an event-handler sink (on* attribute)`,
-          {
-            start: span.start,
-            length: span.end - span.start,
-          },
-        ),
+      found[found.length] = outputContextDiagnostic(
+        diagnostics,
+        `${synthetic.name} is an event-handler sink (on* attribute)`,
+        {
+          start: span.start,
+          length: span.end - span.start,
+        },
       );
       continue;
     }
     if (synthetic.name === 'srcdoc') {
-      found.push(...validateRawHtmlAttribute(diagnostics, synthetic));
+      appendOutputItems(
+        found,
+        validateRawHtmlAttribute(diagnostics, synthetic),
+        'Static srcdoc sink diagnostics',
+      );
       continue;
     }
   }
@@ -391,14 +516,24 @@ function validateStaticObjectEntrySinks(
  * uppercase-initial tag (`Menu`) is a component, never a plain HTML element.
  */
 function isComponentTag(tag: string): boolean {
-  return tag.includes('.') || /^[A-Z]/.test(tag);
+  return compilerStringIncludes(tag, '.') || compilerRegExpTest(/^[A-Z]/, tag);
 }
 
 function spanContainsAttribute(
   spans: readonly SourceSpan[],
   attribute: JsxAttributeModel,
 ): boolean {
-  return spans.some((span) => attribute.start >= span.start && attribute.end <= span.end);
+  const length = compilerArrayLength(spans, 'Compiler-owned style spans');
+  for (let index = 0; index < length; index += 1) {
+    const span = compilerOwnDataValue(spans, index, 'Compiler-owned style spans') as
+      | SourceSpan
+      | undefined;
+    if (!span) {
+      throw new TypeError(`Compiler-owned style spans[${index}] must be an own source span.`);
+    }
+    if (attribute.start >= span.start && attribute.end <= span.end) return true;
+  }
+  return false;
 }
 
 function validateUrlAttribute(
@@ -413,7 +548,7 @@ function validateUrlAttribute(
     return [
       outputContextDiagnostic(
         diagnostics,
-        `${attribute.name}=${JSON.stringify(value)} uses an unsafe URL scheme`,
+        `${attribute.name}=${outputJsonString(value)} uses an unsafe URL scheme`,
         { start: attribute.start, length: attribute.end - attribute.start },
       ),
     ];
@@ -423,7 +558,7 @@ function validateUrlAttribute(
     return [
       outputContextDiagnostic(
         diagnostics,
-        `${attribute.name}=${JSON.stringify(value)} is an external literal URL without external`,
+        `${attribute.name}=${outputJsonString(value)} is an external literal URL without external`,
         { start: attribute.start, length: attribute.end - attribute.start },
       ),
     ];
@@ -457,7 +592,9 @@ function validateStaticStyleObjectAttribute(
   entries: readonly ObjectLiteralEntry[],
   span: SourceSpan,
 ): CompilerDiagnostic[] {
-  for (const entry of entries) {
+  const length = compilerArrayLength(entries, 'Static style object entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = outputArrayValue(entries, index, 'Static style object entries');
     if (entry.objectEntries) continue;
     if (entry.value === undefined) continue;
     const literal = literalStringValue(entry.value);
@@ -507,13 +644,22 @@ function validateComponentCssText(
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
 
-  for (const component of model.components) {
-    for (const option of component.options) {
+  const componentLength = compilerArrayLength(model.components, 'Component CSS components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = outputArrayValue(
+      model.components,
+      componentIndex,
+      'Component CSS components',
+    );
+    const optionLength = compilerArrayLength(component.options, 'Component CSS options');
+    for (let optionIndex = 0; optionIndex < optionLength; optionIndex += 1) {
+      const option = outputArrayValue(component.options, optionIndex, 'Component CSS options');
       if (option.key !== 'css' && option.key !== 'styles') continue;
       if (!option.staticTemplateValue || !cssTextHasUnsafeUrl(option.staticTemplateValue)) continue;
 
-      found.push(
-        outputContextDiagnostic(diagnostics, `${option.key} contains an unsafe CSS url()`),
+      found[found.length] = outputContextDiagnostic(
+        diagnostics,
+        `${option.key} contains an unsafe CSS url()`,
       );
     }
   }
@@ -534,8 +680,8 @@ function literalAttributeStringValue(attribute: JsxAttributeModel): string | nul
  * For `data-derive-attr` with value "foo" the dynamic name is "foo".
  */
 function dynamicAttributeName(attribute: JsxAttributeModel): string | null {
-  if (attribute.name.startsWith('data-bind:')) {
-    return attribute.name.slice('data-bind:'.length);
+  if (compilerStringStartsWith(attribute.name, 'data-bind:')) {
+    return compilerStringSlice(attribute.name, 'data-bind:'.length);
   }
   if (attribute.name === 'data-derive-attr' && typeof attribute.value === 'string') {
     return attribute.value;
@@ -546,12 +692,12 @@ function dynamicAttributeName(attribute: JsxAttributeModel): string | null {
 /** Returns true when the attribute dynamically targets an on* event-handler sink. */
 function isDynamicEventHandlerAttribute(attribute: JsxAttributeModel): boolean {
   const name = dynamicAttributeName(attribute);
-  return name !== null && /^on/i.test(name);
+  return name !== null && compilerRegExpTest(/^on/i, name);
 }
 
 /** Returns true for direct HTML event attributes such as `onclick`, excluding JSX `onClick`. */
 function isDirectHtmlEventHandlerAttribute(attribute: JsxAttributeModel): boolean {
-  return /^on[a-z]/.test(attribute.name);
+  return compilerRegExpTest(/^on[a-z]/, attribute.name);
 }
 
 /** Returns true when the attribute dynamically targets the srcdoc sink. */
@@ -576,11 +722,14 @@ function isRawHtmlAttribute(name: string): boolean {
 }
 
 function isExternalHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
+  return compilerRegExpTest(/^https?:\/\//i, value);
 }
 
 function cssTextHasUnsafeUrl(cssText: string): boolean {
-  for (const value of cssUrlValues(cssText)) {
+  const values = cssUrlValues(cssText);
+  const length = compilerArrayLength(values, 'CSS url values');
+  for (let index = 0; index < length; index += 1) {
+    const value = outputArrayValue(values, index, 'CSS url values');
     if (hasUnsafeUrlScheme(value)) return true;
   }
 
@@ -592,10 +741,12 @@ function cssUrlValues(cssText: string): string[] {
   let cursor = 0;
 
   while (cursor < cssText.length) {
-    const urlIndex = cssText.toLowerCase().indexOf('url(', cursor);
+    const urlIndex = compilerStringIndexOf(compilerStringToLowerCase(cssText), 'url(', cursor);
     if (urlIndex === -1) break;
     let index = urlIndex + 'url('.length;
-    while (index < cssText.length && /\s/.test(cssText[index] ?? '')) index += 1;
+    while (index < cssText.length && compilerRegExpTest(/\s/, cssText[index] ?? '')) {
+      index += 1;
+    }
 
     const quote = cssText[index] === '"' || cssText[index] === "'" ? cssText[index] : undefined;
     if (quote) index += 1;
@@ -611,8 +762,8 @@ function cssUrlValues(cssText: string): string[] {
       index += 1;
     }
 
-    values.push(cssText.slice(start, index).trim());
-    cursor = cssText.indexOf(')', index);
+    values[values.length] = compilerStringTrim(compilerStringSlice(cssText, start, index));
+    cursor = compilerStringIndexOf(cssText, ')', index);
     if (cursor === -1) break;
     cursor += 1;
   }
@@ -629,4 +780,23 @@ function outputContextDiagnostic(
     ...diagnostics.at('KV236', span, detail),
     help: diagnosticDefinitions.KV236.help,
   };
+}
+
+function outputJsonString(value: string): string {
+  const encoded = compilerJsonStringify(value);
+  if (encoded === undefined) throw new TypeError('Output-context string could not be encoded.');
+  return encoded;
+}
+
+function outputArrayValue<Value>(values: readonly Value[], index: number, label: string): Value {
+  const value = compilerOwnDataValue(values, index, label);
+  if (value === undefined) throw new TypeError(`${label}[${index}] must be dense own data.`);
+  return value as Value;
+}
+
+function appendOutputItems<Value>(output: Value[], values: readonly Value[], label: string): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    output[output.length] = outputArrayValue(values, index, label);
+  }
 }

@@ -1,6 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
-import { runInNewContext } from 'node:vm';
+import { existsSync as builtinExistsSync, readFileSync as builtinReadFileSync } from 'node:fs';
+import {
+  dirname as builtinDirname,
+  isAbsolute as builtinIsAbsolute,
+  relative as builtinRelative,
+  resolve as builtinResolve,
+} from 'node:path';
+import { runInNewContext as builtinRunInNewContext } from 'node:vm';
 
 import {
   clientModuleContentVersion,
@@ -8,8 +13,36 @@ import {
   parseVersionedClientModuleTarget,
   versionedClientModuleRequestKey,
 } from '@kovojs/core/internal/client-module-url';
+import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 
 import { CompileCache, compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
+import { canonicalJson } from './canonical-json.js';
+import {
+  compilerArrayIsArray,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerJsonParse,
+  compilerMapDelete,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
+  compilerNumberIsSafeInteger,
+  compilerOwnDataValue,
+  compilerPromiseThen,
+  compilerRegExpExec,
+  compilerRegExpReplace,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetDelete,
+  compilerSetHas,
+  compilerStringEndsWith,
+  compilerStringIncludes,
+  compilerStringIndexOf,
+  compilerStringReplaceAll,
+  compilerStringSlice,
+  compilerStringStartsWith,
+} from './compiler-security-intrinsics.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   collectCssAssetManifest,
@@ -41,6 +74,14 @@ import type {
   RegistryFacts,
 } from './types.js';
 import { validateAuthoringSurface } from './validate/authoring-surface.js';
+
+const existsSync = builtinExistsSync;
+const readFileSync = builtinReadFileSync;
+const dirname = builtinDirname;
+const isAbsolute = builtinIsAbsolute;
+const relative = builtinRelative;
+const resolve = builtinResolve;
+const runInNewContext = builtinRunInNewContext;
 
 /**
  * The Vite plugin object produced by createKovoVitePlugin (and the `kovoVitePlugin` barrel
@@ -244,10 +285,10 @@ export function createKovoVitePlugin(
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
   const compileCache = new CompileCache<ViteCompileResult>();
-  const clientModules = new Map<string, string>();
-  const compiledClientModules = new Map<string, KovoViteCompiledClientModule>();
-  const cssAssetsByFileName = new Map<string, readonly ComponentCssAsset[]>();
-  const hmrImpacts = new Map<string, HmrImpactMetadata>();
+  const clientModules = compilerCreateMap<string, string>();
+  const compiledClientModules = compilerCreateMap<string, KovoViteCompiledClientModule>();
+  const cssAssetsByFileName = compilerCreateMap<string, readonly ComponentCssAsset[]>();
+  const hmrImpacts = compilerCreateMap<string, HmrImpactMetadata>();
   let root = process.cwd();
 
   return {
@@ -259,7 +300,7 @@ export function createKovoVitePlugin(
       root = server.config?.root ?? root;
       server.middlewares.use((req, res, next) => {
         const key = devClientModuleKey(req.url);
-        const source = key ? clientModules.get(key) : undefined;
+        const source = key ? compilerMapGet(clientModules, key) : undefined;
         if (source === undefined) {
           next();
           return;
@@ -274,15 +315,23 @@ export function createKovoVitePlugin(
       });
     },
     getCssAssetManifest(manifestOptions = {}) {
-      return collectCssAssetManifest(
-        [...cssAssetsByFileName.values()].map((cssAssets) => ({ cssAssets })),
-        manifestOptions,
-      );
+      const results: Array<{ cssAssets: readonly ComponentCssAsset[] }> = [];
+      compilerMapForEach(cssAssetsByFileName, (cssAssets) => {
+        results[results.length] = { cssAssets };
+      });
+      return collectCssAssetManifest(results, manifestOptions);
     },
     getClientModules() {
-      return [...compiledClientModules.values()].sort((left, right) =>
-        left.path.localeCompare(right.path),
-      );
+      const modules: KovoViteCompiledClientModule[] = [];
+      compilerMapForEach(compiledClientModules, (module) => {
+        let insertAt = modules.length;
+        while (insertAt > 0 && module.path < modules[insertAt - 1]!.path) {
+          modules[insertAt] = modules[insertAt - 1]!;
+          insertAt -= 1;
+        }
+        modules[insertAt] = module;
+      });
+      return modules;
     },
     name: 'kovo',
     resolveId(source: string, importer?: string): null | string {
@@ -348,7 +397,8 @@ export function createKovoVitePlugin(
         source,
       );
       if (isPromiseLike(result)) {
-        return result.then(
+        return compilerPromiseThen(
+          result,
           (resolvedResult) => {
             try {
               return transformViteCompileResult(
@@ -417,7 +467,7 @@ export function createKovoVitePlugin(
       }
       if (!isComponentSource) return context.modules ?? [];
 
-      const previous = hmrImpacts.get(fileName) ?? null;
+      const previous = compilerMapGet(hmrImpacts, fileName) ?? null;
       rememberKovoCompiledComponent(componentId);
       rememberKovoCompiledComponent(fileName);
       const forgetComponentCompile = (): void => {
@@ -438,12 +488,13 @@ export function createKovoVitePlugin(
         forgetComponentCompile();
         throw error;
       }
+      const emittedFiles = snapshotViteEmittedFiles(result);
       const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
       const next = result.hmrImpact ?? null;
 
       if (errorDiagnostics.length > 0) {
         forgetComponentCompile();
-        if (next) hmrImpacts.set(fileName, next);
+        if (next) compilerMapSet(hmrImpacts, fileName, next);
         sendKovoHmrEvent(context.server, 'kovo:diagnostics', previous, next, {
           impact: 'diagnosticError',
           reasons: ['diagnostics'],
@@ -458,6 +509,7 @@ export function createKovoVitePlugin(
         hmrImpacts,
         fileName,
         result,
+        emittedFiles,
       );
       const classification = classifyViteHmrImpact(previous, next);
       const event = eventForHmrClassification(classification);
@@ -475,7 +527,8 @@ function rewriteDevClientModuleRuntimeImports(source: string): string {
   // papercuts-super-6 A2: emitted client-island modules are served directly by this middleware,
   // bypassing Vite's normal import-rewrite transform. Rewrite the compiler-owned runtime barrel to
   // Vite's resolvable module-id URL so browsers can load the island module without an import map.
-  return source.replaceAll(
+  return compilerStringReplaceAll(
+    source,
     "from '@kovojs/browser/generated'",
     "from '/@id/@kovojs/browser/generated'",
   );
@@ -505,22 +558,25 @@ const KOVO_COMPILED_COMPONENT_IDS = Symbol.for('@kovojs/compiler:cleanlyCompiled
 
 function kovoCompiledComponentIds(): Set<string> {
   const host = globalThis as { [KOVO_COMPILED_COMPONENT_IDS]?: Set<string> };
-  return (host[KOVO_COMPILED_COMPONENT_IDS] ??= new Set<string>());
+  return (host[KOVO_COMPILED_COMPONENT_IDS] ??= compilerCreateSet<string>());
 }
 
 function rememberKovoCompiledComponent(fileName: string): void {
-  kovoCompiledComponentIds().add(fileName);
+  compilerSetAdd(kovoCompiledComponentIds(), fileName);
 }
 
 function forgetKovoCompiledComponent(fileName: string): void {
-  kovoCompiledComponentIds().delete(fileName);
+  compilerSetDelete(kovoCompiledComponentIds(), fileName);
 }
 
 /** A non-public Kovo ABI import (`@kovojs/<pkg>/internal|generated/…`) only emitted lowering has. */
 const KOVO_ABI_IMPORT_PATTERN = /@kovojs\/[^"'\s/]+\/(?:internal|generated)\//;
 
 function isKovoEmittedServerModuleReentry(fileName: string, source: string): boolean {
-  return kovoCompiledComponentIds().has(fileName) && KOVO_ABI_IMPORT_PATTERN.test(source);
+  return (
+    compilerSetHas(kovoCompiledComponentIds(), fileName) &&
+    compilerRegExpTest(KOVO_ABI_IMPORT_PATTERN, source)
+  );
 }
 
 function transformViteCompileResult(
@@ -534,6 +590,7 @@ function transformViteCompileResult(
   source: string,
   result: ViteCompileResult,
 ): { code: string; map: null } {
+  const emittedFiles = snapshotViteEmittedFiles(result);
   const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
   recordViteCompileResult(
@@ -543,24 +600,28 @@ function transformViteCompileResult(
     hmrImpacts,
     fileName,
     result,
+    emittedFiles,
   );
 
   // SPEC §5.2 #3: this authored component compiled cleanly, so a later transform of its emitted
   // output (a second Kovo plugin instance) must be recognized as a re-entry and skipped.
   rememberKovoCompiledComponent(componentId);
   rememberKovoCompiledComponent(fileName);
-  return {
-    code:
-      executableViteServerSource(result.files.find((file) => file.kind === 'server')?.source) ??
-      source,
-    map: null,
-  };
+  let serverSource: string | undefined;
+  for (let index = 0; index < emittedFiles.length; index += 1) {
+    if (emittedFiles[index]!.kind === 'server') {
+      serverSource = emittedFiles[index]!.source;
+      break;
+    }
+  }
+  return { code: executableViteServerSource(serverSource) ?? source, map: null };
 }
 
 function executableViteServerSource(serverSource: string | undefined): string | undefined {
   if (serverSource === undefined) return undefined;
-  const executableWrapper = serverSource.replace(
+  const executableWrapper = compilerRegExpReplace(
     /^\s*export\s+function\s+renderSource\s*\(/m,
+    serverSource,
     'function renderSource(',
   );
   if (executableWrapper === serverSource) return serverSource;
@@ -588,7 +649,7 @@ function shouldTransformViteComponentSource(
   options: KovoVitePluginOptions,
 ): boolean {
   if (!shouldTransformViteAuthoredSource(fileName, componentId, source, options)) return false;
-  if (!source.includes('component(')) return false;
+  if (!compilerStringIncludes(source, 'component(')) return false;
 
   return true;
 }
@@ -599,7 +660,7 @@ function shouldTransformViteAuthoredSource(
   source: string,
   options: KovoVitePluginOptions,
 ): boolean {
-  if (!/\.[cm]?tsx?$/.test(fileName)) return false;
+  if (!compilerRegExpTest(/\.[cm]?tsx?$/, fileName)) return false;
   if (isKovoFrameworkPackageSource(componentId)) return false;
   if (matchesAnyViteFilter(options.exclude, fileName, source)) return false;
   if (options.include !== undefined && !matchesAnyViteFilter(options.include, fileName, source))
@@ -608,29 +669,30 @@ function shouldTransformViteAuthoredSource(
   return true;
 }
 
-const kovoFrameworkPackageSourceCache = new Map<string, boolean>();
+const kovoFrameworkPackageSourceCache = compilerCreateMap<string, boolean>();
 
 function isKovoFrameworkPackageSource(componentId: string): boolean {
   const normalized = slashPath(componentId);
-  const match = /(^|\/)(.+\/packages\/[^/]+)\/src\//.exec(normalized);
+  const match = compilerRegExpExec(/(^|\/)(.+\/packages\/[^/]+)\/src\//, normalized);
   const packageRoot = match?.[2];
   if (packageRoot === undefined) return false;
 
-  const cached = kovoFrameworkPackageSourceCache.get(packageRoot);
+  const cached = compilerMapGet(kovoFrameworkPackageSourceCache, packageRoot);
   if (cached !== undefined) return cached;
 
   const packageJsonPath = `${packageRoot}/package.json`;
   let isFrameworkSource = false;
   try {
     if (existsSync(packageJsonPath)) {
-      const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { name?: unknown };
-      isFrameworkSource = typeof parsed.name === 'string' && parsed.name.startsWith('@kovojs/');
+      const parsed = compilerJsonParse(readFileSync(packageJsonPath, 'utf8'));
+      const name = compilerOwnDataValue(parsed, 'name', 'Kovo framework package manifest');
+      isFrameworkSource = typeof name === 'string' && compilerStringStartsWith(name, '@kovojs/');
     }
   } catch {
     isFrameworkSource = false;
   }
 
-  kovoFrameworkPackageSourceCache.set(packageRoot, isFrameworkSource);
+  compilerMapSet(kovoFrameworkPackageSourceCache, packageRoot, isFrameworkSource);
   return isFrameworkSource;
 }
 
@@ -660,7 +722,16 @@ function matchesAnyViteFilter(
   fileName: string,
   source: string,
 ): boolean {
-  return filters?.some((filter) => matchesViteFilter(filter, fileName, source)) ?? false;
+  if (filters === undefined) return false;
+  const length = compilerArrayLength(filters, 'Kovo Vite module filters');
+  for (let index = 0; index < length; index += 1) {
+    const filter = compilerOwnDataValue(filters, index, 'Kovo Vite module filters');
+    if (filter === undefined) {
+      throw new TypeError(`Kovo Vite module filters[${index}] must be dense.`);
+    }
+    if (matchesViteFilter(filter as KovoViteModuleFilter, fileName, source)) return true;
+  }
+  return false;
 }
 
 function matchesViteFilter(
@@ -669,10 +740,13 @@ function matchesViteFilter(
   source: string,
 ): boolean {
   if (typeof filter === 'function') return filter(fileName, source);
-  if (typeof filter !== 'string') return filter.test(fileName);
+  if (typeof filter !== 'string') return compilerRegExpTest(filter, fileName);
 
-  const normalized = slashPath(filter).replace(/\/+$/, '');
-  return fileName === normalized || fileName.startsWith(`${normalized}/`);
+  let normalized = slashPath(filter);
+  while (normalized.length > 0 && compilerStringEndsWith(normalized, '/')) {
+    normalized = compilerStringSlice(normalized, 0, normalized.length - 1);
+  }
+  return fileName === normalized || compilerStringStartsWith(fileName, `${normalized}/`);
 }
 
 async function compileCachedViteComponentModule(
@@ -714,33 +788,33 @@ async function compileCachedViteComponentModule(
   }
   const cacheInput = compileComponentCacheKeyInput(compileOptions);
   const cacheDir = persistentCompileCacheDir(root);
-  return readPersistentCompileCacheEntryForInput<ViteCompileResult>(cacheDir, cacheInput).then(
-    async (persistent) => {
-      if (persistent) return persistent;
-      const result = await cache.getOrCreate(cacheInput, () =>
-        compileViteComponentModule(
-          compileComponentModule,
-          options,
-          root,
-          fileName,
-          source,
-          queryShapeFacts,
-          registryFacts,
-        ),
-      );
-      if (result.dependencyFootprint) {
-        const cacheKey = compileCacheKey(
-          compileComponentCacheKeyInput(compileOptions, result.dependencyFootprint),
-        );
-        await writePersistentCompileCacheEntry(cacheDir, {
-          cacheKey,
-          footprint: result.dependencyFootprint,
-          result,
-        });
-      }
-      return result;
-    },
+  const persistent = await readPersistentCompileCacheEntryForInput<ViteCompileResult>(
+    cacheDir,
+    cacheInput,
   );
+  if (persistent) return persistent;
+  const result = await cache.getOrCreate(cacheInput, () =>
+    compileViteComponentModule(
+      compileComponentModule,
+      options,
+      root,
+      fileName,
+      source,
+      queryShapeFacts,
+      registryFacts,
+    ),
+  );
+  if (result.dependencyFootprint) {
+    const cacheKey = compileCacheKey(
+      compileComponentCacheKeyInput(compileOptions, result.dependencyFootprint),
+    );
+    await writePersistentCompileCacheEntry(cacheDir, {
+      cacheKey,
+      footprint: result.dependencyFootprint,
+      result,
+    });
+  }
+  return result;
 }
 
 function compileViteComponentModule(
@@ -776,10 +850,14 @@ export function viteFrameworkIdentityFiles(
   fileName: string,
   source: string,
 ): readonly { readonly fileName: string; readonly source: string }[] {
-  const collected = new Map<string, { fileName: string; source: string }>();
-  const visited = new Set<string>();
+  const collected = compilerCreateMap<string, { fileName: string; source: string }>();
+  const visited = compilerCreateSet<string>();
   collectViteFrameworkIdentityFiles(root, fileName, source, collected, visited);
-  return [...collected.values()];
+  const files: Array<{ fileName: string; source: string }> = [];
+  compilerMapForEach(collected, (file) => {
+    files[files.length] = file;
+  });
+  return files;
 }
 
 function collectViteFrameworkIdentityFiles(
@@ -790,15 +868,29 @@ function collectViteFrameworkIdentityFiles(
   visited: Set<string>,
 ): void {
   const key = slashPath(fileName);
-  if (visited.has(key)) return;
-  visited.add(key);
+  if (compilerSetHas(visited, key)) return;
+  compilerSetAdd(visited, key);
 
   const model = parseComponentModule(fileName, source);
-  for (const specifier of model.moduleSpecifiers) {
+  const specifierLength = compilerArrayLength(
+    model.moduleSpecifiers,
+    'Vite framework identity module specifiers',
+  );
+  for (let index = 0; index < specifierLength; index += 1) {
+    const specifier = compilerOwnDataValue(
+      model.moduleSpecifiers,
+      index,
+      'Vite framework identity module specifiers',
+    ) as (typeof model.moduleSpecifiers)[number] | undefined;
+    if (!specifier) {
+      throw new TypeError(`Vite framework identity module specifiers[${index}] must be dense.`);
+    }
     if (!isRelativeModuleSpecifier(specifier.specifier)) continue;
     const resolved = readViteRelativeSourceFile(root, fileName, specifier.specifier);
     if (!resolved) continue;
-    if (!collected.has(resolved.fileName)) collected.set(resolved.fileName, resolved);
+    if (!compilerMapGet(collected, resolved.fileName)) {
+      compilerMapSet(collected, resolved.fileName, resolved);
+    }
     collectViteFrameworkIdentityFiles(root, resolved.fileName, resolved.source, collected, visited);
   }
 }
@@ -812,7 +904,13 @@ function readViteRelativeSourceFile(
     ? importerFileName
     : resolve(root, importerFileName);
   const basePath = resolve(dirname(importerPath), moduleSpecifier);
-  for (const candidate of viteSourceFileCandidates(basePath)) {
+  const candidates = viteSourceFileCandidates(basePath);
+  const length = compilerArrayLength(candidates, 'Vite source-file candidates');
+  for (let index = 0; index < length; index += 1) {
+    const candidate = compilerOwnDataValue(candidates, index, 'Vite source-file candidates');
+    if (typeof candidate !== 'string') {
+      throw new TypeError(`Vite source-file candidates[${index}] must be a string.`);
+    }
     if (!existsSync(candidate)) continue;
     const source = readFileSync(candidate, 'utf8');
     return { fileName: viteComponentFileName(candidate, root), source };
@@ -821,9 +919,9 @@ function readViteRelativeSourceFile(
 }
 
 function viteSourceFileCandidates(basePath: string): readonly string[] {
-  const explicitExtension = basePath.match(/\.(?:mtsx|ctsx|tsx|mts|cts|ts|mjs|cjs|jsx|js)$/u)?.[0];
+  const explicitExtension = viteSourceFileExtension(basePath);
   if (explicitExtension) {
-    const withoutExtension = basePath.slice(0, -explicitExtension.length);
+    const withoutExtension = compilerStringSlice(basePath, 0, -explicitExtension.length);
     switch (explicitExtension) {
       case '.js':
         return [`${withoutExtension}.ts`, `${withoutExtension}.tsx`, basePath];
@@ -857,8 +955,27 @@ function viteSourceFileCandidates(basePath: string): readonly string[] {
   ];
 }
 
+function viteSourceFileExtension(basePath: string): string | null {
+  const extensions = [
+    '.mtsx',
+    '.ctsx',
+    '.tsx',
+    '.mts',
+    '.cts',
+    '.mjs',
+    '.cjs',
+    '.jsx',
+    '.ts',
+    '.js',
+  ];
+  for (let index = 0; index < extensions.length; index += 1) {
+    if (compilerStringEndsWith(basePath, extensions[index]!)) return extensions[index]!;
+  }
+  return null;
+}
+
 function isRelativeModuleSpecifier(specifier: string): boolean {
-  return specifier.startsWith('./') || specifier.startsWith('../');
+  return compilerStringStartsWith(specifier, './') || compilerStringStartsWith(specifier, '../');
 }
 
 function resolveViteClientModuleId(
@@ -866,14 +983,14 @@ function resolveViteClientModuleId(
   importer: string | undefined,
   root: string,
 ): null | string {
-  const sourceFileName = source.split(/[?#]/, 1)[0] ?? source;
-  if (!sourceFileName.endsWith('.client.js')) return null;
-  const importerFileName = importer?.split(/[?#]/, 1)[0];
+  const sourceFileName = viteRequestFileName(source);
+  if (!compilerStringEndsWith(sourceFileName, '.client.js')) return null;
+  const importerFileName = importer === undefined ? undefined : viteRequestFileName(importer);
   const candidate = isAbsolute(sourceFileName)
     ? sourceFileName
     : importerFileName
       ? resolve(dirname(importerFileName), sourceFileName)
-      : resolve(root, sourceFileName.replace(/^\/+/, ''));
+      : resolve(root, trimLeadingSlashes(sourceFileName));
   if (!existsSync(viteClientModuleSourceFilePath(candidate))) return null;
 
   return candidate;
@@ -886,8 +1003,8 @@ function loadViteClientModule(
   root: string,
   id: string,
 ): MaybePromise<null | string> {
-  const clientFilePath = id.split(/[?#]/, 1)[0] ?? id;
-  if (!clientFilePath.endsWith('.client.js')) return null;
+  const clientFilePath = viteRequestFileName(id);
+  if (!compilerStringEndsWith(clientFilePath, '.client.js')) return null;
 
   const sourceFilePath = viteClientModuleSourceFilePath(clientFilePath);
   if (!existsSync(sourceFilePath)) return null;
@@ -906,7 +1023,7 @@ function loadViteClientModule(
     source,
   );
   if (isPromiseLike(result)) {
-    return result.then((resolvedResult) =>
+    return compilerPromiseThen(result, (resolvedResult) =>
       loadViteClientCompileResult(options, fileName, source, resolvedResult),
     );
   }
@@ -920,18 +1037,22 @@ function loadViteClientCompileResult(
   source: string,
   result: ViteCompileResult,
 ): null | string {
+  const emittedFiles = snapshotViteEmittedFiles(result);
   const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
 
-  return viteClientSource(result);
+  return viteClientSource(emittedFiles);
 }
 
-function viteClientSource(result: ViteCompileResult): null | string {
-  return result.files.find((file) => file.kind === 'client')?.source ?? null;
+function viteClientSource(files: readonly { kind: string; source: string }[]): null | string {
+  for (let index = 0; index < files.length; index += 1) {
+    if (files[index]!.kind === 'client') return files[index]!.source;
+  }
+  return null;
 }
 
 function viteClientModuleSourceFilePath(clientFilePath: string): string {
-  return clientFilePath.replace(/\.client\.js$/, '.tsx');
+  return compilerRegExpReplace(/\.client\.js$/u, clientFilePath, '.tsx');
 }
 
 function resolveViteRegistryFacts(
@@ -957,34 +1078,67 @@ function componentLocalQueryShapeFacts(
 ): readonly QueryShapeFact[] | undefined {
   if (!facts || facts.length === 0) return facts;
 
-  const factsByQuery = new Map(facts.map((fact) => [fact.query, fact]));
+  const factsByQuery = compilerCreateMap<string, QueryShapeFact>();
+  const factLength = compilerArrayLength(facts, 'Vite query-shape facts');
+  for (let index = 0; index < factLength; index += 1) {
+    const fact = snapshotViteQueryShapeFact(facts, index);
+    compilerMapSet(factsByQuery, fact.query, fact);
+  }
   const model = parseComponentModule(fileName, source);
-  const aliases = uniqueQueryShapeFacts(
-    allComponentOptionObjectEntries(model, 'queries')
-      .map((entry): QueryShapeFact | null => {
-        const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
-        if (!queryExpression || queryExpression === entry.key) return null;
-        if (factsByQuery.has(entry.key)) return null;
-        const sourceFact =
-          factsByQuery.get(queryExpression) ??
-          factsByQuery.get(importedQueryDerivedKey(model, fileName, queryExpression) ?? '');
-        if (!sourceFact) return null;
-        return { ...sourceFact, query: entry.key };
-      })
-      .filter((fact): fact is QueryShapeFact => fact !== null),
-  );
+  const entries = allComponentOptionObjectEntries(model, 'queries');
+  const entryLength = compilerArrayLength(entries, 'Vite component query entries');
+  const aliasCandidates: QueryShapeFact[] = [];
+  for (let index = 0; index < entryLength; index += 1) {
+    const rawEntry = compilerOwnDataValue(entries, index, 'Vite component query entries');
+    if (typeof rawEntry !== 'object' || rawEntry === null || compilerArrayIsArray(rawEntry)) {
+      throw new TypeError(`Vite component query entries[${index}] must be an own object.`);
+    }
+    const key = compilerOwnDataValue(rawEntry, 'key', `Vite component query entries[${index}]`);
+    const value = compilerOwnDataValue(rawEntry, 'value', `Vite component query entries[${index}]`);
+    if (typeof key !== 'string') {
+      throw new TypeError(`Vite component query entries[${index}].key must be a string.`);
+    }
+    const queryExpression = value
+      ? queryExpressionFromBinding(value as Parameters<typeof queryExpressionFromBinding>[0])
+      : null;
+    if (!queryExpression || queryExpression === key || compilerMapGet(factsByQuery, key)) continue;
+    const importedKey = importedQueryDerivedKey(model, fileName, queryExpression);
+    const sourceFact =
+      compilerMapGet(factsByQuery, queryExpression) ??
+      compilerMapGet(factsByQuery, importedKey ?? '');
+    if (!sourceFact) continue;
+    aliasCandidates[aliasCandidates.length] = {
+      query: key,
+      shape: sourceFact.shape,
+      source: sourceFact.source,
+    };
+  }
+  const aliases = uniqueQueryShapeFacts(aliasCandidates);
 
-  return aliases.length === 0 ? facts : [...facts, ...aliases];
+  if (aliases.length === 0) return facts;
+  const combined: QueryShapeFact[] = [];
+  for (let index = 0; index < factLength; index += 1) {
+    combined[combined.length] = snapshotViteQueryShapeFact(facts, index);
+  }
+  const aliasLength = compilerArrayLength(aliases, 'Vite query-shape aliases');
+  for (let index = 0; index < aliasLength; index += 1) {
+    combined[combined.length] = snapshotViteQueryShapeFact(aliases, index);
+  }
+  return combined;
 }
 
 function uniqueQueryShapeFacts(facts: readonly QueryShapeFact[]): QueryShapeFact[] {
-  const seen = new Set<string>();
-  return facts.filter((fact) => {
-    const key = `${fact.query}\0${fact.source}\0${JSON.stringify(fact.shape)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const seen = compilerCreateSet<string>();
+  const unique: QueryShapeFact[] = [];
+  const length = compilerArrayLength(facts, 'Vite query-shape alias candidates');
+  for (let index = 0; index < length; index += 1) {
+    const fact = snapshotViteQueryShapeFact(facts, index);
+    const key = canonicalJson(fact);
+    if (compilerSetHas(seen, key)) continue;
+    compilerSetAdd(seen, key);
+    unique[unique.length] = fact;
+  }
+  return unique;
 }
 
 function importedQueryDerivedKey(
@@ -992,10 +1146,23 @@ function importedQueryDerivedKey(
   fileName: string,
   queryExpression: string,
 ): string | null {
-  const entry = model.namedImports.find(
-    (namedImport) =>
-      namedImport.localName === queryExpression && namedImport.moduleSpecifier.startsWith('.'),
-  );
+  let entry: (typeof model.namedImports)[number] | undefined;
+  const length = compilerArrayLength(model.namedImports, 'Vite query named imports');
+  for (let index = 0; index < length; index += 1) {
+    const candidate = compilerOwnDataValue(
+      model.namedImports,
+      index,
+      'Vite query named imports',
+    ) as (typeof model.namedImports)[number] | undefined;
+    if (!candidate) throw new TypeError(`Vite query named imports[${index}] must be dense.`);
+    if (
+      candidate.localName === queryExpression &&
+      compilerStringStartsWith(candidate.moduleSpecifier, '.')
+    ) {
+      entry = candidate;
+      break;
+    }
+  }
   if (!entry) return null;
 
   return deriveRegistryIdentity(
@@ -1005,8 +1172,25 @@ function importedQueryDerivedKey(
 }
 
 function resolveImportedModuleFileName(fileName: string, moduleSpecifier: string): string {
-  const extension = /\.[cm]?[tj]sx?$/.test(moduleSpecifier) ? '' : '.ts';
+  const extension = compilerRegExpTest(/\.[cm]?[tj]sx?$/, moduleSpecifier) ? '' : '.ts';
   return slashPath(resolve(dirname(fileName), `${moduleSpecifier}${extension}`));
+}
+
+function snapshotViteQueryShapeFact(
+  facts: readonly QueryShapeFact[],
+  index: number,
+): QueryShapeFact {
+  const raw = compilerOwnDataValue(facts, index, 'Vite query-shape facts');
+  if (typeof raw !== 'object' || raw === null || compilerArrayIsArray(raw)) {
+    throw new TypeError(`Vite query-shape facts[${index}] must be an own object.`);
+  }
+  const query = compilerOwnDataValue(raw, 'query', `Vite query-shape facts[${index}]`);
+  const shape = compilerOwnDataValue(raw, 'shape', `Vite query-shape facts[${index}]`);
+  const factSource = compilerOwnDataValue(raw, 'source', `Vite query-shape facts[${index}]`);
+  if (typeof query !== 'string' || shape === undefined || typeof factSource !== 'string') {
+    throw new TypeError(`Vite query-shape facts[${index}] has an invalid query, shape, or source.`);
+  }
+  return { query, shape: shape as QueryShapeFact['shape'], source: factSource };
 }
 
 function reportViteDiagnostics(
@@ -1015,17 +1199,135 @@ function reportViteDiagnostics(
   fileName: string,
   source: string,
 ): CompilerDiagnostic[] {
-  const diagnostics = result.diagnostics ?? [];
-  options.onModuleDiagnostics?.({ diagnostics, fileName, source });
-  const errorDiagnostics = diagnostics.filter(
-    (diagnostic) => diagnosticSeverity(diagnostic) === 'error',
-  );
+  const rawDiagnostics = compilerOwnDataValue(result, 'diagnostics', 'Vite compile result');
+  if (rawDiagnostics !== undefined && !compilerArrayIsArray(rawDiagnostics)) {
+    throw new TypeError('Kovo Vite compile diagnostics must be an array.');
+  }
+  const diagnostics = (rawDiagnostics ?? []) as CompilerDiagnostic[];
+  const length = compilerArrayLength(diagnostics, 'Vite compile diagnostics');
+  const snapshot: CompilerDiagnostic[] = [];
+  const errorDiagnostics: CompilerDiagnostic[] = [];
+  const nonErrorDiagnostics: CompilerDiagnostic[] = [];
 
-  for (const diagnostic of diagnostics) {
-    if (diagnosticSeverity(diagnostic) !== 'error') options.onDiagnostic?.(diagnostic);
+  // SPEC §2/§5.2: app code executes in this realm, so an error diagnostic cannot pass through
+  // a live Array.filter or callback after evaluation. Snapshot dense own entries/fields and finish
+  // blocking classification before invoking any app-supplied observer.
+  for (let index = 0; index < length; index += 1) {
+    const rawDiagnostic = compilerOwnDataValue(diagnostics, index, 'Vite compile diagnostics');
+    if (rawDiagnostic === undefined) {
+      throw new TypeError(`Kovo Vite compile diagnostics[${index}] must be a dense own value.`);
+    }
+    const diagnostic = snapshotViteCompilerDiagnostic(rawDiagnostic, index);
+    snapshot[snapshot.length] = diagnostic;
+    if (diagnosticSeverity(diagnostic) === 'error') {
+      errorDiagnostics[errorDiagnostics.length] = diagnostic;
+    } else {
+      nonErrorDiagnostics[nonErrorDiagnostics.length] = diagnostic;
+    }
+  }
+
+  options.onModuleDiagnostics?.({
+    diagnostics: cloneViteCompilerDiagnostics(snapshot),
+    fileName,
+    source,
+  });
+  for (let index = 0; index < nonErrorDiagnostics.length; index += 1) {
+    options.onDiagnostic?.(cloneViteCompilerDiagnostic(nonErrorDiagnostics[index]!));
   }
 
   return errorDiagnostics;
+}
+
+function snapshotViteCompilerDiagnostic(value: unknown, index: number): CompilerDiagnostic {
+  if (!value || typeof value !== 'object') {
+    throw new TypeError(`Kovo Vite compile diagnostics[${index}] must be an object.`);
+  }
+  const label = `Vite compile diagnostics[${index}]`;
+  const code = compilerOwnDataValue(value, 'code', label);
+  const fileName = compilerOwnDataValue(value, 'fileName', label);
+  const help = compilerOwnDataValue(value, 'help', label);
+  const length = compilerOwnDataValue(value, 'length', label);
+  const message = compilerOwnDataValue(value, 'message', label);
+  const severity = compilerOwnDataValue(value, 'severity', label);
+  const rawStart = compilerOwnDataValue(value, 'start', label);
+  if (
+    !isDiagnosticCode(code) ||
+    typeof fileName !== 'string' ||
+    (help !== undefined && typeof help !== 'string') ||
+    (length !== undefined &&
+      (typeof length !== 'number' || !compilerNumberIsSafeInteger(length))) ||
+    typeof message !== 'string' ||
+    (severity !== 'error' && severity !== 'warn' && severity !== 'lint' && severity !== 'notice')
+  ) {
+    throw new TypeError(`${label} has malformed authority fields.`);
+  }
+  let start: CompilerDiagnostic['start'];
+  if (rawStart !== undefined) {
+    if (!rawStart || typeof rawStart !== 'object') {
+      throw new TypeError(`${label}.start must be an own position record.`);
+    }
+    const column = compilerOwnDataValue(rawStart, 'column', `${label}.start`);
+    const line = compilerOwnDataValue(rawStart, 'line', `${label}.start`);
+    if (
+      typeof column !== 'number' ||
+      !compilerNumberIsSafeInteger(column) ||
+      typeof line !== 'number' ||
+      !compilerNumberIsSafeInteger(line)
+    ) {
+      throw new TypeError(`${label}.start has malformed line/column values.`);
+    }
+    start = { column, line };
+  }
+  return {
+    code,
+    fileName,
+    ...(help === undefined ? {} : { help }),
+    ...(length === undefined ? {} : { length }),
+    message,
+    severity,
+    ...(start === undefined ? {} : { start }),
+  };
+}
+
+function cloneViteCompilerDiagnostics(
+  diagnostics: readonly CompilerDiagnostic[],
+): CompilerDiagnostic[] {
+  const result: CompilerDiagnostic[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    result[result.length] = cloneViteCompilerDiagnostic(diagnostics[index]!);
+  }
+  return result;
+}
+
+function cloneViteCompilerDiagnostic(diagnostic: CompilerDiagnostic): CompilerDiagnostic {
+  return {
+    ...diagnostic,
+    ...(diagnostic.start === undefined ? {} : { start: { ...diagnostic.start } }),
+  };
+}
+
+function snapshotViteEmittedFiles(result: ViteCompileResult): { kind: string; source: string }[] {
+  const rawFiles = compilerOwnDataValue(result, 'files', 'Vite compile result');
+  if (!compilerArrayIsArray(rawFiles)) {
+    throw new TypeError('Kovo Vite compile files must be an array.');
+  }
+  const length = compilerArrayLength(rawFiles, 'Vite compile files');
+  const files: { kind: string; source: string }[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const file = compilerOwnDataValue(rawFiles, index, 'Vite compile files');
+    if (!file || typeof file !== 'object') {
+      throw new TypeError(`Kovo Vite compile files[${index}] must be an own record.`);
+    }
+    const kind = compilerOwnDataValue(file, 'kind', `Vite compile files[${index}]`);
+    const source = compilerOwnDataValue(file, 'source', `Vite compile files[${index}]`);
+    if (typeof kind !== 'string' || typeof source !== 'string') {
+      throw new TypeError(
+        `Kovo Vite compile files[${index}] must contain own kind/source strings.`,
+      );
+    }
+    files[files.length] = { kind, source };
+  }
+  return files;
 }
 
 function recordViteCompileResult(
@@ -1035,19 +1337,21 @@ function recordViteCompileResult(
   hmrImpacts: Map<string, HmrImpactMetadata>,
   fileName: string,
   result: ViteCompileResult,
+  files: readonly { kind: string; source: string }[],
 ): void {
   let recordedCompiledClientModule = false;
-  for (const file of result.files) {
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index]!;
     if (file.kind === 'client') {
       const href =
         result.hmrImpact?.clientHref ??
         clientModuleHrefForSourceFile(fileName, clientModuleContentVersion(file.source));
-      clientModules.set(href, file.source);
+      compilerMapSet(clientModules, href, file.source);
       const productionSource = rewriteClientModuleRuntimeImportsForBrowser(file.source);
 
       const target = parseVersionedClientModuleTarget(href);
       if (target !== undefined) {
-        clientModules.set(`${target.path}?v=${target.version}`, file.source);
+        compilerMapSet(clientModules, `${target.path}?v=${target.version}`, file.source);
       }
 
       if (result.hmrImpact?.clientHref === null || result.hmrImpact?.clientHref === undefined)
@@ -1057,7 +1361,7 @@ function recordViteCompileResult(
       const exportedClientMembers =
         (result.clientExports?.length ?? 0) + (result.handlerExports?.length ?? 0);
       if (exportedClientMembers === 0) continue;
-      compiledClientModules.set(fileName, {
+      compilerMapSet(compiledClientModules, fileName, {
         path,
         ...(result.renderPlanFingerprint
           ? { renderPlanFingerprint: result.renderPlanFingerprint }
@@ -1068,16 +1372,16 @@ function recordViteCompileResult(
       recordedCompiledClientModule = true;
     }
   }
-  if (!recordedCompiledClientModule) compiledClientModules.delete(fileName);
+  if (!recordedCompiledClientModule) compilerMapDelete(compiledClientModules, fileName);
 
   if (result.cssAssets && result.cssAssets.length > 0) {
-    cssAssetsByFileName.set(fileName, result.cssAssets);
+    compilerMapSet(cssAssetsByFileName, fileName, result.cssAssets);
   } else {
-    cssAssetsByFileName.delete(fileName);
+    compilerMapDelete(cssAssetsByFileName, fileName);
   }
 
-  if (result.hmrImpact) hmrImpacts.set(fileName, result.hmrImpact);
-  else hmrImpacts.delete(fileName);
+  if (result.hmrImpact) compilerMapSet(hmrImpacts, fileName, result.hmrImpact);
+  else compilerMapDelete(hmrImpacts, fileName);
 }
 
 function classifyViteHmrImpact(
@@ -1085,10 +1389,10 @@ function classifyViteHmrImpact(
   next: HmrImpactMetadata | null | undefined,
 ): HmrImpactClassification {
   if (!previous || !next) return viteFullReload('missing-facts');
-  if (next.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
+  if (hasErrorHmrDiagnostic(next.diagnostics)) {
     return { impact: 'diagnosticError', reasons: ['diagnostics'] };
   }
-  if (previous.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
+  if (hasErrorHmrDiagnostic(previous.diagnostics)) {
     return viteFullReload('diagnostics');
   }
   if (previous.sourceFileName !== next.sourceFileName) return viteFullReload('topology');
@@ -1104,8 +1408,10 @@ function classifyViteHmrImpact(
   }
 
   const reasons: HmrImpactReason[] = [];
-  if (previous.queryUpdatePlanHash !== next.queryUpdatePlanHash) reasons.push('query-plan');
-  if (previous.stylesheetAssetsHash !== next.stylesheetAssetsHash) reasons.push('style');
+  if (previous.queryUpdatePlanHash !== next.queryUpdatePlanHash)
+    reasons[reasons.length] = 'query-plan';
+  if (previous.stylesheetAssetsHash !== next.stylesheetAssetsHash)
+    reasons[reasons.length] = 'style';
   if (reasons.length > 0) return { impact: 'routeRefresh', reasons };
   if (previous.liveTargetFactsHash !== next.liveTargetFactsHash) {
     return viteFullReload('live-target');
@@ -1125,6 +1431,22 @@ function classifyViteHmrImpact(
   if (previous.factHash !== next.factHash) return viteFullReload('topology');
 
   return { impact: 'componentRefresh', reasons: [] };
+}
+
+function hasErrorHmrDiagnostic(diagnostics: HmrImpactMetadata['diagnostics']): boolean {
+  const length = compilerArrayLength(diagnostics, 'Vite HMR diagnostics');
+  for (let index = 0; index < length; index += 1) {
+    const diagnostic = compilerOwnDataValue(diagnostics, index, 'Vite HMR diagnostics');
+    if (typeof diagnostic !== 'object' || diagnostic === null || compilerArrayIsArray(diagnostic)) {
+      throw new TypeError(`Vite HMR diagnostics[${index}] must be an own object.`);
+    }
+    if (
+      compilerOwnDataValue(diagnostic, 'severity', `Vite HMR diagnostics[${index}]`) === 'error'
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function viteFullReload(reason: HmrImpactReason): HmrImpactClassification {
@@ -1151,7 +1473,7 @@ function sendKovoHmrEvent(
       ...(next?.component === undefined ? {} : { component: next.component }),
       ...(next?.diagnostics === undefined ? {} : { diagnostics: next.diagnostics }),
       impact: classification.impact,
-      liveTargets: (next?.liveTargetFacts ?? []).map((target) => target.target),
+      liveTargets: viteHmrLiveTargets(next?.liveTargetFacts ?? []),
       ...(next?.clientHref ? { newClientHref: next.clientHref } : {}),
       ...(next?.factHash ? { newFactHash: next.factHash } : {}),
       ...(previous?.clientHref ? { oldClientHref: previous.clientHref } : {}),
@@ -1162,6 +1484,23 @@ function sendKovoHmrEvent(
     event,
     type: 'custom',
   });
+}
+
+function viteHmrLiveTargets(facts: HmrImpactMetadata['liveTargetFacts']): string[] {
+  const targets: string[] = [];
+  const length = compilerArrayLength(facts, 'Vite HMR live-target facts');
+  for (let index = 0; index < length; index += 1) {
+    const fact = compilerOwnDataValue(facts, index, 'Vite HMR live-target facts');
+    if (typeof fact !== 'object' || fact === null || compilerArrayIsArray(fact)) {
+      throw new TypeError(`Vite HMR live-target facts[${index}] must be an own object.`);
+    }
+    const target = compilerOwnDataValue(fact, 'target', `Vite HMR live-target facts[${index}]`);
+    if (typeof target !== 'string') {
+      throw new TypeError(`Vite HMR live-target facts[${index}].target must be a string.`);
+    }
+    targets[targets.length] = target;
+  }
+  return targets;
 }
 
 function diagnosticSeverity(diagnostic: CompilerDiagnostic): CompilerDiagnostic['severity'] {
@@ -1198,24 +1537,43 @@ function diagnosticSite(diagnostic: CompilerDiagnostic): string {
 }
 
 function viteComponentFileName(id: string, root: string): string {
-  const rawFileName = id.split(/[?#]/, 1)[0] ?? id;
-  const fileName = rawFileName.startsWith('/@fs/') ? rawFileName.slice('/@fs'.length) : rawFileName;
+  const rawFileName = viteRequestFileName(id);
+  const fileName = compilerStringStartsWith(rawFileName, '/@fs/')
+    ? compilerStringSlice(rawFileName, '/@fs'.length)
+    : rawFileName;
   if (!isAbsolute(fileName)) return slashPath(fileName);
 
   const relativeFileName = relative(root, fileName);
-  if (!relativeFileName.startsWith('..')) return slashPath(relativeFileName);
+  if (!compilerStringStartsWith(relativeFileName, '..')) return slashPath(relativeFileName);
 
-  return slashPath(fileName.replace(/^\/+/, ''));
+  return slashPath(trimLeadingSlashes(fileName));
 }
 
 function viteComponentIdentity(id: string, root: string): string {
-  const rawFileName = id.split(/[?#]/, 1)[0] ?? id;
-  const fileName = rawFileName.startsWith('/@fs/') ? rawFileName.slice('/@fs'.length) : rawFileName;
+  const rawFileName = viteRequestFileName(id);
+  const fileName = compilerStringStartsWith(rawFileName, '/@fs/')
+    ? compilerStringSlice(rawFileName, '/@fs'.length)
+    : rawFileName;
   return slashPath(isAbsolute(fileName) ? fileName : resolve(root, fileName));
 }
 
 function slashPath(fileName: string): string {
-  return fileName.replaceAll('\\', '/');
+  return compilerStringReplaceAll(fileName, '\\', '/');
+}
+
+function viteRequestFileName(value: string): string {
+  const query = compilerStringIndexOf(value, '?');
+  const fragment = compilerStringIndexOf(value, '#');
+  const end = query < 0 ? fragment : fragment < 0 ? query : query < fragment ? query : fragment;
+  return end < 0 ? value : compilerStringSlice(value, 0, end);
+}
+
+function trimLeadingSlashes(value: string): string {
+  let start = 0;
+  while (start < value.length && compilerStringSlice(value, start, start + 1) === '/') {
+    start += 1;
+  }
+  return start === 0 ? value : compilerStringSlice(value, start);
 }
 
 function devClientModuleKey(url: string | undefined): string | null {

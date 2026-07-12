@@ -34,6 +34,7 @@ const kv210 = diagnosticDefinitions.KV210;
 const kv235 = diagnosticDefinitions.KV235;
 const kv236 = diagnosticDefinitions.KV236;
 const kv330 = diagnosticDefinitions.KV330;
+const kv435 = diagnosticDefinitions.KV435;
 const kv437 = diagnosticDefinitions.KV437;
 
 function createMiddlewareResponse(): {
@@ -98,6 +99,48 @@ export const C = component({
         /KV426 src\/probe\.tsx:/,
       );
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not omit framework identity files through late Array iterator replacement', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-identity-iterator-'));
+    const src = join(root, 'src');
+    mkdirSync(src, { recursive: true });
+    writeFileSync(
+      join(src, 'browser-root.ts'),
+      "export { trustedHtml as th } from '@kovojs/browser';\n",
+    );
+    writeFileSync(join(src, 'browser-barrel.ts'), "export * from './browser-root';\n");
+    const plugin = kovoVitePlugin({ cache: false, include: ['src'] });
+    plugin.configResolved?.({ root });
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    const nativeApply = Reflect.apply;
+    const empty: unknown[] = [];
+
+    try {
+      Array.prototype[Symbol.iterator] = function poisonedModuleSpecifierIterator<
+        T,
+      >(): ArrayIterator<T> {
+        if (typeof (this[0] as { specifier?: unknown } | undefined)?.specifier === 'string') {
+          return nativeApply(nativeIterator, empty, []);
+        }
+        return nativeApply(nativeIterator, this, []);
+      };
+      await expect(
+        plugin.transform(
+          `
+import { th } from './browser-barrel';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{th(post.body)}</article>,
+});
+`,
+          join(src, 'probe.tsx'),
+        ),
+      ).rejects.toThrow(/KV426 src\/probe\.tsx:/);
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
       rmSync(root, { force: true, recursive: true });
     }
   });
@@ -565,6 +608,212 @@ export const RealKv437 = component({
     `);
   });
 
+  it('fails closed when app code selectively replaces the KV435 diagnostic filter', async () => {
+    // SPEC §2/§5.2: compiler error diagnostics are build authority. An evaluated app shares
+    // this realm and previously could make reportViteDiagnostics() drop this exact array through a
+    // selective late Array.prototype.filter replacement, returning deployable server code.
+    const diagnostics = [
+      {
+        code: 'KV435',
+        fileName: 'src/account.tsx',
+        message: kv435.message,
+        severity: 'error' as const,
+      },
+    ];
+    const plugin = createKovoVitePlugin(() => ({
+      diagnostics,
+      files: [{ kind: 'server', source: 'export const leaked = account.adminToken;' }],
+    }));
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    Array.prototype.filter = function poisonedDiagnosticFilter(
+      callback: (value: unknown, index: number, array: unknown[]) => unknown,
+      thisArg?: unknown,
+    ): unknown[] {
+      if (this === diagnostics) return [];
+      return nativeApply(nativeFilter, this, [callback, thisArg]);
+    };
+
+    try {
+      await expect(plugin.transform('component(', 'src/account.tsx')).rejects.toThrow(
+        /KV435[\s\S]*Secret query value reaches the client wire/u,
+      );
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+  });
+
+  it('classifies KV435 before diagnostic observers can mutate compiler output', async () => {
+    const diagnostics = [
+      {
+        code: 'KV311' as const,
+        fileName: 'src/account.tsx',
+        message: 'non-blocking diagnostic before the error',
+        severity: 'warn' as const,
+      },
+      {
+        code: 'KV435' as const,
+        fileName: 'src/account.tsx',
+        message: kv435.message,
+        severity: 'error' as const,
+      },
+    ];
+    const plugin = createKovoVitePlugin(
+      () => ({
+        diagnostics,
+        files: [{ kind: 'server', source: 'export const leaked = account.adminToken;' }],
+      }),
+      {
+        onDiagnostic() {
+          diagnostics[1]!.severity = 'warn';
+        },
+        onModuleDiagnostics(event) {
+          diagnostics[1]!.severity = 'warn';
+          event.diagnostics[1]!.severity = 'warn';
+        },
+      },
+    );
+
+    await expect(plugin.transform('component(', 'src/account.tsx')).rejects.toThrow(
+      /KV435[\s\S]*Secret query value reaches the client wire/u,
+    );
+  });
+
+  it('selects emitted server bytes from the dense compile snapshot, not mutable Array controls', async () => {
+    const files = [{ kind: 'server', source: 'export const reviewedServer = true;' }];
+    const attackerFile = { kind: 'server', source: 'export const attackerServer = true;' };
+    const plugin = createKovoVitePlugin(() => ({ diagnostics: [], files }));
+    const nativeFind = Array.prototype.find;
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    const nativeApply = Reflect.apply;
+    Array.prototype.find = function poisonedEmittedFileFind(
+      callback: (value: unknown, index: number, array: unknown[]) => unknown,
+      thisArg?: unknown,
+    ): unknown {
+      if (this === files) return attackerFile;
+      return nativeApply(nativeFind, this, [callback, thisArg]);
+    };
+    Array.prototype[Symbol.iterator] =
+      function poisonedEmittedFileIterator(): ArrayIterator<unknown> {
+        if (this === files) return nativeApply(nativeIterator, [attackerFile], []);
+        return nativeApply(nativeIterator, this, []);
+      };
+
+    try {
+      await expect(plugin.transform('component(', 'src/reviewed.tsx')).resolves.toEqual({
+        code: 'export const reviewedServer = true;',
+        map: null,
+      });
+    } finally {
+      Array.prototype.find = nativeFind;
+      Array.prototype[Symbol.iterator] = nativeIterator;
+    }
+  });
+
+  it('settles asynchronous compile diagnostics through the boot-captured Promise control', async () => {
+    const real = {
+      diagnostics: [
+        {
+          code: 'KV236' as const,
+          fileName: 'src/unsafe-link.tsx',
+          message: kv236.message,
+          severity: 'error' as const,
+        },
+      ],
+      files: [{ kind: 'server', source: 'export const unsafe = true;' }],
+    };
+    const forged = {
+      diagnostics: [],
+      files: [{ kind: 'server', source: 'export const forgedSafe = true;' }],
+    };
+    const plugin = createKovoVitePlugin(async () => real, { cache: false });
+    const nativeThen = Promise.prototype.then;
+    let pending: ReturnType<typeof plugin.transform>;
+    try {
+      Promise.prototype.then = function poisonedCompileSettlement() {
+        return Promise.resolve(forged);
+      } as typeof Promise.prototype.then;
+      pending = plugin.transform('component(', 'src/unsafe-link.tsx');
+    } finally {
+      Promise.prototype.then = nativeThen;
+    }
+
+    await expect(pending!).rejects.toThrow(/KV236/u);
+  });
+
+  it('does not rewrite validated server render output through late String.replace', async () => {
+    const serverSource =
+      'export function renderSource() { return "export const reviewedServer = true;"; }';
+    const plugin = createKovoVitePlugin(
+      () => ({ diagnostics: [], files: [{ kind: 'server', source: serverSource }] }),
+      {
+        cache: false,
+      },
+    );
+    const nativeReplace = String.prototype.replace;
+    const nativeToString = String.prototype.toString;
+    try {
+      String.prototype.replace = function poisonedValidatedServerReplace(
+        searchValue: string | RegExp,
+        replaceValue: string | ((substring: string, ...args: unknown[]) => string),
+      ): string {
+        const value = Reflect.apply(nativeToString, this, []);
+        if (value === serverSource) {
+          return 'function renderSource() { return "export const attackerServer = true;"; }';
+        }
+        return Reflect.apply(nativeReplace, this, [searchValue, replaceValue]);
+      };
+      await expect(plugin.transform('component(', 'src/reviewed.tsx')).resolves.toEqual({
+        code: 'export const reviewedServer = true;',
+        map: null,
+      });
+    } finally {
+      String.prototype.replace = nativeReplace;
+    }
+  });
+
+  it('binds production client registration to the reviewed generated-runtime rewrite', async () => {
+    const clientSource =
+      "import { runQueryUpdatePlan } from '@kovojs/browser/generated';\nexport const reviewedClient = runQueryUpdatePlan;";
+    const clientHref = clientModuleHrefForSourceFile(
+      'src/reviewed.tsx',
+      clientModuleContentVersion(clientSource),
+    );
+    const plugin = createKovoVitePlugin(
+      () => ({
+        clientExports: ['reviewedClient'],
+        diagnostics: [],
+        files: [
+          { kind: 'server', source: 'export const reviewedServer = true;' },
+          { kind: 'client', source: clientSource },
+        ],
+        hmrImpact: hmrMetadata({ clientHref }),
+      }),
+      { cache: false },
+    );
+    const nativeReplace = String.prototype.replace;
+    const nativeToString = String.prototype.toString;
+    try {
+      String.prototype.replace = function poisonedProductionClientReplace(
+        searchValue: string | RegExp,
+        replaceValue: string | ((substring: string, ...args: unknown[]) => string),
+      ): string {
+        const value = Reflect.apply(nativeToString, this, []);
+        if (value === clientSource) return 'export const attackerClient = globalThis.secret;';
+        return Reflect.apply(nativeReplace, this, [searchValue, replaceValue]);
+      };
+      await plugin.transform('component(', 'src/reviewed.tsx');
+    } finally {
+      String.prototype.replace = nativeReplace;
+    }
+
+    const [compiled] = plugin.getClientModules?.() ?? [];
+    expect(compiled?.source).toContain('const runQueryUpdatePlan');
+    expect(compiled?.source).toContain('export const reviewedClient = runQueryUpdatePlan;');
+    expect(compiled?.source).not.toContain('attackerClient');
+    expect(compiled?.version).toBe(clientModuleContentVersion(clientSource));
+  });
+
   it('reports warn, lint, and notice diagnostics without blocking the Vite transform', async () => {
     const onDiagnostic = vi.fn();
     const plugin = createKovoVitePlugin(
@@ -995,6 +1244,29 @@ export const CartBadge = component({
     expect(compileComponentModule).toHaveBeenCalledTimes(1);
   });
 
+  it('does not let late Array.some replacement skip an included authored component', async () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      include: ['src/components'],
+    });
+    const nativeSome = Array.prototype.some;
+    const nativeApply = Reflect.apply;
+    try {
+      Array.prototype.some = function poisonedViteFilterSome<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): boolean {
+        if (this[0] === 'src/components') return false;
+        return nativeApply(nativeSome, this, [callback, thisArg]);
+      };
+      await plugin.transform('component(', 'src/components/account.tsx');
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+
+    expect(compileComponentModule).toHaveBeenCalledTimes(1);
+  });
+
   it('passes registry facts to the compile step', async () => {
     const compileComponentModule = vi.fn(() => ({
       files: [{ kind: 'server', source: 'export function renderSource() {}' }],
@@ -1076,6 +1348,97 @@ export const ProductList = component({
             shape: { name: 'string' },
             source: 'src/queries/products.ts:3',
           },
+        ]),
+      }),
+    );
+  });
+
+  it('does not suppress component-local query aliases through late Array.map replacement', async () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const queryShapeFacts = [
+      {
+        query: 'queries/products/products-query',
+        shape: { token: { kind: 'secret' as const, shape: 'string' as const } },
+        source: 'src/queries/products.ts:3',
+      },
+    ];
+    const plugin = createKovoVitePlugin(compileComponentModule, { queryShapeFacts });
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    try {
+      Array.prototype.map = function poisonedViteQueryAliasMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        if ((this[0] as { key?: unknown } | undefined)?.key === 'products') return [];
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      await plugin.transform(
+        `
+import { component } from '@kovojs/core';
+import { productsQuery as externalProducts } from '../queries/products';
+export const ProductList = component({
+  queries: { products: externalProducts },
+  render: () => <span data-bind="products.token">x</span>,
+});
+`,
+        'src/components/product-list.tsx',
+      );
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(compileComponentModule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryShapeFacts: expect.arrayContaining([
+          expect.objectContaining({ query: 'products', source: 'src/queries/products.ts:3' }),
+        ]),
+      }),
+    );
+  });
+
+  it('does not suppress imported query identity through late Array.find replacement', async () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      queryShapeFacts: [
+        {
+          query: 'queries/products/products-query',
+          shape: { name: 'string' },
+          source: 'src/queries/products.ts:3',
+        },
+      ],
+    });
+    const nativeFind = Array.prototype.find;
+    const nativeApply = Reflect.apply;
+    try {
+      Array.prototype.find = function poisonedViteNamedImportFind<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T | undefined {
+        if ((this[0] as { localName?: unknown } | undefined)?.localName === 'externalProducts') {
+          return undefined;
+        }
+        return nativeApply(nativeFind, this, [callback, thisArg]);
+      };
+      await plugin.transform(
+        `
+import { component } from '@kovojs/core';
+import { productsQuery as externalProducts } from '../queries/products';
+export const ProductList = component({
+  queries: { products: externalProducts },
+  render: () => <span data-bind="products.name">x</span>,
+});
+`,
+        'src/components/product-list.tsx',
+      );
+    } finally {
+      Array.prototype.find = nativeFind;
+    }
+
+    expect(compileComponentModule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryShapeFacts: expect.arrayContaining([
+          expect.objectContaining({ query: 'products', source: 'src/queries/products.ts:3' }),
         ]),
       }),
     );

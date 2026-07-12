@@ -2,6 +2,21 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { ComponentCssAsset } from './css.js';
+import {
+  compilerArrayIsArray,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateNullRecord,
+  compilerCreateSet,
+  compilerMapDelete,
+  compilerMapForEach,
+  compilerMapGet,
+  compilerMapSet,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetForEach,
+  compilerSetHas,
+} from './compiler-security-intrinsics.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
@@ -837,18 +852,24 @@ export interface QueryShapeFact {
  * In-repo use only (SPEC.md §5.2).
  */
 export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
-  const shapes: Record<string, QueryShape> = {};
-  const duplicateQueries = new Set<string>();
-
-  for (const fact of facts) {
-    if (fact.query in shapes) {
-      duplicateQueries.add(fact.query);
-      delete shapes[fact.query];
+  const shapes = compilerCreateNullRecord<QueryShape>();
+  const uniqueShapes = compilerCreateMap<string, QueryShape>();
+  const duplicateQueries = compilerCreateSet<string>();
+  const length = compilerArrayLength(facts, 'Query-shape facts');
+  for (let index = 0; index < length; index += 1) {
+    const fact = exactQueryShapeFact(facts, index);
+    if (compilerMapGet(uniqueShapes, fact.query) !== undefined) {
+      compilerSetAdd(duplicateQueries, fact.query);
+      compilerMapDelete(uniqueShapes, fact.query);
       continue;
     }
-    if (!duplicateQueries.has(fact.query)) shapes[fact.query] = fact.shape;
+    if (!compilerSetHas(duplicateQueries, fact.query)) {
+      compilerMapSet(uniqueShapes, fact.query, fact.shape);
+    }
   }
-
+  compilerMapForEach(uniqueShapes, (shape, query) => {
+    shapes[query] = shape;
+  });
   return shapes;
 }
 
@@ -1089,57 +1110,87 @@ export function queryShapeFactDiagnostics(
   facts: readonly QueryShapeFact[],
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const factsByQuery = new Map<string, QueryShapeFact[]>();
-
-  for (const fact of facts) {
-    const queryFacts = factsByQuery.get(fact.query);
+  const factsByQuery = compilerCreateMap<string, QueryShapeFact[]>();
+  const length = compilerArrayLength(facts, 'Query-shape diagnostic facts');
+  for (let index = 0; index < length; index += 1) {
+    const fact = exactQueryShapeFact(facts, index);
+    const queryFacts = compilerMapGet(factsByQuery, fact.query);
     if (queryFacts) {
-      queryFacts.push(fact);
+      queryFacts[queryFacts.length] = fact;
     } else {
-      factsByQuery.set(fact.query, [fact]);
+      compilerMapSet(factsByQuery, fact.query, [fact]);
     }
   }
 
-  for (const [query, queryFacts] of factsByQuery) {
-    if (queryFacts.length < 2) continue;
-    const sources = [...new Set(queryFacts.map((fact) => fact.source))].sort();
+  compilerMapForEach(factsByQuery, (queryFacts, query) => {
+    if (queryFacts.length < 2) return;
+    const sourceSet = compilerCreateSet<string>();
+    const queryFactLength = compilerArrayLength(queryFacts, `Query-shape facts for ${query}`);
+    for (let index = 0; index < queryFactLength; index += 1) {
+      compilerSetAdd(sourceSet, exactQueryShapeFact(queryFacts, index).source);
+    }
+    const sourceNames: string[] = [];
+    compilerSetForEach(sourceSet, (source) => {
+      sourceNames[sourceNames.length] = source;
+    });
+    for (let index = 1; index < sourceNames.length; index += 1) {
+      const source = sourceNames[index]!;
+      let insertAt = index;
+      while (insertAt > 0 && source < sourceNames[insertAt - 1]!) {
+        sourceNames[insertAt] = sourceNames[insertAt - 1]!;
+        insertAt -= 1;
+      }
+      sourceNames[insertAt] = source;
+    }
+    let sources = '';
+    for (let index = 0; index < sourceNames.length; index += 1) {
+      if (index > 0) sources += ', ';
+      sources += sourceNames[index]!;
+    }
     const base = diagnosticFor(fileName, 'KV240');
-    diagnostics.push({
+    diagnostics[diagnostics.length] = {
       ...base,
       help: diagnosticDefinitions.KV240.help,
-      message: `${base.message} query="${query}" sources=${sources.join(', ')}`,
-    });
-  }
+      message: `${base.message} query="${query}" sources=${sources}`,
+    };
+  });
 
   return diagnostics;
 }
 
 export function isArrayQueryShape(shape: QueryShape): shape is readonly QueryShape[] {
-  return Array.isArray(shape);
+  return compilerArrayIsArray(shape);
 }
 
 export function unwrapQueryShape(shape: QueryShape): QueryShape {
   let current = shape;
-  while (isQueryShapeWrapper(current)) current = current.shape;
+  while (isQueryShapeWrapper(current)) {
+    current = compilerOwnDataValue(current, 'shape', 'Query-shape wrapper') as QueryShape;
+  }
   return current;
 }
 
 export function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
-  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
+  if (typeof shape !== 'object' || shape === null || compilerArrayIsArray(shape)) return false;
   const record = shape as Record<string, unknown>;
+  const kind = compilerOwnDataValue(record, 'kind', 'Query-shape wrapper');
+  const inner = compilerOwnDataValue(record, 'shape', 'Query-shape wrapper');
+  const reveal = compilerOwnDataValue(record, 'reveal', 'Query-shape wrapper');
   return (
-    'shape' in shape &&
-    (record.kind === 'nullable' ||
-      record.kind === 'optional' ||
-      record.kind === 'secret' ||
-      record.kind === 'table-row' ||
-      record.kind === 'volatile-time' ||
-      (record.kind === 'revealed' && 'reveal' in shape))
+    inner !== undefined &&
+    (kind === 'nullable' ||
+      kind === 'optional' ||
+      kind === 'secret' ||
+      kind === 'table-row' ||
+      kind === 'volatile-time' ||
+      (kind === 'revealed' && reveal !== undefined))
   );
 }
 
 export function isNullableQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
-  return isQueryShapeWrapper(shape) && (shape.kind === 'nullable' || shape.kind === 'optional');
+  if (!isQueryShapeWrapper(shape)) return false;
+  const kind = compilerOwnDataValue(shape, 'kind', 'Nullable query-shape wrapper');
+  return kind === 'nullable' || kind === 'optional';
 }
 
 export function isQueryShapeObject(
@@ -1148,7 +1199,21 @@ export function isQueryShapeObject(
   return (
     typeof shape === 'object' &&
     shape !== null &&
-    !Array.isArray(shape) &&
+    !compilerArrayIsArray(shape) &&
     !isQueryShapeWrapper(shape)
   );
+}
+
+function exactQueryShapeFact(facts: readonly QueryShapeFact[], index: number): QueryShapeFact {
+  const raw = compilerOwnDataValue(facts, index, 'Query-shape facts');
+  if (typeof raw !== 'object' || raw === null || compilerArrayIsArray(raw)) {
+    throw new TypeError(`Query-shape facts[${index}] must be an own object.`);
+  }
+  const query = compilerOwnDataValue(raw, 'query', `Query-shape facts[${index}]`);
+  const shape = compilerOwnDataValue(raw, 'shape', `Query-shape facts[${index}]`);
+  const source = compilerOwnDataValue(raw, 'source', `Query-shape facts[${index}]`);
+  if (typeof query !== 'string' || shape === undefined || typeof source !== 'string') {
+    throw new TypeError(`Query-shape facts[${index}] has an invalid query, shape, or source.`);
+  }
+  return { query, shape: shape as QueryShape, source };
 }

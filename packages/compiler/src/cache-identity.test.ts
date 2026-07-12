@@ -3,9 +3,24 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { compilerBuildId } from './cache-identity.js';
+import { compilerBuildCacheIdentity, compilerBuildId } from './cache-identity.js';
 
 describe('compilerBuildId', () => {
+  it('retains the exact implementation preimages used to authorize cache hits', () => {
+    const identity = compilerBuildCacheIdentity();
+    expect(identity).toBe(compilerBuildCacheIdentity());
+    const parsed = JSON.parse(identity) as {
+      implementationFiles?: Array<{ path: string; sourceBase64: string }>;
+      version: string;
+    };
+    expect(parsed.version).toBe('compiler-build-cache-identity/v2');
+    const ownSource = parsed.implementationFiles?.find((file) => file.path === 'cache-identity.ts');
+    expect(ownSource).toBeDefined();
+    expect(Buffer.from(ownSource?.sourceBase64 ?? '', 'base64').toString('utf8')).toContain(
+      'compilerBuildCacheIdentity',
+    );
+  });
+
   // B1 (plans/bug-and-testing-part3.md): the build id MUST be derived from the
   // compiler's own package.json version, never a hardcoded literal, so a
   // compiler upgrade is a clean cache miss (SPEC.md §5.2 / §5.2.1).

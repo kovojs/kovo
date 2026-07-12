@@ -1,13 +1,24 @@
-import { createHash } from 'node:crypto';
-import { relative } from 'node:path';
+import { relative as builtinRelative } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
 import { compilerBuildId } from './cache-identity.js';
+import {
+  compilerArrayLength,
+  compilerMapGet,
+  compilerMapSet,
+  compilerObjectKeys,
+  compilerObservePromise,
+  compilerOwnDataValue,
+  compilerStringCharCodeAt,
+  compilerStringSlice,
+} from './compiler-security-intrinsics.js';
 import type {
   CompileComponentOptions,
   CompileDependencyFootprint,
   RegistryFacts,
 } from './types.js';
+
+const relative = builtinRelative;
 
 /** @internal Per-module compiler cache key input. */
 export interface CompileCacheKeyInput {
@@ -28,7 +39,7 @@ export interface CompileCacheKeyInput {
 
 interface CompileCacheExtraFileKey {
   readonly fileName: string;
-  readonly sourceHash: string;
+  readonly source: string;
 }
 
 interface CompileComponentCacheKeyOptions extends CompileComponentOptions {
@@ -41,7 +52,6 @@ interface CompileComponentCacheKeyOptions extends CompileComponentOptions {
 interface CompileCacheEntry<Result> {
   active: boolean;
   input: CompileCacheKeyInput;
-  keys: Set<string>;
   sourceKey: string;
   value: Result | Promise<Result>;
 }
@@ -56,34 +66,40 @@ export class CompileCache<Result> {
     compile: () => Result | Promise<Result>,
   ): Result | Promise<Result> {
     const key = compileCacheKey(input);
-    const cached = this.#entries.get(key);
+    const cached = compilerMapGet(this.#entries, key);
     if (cached?.active) return cached.value;
 
     const sourceKey = compileCacheSourceKey(input);
-    const footprintHit = this.#records.find((entry) => {
-      if (!entry.active) return false;
-      if (entry.sourceKey !== sourceKey) return false;
+    let footprintHit: CompileCacheEntry<Result> | undefined;
+    for (let index = 0; index < this.#records.length; index += 1) {
+      const entry = this.#records[index]!;
+      if (!entry.active) continue;
+      if (entry.sourceKey !== sourceKey) continue;
       const footprint = resolvedDependencyFootprint(entry.value);
-      if (!footprint) return false;
-      return (
+      if (!footprint) continue;
+      if (
         compileCacheKey(narrowCompileCacheKeyInput(input, footprint)) ===
         compileCacheKey({ ...entry.input, dependencyFootprint: footprint })
-      );
-    });
+      ) {
+        footprintHit = entry;
+        break;
+      }
+    }
     if (footprintHit) {
       this.#setEntryKey(key, footprintHit);
       return footprintHit.value;
     }
 
     const result = compile();
-    const entry = { active: true, input, keys: new Set<string>(), sourceKey, value: result };
+    const entry = { active: true, input, sourceKey, value: result };
     this.#setEntryKey(key, entry);
-    this.#records.push(entry);
+    this.#records[this.#records.length] = entry;
     const syncFootprint = resolvedDependencyFootprint(result);
     if (syncFootprint) {
       this.#setEntryKey(compileCacheKey({ ...input, dependencyFootprint: syncFootprint }), entry);
     } else {
-      void Promise.resolve(result).then(
+      compilerObservePromise(
+        result,
         (resolved) => {
           entry.value = resolved;
           const footprint = resolvedDependencyFootprint(resolved);
@@ -91,15 +107,14 @@ export class CompileCache<Result> {
             this.#setEntryKey(compileCacheKey({ ...input, dependencyFootprint: footprint }), entry);
           }
         },
-        () => {},
+        () => undefined,
       );
     }
     return result;
   }
 
   #setEntryKey(key: string, entry: CompileCacheEntry<Result>): void {
-    this.#entries.set(key, entry);
-    entry.keys.add(key);
+    compilerMapSet(this.#entries, key, entry);
   }
 }
 
@@ -110,17 +125,22 @@ export class CompileCache<Result> {
  * current project root (cwd) to make the key content-addressed and portable across roots/machines.
  * Paths outside cwd (or already relative) are returned unchanged — this keeps existing relative-path
  * inputs byte-identical and avoids turning an out-of-tree absolute path into an ambiguous `../` chain.
- * The compiler's own version (compilerBuildId) is in every key, so this re-keying can never mis-hit a
+ * The compiler's exact build identity is in every key, so this re-keying can never mis-hit a
  * pre-existing absolute-keyed entry.
  */
 function portableCachePath(value: string | undefined | null): string | null {
   if (value === undefined || value === null) return null;
-  const rel = relative(process.cwd(), value).split(/[\\/]/).join('/');
+  const platformRelative = relative(process.cwd(), value);
+  let rel = '';
+  for (let index = 0; index < platformRelative.length; index += 1) {
+    rel +=
+      compilerStringCharCodeAt(platformRelative, index) === 0x5c ? '/' : platformRelative[index];
+  }
   // `''` means the path IS the project root (the common case for `root`/`packagePrefixDiscoveryRoot`,
   // which equals cwd) — map it to a stable `.` so the key is portable, not the absolute cwd. Paths
   // outside the project root (`../…`) stay absolute (rare; avoids ambiguous traversal in the key).
   if (rel === '') return '.';
-  if (rel.startsWith('../')) return value;
+  if (rel.length >= 3 && rel[0] === '.' && rel[1] === '.' && rel[2] === '/') return value;
   return rel;
 }
 
@@ -154,7 +174,9 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
 
   return canonicalJson({
     compileContext: portableCompileContext,
-    compilerBuildId: compilerBuildId(),
+    // Compact digest locator only. Persistent reuse separately loads and compares the exact
+    // compiler implementation preimage, so a digest collision becomes a miss, never authorization.
+    compilerBuildLocator: compilerBuildId(),
     extraFiles: portableExtraFileCacheKeys(input.extraFiles),
     fileName: portableCachePath(input.fileName),
     // SPEC §5.2.1: the key must be a total function of all compile-affecting options.
@@ -162,7 +184,7 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
     // monotonicity gate, so two compiles differing only in this option must produce different keys.
     productionRenderPlanGate: input.productionRenderPlanGate ?? null,
     root: portableCachePath(input.root),
-    sourceHash: stableHash(input.source),
+    source: input.source,
     sourceProvenance: input.sourceProvenance ?? null,
   });
 }
@@ -236,7 +258,7 @@ export function narrowCompileCacheKeyInput(
   if (dependencyFootprint.queryShapes !== undefined || reads?.queryShapeNames !== undefined) {
     const queryShapes = sliceRecordForKey(
       input.queryShapes as Record<string, unknown> | undefined,
-      reads?.queryShapeNames ?? Object.keys(dependencyFootprint.queryShapes ?? {}),
+      reads?.queryShapeNames ?? compilerObjectKeys(dependencyFootprint.queryShapes ?? {}),
     );
     if (queryShapes !== undefined) narrowedFootprint.queryShapes = queryShapes as never;
   }
@@ -287,11 +309,11 @@ function compileCacheProjection(input: CompileCacheKeyInput): CompileCacheKeyInp
 
 function compileCacheSourceKey(input: CompileCacheKeyInput): string {
   return canonicalJson({
-    compilerBuildId: compilerBuildId(),
+    compilerBuildLocator: compilerBuildId(),
     extraFiles: portableExtraFileCacheKeys(input.extraFiles),
     fileName: portableCachePath(input.fileName),
     root: portableCachePath(input.root),
-    sourceHash: stableHash(input.source),
+    source: input.source,
     sourceProvenance: input.sourceProvenance ?? null,
   });
 }
@@ -299,26 +321,44 @@ function compileCacheSourceKey(input: CompileCacheKeyInput): string {
 function extraFileCacheKeys(
   files: readonly { readonly fileName: string; readonly source: string }[],
 ): readonly CompileCacheExtraFileKey[] {
-  return [...files]
-    .map((file) => ({ fileName: file.fileName, sourceHash: stableHash(file.source) }))
-    .sort((a, b) => a.fileName.localeCompare(b.fileName));
+  const entries: CompileCacheExtraFileKey[] = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index]!;
+    insertExtraFileKey(entries, { fileName: file.fileName, source: file.source });
+  }
+  return entries;
 }
 
 function portableExtraFileCacheKeys(
   files: readonly CompileCacheExtraFileKey[] | undefined,
 ): readonly CompileCacheExtraFileKey[] {
-  return (files ?? [])
-    .map((file) => ({
+  const entries: CompileCacheExtraFileKey[] = [];
+  const source = files ?? [];
+  for (let index = 0; index < source.length; index += 1) {
+    const file = source[index]!;
+    insertExtraFileKey(entries, {
       fileName: portableCachePath(file.fileName) ?? '',
-      sourceHash: file.sourceHash,
-    }))
-    .sort((a, b) => a.fileName.localeCompare(b.fileName));
+      source: file.source,
+    });
+  }
+  return entries;
+}
+
+function insertExtraFileKey(
+  entries: CompileCacheExtraFileKey[],
+  entry: CompileCacheExtraFileKey,
+): void {
+  let insertAt = entries.length;
+  while (insertAt > 0 && entry.fileName < entries[insertAt - 1]!.fileName) {
+    entries[insertAt] = entries[insertAt - 1]!;
+    insertAt -= 1;
+  }
+  entries[insertAt] = entry;
 }
 
 function resolvedDependencyFootprint(value: unknown): CompileDependencyFootprint | null {
-  if (value instanceof Promise) return null;
   if (!value || typeof value !== 'object') return null;
-  const footprint = (value as { dependencyFootprint?: unknown }).dependencyFootprint;
+  const footprint = compilerOwnDataValue(value, 'dependencyFootprint', 'Compile result');
   return footprint && typeof footprint === 'object'
     ? (footprint as CompileDependencyFootprint)
     : null;
@@ -330,9 +370,25 @@ function slicePreviousRegistryFactsForKey(
 ): RegistryFacts | undefined {
   const leaves = footprint.reads?.previousRegistryComponentDomLeaves;
   if (!leaves) return footprint.previousRegistryFacts;
-  const components = (facts?.components ?? []).filter((name) =>
-    leaves.includes(registryNameLeaf(name)),
-  );
+  const sourceComponents = facts?.components ?? [];
+  const componentLength = compilerArrayLength(sourceComponents, 'Previous registry components');
+  const leafLength = compilerArrayLength(leaves, 'Previous registry component DOM leaves');
+  const components: string[] = [];
+  for (let index = 0; index < componentLength; index += 1) {
+    const name = compilerOwnDataValue(sourceComponents, index, 'Previous registry components');
+    if (typeof name !== 'string') {
+      throw new TypeError('Previous registry components must contain own string values.');
+    }
+    const leaf = registryNameLeaf(name);
+    for (let leafIndex = 0; leafIndex < leafLength; leafIndex += 1) {
+      if (
+        compilerOwnDataValue(leaves, leafIndex, 'Previous registry component DOM leaves') === leaf
+      ) {
+        components[components.length] = name;
+        break;
+      }
+    }
+  }
   return components.length === 0 ? undefined : { components };
 }
 
@@ -366,7 +422,7 @@ function sliceRegistryFactsForKey(
   if (old.mutationInputs !== undefined || reads?.mutationInputKeys !== undefined) {
     const mutationInputs = sliceRecordForKey(
       facts?.mutationInputs,
-      reads?.mutationInputKeys ?? Object.keys(old.mutationInputs ?? {}),
+      reads?.mutationInputKeys ?? compilerObjectKeys(old.mutationInputs ?? {}),
     );
     if (mutationInputs !== undefined) sliced.mutationInputs = mutationInputs as never;
   }
@@ -382,7 +438,7 @@ function sliceRegistryFactsForKey(
     );
     if (viewTransitions !== undefined) sliced.viewTransitions = viewTransitions;
   }
-  return Object.keys(sliced).length === 0 ? undefined : sliced;
+  return compilerObjectKeys(sliced).length === 0 ? undefined : sliced;
 }
 
 function sliceRecordForKey<T>(
@@ -390,25 +446,52 @@ function sliceRecordForKey<T>(
   keys: readonly string[],
 ): Record<string, T | undefined> | undefined {
   if (keys.length === 0) return undefined;
-  return Object.fromEntries([...new Set(keys)].sort().map((key) => [key, record?.[key]]));
+  const sorted: string[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    let duplicate = false;
+    for (let seenIndex = 0; seenIndex < sorted.length; seenIndex += 1) {
+      if (sorted[seenIndex] === key) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (duplicate) continue;
+    let insertAt = sorted.length;
+    while (insertAt > 0 && key < sorted[insertAt - 1]!) {
+      sorted[insertAt] = sorted[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    sorted[insertAt] = key;
+  }
+  const result: Record<string, T | undefined> = {};
+  for (let index = 0; index < sorted.length; index += 1) {
+    const key = sorted[index]!;
+    result[key] = record?.[key];
+  }
+  return result;
 }
 
 function sliceArrayForKey<T>(items: readonly T[] | undefined, keys: readonly T[]): T[] | undefined {
   if (keys.length === 0) return undefined;
-  const keySet = new Set(keys);
-  return (items ?? []).filter((item) => keySet.has(item));
+  const result: T[] = [];
+  const source = items ?? [];
+  for (let itemIndex = 0; itemIndex < source.length; itemIndex += 1) {
+    const item = source[itemIndex]!;
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      if (item === keys[keyIndex]) {
+        result[result.length] = item;
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 function registryNameLeaf(registryName: string): string {
-  return registryName.split('/').at(-1) ?? registryName;
-}
-
-// L8-2 (plans/bug-and-testing-part3.md): the cache key folds module source by
-// hash with no stored preimage, so a hash collision is a stale wrong-output hit.
-// SPEC.md §5.2.1#1 mandates a collision-resistant hash for the version-token /
-// cache namespace; a 32-bit FNV-1a is not. Use SHA-256 so a collision is
-// cryptographically infeasible. Output stays deterministic: a fixed source maps
-// to one fixed digest.
-function stableHash(source: string): string {
-  return createHash('sha256').update(source).digest('hex');
+  let separator = -1;
+  for (let index = 0; index < registryName.length; index += 1) {
+    if (registryName[index] === '/') separator = index;
+  }
+  return separator < 0 ? registryName : compilerStringSlice(registryName, separator + 1);
 }

@@ -16,8 +16,27 @@ import {
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
+import { canonicalJson } from './canonical-json.js';
 import { mergeQueryUpdatePlans, mergeStyleUpdateCoverage } from './compile-result.js';
 import { createCompileFactLedger, type CompileFactSnapshot } from './compile-fact-ledger.js';
+import {
+  compilerArrayIsArray,
+  compilerArrayJoin,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateSet,
+  compilerMapGet,
+  compilerMapSet,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetForEach,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringSlice,
+  compilerStringStartsWith,
+  compilerStringTrim,
+} from './compiler-security-intrinsics.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   componentCssAssetForFile,
@@ -111,6 +130,105 @@ import {
 } from './types.js';
 
 ensureTypescriptRuntime(ts);
+
+function compilerMapDense<Value, Result>(
+  values: readonly Value[],
+  label: string,
+  map: (value: Value, index: number) => Result,
+): Result[] {
+  const source = compilerSnapshotDenseArray(values, label);
+  const result: Result[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    result[result.length] = map(source[index]!, index);
+  }
+  return result;
+}
+
+function compilerFlatMapDense<Value, Result>(
+  values: readonly Value[],
+  label: string,
+  map: (value: Value, index: number) => readonly Result[],
+): Result[] {
+  const source = compilerSnapshotDenseArray(values, label);
+  const result: Result[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const mapped = compilerSnapshotDenseArray(map(source[index]!, index), `${label} mapped result`);
+    for (let mappedIndex = 0; mappedIndex < mapped.length; mappedIndex += 1) {
+      result[result.length] = mapped[mappedIndex]!;
+    }
+  }
+  return result;
+}
+
+function compilerFilterDense<Value>(
+  values: readonly Value[],
+  label: string,
+  keep: (value: Value, index: number) => boolean,
+): Value[] {
+  const source = compilerSnapshotDenseArray(values, label);
+  const result: Value[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    if (keep(source[index]!, index)) result[result.length] = source[index]!;
+  }
+  return result;
+}
+
+function compilerSomeDense<Value>(
+  values: readonly Value[],
+  label: string,
+  predicate: (value: Value, index: number) => boolean,
+): boolean {
+  const source = compilerSnapshotDenseArray(values, label);
+  for (let index = 0; index < source.length; index += 1) {
+    if (predicate(source[index]!, index)) return true;
+  }
+  return false;
+}
+
+function compilerFindDense<Value>(
+  values: readonly Value[],
+  label: string,
+  predicate: (value: Value, index: number) => boolean,
+): Value | undefined {
+  const source = compilerSnapshotDenseArray(values, label);
+  for (let index = 0; index < source.length; index += 1) {
+    if (predicate(source[index]!, index)) return source[index]!;
+  }
+  return undefined;
+}
+
+function compilerSortedKeys(value: object): string[] {
+  const keys = compilerObjectKeys(value);
+  for (let index = 1; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    let insertAt = index;
+    while (insertAt > 0 && key < keys[insertAt - 1]!) {
+      keys[insertAt] = keys[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    keys[insertAt] = key;
+  }
+  return keys;
+}
+
+function compilerAppendDense<Value>(
+  first: readonly Value[],
+  second: readonly Value[],
+  label: string,
+): Value[] {
+  const result = compilerSnapshotDenseArray(first, `${label} first values`);
+  const tail = compilerSnapshotDenseArray(second, `${label} second values`);
+  for (let index = 0; index < tail.length; index += 1) result[result.length] = tail[index]!;
+  return result;
+}
+
+function compilerSetValues<Value>(values: ReadonlySet<Value>): Value[] {
+  const result: Value[] = [];
+  compilerSetForEach(values, (value) => {
+    result[result.length] = value;
+  });
+  return result;
+}
 
 const KOVO_MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const KOVO_QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
@@ -324,7 +442,9 @@ function registerFrameworkIdentityProjectForOptions(
   if (!options.extraFiles?.length) return;
   registerFrameworkIdentityProject(
     sourceFile,
-    options.extraFiles.map((file) => parseSourceFile(file.fileName, file.source)),
+    compilerMapDense(options.extraFiles, 'Compiler framework-identity files', (file) =>
+      parseSourceFile(file.fileName, file.source),
+    ),
   );
 }
 
@@ -397,12 +517,17 @@ function emitClientPhase(
   lowered: LowerComponentPhaseResult,
   validated: ValidateComponentPhaseResult,
 ): EmitClientPhaseResult {
-  const stateDerives = [
-    ...lowered.lowering.structuralLowering.stateDerives,
-    ...lowered.lowering.styleExtraction.stateDerives,
-  ];
+  const stateDerives = compilerAppendDense(
+    lowered.lowering.structuralLowering.stateDerives,
+    lowered.lowering.styleExtraction.stateDerives,
+    'Client state derives',
+  );
+  const validatedHandlers = compilerSnapshotDenseArray(
+    validated.handlers,
+    'Validated client handlers',
+  );
   const clientSource = emitClientModule(
-    [...validated.handlers],
+    validatedHandlers,
     validated.queryUpdatePlans,
     stateDerives,
     parsed.componentName,
@@ -414,14 +539,16 @@ function emitClientPhase(
     parsed.options.fileName,
     `${renderPlanFingerprint}-${clientModuleVersion(clientSource)}`,
   );
-  const versionedHandlers = validated.handlers.map((handler) =>
-    versionHandlerLowering(handler, parsed.options.fileName, clientHref),
+  const versionedHandlers = compilerMapDense(
+    validatedHandlers,
+    'Versioned client handlers',
+    (handler) => versionHandlerLowering(handler, parsed.options.fileName, clientHref),
   );
 
   return {
     clientHref,
     clientModuleImportManifest: emitClientModuleImportManifest(
-      [...validated.handlers],
+      validatedHandlers,
       validated.queryUpdatePlans,
       stateDerives,
       validated.clockUpdatePlans,
@@ -456,18 +583,27 @@ function emitRegistryCssPhase(
     componentCssSource && styleCssSource
       ? dedupeCss([componentCssSource, styleCssSource])
       : (componentCssSource ?? styleCssSource ?? '');
-  const fragmentTargetFacts = componentNameFacts.flatMap((fact) =>
-    findFragmentTargetFacts(fact.names.registryKey, lowered.model, fact.component),
+  const fragmentTargetFacts = compilerFlatMapDense(
+    componentNameFacts,
+    'Component fragment-target names',
+    (fact) => findFragmentTargetFacts(fact.names.registryKey, lowered.model, fact.component),
   );
-  const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
-  const liveTargetFacts = componentNameFacts.flatMap((fact) =>
-    findLiveTargetFacts(
-      fact.names.domName,
-      fact.names.registryKey,
-      lowered.model,
-      validated.updateCoverage,
-      fact.component,
-    ),
+  const fragmentTargets = compilerMapDense(
+    fragmentTargetFacts,
+    'Component fragment-target facts',
+    (fact) => fact.target,
+  );
+  const liveTargetFacts = compilerFlatMapDense(
+    componentNameFacts,
+    'Component live-target names',
+    (fact) =>
+      findLiveTargetFacts(
+        fact.names.domName,
+        fact.names.registryKey,
+        lowered.model,
+        validated.updateCoverage,
+        fact.component,
+      ),
   );
   const mutationForms = mutationFormExplainFacts(lowered.model, {
     fileName: parsed.options.fileName,
@@ -476,20 +612,23 @@ function emitRegistryCssPhase(
       : {}),
     source: lowered.source,
   });
-  const componentGraphFacts = componentNameFacts.map((fact, index) =>
-    componentGraphFact(
-      fact.names.registryKey,
-      fact.names.domName,
-      lowered.model,
-      fact.component && componentHasInferredFragmentTarget(fact.component)
-        ? [fact.names.registryKey]
-        : [],
-      index === 0 ? lowered.lowering.styleExtraction.ruleUsages : [],
-      fact.component?.localName,
-      index === 0 ? mutationForms : [],
-      fact.component,
-      parsed.options.fileName,
-    ),
+  const componentGraphFacts = compilerMapDense(
+    componentNameFacts,
+    'Component graph names',
+    (fact, index) =>
+      componentGraphFact(
+        fact.names.registryKey,
+        fact.names.domName,
+        lowered.model,
+        fact.component && componentHasInferredFragmentTarget(fact.component)
+          ? [fact.names.registryKey]
+          : [],
+        index === 0 ? lowered.lowering.styleExtraction.ruleUsages : [],
+        fact.component?.localName,
+        index === 0 ? mutationForms : [],
+        fact.component,
+        parsed.options.fileName,
+      ),
   );
   const cssAssets = cssSource
     ? [
@@ -521,7 +660,11 @@ function emitRegistryCssPhase(
       clientFileName: fileNames.client,
       cssAssets,
       componentName: parsed.componentName,
-      componentRegistryNames: componentNameFacts.map((fact) => fact.names.registryKey),
+      componentRegistryNames: compilerMapDense(
+        componentNameFacts,
+        'Component registry names',
+        (fact) => fact.names.registryKey,
+      ),
       domComponentName: primaryComponentNames.domName,
       fragmentTargetFacts,
       handlers: client.versionedHandlers,
@@ -553,16 +696,19 @@ function emitServerPhase(
     primaryComponentNames.domName,
     {
       clientHref: client.clientHref,
-      componentStampTargets: componentNameFacts.flatMap((fact) =>
-        fact.component
-          ? [
-              {
-                component: fact.component,
-                domComponentName: fact.names.domName,
-                registryComponentName: fact.names.registryKey,
-              },
-            ]
-          : [],
+      componentStampTargets: compilerFlatMapDense(
+        componentNameFacts,
+        'Component stamp targets',
+        (fact) =>
+          fact.component
+            ? [
+                {
+                  component: fact.component,
+                  domComponentName: fact.names.domName,
+                  registryComponentName: fact.names.registryKey,
+                },
+              ]
+            : [],
       ),
       fileName: parsed.options.fileName,
       registryComponentName: primaryComponentNames.registryKey,
@@ -572,13 +718,30 @@ function emitServerPhase(
       source: lowered.source,
     },
   );
-  const serverRenderReplacements = [
-    ...serverRender.replacements,
-    ...componentDescriptorNameAssignments(lowered.model, componentNameFacts),
-    ...derivedMutationKeyAssignments(lowered.model, parsed.options.fileName),
-    ...derivedQueryKeyAssignments(lowered.model, parsed.options.fileName, lowered.source),
-    ...versionStateDeriveReferences(client.stateDeriveReferences),
-  ];
+  let serverRenderReplacements = compilerSnapshotDenseArray(
+    serverRender.replacements,
+    'Server render replacements',
+  );
+  serverRenderReplacements = compilerAppendDense(
+    serverRenderReplacements,
+    componentDescriptorNameAssignments(lowered.model, componentNameFacts),
+    'Component descriptor replacements',
+  );
+  serverRenderReplacements = compilerAppendDense(
+    serverRenderReplacements,
+    derivedMutationKeyAssignments(lowered.model, parsed.options.fileName),
+    'Derived mutation-key replacements',
+  );
+  serverRenderReplacements = compilerAppendDense(
+    serverRenderReplacements,
+    derivedQueryKeyAssignments(lowered.model, parsed.options.fileName, lowered.source),
+    'Derived query-key replacements',
+  );
+  serverRenderReplacements = compilerAppendDense(
+    serverRenderReplacements,
+    versionStateDeriveReferences(client.stateDeriveReferences),
+    'State-derive URL replacements',
+  );
   const patchedServerSource = applyTerminalEmitPatches(
     lowered.lowering.terminalState,
     serverRenderReplacements,
@@ -591,7 +754,9 @@ function emitServerPhase(
     appendLiveTargetRendererExports({
       componentExpression: parsed.componentName,
       componentExpressionForFact: (fact) =>
-        componentNameFacts.find(
+        compilerFindDense(
+          componentNameFacts,
+          'Component expression facts',
           (componentFact) => componentFact.names.registryKey === fact.component,
         )?.component?.localName ?? parsed.componentName,
       liveTargetFacts: registryCss.liveTargetFacts,
@@ -613,19 +778,54 @@ function verifyComponentPhase(
   client: EmitClientPhaseResult,
   server: EmitServerPhaseResult,
 ): VerifyComponentPhaseResult {
-  const diagnostics = [
-    ...parsed.authoringSurfaceDiagnostics,
-    ...client.versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
-    ...lowered.lowering.structuralLowering.diagnostics,
-    ...lowered.lowering.styleExtraction.diagnostics,
-    ...server.serverRender.diagnostics,
-    ...validated.packagePrefixDiagnostics,
-    ...validated.validationDiagnostics,
-    ...productionRenderPlanGateDiagnostics(
-      parsed.compileOptions,
-      client.renderPlanFingerprintInput,
-    ),
-  ];
+  const diagnostics: CompilerDiagnostic[] = [];
+  appendCompilerDiagnostics(
+    diagnostics,
+    parsed.authoringSurfaceDiagnostics,
+    'Authoring-surface diagnostics',
+  );
+  const handlerLength = compilerArrayLength(client.versionedHandlers, 'Versioned handlers');
+  for (let index = 0; index < handlerLength; index += 1) {
+    const handler = compilerOwnDataValue(client.versionedHandlers, index, 'Versioned handlers') as
+      | HandlerLowering
+      | undefined;
+    if (!handler) throw new TypeError(`Versioned handlers[${index}] must be dense own data.`);
+    appendCompilerDiagnostics(
+      diagnostics,
+      handler.diagnostics ?? [],
+      'Versioned handler diagnostics',
+    );
+  }
+  appendCompilerDiagnostics(
+    diagnostics,
+    lowered.lowering.structuralLowering.diagnostics,
+    'Structural lowering diagnostics',
+  );
+  appendCompilerDiagnostics(
+    diagnostics,
+    lowered.lowering.styleExtraction.diagnostics,
+    'Style extraction diagnostics',
+  );
+  appendCompilerDiagnostics(
+    diagnostics,
+    server.serverRender.diagnostics,
+    'Server-render diagnostics',
+  );
+  appendCompilerDiagnostics(
+    diagnostics,
+    validated.packagePrefixDiagnostics,
+    'Package-prefix diagnostics',
+  );
+  appendCompilerDiagnostics(
+    diagnostics,
+    validated.validationDiagnostics,
+    'Compiler validation diagnostics',
+  );
+  appendCompilerDiagnostics(
+    diagnostics,
+    productionRenderPlanGateDiagnostics(parsed.compileOptions, client.renderPlanFingerprintInput),
+    'Production render-plan diagnostics',
+  );
 
   const registryFactsOptions = {
     fileName: parsed.compileOptions.fileName,
@@ -663,6 +863,19 @@ function verifyComponentPhase(
     diagnostics,
     renderEquivalenceChecks: [combineRenderEquivalenceChecks(loweredRoundTrip, authoredStaticText)],
   };
+}
+
+function appendCompilerDiagnostics(
+  output: CompilerDiagnostic[],
+  values: readonly CompilerDiagnostic[],
+  label: string,
+): void {
+  const length = compilerArrayLength(values, label);
+  for (let index = 0; index < length; index += 1) {
+    const value = compilerOwnDataValue(values, index, label) as CompilerDiagnostic | undefined;
+    if (!value) throw new TypeError(`${label}[${index}] must be dense own data.`);
+    output[output.length] = value;
+  }
 }
 
 /**
@@ -703,11 +916,19 @@ function assembleCompileResult(
     componentGraphFacts: facts.componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(parsed.compileOptions, {
       fileName: parsed.options.fileName,
-      fragmentTargets: facts.fragmentTargetFacts.map((fact) => fact.target),
+      fragmentTargets: compilerMapDense(
+        facts.fragmentTargetFacts,
+        'Compile-result fragment targets',
+        (fact) => fact.target,
+      ),
       model: lowered.model,
       mutationForms: registryCss.mutationForms,
       queryUpdatePlans: facts.queryUpdatePlans,
-      viewTransitionNames: facts.viewTransitions.map((stamp) => stamp.name),
+      viewTransitionNames: compilerMapDense(
+        facts.viewTransitions,
+        'Compile-result view transitions',
+        (stamp) => stamp.name,
+      ),
     }),
     diagnostics: verified.diagnostics,
     endpointGraphFacts: facts.endpointGraphFacts,
@@ -733,13 +954,26 @@ function assembleCompileResult(
         source: registryCss.registrySource,
       },
     ],
-    clientExports: [
-      ...client.versionedHandlers.map((handler) => handler.exportName),
-      ...facts.stateDerives.map((derive) => derive.exportName),
-    ],
+    clientExports: compilerAppendDense(
+      compilerMapDense(
+        client.versionedHandlers,
+        'Client handler exports',
+        (handler) => handler.exportName,
+      ),
+      compilerMapDense(
+        facts.stateDerives,
+        'Client state-derive exports',
+        (derive) => derive.exportName,
+      ),
+      'Client exports',
+    ),
     cssAssets: facts.componentCssAssets,
     handlerWriteSinkFacts: facts.handlerWriteSinkFacts,
-    handlerExports: client.versionedHandlers.map((handler) => handler.exportName),
+    handlerExports: compilerMapDense(
+      client.versionedHandlers,
+      'Compile-result handler exports',
+      (handler) => handler.exportName,
+    ),
     hmrImpact: createComponentHmrImpactMetadata({
       clientHref: client.clientHref,
       componentGraphFacts: facts.componentGraphFacts,
@@ -823,18 +1057,24 @@ function componentCompileFactSnapshot(
   ledger.append(
     'outputContexts',
     { phase: 'validate', pass: 'query-update-plans' },
-    validated.queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
+    compilerFlatMapDense(validated.queryUpdatePlans, 'Query update-plan output contexts', (plan) =>
+      compilerSnapshotDenseArray(plan.outputContexts ?? [], 'Query output contexts'),
+    ),
   );
   ledger.append(
     'outputContexts',
     { phase: 'emit', pass: 'state-derives' },
-    client.stateDerives.map((derive) => derive.outputContext),
+    compilerMapDense(
+      client.stateDerives,
+      'State-derive output contexts',
+      (derive) => derive.outputContext,
+    ),
   );
   return ledger.snapshot();
 }
 
 function taskGraphFactsFromModel(model: ComponentModuleModel): TaskGraphFact[] {
-  return model.taskRunHandlers.map((handler) => ({
+  return compilerMapDense(model.taskRunHandlers, 'Task graph handlers', (handler) => ({
     ...(handler.cron === undefined ? {} : { cron: handler.cron }),
     key: handler.key,
     ...(handler.runMutationEdges.length === 0 ? {} : { runMutations: handler.runMutationEdges }),
@@ -844,7 +1084,7 @@ function taskGraphFactsFromModel(model: ComponentModuleModel): TaskGraphFact[] {
 }
 
 function webhookEndpointGraphFactsFromModel(model: ComponentModuleModel): EndpointGraphFact[] {
-  return model.webhookHandlers.map((handler) => ({
+  return compilerMapDense(model.webhookHandlers, 'Webhook graph handlers', (handler) => ({
     access: { kind: 'verified-machine-auth' },
     appOwnedSafety: false,
     auth: 'webhook-verifier',
@@ -860,7 +1100,13 @@ function webhookEndpointGraphFactsFromModel(model: ComponentModuleModel): Endpoi
     surface: 'webhook',
     ...(handler.declaredWriteKeys.length === 0
       ? {}
-      : { writes: handler.declaredWriteKeys.filter((key) => key !== 'UNRESOLVED') }),
+      : {
+          writes: compilerFilterDense(
+            handler.declaredWriteKeys,
+            'Webhook declared write keys',
+            (key) => key !== 'UNRESOLVED',
+          ),
+        }),
   }));
 }
 
@@ -936,27 +1182,52 @@ function conservativeCompileDependencyFootprint(
 }
 
 function referencedQueryNames(usage: CompileDependencyFootprintUsage): Set<string> {
-  const names = new Set<string>();
-  for (const plan of usage.queryUpdatePlans) names.add(plan.query);
-  for (const component of usage.model.components) {
-    for (const option of component.options) {
+  const names = compilerCreateSet<string>();
+  const plans = compilerSnapshotDenseArray(usage.queryUpdatePlans, 'Dependency query plans');
+  for (let index = 0; index < plans.length; index += 1) {
+    compilerSetAdd(names, plans[index]!.query);
+  }
+  const components = compilerSnapshotDenseArray(
+    usage.model.components,
+    'Dependency model components',
+  );
+  for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
+    const component = components[componentIndex]!;
+    const options = compilerSnapshotDenseArray(component.options, 'Dependency component options');
+    for (let optionIndex = 0; optionIndex < options.length; optionIndex += 1) {
+      const option = options[optionIndex]!;
       if (option.key !== 'queries') continue;
-      for (const entry of option.objectEntries ?? []) names.add(entry.key);
+      const entries = compilerSnapshotDenseArray(
+        option.objectEntries ?? [],
+        'Dependency query option entries',
+      );
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+        compilerSetAdd(names, entries[entryIndex]!.key);
+      }
     }
   }
   return names;
 }
 
 function referencedMutationInputKeys(usage: CompileDependencyFootprintUsage): Set<string> {
-  return new Set(usage.mutationForms.map((form) => form.mutation));
+  const keys = compilerCreateSet<string>();
+  const forms = compilerSnapshotDenseArray(usage.mutationForms, 'Dependency mutation forms');
+  for (let index = 0; index < forms.length; index += 1) {
+    compilerSetAdd(keys, forms[index]!.mutation);
+  }
+  return keys;
 }
 
 function previousRegistryComponentDomLeaves(usage: CompileDependencyFootprintUsage): Set<string> {
-  return new Set(
-    usage.model.components.map(
-      (component) => deriveComponentNames(usage.fileName, component).domName,
-    ),
+  const names = compilerCreateSet<string>();
+  const components = compilerSnapshotDenseArray(
+    usage.model.components,
+    'Previous registry components',
   );
+  for (let index = 0; index < components.length; index += 1) {
+    compilerSetAdd(names, deriveComponentNames(usage.fileName, components[index]!).domName);
+  }
+  return names;
 }
 
 function compileDependencyReads(reads: {
@@ -967,10 +1238,10 @@ function compileDependencyReads(reads: {
   viewTransitions: readonly string[];
 }): CompileDependencyFootprint['reads'] | undefined {
   const fragmentTargets = sortedUnique(reads.fragmentTargets);
-  const mutationInputKeys = sortedUnique([...reads.mutationInputKeys]);
-  const previousRegistryComponentDomLeaves = sortedUnique([
-    ...reads.previousRegistryComponentDomLeaves,
-  ]);
+  const mutationInputKeys = sortedUnique(compilerSetValues(reads.mutationInputKeys));
+  const previousRegistryComponentDomLeaves = sortedUnique(
+    compilerSetValues(reads.previousRegistryComponentDomLeaves),
+  );
   const queryShapeNames = sortedUnique(reads.queryShapeNames);
   const viewTransitions = sortedUnique(reads.viewTransitions);
   const footprint: NonNullable<CompileDependencyFootprint['reads']> = {
@@ -982,7 +1253,7 @@ function compileDependencyReads(reads: {
     ...(queryShapeNames.length === 0 ? {} : { queryShapeNames }),
     ...(viewTransitions.length === 0 ? {} : { viewTransitions }),
   };
-  return Object.keys(footprint).length === 0 ? undefined : footprint;
+  return compilerObjectKeys(footprint).length === 0 ? undefined : footprint;
 }
 
 function slicePreviousRegistryFacts(
@@ -993,7 +1264,11 @@ function slicePreviousRegistryFacts(
   if (!previousComponents) return undefined;
 
   const domLeaves = previousRegistryComponentDomLeaves(usage);
-  const components = previousComponents.filter((name) => domLeaves.has(registryNameLeaf(name)));
+  const components = compilerFilterDense(
+    previousComponents,
+    'Previous registry component names',
+    (name) => compilerSetHas(domLeaves, registryNameLeaf(name)),
+  );
   return components.length === 0 ? undefined : { components };
 }
 
@@ -1005,8 +1280,24 @@ function sliceRegistryFacts(
   if (!facts) return undefined;
 
   const mutationInputs = sliceRecord(facts.mutationInputs, mutationKeys);
-  const fragmentTargets = sliceArray(facts.fragmentTargets, new Set(usage.fragmentTargets));
-  const viewTransitions = sliceArray(facts.viewTransitions, new Set(usage.viewTransitionNames));
+  const fragmentTargetKeys = compilerCreateSet<string>();
+  const fragmentTargetsSnapshot = compilerSnapshotDenseArray(
+    usage.fragmentTargets,
+    'Dependency fragment targets',
+  );
+  for (let index = 0; index < fragmentTargetsSnapshot.length; index += 1) {
+    compilerSetAdd(fragmentTargetKeys, fragmentTargetsSnapshot[index]!);
+  }
+  const viewTransitionKeys = compilerCreateSet<string>();
+  const viewTransitionSnapshot = compilerSnapshotDenseArray(
+    usage.viewTransitionNames,
+    'Dependency view transitions',
+  );
+  for (let index = 0; index < viewTransitionSnapshot.length; index += 1) {
+    compilerSetAdd(viewTransitionKeys, viewTransitionSnapshot[index]!);
+  }
+  const fragmentTargets = sliceArray(facts.fragmentTargets, fragmentTargetKeys);
+  const viewTransitions = sliceArray(facts.viewTransitions, viewTransitionKeys);
   const sliced: RegistryFacts = {
     ...(facts.components === undefined ? {} : { components: facts.components }),
     ...(facts.domainKeys === undefined ? {} : { domainKeys: facts.domainKeys }),
@@ -1019,23 +1310,35 @@ function sliceRegistryFacts(
     ...(facts.routes === undefined ? {} : { routes: facts.routes }),
     ...(viewTransitions === undefined ? {} : { viewTransitions }),
   };
-  return Object.keys(sliced).length === 0 ? undefined : sliced;
+  return compilerObjectKeys(sliced).length === 0 ? undefined : sliced;
 }
 
 function sliceRecord<T>(
   record: Readonly<Record<string, T>> | undefined,
   keys: ReadonlySet<string>,
 ): Record<string, T> | undefined {
-  if (!record || keys.size === 0) return undefined;
+  if (!record || compilerSetValues(keys).length === 0) return undefined;
 
-  const entries = Object.entries(record).filter(([key]) => keys.has(key));
-  return entries.length === 0 ? undefined : Object.fromEntries(entries);
+  const result: Record<string, T> = {};
+  const recordKeys = compilerObjectKeys(record);
+  let count = 0;
+  for (let index = 0; index < recordKeys.length; index += 1) {
+    const key = recordKeys[index]!;
+    if (!compilerSetHas(keys, key)) continue;
+    const value = compilerOwnDataValue(record, key, 'Registry fact record') as T | undefined;
+    if (value === undefined) continue;
+    result[key] = value;
+    count += 1;
+  }
+  return count === 0 ? undefined : result;
 }
 
 function sliceArray<T>(items: readonly T[] | undefined, keys: ReadonlySet<T>): T[] | undefined {
-  if (!items || keys.size === 0) return undefined;
+  if (!items || compilerSetValues(keys).length === 0) return undefined;
 
-  const selected = items.filter((item) => keys.has(item));
+  const selected = compilerFilterDense(items, 'Registry fact array', (item) =>
+    compilerSetHas(keys, item),
+  );
   return selected.length === 0 ? undefined : selected;
 }
 
@@ -1044,7 +1347,21 @@ function registryNameLeaf(registryName: string): string {
 }
 
 function sortedUnique(items: readonly string[]): string[] {
-  return [...new Set(items)].sort((left, right) => left.localeCompare(right));
+  const source = compilerSnapshotDenseArray(items, 'Strings to deduplicate and sort');
+  const seen = compilerCreateSet<string>();
+  const result: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const value = source[index]!;
+    if (compilerSetHas(seen, value)) continue;
+    compilerSetAdd(seen, value);
+    let insertAt = result.length;
+    while (insertAt > 0 && value < result[insertAt - 1]!) {
+      result[insertAt] = result[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    result[insertAt] = value;
+  }
+  return result;
 }
 
 function collectClockUpdatePlans(
@@ -1052,17 +1369,29 @@ function collectClockUpdatePlans(
   componentName: string,
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
 ): ClockUpdatePlanFact[] {
-  if (!queryUpdatePlans.some((plan) => plan.query === 'now')) return [];
+  if (
+    !compilerSomeDense(queryUpdatePlans, 'Clock query update plans', (plan) => plan.query === 'now')
+  ) {
+    return [];
+  }
 
-  const clocks = componentOptionObjectEntries(model, 'clocks')
-    .filter((entry) => entry.value && !clockEntryIsRenderOnce(entry))
-    .map((entry) => ({ name: entry.key, spec: entry.value! }));
+  const clocks = compilerMapDense(
+    compilerFilterDense(
+      componentOptionObjectEntries(model, 'clocks'),
+      'Clock component options',
+      (entry) => entry.value !== undefined && entry.value !== '' && !clockEntryIsRenderOnce(entry),
+    ),
+    'Live clock component options',
+    (entry) => ({ name: entry.key, spec: entry.value! }),
+  );
 
   return clocks.length > 0 ? [{ clocks, componentName }] : [];
 }
 
 function clockEntryIsRenderOnce(entry: Pick<ObjectLiteralEntry, 'objectEntries'>): boolean {
-  return (entry.objectEntries ?? []).some(
+  return compilerSomeDense(
+    entry.objectEntries ?? [],
+    'Clock render-once fields',
     (field) => field.key === 'renderOnce' && field.value === 'true',
   );
 }
@@ -1075,7 +1404,7 @@ function componentNameFactsForModel(
     return [{ component: null, names: deriveComponentNames(fileName, null) }];
   }
 
-  return model.components.map((component) => ({
+  return compilerMapDense(model.components, 'Component naming facts', (component) => ({
     component,
     names: deriveComponentNames(fileName, component),
   }));
@@ -1085,19 +1414,21 @@ function componentDescriptorNameAssignments(
   model: ComponentModuleModel,
   componentNameFacts: readonly ModuleComponentNameFact[],
 ): SourceReplacement[] {
-  const factsByComponent = new Map<ComponentModel, ModuleComponentNameFact>();
-  for (const fact of componentNameFacts) {
-    if (fact.component) factsByComponent.set(fact.component, fact);
+  const factsByComponent = compilerCreateMap<ComponentModel, ModuleComponentNameFact>();
+  const facts = compilerSnapshotDenseArray(componentNameFacts, 'Component descriptor name facts');
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = facts[index]!;
+    if (fact.component) compilerMapSet(factsByComponent, fact.component, fact);
   }
 
-  return model.components.flatMap((component) => {
-    const registryComponentName = factsByComponent.get(component)?.names.registryKey;
+  return compilerFlatMapDense(model.components, 'Component descriptor assignments', (component) => {
+    const registryComponentName = compilerMapGet(factsByComponent, component)?.names.registryKey;
     if (!component.localName || registryComponentName === undefined) return [];
 
     return [
       {
         end: component.declarationEnd,
-        replacement: `\n${component.localName}.name = ${JSON.stringify(registryComponentName)};`,
+        replacement: `\n${component.localName}.name = ${canonicalJson(registryComponentName)};`,
         start: component.declarationEnd,
       },
     ];
@@ -1108,18 +1439,14 @@ function derivedMutationKeyAssignments(
   model: ComponentModuleModel,
   fileName: string,
 ): SourceReplacement[] {
-  return model.calls.flatMap((call) => {
+  return compilerFlatMapDense(model.calls, 'Derived mutation-key calls', (call) => {
     if (!isExportedObjectFormMutationCall(model, call)) return [];
 
-    const derivedKey = deriveMutationKey(fileName, call.exportedConstName);
+    const derivedKey = canonicalJson(deriveMutationKey(fileName, call.exportedConstName));
     return [
       {
         end: call.end,
-        replacement: `\n${call.exportedConstName}.key = ${JSON.stringify(
-          derivedKey,
-        )};\nif (${call.exportedConstName}.queue === true) ${call.exportedConstName}.queue = ${JSON.stringify(
-          derivedKey,
-        )};`,
+        replacement: `\n${call.exportedConstName}.key = ${derivedKey};\nif (${call.exportedConstName}.queue === true) ${call.exportedConstName}.queue = ${derivedKey};`,
         start: call.end,
       },
     ];
@@ -1134,7 +1461,8 @@ function isExportedObjectFormMutationCall(
     isKovoMutationCall(model, call) &&
     call.exportedConstName !== undefined &&
     call.arguments.length === 1 &&
-    call.arguments[0]?.trimStart().startsWith('{') === true
+    call.arguments[0] !== undefined &&
+    compilerStringStartsWith(compilerStringTrim(call.arguments[0]), '{')
   );
 }
 
@@ -1146,20 +1474,26 @@ function derivedQueryKeyAssignments(
   fileName: string,
   source: string,
 ): SourceReplacement[] {
-  return exportedObjectFirstQueryCalls(model).map((call) => {
-    const key = deriveRegistryIdentity(fileName, call.exportedConstName!).key;
-    return {
-      end: call.end,
-      replacement: `${derivedQueryKeyHelper}(${source.slice(call.start, call.end)}, ${JSON.stringify(key)})`,
-      start: call.start,
-    };
-  });
+  return compilerMapDense(
+    exportedObjectFirstQueryCalls(model),
+    'Derived query-key calls',
+    (call) => {
+      const key = deriveRegistryIdentity(fileName, call.exportedConstName!).key;
+      return {
+        end: call.end,
+        replacement: `${derivedQueryKeyHelper}(${compilerStringSlice(source, call.start, call.end)}, ${canonicalJson(key)})`,
+        start: call.start,
+      };
+    },
+  );
 }
 
 function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel): string {
   if (exportedObjectFirstQueryCalls(model).length === 0) return source;
   if (
-    model.namedImports.some(
+    compilerSomeDense(
+      model.namedImports,
+      'Derived query-key helper imports',
       (entry) =>
         entry.moduleSpecifier === derivedQueryKeyWireModule &&
         entry.localName === derivedQueryKeyHelper,
@@ -1169,19 +1503,27 @@ function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel
   }
 
   const sourceFile = parseSourceFile('lowered.tsx', source);
-  const importDeclarationEnd =
-    sourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ?? 0;
+  const statements = compilerSnapshotDenseArray(sourceFile.statements, 'Lowered source statements');
+  let importDeclarationEnd = 0;
+  for (let index = statements.length - 1; index >= 0; index -= 1) {
+    if (ts.isImportDeclaration(statements[index]!)) {
+      importDeclarationEnd = statements[index]!.end;
+      break;
+    }
+  }
   const importLine = `import { assignDerivedQueryKey as ${derivedQueryKeyHelper} } from '${derivedQueryKeyWireModule}';\n`;
   if (importDeclarationEnd > 0) {
-    return `${source.slice(0, importDeclarationEnd)}\n${importLine}${source.slice(importDeclarationEnd)}`;
+    return `${compilerStringSlice(source, 0, importDeclarationEnd)}\n${importLine}${compilerStringSlice(source, importDeclarationEnd)}`;
   }
   return `${importLine}${source}`;
 }
 
 function exportedObjectFirstQueryCalls(model: ComponentModuleModel) {
-  return model.calls.filter(
+  return compilerFilterDense(
+    model.calls,
+    'Exported object-form query calls',
     (call) =>
-      call.exportedConstName &&
+      call.exportedConstName !== undefined &&
       isKovoQueryCall(model, call) &&
       call.arguments.length === 1 &&
       typeof call.argumentStaticValues[0] !== 'string',
@@ -1222,28 +1564,39 @@ export function collectStateDeriveReferenceFacts(
 ): StateDeriveReferenceFact[] {
   if (stateDerives.length === 0) return [];
 
-  const derivesByPlaceholder = new Map(stateDerives.map((derive) => [derive.placeholder, derive]));
+  const derivesByPlaceholder = compilerCreateMap<string, StateDeriveFact>();
+  const derives = compilerSnapshotDenseArray(stateDerives, 'State derives for URL versioning');
+  for (let index = 0; index < derives.length; index += 1) {
+    compilerMapSet(derivesByPlaceholder, derives[index]!.placeholder, derives[index]!);
+  }
   const references: StateDeriveReferenceFact[] = [];
 
-  for (const element of jsxElements(model)) {
-    for (const attribute of element.attributes) {
+  const elements = compilerSnapshotDenseArray(jsxElements(model), 'State-derive JSX elements');
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const element = elements[elementIndex]!;
+    const attributes = compilerSnapshotDenseArray(
+      element.attributes,
+      'State-derive JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      const attribute = attributes[attributeIndex]!;
       if (
         !(
           attribute.name === 'data-bind' ||
-          attribute.name.startsWith('data-bind:') ||
+          compilerStringStartsWith(attribute.name, 'data-bind:') ||
           // SPEC §4.8 data-bind-prop: version the live-property stamp's derive
           // reference identically to its data-bind:<attr> sibling.
-          attribute.name.startsWith('data-bind-prop:')
+          compilerStringStartsWith(attribute.name, 'data-bind-prop:')
         ) ||
         !attribute.value
       ) {
         continue;
       }
 
-      const derive = derivesByPlaceholder.get(attribute.value);
+      const derive = compilerMapGet(derivesByPlaceholder, attribute.value);
       if (!derive) continue;
 
-      references.push({
+      references[references.length] = {
         attr: attribute.name,
         clientHref,
         exportName: derive.exportName,
@@ -1251,7 +1604,7 @@ export function collectStateDeriveReferenceFacts(
         target: { end: attribute.end, start: attribute.start },
         value: formatKovoModuleRef(kovoModuleRef(clientHref, derive.exportName, 'derive')),
         writer: 'state derive URL versioning',
-      });
+      };
     }
   }
 
@@ -1261,7 +1614,7 @@ export function collectStateDeriveReferenceFacts(
 function versionStateDeriveReferences(
   references: readonly StateDeriveReferenceFact[],
 ): SourceReplacement[] {
-  return references.map((reference) => ({
+  return compilerMapDense(references, 'State-derive reference replacements', (reference) => ({
     end: reference.target.end,
     replacement: `${reference.attr}="${escapeAttribute(reference.value)}"`,
     start: reference.target.start,
@@ -1311,7 +1664,7 @@ export function assertRenderEquivalence(result: CompileResult): void {
       const detail =
         check.expected === undefined && check.actual === undefined
           ? ''
-          : ` expected=${JSON.stringify(check.expected)} actual=${JSON.stringify(check.actual)}`;
+          : ` expected=${canonicalJson(check.expected ?? null)} actual=${canonicalJson(check.actual ?? null)}`;
       throw new Error(`Render equivalence failed for ${check.artifact}${detail}`);
     }
   }
@@ -1371,8 +1724,7 @@ export function assertRenderPlanTokenMonotonicity(
   const beforeToken = tokenFn(before);
   const afterToken = tokenFn(after);
 
-  const shapesChanged =
-    JSON.stringify(sortedRecord(before)) !== JSON.stringify(sortedRecord(after));
+  const shapesChanged = canonicalJson(sortedRecord(before)) !== canonicalJson(sortedRecord(after));
 
   if (shapesChanged && beforeToken === afterToken) {
     throw new CompilerDiagnosticError(
@@ -1428,9 +1780,17 @@ export class CompilerDiagnosticError extends Error {
 }
 
 function sortedRecord(record: Record<string, string>): [string, string][] {
-  return Object.keys(record)
-    .sort()
-    .map((k) => [k, record[k] as string]);
+  const keys = compilerSortedKeys(record);
+  const result: [string, string][] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const value = compilerOwnDataValue(record, key, 'Render-plan token input');
+    if (typeof value !== 'string') {
+      throw new TypeError(`Render-plan token input ${key} must be a string.`);
+    }
+    result[result.length] = [key, value];
+  }
+  return result;
 }
 
 function productionRenderPlanGateDiagnostics(
@@ -1479,51 +1839,71 @@ function renderPlanFingerprintInputForOptions(
   if (!shapes) return {};
 
   const input: CompilerRenderPlanFingerprintInput = {};
-  for (const [name, shape] of Object.entries(shapes)) {
+  const names = compilerSortedKeys(shapes);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const shape = compilerOwnDataValue(shapes, name, 'Compiler query shapes') as
+      | QueryShape
+      | undefined;
+    if (shape === undefined) throw new TypeError(`Compiler query shape ${name} is undefined.`);
     input[name] = stableQueryShapeSignature(shape);
   }
   return input;
 }
 
 function stableQueryShapeSignature(shape: QueryShape): string {
-  if (Array.isArray(shape)) {
-    return encodeRenderPlanFrame('array', shape.map(stableQueryShapeSignature).join(''));
+  if (compilerArrayIsArray(shape)) {
+    const entries = compilerSnapshotDenseArray(shape as readonly QueryShape[], 'Array query shape');
+    const signatures = compilerMapDense(entries, 'Array query-shape entries', (entry) =>
+      stableQueryShapeSignature(entry),
+    );
+    return encodeRenderPlanFrame('array', compilerArrayJoin(signatures, ''));
   }
   if (typeof shape === 'string') return encodeRenderPlanFrame('primitive', shape);
   if (isQueryShapeWrapper(shape)) {
+    const kind = compilerOwnDataValue(
+      shape,
+      'kind',
+      'Query-shape wrapper',
+    ) as QueryShapeWrapper['kind'];
+    const wrappedShape = compilerOwnDataValue(shape, 'shape', 'Query-shape wrapper') as QueryShape;
     return encodeRenderPlanFrame(
       'wrapper',
-      encodeRenderPlanFrame('kind', shape.kind) +
-        encodeRenderPlanFrame('shape', stableQueryShapeSignature(shape.shape)),
+      encodeRenderPlanFrame('kind', kind) +
+        encodeRenderPlanFrame('shape', stableQueryShapeSignature(wrappedShape)),
     );
   }
 
   const objectShape = shape as Readonly<Record<string, QueryShape>>;
-  return encodeRenderPlanFrame(
-    'object',
-    Object.keys(shape)
-      .sort()
-      .map((key) =>
+  const keys = compilerSortedKeys(objectShape);
+  const frames: string[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const propertyShape = compilerOwnDataValue(objectShape, key, 'Object query shape');
+    frames[frames.length] = encodeRenderPlanFrame(
+      'property',
+      encodeRenderPlanFrame('name', key) +
         encodeRenderPlanFrame(
-          'property',
-          encodeRenderPlanFrame('name', key) +
-            encodeRenderPlanFrame('shape', stableQueryShapeSignature(objectShape[key] ?? 'object')),
+          'shape',
+          stableQueryShapeSignature((propertyShape ?? 'object') as QueryShape),
         ),
-      )
-      .join(''),
-  );
+    );
+  }
+  return encodeRenderPlanFrame('object', compilerArrayJoin(frames, ''));
 }
 
 function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
-  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
+  if (typeof shape !== 'object' || shape === null || compilerArrayIsArray(shape)) return false;
+  const kind = compilerOwnDataValue(shape, 'kind', 'Query-shape wrapper candidate');
+  const wrappedShape = compilerOwnDataValue(shape, 'shape', 'Query-shape wrapper candidate');
   return (
-    'kind' in shape &&
-    'shape' in shape &&
-    (shape.kind === 'nullable' ||
-      shape.kind === 'optional' ||
-      shape.kind === 'secret' ||
-      shape.kind === 'volatile-time' ||
-      (shape.kind === 'revealed' && 'reveal' in shape))
+    wrappedShape !== undefined &&
+    (kind === 'nullable' ||
+      kind === 'optional' ||
+      kind === 'secret' ||
+      kind === 'volatile-time' ||
+      (kind === 'revealed' &&
+        compilerOwnDataValue(shape, 'reveal', 'Revealed query-shape wrapper') !== undefined))
   );
 }
 
@@ -1535,12 +1915,43 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 export function collectMinifierReservedNames(
   results: CompileResult | readonly CompileResult[],
 ): string[] {
-  const reserved = new Set<string>();
-  const items = Array.isArray(results) ? results : [results];
+  const reserved = compilerCreateSet<string>();
+  const items: readonly CompileResult[] = compilerArrayIsArray(results)
+    ? compilerSnapshotDenseArray(
+        results as readonly CompileResult[],
+        'Compile results for minifier reservations',
+      )
+    : [results as CompileResult];
 
-  for (const result of items) {
-    for (const exportName of result.clientExports) reserved.add(exportName);
+  for (let resultIndex = 0; resultIndex < items.length; resultIndex += 1) {
+    const exports = compilerSnapshotDenseArray(
+      items[resultIndex]!.clientExports,
+      'Client exports for minifier reservations',
+    );
+    for (let exportIndex = 0; exportIndex < exports.length; exportIndex += 1) {
+      compilerSetAdd(reserved, exports[exportIndex]!);
+    }
   }
+  const result: string[] = [];
+  compilerSetForEachSorted(reserved, result);
+  return result;
+}
 
-  return [...reserved].sort();
+function compilerSetForEachSorted(values: ReadonlySet<string>, result: string[]): void {
+  // The set was populated by pinned operations. Re-scan known values via the captured forEach path
+  // so a late Set iterator/sort replacement cannot change the minifier reservation ABI.
+  const candidates: string[] = [];
+  // `compilerSetForEach` dispatches through the boot-captured Set control.
+  compilerSetForEach(values, (value) => {
+    candidates[candidates.length] = value;
+  });
+  for (let index = 0; index < candidates.length; index += 1) {
+    const value = candidates[index]!;
+    let insertAt = result.length;
+    while (insertAt > 0 && value < result[insertAt - 1]!) {
+      result[insertAt] = result[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    result[insertAt] = value;
+  }
 }

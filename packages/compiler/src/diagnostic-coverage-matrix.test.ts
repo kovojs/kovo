@@ -1540,5 +1540,5 @@ function snapshotDiagnostic(diagnostic: CompilerDiagnostic): DiagnosticSnapshotF
 }
 
 function normalizeDiagnosticText(text: string): string {
-  return text.replaceAll(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\//g, '/c/__v/<version>/');
+  return text.replaceAll(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\//g, '/c/__v/<version>/');
 }

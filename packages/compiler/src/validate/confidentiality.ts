@@ -1,4 +1,10 @@
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import {
+  compilerArrayIsArray,
+  compilerArrayLength,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+} from '../compiler-security-intrinsics.js';
 import { componentOptionObjectKeys } from '../scan/parse.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
@@ -16,40 +22,55 @@ export const validateSecretQueryWire = securityClassifier(
   ): CompilerDiagnostic[] {
     const queryShapes = componentQueryShapes(options);
     const queryNames = componentOptionObjectKeys(model, 'queries');
-    const missingShapeDiagnostics = requiresClosedQueryShapeFacts(options)
-      ? queryNames
-          .filter((query) => !queryShapes?.[query])
-          .map((query) =>
-            diagnostics.at(
-              'KV435',
-              undefined,
-              `query="${query}" missing query-shape fact for production query-wire validation`,
-            ),
-          )
-      : [];
+    const queryNameLength = compilerArrayLength(queryNames, 'Component query names');
+    const queryNameSnapshot: string[] = [];
+    const missingShapeDiagnostics: CompilerDiagnostic[] = [];
+    for (let index = 0; index < queryNameLength; index += 1) {
+      const query = compilerOwnDataValue(queryNames, index, 'Component query names');
+      if (typeof query !== 'string') {
+        throw new TypeError(`Component query names[${index}] must be an own string.`);
+      }
+      queryNameSnapshot[queryNameSnapshot.length] = query;
+      const shape = queryShapes
+        ? (compilerOwnDataValue(queryShapes, query, 'Component query shapes') as
+            | QueryShape
+            | undefined)
+        : undefined;
+      if (requiresClosedQueryShapeFacts(options) && shape === undefined) {
+        missingShapeDiagnostics[missingShapeDiagnostics.length] = diagnostics.at(
+          'KV435',
+          undefined,
+          `query="${query}" missing query-shape fact for production query-wire validation`,
+        );
+      }
+    }
     if (!queryShapes) return missingShapeDiagnostics;
 
-    return [
-      ...missingShapeDiagnostics,
-      ...queryNames.flatMap((query) =>
-        secretQueryShapePaths(queryShapes[query]).map((path) =>
-          diagnostics.at(
-            'KV435',
-            undefined,
-            `query="${query}" path="${pathForDiagnostic(query, path)}"`,
-          ),
-        ),
-      ),
-      ...queryNames.flatMap((query) =>
-        tableRowQueryShapePaths(queryShapes[query]).map((path) =>
-          diagnostics.at(
-            'KV439',
-            undefined,
-            `query="${query}" path="${pathForDiagnostic(query, path)}"`,
-          ),
-        ),
-      ),
-    ];
+    const result: CompilerDiagnostic[] = [];
+    appendDiagnostics(result, missingShapeDiagnostics);
+    for (let index = 0; index < queryNameSnapshot.length; index += 1) {
+      const query = queryNameSnapshot[index]!;
+      const shape = compilerOwnDataValue(queryShapes, query, 'Component query shapes') as
+        | QueryShape
+        | undefined;
+      const secretPaths = secretQueryShapePaths(shape);
+      for (let pathIndex = 0; pathIndex < secretPaths.length; pathIndex += 1) {
+        result[result.length] = diagnostics.at(
+          'KV435',
+          undefined,
+          `query="${query}" path="${pathForDiagnostic(query, secretPaths[pathIndex]!)}"`,
+        );
+      }
+      const tablePaths = tableRowQueryShapePaths(shape);
+      for (let pathIndex = 0; pathIndex < tablePaths.length; pathIndex += 1) {
+        result[result.length] = diagnostics.at(
+          'KV439',
+          undefined,
+          `query="${query}" path="${pathForDiagnostic(query, tablePaths[pathIndex]!)}"`,
+        );
+      }
+    }
+    return result;
   },
 );
 
@@ -72,17 +93,25 @@ const secretQueryShapePaths = securityClassifier(
       // records that decision for `kovo explain --revealed`; KV435 remains the
       // default for un-revealed secret fields.
       if (shape.kind === 'revealed') return [];
-      if (shape.kind === 'secret') return [path.join('.')];
+      if (shape.kind === 'secret') return [joinShapePath(path)];
       return secretQueryShapePaths(shape.shape, path);
     }
 
-    if (isArrayQueryShape(shape)) return secretQueryShapePaths(shape[0] ?? 'object', path);
+    if (isArrayQueryShape(shape)) {
+      const item = compilerOwnDataValue(shape, 0, 'Secret query array shape');
+      return secretQueryShapePaths((item ?? 'object') as QueryShape, path);
+    }
     if (isQueryShapePrimitive(shape)) return [];
-    if (!isQueryShapeObject(shape)) return [path.join('.')];
+    if (!isQueryShapeObject(shape)) return [joinShapePath(path)];
 
-    return Object.entries(shape).flatMap(([key, child]) =>
-      secretQueryShapePaths(child, [...path, key]),
-    );
+    const result: string[] = [];
+    const keys = compilerObjectKeys(shape);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const child = compilerOwnDataValue(shape, key, 'Secret query object shape') as QueryShape;
+      appendStrings(result, secretQueryShapePaths(child, appendShapePath(path, key)));
+    }
+    return result;
   },
 );
 
@@ -92,17 +121,25 @@ const tableRowQueryShapePaths = securityClassifier(
     if (shape === undefined) return [];
 
     if (isQueryShapeWrapper(shape)) {
-      if (shape.kind === 'table-row') return [path.join('.')];
+      if (shape.kind === 'table-row') return [joinShapePath(path)];
       return tableRowQueryShapePaths(shape.shape, path);
     }
 
-    if (isArrayQueryShape(shape)) return tableRowQueryShapePaths(shape[0] ?? 'object', path);
+    if (isArrayQueryShape(shape)) {
+      const item = compilerOwnDataValue(shape, 0, 'Table-row query array shape');
+      return tableRowQueryShapePaths((item ?? 'object') as QueryShape, path);
+    }
     if (isQueryShapePrimitive(shape)) return [];
-    if (!isQueryShapeObject(shape)) return [path.join('.')];
+    if (!isQueryShapeObject(shape)) return [joinShapePath(path)];
 
-    return Object.entries(shape).flatMap(([key, child]) =>
-      tableRowQueryShapePaths(child, [...path, key]),
-    );
+    const result: string[] = [];
+    const keys = compilerObjectKeys(shape);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const child = compilerOwnDataValue(shape, key, 'Table-row query object shape') as QueryShape;
+      appendStrings(result, tableRowQueryShapePaths(child, appendShapePath(path, key)));
+    }
+    return result;
   },
 );
 
@@ -117,10 +154,40 @@ function isQueryShapePrimitive(shape: QueryShape): boolean {
 }
 
 function malformedRevealInnerShape(shape: QueryShape): QueryShape | undefined {
-  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return undefined;
+  if (typeof shape !== 'object' || shape === null || compilerArrayIsArray(shape)) return undefined;
   const record = shape as Record<string, unknown>;
-  if (record.kind !== 'revealed' || !('shape' in record) || 'reveal' in record) return undefined;
-  return record.shape as QueryShape;
+  const kind = compilerOwnDataValue(record, 'kind', 'Reveal query shape');
+  const inner = compilerOwnDataValue(record, 'shape', 'Reveal query shape');
+  const reveal = compilerOwnDataValue(record, 'reveal', 'Reveal query shape');
+  if (kind !== 'revealed' || inner === undefined || reveal !== undefined) return undefined;
+  return inner as QueryShape;
+}
+
+function appendDiagnostics(
+  target: CompilerDiagnostic[],
+  values: readonly CompilerDiagnostic[],
+): void {
+  for (let index = 0; index < values.length; index += 1) target[target.length] = values[index]!;
+}
+
+function appendStrings(target: string[], values: readonly string[]): void {
+  for (let index = 0; index < values.length; index += 1) target[target.length] = values[index]!;
+}
+
+function appendShapePath(path: readonly string[], key: string): string[] {
+  const result: string[] = [];
+  for (let index = 0; index < path.length; index += 1) result[result.length] = path[index]!;
+  result[result.length] = key;
+  return result;
+}
+
+function joinShapePath(path: readonly string[]): string {
+  let result = '';
+  for (let index = 0; index < path.length; index += 1) {
+    if (index > 0) result += '.';
+    result += path[index]!;
+  }
+  return result;
 }
 
 function pathForDiagnostic(query: string, path: string): string {

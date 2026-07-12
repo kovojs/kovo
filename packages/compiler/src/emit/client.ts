@@ -1,6 +1,17 @@
 import { compilerIrHeader } from '../ir.js';
 import { headlessUiGeneratedHandlerNames } from '../generated/headless-ui-generated-handlers.js';
 import {
+  compilerArrayJoin,
+  compilerCreateSet,
+  compilerOwnDataValue,
+  compilerRegExpReplace,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerSnapshotDenseArray,
+  compilerStringSplit,
+  compilerStringTrim,
+} from '../compiler-security-intrinsics.js';
+import {
   runtimeOutputHelpers,
   templateStampHtmlEscapeExpression,
 } from '../security/output-context.js';
@@ -95,51 +106,102 @@ export function emitClientModuleImportManifest(
  * registration so the browser never sees a bare package specifier in an immutable client module.
  */
 export function rewriteClientModuleRuntimeImportsForBrowser(source: string): string {
-  return source.replace(RUNTIME_GENERATED_IMPORT_PATTERN, (_match, specifiers: string) =>
-    runtimeGeneratedHelperSource(importedRuntimeGeneratedNames(specifiers)),
+  return compilerRegExpReplace(
+    RUNTIME_GENERATED_IMPORT_PATTERN,
+    source,
+    (_match, specifiers: string) =>
+      runtimeGeneratedHelperSource(importedRuntimeGeneratedNames(specifiers)),
   );
 }
 
 function importedRuntimeGeneratedNames(specifiers: string): readonly string[] {
-  return specifiers
-    .split(',')
-    .map(
-      (specifier) =>
-        specifier
-          .trim()
-          .split(/\s+as\s+/i)[0]
-          ?.trim() ?? '',
-    )
-    .filter(Boolean)
-    .sort();
+  const parts = compilerStringSplit(specifiers, ',');
+  const names: string[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const aliases = compilerStringSplit(compilerStringTrim(parts[index]!), /\s+as\s+/i);
+    const name = aliases[0] === undefined ? '' : compilerStringTrim(aliases[0]);
+    if (name.length === 0) continue;
+    let insertAt = names.length;
+    while (insertAt > 0 && name < names[insertAt - 1]!) {
+      names[insertAt] = names[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    names[insertAt] = name;
+  }
+  return names;
 }
 
 function runtimeGeneratedHelperSource(names: readonly string[]): string {
   const helpers: string[] = [];
   const missing: string[] = [];
-  for (const name of runtimeGeneratedHelperNames(names)) {
-    const helper = RUNTIME_GENERATED_HELPERS[name];
+  const helperNames = compilerSnapshotDenseArray(
+    runtimeGeneratedHelperNames(names),
+    'Runtime-generated helper names',
+  );
+  for (let index = 0; index < helperNames.length; index += 1) {
+    const name = helperNames[index]!;
+    const helper = compilerOwnDataValue(
+      RUNTIME_GENERATED_HELPERS,
+      name,
+      'Runtime-generated helper registry',
+    );
     if (helper === undefined) {
-      missing.push(name);
+      missing[missing.length] = name;
       continue;
     }
-    helpers.push(helper);
+    if (typeof helper !== 'string') {
+      throw new TypeError(`Runtime-generated helper ${name} must be a source string.`);
+    }
+    helpers[helpers.length] = helper;
   }
   if (missing.length > 0) {
     throw new Error(
-      `Cannot emit browser-resolvable client module helpers for generated ABI import(s): ${missing.join(
-        ', ',
-      )}`,
+      `Cannot emit browser-resolvable client module helpers for generated ABI import(s): ${compilerArrayJoin(missing, ', ')}`,
     );
   }
 
-  return `${dedupeBy(helpers, (helper) => helper).join('\n')}\n\n`;
+  const uniqueHelpers: string[] = [];
+  const seen = compilerCreateSet<string>();
+  for (let index = 0; index < helpers.length; index += 1) {
+    const helper = helpers[index]!;
+    if (compilerSetHas(seen, helper)) continue;
+    compilerSetAdd(seen, helper);
+    uniqueHelpers[uniqueHelpers.length] = helper;
+  }
+  return `${compilerArrayJoin(uniqueHelpers, '\n')}\n\n`;
 }
 
 function runtimeGeneratedHelperNames(names: readonly string[]): readonly string[] {
-  const expanded = new Set(names);
-  if (expanded.has('applyCompiledQueryUpdatePlan')) expanded.add('runQueryUpdatePlan');
-  return [...expanded].sort();
+  const source = compilerSnapshotDenseArray(names, 'Imported runtime-generated names');
+  const expanded = compilerCreateSet<string>();
+  for (let index = 0; index < source.length; index += 1) {
+    compilerSetAdd(expanded, source[index]!);
+  }
+  if (compilerSetHas(expanded, 'applyCompiledQueryUpdatePlan')) {
+    compilerSetAdd(expanded, 'runQueryUpdatePlan');
+  }
+  const result: string[] = [];
+  const candidates = compilerSnapshotDenseArray(source, 'Runtime-generated helper candidates');
+  candidates[candidates.length] = 'runQueryUpdatePlan';
+  for (let index = 0; index < candidates.length; index += 1) {
+    const name = candidates[index]!;
+    if (!compilerSetHas(expanded, name)) continue;
+    let alreadyPresent = false;
+    for (let resultIndex = 0; resultIndex < result.length; resultIndex += 1) {
+      if (result[resultIndex] === name) {
+        alreadyPresent = true;
+        break;
+      }
+    }
+    if (alreadyPresent) continue;
+    let insertAt = result.length;
+    while (insertAt > 0 && name < result[insertAt - 1]!) {
+      result[insertAt] = result[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    result[insertAt] = name;
+  }
+  return result;
 }
 
 const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
