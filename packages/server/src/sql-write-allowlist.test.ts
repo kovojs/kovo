@@ -117,6 +117,31 @@ describe('parseSqlWriteTables', () => {
       Array.prototype.push = nativePush;
     }
   });
+
+  it('keeps nested data-modifying CTE targets after selective iterator replacement', () => {
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    let victimIterations = 0;
+    try {
+      Array.prototype[Symbol.iterator] = function (): ArrayIterator<unknown> {
+        if (this.length === 1 && this[0] === 'victim_accounts') {
+          victimIterations += 1;
+          if (victimIterations === 4) {
+            return Reflect.apply(nativeIterator, [], []) as ArrayIterator<unknown>;
+          }
+        }
+        return Reflect.apply(nativeIterator, this, []) as ArrayIterator<unknown>;
+      };
+      expect(
+        parseSqlWriteTables(
+          'INSERT INTO allowed WITH deleted AS (DELETE FROM victim_accounts RETURNING id) SELECT id FROM deleted',
+          { dialect: 'postgres' },
+        ),
+      ).toEqual(['allowed', 'victim_accounts']);
+      expect(victimIterations).toBe(3);
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+    }
+  });
 });
 
 describe('classifyStatement', () => {

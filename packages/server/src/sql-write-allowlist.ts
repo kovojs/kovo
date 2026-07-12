@@ -312,14 +312,12 @@ function writeTablesForInsert(
   cteAliases: ReadonlySet<string>,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
-  return [
+  return directAndNestedWriteTables(
     tableName(statement.into),
-    ...writeTablesForNestedStatements(
-      [statement.insert, statement.onConflict, statement.returning],
-      cteAliases,
-      dialect,
-    ),
-  ];
+    [statement.insert, statement.onConflict, statement.returning],
+    cteAliases,
+    dialect,
+  );
 }
 
 function writeTablesForUpdate(
@@ -327,14 +325,12 @@ function writeTablesForUpdate(
   cteAliases: ReadonlySet<string>,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
-  return [
+  return directAndNestedWriteTables(
     tableName(statement.table),
-    ...writeTablesForNestedStatements(
-      [statement.from, statement.sets, statement.where, statement.returning],
-      cteAliases,
-      dialect,
-    ),
-  ];
+    [statement.from, statement.sets, statement.where, statement.returning],
+    cteAliases,
+    dialect,
+  );
 }
 
 function writeTablesForDelete(
@@ -342,10 +338,31 @@ function writeTablesForDelete(
   cteAliases: ReadonlySet<string>,
   dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
-  return [
+  return directAndNestedWriteTables(
     tableName(statement.from),
-    ...writeTablesForNestedStatements([statement.where, statement.returning], cteAliases, dialect),
-  ];
+    [statement.where, statement.returning],
+    cteAliases,
+    dialect,
+  );
+}
+
+function directAndNestedWriteTables(
+  direct: ParsedSqlWriteTarget,
+  values: readonly unknown[],
+  cteAliases: ReadonlySet<string>,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
+): ParsedSqlWriteTarget[] {
+  const targets: ParsedSqlWriteTarget[] = [];
+  appendSqlClassifierValue(targets, direct);
+  const nested = writeTablesForNestedStatements(values, cteAliases, dialect);
+  for (let index = 0; index < nested.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(nested, index);
+    appendSqlClassifierValue(
+      targets,
+      descriptor === undefined || !('value' in descriptor) ? UNTABLED_SQL_WRITE : descriptor.value,
+    );
+  }
+  return targets;
 }
 
 function writeTablesForTruncate(statement: TruncateTableStatement): ParsedSqlWriteTarget[] {
@@ -455,7 +472,18 @@ function writeTablesForNestedStatement(
 
   if (isStatement(value)) {
     const verdict = classifyParsedStatement(value, cteAliases, dialect);
-    return verdict.kind === 'proven-unsafe' ? [...verdict.detail] : [];
+    if (verdict.kind !== 'proven-unsafe') return [];
+    const targets: ParsedSqlWriteTarget[] = [];
+    for (let index = 0; index < verdict.detail.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(verdict.detail, index);
+      appendSqlClassifierValue(
+        targets,
+        descriptor === undefined || !('value' in descriptor)
+          ? UNTABLED_SQL_WRITE
+          : descriptor.value,
+      );
+    }
+    return targets;
   }
 
   const targets: ParsedSqlWriteTarget[] = [];
