@@ -1,4 +1,8 @@
-import type { WebhookVerifier } from '@kovojs/core';
+import type {
+  CustomWebhookVerifier,
+  WebhookVerificationRequest,
+  WebhookVerifier,
+} from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import {
   actAsNonRequestPrincipal,
@@ -7,7 +11,12 @@ import {
   type PrincipalAccessOperation,
 } from './auth-principal.js';
 import type { ChangeRecord } from './change-record.js';
-import { pinAccessDecision, verifiedAccess, type AccessDecision } from './access.js';
+import {
+  pinAccessDecision,
+  snapshotAccessDecision,
+  verifiedAccess,
+  type AccessDecision,
+} from './access.js';
 import type { Domain } from './domain.js';
 import { runMutation, type RunMutationOptions } from './mutation.js';
 import {
@@ -27,7 +36,8 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import { isSchemaValidationError } from './schema.js';
+import { securityStringTrim } from './response-security-intrinsics.js';
+import { isSchemaValidationError, snapshotSchemaForRuntime } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { reserveReplayBeforeRun } from './replay.js';
@@ -40,10 +50,17 @@ import {
 } from './request-state-intrinsics.js';
 import {
   createWitnessMap,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessGetPrototypeOf,
+  witnessIsArray,
   witnessMapDelete,
   witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
+  witnessObjectIs,
+  witnessReflectApply,
 } from './security-witness-intrinsics.js';
 import {
   parseUntrustedJsonBodyBytes,
@@ -51,6 +68,7 @@ import {
 } from './untrusted-request-body.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
+const WEBHOOK_OBJECT_PROTOTYPE = witnessGetPrototypeOf({});
 
 declare const webhookTxDbBrand: unique symbol;
 
@@ -510,20 +528,21 @@ export function webhook<
   path: Path,
   definition: WebhookDefinition<InputSchema, Value, Tx, Writes>,
 ): WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes> {
-  pinWebhookVerificationField(definition);
+  const closedDefinition = snapshotWebhookDefinitionForDeclaration(definition);
   const name = webhookNameFromPath(path);
-  assertWebhookWritePosture(name, definition);
+  assertWebhookWritePosture(name, closedDefinition);
   let declaration: WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes>;
   const handler = async (request: EndpointRequest): Promise<Response> =>
     (await runWebhook(declaration, request)).response;
 
-  const access = definition.access ?? (definition.verify === 'none' ? undefined : verifiedAccess);
-  const auth = webhookAuth(definition);
+  const access =
+    closedDefinition.access ?? (closedDefinition.verify === 'none' ? undefined : verifiedAccess);
+  const auth = webhookAuth(closedDefinition);
   declaration = pinAccessDecision(
     {
       csrf: {
         exempt: true,
-        justification: webhookCsrfJustification(name, definition),
+        justification: webhookCsrfJustification(name, closedDefinition),
       },
       handler,
       method: 'POST' satisfies EndpointMethod,
@@ -538,27 +557,282 @@ export function webhook<
         reservedHeaders: WEBHOOK_RESPONSE_RESERVED_HEADERS,
       },
       webhook: true,
-      webhookDefinition: definition,
+      webhookDefinition: closedDefinition,
     } satisfies WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes>,
     access,
   );
+  witnessDefineProperty(declaration, 'webhookDefinition', {
+    configurable: false,
+    enumerable: true,
+    value: closedDefinition,
+    writable: false,
+  });
   pinEndpointAuth(declaration, auth);
-  if (definition.verify !== 'none') pinEndpointSelfVerifyingAuth(declaration);
+  if (closedDefinition.verify !== 'none') pinEndpointSelfVerifyingAuth(declaration);
 
   return declaration;
 }
 
-function pinWebhookVerificationField(definition: WebhookVerificationFields): void {
-  const descriptor = Object.getOwnPropertyDescriptor(definition, 'verify');
-  if (descriptor === undefined || !('value' in descriptor)) {
-    throw new TypeError('webhook() requires a stable own verification declaration.');
+function snapshotWebhookDefinitionForDeclaration<
+  InputSchema extends Schema<unknown>,
+  Value,
+  Tx,
+  Writes extends WebhookDeclaredWrites | undefined,
+>(
+  source: WebhookDefinition<InputSchema, Value, Tx, Writes>,
+): WebhookDefinition<InputSchema, Value, Tx, Writes> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('webhook() requires a stable own-data definition record.');
   }
-  Object.defineProperty(definition, 'verify', {
-    configurable: false,
-    enumerable: descriptor.enumerable === true,
-    value: descriptor.value,
-    writable: false,
+  const verifySource = stableOwnWebhookValue(source, 'verify', 'webhook().verify');
+  const verify = snapshotWebhookVerification(verifySource);
+  const inputSource = stableOwnWebhookValue(source, 'input', 'webhook().input');
+  const handler = stableOwnWebhookValue(source, 'handler', 'webhook().handler');
+  const idempotency = stableOwnWebhookValue(source, 'idempotency', 'webhook().idempotency', false);
+  const replayStoreSource = stableOwnWebhookValue(
+    source,
+    'replayStore',
+    'webhook().replayStore',
+    false,
+  );
+  const transaction = stableOwnWebhookValue(source, 'transaction', 'webhook().transaction', false);
+  const writesSource = stableOwnWebhookValue(source, 'writes', 'webhook().writes', false);
+  const accessSource = stableOwnWebhookValue(source, 'access', 'webhook().access', false);
+
+  if (typeof handler !== 'function') throw new TypeError('webhook().handler must be a function.');
+  if (idempotency !== undefined && typeof idempotency !== 'function') {
+    throw new TypeError('webhook().idempotency must be a function.');
+  }
+  if (transaction !== undefined && typeof transaction !== 'function') {
+    throw new TypeError('webhook().transaction must be a function.');
+  }
+
+  const input = snapshotSchemaForRuntime(inputSource as InputSchema, 'webhook().input');
+  const replayStore =
+    replayStoreSource === undefined
+      ? undefined
+      : snapshotWebhookReplayStore(replayStoreSource, 'webhook().replayStore');
+  const writes =
+    writesSource === undefined
+      ? undefined
+      : snapshotWebhookWrites(writesSource, 'webhook().writes');
+  const access = snapshotAccessDecision(accessSource as AccessDecision | undefined);
+
+  if (verify === 'none') {
+    const justification = stableOwnWebhookValue(
+      source,
+      'verifyJustification',
+      'webhook().verifyJustification',
+    );
+    if (typeof justification !== 'string' || securityStringTrim(justification) === '') {
+      throw new TypeError('webhook() verify: "none" requires a non-empty verifyJustification.');
+    }
+    return witnessFreeze({
+      ...(access === undefined ? {} : { access }),
+      handler,
+      ...(idempotency === undefined ? {} : { idempotency }),
+      input,
+      ...(replayStore === undefined ? {} : { replayStore }),
+      ...(transaction === undefined ? {} : { transaction }),
+      verify,
+      verifyJustification: justification,
+      ...(writes === undefined ? {} : { writes }),
+    }) as WebhookDefinition<InputSchema, Value, Tx, Writes>;
+  }
+
+  return witnessFreeze({
+    ...(access === undefined ? {} : { access }),
+    handler,
+    ...(idempotency === undefined ? {} : { idempotency }),
+    input,
+    ...(replayStore === undefined ? {} : { replayStore }),
+    ...(transaction === undefined ? {} : { transaction }),
+    verify,
+    ...(writes === undefined ? {} : { writes }),
+  }) as WebhookDefinition<InputSchema, Value, Tx, Writes>;
+}
+
+function snapshotWebhookVerification(source: unknown): WebhookVerifier | 'none' {
+  if (source === 'none') return source;
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('webhook().verify must be "none" or a stable verifier object.');
+  }
+  const kind = stableOwnWebhookValue(source, 'kind', 'webhook().verify.kind');
+  if (kind === 'hmac') {
+    if (!isFrameworkHmacSignatureVerifier(source)) {
+      throw new TypeError(
+        'webhook() HMAC verification must come from hmacSignature() or a framework preset.',
+      );
+    }
+    return source;
+  }
+  if (kind !== 'custom') {
+    throw new TypeError('webhook().verify.kind must be "custom" or "hmac".');
+  }
+  const name = stableOwnWebhookValue(source, 'name', 'webhook().verify.name');
+  const scheme = stableOwnWebhookValue(source, 'scheme', 'webhook().verify.scheme');
+  const verify = stableOwnWebhookValue(source, 'verify', 'webhook().verify.verify');
+  if (typeof name !== 'string' || typeof scheme !== 'string' || typeof verify !== 'function') {
+    throw new TypeError('webhook().verify must expose stable custom verifier metadata.');
+  }
+
+  let snapshot: CustomWebhookVerifier;
+  snapshot = witnessFreeze({
+    kind: 'custom' as const,
+    name,
+    scheme,
+    async verify(request: WebhookVerificationRequest): Promise<boolean> {
+      return (await witnessReflectApply(verify, snapshot, [request])) === true;
+    },
   });
+  return snapshot;
+}
+
+function snapshotWebhookReplayStore(source: unknown, label: string): WebhookReplayStore {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError(`${label} must be a stable replay-store object.`);
+  }
+  const get = stableWebhookMethod(source, 'get', `${label}.get`);
+  const reserve = stableWebhookMethod(source, 'reserve', `${label}.reserve`);
+  const set = stableWebhookMethod(source, 'set', `${label}.set`);
+  return witnessFreeze({
+    get(scope: string, idem: string) {
+      return witnessReflectApply(get, source, [scope, idem]);
+    },
+    reserve(scope: string, idem: string) {
+      const reservation = witnessReflectApply<unknown>(reserve, source, [scope, idem]);
+      return reservation === undefined
+        ? undefined
+        : snapshotWebhookReplayReservation(reservation, `${label}.reserve()`);
+    },
+    set(scope: string, idem: string, response: WebhookWireResponse) {
+      witnessReflectApply(set, source, [scope, idem, response]);
+    },
+  });
+}
+
+function snapshotWebhookReplayReservation(
+  source: unknown,
+  label: string,
+): WebhookReplayReservation {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError(`${label} must return a stable replay reservation.`);
+  }
+  const commit = stableWebhookMethod(source, 'commit', `${label}.commit`);
+  const abort = stableWebhookMethod(source, 'abort', `${label}.abort`, false);
+  return witnessFreeze({
+    ...(abort === undefined
+      ? {}
+      : {
+          abort() {
+            witnessReflectApply(abort, source, []);
+          },
+        }),
+    commit(response: WebhookWireResponse) {
+      witnessReflectApply(commit, source, [response]);
+    },
+  });
+}
+
+function snapshotWebhookWrites(source: unknown, label: string): readonly Domain[] {
+  if (!witnessIsArray(source)) throw new TypeError(`${label} must be an array.`);
+  const length = stableOwnWebhookValue(source, 'length', `${label}.length`);
+  if (typeof length !== 'number' || length < 0 || length > 100_000 || length % 1 !== 0) {
+    throw new TypeError(`${label} must be a bounded dense array.`);
+  }
+  const snapshot: Domain[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const domain = stableOwnWebhookValue(source, index, `${label}[${index}]`);
+    if (typeof domain !== 'object' || domain === null || witnessIsArray(domain)) {
+      throw new TypeError(`${label}[${index}] must be a domain.`);
+    }
+    const key = stableOwnWebhookValue(domain, 'key', `${label}[${index}].key`);
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new TypeError(`${label}[${index}].key must be a non-empty string.`);
+    }
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: domain,
+      writable: true,
+    });
+  }
+  return witnessFreeze(snapshot);
+}
+
+function stableWebhookMethod(
+  source: object,
+  property: PropertyKey,
+  label: string,
+  required?: true,
+): Function;
+function stableWebhookMethod(
+  source: object,
+  property: PropertyKey,
+  label: string,
+  required: false,
+): Function | undefined;
+function stableWebhookMethod(
+  source: object,
+  property: PropertyKey,
+  label: string,
+  required = true,
+): Function | undefined {
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const before = witnessGetOwnPropertyDescriptor(owner, property);
+    const prototype = witnessGetPrototypeOf(owner);
+    const after = witnessGetOwnPropertyDescriptor(owner, property);
+    if (!sameWebhookDataDescriptor(before, after)) {
+      throw new TypeError(`${label} changed while the webhook was closed.`);
+    }
+    if (before !== undefined) {
+      if (!('value' in before) || typeof before.value !== 'function') {
+        throw new TypeError(`${label} must be a stable data method.`);
+      }
+      return before.value;
+    }
+    if (witnessGetPrototypeOf(owner) !== prototype) {
+      throw new TypeError(`${label} prototype changed while the webhook was closed.`);
+    }
+    owner = prototype;
+  }
+  if (!required) return undefined;
+  throw new TypeError(`${label} must be a stable data method.`);
+}
+
+function stableOwnWebhookValue(
+  source: object,
+  property: PropertyKey,
+  label: string,
+  required = true,
+): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (!sameWebhookDataDescriptor(before, after)) {
+    throw new TypeError(`${label} changed while the webhook was closed.`);
+  }
+  if (before === undefined) {
+    if (!required) return undefined;
+    throw new TypeError(`${label} must be an own data property.`);
+  }
+  if (!('value' in before)) throw new TypeError(`${label} must be an own data property.`);
+  return before.value;
+}
+
+function sameWebhookDataDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    'value' in left &&
+    'value' in right &&
+    witnessObjectIs(left.value, right.value) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
 }
 
 /**
@@ -1274,10 +1548,7 @@ function webhookReplayKey(scope: string, idem: string): string {
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype
-  );
+  if (typeof value !== 'object' || value === null || witnessIsArray(value)) return false;
+  const prototype = witnessGetPrototypeOf(value);
+  return prototype === null || prototype === WEBHOOK_OBJECT_PROTOTYPE;
 }

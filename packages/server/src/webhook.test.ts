@@ -3,6 +3,7 @@ import { customVerifier, hmacSignature } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { describe, expect, it } from 'vitest';
 
+import { createApp, createRequestHandler } from './app.js';
 import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
 import { assignDerivedWebhookName } from './internal/wire.js';
@@ -253,6 +254,49 @@ describe('server webhook primitive', () => {
       },
       webhook: true,
     });
+  });
+
+  it('binds app dispatch to the snapshotted verifier under a poisoned declaration pin', async () => {
+    const nativeDefineProperty = Object.defineProperty;
+    let handled = 0;
+    const verifier = customVerifier('closed-rejecting-verifier', () => false);
+    const definition = {
+      handler() {
+        handled += 1;
+      },
+      input: s.object({ id: s.string() }),
+      verify: verifier,
+    };
+
+    Object.defineProperty = function (target, property, descriptor) {
+      if (target === definition && property === 'verify') return target;
+      return Reflect.apply(nativeDefineProperty, Object, [target, property, descriptor]);
+    } as typeof Object.defineProperty;
+
+    let declaration;
+    try {
+      declaration = webhook('/webhooks/closed-verifier', definition);
+    } finally {
+      Object.defineProperty = nativeDefineProperty;
+    }
+    (definition as { verify: unknown }).verify = 'none';
+    verifier.verify = async () => true;
+
+    const app = createApp({ endpoints: [declaration] });
+    expect(app.endpoints[0]?.auth).toEqual({
+      kind: 'custom',
+      name: 'closed-rejecting-verifier',
+    });
+    const response = await createRequestHandler(app)(
+      new Request('https://example.test/webhooks/closed-verifier', {
+        body: JSON.stringify({ id: 'unsigned-attacker-event' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(handled).toBe(0);
   });
 
   it('runs verify -> loose parse -> replay reserve -> tx -> handler -> change record', async () => {
@@ -996,12 +1040,17 @@ describe('server webhook primitive', () => {
       verify: 'none',
       verifyJustification: 'fixture-only webhook test',
     });
-    // Simulate a declaration that bypassed the builder (e.g. hand-constructed): strip posture.
-    delete (wh.webhookDefinition as { idempotency?: unknown }).idempotency;
-    delete (wh.webhookDefinition as { replayStore?: unknown }).replayStore;
+    // Simulate a declaration that bypassed the builder (e.g. hand-constructed): strip posture
+    // from a structural clone. webhook() itself now returns an immutable closed definition.
+    const stripped = {
+      ...wh,
+      webhookDefinition: { ...wh.webhookDefinition },
+    };
+    delete (stripped.webhookDefinition as { idempotency?: unknown }).idempotency;
+    delete (stripped.webhookDefinition as { replayStore?: unknown }).replayStore;
 
     const result = await runWebhook(
-      wh,
+      stripped as typeof wh,
       new Request('https://example.test/webhooks/charge-dispatch', {
         body: JSON.stringify({ id: 'evt_1' }),
         method: 'POST',

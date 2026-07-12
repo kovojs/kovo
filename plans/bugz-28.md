@@ -625,7 +625,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the integrated real-export regression emits only the referenced public module and
     runtime; the registered unreferenced admin module and internal token remain absent.
 
-- [ ] **C54 - A mutable webhook verifier pin turns reviewed signed ingress into unsigned execution.**
+- [x] **C54 - A mutable webhook verifier pin turns reviewed signed ingress into unsigned execution.**
       `packages/server/src/webhook.ts`
   - `webhook()` called the live `Object.defineProperty` to pin `definition.verify`, then retained that
     same public definition as runtime authority. A selective no-op replacement left the field
@@ -634,9 +634,12 @@ This is an active closure ledger; `SPEC.md` remains normative.
     and executed the handler.
   - **Acceptance:** definition fields, verifier identity/configuration, schema, handler, idempotency,
     replay store, transaction, writes, and access posture are snapshotted through boot-pinned stable
-    own-data controls at declaration; endpoint audit/auth metadata and dispatch consume one private
+    own-data controls at declaration; endpoint audit/auth metadata and dispatch consume one immutable
     witnessed authority snapshot, and post-construction mutation or late/import-order poison cannot
     waive verification or change executable/write posture.
+  - **Evidence:** the 240-test webhook/app/endpoint/request matrix and server dist+DTS build pass; the
+    independent full-app no-op pin proof now retains the rejecting custom verifier, returns 401 to
+    the unsigned request, and never runs the handler after both definition and verifier mutation.
 
 ## High
 
@@ -1058,8 +1061,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C54, H20, and H27 are
-active compiler-cache, static-analysis, compiler-Vite, webhook-authority, and immutable-output fixes.
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, H20, and H27 are active
+compiler-cache, static-analysis, compiler-Vite, and immutable-output fixes.
 Integrated
 evidence is
 green at
