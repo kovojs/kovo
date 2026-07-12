@@ -377,7 +377,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
     boot-pinned, semantically checked controls; late/import-order poison cannot replace or reorder
     bytes, admit unsafe URLs/CSS, or desynchronize output from its CSP metadata.
 
-- [ ] **H23 - Mutable enhanced-navigation URL controls apply cross-origin HTML in the live realm.**
+- [x] **H23 - Mutable enhanced-navigation URL controls apply cross-origin HTML in the live realm.**
       `packages/browser/src/enhanced-navigation.ts` and the emitted inline loader
   - Replacing `URL.prototype.origin` after runtime installation made a real navigation accept an
     `https://evil.example` HTML response as same-origin, pass its build/session checks, replace the
@@ -386,8 +386,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     and content-type reads, build/session stamps, document parsing, mutation ordering, hard-navigation
     fallback, and the emitted inline-loader closure use boot-pinned, semantically checked controls;
     late/import-order poison cannot apply cross-origin or non-HTML bytes to the current document.
+  - **Evidence:** 175 focused Node tests and 162 three-engine browser tests pass; the independent
+    cross-origin origin-getter proof falls back without replacing the body or replaying scripts.
 
-- [ ] **H24 - Mutable client reauthentication controls reopen a protocol-relative redirect.**
+- [x] **H24 - Mutable client reauthentication controls reopen a protocol-relative redirect.**
       `packages/browser/src/{reauth-directive,mutation-fetch}.ts` and the emitted inline loader
   - A selective late `String.prototype.startsWith` override made
     `sanitizeReauthDirective('//evil.example/phish')` return the attacker target instead of `/`;
@@ -398,6 +400,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
     path validation, redirect application, auth-success fallback, session transition retirement, and
     the emitted inline-loader closure use boot-pinned controls; late/import-order poison cannot
     navigate outside the current origin, suppress required retirement, or consume unclassified bytes.
+  - **Evidence:** the same Node/browser matrix plus inline-loader parity passes; both independent
+    protocol-relative and backslash-authority proofs route to `/` under late intrinsic replacement.
 
 - [ ] **H25 - The shipped inline loader can mint predictable mutation replay identifiers.**
       `packages/browser/src/{inline-loader-build,inline-loader,mutation-response}.ts`
@@ -501,8 +505,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: H15 and H17-H25 are active response/deferred/
-mutation/client output, task, and browser-navigation/replay-token fixes.
+The remediation pass remains intentionally non-zero: H15, H17-H22, and H25 are active response/
+deferred/mutation/client output, task, schema, and replay-token fixes.
 Integrated
 evidence is
 green at
