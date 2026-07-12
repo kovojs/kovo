@@ -1,20 +1,28 @@
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
-import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
+import {
+  buildOwnDataProperty,
+  buildSecurityFileUrlToPath,
+  buildSecurityPathBasename,
+  buildSecurityPathDirname,
+  buildSecurityPathJoin,
+  buildSecurityPathRelative,
+  buildSecurityPathResolve,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
 import {
   createSecurityNullRecord,
   createSecuritySet,
   securityArrayJoin,
   securityArrayPush,
+  securityIsUrl,
   securityObjectKeys,
   securitySetAdd,
   securitySetHas,
   securityStringEndsWith,
   securityStringSlice,
   securityStringStartsWith,
+  securityUrlObjectSnapshot,
 } from './response-security-intrinsics.js';
 import {
   staticExportOutputTargets,
@@ -113,18 +121,21 @@ export function createStaticExportOutputPlan(
  * the filesystem root for a static export write.
  */
 export function staticExportOutputRoot(outDir: string | URL): string {
-  if (outDir instanceof URL) {
-    if (outDir.protocol === 'file:') return path.resolve(fileURLToPath(outDir));
+  if (securityIsUrl(outDir)) {
+    const snapshot = securityUrlObjectSnapshot(outDir);
+    if (snapshot.protocol === 'file:') {
+      return buildSecurityPathResolve(buildSecurityFileUrlToPath(snapshot.href));
+    }
 
     throw new StaticExportError([
       staticExportDiagnostic(
         'outDir',
-        `KV229 static export cannot write to '${outDir.href}'. SPEC §9.5 static export output directories must be filesystem paths or file: URLs.`,
+        `KV229 static export cannot write to '${snapshot.href}'. SPEC §9.5 static export output directories must be filesystem paths or file: URLs.`,
       ),
     ]);
   }
 
-  return path.resolve(outDir);
+  return buildSecurityPathResolve(outDir);
 }
 
 /**
@@ -153,7 +164,7 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
   await writeArtifactOutput(plan.root, outputEntries, {
     cleanup: {
       enumerate(root) {
-        return enumerateStaticExportRouteDocuments(root, path.join(root, 'c'));
+        return enumerateStaticExportRouteDocuments(root, buildSecurityPathJoin(root, 'c'));
       },
     },
     diagnostics: {
@@ -190,13 +201,14 @@ async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan
     const write = writes[index]!;
     if (
       write.itemKind === 'route-document' ||
-      (write.itemKind === 'static-asset' && path.basename(write.targetPath) === 'index.html')
+      (write.itemKind === 'static-asset' &&
+        buildSecurityPathBasename(write.targetPath) === 'index.html')
     ) {
       securitySetAdd(ownedIndexHtmlDocuments, write.targetPath);
     }
   }
 
-  const clientModuleRoot = path.join(plan.root, 'c');
+  const clientModuleRoot = buildSecurityPathJoin(plan.root, 'c');
   for await (const indexHtmlPath of enumerateStaticExportRouteDocuments(
     plan.root,
     clientModuleRoot,
@@ -205,7 +217,7 @@ async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan
       // Remove only the stale directory-index document; leave any sibling files (assets the export
       // does not own a manifest for, user-managed files) untouched.
       const fileSystem = createFrameworkOutputFileSystemBoundary(plan.root);
-      const relativePath = path.relative(plan.root, indexHtmlPath);
+      const relativePath = buildSecurityPathRelative(plan.root, indexHtmlPath);
       await fileSystem.deleteFile(relativePath);
     }
   }
@@ -222,7 +234,7 @@ async function* enumerateStaticExportRouteDocuments(
 ): AsyncGenerator<string> {
   const fileSystem = createFrameworkOutputFileSystemBoundary(root);
   for await (const entry of fileSystem.entries('.')) {
-    const entryPath = path.join(root, entry.relativePath);
+    const entryPath = buildSecurityPathJoin(root, entry.relativePath);
     if (entry.kind === 'directory') {
       // `/c/` holds immutable versioned client modules — never descend (SPEC §14 retention).
       if (entryPath === clientModuleRoot) continue;
@@ -473,8 +485,10 @@ function staticExportHeaderRecordEntries(
 async function assertReadableStaticExportAssetSource(
   artifact: StaticExportAssetArtifact,
 ): Promise<void> {
-  const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(artifact.source));
-  const sourceStat = await fileSystem.statFile(path.basename(artifact.source));
+  const fileSystem = createFrameworkOutputFileSystemBoundary(
+    buildSecurityPathDirname(artifact.source),
+  );
+  const sourceStat = await fileSystem.statFile(buildSecurityPathBasename(artifact.source));
   if (sourceStat === undefined) {
     throw new StaticExportError([
       staticExportDiagnostic(
@@ -532,13 +546,14 @@ function staticExportAssetHeaders(asset: StaticExportAssetInput): Record<string,
 }
 
 function staticExportSourcePath(asset: StaticExportAssetInput): string {
-  if (asset.source instanceof URL) {
-    if (asset.source.protocol === 'file:') return fileURLToPath(asset.source);
+  if (securityIsUrl(asset.source)) {
+    const snapshot = securityUrlObjectSnapshot(asset.source);
+    if (snapshot.protocol === 'file:') return buildSecurityFileUrlToPath(snapshot.href);
 
     throw new StaticExportError([
       staticExportDiagnostic(
         asset.path,
-        `KV229 static export cannot copy static asset '${asset.path}' from '${asset.source.href}'. Static asset sources must be filesystem paths or file: URLs.`,
+        `KV229 static export cannot copy static asset '${asset.path}' from '${snapshot.href}'. Static asset sources must be filesystem paths or file: URLs.`,
       ),
     ]);
   }

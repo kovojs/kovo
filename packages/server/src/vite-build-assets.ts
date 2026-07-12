@@ -1,9 +1,18 @@
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { confinedPath } from '@kovojs/core/internal/filesystem';
 
-import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
+import {
+  buildOwnDataProperty,
+  buildSecurityFileUrlToPath,
+  buildSecurityPathExtname,
+  buildSecurityPathJoin,
+  buildSecurityPathResolve,
+  snapshotBuildArray,
+} from './build-security-intrinsics.js';
+import {
+  securityIsUrl,
+  securityStringToLowerCase,
+  securityUrlObjectSnapshot,
+} from './response-security-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
 import {
@@ -174,7 +183,7 @@ export function kovoAppShellViteBuildStaticExportAssets(
  * Exported only for in-repo build/host config, not app authors.
  */
 export function kovoAppShellViteManifestFile(distDir: string | URL): string {
-  return path.join(resolvedFileSystemPath(distDir), '.vite', 'manifest.json');
+  return buildSecurityPathJoin(resolvedFileSystemPath(distDir), '.vite', 'manifest.json');
 }
 
 /**
@@ -183,18 +192,21 @@ export function kovoAppShellViteManifestFile(distDir: string | URL): string {
  * Exported only for in-repo build/host config, not app authors.
  */
 export function resolvedFileSystemPath(value: string | URL): string {
-  if (value instanceof URL) {
-    if (value.protocol === 'file:') return path.resolve(fileURLToPath(value));
+  if (securityIsUrl(value)) {
+    const snapshot = securityUrlObjectSnapshot(value);
+    if (snapshot.protocol === 'file:') {
+      return buildSecurityPathResolve(buildSecurityFileUrlToPath(snapshot.href));
+    }
 
     throw new StaticExportError([
       staticExportDiagnostic(
         'vite-distDir',
-        `KV229 Vite app-shell filesystem roots must be filesystem paths or file: URLs, received '${value.href}'. SPEC §9.5 static export copies Vite assets from a local output directory.`,
+        `KV229 Vite app-shell filesystem roots must be filesystem paths or file: URLs, received '${snapshot.href}'. SPEC §9.5 static export copies Vite assets from a local output directory.`,
       ),
     ]);
   }
 
-  return path.resolve(value);
+  return buildSecurityPathResolve(value);
 }
 
 /**
@@ -217,7 +229,7 @@ function viteManifestOptions(base: string | undefined): KovoAppShellViteManifest
 }
 
 function viteAssetContentType(file: string): string | undefined {
-  const extension = path.extname(file).toLowerCase();
+  const extension = securityStringToLowerCase(buildSecurityPathExtname(file));
 
   switch (extension) {
     case '.css':

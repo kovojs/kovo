@@ -1,6 +1,5 @@
-import * as path from 'node:path';
-
 import { exportStaticApp } from './static-export.js';
+import { buildOwnDataProperty, buildSecurityPathDirname } from './build-security-intrinsics.js';
 import type { KovoAppShellBuild, KovoAppShellBuiltClientModule } from './vite-build.js';
 import { kovoAppShellViteStaticExportAssets, resolvedFileSystemPath } from './vite-build-assets.js';
 import type { StaticExportAssetInput, StaticExportResult } from './static-export-types.js';
@@ -91,8 +90,12 @@ export async function writeKovoAppShellViteBuildOutput(
  * Exported only for in-repo build/host config, not app authors.
  */
 export function kovoAppShellViteOutputDir(options: KovoAppShellViteOutputOptions): string {
-  if (options.dir) return options.dir;
-  if (options.file) return path.dirname(options.file);
+  const dir = buildOwnDataProperty(options, 'dir', 'Vite output.dir');
+  if (dir.present && typeof dir.value === 'string' && dir.value !== '') return dir.value;
+  const file = buildOwnDataProperty(options, 'file', 'Vite output.file');
+  if (file.present && typeof file.value === 'string' && file.value !== '') {
+    return buildSecurityPathDirname(file.value);
+  }
 
   throw new Error('App shell Vite build output requires output.dir or output.file.');
 }

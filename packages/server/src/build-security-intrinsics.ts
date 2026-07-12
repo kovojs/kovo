@@ -35,7 +35,11 @@ const nativeFileURLToPath = fileURLToPath;
 const nativeFunctionToString = globalThis.Function.prototype.toString;
 const nativePathBasename = path.basename;
 const nativePathDirname = path.dirname;
+const nativePathExtname = path.extname;
+const nativePathJoin = path.join;
+const nativePathRelative = path.relative;
 const nativePathResolve = path.resolve;
+const nativePathSeparator = path.sep;
 const nativePosixExtname = path.posix.extname;
 const nativePosixDirname = path.posix.dirname;
 const nativeResponseText = stableOwnFunction(NativeResponse.prototype, 'text');
@@ -95,12 +99,17 @@ function capturedControlsAreSound(): boolean {
   try {
     const response = new NativeResponse('control', { status: 201 });
     const pathControl = nativePathResolve('kovo-build-control', 'child.txt');
+    const joinedPathControl = nativePathJoin('kovo-build-control', 'child.txt');
     const fileUrlControl = nativeFileURLToPath('file:///tmp/kovo-build-control.txt');
     return (
       witnessReflectApply<number>(nativeResponseStatus, response, []) === 201 &&
       witnessReflectApply(nativeDecodeURIComponent, undefined, ['safe%2Fchild']) === 'safe/child' &&
       nativePathBasename(pathControl) === 'child.txt' &&
       nativePathBasename(nativePathDirname(pathControl)) === 'kovo-build-control' &&
+      nativePathBasename(joinedPathControl) === 'child.txt' &&
+      nativePathRelative(nativePathDirname(pathControl), pathControl) === 'child.txt' &&
+      nativePathExtname(pathControl) === '.txt' &&
+      (nativePathSeparator === '/' || nativePathSeparator === '\\') &&
       nativePathBasename(fileUrlControl) === 'kovo-build-control.txt' &&
       nativePosixExtname('/assets/app.css') === '.css' &&
       nativePosixDirname('/assets/app.css') === '/assets' &&
@@ -194,9 +203,29 @@ export function buildSecurityPathDirname(value: string): string {
   return nativePathDirname(value);
 }
 
+export function buildSecurityPathExtname(value: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativePathExtname(value);
+}
+
+export function buildSecurityPathJoin(...values: string[]): string {
+  assertBuildSecurityIntrinsics();
+  return nativePathJoin(...values);
+}
+
+export function buildSecurityPathRelative(from: string, to: string): string {
+  assertBuildSecurityIntrinsics();
+  return nativePathRelative(from, to);
+}
+
 export function buildSecurityPathResolve(value: string): string {
   assertBuildSecurityIntrinsics();
   return nativePathResolve(value);
+}
+
+export function buildSecurityPathSeparator(): string {
+  assertBuildSecurityIntrinsics();
+  return nativePathSeparator;
 }
 
 export function buildSecurityPosixDirname(value: string): string {

@@ -1,9 +1,9 @@
-import * as path from 'node:path';
-
 import { confinedPath } from '@kovojs/core/internal/filesystem';
 
 import {
   buildSecurityDecodeURIComponent,
+  buildSecurityPathJoin,
+  buildSecurityPathSeparator,
   snapshotBuildArray,
 } from './build-security-intrinsics.js';
 import {
@@ -145,7 +145,7 @@ export function staticExportOutputTargets(
       itemIndex: 0,
       itemKind: 'header-sidecar',
       kind: 'header sidecar',
-      targetPath: path.join(root, '_headers'),
+      targetPath: buildSecurityPathJoin(root, '_headers'),
     });
   }
 
@@ -220,7 +220,7 @@ function staticExportArtifactTargetPath(root: string, artifactPath: string): str
     ]);
   }
 
-  const targetPath = confinedPath(root, securityArrayJoin(segments, path.sep));
+  const targetPath = confinedPath(root, securityArrayJoin(segments, buildSecurityPathSeparator()));
   if (targetPath !== undefined) return targetPath;
 
   throw new StaticExportError([
@@ -263,7 +263,7 @@ function decodeRouteDocumentPathSegment(segment: string): string {
 
 function staticExportClientModuleTargetPath(root: string, modulePath: string): string {
   const segments = decodedStaticExportPathSegments(modulePath, decodeClientModulePathSegment);
-  const targetPath = confinedPath(root, securityArrayJoin(segments, path.sep));
+  const targetPath = confinedPath(root, securityArrayJoin(segments, buildSecurityPathSeparator()));
   if (targetPath !== undefined) return targetPath;
 
   throw new StaticExportError([
@@ -315,7 +315,7 @@ function staticExportAssetTargetPath(root: string, assetPath: string): string {
     ]);
   }
 
-  const targetPath = confinedPath(root, securityArrayJoin(segments, path.sep));
+  const targetPath = confinedPath(root, securityArrayJoin(segments, buildSecurityPathSeparator()));
   if (targetPath !== undefined) return targetPath;
 
   throw new StaticExportError([

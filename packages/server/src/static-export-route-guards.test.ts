@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -14,6 +15,8 @@ import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 import { StaticExportError } from './static-export-diagnostics.js';
 import { renderedHtml } from './html.js';
+
+const requireFromTest = createRequire(import.meta.url);
 
 describe('server static export', () => {
   it('rejects raw request handlers before static export replay or writes', async () => {
@@ -110,6 +113,53 @@ describe('server static export', () => {
       ],
     });
     expect(rendered).toBe(false);
+  });
+
+  it('does not let late path resolution redirect the static-export output root', async () => {
+    // SPEC §6.6/§9.5 / C172: the root validated before replay is the only destination authority;
+    // authored code cannot make target planning resolve that same carrier a second way.
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-root-safe-'));
+    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-root-outside-'));
+    const nodePath = requireFromTest('node:path') as typeof import('node:path');
+    const originalResolve = nodePath.resolve;
+    let poisonHits = 0;
+
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page() {
+              nodePath.resolve = function (...paths: string[]) {
+                if (
+                  paths.length === 1 &&
+                  paths[0] === outDir &&
+                  new Error().stack?.includes('staticExportOutputRoot')
+                ) {
+                  poisonHits += 1;
+                  return outsideDir;
+                }
+                return Reflect.apply(originalResolve, nodePath, paths);
+              };
+              syncBuiltinESMExports();
+              return renderedHtml('<main>safe-root</main>');
+            },
+          }),
+        ],
+      });
+
+      await exportStaticApp(app, { outDir });
+
+      await expect(readFile(path.join(outsideDir, 'index.html'))).rejects.toThrow();
+      expect(poisonHits).toBe(0);
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
+        'safe-root',
+      );
+    } finally {
+      nodePath.resolve = originalResolve;
+      syncBuiltinESMExports();
+      await rm(outDir, { force: true, recursive: true });
+      await rm(outsideDir, { force: true, recursive: true });
+    }
   });
 
   it('rejects invalid static export origins before replay or writes', async () => {
