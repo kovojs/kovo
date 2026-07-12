@@ -20,7 +20,13 @@ import {
   runtimeOutputHelpers,
   templateStampHtmlEscapeExpression,
 } from '../security/output-context.js';
-import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
+import {
+  applySourceReplacements,
+  dedupeBy,
+  indent,
+  uniqueSorted,
+  type SourceReplacement,
+} from '../shared.js';
 import { elementParamNameFromAttribute } from '../types.js';
 import type {
   ClientConstantDependency,
@@ -536,21 +542,50 @@ function runtimeGeneratedImportNames(
   stateDerives: readonly StateDeriveFact[],
   clockUpdatePlans: readonly ClockUpdatePlanFact[],
 ): readonly string[] {
-  return [
-    ...(queryUpdatePlans.length > 0 ? ['runQueryUpdatePlan'] : []),
-    ...(stateDerives.length > 0 ||
-    queryUpdatePlans.some(
-      (plan) => (plan.derives?.length ?? 0) > 0 || (plan.stamps?.length ?? 0) > 0,
-    )
-      ? ['derive']
-      : []),
-    ...(queryUpdatePlans.some((plan) => (plan.templateStamps?.length ?? 0) > 0)
-      ? [runtimeOutputHelpers.escapeHtml]
-      : []),
-    ...runtimeOutputHelperImports([...queryUpdatePlans], stateDerives),
-    ...(handlers.length > 0 ? ['handler'] : []),
-    ...(clockUpdatePlans.length > 0 ? ['installClockUpdatePlans'] : []),
-  ].sort();
+  const names: string[] = [];
+  const planSnapshot = compilerSnapshotDenseArray(queryUpdatePlans, 'Client query update plans');
+  const stateSnapshot = compilerSnapshotDenseArray(stateDerives, 'Client state derives');
+  let hasDerive = compilerArrayLength(stateSnapshot, 'Client state derives') > 0;
+  let hasTemplateStamp = false;
+  let hasStyleProperty = false;
+  for (let planIndex = 0; planIndex < planSnapshot.length; planIndex += 1) {
+    const plan = planSnapshot[planIndex]!;
+    if (
+      (plan.derives !== undefined &&
+        compilerArrayLength(plan.derives, 'Client query derives') > 0) ||
+      (plan.stamps !== undefined && compilerArrayLength(plan.stamps, 'Client query stamps') > 0)
+    ) {
+      hasDerive = true;
+    }
+    if (
+      plan.templateStamps !== undefined &&
+      compilerArrayLength(plan.templateStamps, 'Client template stamps') > 0
+    ) {
+      hasTemplateStamp = true;
+    }
+    if (plan.stamps !== undefined) {
+      const stamps = compilerSnapshotDenseArray(plan.stamps, 'Client query stamps');
+      for (let stampIndex = 0; stampIndex < stamps.length; stampIndex += 1) {
+        if (stamps[stampIndex]!.attr === 'style') hasStyleProperty = true;
+      }
+    }
+  }
+  for (let index = 0; index < stateSnapshot.length; index += 1) {
+    if (stateSnapshot[index]!.attr === 'style') hasStyleProperty = true;
+  }
+
+  if (planSnapshot.length > 0)
+    appendClientValue(names, 'runQueryUpdatePlan', 'Client runtime import names');
+  if (hasDerive) appendClientValue(names, 'derive', 'Client runtime import names');
+  if (hasTemplateStamp)
+    appendClientValue(names, runtimeOutputHelpers.escapeHtml, 'Client runtime import names');
+  if (hasStyleProperty)
+    appendClientValue(names, runtimeOutputHelpers.styleProperty, 'Client runtime import names');
+  if (compilerArrayLength(handlers, 'Client handlers') > 0)
+    appendClientValue(names, 'handler', 'Client runtime import names');
+  if (compilerArrayLength(clockUpdatePlans, 'Client clock update plans') > 0)
+    appendClientValue(names, 'installClockUpdatePlans', 'Client runtime import names');
+  return uniqueSorted(names);
 }
 
 function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
@@ -780,14 +815,4 @@ function templateStampRenderSegments(stamp: QueryTemplateStampFact): string[] {
   }
 
   return segments.length > 0 ? segments : [JSON.stringify(stamp.template)];
-}
-
-function runtimeOutputHelperImports(
-  queryUpdatePlans: readonly QueryUpdatePlanFact[],
-  stateDerives: readonly StateDeriveFact[],
-): string[] {
-  return queryUpdatePlans.some((plan) => plan.stamps?.some((stamp) => stamp.attr === 'style')) ||
-    stateDerives.some((derive) => derive.attr === 'style')
-    ? [runtimeOutputHelpers.styleProperty]
-    : [];
 }
