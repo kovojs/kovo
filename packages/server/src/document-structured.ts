@@ -26,12 +26,23 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import {
+  securityArrayIsArray,
+  securityArrayJoin,
+  securityArrayPush,
+  securityObjectKeys,
+  securityRegExpReplace,
+  securityRegExpTest,
+  securityString,
+  securityStringStartsWith,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
 
 const documentConfigSentinel: unique symbol = Symbol('kovo.document.config');
 const documentNodeSentinel: unique symbol = Symbol('kovo.document.node');
 const documentConfigProofs = createWitnessWeakSet<object>();
 const documentNodeProofs = createWitnessWeakSet<object>();
-const invalidAttributeNamePattern = new RegExp(String.raw`[\s"'=<>/\u0000-\u001f\u007f]`, 'u');
+const invalidAttributeNamePattern = /[\s"'=<>/\u0000-\u001f\u007f]/u;
 const linkAttributeNames = witnessSetOf([
   'as',
   'crossorigin',
@@ -99,19 +110,26 @@ export function Document(props: {
   const cspEntries: CspInlineMetadata[] = [];
 
   if (props.title !== undefined) {
-    head.push(`<title>${escapeHtml(props.title)}</title>`);
+    securityArrayPush(head, `<title>${escapeHtml(props.title)}</title>`);
   }
 
-  for (const node of nodes) {
-    if (node.csp !== undefined) cspEntries.push(node.csp);
-    if (node.placement === 'head' && node.html !== undefined) head.push(node.html);
-    if (node.placement === 'body-start' && node.html !== undefined) bodyStart.push(node.html);
-    if (node.placement === 'body-end' && node.html !== undefined) bodyEnd.push(node.html);
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index]!;
+    if (node.csp !== undefined) securityArrayPush(cspEntries, node.csp);
+    if (node.placement === 'head' && node.html !== undefined) {
+      securityArrayPush(head, node.html);
+    }
+    if (node.placement === 'body-start' && node.html !== undefined) {
+      securityArrayPush(bodyStart, node.html);
+    }
+    if (node.placement === 'body-end' && node.html !== undefined) {
+      securityArrayPush(bodyEnd, node.html);
+    }
     if (node.placement === 'html-attrs' && node.attrs !== undefined) {
-      Object.assign(htmlAttrs, node.attrs);
+      copyDocumentAttributes(htmlAttrs, node.attrs);
     }
     if (node.placement === 'body-attrs' && node.attrs !== undefined) {
-      Object.assign(bodyAttrs, node.attrs);
+      copyDocumentAttributes(bodyAttrs, node.attrs);
     }
   }
 
@@ -124,11 +142,30 @@ export function Document(props: {
     bodyAttrs,
     bodyEnd,
     bodyStart,
-    csp: mergeCspInlineMetadata(...cspEntries),
+    csp: mergeDocumentCspEntries(cspEntries),
     head,
     htmlAttrs,
     ...(props.lang === undefined ? {} : { lang: props.lang }),
   });
+}
+
+function copyDocumentAttributes(
+  target: DocumentShellAttributes,
+  source: DocumentShellAttributes,
+): void {
+  const names = securityObjectKeys(source);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    target[name] = source[name];
+  }
+}
+
+function mergeDocumentCspEntries(entries: readonly CspInlineMetadata[]): CspInlineMetadata {
+  let merged = mergeCspInlineMetadata();
+  for (let index = 0; index < entries.length; index += 1) {
+    merged = mergeCspInlineMetadata(merged, entries[index]);
+  }
+  return merged;
 }
 
 /** Document head contribution container (SPEC.md §9.5). */
@@ -232,7 +269,7 @@ export function InlineScript(props: {
   id: string;
   run: 'afterInteractive' | 'beforePaint';
 }): unknown {
-  if (props.id.trim() === '') {
+  if (securityStringTrim(props.id) === '') {
     throw new TypeError('InlineScript requires a stable non-empty id (SPEC.md §9.5, KV424).');
   }
   const source = escapeScriptElementText(sourceText(props.children, 'InlineScript'));
@@ -252,10 +289,10 @@ export function InlineStyle(props: {
   id: string;
   source: string;
 }): unknown {
-  if (props.id.trim() === '') {
+  if (securityStringTrim(props.id) === '') {
     throw new TypeError('InlineStyle requires a stable non-empty id (SPEC.md §9.5, KV424).');
   }
-  if (props.source.trim() === '') {
+  if (securityStringTrim(props.source) === '') {
     throw new TypeError('InlineStyle requires source metadata (SPEC.md §9.5, KV424).');
   }
   const source = escapeStyleElementText(sourceText(props.children, 'InlineStyle'));
@@ -332,18 +369,21 @@ export function resolveDocumentDeclaration(
 
 /** @internal */
 export function renderShellAttributes(attributes: DocumentShellAttributes): string {
-  return Object.entries(attributes)
-    .filter(
-      (entry): entry is [string, Exclude<DocumentShellAttributeValue, undefined>] =>
-        entry[1] !== undefined,
-    )
-    .map(([name, value]) => {
-      assertValidAttributeName(name, 'document shell attribute');
-      if (value === true) return ` ${name}`;
-      if (value === false) return '';
-      return ` ${name}="${escapeAttribute(String(value))}"`;
-    })
-    .join('');
+  const rendered: string[] = [];
+  const names = securityObjectKeys(attributes);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = attributes[name];
+    if (value === undefined) continue;
+    assertValidAttributeName(name, 'document shell attribute');
+    if (value === true) {
+      securityArrayPush(rendered, ` ${name}`);
+      continue;
+    }
+    if (value === false) continue;
+    securityArrayPush(rendered, ` ${name}="${escapeAttribute(securityString(value))}"`);
+  }
+  return securityArrayJoin(rendered, '');
 }
 
 function documentConfig(config: DocumentConfig): DocumentConfig {
@@ -377,7 +417,7 @@ function sealDocumentConfig(config: DocumentConfig): DocumentConfig {
 }
 
 function snapshotDocumentStringArray(value: unknown, label: string): readonly string[] {
-  if (!Array.isArray(value)) {
+  if (!securityArrayIsArray(value)) {
     throw new TypeError(`${label} must be a dense array of strings (SPEC §9.5).`);
   }
   const snapshot: string[] = [];
@@ -390,17 +430,19 @@ function snapshotDocumentStringArray(value: unknown, label: string): readonly st
     ) {
       throw new TypeError(`${label} must contain stable own string values (SPEC §9.5).`);
     }
-    snapshot.push(descriptor.value);
+    securityArrayPush(snapshot, descriptor.value);
   }
   return witnessFreeze(snapshot);
 }
 
 function snapshotDocumentShellAttributes(value: unknown, label: string): DocumentShellAttributes {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || securityArrayIsArray(value)) {
     throw new TypeError(`${label} must be a plain own-data attribute record (SPEC §9.5).`);
   }
   const snapshot: DocumentShellAttributes = {};
-  for (const key of witnessObjectKeys(value)) {
+  const keys = witnessObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
     const descriptor = witnessGetOwnPropertyDescriptor(value, key);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`${label}.${key} must be a stable own data property (SPEC §9.5).`);
@@ -420,7 +462,7 @@ function snapshotDocumentShellAttributes(value: unknown, label: string): Documen
 }
 
 function snapshotCspInlineMetadata(value: unknown): CspInlineMetadata {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || securityArrayIsArray(value)) {
     throw new TypeError('Structured document CSP metadata must be an own-data record (SPEC §9.5).');
   }
   const scripts = snapshotDocumentStringArray(
@@ -483,7 +525,14 @@ export function isStructuredDocumentNode(value: unknown): value is object {
 
 function collectDocumentNodes(value: unknown): DocumentNode[] {
   if (value === null || value === undefined || value === false) return [];
-  if (Array.isArray(value)) return value.flatMap(collectDocumentNodes);
+  if (securityArrayIsArray(value)) {
+    const nodes: DocumentNode[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const nested = collectDocumentNodes(value[index]);
+      appendDocumentNodes(nodes, nested);
+    }
+    return nodes;
+  }
   if (isDocumentNode(value)) return [value];
   if (isRenderedHtml(value) || typeof value === 'string') {
     throw new TypeError(
@@ -493,6 +542,12 @@ function collectDocumentNodes(value: unknown): DocumentNode[] {
   throw new TypeError(
     '<Document> received an unsupported child. Use structured document primitives (SPEC.md §9.5, KV424).',
   );
+}
+
+function appendDocumentNodes(target: DocumentNode[], values: readonly DocumentNode[]): void {
+  for (let index = 0; index < values.length; index += 1) {
+    securityArrayPush(target, values[index]!);
+  }
 }
 
 function isDocumentNode(value: unknown): value is DocumentNode {
@@ -505,12 +560,8 @@ function renderDocumentChildren(value: unknown): { csp: CspInlineMetadata; html:
   if (value === null || value === undefined || value === false) {
     return { csp: mergeCspInlineMetadata(), html: '' };
   }
-  if (Array.isArray(value)) {
-    const rendered = value.map(renderDocumentChildren);
-    return {
-      csp: mergeCspInlineMetadata(...rendered.map((child) => child.csp)),
-      html: rendered.map((child) => child.html).join(''),
-    };
+  if (securityArrayIsArray(value)) {
+    return renderDocumentChildArray(value, renderDocumentChildren);
   }
   if (isDocumentNode(value)) {
     if (
@@ -531,12 +582,8 @@ function renderHeadChildren(value: unknown): { csp: CspInlineMetadata; html: str
   if (value === null || value === undefined || value === false) {
     return { csp: mergeCspInlineMetadata(), html: '' };
   }
-  if (Array.isArray(value)) {
-    const rendered = value.map(renderHeadChildren);
-    return {
-      csp: mergeCspInlineMetadata(...rendered.map((child) => child.csp)),
-      html: rendered.map((child) => child.html).join(''),
-    };
+  if (securityArrayIsArray(value)) {
+    return renderDocumentChildArray(value, renderHeadChildren);
   }
   if (!isDocumentNode(value) || value.placement !== 'head') {
     throw new TypeError(
@@ -546,18 +593,35 @@ function renderHeadChildren(value: unknown): { csp: CspInlineMetadata; html: str
   return { csp: value.csp ?? mergeCspInlineMetadata(), html: value.html ?? '' };
 }
 
+function renderDocumentChildArray(
+  values: readonly unknown[],
+  render: (value: unknown) => { csp: CspInlineMetadata; html: string },
+): { csp: CspInlineMetadata; html: string } {
+  let csp = mergeCspInlineMetadata();
+  const html: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const child = render(values[index]);
+    csp = mergeCspInlineMetadata(csp, child.csp);
+    securityArrayPush(html, child.html);
+  }
+  return { csp, html: securityArrayJoin(html, '') };
+}
+
 function renderAttributes(tag: string, attributes: Record<string, unknown>): string {
-  return Object.entries(attributes)
-    .filter((entry): entry is [string, Exclude<unknown, undefined | false | null>] => {
-      const [name, value] = entry;
-      return name !== 'children' && value !== undefined && value !== false && value !== null;
-    })
-    .map(([name, value]) => {
-      assertValidAttributeName(name, `<${tag}> attribute`);
-      if (value === true) return ` ${name}`;
-      return ` ${name}="${safeUrlAttribute(name, String(value))}"`;
-    })
-    .join('');
+  const rendered: string[] = [];
+  const names = securityObjectKeys(attributes);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = attributes[name];
+    if (name === 'children' || value === undefined || value === false || value === null) continue;
+    assertValidAttributeName(name, `<${tag}> attribute`);
+    if (value === true) {
+      securityArrayPush(rendered, ` ${name}`);
+      continue;
+    }
+    securityArrayPush(rendered, ` ${name}="${safeUrlAttribute(name, securityString(value))}"`);
+  }
+  return securityArrayJoin(rendered, '');
 }
 
 function filterShellAttrs(
@@ -567,10 +631,13 @@ function filterShellAttrs(
   const allowed =
     element === 'html' ? witnessSetOf(['class', 'dir', 'lang']) : witnessSetOf(['class']);
   const attrs: DocumentShellAttributes = {};
-  for (const [name, value] of Object.entries(props)) {
+  const names = securityObjectKeys(props);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = props[name];
     if (name === 'children' || value === undefined || value === false) continue;
     assertValidAttributeName(name, `<${element}> attribute`);
-    if (!witnessSetHas(allowed, name) && !name.startsWith('data-')) {
+    if (!witnessSetHas(allowed, name) && !securityStringStartsWith(name, 'data-')) {
       throw new TypeError(
         `<${element}> attribute "${name}" is not supported by structured document attributes (SPEC.md §9.5, KV424).`,
       );
@@ -582,7 +649,10 @@ function filterShellAttrs(
 
 function filterLinkAttrs(attributes: Record<string, unknown>): Record<string, unknown> {
   const attrs: Record<string, unknown> = {};
-  for (const [name, value] of Object.entries(attributes)) {
+  const names = securityObjectKeys(attributes);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = attributes[name];
     if (!witnessSetHas(linkAttributeNames, name)) continue;
     attrs[name] = value;
   }
@@ -590,7 +660,7 @@ function filterLinkAttrs(attributes: Record<string, unknown>): Record<string, un
 }
 
 function assertValidAttributeName(name: string, sink: string): void {
-  if (name !== '' && !invalidAttributeNamePattern.test(name)) return;
+  if (name !== '' && !securityRegExpTest(invalidAttributeNamePattern, name)) return;
   throw new TypeError(
     `${sink} name "${name}" is not a valid HTML attribute token (SPEC.md §9.5, KV424).`,
   );
@@ -603,7 +673,9 @@ function assertSafeUrl(value: string, sink: string): void {
 
 function witnessSetOf<Value>(values: readonly Value[]): Set<Value> {
   const set = createWitnessSet<Value>();
-  for (const value of values) witnessSetAdd(set, value);
+  for (let index = 0; index < values.length; index += 1) {
+    witnessSetAdd(set, values[index]!);
+  }
   return set;
 }
 
@@ -612,7 +684,16 @@ function sourceText(
   name: string,
 ): string {
   if (value === undefined) return '';
-  if (Array.isArray(value)) return value.map((item) => sourceText(item, name)).join('');
+  if (securityArrayIsArray(value)) {
+    const sources: string[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      securityArrayPush(
+        sources,
+        sourceText(value[index] as string | readonly string[] | TrustedHtml | undefined, name),
+      );
+    }
+    return securityArrayJoin(sources, '');
+  }
   const trusted = kovoTrustedHtmlContent(value);
   if (trusted !== '') return trusted;
   if (typeof value === 'string') return value;
@@ -620,9 +701,9 @@ function sourceText(
 }
 
 function escapeScriptElementText(value: string): string {
-  return value.replace(/<\/script/gi, '<\\/script');
+  return securityRegExpReplace(value, /<\/script/gi, '<\\/script');
 }
 
 function escapeStyleElementText(value: string): string {
-  return value.replace(/<\/style/gi, '<\\/style');
+  return securityRegExpReplace(value, /<\/style/gi, '<\\/style');
 }

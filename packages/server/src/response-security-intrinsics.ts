@@ -97,6 +97,10 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeArrayJoin, shell, ['']) !== '<!doctype html><html><body>safe</body></html>') {
       return false;
     }
+    const shellAttributes = [' lang="en"', ' data-shell="safe"'];
+    if (apply(nativeArrayJoin, shellAttributes, ['']) !== ' lang="en" data-shell="safe"') {
+      return false;
+    }
     const pushed: string[] = [];
     if (apply(nativeArrayPush, pushed, ['safe']) !== 1 || pushed[0] !== 'safe') return false;
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
@@ -115,14 +119,19 @@ function capturedControlsAreSound(): boolean {
       return false;
     }
     if (apply(nativeStringTrim, '  safe \t', []) !== 'safe') return false;
+    if (apply(nativeStringTrim, '   ', []) !== '') return false;
     if (apply(nativeStringIndexOf, 'name=value', ['=']) !== 4) return false;
     if (apply(nativeStringIndexOf, 'name', ['=']) !== -1) return false;
     if (apply(nativeStringSlice, 'name=value', [5]) !== 'value') return false;
     if (apply(nativeStringToLowerCase, 'SameSite', []) !== 'samesite') return false;
     if (apply(nativeStringStartsWith, '__Host-id', ['__Host-']) !== true) return false;
     if (apply(nativeStringStartsWith, 'id', ['__Host-']) !== false) return false;
+    if (apply(nativeStringStartsWith, 'data-safe', ['data-']) !== true) return false;
+    if (apply(nativeStringStartsWith, 'onclick', ['data-']) !== false) return false;
     if (apply(nativeStringCharCodeAt, '\u007f', [0]) !== 0x7f) return false;
     if (apply(nativeStringReplaceAll, '&amp;&amp;', ['&amp;', '&']) !== '&&') return false;
+    if (apply(NativeString, undefined, [42]) !== '42') return false;
+    if (apply(NativeString, undefined, [null]) !== 'null') return false;
 
     const safeCookieName = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
     if (apply<RegExpExecArray | null>(nativeRegExpExec, safeCookieName, ['sid']) === null) {
@@ -133,12 +142,29 @@ function capturedControlsAreSound(): boolean {
     ) {
       return false;
     }
+    const invalidAttribute = /[\s"'=<>/\u0000-\u001f\u007f]/u;
+    if (apply<RegExpExecArray | null>(nativeRegExpExec, invalidAttribute, ['data-safe']) !== null) {
+      return false;
+    }
+    if (
+      apply<RegExpExecArray | null>(nativeRegExpExec, invalidAttribute, [
+        'data-evil" onclick="x',
+      ]) === null
+    ) {
+      return false;
+    }
     if (
       replaceRegExp(
         '<script>bad()</script><p>safe</p>',
         /<script\b[^>]*>[\s\S]*?<\/script>/giu,
         '',
       ) !== '<p>safe</p>'
+    ) {
+      return false;
+    }
+    if (
+      replaceRegExp('</script><p>safe</p>', /<\/script/gi, '<\\/script') !==
+      '<\\/script><p>safe</p>'
     ) {
       return false;
     }
@@ -250,6 +276,11 @@ export function securityArrayPush<Value>(values: Value[], value: Value): void {
 export function securityStringIncludes(value: string, search: string): boolean {
   assertResponseSecurityIntrinsics();
   return apply(nativeStringIncludes, value, [search]);
+}
+
+export function securityString(value: unknown): string {
+  assertResponseSecurityIntrinsics();
+  return apply(NativeString, undefined, [value]);
 }
 
 export function securityStringSplit(value: string, separator: string): string[] {
