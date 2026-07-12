@@ -552,6 +552,35 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     expect(csp).not.toContain('https://evil.test');
   });
 
+  it('uses pinned descriptor and freeze controls after evaluated app code poisons Object', () => {
+    const originalFreeze = Object.freeze;
+    const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    try {
+      Object.freeze = ((value: unknown) => value) as typeof Object.freeze;
+      Object.getOwnPropertyDescriptor = (() => undefined) as typeof Object.getOwnPropertyDescriptor;
+      const app = createApp({
+        document: {
+          csp: {
+            allowlist: { scriptSrc: ['https://cdn.safe.test'] },
+            reporting: { maxAgeSeconds: 60 },
+            trustedTypes: true,
+          },
+          lang: 'en',
+        },
+      });
+
+      expect(app.document.lang).toBe('en');
+      expect(app.document.csp?.allowlist?.scriptSrc).toEqual(['https://cdn.safe.test']);
+      expect(app.document.csp?.reporting).toEqual({ maxAgeSeconds: 60 });
+      expect(Object.isFrozen(app.document)).toBe(true);
+      expect(Object.isFrozen(app.document.csp)).toBe(true);
+      expect(Object.isFrozen(app.document.csp?.allowlist?.scriptSrc)).toBe(true);
+    } finally {
+      Object.freeze = originalFreeze;
+      Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
+    }
+  });
+
   it('rejects accessor-backed document options without invoking author code', () => {
     let reads = 0;
     const document = Object.defineProperty({}, 'csp', {

@@ -22,9 +22,33 @@ import {
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import { layout, route, type LayoutDeclaration } from './route.js';
+import type { AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
+import type { CsrfAnonymousCookieOptions, CsrfOptions } from './csrf.js';
+import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
+import { signingKeyRingFromSecret } from './keyring.js';
+import {
+  createWitnessWeakMap,
+  createWitnessWeakSet,
+  createWitnessSet,
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectIs,
+  witnessOwnKeys,
+  witnessReflectApply,
+  witnessReflectGet,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+  witnessSetAdd,
+  witnessSetHas,
+  witnessWeakSetAdd,
+  witnessWeakSetDelete,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
 import { runWebhook, type WebhookDeclaration } from './webhook.js';
 
 const MAX_APP_REGISTRY_LENGTH = 100_000;
+const EMPTY_OMITTED_PROPERTIES = createWitnessSet<PropertyKey>();
 
 /** One assembly-local identity map keeps nested layout/mutation query references canonical. */
 export interface AppDeclarationSnapshotContext {
@@ -38,12 +62,12 @@ export interface AppDeclarationSnapshotContext {
 
 export function createAppDeclarationSnapshotContext(): AppDeclarationSnapshotContext {
   return {
-    endpoints: new WeakMap(),
-    layouts: new WeakMap(),
-    layoutsInProgress: new WeakSet(),
-    mutations: new WeakMap(),
-    queries: new WeakMap(),
-    routes: new WeakMap(),
+    endpoints: createWitnessWeakMap(),
+    layouts: createWitnessWeakMap(),
+    layoutsInProgress: createWitnessWeakSet(),
+    mutations: createWitnessWeakMap(),
+    queries: createWitnessWeakMap(),
+    routes: createWitnessWeakMap(),
   };
 }
 
@@ -54,7 +78,11 @@ export function snapshotAppRegistry<Value, Result>(
   snapshot: (value: Value, index: number) => Result,
 ): readonly Result[] {
   const source = denseArrayValues(values, label);
-  return Object.freeze(source.map(snapshot));
+  const result: Result[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    result.push(snapshot(source[index]!, index));
+  }
+  return witnessFreeze(result);
 }
 
 export function snapshotAppQuery(
@@ -62,18 +90,18 @@ export function snapshotAppQuery(
   context: AppDeclarationSnapshotContext,
 ): AppQueryDeclaration {
   const object = requireDeclarationObject(source, 'query');
-  const existing = context.queries.get(object);
+  const existing = witnessWeakMapGet(context.queries, object);
   if (existing !== undefined) return existing;
 
   const access = accessDecisionFor(object as AppQueryDeclaration & { access?: AccessDecision });
-  const record = snapshotOwnDataRecord(object, 'query declaration', new Set(['access']));
+  const record = snapshotOwnDataRecord(object, 'query declaration', omittedProperties('access'));
   snapshotArrayProperty(record, 'reads', 'query.reads');
   snapshotArrayProperty(record, 'delta', 'query.delta');
 
   const declaration = pinAccessDecision(record, access) as AppQueryDeclaration;
-  Object.freeze(declaration);
-  context.queries.set(object, declaration);
-  context.queries.set(declaration, declaration);
+  witnessFreeze(declaration);
+  witnessWeakMapSet(context.queries, object, declaration);
+  witnessWeakMapSet(context.queries, declaration, declaration);
   return declaration;
 }
 
@@ -82,25 +110,25 @@ export function snapshotAppMutation(
   context: AppDeclarationSnapshotContext,
 ): AppMutationDeclaration {
   const object = requireDeclarationObject(source, 'mutation');
-  const existing = context.mutations.get(object);
+  const existing = witnessWeakMapGet(context.mutations, object);
   if (existing !== undefined) return existing;
 
   const access = accessDecisionFor(object as AppMutationDeclaration & { access?: AccessDecision });
-  const record = snapshotOwnDataRecord(object, 'mutation declaration', new Set(['access']));
+  const record = snapshotOwnDataRecord(object, 'mutation declaration', omittedProperties('access'));
   snapshotArrayProperty(record, 'fileFields', 'mutation.fileFields');
   if (record.registry !== undefined) {
     record.registry = snapshotMutationRegistry(record.registry, context);
   }
   if (record.optimistic !== undefined) {
-    record.optimistic = Object.freeze(
+    record.optimistic = witnessFreeze(
       snapshotOwnDataRecord(record.optimistic, 'mutation.optimistic'),
     );
   }
 
   const declaration = pinAccessDecision(record, access) as AppMutationDeclaration;
-  Object.freeze(declaration);
-  context.mutations.set(object, declaration);
-  context.mutations.set(declaration, declaration);
+  witnessFreeze(declaration);
+  witnessWeakMapSet(context.mutations, object, declaration);
+  witnessWeakMapSet(context.mutations, declaration, declaration);
   return declaration;
 }
 
@@ -109,22 +137,26 @@ export function snapshotAppEndpoint(
   context: AppDeclarationSnapshotContext,
 ): EndpointDeclaration<string, EndpointMethod, EndpointMount> {
   const object = requireDeclarationObject(source, 'endpoint');
-  const existing = context.endpoints.get(object);
+  const existing = witnessWeakMapGet(context.endpoints, object);
   if (existing !== undefined) return existing;
 
   const access = accessDecisionFor(
     object as EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   );
-  const record = snapshotOwnDataRecord(object, 'endpoint declaration', new Set(['access', 'auth']));
+  const record = snapshotOwnDataRecord(
+    object,
+    'endpoint declaration',
+    omittedProperties('access', 'auth'),
+  );
   if (record.csrf !== undefined) {
-    record.csrf = Object.freeze(snapshotOwnDataRecord(record.csrf, 'endpoint.csrf'));
+    record.csrf = witnessFreeze(snapshotOwnDataRecord(record.csrf, 'endpoint.csrf'));
   }
   if (record.response !== undefined) {
     const response = snapshotOwnDataRecord(record.response, 'endpoint.response');
     snapshotArrayProperty(response, 'body', 'endpoint.response.body');
     snapshotArrayProperty(response, 'redirectAllowlist', 'endpoint.response.redirectAllowlist');
     snapshotArrayProperty(response, 'reservedHeaders', 'endpoint.response.reservedHeaders');
-    record.response = Object.freeze(response);
+    record.response = witnessFreeze(response);
   }
   if (record.webhookDefinition !== undefined) {
     record.webhookDefinition = snapshotWebhookDefinition(record.webhookDefinition);
@@ -146,9 +178,9 @@ export function snapshotAppEndpoint(
     EndpointMount
   >;
   copyEndpointAuthSnapshot(object as object & { auth?: EndpointAuthDeclaration }, declaration);
-  Object.freeze(declaration);
-  context.endpoints.set(object, declaration);
-  context.endpoints.set(declaration, declaration);
+  witnessFreeze(declaration);
+  witnessWeakMapSet(context.endpoints, object, declaration);
+  witnessWeakMapSet(context.endpoints, declaration, declaration);
   return declaration;
 }
 
@@ -157,7 +189,7 @@ export function snapshotAppRoute(
   context: AppDeclarationSnapshotContext,
 ): AppRouteDeclaration {
   const object = requireDeclarationObject(source, 'route');
-  const existing = context.routes.get(object);
+  const existing = witnessWeakMapGet(context.routes, object);
   if (existing !== undefined) return existing;
 
   const access = accessDecisionFor(object as AppRouteDeclaration & { access?: AccessDecision });
@@ -169,7 +201,7 @@ export function snapshotAppRoute(
   const record = snapshotOwnDataRecord(
     object,
     `route(${path}) declaration`,
-    new Set(['access', 'layout', 'path']),
+    omittedProperties('access', 'layout', 'path'),
   );
   snapshotRouteHintArrays(record, `route(${path})`);
 
@@ -182,8 +214,8 @@ export function snapshotAppRoute(
           layout: snapshotAppLayout(sourceLayout as LayoutDeclaration<any, any, any, any>, context),
         }),
   } as any) as AppRouteDeclaration;
-  context.routes.set(object, declaration);
-  context.routes.set(declaration, declaration);
+  witnessWeakMapSet(context.routes, object, declaration);
+  witnessWeakMapSet(context.routes, declaration, declaration);
   return declaration;
 }
 
@@ -192,13 +224,13 @@ export function snapshotAppLayout(
   context: AppDeclarationSnapshotContext,
 ): LayoutDeclaration<any, any, any, any> {
   const object = requireDeclarationObject(source, 'layout');
-  const existing = context.layouts.get(object);
+  const existing = witnessWeakMapGet(context.layouts, object);
   if (existing !== undefined) return existing;
-  if (context.layoutsInProgress.has(object)) {
+  if (witnessWeakSetHas(context.layoutsInProgress, object)) {
     throw new TypeError('Kovo route layout topology must be acyclic and stable.');
   }
 
-  context.layoutsInProgress.add(object);
+  witnessWeakSetAdd(context.layoutsInProgress, object);
   try {
     const access = accessDecisionFor(
       object as LayoutDeclaration<any, any, any, any> & { access?: AccessDecision },
@@ -208,7 +240,7 @@ export function snapshotAppLayout(
     const record = snapshotOwnDataRecord(
       object,
       'layout declaration',
-      new Set(['access', 'parent', 'queries']),
+      omittedProperties('access', 'parent', 'queries'),
     );
     snapshotRouteHintArrays(record, 'layout');
 
@@ -227,11 +259,11 @@ export function snapshotAppLayout(
         ? {}
         : { queries: snapshotLayoutQueries(sourceQueries, context) }),
     } as any);
-    context.layouts.set(object, declaration);
-    context.layouts.set(declaration, declaration);
+    witnessWeakMapSet(context.layouts, object, declaration);
+    witnessWeakMapSet(context.layouts, declaration, declaration);
     return declaration;
   } finally {
-    context.layoutsInProgress.delete(object);
+    witnessWeakSetDelete(context.layoutsInProgress, object);
   }
 }
 
@@ -242,7 +274,7 @@ export function snapshotLiveTargetRenderers(
   return snapshotAppRegistry(renderers, 'app.liveTargetRenderers', (source, index) => {
     const record = snapshotOwnDataRecord(source, `liveTargetRenderer[${index}]`);
     if (record.queries !== undefined) {
-      record.queries = Object.freeze(
+      record.queries = witnessFreeze(
         denseArrayValues(record.queries, 'liveTargetRenderer.queries'),
       );
     }
@@ -257,9 +289,93 @@ export function snapshotLiveTargetRenderers(
           ) as RegisteredQueryDefinition,
       );
     }
-    snapshotArrayProperty(record, 'stylesheets', 'liveTargetRenderer.stylesheets');
-    return Object.freeze(record) as unknown as LiveTargetRenderer<any>;
+    snapshotStylesheetArrayProperty(record, 'stylesheets', 'liveTargetRenderer.stylesheets');
+    return witnessFreeze(record) as unknown as LiveTargetRenderer<any>;
   });
+}
+
+/** Snapshot the complete app-wide CSRF posture before evaluated app state can mutate it. */
+export function snapshotAppCsrfOptions<Request>(
+  source: CsrfOptions<Request>,
+): CsrfOptions<Request> {
+  const object = requireDeclarationObject(source, 'app.csrf');
+  const secret = stableOwnDataValue(object, 'secret', 'app.csrf.secret');
+  const sessionId = stableOwnDataValue(object, 'sessionId', 'app.csrf.sessionId');
+  if (secret === undefined || typeof sessionId !== 'function') {
+    throw new TypeError('app.csrf must expose stable secret and sessionId data properties.');
+  }
+
+  const field = stableOwnDataValue(object, 'field', 'app.csrf.field');
+  if (field !== undefined && typeof field !== 'string') {
+    throw new TypeError('app.csrf.field must be a stable string data property.');
+  }
+  const trustedOriginsSource = stableOwnDataValue(
+    object,
+    'trustedOrigins',
+    'app.csrf.trustedOrigins',
+  );
+  let trustedOrigins: readonly string[] | undefined;
+  if (trustedOriginsSource !== undefined) {
+    const values = denseArrayValues(
+      trustedOriginsSource as readonly unknown[],
+      'app.csrf.trustedOrigins',
+    );
+    const origins: string[] = [];
+    for (const origin of values) {
+      if (typeof origin !== 'string') {
+        throw new TypeError('app.csrf.trustedOrigins must contain only stable strings.');
+      }
+      origins.push(origin);
+    }
+    trustedOrigins = witnessFreeze(origins);
+  }
+  const anonymousCookieSource = stableOwnDataValue(
+    object,
+    'anonymousCookie',
+    'app.csrf.anonymousCookie',
+  );
+  const anonymousCookie = snapshotAnonymousCookie(anonymousCookieSource);
+
+  // Resolve byte arrays and declarative key rings now. The resulting key-ring identity is pinned
+  // in the frozen aggregate, so later mutation of authoring objects cannot swap signing material.
+  const pinnedSecret = signingKeyRingFromSecret(secret as CsrfOptions<Request>['secret']);
+  return witnessFreeze({
+    ...(anonymousCookie === undefined ? {} : { anonymousCookie }),
+    ...(field === undefined ? {} : { field }),
+    secret: pinnedSecret,
+    sessionId: sessionId as CsrfOptions<Request>['sessionId'],
+    ...(trustedOrigins === undefined ? {} : { trustedOrigins }),
+  });
+}
+
+/** Snapshot the error-shell callback identities used by the framework request shell. */
+export function snapshotAppErrorShells(source: AppErrorShellOptions): AppErrorShellOptions {
+  const object = requireDeclarationObject(source, 'app.errorShells');
+  const snapshot: AppErrorShellOptions = {};
+  for (const field of ['forbidden', 'notFound', 'serverError'] as const) {
+    const renderer = stableOwnDataValue(object, field, `app.errorShells.${field}`);
+    if (renderer !== undefined && typeof renderer !== 'function') {
+      throw new TypeError(`app.errorShells.${field} must be a stable function data property.`);
+    }
+    if (renderer !== undefined) (snapshot as Record<string, unknown>)[field] = renderer;
+  }
+  return witnessFreeze(snapshot);
+}
+
+/** Snapshot a task registry entry, including immutable retry and recurring argument topology. */
+export function snapshotAppTask(source: AppTaskDeclaration, index = 0): AppTaskDeclaration {
+  const record = snapshotOwnDataRecord(source, `app.tasks[${index}]`);
+  if (record.retry !== undefined) {
+    record.retry = witnessFreeze(snapshotOwnDataRecord(record.retry, `app.tasks[${index}].retry`));
+  }
+  if (record.cronArgs !== undefined) {
+    record.cronArgs = snapshotImmutableTaskData(
+      record.cronArgs,
+      `app.tasks[${index}].cronArgs`,
+      createWitnessWeakSet(),
+    );
+  }
+  return witnessFreeze(record) as AppTaskDeclaration;
 }
 
 /**
@@ -284,14 +400,18 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     snapshotAppEndpoint(value, context),
   );
   const liveTargetRenderers = snapshotLiveTargetRenderers(source.liveTargetRenderers, context);
-  const diagnostics = Object.freeze(denseArrayValues(source.diagnostics, 'app.diagnostics'));
-  const stylesheets = Object.freeze(denseArrayValues(source.stylesheets, 'app.stylesheets'));
-  const tasks = Object.freeze(denseArrayValues(source.tasks, 'app.tasks'));
+  const diagnostics = witnessFreeze(denseArrayValues(source.diagnostics, 'app.diagnostics'));
+  const stylesheets = snapshotStylesheetArray(source.stylesheets, 'app.stylesheets');
+  const tasks = snapshotAppRegistry(source.tasks, 'app.tasks', snapshotAppTask);
+  const errorShells = snapshotAppErrorShells(source.errorShells);
+  const csrf = source.csrf === undefined ? undefined : snapshotAppCsrfOptions(source.csrf);
 
-  const aggregate = Object.freeze({
+  const aggregate = witnessFreeze({
     ...source,
+    ...(csrf === undefined ? {} : { csrf }),
     diagnostics,
     endpoints,
+    errorShells,
     liveTargetRenderers,
     mutations,
     queries,
@@ -317,7 +437,7 @@ function snapshotMutationRegistry(
   source: unknown,
   context: AppDeclarationSnapshotContext,
 ): Readonly<Record<string, unknown>> {
-  const record = snapshotOwnDataRecord(source, 'mutation.registry', new Set(['queries']));
+  const record = snapshotOwnDataRecord(source, 'mutation.registry', omittedProperties('queries'));
   const queries = stableOwnDataValue(
     requireDeclarationObject(source, 'mutation.registry'),
     'queries',
@@ -333,7 +453,7 @@ function snapshotMutationRegistry(
   snapshotArrayProperty(record, 'inferredTouches', 'mutation.registry.inferredTouches');
   snapshotArrayProperty(record, 'tables', 'mutation.registry.tables');
   snapshotArrayProperty(record, 'touches', 'mutation.registry.touches');
-  return Object.freeze(record);
+  return witnessFreeze(record);
 }
 
 function snapshotWebhookDefinition(source: unknown): Readonly<Record<string, unknown>> {
@@ -341,10 +461,10 @@ function snapshotWebhookDefinition(source: unknown): Readonly<Record<string, unk
   // Verification is security topology just like route.layout. Reject a Proxy get/descriptor split
   // and then preserve only the stable descriptor value in the canonical definition.
   const verify = stableOwnDataValue(object, 'verify', 'webhookDefinition.verify');
-  const record = snapshotOwnDataRecord(object, 'webhookDefinition', new Set(['verify']));
+  const record = snapshotOwnDataRecord(object, 'webhookDefinition', omittedProperties('verify'));
   record.verify = verify === 'none' ? verify : snapshotWebhookVerifier(verify);
   snapshotArrayProperty(record, 'writes', 'webhookDefinition.writes');
-  return Object.freeze(record);
+  return witnessFreeze(record);
 }
 
 function snapshotWebhookVerifier(source: unknown): WebhookVerifier {
@@ -374,12 +494,12 @@ function snapshotWebhookVerifier(source: unknown): WebhookVerifier {
   }
 
   let canonical: CustomWebhookVerifier;
-  canonical = Object.freeze({
+  canonical = witnessFreeze({
     kind: 'custom',
     name,
     scheme,
     async verify(request: WebhookVerificationRequest): Promise<boolean> {
-      return Boolean(await Reflect.apply(verify, canonical, [request]));
+      return Boolean(await witnessReflectApply(verify, canonical, [request]));
     },
   });
   return canonical;
@@ -393,7 +513,7 @@ function snapshotLayoutQueries(
   for (const key of Object.keys(record)) {
     record[key] = snapshotAppQuery(record[key] as AppQueryDeclaration, context);
   }
-  return Object.freeze(record) as Readonly<Record<string, AppQueryDeclaration>>;
+  return witnessFreeze(record) as Readonly<Record<string, AppQueryDeclaration>>;
 }
 
 function snapshotRouteHintArrays(record: Record<PropertyKey, any>, label: string): void {
@@ -405,8 +525,100 @@ function snapshotRouteHintArrays(record: Record<PropertyKey, any>, label: string
     'staticPaths',
     'stylesheets',
   ] as const) {
-    snapshotArrayProperty(record, field, `${label}.${field}`);
+    if (field === 'stylesheets') {
+      snapshotStylesheetArrayProperty(record, field, `${label}.${field}`);
+    } else {
+      snapshotArrayProperty(record, field, `${label}.${field}`);
+    }
   }
+}
+
+function snapshotAnonymousCookie(source: unknown): CsrfAnonymousCookieOptions | false | undefined {
+  if (source === undefined || source === false) return source;
+  const object = requireDeclarationObject(source, 'app.csrf.anonymousCookie');
+  const snapshot: CsrfAnonymousCookieOptions = {};
+  for (const field of ['maxAge', 'name', 'path', 'sameSite', 'secure'] as const) {
+    const value = stableOwnDataValue(object, field, `app.csrf.anonymousCookie.${field}`);
+    if (value === undefined) continue;
+    if (field === 'maxAge' && (typeof value !== 'number' || !Number.isFinite(value))) {
+      throw new TypeError('app.csrf.anonymousCookie.maxAge must be a finite number.');
+    }
+    if ((field === 'name' || field === 'path') && typeof value !== 'string') {
+      throw new TypeError(`app.csrf.anonymousCookie.${field} must be a string.`);
+    }
+    if (field === 'sameSite' && value !== 'lax' && value !== 'none' && value !== 'strict') {
+      throw new TypeError('app.csrf.anonymousCookie.sameSite must be lax, none, or strict.');
+    }
+    if (field === 'secure' && typeof value !== 'boolean') {
+      throw new TypeError('app.csrf.anonymousCookie.secure must be a boolean.');
+    }
+    (snapshot as Record<string, unknown>)[field] = value;
+  }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotImmutableTaskData(
+  value: unknown,
+  label: string,
+  ancestors: WeakSet<object>,
+): unknown {
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
+  if (typeof value === 'function') {
+    throw new TypeError(`${label} must contain serializable data, not functions.`);
+  }
+  if (witnessWeakSetHas(ancestors, value)) {
+    throw new TypeError(`${label} must not contain cyclic data.`);
+  }
+  witnessWeakSetAdd(ancestors, value);
+  try {
+    if (Array.isArray(value)) {
+      const values = denseArrayValues(value, label);
+      const snapshot: unknown[] = [];
+      for (let index = 0; index < values.length; index += 1) {
+        snapshot.push(snapshotImmutableTaskData(values[index], `${label}[${index}]`, ancestors));
+      }
+      return witnessFreeze(snapshot);
+    }
+
+    const snapshot: Record<PropertyKey, unknown> = {};
+    for (const key of witnessOwnKeys(value)) {
+      if (typeof key === 'symbol') {
+        throw new TypeError(`${label} must not contain symbol-keyed data.`);
+      }
+      const descriptor = witnessGetOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError(`${label}.${key} must be a stable own data property.`);
+      }
+      snapshot[key] = snapshotImmutableTaskData(descriptor.value, `${label}.${key}`, ancestors);
+    }
+    return witnessFreeze(snapshot);
+  } finally {
+    witnessWeakSetDelete(ancestors, value);
+  }
+}
+
+function snapshotStylesheetArray(
+  source: readonly (string | StylesheetAsset)[],
+  label: string,
+): readonly (string | StylesheetAsset)[] {
+  const values = denseArrayValues(source, label);
+  const snapshot: (string | StylesheetAsset)[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (typeof value === 'string') snapshot.push(value);
+    else snapshot.push(snapshotStylesheetAsset(value));
+  }
+  return witnessFreeze(snapshot);
+}
+
+function snapshotStylesheetArrayProperty(
+  record: Record<PropertyKey, any>,
+  property: PropertyKey,
+  label: string,
+): void {
+  const value = record[property];
+  if (value === undefined) return;
+  record[property] = snapshotStylesheetArray(value, label);
 }
 
 function snapshotArrayProperty(
@@ -416,7 +628,7 @@ function snapshotArrayProperty(
 ): void {
   const value = record[property];
   if (value === undefined || !Array.isArray(value)) return;
-  record[property] = Object.freeze(denseArrayValues(value, label));
+  record[property] = witnessFreeze(denseArrayValues(value, label));
 }
 
 function denseArrayValues<Value>(source: readonly Value[], label: string): Value[] {
@@ -429,7 +641,7 @@ function denseArrayValues<Value>(source: readonly Value[], label: string): Value
   if (!array) throw new TypeError(`${label} must be a stable dense array.`);
 
   try {
-    const length = Object.getOwnPropertyDescriptor(source, 'length');
+    const length = witnessGetOwnPropertyDescriptor(source, 'length');
     if (
       length === undefined ||
       !('value' in length) ||
@@ -442,7 +654,7 @@ function denseArrayValues<Value>(source: readonly Value[], label: string): Value
 
     const values: Value[] = [];
     for (let index = 0; index < length.value; index += 1) {
-      const descriptor = Object.getOwnPropertyDescriptor(source, index);
+      const descriptor = witnessGetOwnPropertyDescriptor(source, index);
       if (descriptor === undefined || !('value' in descriptor)) {
         throw new TypeError(`${label}[${index}] must be a stable own data property.`);
       }
@@ -455,21 +667,27 @@ function denseArrayValues<Value>(source: readonly Value[], label: string): Value
   }
 }
 
+function omittedProperties(...properties: PropertyKey[]): ReadonlySet<PropertyKey> {
+  const omitted = createWitnessSet<PropertyKey>();
+  for (const property of properties) witnessSetAdd(omitted, property);
+  return omitted;
+}
+
 function snapshotOwnDataRecord(
   source: unknown,
   label: string,
-  omitted: ReadonlySet<PropertyKey> = new Set(),
+  omitted: ReadonlySet<PropertyKey> = EMPTY_OMITTED_PROPERTIES,
 ): Record<PropertyKey, any> {
   const object = requireDeclarationObject(source, label);
   const record: Record<PropertyKey, any> = {};
   try {
-    for (const key of Reflect.ownKeys(object)) {
-      if (omitted.has(key)) continue;
-      const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    for (const key of witnessOwnKeys(object)) {
+      if (witnessSetHas(omitted as Set<PropertyKey>, key)) continue;
+      const descriptor = witnessGetOwnPropertyDescriptor(object, key);
       if (descriptor === undefined || !('value' in descriptor)) {
         throw new TypeError(`${label}.${String(key)} must be a stable own data property.`);
       }
-      Object.defineProperty(record, key, {
+      witnessDefineProperty(record, key, {
         configurable: true,
         enumerable: descriptor.enumerable === true,
         value: descriptor.value,
@@ -485,17 +703,17 @@ function snapshotOwnDataRecord(
 
 function stableOwnDataValue(source: object, property: PropertyKey, label: string): unknown {
   try {
-    const before = Object.getOwnPropertyDescriptor(source, property);
+    const before = witnessGetOwnPropertyDescriptor(source, property);
     if (before !== undefined && !('value' in before)) {
       throw new TypeError(`${label} must be a stable own data property.`);
     }
-    const observed = Reflect.get(source, property, source);
-    const after = Object.getOwnPropertyDescriptor(source, property);
+    const observed = witnessReflectGet(source, property, source);
+    const after = witnessGetOwnPropertyDescriptor(source, property);
     if (!sameDataDescriptor(before, after)) {
       throw new TypeError(`${label} changed while the app aggregate was assembled.`);
     }
     const descriptorValue = before === undefined ? undefined : before.value;
-    if (!Object.is(observed, descriptorValue)) {
+    if (!witnessObjectIs(observed, descriptorValue)) {
       throw new TypeError(`${label} must not disagree between descriptor and property access.`);
     }
     return descriptorValue;
@@ -513,7 +731,7 @@ function sameDataDescriptor(
   return (
     'value' in left &&
     'value' in right &&
-    Object.is(left.value, right.value) &&
+    witnessObjectIs(left.value, right.value) &&
     left.configurable === right.configurable &&
     left.enumerable === right.enumerable &&
     left.writable === right.writable

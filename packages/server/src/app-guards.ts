@@ -1,15 +1,20 @@
 import type { KovoApp } from './app-types.js';
 import { isDocumentConfig } from './document-structured.js';
+import {
+  createWitnessWeakSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
+} from './security-witness-intrinsics.js';
 
 // SPEC §9.5 makes createApp() the sole app-aggregate bootstrap. A structural check alone lets a
 // shallow clone (or Proxy) impersonate that aggregate and swap one of the audited registries after
 // createRequestHandler() validates it. Keep the proof module-private and identity-based: trusted
 // framework derivations must explicitly close and mark their new aggregate through app-snapshot.
-const closedKovoApps = new WeakSet<object>();
+const closedKovoApps = createWitnessWeakSet<object>();
 
 /** @internal Mark an aggregate after its declarations and registries have been snapshotted. */
 export function markClosedKovoApp<App extends KovoApp>(app: App): App {
-  closedKovoApps.add(app);
+  witnessWeakSetAdd(closedKovoApps, app);
   return app;
 }
 
@@ -22,7 +27,7 @@ export function markClosedKovoApp<App extends KovoApp>(app: App): App {
 export function isKovoApp(value: unknown): value is KovoApp {
   return (
     isRecord(value) &&
-    closedKovoApps.has(value) &&
+    witnessWeakSetHas(closedKovoApps, value) &&
     isEndpointDeclarations(value.endpoints) &&
     isAppDiagnostics(value.diagnostics) &&
     isMutationDeclarations(value.mutations) &&
@@ -341,8 +346,11 @@ function isSigningSecret(value: unknown): boolean {
     typeof value === 'string' ||
     value instanceof Uint8Array ||
     (isRecord(value) &&
-      ((typeof value.current === 'string' &&
-        (value.previous === undefined || typeof value.previous === 'string')) ||
+      ((typeof value.currentKeyId === 'string' &&
+        typeof value.sign === 'function' &&
+        typeof value.verify === 'function') ||
+        (typeof value.current === 'string' &&
+          (value.previous === undefined || typeof value.previous === 'string')) ||
         Array.isArray(value.keys)))
   );
 }

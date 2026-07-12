@@ -858,7 +858,7 @@ export default async function handler(request) {
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
       expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
-      expect(nodeAdapter).toContain('const setCookies = headers.getSetCookie();');
+      expect(nodeAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
       expect(nodeAdapter).not.toContain('typeof headers.getSetCookie');
       expect(nodeAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
       expect(nodeAdapter).toContain(':authority');
@@ -1400,7 +1400,7 @@ export default async function handler(request) {
       expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
       expect(vercelAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
-      expect(vercelAdapter).toContain('const setCookies = headers.getSetCookie();');
+      expect(vercelAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
       expect(vercelAdapter).not.toContain('typeof headers.getSetCookie');
       expect(vercelAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
       expect(vercelAdapter).toContain(':authority');
@@ -2217,7 +2217,17 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   expect(emittedRequest.headers.get('host')).toBeNull();
   expect(() => emittedRequest.headers.get(':authority')).toThrow();
 
-  for (const target of ['/_m/a/%2e/b', 'http://proxy.invalid\\_m\\a\\%2e\\b']) {
+  for (const target of [
+    '/%2e/_m/a/b',
+    '/x/%2e%2e/_m/a/b',
+    '//_m/a/b',
+    '////_m/a/b',
+    '/_m/a/%2e/b',
+    '\\_m\\a\\b',
+    'http://attacker.test/_m/a/b',
+    'https://h2.example.test/_m/a/b',
+    'http://proxy.invalid\\_m\\a\\%2e\\b',
+  ]) {
     const unsafeMutationRequest = adapterParityRequest();
     unsafeMutationRequest.method = 'POST';
     unsafeMutationRequest.url = target;
@@ -2225,6 +2235,12 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
       'Reserved mutation request targets must use their canonical raw path.',
     );
   }
+
+  const canonicalMutationRequest = adapterParityRequest();
+  canonicalMutationRequest.url = '/_m/a/b';
+  expect(
+    adapter.nodeRequestToWebRequest(canonicalMutationRequest, { trustedProxy: true }).url,
+  ).toBe('https://h2.example.test/_m/a/b');
 
   const liveHeaders = await capturedNodeHeaders(liveWriteWebResponseToNode);
   const emittedHeaders = await capturedNodeHeaders(adapter.writeWebResponseToNode);

@@ -608,7 +608,28 @@ function nodeAdapterRuntimeSource(): string {
   return `import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
+const NativeHeaders = globalThis.Headers;
+const NativeRequest = globalThis.Request;
+const NativeURL = globalThis.URL;
+const nativeReflectApply = Reflect.apply;
+const nativeObjectDefineProperty = Object.defineProperty;
+const nativeObjectEntries = Object.entries;
+const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const nativeHeadersGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'Headers');
+const nativeRequestGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'Request');
+const nativeUrlGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'URL');
+const nativeSetHas = Set.prototype.has;
+const nativeHeadersAppend = NativeHeaders.prototype.append;
+const nativeHeadersForEach = NativeHeaders.prototype.forEach;
+const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
+const nativeHeadersSet = NativeHeaders.prototype.set;
+const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
+const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'href').get;
+const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
+const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
+const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
 const bodylessMethods = new Set(['GET', 'HEAD']);
+const requestTargetAnalysisOrigin = 'https://kovo.invalid';
 
 export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
   if (unsafeReservedMutationRequestTarget(nodeRequest.url ?? '/')) {
@@ -636,7 +657,7 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
     headers,
     method,
     signal: controller.signal,
-    ...(bodylessMethods.has(method)
+    ...(apply(nativeSetHas, bodylessMethods, [method])
       ? {}
       : {
           body: Readable.toWeb(nodeRequest),
@@ -644,15 +665,34 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
         }),
   };
 
-  const request = new Request(nodeRequestUrl(nodeRequest, options), init);
+  const request = constructNativeRequest(nodeRequestUrl(nodeRequest, options), init);
   const peerAddress = nodeRequest.socket?.remoteAddress?.trim();
   if (peerAddress) {
-    Object.defineProperty(request, '__kovoPeerAddress', {
+    apply(nativeObjectDefineProperty, Object, [request, '__kovoPeerAddress', {
       configurable: true,
       value: peerAddress,
-    });
+    }]);
   }
   return request;
+}
+
+function constructNativeRequest(input, init) {
+  const currentHeaders = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'Headers']);
+  const currentRequest = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'Request']);
+  const currentUrl = apply(nativeObjectGetOwnPropertyDescriptor, Object, [globalThis, 'URL']);
+  if (!currentHeaders || !currentRequest || !currentUrl) {
+    throw new TypeError('Kovo Node adapter web platform constructors are unavailable.');
+  }
+  try {
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', nativeHeadersGlobalDescriptor]);
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', nativeRequestGlobalDescriptor]);
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', nativeUrlGlobalDescriptor]);
+    return new NativeRequest(input, init);
+  } finally {
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'Headers', currentHeaders]);
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'Request', currentRequest]);
+    apply(nativeObjectDefineProperty, Object, [globalThis, 'URL', currentUrl]);
+  }
 }
 
 export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
@@ -679,15 +719,18 @@ export function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
 }
 
 function unsafeReservedMutationRequestTarget(rawTarget) {
+  const absoluteForm = /^[a-z][a-z0-9+.-]*:/i.test(rawTarget);
   const pathname = rawNodeRequestTargetPathname(rawTarget);
   const comparablePathname = pathname.replaceAll('\\\\', '/');
-  if (!comparablePathname.startsWith('/_m/')) return false;
-  if (/%(?:2e|2f|5c)/i.test(pathname)) return true;
-  if (pathname.includes('\\\\')) return true;
-  return comparablePathname
-    .slice('/_m/'.length)
-    .split('/')
-    .some((segment) => segment === '.' || segment === '..');
+  const rootedPathname = '/' + comparablePathname.replace(/^\\/+/, '');
+  let normalizedPathname;
+  try {
+    normalizedPathname = urlPathname(new NativeURL(rootedPathname, requestTargetAnalysisOrigin));
+  } catch {
+    return false;
+  }
+  if (normalizedPathname !== '/_m' && !normalizedPathname.startsWith('/_m/')) return false;
+  return absoluteForm || pathname !== normalizedPathname || pathname.includes('\\\\') || /%(?:2e|2f|5c)/i.test(pathname);
 }
 
 function rawNodeRequestTargetPathname(rawTarget) {
@@ -702,9 +745,9 @@ function rawNodeRequestTargetPathname(rawTarget) {
 }
 
 export async function writeWebResponseToNode(response, nodeResponse, method = 'GET', options = {}) {
-  const responseHeaders = new Headers(response.headers);
+  const responseHeaders = new NativeHeaders(response.headers);
   if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
-    responseHeaders.set('connection', 'close');
+    apply(nativeHeadersSet, responseHeaders, ['connection', 'close']);
   }
   const headers = responseHeadersToNodeHeaders(responseHeaders);
 
@@ -724,14 +767,29 @@ function nodeRequestUrl(nodeRequest, options) {
       ? options.origin(nodeRequest)
       : (options.origin ?? defaultOrigin(nodeRequest, options));
 
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
-    const absolute = new URL(rawUrl);
-    return new URL(absolute.pathname + absolute.search + absolute.hash, origin).href;
-  }
-
-  const pathOnly = rawUrl.startsWith('//') ? '/' + rawUrl.replace(/^\\/+/, '') : rawUrl;
-  return new URL(pathOnly, origin).href;
+  const originUrl = new NativeURL(origin);
+  const pinnedOrigin = urlOrigin(originUrl);
+  if (pinnedOrigin === 'null') throw new TypeError('Node adapter origin must be hierarchical.');
+  const absolute = /^[a-z][a-z0-9+.-]*:/i.test(rawUrl);
+  const pathTarget = absolute
+    ? new NativeURL(rawUrl)
+    : new NativeURL(/^[\\\\/]/.test(rawUrl) ? '/' + rawUrl.replace(/^[\\\\/]+/, '') : rawUrl, requestTargetAnalysisOrigin);
+  const pathname = urlPathname(pathTarget);
+  const assembled = new NativeURL(
+    pinnedOrigin + (pathname.startsWith('/') ? '' : '/') + pathname + urlSearch(pathTarget) + urlHash(pathTarget),
+  );
+  return urlHref(assembled);
 }
+
+function apply(fn, receiver, args) {
+  return nativeReflectApply(fn, receiver, args);
+}
+
+function urlHash(url) { return apply(nativeUrlHashGetter, url, []); }
+function urlHref(url) { return apply(nativeUrlHrefGetter, url, []); }
+function urlOrigin(url) { return apply(nativeUrlOriginGetter, url, []); }
+function urlPathname(url) { return apply(nativeUrlPathnameGetter, url, []); }
+function urlSearch(url) { return apply(nativeUrlSearchGetter, url, []); }
 
 function defaultOrigin(nodeRequest, options) {
   // E2 (SPEC §9.5): under HTTP/2 the \`Host\` header is often absent — the authority lives in
@@ -752,8 +810,8 @@ function defaultOrigin(nodeRequest, options) {
 }
 
 function nodeHeadersToWebHeaders(nodeRequest) {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(nodeRequest.headers)) {
+  const headers = new NativeHeaders();
+  for (const [name, value] of apply(nativeObjectEntries, Object, [nodeRequest.headers])) {
     if (value === undefined) continue;
     // E2 (SPEC §9.5): under Node's HTTP/2 compat API \`nodeRequest.headers\` carries pseudo-headers
     // (\`:path\`/\`:method\`/\`:authority\`/\`:scheme\`). The web \`Headers\` constructor throws on any
@@ -761,9 +819,9 @@ function nodeHeadersToWebHeaders(nodeRequest) {
     // — they are addressed via \`nodeRequest.method\`/\`nodeRequest.url\`/the \`:authority\` URL fallback.
     if (name.startsWith(':')) continue;
     if (Array.isArray(value)) {
-      for (const entry of value) headers.append(name, entry);
+      for (const entry of value) apply(nativeHeadersAppend, headers, [name, entry]);
     } else {
-      headers.set(name, value);
+      apply(nativeHeadersSet, headers, [name, value]);
     }
   }
   return headers;
@@ -774,12 +832,12 @@ function responseHeadersToNodeHeaders(headers) {
   // Headers.forEach combines set-cookie into one entry (comma-joined), so handle
   // it separately via getSetCookie() which preserves each cookie as a distinct value.
   const nodeHeaders = {};
-  const setCookies = headers.getSetCookie();
+  const setCookies = apply(nativeHeadersGetSetCookie, headers, []);
   if (setCookies.length > 0) nodeHeaders['set-cookie'] = setCookies;
-  headers.forEach((value, name) => {
+  apply(nativeHeadersForEach, headers, [(value, name) => {
     if (name === 'set-cookie') return;
     nodeHeaders[name] = value;
-  });
+  }]);
   return nodeHeaders;
 }
 

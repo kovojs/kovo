@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSigningKeyRing } from './keyring.js';
+import { createSigningKeyRing, signingKeyRingFromSecret } from './keyring.js';
 
 const OLD_SECRET = 'old-signing-secret-at-least-32-bytes';
 const NEW_SECRET = 'new-signing-secret-at-least-32-bytes';
@@ -161,5 +161,68 @@ describe('SigningKeyRing', () => {
         ],
       }),
     ).toThrow(/exactly one active key/);
+  });
+
+  it('pins opaque key-ring method identities and current key metadata', () => {
+    const source = {
+      currentKeyId: 'original',
+      sign: () => ({ keyId: 'original', signature: 'original-signature' }),
+      verify: () => ({ ok: false as const, reason: 'bad-signature' as const }),
+    };
+    const pinned = signingKeyRingFromSecret(source);
+
+    source.currentKeyId = 'attacker';
+    source.sign = () => ({ keyId: 'attacker', signature: 'attacker-signature' });
+    source.verify = () => ({ ok: true as const, keyId: 'attacker' });
+
+    expect(pinned.currentKeyId).toBe('original');
+    expect(
+      pinned.sign({ audience: 'csrf:account/delete', payload: 'victim', purpose: 'csrf' }),
+    ).toEqual({ keyId: 'original', signature: 'original-signature' });
+    expect(
+      pinned.verify({
+        audience: 'csrf:account/delete',
+        payload: 'victim',
+        purpose: 'csrf',
+        signature: 'attacker-signature',
+      }),
+    ).toEqual({ ok: false, reason: 'bad-signature' });
+    expect(Object.isFrozen(pinned)).toBe(true);
+  });
+
+  it('never dispatches signing-key arrays through poisoned find or iterator prototypes', () => {
+    const originalFind = Array.prototype.find;
+    const originalIterator = Array.prototype[Symbol.iterator];
+    Array.prototype.find = () => {
+      throw new Error('poisoned Array.find observed signing keys');
+    };
+    Array.prototype[Symbol.iterator] = function () {
+      const first = this[0] as { secret?: unknown } | undefined;
+      if (first && typeof first === 'object' && 'secret' in first) {
+        throw new Error('poisoned Array iterator observed signing keys');
+      }
+      return originalIterator.call(this);
+    };
+    try {
+      const ring = createSigningKeyRing({
+        keys: [
+          { id: 'new', secret: NEW_SECRET, state: 'active' },
+          { id: 'old', secret: OLD_SECRET, state: 'previous' },
+        ],
+      });
+      const signed = ring.sign({ audience: 'csrf:cart/add', payload: 'victim', purpose: 'csrf' });
+      expect(
+        ring.verify({
+          audience: 'csrf:cart/add',
+          keyId: signed.keyId,
+          payload: 'victim',
+          purpose: 'csrf',
+          signature: signed.signature,
+        }),
+      ).toEqual({ ok: true, keyId: 'new' });
+    } finally {
+      Array.prototype.find = originalFind;
+      Array.prototype[Symbol.iterator] = originalIterator;
+    }
   });
 });

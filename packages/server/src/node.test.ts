@@ -42,9 +42,47 @@ describe('server node adapter', () => {
     const protocolRelative = nodeRequestToWebRequest(nodeRequest('//evil.example/admin?next=1'), {
       origin: 'https://app.example',
     });
+    const absoluteDoubleSlashPath = nodeRequestToWebRequest(
+      nodeRequest('http://evil.example//other.example/admin?next=1'),
+      { origin: 'https://app.example' },
+    );
 
     expect(absolute.url).toBe('https://app.example/admin?next=1');
     expect(protocolRelative.url).toBe('https://app.example/evil.example/admin?next=1');
+    expect(absoluteDoubleSlashPath.url).toBe('https://app.example//other.example/admin?next=1');
+  });
+
+  it('uses captured URL, Request, and Headers constructors after app evaluation', () => {
+    const OriginalHeaders = globalThis.Headers;
+    const OriginalRequest = globalThis.Request;
+    const OriginalURL = globalThis.URL;
+    try {
+      globalThis.Headers = class PoisonedHeaders {
+        constructor() {
+          throw new Error('poisoned Headers reached');
+        }
+      } as never;
+      globalThis.Request = class PoisonedRequest {
+        constructor() {
+          throw new Error('poisoned Request reached');
+        }
+      } as never;
+      globalThis.URL = class PoisonedURL {
+        constructor() {
+          throw new Error('poisoned URL reached');
+        }
+      } as never;
+
+      const converted = nodeRequestToWebRequest(nodeRequest('/captured?ok=1'), {
+        origin: 'https://app.example',
+      });
+      expect(converted.url).toBe('https://app.example/captured?ok=1');
+      expect(converted.headers.get('host')).toBe('internal.example');
+    } finally {
+      globalThis.Headers = OriginalHeaders;
+      globalThis.Request = OriginalRequest;
+      globalThis.URL = OriginalURL;
+    }
   });
 
   it('trusts forwarded schemes only when the Node adapter opts into trustedProxy', () => {
@@ -614,6 +652,10 @@ describe('toNodeHandler incomplete request transport closure', () => {
     const server = await serveWithNode(toNodeHandler(createRequestHandler(app)));
     const credential = 'NODE_ALIAS_CREDENTIAL_MUST_NOT_ECHO';
     const aliases = [
+      '/%2e/_m/a/b',
+      '/x/%2e%2e/_m/a/b',
+      '//_m/a/b',
+      '////_m/a/b',
       '/_m/a/%2e/b',
       '/_m/a/%2E/b',
       '/_m/x/a/%2e%2E/b',
@@ -622,7 +664,9 @@ describe('toNodeHandler incomplete request transport closure', () => {
       '/_m/a/./b',
       '/_m/x/a/../b',
       'http://proxy.invalid/_m/a/%2e/b',
+      'http://attacker.test/_m/a/b',
     ];
+    aliases.push(`${server.origin}/_m/a/b`);
 
     try {
       for (const target of aliases) {
@@ -653,13 +697,27 @@ describe('toNodeHandler incomplete request transport closure', () => {
   });
 
   it('refuses an encoded reserved mutation target in direct Node request conversion', () => {
-    for (const target of ['/_m/a/%2e/b', 'http://proxy.invalid\\_m\\a\\%2e\\b']) {
+    for (const target of [
+      '/%2e/_m/a/b',
+      '/x/%2e%2e/_m/a/b',
+      '//_m/a/b',
+      '////_m/a/b',
+      '/_m/a/%2e/b',
+      '\\_m\\a\\b',
+      'http://attacker.test/_m/a/b',
+      'https://internal.example/_m/a/b',
+      'http://proxy.invalid\\_m\\a\\%2e\\b',
+    ]) {
       const request = nodeRequest(target);
       request.method = 'POST';
       expect(() => nodeRequestToWebRequest(request)).toThrow(
         'Reserved mutation request targets must use their canonical raw path.',
       );
     }
+
+    expect(
+      nodeRequestToWebRequest(nodeRequest('/_m/a/b'), { origin: 'https://internal.example' }).url,
+    ).toBe('https://internal.example/_m/a/b');
   });
 });
 

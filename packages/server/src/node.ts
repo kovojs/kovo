@@ -5,6 +5,14 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
 import { trustedNodeRequestScheme } from './request-scheme.js';
+import {
+  createWitnessSet,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessReflectApply,
+  witnessSetAdd,
+  witnessSetHas,
+} from './security-witness-intrinsics.js';
 
 /** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
 export interface NodeHandlerOptions {
@@ -35,8 +43,49 @@ export type NodeRequestHandler = (
   response: ServerResponse,
 ) => Promise<void> | void;
 
-const bodylessMethods = new Set(['GET', 'HEAD']);
+const NativeHeaders = globalThis.Headers;
+const NativeRequest = globalThis.Request;
+const NativeURL = globalThis.URL;
+const nativeHeadersGlobalDescriptor = witnessGetOwnPropertyDescriptor(globalThis, 'Headers');
+const nativeRequestGlobalDescriptor = witnessGetOwnPropertyDescriptor(globalThis, 'Request');
+const nativeUrlGlobalDescriptor = witnessGetOwnPropertyDescriptor(globalThis, 'URL');
+if (
+  nativeHeadersGlobalDescriptor === undefined ||
+  nativeRequestGlobalDescriptor === undefined ||
+  nativeUrlGlobalDescriptor === undefined
+) {
+  throw new TypeError('Kovo Node adapter requires intact web platform constructors.');
+}
+const nativeHeadersAppend = NativeHeaders.prototype.append;
+const nativeHeadersDelete = NativeHeaders.prototype.delete;
+const nativeHeadersForEach = NativeHeaders.prototype.forEach;
+const nativeHeadersGet = NativeHeaders.prototype.get;
+const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
+const nativeHeadersHas = NativeHeaders.prototype.has;
+const nativeHeadersSet = NativeHeaders.prototype.set;
+const nativeUrlHashGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'hash')?.get;
+const nativeUrlHrefGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'href')?.get;
+const nativeUrlOriginGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
+const nativeUrlPathnameGetter = witnessGetOwnPropertyDescriptor(
+  NativeURL.prototype,
+  'pathname',
+)?.get;
+const nativeUrlSearchGetter = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'search')?.get;
+if (
+  nativeUrlHashGetter === undefined ||
+  nativeUrlHrefGetter === undefined ||
+  nativeUrlOriginGetter === undefined ||
+  nativeUrlPathnameGetter === undefined ||
+  nativeUrlSearchGetter === undefined
+) {
+  throw new TypeError('Kovo Node adapter requires intact URL intrinsic accessors.');
+}
+
+const bodylessMethods = createWitnessSet<string>();
+witnessSetAdd(bodylessMethods, 'GET');
+witnessSetAdd(bodylessMethods, 'HEAD');
 const requestPeerAddressProperty = '__kovoPeerAddress';
+const requestTargetAnalysisOrigin = 'https://kovo.invalid';
 
 /**
  * Adapt a Web-standard `RequestHandler` (from `createRequestHandler`) to a Node
@@ -128,7 +177,7 @@ export function nodeRequestToWebRequest(
     headers,
     method,
     signal: controller.signal,
-    ...(bodylessMethods.has(method)
+    ...(witnessSetHas(bodylessMethods, method)
       ? {}
       : {
           body: Readable.toWeb(nodeRequest) as ReadableStream<Uint8Array>,
@@ -136,15 +185,36 @@ export function nodeRequestToWebRequest(
         }),
   };
 
-  const request = new Request(nodeRequestUrl(nodeRequest, options), init);
+  const request = constructNativeRequest(nodeRequestUrl(nodeRequest, options), init);
   const peerAddress = nodeRequest.socket?.remoteAddress?.trim();
   if (peerAddress) {
-    Object.defineProperty(request, requestPeerAddressProperty, {
+    witnessDefineProperty(request, requestPeerAddressProperty, {
       configurable: true,
       value: peerAddress,
     });
   }
   return request;
+}
+
+function constructNativeRequest(input: string, init: RequestInit): Request {
+  const currentHeaders = witnessGetOwnPropertyDescriptor(globalThis, 'Headers');
+  const currentRequest = witnessGetOwnPropertyDescriptor(globalThis, 'Request');
+  const currentUrl = witnessGetOwnPropertyDescriptor(globalThis, 'URL');
+  if (currentHeaders === undefined || currentRequest === undefined || currentUrl === undefined) {
+    throw new TypeError('Kovo Node adapter web platform constructors are unavailable.');
+  }
+  try {
+    // Node's Request constructor consults the realm URL binding internally. Restore the captured
+    // trio only for this synchronous construction step, then put evaluated app globals back.
+    witnessDefineProperty(globalThis, 'Headers', nativeHeadersGlobalDescriptor);
+    witnessDefineProperty(globalThis, 'Request', nativeRequestGlobalDescriptor);
+    witnessDefineProperty(globalThis, 'URL', nativeUrlGlobalDescriptor);
+    return new NativeRequest(input, init);
+  } finally {
+    witnessDefineProperty(globalThis, 'Headers', currentHeaders);
+    witnessDefineProperty(globalThis, 'Request', currentRequest);
+    witnessDefineProperty(globalThis, 'URL', currentUrl);
+  }
 }
 
 export async function writeWebResponseToNode(
@@ -154,17 +224,17 @@ export async function writeWebResponseToNode(
   options: WriteWebResponseToNodeOptions = {},
 ): Promise<void> {
   const compression = responseCompression(response, options, method);
-  const responseHeaders = new Headers(response.headers);
+  const responseHeaders = new NativeHeaders(response.headers);
   if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
-    responseHeaders.set('Connection', 'close');
+    setHeader(responseHeaders, 'Connection', 'close');
   }
   if (compression) {
-    responseHeaders.set('Content-Encoding', compression);
-    responseHeaders.delete('Content-Length');
+    setHeader(responseHeaders, 'Content-Encoding', compression);
+    deleteHeader(responseHeaders, 'Content-Length');
     appendVary(responseHeaders, 'Accept-Encoding');
   }
   const headers = responseHeadersToNodeHeaders(responseHeaders);
-  const earlyHints = response.headers.get('Link');
+  const earlyHints = getHeader(response.headers, 'Link');
 
   if (
     options.earlyHints !== false &&
@@ -236,15 +306,27 @@ function rejectUnsafeNodeMutationTarget(
 }
 
 function unsafeReservedMutationRequestTarget(rawTarget: string): boolean {
+  const absoluteForm = /^[a-z][a-z0-9+.-]*:/i.test(rawTarget);
   const pathname = rawNodeRequestTargetPathname(rawTarget);
   const comparablePathname = pathname.replaceAll('\\', '/');
-  if (!comparablePathname.startsWith('/_m/')) return false;
-  if (/%(?:2e|2f|5c)/i.test(pathname)) return true;
-  if (pathname.includes('\\')) return true;
-  return comparablePathname
-    .slice('/_m/'.length)
-    .split('/')
-    .some((segment) => segment === '.' || segment === '..');
+  const rootedPathname = `/${comparablePathname.replace(/^\/+/, '')}`;
+  let normalizedPathname: string;
+  try {
+    normalizedPathname = urlPathname(new NativeURL(rootedPathname, requestTargetAnalysisOrigin));
+  } catch {
+    return false;
+  }
+  if (normalizedPathname !== '/_m' && !normalizedPathname.startsWith('/_m/')) return false;
+
+  // Canonical mutation identities are already exactly what the URL parser will expose. Any raw
+  // spelling that reaches the same reserved path only after slash, backslash, percent-dot, or dot
+  // segment processing is an alias and must die before app policy/dispatch sees it.
+  return (
+    absoluteForm ||
+    pathname !== normalizedPathname ||
+    pathname.includes('\\') ||
+    /%(?:2e|2f|5c)/i.test(pathname)
+  );
 }
 
 function rawNodeRequestTargetPathname(rawTarget: string): string {
@@ -258,6 +340,26 @@ function rawNodeRequestTargetPathname(rawTarget: string): string {
   return path < 0 ? '/' : target.slice(path);
 }
 
+function urlHash(url: URL): string {
+  return witnessReflectApply(nativeUrlHashGetter, url, []);
+}
+
+function urlHref(url: URL): string {
+  return witnessReflectApply(nativeUrlHrefGetter, url, []);
+}
+
+function urlOrigin(url: URL): string {
+  return witnessReflectApply(nativeUrlOriginGetter, url, []);
+}
+
+function urlPathname(url: URL): string {
+  return witnessReflectApply(nativeUrlPathnameGetter, url, []);
+}
+
+function urlSearch(url: URL): string {
+  return witnessReflectApply(nativeUrlSearchGetter, url, []);
+}
+
 function responseCompression(
   response: Response,
   options: WriteWebResponseToNodeOptions,
@@ -266,17 +368,19 @@ function responseCompression(
   if (options.compression === false) return undefined;
   if (method === 'HEAD' || response.body === null) return undefined;
   if (response.status === 204 || response.status === 304) return undefined;
-  if (response.headers.has('Content-Encoding')) return undefined;
+  if (hasHeader(response.headers, 'Content-Encoding')) return undefined;
   if (isSensitiveResponse(response.headers)) return undefined;
-  if (!isCompressibleContentType(response.headers.get('Content-Type') ?? '')) return undefined;
+  if (!isCompressibleContentType(getHeader(response.headers, 'Content-Type') ?? '')) {
+    return undefined;
+  }
   return preferredCompression(options.acceptEncoding ?? '');
 }
 
 function isSensitiveResponse(headers: Headers): boolean {
-  const cacheControl = headers.get('Cache-Control') ?? '';
+  const cacheControl = getHeader(headers, 'Cache-Control') ?? '';
   if (/\b(no-transform|no-store|private)\b/i.test(cacheControl)) return true;
-  if (headers.has('Set-Cookie')) return true;
-  const vary = headers.get('Vary') ?? '';
+  if (hasHeader(headers, 'Set-Cookie')) return true;
+  const vary = getHeader(headers, 'Vary') ?? '';
   return vary
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
@@ -330,13 +434,13 @@ function isCompressibleContentType(contentType: string): boolean {
 }
 
 function appendVary(headers: Headers, token: string): void {
-  const existing = headers.get('Vary');
+  const existing = getHeader(headers, 'Vary');
   if (!existing) {
-    headers.set('Vary', token);
+    setHeader(headers, 'Vary', token);
     return;
   }
   const tokens = existing.split(',').map((entry) => entry.trim().toLowerCase());
-  if (!tokens.includes(token.toLowerCase())) headers.set('Vary', `${existing}, ${token}`);
+  if (!tokens.includes(token.toLowerCase())) setHeader(headers, 'Vary', `${existing}, ${token}`);
 }
 
 function nodeEarlyHintsLinkValue(header: string): string | string[] {
@@ -392,13 +496,22 @@ function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): 
       ? options.origin(request)
       : (options.origin ?? defaultOrigin(request, options));
 
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
-    const absolute = new URL(rawUrl);
-    return new URL(`${absolute.pathname}${absolute.search}${absolute.hash}`, origin).href;
-  }
+  const originUrl = new NativeURL(origin);
+  const pinnedOrigin = urlOrigin(originUrl);
+  if (pinnedOrigin === 'null') throw new TypeError('Node adapter origin must be hierarchical.');
 
-  const pathOnly = rawUrl.startsWith('//') ? `/${rawUrl.replace(/^\/+/, '')}` : rawUrl;
-  return new URL(pathOnly, origin).href;
+  const absolute = /^[a-z][a-z0-9+.-]*:/i.test(rawUrl);
+  const pathTarget = absolute
+    ? new NativeURL(rawUrl)
+    : new NativeURL(
+        /^[\\/]/.test(rawUrl) ? `/${rawUrl.replace(/^[\\/]+/, '')}` : rawUrl,
+        requestTargetAnalysisOrigin,
+      );
+  const pathname = urlPathname(pathTarget);
+  const assembled = new NativeURL(
+    `${pinnedOrigin}${pathname.startsWith('/') ? '' : '/'}${pathname}${urlSearch(pathTarget)}${urlHash(pathTarget)}`,
+  );
+  return urlHref(assembled);
 }
 
 function defaultOrigin(request: IncomingMessage, options: NodeHandlerOptions): string {
@@ -415,7 +528,7 @@ function defaultOrigin(request: IncomingMessage, options: NodeHandlerOptions): s
 }
 
 function nodeHeadersToWebHeaders(request: IncomingMessage): Headers {
-  const headers = new Headers();
+  const headers = new NativeHeaders();
 
   for (const [name, value] of Object.entries(request.headers)) {
     if (value === undefined) continue;
@@ -425,9 +538,9 @@ function nodeHeadersToWebHeaders(request: IncomingMessage): Headers {
     // — they are addressed via `request.method`/`request.url`/the `:authority` URL fallback.
     if (name.startsWith(':')) continue;
     if (Array.isArray(value)) {
-      for (const entry of value) headers.append(name, entry);
+      for (const entry of value) appendHeader(headers, name, entry);
     } else {
-      headers.set(name, value);
+      setHeader(headers, name, value);
     }
   }
 
@@ -439,13 +552,41 @@ function responseHeadersToNodeHeaders(headers: Headers): Record<string, string |
   // Headers.forEach combines set-cookie into one entry (comma-joined), so handle
   // it separately via getSetCookie() which preserves each cookie as a distinct value.
   const nodeHeaders: Record<string, string | string[]> = {};
-  const setCookies = headers.getSetCookie();
+  const setCookies = getSetCookieHeaders(headers);
   if (setCookies.length > 0) nodeHeaders['set-cookie'] = setCookies;
-  headers.forEach((value, name) => {
+  forEachHeader(headers, (value, name) => {
     if (name === 'set-cookie') return; // already handled above
     nodeHeaders[name] = value;
   });
   return nodeHeaders;
+}
+
+function appendHeader(headers: Headers, name: string, value: string): void {
+  witnessReflectApply(nativeHeadersAppend, headers, [name, value]);
+}
+
+function deleteHeader(headers: Headers, name: string): void {
+  witnessReflectApply(nativeHeadersDelete, headers, [name]);
+}
+
+function forEachHeader(headers: Headers, callback: (value: string, name: string) => void): void {
+  witnessReflectApply(nativeHeadersForEach, headers, [callback]);
+}
+
+function getHeader(headers: Headers, name: string): string | null {
+  return witnessReflectApply(nativeHeadersGet, headers, [name]);
+}
+
+function getSetCookieHeaders(headers: Headers): string[] {
+  return witnessReflectApply(nativeHeadersGetSetCookie, headers, []);
+}
+
+function hasHeader(headers: Headers, name: string): boolean {
+  return witnessReflectApply(nativeHeadersHas, headers, [name]);
+}
+
+function setHeader(headers: Headers, name: string, value: string): void {
+  witnessReflectApply(nativeHeadersSet, headers, [name, value]);
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {

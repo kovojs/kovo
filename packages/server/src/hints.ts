@@ -8,8 +8,16 @@ import {
   type CspInlineMetadata,
 } from './csp.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson, safeUrlValue } from './html.js';
+import {
+  createWitnessWeakMap,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectIs,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
-const stylesheetSourceProvenance = new WeakMap<
+const stylesheetSourceProvenance = createWitnessWeakMap<
   StylesheetAsset,
   {
     readonly file?: string;
@@ -195,7 +203,7 @@ export function stylesheet(
   const sourcePath = source === undefined ? undefined : localStylesheetSourcePath(source);
   const sourceFile = sourcePath === undefined ? undefined : localStylesheetSourceFile(sourcePath);
   if (sourcePath !== undefined || sourceFile !== undefined) {
-    stylesheetSourceProvenance.set(asset, {
+    witnessWeakMapSet(stylesheetSourceProvenance, asset, {
       ...(sourceFile === undefined ? {} : { file: sourceFile }),
       ...(sourcePath === undefined ? {} : { path: sourcePath }),
     });
@@ -205,12 +213,65 @@ export function stylesheet(
 
 /** @internal */
 export function stylesheetSourceFile(asset: StylesheetAsset): string | undefined {
-  return stylesheetSourceProvenance.get(asset)?.file;
+  return witnessWeakMapGet(stylesheetSourceProvenance, asset)?.file;
 }
 
 /** @internal */
 export function stylesheetSourcePath(asset: StylesheetAsset): string | undefined {
-  return stylesheetSourceProvenance.get(asset)?.path;
+  return witnessWeakMapGet(stylesheetSourceProvenance, asset)?.path;
+}
+
+/** @internal Descriptor-snapshot an authored stylesheet while preserving source provenance. */
+export function snapshotStylesheetAsset(source: StylesheetAsset): StylesheetAsset {
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    throw new TypeError('Kovo stylesheet assets must be stable own-data objects.');
+  }
+
+  const read = (property: keyof StylesheetAsset): unknown => {
+    const before = witnessGetOwnPropertyDescriptor(source, property);
+    const after = witnessGetOwnPropertyDescriptor(source, property);
+    if (
+      (before === undefined) !== (after === undefined) ||
+      (before !== undefined &&
+        (!('value' in before) ||
+          after === undefined ||
+          !('value' in after) ||
+          !witnessObjectIs(before.value, after.value)))
+    ) {
+      throw new TypeError(`Kovo stylesheet asset.${property} must be a stable own data property.`);
+    }
+    return before === undefined ? undefined : before.value;
+  };
+
+  const href = read('href');
+  const criticalCss = read('criticalCss');
+  const cspHash = read('cspHash');
+  const deferFull = read('deferFull');
+  const preload = read('preload');
+  if (typeof href !== 'string') throw new TypeError('Kovo stylesheet asset.href must be a string.');
+  if (criticalCss !== undefined && typeof criticalCss !== 'string') {
+    throw new TypeError('Kovo stylesheet asset.criticalCss must be a string.');
+  }
+  if (cspHash !== undefined && typeof cspHash !== 'string') {
+    throw new TypeError('Kovo stylesheet asset.cspHash must be a string.');
+  }
+  if (deferFull !== undefined && typeof deferFull !== 'boolean') {
+    throw new TypeError('Kovo stylesheet asset.deferFull must be a boolean.');
+  }
+  if (preload !== undefined && typeof preload !== 'boolean') {
+    throw new TypeError('Kovo stylesheet asset.preload must be a boolean.');
+  }
+
+  const snapshot = witnessFreeze({
+    ...(criticalCss === undefined ? {} : { criticalCss }),
+    ...(cspHash === undefined ? {} : { cspHash }),
+    ...(deferFull === undefined ? {} : { deferFull }),
+    href,
+    ...(preload === undefined ? {} : { preload }),
+  });
+  const provenance = witnessWeakMapGet(stylesheetSourceProvenance, source);
+  if (provenance !== undefined) witnessWeakMapSet(stylesheetSourceProvenance, snapshot, provenance);
+  return snapshot;
 }
 
 /**

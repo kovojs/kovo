@@ -459,6 +459,145 @@ describe('server createApp request shell', () => {
     expect('use' in app).toBe(false);
   });
 
+  it('descriptor-snapshots mutable app security and runtime configuration', async () => {
+    const originalNotFound = () => renderedHtml('<main>original-not-found</main>');
+    const errorShells = { notFound: originalNotFound };
+    const anonymousCookie = { name: 'original-csrf', sameSite: 'strict' as const };
+    const trustedOrigins = ['https://trusted.example'];
+    const csrf = {
+      anonymousCookie,
+      field: 'original-csrf-field',
+      secret: 'original-app-snapshot-secret-0123456789',
+      sessionId: () => 'original-session',
+      trustedOrigins,
+    };
+    const retry = { backoff: 'linear' as const, maxAttempts: 2 };
+    const cronArgs = { account: { id: 'original-account' } };
+    const recurring = task('snapshot/recurring', {
+      cron: '0 * * * *',
+      cronArgs,
+      input: s.object({ account: s.object({ id: s.string() }) }),
+      retry,
+      run: () => undefined,
+    });
+    const appStylesheet = stylesheet({ href: '/original.css', preload: true });
+    const app = createApp({
+      csrf,
+      errorShells,
+      routes: [route('/', { page: () => renderedHtml('<main>home</main>') })],
+      stylesheets: [appStylesheet],
+    });
+    const taskApp = createApp({ tasks: [recurring] });
+
+    errorShells.notFound = () => renderedHtml('<main>mutated-not-found</main>');
+    csrf.field = 'mutated-field';
+    csrf.secret = 'mutated-app-snapshot-secret-0123456789';
+    csrf.sessionId = () => 'mutated-session';
+    anonymousCookie.name = 'mutated-csrf';
+    trustedOrigins[0] = 'https://attacker.example';
+    retry.maxAttempts = 99;
+    cronArgs.account.id = 'mutated-account';
+    appStylesheet.href = '/mutated.css';
+
+    expect(Object.isFrozen(app.csrf)).toBe(true);
+    expect(Object.isFrozen(app.csrf?.anonymousCookie)).toBe(true);
+    expect(app.csrf?.field).toBe('original-csrf-field');
+    expect(app.csrf?.sessionId({})).toBe('original-session');
+    expect(app.csrf?.trustedOrigins).toEqual(['https://trusted.example']);
+    expect(Object.isFrozen(app.errorShells)).toBe(true);
+    expect(taskApp.tasks[0]?.retry).toEqual({ backoff: 'linear', maxAttempts: 2 });
+    expect(taskApp.tasks[0]?.cronArgs).toEqual({ account: { id: 'original-account' } });
+    expect(Object.isFrozen(taskApp.tasks[0]?.cronArgs)).toBe(true);
+    expect(Object.isFrozen((taskApp.tasks[0]?.cronArgs as { account: object }).account)).toBe(true);
+    expect(app.stylesheets).toEqual([{ href: '/original.css', preload: true }]);
+    expect(Object.isFrozen(app.stylesheets[0])).toBe(true);
+
+    const handler = createRequestHandler(app);
+    const missing = await handler(new Request('https://example.test/missing'));
+    await expect(missing.text()).resolves.toContain('original-not-found');
+    const home = await handler(new Request('https://example.test/'));
+    const html = await home.text();
+    expect(html).toContain('/original.css');
+    expect(html).not.toContain('/mutated.css');
+  });
+
+  it('rejects a forged victim-session CSRF token after the authoring config is mutated', async () => {
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const csrf = {
+      secret: 'victim-app-csrf-secret-012345678901234',
+      sessionId(request: { headers?: Headers }) {
+        return request.headers?.get('cookie')?.match(/(?:^|;\s*)sid=([^;]+)/)?.[1];
+      },
+    };
+    const app = createApp({
+      csrf,
+      mutations: [
+        mutation('account/delete', {
+          input: s.object({}),
+          handler: mutationHandler,
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    csrf.secret = 'attacker-controlled-secret-0123456789012';
+    csrf.sessionId = () => 'victim';
+    const forged = csrfToken({}, csrf, { audience: 'account/delete' });
+    const form = new FormData();
+    form.set('kovo-csrf', forged);
+    const response = await handler(
+      new Request('https://example.test/_m/account/delete', {
+        body: form,
+        headers: { Cookie: 'sid=victim', Origin: 'https://example.test' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(mutationHandler).not.toHaveBeenCalled();
+  });
+
+  it('pins retained opaque CSRF key-ring methods against a forged victim token', async () => {
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const ring = {
+      currentKeyId: 'original',
+      sign: () => ({ keyId: 'original', signature: 'original-signature' }),
+      verify: (input: { signature: string }) =>
+        input.signature === 'original-signature'
+          ? ({ keyId: 'original', ok: true } as const)
+          : ({ ok: false, reason: 'bad-signature' } as const),
+    };
+    const csrf = { secret: ring, sessionId: () => 'victim' };
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        mutations: [
+          mutation('account/keyring-delete', {
+            input: s.object({}),
+            handler: mutationHandler,
+          }),
+        ],
+      }),
+    );
+
+    ring.currentKeyId = 'attacker';
+    ring.sign = () => ({ keyId: 'attacker', signature: 'attacker-signature' });
+    ring.verify = () => ({ keyId: 'attacker', ok: true }) as const;
+    const forged = csrfToken({}, csrf, { audience: 'account/keyring-delete' });
+    const form = new FormData();
+    form.set('kovo-csrf', forged);
+    const response = await handler(
+      new Request('https://example.test/_m/account/keyring-delete', {
+        body: form,
+        headers: { Origin: 'https://example.test' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(mutationHandler).not.toHaveBeenCalled();
+  });
+
   it('uses compiler-registered live target renderers when createApp does not receive explicit wiring', () => {
     const renderer = {
       component: 'test/create-app-registered-live-target',

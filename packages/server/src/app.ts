@@ -6,6 +6,7 @@ import {
   closeKovoAppAggregate,
   createAppDeclarationSnapshotContext,
   snapshotAppEndpoint,
+  snapshotAppCsrfOptions,
   snapshotAppMutation,
   snapshotAppQuery,
   snapshotAppRegistry,
@@ -21,6 +22,11 @@ import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
 import { task } from './task.js';
+import {
+  witnessDefineProperty,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+} from './security-witness-intrinsics.js';
 import { runtimeRegistryFacts } from './registry-facts.js';
 import {
   isDocumentConfig,
@@ -74,6 +80,12 @@ import type {
   RequestHandler,
 } from './app-types.js';
 
+const nativeArrayIsArray = Array.isArray;
+const nativeNumberIsFinite = Number.isFinite;
+if (!nativeArrayIsArray([]) || nativeArrayIsArray({}) || !nativeNumberIsFinite(1)) {
+  throw new TypeError('Kovo app snapshot controls were modified before framework initialization.');
+}
+
 /**
  * Assemble the app aggregate: the routes, queries, mutations, endpoints,
  * document options, and session provider that make up a Kovo application. The
@@ -100,13 +112,14 @@ export function createApp<
 >(
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
 ): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
+  const csrf = options.csrf === undefined ? undefined : snapshotAppCsrfOptions(options.csrf);
   // Refuse to boot — by-construction at the bootstrap chokepoint (SPEC §6.6,
   // §9.5; plans/secure-framework.md Tier 1). In production a missing/empty/short
   // framework signing secret (today the CSRF/anonymous-CSRF HMAC secret) or an
   // app-declared `env` schema failure throws CreateAppBootError before the app is
   // assembled. Dev stays lenient (warns, never bricks localhost).
   validateAppEnv(
-    { csrfSecret: options.csrf?.secret },
+    { csrfSecret: csrf?.secret },
     {
       ...(options.env === undefined ? {} : { env: options.env }),
       ...(options.envSource === undefined ? {} : { envSource: options.envSource }),
@@ -186,7 +199,7 @@ export function createApp<
       requestLimits: normalizeAppRequestLimits(options.requestLimits),
       routes,
       stylesheets: options.stylesheets ?? [],
-      ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+      ...(csrf === undefined ? {} : { csrf }),
       ...(options.db === undefined ? {} : { db: options.db }),
       mutationResponses: snapshotAppMutationResponses(options.mutationResponses ?? {}),
       ...(options.mutationReplayStore === undefined
@@ -283,7 +296,7 @@ function refuseOrWarnUnauditedDisabledEgress(
 function normalizeAppDocumentOptions(
   document: CreateAppOptions['document'] | undefined,
 ): KovoApp['document'] {
-  if (document === undefined) return Object.freeze({});
+  if (document === undefined) return witnessFreeze({});
   if (isDocumentConfig(document) || typeof document === 'function') {
     const structured = resolveDocumentDeclaration(document);
     if (structured === undefined || !isDocumentConfig(structured)) {
@@ -292,16 +305,16 @@ function normalizeAppDocumentOptions(
       );
     }
     const snapshot = snapshotDocumentConfig(structured);
-    return Object.freeze({
+    return witnessFreeze({
       ...(snapshot.lang === undefined ? {} : { lang: snapshot.lang }),
       structured: snapshot,
     });
   }
-  if (typeof document !== 'object' || document === null || Array.isArray(document)) {
+  if (typeof document !== 'object' || document === null || nativeArrayIsArray(document)) {
     throw new TypeError('createApp({ document }) must be a stable options object (SPEC §9.5).');
   }
   const record = document as unknown as Record<PropertyKey, unknown>;
-  if (Object.getOwnPropertyDescriptor(record, 'template') !== undefined) {
+  if (witnessGetOwnPropertyDescriptor(record, 'template') !== undefined) {
     throw new TypeError(
       'createApp({ document.template }) is not supported. Use structured document primitives such as Document, Head, BodyStart, and BodyEnd (SPEC.md §9.5).',
     );
@@ -317,7 +330,7 @@ function normalizeAppDocumentOptions(
       'createApp({ document.structured }) requires a genuine Document(...) config (SPEC §9.5).',
     );
   }
-  return Object.freeze({
+  return witnessFreeze({
     ...(csp === undefined ? {} : { csp: snapshotAppDocumentCsp(csp) }),
     ...(lang === undefined ? {} : { lang }),
     ...(structured === undefined ? {} : { structured: snapshotDocumentConfig(structured) }),
@@ -335,7 +348,7 @@ function snapshotAppDocumentCsp(value: unknown): NonNullable<KovoApp['document']
   if (reporting !== undefined && reporting !== false && typeof reporting !== 'object') {
     throw new TypeError('createApp document.csp.reporting must be false or an options object.');
   }
-  return Object.freeze({
+  return witnessFreeze({
     ...(allowlist === undefined ? {} : { allowlist: snapshotAppDocumentCspAllowlist(allowlist) }),
     ...(reporting === undefined
       ? {}
@@ -358,7 +371,7 @@ function snapshotAppDocumentCspAllowlist(
       snapshot[field] = snapshotAppDocumentStringArray(entries, `document.csp.allowlist.${field}`);
     }
   }
-  return Object.freeze(snapshot);
+  return witnessFreeze(snapshot);
 }
 
 function snapshotAppDocumentCspReporting(
@@ -368,20 +381,20 @@ function snapshotAppDocumentCspReporting(
   const maxAgeSeconds = appDocumentOwnDataValue(record, 'maxAgeSeconds');
   if (
     maxAgeSeconds !== undefined &&
-    (typeof maxAgeSeconds !== 'number' || !Number.isFinite(maxAgeSeconds) || maxAgeSeconds < 0)
+    (typeof maxAgeSeconds !== 'number' || !nativeNumberIsFinite(maxAgeSeconds) || maxAgeSeconds < 0)
   ) {
     throw new TypeError('createApp document.csp.reporting.maxAgeSeconds must be non-negative.');
   }
-  return Object.freeze(maxAgeSeconds === undefined ? {} : { maxAgeSeconds });
+  return witnessFreeze(maxAgeSeconds === undefined ? {} : { maxAgeSeconds });
 }
 
 function snapshotAppDocumentStringArray(value: unknown, label: string): readonly string[] {
-  if (!Array.isArray(value)) {
+  if (!nativeArrayIsArray(value)) {
     throw new TypeError(`createApp ${label} must be a dense string array.`);
   }
   const snapshot: string[] = [];
   for (let index = 0; index < value.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
     if (
       descriptor === undefined ||
       !('value' in descriptor) ||
@@ -389,13 +402,18 @@ function snapshotAppDocumentStringArray(value: unknown, label: string): readonly
     ) {
       throw new TypeError(`createApp ${label} must contain stable own strings.`);
     }
-    snapshot.push(descriptor.value);
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: descriptor.value,
+      writable: true,
+    });
   }
-  return Object.freeze(snapshot);
+  return witnessFreeze(snapshot);
 }
 
 function appDocumentRecord(value: unknown, label: string): Record<PropertyKey, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || nativeArrayIsArray(value)) {
     throw new TypeError(`createApp ${label} must be a stable own-data object.`);
   }
   return value as Record<PropertyKey, unknown>;
@@ -405,7 +423,7 @@ function appDocumentOwnDataValue(
   record: Record<PropertyKey, unknown>,
   property: PropertyKey,
 ): unknown {
-  const descriptor = Object.getOwnPropertyDescriptor(record, property);
+  const descriptor = witnessGetOwnPropertyDescriptor(record, property);
   if (descriptor === undefined) return undefined;
   if (!('value' in descriptor)) {
     throw new TypeError(
