@@ -409,11 +409,26 @@ describe('query endpoints', () => {
       load: () => ({ payload: new JsonAmplifier() as unknown as string }),
       reads: [],
     });
+    const bigint = query('bigint-resource-query', {
+      access: publicAccess('bigint wire ceiling regression'),
+      load: () => ({ huge: BigInt('9'.repeat(4_300_000)) }),
+      reads: [],
+    });
+    const transformed = query('schema-amplified-resource-query', {
+      access: publicAccess('post-schema byte ceiling regression'),
+      load: () => ({ payload: 'small' }),
+      output: {
+        parse: () => ({ payload: 'x'.repeat(1_500_000) }),
+      },
+      reads: [],
+    });
 
     await expect(runQuery(deep, {}, {})).rejects.toThrow(/depth ceiling/u);
     await expect(runQuery(wide, {}, {})).rejects.toThrow(/byte ceiling/u);
     await expect(runQuery(escaped, {}, {})).rejects.toThrow(/byte ceiling/u);
     await expect(runQuery(opaque, {}, {})).rejects.toThrow(/non-JSON object/u);
+    await expect(runQuery(bigint, {}, {})).rejects.toThrow(/byte ceiling/u);
+    await expect(runQuery(transformed, {}, {})).rejects.toThrow(/byte ceiling/u);
   });
 
   it('preserves explicit query list limits below the default ceiling', async () => {

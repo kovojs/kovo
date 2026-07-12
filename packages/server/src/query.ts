@@ -57,6 +57,7 @@ const DEFAULT_QUERY_LIST_ITEMS = 100;
 const MAX_QUERY_RESULT_DEPTH = 64;
 const MAX_QUERY_RESULT_NODES = 100_000;
 const MAX_QUERY_RESULT_ESTIMATED_BYTES = 4 * 1_024 * 1_024;
+const MAX_QUERY_BIGINT_MAGNITUDE = 10n ** 4_096n;
 const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
 const intrinsicArrayPrototype = witnessGetPrototypeOf([]);
 const intrinsicObjectPrototype = witnessGetPrototypeOf({});
@@ -475,14 +476,17 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
     ...(threadedDb === undefined ? {} : { db: threadedDb }),
   } as QueryLoadContext<Request>;
   const value = definition.load ? await definition.load(input, loadContext) : (null as Value);
-  const capped = capQueryListResults(value, options.maxListItems ?? DEFAULT_QUERY_LIST_ITEMS);
-  const outputResult = parseQueryOutput(definition, capped.value as Value);
+  const outputResult = parseQueryOutput(definition, value);
   if (!outputResult.ok) return outputResult.failure;
+  const capped = capQueryListResults(
+    outputResult.value,
+    options.maxListItems ?? DEFAULT_QUERY_LIST_ITEMS,
+  );
 
   return {
     input,
     ok: true,
-    value: outputResult.value,
+    value: capped.value as Value,
     ...(capped.warnings.length === 0 ? {} : { warnings: capped.warnings }),
   };
 }
@@ -934,10 +938,24 @@ function queryArrayLength(value: readonly unknown[]): number {
 
 function estimatedQueryValueBytes(value: unknown): number {
   if (typeof value === 'string') return value.length * 6 + 2;
-  if (typeof value === 'number' || typeof value === 'bigint') return 32;
+  if (typeof value === 'bigint') return estimatedBigintWireBytes(value);
+  if (typeof value === 'number') return 32;
   if (typeof value === 'boolean') return 5;
   if (value === null || value === undefined) return 4;
   return 16;
+}
+
+function estimatedBigintWireBytes(value: bigint): number {
+  let remaining = value < 0n ? -value : value;
+  if (remaining >= MAX_QUERY_BIGINT_MAGNITUDE) {
+    throw new Error('KV430: query result exceeded the framework byte ceiling (SPEC §9.5).');
+  }
+  let digits = 1;
+  while (remaining >= 10n) {
+    remaining /= 10n;
+    digits += 1;
+  }
+  return digits + (value < 0n ? 1 : 0) + 40;
 }
 
 function appendQueryValue<Value>(values: Value[], value: Value): void {
