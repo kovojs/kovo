@@ -1,5 +1,12 @@
 import type { IncomingMessage } from 'node:http';
 
+import {
+  requestCreateUrl,
+  requestIsRequest,
+  requestUrl,
+  requestUrlSnapshot,
+} from './request-body-intrinsics.js';
+
 /**
  * Trusted transport scheme provenance for framework security decisions.
  *
@@ -14,12 +21,14 @@ export type TrustedRequestScheme = 'http' | 'https';
 
 /** @internal */
 export function trustedRequestScheme(request: Request): TrustedRequestScheme {
-  return new URL(request.url).protocol === 'https:' ? 'https' : 'http';
+  return requestUrlSnapshot(requestCreateUrl(requestUrl(request))).protocol === 'https:'
+    ? 'https'
+    : 'http';
 }
 
 /** @internal */
 export function isTrustedSecureRequest(request: unknown): boolean {
-  return request instanceof Request && trustedRequestScheme(request) === 'https';
+  return requestIsRequest(request) && trustedRequestScheme(request) === 'https';
 }
 
 /** @internal */

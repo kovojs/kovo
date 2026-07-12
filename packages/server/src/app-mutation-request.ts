@@ -26,7 +26,7 @@ import {
   renderAppRouteDocumentResponse,
 } from './app-document.js';
 import { matchShellDispatch } from './shell.js';
-import { resolveRequestClientIp } from './app-load-shed.js';
+import { pinRequestIngressSurface, resolveRequestClientIp } from './app-load-shed.js';
 import {
   endpointRequestWithoutSession,
   requestMetadataWithoutAmbientAuthority,
@@ -36,15 +36,22 @@ import { appTaskScheduler } from './task-runtime.js';
 import { readUntrustedRequestBody, revealUntrustedRequestValue } from './untrusted-request-body.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import { canonicalRequestMethod } from './request-method.js';
+import {
+  requestCreateUrl,
+  requestMethod,
+  requestUrlSnapshot,
+} from './request-body-intrinsics.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
   request: Request,
   url: URL,
   mutationKey: string,
+  ingressMethod: string = requestMethod(request),
 ): Promise<Response> {
-  if (canonicalRequestMethod(request.method) !== 'POST') {
-    return methodNotAllowedWebResponse(request, ['POST']);
+  pinRequestIngressSurface(request);
+  if (canonicalRequestMethod(ingressMethod) !== 'POST') {
+    return methodNotAllowedWebResponse({ method: ingressMethod }, ['POST']);
   }
 
   const mutation = denseOwnRegistryEntryByExactKey(
@@ -58,7 +65,7 @@ export async function handleAppMutationRequest(
       mutationResponseWithoutBrowserState(
         await renderAppErrorDocumentResponse(app, errorShellRequest, 404),
       ),
-      errorShellRequest,
+      { method: ingressMethod },
     );
   }
 
@@ -97,7 +104,14 @@ export async function handleAppMutationRequest(
     // be safely decoded to read the submitted token, a CSRF-protected mutation fails
     // closed as CSRF instead of leaking body/schema diagnostics ahead of CSRF.
     if (mutationRequiresPreBodyCsrf(mutation, app)) {
-      return renderPreBodyCsrfFailure(app, mutation, mutationRequest, url, sourceUrl);
+      return renderPreBodyCsrfFailure(
+        app,
+        mutation,
+        mutationRequest,
+        url,
+        sourceUrl,
+        ingressMethod,
+      );
     }
 
     return serverResponseToWebResponse(
@@ -110,7 +124,7 @@ export async function handleAppMutationRequest(
         },
         status: 422,
       },
-      mutationRequest,
+      { method: ingressMethod },
     );
   }
   const rawInput = bodyResult.value;
@@ -162,7 +176,7 @@ export async function handleAppMutationRequest(
             outcome: appMutationResponseOutcome(outcome),
             rawInput: responseRawInput,
             request: mutationRequest,
-            url: new URL(url),
+            url: requestCreateUrl(requestUrlSnapshot(url).href),
           });
           if (resolved === undefined) return undefined;
           return appMutationEndpointResponseOptions(
@@ -195,7 +209,7 @@ export async function handleAppMutationRequest(
     ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
 
-  return serverResponseToWebResponse(endpointResponse, mutationRequest);
+  return serverResponseToWebResponse(endpointResponse, { method: ingressMethod });
 }
 
 async function renderPreBodyCsrfFailure(
@@ -204,6 +218,7 @@ async function renderPreBodyCsrfFailure(
   request: Request,
   url: URL,
   sourceUrl: URL,
+  ingressMethod: string,
 ): Promise<Response> {
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
@@ -240,7 +255,7 @@ async function renderPreBodyCsrfFailure(
     ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
 
-  return serverResponseToWebResponse(endpointResponse, request);
+  return serverResponseToWebResponse(endpointResponse, { method: ingressMethod });
 }
 
 function mutationRequiresPreBodyCsrf(appMutation: AppMutationDeclaration, app: KovoApp): boolean {
@@ -258,7 +273,7 @@ function sourceRouteStylesheets(
   const match = matchShellDispatch({
     endpoints: app.endpoints,
     method: 'GET',
-    pathname: sourceUrl.pathname,
+    pathname: requestUrlSnapshot(sourceUrl).pathname,
     routes: app.routes,
   });
   const routeStylesheets =
@@ -372,7 +387,7 @@ function defaultMutationRedirectTo(request: Request, currentUrl: string): string
   const referer = request.headers.get('referer');
   if (referer) {
     try {
-      const url = new URL(referer);
+      const url = requestCreateUrl(referer);
       return appRequestUrl(url);
     } catch {
       return referer;
@@ -386,8 +401,9 @@ function mutationSourceUrl(request: Request, mutationUrl: URL): URL {
   const referer = request.headers.get('referer');
   if (!referer) return mutationUrl;
   try {
-    const url = new URL(referer, mutationUrl);
-    return url.origin === mutationUrl.origin ? url : mutationUrl;
+    const mutationSnapshot = requestUrlSnapshot(mutationUrl);
+    const url = requestCreateUrl(referer, mutationSnapshot.href);
+    return requestUrlSnapshot(url).origin === mutationSnapshot.origin ? url : mutationUrl;
   } catch {
     return mutationUrl;
   }
@@ -403,7 +419,7 @@ function defaultAppMutationFailurePageRenderer(
   const match = matchShellDispatch({
     endpoints: app.endpoints,
     method: 'GET',
-    pathname: sourceUrl.pathname,
+    pathname: requestUrlSnapshot(sourceUrl).pathname,
     routes: app.routes,
   });
 

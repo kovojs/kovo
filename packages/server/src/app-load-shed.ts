@@ -520,7 +520,11 @@ export async function requestWithVerifiedBodyLimit(
   request: Request,
   maxBodyBytes: number | false,
 ): Promise<Request> {
-  if (maxBodyBytes === false || readNativeRequestBody(request) === null) return request;
+  if (maxBodyBytes === false || readNativeRequestBody(request) === null) {
+    pinRequestIngressSurface(request);
+    witnessWeakSetAdd(verifiedBodyRequests, request);
+    return request;
+  }
   const body = await readLimitedArrayBuffer(request, maxBodyBytes);
   const verified = createNativeRequest(readNativeRequestUrl(request), {
     body,
@@ -685,7 +689,8 @@ function optionalInheritedFunctionDataProperty(
   return undefined;
 }
 
-function pinRequestIngressSurface(request: Request): void {
+/** @internal Close the native Request surface before authored lifecycle code can observe it. */
+export function pinRequestIngressSurface(request: Request): void {
   if (witnessWeakSetHas(pinnedIngressRequests, request)) return;
   const headers = readNativeRequestHeaders(request);
   const body = readNativeRequestBody(request);

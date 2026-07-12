@@ -100,6 +100,7 @@ export async function dispatchMatchedAppRequest({
       request,
       url,
       reservedKey ?? decodeURIComponent(match.key),
+      exactMethod,
     );
   }
 

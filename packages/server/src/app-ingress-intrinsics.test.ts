@@ -91,6 +91,41 @@ describe('request ingress intrinsic authority', () => {
     expect(calls).toEqual([]);
   });
 
+  it('does not let a late Request.method getter turn GET into an unsafe mutation POST', async () => {
+    const calls: string[] = [];
+    const definition = mutation('account/delete', {
+      csrf: false,
+      handler() {
+        calls.push('deleted');
+        return { ok: true };
+      },
+      input: s.object({}),
+    });
+    const handler = createRequestHandler(createApp({ mutations: [definition] }));
+    const request = new Request('https://kovo.local/_m/account/delete', {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: 'GET',
+    });
+    const nativeMethod = Object.getOwnPropertyDescriptor(Request.prototype, 'method')!;
+    Object.defineProperty(Request.prototype, 'method', {
+      configurable: true,
+      get() {
+        return this === request ? 'POST' : Reflect.apply(nativeMethod.get!, this, []);
+      },
+    });
+
+    let response: Response;
+    try {
+      response = await handler(request);
+    } finally {
+      Object.defineProperty(Request.prototype, 'method', nativeMethod);
+    }
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('POST');
+    expect(calls).toEqual([]);
+  });
+
   it('keeps oversized endpoint bytes at 413 after late stream-reader replacement', async () => {
     const echo = endpoint('/intrinsics/echo', {
       access: publicAccess('body-limit intrinsic regression'),

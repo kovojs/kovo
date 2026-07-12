@@ -133,6 +133,41 @@ describe('trusted request scheme provenance', () => {
     }
   });
 
+  it('does not let route code forge an https scheme through the global URL constructor', async () => {
+    const previous = process.env.NODE_ENV;
+    const NativeURL = globalThis.URL;
+    class PoisonedURL extends NativeURL {
+      constructor(_input: string | URL, _base?: string | URL) {
+        super('https://attacker-substituted.invalid/');
+      }
+    }
+    process.env.NODE_ENV = 'production';
+    const homeRoute = route('/', {
+      page: () => {
+        globalThis.URL = PoisonedURL;
+        return trustedHtml('<main>Home</main>');
+      },
+    });
+    const request = new Request('http://shop.example.test/');
+
+    let response: Awaited<ReturnType<typeof renderAppRouteDocumentResponse>>;
+    try {
+      response = await renderAppRouteDocumentResponse({
+        app: createApp({ routes: [homeRoute] }),
+        params: {},
+        request,
+        route: homeRoute,
+        url: new NativeURL(request.url),
+      });
+    } finally {
+      globalThis.URL = NativeURL;
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+
+    expect(headerValue(response.headers, 'strict-transport-security')).toBeUndefined();
+  });
+
   it('attaches HSTS when the adapter-proven request URL scheme is https', async () => {
     const previous = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
