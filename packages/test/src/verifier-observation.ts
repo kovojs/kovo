@@ -16,6 +16,7 @@ import {
   verifierAsyncStorageRun,
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
+  verifierIsProxy,
   verifierMap,
   verifierMapGet,
   verifierMapSize,
@@ -23,7 +24,6 @@ import {
   verifierObjectKeys,
   verifierPromiseResolve,
   verifierPromiseThen,
-  verifierReflectGet,
   verifierWeakMapGet,
   verifierWeakMapSet,
 } from './verifier-security-intrinsics.js';
@@ -73,7 +73,7 @@ export interface CachedMethod {
   wrapped: unknown;
 }
 
-export function createObservationRecorder(): ObservationRecorder {
+export function createObservationRecorder(recordOutsideCapture = true): ObservationRecorder {
   const observed: ObservedDbOperation[] = [];
   const storage = verifierAsyncStorage<ObservationScope>();
 
@@ -92,9 +92,10 @@ export function createObservationRecorder(): ObservationRecorder {
       return observed.length;
     },
     record(operation: ObservedDbOperation): void {
+      const scope = verifierAsyncStorageGetStore(storage);
+      if (scope === undefined && !recordOutsideCapture) return;
       const snapshot = snapshotObservedOperation(operation);
       verifierArrayPush(observed, snapshot);
-      const scope = verifierAsyncStorageGetStore(storage);
       if (scope !== undefined) verifierArrayPush(scope.observed, snapshot);
     },
     slice(start: number): readonly ObservedDbOperation[] {
@@ -208,8 +209,15 @@ const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
 function tableNameOf(table: unknown): string | undefined {
   if (typeof table === 'string') return table;
   if (typeof table === 'object' && table !== null) {
-    const name = verifierReflectGet(table, DRIZZLE_TABLE_NAME, table);
-    if (typeof name === 'string') return name;
+    if (verifierIsProxy(table)) {
+      throw new TypeError('Kovo DB verifier table arguments must not be Proxy carriers.');
+    }
+    const descriptor = verifierGetOwnPropertyDescriptor(table, DRIZZLE_TABLE_NAME);
+    if (descriptor === undefined) return undefined;
+    if (!('value' in descriptor) || typeof descriptor.value !== 'string') {
+      throw new TypeError('Kovo DB verifier table identity must be a stable own string property.');
+    }
+    return descriptor.value;
   }
   return undefined;
 }

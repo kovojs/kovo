@@ -77,6 +77,97 @@ describe('@kovojs/test mutation verifier', () => {
     ).rejects.toThrow(expectedDiagnostic('KV402', 'product'));
   });
 
+  it('C167 rejects undeclared standalone reads performed by a mutation handler', async () => {
+    const cartMutation = mutation('cart/read-product', {
+      csrf: false,
+      input: s.object({}),
+      handler(_input, request: { db: FakeDb }) {
+        return request.db.read('products');
+      },
+    });
+    const harness = createKovoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart/read-product': {
+          reads: [],
+          touches: [],
+          unresolved: [],
+        },
+      },
+      verification: { domainByTable: { products: 'product' } },
+    });
+
+    await expect(
+      harness.exec(cartMutation, {}, { touchGraphKey: 'cart/read-product' }),
+    ).rejects.toThrow(expectedDiagnostic('KV407', 'product'));
+  });
+
+  it('C167 accepts a standalone mutation read declared in the immutable graph', async () => {
+    const cartMutation = mutation('cart/read-product', {
+      csrf: false,
+      input: s.object({}),
+      handler(_input, request: { db: FakeDb }) {
+        return request.db.read('products');
+      },
+    });
+    const harness = createKovoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart/read-product': {
+          reads: [
+            {
+              domain: 'product',
+              keys: null,
+              site: 'cart.ts:1',
+              source: 'products',
+              via: 'products',
+            },
+          ],
+          touches: [],
+          unresolved: [],
+        },
+      },
+      verification: { domainByTable: { products: 'product' } },
+    });
+
+    await expect(
+      harness.exec(cartMutation, {}, { touchGraphKey: 'cart/read-product' }),
+    ).resolves.toMatchObject({ ok: true, value: [] });
+  });
+
+  it('C145 snapshots the touch graph key before a mutation can switch verification scope', async () => {
+    const execOptions = { touchGraphKey: 'cart/add' };
+    const cartMutation = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        execOptions.touchGraphKey = 'product/update';
+        request.db.write('products', input.productId);
+        return input.productId;
+      },
+    });
+    const harness = createKovoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart/add': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+        'product/update': {
+          touches: [
+            { domain: 'product', keys: null, site: 'product.domain.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      verification: { domainByTable: { cart_items: 'cart', products: 'product' } },
+    });
+
+    await expect(harness.exec(cartMutation, { productId: 'p1' }, execOptions)).rejects.toThrow(
+      expectedDiagnostic('KV402', 'product'),
+    );
+  });
+
   it('uses explicit harness touch graph keys when mutation keys differ from graph entries', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,

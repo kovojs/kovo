@@ -344,6 +344,69 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
       await expect(harness.page('/cart')).rejects.toThrow(expectedDiagnostic('KV407', 'product'));
     });
 
+    it('C144 snapshots page reads before render can widen its fixture declaration', async () => {
+      const fixture: {
+        reads: string[];
+        render(context: { db: FakeDb }): string;
+      } = {
+        reads: ['cart'],
+        render({ db }) {
+          fixture.reads = ['cart', 'product'];
+          db.read('products');
+          return '<main></main>';
+        },
+      };
+      const harness = createKovoTestHarness({
+        db: createFakeDb(),
+        pages: { '/cart': fixture },
+        touchGraph: {},
+        verification: { domainByTable: { cart_items: 'cart', products: 'product' } },
+      });
+
+      await expect(harness.page('/cart')).rejects.toThrow(expectedDiagnostic('KV407', 'product'));
+    });
+
+    it('C166 rejects writes performed by an object page fixture', async () => {
+      const harness = createKovoTestHarness({
+        db: createFakeDb(),
+        pages: {
+          '/product': {
+            reads: ['product'],
+            render({ db }) {
+              db.write('products', 'p1');
+              return '<main></main>';
+            },
+          },
+        },
+        touchGraph: {},
+        verification: { domainByTable: { products: 'product' } },
+      });
+
+      await expect(harness.page('/product')).rejects.toThrow(
+        expectedDiagnostic('KV402', 'product'),
+      );
+    });
+
+    it('C166 rejects writes performed by a thunk page fixture', async () => {
+      let wrappedDb!: FakeDb;
+      const harness = createKovoTestHarness({
+        db: createFakeDb(),
+        pages: {
+          '/product': () => {
+            wrappedDb.write('products', 'p1');
+            return '<main></main>';
+          },
+        },
+        touchGraph: {},
+        verification: { domainByTable: { products: 'product' } },
+      });
+      wrappedDb = harness.db;
+
+      await expect(harness.page('/product')).rejects.toThrow(
+        expectedDiagnostic('KV402', 'product'),
+      );
+    });
+
     it('fails page-render verification on a row-key mismatch (KV408)', async () => {
       const harness = createKovoTestHarness({
         db: createFakeDb(),
@@ -363,6 +426,24 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
       await expect(harness.page('/product')).rejects.toThrow(
         expectedDiagnostic('KV408', 'products expected id observed sku'),
       );
+    });
+
+    it('C158 captures database reads made by a thunk page fixture', async () => {
+      let wrappedDb!: FakeDb;
+      const harness = createKovoTestHarness({
+        db: createFakeDb(),
+        pages: {
+          '/thunk': () => {
+            wrappedDb.read('products');
+            return '<main></main>';
+          },
+        },
+        touchGraph: {},
+        verification: { domainByTable: { products: 'product' } },
+      });
+      wrappedDb = harness.db;
+
+      await expect(harness.page('/thunk')).rejects.toThrow(expectedDiagnostic('KV407', 'product'));
     });
 
     it('still serves string and thunk page fixtures unchanged', async () => {

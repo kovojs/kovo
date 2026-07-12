@@ -7,6 +7,7 @@ import {
 } from '@kovojs/server/internal/execution';
 import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
 import {
+  createManagedAdapterDispatchProxy,
   formatPolicyValues,
   snapshotAdapterPolicy,
   snapshotAdapterStatementCarrier,
@@ -31,6 +32,7 @@ import {
   verifierStringReplaceAll,
   verifierStringSplit,
 } from './verifier-security-intrinsics.js';
+import { snapshotVerifierSqlStatement } from './verifier-snapshots.js';
 
 const NativePGlite = PGlite;
 const nativePgliteExec = verifierStableMethod(NativePGlite.prototype, 'exec');
@@ -268,7 +270,7 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     [kovoReadonlyDbHandle]: readonlyHandle,
   };
 
-  return db;
+  return createManagedAdapterDispatchProxy(db);
 }
 
 function pgliteTestDbFromOperations(
@@ -282,7 +284,7 @@ function pgliteTestDbFromOperations(
   declaredWritePolicy?: DeclaredWritePolicy,
   pgliteHandle: () => PGlite = () => pglite,
 ): ReadonlyPgliteTestDb {
-  return {
+  return createManagedAdapterDispatchProxy({
     async close() {
       if (!readonly) await callPgliteClose(pglite);
     },
@@ -307,7 +309,7 @@ function pgliteTestDbFromOperations(
       }
       await insertPgliteRow(execStatement, queryRows, table, value);
     },
-  };
+  });
 }
 
 function pgliteReadonlyDataDir(options: PGliteOptions): string | undefined {
@@ -469,10 +471,11 @@ function pgliteStatement(
   if (typeof statement === 'string') {
     return { text: statement, values: snapshotAdapterValues(params) };
   }
-  const snapshot = snapshotManagedSqlStatement(statement, 'postgres');
+  const stableStatement = snapshotVerifierSqlStatement(statement) as object;
+  const snapshot = snapshotManagedSqlStatement(stableStatement, 'postgres');
   if (snapshot.ok) return snapshot.statement;
   if (snapshot.message !== undefined) throw new Error(`KV422: ${snapshot.message}`);
-  return snapshotAdapterStatementCarrier(statement, params, 'PGlite statement carrier');
+  return snapshotAdapterStatementCarrier(stableStatement, params, 'PGlite statement carrier');
 }
 
 async function pgliteExecStatement(

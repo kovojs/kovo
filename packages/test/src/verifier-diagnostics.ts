@@ -107,13 +107,14 @@ export function assertObservedWritesCovered(
   touchGraph: CoreGraph.TouchGraph,
   config: DbVerificationConfig,
   touchGraphKey?: string,
+  allReadsInScope = false,
 ): void {
   const scopedTouchGraph = selectTouchGraph(touchGraph, touchGraphKey);
 
   assertRowKeys(observed, config);
   assertRawWriteTablesAllowed(observed, scopedTouchGraph);
   assertKeyedWritesObserved(observed, scopedTouchGraph, config);
-  assertMutationReadsCovered(observed, scopedTouchGraph, config);
+  assertMutationReadsCovered(observed, scopedTouchGraph, config, allReadsInScope);
 
   const exemptTables = stringSet(config.exemptTables ?? []);
   const unmappedTables: string[] = [];
@@ -312,6 +313,7 @@ function assertMutationReadsCovered(
   observed: readonly ObservedDbOperation[],
   touchGraph: CoreGraph.TouchGraph,
   config: DbVerificationConfig,
+  allReadsInScope: boolean,
 ): void {
   assertNoExemptReads(observed, config);
 
@@ -332,7 +334,9 @@ function assertMutationReadsCovered(
   const uncoveredDomains: string[] = [];
   for (let index = 0; index < observed.length; index += 1) {
     const operation = observed[index];
-    if (operation?.kind !== 'read' || operation.mutationRead !== true) continue;
+    if (operation?.kind !== 'read' || (!allReadsInScope && operation.mutationRead !== true)) {
+      continue;
+    }
     if (operation.domain === undefined) verifierArrayPush(unmappedTables, operation.table);
     else if (
       !verifierSetHas(allowedReads, operation.domain) &&

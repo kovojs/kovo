@@ -1,3 +1,4 @@
+import { createFrameworkManagedSqlDispatchProxy } from '@kovojs/server/internal/execution';
 import {
   verifierArrayJoin,
   verifierArrayPush,
@@ -7,11 +8,40 @@ import {
   verifierGetOwnPropertyDescriptor,
   verifierNullRecord,
   verifierObjectKeys,
+  verifierReflectGet,
   verifierDefineProperty,
   verifierSet,
   verifierSetAdd,
   verifierSetValues,
 } from './verifier-security-intrinsics.js';
+
+/**
+ * Mark a repo-owned adapter object as safe for its captured table-helper dispatch to cross the
+ * server's managed SQL membrane. The server still classifies every direct SQL method itself;
+ * only the adapter's `read`/`write` helpers retain this witnessed dispatch (SPEC §11.2).
+ */
+export function createManagedAdapterDispatchProxy<Target extends object>(target: Target): Target {
+  return createFrameworkManagedSqlDispatchProxy(target, {
+    get(value, property, receiver) {
+      return verifierReflectGet(value, property, receiver);
+    },
+  });
+}
+
+/** @internal Mark a generic harness fixture while retaining server guards for known SQL sinks. */
+export function createManagedTestFixtureDispatchProxy<Target extends object>(
+  target: Target,
+): Target {
+  return createFrameworkManagedSqlDispatchProxy(
+    target,
+    {
+      get(value, property, receiver) {
+        return verifierReflectGet(value, property, receiver);
+      },
+    },
+    'test-fixture',
+  );
+}
 
 export interface AdapterDeclaredWritePolicy {
   readonly dialect?: 'postgres' | 'sqlite';

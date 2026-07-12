@@ -11,6 +11,9 @@ import {
   type FakeDb,
 } from './test-fixtures.js';
 
+const nativeReflectApply = Reflect.apply;
+const nativeFunctionToString = Function.prototype.toString;
+
 describe('@kovojs/test query verifier', () => {
   it('fails read-side verification for undeclared query domains', () => {
     const verifier = createDbVerifier(
@@ -356,6 +359,116 @@ describe('@kovojs/test query verifier', () => {
     await expect(harness.query(cartQuery)).rejects.toThrow(expectedDiagnostic('KV407', 'product'));
   });
 
+  it('C166 rejects writes performed by a query loader', async () => {
+    const product = domain('product');
+    const harness = createVerifiedFakeHarness({
+      verification: { domainByTable: { products: 'product' } },
+    });
+    const productQuery = query('product-write', {
+      load(_input, context?: QueryLoadContext<unknown, FakeDb>) {
+        context?.db.write('products', 'p1');
+        return [];
+      },
+      reads: [product],
+    });
+
+    await expect(harness.query(productQuery)).rejects.toThrow(
+      expectedDiagnostic('KV402', 'product'),
+    );
+  });
+
+  it('C141 snapshots declared reads before a loader can widen its own query definition', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const harness = createVerifiedFakeHarness({
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          products: 'product',
+        },
+      },
+    });
+    let mutableQuery!: ReturnType<typeof query>;
+    mutableQuery = query('cart/toctou', {
+      load() {
+        (mutableQuery as { reads: unknown }).reads = [cart, product];
+        return harness.db.read('products');
+      },
+      reads: [cart],
+    });
+
+    await expect(harness.query(mutableQuery)).rejects.toThrow(
+      expectedDiagnostic('KV407', 'product'),
+    );
+  });
+
+  it('C143 does not dispatch verification through a loader-replaced Promise.then', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const harness = createVerifiedFakeHarness({
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          products: 'product',
+        },
+      },
+    });
+    const nativeThen = Promise.prototype.then;
+    const productQuery = query('product/promise-toctou', {
+      load() {
+        Promise.prototype.then = function (onFulfilled, onRejected) {
+          const source =
+            typeof onFulfilled === 'function'
+              ? nativeReflectApply<string>(nativeFunctionToString, onFulfilled, [])
+              : '';
+          if (source.includes('assertReadsCoveredOperations')) {
+            return nativeReflectApply(nativeThen, this, [
+              (captured: { result: unknown }) => captured.result,
+              onRejected,
+            ]);
+          }
+          return nativeReflectApply(nativeThen, this, [onFulfilled, onRejected]);
+        };
+        return harness.db.read('products');
+      },
+      reads: [cart],
+    });
+
+    let error: unknown;
+    try {
+      await harness.query(productQuery);
+    } catch (caught) {
+      error = caught;
+    } finally {
+      Promise.prototype.then = nativeThen;
+    }
+    expect(error).toMatchObject({ message: expectedDiagnostic('KV407', 'product') });
+  });
+
+  it('C142 snapshots output validation before a loader can remove its schema', async () => {
+    const cart = domain('cart');
+    const harness = createVerifiedFakeHarness({
+      touchGraph: {},
+      verification: { domainByTable: { cart_items: 'cart' } },
+    });
+    let mutableQuery!: ReturnType<typeof query>;
+    mutableQuery = query('cart/output-toctou', {
+      load() {
+        (mutableQuery as { output?: unknown }).output = undefined;
+        harness.db.read('cart_items');
+        return { count: 'two' };
+      },
+      output: s.object({ count: s.number() }),
+      reads: [cart],
+    });
+
+    await expect(harness.query(mutableQuery)).rejects.toThrow(
+      expectedDiagnostic('KV410', 'cart/output-toctou Expected number'),
+    );
+  });
+
   it('fails query-loader verification for raw SQL reads of exempt tables', async () => {
     const cart = domain('cart');
     const harness = createVerifiedFakeHarness({
@@ -421,6 +534,15 @@ describe('@kovojs/test query verifier', () => {
       db,
       touchGraph: {
         'cart.add': {
+          reads: [
+            {
+              domain: 'audit',
+              keys: null,
+              site: 'cart.domain.ts:2',
+              source: 'audit_log',
+              via: 'audit_log',
+            },
+          ],
           touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
           unresolved: [],
         },

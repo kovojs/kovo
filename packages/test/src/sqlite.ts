@@ -12,6 +12,7 @@ import {
 } from '@kovojs/server/internal/execution';
 import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
 import {
+  createManagedAdapterDispatchProxy,
   formatPolicyValues,
   snapshotAdapterPolicy,
   snapshotAdapterStatementCarrier,
@@ -39,6 +40,7 @@ import {
   verifierWeakMapGet,
   verifierWeakMapSet,
 } from './verifier-security-intrinsics.js';
+import { snapshotVerifierSqlStatement } from './verifier-snapshots.js';
 
 interface BetterSqliteConstructor {
   new (filename: string, options?: SqliteTestDbOptions): SqliteNativeHandle;
@@ -188,7 +190,7 @@ export function createSqliteTestDb(options: SqliteTestDbOptions = {}): SqliteTes
     };
   }
 
-  return db;
+  return createManagedAdapterDispatchProxy(db);
 }
 
 class NodeSqliteDeclaredWriteError extends Error {
@@ -363,7 +365,7 @@ function mapNodeSqliteAuthorizerError<T>(policy: DeclaredWritePolicy, run: () =>
   try {
     return run();
   } catch (error) {
-    if (error instanceof Error && /not authorized/i.test(error.message)) {
+    if (error instanceof Error && verifierRegExpExec(/not authorized/i, error.message) !== null) {
       throw new NodeSqliteDeclaredWriteError(policy, 'a SQLite engine write/DDL/pragma');
     }
     throw error;
@@ -384,7 +386,7 @@ function declaredWriteSqliteTestDbFromHandle(
   sqlite: SqliteNativeHandle,
   policy: DeclaredWritePolicy,
 ): DeclaredWriteSqliteTestDb {
-  return {
+  return createManagedAdapterDispatchProxy({
     close() {
       callSqliteClose(sqlite);
     },
@@ -409,11 +411,11 @@ function declaredWriteSqliteTestDbFromHandle(
       assertDeclaredWriteTableAllowed(table, policy, 'sqlite');
       insertSqliteRow(sqlite, table, value);
     },
-  };
+  });
 }
 
 function sqliteTestDbFromHandle(sqlite: SqliteNativeHandle): ReadonlySqliteTestDb {
-  return {
+  return createManagedAdapterDispatchProxy({
     close() {
       callSqliteClose(sqlite);
     },
@@ -437,7 +439,7 @@ function sqliteTestDbFromHandle(sqlite: SqliteNativeHandle): ReadonlySqliteTestD
     write(table, value) {
       insertSqliteRow(sqlite, table, value);
     },
-  };
+  });
 }
 
 function insertSqliteRow(
@@ -510,10 +512,11 @@ function sqliteStatement(
   if (typeof statement === 'string') {
     return { text: statement, values: snapshotAdapterValues(params) };
   }
-  const snapshot = snapshotManagedSqlStatement(statement, 'sqlite');
+  const stableStatement = snapshotVerifierSqlStatement(statement) as object;
+  const snapshot = snapshotManagedSqlStatement(stableStatement, 'sqlite');
   if (snapshot.ok) return snapshot.statement;
   if (snapshot.message !== undefined) throw new Error(`KV422: ${snapshot.message}`);
-  return snapshotAdapterStatementCarrier(statement, params, 'SQLite statement carrier');
+  return snapshotAdapterStatementCarrier(stableStatement, params, 'SQLite statement carrier');
 }
 
 function sqliteStatementText(statement: SqliteStatementInput): string {

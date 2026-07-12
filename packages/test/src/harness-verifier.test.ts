@@ -23,6 +23,15 @@ describe('@kovojs/test harness verifier integration', () => {
     const harness = createVerifiedFakeHarness({
       touchGraph: {
         'cart.addItem': {
+          reads: [
+            {
+              domain: 'cart',
+              keys: null,
+              site: 'cart.domain.ts:2',
+              source: 'cart_items',
+              via: 'cart_items',
+            },
+          ],
           touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
           unresolved: [],
         },
@@ -52,6 +61,15 @@ describe('@kovojs/test harness verifier integration', () => {
     const harness = createVerifiedFakeHarness({
       touchGraph: {
         'cart.addItem': {
+          reads: [
+            {
+              domain: 'cart',
+              keys: null,
+              site: 'cart.domain.ts:3',
+              source: 'cart_items',
+              via: 'cart_items',
+            },
+          ],
           touches: [
             {
               branch: 'cart-line',

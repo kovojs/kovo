@@ -1,5 +1,6 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked via pinned Reflect.apply. */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { types as NodeUtilTypes } from 'node:util';
 
 /**
  * Package-private, descriptor-witnessed controls for the SPEC §11 verifier.
@@ -12,6 +13,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 const NativeArray = globalThis.Array;
 const NativeAsyncLocalStorage = AsyncLocalStorage;
+const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
@@ -19,6 +21,7 @@ const NativePromise = globalThis.Promise;
 const NativeProxy = globalThis.Proxy;
 const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
+const NativeResponse = globalThis.Response;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
@@ -32,6 +35,7 @@ const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArrayPush = NativeArray.prototype.push;
 const nativeArraySlice = NativeArray.prototype.slice;
 const nativeArraySort = NativeArray.prototype.sort;
+const nativeJsonStringify = NativeJSON.stringify;
 const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
@@ -44,6 +48,9 @@ const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescript
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
+const nativeAsyncFunctionPrototype = apply<object>(nativeObjectGetPrototypeOf, NativeObject, [
+  async function verifierAsyncFunctionControl(): Promise<void> {},
+]);
 const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
@@ -61,6 +68,7 @@ const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeUtilIsProxy = NodeUtilTypes.isProxy;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapHas = NativeWeakMap.prototype.has;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
@@ -136,18 +144,25 @@ function capturedControlsAreSound(): boolean {
       NativeObject,
       [target, 'safe'],
     );
+    const response = new NativeResponse('safe', { status: 201 });
     return (
       proxy.safe === 7 &&
+      apply(nativeUtilIsProxy, NodeUtilTypes, [proxy]) === true &&
+      apply(nativeUtilIsProxy, NodeUtilTypes, [target]) === false &&
       apply(nativeWeakMapHas, weak, [weakKey]) === true &&
       apply(nativeWeakMapGet, weak, [weakKey]) === weakValue &&
       apply(nativeMapHas, map, ['safe']) === true &&
       apply(nativeMapGet, map, ['safe']) === 11 &&
       apply(nativeSetHas, set, ['safe']) === true &&
       apply(nativeArrayJoin, array, [',']) === 'a,b' &&
+      apply(nativeJsonStringify, NativeJSON, [{ safe: 7 }]) === '{"safe":7}' &&
+      response.status === 201 &&
       observedScope === scope &&
       descriptor !== undefined &&
       'value' in descriptor &&
       descriptor.value === 7 &&
+      apply(nativeObjectGetPrototypeOf, NativeObject, [async function asyncControl() {}]) ===
+        nativeAsyncFunctionPrototype &&
       apply(nativeStringTrim, ' safe ', []) === 'safe' &&
       apply<RegExpExecArray | null>(nativeRegExpExec, /^safe$/u, ['safe'])?.[0] === 'safe'
     );
@@ -178,6 +193,11 @@ export function verifierApply<Return>(
 export function verifierProxy<T extends object>(target: T, handler: ProxyHandler<T>): T {
   assertVerifierSecurityIntrinsics();
   return new NativeProxy(target, handler);
+}
+
+export function verifierResponse(body?: BodyInit | null, init?: ResponseInit): Response {
+  assertVerifierSecurityIntrinsics();
+  return new NativeResponse(body, init);
 }
 
 export function verifierWeakMap<K extends object, V>(): WeakMap<K, V> {
@@ -321,6 +341,14 @@ export function verifierGetPrototypeOf(value: object): object | null {
   return apply(nativeObjectGetPrototypeOf, NativeObject, [value]);
 }
 
+export function verifierIsAsyncFunction(value: unknown): value is Function {
+  assertVerifierSecurityIntrinsics();
+  return (
+    typeof value === 'function' &&
+    apply(nativeObjectGetPrototypeOf, NativeObject, [value]) === nativeAsyncFunctionPrototype
+  );
+}
+
 export function verifierStableMethod(value: object, property: PropertyKey): Function {
   assertVerifierSecurityIntrinsics();
   return stableOwnFunction(value, property);
@@ -354,6 +382,11 @@ export function verifierIsArray(value: unknown): value is unknown[] {
   return apply(nativeArrayIsArray, NativeArray, [value]) === true;
 }
 
+export function verifierIsProxy(value: unknown): boolean {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeUtilIsProxy, NodeUtilTypes, [value]) === true;
+}
+
 export function verifierArrayPush<T>(values: T[], value: T): number {
   assertVerifierSecurityIntrinsics();
   return apply(nativeArrayPush, values, [value]);
@@ -374,6 +407,11 @@ export function verifierArrayJoin(values: readonly unknown[], separator: string)
 export function verifierArraySort<T>(values: T[], compare: (left: T, right: T) => number): T[] {
   assertVerifierSecurityIntrinsics();
   return apply(nativeArraySort, values, [compare]);
+}
+
+export function verifierJsonStringify(value: unknown): string | undefined {
+  assertVerifierSecurityIntrinsics();
+  return apply(nativeJsonStringify, NativeJSON, [value]);
 }
 
 export function verifierDenseArraySnapshot<T>(

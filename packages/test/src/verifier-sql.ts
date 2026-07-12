@@ -15,6 +15,20 @@ import {
 } from 'pgsql-ast-parser';
 
 import type { ObservedDbOperation } from './verifier-observation.js';
+import {
+  verifierArrayJoin,
+  verifierArrayPush,
+  verifierGetOwnPropertyDescriptor,
+  verifierIsArray,
+  verifierNumber,
+  verifierObjectKeys,
+  verifierSet,
+  verifierSetAdd,
+  verifierSetForEach,
+  verifierSetHas,
+  verifierStringIndexOf,
+  verifierStringSlice,
+} from './verifier-security-intrinsics.js';
 
 /** @internal Parsed read/write operation extracted from a SQL statement. */
 export type ParsedSqlOperation = Pick<
@@ -32,9 +46,28 @@ export function parseSqlOperations(
   statement: string,
   options: ParseSqlOperationsOptions = {},
 ): ParsedSqlOperation[] {
+  const dialectDescriptor = verifierGetOwnPropertyDescriptor(options, 'dialect');
+  if (dialectDescriptor !== undefined && !('value' in dialectDescriptor)) {
+    throw new TypeError('SQL verifier dialect must be a stable own data property.');
+  }
+  const dialect =
+    dialectDescriptor !== undefined && 'value' in dialectDescriptor
+      ? dialectDescriptor.value
+      : undefined;
   const dialectStatement =
-    options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
-  return parse(dialectStatement).flatMap((parsed) => operationsForStatement(parsed, new Set()));
+    dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
+  const parsedStatements = parse(dialectStatement);
+  const operations: ParsedSqlOperation[] = [];
+  for (let index = 0; index < parsedStatements.length; index += 1) {
+    appendOperations(
+      operations,
+      operationsForStatement(
+        arrayEntry(parsedStatements, index, 'parsed SQL statements'),
+        verifierSet(),
+      ),
+    );
+  }
+  return operations;
 }
 
 function normalizeSqlitePlaceholders(statement: string): string {
@@ -60,26 +93,26 @@ function normalizeSqlitePlaceholders(statement: string): string {
     }
 
     if (char === '-' && next === '-') {
-      const end = statement.indexOf('\n', index + 2);
-      if (end === -1) return normalized + statement.slice(index);
-      normalized += statement.slice(index, end + 1);
+      const end = verifierStringIndexOf(statement, '\n', index + 2);
+      if (end === -1) return normalized + verifierStringSlice(statement, index);
+      normalized += verifierStringSlice(statement, index, end + 1);
       index = end;
       continue;
     }
 
     if (char === '/' && next === '*') {
-      const end = statement.indexOf('*/', index + 2);
-      if (end === -1) return normalized + statement.slice(index);
-      normalized += statement.slice(index, end + 2);
+      const end = verifierStringIndexOf(statement, '*/', index + 2);
+      if (end === -1) return normalized + verifierStringSlice(statement, index);
+      normalized += verifierStringSlice(statement, index, end + 2);
       index = end + 1;
       continue;
     }
 
     if (char === '?') {
       let digitEnd = index + 1;
-      while (/\d/.test(statement[digitEnd] ?? '')) digitEnd += 1;
-      const explicitIndex = statement.slice(index + 1, digitEnd);
-      parameterIndex = explicitIndex === '' ? parameterIndex + 1 : Number(explicitIndex);
+      while (isAsciiDigit(statement[digitEnd] ?? '')) digitEnd += 1;
+      const explicitIndex = verifierStringSlice(statement, index + 1, digitEnd);
+      parameterIndex = explicitIndex === '' ? parameterIndex + 1 : verifierNumber(explicitIndex);
       normalized += `$${parameterIndex}`;
       index = digitEnd - 1;
       continue;
@@ -103,11 +136,11 @@ function readQuoted(
         index += 2;
         continue;
       }
-      return [statement.slice(start, index + 1), index];
+      return [verifierStringSlice(statement, start, index + 1), index];
     }
     index += 1;
   }
-  return [statement.slice(start), statement.length - 1];
+  return [verifierStringSlice(statement, start), statement.length - 1];
 }
 
 function operationsForStatement(
@@ -142,17 +175,21 @@ function operationsForSelect(
   switch (statement.type) {
     case 'select': {
       const rowKey = rowKeyFromWhere(statement.where);
-      return [
-        ...operationsForFrom(statement.from ?? [], rowKey, cteAliases),
-        ...operationsForNestedStatements([statement.columns, statement.where], cteAliases),
-      ];
+      const operations: ParsedSqlOperation[] = [];
+      appendOperations(operations, operationsForFrom(statement.from ?? [], rowKey, cteAliases));
+      appendOperations(
+        operations,
+        operationsForNestedStatements([statement.columns, statement.where], cteAliases),
+      );
+      return operations;
     }
     case 'union':
-    case 'union all':
-      return [
-        ...operationsForSelect(statement.left, cteAliases),
-        ...operationsForSelect(statement.right, cteAliases),
-      ];
+    case 'union all': {
+      const operations: ParsedSqlOperation[] = [];
+      appendOperations(operations, operationsForSelect(statement.left, cteAliases));
+      appendOperations(operations, operationsForSelect(statement.right, cteAliases));
+      return operations;
+    }
     case 'with':
       return operationsForWith(statement, cteAliases);
     case 'with recursive':
@@ -166,21 +203,28 @@ function operationsForInsert(
   statement: InsertStatement,
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
-  return [
+  const operations: ParsedSqlOperation[] = [
     {
       kind: 'write',
       mutationRead: undefined,
       rowKey: undefined,
       table: tableName(statement.into),
     },
-    ...markMutationReads(operationsForSelect(statement.insert, cteAliases)),
-    // KV407 soundness: `ON CONFLICT DO UPDATE SET col=(subquery)` and
-    // `RETURNING (subquery)` read other tables; without walking them a
-    // cross-domain read hides from coverage (SPEC.md §11.2).
-    ...markMutationReads(
+  ];
+  appendOperations(
+    operations,
+    markMutationReads(operationsForSelect(statement.insert, cteAliases)),
+  );
+  // KV407 soundness: `ON CONFLICT DO UPDATE SET col=(subquery)` and
+  // `RETURNING (subquery)` read other tables; without walking them a
+  // cross-domain read hides from coverage (SPEC.md §11.2).
+  appendOperations(
+    operations,
+    markMutationReads(
       operationsForNestedStatements([statement.onConflict, statement.returning], cteAliases),
     ),
-  ];
+  );
+  return operations;
 }
 
 function operationsForUpdate(
@@ -188,49 +232,65 @@ function operationsForUpdate(
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
   const rowKey = rowKeyFromWhere(statement.where);
-  return [
+  const operations: ParsedSqlOperation[] = [
     { kind: 'write', mutationRead: undefined, rowKey, table: tableName(statement.table) },
-    ...markMutationReads(
+  ];
+  appendOperations(
+    operations,
+    markMutationReads(
       operationsForFrom(statement.from ? [statement.from] : [], rowKey, cteAliases),
     ),
-    ...markMutationReads(
+  );
+  appendOperations(
+    operations,
+    markMutationReads(
       operationsForNestedStatements(
         // KV407 soundness: `RETURNING (subquery)` reads other tables (SPEC.md §11.2).
         [statement.sets, statement.where, statement.returning],
         cteAliases,
       ),
     ),
-  ];
+  );
+  return operations;
 }
 
 function operationsForDelete(
   statement: DeleteStatement,
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
-  return [
+  const operations: ParsedSqlOperation[] = [
     {
       kind: 'write',
       mutationRead: undefined,
       rowKey: rowKeyFromWhere(statement.where),
       table: tableName(statement.from),
     },
-    // KV407 soundness: `RETURNING (subquery)` reads other tables (SPEC.md §11.2).
-    ...markMutationReads(
+  ];
+  // KV407 soundness: `RETURNING (subquery)` reads other tables (SPEC.md §11.2).
+  appendOperations(
+    operations,
+    markMutationReads(
       operationsForNestedStatements([statement.where, statement.returning], cteAliases),
     ),
-  ];
+  );
+  return operations;
 }
 
 function operationsForTruncate(statement: TruncateTableStatement): ParsedSqlOperation[] {
   // SPEC.md §11.2 meta-soundness: TRUNCATE is a destructive write per named
   // table. Without an explicit write op an uncovered `truncate products` would
   // parse to zero ops and pass `assertCovered()` green (E1).
-  return statement.tables.map((table) => ({
-    kind: 'write' as const,
-    mutationRead: undefined,
-    rowKey: undefined,
-    table: tableName(table),
-  }));
+  const operations: ParsedSqlOperation[] = [];
+  for (let index = 0; index < statement.tables.length; index += 1) {
+    const table = arrayEntry(statement.tables, index, 'TRUNCATE tables');
+    verifierArrayPush(operations, {
+      kind: 'write',
+      mutationRead: undefined,
+      rowKey: undefined,
+      table: tableName(table),
+    });
+  }
+  return operations;
 }
 
 function operationsForWith(
@@ -240,12 +300,14 @@ function operationsForWith(
   let aliases = cteAliases;
   const operations: ParsedSqlOperation[] = [];
 
-  for (const binding of statement.bind) {
-    operations.push(...operationsForStatement(binding.statement, aliases));
+  for (let index = 0; index < statement.bind.length; index += 1) {
+    const binding = arrayEntry(statement.bind, index, 'WITH bindings');
+    appendOperations(operations, operationsForStatement(binding.statement, aliases));
     aliases = withAliases(aliases, [binding.alias.name]);
   }
 
-  return [...operations, ...operationsForStatement(statement.in, aliases)];
+  appendOperations(operations, operationsForStatement(statement.in, aliases));
+  return operations;
 }
 
 function operationsForWithRecursive(
@@ -253,17 +315,22 @@ function operationsForWithRecursive(
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
   const aliases = withAliases(cteAliases, [statement.alias.name]);
-  return [
-    ...operationsForSelect(statement.bind, aliases),
-    ...operationsForStatement(statement.in, aliases),
-  ];
+  const operations: ParsedSqlOperation[] = [];
+  appendOperations(operations, operationsForSelect(statement.bind, aliases));
+  appendOperations(operations, operationsForStatement(statement.in, aliases));
+  return operations;
 }
 
 function withAliases(
   currentAliases: ReadonlySet<string>,
   addedAliases: readonly string[],
 ): ReadonlySet<string> {
-  return new Set([...currentAliases, ...addedAliases]);
+  const aliases = verifierSet<string>();
+  verifierSetForEach(currentAliases, (alias) => verifierSetAdd(aliases, alias));
+  for (let index = 0; index < addedAliases.length; index += 1) {
+    verifierSetAdd(aliases, arrayEntry(addedAliases, index, 'WITH aliases'));
+  }
+  return aliases;
 }
 
 function operationsForFrom(
@@ -271,35 +338,51 @@ function operationsForFrom(
   rowKey: string | undefined,
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
-  return from.flatMap((item) => {
+  const operations: ParsedSqlOperation[] = [];
+  for (let index = 0; index < from.length; index += 1) {
+    const item = arrayEntry(from, index, 'SQL FROM sources');
     if (item.type === 'table') {
       const table = tableName(item.name);
-      return cteAliases.has(table)
-        ? []
-        : [{ kind: 'read', mutationRead: undefined, rowKey, table }];
+      if (!verifierSetHas(cteAliases, table)) {
+        verifierArrayPush(operations, { kind: 'read', mutationRead: undefined, rowKey, table });
+      }
+      continue;
     }
 
     if (item.type === 'statement') {
-      return operationsForSelect(item.statement, cteAliases);
+      appendOperations(operations, operationsForSelect(item.statement, cteAliases));
     }
-
-    return [];
-  });
+  }
+  return operations;
 }
 
 function operationsForNestedStatements(
   values: readonly unknown[],
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
-  return values.flatMap((value) => operationsForNestedStatement(value, cteAliases));
+  const operations: ParsedSqlOperation[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    appendOperations(
+      operations,
+      operationsForNestedStatement(arrayEntry(values, index, 'nested SQL values'), cteAliases),
+    );
+  }
+  return operations;
 }
 
 function operationsForNestedStatement(
   value: unknown,
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => operationsForNestedStatement(item, cteAliases));
+  if (verifierIsArray(value)) {
+    const operations: ParsedSqlOperation[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      appendOperations(
+        operations,
+        operationsForNestedStatement(arrayEntry(value, index, 'nested SQL array'), cteAliases),
+      );
+    }
+    return operations;
   }
   if (!value || typeof value !== 'object') return [];
 
@@ -307,7 +390,15 @@ function operationsForNestedStatement(
     return operationsForSelect(value, cteAliases);
   }
 
-  return Object.values(value).flatMap((item) => operationsForNestedStatement(item, cteAliases));
+  const operations: ParsedSqlOperation[] = [];
+  const keys = verifierObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = arrayEntry(keys, index, 'nested SQL object keys');
+    const descriptor = verifierGetOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !('value' in descriptor)) continue;
+    appendOperations(operations, operationsForNestedStatement(descriptor.value, cteAliases));
+  }
+  return operations;
 }
 
 function isSelectStatement(value: object): value is SelectStatement {
@@ -323,15 +414,29 @@ function isSelectStatement(value: object): value is SelectStatement {
 }
 
 function markMutationReads(operations: ParsedSqlOperation[]): ParsedSqlOperation[] {
-  return operations.map((operation) => ({
-    ...operation,
-    mutationRead: operation.kind === 'read' ? true : operation.mutationRead,
-  }));
+  const marked: ParsedSqlOperation[] = [];
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = arrayEntry(operations, index, 'mutation SQL operations');
+    verifierArrayPush(marked, {
+      kind: operation.kind,
+      mutationRead: operation.kind === 'read' ? true : operation.mutationRead,
+      rowKey: operation.rowKey,
+      table: operation.table,
+    });
+  }
+  return marked;
 }
 
 function rowKeyFromWhere(where: Expr | null | undefined): string | undefined {
-  const keys = where ? [...new Set(rowKeysFromExpr(where))] : [];
-  return keys.length > 0 ? keys.join(', ') : undefined;
+  if (!where) return undefined;
+  const unique = verifierSet<string>();
+  const observed = rowKeysFromExpr(where);
+  for (let index = 0; index < observed.length; index += 1) {
+    verifierSetAdd(unique, arrayEntry(observed, index, 'SQL row keys'));
+  }
+  const keys: string[] = [];
+  verifierSetForEach(unique, (key) => verifierArrayPush(keys, key));
+  return keys.length > 0 ? verifierArrayJoin(keys, ', ') : undefined;
 }
 
 function rowKeysFromExpr(expression: Expr): string[] {
@@ -346,7 +451,9 @@ function rowKeysFromExpr(expression: Expr): string[] {
     if (right) return [right];
   }
 
-  return [...rowKeysFromExpr(expression.left), ...rowKeysFromExpr(expression.right)];
+  const keys = rowKeysFromExpr(expression.left);
+  appendStrings(keys, rowKeysFromExpr(expression.right));
+  return keys;
 }
 
 function refName(expression: Expr): string | undefined {
@@ -355,4 +462,31 @@ function refName(expression: Expr): string | undefined {
 
 function tableName(identifier: QName): string {
   return identifier.name;
+}
+
+function appendOperations(
+  target: ParsedSqlOperation[],
+  source: readonly ParsedSqlOperation[],
+): void {
+  for (let index = 0; index < source.length; index += 1) {
+    verifierArrayPush(target, arrayEntry(source, index, 'SQL operations'));
+  }
+}
+
+function appendStrings(target: string[], source: readonly string[]): void {
+  for (let index = 0; index < source.length; index += 1) {
+    verifierArrayPush(target, arrayEntry(source, index, 'SQL strings'));
+  }
+}
+
+function arrayEntry<Value>(values: readonly Value[], index: number, label: string): Value {
+  const descriptor = verifierGetOwnPropertyDescriptor(values, index);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`${label} must remain a dense own-data array.`);
+  }
+  return descriptor.value;
+}
+
+function isAsciiDigit(value: string): boolean {
+  return value >= '0' && value <= '9';
 }

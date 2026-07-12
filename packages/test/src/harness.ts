@@ -16,6 +16,7 @@ import type { PageAssertion } from './page.js';
 import { createDbVerifier } from './verifier.js';
 import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 import type { DbVerificationConfig as InternalDbVerificationConfig } from './verifier-observation.js';
+import { createManagedTestFixtureDispatchProxy } from './adapter-security.js';
 
 // SPEC.md §11: the harness verification API returns `DbVerificationDiagnostic`s
 // and the `page()` API returns a `PageAssertion`, so both documented types are
@@ -123,7 +124,11 @@ export function createKovoTestHarness<Db>(
           options.verification as InternalDbVerificationConfig,
         )
       : null;
-  const db = verifier ? (verifier.wrap(options.db) as Db) : options.db;
+  const db = verifier
+    ? (verifier.wrap(options.db) as Db)
+    : typeof options.db === 'object' && options.db !== null
+      ? (createManagedTestFixtureDispatchProxy(options.db) as Db)
+      : options.db;
 
   return {
     db,

@@ -1,8 +1,11 @@
+/* oxlint-disable typescript/unbound-method -- Adversarial test replaces late realm methods. */
 import { describe, expect, it } from 'vitest';
 
 import { createDbVerifier } from './verifier.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 import { sqlStatementText } from './sql-observer.js';
+
+const nativeReflectApply = Reflect.apply;
 
 interface SqlDb {
   sql(statement: string): unknown[];
@@ -91,7 +94,7 @@ describe('@kovojs/test SQL observer', () => {
     expect(() => verifier.assertCovered()).not.toThrow();
   });
 
-  it('observes update-only engine side effects even when row counts do not change', async () => {
+  it('C140 pins engine side-effect dispatch and fingerprints against late replacement', async () => {
     const rows: Record<string, Record<string, unknown>[]> = {
       inventory: [{ product_id: 'p1', refreshed_at: 'v1' }],
       products: [{ id: 'p1', price: 10 }],
@@ -126,7 +129,19 @@ describe('@kovojs/test SQL observer', () => {
     );
     const wrapped = verifier.wrap(db);
 
-    await wrapped.sql("update products set price = 20 where id = 'p1'");
+    const nativeCall = Function.prototype.call;
+    const nativeStringify = JSON.stringify;
+    try {
+      Function.prototype.call = function (thisArg: unknown, ...args: unknown[]) {
+        if (this === db.query) return Promise.resolve({ rows: [] });
+        return nativeReflectApply(this, thisArg, args);
+      };
+      JSON.stringify = () => 'constant-attacker-fingerprint';
+      await wrapped.sql("update products set price = 20 where id = 'p1'");
+    } finally {
+      JSON.stringify = nativeStringify;
+      Function.prototype.call = nativeCall;
+    }
 
     expect(verifier.observed).toEqual([
       {

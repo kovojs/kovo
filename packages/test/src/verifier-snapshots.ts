@@ -1,11 +1,13 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
+  frameworkTrustedSqlCarrier,
   isManagedSqlStatement,
   snapshotManagedSqlStatement,
 } from '@kovojs/core/internal/sql-safety';
 
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 import {
+  verifierApply,
   verifierArrayPush,
   verifierDefineProperty,
   verifierDenseArraySnapshot,
@@ -14,7 +16,26 @@ import {
   verifierIsArray,
   verifierNullRecord,
   verifierOwnKeys,
+  verifierSet,
+  verifierSetAdd,
+  verifierSetDelete,
+  verifierSetForEach,
 } from './verifier-security-intrinsics.js';
+
+const frameworkSqlSnapshotters = verifierSet<Function>();
+
+/** @internal Register a pre-app framework-copy SQL snapshot control for fixture SSR bridging. */
+export function registerFrameworkSqlSnapshotter(snapshotter: Function): () => void {
+  const registered = (statement: unknown): unknown =>
+    verifierApply(snapshotter, undefined, [statement]);
+  verifierSetAdd(frameworkSqlSnapshotters, registered);
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    verifierSetDelete(frameworkSqlSnapshotters, registered);
+  };
+}
 
 interface OwnDataEntry {
   key: string;
@@ -271,6 +292,33 @@ export function snapshotDomains(domains: readonly string[]): readonly string[] {
   return stringArray(domains, 'declared read domains');
 }
 
+/** Snapshot a query definition's declared domains through own-data descriptors (SPEC §11.2). */
+export function snapshotQueryReadDomains(
+  query: object,
+  label = 'query fixture',
+): readonly string[] {
+  const readsDescriptor = verifierGetOwnPropertyDescriptor(query, 'reads');
+  if (readsDescriptor === undefined) return snapshotDomains([]);
+  if (!('value' in readsDescriptor)) {
+    throw new TypeError(`${label}.reads must be a stable own data property.`);
+  }
+  if (readsDescriptor.value === undefined) return snapshotDomains([]);
+  return verifierDenseArraySnapshot(readsDescriptor.value, `${label}.reads`, (domain, index) => {
+    if (typeof domain !== 'object' || domain === null) {
+      throw new TypeError(`${label}.reads[${index}] must be a domain object.`);
+    }
+    const keyDescriptor = verifierGetOwnPropertyDescriptor(domain, 'key');
+    if (
+      keyDescriptor === undefined ||
+      !('value' in keyDescriptor) ||
+      typeof keyDescriptor.value !== 'string'
+    ) {
+      throw new TypeError(`${label}.reads[${index}].key must be a string own data property.`);
+    }
+    return keyDescriptor.value;
+  });
+}
+
 /**
  * Snapshot an externally supplied SQL carrier once and pass that same immutable value to both the
  * parser and adapter.  Framework-minted statements reuse the core-managed snapshot; generic test
@@ -287,6 +335,9 @@ export function snapshotVerifierSqlStatement(statement: unknown): unknown {
   if (managed.ok && managed.statement.provenance !== 'plain-separated-carrier') {
     return managed.statement;
   }
+
+  const bridged = snapshotFrameworkCopySqlStatement(statement);
+  if (bridged !== undefined) return bridged;
 
   const entries = ownDataEntries(statement, 'SQL statement carrier');
   const textEntry = entryValue(entries, 'text');
@@ -316,4 +367,53 @@ export function snapshotVerifierSqlStatement(statement: unknown): unknown {
     });
   }
   return verifierFreeze(snapshot);
+}
+
+function snapshotFrameworkCopySqlStatement(statement: object): unknown | undefined {
+  let reconstructed: unknown;
+  verifierSetForEach(frameworkSqlSnapshotters, (snapshotter) => {
+    if (reconstructed !== undefined) return;
+    const result = verifierApply<unknown>(snapshotter, undefined, [statement]);
+    if (typeof result !== 'object' || result === null) return;
+    const okDescriptor = verifierGetOwnPropertyDescriptor(result, 'ok');
+    if (okDescriptor === undefined || !('value' in okDescriptor)) {
+      throw new TypeError('Framework SQL snapshot control returned an unstable result.');
+    }
+    if (okDescriptor.value !== true) return;
+    const statementDescriptor = verifierGetOwnPropertyDescriptor(result, 'statement');
+    if (
+      statementDescriptor === undefined ||
+      !('value' in statementDescriptor) ||
+      typeof statementDescriptor.value !== 'object' ||
+      statementDescriptor.value === null
+    ) {
+      throw new TypeError('Framework SQL snapshot control omitted its statement artifact.');
+    }
+    const foreignStatement = statementDescriptor.value;
+    const textDescriptor = verifierGetOwnPropertyDescriptor(foreignStatement, 'text');
+    const sqlDescriptor = verifierGetOwnPropertyDescriptor(foreignStatement, 'sql');
+    const valuesDescriptor = verifierGetOwnPropertyDescriptor(foreignStatement, 'values');
+    if (
+      textDescriptor === undefined ||
+      !('value' in textDescriptor) ||
+      typeof textDescriptor.value !== 'string' ||
+      sqlDescriptor === undefined ||
+      !('value' in sqlDescriptor) ||
+      sqlDescriptor.value !== textDescriptor.value ||
+      valuesDescriptor === undefined ||
+      !('value' in valuesDescriptor)
+    ) {
+      throw new TypeError('Framework SQL snapshot control returned an invalid statement artifact.');
+    }
+    const values = verifierDenseArraySnapshot(
+      valuesDescriptor.value,
+      'framework-copy SQL parameters',
+      (value) => value,
+    );
+    reconstructed = frameworkTrustedSqlCarrier(
+      { text: textDescriptor.value, values },
+      'framework-owned integration fixture SQL bridge',
+    );
+  });
+  return reconstructed;
 }

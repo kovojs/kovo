@@ -5,6 +5,7 @@ import {
   isSqlHandleLike,
   isSqlHandleProperty,
 } from '@kovojs/core/internal/sql-safety';
+import { createFrameworkManagedSqlDispatchProxy } from '@kovojs/server/internal/execution';
 import { observeSqlEngineSideEffects, tableObservationSnapshots } from './sql-observer.js';
 import {
   assertObservedReadsCovered,
@@ -31,7 +32,6 @@ import {
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
   verifierObjectKeys,
-  verifierProxy,
   verifierReflectGet,
   verifierSet,
   verifierSetAdd,
@@ -60,6 +60,7 @@ export interface DbVerifier {
   assertCovered(touchGraphKey?: string): void;
   assertCoveredOperations(observed: readonly ObservedDbOperation[], touchGraphKey?: string): void;
   assertCoveredSince(start: number, touchGraphKey?: string): void;
+  assertNoWritesOperations(observed: readonly ObservedDbOperation[]): void;
   assertReadsCovered(domains: readonly string[]): void;
   assertReadsCoveredOperations(
     observed: readonly ObservedDbOperation[],
@@ -88,11 +89,13 @@ export interface DbVerifier {
 export function createDbVerifier(
   touchGraph: CoreGraph.TouchGraph,
   config: DbVerificationConfig,
+  options: { recordOutsideCapture?: boolean } = {},
 ): DbVerifier {
   assertVerifierSecurityIntrinsics();
   const touchGraphSnapshot = snapshotTouchGraph(touchGraph);
+  const emptyTouchGraphSnapshot = snapshotTouchGraph({});
   const configSnapshot = snapshotDbVerificationConfig(config);
-  const recorder = createObservationRecorder();
+  const recorder = createObservationRecorder(options.recordOutsideCapture !== false);
   const rootProxyCache = verifierWeakMap<object, object>();
   const sqlHandleProxyCache = verifierWeakMap<object, object>();
   const methodCache = verifierWeakMap<object, Map<PropertyKey, CachedMethod>>();
@@ -115,6 +118,7 @@ export function createDbVerifier(
         touchGraphSnapshot,
         configSnapshot,
         touchGraphKey,
+        true,
       );
     },
     assertCoveredSince(start: number, touchGraphKey?: string): void {
@@ -123,6 +127,14 @@ export function createDbVerifier(
         touchGraphSnapshot,
         configSnapshot,
         touchGraphKey,
+        true,
+      );
+    },
+    assertNoWritesOperations(observed: readonly ObservedDbOperation[]): void {
+      assertObservedWritesCovered(
+        snapshotObservedOperations(observed),
+        emptyTouchGraphSnapshot,
+        configSnapshot,
       );
     },
     assertReadsCovered(domains: readonly string[]): void {
@@ -160,82 +172,92 @@ export function createDbVerifier(
       // SPEC.md §11.4: verification observes calls that cross the harness
       // DB seam. A raw handle captured before wrap() never reaches this proxy;
       // tests must pass and use the wrapped harness DB handle instead.
-      const proxy = verifierProxy(db as Record<string, unknown>, {
-        get(target, prop, receiver) {
-          if (prop === '__kovoObserved') return recorder.observed;
-          const value = verifierReflectGet(target, prop, receiver);
+      const proxy = createFrameworkManagedSqlDispatchProxy(
+        db as Record<string, unknown>,
+        {
+          get(target, prop, receiver) {
+            if (prop === '__kovoObserved') return recorder.observed;
+            const value = verifierReflectGet(target, prop, receiver);
 
-          if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
-            return wrapSqlHandle(value, configSnapshot, recorder, sqlHandleProxyCache, methodCache);
-          }
-
-          if (prop === 'read' && typeof value === 'function') {
-            return cachedMethod(target, prop, value, methodCache, () =>
-              observableTableMethod('read', target, value, configSnapshot, recorder),
-            );
-          }
-
-          if (prop === 'write' && typeof value === 'function') {
-            return cachedMethod(target, prop, value, methodCache, () =>
-              observableTableMethod('write', target, value, configSnapshot, recorder),
-            );
-          }
-
-          // Real Drizzle write seam: `db.insert(table)` / `db.update(table)` /
-          // `db.delete(table)` take the table as the first argument, so the same
-          // table-method observer records the write (table resolved via the
-          // Drizzle name symbol). SPEC.md §11.2/§14.
-          if (
-            (prop === 'insert' || prop === 'update' || prop === 'delete') &&
-            typeof value === 'function'
-          ) {
-            return cachedMethod(target, prop, value, methodCache, () =>
-              observableTableMethod('write', target, value, configSnapshot, recorder),
-            );
-          }
-
-          if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
-            return cachedMethod(target, prop, value, methodCache, () =>
-              observableSqlMethod(target, value, configSnapshot, recorder),
-            );
-          }
-
-          if (
-            (prop === 'query' || prop === 'exec' || prop === 'execute') &&
-            typeof value === 'function' &&
-            (isDbAdapterLike(target) || isSqlHandleLike(target))
-          ) {
-            return cachedMethod(target, prop, value, methodCache, () =>
-              observableSqlMethod(target, value, configSnapshot, recorder),
-            );
-          }
-
-          if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(target)) {
-            return cachedMethod(target, prop, value, methodCache, () =>
-              observablePrepareMethod(
-                target,
+            if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
+              return wrapSqlHandle(
                 value,
                 configSnapshot,
                 recorder,
                 sqlHandleProxyCache,
                 methodCache,
-              ),
-            );
-          }
+              );
+            }
 
-          return typeof value === 'function'
-            ? cachedMethod(
-                target,
-                prop,
-                value,
-                methodCache,
-                () =>
-                  (...args: unknown[]) =>
-                    verifierApply(value, target, args),
-              )
-            : value;
+            if (prop === 'read' && typeof value === 'function') {
+              return cachedMethod(target, prop, value, methodCache, () =>
+                observableTableMethod('read', target, value, configSnapshot, recorder),
+              );
+            }
+
+            if (prop === 'write' && typeof value === 'function') {
+              return cachedMethod(target, prop, value, methodCache, () =>
+                observableTableMethod('write', target, value, configSnapshot, recorder),
+              );
+            }
+
+            // Real Drizzle write seam: `db.insert(table)` / `db.update(table)` /
+            // `db.delete(table)` take the table as the first argument, so the same
+            // table-method observer records the write (table resolved via the
+            // Drizzle name symbol). SPEC.md §11.2/§14.
+            if (
+              (prop === 'insert' || prop === 'update' || prop === 'delete') &&
+              typeof value === 'function'
+            ) {
+              return cachedMethod(target, prop, value, methodCache, () =>
+                observableTableMethod('write', target, value, configSnapshot, recorder),
+              );
+            }
+
+            if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
+              return cachedMethod(target, prop, value, methodCache, () =>
+                observableSqlMethod(target, value, configSnapshot, recorder),
+              );
+            }
+
+            if (
+              (prop === 'query' || prop === 'exec' || prop === 'execute') &&
+              typeof value === 'function' &&
+              (isDbAdapterLike(target) || isSqlHandleLike(target))
+            ) {
+              return cachedMethod(target, prop, value, methodCache, () =>
+                observableSqlMethod(target, value, configSnapshot, recorder),
+              );
+            }
+
+            if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(target)) {
+              return cachedMethod(target, prop, value, methodCache, () =>
+                observablePrepareMethod(
+                  target,
+                  value,
+                  configSnapshot,
+                  recorder,
+                  sqlHandleProxyCache,
+                  methodCache,
+                ),
+              );
+            }
+
+            return typeof value === 'function'
+              ? cachedMethod(
+                  target,
+                  prop,
+                  value,
+                  methodCache,
+                  () =>
+                    (...args: unknown[]) =>
+                      verifierApply(value, target, args),
+                )
+              : value;
+          },
         },
-      });
+        'test-fixture',
+      );
 
       verifierWeakMapSet(rootProxyCache, db, proxy);
       return proxy as Db;
@@ -253,7 +275,7 @@ function wrapSqlHandle<Handle extends object>(
   const cached = verifierWeakMapGet(proxyCache, handle);
   if (cached) return cached as Handle;
 
-  const proxy = verifierProxy(handle as Record<PropertyKey, unknown>, {
+  const proxy = createFrameworkManagedSqlDispatchProxy(handle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const value = verifierReflectGet(target, prop, receiver);
 
@@ -361,29 +383,39 @@ function wrapPreparedSqlStatement<Statement extends object>(
   const cached = verifierWeakMapGet(proxyCache, statementHandle);
   if (cached) return cached as Statement;
 
-  const proxy = verifierProxy(statementHandle as Record<PropertyKey, unknown>, {
-    get(target, prop, receiver) {
-      const value = verifierReflectGet(target, prop, receiver);
+  const proxy = createFrameworkManagedSqlDispatchProxy(
+    statementHandle as Record<PropertyKey, unknown>,
+    {
+      get(target, prop, receiver) {
+        const value = verifierReflectGet(target, prop, receiver);
 
-      if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
-        return cachedMethod(target, prop, value, methodCache, () =>
-          observablePreparedSqlMethod(executionTarget, target, value, statement, config, recorder),
-        );
-      }
+        if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
+          return cachedMethod(target, prop, value, methodCache, () =>
+            observablePreparedSqlMethod(
+              executionTarget,
+              target,
+              value,
+              statement,
+              config,
+              recorder,
+            ),
+          );
+        }
 
-      return typeof value === 'function'
-        ? cachedMethod(
-            target,
-            prop,
-            value,
-            methodCache,
-            () =>
-              (...args: unknown[]) =>
-                verifierApply(value, target, args),
-          )
-        : value;
+        return typeof value === 'function'
+          ? cachedMethod(
+              target,
+              prop,
+              value,
+              methodCache,
+              () =>
+                (...args: unknown[]) =>
+                  verifierApply(value, target, args),
+            )
+          : value;
+      },
     },
-  }) as Statement;
+  ) as Statement;
 
   verifierWeakMapSet(proxyCache, statementHandle, proxy);
   return proxy;

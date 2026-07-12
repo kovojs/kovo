@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createFakeDb, expectedDiagnostic } from './test-fixtures.js';
 import { assertOwnerRowsScoped, assertOwnerWritesScoped, createDbVerifier } from './verifier.js';
+import { registerFrameworkSqlSnapshotter } from './verifier-snapshots.js';
 
 const nativeReflectApply = Reflect.apply;
 
@@ -99,6 +100,31 @@ describe('@kovojs/test verifier shared-realm security', () => {
     } finally {
       Array.prototype.filter = nativeFilter;
     }
+  });
+
+  it('C139 keeps SQL read observations when Array.flatMap and Set.has are replaced', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { audit_log: 'audit' } });
+    const db = verifier.wrap({
+      query() {
+        return [];
+      },
+    });
+    const nativeFlatMap = Array.prototype.flatMap;
+    const nativeSetHas = Set.prototype.has;
+    try {
+      Array.prototype.flatMap = function <Value>(): Value[] {
+        return [];
+      };
+      Set.prototype.has = function (): boolean {
+        return true;
+      };
+      db.query({ text: 'select * from audit_log', values: [] });
+    } finally {
+      Set.prototype.has = nativeSetHas;
+      Array.prototype.flatMap = nativeFlatMap;
+    }
+
+    expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('KV407', 'audit'));
   });
 
   it('pins Function.call so a covered table cannot be rewritten at dispatch', () => {
@@ -234,5 +260,102 @@ describe('@kovojs/test verifier shared-realm security', () => {
     });
     expect(() => db.query(statement)).toThrow(/own data property/);
     expect(calls).toEqual([]);
+  });
+
+  it('C170 rejects a split-view Proxy table before observer and adapter see different names', () => {
+    const tableName = Symbol.for('drizzle:Name');
+    const actualTables: string[] = [];
+    let nameReads = 0;
+    const table = new Proxy(
+      {},
+      {
+        get(target, property, receiver) {
+          if (property === tableName) {
+            nameReads += 1;
+            return nameReads === 1 ? 'cart_items' : 'audit_log';
+          }
+          return nativeReflectApply(Reflect.get, Reflect, [target, property, receiver]);
+        },
+      },
+    );
+    const verifier = createDbVerifier(
+      {
+        'cart/add': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
+    );
+    const db = verifier.wrap({
+      insert(value: object) {
+        actualTables.push(Reflect.get(value, tableName) as string);
+      },
+    });
+
+    expect(() => db.insert(table)).toThrow(/table.*Proxy|stable.*table/i);
+    expect(actualTables).toEqual([]);
+  });
+
+  it('C170 preserves stable own-data Drizzle table identity at adapter dispatch', () => {
+    const tableName = Symbol.for('drizzle:Name');
+    const table = { [tableName]: 'cart_items' };
+    const actualTables: string[] = [];
+    const verifier = createDbVerifier(
+      {
+        'cart/add': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { cart_items: 'cart' } },
+    );
+    const db = verifier.wrap({
+      insert(value: typeof table) {
+        actualTables.push(value[tableName]);
+      },
+    });
+
+    db.insert(table);
+    expect(actualTables).toEqual(['cart_items']);
+    expect(() => verifier.assertCovered('cart/add')).not.toThrow();
+  });
+
+  it('bridges only artifacts authenticated by a registered framework snapshot control', () => {
+    const trusted = {};
+    const privateLookalike = { [Symbol('kovo.sql.private-lookalike')]: true };
+    const unregister = registerFrameworkSqlSnapshotter((statement: unknown) =>
+      statement === trusted
+        ? {
+            ok: true,
+            statement: {
+              dialect: 'postgres',
+              provenance: 'pinned-kovo-recipe',
+              sql: 'select * from cart_items',
+              text: 'select * from cart_items',
+              values: [],
+            },
+          }
+        : { ok: false },
+    );
+    const calls: unknown[] = [];
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const db = verifier.wrap({
+      query(statement: unknown) {
+        calls.push(statement);
+        return [];
+      },
+    });
+
+    try {
+      db.query(trusted);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).not.toBe(trusted);
+      expect(calls[0]).toMatchObject({ text: 'select * from cart_items', values: [] });
+      expect(() => db.query(privateLookalike)).toThrow(/must not contain symbol properties/);
+      expect(calls).toHaveLength(1);
+    } finally {
+      unregister();
+    }
   });
 });

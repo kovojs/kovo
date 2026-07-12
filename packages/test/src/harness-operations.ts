@@ -10,10 +10,19 @@ import { runMutation } from '@kovojs/server/internal/execution';
 import { createPageAssertion, type PageAssertion } from './page.js';
 import { diagnosticMessage } from './verifier-diagnostics.js';
 import type { ObservedDbOperation } from './verifier-observation.js';
+import {
+  verifierApply,
+  verifierGetOwnPropertyDescriptor,
+  verifierStableMethod,
+  verifierString,
+} from './verifier-security-intrinsics.js';
+import { snapshotDomains, snapshotQueryReadDomains } from './verifier-snapshots.js';
+import { createManagedTestFixtureDispatchProxy } from './adapter-security.js';
 
 /** @internal Verifier seam used internally by the test harness (SPEC.md §11). */
 export interface HarnessOperationVerifier {
   assertCoveredOperations(observed: readonly ObservedDbOperation[], touchGraphKey?: string): void;
+  assertNoWritesOperations(observed: readonly ObservedDbOperation[]): void;
   assertReadsCoveredOperations(
     observed: readonly ObservedDbOperation[],
     domains: readonly string[],
@@ -63,10 +72,21 @@ export async function executeHarnessMutation<
   verifier: HarnessOperationVerifier | null,
   options?: HarnessMutationOptions<Request>,
 ): Promise<MutationResult<Value>> {
+  const touchGraphKeyValue =
+    options === undefined
+      ? undefined
+      : optionalOwnDataValue(options, 'touchGraphKey', 'harness mutation options');
+  if (touchGraphKeyValue !== undefined && typeof touchGraphKeyValue !== 'string') {
+    throw new TypeError(
+      'harness mutation options.touchGraphKey must be a string own data property.',
+    );
+  }
+  const executionDb =
+    typeof db === 'object' && db !== null ? createManagedTestFixtureDispatchProxy(db) : db;
   const request = {
     ...requestFixture,
     ...options?.request,
-    db,
+    db: executionDb,
   } as unknown as Request;
   const run = () =>
     runMutation(
@@ -79,7 +99,7 @@ export async function executeHarnessMutation<
   if (!verifier) return run();
 
   const captured = await verifier.capture(run);
-  verifier.assertCoveredOperations(captured.observed, options?.touchGraphKey);
+  verifier.assertCoveredOperations(captured.observed, touchGraphKeyValue);
   return captured.result;
 }
 
@@ -94,16 +114,29 @@ export async function loadHarnessPage<Db>(
   if (!page) throw new Error(`Page fixture not found: ${path}`);
 
   if (typeof page === 'string') return createPageAssertion(page);
-  if (typeof page === 'function') return createPageAssertion(await page());
+  if (typeof page === 'function') {
+    const runThunk = () => verifierApply<string | Promise<string>>(page, undefined, []);
+    if (!verifier) return createPageAssertion(await runThunk());
 
+    const captured = await verifier.capture(runThunk);
+    verifier.assertNoWritesOperations(captured.observed);
+    verifier.assertReadsCoveredOperations(captured.observed, snapshotDomains([]));
+    return createPageAssertion(captured.result);
+  }
+
+  const render = requiredOwnFunction(page, 'render', 'page fixture');
+  const declaredReads = snapshotDomains(
+    (optionalOwnDataValue(page, 'reads', 'page fixture') as readonly string[] | undefined) ?? [],
+  );
   // SPEC.md §11.2: a route page's loader accesses the same wrapped DB seam as
   // mutation/query execution, so its reads are cross-checked against the
   // declared read set. Without the verifier the render still runs untracked.
-  const render = () => page.render({ db });
-  if (!verifier) return createPageAssertion(await render());
+  const runRender = () => verifierApply<string | Promise<string>>(render, page, [{ db }]);
+  if (!verifier) return createPageAssertion(await runRender());
 
-  const captured = await verifier.capture(render);
-  verifier.assertReadsCoveredOperations(captured.observed, page.reads ?? []);
+  const captured = await verifier.capture(runRender);
+  verifier.assertNoWritesOperations(captured.observed);
+  verifier.assertReadsCoveredOperations(captured.observed, declaredReads);
   return createPageAssertion(captured.result);
 }
 
@@ -115,7 +148,15 @@ export async function executeHarnessQuery<Db>(
   requestFixture: Record<string, unknown> | undefined,
   verifier: HarnessOperationVerifier | null,
 ): Promise<unknown> {
-  if (!query.load) throw new Error(`Query fixture has no loader: ${query.key}`);
+  const queryKey = requiredOwnString(query, 'key', 'query fixture');
+  const queryLoad = optionalOwnDataValue(query, 'load', 'query fixture');
+  if (typeof queryLoad !== 'function') throw new Error(`Query fixture has no loader: ${queryKey}`);
+  const declaredReads = snapshotQueryReadDomains(query);
+  const output = optionalOwnDataValue(query, 'output', 'query fixture');
+  const outputParse =
+    typeof output === 'object' && output !== null
+      ? verifierStableMethod(output, 'parse')
+      : undefined;
 
   const request = {
     ...requestFixture,
@@ -127,29 +168,54 @@ export async function executeHarnessQuery<Db>(
   // managed-handle seam. The fixture db is not the read-only proxy here (the harness owns the
   // verifier seam), so it is passed through the public `QueryLoadContext` shape.
   const loadContext = { db, request } as QueryLoadContext<typeof request, Db>;
-  const load = () => query.load?.(input, loadContext);
-  const result = verifier
-    ? await verifier.capture(load).then((captured) => {
-        verifier.assertReadsCoveredOperations(
-          captured.observed,
-          (query.reads ?? []).map((domain) => domain.key),
-        );
-        return captured.result;
-      })
-    : await load();
+  const load = () => verifierApply(queryLoad, query, [input, loadContext]);
+  let result: unknown;
+  if (verifier) {
+    const captured = await verifier.capture(load);
+    verifier.assertNoWritesOperations(captured.observed);
+    verifier.assertReadsCoveredOperations(captured.observed, declaredReads);
+    result = captured.result;
+  } else {
+    result = await load();
+  }
 
-  if (!query.output) return result;
+  if (outputParse === undefined || output === undefined) return result;
 
   try {
-    query.output.parse(result);
+    verifierApply(outputParse, output, [result]);
   } catch (error) {
     throw new Error(
       diagnosticMessage(
         'KV410',
-        `${query.key} ${error instanceof Error ? error.message : String(error)}`,
+        `${queryKey} ${error instanceof Error ? error.message : verifierString(error)}`,
       ),
     );
   }
 
+  return result;
+}
+
+function optionalOwnDataValue(value: object, property: PropertyKey, label: string): unknown {
+  const descriptor = verifierGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${label}.${String(property)} must be a stable own data property.`);
+  }
+  return descriptor.value;
+}
+
+function requiredOwnString(value: object, property: PropertyKey, label: string): string {
+  const result = optionalOwnDataValue(value, property, label);
+  if (typeof result !== 'string') {
+    throw new TypeError(`${label}.${String(property)} must be a string own data property.`);
+  }
+  return result;
+}
+
+function requiredOwnFunction(value: object, property: PropertyKey, label: string): Function {
+  const result = optionalOwnDataValue(value, property, label);
+  if (typeof result !== 'function') {
+    throw new TypeError(`${label}.${String(property)} must be a function own data property.`);
+  }
   return result;
 }

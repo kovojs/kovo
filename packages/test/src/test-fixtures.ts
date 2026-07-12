@@ -69,6 +69,9 @@ export function createRecordingOperationVerifier(
         if (operations !== observed) throw new Error('Captured write operations were not reused.');
         state.coveredKey = touchGraphKey;
       },
+      assertNoWritesOperations(operations) {
+        if (operations !== observed) throw new Error('Captured operations were not reused.');
+      },
       assertReadsCoveredOperations(operations, domains) {
         if (operations !== observed) throw new Error('Captured read operations were not reused.');
         state.reads = domains;
