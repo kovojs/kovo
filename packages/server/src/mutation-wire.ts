@@ -19,18 +19,30 @@ import {
   type ServerResponseBase,
 } from './response.js';
 import {
+  createWitnessSet,
   witnessGetPrototypeOf,
   witnessIsArray,
   witnessJsonStringifyPrimitive,
   witnessGetOwnPropertyDescriptor,
   witnessObjectKeys,
   witnessReflectApply,
+  witnessSetAdd,
+  witnessSetHas,
   witnessSortStrings,
   witnessString,
 } from './security-witness-intrinsics.js';
+import {
+  securityStringCharCodeAt,
+  securityStringIndexOf,
+  securityStringSlice,
+  securityStringToLowerCase,
+  securityStringTrim,
+} from './response-security-intrinsics.js';
+import { mutationWireJsonParse } from './mutation-wire-intrinsics.js';
 
 const NativeBuffer = Buffer;
 const nativeBufferFrom = NativeBuffer.from;
+const nativeBufferByteLength = NativeBuffer.byteLength;
 const hashControl = createHash('sha256');
 const hashPrototype = witnessGetPrototypeOf(hashControl);
 const nativeHashUpdate =
@@ -43,6 +55,9 @@ const nativeHashDigest =
     : witnessGetOwnPropertyDescriptor(hashPrototype, 'digest')?.value;
 if (typeof nativeHashUpdate !== 'function' || typeof nativeHashDigest !== 'function') {
   throw new TypeError('Kovo live-target attestation hash controls are unavailable.');
+}
+if (witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, ['🙂', 'utf8']) !== 4) {
+  throw new TypeError('Kovo live-target attestation byte-length control failed its semantic check.');
 }
 const hashSemanticControl = createHash('sha256');
 witnessReflectApply(nativeHashUpdate, hashSemanticControl, ['abc']);
@@ -390,15 +405,25 @@ export type MutationEndpointResponse = MutationWireResponse | NoJsMutationRespon
  * code, not app authors.
  */
 export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
-  const fragment = readHeader(headers, 'Kovo-Fragment')?.toLowerCase() === 'true';
-  const idem = readHeader(headers, 'Kovo-Idem')?.trim();
-  const stream = readHeader(headers, 'Kovo-Stream')?.toLowerCase() === 'true';
-  const submittedFormTarget = readHeader(headers, 'Kovo-Form-Target')?.trim();
+  const fragmentHeader = readHeader(headers, 'Kovo-Fragment');
+  const fragment =
+    fragmentHeader !== undefined && securityStringToLowerCase(fragmentHeader) === 'true';
+  const idemHeader = readHeader(headers, 'Kovo-Idem');
+  const idem = idemHeader === undefined ? undefined : securityStringTrim(idemHeader);
+  const streamHeader = readHeader(headers, 'Kovo-Stream');
+  const stream = streamHeader !== undefined && securityStringToLowerCase(streamHeader) === 'true';
+  const formTargetHeader = readHeader(headers, 'Kovo-Form-Target');
+  const submittedFormTarget =
+    formTargetHeader === undefined ? undefined : securityStringTrim(formTargetHeader);
   const liveTargets = parseLiveTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '');
   const liveTargetDescriptors = parseLiveTargetDescriptorHeader(
     readHeader(headers, 'Kovo-Live-Targets') ?? '',
   );
-  const targets = dedupe(liveTargets.map((entry) => entry.target));
+  const rawTargets: string[] = [];
+  for (let index = 0; index < liveTargets.length; index += 1) {
+    rawTargets[rawTargets.length] = liveTargets[index]!.target;
+  }
+  const targets = dedupe(rawTargets);
 
   return {
     fragment,
@@ -421,9 +446,13 @@ export function mutationWireRequestFromHeaders<Request>(
   options: MutationWireRequestOptions<Request>,
 ): MutationWireRequest<Request> {
   const headers = readMutationWireHeaders(options.headers);
-  const liveTargetDescriptors = headers.liveTargetDescriptors.filter((descriptor) =>
-    verifyLiveTargetDescriptor(descriptor, options),
-  );
+  const liveTargetDescriptors: MutationLiveTargetDescriptor[] = [];
+  for (let index = 0; index < headers.liveTargetDescriptors.length; index += 1) {
+    const descriptor = headers.liveTargetDescriptors[index]!;
+    if (verifyLiveTargetDescriptor(descriptor, options)) {
+      liveTargetDescriptors[liveTargetDescriptors.length] = descriptor;
+    }
+  }
 
   return {
     fragment: headers.fragment,
@@ -480,11 +509,13 @@ export const MAX_MUTATION_WIRE_TARGETS = 64;
 function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
   // K2 (SPEC §9.5): cap the raw entry list BEFORE per-entry parse so a flood header costs
   // O(cap) parse work, not O(N). Dedup further shrinks the post-cap set.
-  return dedupeLiveTargets(
-    capEntries(value.split(/[;,]/))
-      .map((entry) => parseLiveTargetEntry(entry))
-      .filter((entry): entry is MutationLiveTarget => entry !== null),
-  );
+  const rawEntries = capEntries(splitTargetHeaderEntries(value));
+  const parsed: MutationLiveTarget[] = [];
+  for (let index = 0; index < rawEntries.length; index += 1) {
+    const entry = parseLiveTargetEntry(rawEntries[index]!);
+    if (entry !== null) parsed[parsed.length] = entry;
+  }
+  return dedupeLiveTargets(parsed);
 }
 
 /**
@@ -493,42 +524,54 @@ function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
  * it. Capping here (parse time) keeps the rendered count and selection cost bounded.
  */
 function capEntries<T>(entries: readonly T[]): T[] {
-  return entries.length > MAX_MUTATION_WIRE_TARGETS
-    ? entries.slice(0, MAX_MUTATION_WIRE_TARGETS)
-    : [...entries];
+  const capped: T[] = [];
+  const length =
+    entries.length > MAX_MUTATION_WIRE_TARGETS ? MAX_MUTATION_WIRE_TARGETS : entries.length;
+  for (let index = 0; index < length; index += 1) capped[index] = entries[index]!;
+  return capped;
 }
 
 function parseLiveTargetEntry(entry: string): MutationLiveTarget | null {
-  const trimmed = entry.trim();
+  const trimmed = securityStringTrim(entry);
   if (!trimmed) return null;
 
-  const separator = trimmed.indexOf('=');
+  const separator = securityStringIndexOf(trimmed, '=');
   if (separator === -1) return { deps: [], target: trimmed };
 
-  const target = trimmed.slice(0, separator).trim();
+  const target = securityStringTrim(securityStringSlice(trimmed, 0, separator));
   if (!target) return null;
 
   return {
-    deps: readTargetDeps(trimmed.slice(separator + 1)),
+    deps: readTargetDeps(securityStringSlice(trimmed, separator + 1)),
     target,
   };
 }
 
 function readTargetDeps(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
+  const deps: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index === value.length ? 0x2c : securityStringCharCodeAt(value, index);
+    if (code !== 0x2c && !isWhitespaceCode(code)) continue;
+    if (index > start) {
+      const dep = securityStringTrim(securityStringSlice(value, start, index));
+      if (dep !== '') deps[deps.length] = dep;
+    }
+    start = index + 1;
+  }
+  return deps;
 }
 
 function parseLiveTargetDescriptorHeader(value: string): MutationLiveTargetDescriptor[] {
   // K2 (SPEC §9.5): cap the raw entry list BEFORE per-entry parse (each entry runs a
   // JSON.parse for its props) so a flood header costs O(cap) parse work, not O(N).
-  return dedupeLiveTargetDescriptors(
-    capEntries(splitLiveTargetDescriptorEntries(value))
-      .map((entry) => parseLiveTargetDescriptorEntry(entry))
-      .filter((entry): entry is MutationLiveTargetDescriptor => entry !== null),
-  );
+  const rawEntries = capEntries(splitLiveTargetDescriptorEntries(value));
+  const parsed: MutationLiveTargetDescriptor[] = [];
+  for (let index = 0; index < rawEntries.length; index += 1) {
+    const entry = parseLiveTargetDescriptorEntry(rawEntries[index]!);
+    if (entry !== null) parsed[parsed.length] = entry;
+  }
+  return dedupeLiveTargetDescriptors(parsed);
 }
 
 function splitLiveTargetDescriptorEntries(value: string): string[] {
@@ -556,36 +599,44 @@ function splitLiveTargetDescriptorEntries(value: string): string[] {
       continue;
     }
     if (char === '}' || char === ']') {
-      depth = Math.max(0, depth - 1);
+      if (depth > 0) depth -= 1;
       continue;
     }
     if (char !== ';' || depth !== 0) continue;
-    entries.push(value.slice(start, index));
+    entries[entries.length] = securityStringSlice(value, start, index);
     start = index + 1;
   }
 
-  entries.push(value.slice(start));
+  entries[entries.length] = securityStringSlice(value, start);
   return entries;
 }
 
 function parseLiveTargetDescriptorEntry(entry: string): MutationLiveTargetDescriptor | null {
-  const trimmed = entry.trim();
+  const trimmed = securityStringTrim(entry);
   if (!trimmed) return null;
 
-  const componentSeparator = trimmed.indexOf('#');
+  const componentSeparator = securityStringIndexOf(trimmed, '#');
   if (componentSeparator <= 0) return null;
 
-  const propsSeparator = trimmed.indexOf(':', componentSeparator + 1);
+  const propsSeparator = securityStringIndexOf(trimmed, ':', componentSeparator + 1);
   if (propsSeparator <= componentSeparator + 1) return null;
 
-  const target = trimmed.slice(0, componentSeparator).trim();
-  const componentAndAttestation = trimmed.slice(componentSeparator + 1, propsSeparator).trim();
-  const attestationSeparator = componentAndAttestation.lastIndexOf('@');
+  const target = securityStringTrim(securityStringSlice(trimmed, 0, componentSeparator));
+  const componentAndAttestation = securityStringTrim(
+    securityStringSlice(trimmed, componentSeparator + 1, propsSeparator),
+  );
+  const attestationSeparator = lastStringIndexOf(componentAndAttestation, '@');
   if (attestationSeparator <= 0) return null;
 
-  const component = componentAndAttestation.slice(0, attestationSeparator).trim();
-  const attestation = componentAndAttestation.slice(attestationSeparator + 1).trim();
-  const props = parseLiveTargetProps(trimmed.slice(propsSeparator + 1).trim());
+  const component = securityStringTrim(
+    securityStringSlice(componentAndAttestation, 0, attestationSeparator),
+  );
+  const attestation = securityStringTrim(
+    securityStringSlice(componentAndAttestation, attestationSeparator + 1),
+  );
+  const props = parseLiveTargetProps(
+    securityStringTrim(securityStringSlice(trimmed, propsSeparator + 1)),
+  );
   if (!target || !component || !attestation || props === null) return null;
 
   return { attestation, component, props, target };
@@ -696,10 +747,14 @@ function secureEqual(left: string, right: string): boolean {
 
 function digestComparableAttestation(value: string): Buffer {
   const bytes = witnessReflectApply<Buffer>(nativeBufferFrom, NativeBuffer, [value]);
+  const byteLength = witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, [
+    value,
+    'utf8',
+  ]);
   const hash = createHash('sha256');
   witnessReflectApply(nativeHashUpdate, hash, ['kovo-live-target-attestation-v1']);
   witnessReflectApply(nativeHashUpdate, hash, ['\0']);
-  witnessReflectApply(nativeHashUpdate, hash, [witnessString(bytes.byteLength)]);
+  witnessReflectApply(nativeHashUpdate, hash, [witnessString(byteLength)]);
   witnessReflectApply(nativeHashUpdate, hash, ['\0']);
   witnessReflectApply(nativeHashUpdate, hash, [bytes]);
   return witnessReflectApply(nativeHashDigest, hash, []);
@@ -707,7 +762,7 @@ function digestComparableAttestation(value: string): Buffer {
 
 function parseLiveTargetProps(value: string): Record<string, unknown> | null {
   try {
-    const props = JSON.parse(value);
+    const props = mutationWireJsonParse(value);
     return isRecord(props) ? props : null;
   } catch {
     return null;
@@ -719,17 +774,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function dedupe(values: readonly string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
+  const seen = createWitnessSet<string>();
+  const result: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (value === '' || witnessSetHas(seen, value)) continue;
+    witnessSetAdd(seen, value);
+    result[result.length] = value;
+  }
+  return result;
 }
 
 function dedupeLiveTargets(values: readonly MutationLiveTarget[]): MutationLiveTarget[] {
-  const seen = new Set<string>();
+  const seen = createWitnessSet<string>();
   const targets: MutationLiveTarget[] = [];
 
-  for (const value of values) {
-    if (seen.has(value.target)) continue;
-    seen.add(value.target);
-    targets.push(value);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (witnessSetHas(seen, value.target)) continue;
+    witnessSetAdd(seen, value.target);
+    targets[targets.length] = value;
   }
 
   return targets;
@@ -738,14 +802,54 @@ function dedupeLiveTargets(values: readonly MutationLiveTarget[]): MutationLiveT
 function dedupeLiveTargetDescriptors(
   values: readonly MutationLiveTargetDescriptor[],
 ): MutationLiveTargetDescriptor[] {
-  const seen = new Set<string>();
+  const seen = createWitnessSet<string>();
   const targets: MutationLiveTargetDescriptor[] = [];
 
-  for (const value of values) {
-    if (seen.has(value.target)) continue;
-    seen.add(value.target);
-    targets.push(value);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (witnessSetHas(seen, value.target)) continue;
+    witnessSetAdd(seen, value.target);
+    targets[targets.length] = value;
   }
 
   return targets;
+}
+
+function splitTargetHeaderEntries(value: string): string[] {
+  const entries: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index === value.length ? 0x3b : securityStringCharCodeAt(value, index);
+    if (code !== 0x3b && code !== 0x2c) continue;
+    entries[entries.length] = securityStringSlice(value, start, index);
+    start = index + 1;
+  }
+  return entries;
+}
+
+function isWhitespaceCode(code: number): boolean {
+  return (
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0b ||
+    code === 0x0c ||
+    code === 0x0d ||
+    code === 0x20 ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
+}
+
+function lastStringIndexOf(value: string, search: string): number {
+  for (let index = value.length - search.length; index >= 0; index -= 1) {
+    if (securityStringSlice(value, index, index + search.length) === search) return index;
+  }
+  return -1;
 }

@@ -1,6 +1,10 @@
 import { reportServerError } from '../diagnostics.js';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
-import { guardFailureIsUnauthenticated, type ResolvedGuardFailure } from '../guards.js';
+import {
+  guardFailureIsUnauthenticated,
+  sanitizeNext,
+  type ResolvedGuardFailure,
+} from '../guards.js';
 import { generatedFragmentHtml, generatedFragmentHtmlValue } from '../html.js';
 import type { ChangeRecord } from '../change-record.js';
 import {
@@ -13,6 +17,8 @@ import { renderFragmentWireHtml } from '../wire-html.js';
 import { commitReservedMutationReplay } from '../replay.js';
 import {
   type BufferedMutationWireResponse,
+  type LiveTargetRenderer,
+  type MutationLiveTargetDescriptor,
   type MutationPostLifecycleOutcome,
   type MutationPostLifecycleResponseOptions,
   type MutationWireRequest,
@@ -32,6 +38,17 @@ import {
 import { isEnhancedReplayResponse, type MutationLifecycleOutcome } from './replay-policy.js';
 import { renderDefaultFailureFragmentContent } from './failure-html.js';
 import type { MutationDefinition, MutationFail, MutationSuccess } from './definition.js';
+import {
+  securityArrayJoin,
+  securityEncodeURIComponent,
+  securityJsonStringify,
+  securityObjectKeys,
+  securityPromiseResolve,
+  securityPromiseThen,
+  securityStringCharCodeAt,
+  securityStringToLowerCase,
+} from '../response-security-intrinsics.js';
+import { witnessGetOwnPropertyDescriptor } from '../security-witness-intrinsics.js';
 
 export interface MutationWireLifecycleResponseOptions<
   Key extends string,
@@ -268,6 +285,8 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
     renderInput: unknown,
     registryFacts: RuntimeRegistryFacts<Request>,
   ): Promise<BufferedMutationWireResponse> {
+    const rerunQueries =
+      result.rerunQueryInstances ?? queryKeysToReruns(result.rerunQueries);
     const selection = selectMutationResponseTargets({
       changes: result.changes,
       fragmentRenderers: wireRequest.fragmentRenderers ?? [],
@@ -275,7 +294,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
       liveTargetRenderers: wireRequest.liveTargetRenderers ?? [],
       liveTargets: wireRequest.liveTargets,
       registryFacts,
-      rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+      rerunQueries,
       targets: wireRequest.targets ?? [],
     });
     const queryChunks = await renderQueryChunks(
@@ -287,21 +306,29 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
       wireRequest.maxListItems,
       wireRequest.idem === undefined ? undefined : [wireRequest.idem],
     );
-    const fragmentChunks = [
-      ...(await renderLiveTargetChunks(
+    const fragmentChunks: string[] = [];
+    appendChunks(
+      fragmentChunks,
+      await renderLiveTargetChunks(
         wireRequest.liveTargetRenderers ?? [],
         selection.liveTargetDescriptors,
         renderInput,
         wireRequest.request,
         wireRequest.csrf,
         wireRequest.maxListItems,
-      )),
-      ...(await renderFragmentChunks(
+      ),
+    );
+    appendChunks(
+      fragmentChunks,
+      await renderFragmentChunks(
         wireRequest.fragmentRenderers ?? [],
         selection.fragmentTargets,
         renderInput,
-      )),
-    ];
+      ),
+    );
+    const responseChunks: string[] = [];
+    appendChunks(responseChunks, queryChunks);
+    appendChunks(responseChunks, fragmentChunks);
 
     // SPEC §5.2.1 rule 2(c): enhanced mutation/full fragment responses are build-scoped
     // payloads, so a successful response must carry the render-plan token.
@@ -319,7 +346,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
     );
 
     return {
-      body: frameworkWireBody([...queryChunks, ...fragmentChunks].join('\n')),
+      body: frameworkWireBody(securityArrayJoin(responseChunks, '\n')),
       headers: mergeResponseHeaders(
         mutationWireResponseHeaders(wireRequest),
         {
@@ -338,11 +365,14 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
 const mutationWireFailureResponse = wireEmitter('server.wire.mutation-failure', function <
   Request,
 >(failure: MutationFail, wireRequest: MutationWireRequest<Request>): Promise<BufferedMutationWireResponse> {
-  return Promise.resolve(renderFailureFragment(failure, wireRequest)).then((body) => ({
-    body: frameworkWireBody(body),
-    headers: mutationWireResponseHeaders(wireRequest),
-    status: 422,
-  }));
+  return securityPromiseThen(
+    securityPromiseResolve(renderFailureFragment(failure, wireRequest)),
+    (body) => ({
+      body: frameworkWireBody(body),
+      headers: mutationWireResponseHeaders(wireRequest),
+      status: 422,
+    }),
+  );
 });
 
 function renderReplayConflictFragment<Request>(
@@ -423,11 +453,22 @@ function mutationSessionTransitionHeaders(
   changes: readonly ChangeRecord[],
   responseHeaders: ResponseHeaders | undefined,
 ): ResponseHeaders | undefined {
-  const authChanged = changes.some((change) => change.domain === 'auth');
-  const credentialHeadersChanged = Object.keys(responseHeaders ?? {}).some((name) => {
-    const lower = name.toLowerCase();
-    return lower === 'set-cookie' || lower === 'clear-site-data';
-  });
+  let authChanged = false;
+  for (let index = 0; index < changes.length; index += 1) {
+    if (changes[index]!.domain === 'auth') {
+      authChanged = true;
+      break;
+    }
+  }
+  let credentialHeadersChanged = false;
+  const headerNames = securityObjectKeys(responseHeaders ?? {});
+  for (let index = 0; index < headerNames.length; index += 1) {
+    const lower = securityStringToLowerCase(headerNames[index]!);
+    if (lower === 'set-cookie' || lower === 'clear-site-data') {
+      credentialHeadersChanged = true;
+      break;
+    }
+  }
   return authChanged || credentialHeadersChanged
     ? { 'Kovo-Session-Transition': 'reload' }
     : undefined;
@@ -464,12 +505,13 @@ async function renderDefaultFailureFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
   target: string,
 ): Promise<GeneratedFragmentRenderable> {
-  const descriptor = wireRequest.liveTargetDescriptors?.find((entry) => entry.target === target);
+  const descriptor = findLiveTargetDescriptor(wireRequest.liveTargetDescriptors ?? [], target);
   const renderer =
     descriptor === undefined
       ? undefined
-      : wireRequest.liveTargetRenderers?.find(
-          (candidate) => candidate.component === descriptor.component,
+      : findLiveTargetRenderer(
+          wireRequest.liveTargetRenderers ?? [],
+          descriptor.component,
         );
   if (descriptor && renderer) {
     return renderer.render({
@@ -564,18 +606,21 @@ function mutationGuardFailureIsUnauthenticated<Request>(
 }
 
 function loginLocation(next: string): string {
-  const url = new URL('/login', 'https://kovo.local');
-  url.searchParams.set('next', next.startsWith('/') && !next.startsWith('//') ? next : '/');
-  return `${url.pathname}${url.search}${url.hash}`;
+  return `/login?next=${securityEncodeURIComponent(sanitizeNext(next))}`;
 }
 
 function mutationWireChangeRecords(
   changes: readonly ChangeRecord[],
 ): Pick<ChangeRecord, 'domain' | 'keys'>[] {
-  return changes.map((change) => ({
-    domain: change.domain,
-    ...(change.keys === undefined ? {} : { keys: change.keys }),
-  }));
+  const records: Pick<ChangeRecord, 'domain' | 'keys'>[] = [];
+  for (let index = 0; index < changes.length; index += 1) {
+    const change = changes[index]!;
+    records[records.length] = {
+      domain: change.domain,
+      ...(change.keys === undefined ? {} : { keys: snapshotStrings(change.keys) }),
+    };
+  }
+  return records;
 }
 
 function mutationWireChangeHeader(changes: readonly ChangeRecord[]): string {
@@ -583,14 +628,76 @@ function mutationWireChangeHeader(changes: readonly ChangeRecord[]): string {
 }
 
 function asciiJsonHeaderValue(value: unknown): string {
-  return JSON.stringify(value).replace(
-    /[^\x20-\x7e]/g,
-    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
-  );
+  const json = securityJsonStringify(value);
+  if (json === undefined) throw new TypeError('Mutation change headers require JSON values.');
+  let escaped = '';
+  for (let index = 0; index < json.length; index += 1) {
+    const code = securityStringCharCodeAt(json, index);
+    escaped += code >= 0x20 && code <= 0x7e ? json[index] : `\\u${fixedHex4(code)}`;
+  }
+  return escaped;
 }
 
 function mutationResponseInput<Value>(result: MutationSuccess<Value>, rawInput: unknown): unknown {
-  if (Object.hasOwn(result, 'input')) return result.input;
+  const inputDescriptor = witnessGetOwnPropertyDescriptor(result, 'input');
+  if (inputDescriptor !== undefined && 'value' in inputDescriptor) return inputDescriptor.value;
 
-  return result.changes.find((change) => change.input !== undefined)?.input ?? rawInput;
+  for (let index = 0; index < result.changes.length; index += 1) {
+    const change = result.changes[index]!;
+    if (change.input !== undefined) return change.input;
+  }
+  return rawInput;
+}
+
+function queryKeysToReruns(keys: readonly string[]): { key: string }[] {
+  const reruns: { key: string }[] = [];
+  for (let index = 0; index < keys.length; index += 1) reruns[index] = { key: keys[index]! };
+  return reruns;
+}
+
+function appendChunks(target: string[], chunks: readonly string[]): void {
+  for (let index = 0; index < chunks.length; index += 1) {
+    target[target.length] = chunks[index]!;
+  }
+}
+
+function findLiveTargetDescriptor(
+  descriptors: readonly MutationLiveTargetDescriptor[],
+  target: string,
+): MutationLiveTargetDescriptor | undefined {
+  for (let index = 0; index < descriptors.length; index += 1) {
+    const descriptor = descriptors[index]!;
+    if (descriptor.target === target) return descriptor;
+  }
+  return undefined;
+}
+
+function findLiveTargetRenderer<Request>(
+  renderers: readonly LiveTargetRenderer<Request>[],
+  component: string,
+): LiveTargetRenderer<Request> | undefined {
+  for (let index = 0; index < renderers.length; index += 1) {
+    const renderer = renderers[index]!;
+    if (renderer.component === component) return renderer;
+  }
+  return undefined;
+}
+
+function snapshotStrings(values: readonly string[]): string[] {
+  const snapshot: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(values, index);
+    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+      throw new TypeError('Mutation change keys must be dense string data properties.');
+    }
+    snapshot[index] = descriptor.value;
+  }
+  return snapshot;
+}
+
+function fixedHex4(value: number): string {
+  const alphabet = '0123456789abcdef';
+  let output = '';
+  for (let shift = 12; shift >= 0; shift -= 4) output += alphabet[(value >>> shift) & 0x0f];
+  return output;
 }
