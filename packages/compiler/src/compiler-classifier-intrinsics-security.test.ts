@@ -1403,4 +1403,54 @@ export const ProductLink = component({
     expect(lowered).toContain('const reviewedTarget = "/products/p1"');
     expect(poisonHits).toBe(0);
   });
+
+  it('cannot inject JSX through static spread projection', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    const nativeFunctionToString = Function.prototype.toString;
+    const nativeIncludes = String.prototype.includes;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedStaticSpreadMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        const first = this[0] as { name?: unknown; ownership?: unknown; value?: unknown } | undefined;
+        const callbackSource = nativeApply(nativeFunctionToString, callback, []);
+        if (
+          first?.name === 'id' &&
+          first.ownership === 'generated' &&
+          typeof first.value === 'object' &&
+          nativeApply(nativeIncludes, callbackSource, ['source'])
+        ) {
+          poisonHits += 1;
+          return [
+            {
+              name: 'id="safe" /><img src="x" data-kovo-spread-injection="true" /><div data-rest',
+              ownership: 'generated',
+              provenance: first,
+              value: { kind: 'string', value: 'safe' },
+            },
+          ] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'spread-card.tsx',
+        source: `
+export const SpreadCard = component({
+  render: () => <div {...{ id: 'safe', title: 'reviewed' }}>Safe</div>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    const lowered = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(lowered).not.toContain('data-kovo-spread-injection');
+    expect(lowered).toContain('id="safe" title="reviewed"');
+    expect(poisonHits).toBe(0);
+  });
 });
