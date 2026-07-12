@@ -96,7 +96,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     source-aliased 146-test integration run, including alias, branch, computed, reflection,
     definition, escape, imported-carrier, and post-sink controls.
 
-- [ ] **H4 - Same-build enhanced navigation can install a new principal's document while retaining
+- [x] **H4 - Same-build enhanced navigation can install a new principal's document while retaining
       the old BroadcastChannel principal closure.**
       `packages/browser/src/enhanced-navigation.ts:142-208`,
       `packages/browser/src/inline-loader-build.ts:784-802`
@@ -113,8 +113,11 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** compare old and fetched `kovo-session` fingerprints, including present/missing
     transitions, before any head/body apply. On mismatch, close/retire the old runtime and force a
     hard navigation. Preserve the existing build-drift and mutation-transition controls.
+  - **Evidence:** browser-worker unit and full-engine matrices pass 709 and 273 tests respectively;
+    the integrated parser/navigation/stream suite passes 194 tests and the focused
+    Chromium/Firefox/WebKit recovery suite passes 21 tests.
 
-- [ ] **H5 - A genuine parameterized Kovo SQL object can be mutated into raw attacker SQL while
+- [x] **H5 - A genuine parameterized Kovo SQL object can be mutated into raw attacker SQL while
       retaining the witness that bypasses KV422.**
       `packages/drizzle/src/runtime.ts:116-194`,
       `packages/core/src/internal/sql-safety.ts:17-107,274-346,483-500`
@@ -135,8 +138,12 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     `queryChunks`, `.text`, `.sql`, or nested third-party chunks as trusted. Do not deep-freeze
     Drizzle objects. Cover property/nested mutation, nested branded SQL, strict TS/static KV422,
     actual write execution, read denial, unbranded controls, and post-snapshot isolation.
+  - **Evidence:** the source-aliased core/Drizzle/server integration matrix passes 281 tests,
+    including real PGlite pinned-write, read-denial, nested composition, post-snapshot mutation,
+    strict carrier, and static KV422 controls; TCB, classifier, API, import, and 37-mutant security
+    gates pass.
 
-- [ ] **H6 - The generated inline streaming mutation path ignores `Kovo-Build` and applies a
+- [x] **H6 - The generated inline streaming mutation path ignores `Kovo-Build` and applies a
       foreign-build response.** `packages/browser/src/inline-loader-build.ts:904-918`,
       `packages/browser/src/apply-mutation-response.ts:174-178`
   - Buffered inline mutation apply calls the build-token gate; the streaming branch sends
@@ -152,6 +159,9 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Acceptance:** validate `Kovo-Build` before acquiring/reading the stream; on missing/mismatch,
     cancel the body and perform full GET/navigation recovery with zero fragment/query/text apply.
     Cover readable, minified/generated installer artifacts and all three browser engines.
+  - **Evidence:** readable/minified/generated/extracted installer tests, inline generator check,
+    194 integrated source tests, and the 21-test three-engine recovery suite pass with mismatch
+    cancellation before stream acquisition and zero apply.
 
 ## Medium
 
@@ -195,7 +205,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     CSRF, schema, guard, replay-shed, static-snapshot, and runtime-override regressions;
     `pnpm --filter @kovojs/server run build:dist` and `pnpm run check:api-surface` pass.
 
-- [ ] **M3 - Failed or non-complete streaming mutations leave progressively applied fragments
+- [x] **M3 - Failed or non-complete streaming mutations leave progressively applied fragments
       authoritative in the DOM.** `packages/browser/src/apply-mutation-response.ts:196-303`,
       `packages/browser/src/mutation-submit.ts:228-230`,
       `packages/browser/src/inline-loader-build.ts:705-760,904-918`
@@ -213,6 +223,9 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     output and guarantee a hard reload/refetch (or a proven full DOM rollback) before returning;
     inline runtime must reject rather than resolve an error terminator. Preserve successful-stream
     controls across all browser engines.
+  - **Evidence:** modular and generated inline recovery regressions pass in the 194-test integrated
+    suite and the 21-test Chromium/Firefox/WebKit run, covering error, abort, missing-done,
+    post-error terminator laundering, and successful replace/append/prepend controls.
 
 - [ ] **M4 - Case-insensitive filesystem storage collapses case-distinct logical keys, breaking
       object-exact capability binding.** `packages/core/src/storage.ts:164-285,408-430`,
@@ -230,7 +243,7 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
     plus verify the exact logical key; cover get/stat/stream/put/delete and sidecars, Unicode
     normalization, Windows trailing-dot/space/reserved names, and memory/S3 parity.
 
-- [ ] **M5 - The public auth name `kovo-capability-url` acts as a forgeable password for a green
+- [x] **M5 - The public auth name `kovo-capability-url` acts as a forgeable password for a green
       endpoint access audit even though runtime executes no verifier.**
       `packages/server/src/access-graph.ts:194-202`, `packages/server/src/endpoint.ts:562-580`,
       `packages/server/src/capability-route.ts:385-404`
@@ -242,9 +255,14 @@ packages/server/src/app-document.test.ts packages/server/src/app.test.ts` (144 t
   - **Impact:** a deliberate or accidental reserved string turns an unauthenticated endpoint into a
     green audited machine ingress.
   - **SPEC:** sections 2, 9.1, 10.2, and 11.4 require executable default-deny ingress verification.
-  - **Acceptance:** use a module-private, non-copyable endpoint identity that survives app snapshot,
-    bundle duplication/HMR, and closed-app derivation; generic name-only auth must fail KV436 and
-    fail closed at runtime. Do not rely on a discoverable/copyable symbol.
+  - **Acceptance:** use a module-private, non-copyable endpoint identity that survives app snapshot
+    and closed-app derivation; bundle duplication/HMR must preserve it through canonical snapshot
+    copying or fail closed, never become green. Generic name-only auth must fail KV436 and runtime
+    dispatch. Do not rely on a discoverable/copyable symbol.
+  - **Evidence:** the 163-test endpoint/access/capability integration suite proves a copied magic
+    name is KV436-missing and runtime 401 with zero handler calls, while the genuine private witness
+    survives `createApp()` canonicalization and rejects unsigned access as 404; server declaration
+    build, API-surface, and security-guarantee gates pass.
 
 - [ ] **M6 - PostgreSQL posture accepts corrupted framework owner policies and unexpected
       permissive policies that OR open cross-tenant access.**
