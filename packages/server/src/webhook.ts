@@ -1314,13 +1314,20 @@ function webhookHandlerContext<Input, Tx>(
     rawBody,
     recordChange(domain, options = {}) {
       const domainKey = declaredWebhookChangeDomainKey(domain, declaredWrites);
+      const keys =
+        options.keys === undefined
+          ? undefined
+          : snapshotWebhookStringArray(options.keys, 'Webhook recordChange() keys');
+      if (options.reason !== undefined && typeof options.reason !== 'string') {
+        throw new TypeError('Webhook recordChange() reason must be a string.');
+      }
       // SPEC §9.1: webhook domain writes emit the same internal change record shape as mutations.
-      const record = {
+      const record = witnessFreeze({
         domain: domainKey,
         input: options.input ?? input,
-        ...(options.keys === undefined ? {} : { keys: options.keys }),
+        ...(keys === undefined ? {} : { keys }),
         ...(options.reason === undefined ? {} : { reason: options.reason }),
-      } as ChangeRecord<typeof domain.key, Input>;
+      }) as ChangeRecord<typeof domain.key, Input>;
       appendWebhookChange(changes, record);
       return record;
     },
