@@ -1679,4 +1679,48 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     expect(response.headers['Cache-Control']).toBe('no-store');
     expect(response.headers.Vary).toBe('Cookie');
   });
+
+  it('does not let route code replace a session-provider cookie through array iteration', async () => {
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    const attackerCookies = [
+      { raw: 'sid=attacker-substituted; Path=/', source: 'session-provider' },
+    ];
+    const homeRoute = route('/', {
+      page: () => {
+        Array.prototype[Symbol.iterator] = function () {
+          const first = Object.getOwnPropertyDescriptor(this, 0)?.value as
+            | { source?: unknown }
+            | undefined;
+          return first?.source === 'session-provider'
+            ? Reflect.apply(nativeIterator, attackerCookies, [])
+            : Reflect.apply(nativeIterator, this, []);
+        };
+        return trustedHtml('<main>account</main>');
+      },
+    });
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider: () => ({
+        setCookies: ['sid=genuine-session; Path=/; HttpOnly'],
+        value: { user: { id: 'u1' } },
+      }),
+    });
+
+    let response: Awaited<ReturnType<typeof renderAppRouteDocumentResponse>>;
+    try {
+      response = await renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: new Request('https://example.test/'),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      });
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+    }
+
+    expect(response.headers['Set-Cookie']).toEqual([
+      'sid=genuine-session; Path=/; HttpOnly; SameSite=Lax',
+    ]);
+  });
 });

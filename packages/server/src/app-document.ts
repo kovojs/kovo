@@ -55,6 +55,7 @@ import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import {
   witnessCreateNullRecord,
   witnessDefineProperty,
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessReflectApply,
@@ -111,7 +112,7 @@ export async function renderAppRouteDocumentResponse({
   // `{ value, setCookies }` provider envelope. The route lifecycle forwards them to this sink; we
   // re-emit them on the document response so a continuously-active user's session actually extends
   // instead of being hard-logged-out at the original boundary.
-  const refreshSetCookies: { raw: string; source: 'csrf' | 'session-provider' }[] = [];
+  const refreshSetCookies: RefreshSetCookie[] = [];
   const routeResponse = await renderRoutePageResponse(
     route,
     routeInput,
@@ -133,11 +134,11 @@ export async function renderAppRouteDocumentResponse({
         : { mutationFailure: jsxContext.mutationFailure }),
       maxListItems: app.requestLimits.maxQueryListItems,
       onCsrfSetCookie: (rawSetCookie) =>
-        refreshSetCookies.push({ raw: rawSetCookie, source: 'csrf' }),
+        appendRefreshSetCookie(refreshSetCookies, rawSetCookie, 'csrf'),
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       onSessionSetCookie: (rawSetCookie) =>
-        refreshSetCookies.push({ raw: rawSetCookie, source: 'session-provider' }),
+        appendRefreshSetCookie(refreshSetCookies, rawSetCookie, 'session-provider'),
       clientIp: (req) => resolveRequestClientIp(app, req),
       renderForbidden: (async () => {
         const forbidden = await renderAppErrorDocumentResponse(app, request, 403);
@@ -161,12 +162,18 @@ export async function renderAppRouteDocumentResponse({
     // Forwarded session/CSRF Set-Cookie strings are routed through the cookie floor
     // (cookies.ts) so a forwarded credential cookie can never land below the
     // HttpOnly/Secure(prod)/SameSite floor (SPEC §6.6/§9.1).
-    for (const cookie of refreshSetCookies)
+    for (let index = 0; index < refreshSetCookies.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(refreshSetCookies, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Kovo refresh cookies must remain a dense exact snapshot.');
+      }
+      const cookie = descriptor.value;
       appendResponseHeader(
         response.headers,
         'Set-Cookie',
         forwardSetCookie(cookie.raw, { class: 'session', source: cookie.source }),
       );
+    }
     return refreshSetCookies.length > 0
       ? stampCredentialBearingResponseCacheFloor(response)
       : response;
@@ -278,6 +285,35 @@ export async function renderAppRouteDocumentResponse({
   }
 
   return withRefreshCookies(documentResponse);
+}
+
+interface RefreshSetCookie {
+  readonly raw: string;
+  readonly source: 'csrf' | 'session-provider';
+}
+
+function appendRefreshSetCookie(
+  cookies: RefreshSetCookie[],
+  raw: string,
+  source: RefreshSetCookie['source'],
+): void {
+  const cookie = witnessCreateNullRecord<unknown>();
+  witnessDefineProperty(cookie, 'raw', {
+    enumerable: true,
+    value: raw,
+    writable: false,
+  });
+  witnessDefineProperty(cookie, 'source', {
+    enumerable: true,
+    value: source,
+    writable: false,
+  });
+  witnessDefineProperty(cookies, cookies.length, {
+    configurable: true,
+    enumerable: true,
+    value: witnessFreeze(cookie) as unknown as RefreshSetCookie,
+    writable: true,
+  });
 }
 
 type AppStorageDownloadSigner =
