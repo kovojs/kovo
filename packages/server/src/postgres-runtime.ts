@@ -85,7 +85,11 @@ const POSTGRES_CLASSIFIED_ROLE_COLUMNS = new Set([
   'rolconfig',
 ]);
 const POSTGRES_SECURITY_SEARCH_PATH_SQL = 'SET LOCAL search_path = pg_catalog, public, pg_temp';
-const POSTGRES_APP_DDL_SEARCH_PATH_SQL = 'SET LOCAL search_path = public, pg_catalog, pg_temp';
+// Keep pg_catalog implicit so PostgreSQL searches it before the app schema while still making
+// `public` the creation target for unqualified app DDL. Listing pg_catalog after public would let a
+// role with pre-provisioning CREATE authority shadow built-ins invoked by reviewed migrations or
+// seed SQL and run its function with the provisioner's authority (SPEC §10.3 C9/C10).
+const POSTGRES_APP_DDL_SEARCH_PATH_SQL = 'SET LOCAL search_path = public, pg_temp';
 const POSTGRES_REACHABLE_RELATIONS_SQL = [
   'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3), ($4)),',
   'existing_roles AS (',

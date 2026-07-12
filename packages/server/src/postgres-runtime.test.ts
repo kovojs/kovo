@@ -2222,6 +2222,86 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('does not execute attacker-created public function shadows while applying authored seed SQL', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-seed-shadow-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE kovo_reader',
+        'CREATE ROLE kovo_writer',
+        'GRANT CREATE ON SCHEMA public TO kovo_writer',
+        'SET ROLE kovo_writer',
+        `CREATE FUNCTION public.lower(text) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT ''ATTACKER-SHADOW'''`,
+        'RESET ROLE',
+      ].join('; '),
+    );
+
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema,
+      seedSql: [
+        `INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES ('n1', 'u1', 's1', lower('Safe Title'))`,
+        `INSERT INTO kovo_runtime_labels (id, label) VALUES ('l1', 'Inbox')`,
+      ],
+    });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    const result = await queryPglite<{ title: string }>(
+      dataDir,
+      `SELECT title FROM kovo_runtime_notes WHERE id = 'n1'`,
+    );
+    expect(result.rows).toEqual([{ title: 'safe title' }]);
+  });
+
+  it('keeps catalog lookup ahead of public while migrations create unqualified app objects in public', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-migration-shadow-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        'CREATE ROLE kovo_reader',
+        'CREATE ROLE kovo_writer',
+        'GRANT CREATE ON SCHEMA public TO kovo_writer',
+        'SET ROLE kovo_writer',
+        `CREATE FUNCTION public.lower(text) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT ''ATTACKER-SHADOW'''`,
+        'RESET ROLE',
+      ].join('; '),
+    );
+
+    const report = await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [
+        {
+          id: '001-shadow-safe-ddl',
+          sql: [
+            runtimeSchemaMigrationSql,
+            `CREATE TABLE kovo_migration_shadow_probe AS SELECT lower('Reviewed DDL') AS value`,
+          ].join('; '),
+        },
+      ],
+      schema,
+    });
+    expect(report.posture.ok).toBe(true);
+
+    const result = await queryPglite<{ schema_name: string; value: string }>(
+      dataDir,
+      [
+        'SELECT namespace.nspname AS schema_name, probe.value',
+        'FROM public.kovo_migration_shadow_probe probe',
+        "JOIN pg_catalog.pg_class relation ON relation.relname = 'kovo_migration_shadow_probe'",
+        'JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace',
+      ].join(' '),
+    );
+    expect(result.rows).toEqual([{ schema_name: 'public', value: 'reviewed ddl' }]);
+  });
+
   it('fails posture closed when the pinned creation-authority query errors', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-posture-query-error-'));
     roots.push(dataDir);
