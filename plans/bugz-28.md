@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    64 | C1-C64 |
+| Critical |    65 | C1-C65 |
 | High     |    32 | H1-H32 |
 | Medium   |     9 | M1-M9  |
 
@@ -758,6 +758,19 @@ This is an active closure ledger; `SPEC.md` remains normative.
     invalid CSRF mutation into handler execution, while genuine bounded streaming bodies retain
     backpressure and cancellation behavior.
 
+- [ ] **C65 - Mutable client-capture analysis publishes a server secret import into browser code.**
+      `packages/compiler/src/validate/client-capture.ts`
+  - A stateful late `Array.prototype.filter` replacement skipped the unsafe-use classification for
+    each handler-capture analysis while preserving the later referenced-import pass. The real
+    compiler emitted no KV437 and generated a client module that literally imported
+    `STRIPE_SECRET_KEY` from `../../config/secrets` and passed it to client code.
+  - **Acceptance:** import/module-constant discovery, handler capture/use classification, shadowing,
+    publish-to-client escape verification, blocked/referenced set construction, diagnostic output,
+    and the lowering allowlist consume the same immutable boot-pinned analysis snapshot;
+    late/import-order mutation cannot disagree between diagnostic and emission passes or publish any
+    unreviewed value-position capture, while callee-only and explicitly published values retain the
+    documented behavior.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -1200,7 +1213,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C64, H20, H27,
+The remediation pass remains intentionally non-zero: C25, C28, C31-C32, C42, C55-C65, H20, H27,
 and H31-H32 are active compiler-cache, static-analysis, browser/server authority/output, and
 immutable-output fixes.
 Integrated
