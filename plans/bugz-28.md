@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   235 | C1-C235 |
+| Critical |   236 | C1-C236 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2678,12 +2678,15 @@ build:dist` passes.
     or fail before dispatch in both managed composition orders; packages/test passes 269/269, dist
     build, and classifier/guarantee/census/brand gates pass.
 
-- [ ] **C230 - Mutable browser fetch transport substitutes post-validation response bytes.**
+- [x] **C230 - Mutable browser fetch transport substitutes post-validation response bytes.**
       modular and generated navigation/query/live-target/mutation fetch paths
   - Security controls pin Response/Headers/DOMParser getters but re-read `scope.fetch`; a late global
     replacement returns attacker response bytes that the otherwise-pinned response reader accepts.
   - **Acceptance:** browser fetch, promise, and response carrier identity are boot-captured/witnessed
     in every transport path; late/pre-init replacement or foreign carriers fail closed across parity.
+  - **Evidence:** late fetch/Response replacement cannot substitute bytes in modular or generated
+    navigation, query, live-target, or mutation paths; pre-init accessors and inherited carriers fail
+    closed across 522 browser and 761 browser-package unit tests, with generated-loader parity green.
 
 - [x] **C231 - Mutable static-spread projection injects executable server markup.**
       `packages/compiler/src/lower/primitive-spreads.ts`
@@ -2723,12 +2726,15 @@ build:dist` passes.
   - **Evidence:** the exact selective inherited setter receives zero diagnostic commits and KV210/
     KV201 remain present; all 1,031 compiler tests and compiler dist/DTS pass.
 
-- [ ] **C235 - Deferred capture descendants execute database authority after verification.**
+- [x] **C235 - Deferred capture descendants execute database authority after verification.**
       `packages/test/src` verifier capture lifecycle
   - AsyncLocalStorage descendants retain the recorder after the handler promise settles; a deferred
     write runs after empty observations pass coverage and after the response/verification boundary.
   - **Acceptance:** every authority entry checks an active capture epoch before adapter/transaction/
     probe dispatch; settled descendants fail KV407 while genuinely awaited in-scope work remains valid.
+  - **Evidence:** detached direct, prepared, nested, transaction, harness, and PGlite descendants now
+    fail KV407 after settlement while awaited/concurrent live scopes pass; all 278 `@kovojs/test`
+    tests, its dist/DTS build, and classifier/security/capability gates are green.
 
 - [x] **C236 - Captured response-array push strips mandatory cookie attributes.**
       `packages/server/src/{response-security-intrinsics,cookies}.ts`
