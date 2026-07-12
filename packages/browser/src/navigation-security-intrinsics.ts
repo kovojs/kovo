@@ -2061,6 +2061,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           'article',
         ]);
         const templateControl = apply<unknown>(documentCreateElement, documentObject, ['template']);
+        const templateChildControl = apply<unknown>(documentCreateElement, documentObject, [
+          'strong',
+        ]);
         if (
           snapshotControl === null ||
           typeof snapshotControl !== 'object' ||
@@ -2073,7 +2076,9 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           replacementControl === null ||
           typeof replacementControl !== 'object' ||
           templateControl === null ||
-          typeof templateControl !== 'object'
+          typeof templateControl !== 'object' ||
+          templateChildControl === null ||
+          typeof templateChildControl !== 'object'
         ) {
           return false;
         }
@@ -2086,12 +2091,15 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           'kovo-fragment-target',
           'security-live-target',
         ]);
+        apply(elementSetAttribute, templateChildControl, ['data-kovo-template-control', 'yes']);
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
-        apply(elementInnerHtmlSetter, templateControl, [
-          '<strong data-kovo-template-control="yes">safe</strong>',
-        ]);
         const templateFragment = apply<unknown>(templateContent, templateControl, []);
         if (templateFragment === null || typeof templateFragment !== 'object') return false;
+        // C186 / SPEC §6.6: the realm witness must not itself violate the default Trusted Types
+        // CSP before Kovo's sole `kovo` policy exists. Build the detached semantic control with
+        // captured non-HTML DOM primitives; production HTML parsing still requires a policy-
+        // minted TrustedHTML value at the captured innerHTML setter below `createFragmentContent`.
+        apply(nodeAppendChild, templateFragment, [templateChildControl]);
         const templateChildren = apply<unknown>(fragmentChildren, templateFragment, []);
         const templateNodes = apply<unknown>(nodeChildNodes, templateFragment, []);
         if (

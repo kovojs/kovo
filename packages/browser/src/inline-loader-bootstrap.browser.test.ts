@@ -220,4 +220,29 @@ describe('browser inline loader bootstrap', () => {
 
     await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
   });
+
+  it('falls back to native submit when an imported runtime rejects during installation', async () => {
+    // C186 control: the successful strict-CSP proof must not erase the bootstrap's availability
+    // fallback for a genuinely rejected runtime installer.
+    installRafQueue();
+    const form = document.createElement('form');
+    form.setAttribute('enhance', '');
+    form.action = '/save';
+    const submit = vi.fn();
+    Object.defineProperty(form, 'submit', { value: submit });
+    document.body.append(form);
+
+    installInlineKovoBootstrap(
+      '/c/__v/runtime/kovo-runtime.client.js',
+      vi.fn(async () => ({
+        installKovoDeferredRuntime() {
+          throw new TypeError('runtime controls rejected');
+        },
+      })),
+    );
+
+    form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  });
 });

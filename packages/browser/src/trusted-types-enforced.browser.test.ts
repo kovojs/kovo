@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { __resetKovoTrustedTypePolicyForTest, kovoCreateHTML } from './trusted-types.js';
 import { applyHtmlResponseFragments } from './response-fragment-apply.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 // SF (secure-framework Tier 3, SPEC §6.6): the LOAD-BEARING proof that Trusted Types can
 // ship DEFAULT-ON without bricking Kovo's own hydration on Chromium. Trusted Types is
@@ -47,6 +48,34 @@ afterEach(() => {
 });
 
 describe('Trusted Types default-on enforcement (SF Tier 3, Chromium-only)', () => {
+  it.runIf(hasTrustedTypes)(
+    'boots navigation controls before policy creation and accepts policy-minted template HTML',
+    async () => {
+      // C186 / SPEC §6.6: deferred-runtime module evaluation creates these controls before any
+      // fragment needs Kovo's lazy policy. The self-witness must therefore use non-sink DOM
+      // construction, while the actual template sink still accepts only policy-minted HTML.
+      const frame = await enforcingFrame();
+      const win = frame.contentWindow as Window &
+        typeof globalThis & {
+          trustedTypes: {
+            createPolicy(
+              name: string,
+              rules: { createHTML(input: string): string },
+            ): { createHTML(input: string): unknown };
+          };
+        };
+
+      const controls = createBrowserNavigationSecurityControls(win);
+      const policy = win.trustedTypes.createPolicy('kovo', { createHTML: (value) => value });
+      const content = controls.createFragmentContent(
+        policy.createHTML('<strong data-c186-control>runtime-ready</strong>') as string,
+      );
+
+      expect(content.querySelector('strong')?.textContent).toBe('runtime-ready');
+      expect(content.querySelector('strong')?.hasAttribute('data-c186-control')).toBe(true);
+    },
+  );
+
   it.runIf(hasTrustedTypes)(
     'kills a non-framework raw-string innerHTML write under the strict CSP',
     async () => {
