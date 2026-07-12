@@ -1,11 +1,96 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mergeQueryShapeFactSets,
   outputSchemaQueryShapeFactsFromProject,
   outputSchemaQueryShapeFactsFromSource,
 } from './query-shape-source.js';
 
 describe('non-Drizzle query output schema identity recognition', () => {
+  it('does not redispatch query-shape authority through late exact Array.map receivers', () => {
+    const primary = [
+      {
+        query: 'account',
+        shape: { token: { kind: 'secret' as const, shape: 'string' as const } },
+        source: 'drizzle-analysis',
+      },
+    ];
+    const secondary = [
+      {
+        query: 'account',
+        shape: { token: 'string' as const },
+        source: 'output-schema',
+      },
+    ];
+    const forged = [
+      {
+        query: 'account',
+        shape: { token: 'string' as const },
+        source: 'forged-public-shape',
+      },
+    ];
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let merged!: ReturnType<typeof mergeQueryShapeFactSets>;
+    try {
+      Array.prototype.map = function poisonedQueryShapeMap(this: any[], callback, thisArg) {
+        if (this === primary) {
+          poisonHits += 1;
+          return forged;
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      merged = mergeQueryShapeFactSets(primary, secondary);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(merged).toEqual([
+      expect.objectContaining({
+        query: 'account',
+        shape: { token: { kind: 'secret', shape: 'string' } },
+      }),
+    ]);
+  });
+
+  it('does not let a late source-array map omit output-schema facts', () => {
+    const files = [
+      {
+        fileName: 'queries.ts',
+        source: `
+import { query, s } from '@kovojs/server';
+export const account = query({
+  output: s.object({ name: s.string() }),
+  load: () => ({ name: 'Ada' }),
+});
+`,
+      },
+    ];
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let facts!: ReturnType<typeof outputSchemaQueryShapeFactsFromProject>;
+    try {
+      Array.prototype.map = function poisonedQuerySourceMap(this: any[], callback, thisArg) {
+        if (this === files) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      facts = outputSchemaQueryShapeFactsFromProject(files);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(facts).toEqual([
+      expect.objectContaining({ query: 'account', shape: { name: 'string' } }),
+    ]);
+  });
+
   it('extracts output schemas through public data subpath aliases and namespace members', () => {
     const facts = outputSchemaQueryShapeFactsFromSource(
       'queries.ts',

@@ -53,6 +53,64 @@ describe('data-plane static analysis aggregate ABI', () => {
     await expect(pending!).resolves.toEqual(['first', 'second']);
   });
 
+  it('keeps compiler query-shape facts exact after app-time source-array map replacement', async () => {
+    const { buildCompilerQueryShapeFacts } = await loadSubject();
+    const files = [
+      {
+        fileName: 'src/queries.ts',
+        source: `
+import { query, s } from '@kovojs/server';
+export const status = query({
+  output: s.object({ ready: s.boolean() }),
+  load: () => ({ ready: true }),
+});
+`,
+      },
+    ];
+    const staticFacts = {
+      massAssignmentFacts: [],
+      ownerDomains: [],
+      queries: [],
+      queryShapeFacts: [
+        {
+          query: 'account',
+          shape: { token: { kind: 'secret' as const, shape: 'string' as const } },
+          source: 'drizzle-analysis',
+        },
+      ],
+      queryWriteReachability: [],
+      scopeAudits: [],
+      sqlSafetyDiagnostics: [],
+      toctouFacts: [],
+      touchGraph: {},
+    };
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result!: ReturnType<typeof buildCompilerQueryShapeFacts>;
+    try {
+      Array.prototype.map = function poisonedBuildQuerySourceMap(this: any[], callback, thisArg) {
+        if (this === files) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      } as typeof Array.prototype.map;
+      result = buildCompilerQueryShapeFacts(files, staticFacts);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(result).toEqual([
+      expect.objectContaining({
+        query: 'account',
+        shape: { token: { kind: 'secret', shape: 'string' } },
+      }),
+      expect.objectContaining({ query: 'status', shape: { ready: 'boolean' } }),
+    ]);
+  });
+
   it('fails closed instead of recomposing old analyzer entrypoints when the aggregate ABI is missing', async () => {
     vi.doMock('@kovojs/drizzle/internal/static', () => ({
       analyzeSqlSafetyFromProject: () => [

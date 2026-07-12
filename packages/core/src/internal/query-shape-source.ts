@@ -1,6 +1,22 @@
 import type * as TypeScript from 'typescript';
 
 import {
+  freezeSecurityValue,
+  securityGetOwnPropertyDescriptor,
+  securityHasOwn,
+  securityIsArray,
+  securityMap,
+  securityMapGet,
+  securityMapSet,
+  securityNullRecord,
+  securityObjectIs,
+  securityObjectKeys,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+} from '#security-witness-intrinsics';
+
+import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
   registerFrameworkIdentityProject,
@@ -66,21 +82,46 @@ export function outputSchemaQueryShapeFactsFromProject(
   files: readonly QueryShapeSourceFile[],
   scanFiles: readonly QueryShapeSourceFile[] = files,
 ): readonly QueryShapeFact[] {
-  const sourceFiles = files.map((file) =>
-    ts.createSourceFile(
+  const fileInputs = snapshotQueryShapeArray(files, 'query-shape project files');
+  const scanInputs =
+    scanFiles === files ? fileInputs : snapshotQueryShapeArray(scanFiles, 'query-shape scan files');
+  const sourceFiles: TypeScript.SourceFile[] = [];
+  for (let index = 0; index < fileInputs.length; index += 1) {
+    const file = snapshotQueryShapeSourceFile(
+      fileInputs[index]!,
+      `query-shape project file[${index}]`,
+    );
+    sourceFiles[sourceFiles.length] = ts.createSourceFile(
       file.fileName,
       file.source,
       ts.ScriptTarget.Latest,
       true,
       ts.ScriptKind.TSX,
-    ),
-  );
-  for (const sourceFile of sourceFiles) registerFrameworkIdentityProject(sourceFile, sourceFiles);
+    );
+  }
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    registerFrameworkIdentityProject(sourceFiles[index]!, sourceFiles);
+  }
 
-  const scanFileNames = new Set(scanFiles.map((file) => file.fileName));
-  return sourceFiles
-    .filter((sourceFile) => scanFileNames.has(sourceFile.fileName))
-    .flatMap((sourceFile) => outputSchemaQueryShapeFactsFromSourceFile(ts, sourceFile));
+  const scanFileNames = securitySet<string>();
+  for (let index = 0; index < scanInputs.length; index += 1) {
+    const file = snapshotQueryShapeSourceFile(
+      scanInputs[index]!,
+      `query-shape scan file[${index}]`,
+    );
+    securitySetAdd(scanFileNames, file.fileName);
+  }
+  const facts: QueryShapeFact[] = [];
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    const sourceFile = sourceFiles[index]!;
+    if (!securitySetHas(scanFileNames, sourceFile.fileName)) continue;
+    appendQueryShapeFacts(
+      facts,
+      outputSchemaQueryShapeFactsFromSourceFile(ts, sourceFile),
+      `query-shape facts for ${sourceFile.fileName}`,
+    );
+  }
+  return facts;
 }
 
 /** @internal Merge projected query-shape facts from multiple analyzers. */
@@ -88,15 +129,34 @@ export function mergeQueryShapeFactSets(
   primary: readonly QueryShapeFact[],
   secondary: readonly QueryShapeFact[],
 ): QueryShapeFact[] {
-  const secondaryByQuery = new Map(secondary.map((fact) => [fact.query, fact]));
-  const primaryQueries = new Set(primary.map((fact) => fact.query));
-  return [
-    ...primary.map((fact) => mergeQueryShapeFact(fact, secondaryByQuery.get(fact.query))),
-    ...secondary.filter((fact) => !primaryQueries.has(fact.query)),
-  ].sort(
-    (left, right) =>
-      left.query.localeCompare(right.query) || left.source.localeCompare(right.source),
-  );
+  const primaryFacts = snapshotQueryShapeArray(primary, 'primary query-shape facts');
+  const secondaryFacts = snapshotQueryShapeArray(secondary, 'secondary query-shape facts');
+  const secondaryByQuery = securityMap<string, QueryShapeFact>();
+  for (let index = 0; index < secondaryFacts.length; index += 1) {
+    const fact = snapshotQueryShapeFact(
+      secondaryFacts[index]!,
+      `secondary query-shape fact[${index}]`,
+    );
+    securityMapSet(secondaryByQuery, fact.query, fact);
+  }
+  const primaryQueries = securitySet<string>();
+  const result: QueryShapeFact[] = [];
+  for (let index = 0; index < primaryFacts.length; index += 1) {
+    const fact = snapshotQueryShapeFact(primaryFacts[index]!, `primary query-shape fact[${index}]`);
+    securitySetAdd(primaryQueries, fact.query);
+    insertQueryShapeFact(
+      result,
+      mergeQueryShapeFact(fact, securityMapGet(secondaryByQuery, fact.query)),
+    );
+  }
+  for (let index = 0; index < secondaryFacts.length; index += 1) {
+    const fact = snapshotQueryShapeFact(
+      secondaryFacts[index]!,
+      `secondary query-shape fact[${index}]`,
+    );
+    if (!securitySetHas(primaryQueries, fact.query)) insertQueryShapeFact(result, fact);
+  }
+  return result;
 }
 
 function outputSchemaQueryShapeFactsFromSourceFile(
@@ -107,7 +167,7 @@ function outputSchemaQueryShapeFactsFromSourceFile(
   const visit = (node: TypeScript.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
       const fact = outputSchemaQueryShapeFactFromVariable(ts, sourceFile, node);
-      if (fact) facts.push(fact);
+      if (fact) facts[facts.length] = fact;
     }
     ts.forEachChild(node, visit);
   };
@@ -140,7 +200,8 @@ function staticQueryDeclaration(
   node: TypeScript.VariableDeclaration,
   call: TypeScript.CallExpression,
 ): { definition: TypeScript.ObjectLiteralExpression; query: string } | null {
-  const [firstArgument, secondArgument] = call.arguments;
+  const firstArgument = call.arguments[0];
+  const secondArgument = call.arguments[1];
   if (
     firstArgument &&
     (ts.isStringLiteralLike(firstArgument) || ts.isNoSubstitutionTemplateLiteral(firstArgument))
@@ -245,8 +306,9 @@ function compilerQueryShapeFromSchemaObject(
   sourceFile: TypeScript.SourceFile,
   object: TypeScript.ObjectLiteralExpression,
 ): QueryShape {
-  const shape: Record<string, QueryShape> = {};
-  for (const property of object.properties) {
+  const shape = securityNullRecord<QueryShape>();
+  for (let index = 0; index < object.properties.length; index += 1) {
+    const property = object.properties[index]!;
     if (!ts.isPropertyAssignment(property)) continue;
     const name = propertyNameText(ts, property.name);
     if (!name) continue;
@@ -261,7 +323,8 @@ function objectPropertyExpression(
   object: TypeScript.ObjectLiteralExpression,
   propertyName: string,
 ): TypeScript.Expression | null {
-  for (const property of object.properties) {
+  for (let index = 0; index < object.properties.length; index += 1) {
+    const property = object.properties[index]!;
     if (!ts.isPropertyAssignment(property)) continue;
     if (propertyNameText(ts, property.name) === propertyName) return property.initializer;
   }
@@ -297,10 +360,12 @@ function isExportedVariableDeclaration(
   while (current.parent) {
     current = current.parent;
     if (ts.isVariableStatement(current)) {
-      return (
-        current.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
-        false
-      );
+      const modifiers = current.modifiers;
+      if (modifiers === undefined) return false;
+      for (let index = 0; index < modifiers.length; index += 1) {
+        if (modifiers[index]!.kind === ts.SyntaxKind.ExportKeyword) return true;
+      }
+      return false;
     }
   }
   return false;
@@ -326,9 +391,19 @@ function unwrapTsExpression(
 
 function isSubstantiveQueryShape(shape: QueryShape): boolean {
   if (typeof shape === 'string') return shape !== 'object';
-  if (Array.isArray(shape)) return shape.some(isSubstantiveQueryShape);
-  if ('kind' in shape) return isSubstantiveQueryShape(shape.shape);
-  return Object.keys(shape).length > 0;
+  if (securityIsArray(shape)) {
+    const entries = snapshotQueryShapeArray(shape, 'query-shape array');
+    for (let index = 0; index < entries.length; index += 1) {
+      if (isSubstantiveQueryShape(entries[index] as QueryShape)) return true;
+    }
+    return false;
+  }
+  if (securityHasOwn(shape, 'kind')) {
+    return isSubstantiveQueryShape(
+      queryShapeOwnDataValue(shape, 'shape', 'wrapped query shape') as QueryShape,
+    );
+  }
+  return securityObjectKeys(shape).length > 0;
 }
 
 function mergeQueryShapeFact(
@@ -336,32 +411,213 @@ function mergeQueryShapeFact(
   secondary: QueryShapeFact | undefined,
 ): QueryShapeFact {
   if (!secondary) return primary;
-  return {
-    ...primary,
+  return freezeSecurityValue({
+    query: primary.query,
     shape: mergeQueryShapes(primary.shape, secondary.shape),
     source: `${primary.source}; output ${secondary.source}`,
-  };
+  });
 }
 
 function mergeQueryShapes(primary: QueryShape, secondary: QueryShape): QueryShape {
-  if (Array.isArray(primary) && Array.isArray(secondary)) {
-    const primaryItem = primary[0];
-    const secondaryItem = secondary[0];
+  if (securityIsArray(primary) && securityIsArray(secondary)) {
+    const primaryItems = snapshotQueryShapeArray(primary, 'primary query-shape array');
+    const secondaryItems = snapshotQueryShapeArray(secondary, 'secondary query-shape array');
+    const primaryItem = primaryItems[0] as QueryShape | undefined;
+    const secondaryItem = secondaryItems[0] as QueryShape | undefined;
     return primaryItem && secondaryItem ? [mergeQueryShapes(primaryItem, secondaryItem)] : primary;
   }
 
   if (isPlainQueryShapeObject(primary) && isPlainQueryShapeObject(secondary)) {
-    const merged: Record<string, QueryShape> = { ...secondary };
-    for (const [key, value] of Object.entries(primary)) {
-      const secondaryValue = secondary[key];
+    const merged = securityNullRecord<QueryShape>();
+    const secondaryKeys = securityObjectKeys(secondary);
+    for (let index = 0; index < secondaryKeys.length; index += 1) {
+      const key = secondaryKeys[index]!;
+      merged[key] = queryShapeOwnDataValue(
+        secondary,
+        key,
+        'secondary query-shape object',
+      ) as QueryShape;
+    }
+    const primaryKeys = securityObjectKeys(primary);
+    for (let index = 0; index < primaryKeys.length; index += 1) {
+      const key = primaryKeys[index]!;
+      const value = queryShapeOwnDataValue(
+        primary,
+        key,
+        'primary query-shape object',
+      ) as QueryShape;
+      const secondaryValue = securityHasOwn(secondary, key)
+        ? (queryShapeOwnDataValue(secondary, key, 'secondary query-shape object') as QueryShape)
+        : undefined;
       merged[key] = secondaryValue ? mergeQueryShapes(value, secondaryValue) : value;
     }
-    return merged;
+    return freezeSecurityValue(merged);
   }
 
   return primary;
 }
 
 function isPlainQueryShapeObject(shape: QueryShape): shape is Record<string, QueryShape> {
-  return typeof shape === 'object' && shape !== null && !Array.isArray(shape) && !('kind' in shape);
+  return (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !securityIsArray(shape) &&
+    !securityHasOwn(shape, 'kind')
+  );
+}
+
+function snapshotQueryShapeSourceFile(
+  value: QueryShapeSourceFile,
+  label: string,
+): QueryShapeSourceFile {
+  const fileName = queryShapeOwnDataValue(value, 'fileName', label);
+  const source = queryShapeOwnDataValue(value, 'source', label);
+  if (typeof fileName !== 'string' || typeof source !== 'string') {
+    throw new TypeError(`${label} must expose own string fileName/source properties.`);
+  }
+  return freezeSecurityValue({ fileName, source });
+}
+
+function snapshotQueryShapeFact(value: QueryShapeFact, label: string): QueryShapeFact {
+  const query = queryShapeOwnDataValue(value, 'query', label);
+  const shape = queryShapeOwnDataValue(value, 'shape', label);
+  const source = queryShapeOwnDataValue(value, 'source', label);
+  if (typeof query !== 'string' || typeof source !== 'string') {
+    throw new TypeError(`${label} must expose own string query/source properties.`);
+  }
+  return freezeSecurityValue({
+    query,
+    shape: snapshotQueryShape(shape, `${label}.shape`),
+    source,
+  });
+}
+
+function snapshotQueryShape(value: unknown, label: string): QueryShape {
+  if (
+    value === 'array' ||
+    value === 'boolean' ||
+    value === 'number' ||
+    value === 'object' ||
+    value === 'string'
+  ) {
+    return value;
+  }
+  if (securityIsArray(value)) {
+    const source = snapshotQueryShapeArray(value, label);
+    const output: QueryShape[] = [];
+    for (let index = 0; index < source.length; index += 1) {
+      output[output.length] = snapshotQueryShape(source[index], `${label}[${index}]`);
+    }
+    return freezeSecurityValue(output);
+  }
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError(`${label} must be a compiler query shape.`);
+  }
+  if (securityHasOwn(value, 'kind')) {
+    const kind = queryShapeOwnDataValue(value, 'kind', label);
+    const shape = snapshotQueryShape(
+      queryShapeOwnDataValue(value, 'shape', label),
+      `${label}.shape`,
+    );
+    if (kind === 'table-row') {
+      const table = queryShapeOwnDataValue(value, 'table', label);
+      if (typeof table !== 'string') throw new TypeError(`${label}.table must be a string.`);
+      return freezeSecurityValue({ kind: 'table-row' as const, shape, table });
+    }
+    if (kind === 'revealed') {
+      return freezeSecurityValue({
+        kind: 'revealed' as const,
+        reveal: queryShapeOwnDataValue(value, 'reveal', label),
+        shape,
+      });
+    }
+    if (
+      kind === 'nullable' ||
+      kind === 'optional' ||
+      kind === 'secret' ||
+      kind === 'volatile-time'
+    ) {
+      return freezeSecurityValue({ kind, shape } as const);
+    }
+    throw new TypeError(`${label}.kind is not a compiler query-shape wrapper.`);
+  }
+  const output = securityNullRecord<QueryShape>();
+  const keys = securityObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    output[key] = snapshotQueryShape(queryShapeOwnDataValue(value, key, label), `${label}.${key}`);
+  }
+  return freezeSecurityValue(output);
+}
+
+function snapshotQueryShapeArray<Value>(value: readonly Value[], label: string): readonly Value[] {
+  if (!securityIsArray(value)) throw new TypeError(`${label} must be an array.`);
+  const rawLength = queryShapeOwnDataValue(value, 'length', label);
+  if (
+    typeof rawLength !== 'number' ||
+    rawLength < 0 ||
+    rawLength > 100_000 ||
+    rawLength % 1 !== 0
+  ) {
+    throw new TypeError(`${label} must expose a bounded dense length.`);
+  }
+  const snapshot: Value[] = [];
+  for (let index = 0; index < rawLength; index += 1) {
+    snapshot[index] = queryShapeOwnDataValue(value, index, label) as Value;
+  }
+  return freezeSecurityValue(snapshot);
+}
+
+function queryShapeOwnDataValue(value: object, property: PropertyKey, label: string): unknown {
+  const before = securityGetOwnPropertyDescriptor(value, property);
+  const after = securityGetOwnPropertyDescriptor(value, property);
+  if (
+    !sameQueryShapeDataDescriptor(before, after) ||
+    before === undefined ||
+    !('value' in before)
+  ) {
+    throw new TypeError(`${label}.${String(property)} must be a stable own data property.`);
+  }
+  return before.value;
+}
+
+function sameQueryShapeDataDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    'value' in left &&
+    'value' in right &&
+    securityObjectIs(left.value, right.value) &&
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable
+  );
+}
+
+function appendQueryShapeFacts(
+  target: QueryShapeFact[],
+  source: readonly QueryShapeFact[],
+  label: string,
+): void {
+  const facts = snapshotQueryShapeArray(source, label);
+  for (let index = 0; index < facts.length; index += 1) {
+    target[target.length] = snapshotQueryShapeFact(facts[index]!, `${label}[${index}]`);
+  }
+}
+
+function insertQueryShapeFact(result: QueryShapeFact[], fact: QueryShapeFact): void {
+  let index = result.length;
+  while (index > 0 && compareQueryShapeFact(fact, result[index - 1]!) < 0) {
+    result[index] = result[index - 1]!;
+    index -= 1;
+  }
+  result[index] = fact;
+}
+
+function compareQueryShapeFact(left: QueryShapeFact, right: QueryShapeFact): number {
+  if (left.query !== right.query) return left.query < right.query ? -1 : 1;
+  if (left.source === right.source) return 0;
+  return left.source < right.source ? -1 : 1;
 }
