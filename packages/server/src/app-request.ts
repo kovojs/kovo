@@ -17,6 +17,7 @@ import type {
 } from './endpoint.js';
 import { appSystemResponse } from './app-system-response.js';
 import {
+  pinRequestIngressSurface,
   preDispatchLoadShedResponse,
   requestWithBodyLimit,
   RequestBodyLimitExceededError,
@@ -44,6 +45,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     return routeResponseToWebResponse(renderDiagnosticDocument(appDiagnostics), request);
   }
 
+  pinRequestIngressSurface(request);
   const method = requestMethod(request);
   const url = requestCreateUrl(requestUrl(request));
   const urlSnapshot = requestUrlSnapshot(url);

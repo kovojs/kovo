@@ -1,5 +1,6 @@
 import { customVerifier } from '@kovojs/core';
 import { trustedHtml } from '@kovojs/browser';
+import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 import { describe, expect, it } from 'vitest';
 
 import { publicAccess, verifiedAccess } from './access.js';
@@ -124,6 +125,40 @@ describe('request ingress intrinsic authority', () => {
     expect(response.status).toBe(405);
     expect(response.headers.get('allow')).toBe('POST');
     expect(calls).toEqual([]);
+  });
+
+  it('does not let route code replace the accepted document channel through Headers.get', async () => {
+    const nativeGet = Headers.prototype.get;
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/document', {
+            page: () => {
+              Headers.prototype.get = function (name: string) {
+                if (name.toLowerCase() === 'accept') {
+                  return enhancedNavigationDocumentAcceptHeader;
+                }
+                return Reflect.apply(nativeGet, this, [name]);
+              };
+              return trustedHtml('<main>full-document</main>');
+            },
+          }),
+        ],
+      }),
+    );
+
+    let response: Response;
+    try {
+      response = await handler(
+        new Request('https://kovo.local/document', { headers: { Accept: 'text/html' } }),
+      );
+    } finally {
+      Headers.prototype.get = nativeGet;
+    }
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('vary')).toBeNull();
+    await expect(response.text()).resolves.toContain('installInlineKovoBootstrap');
   });
 
   it('keeps oversized endpoint bytes at 413 after late stream-reader replacement', async () => {
