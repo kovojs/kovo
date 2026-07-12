@@ -384,6 +384,7 @@ describe('server app shell Vite dev seam', () => {
         if (id === '@kovojs/server/internal/app-shell-vite') {
           return { dispatchKovoAppShellViteDevRequest };
         }
+        if (id === '@kovojs/server') return {};
         expect(id).toBe('/src/app-shell.ts');
         return { default: appLoad++ === 0 ? app : structuralClone };
       },
@@ -1272,5 +1273,7 @@ function viteDevSsrLoadModule(
   return async (id) =>
     id === '@kovojs/server/internal/app-shell-vite'
       ? { dispatchKovoAppShellViteDevRequest }
+      : id === '@kovojs/server'
+        ? {}
       : await loadAppModule(id);
 }

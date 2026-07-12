@@ -36,6 +36,7 @@ const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
 const kovoAppShellViteDevModuleId = '@kovojs/server/internal/app-shell-vite';
+const kovoServerRootModuleId = '@kovojs/server';
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Minimal Vite dev-server
@@ -339,6 +340,10 @@ export async function dispatchKovoAppShellViteDevRequest(
   const appExportName = options.appExportName ?? 'default';
   if (options.devDiagnostics) registerRequestDiagnosticStore(options.devDiagnostics);
 
+  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app
+  // graph. Runtime-specific controls such as command execution remain tree-shakeable in production
+  // bundles, but an authored dependency cannot run first and influence their dev-time capture.
+  await server.ssrLoadModule(kovoServerRootModuleId);
   const module = await server.ssrLoadModule(moduleId);
   const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
   const stylesheetResponse = renderKovoAppShellViteDevStylesheetAsset(request, stylesheetAssets);

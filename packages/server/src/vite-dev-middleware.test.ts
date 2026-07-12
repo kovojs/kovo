@@ -401,5 +401,7 @@ function viteDevSsrLoadModule(
   return async (id) =>
     id === '@kovojs/server/internal/app-shell-vite'
       ? { dispatchKovoAppShellViteDevRequest }
+      : id === '@kovojs/server'
+        ? {}
       : await loadAppModule(id);
 }

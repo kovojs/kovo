@@ -130,7 +130,9 @@ describe('framework-owned security bootstrap', () => {
 
   it('selective Function-source mimicry cannot replace reviewed command execution', async () => {
     vi.resetModules();
-    await import('./security-bootstrap.ts?root-bootstrap-command');
+    // The supported runner preloads the root barrel before the app graph. Command remains outside
+    // the neutral bootstrap so unused node:child_process code can be tree-shaken from Workers.
+    await import('./index.ts?root-bootstrap-command');
 
     mutableChildProcess.execFile = function execFile(file, args, options, callback) {
       // normalizeExecFileArgs

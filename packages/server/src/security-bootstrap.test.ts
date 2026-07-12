@@ -10,6 +10,13 @@ describe('server security bootstrap census', () => {
     const source = readFileSync(new URL('./security-bootstrap.ts', import.meta.url), 'utf8');
     const intrinsicModules = readdirSync(sourceDirectory)
       .filter((fileName) => fileName.endsWith('-intrinsics.ts'))
+      // Build-only controls are captured by the build/static-export entries; command controls are
+      // captured by preloading the root server barrel before the app graph. Keeping both out of the
+      // neutral bootstrap lets tree shaking omit unsupported node:child_process from Workers.
+      .filter(
+        (fileName) =>
+          fileName !== 'build-security-intrinsics.ts' && fileName !== 'command-intrinsics.ts',
+      )
       .sort();
 
     expect(intrinsicModules.length).toBeGreaterThan(0);
@@ -34,5 +41,14 @@ describe('server security bootstrap census', () => {
       const source = readFileSync(new URL(fileName, import.meta.url), 'utf8');
       expect(source.indexOf(bootstrapImport), fileName).toBe(0);
     }
+  });
+
+  it('preloads the complete server profile before the authored Vite app graph', () => {
+    const source = readFileSync(new URL('./vite-dev.ts', import.meta.url), 'utf8');
+    const rootLoad = source.indexOf('await server.ssrLoadModule(kovoServerRootModuleId);');
+    const appLoad = source.indexOf('const module = await server.ssrLoadModule(moduleId);');
+
+    expect(rootLoad).toBeGreaterThan(0);
+    expect(appLoad).toBeGreaterThan(rootLoad);
   });
 });

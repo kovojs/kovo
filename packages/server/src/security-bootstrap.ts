@@ -2,9 +2,12 @@
  * Framework-owned server trust-root bootstrap (SPEC §6.6).
  *
  * Supported Kovo runners evaluate this module before loading authored app, Vite-plugin, or
- * generated server modules. Importing every authority-bearing intrinsic membrane here makes the
- * pristine capture order a construction property of the runner instead of trying to authenticate
- * mutable JavaScript functions from their source text or a finite probe corpus.
+ * generated server modules. Importing every runtime-neutral authority membrane here makes pristine
+ * capture order a construction property of the runner instead of trying to authenticate mutable
+ * JavaScript functions from their source text or a finite probe corpus. Supported runners also
+ * preload their profile entry before the app graph: server/build entries capture build controls,
+ * while the root server barrel captures tree-shakeable Node-only command controls. That split keeps
+ * unused `node:child_process` out of Cloudflare Workers without permitting app-first evaluation.
  *
  * This is deliberately private. Code that executes in the process before a supported Kovo entry
  * can replace host controls before this module runs and is therefore privileged host compromise,
@@ -16,10 +19,8 @@ import '@kovojs/core/internal/filesystem';
 import '@kovojs/core/internal/render-plan-token';
 
 import './auth-principal.js';
-import { assertBuildSecurityIntrinsics } from './build-security-intrinsics.js';
 import { assertCapabilityIntrinsics } from './capability-intrinsics.js';
 import './client-module-registry-intrinsics.js';
-import { assertCommandIntrinsics } from './command-intrinsics.js';
 import { assertConfidentialAtRestIntrinsics } from './confidential-at-rest-intrinsics.js';
 import { assertEgressIntrinsics } from './egress-intrinsics.js';
 import { assertJsxFormHelperIntrinsics } from './jsx-form-helper-intrinsics.js';
@@ -35,9 +36,7 @@ import { assertTaskSecurityIntrinsics } from './task-security-intrinsics.js';
 // trust-root transition. These checks are health assertions over controls already captured by the
 // runner; they are not provenance tests and must never be used to bless a late bootstrap.
 assertSecurityWitnessIntrinsics();
-assertBuildSecurityIntrinsics();
 assertCapabilityIntrinsics();
-assertCommandIntrinsics();
 assertConfidentialAtRestIntrinsics();
 assertEgressIntrinsics();
 assertJsxFormHelperIntrinsics();

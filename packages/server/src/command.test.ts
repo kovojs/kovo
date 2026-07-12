@@ -13,7 +13,10 @@ import {
 } from './command.js';
 
 const commandModuleUrl = new URL('./command.ts', import.meta.url).href;
-const securityBootstrapModuleUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
+const commandBootstrapModuleUrl = new URL(
+  './security-bootstrap-command.ts',
+  import.meta.url,
+).href;
 const mutableChildProcess = createRequire(import.meta.url)('node:child_process') as {
   execFile: typeof execFile;
 };
@@ -167,7 +170,7 @@ describe('server command primitive', () => {
         }
         return nextResolve(specifier, context);
       }});
-      await import(${JSON.stringify(`${securityBootstrapModuleUrl}?command-runner`)});
+      await import(${JSON.stringify(`${commandBootstrapModuleUrl}?command-runner`)});
       const mutable = createRequire(import.meta.url)('node:child_process');
       const original = mutable.execFile;
       let poisonedCalls = 0;
