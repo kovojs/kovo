@@ -5,6 +5,7 @@ import {
   authorityNeutralAbortSignal,
   createNativeHeaders,
   createNativeRequest,
+  isNativeAbortSignal,
   isNativeHeaders,
   isNativeRequest,
   requestForAuthorityNeutralMetadata,
@@ -375,7 +376,7 @@ function sanitizeDiagnosticValue(
     seen.set(object, sanitized);
     return sanitized;
   }
-  if (value instanceof AbortSignal) {
+  if (isNativeAbortSignal(value)) {
     try {
       const sanitized = authorityNeutralAbortSignal(value);
       seen.set(object, sanitized);

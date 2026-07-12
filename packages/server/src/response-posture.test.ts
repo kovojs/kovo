@@ -242,7 +242,12 @@ describe('central response posture finalization', () => {
     const request = new Request('https://example.test/_m/machine/run', {
       headers: {
         Authorization: 'Basic victim-browser-credential',
+        'Cf-Connecting-Ip': '203.0.113.10',
+        Forwarded: 'for=203.0.113.10',
         'Proxy-Authorization': 'Basic victim-proxy-credential',
+        'Remote-User': 'victim',
+        'X-Auth-Request-User': 'victim',
+        'X-Forwarded-For': '203.0.113.10',
         'X-Machine-Signature': 'kept',
       },
     });
@@ -252,7 +257,12 @@ describe('central response posture finalization', () => {
     });
 
     expect(mutationRequest.headers.get('authorization')).toBeNull();
+    expect(mutationRequest.headers.get('cf-connecting-ip')).toBeNull();
+    expect(mutationRequest.headers.get('forwarded')).toBeNull();
     expect(mutationRequest.headers.get('proxy-authorization')).toBeNull();
+    expect(mutationRequest.headers.get('remote-user')).toBeNull();
+    expect(mutationRequest.headers.get('x-auth-request-user')).toBeNull();
+    expect(mutationRequest.headers.get('x-forwarded-for')).toBeNull();
     expect(mutationRequest.headers.get('x-machine-signature')).toBe('kept');
     expect(mutationRequest.clone().headers.get('authorization')).toBeNull();
   });

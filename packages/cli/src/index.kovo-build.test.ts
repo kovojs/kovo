@@ -730,6 +730,14 @@ const unsafeAuthorization = mutation('auth/unsafe-authorization', {
     return { authorization: request.headers.get('Authorization') };
   },
 });
+const unsafeProxyIdentity = mutation('auth/unsafe-proxy-identity', {
+  access: publicAccess('proxy identity callback'),
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { user: request.headers.get('X-Auth-Request-User') };
+  },
+});
 const unsafeDynamicCode = mutation('auth/unsafe-dynamic-code', {
   access: publicAccess('dynamic code callback'),
   csrf: false,
@@ -787,10 +795,36 @@ const guarded = mutation('auth/session-guarded', {
     return { signature: request.headers.get('X-Machine-Signature') };
   },
 });
+const customGuard = () => true;
+const compositeGuarded = mutation('auth/composite-opaque-guard', {
+  access: [guards.all(customGuard, guards.rateLimit({ max: 10, per: 'ip' }))],
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { signature: request.headers.get('X-Machine-Signature') };
+  },
+});
+const proxiedGuarded = mutation('auth/proxied-guard', {
+  access: [new Proxy(guards.rateLimit({ max: 10, per: 'global' }), {})],
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { signature: request.headers.get('X-Machine-Signature') };
+  },
+});
+const globalRateGuarded = mutation('auth/global-rate-guard', {
+  access: [guards.rateLimit({ max: 10, per: 'global' })],
+  csrf: false,
+  input: s.object({}),
+  handler(_input, request) {
+    return { signature: request.headers.get('X-Machine-Signature') };
+  },
+});
 export default createApp({
   mutations: [
     unsafe,
     unsafeAuthorization,
+    unsafeProxyIdentity,
     unsafeDynamicCode,
     unsafeCookieOutput,
     unsafeFakeThis,
@@ -798,6 +832,9 @@ export default createApp({
     safe,
     unproven,
     guarded,
+    compositeGuarded,
+    proxiedGuarded,
+    globalRateGuarded,
   ],
 });
 `,
@@ -812,13 +849,17 @@ export default createApp({
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-authorization');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-proxy-identity');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-dynamic-code');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie-output');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-fake-this');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-context-escape');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unproven-handler');
       expect(errorOutput).toContain('ERROR KV418 MUTATION auth/session-guarded');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/composite-opaque-guard');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/proxied-guard');
       expect(errorOutput).not.toContain('ERROR KV418 MUTATION auth/signed-machine');
+      expect(errorOutput).not.toContain('ERROR KV418 MUTATION auth/global-rate-guard');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();

@@ -34,6 +34,7 @@ export interface MatchedAppDispatchOptions {
   app: KovoApp;
   match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>;
   request: Request;
+  reservedKey?: string;
   url: URL;
 }
 
@@ -41,6 +42,7 @@ export async function dispatchMatchedAppRequest({
   app,
   match,
   request,
+  reservedKey,
   url,
 }: MatchedAppDispatchOptions): Promise<Response> {
   if (match.kind === 'client-module') {
@@ -80,7 +82,7 @@ export async function dispatchMatchedAppRequest({
     return routeResponseToWebResponse(
       await renderQueryRegistryEndpointResponse<Request>(
         { queries: app.queries as QueryEndpointRegistry<Request>['queries'] },
-        decodeURIComponent(match.key),
+        reservedKey ?? decodeURIComponent(match.key),
         queryRequest,
       ),
       request,
@@ -88,7 +90,12 @@ export async function dispatchMatchedAppRequest({
   }
 
   if (match.kind === 'mutation') {
-    return handleAppMutationRequest(app, request, url, decodeURIComponent(match.key));
+    return handleAppMutationRequest(
+      app,
+      request,
+      url,
+      reservedKey ?? decodeURIComponent(match.key),
+    );
   }
 
   if (match.kind === 'endpoint') {

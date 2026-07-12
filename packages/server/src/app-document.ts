@@ -39,6 +39,7 @@ import {
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
 import type { KovoApp } from './app-types.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
+import { requestForAuthorityNeutralMetadata } from './request-carrier.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 const fallbackBroadcastFingerprintSecret = randomBytes(32);
@@ -320,6 +321,11 @@ export async function renderAppErrorDocumentResponse(
   request: Request,
   status: 403 | 404 | 500,
 ): Promise<RoutePageResponse> {
+  const stableRequestUrl = readErrorShellRequestUrl(request);
+  const stableUrl = new URL(stableRequestUrl);
+  const diagnosticUrl = appRequestUrl(stableUrl);
+  const reportingOrigin = stableUrl.origin;
+  const secure = stableUrl.protocol === 'https:';
   const renderer =
     status === 403
       ? app.errorShells.forbidden
@@ -330,13 +336,19 @@ export async function renderAppErrorDocumentResponse(
   if (renderer) {
     try {
       const rendered = await renderer({ request, status });
-      return renderConfiguredErrorShellDocumentResponse(app, request, rendered, status);
+      return renderConfiguredErrorShellDocumentResponse(
+        app,
+        rendered,
+        status,
+        reportingOrigin,
+        secure,
+      );
     } catch (error) {
       reportServerError(app.onError, error, {
         operation: 'error-shell',
         request,
         status,
-        url: appRequestUrl(new URL(request.url)),
+        url: diagnosticUrl,
       });
     }
   }
@@ -348,22 +360,22 @@ export async function renderAppErrorDocumentResponse(
     ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
-    reportingOrigin: new URL(request.url).origin,
+    reportingOrigin,
     status,
   });
 }
 
 function renderConfiguredErrorShellDocumentResponse(
   app: KovoApp,
-  request: Request,
   rendered: unknown,
   status: 403 | 404 | 500,
+  reportingOrigin: string,
+  secure: boolean,
 ): RoutePageResponse {
   const response = normalizeConfiguredErrorShellResponse(rendered, status);
   // SPEC §9.2/§9.5: configured request-shell error bodies are still framework-owned
   // documents. They therefore receive the same document security/header floor as route
   // documents instead of bypassing CSP/XFO/nosniff/cache defaults.
-  const secure = isTrustedSecureRequest(request);
   const documentResponse = renderRouteDocumentResponse(
     {
       ...response,
@@ -378,7 +390,7 @@ function renderConfiguredErrorShellDocumentResponse(
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
       loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
       noStore: true,
-      reportingOrigin: new URL(request.url).origin,
+      reportingOrigin,
       ...(secure ? { secure: true } : {}),
       wrapNonOk: true,
     },
@@ -395,6 +407,26 @@ function renderConfiguredErrorShellDocumentResponse(
     ),
     status,
   };
+}
+
+const readNativeErrorShellRequestUrl = (() => {
+  const descriptor = Object.getOwnPropertyDescriptor(Request.prototype, 'url');
+  const getter = descriptor ? (Reflect.get(descriptor, 'get') as unknown) : undefined;
+  if (typeof getter !== 'function') {
+    throw new TypeError('The Web Request implementation lacks a url getter.');
+  }
+  return (request: Request): string => Reflect.apply(getter, request, []) as string;
+})();
+
+function readErrorShellRequestUrl(request: Request): string {
+  try {
+    return readNativeErrorShellRequestUrl(requestForAuthorityNeutralMetadata(request));
+  } catch {
+    // Stable error output is preferable to trusting a public accessor or throwing
+    // from the fallback path. Genuine framework Request carriers always take the
+    // intrinsic branch above.
+    return 'http://kovo.invalid/';
+  }
 }
 
 function normalizeConfiguredErrorShellResponse(

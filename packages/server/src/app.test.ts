@@ -93,6 +93,39 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
     expect(response.status).toBe(204);
   });
 
+  it.each(['never settles', 'rejects'] as const)(
+    'does not wait when oversized CSP report stream cancellation %s',
+    async (behavior) => {
+      let cancelCalls = 0;
+      const app = createApp();
+      const handler = createRequestHandler(app);
+      const body = new ReadableStream<Uint8Array>({
+        cancel() {
+          cancelCalls += 1;
+          return behavior === 'never settles'
+            ? new Promise<void>(() => undefined)
+            : Promise.reject(new Error('cancel trap'));
+        },
+        start(controller) {
+          controller.enqueue(new Uint8Array(70_000));
+        },
+      });
+
+      const response = await handler(
+        new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`, {
+          body,
+          headers: { 'Content-Type': 'application/reports+json' },
+          method: 'POST',
+          duplex: 'half',
+        } as RequestInit),
+      );
+
+      expect(response.status).toBe(204);
+      expect(cancelCalls).toBe(1);
+      expect(kovoSecurityReportSnapshot(app).dropped).toBeGreaterThan(0);
+    },
+  );
+
   it('redacts report URLs and aggregates repeated report fingerprints', async () => {
     const app = createApp();
     const handler = createRequestHandler(app);
@@ -966,6 +999,38 @@ describe('server createApp request shell', () => {
     });
   });
 
+  it('keeps the stable error fallback when a shell poisons the public request URL accessor', async () => {
+    const shellError = new Error('private poisoned shell detail');
+    const onError = vi.fn();
+    const handler = createRequestHandler(
+      createApp({
+        errorShells: {
+          notFound({ request }) {
+            Object.defineProperty(request, 'url', {
+              configurable: true,
+              get() {
+                throw new Error('url getter trap');
+              },
+            });
+            throw shellError;
+          },
+        },
+        onError,
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://example.test/missing?token=POISONED_URL_SECRET'),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.text()).resolves.toContain('<h1>Not Found</h1>');
+    expect(onError).toHaveBeenCalledWith(
+      shellError,
+      expect.objectContaining({ operation: 'error-shell', url: '/missing?token' }),
+    );
+  });
+
   it('keeps app request failures private when the configured 500 shell also fails', async () => {
     const endpointError = new Error('private endpoint detail');
     const shellError = new Error('private 500 shell detail');
@@ -1226,6 +1291,53 @@ describe('server createApp request shell', () => {
     expect(sideEffects).toBe(0);
   });
 
+  it('does not wait for a hostile stream cancellation promise after body overflow', async () => {
+    let cancelCalls = 0;
+    const endpointHandler = vi.fn(() => new Response('unreachable'));
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint('/cancel-trap', {
+            csrf: false,
+            csrfJustification: 'test machine endpoint',
+            handler: endpointHandler,
+            method: 'POST',
+            reason: 'hostile cancellation fixture',
+            response: rawTextResponse,
+          }),
+        ],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: 4,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: false },
+        },
+      }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelCalls += 1;
+        return new Promise<void>(() => undefined);
+      },
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('12345'));
+      },
+    });
+
+    const response = await handler(
+      new Request('https://example.test/cancel-trap', {
+        body,
+        method: 'POST',
+        duplex: 'half',
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(413);
+    expect(cancelCalls).toBe(1);
+    expect(endpointHandler).not.toHaveBeenCalled();
+  });
+
   it('rejects oversized streamed mutation bodies before lifecycle providers or dispatch', async () => {
     const db = vi.fn(() => ({}));
     const mutationHandler = vi.fn((input) => input);
@@ -1351,6 +1463,103 @@ describe('server createApp request shell', () => {
     expect(limited.headers.get('x-content-type-options')).toBe('nosniff');
     await expect(limited.text()).resolves.toBe('Too Many Requests');
     expect(mutationHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps throwing pre-dispatch client-IP policy to stable surface-specific 500 responses', async () => {
+    const onError = vi.fn();
+    const app = createApp({
+      endpoints: [
+        endpoint('/machine', {
+          csrf: false,
+          csrfJustification: 'signed machine fixture',
+          handler: () => Response.json({ ok: true }),
+          method: 'POST',
+          reason: 'predispatch failure fixture',
+          response: rawJsonResponse,
+        }),
+      ],
+      errorShells: {
+        serverError: () => trustedHtml('<main>stable shell</main>'),
+      },
+      mutations: [
+        mutation('machine/run', {
+          csrf: false,
+          handler: () => ({ ok: true }),
+          input: s.object({}),
+        }),
+      ],
+      onError,
+      queries: [query('catalog', { load: () => [], reads: [] })],
+      requestLimits: {
+        clientIp() {
+          throw new Error('clientIp trap');
+        },
+      },
+      routes: [route('/', { page: () => trustedHtml('<main>home</main>') })],
+    });
+    const handler = createRequestHandler(app);
+
+    const queryResponse = await handler(new Request('https://example.test/_q/catalog'));
+    expect(queryResponse.status).toBe(500);
+    expect(queryResponse.headers.get('cache-control')).toBe('private, no-store');
+    expect(queryResponse.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    await expect(queryResponse.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
+
+    const endpointResponse = await handler(
+      new Request('https://example.test/machine', { method: 'POST' }),
+    );
+    expect(endpointResponse.status).toBe(500);
+    expect(endpointResponse.headers.get('content-type')).toBe('application/json');
+    await expect(endpointResponse.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
+
+    const mutationResponse = await handler(
+      new Request('https://example.test/_m/machine/run', {
+        body: new URLSearchParams(),
+        method: 'POST',
+      }),
+    );
+    expect(mutationResponse.status).toBe(500);
+    await expect(mutationResponse.text()).resolves.toContain('<main>stable shell</main>');
+
+    const routeResponse = await handler(new Request('https://example.test/'));
+    expect(routeResponse.status).toBe(500);
+    await expect(routeResponse.text()).resolves.toContain('<main>stable shell</main>');
+    expect(onError).toHaveBeenCalledTimes(4);
+  });
+
+  it('rejects percent-encoded mutation aliases before policy callbacks or dispatch', async () => {
+    const clientIp = vi.fn(() => '203.0.113.7');
+    const protectedHandler = vi.fn(() => ({ protected: true }));
+    const exemptHandler = vi.fn(() => ({ exempt: true }));
+    const handler = createRequestHandler(
+      createApp({
+        mutations: [
+          mutation('a', {
+            csrf: false,
+            handler: exemptHandler,
+            input: s.object({}),
+          }),
+          mutation('%61', {
+            handler: protectedHandler,
+            input: s.object({}),
+          }),
+        ],
+        requestLimits: { clientIp },
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://example.test/_m/%61', {
+        body: new URLSearchParams(),
+        headers: { Cookie: 'sid=victim' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(clientIp).not.toHaveBeenCalled();
+    expect(protectedHandler).not.toHaveBeenCalled();
+    expect(exemptHandler).not.toHaveBeenCalled();
   });
 
   it('ignores spoofed forwarded IP headers unless trustedProxy is enabled', async () => {

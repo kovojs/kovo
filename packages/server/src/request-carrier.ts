@@ -1,13 +1,21 @@
+const NativeAbortController = AbortController;
 const NativeHeaders = Headers;
 const NativeRequest = Request;
 const authorityNeutralCloneFactories = new WeakMap<Request, () => Request>();
 const authorityNeutralMetadataSources = new WeakMap<Request, Request>();
 const nativeRequestClone = Object.getOwnPropertyDescriptor(Request.prototype, 'clone')
   ?.value as unknown;
+const nativeRequestHeaders = Object.getOwnPropertyDescriptor(Request.prototype, 'headers')?.get;
+const nativeHeadersEntries = Object.getOwnPropertyDescriptor(Headers.prototype, 'entries')
+  ?.value as unknown;
 const nativeAbortControllerAbort = Object.getOwnPropertyDescriptor(
   AbortController.prototype,
   'abort',
 )?.value as unknown;
+const nativeAbortControllerSignal = Object.getOwnPropertyDescriptor(
+  AbortController.prototype,
+  'signal',
+)?.get;
 const abortSignalAbortedDescriptor = Object.getOwnPropertyDescriptor(
   AbortSignal.prototype,
   'aborted',
@@ -38,14 +46,41 @@ export function createNativeHeaders(init?: HeadersInit): Headers {
   return new NativeHeaders(init);
 }
 
-/** Test against the import-time Web Request constructor. */
+/** Test with the import-time Web Request brand intrinsic. */
 export function isNativeRequest(value: unknown): value is Request {
-  return value instanceof NativeRequest;
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
+  const source = authorityNeutralMetadataSources.get(value as Request) ?? value;
+  if (typeof nativeRequestHeaders !== 'function') return false;
+  try {
+    Reflect.apply(nativeRequestHeaders, source, []);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Test against the import-time Web Headers constructor. */
+/** Test with the import-time Web Headers brand intrinsic. */
 export function isNativeHeaders(value: unknown): value is Headers {
-  return value instanceof NativeHeaders;
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
+  if (typeof nativeHeadersEntries !== 'function') return false;
+  try {
+    Reflect.apply(nativeHeadersEntries, value, []);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Test with the import-time Web AbortSignal brand intrinsic. */
+export function isNativeAbortSignal(value: unknown): value is AbortSignal {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
+  if (typeof nativeAbortSignalAborted !== 'function') return false;
+  try {
+    Reflect.apply(nativeAbortSignalAborted, value, []);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Register the only framework-owned way to unwrap a Request compatibility carrier safely. */
@@ -80,24 +115,26 @@ export function registerAuthorityNeutralRequestMetadata(
 export function authorityNeutralAbortSignal(source: AbortSignal): AbortSignal {
   if (
     typeof nativeAbortControllerAbort !== 'function' ||
+    typeof nativeAbortControllerSignal !== 'function' ||
     typeof nativeAbortSignalAborted !== 'function' ||
     typeof nativeAddEventListener !== 'function'
   ) {
     throw new TypeError('The Web AbortSignal implementation lacks required intrinsics.');
   }
 
-  const controller = new AbortController();
+  const controller = new NativeAbortController();
+  const signal = Reflect.apply(nativeAbortControllerSignal, controller, []) as AbortSignal;
   const abort = (): void => {
-    if (!Reflect.apply(nativeAbortSignalAborted, controller.signal, []) as boolean) {
+    if (!(Reflect.apply(nativeAbortSignalAborted, signal, []) as boolean)) {
       Reflect.apply(nativeAbortControllerAbort, controller, []);
     }
   };
   if (Reflect.apply(nativeAbortSignalAborted, source, []) as boolean) {
     abort();
-    return controller.signal;
+    return signal;
   }
   Reflect.apply(nativeAddEventListener, source, ['abort', abort, { once: true }]);
   // Close the check/listen race without ever copying `source.reason`.
   if (Reflect.apply(nativeAbortSignalAborted, source, []) as boolean) abort();
-  return controller.signal;
+  return signal;
 }

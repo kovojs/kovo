@@ -57,31 +57,49 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     });
   }
 
-  const maxBodyBytes = requestBodyLimitForMatch(app, match);
-  const loadShedRequest = loadShedRequiresNeutralAuthority(app, match, url)
-    ? requestMetadataWithoutAmbientAuthority(request)
-    : request;
-  const loadShed = preDispatchLoadShedResponse(
-    app,
-    loadShedRequest,
-    surface,
-    buildToken,
-    maxBodyBytes,
-  );
-  if (loadShed) return loadShed;
-
-  if (url.pathname === KOVO_CSP_REPORT_ENDPOINT) {
-    return kovoSecurityReportResponse(app, request);
+  const reservedKey = resolveReservedDispatchKey(match);
+  if ((match.kind === 'mutation' || match.kind === 'query') && reservedKey === undefined) {
+    return appSystemResponse('Not Found', {
+      buildToken,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      method: request.method,
+      status: 404,
+      surface,
+    });
   }
 
   let limitedRequest = request;
   try {
+    const maxBodyBytes = requestBodyLimitForMatch(app, match, reservedKey);
+    // Pre-dispatch policy callbacks need only method/URL/client-IP metadata. Give
+    // every surface the same bodyless, credential-neutral carrier so a custom
+    // limiter cannot accidentally become an ambient-authority consumer.
+    const loadShedRequest = requestMetadataWithoutAmbientAuthority(request);
+    const loadShed = preDispatchLoadShedResponse(
+      app,
+      loadShedRequest,
+      surface,
+      buildToken,
+      maxBodyBytes,
+    );
+    if (loadShed) return loadShed;
+
+    if (url.pathname === KOVO_CSP_REPORT_ENDPOINT) {
+      return kovoSecurityReportResponse(app, request);
+    }
+
     const dispatchRequest =
       match.kind === 'endpoint' || match.kind === 'mutation'
         ? await requestWithVerifiedBodyLimit(request, maxBodyBytes)
         : request;
     limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
-    return await dispatchMatchedAppRequest({ app, match, request: limitedRequest, url });
+    return await dispatchMatchedAppRequest({
+      app,
+      match,
+      request: limitedRequest,
+      ...(reservedKey === undefined ? {} : { reservedKey }),
+      url,
+    });
   } catch (error) {
     if (error instanceof RequestBodyLimitExceededError) {
       return appSystemResponse('Payload Too Large', {
@@ -100,6 +118,15 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     if (match.kind === 'endpoint') {
       return endpointServerErrorResponse(match.endpoint.response);
     }
+    if (match.kind === 'query') {
+      return appSystemResponse(JSON.stringify({ code: 'SERVER_ERROR', payload: {} }), {
+        buildToken,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        method: request.method,
+        status: 500,
+        surface,
+      });
+    }
     const errorShellRequest =
       match.kind === 'mutation' ? requestMetadataWithoutAmbientAuthority(request) : request;
     return routeResponseToWebResponse(
@@ -107,17 +134,6 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       errorShellRequest,
     );
   }
-}
-
-function loadShedRequiresNeutralAuthority(
-  app: KovoApp,
-  match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
-  url: URL,
-): boolean {
-  if (match.kind === 'endpoint' || url.pathname === KOVO_CSP_REPORT_ENDPOINT) return true;
-  if (match.kind !== 'mutation') return false;
-  const mutation = app.mutations.find((candidate) => candidate.key === match.key);
-  return mutation === undefined || mutation.csrf === false;
 }
 
 export async function handleAppStartupErrorResponse(
@@ -156,13 +172,12 @@ export function reportAppStartupError(app: KovoApp, request: Request, error: unk
 function requestBodyLimitForMatch(
   app: KovoApp,
   match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
+  reservedKey: string | undefined,
 ): number | false {
   const baseLimit = app.requestLimits.maxBodyBytes;
   if (baseLimit === false || match.kind !== 'mutation') return baseLimit;
 
-  const mutation = app.mutations.find(
-    (candidate) => candidate.key === decodeURIComponent(match.key),
-  );
+  const mutation = app.mutations.find((candidate) => candidate.key === reservedKey);
   if (mutation === undefined) return baseLimit;
   const uploadBytes = schemaMaxUploadBytes(mutation.input as Schema<unknown>);
   if (uploadBytes === undefined) return baseLimit;
@@ -171,6 +186,23 @@ function requestBodyLimitForMatch(
   // pre-dispatch floor, but raise it enough for multipart envelope bytes so the schema can return
   // the typed 422 field error instead of a misleading bare 413 for ordinary bounded uploads.
   return Math.max(baseLimit, uploadBytes + FILE_MUTATION_BODY_OVERHEAD_BYTES);
+}
+
+function resolveReservedDispatchKey(
+  match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
+): string | undefined {
+  if (match.kind === 'mutation') {
+    // Mutation form actions are emitted directly from the canonical registry key.
+    // Reject percent-encoded aliases before any policy callback so a protected key
+    // cannot be classified under one spelling and dispatched under another.
+    return match.key.includes('%') ? undefined : match.key;
+  }
+  if (match.kind !== 'query') return undefined;
+  try {
+    return decodeURIComponent(match.key);
+  } catch {
+    return undefined;
+  }
 }
 
 function loadShedSurface(kind: string): LoadShedSurface {

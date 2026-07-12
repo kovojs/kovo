@@ -1597,15 +1597,12 @@ function isProvablyNonAmbientMutationHeader(value: string): boolean {
     header === 'accept' ||
     header === 'content-length' ||
     header === 'content-type' ||
-    header === 'forwarded' ||
     header === 'user-agent' ||
-    header === 'x-forwarded-for' ||
-    header === 'x-real-ip' ||
-    header.endsWith('-ip') ||
     header.includes('signature') ||
     header.includes('hmac') ||
     header.startsWith('kovo-') ||
     header.startsWith('webhook-') ||
+    header.startsWith('x-kovo-') ||
     header.startsWith('x-machine-')
   );
 }

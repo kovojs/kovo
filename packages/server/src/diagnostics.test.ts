@@ -311,11 +311,19 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
 
   it('uses import-time Web constructors when app code replaces global Request', () => {
     const NativeRequest = Request;
-    const constructorInputs: unknown[] = [];
+    const NativeAbortController = AbortController;
+    const abortConstructorCalls: string[] = [];
+    const requestConstructorInputs: unknown[] = [];
     class CapturingRequest extends NativeRequest {
       constructor(input: RequestInfo | URL, init?: RequestInit) {
-        constructorInputs.push(input, init);
+        requestConstructorInputs.push(input, init);
         super(input, init);
+      }
+    }
+    class CapturingAbortController extends NativeAbortController {
+      constructor() {
+        abortConstructorCalls.push('AbortController');
+        super();
       }
     }
     const request = new NativeRequest('https://app.test/fail?token=CONSTRUCTOR_SECRET', {
@@ -324,6 +332,7 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
     const onError = vi.fn();
 
     globalThis.Request = CapturingRequest as typeof Request;
+    globalThis.AbortController = CapturingAbortController as typeof AbortController;
     try {
       reportServerError(onError, new Error(`failed at ${request.url}`), {
         operation: 'app-request',
@@ -331,9 +340,11 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
       });
     } finally {
       globalThis.Request = NativeRequest;
+      globalThis.AbortController = NativeAbortController;
     }
 
-    expect(constructorInputs).toEqual([]);
+    expect(requestConstructorInputs).toEqual([]);
+    expect(abortConstructorCalls.length).toBeGreaterThan(0);
     const [reportedError, context] = onError.mock.calls[0]!;
     expect(context.request).toBeInstanceOf(NativeRequest);
     expect(context.request.url).toBe('https://app.test/fail?token');

@@ -455,6 +455,26 @@ export const proxyAuthorization = mutation('cart/proxy-authorization', {
     return headers.get('proxy-authorization');
   },
 });
+export const remoteUser = mutation('cart/remote-user', {
+  handler(_input, request) {
+    return request.headers.get('remote-user');
+  },
+});
+export const authRequestUser = mutation('cart/auth-request-user', {
+  handler(_input, request) {
+    return request.headers.get('x-auth-request-user');
+  },
+});
+export const forwardedIdentity = mutation('cart/forwarded-identity', {
+  handler(_input, request) {
+    return request.headers.get('x-forwarded-for');
+  },
+});
+export const clientIpIdentity = mutation('cart/client-ip-identity', {
+  handler(_input, request) {
+    return request.headers.get('cf-connecting-ip');
+  },
+});
 export const aliased = mutation('cart/aliased', {
   handler(_input, request) {
     const req = request;
@@ -599,8 +619,10 @@ export const inputOnly = mutation('cart/input-only', {
       [
         'cart/aliased',
         'cart/arguments-read',
+        'cart/auth-request-user',
         'cart/authorization',
         'cart/clears-site-data',
+        'cart/client-ip-identity',
         'cart/cloned',
         'cart/constructed',
         'cart/context-prototype-escape',
@@ -611,6 +633,7 @@ export const inputOnly = mutation('cart/input-only', {
         'cart/evaluated',
         'cart/fake-this-cookie',
         'cart/fake-this-cookie-sink',
+        'cart/forwarded-identity',
         'cart/forwards-cookie',
         'cart/helper-escape',
         'cart/nested-alias',
@@ -618,6 +641,7 @@ export const inputOnly = mutation('cart/input-only', {
         'cart/parenthesized',
         'cart/proxy-authorization',
         'cart/reassigned-name',
+        'cart/remote-user',
         'cart/rest-read',
         'cart/session',
         'cart/sets-cookie',

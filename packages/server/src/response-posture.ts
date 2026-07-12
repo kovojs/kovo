@@ -331,10 +331,9 @@ export function endpointRequestWithoutSession(
   const peerAddress = frameworkPeerAddress(request);
   const source = cloneRequestForAuthorityNeutralization(request);
   const sourceHeaders = readNativeRequestHeaders(source);
-  const sanitizedHeaders = endpointHeadersWithoutAmbientAuthority(
-    sourceHeaders,
-    options.stripAuthorization === true,
-  );
+  const sanitizedHeaders = endpointHeadersWithoutAmbientAuthority(sourceHeaders, {
+    stripAuthorization: options.stripAuthorization === true,
+  });
   const neutral = createNativeRequest(source, {
     headers: sanitizedHeaders,
     signal: authorityNeutralAbortSignal(readNativeRequestSignal(source)),
@@ -358,7 +357,10 @@ export function requestMetadataWithoutAmbientAuthority(request: Request): Reques
   const signal = authorityNeutralAbortSignal(readNativeRequestSignal(source));
   const url = readNativeRequestUrl(source);
   const neutral = createNativeRequest(url, {
-    headers: endpointHeadersWithoutAmbientAuthority(headers),
+    headers: endpointHeadersWithoutAmbientAuthority(headers, {
+      allowNetworkMetadata: true,
+      stripAuthorization: true,
+    }),
     method,
     signal,
   });
@@ -569,9 +571,9 @@ function isRedirectStatus(status: number): boolean {
 const AMBIENT_BROWSER_AUTHORITY_HEADERS: readonly string[] = ['cookie'];
 function endpointHeadersWithoutAmbientAuthority(
   headers: Headers,
-  stripAuthorization = true,
+  options: { allowNetworkMetadata?: boolean; stripAuthorization?: boolean } = {},
 ): Headers {
-  if (stripAuthorization) {
+  if (options.stripAuthorization !== false) {
     const sanitized = createNativeHeaders();
     if (typeof nativeHeadersEntries !== 'function' || typeof nativeHeadersAppend !== 'function') {
       throw new TypeError('The Web Headers implementation lacks required intrinsics.');
@@ -580,7 +582,10 @@ function endpointHeadersWithoutAmbientAuthority(
       [string, string]
     >;
     for (const [name, value] of entries) {
-      if (isProvablyNonAmbientMachineHeader(name)) {
+      if (
+        isProvablyNonAmbientMachineHeader(name) ||
+        (options.allowNetworkMetadata === true && isNetworkMetadataHeader(name))
+      ) {
         Reflect.apply(nativeHeadersAppend, sanitized, [name, value]);
       }
     }
@@ -591,21 +596,30 @@ function endpointHeadersWithoutAmbientAuthority(
   return sanitized;
 }
 
+function isNetworkMetadataHeader(value: string): boolean {
+  const header = value.toLowerCase();
+  return (
+    header === 'cf-connecting-ip' ||
+    header === 'fastly-client-ip' ||
+    header === 'forwarded' ||
+    header === 'true-client-ip' ||
+    header === 'x-forwarded-for' ||
+    header === 'x-real-ip'
+  );
+}
+
 function isProvablyNonAmbientMachineHeader(value: string): boolean {
   const header = value.toLowerCase();
   return (
     header === 'accept' ||
     header === 'content-length' ||
     header === 'content-type' ||
-    header === 'forwarded' ||
     header === 'user-agent' ||
-    header === 'x-forwarded-for' ||
-    header === 'x-real-ip' ||
-    header.endsWith('-ip') ||
     header.includes('signature') ||
     header.includes('hmac') ||
     header.startsWith('kovo-') ||
     header.startsWith('webhook-') ||
+    header.startsWith('x-kovo-') ||
     header.startsWith('x-machine-')
   );
 }
