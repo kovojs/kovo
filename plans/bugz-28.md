@@ -12,7 +12,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | -------- | ----: | ------ |
 | Critical |    76 | C1-C76 |
 | High     |    35 | H1-H35 |
-| Medium   |    10 | M1-M10 |
+| Medium   |    11 | M1-M11 |
 
 ## Critical
 
@@ -1471,6 +1471,16 @@ build:dist` passes.
     controls over the exact query snapshot; late/import-order mutation cannot admit any spelling or
     schema qualification of `set_config`/role/session control, while genuine parameterized app SQL
     remains executable.
+
+- [x] **M11 - Tagged FormData aliases distinct no-JS replay bodies.**
+      `packages/server/src/replay.ts`
+  - Request provenance wrapped `FormData` in a registered proxy, but replay fingerprinting accepted
+    only the native receiver. Two different form bodies with the same `Kovo-Idem` therefore hashed
+    as the same empty proxy shape and replayed the first 303 instead of returning an idempotency
+    conflict for the changed body.
+  - **Evidence:** the 68-test no-JS replay/request-body matrix uses the shared exact FormData snapshot
+    boundary; distinct tagged bodies now return `IDEMPOTENCY_CONFLICT`, while identical replay and
+    ordinary native FormData remain green.
 
 ## Latest verification
 
