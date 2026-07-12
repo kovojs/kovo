@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { isSecret, revealSecret } from '@kovojs/core';
+import { PGlite } from '@electric-sql/pglite';
 import Database from 'better-sqlite3';
 import { defineRelations, sql as drizzleSql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
+import { pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import {
   createSecretBoxingReadDb,
@@ -500,8 +503,56 @@ describe('secret read boundary', () => {
         .execute({});
       expect(Array.isArray(preparedExecute)).toBe(true);
       expect(isSecret(preparedExecute[0]!.derived)).toBe(true);
+      const preparedRelationalPublic = await db.query.secrets
+        .findMany({ columns: { classified: false, label: true } })
+        .prepare()
+        .execute({});
+      expect(preparedRelationalPublic[0]!.label).toBe('public-label');
+      expect(isSecret(preparedRelationalPublic[0]!.label)).toBe(false);
     } finally {
       client.close();
+    }
+  });
+
+  it('preserves PGlite relational findFirst/findMany shape while boxing secret fields', async () => {
+    const client = new PGlite();
+    try {
+      await client.exec(
+        [
+          'create table secrets (id text primary key, classified text not null, label text not null)',
+          "insert into secrets values ('s1', 'victim-secret', 'public-label')",
+        ].join(';'),
+      );
+      const secrets = pgTable('secrets', {
+        classified: pgText('classified').notNull(),
+        id: pgText('id').primaryKey(),
+        label: pgText('label').notNull(),
+      });
+      const relations = defineRelations({ secrets }, () => ({}));
+      const db = createSecretBoxingReadDb(
+        drizzlePostgres({ client, relations }),
+        metadata(),
+      );
+
+      const first = await db.query.secrets.findFirst();
+      expect(Array.isArray(first)).toBe(false);
+      expect(first?.label).toBe('public-label');
+      expect(isSecret(first?.label)).toBe(false);
+      expect(isSecret(first?.classified)).toBe(true);
+
+      const many = await db.query.secrets.findMany();
+      expect(Array.isArray(many)).toBe(true);
+      expect(many[0]!.label).toBe('public-label');
+      expect(isSecret(many[0]!.classified)).toBe(true);
+
+      const preparedPublic = await db.query.secrets
+        .findMany({ columns: { classified: false, label: true } })
+        .prepare()
+        .execute({});
+      expect(preparedPublic[0]!.label).toBe('public-label');
+      expect(isSecret(preparedPublic[0]!.label)).toBe(false);
+    } finally {
+      await client.close();
     }
   });
 

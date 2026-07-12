@@ -143,7 +143,8 @@ interface PinnedRelationalReadQuery {
   readonly carrier: SqlCarrier;
   readonly nestedResultKeys: ReadonlySet<string>;
   readonly opaqueResultKeys: ReadonlySet<string>;
-  execute(args: readonly unknown[]): unknown;
+  readonly preparedTerminals: ReadonlySet<string>;
+  execute(property: PropertyKey, args: readonly unknown[]): unknown;
 }
 
 const declaredSecretReadCapabilities = createWitnessWeakMap<object, DeclaredSecretReadCapability>();
@@ -747,6 +748,7 @@ function wrapReadSurface(
   metadata: SecretReadMetadata,
   inheritedBoundary: SecretReadBoundary = emptyReadBoundary(),
   options: SecretReadBoundaryOptions,
+  inheritedRelationalQuery?: PinnedRelationalReadQuery,
 ): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (witnessIsArray(value)) return boxSecretReadRows(value, metadata, inheritedBoundary);
@@ -755,7 +757,7 @@ function wrapReadSurface(
       (result: unknown) => boxSecretReadRows(result, metadata, inheritedBoundary),
     ]);
   }
-  const relationalQuery = pinRelationalReadQuery(value);
+  const relationalQuery = inheritedRelationalQuery ?? pinRelationalReadQuery(value);
   return new Proxy(value, {
     get(target, prop, receiver) {
       const item = witnessReflectGet(target, prop, receiver);
@@ -774,7 +776,7 @@ function wrapReadSurface(
               metadata,
               options,
               exact,
-              relationalQuery?.nestedResultKeys,
+              relationalQuery,
             ),
           ),
           relationalReadBoundary(relationalQuery, metadata),
@@ -784,7 +786,7 @@ function wrapReadSurface(
           onRejected?: (reason: unknown) => unknown,
         ) => {
           if (relationalQuery !== undefined) {
-            const settled = settleSecretReadResult(relationalQuery.execute([]));
+            const settled = settleSecretReadResult(relationalQuery.execute('execute', []));
             return witnessReflectApply(nativePromiseThen, settled, [
               (result: unknown) =>
                 onFulfilled?.(boxSecretReadRows(result, metadata, boundary)),
@@ -817,6 +819,18 @@ function wrapReadSurface(
           : item;
       }
       return (...args: unknown[]) => {
+        if (prop === 'prepare' && relationalQuery !== undefined) {
+          if (args.length !== 0) {
+            throw new TypeError('Relational prepare does not accept arguments.');
+          }
+          return wrapReadSurface(
+            createPinnedRelationalPreparedFacade(relationalQuery),
+            metadata,
+            inheritedBoundary,
+            options,
+            relationalQuery,
+          );
+        }
         const terminalMode = readBuilderTerminalMode(prop, args);
         if (terminalMode !== undefined) {
           const carrier = relationalQuery?.carrier ?? sqlCarrierFromValue(target, []);
@@ -835,15 +849,17 @@ function wrapReadSurface(
                 metadata,
                 options,
                 exact,
-                relationalQuery?.nestedResultKeys,
+                relationalQuery,
               ),
             ),
             relationalReadBoundary(relationalQuery, metadata),
           );
           if (relationalQuery !== undefined) {
-            const result = relationalQuery.execute(args);
-            if (prop === 'sync') return boxSecretReadRows(result, metadata, boundary);
-            return boxSecretReadExecutionResult(result, metadata, boundary);
+            const result = relationalQuery.execute(prop, args);
+            const terminalBoundary =
+              prop === 'values' ? failClosedExecutionBoundary(boundary) : boundary;
+            if (prop === 'sync') return boxSecretReadRows(result, metadata, terminalBoundary);
+            return boxSecretReadExecutionResult(result, metadata, terminalBoundary);
           }
           const result =
             exact === undefined
@@ -876,7 +892,7 @@ function readBoundaryForQuery(
   metadata: SecretReadMetadata,
   options: SecretReadBoundaryOptions,
   exact: ExactSecretReadExecution | undefined,
-  nestedResultKeys?: ReadonlySet<string>,
+  relationalQuery?: PinnedRelationalReadQuery,
 ): SecretReadBoundary {
   if (carrier === undefined) return failClosedExecutionBoundary(emptyReadBoundary());
   if (exact?.exactColumns === true) {
@@ -886,25 +902,30 @@ function readBoundaryForQuery(
       metadata,
       undefined,
       exact.columns,
-      nestedResultKeys,
+      relationalQuery?.nestedResultKeys,
     );
   }
   return options.sqliteColumnOrigins === undefined
-    ? fallbackReadBoundaryForSql(carrier.text, metadata)
+    ? relationalQuery === undefined
+      ? fallbackReadBoundaryForSql(carrier.text, metadata)
+      : { ...emptyReadBoundary(), secretColumnScopeKnown: true }
     : sqliteSecretReadBoundaryForStatement(
         value,
         carrier.text,
         metadata,
         options.sqliteColumnOrigins,
         undefined,
-        nestedResultKeys,
+        relationalQuery?.nestedResultKeys,
       );
 }
 
 function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | undefined {
-  const config = optionalOwnDataValue(value, 'config');
+  const configValue = optionalOwnDataValue(value, 'config');
   const tableConfig = optionalOwnDataValue(value, 'tableConfig');
-  if (!isPlainRecord(config) || !isPlainRecord(tableConfig)) return undefined;
+  if ((configValue !== true && !isPlainRecord(configValue)) || !isPlainRecord(tableConfig)) {
+    return undefined;
+  }
+  const config = configValue === true ? witnessCreateNullRecord<unknown>() : configValue;
   const prepare = optionalInheritedFunctionDataProperty(value, '_prepare');
   if (prepare === undefined) return undefined;
   // Compile once now. The private prepared object binds the exact config/SQL/mapping that every
@@ -916,8 +937,17 @@ function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | unde
   }
   const query = ownDataValue(prepared, 'query');
   const carrier = sqlCarrierFromValue(query, []);
-  const all = optionalInheritedFunctionDataProperty(prepared, 'all');
-  if (carrier === undefined || all === undefined) {
+  const terminalMethods = createWitnessMap<string, Function>();
+  const preparedTerminals = createWitnessSet<string>();
+  const terminalNames = ['all', 'execute', 'get', 'values'] as const;
+  for (let index = 0; index < terminalNames.length; index += 1) {
+    const name = terminalNames[index]!;
+    const method = optionalInheritedFunctionDataProperty(prepared, name);
+    if (method === undefined) continue;
+    witnessMapSet(terminalMethods, name, method);
+    witnessSetAdd(preparedTerminals, name);
+  }
+  if (carrier === undefined || !witnessSetHas(preparedTerminals, 'execute')) {
     throw new TypeError('Relational query preparation did not expose stable SQL execution.');
   }
   const posture = relationalResultPosture(config);
@@ -925,13 +955,52 @@ function pinRelationalReadQuery(value: object): PinnedRelationalReadQuery | unde
     carrier,
     nestedResultKeys: posture.nestedResultKeys,
     opaqueResultKeys: posture.opaqueResultKeys,
-    execute(args: readonly unknown[]) {
+    preparedTerminals,
+    execute(property: PropertyKey, args: readonly unknown[]) {
       if (args.length > 1) {
         throw new TypeError('Relational query terminals accept at most one placeholder bag.');
       }
-      return witnessReflectApply(all, prepared, args.length === 0 ? [] : [args[0]]);
+      const terminal = property === 'sync' ? 'execute' : property;
+      if (typeof terminal !== 'string') {
+        throw new TypeError('Relational query terminal must be a string property.');
+      }
+      const method = witnessMapGet(terminalMethods, terminal);
+      if (method === undefined) {
+        throw new TypeError(`Relational prepared query does not support ${terminal}.`);
+      }
+      const result = witnessReflectApply<unknown>(
+        method,
+        prepared,
+        args.length === 0 ? [] : [args[0]],
+      );
+      if (property !== 'sync') return result;
+      if (!isObjectLike(result)) {
+        throw new TypeError('Synchronous relational execution did not return a sync carrier.');
+      }
+      const sync = optionalInheritedFunctionDataProperty(result, 'sync');
+      if (sync === undefined) {
+        throw new TypeError('Relational query is not available synchronously on this adapter.');
+      }
+      return witnessReflectApply(sync, result, []);
     },
   });
+}
+
+function createPinnedRelationalPreparedFacade(
+  query: PinnedRelationalReadQuery,
+): Record<PropertyKey, unknown> {
+  const facade = witnessCreateNullRecord<unknown>();
+  witnessSetForEach(query.preparedTerminals as Set<string>, (property) => {
+    witnessDefineProperty(facade, property, {
+      configurable: true,
+      enumerable: false,
+      value() {
+        throw new TypeError('Pinned relational terminals must execute through their wrapper.');
+      },
+      writable: false,
+    });
+  });
+  return facade;
 }
 
 function relationalResultPosture(config: Record<string, unknown>): {
