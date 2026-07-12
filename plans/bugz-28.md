@@ -11,7 +11,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 | Severity | Count | Items |
 | -------- | ----: | ----- |
 | Critical |    12 | C1-C12 |
-| High     |    22 | H1-H22 |
+| High     |    23 | H1-H23 |
 | Medium   |     9 | M1-M9 |
 
 ## Critical
@@ -322,6 +322,16 @@ This is an active closure ledger; `SPEC.md` remains normative.
     boot-pinned, semantically checked controls; late/import-order poison cannot replace or reorder
     bytes, admit unsafe URLs/CSS, or desynchronize output from its CSP metadata.
 
+- [ ] **H23 - Mutable enhanced-navigation URL controls apply cross-origin HTML in the live realm.**
+      `packages/browser/src/enhanced-navigation.ts` and the emitted inline loader
+  - Replacing `URL.prototype.origin` after runtime installation made a real navigation accept an
+    `https://evil.example` HTML response as same-origin, pass its build/session checks, replace the
+    body, and enter script replay instead of falling back to a hard navigation.
+  - **Acceptance:** requested/final URL construction and immutable origin/path facts, response URL
+    and content-type reads, build/session stamps, document parsing, mutation ordering, hard-navigation
+    fallback, and the emitted inline-loader closure use boot-pinned, semantically checked controls;
+    late/import-order poison cannot apply cross-origin or non-HTML bytes to the current document.
+
 ## Medium
 
 - [x] **M1 - The CSRF Origin floor dispatches through mutable Request/String/URL controls.**
@@ -388,7 +398,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 158-test app/guard/request-state matrix passes; independent WeakMap and clock
     poison proofs retain the configured 429/rate-limited outcomes.
 
-- [ ] **M8 - Mutable replay-store state and clock controls erase committed idempotency truth.**
+- [x] **M8 - Mutable replay-store state and clock controls erase committed idempotency truth.**
       `packages/server/src/replay.ts`
   - Selective late `Map.prototype.get` hid a committed `(scope, idem)` response, and an advanced
     `Date.now` expired it immediately. Both independent proofs made the same token appear unused,
@@ -397,6 +407,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Acceptance:** replay records, exact keys, pending/committed discrimination, generation fences,
     time reads, TTL, and capacity calculations use boot-pinned, semantically checked controls; late
     and import-order poison cannot hide/cross-bind records, expire fresh truth, or evade either cap.
+  - **Evidence:** the 90-test replay/webhook/request-state matrix passes; independent Map and clock
+    poison proofs keep all three committed responses visible and refuse a second reservation.
 
 - [ ] **M9 - Mutable Reporting API URL controls persist credential-bearing paths.**
       `packages/server/src/reporting.ts`
@@ -410,9 +422,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C10-C12, H15, H17-H22, and M8-M9 are active
-capability, request-carrier, response/deferred/mutation/client output, task, replay, and reporting
-fixes.
+The remediation pass remains intentionally non-zero: C10-C12, H15, H17-H23, and M9 are active
+capability, request-carrier, response/deferred/mutation/client output, task, browser navigation, and
+reporting fixes.
 Integrated
 evidence is
 green at
