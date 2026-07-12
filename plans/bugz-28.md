@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |    24 | C1-C24 |
+| Critical |    27 | C1-C27 |
 | High     |    26 | H1-H26 |
 | Medium   |     9 | M1-M9  |
 
@@ -275,6 +275,41 @@ This is an active closure ledger; `SPEC.md` remains normative.
     filesystem/path controls, and Promise settlement use boot-pinned exact operations; committed
     bytes must match their reviewed manifest hash and cannot be substituted after validation.
 
+- [ ] **C25 - Mutable persistent-cache hashing authenticates attacker compiler output.**
+      `packages/compiler/src/{persistent-compile-cache,vite}.ts`
+  - After a genuine safe cached `account.client.js` was replaced with attacker JavaScript, the
+    normal cache reader correctly missed. Replacing CommonJS `node:crypto.createHash`, synchronizing
+    ESM exports, and selectively returning the stored filename digest for the tampered JSON made the
+    real persistent reader accept the attacker module; the Vite path returns such hits without
+    recompilation or another output check.
+  - **Acceptance:** cache-key/footprint narrowing, compiler identity, manifest/entry/blob parsing and
+    own-data snapshots, path/ref validation, hashing and crypto methods, file reads/writes/renames,
+    atomic temp identities, iteration, and Promise settlement use boot-pinned exact controls;
+    late/import-order poison or disk tampering can only produce a cache miss, never trusted code.
+
+- [ ] **C26 - Mutable SRI finalization replaces a safe static document after rendering.**
+      `packages/server/src/{static-export-sri,static-export}.ts`
+  - A route installed a selective late `Array.prototype.map` that stayed inert through safe page
+    rendering, then substituted a raw event-bearing document for the private `/index.html` artifact
+    during SRI finalization. Real `exportStaticApp()` returned and wrote the executable HTML after
+    the framework output choke; the unpoisoned export retained only the safe body.
+  - **Acceptance:** artifact/asset/module snapshots, integrity hashing, opening-tag and attribute
+    parsing, first-party URL resolution, replacement offsets/assembly, final artifact traversal, and
+    publication use boot-pinned exact controls; SRI decoration cannot add or replace rendered bytes,
+    and the final committed document is bound to the reviewed post-choke artifact.
+
+- [ ] **C27 - Inherited Vite manifest fields publish unlisted server-private files.**
+      `packages/server/src/{vite-manifest,vite-build-assets,static-export}.ts`
+  - A genuine manifest contained only `{ "src/public.client.ts": {} }`, but a late non-enumerable
+    `Object.prototype.file = "server/private-config.js"` made manifest validation accept the
+    inherited path as an emitted public asset. After restoring the prototype, real static export
+    copied that unlisted dist file into `/server/private-config.js`, disclosing a production database
+    password; the unpolluted manifest yields no assets.
+  - **Acceptance:** JSON parsing, record/key/chunk reconstruction, optional scalar/array fields,
+    manifest traversal/resolution, dist-path normalization, asset mapping, and public copy inputs use
+    boot-pinned own-data controls; inherited/accessor/proxy fields and late/import-order poison cannot
+    add a public artifact or disclose an unlisted server/build file.
+
 ## High
 
 - [x] **H1 - Mutable String/Array/RegExp prototypes bypass server and browser output chokes.**
@@ -455,8 +490,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** the 194-test mutation/wire/guard matrix and server dist/DTS build pass; the
     independent final-join proof retains the genuine authenticated query truth.
 
-- [x] **H20 - Mutable client-module and render-plan controls can cross-bind immutable code or
-      collapse build truth.** `packages/server/src/{client-modules,loader-runtime-client-module}.ts`,
+- [ ] **H20 - Mutable client-module and render-plan controls can cross-bind immutable code or
+      collapse build truth.** `packages/server/src/{client-modules,loader-runtime-client-module,vite-build}.ts`,
       `packages/core/src/internal/render-plan-token.ts`
   - A selective late `Map.prototype.get` override made the immutable URL registered for
     `/c/public.client.js@v1` return status 200 with the exact source bytes registered for the
@@ -472,6 +507,10 @@ This is an active closure ledger; `SPEC.md` remains normative.
     render-plan matrix, core/server dist+dts builds, and import/API/wire-output gates pass. The two
     independent proofs now retain exact public module bytes and distinct fingerprints for projected
     shapes with versus without the privileged field under selective Map/final-join replacement.
+  - **Reopened:** `vite-build.ts::sourceVersion()` still used the live ESM `createHash` binding and
+    mutable hash methods. A synchronized selective replacement made two distinct executable module
+    sources receive the same default version, immutable href, and app build token; source hashing and
+    its build traversal must join the pinned client-module membrane before this item can close.
 
 - [x] **H21 - Mutable schema-validator traversal can skip every declared refinement.**
       `packages/server/src/schema.ts`
@@ -640,8 +679,8 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 ## Latest verification
 
-The remediation pass remains intentionally non-zero: C17-C24 and H26 are active task, command,
-crypto, JSX output-authority, static-export, and build-output fixes.
+The remediation pass remains intentionally non-zero: C17-C27, H20, and H26 are active task,
+command, crypto, JSX output-authority, compiler-cache, static-export, and build-output fixes.
 Integrated
 evidence is
 green at
