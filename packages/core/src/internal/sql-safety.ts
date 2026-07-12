@@ -601,10 +601,56 @@ function appendPinnedSqlInterpolation(chunks: PinnedSqlChunk[], value: unknown):
     // Kovo can pin its own recursively composed SQL values. An unpinned SQLWrapper remains useful
     // to Drizzle builders, but direct managed execution cannot reconstruct it without invoking or
     // rereading a mutable third-party object, so leave the outer carrier unpinned and fail closed.
+    const drizzleIdentifier = pinnedDrizzleIdentifier(value);
+    if (drizzleIdentifier !== undefined) {
+      chunks.push({ kind: 'text', value: drizzleIdentifier });
+      return true;
+    }
     if (nested?.kind === 'fixed' || hasSqlWrapperSurface(value)) return false;
   }
   chunks.push({ kind: 'parameter', value });
   return true;
+}
+
+const DRIZZLE_IS_TABLE_SYMBOL = Symbol.for('drizzle:IsDrizzleTable');
+const DRIZZLE_NAME_SYMBOL = Symbol.for('drizzle:Name');
+const DRIZZLE_SCHEMA_SYMBOL = Symbol.for('drizzle:Schema');
+
+function pinnedDrizzleIdentifier(value: object): string | undefined {
+  try {
+    const table = pinnedDrizzleTableIdentifier(value);
+    if (table !== undefined) return table;
+    const name = ownDataProperty(value, 'name');
+    const owner = ownDataProperty(value, 'table');
+    if (typeof name !== 'string' || name === '' || typeof owner !== 'object' || owner === null) {
+      return undefined;
+    }
+    const ownerIdentifier = pinnedDrizzleTableIdentifier(owner);
+    return ownerIdentifier === undefined
+      ? undefined
+      : `${ownerIdentifier}.${quotePinnedSqlIdentifier(name)}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function pinnedDrizzleTableIdentifier(value: object): string | undefined {
+  if (ownDataProperty(value, DRIZZLE_IS_TABLE_SYMBOL) !== true) return undefined;
+  const name = ownDataProperty(value, DRIZZLE_NAME_SYMBOL);
+  if (typeof name !== 'string' || name === '') return undefined;
+  const schema = ownDataProperty(value, DRIZZLE_SCHEMA_SYMBOL);
+  return typeof schema === 'string' && schema !== ''
+    ? `${quotePinnedSqlIdentifier(schema)}.${quotePinnedSqlIdentifier(name)}`
+    : quotePinnedSqlIdentifier(name);
+}
+
+function ownDataProperty(value: object, key: PropertyKey): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+function quotePinnedSqlIdentifier(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 function pinnedSqlCarrierFromCurrentData(value: object): PinnedSqlCarrier | undefined {

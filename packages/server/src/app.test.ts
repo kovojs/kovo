@@ -927,7 +927,7 @@ describe('server createApp request shell', () => {
 
     expect(response.status).toBe(404);
     expect(shellViews).toEqual([
-      { authorization: null, body: null, cookie: null, signature: 'kept' },
+      { authorization: null, body: null, cookie: null, signature: null },
     ]);
   });
 
@@ -967,7 +967,7 @@ describe('server createApp request shell', () => {
     );
 
     expect(response.status).toBe(500);
-    expect(shellViews).toEqual([[null, 'kept']]);
+    expect(shellViews).toEqual([[null, null]]);
   });
 
   it('reports failing error shells and falls back to stable no-internals documents', async () => {
@@ -1002,16 +1002,29 @@ describe('server createApp request shell', () => {
   it('keeps the stable error fallback when a shell poisons the public request URL accessor', async () => {
     const shellError = new Error('private poisoned shell detail');
     const onError = vi.fn();
+    let getterReads = 0;
     const handler = createRequestHandler(
       createApp({
         errorShells: {
           notFound({ request }) {
-            Object.defineProperty(request, 'url', {
-              configurable: true,
-              get() {
-                throw new Error('url getter trap');
-              },
-            });
+            for (const property of [
+              'body',
+              'clone',
+              'constructor',
+              'headers',
+              'method',
+              'referrer',
+              'signal',
+              'url',
+            ]) {
+              Object.defineProperty(request, property, {
+                configurable: true,
+                get() {
+                  getterReads += 1;
+                  throw new Error(`${property} getter trap`);
+                },
+              });
+            }
             throw shellError;
           },
         },
@@ -1025,6 +1038,7 @@ describe('server createApp request shell', () => {
 
     expect(response.status).toBe(404);
     await expect(response.text()).resolves.toContain('<h1>Not Found</h1>');
+    expect(getterReads).toBe(0);
     expect(onError).toHaveBeenCalledWith(
       shellError,
       expect.objectContaining({ operation: 'error-shell', url: '/missing?token' }),
@@ -1437,7 +1451,7 @@ describe('server createApp request shell', () => {
     const app = createApp({
       mutations: [addToCart],
       requestLimits: {
-        clientIp: (request) => request.headers.get('x-kovo-test-ip') ?? undefined,
+        clientIp: (request) => request.headers.get('x-kovo-client-ip') ?? undefined,
         global: false,
         maxBodyBytes: false,
         perIp: false,
@@ -1449,7 +1463,7 @@ describe('server createApp request shell', () => {
     const request = () =>
       new Request('https://example.test/_m/cart/add-rate-limited', {
         body: new URLSearchParams({ quantity: '2' }),
-        headers: { 'X-Kovo-Test-Ip': '203.0.113.9' },
+        headers: { 'X-Kovo-Client-Ip': '203.0.113.9' },
         method: 'POST',
       });
 

@@ -111,6 +111,34 @@ describe('validateManagedSqlStatement runtime floor (SPEC §10.2/§6.6)', () => 
     expect(Object.isFrozen(carrier)).toBe(true);
   });
 
+  it('pins Drizzle table and column identifiers as quoted text instead of bind values', () => {
+    const name = Symbol.for('drizzle:Name');
+    const schema = Symbol.for('drizzle:Schema');
+    const isTable = Symbol.for('drizzle:IsDrizzleTable');
+    const table = { [isTable]: true, [name]: 'notes', [schema]: 'public' };
+    const column = { name: 'id', table };
+    const statement = stampParameterizedSql(
+      {},
+      {},
+      {
+        kind: 'template',
+        strings: ['select ', ' from ', ' where id = ', ''],
+        values: [column, table, 'n1'],
+      },
+    );
+
+    table[name] = 'mutated';
+    column.name = 'mutated';
+
+    expect(snapshotManagedSqlStatement(statement, 'postgres')).toMatchObject({
+      ok: true,
+      statement: {
+        text: 'select "public"."notes"."id" from "public"."notes" where id = $1',
+        values: ['n1'],
+      },
+    });
+  });
+
   it('rejects an unbranded carrier whose values array has no SQL bind marker', () => {
     const result = validateManagedSqlStatement({
       text: "select * from products where id = 'already assembled'",

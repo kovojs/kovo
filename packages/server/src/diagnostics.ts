@@ -19,15 +19,28 @@ const readDiagnosticRequestUrl = requestIntrinsicGetter<string>('url');
 const nativeHeadersEntries = Object.getOwnPropertyDescriptor(Headers.prototype, 'entries')
   ?.value as unknown;
 const nativeAtob = globalThis.atob;
-const nativeErrorStackDescriptor = Object.getOwnPropertyDescriptor(new Error(), 'stack');
+const NativeBlob = Blob;
+const NativeError = Error;
+const NativeEvalError = EvalError;
+const NativeRangeError = RangeError;
+const NativeReferenceError = ReferenceError;
+const NativeResponse = Response;
+const NativeSyntaxError = SyntaxError;
+const NativeTextDecoder = TextDecoder;
+const NativeTypeError = TypeError;
+const NativeURIError = URIError;
+const NativeURL = URL;
+const NativeURLSearchParams = URLSearchParams;
+const nativeFunctionHasInstance = Function.prototype[Symbol.hasInstance];
+const nativeErrorStackDescriptor = Object.getOwnPropertyDescriptor(new NativeError(), 'stack');
 const nativeErrorPrototypeNames = new Map<object, string>([
-  [Error.prototype, 'Error'],
-  [EvalError.prototype, 'EvalError'],
-  [RangeError.prototype, 'RangeError'],
-  [ReferenceError.prototype, 'ReferenceError'],
-  [SyntaxError.prototype, 'SyntaxError'],
-  [TypeError.prototype, 'TypeError'],
-  [URIError.prototype, 'URIError'],
+  [NativeError.prototype, 'Error'],
+  [NativeEvalError.prototype, 'EvalError'],
+  [NativeRangeError.prototype, 'RangeError'],
+  [NativeReferenceError.prototype, 'ReferenceError'],
+  [NativeSyntaxError.prototype, 'SyntaxError'],
+  [NativeTypeError.prototype, 'TypeError'],
+  [NativeURIError.prototype, 'URIError'],
 ]);
 
 /**
@@ -107,7 +120,7 @@ function safelyPrepareServerErrorDiagnostic(
     } catch {}
     return {
       context: { operation },
-      error: new Error('Server operation failed.'),
+      error: new NativeError('Server operation failed.'),
     };
   }
 }
@@ -261,7 +274,7 @@ function diagnosticAuthorizationValues(value: string): string[] {
   const values = [payload];
   if (scheme === 'basic' && typeof nativeAtob === 'function') {
     try {
-      const decoded = new TextDecoder().decode(
+      const decoded = new NativeTextDecoder().decode(
         Uint8Array.from(Reflect.apply(nativeAtob, globalThis, [payload]), (char) =>
           char.charCodeAt(0),
         ),
@@ -285,7 +298,7 @@ function diagnosticAuthorizationValues(value: string): string[] {
 function diagnosticUrlValues(value: string): string[] {
   let parsed: URL;
   try {
-    parsed = new URL(value, 'https://kovo.invalid');
+    parsed = new NativeURL(value, 'https://kovo.invalid');
   } catch {
     return [];
   }
@@ -315,8 +328,8 @@ function sanitizeDiagnosticRequest(request: unknown): unknown {
   try {
     const source = requestForAuthorityNeutralMetadata(request);
     const rawUrl = readDiagnosticRequestUrl(source);
-    const parsed = new URL(rawUrl);
-    const safeUrl = new URL(sanitizeDiagnosticUrl(rawUrl), parsed.origin).href;
+    const parsed = new NativeURL(rawUrl);
+    const safeUrl = new NativeURL(sanitizeDiagnosticUrl(rawUrl), parsed.origin).href;
     const rawReferrer = readDiagnosticRequestReferrer(source);
     const safeReferrer = diagnosticRequestReferrer(rawReferrer);
     return createNativeRequest(safeUrl, {
@@ -344,8 +357,8 @@ function diagnosticRequestReferrer(value: string): string | undefined {
   if (value === '') return undefined;
   if (value === 'about:client') return value;
   try {
-    const parsed = new URL(value);
-    return new URL(sanitizeDiagnosticUrl(value), parsed.origin).href;
+    const parsed = new NativeURL(value);
+    return new NativeURL(sanitizeDiagnosticUrl(value), parsed.origin).href;
   } catch {
     return undefined;
   }
@@ -387,22 +400,22 @@ function sanitizeDiagnosticValue(
     }
   }
   if (
-    value instanceof URL ||
-    value instanceof URLSearchParams ||
-    value instanceof Response ||
-    value instanceof Blob
+    hasNativeInstance(value, NativeURL) ||
+    hasNativeInstance(value, NativeURLSearchParams) ||
+    hasNativeInstance(value, NativeResponse) ||
+    hasNativeInstance(value, NativeBlob)
   ) {
     seen.set(object, '[redacted]');
     return '[redacted]';
   }
 
-  if (value instanceof Error) {
+  if (isNativeError(value)) {
     const prototype = Object.getPrototypeOf(value);
     const nativeName = nativeErrorPrototypeNames.get(prototype);
     const name = diagnosticErrorString(value, 'name', nativeName ?? '[redacted]', requestInputs);
     const message = diagnosticErrorString(value, 'message', '', requestInputs);
     const stack = diagnosticErrorString(value, 'stack', undefined, requestInputs);
-    const clone = new Error(message.value);
+    const clone = new NativeError(message.value);
     clone.name = name.value ?? 'Error';
     if (stack.value !== undefined) clone.stack = stack.value;
     seen.set(object, clone);
@@ -565,7 +578,7 @@ function reportServerErrorToStderr(error: unknown, context: ServerErrorDiagnosti
 }
 
 function diagnosticLogValue(value: unknown): string {
-  if (!(value instanceof Error)) return neutralizeLogValue('[diagnostic value redacted]');
+  if (!isNativeError(value)) return neutralizeLogValue('[diagnostic value redacted]');
   const prototype = Object.getPrototypeOf(value);
   const fallbackName = nativeErrorPrototypeNames.get(prototype) ?? 'Error';
   const name = diagnosticErrorString(value, 'name', fallbackName, {
@@ -577,4 +590,16 @@ function diagnosticLogValue(value: unknown): string {
     urls: [],
   }).value;
   return neutralizeLogValue(`${name ?? fallbackName}${message ? `: ${message}` : ''}`);
+}
+
+function isNativeError(value: unknown): value is Error {
+  return hasNativeInstance(value, NativeError);
+}
+
+function hasNativeInstance(value: unknown, constructor: Function): boolean {
+  try {
+    return Reflect.apply(nativeFunctionHasInstance, constructor, [value]) as boolean;
+  } catch {
+    return false;
+  }
 }

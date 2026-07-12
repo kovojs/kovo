@@ -352,6 +352,37 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
     expect((reportedError as Error).message).not.toContain('CONSTRUCTOR_SECRET');
   });
 
+  it('uses the captured Error brand and constructor after app code poisons global Error', () => {
+    const NativeError = Error;
+    const error = new NativeError('ordinary captured error');
+    const onError = vi.fn();
+    class PoisonError {
+      static [Symbol.hasInstance](): boolean {
+        throw new NativeError('error hasInstance trap');
+      }
+
+      constructor() {
+        throw new NativeError('error constructor trap');
+      }
+    }
+
+    let thrown: unknown;
+    globalThis.Error = PoisonError as unknown as ErrorConstructor;
+    try {
+      reportServerError(onError, error, { operation: 'app-request', url: '/safe' });
+    } catch (caught) {
+      thrown = caught;
+    } finally {
+      globalThis.Error = NativeError;
+    }
+
+    expect(thrown).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(error, {
+      operation: 'app-request',
+      url: '/safe',
+    });
+  });
+
   it('applies the same URL sanitization before default stderr', () => {
     const token = 'RESET_BEARER_SHOULD_NEVER_LOG';
     const url = `/reset?Token=${token}&token=duplicate`;

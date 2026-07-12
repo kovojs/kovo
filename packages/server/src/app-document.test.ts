@@ -1058,9 +1058,7 @@ describe('server app document boundary', () => {
       status: 404,
       url: '/missing?from',
     });
-    expect(onError.mock.calls[0]?.[1].request.url).toBe(
-      'https://shop.example.test/missing?from',
-    );
+    expect(onError.mock.calls[0]?.[1].request.url).toBe('https://shop.example.test/missing?from');
   });
 
   it('renders route notFound outcomes through the configured 404 shell', async () => {
@@ -1215,7 +1213,7 @@ describe('server app document boundary', () => {
     expect('session' in context.request).toBe(false);
   });
 
-  it('escapes raw configured 500 shell content that reflects request data', async () => {
+  it('does not expose arbitrary request headers to a configured 500 shell', async () => {
     const routeError = new Error('private route detail');
     const payload = '<img src=x onerror=alert(1)> Set-Cookie: session=evil';
     const brokenRoute = route('/broken', {
@@ -1248,9 +1246,8 @@ describe('server app document boundary', () => {
     });
 
     expect(response.status).toBe(500);
-    expect(response.body).toContain(
-      '&lt;main data-shell="500"&gt;&lt;img src=x onerror=alert(1)&gt; Set-Cookie: session=evil&lt;/main&gt;',
-    );
+    expect(response.body).toContain('&lt;main data-shell="500"&gt;null&lt;/main&gt;');
+    expect(response.body).not.toContain(payload);
     expect(response.body).not.toContain('<img src=x onerror=alert(1)>');
     expect(response.body).not.toContain('<main data-shell="500">');
     expect(response.body).not.toContain('private route detail');

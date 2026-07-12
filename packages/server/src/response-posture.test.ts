@@ -11,6 +11,7 @@ import {
   endpointRequestWithoutSession,
   finalizeRawWebResponse,
   finalizeServerResponse,
+  requestMetadataWithoutAmbientAuthority,
   resolveKovoLifecycleRequest,
 } from './response-posture.js';
 
@@ -265,6 +266,47 @@ describe('central response posture finalization', () => {
     expect(mutationRequest.headers.get('x-forwarded-for')).toBeNull();
     expect(mutationRequest.headers.get('x-machine-signature')).toBe('kept');
     expect(mutationRequest.clone().headers.get('authorization')).toBeNull();
+  });
+
+  it('exposes only value-free URL and client-IP metadata to predispatch callbacks', () => {
+    const metadata = requestMetadataWithoutAmbientAuthority(
+      new Request('https://example.test/_m/run?token=QUERY_SECRET&key=duplicate', {
+        body: 'BODY_SECRET',
+        headers: {
+          'Cf-Connecting-Ip': '203.0.113.8',
+          'Content-Type': 'text/plain',
+          Cookie: 'sid=COOKIE_SECRET',
+          'Kovo-Csrf': 'CSRF_SECRET',
+          'Kovo-Form-Key': 'FORM_KEY_SECRET',
+          'Kovo-Idem': 'IDEM_SECRET',
+          'Kovo-Session': 'SESSION_SECRET',
+          'Webhook-Secret': 'WEBHOOK_SECRET',
+          'X-Kovo-Api-Key': 'API_KEY_SECRET',
+          'X-Machine-Signature': 'SIGNATURE_SECRET',
+          'X-Machine-Token': 'MACHINE_TOKEN_SECRET',
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(metadata.url).toBe('https://example.test/_m/run?token&key');
+    expect(metadata.body).toBeNull();
+    expect(metadata.headers.get('cf-connecting-ip')).toBe('203.0.113.8');
+    expect(metadata.headers.get('content-type')).toBe('text/plain');
+    for (const name of [
+      'cookie',
+      'kovo-csrf',
+      'kovo-form-key',
+      'kovo-idem',
+      'kovo-session',
+      'webhook-secret',
+      'x-kovo-api-key',
+      'x-machine-signature',
+      'x-machine-token',
+    ]) {
+      expect(metadata.headers.get(name), name).toBeNull();
+    }
+    expect(JSON.stringify([...metadata.headers])).not.toContain('SECRET');
   });
 
   it('mirrors abort timing without exposing caller-controlled abort reasons', () => {

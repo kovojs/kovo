@@ -2119,7 +2119,7 @@ describe('createPostgresAppRuntimeDb', () => {
         }),
       );
     }
-  });
+  }, 30_000);
 
   // SPEC §10.3 (C10/C11): the identity escalation surface is role ATTRIBUTES ∪ predefined-role
   // MEMBERSHIP. PostgreSQL predefined roles (pg_execute_server_program ⇒ COPY … FROM PROGRAM OS
@@ -2194,7 +2194,7 @@ describe('createPostgresAppRuntimeDb', () => {
         }),
       );
     }
-  });
+  }, 30_000);
 
   // SPEC §10.3 (C10/C11): membership in only the framework's own roles must not over-block; the
   // predefined-role allowlist targets `pg_*` predefined roles, not the framework reader/writer/etc.

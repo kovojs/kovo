@@ -302,6 +302,15 @@ const readNativeRequestHeaders = requestIntrinsicGetter<Headers>('headers');
 const readNativeRequestMethod = requestIntrinsicGetter<string>('method');
 const readNativeRequestSignal = requestIntrinsicGetter<AbortSignal>('signal');
 const readNativeRequestUrl = requestIntrinsicGetter<string>('url');
+const NativeURL = URL;
+const readNativeUrlOrigin = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')?.get;
+const readNativeUrlPathname = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname')?.get;
+const readNativeUrlSearchParams = Object.getOwnPropertyDescriptor(
+  URL.prototype,
+  'searchParams',
+)?.get;
+const nativeUrlSearchParamKeys = Object.getOwnPropertyDescriptor(URLSearchParams.prototype, 'keys')
+  ?.value as unknown;
 const nativeHeadersEntries = Object.getOwnPropertyDescriptor(Headers.prototype, 'entries')
   ?.value as unknown;
 const nativeHeadersAppend = Object.getOwnPropertyDescriptor(Headers.prototype, 'append')
@@ -355,10 +364,10 @@ export function requestMetadataWithoutAmbientAuthority(request: Request): Reques
   const headers = readNativeRequestHeaders(source);
   const method = readNativeRequestMethod(source);
   const signal = authorityNeutralAbortSignal(readNativeRequestSignal(source));
-  const url = readNativeRequestUrl(source);
+  const url = requestMetadataUrl(readNativeRequestUrl(source));
   const neutral = createNativeRequest(url, {
     headers: endpointHeadersWithoutAmbientAuthority(headers, {
-      allowNetworkMetadata: true,
+      metadataOnly: true,
       stripAuthorization: true,
     }),
     method,
@@ -571,7 +580,7 @@ function isRedirectStatus(status: number): boolean {
 const AMBIENT_BROWSER_AUTHORITY_HEADERS: readonly string[] = ['cookie'];
 function endpointHeadersWithoutAmbientAuthority(
   headers: Headers,
-  options: { allowNetworkMetadata?: boolean; stripAuthorization?: boolean } = {},
+  options: { metadataOnly?: boolean; stripAuthorization?: boolean } = {},
 ): Headers {
   if (options.stripAuthorization !== false) {
     const sanitized = createNativeHeaders();
@@ -583,8 +592,9 @@ function endpointHeadersWithoutAmbientAuthority(
     >;
     for (const [name, value] of entries) {
       if (
-        isProvablyNonAmbientMachineHeader(name) ||
-        (options.allowNetworkMetadata === true && isNetworkMetadataHeader(name))
+        options.metadataOnly === true
+          ? isRequestMetadataHeader(name)
+          : isProvablyNonAmbientMachineHeader(name)
       ) {
         Reflect.apply(nativeHeadersAppend, sanitized, [name, value]);
       }
@@ -594,6 +604,41 @@ function endpointHeadersWithoutAmbientAuthority(
   const sanitized = createNativeHeaders(headers);
   for (const name of AMBIENT_BROWSER_AUTHORITY_HEADERS) sanitized.delete(name);
   return sanitized;
+}
+
+function requestMetadataUrl(value: string): string {
+  if (
+    typeof readNativeUrlOrigin !== 'function' ||
+    typeof readNativeUrlPathname !== 'function' ||
+    typeof readNativeUrlSearchParams !== 'function' ||
+    typeof nativeUrlSearchParamKeys !== 'function'
+  ) {
+    return 'http://kovo.invalid/';
+  }
+  try {
+    const parsed = new NativeURL(value);
+    const origin = Reflect.apply(readNativeUrlOrigin, parsed, []) as string;
+    const pathname = Reflect.apply(readNativeUrlPathname, parsed, []) as string;
+    const searchParams = Reflect.apply(readNativeUrlSearchParams, parsed, []) as URLSearchParams;
+    const keys = [
+      ...(Reflect.apply(nativeUrlSearchParamKeys, searchParams, []) as IterableIterator<string>),
+    ].map(encodeURIComponent);
+    return `${origin}${pathname}${keys.length === 0 ? '' : `?${keys.join('&')}`}`;
+  } catch {
+    return 'http://kovo.invalid/';
+  }
+}
+
+function isRequestMetadataHeader(value: string): boolean {
+  const header = value.toLowerCase();
+  return (
+    header === 'accept' ||
+    header === 'content-length' ||
+    header === 'content-type' ||
+    header === 'user-agent' ||
+    header === 'x-kovo-client-ip' ||
+    isNetworkMetadataHeader(header)
+  );
 }
 
 function isNetworkMetadataHeader(value: string): boolean {

@@ -40,6 +40,7 @@ import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from 
 import type { KovoApp } from './app-types.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { requestForAuthorityNeutralMetadata } from './request-carrier.js';
+import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 const fallbackBroadcastFingerprintSecret = randomBytes(32);
@@ -321,7 +322,8 @@ export async function renderAppErrorDocumentResponse(
   request: Request,
   status: 403 | 404 | 500,
 ): Promise<RoutePageResponse> {
-  const stableRequestUrl = readErrorShellRequestUrl(request);
+  const shellRequest = requestMetadataWithoutAmbientAuthority(request);
+  const stableRequestUrl = readErrorShellRequestUrl(shellRequest);
   const stableUrl = new URL(stableRequestUrl);
   const diagnosticUrl = appRequestUrl(stableUrl);
   const reportingOrigin = stableUrl.origin;
@@ -335,7 +337,7 @@ export async function renderAppErrorDocumentResponse(
 
   if (renderer) {
     try {
-      const rendered = await renderer({ request, status });
+      const rendered = await renderer({ request: shellRequest, status });
       return renderConfiguredErrorShellDocumentResponse(
         app,
         rendered,
@@ -346,7 +348,7 @@ export async function renderAppErrorDocumentResponse(
     } catch (error) {
       reportServerError(app.onError, error, {
         operation: 'error-shell',
-        request,
+        request: shellRequest,
         status,
         url: diagnosticUrl,
       });
