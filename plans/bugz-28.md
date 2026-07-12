@@ -10,9 +10,9 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items |
 | -------- | ----: | ----- |
-| Critical |     2 | C1-C2 |
+| Critical |     3 | C1-C3 |
 | High     |     6 | H1-H6 |
-| Medium   |     3 | M1-M3 |
+| Medium   |     4 | M1-M4 |
 
 ## Critical
 
@@ -33,6 +33,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
     every Undici redirect/connect hop use boot-pinned, semantically checked controls and bind the
     classified host bytes to the actual dial; real-fetch poison regressions must keep private and
     metadata destinations blocked.
+
+- [ ] **C3 - Mutable path-containment prototypes escape the framework output filesystem root.**
+      `packages/core/src/{storage,internal/filesystem}.ts`
+  - Selective late `String.prototype.startsWith` and `Array.prototype.includes` overrides made the
+    real output boundary write `../outside/escaped.txt` outside its pinned root; storage key
+    normalization uses adjacent mutable segment controls.
+  - **Acceptance:** logical-key parsing, relative-path rejection, and every read/write/copy/rename/
+    delete containment decision use boot-pinned, semantically checked operations and exact path bytes;
+    a real outside sentinel must remain unchanged under hostile import order and late poison.
 
 ## High
 
@@ -109,6 +118,15 @@ This is an active closure ledger; `SPEC.md` remains normative.
   - **Evidence:** focused fake and real-PGlite principal-swap regressions pass; the scanner rejects
     the entire Unicode-escaped identifier syntax, including schema-qualified, six-digit, custom
     `UESCAPE`, and comment-adjacent variants, while benign non-ASCII identifiers retain coverage.
+
+- [ ] **M4 - Mutable diagnostic String/Array controls re-expose credentials and log injection.**
+      `packages/server/src/{diagnostics,logging}.ts` and generated Node copies
+  - Selective late `String.prototype.replaceAll` kept a full URL with userinfo, query secrets, and
+    fragment in diagnostic text; selective `String.prototype.replace` preserved an attacker newline
+    in the log-neutralization choke.
+  - **Acceptance:** secret discovery, URL scrubbing, replacement, traversal, and control-character
+    neutralization use boot-pinned, semantically checked operations in live and emitted paths; hostile
+    import-order and late-poison tests keep credentials absent and each event on one line.
 
 ## Latest verification
 
