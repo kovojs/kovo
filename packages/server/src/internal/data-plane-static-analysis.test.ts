@@ -6,6 +6,8 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { staticAnalysisPromiseAll } from './data-plane-static-analysis-intrinsics.js';
+
 type DataPlaneStaticAnalysisModule = typeof import('./data-plane-static-analysis.js');
 
 const RELEVANT_DRIZZLE_SOURCE = {
@@ -23,6 +25,32 @@ describe('data-plane static analysis aggregate ABI', () => {
   afterEach(() => {
     vi.doUnmock('@kovojs/drizzle/internal/static');
     vi.resetModules();
+  });
+
+  it('does not let late Promise/iterator controls replace analyzer joins', async () => {
+    const first = Promise.resolve('first');
+    const second = Promise.resolve('second');
+    const values = [first, second];
+    const nativeIterator = Array.prototype[Symbol.iterator];
+    const nativeResolve = Promise.resolve;
+    let pending: Promise<string[]>;
+    try {
+      Array.prototype[Symbol.iterator] = function poisonedAnalyzerPromiseIterator<T>() {
+        if (this === values) return Reflect.apply(nativeIterator, [], []);
+        return Reflect.apply(nativeIterator, this, []);
+      };
+      Promise.resolve = function poisonedAnalyzerPromiseResolve<T>(value: T | PromiseLike<T>) {
+        if (value === first || value === second) {
+          return Reflect.apply(nativeResolve, Promise, ['forged']) as Promise<Awaited<T>>;
+        }
+        return Reflect.apply(nativeResolve, Promise, [value]);
+      };
+      pending = staticAnalysisPromiseAll(values);
+    } finally {
+      Array.prototype[Symbol.iterator] = nativeIterator;
+      Promise.resolve = nativeResolve;
+    }
+    await expect(pending!).resolves.toEqual(['first', 'second']);
   });
 
   it('fails closed instead of recomposing old analyzer entrypoints when the aggregate ABI is missing', async () => {

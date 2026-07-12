@@ -48,7 +48,6 @@ const nativeObjectCreate = NativeObject.create;
 const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
-const nativeRegExpTest = NativeRegExp.prototype.test;
 const nativeObjectIs = NativeObject.is;
 const nativeReflectApply = NativeReflect.apply;
 const nativeSetAdd = NativeSet.prototype.add;
@@ -59,9 +58,7 @@ const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
-const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 const nativeStringSlice = NativeString.prototype.slice;
-const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
@@ -123,7 +120,8 @@ function compilerBootstrapSelfCheckPasses(): boolean {
       typeof nativeHashUpdate !== 'function' ||
       typeof nativeHashDigest !== 'function' ||
       typeof nativeHmacUpdate !== 'function' ||
-      typeof nativeHmacDigest !== 'function'
+      typeof nativeHmacDigest !== 'function' ||
+      typeof nativeRegExpGlobalGetter !== 'function'
     ) {
       return false;
     }
@@ -413,7 +411,7 @@ export function compilerSecureStringEqual(left: string, right: string): boolean 
 
 export function compilerRegExpTest(value: RegExp, input: string): boolean {
   assertCompilerSecurityIntrinsics();
-  return apply(nativeRegExpTest, value, [input]);
+  return apply<RegExpExecArray | null>(nativeRegExpExec, value, [input]) !== null;
 }
 
 export function compilerRegExpExec(value: RegExp, input: string): RegExpExecArray | null {
@@ -500,7 +498,19 @@ export function compilerStringReplaceAll(
   replacement: string,
 ): string {
   assertCompilerSecurityIntrinsics();
-  return apply(nativeStringReplaceAll, value, [search, replacement]);
+  if (search.length === 0) {
+    throw new NativeTypeError('Compiler literal replacement search must not be empty.');
+  }
+  let output = '';
+  let sourceIndex = 0;
+  while (true) {
+    const matchIndex = apply<number>(nativeStringIndexOf, value, [search, sourceIndex]);
+    if (matchIndex < 0) break;
+    output += apply<string>(nativeStringSlice, value, [sourceIndex, matchIndex]);
+    output += replacement;
+    sourceIndex = matchIndex + search.length;
+  }
+  return output + apply<string>(nativeStringSlice, value, [sourceIndex]);
 }
 
 export function compilerStringSlice(value: string, start: number, end?: number): string {
@@ -508,9 +518,21 @@ export function compilerStringSlice(value: string, start: number, end?: number):
   return apply(nativeStringSlice, value, end === undefined ? [start] : [start, end]);
 }
 
-export function compilerStringSplit(value: string, separator: string | RegExp): string[] {
+export function compilerStringSplit(value: string, separator: string): string[] {
   assertCompilerSecurityIntrinsics();
-  return apply(nativeStringSplit, value, [separator]);
+  if (separator.length === 0) {
+    throw new NativeTypeError('Compiler literal split separator must not be empty.');
+  }
+  const result: string[] = [];
+  let sourceIndex = 0;
+  while (true) {
+    const matchIndex = apply<number>(nativeStringIndexOf, value, [separator, sourceIndex]);
+    if (matchIndex < 0) break;
+    result[result.length] = apply(nativeStringSlice, value, [sourceIndex, matchIndex]);
+    sourceIndex = matchIndex + separator.length;
+  }
+  result[result.length] = apply(nativeStringSlice, value, [sourceIndex]);
+  return result;
 }
 
 export function compilerStringStartsWith(value: string, search: string): boolean {

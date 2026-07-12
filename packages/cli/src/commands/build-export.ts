@@ -248,6 +248,18 @@ function appendDense<Value>(
   return result;
 }
 
+function buildPathSegments(value: string): string[] {
+  const slashSegments = buildStringSplit(value, '/');
+  const result: string[] = [];
+  for (let index = 0; index < slashSegments.length; index += 1) {
+    const segments = buildStringSplit(slashSegments[index]!, '\\');
+    for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
+      result[result.length] = segments[segmentIndex]!;
+    }
+  }
+  return result;
+}
+
 interface KovoExportOptions {
   appModulePath: string;
   assetBase?: string;
@@ -1605,7 +1617,7 @@ function isWebhookEndpoint(
 function findBuildTsconfig(appModulePath: string): string | undefined {
   const relativeAppPath = relative(process.cwd(), appModulePath);
   if (
-    buildSomeDense(buildStringSplit(relativeAppPath, /[\\/]/), 'Build app path segments', (part) =>
+    buildSomeDense(buildPathSegments(relativeAppPath), 'Build app path segments', (part) =>
       buildStringStartsWith(part, '.'),
     )
   ) {

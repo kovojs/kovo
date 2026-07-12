@@ -4,10 +4,12 @@ import {
   compilerArrayJoin,
   compilerCreateSet,
   compilerOwnDataValue,
+  compilerRegExpExec,
   compilerRegExpReplace,
   compilerSetAdd,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringSlice,
   compilerStringSplit,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
@@ -118,8 +120,11 @@ function importedRuntimeGeneratedNames(specifiers: string): readonly string[] {
   const parts = compilerStringSplit(specifiers, ',');
   const names: string[] = [];
   for (let index = 0; index < parts.length; index += 1) {
-    const aliases = compilerStringSplit(compilerStringTrim(parts[index]!), /\s+as\s+/i);
-    const name = aliases[0] === undefined ? '' : compilerStringTrim(aliases[0]);
+    const specifier = compilerStringTrim(parts[index]!);
+    const alias = compilerRegExpExec(/\s+as\s+/i, specifier);
+    const name = compilerStringTrim(
+      alias === null ? specifier : compilerStringSlice(specifier, 0, alias.index),
+    );
     if (name.length === 0) continue;
     let insertAt = names.length;
     while (insertAt > 0 && name < names[insertAt - 1]!) {

@@ -29,7 +29,6 @@ const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescript
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
 const nativeObjectSetPrototypeOf = NativeObject.setPrototypeOf;
-const nativePromiseAll = NativePromise.all;
 const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
@@ -37,7 +36,8 @@ const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringIncludes = NativeString.prototype.includes;
-const nativeStringSplit = NativeString.prototype.split;
+const nativeStringIndexOf = NativeString.prototype.indexOf;
+const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringTrimEnd = NativeString.prototype.trimEnd;
 
@@ -92,7 +92,8 @@ function bootstrapSelfCheckPasses(): boolean {
     if (apply<RegExpExecArray | null>(nativeRegExpExec, /^ERROR/u, ['ERROR KV418']) === null) {
       return false;
     }
-    return typeof apply(nativePromiseAll, NativePromise, [[]]) === 'object';
+    const promise = apply<Promise<string>>(nativePromiseResolve, NativePromise, ['safe']);
+    return typeof apply(nativePromiseThen, promise, [(value: string) => value]) === 'object';
   } catch {
     return false;
   }
@@ -222,9 +223,21 @@ export function buildStringIncludes(value: string, search: string): boolean {
   return apply(nativeStringIncludes, value, [search]);
 }
 
-export function buildStringSplit(value: string, separator: string | RegExp): string[] {
+export function buildStringSplit(value: string, separator: string): string[] {
   assertBuildSecurityIntrinsics();
-  return apply(nativeStringSplit, value, [separator]);
+  if (separator.length === 0) {
+    throw new NativeTypeError('Kovo build split separator must not be empty.');
+  }
+  const result: string[] = [];
+  let sourceIndex = 0;
+  while (true) {
+    const matchIndex = apply<number>(nativeStringIndexOf, value, [separator, sourceIndex]);
+    if (matchIndex < 0) break;
+    result[result.length] = apply(nativeStringSlice, value, [sourceIndex, matchIndex]);
+    sourceIndex = matchIndex + separator.length;
+  }
+  result[result.length] = apply(nativeStringSlice, value, [sourceIndex]);
+  return result;
 }
 
 export function buildStringStartsWith(value: string, search: string): boolean {
@@ -289,7 +302,30 @@ export function buildPromiseAll<Values extends readonly unknown[] | []>(
   values: Values,
 ): Promise<{ -readonly [Index in keyof Values]: Awaited<Values[Index]> }> {
   assertBuildSecurityIntrinsics();
-  return apply(nativePromiseAll, NativePromise, [values]);
+  const source = buildSnapshotDenseArray(values, 'Kovo build Promise inputs');
+  return new NativePromise((resolvePromise, rejectPromise) => {
+    const results: unknown[] = [];
+    let remaining = source.length;
+    if (remaining === 0) {
+      resolvePromise(results as { -readonly [Index in keyof Values]: Awaited<Values[Index]> });
+      return;
+    }
+    for (let index = 0; index < source.length; index += 1) {
+      const promise = apply<Promise<unknown>>(nativePromiseResolve, NativePromise, [source[index]]);
+      apply(nativePromiseThen, promise, [
+        (value: unknown) => {
+          results[index] = value;
+          remaining -= 1;
+          if (remaining === 0) {
+            resolvePromise(
+              results as { -readonly [Index in keyof Values]: Awaited<Values[Index]> },
+            );
+          }
+        },
+        rejectPromise,
+      ]);
+    }
+  });
 }
 
 export function buildObservePromise<Value>(

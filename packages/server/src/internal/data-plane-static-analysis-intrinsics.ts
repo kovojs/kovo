@@ -39,7 +39,8 @@ const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescript
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
-const nativePromiseAll = NativePromise.all;
+const nativePromiseResolve = NativePromise.resolve;
+const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
@@ -137,7 +138,8 @@ function bootstrapSelfCheckPasses(): boolean {
     }
     if (apply(nativeNumberParseInt, NativeNumber, ['12', 10]) !== 12) return false;
     if (apply(nativeNumberIsFinite, NativeNumber, [12]) !== true) return false;
-    return typeof apply(nativePromiseAll, NativePromise, [[]]) === 'object';
+    const promise = apply<Promise<string>>(nativePromiseResolve, NativePromise, ['safe']);
+    return typeof apply(nativePromiseThen, promise, [(value: string) => value]) === 'object';
   } catch {
     return false;
   }
@@ -167,7 +169,7 @@ export function staticAnalysisArrayIsArray(value: unknown): value is unknown[] {
   return apply(nativeArrayIsArray, NativeArray, [value]);
 }
 
-export function staticAnalysisArrayLength(value: unknown[], label: string): number {
+export function staticAnalysisArrayLength(value: readonly unknown[], label: string): number {
   assertDataPlaneStaticAnalysisIntrinsics();
   const before = descriptor(value, 'length');
   const after = descriptor(value, 'length');
@@ -312,7 +314,34 @@ export function staticAnalysisPromiseAll<Value>(
   values: readonly Promise<Value>[],
 ): Promise<Value[]> {
   assertDataPlaneStaticAnalysisIntrinsics();
-  return apply(nativePromiseAll, NativePromise, [values]);
+  const length = staticAnalysisArrayLength(values, 'Static-analysis Promise inputs');
+  const source: Promise<Value>[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const value = staticAnalysisOwnDataValue(values, index, 'Static-analysis Promise inputs');
+    if (value === undefined) {
+      throw new NativeTypeError(`Static-analysis Promise inputs[${index}] must be dense.`);
+    }
+    source[index] = value as Promise<Value>;
+  }
+  return new NativePromise<Value[]>((resolvePromise, rejectPromise) => {
+    const results: Value[] = [];
+    let remaining = source.length;
+    if (remaining === 0) {
+      resolvePromise(results);
+      return;
+    }
+    for (let index = 0; index < source.length; index += 1) {
+      const promise = apply<Promise<Value>>(nativePromiseResolve, NativePromise, [source[index]]);
+      apply(nativePromiseThen, promise, [
+        (value: Value) => {
+          results[index] = value;
+          remaining -= 1;
+          if (remaining === 0) resolvePromise(results);
+        },
+        rejectPromise,
+      ]);
+    }
+  });
 }
 
 export function staticAnalysisCreatePromise<Value>(
