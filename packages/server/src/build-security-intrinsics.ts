@@ -29,7 +29,10 @@ import {
  * captured cryptographic controls rather than mutable caller arrays, accessors, or live globals.
  */
 
+const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
+const NativeURL = globalThis.URL;
+const nativeGlobalThis = globalThis;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeCreateHash = createHash;
 const nativeFileURLToPath = fileURLToPath;
@@ -44,7 +47,15 @@ const nativePathSeparator = path.sep;
 const nativePosixExtname = path.posix.extname;
 const nativePosixDirname = path.posix.dirname;
 const nativeResponseText = stableOwnFunction(NativeResponse.prototype, 'text');
+const nativeRequestMethod = stableOwnGetter(NativeRequest.prototype, 'method');
+const nativeRequestUrl = stableOwnGetter(NativeRequest.prototype, 'url');
 const nativeResponseStatus = stableOwnGetter(NativeResponse.prototype, 'status');
+const nativeUrlHash = stableOwnGetter(NativeURL.prototype, 'hash');
+const nativeUrlHref = stableOwnGetter(NativeURL.prototype, 'href');
+const nativeUrlOrigin = stableOwnGetter(NativeURL.prototype, 'origin');
+const nativeUrlPathname = stableOwnGetter(NativeURL.prototype, 'pathname');
+const nativeUrlProtocol = stableOwnGetter(NativeURL.prototype, 'protocol');
+const nativeUrlSearch = stableOwnGetter(NativeURL.prototype, 'search');
 
 const hashControl = nativeCreateHash('sha256');
 const nativeHashUpdate = stableOwnFunction(hashControl, 'update');
@@ -99,11 +110,19 @@ function rawDigest(
 function capturedControlsAreSound(): boolean {
   try {
     const response = new NativeResponse('control', { status: 201 });
+    const request = new NativeRequest('https://kovo-build-control.test/safe', { method: 'GET' });
+    const url = new NativeURL('/safe?proof=1', 'https://kovo-build-control.test');
     const pathControl = nativePathResolve('kovo-build-control', 'child.txt');
     const joinedPathControl = nativePathJoin('kovo-build-control', 'child.txt');
     const fileUrlControl = nativeFileURLToPath('file:///tmp/kovo-build-control.txt');
     return (
       witnessReflectApply<number>(nativeResponseStatus, response, []) === 201 &&
+      witnessReflectApply<string>(nativeRequestMethod, request, []) === 'GET' &&
+      witnessReflectApply<string>(nativeRequestUrl, request, []) ===
+        'https://kovo-build-control.test/safe' &&
+      witnessReflectApply<string>(nativeUrlHref, url, []) ===
+        'https://kovo-build-control.test/safe?proof=1' &&
+      witnessReflectApply<string>(nativeUrlPathname, url, []) === '/safe' &&
       witnessReflectApply(nativeDecodeURIComponent, undefined, ['safe%2Fchild']) === 'safe/child' &&
       nativePathBasename(pathControl) === 'child.txt' &&
       nativePathBasename(nativePathDirname(pathControl)) === 'kovo-build-control' &&
@@ -213,6 +232,135 @@ export function buildOwnDataProperty(
 export function buildSecurityDecodeURIComponent(value: string): string {
   assertBuildSecurityIntrinsics();
   return witnessReflectApply(nativeDecodeURIComponent, undefined, [value]);
+}
+
+export interface BuildSecurityUrlSnapshot {
+  readonly hash: string;
+  readonly href: string;
+  readonly origin: string;
+  readonly pathname: string;
+  readonly protocol: string;
+  readonly search: string;
+}
+
+/** Construct and snapshot a URL through controls captured before evaluated app code runs. */
+export function buildSecurityUrlSnapshot(input: string, base?: string): BuildSecurityUrlSnapshot {
+  assertBuildSecurityIntrinsics();
+  const url = base === undefined ? new NativeURL(input) : new NativeURL(input, base);
+  return {
+    hash: witnessReflectApply(nativeUrlHash, url, []),
+    href: witnessReflectApply(nativeUrlHref, url, []),
+    origin: witnessReflectApply(nativeUrlOrigin, url, []),
+    pathname: witnessReflectApply(nativeUrlPathname, url, []),
+    protocol: witnessReflectApply(nativeUrlProtocol, url, []),
+    search: witnessReflectApply(nativeUrlSearch, url, []),
+  };
+}
+
+/** Construct one synthetic static-export GET Request through the boot-pinned constructor. */
+export function buildSecurityGetRequest(href: string): Request {
+  assertBuildSecurityIntrinsics();
+  const request = constructNativeGetRequest(href);
+  if (
+    witnessReflectApply<string>(nativeRequestMethod, request, []) !== 'GET' ||
+    witnessReflectApply<string>(nativeRequestUrl, request, []) !== href
+  ) {
+    throw new TypeError('Kovo build security boundary could not construct an exact GET request.');
+  }
+  return request;
+}
+
+function constructNativeGetRequest(href: string): Request {
+  const lateUrlDescriptor = witnessGetOwnPropertyDescriptor(nativeGlobalThis, 'URL');
+  if (lateUrlDescriptor === undefined) {
+    throw new TypeError('Kovo build security boundary could not witness the ambient URL control.');
+  }
+
+  const lateUrlValue = witnessGetOwnPropertyDescriptor(lateUrlDescriptor, 'value');
+  if (lateUrlValue !== undefined && witnessObjectIs(lateUrlValue.value, NativeURL)) {
+    return new NativeRequest(href, { method: 'GET' });
+  }
+
+  const configurable = descriptorBoolean(lateUrlDescriptor, 'configurable');
+  const enumerable = descriptorBoolean(lateUrlDescriptor, 'enumerable');
+  const writable =
+    lateUrlValue === undefined ? false : descriptorBoolean(lateUrlDescriptor, 'writable');
+  if (!configurable && !writable) {
+    throw new TypeError(
+      'Kovo build security boundary cannot restore the captured URL control for Request construction.',
+    );
+  }
+
+  // Node's native Request constructor resolves string inputs through the ambient URL binding.
+  // Replace only that binding for this synchronous intrinsic call, then restore the exact late
+  // descriptor before any application code can observe another turn (SPEC §6.6/§9.5).
+  witnessDefineProperty(nativeGlobalThis, 'URL', {
+    configurable,
+    enumerable,
+    value: NativeURL,
+    writable: configurable ? true : writable,
+  });
+  let request: Request | undefined;
+  let constructionError: unknown;
+  let constructionFailed = false;
+  try {
+    const installed = witnessGetOwnPropertyDescriptor(nativeGlobalThis, 'URL');
+    if (installed === undefined || !witnessObjectIs(descriptorDataProperty(installed), NativeURL)) {
+      throw new TypeError(
+        'Kovo build security boundary could not install the captured URL control.',
+      );
+    }
+    request = new NativeRequest(href, { method: 'GET' });
+  } catch (error) {
+    constructionFailed = true;
+    constructionError = error;
+  }
+
+  witnessDefineProperty(nativeGlobalThis, 'URL', lateUrlDescriptor);
+  const restored = witnessGetOwnPropertyDescriptor(nativeGlobalThis, 'URL');
+  if (restored === undefined || !propertyDescriptorsMatch(restored, lateUrlDescriptor)) {
+    throw new TypeError(
+      'Kovo build security boundary could not restore the ambient URL descriptor.',
+    );
+  }
+  if (constructionFailed) throw constructionError;
+  if (request === undefined) {
+    throw new TypeError('Kovo build security boundary could not construct the GET request.');
+  }
+  return request;
+}
+
+function descriptorBoolean(
+  descriptor: PropertyDescriptor,
+  property: 'configurable' | 'enumerable' | 'writable',
+): boolean {
+  const field = witnessGetOwnPropertyDescriptor(descriptor, property);
+  if (field === undefined || typeof field.value !== 'boolean') {
+    throw new TypeError(`Kovo build security boundary found an invalid ${property} descriptor.`);
+  }
+  return field.value;
+}
+
+function propertyDescriptorsMatch(left: PropertyDescriptor, right: PropertyDescriptor): boolean {
+  return (
+    descriptorFieldsMatch(left, right, 'configurable') &&
+    descriptorFieldsMatch(left, right, 'enumerable') &&
+    descriptorFieldsMatch(left, right, 'value') &&
+    descriptorFieldsMatch(left, right, 'writable') &&
+    descriptorFieldsMatch(left, right, 'get') &&
+    descriptorFieldsMatch(left, right, 'set')
+  );
+}
+
+function descriptorFieldsMatch(
+  left: PropertyDescriptor,
+  right: PropertyDescriptor,
+  property: 'configurable' | 'enumerable' | 'value' | 'writable' | 'get' | 'set',
+): boolean {
+  const leftField = witnessGetOwnPropertyDescriptor(left, property);
+  const rightField = witnessGetOwnPropertyDescriptor(right, property);
+  if (leftField === undefined || rightField === undefined) return leftField === rightField;
+  return witnessObjectIs(leftField.value, rightField.value);
 }
 
 export function buildSecurityFileUrlToPath(href: string): string {

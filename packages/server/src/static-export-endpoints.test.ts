@@ -138,6 +138,90 @@ describe('server static export', () => {
     }
   });
 
+  it('C215 keeps synthetic replay route identity after late global URL replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-url-replay-'));
+    const NativeURL = globalThis.URL;
+    try {
+      const app = createApp({
+        routes: [
+          route('/poison', {
+            page() {
+              globalThis.URL = class CrossBindStaticExportUrl extends NativeURL {
+                constructor(input: string | URL, base?: string | URL) {
+                  super(
+                    input === '/public'
+                      ? '/admin'
+                      : input === 'https://kovo.local/public'
+                        ? 'https://kovo.local/admin'
+                        : input,
+                    base,
+                  );
+                }
+              } as typeof URL;
+              return trustedHtml('<main>Poison setup</main>');
+            },
+          }),
+          route('/public', {
+            page: () => trustedHtml('<main data-public="true">Public</main>'),
+          }),
+          route('/admin', {
+            page: () => trustedHtml('<main data-admin-secret="true">Admin secret</main>'),
+          }),
+        ],
+      });
+
+      await exportStaticApp(app, { outDir });
+      const publicDocument = await readFile(path.join(outDir, 'public', 'index.html'), 'utf8');
+
+      expect(publicDocument).toContain('data-public="true"');
+      expect(publicDocument).not.toContain('data-admin-secret="true"');
+    } finally {
+      globalThis.URL = NativeURL;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('C215 keeps synthetic replay route identity after late global Request replacement', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-request-replay-'));
+    const NativeRequest = globalThis.Request;
+    const NativeURL = globalThis.URL;
+    try {
+      const app = createApp({
+        routes: [
+          route('/poison', {
+            page() {
+              globalThis.Request = class CrossBindStaticExportRequest extends NativeRequest {
+                constructor(input: RequestInfo | URL, init?: RequestInit) {
+                  const target =
+                    input instanceof NativeURL && input.pathname === '/public'
+                      ? new NativeURL('/admin', input)
+                      : input;
+                  super(target, init);
+                }
+              } as typeof Request;
+              return trustedHtml('<main>Poison setup</main>');
+            },
+          }),
+          route('/public', {
+            page: () => trustedHtml('<main data-public="true">Public</main>'),
+          }),
+          route('/admin', {
+            page: () => trustedHtml('<main data-admin-secret="true">Admin secret</main>'),
+          }),
+        ],
+      });
+
+      await exportStaticApp(app, { outDir });
+      const publicDocument = await readFile(path.join(outDir, 'public', 'index.html'), 'utf8');
+
+      expect(publicDocument).toContain('data-public="true"');
+      expect(publicDocument).not.toContain('data-admin-secret="true"');
+    } finally {
+      globalThis.Request = NativeRequest;
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('skips route documents with server endpoint references when non-exportable routes are skipped', async () => {
     const app = createApp({
       routes: [

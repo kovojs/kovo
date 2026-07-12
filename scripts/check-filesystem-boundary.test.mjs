@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildSecurityIntrinsicsFile,
   cloudflareTomlAssemblyFindings,
   checkFilesystemBoundary,
   defaultAllowedToolingFiles,
@@ -14,6 +15,9 @@ import {
   staticExportEndpointBlockerFindings,
   staticExportReplayArtifactCommitFindings,
   staticExportReplayArtifactFile,
+  staticExportReplayContextFile,
+  staticExportReplayRequestFile,
+  staticExportSyntheticRequestFindings,
 } from './check-filesystem-boundary.mjs';
 
 function runFixture(files, overrides = {}) {
@@ -149,6 +153,53 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         `,
       ),
     ).toEqual([]);
+  });
+
+  it('C215 pins synthetic static-export target and carrier construction', () => {
+    expect(
+      staticExportSyntheticRequestFindings(
+        staticExportReplayRequestFile,
+        `
+          const url = new URL(pathname, context.origin);
+          const request = new Request(url, { method: 'GET' });
+          return { response: await context.handler(request), url };
+        `,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('mutable ambient URL constructor'),
+        expect.stringContaining('mutable ambient Request constructor'),
+        expect.stringContaining('boot-pinned URL snapshot'),
+        expect.stringContaining('boot-pinned GET Request constructor'),
+        expect.stringContaining('witnessed URL snapshot'),
+      ]),
+    );
+
+    expect(
+      staticExportSyntheticRequestFindings(
+        staticExportReplayRequestFile,
+        `
+          interface Result { url: BuildSecurityUrlSnapshot }
+          const url = buildSecurityUrlSnapshot(pathname, context.origin);
+          const request = buildSecurityGetRequest(url.href);
+        `,
+      ),
+    ).toEqual([]);
+    expect(
+      staticExportSyntheticRequestFindings(
+        staticExportReplayContextFile,
+        'const url = buildSecurityUrlSnapshot(origin);',
+      ),
+    ).toEqual([]);
+    expect(
+      staticExportSyntheticRequestFindings(buildSecurityIntrinsicsFile, 'export const unsafe = 1;'),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('captured Request constructor'),
+        expect.stringContaining('captured URL constructor'),
+        expect.stringContaining('ambient URL descriptor restoration'),
+      ]),
+    );
   });
 
   it('C202 pins deploy-skew retention classification to the emitted module snapshot', () => {

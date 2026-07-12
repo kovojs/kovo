@@ -1,5 +1,6 @@
 import { createRequestHandler } from './app.js';
 import type { KovoApp, RequestHandler } from './app-types.js';
+import { buildSecurityUrlSnapshot } from './build-security-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 export interface StaticExportReplayContext {
@@ -25,9 +26,9 @@ export function createStaticExportReplayContext({
 function staticExportReplayOrigin(origin: string | undefined): string {
   if (origin === undefined) return 'https://kovo.local';
 
-  let url: URL;
+  let url: ReturnType<typeof buildSecurityUrlSnapshot>;
   try {
-    url = new URL(origin);
+    url = buildSecurityUrlSnapshot(origin);
   } catch {
     throw invalidStaticExportOrigin(origin);
   }

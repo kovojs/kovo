@@ -1,3 +1,8 @@
+import {
+  buildSecurityGetRequest,
+  buildSecurityUrlSnapshot,
+  type BuildSecurityUrlSnapshot,
+} from './build-security-intrinsics.js';
 import type { StaticExportReplayContext } from './static-export-replay-context.js';
 
 export interface StaticExportReplayRequestOptions {
@@ -8,7 +13,7 @@ export interface StaticExportReplayRequestOptions {
 
 export interface StaticExportReplayRequestResult {
   response: Response;
-  url: URL;
+  url: BuildSecurityUrlSnapshot;
 }
 
 export async function replayStaticExportRequest({
@@ -16,9 +21,10 @@ export async function replayStaticExportRequest({
   href,
   pathname,
 }: StaticExportReplayRequestOptions): Promise<StaticExportReplayRequestResult> {
-  // SPEC §9.5: static export replays synthetic GET requests through the app handler.
-  const url = new URL(href ?? pathname ?? '/', context.origin);
-  const request = new Request(url, { method: 'GET' });
+  // SPEC §6.6/§9.5: earlier route evaluation shares this realm. Construct the synthetic target
+  // and GET carrier through boot-pinned controls, and retain only the exact URL snapshot they prove.
+  const url = buildSecurityUrlSnapshot(href ?? pathname ?? '/', context.origin);
+  const request = buildSecurityGetRequest(url.href);
 
   return {
     response: await context.handler(request),

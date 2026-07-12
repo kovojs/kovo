@@ -18,6 +18,9 @@ export const protocolFreeFilesystemEnumerationFiles = [
 ];
 export const staticExportEndpointBlockerFile = 'packages/server/src/static-export-document.ts';
 export const staticExportReplayArtifactFile = 'packages/server/src/static-export-replay.ts';
+export const staticExportReplayContextFile = 'packages/server/src/static-export-replay-context.ts';
+export const staticExportReplayRequestFile = 'packages/server/src/static-export-request.ts';
+export const buildSecurityIntrinsicsFile = 'packages/server/src/build-security-intrinsics.ts';
 export const presetRetentionPolicyFile = 'packages/server/src/build.ts';
 
 export const defaultAllowedRuntimeFiles = [
@@ -62,6 +65,13 @@ export function checkFilesystemBoundary(options = {}) {
   );
   const staticExportReplayArtifactFiles = new Set(
     options.staticExportReplayArtifactFiles ?? [staticExportReplayArtifactFile],
+  );
+  const staticExportSyntheticRequestFiles = new Set(
+    options.staticExportSyntheticRequestFiles ?? [
+      buildSecurityIntrinsicsFile,
+      staticExportReplayContextFile,
+      staticExportReplayRequestFile,
+    ],
   );
   const presetRetentionPolicyFiles = new Set(
     options.presetRetentionPolicyFiles ?? [presetRetentionPolicyFile],
@@ -126,6 +136,9 @@ export function checkFilesystemBoundary(options = {}) {
     }
     if (staticExportReplayArtifactFiles.has(filePath)) {
       findings.push(...staticExportReplayArtifactCommitFindings(filePath, sourceText));
+    }
+    if (staticExportSyntheticRequestFiles.has(filePath)) {
+      findings.push(...staticExportSyntheticRequestFindings(filePath, sourceText));
     }
     if (presetRetentionPolicyFiles.has(filePath)) {
       findings.push(...presetRetentionPolicyFindings(filePath, sourceText));
@@ -203,6 +216,92 @@ export function staticExportReplayArtifactCommitFindings(filePath, sourceText) {
       `${filePath}: approved static-export route bytes must commit through commitBuildArrayValue() after replay classification`,
     );
   }
+  return findings;
+}
+
+export function staticExportSyntheticRequestFindings(filePath, sourceText) {
+  const scanText = stripCommentsAndStrings(sourceText);
+  const findings = [];
+  const mutableUrlConstructor = /\bnew\s+(?:globalThis\s*\.\s*)?URL\s*\(/u.exec(scanText);
+  if (mutableUrlConstructor !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableUrlConstructor.index)}: synthetic static-export targets must not use the mutable ambient URL constructor`,
+    );
+  }
+  const mutableRequestConstructor = /\bnew\s+(?:globalThis\s*\.\s*)?Request\s*\(/u.exec(scanText);
+  if (mutableRequestConstructor !== null) {
+    findings.push(
+      `${filePath}:${lineOf(sourceText, mutableRequestConstructor.index)}: synthetic static-export carriers must not use the mutable ambient Request constructor`,
+    );
+  }
+
+  if (filePath === staticExportReplayRequestFile) {
+    if (!/\bbuildSecurityUrlSnapshot\s*\(/u.test(scanText)) {
+      findings.push(
+        `${filePath}: synthetic static-export targets must use the boot-pinned URL snapshot`,
+      );
+    }
+    if (!/\bbuildSecurityGetRequest\s*\(\s*url\s*\.\s*href\s*\)/u.test(scanText)) {
+      findings.push(
+        `${filePath}: synthetic static-export carriers must use the boot-pinned GET Request constructor`,
+      );
+    }
+    if (!/\burl\s*:\s*BuildSecurityUrlSnapshot\b/u.test(sourceText)) {
+      findings.push(
+        `${filePath}: synthetic static-export results must retain the witnessed URL snapshot instead of a live URL`,
+      );
+    }
+  }
+
+  if (filePath === buildSecurityIntrinsicsFile) {
+    const requiredControls = [
+      [
+        'captured Request constructor',
+        /\bconst\s+NativeRequest\s*=\s*globalThis\s*\.\s*Request\b/u,
+      ],
+      ['captured URL constructor', /\bconst\s+NativeURL\s*=\s*globalThis\s*\.\s*URL\b/u],
+      [
+        'witnessed Request method',
+        /\bnativeRequestMethod\s*=\s*stableOwnGetter\s*\(\s*NativeRequest\s*\.\s*prototype\s*,\s*['"]method['"]\s*\)/u,
+      ],
+      [
+        'witnessed Request URL',
+        /\bnativeRequestUrl\s*=\s*stableOwnGetter\s*\(\s*NativeRequest\s*\.\s*prototype\s*,\s*['"]url['"]\s*\)/u,
+      ],
+      ['witnessed URL href', /\bnativeUrlHref\s*=\s*stableOwnGetter\s*\(/u],
+      ['witnessed URL pathname', /\bnativeUrlPathname\s*=\s*stableOwnGetter\s*\(/u],
+      [
+        'exact Request target check',
+        /\bwitnessReflectApply\s*<\s*string\s*>\s*\(\s*nativeRequestUrl\s*,\s*request\s*,/u,
+      ],
+      [
+        'native URL installation for Request internals',
+        /\bwitnessDefineProperty\s*\(\s*nativeGlobalThis\s*,\s*['"]URL['"]\s*,/u,
+      ],
+      [
+        'ambient URL descriptor restoration',
+        /\bwitnessDefineProperty\s*\(\s*nativeGlobalThis\s*,\s*['"]URL['"]\s*,\s*lateUrlDescriptor\s*\)/u,
+      ],
+    ];
+    for (let index = 0; index < requiredControls.length; index += 1) {
+      const [label, pattern] = requiredControls[index];
+      if (!pattern.test(sourceText)) {
+        findings.push(
+          `${filePath}: synthetic static-export construction is missing its ${label} control`,
+        );
+      }
+    }
+  }
+
+  if (
+    filePath === staticExportReplayContextFile &&
+    !/\bbuildSecurityUrlSnapshot\s*\(\s*origin\s*\)/u.test(scanText)
+  ) {
+    findings.push(
+      `${filePath}: synthetic static-export origins must use the boot-pinned URL snapshot`,
+    );
+  }
+
   return findings;
 }
 

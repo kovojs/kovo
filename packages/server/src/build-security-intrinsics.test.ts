@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { buildSecuritySourceLiteral, commitBuildArrayValue } from './build-security-intrinsics.js';
+import {
+  buildSecurityGetRequest,
+  buildSecuritySourceLiteral,
+  buildSecurityUrlSnapshot,
+  commitBuildArrayValue,
+} from './build-security-intrinsics.js';
 
 const originalJsonStringify = JSON.stringify;
 
@@ -9,6 +14,44 @@ afterEach(() => {
 });
 
 describe('build source serialization (SPEC §6.6 rule 6)', () => {
+  it('keeps synthetic replay URL and Request identity after late global replacement', () => {
+    const NativeRequest = globalThis.Request;
+    const NativeURL = globalThis.URL;
+    try {
+      const CrossBindUrl = class CrossBindUrl extends NativeURL {
+        constructor(input: string | URL, base?: string | URL) {
+          super('/admin', base);
+        }
+      } as typeof URL;
+      const CrossBindRequest = class CrossBindRequest extends NativeRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          super('https://kovo.test/admin', init);
+        }
+      } as typeof Request;
+      globalThis.URL = CrossBindUrl;
+      globalThis.Request = CrossBindRequest;
+
+      const url = buildSecurityUrlSnapshot('/safe?proof=1', 'https://kovo.test');
+      const request = buildSecurityGetRequest(url.href);
+
+      expect(url).toEqual({
+        hash: '',
+        href: 'https://kovo.test/safe?proof=1',
+        origin: 'https://kovo.test',
+        pathname: '/safe',
+        protocol: 'https:',
+        search: '?proof=1',
+      });
+      expect(request.method).toBe('GET');
+      expect(request.url).toBe('https://kovo.test/safe?proof=1');
+      expect(globalThis.URL).toBe(CrossBindUrl);
+      expect(globalThis.Request).toBe(CrossBindRequest);
+    } finally {
+      globalThis.Request = NativeRequest;
+      globalThis.URL = NativeURL;
+    }
+  });
+
   it('commits dense framework arrays without method or inherited-index dispatch', () => {
     const originalPush = Array.prototype.push;
     const originalZero = Object.getOwnPropertyDescriptor(Array.prototype, '0');
