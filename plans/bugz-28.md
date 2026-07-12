@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items  |
 | -------- | ----: | ------ |
-| Critical |   136 | C1-C136 |
+| Critical |   146 | C1-C146 |
 | High     |    35 | H1-H35 |
 | Medium   |    12 | M1-M12 |
 
@@ -1227,7 +1227,7 @@ build:dist` passes.
     `Vary: Cookie`; adjacent validation, redirect, renderer-failure, and route-semantics cases pass
     3/3, with the broader boundary document selection at 11/11.
 
-- [ ] **C93 - Mutable database URL parsing grants runtime privileges to the wrong role.**
+- [x] **C93 - Mutable database URL parsing grants runtime privileges to the wrong role.**
       `packages/server/src/postgres-runtime.ts`
   - `runtimeLoginRoleFromDatabaseUrl()` used the live global `URL` constructor and
     `decodeURIComponent` before provisioning. A selective replacement changed the configured
@@ -1237,6 +1237,8 @@ build:dist` passes.
   - **Acceptance:** runtime/admin/system URL identity, decoded role name, membership grants, function
     ACLs, and posture checks share one boot-pinned exact URL snapshot; late constructor/accessor/
     decode replacement cannot redirect any provisioned privilege.
+  - **Evidence:** the exact late URL/identifier replacement remains bound to the configured runtime
+    role in the 12-test PostgreSQL intrinsic-security matrix.
 
 - [x] **C94 - Route code substitutes a session cookie at document finalization.**
       `packages/server/src/app-document.ts`
@@ -1251,7 +1253,7 @@ build:dist` passes.
     provider's genuine cookie under the exact iterator substitution; both session-provider and CSRF
     collectors use frozen null-prototype entries and witnessed indexed finalization.
 
-- [ ] **C95 - Mutable authority-root filtering preserves runtime schema-creation power.**
+- [x] **C95 - Mutable authority-root filtering preserves runtime schema-creation power.**
       `packages/server/src/postgres-runtime.ts`
   - PostgreSQL provisioning built both its audited app-role roots and CREATE/TEMP revocation list
     through live `Array.prototype.filter`. A selective filter omitted only
@@ -1261,8 +1263,11 @@ build:dist` passes.
     expansion, revocation grantees, schema/database rows, and post-revocation verification use one
     exact descriptor-snapshotted identity set; no collection substitution can omit an app-reachable
     role or object.
+  - **Evidence:** authority-root/revocation traversal contains no live collection dispatch; the exact
+    creation-authority and full six-root CREATE/TEMP posture proofs pass in the focused PostgreSQL
+    matrices.
 
-- [ ] **C96 - Mutable column filtering grants readers a declared secret.**
+- [x] **C96 - Mutable column filtering grants readers a declared secret.**
       `packages/server/src/postgres-runtime.ts`
   - Reader/writer/admin grant synthesis used live column `map/filter/map` chains. A selective filter
     preserved `secretNote` in the public-column list; real PGlite migration committed and
@@ -1270,8 +1275,10 @@ build:dist` passes.
   - **Acceptance:** exact schema columns and secret metadata are descriptor-snapshotted once; every
     reader/writer/admin grant is built by bounded indexed traversal with captured membership and SQL
     emission, and a secret-derived column can never enter a public grant.
+  - **Evidence:** grant synthesis contains no live collection dispatch; the reader raw-read and
+    writer engine secret-column denial proofs pass with the authority-root posture case (3/3).
 
-- [ ] **C97 - Mutable policy traversal hides an extra permissive RLS policy.**
+- [x] **C97 - Mutable policy traversal hides an extra permissive RLS policy.**
       `packages/server/src/postgres-runtime.ts`
   - After ordinary provisioning, an extra `attacker_allow_all` permissive SELECT policy for
     `kovo_reader` was installed. A selective live policy-row filter returned an empty unexpected
@@ -1279,8 +1286,10 @@ build:dist` passes.
   - **Acceptance:** catalog policy rows, expected names/roles, set equality, AST normalization, key
     order, and issue accumulation use captured descriptor-first controls; every missing, altered, or
     additional permissive/restrictive policy makes posture fail closed.
+  - **Evidence:** extra-PUBLIC-policy and one-shot Proxy row-count regressions remain failing posture
+    in the 12-test PostgreSQL intrinsic-security matrix.
 
-- [ ] **C98 - Mutable RLS policy assembly installs an allow-all owner policy.**
+- [x] **C98 - Mutable RLS policy assembly installs an allow-all owner policy.**
       `packages/server/src/postgres-runtime.ts`
   - A selective one-shot `Array.prototype.join` replacement targeted only the generated
     `CREATE POLICY kovo_owner_scope` statement, returned `USING (true) WITH CHECK (true)`, and
@@ -1290,8 +1299,10 @@ build:dist` passes.
     statement assembly, execution, and posture readback use one descriptor-snapshotted exact policy
     plan through boot-captured operations; no late or one-shot collection replacement can widen an
     installed predicate, and the provisioner must verify the committed AST before returning ready.
+  - **Evidence:** the exact one-shot policy `Array.join` replay installs only the reviewed owner
+    predicate in the 12-test PostgreSQL intrinsic-security matrix.
 
-- [ ] **C99 - A time-varying schema snapshot omits RLS from a tenant-owned table.**
+- [x] **C99 - A time-varying schema snapshot omits RLS from a tenant-owned table.**
       `packages/server/src/postgres-runtime.ts`
   - A one-shot schema `Proxy.ownKeys` trap hid one owner table only during
     `postgresTablesFromSchema()`, then self-restored. Boot continued from a visible reference table;
@@ -1303,8 +1314,10 @@ build:dist` passes.
     graph once as a dense immutable snapshot, then reuse it for DDL, migration, metadata, owner/RLS,
     grants, relation wiring, and request-time Drizzle construction. Any unstable view fails before
     seed, migration, or provisioner SQL executes.
+  - **Evidence:** the exact first-use `Proxy.ownKeys` schema is rejected before SQL, while a genuine
+    immutable ESM namespace snapshot passes and a changing live binding fails.
 
-- [ ] **C100 - Mutable migration normalization executes injected provisioner SQL.**
+- [x] **C100 - Mutable migration normalization executes injected provisioner SQL.**
       `packages/server/src/postgres-runtime.ts`
   - A selective one-shot `Array.prototype.map` replacement injected an extra privileged statement
     while `normalizePostgresMigrations()` processed an otherwise reviewed migration list, then
@@ -1315,8 +1328,10 @@ build:dist` passes.
     first snapshot through boot-captured operations. The exact reviewed bytes/checksum must bind the
     statements executed under provisioner authority, and injected, accessor-backed, sparse, or
     time-varying migration state must fail before any transaction writes.
+  - **Evidence:** the exact one-shot migration `Array.map` replay executes only reviewed bytes in the
+    12-test PostgreSQL intrinsic-security matrix.
 
-- [ ] **C101 - Proxy-backed catalog rows hide live PostgreSQL posture drift.**
+- [x] **C101 - Proxy-backed catalog rows hide live PostgreSQL posture drift.**
       `packages/server/src/postgres-runtime.ts`
   - A self-disabling Proxy around a real driver-returned rows carrier hid the trailing extra
     permissive policy for the audit's repeated length reads. The same database changed from a
@@ -1326,8 +1341,10 @@ build:dist` passes.
     grant, migration, or posture authority is rejected when Proxy/accessor-backed, then reconstructed
     once as a bounded dense own-data snapshot before any traversal. No driver carrier can present a
     different row count, identity, or field value across audit phases; ambiguity fails posture closed.
+  - **Evidence:** the real-driver one-shot Proxy row-length regression retains the unexpected policy
+    and fails posture in the focused 12-test matrix.
 
-- [ ] **C102 - Mutable query-parameter iteration cross-binds an audited admin read.**
+- [x] **C102 - Mutable query-parameter iteration cross-binds an audited admin read.**
       `packages/server/src/postgres-runtime.ts`
   - A selective generic array iterator targeted the exact one-element parameter array `['u1']`,
     substituted `u2` only while the runtime spread parameters into the driver, and self-restored.
@@ -1338,8 +1355,10 @@ build:dist` passes.
     audit fact, and driver execution derive from one immutable descriptor-first query snapshot.
     Read, privileged-read, and admin/cross-owner clients never dispatch a caller or ambient iterator,
     and an unstable/sparse/accessor/Proxy parameter carrier fails before query or audit execution.
+  - **Evidence:** the exact one-shot parameter iterator replay returns the reviewed owner row and
+    preserves its matching audit fact in the 12-test PostgreSQL intrinsic-security matrix.
 
-- [ ] **C103 - Mutable default validation-failure assembly injects executable HTML.**
+- [x] **C103 - Mutable default validation-failure assembly injects executable HTML.**
       `packages/server/src/mutation/failure-html.ts`
   - The built-in 422 renderer escaped each validation issue, then assembled the trusted fragment
     through ambient `issues.map(...).join('')`. A selective one-shot `Array.prototype.join`
@@ -1350,8 +1369,10 @@ build:dist` passes.
     final trusted-HTML construction use bounded dense snapshots and boot-captured scalar/collection
     operations. No late or one-shot intrinsic replacement can add markup after escaping, and the
     complete mutation 422 response must pass the same final HTML choke as ordinary documents.
+  - **Evidence:** the exact final-join fragment/page attacks stay escaped in the 5-test failure-HTML
+    and streaming-output security matrix.
 
-- [ ] **C104 - Mutable streaming mutation encoding and replay assembly inject executable HTML.**
+- [x] **C104 - Mutable streaming mutation encoding and replay assembly inject executable HTML.**
       `packages/server/src/mutation/streaming.ts`
   - After awaiting an app-authored stream generator, the real renderer invoked live
     `TextEncoder.prototype.encode(line)`. A one-shot selective replacement changed a safe
@@ -1365,8 +1386,10 @@ build:dist` passes.
     one boot-pinned exact byte sequence. No app callback runs before a live encoder/collection sink;
     the first response bytes and committed replay bytes must be identical and pass the same output
     choke under late, one-shot, and post-yield intrinsic replacement.
+  - **Evidence:** late encoder and replay-buffer substitutions retain identical reviewed live/replay
+    bytes in the same focused 5-test matrix.
 
-- [ ] **C105 - Mutable Drizzle dialect rendering installs an allow-all authorization policy.**
+- [x] **C105 - Mutable Drizzle dialect rendering installs an allow-all authorization policy.**
       `packages/server/src/postgres-runtime.ts`
   - A one-shot `PgDialect.prototype.sqlToQuery` replacement targeted only the second rendering of an
     exact custom authorization predicate, returned `true`, and self-restored. Real provisioning
@@ -1376,8 +1399,10 @@ build:dist` passes.
     invoke it only through witnessed receiver binding, and snapshot the rendered SQL/parameters once
     for policy identity, DDL execution, and committed-AST posture readback. No late prototype,
     instance, getter, or one-shot renderer replacement can change a custom predicate after review.
+  - **Evidence:** the exact one-shot late `PgDialect.sqlToQuery` replay commits the reviewed custom
+    predicate in the 12-test PostgreSQL intrinsic-security matrix.
 
-- [ ] **C106 - Mutable PostgreSQL policy parsing authenticates an allow-all predicate.**
+- [x] **C106 - Mutable PostgreSQL policy parsing authenticates an allow-all predicate.**
       `packages/server/src/postgres-runtime.ts`
   - A selective replacement of the cached `pgsql-ast-parser.parse` method rewrote only the two real
     `USING (true)` / `WITH CHECK (true)` parses into the expected owner predicate AST and
@@ -1387,8 +1412,10 @@ build:dist` passes.
     through witnessed binding, and normalize one immutable AST snapshot for expected policy,
     catalog readback, equality, and diagnostics. No late module/object/prototype/parser replacement
     can make different SQL bytes share an authorization verdict.
+  - **Evidence:** the exact late parser substitution cannot authenticate the installed allow-all AST
+    in the 12-test PostgreSQL intrinsic-security matrix.
 
-- [ ] **C107 - Mutable browser stream decoding substitutes executable mutation fragments.**
+- [x] **C107 - Mutable browser stream decoding substitutes executable mutation fragments.**
       `packages/browser/src/apply-mutation-response.ts`, generated inline mutation runtime
   - The browser constructed `new TextDecoder()` and later called live `decoder.decode()` after
     authored modules could run. A one-shot prototype replacement changed a safe server stream into
@@ -1399,10 +1426,9 @@ build:dist` passes.
     only that snapshot into framing, fragment parsing, sanitization, and morphing. Late decoder/
     typed-array/stream replacement cannot alter any parsed byte, and source/generated parity is
     proven in all supported engines.
-  - **Open residual:** a fresh post-fix three-engine sweep replaced live
-    `ReadableStream.prototype.getReader` once and substituted an attacker mutation stream in both
-    modular and generated-inline runtimes (6/6). Reader acquisition/read/cancel/release must join the
-    same boot-pinned byte membrane before C107 can close.
+  - **Evidence:** exact late decoder and `getReader` stream substitution replays stay inert 6/6 in
+    Chromium, Firefox, and WebKit; the full source/generated browser matrix passes 399/399 with
+    pinned read/cancel/release/locked controls and byte snapshots.
 
 - [x] **C108 - Mutable final DOM commit changes a sanitized node into executable markup.**
       `packages/browser/src/{morph,response-fragment-apply}.ts`
@@ -1418,7 +1444,7 @@ build:dist` passes.
     traversal/attribute omission, dynamic script substitution, and scalar sanitizer poison; the full
     browser matrix passes 375/375 plus inline, Trusted Types, build, API, and import gates.
 
-- [ ] **C109 - Mutable PGlite transaction dispatch rewrites a committed RLS policy.**
+- [x] **C109 - Mutable PGlite transaction dispatch rewrites a committed RLS policy.**
       `packages/server/src/postgres-runtime.ts`
   - A one-shot `PGlite.prototype.transaction` wrapper captured the genuine transaction client and
     replaced only its `exec` for the owner-policy `CREATE POLICY`, committing `USING (true)` before
@@ -1429,8 +1455,10 @@ build:dist` passes.
     `exec/query/transaction` methods before callbacks or SQL execute. Outer and nested client
     dispatch must consume the same reviewed SQL/policy plan; prototype, instance, or one-shot driver
     wrapping cannot change committed bytes.
+  - **Evidence:** the exact late transaction-local DDL substitution receives no dispatch and the
+    reviewed owner policy remains installed in the 12-test PostgreSQL intrinsic-security matrix.
 
-- [ ] **C110 - Mutable migration hashing authenticates changed applied SQL.**
+- [x] **C110 - Mutable migration hashing authenticates changed applied SQL.**
       `packages/server/src/postgres-runtime.ts`
   - A changed, already-applied migration correctly failed the control check. Selective hash
     `update/digest` replacements then returned the stored checksum for exactly the normalization and
@@ -1440,6 +1468,8 @@ build:dist` passes.
     methods before authored code, bind canonical migration bytes to one immutable digest snapshot,
     and compare the stored, planned, and pre-execution checksum through captured constant-time scalar
     operations. No late prototype/instance/call-count hash replacement can alias changed SQL.
+  - **Evidence:** exact late hash-instance replacement cannot authenticate the changed migration in
+    the 12-test PostgreSQL intrinsic-security matrix.
 
 - [x] **C111 - Mutable Node PostgreSQL driver dispatch forges live posture evidence.**
       `packages/server/src/postgres-runtime.ts`
@@ -1604,7 +1634,7 @@ build:dist` passes.
   - **Evidence:** inherited-list pollution, collection poisoning, and time-varying Proxy rows are
     inert; the integrated core/browser query-delta matrix passes 50/50 and focused check is clean.
 
-- [ ] **C124 - A late Proxy replacement disables the runtime database verifier.**
+- [x] **C124 - A late Proxy replacement disables the runtime database verifier.**
       `packages/test/src/{verifier,verifier-observation,sql-observer}.ts`
   - Replacing `globalThis.Proxy` only while `createDbVerifier().wrap(db)` ran returned the raw
     database handle. An uncovered `audit_log` write then produced no observation and
@@ -1613,8 +1643,10 @@ build:dist` passes.
     and diagnostic traversal use boot-captured, witnessed controls. Late Proxy/Reflect/Function,
     Object/Array/Map/Set/WeakMap, Promise, or iterator mutation cannot suppress, fabricate, or
     reclassify an operation; uncertainty fails closed and exact adversarial tests remain permanent.
+  - **Evidence:** the exact late-Proxy replay still records and rejects the uncovered write in the
+    13-test verifier/adapter security matrix.
 
-- [ ] **C125 - The verifier exposes its mutable authority ledger to tested code.**
+- [x] **C125 - The verifier exposes its mutable authority ledger to tested code.**
       `packages/test/src/{verifier,verifier-observation}.ts`
   - Both `verifier.observed` and wrapped-DB `__kovoObserved` returned the recorder's live array. A
     tested mutation could clear that array after an uncovered write, after which `assertCovered()`
@@ -1623,8 +1655,10 @@ build:dist` passes.
     frozen dense snapshots of frozen exact operation records. Mutating an earlier view cannot alter
     current verification state, and externally supplied operation ledgers are re-snapshotted or
     rejected before they influence a coverage decision.
+  - **Evidence:** mutations of both exposed observation views leave the private frozen ledger intact
+    in the 13-test verifier/adapter security matrix.
 
-- [ ] **C126 - Caller-owned verifier inputs can retroactively bless an uncovered write.**
+- [x] **C126 - Caller-owned verifier inputs can retroactively bless an uncovered write.**
       `packages/test/src/{verifier,verifier-diagnostics}.ts`
   - After recording an uncovered `audit_log` write, mutating the original touch graph to declare an
     `audit` touch made `assertCovered()` pass. The verifier retained caller-owned graph/config
@@ -1633,8 +1667,10 @@ build:dist` passes.
     and copied into frozen null-prototype own-data snapshots before any DB handle is exposed. Later
     mutation, getters, inheritance, sparse arrays, proxies, or prototype pollution cannot change the
     policy used to classify an already observed or future operation.
+  - **Evidence:** touch-graph/config mutation plus inherited/accessor/sparse carriers remain inert or
+    fail closed in the 13-test verifier/adapter security matrix.
 
-- [ ] **C127 - Mutable array traversal suppresses runtime owner-scope violations.**
+- [x] **C127 - Mutable array traversal suppresses runtime owner-scope violations.**
       `packages/test/src/verifier.ts`
   - A selective late `Array.prototype.filter` replacement returned an empty array only for exact
     foreign-owner rows. Both `assertOwnerRowsScoped()` and `assertOwnerWritesScoped()` then returned
@@ -1644,8 +1680,10 @@ build:dist` passes.
     diagnostics use dense own-data snapshots plus captured exact primitives. Late Array/Set/String,
     iterators, accessors, sparse arrays, proxies, or prototype pollution cannot hide a foreign row;
     ambiguous carriers fail closed.
+  - **Evidence:** both owner-row and owner-write exact late-filter replays retain KV414 in the
+    13-test verifier/adapter security matrix.
 
-- [ ] **C128 - Mutable set membership authorizes undeclared test-database writes.**
+- [x] **C128 - Mutable set membership authorizes undeclared test-database writes.**
       `packages/test/src/{sqlite,pglite}.ts`
   - An in-memory SQLite declared writer allowed only `cart_items`. A targeted late
     `Set.prototype.has('main.audit_log')` replacement made its helper authorization check return
@@ -1655,8 +1693,10 @@ build:dist` passes.
     table membership, engine stat/authorizer decisions, statement construction, and driver calls use
     boot-captured witnessed controls. Late collection/string/function mutation or caller policy
     changes cannot authorize an undeclared table, and rejected operations leave engine state intact.
+  - **Evidence:** exact SQLite and PGlite `Set.has`/policy-mutation replays reject the audit write and
+    leave both engines unchanged in the 13-test verifier/adapter security matrix.
 
-- [ ] **C129 - Mutable PGlite dispatch turns a reviewed read into an engine write.**
+- [x] **C129 - Mutable PGlite dispatch turns a reviewed read into an engine write.**
       `packages/test/src/pglite.ts`
   - A late `PGlite.prototype.query` wrapper targeted the exact reviewed
     `select id from products`, used the reader receiver to disable
@@ -1666,6 +1706,8 @@ build:dist` passes.
     statement/value snapshots, result projection, and close lifecycle use boot-captured witnessed
     driver/Promise controls. Late prototype/instance wrappers cannot change the session setting,
     execute extra SQL, alter reviewed bytes/values, or return before an enforcement failure.
+  - **Evidence:** the exact dedicated-reader extra-SQL injection receives no dispatch; `audit_log`
+    stays empty and read-only session posture stays on in the 13-test verifier/adapter matrix.
 
 - [x] **C130 - Mutable app-graph traversal erases a webhook from the authority census.**
       `packages/compiler/src/{app-graph,compile-fact-ledger,compile-result}.ts`
@@ -1683,7 +1725,7 @@ build:dist` passes.
     helpers contain no live collection/scalar dispatch; the compiler suite passes 1,004/1,004 plus
     compiler dist/DTS and the security-classifier corpus.
 
-- [ ] **C131 - Mutable production-build traversal blesses an undeclared route.**
+- [x] **C131 - Mutable production-build traversal blesses an undeclared route.**
       `packages/server/src/vite-build.ts`
   - With one declared `/safe` route and genuine build hints, a selective late
     `Array.prototype.map` replacement returned an attacker `/undeclared-admin` route only when the
@@ -1693,8 +1735,10 @@ build:dist` passes.
     fingerprints, and derived-app overrides are exact one-time snapshots traversed with build
     security intrinsics. Late collection/prototype/Proxy mutation cannot add, omit, reorder, or
     cross-bind a route, renderer, hint, module, or asset before static/deploy output.
+  - **Evidence:** the exact late route-map replay retains only `/safe`; focused route/asset tests pass
+    2/2 and the broader build matrix passes 65/65.
 
-- [ ] **C132 - Mutable manifest-asset traversal publishes an arbitrary host file.**
+- [x] **C132 - Mutable manifest-asset traversal publishes an arbitrary host file.**
       `packages/server/src/{vite-build-assets,vite-build-output}.ts`
   - A selective late `Array.prototype.map` replacement targeted the genuine manifest asset array
     before `viteDistSourcePath()` ran and returned `{ path: '/assets/credentials.txt', source:
@@ -1704,6 +1748,8 @@ build:dist` passes.
     source path is derived inside the reviewed dist root after snapshotting. Late traversal,
     getters, proxies, URL/path methods, or forged `StaticExportAssetInput` objects cannot bypass
     confinement or publish a source not explicitly supplied through the separate author-asset API.
+  - **Evidence:** the exact host-credential asset replay writes no file outside the manifest-derived
+    dist source; focused route/asset tests pass 2/2 and the static/Vite matrix passes 264 tests.
 
 - [x] **C133 - Mutable shared compiler deduplication erases a required KV320 diagnostic.**
       `packages/compiler/src/shared.ts` and validator/emit consumers
@@ -1748,7 +1794,7 @@ build:dist` passes.
     late `charCodeAt`/`Math.imul`/number-format replay receives zero calls, and the full compiler
     matrix plus dist/DTS pass.
 
-- [ ] **C136 - Mutable page-transition state bypasses the session bfcache reload floor.**
+- [x] **C136 - Mutable page-transition state bypasses the session bfcache reload floor.**
       `packages/browser/src/{query-visible-return,document-lifecycle}.ts`, generated inline loader
   - After installing the session-dependent `pageshow` defense, a late replacement of
     `PageTransitionEvent.prototype.persisted` returned false for a genuine native persisted event.
@@ -1757,6 +1803,86 @@ build:dist` passes.
   - **Acceptance:** source and generated lifecycle runtimes read the native persisted state through
     one boot-pinned, witnessed, fail-closed control. Late getter/prototype/event substitution cannot
     suppress a session-dependent restore reload; exact three-engine parity remains permanent.
+  - **Evidence:** exact modular/generated persisted-getter substitution reloads 6/6 in Chromium,
+    Firefox, and WebKit; the full browser matrix passes 399/399.
+
+- [ ] **C137 - Mutable broadcast event data cross-binds private wire across principals.**
+      `packages/browser/src/broadcast.ts`, generated inline loader
+  - A late `MessageEvent.prototype.data` getter preserved session A's genuine private mutation body
+    but rewrote only its principal stamp to session B. Modular and generated receivers then accepted
+    and applied A's query/fragment truth in B's UI; the exploit reproduces 6/6 across three engines.
+  - **Acceptance:** receive paths use a boot-pinned witnessed native data read and one immutable exact
+    envelope snapshot before fingerprint comparison or apply. Event/prototype/getter substitution
+    cannot change principal, build, query, fragment, or body truth after transport delivery.
+
+- [ ] **C138 - Raw-read unwrapping bypasses the read-only SQL choke.**
+      `packages/test/src` verifier/harness adapters
+  - `readonlyDb(...).rawRead` exposed the framework-managed raw target before execution, allowing a
+    mutable adapter to execute DML outside statement classification; SQLite/PGlite engine denials
+    also escaped the required KV433 mapping.
+  - **Acceptance:** raw reads retain the managed read-only membrane through final dispatch, snapshot
+    SQL/values/metadata once, reject write-capable statements before engine effects, and normalize
+    every engine denial to the framework's fail-closed verdict.
+
+- [ ] **C139 - Mutable SQL-observation collections erase a real read.**
+      `packages/test/src/{sql-observer,verifier-observation}.ts`
+  - Late `Array.prototype.flatMap` and `Set.prototype.has` replacements erased a genuine
+    `SELECT audit_log` observation, so the runtime verifier reported KV407 coverage as green.
+  - **Acceptance:** parsing, operation expansion, dedupe, domain/table membership, and recorder append
+    use captured controls over exact snapshots; no collection replacement can omit or reclassify a
+    database effect.
+
+- [ ] **C140 - Mutable side-effect fingerprints hide trigger and cascade writes.**
+      `packages/test/src` engine side-effect verifier
+  - Targeted `Function.prototype.call` redirection plus constant `JSON.stringify` fingerprints hid
+    same-row-count trigger/cascade updates from the engine before/after net while verification passed.
+  - **Acceptance:** engine queries, row snapshots, canonical fingerprints, equality, and effect-net
+    construction use pinned exact controls and collision-resistant identity; any ambiguity fails
+    coverage closed.
+
+- [ ] **C141 - A query mutates its declared reads after executing an undeclared read.**
+      `packages/test/src` query harness
+  - The loader widened its own `query.reads` after reading an undeclared table; post-load traversal
+    accepted the changed declaration and KV407 passed.
+  - **Acceptance:** query identity and declared read policy are immutable construction-time snapshots
+    shared by execution and post-run verification; loader code cannot alter its authority after use.
+
+- [ ] **C142 - A query deletes its output schema before result verification.**
+      `packages/test/src` query harness
+  - The loader assigned `query.output = undefined`; post-load lookup then skipped KV410 result-schema
+    validation for the already-produced value.
+  - **Acceptance:** the exact output schema/verifier is captured before loader execution and always
+    validates the returned value; later mutation or property ambiguity rejects rather than disables
+    KV410.
+
+- [ ] **C143 - Mutable Promise dispatch skips post-handler verification.**
+      `packages/test/src` verifier harness
+  - A targeted late `Promise.prototype.then` replacement recognized the coverage assertion and
+    returned the captured result without invoking it, allowing an uncovered operation to resolve.
+  - **Acceptance:** handler/loader settlement and every post-execution assertion use boot-pinned
+    Promise observation; late then/catch/finally substitution cannot skip success or failure checks.
+
+- [ ] **C144 - A page mutates its declared reads after rendering.**
+      `packages/test/src` page harness
+  - `render()` widened its fixture `reads` before the post-render assertion, hiding an undeclared DB
+    read and making runtime coverage pass.
+  - **Acceptance:** page read policy is one immutable pre-render snapshot used by both execution and
+    verification; render code cannot expand authority after the effect.
+
+- [ ] **C145 - A mutation changes its touch-graph scope after writing.**
+      `packages/test/src` mutation harness
+  - The handler changed caller-owned `touchGraphKey` from a restrictive entry to a permissive entry
+    before post-handler coverage, hiding an out-of-scope write.
+  - **Acceptance:** mutation identity, touch-graph key, graph entry, domains, and table policy are
+    snapshotted before handler execution and remain the sole verification authority.
+
+- [ ] **C146 - A late Proxy replacement removes server database membranes.**
+      `packages/server/src` managed DB adapters
+  - `wrapDbAdapter` and `readonlyCapabilityDb` constructed live global `Proxy` instances after app
+    code could replace the constructor; returning the raw target removes KV422/KV433 method and
+    write guards.
+  - **Acceptance:** every managed/read-only DB proxy uses a boot-captured witnessed constructor and
+    pinned traps/dispatch; late global Proxy replacement cannot expose or return an unwrapped target.
 
 ## High
 
