@@ -66,7 +66,9 @@ const NativeTypeError = globalThis.TypeError;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
+const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeReflectApply = NativeReflect.apply;
 const nativeRegExpExec = RegExp.prototype.exec;
@@ -77,16 +79,38 @@ function passwordApply<Return>(fn: Function, receiver: unknown, args: readonly u
   return nativeReflectApply(fn, receiver, args) as Return;
 }
 
+function passwordArrayAppend<Value>(target: Value[], value: Value): void {
+  const length = target.length;
+  passwordApply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    length,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = passwordApply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [target, length],
+  );
+  if (committed === undefined || !('value' in committed) || committed.value !== value) {
+    throw new NativeTypeError('Password parser own-data append failed.');
+  }
+}
+
 function rawSplitLiteral(value: string, separator: string): string[] {
   const parts: string[] = [];
   let cursor = 0;
   while (cursor <= value.length) {
     const match = passwordApply<number>(nativeStringIndexOf, value, [separator, cursor]);
     if (match < 0) {
-      parts[parts.length] = passwordApply(nativeStringSlice, value, [cursor]);
+      passwordArrayAppend(parts, passwordApply(nativeStringSlice, value, [cursor]));
       return parts;
     }
-    parts[parts.length] = passwordApply(nativeStringSlice, value, [cursor, match]);
+    passwordArrayAppend(parts, passwordApply(nativeStringSlice, value, [cursor, match]));
     cursor = match + separator.length;
   }
   return parts;

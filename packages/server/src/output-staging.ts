@@ -20,7 +20,7 @@ import {
   securitySetHas,
   securityUint8ArraySlice,
 } from './response-security-intrinsics.js';
-import { witnessFreeze } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 
 /**
  * @internal Manifest-backed artifact staging primitive for build/export output (SPEC.md §9.5).
@@ -186,12 +186,16 @@ async function artifactOutputManifest(
       throw targetError(entry, `duplicate artifact target '${relativePath}'`, diagnostics);
     }
     securitySetAdd(seen, relativePath);
-    manifest[manifest.length] = {
-      hash: await artifactOutputHash(entry),
-      label: entry.label,
-      relativePath,
-      targetPath,
-    };
+    witnessArrayAppend(
+      manifest,
+      {
+        hash: await artifactOutputHash(entry),
+        label: entry.label,
+        relativePath,
+        targetPath,
+      },
+      'Server packages/server/src/output-staging.ts collection',
+    );
   }
   return manifest;
 }
@@ -240,7 +244,11 @@ function snapshotArtifactOutputEntries(
         : {}),
     };
     assertArtifactOutputEntryShape(entry);
-    pinned[pinned.length] = witnessFreeze(entry);
+    witnessArrayAppend(
+      pinned,
+      witnessFreeze(entry),
+      'Server packages/server/src/output-staging.ts collection',
+    );
   }
   return witnessFreeze(pinned);
 }
@@ -323,10 +331,11 @@ async function changedArtifactOutputEntries(
     );
     const current = await fileSystem.fileBytes(buildSecurityPathBasename(entry.targetPath));
     if (current === undefined) {
-      changed[changed.length] = entry;
+      witnessArrayAppend(changed, entry, 'Server packages/server/src/output-staging.ts collection');
       continue;
     }
-    if (sha256(current) !== entry.hash) changed[changed.length] = entry;
+    if (sha256(current) !== entry.hash)
+      witnessArrayAppend(changed, entry, 'Server packages/server/src/output-staging.ts collection');
   }
   return changed;
 }
@@ -352,7 +361,12 @@ async function staleArtifactOutputPaths(
     }
     const resolved = buildSecurityPathResolve(candidate);
     if (pathRelativeToRoot(root, resolved) === undefined) continue;
-    if (!securitySetHas(owned, resolved)) stale[stale.length] = resolved;
+    if (!securitySetHas(owned, resolved))
+      witnessArrayAppend(
+        stale,
+        resolved,
+        'Server packages/server/src/output-staging.ts collection',
+      );
   }
   return stale;
 }

@@ -7,7 +7,7 @@ import {
   securitySetAdd,
   securitySetHas,
 } from './response-security-intrinsics.js';
-import { witnessFreeze } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 
 /**
  * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Planned immutable
@@ -77,7 +77,11 @@ export function kovoAppShellViteClientModuleOutputPlan(
   const plan: KovoAppShellViteClientModuleOutputPlanItem[] = [];
   for (let index = 0; index < writes.length; index += 1) {
     const write = writes[index]!;
-    plan[plan.length] = { path: write.path, targetPath: write.targetPath };
+    witnessArrayAppend(
+      plan,
+      { path: write.path, targetPath: write.targetPath },
+      'Server packages/server/src/vite-client-module-output.ts collection',
+    );
   }
   return plan;
 }
@@ -98,11 +102,15 @@ function kovoAppShellViteClientModuleWrites(
     const path = requiredBuiltClientModuleString(module, 'path', index);
     const source = requiredBuiltClientModuleString(module, 'source', index);
     const file = requiredBuiltClientModuleString(module, 'file', index);
-    writes[writes.length] = witnessFreeze({
-      path,
-      source,
-      targetPath: viteDistSourcePath(root, file),
-    });
+    witnessArrayAppend(
+      writes,
+      witnessFreeze({
+        path,
+        source,
+        targetPath: viteDistSourcePath(root, file),
+      }),
+      'Server packages/server/src/vite-client-module-output.ts collection',
+    );
   }
   return writes;
 }
@@ -149,7 +157,11 @@ function kovoAppShellViteArtifactOutputEntries(
 ) {
   const entries: ReturnType<typeof kovoAppShellViteArtifactOutputEntry>[] = [];
   for (let index = 0; index < writes.length; index += 1) {
-    entries[entries.length] = kovoAppShellViteArtifactOutputEntry(writes[index]!);
+    witnessArrayAppend(
+      entries,
+      kovoAppShellViteArtifactOutputEntry(writes[index]!),
+      'Server packages/server/src/vite-client-module-output.ts collection',
+    );
   }
   return entries;
 }

@@ -13,7 +13,7 @@ import {
   securityObjectKeys,
   securitySetAdd,
 } from './response-security-intrinsics.js';
-import { witnessSetForEach } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessSetForEach } from './security-witness-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import { replayStaticExportRequest } from './static-export-request.js';
 import type { StaticExportReplayContext } from './static-export-replay-context.js';
@@ -51,7 +51,11 @@ export async function replayStaticExportClientModuleArtifacts({
   }
   const hrefs: string[] = [];
   witnessSetForEach(hrefSet, (href) => {
-    hrefs[hrefs.length] = href;
+    witnessArrayAppend(
+      hrefs,
+      href,
+      'Server packages/server/src/static-export-client-modules.ts collection',
+    );
   });
 
   for (let index = 0; index < hrefs.length; index += 1) {
@@ -71,7 +75,11 @@ export async function replayStaticExportClientModuleArtifacts({
     }
 
     if (existingArtifact === undefined) {
-      artifacts[artifacts.length] = artifact;
+      witnessArrayAppend(
+        artifacts,
+        artifact,
+        'Server packages/server/src/static-export-client-modules.ts collection',
+      );
       securityMapSet(artifactByTargetPath, artifact.path, artifact);
     }
   }

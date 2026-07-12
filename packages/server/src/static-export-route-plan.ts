@@ -17,6 +17,7 @@ import {
   staticExportDiagnostic,
   type StaticExportDiagnostic,
 } from './static-export-diagnostics.js';
+import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 export interface StaticExportRouteTarget {
   path: string;
@@ -38,25 +39,37 @@ export function staticExportRoutePlan(app: KovoApp): StaticExportRoutePlan {
     const route = routes[routeIndex]!;
     const access = accessDecisionFor(route);
     if (app.sessionProvider && !isPublicAccessDecision(access)) {
-      diagnostics[diagnostics.length] = staticExportDiagnostic(
-        route.path,
-        `KV229 static export cannot prove '${route.path}' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; declare publicAccess(...) on explicitly public routes, split this route into an explicitly public app shell, or wait for compiler-backed session-dependence metadata.`,
+      witnessArrayAppend(
+        diagnostics,
+        staticExportDiagnostic(
+          route.path,
+          `KV229 static export cannot prove '${route.path}' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; declare publicAccess(...) on explicitly public routes, split this route into an explicitly public app shell, or wait for compiler-backed session-dependence metadata.`,
+        ),
+        'Server packages/server/src/static-export-route-plan.ts collection',
       );
       continue;
     }
 
     if (route.guard || isGuardAccessDecision(access)) {
-      diagnostics[diagnostics.length] = staticExportDiagnostic(
-        route.path,
-        `KV229 static export cannot export guarded route '${route.path}'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.`,
+      witnessArrayAppend(
+        diagnostics,
+        staticExportDiagnostic(
+          route.path,
+          `KV229 static export cannot export guarded route '${route.path}'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.`,
+        ),
+        'Server packages/server/src/static-export-route-plan.ts collection',
       );
       continue;
     }
 
     if (isPublicAccessDecision(access) && appRouteMayEmitAnonymousCsrfCookie(app)) {
-      diagnostics[diagnostics.length] = staticExportDiagnostic(
-        route.path,
-        `KV229 static export cannot export publicAccess route '${route.path}' because this app has default-on per-form CSRF for browser mutations. Rendering a mutation form can mint the anonymous CSRF Set-Cookie required by SPEC §9.1, but SPEC §9.5 static files have no response-specific cookie channel. Serve this route dynamically, split the form out of the exported surface, or make the targeted non-browser mutation explicitly csrf:false with a justification.`,
+      witnessArrayAppend(
+        diagnostics,
+        staticExportDiagnostic(
+          route.path,
+          `KV229 static export cannot export publicAccess route '${route.path}' because this app has default-on per-form CSRF for browser mutations. Rendering a mutation form can mint the anonymous CSRF Set-Cookie required by SPEC §9.1, but SPEC §9.5 static files have no response-specific cookie channel. Serve this route dynamically, split the form out of the exported surface, or make the targeted non-browser mutation explicitly csrf:false with a justification.`,
+        ),
+        'Server packages/server/src/static-export-route-plan.ts collection',
       );
       continue;
     }
@@ -135,19 +148,27 @@ function staticExportParamRouteTargets(
       securityStringIncludes(staticPath, '?') ||
       securityStringIncludes(staticPath, '#')
     ) {
-      diagnostics[diagnostics.length] = staticExportDiagnostic(
-        route.path,
-        `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be an absolute pathname without search or hash.`,
-        staticPath,
+      witnessArrayAppend(
+        diagnostics,
+        staticExportDiagnostic(
+          route.path,
+          `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be an absolute pathname without search or hash.`,
+          staticPath,
+        ),
+        'Server packages/server/src/static-export-route-plan.ts collection',
       );
       continue;
     }
 
     if (routeHasParams(normalized.pathname)) {
-      diagnostics[diagnostics.length] = staticExportDiagnostic(
-        route.path,
-        `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be a concrete URL, not a route pattern.`,
-        normalized.pathname,
+      witnessArrayAppend(
+        diagnostics,
+        staticExportDiagnostic(
+          route.path,
+          `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be a concrete URL, not a route pattern.`,
+          normalized.pathname,
+        ),
+        'Server packages/server/src/static-export-route-plan.ts collection',
       );
       continue;
     }
@@ -157,18 +178,23 @@ function staticExportParamRouteTargets(
     // specific "unsafe URL path segment" diagnostic must be raised here rather than being preempted
     // by the generic "does not match" message (SPEC §9.5).
     if (!staticExportRouteTargetPathIsSafe(normalized.pathname)) {
-      diagnostics[diagnostics.length] = unsafeStaticExportRouteTargetDiagnostic(
-        route.path,
-        normalized.pathname,
+      witnessArrayAppend(
+        diagnostics,
+        unsafeStaticExportRouteTargetDiagnostic(route.path, normalized.pathname),
+        'Server packages/server/src/static-export-route-plan.ts collection',
       );
       continue;
     }
 
     if (!matchRoute([route], normalized.pathname)) {
-      diagnostics[diagnostics.length] = staticExportDiagnostic(
-        route.path,
-        `KV229 static export staticPath '${staticPath}' does not match param route '${route.path}'.`,
-        normalized.pathname,
+      witnessArrayAppend(
+        diagnostics,
+        staticExportDiagnostic(
+          route.path,
+          `KV229 static export staticPath '${staticPath}' does not match param route '${route.path}'.`,
+          normalized.pathname,
+        ),
+        'Server packages/server/src/static-export-route-plan.ts collection',
       );
       continue;
     }
@@ -189,9 +215,10 @@ function addStaticExportRouteTarget(
   target: StaticExportRouteTarget,
 ): void {
   if (!staticExportRouteTargetPathIsSafe(target.path)) {
-    diagnostics[diagnostics.length] = unsafeStaticExportRouteTargetDiagnostic(
-      target.routePath,
-      target.path,
+    witnessArrayAppend(
+      diagnostics,
+      unsafeStaticExportRouteTargetDiagnostic(target.routePath, target.path),
+      'Server packages/server/src/static-export-route-plan.ts collection',
     );
     return;
   }
@@ -200,16 +227,24 @@ function addStaticExportRouteTarget(
   if (existing) {
     // SPEC §9.5 static export replays a synthetic GET per concrete route document;
     // duplicate concrete URLs are non-exportable because they would race for one HTML artifact.
-    diagnostics[diagnostics.length] = staticExportDiagnostic(
-      target.routePath,
-      `KV229 static export cannot export '${target.path}' for route '${target.routePath}' because it duplicates the concrete route target from '${existing.routePath}'.`,
-      target.path,
+    witnessArrayAppend(
+      diagnostics,
+      staticExportDiagnostic(
+        target.routePath,
+        `KV229 static export cannot export '${target.path}' for route '${target.routePath}' because it duplicates the concrete route target from '${existing.routePath}'.`,
+        target.path,
+      ),
+      'Server packages/server/src/static-export-route-plan.ts collection',
     );
     return;
   }
 
   securityMapSet(targetPaths, target.path, target);
-  targets[targets.length] = target;
+  witnessArrayAppend(
+    targets,
+    target,
+    'Server packages/server/src/static-export-route-plan.ts collection',
+  );
 }
 
 function staticExportRouteTargetPathIsSafe(pathname: string): boolean {
@@ -257,6 +292,10 @@ function routeHasParams(path: string): boolean {
 function appendStaticExportPlanItems<Value>(target: Value[], source: readonly Value[]): void {
   const pinned = snapshotBuildArray(source, 'static-export plan items');
   for (let index = 0; index < pinned.length; index += 1) {
-    target[target.length] = pinned[index]!;
+    witnessArrayAppend(
+      target,
+      pinned[index]!,
+      'Server packages/server/src/static-export-route-plan.ts collection',
+    );
   }
 }

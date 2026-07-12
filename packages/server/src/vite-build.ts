@@ -27,6 +27,7 @@ import {
   type KovoAppShellViteManifestHintOptions,
   type KovoAppShellViteOutputBundle,
 } from './vite-manifest.js';
+import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 /**
  * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Compiled client module
@@ -387,10 +388,14 @@ function buildRouteHints(
       routeManifestEntries.value as readonly string[],
       `app-shell route hint entry ${index}.entries`,
     );
-    hints[hints.length] = {
-      hints: kovoAppShellViteManifestHints(manifest, pinnedManifestEntries, options),
-      routePath: routePath.value,
-    };
+    witnessArrayAppend(
+      hints,
+      {
+        hints: kovoAppShellViteManifestHints(manifest, pinnedManifestEntries, options),
+        routePath: routePath.value,
+      },
+      'Server packages/server/src/vite-build.ts collection',
+    );
   }
 
   return snapshotBuildArray(hints, 'built app-shell route hints');
@@ -415,13 +420,16 @@ function buildRoutesWithHints(
         break;
       }
     }
-    derived[derived.length] =
+    witnessArrayAppend(
+      derived,
       built === undefined
         ? routeDeclaration
         : {
             ...routeDeclaration,
             ...mergePageHints(routeDeclaration, built.hints),
-          };
+          },
+      'Server packages/server/src/vite-build.ts collection',
+    );
   }
   return snapshotBuildArray(derived, 'derived app-shell build routes');
 }
@@ -463,8 +471,11 @@ function registerCompiledClientModules(
       source: module.source,
       version,
     };
-    builtModules[builtModules.length] =
-      module.contentType === undefined ? built : { ...built, contentType: module.contentType };
+    witnessArrayAppend(
+      builtModules,
+      module.contentType === undefined ? built : { ...built, contentType: module.contentType },
+      'Server packages/server/src/vite-build.ts collection',
+    );
   }
 
   return builtModules;
@@ -489,13 +500,17 @@ function snapshotCompiledClientModules(
       index,
     );
     const version = optionalCompiledClientModuleString(raw, 'version', index);
-    pinned[pinned.length] = {
-      path,
-      source,
-      ...(contentType === undefined ? {} : { contentType }),
-      ...(renderPlanFingerprint === undefined ? {} : { renderPlanFingerprint }),
-      ...(version === undefined ? {} : { version }),
-    };
+    witnessArrayAppend(
+      pinned,
+      {
+        path,
+        source,
+        ...(contentType === undefined ? {} : { contentType }),
+        ...(renderPlanFingerprint === undefined ? {} : { renderPlanFingerprint }),
+        ...(version === undefined ? {} : { version }),
+      },
+      'Server packages/server/src/vite-build.ts collection',
+    );
   }
   return snapshotBuildArray(pinned, 'pinned compiled client modules');
 }

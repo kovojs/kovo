@@ -25,6 +25,7 @@ import type {
   StaticExportAssetArtifact,
   StaticExportClientModuleArtifact,
 } from './static-export-types.js';
+import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 interface StaticExportSriInput {
   artifacts: readonly StaticExportArtifact[];
@@ -48,10 +49,14 @@ export async function applyStaticExportSubresourceIntegrity({
   const finalized: StaticExportArtifact[] = [];
   for (let index = 0; index < sourceArtifacts.length; index += 1) {
     const artifact = sourceArtifacts[index]!;
-    finalized[finalized.length] = {
-      ...artifact,
-      body: renderStaticExportSriHtml(artifact.body, origin, integrityByPath),
-    };
+    witnessArrayAppend(
+      finalized,
+      {
+        ...artifact,
+        body: renderStaticExportSriHtml(artifact.body, origin, integrityByPath),
+      },
+      'Server packages/server/src/static-export-sri.ts collection',
+    );
   }
   return finalized;
 }
@@ -116,11 +121,15 @@ function renderStaticExportSriHtml(
     const integrity = securityMapGet(integrityByPath, pathname);
     if (integrity === undefined) continue;
 
-    replacements[replacements.length] = {
-      end: tag.end - 1,
-      start: tag.end - 1,
-      value: ` integrity="${escapeAttribute(integrity)}"`,
-    };
+    witnessArrayAppend(
+      replacements,
+      {
+        end: tag.end - 1,
+        start: tag.end - 1,
+        value: ` integrity="${escapeAttribute(integrity)}"`,
+      },
+      'Server packages/server/src/static-export-sri.ts collection',
+    );
   }
 
   return applyStaticExportHtmlReplacements(html, replacements);

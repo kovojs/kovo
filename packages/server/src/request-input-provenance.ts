@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
+  witnessArrayAppend,
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessGetPrototypeOf,
@@ -71,7 +72,11 @@ export function markPrivilegedRequestInputAssignment(value: unknown): void {
       type: typeof value,
       value,
     };
-    state.privilegedPrimitives[state.privilegedPrimitives.length] = { ...read, consumed: false };
+    witnessArrayAppend(
+      state.privilegedPrimitives,
+      { ...read, consumed: false },
+      'Server packages/server/src/request-input-provenance.ts collection',
+    );
   }
 }
 
@@ -101,7 +106,11 @@ function trackRequestInputValue(
 ): unknown {
   if (!isTrackableObject(value)) {
     if (isPrimitiveValue(value)) {
-      state.primitiveReads[state.primitiveReads.length] = { path, type: typeof value, value };
+      witnessArrayAppend(
+        state.primitiveReads,
+        { path, type: typeof value, value },
+        'Server packages/server/src/request-input-provenance.ts collection',
+      );
     }
     return value;
   }

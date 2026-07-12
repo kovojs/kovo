@@ -12,6 +12,7 @@ import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 import {
+  witnessArrayAppend,
   createWitnessMap,
   witnessFreeze,
   witnessMapForEach,
@@ -154,7 +155,11 @@ export function createMemoryVersionedClientModuleRegistry(
       const tokenEntries: string[] = [];
       witnessMapForEach(versionsByPath, (versions, path) => {
         for (let index = 0; index < versions.length; index += 1) {
-          tokenEntries[tokenEntries.length] = `${path}@${versions[index]!}`;
+          witnessArrayAppend(
+            tokenEntries,
+            `${path}@${versions[index]!}`,
+            'Server packages/server/src/client-modules.ts collection',
+          );
         }
       });
       witnessSortStrings(tokenEntries);
@@ -176,7 +181,11 @@ export function createMemoryVersionedClientModuleRegistry(
     entries() {
       const entries: VersionedClientModuleInput[] = [];
       witnessMapForEach(modules, (module) => {
-        entries[entries.length] = cloneClientModule(module);
+        witnessArrayAppend(
+          entries,
+          cloneClientModule(module),
+          'Server packages/server/src/client-modules.ts collection',
+        );
       });
       sortClientModuleEntries(entries);
       return entries;
@@ -203,10 +212,7 @@ export function createMemoryVersionedClientModuleRegistry(
       const target = parseVersionedClientModuleTarget(href);
       if (target === undefined) return missingClientModuleResponse();
 
-      const module = witnessMapGet(
-        modules,
-        versionedClientModuleKey(target.path, target.version),
-      );
+      const module = witnessMapGet(modules, versionedClientModuleKey(target.path, target.version));
       if (!module) return missingClientModuleResponse();
 
       // SPEC §6.6: versioned emitted module URLs are immutable and retained across deploys.
@@ -277,7 +283,12 @@ function rememberClientModuleVersion(
       break;
     }
   }
-  if (!alreadyPresent) versions[versions.length] = version;
+  if (!alreadyPresent)
+    witnessArrayAppend(
+      versions,
+      version,
+      'Server packages/server/src/client-modules.ts collection',
+    );
   witnessMapSet(versionsByPath, path, versions);
 }
 

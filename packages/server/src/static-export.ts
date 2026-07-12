@@ -53,7 +53,7 @@ import {
   securityUrlObjectSnapshot,
   securityUrlSnapshot,
 } from './response-security-intrinsics.js';
-import { witnessSetForEach } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessSetForEach } from './security-witness-intrinsics.js';
 
 /**
  * Pre-render an app's static routes to files on disk for static hosting,
@@ -177,10 +177,18 @@ function combinedStaticExportCompileDiagnostics(
   const optionSource = snapshotBuildArray(optionDiagnostics, 'static-export option diagnostics');
   const combined: (typeof appSource)[number][] = [];
   for (let index = 0; index < appSource.length; index += 1) {
-    combined[combined.length] = appSource[index]!;
+    witnessArrayAppend(
+      combined,
+      appSource[index]!,
+      'Server packages/server/src/static-export.ts collection',
+    );
   }
   for (let index = 0; index < optionSource.length; index += 1) {
-    combined[combined.length] = optionSource[index]!;
+    witnessArrayAppend(
+      combined,
+      optionSource[index]!,
+      'Server packages/server/src/static-export.ts collection',
+    );
   }
   return combined;
 }
@@ -278,15 +286,23 @@ async function documentPublicAssetInputs(
 
     const source = staticExportPublicAssetSource(discovery.fileSystem, discovery.base, hrefPath);
     if ((await discovery.fileSystem.fileExists(source.relativePath)) === false) {
-      diagnostics[diagnostics.length] = staticExportDiagnostic(
-        hrefPath,
-        `KV229 static export cannot copy referenced public asset '${hrefPath}' because source '${source.source}' was not found under public asset root '${discovery.root}'. SPEC §9.5 exports referenced static assets with route documents.`,
+      witnessArrayAppend(
+        diagnostics,
+        staticExportDiagnostic(
+          hrefPath,
+          `KV229 static export cannot copy referenced public asset '${hrefPath}' because source '${source.source}' was not found under public asset root '${discovery.root}'. SPEC §9.5 exports referenced static assets with route documents.`,
+        ),
+        'Server packages/server/src/static-export.ts collection',
       );
       continue;
     }
 
     securitySetAdd(discovery.configuredPaths, hrefPath);
-    publicAssets[publicAssets.length] = { path: hrefPath, source: source.source };
+    witnessArrayAppend(
+      publicAssets,
+      { path: hrefPath, source: source.source },
+      'Server packages/server/src/static-export.ts collection',
+    );
   }
 
   if (diagnostics.length > 0) throw new StaticExportError(diagnostics);
@@ -301,10 +317,18 @@ function combineStaticExportAssets(
   const discovered = snapshotBuildArray(publicAssets, 'discovered static-export public assets');
   const combined: StaticExportAssetArtifact[] = [];
   for (let index = 0; index < configured.length; index += 1) {
-    combined[combined.length] = configured[index]!;
+    witnessArrayAppend(
+      combined,
+      configured[index]!,
+      'Server packages/server/src/static-export.ts collection',
+    );
   }
   for (let index = 0; index < discovered.length; index += 1) {
-    combined[combined.length] = discovered[index]!;
+    witnessArrayAppend(
+      combined,
+      discovered[index]!,
+      'Server packages/server/src/static-export.ts collection',
+    );
   }
   return combined;
 }
@@ -428,7 +452,7 @@ function isConfiguredAssetNamespaceHref(hrefPath: string, assetDirectory: string
 function sortedSecurityStringSet(values: ReadonlySet<string>): string[] {
   const result: string[] = [];
   witnessSetForEach(values, (value) => {
-    result[result.length] = value;
+    witnessArrayAppend(result, value, 'Server packages/server/src/static-export.ts collection');
   });
   securityArraySort(result, (left, right) => (left < right ? -1 : left > right ? 1 : 0));
   return result;
@@ -447,7 +471,8 @@ function htmlAttributeUrls(html: string): string[] {
   const attrPattern = /\s(?:href|src|poster)=["']([^"']+)["']/gi;
   let match: RegExpExecArray | null;
   while ((match = securityRegExpExec(attrPattern, html)) !== null) {
-    if (match[1] !== undefined) urls[urls.length] = match[1];
+    if (match[1] !== undefined)
+      witnessArrayAppend(urls, match[1], 'Server packages/server/src/static-export.ts collection');
   }
 
   const srcsetPattern = /\ssrcset=["']([^"']+)["']/gi;
@@ -458,7 +483,8 @@ function htmlAttributeUrls(html: string): string[] {
       const whitespace = securityRegExpExec(/\s/u, candidate);
       const url =
         whitespace === null ? candidate : securityStringSlice(candidate, 0, whitespace.index);
-      if (url !== '') urls[urls.length] = url;
+      if (url !== '')
+        witnessArrayAppend(urls, url, 'Server packages/server/src/static-export.ts collection');
     }
   }
   return urls;
@@ -470,7 +496,12 @@ function cssUrlUrls(css: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = securityRegExpExec(urlPattern, css)) !== null) {
     const rawUrl = match[1] ?? match[2] ?? match[3];
-    if (rawUrl !== undefined) urls[urls.length] = securityStringTrim(rawUrl);
+    if (rawUrl !== undefined)
+      witnessArrayAppend(
+        urls,
+        securityStringTrim(rawUrl),
+        'Server packages/server/src/static-export.ts collection',
+      );
   }
   return urls;
 }

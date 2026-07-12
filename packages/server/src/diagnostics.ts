@@ -25,6 +25,7 @@ import {
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
 import {
+  witnessArrayAppend,
   createWitnessWeakMap,
   witnessDefineProperty,
   witnessGetOwnPropertyDescriptor,
@@ -179,12 +180,21 @@ function prepareServerErrorDiagnostic(
   context: ServerErrorDiagnosticContext,
 ): { context: ServerErrorDiagnosticContext; error: unknown } {
   const requestInputs = diagnosticRequestInputs(context.request);
-  if (context.url !== undefined) requestInputs.urls[requestInputs.urls.length] = context.url;
+  if (context.url !== undefined)
+    witnessArrayAppend(
+      requestInputs.urls,
+      context.url,
+      'Server packages/server/src/diagnostics.ts collection',
+    );
   requestInputs.urls = uniqueDiagnosticStrings(requestInputs.urls);
   for (let index = 0; index < requestInputs.urls.length; index += 1) {
     const values = diagnosticUrlValues(requestInputs.urls[index]!);
     for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
-      requestInputs.secretValues[requestInputs.secretValues.length] = values[valueIndex]!;
+      witnessArrayAppend(
+        requestInputs.secretValues,
+        values[valueIndex]!,
+        'Server packages/server/src/diagnostics.ts collection',
+      );
     }
   }
   requestInputs.secretValues = uniqueDiagnosticStrings(requestInputs.secretValues);
@@ -239,11 +249,20 @@ function diagnosticRequestInputs(request: unknown): DiagnosticRequestInputs {
   if (!isNativeRequest(request)) return inputs;
   const source = requestForAuthorityNeutralMetadata(request);
   try {
-    inputs.urls[inputs.urls.length] = readDiagnosticRequestUrl(source);
+    witnessArrayAppend(
+      inputs.urls,
+      readDiagnosticRequestUrl(source),
+      'Server packages/server/src/diagnostics.ts collection',
+    );
   } catch {}
   try {
     const referrer = readDiagnosticRequestReferrer(source);
-    if (referrer !== '') inputs.urls[inputs.urls.length] = referrer;
+    if (referrer !== '')
+      witnessArrayAppend(
+        inputs.urls,
+        referrer,
+        'Server packages/server/src/diagnostics.ts collection',
+      );
   } catch {}
   try {
     const headers = readDiagnosticRequestHeaders(source);
@@ -268,9 +287,18 @@ function diagnosticRequestInputs(request: unknown): DiagnosticRequestInputs {
       if (next.done) break;
       const name = next.value[0];
       const value = next.value[1];
-      if (diagnosticNameCarriesUrl(name) && value !== '') inputs.urls[inputs.urls.length] = value;
+      if (diagnosticNameCarriesUrl(name) && value !== '')
+        witnessArrayAppend(
+          inputs.urls,
+          value,
+          'Server packages/server/src/diagnostics.ts collection',
+        );
       if (diagnosticNameCarriesSecret(name) && value !== '') {
-        inputs.secretValues[inputs.secretValues.length] = value;
+        witnessArrayAppend(
+          inputs.secretValues,
+          value,
+          'Server packages/server/src/diagnostics.ts collection',
+        );
         appendDiagnosticStrings(inputs.secretValues, diagnosticAuthorizationValues(value));
         if (loggingStringEndsWith(normalizeDiagnosticName(name), 'cookie')) {
           appendDiagnosticStrings(inputs.secretValues, diagnosticCookieValues(value));
@@ -351,11 +379,19 @@ function diagnosticAuthorizationValues(value: string): string[] {
         bytes[index] = loggingCharacterCodeAt(binary, index);
       }
       const decoded = new NativeTextDecoder().decode(bytes);
-      values[values.length] = decoded;
+      witnessArrayAppend(values, decoded, 'Server packages/server/src/diagnostics.ts collection');
       const separator = loggingStringIndexOf(decoded, ':');
       if (separator >= 0) {
-        values[values.length] = loggingStringSlice(decoded, 0, separator);
-        values[values.length] = loggingStringSlice(decoded, separator + 1);
+        witnessArrayAppend(
+          values,
+          loggingStringSlice(decoded, 0, separator),
+          'Server packages/server/src/diagnostics.ts collection',
+        );
+        witnessArrayAppend(
+          values,
+          loggingStringSlice(decoded, separator + 1),
+          'Server packages/server/src/diagnostics.ts collection',
+        );
       }
     } catch {}
   }
@@ -369,7 +405,8 @@ function diagnosticAuthorizationValues(value: string): string[] {
       const fieldValue = field[1] ?? field[2];
       if (fieldValue === undefined) continue;
       const trimmed = loggingStringTrim(fieldValue);
-      if (trimmed !== '') values[values.length] = trimmed;
+      if (trimmed !== '')
+        witnessArrayAppend(values, trimmed, 'Server packages/server/src/diagnostics.ts collection');
     }
   }
   return uniqueDiagnosticStrings(values);
@@ -391,10 +428,11 @@ function diagnosticUrlValues(value: string): string[] {
       key = loggingDecodeURIComponent(key);
     } catch {}
     if (!diagnosticNameCarriesSecret(key) || rawValue === '') continue;
-    values[values.length] = rawValue;
+    witnessArrayAppend(values, rawValue, 'Server packages/server/src/diagnostics.ts collection');
     try {
       const decoded = loggingDecodeURIComponent(loggingReplaceAllLiteral(rawValue, '+', ' '));
-      if (decoded !== '') values[values.length] = decoded;
+      if (decoded !== '')
+        witnessArrayAppend(values, decoded, 'Server packages/server/src/diagnostics.ts collection');
     } catch {}
   }
   return uniqueDiagnosticStrings(values);
@@ -694,7 +732,11 @@ function hasNativeInstance(value: unknown, constructor: Function): boolean {
 
 function appendDiagnosticStrings(target: string[], values: readonly string[]): void {
   for (let index = 0; index < values.length; index += 1) {
-    target[target.length] = values[index]!;
+    witnessArrayAppend(
+      target,
+      values[index]!,
+      'Server packages/server/src/diagnostics.ts collection',
+    );
   }
 }
 
@@ -710,7 +752,8 @@ function uniqueDiagnosticStrings(values: readonly string[]): string[] {
         break;
       }
     }
-    if (!found) unique[unique.length] = value;
+    if (!found)
+      witnessArrayAppend(unique, value, 'Server packages/server/src/diagnostics.ts collection');
   }
   return unique;
 }
@@ -735,10 +778,18 @@ function splitDiagnosticLiteral(value: string, separator: string): string[] {
   while (cursor <= value.length) {
     const match = loggingStringIndexOf(value, separator, cursor);
     if (match < 0) {
-      parts[parts.length] = loggingStringSlice(value, cursor);
+      witnessArrayAppend(
+        parts,
+        loggingStringSlice(value, cursor),
+        'Server packages/server/src/diagnostics.ts collection',
+      );
       return parts;
     }
-    parts[parts.length] = loggingStringSlice(value, cursor, match);
+    witnessArrayAppend(
+      parts,
+      loggingStringSlice(value, cursor, match),
+      'Server packages/server/src/diagnostics.ts collection',
+    );
     cursor = match + separator.length;
   }
   return parts;

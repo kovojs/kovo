@@ -19,6 +19,7 @@ import {
   type ServerResponseBase,
 } from './response.js';
 import {
+  witnessArrayAppend,
   createWitnessSet,
   witnessGetPrototypeOf,
   witnessIsArray,
@@ -57,7 +58,9 @@ if (typeof nativeHashUpdate !== 'function' || typeof nativeHashDigest !== 'funct
   throw new TypeError('Kovo live-target attestation hash controls are unavailable.');
 }
 if (witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, ['🙂', 'utf8']) !== 4) {
-  throw new TypeError('Kovo live-target attestation byte-length control failed its semantic check.');
+  throw new TypeError(
+    'Kovo live-target attestation byte-length control failed its semantic check.',
+  );
 }
 const hashSemanticControl = createHash('sha256');
 witnessReflectApply(nativeHashUpdate, hashSemanticControl, ['abc']);
@@ -421,7 +424,11 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
   );
   const rawTargets: string[] = [];
   for (let index = 0; index < liveTargets.length; index += 1) {
-    rawTargets[rawTargets.length] = liveTargets[index]!.target;
+    witnessArrayAppend(
+      rawTargets,
+      liveTargets[index]!.target,
+      'Server packages/server/src/mutation-wire.ts collection',
+    );
   }
   const targets = dedupe(rawTargets);
 
@@ -450,7 +457,11 @@ export function mutationWireRequestFromHeaders<Request>(
   for (let index = 0; index < headers.liveTargetDescriptors.length; index += 1) {
     const descriptor = headers.liveTargetDescriptors[index]!;
     if (verifyLiveTargetDescriptor(descriptor, options)) {
-      liveTargetDescriptors[liveTargetDescriptors.length] = descriptor;
+      witnessArrayAppend(
+        liveTargetDescriptors,
+        descriptor,
+        'Server packages/server/src/mutation-wire.ts collection',
+      );
     }
   }
 
@@ -513,7 +524,8 @@ function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
   const parsed: MutationLiveTarget[] = [];
   for (let index = 0; index < rawEntries.length; index += 1) {
     const entry = parseLiveTargetEntry(rawEntries[index]!);
-    if (entry !== null) parsed[parsed.length] = entry;
+    if (entry !== null)
+      witnessArrayAppend(parsed, entry, 'Server packages/server/src/mutation-wire.ts collection');
   }
   return dedupeLiveTargets(parsed);
 }
@@ -555,7 +567,8 @@ function readTargetDeps(value: string): string[] {
     if (code !== 0x2c && !isWhitespaceCode(code)) continue;
     if (index > start) {
       const dep = securityStringTrim(securityStringSlice(value, start, index));
-      if (dep !== '') deps[deps.length] = dep;
+      if (dep !== '')
+        witnessArrayAppend(deps, dep, 'Server packages/server/src/mutation-wire.ts collection');
     }
     start = index + 1;
   }
@@ -569,7 +582,8 @@ function parseLiveTargetDescriptorHeader(value: string): MutationLiveTargetDescr
   const parsed: MutationLiveTargetDescriptor[] = [];
   for (let index = 0; index < rawEntries.length; index += 1) {
     const entry = parseLiveTargetDescriptorEntry(rawEntries[index]!);
-    if (entry !== null) parsed[parsed.length] = entry;
+    if (entry !== null)
+      witnessArrayAppend(parsed, entry, 'Server packages/server/src/mutation-wire.ts collection');
   }
   return dedupeLiveTargetDescriptors(parsed);
 }
@@ -603,11 +617,19 @@ function splitLiveTargetDescriptorEntries(value: string): string[] {
       continue;
     }
     if (char !== ';' || depth !== 0) continue;
-    entries[entries.length] = securityStringSlice(value, start, index);
+    witnessArrayAppend(
+      entries,
+      securityStringSlice(value, start, index),
+      'Server packages/server/src/mutation-wire.ts collection',
+    );
     start = index + 1;
   }
 
-  entries[entries.length] = securityStringSlice(value, start);
+  witnessArrayAppend(
+    entries,
+    securityStringSlice(value, start),
+    'Server packages/server/src/mutation-wire.ts collection',
+  );
   return entries;
 }
 
@@ -780,7 +802,7 @@ function dedupe(values: readonly string[]): string[] {
     const value = values[index]!;
     if (value === '' || witnessSetHas(seen, value)) continue;
     witnessSetAdd(seen, value);
-    result[result.length] = value;
+    witnessArrayAppend(result, value, 'Server packages/server/src/mutation-wire.ts collection');
   }
   return result;
 }
@@ -793,7 +815,7 @@ function dedupeLiveTargets(values: readonly MutationLiveTarget[]): MutationLiveT
     const value = values[index]!;
     if (witnessSetHas(seen, value.target)) continue;
     witnessSetAdd(seen, value.target);
-    targets[targets.length] = value;
+    witnessArrayAppend(targets, value, 'Server packages/server/src/mutation-wire.ts collection');
   }
 
   return targets;
@@ -809,7 +831,7 @@ function dedupeLiveTargetDescriptors(
     const value = values[index]!;
     if (witnessSetHas(seen, value.target)) continue;
     witnessSetAdd(seen, value.target);
-    targets[targets.length] = value;
+    witnessArrayAppend(targets, value, 'Server packages/server/src/mutation-wire.ts collection');
   }
 
   return targets;
@@ -821,7 +843,11 @@ function splitTargetHeaderEntries(value: string): string[] {
   for (let index = 0; index <= value.length; index += 1) {
     const code = index === value.length ? 0x3b : securityStringCharCodeAt(value, index);
     if (code !== 0x3b && code !== 0x2c) continue;
-    entries[entries.length] = securityStringSlice(value, start, index);
+    witnessArrayAppend(
+      entries,
+      securityStringSlice(value, start, index),
+      'Server packages/server/src/mutation-wire.ts collection',
+    );
     start = index + 1;
   }
   return entries;

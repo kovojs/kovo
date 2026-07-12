@@ -33,7 +33,7 @@ import {
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import { createStaticExportHeaderSink, staticExportHeaders } from './static-export-headers.js';
 import { staticHostHeaders, type StaticHostHeaderPolicyKind } from './static-host-header-policy.js';
-import { witnessFreeze } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 import {
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
@@ -95,11 +95,15 @@ export function staticExportOutputPlan(
   const output: StaticExportOutputPlanItem[] = [];
   for (let index = 0; index < writes.length; index += 1) {
     const write = writes[index]!;
-    output[output.length] = {
-      kind: write.itemKind,
-      path: write.diagnosticPath,
-      targetPath: write.targetPath,
-    };
+    witnessArrayAppend(
+      output,
+      {
+        kind: write.itemKind,
+        path: write.diagnosticPath,
+        targetPath: write.targetPath,
+      },
+      'Server packages/server/src/static-export-output.ts collection',
+    );
   }
   return output;
 }
@@ -171,7 +175,11 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
   const writes = snapshotBuildArray(plan.writes, 'static-export output writes');
   const outputEntries: ArtifactOutputEntry[] = [];
   for (let index = 0; index < writes.length; index += 1) {
-    outputEntries[outputEntries.length] = staticExportArtifactOutputEntry(writes[index]!);
+    witnessArrayAppend(
+      outputEntries,
+      staticExportArtifactOutputEntry(writes[index]!),
+      'Server packages/server/src/static-export-output.ts collection',
+    );
   }
   await writeArtifactOutput(plan.root, outputEntries, {
     cleanup: {
@@ -286,12 +294,16 @@ export function staticExportAssetArtifacts(
   const artifacts: StaticExportAssetArtifact[] = [];
   for (let index = 0; index < sourceAssets.length; index += 1) {
     const asset = sourceAssets[index]!;
-    artifacts[artifacts.length] = {
-      headers: staticExportAssetHeaders(asset),
-      path: asset.path,
-      source: staticExportSourcePath(asset),
-      status: 200,
-    };
+    witnessArrayAppend(
+      artifacts,
+      {
+        headers: staticExportAssetHeaders(asset),
+        path: asset.path,
+        source: staticExportSourcePath(asset),
+        status: 200,
+      },
+      'Server packages/server/src/static-export-output.ts collection',
+    );
   }
   return artifacts;
 }
@@ -306,7 +318,11 @@ function staticExportPlannedWrites(
   );
   const writes: StaticExportPlannedWrite[] = [];
   for (let index = 0; index < targets.length; index += 1) {
-    writes[writes.length] = staticExportPlannedWrite(plan, targets[index]!);
+    witnessArrayAppend(
+      writes,
+      staticExportPlannedWrite(plan, targets[index]!),
+      'Server packages/server/src/static-export-output.ts collection',
+    );
   }
   return writes;
 }
@@ -504,7 +520,11 @@ function staticExportHeaderRecordEntries(
     if (!property.present || typeof property.value !== 'string') {
       throw new TypeError(`Static export header '${name}' must be an own string value.`);
     }
-    entries[entries.length] = [name, property.value] as const;
+    witnessArrayAppend(
+      entries,
+      [name, property.value] as const,
+      'Server packages/server/src/static-export-output.ts collection',
+    );
   }
   return entries;
 }

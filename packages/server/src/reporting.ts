@@ -16,6 +16,7 @@ import {
   requestStateTrim,
 } from './request-state-intrinsics.js';
 import {
+  witnessArrayAppend,
   createWitnessMap,
   createWitnessWeakMap,
   witnessGetOwnPropertyDescriptor,
@@ -185,12 +186,16 @@ export function kovoSecurityReportSnapshot(app: KovoApp): KovoSecurityReportSnap
   if (!state) return { aggregates: [], dropped: 0 };
   const aggregates: Readonly<ReportAggregate>[] = [];
   witnessMapForEach(state.aggregates, (aggregate) => {
-    aggregates[aggregates.length] = {
-      count: aggregate.count,
-      firstSeen: aggregate.firstSeen,
-      lastSeen: aggregate.lastSeen,
-      report: { ...aggregate.report },
-    };
+    witnessArrayAppend(
+      aggregates,
+      {
+        count: aggregate.count,
+        firstSeen: aggregate.firstSeen,
+        lastSeen: aggregate.lastSeen,
+        report: { ...aggregate.report },
+      },
+      'Server packages/server/src/reporting.ts collection',
+    );
   });
   return {
     aggregates,

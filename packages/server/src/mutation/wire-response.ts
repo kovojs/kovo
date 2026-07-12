@@ -48,7 +48,10 @@ import {
   securityStringCharCodeAt,
   securityStringToLowerCase,
 } from '../response-security-intrinsics.js';
-import { witnessGetOwnPropertyDescriptor } from '../security-witness-intrinsics.js';
+import {
+  witnessArrayAppend,
+  witnessGetOwnPropertyDescriptor,
+} from '../security-witness-intrinsics.js';
 
 export interface MutationWireLifecycleResponseOptions<
   Key extends string,
@@ -285,8 +288,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
     renderInput: unknown,
     registryFacts: RuntimeRegistryFacts<Request>,
   ): Promise<BufferedMutationWireResponse> {
-    const rerunQueries =
-      result.rerunQueryInstances ?? queryKeysToReruns(result.rerunQueries);
+    const rerunQueries = result.rerunQueryInstances ?? queryKeysToReruns(result.rerunQueries);
     const selection = selectMutationResponseTargets({
       changes: result.changes,
       fragmentRenderers: wireRequest.fragmentRenderers ?? [],
@@ -509,10 +511,7 @@ async function renderDefaultFailureFragment<Request>(
   const renderer =
     descriptor === undefined
       ? undefined
-      : findLiveTargetRenderer(
-          wireRequest.liveTargetRenderers ?? [],
-          descriptor.component,
-        );
+      : findLiveTargetRenderer(wireRequest.liveTargetRenderers ?? [], descriptor.component);
   if (descriptor && renderer) {
     return renderer.render({
       failure,
@@ -615,10 +614,14 @@ function mutationWireChangeRecords(
   const records: Pick<ChangeRecord, 'domain' | 'keys'>[] = [];
   for (let index = 0; index < changes.length; index += 1) {
     const change = changes[index]!;
-    records[records.length] = {
-      domain: change.domain,
-      ...(change.keys === undefined ? {} : { keys: snapshotStrings(change.keys) }),
-    };
+    witnessArrayAppend(
+      records,
+      {
+        domain: change.domain,
+        ...(change.keys === undefined ? {} : { keys: snapshotStrings(change.keys) }),
+      },
+      'Server packages/server/src/mutation/wire-response.ts collection',
+    );
   }
   return records;
 }
@@ -657,7 +660,11 @@ function queryKeysToReruns(keys: readonly string[]): { key: string }[] {
 
 function appendChunks(target: string[], chunks: readonly string[]): void {
   for (let index = 0; index < chunks.length; index += 1) {
-    target[target.length] = chunks[index]!;
+    witnessArrayAppend(
+      target,
+      chunks[index]!,
+      'Server packages/server/src/mutation/wire-response.ts collection',
+    );
   }
 }
 
@@ -687,7 +694,11 @@ function snapshotStrings(values: readonly string[]): string[] {
   const snapshot: string[] = [];
   for (let index = 0; index < values.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(values, index);
-    if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
       throw new TypeError('Mutation change keys must be dense string data properties.');
     }
     snapshot[index] = descriptor.value;

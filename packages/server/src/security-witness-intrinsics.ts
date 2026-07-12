@@ -13,6 +13,7 @@ const NativeArray = globalThis.Array;
 const NativeWeakSet = globalThis.WeakSet;
 const NativeMap = globalThis.Map;
 const NativeSet = globalThis.Set;
+const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
 const NativeProxy = globalThis.Proxy;
 const NativeReflect = globalThis.Reflect;
@@ -49,6 +50,7 @@ const nativeObjectIs = NativeObject.is;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
 const nativeObjectPrototype = NativeObject.prototype;
+const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeMapSize = apply<PropertyDescriptor | undefined>(
   nativeObjectGetOwnPropertyDescriptor,
   NativeObject,
@@ -74,6 +76,8 @@ function capturedControlsAreSound(): boolean {
   try {
     if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
     if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
+    if (apply(nativeNumberIsSafeInteger, NativeNumber, [1]) !== true) return false;
+    if (apply(nativeNumberIsSafeInteger, NativeNumber, [1.5]) !== false) return false;
     const sorted = ['z', 'a', 'aa'];
     apply(nativeArraySort, sorted, []);
     if (sorted[0] !== 'a' || sorted[1] !== 'aa' || sorted[2] !== 'z') return false;
@@ -484,6 +488,57 @@ export function witnessIsArray(value: unknown): value is unknown[] {
 export function witnessSortStrings(values: string[]): void {
   assertSecurityWitnessIntrinsics();
   apply(nativeArraySort, values, []);
+}
+
+/** Own-data append for authority-bearing server collections (SPEC §9.5/§10.3). */
+export function witnessArrayAppend<Value>(target: Value[], value: Value, label: string): void {
+  assertSecurityWitnessIntrinsics();
+  const before = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [target, 'length'],
+  );
+  if (
+    before === undefined ||
+    !('value' in before) ||
+    typeof before.value !== 'number' ||
+    !apply(nativeNumberIsSafeInteger, NativeNumber, [before.value]) ||
+    before.value < 0 ||
+    before.value >= 1_000_000
+  ) {
+    throw new TypeError(`${label} must have a bounded own array length.`);
+  }
+  const index = before.value;
+  apply(nativeObjectDefineProperty, NativeObject, [
+    target,
+    index,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+  const committed = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [target, index],
+  );
+  const after = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [target, 'length'],
+  );
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    !apply(nativeObjectIs, NativeObject, [committed.value, value]) ||
+    after === undefined ||
+    !('value' in after) ||
+    after.value !== index + 1
+  ) {
+    throw new TypeError(`${label} own-data append failed.`);
+  }
 }
 
 export function witnessJsonStringifyPrimitive(

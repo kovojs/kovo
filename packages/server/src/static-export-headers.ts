@@ -20,7 +20,7 @@ import {
   securityStringToLowerCase,
 } from './response-security-intrinsics.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
-import { witnessFreeze } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 interface StaticExportHeaderSinkOptions {
@@ -67,7 +67,11 @@ export const createStaticExportHeaderSink = wireEmitter(
       toJSON() {
         const names: string[] = [];
         securityMapForEach(headers, (_value, name) => {
-          names[names.length] = name;
+          witnessArrayAppend(
+            names,
+            name,
+            'Server packages/server/src/static-export-headers.ts collection',
+          );
         });
         securityArraySort(names, (left, right) => (left < right ? -1 : left > right ? 1 : 0));
         const record = createSecurityNullRecord<string>();
@@ -107,7 +111,11 @@ function staticExportHeaderEntries(
   const entries: (readonly [string, unknown])[] = [];
   if (securityIsHeaders(source)) {
     securityHeadersForEach(source, (value, name) => {
-      entries[entries.length] = witnessFreeze([name, value] as const);
+      witnessArrayAppend(
+        entries,
+        witnessFreeze([name, value] as const),
+        'Server packages/server/src/static-export-headers.ts collection',
+      );
     });
     return witnessFreeze(entries);
   }
@@ -129,7 +137,11 @@ function staticExportHeaderEntries(
           'static export header entries must be [name, value] pairs.',
         );
       }
-      entries[entries.length] = witnessFreeze([pair[0]!, pair[1]] as const);
+      witnessArrayAppend(
+        entries,
+        witnessFreeze([pair[0]!, pair[1]] as const),
+        'Server packages/server/src/static-export-headers.ts collection',
+      );
     }
     return witnessFreeze(entries);
   }
@@ -141,7 +153,11 @@ function staticExportHeaderEntries(
     if (!property.present) {
       throw staticExportHeaderError(options, `static export header '${name}' is unavailable.`);
     }
-    entries[entries.length] = witnessFreeze([name, property.value] as const);
+    witnessArrayAppend(
+      entries,
+      witnessFreeze([name, property.value] as const),
+      'Server packages/server/src/static-export-headers.ts collection',
+    );
   }
   return witnessFreeze(entries);
 }

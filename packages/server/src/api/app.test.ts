@@ -548,6 +548,7 @@ describe('server app-shell public API barrels', () => {
       // SPEC §10.3/§11.2: generated auth adapters consume opaque framework-owned system DB
       // capabilities through this public helper; raw system DB handles stay unexported.
       usePostgresSystemDb: postgresRuntimeApi.usePostgresSystemDb,
+      postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
@@ -935,6 +936,7 @@ describe('server app-shell public API barrels', () => {
       // internal execution subpath (SPEC §6.6/§10.2); keep the barrel census explicit.
       'accessDecisionFor',
       'accessFactsFromApp',
+      'createFrameworkManagedSqlDispatchProxy',
       'createMemoryMutationReplayStore',
       'endpointMatches',
       'explainGuard',
@@ -945,6 +947,7 @@ describe('server app-shell public API barrels', () => {
       'kovoReadonlyDbHandle',
       'managedDb',
       'readonlyDb',
+      'registerFrameworkManagedDbHooks',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
       'resolveLifecycleRequest',

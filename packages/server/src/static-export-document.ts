@@ -13,6 +13,7 @@ import { replayStaticExportRequest } from './static-export-request.js';
 import type { StaticExportReplayContext } from './static-export-replay-context.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
 import { type StaticExportArtifact } from './static-export-types.js';
+import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 export interface StaticExportRouteDocumentReplayOptions {
   context: StaticExportReplayContext;
@@ -65,10 +66,14 @@ function assertStaticExportRouteDocumentL0L1({
   const diagnostics: StaticExportDiagnostic[] = [];
   for (let index = 0; index < endpointRefs.length; index += 1) {
     const ref = endpointRefs[index]!;
-    diagnostics[diagnostics.length] = staticExportDiagnostic(
-      routePath,
-      `KV229 static export cannot export route '${routePath}' because document attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
-      routePath,
+    witnessArrayAppend(
+      diagnostics,
+      staticExportDiagnostic(
+        routePath,
+        `KV229 static export cannot export route '${routePath}' because document attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
+        routePath,
+      ),
+      'Server packages/server/src/static-export-document.ts collection',
     );
   }
 

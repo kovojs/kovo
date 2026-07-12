@@ -1,5 +1,6 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installNetConnectFloor, resolveEgressPolicy } from './egress.js';
@@ -11,6 +12,7 @@ import { task } from './task.js';
 import { createDurableTaskRunner } from './task-runner.js';
 import { MemoryDurableTaskQueue } from './task-queue.js';
 import { assertNonRequestPrincipalPosture } from './auth-principal.js';
+import { registerFrameworkManagedDbHooks } from './managed-db.js';
 
 describe('durable task runner (SPEC §9.6)', () => {
   let uninstallEgressFloor: (() => void) | undefined;
@@ -121,15 +123,21 @@ describe('durable task runner (SPEC §9.6)', () => {
     const mutationValues: unknown[] = [];
     type ScopedTaskDb = {
       select(): readonly { id: string; ownerId: string; scope: string }[];
-      recordOrder(input: { id: string }): { id: string; ownerId: string; scope: string };
+      execute(statement: unknown): { id: string; ownerId: string; scope: string };
     };
     const readOrders = query('orders/read', {
       load: async (_input, context?: { db?: ScopedTaskDb }) => context?.db?.select() ?? [],
     });
     const recordOrder = mutation('orders/record', {
       input: s.object({ id: s.string() }),
+      registry: { tables: ['orders'] },
       handler: async (input, request: { db?: ScopedTaskDb }) =>
-        request.db?.recordOrder(input) ?? { id: input.id, ownerId: 'missing', scope: 'missing' },
+        request.db?.execute(
+          stampTrustedSql(
+            { text: 'insert into orders (id) values (?)', values: [input.id] },
+            'task-runner lifecycle posture test',
+          ),
+        ) ?? { id: input.id, ownerId: 'missing', scope: 'missing' },
     });
     const scoped = task('owner.read-write.scoped', {
       input: s.object({ ownerId: s.string() }),
@@ -152,20 +160,23 @@ describe('durable task runner (SPEC §9.6)', () => {
       const posture = (request as { principalPosture?: unknown }).principalPosture;
       assertNonRequestPrincipalPosture(posture);
       providerPostures.push(posture);
-      return {
+      const handle = {
         select() {
           return posture.kind === 'act-as'
             ? [{ id: 'ord_1', ownerId: posture.principal, scope: posture.kind }]
             : [{ id: 'system_ord', ownerId: '*', scope: posture.kind }];
         },
-        recordOrder(input) {
+        execute() {
           return {
-            id: input.id,
+            id: 'ord_1',
             ownerId: posture.kind === 'act-as' ? posture.principal : 'system',
             scope: posture.kind,
           };
         },
       } satisfies ScopedTaskDb;
+      const reader = { select: handle.select };
+      registerFrameworkManagedDbHooks(handle, () => reader, undefined);
+      return handle;
     };
     const runner = createDurableTaskRunner({
       store,

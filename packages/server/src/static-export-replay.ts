@@ -14,6 +14,7 @@ import {
   type StaticExportClientModuleArtifact,
   type StaticExportNonExportablePolicy,
 } from './static-export-types.js';
+import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 export interface StaticExportAppReplayOptions {
   app: KovoApp;
@@ -79,7 +80,11 @@ export async function replayStaticExportApp({
         'static-export replay error diagnostics',
       );
       for (let index = 0; index < errorDiagnostics.length; index += 1) {
-        diagnostics[diagnostics.length] = errorDiagnostics[index]!;
+        witnessArrayAppend(
+          diagnostics,
+          errorDiagnostics[index]!,
+          'Server packages/server/src/static-export-replay.ts collection',
+        );
       }
     }
   }
@@ -100,7 +105,11 @@ function copyStaticExportDiagnostics(
   const pinned = snapshotBuildArray(source, 'static-export diagnostics');
   const diagnostics: StaticExportDiagnostic[] = [];
   for (let index = 0; index < pinned.length; index += 1) {
-    diagnostics[diagnostics.length] = pinned[index]!;
+    witnessArrayAppend(
+      diagnostics,
+      pinned[index]!,
+      'Server packages/server/src/static-export-replay.ts collection',
+    );
   }
   return diagnostics;
 }

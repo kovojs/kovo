@@ -1,6 +1,7 @@
 import type { DiagnosticCode } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { snapshotBuildArray } from './build-security-intrinsics.js';
+import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 /**
  * Route-level diagnostic emitted when a request-shell route cannot be represented
@@ -115,7 +116,11 @@ export function formatStaticExportDiagnostics(
   const source = snapshotBuildArray(diagnostics, 'static-export diagnostics');
   const formatted: string[] = [];
   for (let index = 0; index < source.length; index += 1) {
-    formatted[formatted.length] = formatStaticExportDiagnostic(source[index]!, severity);
+    witnessArrayAppend(
+      formatted,
+      formatStaticExportDiagnostic(source[index]!, severity),
+      'Server packages/server/src/static-export-diagnostics.ts collection',
+    );
   }
   return formatted;
 }
@@ -138,11 +143,15 @@ export function blockingStaticExportDiagnostics(
   for (let index = 0; index < source.length; index += 1) {
     const diagnostic = source[index]!;
     if (diagnosticDefinitions[diagnostic.code].severity !== 'error') continue;
-    blocking[blocking.length] = {
-      code: diagnostic.code,
-      message: staticExportCompileDiagnosticMessage(diagnostic),
-      routePath: diagnostic.fileName,
-    };
+    witnessArrayAppend(
+      blocking,
+      {
+        code: diagnostic.code,
+        message: staticExportCompileDiagnosticMessage(diagnostic),
+        routePath: diagnostic.fileName,
+      },
+      'Server packages/server/src/static-export-diagnostics.ts collection',
+    );
   }
   return blocking;
 }

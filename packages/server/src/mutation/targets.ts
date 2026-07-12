@@ -25,6 +25,7 @@ import {
   securityStringStartsWith,
 } from '../response-security-intrinsics.js';
 import {
+  witnessArrayAppend,
   createWitnessMap,
   createWitnessSet,
   witnessIsArray,
@@ -47,20 +48,26 @@ export function queriesToRerun(
   const reruns: QueryRerun[] = [];
   for (let queryIndex = 0; queryIndex < queries.length; queryIndex += 1) {
     const queryDefinition = queries[queryIndex]!;
-    if (!someChange(changes, (change) => queryTouchedByChange(queryDefinition, change, queryInput))) {
+    if (
+      !someChange(changes, (change) => queryTouchedByChange(queryDefinition, change, queryInput))
+    ) {
       continue;
     }
     const instanceKey = readQueryInstanceKey(queryDefinition, queryInput);
-    reruns[reruns.length] = {
-      ...(instanceKey === undefined ? {} : { instanceKey }),
-      key: queryDefinition.key,
-      ...(instanceKey !== undefined &&
-      someChange(changes, (change) =>
-        queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, queryInput),
-      )
-        ? { whole: true }
-        : {}),
-    };
+    witnessArrayAppend(
+      reruns,
+      {
+        ...(instanceKey === undefined ? {} : { instanceKey }),
+        key: queryDefinition.key,
+        ...(instanceKey !== undefined &&
+        someChange(changes, (change) =>
+          queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, queryInput),
+        )
+          ? { whole: true }
+          : {}),
+      },
+      'Server packages/server/src/mutation/targets.ts collection',
+    );
   }
   return reruns;
 }
@@ -139,12 +146,10 @@ export async function renderQueryChunks(
     }
     recordQueryRuntimeWarnings(request, result.warnings);
 
-    chunks[chunks.length] = renderQueryRerunChunk(
-      queryDefinition,
-      input,
-      result.value,
-      affectedKeysByDomain,
-      settles,
+    witnessArrayAppend(
+      chunks,
+      renderQueryRerunChunk(queryDefinition, input, result.value, affectedKeysByDomain, settles),
+      'Server packages/server/src/mutation/targets.ts collection',
     );
   }
 
@@ -235,22 +240,30 @@ export async function renderFragmentChunks(
     if (witnessSetSize(wanted) > 0 && !witnessSetHas(wanted, renderer.target)) continue;
 
     try {
-      chunks[chunks.length] = renderFragmentWireHtml({
+      witnessArrayAppend(
+        chunks,
+        renderFragmentWireHtml({
           html: generatedFragmentHtmlValue(await renderer.render(input)),
           mode: renderer.mode,
           stylesheets: renderer.stylesheets,
           target: renderer.target,
-        });
+        }),
+        'Server packages/server/src/mutation/targets.ts collection',
+      );
     } catch (error) {
       if (!renderer.errorBoundary) throw error;
 
       const target = renderer.errorBoundary.target ?? renderer.target;
-      chunks[chunks.length] = renderFragmentWireHtml({
+      witnessArrayAppend(
+        chunks,
+        renderFragmentWireHtml({
           errorBoundary: renderer.target,
           html: generatedFragmentHtmlValue(await renderer.errorBoundary.render(error, input)),
           stylesheets: renderer.stylesheets,
           target,
-        });
+        }),
+        'Server packages/server/src/mutation/targets.ts collection',
+      );
     }
   }
 
@@ -283,21 +296,29 @@ export async function renderLiveTargetChunks<Request>(
         request,
         target: target.target,
       });
-      chunks[chunks.length] = renderFragmentWireHtml({
+      witnessArrayAppend(
+        chunks,
+        renderFragmentWireHtml({
           html: generatedFragmentHtmlValue(html),
           stylesheets: renderer.stylesheets,
           target: target.target,
-        });
+        }),
+        'Server packages/server/src/mutation/targets.ts collection',
+      );
     } catch (error) {
       if (!renderer.errorBoundary) throw error;
 
       const boundaryTarget = renderer.errorBoundary.target ?? target.target;
-      chunks[chunks.length] = renderFragmentWireHtml({
+      witnessArrayAppend(
+        chunks,
+        renderFragmentWireHtml({
           errorBoundary: target.target,
           html: generatedFragmentHtmlValue(await renderer.errorBoundary.render(error, input)),
           stylesheets: renderer.stylesheets,
           target: boundaryTarget,
-        });
+        }),
+        'Server packages/server/src/mutation/targets.ts collection',
+      );
     }
   }
 
@@ -361,10 +382,7 @@ export function selectMutationResponseTargets<Request>(
     }
   }
 
-  const descriptorReruns = createWitnessMap<
-    MutationLiveTargetDescriptor,
-    readonly QueryRerun[]
-  >();
+  const descriptorReruns = createWitnessMap<MutationLiveTargetDescriptor, readonly QueryRerun[]>();
   for (
     let descriptorIndex = 0;
     descriptorIndex < input.liveTargetDescriptors.length;
@@ -372,10 +390,7 @@ export function selectMutationResponseTargets<Request>(
   ) {
     const descriptor = input.liveTargetDescriptors[descriptorIndex]!;
     const renderer = witnessMapGet(liveRenderersByComponent, descriptor.component);
-    const liveTarget = findLiveTarget(
-      liveTargets,
-      (target) => target.target === descriptor.target,
-    );
+    const liveTarget = findLiveTarget(liveTargets, (target) => target.target === descriptor.target);
     if (!renderer || liveTarget === undefined) continue;
 
     const reruns = liveTargetDescriptorQueryReruns(
@@ -397,12 +412,18 @@ export function selectMutationResponseTargets<Request>(
   for (let queryIndex = 0; queryIndex < input.rerunQueries.length; queryIndex += 1) {
     const query = input.rerunQueries[queryIndex]!;
     const tokens = queryRerunTokens(query);
-    if (someLiveTarget(
-      liveTargets,
-      (target) =>
-        targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
-    )) {
-      rerunQueries[rerunQueries.length] = query;
+    if (
+      someLiveTarget(
+        liveTargets,
+        (target) =>
+          targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
+      )
+    ) {
+      witnessArrayAppend(
+        rerunQueries,
+        query,
+        'Server packages/server/src/mutation/targets.ts collection',
+      );
     }
   }
 
@@ -410,12 +431,13 @@ export function selectMutationResponseTargets<Request>(
   for (let rendererIndex = 0; rendererIndex < input.fragmentRenderers.length; rendererIndex += 1) {
     const renderer = input.fragmentRenderers[rendererIndex]!;
     if (renderer.updateCoverage === 'plan') continue;
-    const liveTarget = findLiveTarget(
-      liveTargets,
-      (target) => target.target === renderer.target,
-    );
+    const liveTarget = findLiveTarget(liveTargets, (target) => target.target === renderer.target);
     if (liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens)) {
-      fragmentTargets[fragmentTargets.length] = renderer.target;
+      witnessArrayAppend(
+        fragmentTargets,
+        renderer.target,
+        'Server packages/server/src/mutation/targets.ts collection',
+      );
     }
   }
 
@@ -429,24 +451,22 @@ export function selectMutationResponseTargets<Request>(
     if (witnessMapHas(renderersByTarget, descriptor.target)) continue;
     const renderer = witnessMapGet(liveRenderersByComponent, descriptor.component);
     if (!renderer) continue;
-    const liveTarget = findLiveTarget(
-      liveTargets,
-      (target) => target.target === descriptor.target,
-    );
+    const liveTarget = findLiveTarget(liveTargets, (target) => target.target === descriptor.target);
     if (liveTarget === undefined) continue;
     const reruns = witnessMapGet(descriptorReruns, descriptor) ?? [];
     if (someQueryRerun(reruns, (query) => depsMatch(liveTarget, queryRerunTokens(query)))) {
-      liveTargetDescriptors[liveTargetDescriptors.length] = descriptor;
+      witnessArrayAppend(
+        liveTargetDescriptors,
+        descriptor,
+        'Server packages/server/src/mutation/targets.ts collection',
+      );
     }
   }
 
   const mergedReruns: QueryRerun[] = [];
   appendArray(mergedReruns, rerunQueries);
   for (let index = 0; index < liveTargetDescriptors.length; index += 1) {
-    appendArray(
-      mergedReruns,
-      witnessMapGet(descriptorReruns, liveTargetDescriptors[index]!) ?? [],
-    );
+    appendArray(mergedReruns, witnessMapGet(descriptorReruns, liveTargetDescriptors[index]!) ?? []);
   }
 
   return {
@@ -474,17 +494,21 @@ function liveTargetDescriptorQueryReruns<Request>(
     }
 
     const instanceKey = readQueryInstanceKey(binding.query, queryInput);
-    reruns[reruns.length] = {
-      input: queryInput,
-      ...(instanceKey === undefined ? {} : { instanceKey }),
-      key: binding.query.key,
-      ...(instanceKey !== undefined &&
-      someChange(changes, (change) =>
-        queryChangeInvalidatesWholeQueryInstance(binding.query, change, queryInput),
-      )
-        ? { whole: true }
-        : {}),
-    };
+    witnessArrayAppend(
+      reruns,
+      {
+        input: queryInput,
+        ...(instanceKey === undefined ? {} : { instanceKey }),
+        key: binding.query.key,
+        ...(instanceKey !== undefined &&
+        someChange(changes, (change) =>
+          queryChangeInvalidatesWholeQueryInstance(binding.query, change, queryInput),
+        )
+          ? { whole: true }
+          : {}),
+      },
+      'Server packages/server/src/mutation/targets.ts collection',
+    );
   }
 
   return mergeQueryReruns(reruns);
@@ -512,7 +536,7 @@ function mergeQueryReruns(queries: readonly QueryRerun[]): QueryRerun[] {
   }
   const merged: QueryRerun[] = [];
   witnessMapForEach(byIdentity, (query) => {
-    merged[merged.length] = query;
+    witnessArrayAppend(merged, query, 'Server packages/server/src/mutation/targets.ts collection');
   });
   return merged;
 }
@@ -627,7 +651,11 @@ function findLiveTarget(
 
 function appendArray<Value>(target: Value[], source: readonly Value[]): void {
   for (let index = 0; index < source.length; index += 1) {
-    target[target.length] = source[index]!;
+    witnessArrayAppend(
+      target,
+      source[index]!,
+      'Server packages/server/src/mutation/targets.ts collection',
+    );
   }
 }
 

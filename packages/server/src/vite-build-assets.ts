@@ -22,6 +22,7 @@ import {
   type KovoAppShellBuildAsset,
   type KovoAppShellViteManifestHintOptions,
 } from './vite-manifest.js';
+import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 /**
  * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Base asset-copy options
@@ -67,13 +68,17 @@ export function kovoAppShellViteStaticExportAssets(
     const asset = snapshotViteManifestBuildAsset(source[index], index);
     const contentType = viteAssetContentType(asset.file);
 
-    mapped[mapped.length] = {
-      ...(contentType === undefined ? {} : { contentType }),
-      path: asset.path,
-      // SPEC §6.6/§9.5: manifest-derived assets never carry caller-provided source authority.
-      // Derive the source from the one exact file snapshot through dist-root confinement.
-      source: viteDistSourcePath(distDir, asset.file),
-    };
+    witnessArrayAppend(
+      mapped,
+      {
+        ...(contentType === undefined ? {} : { contentType }),
+        path: asset.path,
+        // SPEC §6.6/§9.5: manifest-derived assets never carry caller-provided source authority.
+        // Derive the source from the one exact file snapshot through dist-root confinement.
+        source: viteDistSourcePath(distDir, asset.file),
+      },
+      'Server packages/server/src/vite-build-assets.ts collection',
+    );
   }
   return mapped;
 }
@@ -167,12 +172,20 @@ export function kovoAppShellViteBuildStaticExportAssets(
   );
   const combined: StaticExportAssetInput[] = [];
   for (let index = 0; index < manifestAssets.length; index += 1) {
-    combined[combined.length] = manifestAssets[index]!;
+    witnessArrayAppend(
+      combined,
+      manifestAssets[index]!,
+      'Server packages/server/src/vite-build-assets.ts collection',
+    );
   }
   // Explicit author assets intentionally retain their own source API. They are snapshotted as a
   // separate collection and never confused with manifest assets whose source is dist-confined.
   for (let index = 0; index < pinnedAuthorAssets.length; index += 1) {
-    combined[combined.length] = pinnedAuthorAssets[index]!;
+    witnessArrayAppend(
+      combined,
+      pinnedAuthorAssets[index]!,
+      'Server packages/server/src/vite-build-assets.ts collection',
+    );
   }
   return combined;
 }

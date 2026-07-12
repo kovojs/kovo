@@ -283,7 +283,11 @@ export const LoginCard = component({
             return await import('@kovojs/server');
           }
           if (id === '@kovojs/server/internal/app-shell-vite') {
-            return await import('@kovojs/server/internal/app-shell-vite');
+            const module = await import('@kovojs/server/internal/app-shell-vite');
+            return {
+              createKovoAppShellViteDevIntegration: module.createKovoAppShellViteDevIntegration,
+              dispatchKovoAppShellViteDevRequest: module.dispatchKovoAppShellViteDevRequest,
+            };
           }
           expect(id).toBe('/src/app-shell.tsx');
           return {

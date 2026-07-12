@@ -30,7 +30,11 @@ import {
   securityStringStartsWith,
   securityStringTrim,
 } from './response-security-intrinsics.js';
-import { witnessCreateNullRecord, witnessFreeze } from './security-witness-intrinsics.js';
+import {
+  witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessFreeze,
+} from './security-witness-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 /**
@@ -238,14 +242,23 @@ export function kovoAppShellViteRouteEntries(
       securitySetAdd(seenRoutePaths, route.path);
 
       const routeEntries = securityMapGet(mapped, route.path);
-      if (routeEntries) ordered[ordered.length] = { entries: routeEntries, routePath: route.path };
+      if (routeEntries)
+        witnessArrayAppend(
+          ordered,
+          { entries: routeEntries, routePath: route.path },
+          'Server packages/server/src/vite-manifest.ts collection',
+        );
     }
     return ordered;
   }
 
   const result: KovoAppShellRouteBuildEntry[] = [];
   securityMapForEach(mapped, (entries, routePath) => {
-    result[result.length] = { entries, routePath };
+    witnessArrayAppend(
+      result,
+      { entries, routePath },
+      'Server packages/server/src/vite-manifest.ts collection',
+    );
   });
   securityArraySort(result, (left, right) =>
     left.routePath < right.routePath ? -1 : left.routePath > right.routePath ? 1 : 0,
@@ -279,7 +292,7 @@ export function kovoAppShellViteManifestAssets(
 
   const result: KovoAppShellBuildAsset[] = [];
   securityMapForEach(assets, (asset) => {
-    result[result.length] = asset;
+    witnessArrayAppend(result, asset, 'Server packages/server/src/vite-manifest.ts collection');
   });
   securityArraySort(result, (left, right) =>
     left.file < right.file ? -1 : left.file > right.file ? 1 : 0,
@@ -583,7 +596,7 @@ function optionalManifestStringArray(
         valid = false;
         break;
       }
-      strings[strings.length] = item;
+      witnessArrayAppend(strings, item, 'Server packages/server/src/vite-manifest.ts collection');
     }
     if (valid) return witnessFreeze(strings);
   }
@@ -633,7 +646,7 @@ function addUnique(values: string[], value: string): void {
   for (let index = 0; index < values.length; index += 1) {
     if (values[index] === value) return;
   }
-  values[values.length] = value;
+  witnessArrayAppend(values, value, 'Server packages/server/src/vite-manifest.ts collection');
 }
 
 function ownRecordEntries(value: object, label: string): readonly (readonly [string, unknown])[] {
@@ -645,7 +658,11 @@ function ownRecordEntries(value: object, label: string): readonly (readonly [str
     if (!property.present) {
       throw new TypeError(`Kovo build security boundary could not snapshot ${label}.${key}.`);
     }
-    entries[entries.length] = witnessFreeze([key, property.value] as const);
+    witnessArrayAppend(
+      entries,
+      witnessFreeze([key, property.value] as const),
+      'Server packages/server/src/vite-manifest.ts collection',
+    );
   }
   return witnessFreeze(entries);
 }

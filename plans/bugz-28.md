@@ -10,7 +10,7 @@ This is an active closure ledger; `SPEC.md` remains normative.
 
 | Severity | Count | Items   |
 | -------- | ----: | ------- |
-| Critical |   250 | C1-C250 |
+| Critical |   251 | C1-C251 |
 | High     |    35 | H1-H35  |
 | Medium   |    12 | M1-M12  |
 
@@ -2928,6 +2928,17 @@ build:dist` passes.
     primitive; the complete non-test compiler source census has no numeric length assignment.
   - **Evidence:** an inherited setter cannot observe or erase an `on:click` emitter patch; the complete
     compiler census is empty and all 1,033 compiler tests pass.
+
+- [x] **C251 - Server mutation, wire, static-export, and build collections remain cross-bindable.**
+      `packages/server/src`
+  - 112 production server appends still exposed mutation targets/chunks, wire fields, client-module
+    plans, SRI/header/static-export facts, build assets, diagnostics, and request snapshots to
+    inherited numeric setters before final response or artifact decisions consumed them.
+  - **Acceptance:** the shared server witness provides a bounded verified own-data append, isolated
+    bootstrap owners retain local equivalents, and the non-test server census has no numeric length
+    assignment.
+  - **Evidence:** the exact inherited setter receives zero witness commits; the complete server
+    source census is empty and the full 2,390-test server matrix passes.
 
 ## High
 

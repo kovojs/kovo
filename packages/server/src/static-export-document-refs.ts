@@ -9,7 +9,7 @@ import {
   securityStringSlice,
   securityStringTrim,
 } from './response-security-intrinsics.js';
-import { witnessSetForEach } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessSetForEach } from './security-witness-intrinsics.js';
 import {
   scanStaticExportDocumentProtocol,
   staticExportClientModuleHref,
@@ -52,7 +52,11 @@ export function collectStaticExportClientModuleHrefs(
 
   const result: string[] = [];
   witnessSetForEach(hrefs, (href) => {
-    result[result.length] = href;
+    witnessArrayAppend(
+      result,
+      href,
+      'Server packages/server/src/static-export-document-refs.ts collection',
+    );
   });
   securityArraySort(result, (left, right) => (left < right ? -1 : left > right ? 1 : 0));
   return result;
@@ -69,7 +73,12 @@ export function collectStaticExportServerEndpointRefs(
     'static-export server endpoint refs',
   );
   const result: StaticExportServerEndpointRef[] = [];
-  for (let index = 0; index < refs.length; index += 1) result[result.length] = refs[index]!;
+  for (let index = 0; index < refs.length; index += 1)
+    witnessArrayAppend(
+      result,
+      refs[index]!,
+      'Server packages/server/src/static-export-document-refs.ts collection',
+    );
   return result;
 }
 
