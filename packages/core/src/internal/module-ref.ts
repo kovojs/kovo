@@ -4,7 +4,11 @@
  * imports, so parsing and formatting live in one core contract.
  */
 
-import { securityRegExpTest, securityStringSlice } from '#security-witness-intrinsics';
+import {
+  securityArrayAppend,
+  securityRegExpTest,
+  securityStringSlice,
+} from '#security-witness-intrinsics';
 
 /** @internal Kovo module reference families carried on the wire. */
 export type KovoModuleRefKind = 'derive' | 'handler';
@@ -51,7 +55,10 @@ export function parseKovoModuleRefList<Kind extends KovoModuleRefKind>(
   for (let index = 0; index <= value.length; index += 1) {
     if (index < value.length && !securityRegExpTest(/\s/u, value[index] ?? '')) continue;
     if (index > start) {
-      refs[refs.length] = assertKovoModuleRef(securityStringSlice(value, start, index), kind);
+      securityArrayAppend(
+        refs,
+        assertKovoModuleRef(securityStringSlice(value, start, index), kind),
+      );
     }
     start = index + 1;
   }

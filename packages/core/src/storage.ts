@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
+import { securityArrayAppend } from './internal/security-witness-intrinsics.js';
 import {
   createFileSystemMap,
   createFileSystemReadableStream,
@@ -368,11 +369,7 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
 
       const body = await storageBodyToBytes(output.body);
       return {
-        ...s3ObjectInfo(
-          normalizedKey,
-          output,
-          fileSystemArrayBufferViewByteLength(body),
-        ),
+        ...s3ObjectInfo(normalizedKey, output, fileSystemArrayBufferViewByteLength(body)),
         body,
       };
     },
@@ -767,7 +764,7 @@ function normalizeStoragePrefix(prefix: string): string {
   const normalizedParts: string[] = [];
   for (let index = 0; index < rawParts.length; index += 1) {
     const part = rawParts[index]!;
-    if (part.length > 0) normalizedParts[normalizedParts.length] = normalizeStorageKey(part);
+    if (part.length > 0) securityArrayAppend(normalizedParts, normalizeStorageKey(part));
   }
   return fileSystemArrayJoin(normalizedParts, '/');
 }

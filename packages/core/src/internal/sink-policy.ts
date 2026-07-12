@@ -1,5 +1,6 @@
 import {
   freezeSecurityValue,
+  securityArrayAppend,
   securityMap,
   securityMapGet,
   securityMapSet,
@@ -369,7 +370,7 @@ export function sanitizeRuntimeSrcset(value: string): string | null {
       urlEnd === -1 ? '' : securityStringTrim(securityStringSlice(trimmed, urlEnd));
     if (hasUnsafeUrlScheme(unquoteCssUrlToken(url))) continue;
 
-    safeCandidates[safeCandidates.length] = descriptor ? `${url} ${descriptor}` : url;
+    securityArrayAppend(safeCandidates, descriptor ? `${url} ${descriptor}` : url);
   }
 
   if (safeCandidates.length === 0) return null;
@@ -427,12 +428,12 @@ function splitSrcsetCandidates(value: string): string[] {
       continue;
     }
     if (char === ',' && depth === 0) {
-      candidates[candidates.length] = securityStringSlice(value, start, index);
+      securityArrayAppend(candidates, securityStringSlice(value, start, index));
       start = index + 1;
     }
   }
 
-  candidates[candidates.length] = securityStringSlice(value, start);
+  securityArrayAppend(candidates, securityStringSlice(value, start));
   return candidates;
 }
 

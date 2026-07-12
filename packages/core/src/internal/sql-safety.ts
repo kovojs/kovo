@@ -1,6 +1,7 @@
 import { diagnosticDefinitions } from './diagnostics.js';
 import {
   freezeSecurityValue,
+  securityArrayAppend,
   securityApply,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
@@ -621,7 +622,7 @@ function appendOwnArray<T>(target: T[], values: readonly T[]): boolean {
   for (let index = 0; index < values.length; index += 1) {
     const entry = ownArrayEntry(values, index);
     if (!entry.ok) return false;
-    target[target.length] = entry.value;
+    securityArrayAppend(target, entry.value);
   }
   return true;
 }
@@ -723,7 +724,7 @@ function pinnedSqlTemplate(
   for (let index = 0; index < strings.length; index += 1) {
     const text = ownArrayEntry(strings, index);
     if (!text.ok || typeof text.value !== 'string') return undefined;
-    chunks[chunks.length] = { kind: 'text', value: text.value };
+    securityArrayAppend(chunks, { kind: 'text', value: text.value });
     const value = index < values.length ? ownArrayEntry(values, index) : undefined;
     if (value !== undefined && (!value.ok || !appendPinnedSqlInterpolation(chunks, value.value))) {
       return undefined;
@@ -740,7 +741,7 @@ function pinnedSqlJoin(
   for (let index = 0; index < parts.length; index += 1) {
     if (index > 0) {
       if (separator === undefined) {
-        chunks[chunks.length] = { kind: 'text', value: ', ' };
+        securityArrayAppend(chunks, { kind: 'text', value: ', ' });
       } else if (!appendPinnedSqlInterpolation(chunks, separator)) {
         return undefined;
       }
@@ -763,12 +764,12 @@ function appendPinnedSqlInterpolation(chunks: PinnedSqlChunk[], value: unknown):
     // rereading a mutable third-party object, so leave the outer carrier unpinned and fail closed.
     const drizzleIdentifier = pinnedDrizzleIdentifier(value);
     if (drizzleIdentifier !== undefined) {
-      chunks[chunks.length] = { kind: 'text', value: drizzleIdentifier };
+      securityArrayAppend(chunks, { kind: 'text', value: drizzleIdentifier });
       return true;
     }
     if (nested?.kind === 'fixed' || hasSqlWrapperSurface(value)) return false;
   }
-  chunks[chunks.length] = { kind: 'parameter', value };
+  securityArrayAppend(chunks, { kind: 'parameter', value });
   return true;
 }
 
@@ -848,7 +849,7 @@ function appendPinnedQueryChunk(
   seen: WeakSet<object>,
 ): boolean {
   if (typeof chunk !== 'object' || chunk === null) {
-    chunks[chunks.length] = { kind: 'parameter', value: chunk };
+    securityArrayAppend(chunks, { kind: 'parameter', value: chunk });
     return true;
   }
 
@@ -862,11 +863,11 @@ function appendPinnedQueryChunk(
   const chunkValue = securityGetOwnPropertyDescriptor(record, 'value')?.value;
   const rawChunkText = securityIsArray(chunkValue) ? joinedOwnStringArray(chunkValue) : undefined;
   if (rawChunkText !== undefined) {
-    chunks[chunks.length] = { kind: 'text', value: rawChunkText };
+    securityArrayAppend(chunks, { kind: 'text', value: rawChunkText });
     return true;
   }
   if (typeof chunkValue === 'string' && securityHasOwn(record, 'brand')) {
-    chunks[chunks.length] = { kind: 'text', value: chunkValue };
+    securityArrayAppend(chunks, { kind: 'text', value: chunkValue });
     return true;
   }
 
@@ -882,7 +883,7 @@ function appendPinnedQueryChunk(
   }
 
   if (hasSqlWrapperSurface(chunk)) return false;
-  chunks[chunks.length] = { kind: 'parameter', value: chunk };
+  securityArrayAppend(chunks, { kind: 'parameter', value: chunk });
   return true;
 }
 
@@ -894,10 +895,13 @@ function pinnedSqlRecipe(chunks: readonly PinnedSqlChunk[]): PinnedSqlCarrier {
       throw new TypeError('Pinned SQL recipes require dense own-data chunks.');
     }
     const chunk = entry.value;
-    pinnedChunks[pinnedChunks.length] = freezeSecurityValue(
-      chunk.kind === 'text'
-        ? { kind: 'text' as const, value: chunk.value }
-        : { kind: 'parameter' as const, value: chunk.value },
+    securityArrayAppend(
+      pinnedChunks,
+      freezeSecurityValue(
+        chunk.kind === 'text'
+          ? { kind: 'text' as const, value: chunk.value }
+          : { kind: 'parameter' as const, value: chunk.value },
+      ),
     );
   }
   return freezeSecurityValue({
@@ -920,7 +924,7 @@ function renderPinnedSqlCarrier(pinned: PinnedSqlCarrier): {
     if (chunk.kind === 'text') {
       text += chunk.value;
     } else {
-      values[values.length] = chunk.value;
+      securityArrayAppend(values, chunk.value);
       text += `$${values.length}`;
     }
   }

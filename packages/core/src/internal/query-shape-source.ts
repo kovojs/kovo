@@ -2,6 +2,7 @@ import type * as TypeScript from 'typescript';
 
 import {
   freezeSecurityValue,
+  securityArrayAppend,
   securityGetOwnPropertyDescriptor,
   securityHasOwn,
   securityIsArray,
@@ -91,12 +92,15 @@ export function outputSchemaQueryShapeFactsFromProject(
       fileInputs[index]!,
       `query-shape project file[${index}]`,
     );
-    sourceFiles[sourceFiles.length] = ts.createSourceFile(
-      file.fileName,
-      file.source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
+    securityArrayAppend(
+      sourceFiles,
+      ts.createSourceFile(
+        file.fileName,
+        file.source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      ),
     );
   }
   for (let index = 0; index < sourceFiles.length; index += 1) {
@@ -167,7 +171,7 @@ function outputSchemaQueryShapeFactsFromSourceFile(
   const visit = (node: TypeScript.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
       const fact = outputSchemaQueryShapeFactFromVariable(ts, sourceFile, node);
-      if (fact) facts[facts.length] = fact;
+      if (fact) securityArrayAppend(facts, fact);
     }
     ts.forEachChild(node, visit);
   };
@@ -506,7 +510,7 @@ function snapshotQueryShape(value: unknown, label: string): QueryShape {
     const source = snapshotQueryShapeArray(value, label);
     const output: QueryShape[] = [];
     for (let index = 0; index < source.length; index += 1) {
-      output[output.length] = snapshotQueryShape(source[index], `${label}[${index}]`);
+      securityArrayAppend(output, snapshotQueryShape(source[index], `${label}[${index}]`));
     }
     return freezeSecurityValue(output);
   }
@@ -603,7 +607,7 @@ function appendQueryShapeFacts(
 ): void {
   const facts = snapshotQueryShapeArray(source, label);
   for (let index = 0; index < facts.length; index += 1) {
-    target[target.length] = snapshotQueryShapeFact(facts[index]!, `${label}[${index}]`);
+    securityArrayAppend(target, snapshotQueryShapeFact(facts[index]!, `${label}[${index}]`));
   }
 }
 

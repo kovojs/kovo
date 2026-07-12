@@ -1,5 +1,6 @@
 import type * as TypeScript from 'typescript';
 import {
+  securityArrayAppend,
   securityMap,
   securityMapForEach,
   securityMapGet,
@@ -122,7 +123,7 @@ function identityArrayEntry<Value>(values: readonly Value[], index: number, labe
 }
 
 function appendIdentityValue<Value>(values: Value[], value: Value): void {
-  values[values.length] = value;
+  securityArrayAppend(values, value);
 }
 
 interface DeclarationIndexEntry {
@@ -892,7 +893,7 @@ function declarationIndexForContainer(
   const add = (name: string, declaration: TypeScript.Node): void => {
     const bucket = securityMapGet(index, name);
     const entry = { declaration, start: declaration.getStart(sourceFile) };
-    if (bucket) bucket[bucket.length] = entry;
+    if (bucket) securityArrayAppend(bucket, entry);
     else securityMapSet(index, name, [entry]);
   };
 
@@ -1350,7 +1351,7 @@ function normalizePath(path: string): string {
     if (part === '..') {
       if (parts.length > 0) parts.length -= 1;
     } else {
-      parts[parts.length] = part;
+      securityArrayAppend(parts, part);
     }
   }
   return joinIdentityStrings(parts, '/');

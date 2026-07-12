@@ -1,5 +1,6 @@
 import {
   freezeSecurityValue,
+  securityArrayAppend,
   securityMap,
   securityMapGet,
   securityMapSet,
@@ -227,17 +228,20 @@ function appendCatalogEntry(
   target: FrameworkIdentityCatalogEntry[],
   entry: FrameworkIdentityCatalogEntry,
 ): void {
-  target[target.length] = freezeSecurityValue({
-    exportName: entry.exportName,
-    module: entry.module,
-    ...(entry.packageSourceFiles === undefined
-      ? {}
-      : {
-          packageSourceFiles: freezeStringArray(entry.packageSourceFiles, 'package source files'),
-        }),
-    scopes: freezeStringArray(entry.scopes, 'scopes') as readonly FrameworkIdentityScope[],
-    specifiers: freezeStringArray(entry.specifiers, 'specifiers'),
-  });
+  securityArrayAppend(
+    target,
+    freezeSecurityValue({
+      exportName: entry.exportName,
+      module: entry.module,
+      ...(entry.packageSourceFiles === undefined
+        ? {}
+        : {
+            packageSourceFiles: freezeStringArray(entry.packageSourceFiles, 'package source files'),
+          }),
+      scopes: freezeStringArray(entry.scopes, 'scopes') as readonly FrameworkIdentityScope[],
+      specifiers: freezeStringArray(entry.specifiers, 'specifiers'),
+    }),
+  );
 }
 
 function freezeStringArray(values: readonly string[], label: string): readonly string[] {
@@ -245,7 +249,7 @@ function freezeStringArray(values: readonly string[], label: string): readonly s
   for (let index = 0; index < values.length; index += 1) {
     const entry = securityOwnArrayEntry(values, index);
     if (!entry.ok) throw new TypeError(`Framework identity ${label}[${index}] must be dense.`);
-    snapshot[snapshot.length] = entry.value;
+    securityArrayAppend(snapshot, entry.value);
   }
   return freezeSecurityValue(snapshot);
 }

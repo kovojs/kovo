@@ -2,6 +2,7 @@ import type { DerivationStatus } from './derivation.js';
 
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
 import {
+  securityArrayAppend,
   securityOwnArrayEntry,
   securitySet,
   securitySetAdd,
@@ -892,7 +893,7 @@ function appendDerivedFacts<Input, Fact>(
     if (!entry.ok) {
       throw new TypeError(`Kovo graph derivation rejected sparse ${label} at index ${index}`);
     }
-    facts[facts.length] = derive(entry.value);
+    securityArrayAppend(facts, derive(entry.value));
   }
 }
 
@@ -1199,13 +1200,13 @@ function appendOwnershipPostureFacts<Entry extends QueryReadSet | MutationExplai
       }
       const parsed = ownsGuardFact(guardEntry.value);
       if (parsed) {
-        facts[facts.length] = {
+        securityArrayAppend(facts, {
           ...parsed,
           kind,
           name,
           ownerGuarded: true,
           source: 'ownership-posture',
-        };
+        });
       }
     }
   }

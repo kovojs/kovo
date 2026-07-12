@@ -1,4 +1,5 @@
 import {
+  securityArrayAppend,
   securityDecodeURIComponent,
   securityEncodeURIComponent,
   securityGetOwnPropertyDescriptor,
@@ -86,8 +87,8 @@ export function parseRoutePattern(path: string): RoutePattern {
     const sourceSegment = sourceSegments[index];
     if (sourceSegment === undefined) continue;
     const segment = parseRoutePatternSegment(sourceSegment);
-    segments[segments.length] = segment;
-    if (segment.kind === 'param' && segment.name) paramNames[paramNames.length] = segment.name;
+    securityArrayAppend(segments, segment);
+    if (segment.kind === 'param' && segment.name) securityArrayAppend(paramNames, segment.name);
   }
 
   return {
@@ -245,12 +246,12 @@ export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly Rou
       const witnessPath = routeAmbiguityWitness(left, right);
       if (!witnessPath) continue;
 
-      ambiguities[ambiguities.length] = {
+      securityArrayAppend(ambiguities, {
         code: 'KV228',
         message: `Ambiguous route table: '${left.path}' and '${right.path}' can both match canonical request path '${witnessPath}'.`,
         paths: [left.path, right.path],
         witnessPath,
-      };
+      });
     }
   }
 
@@ -396,21 +397,21 @@ function routeAmbiguityWitness(left: CompiledRoute, right: CompiledRoute): strin
 
     if (leftSegment.kind === 'static' && rightSegment.kind === 'static') {
       if (leftSegment.value !== rightSegment.value) return undefined;
-      witnessSegments[witnessSegments.length] = leftSegment.value;
+      securityArrayAppend(witnessSegments, leftSegment.value);
       continue;
     }
 
     if (leftSegment.kind === 'static') {
-      witnessSegments[witnessSegments.length] = leftSegment.value;
+      securityArrayAppend(witnessSegments, leftSegment.value);
       continue;
     }
 
     if (rightSegment.kind === 'static') {
-      witnessSegments[witnessSegments.length] = rightSegment.value;
+      securityArrayAppend(witnessSegments, rightSegment.value);
       continue;
     }
 
-    witnessSegments[witnessSegments.length] = leftSegment.name ? `:${leftSegment.name}` : ':param';
+    securityArrayAppend(witnessSegments, leftSegment.name ? `:${leftSegment.name}` : ':param');
   }
 
   return `/${joinPathSegments(witnessSegments)}`;
@@ -434,7 +435,7 @@ function removeDotSegments(pathname: string): string {
       if (output.length > 1) output.length -= 1;
       continue;
     }
-    output[output.length] = segment;
+    securityArrayAppend(output, segment);
   }
 
   const joined = joinPathSegments(output);

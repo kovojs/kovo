@@ -1,5 +1,6 @@
 import {
   freezeSecurityValue,
+  securityArrayAppend,
   securityApply,
   securityGetOwnPropertyDescriptor,
   securityHasInstance,
@@ -267,7 +268,7 @@ function snapshotHmacSecrets(
       if (descriptor === undefined || !('value' in descriptor)) {
         throw new TypeError('HMAC secret arrays require stable own-data entries.');
       }
-      snapshot[snapshot.length] = snapshotHmacSecret(descriptor.value as HmacSecret);
+      securityArrayAppend(snapshot, snapshotHmacSecret(descriptor.value as HmacSecret));
     }
     return freezeSecurityValue(snapshot);
   }
@@ -409,7 +410,7 @@ async function verifyHmacSignature(
     }
     const signature = descriptor.value;
     const decoded = decodeSignature(signature, options.encoding);
-    if (decoded !== undefined) signatures[signatures.length] = decoded;
+    if (decoded !== undefined) securityArrayAppend(signatures, decoded);
   }
   if (signatures.length === 0) return false;
 
@@ -448,7 +449,9 @@ function parseSignatures(
         header[index] === ',' ||
         securityRegExpTest(/\s/u, header[index] ?? '');
       if (!delimiter) continue;
-      if (index > start) signatures[signatures.length] = securityStringSlice(header, start, index);
+      if (index > start) {
+        securityArrayAppend(signatures, securityStringSlice(header, start, index));
+      }
       start = index + 1;
     }
     return signatures;
@@ -465,7 +468,7 @@ function standardV1Signatures(header: string): readonly string[] {
       const token = securityStringSlice(header, start, index);
       const comma = firstCharacterIndex(token, ',');
       if (comma === 2 && token[0] === 'v' && token[1] === '1' && comma + 1 < token.length) {
-        signatures[signatures.length] = securityStringSlice(token, comma + 1);
+        securityArrayAppend(signatures, securityStringSlice(token, comma + 1));
       }
     }
     start = index + 1;
@@ -482,8 +485,9 @@ function normalizeStandardWebhooksSecrets(
     for (let index = 0; index < secretValues.length; index += 1) {
       const descriptor = securityGetOwnPropertyDescriptor(secretValues, index);
       if (descriptor !== undefined && 'value' in descriptor && descriptor.value !== undefined) {
-        normalized[normalized.length] = normalizeStandardWebhooksSecret(
-          descriptor.value as HmacSecret,
+        securityArrayAppend(
+          normalized,
+          normalizeStandardWebhooksSecret(descriptor.value as HmacSecret),
         );
       }
     }

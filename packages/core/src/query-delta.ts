@@ -1,6 +1,7 @@
 import type { JsonValue } from './index.js';
 import { cloneJsonValue, jsonEncodedByteLength } from './json-clone.js';
 import {
+  securityArrayAppend,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityHasOwn,
@@ -206,14 +207,16 @@ export function buildQueryDelta(
       const key = rowKey(row, keyField);
       if (key === undefined) return undefined; // unkeyed row ⇒ cannot scope ⇒ full
       securitySetAdd(present, key);
-      if (securitySetHas(affected, key)) upsert[upsert.length] = row;
+      if (securitySetHas(affected, key)) securityArrayAppend(upsert, row);
     }
     const remove: string[] = [];
     const affectedValues = securitySetValues(affected);
     for (let keyIndex = 0; keyIndex < affectedValues.length; keyIndex += 1) {
       const keyEntry = securityOwnArrayEntry(affectedValues, keyIndex);
       if (!keyEntry.ok) return undefined;
-      if (!securitySetHas(present, keyEntry.value)) remove[remove.length] = keyEntry.value;
+      if (!securitySetHas(present, keyEntry.value)) {
+        securityArrayAppend(remove, keyEntry.value);
+      }
     }
 
     securityDefineProperty(lists, path, {
@@ -439,18 +442,18 @@ function reconcileList(
     const key = rowKey(row, keyField);
     if (key !== undefined && securitySetHas(removeSet, key)) continue;
     if (key !== undefined && securityMapHas(upsertByKey, key)) {
-      kept[kept.length] = securityMapGet(upsertByKey, key) as JsonValue;
+      securityArrayAppend(kept, securityMapGet(upsertByKey, key) as JsonValue);
       securityMapDelete(upsertByKey, key);
       continue;
     }
-    kept[kept.length] = row;
+    securityArrayAppend(kept, row);
   }
   // New rows (upserts whose key was not already present), in wire order.
   const added: JsonValue[] = [];
   for (let index = 0; index < upsertEntries.length; index += 1) {
     const entry = upsertEntries[index]!;
     if (securityMapHas(upsertByKey, entry.key)) {
-      added[added.length] = entry.row;
+      securityArrayAppend(added, entry.row);
       securityMapDelete(upsertByKey, entry.key);
     }
   }
@@ -464,12 +467,12 @@ function reconcileList(
   for (let index = 0; index < first.length; index += 1) {
     const entry = securityOwnArrayEntry(first, index);
     if (!entry.ok) throw new QueryDeltaApplyError(`query delta result for "${path}" is unstable`);
-    result[result.length] = entry.value;
+    securityArrayAppend(result, entry.value);
   }
   for (let index = 0; index < second.length; index += 1) {
     const entry = securityOwnArrayEntry(second, index);
     if (!entry.ok) throw new QueryDeltaApplyError(`query delta result for "${path}" is unstable`);
-    result[result.length] = entry.value;
+    securityArrayAppend(result, entry.value);
   }
   return result;
 }

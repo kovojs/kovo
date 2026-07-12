@@ -493,24 +493,36 @@ export function securitySetForEach<T>(set: ReadonlySet<T>, callback: (value: T) 
 export function securitySetValues<T>(set: ReadonlySet<T>): T[] {
   const values: T[] = [];
   securitySetForEach(set, (value) => {
-    const length = values.length;
-    securityDefineProperty(values, length, {
-      configurable: true,
-      enumerable: true,
-      value,
-      writable: true,
-    });
-    const committed = securityGetOwnPropertyDescriptor(values, length);
-    if (
-      committed === undefined ||
-      !('value' in committed) ||
-      !securityObjectIs(committed.value, value) ||
-      values.length !== length + 1
-    ) {
-      failIntrinsic('Set value own-data commit');
-    }
+    securityArrayAppend(values, value);
   });
   return values;
+}
+
+export function securityArrayAppend<T>(values: T[], value: T): void {
+  assertCapturedSecurityControls();
+  const lengthDescriptor = securityGetOwnPropertyDescriptor(values, 'length');
+  const length =
+    lengthDescriptor !== undefined && 'value' in lengthDescriptor
+      ? lengthDescriptor.value
+      : undefined;
+  if (typeof length !== 'number' || length % 1 !== 0 || length < 0 || length >= 1_000_000) {
+    failIntrinsic('Array append length');
+  }
+  securityDefineProperty(values, length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+  const committed = securityGetOwnPropertyDescriptor(values, length);
+  if (
+    committed === undefined ||
+    !('value' in committed) ||
+    !securityObjectIs(committed.value, value) ||
+    values.length !== length + 1
+  ) {
+    failIntrinsic('Array append own-data commit');
+  }
 }
 
 export function freezeSecurityValue<T extends object>(value: T): T {
