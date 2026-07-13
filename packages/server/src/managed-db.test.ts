@@ -4430,6 +4430,59 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
+  it('keeps the managed write choke closed after selective Nearley map poisoning', () => {
+    const log: string[] = [];
+    const handle = wrapManagedDbForSqlSafety(
+      {
+        run(statement: unknown) {
+          log.push('run');
+          return statement;
+        },
+      },
+      undefined,
+      managedSqlExecutionPolicy({
+        capability: 'write',
+        dialect: 'postgres',
+        tables: ['allowed_accounts'],
+        touches: ['allowedAccount'],
+      }),
+    ) as { run(statement: unknown): unknown };
+    const statement = stampTrustedSql(
+      { text: "UPDATE victim_accounts SET role = 'admin'", values: [] },
+      'isolated parser managed-choke regression',
+    );
+
+    expect(() => handle.run(statement)).toThrow(/KV406/u);
+
+    const nativeMap = Array.prototype.map;
+    let parserMapHits = 0;
+    try {
+      Array.prototype.map = function <Value, Result>(
+        callback: (value: Value, index: number, array: Value[]) => Result,
+        thisArg?: unknown,
+      ): Result[] {
+        const state = this[0] as
+          | { data?: { type?: unknown }; rule?: { name?: unknown } }
+          | undefined;
+        if (this.length === 1 && state?.rule?.name === 'main' && state.data?.type === 'update') {
+          parserMapHits += 1;
+          return [
+            {
+              type: 'select',
+              columns: [{ expr: { type: 'integer', value: 1 } }],
+            } as Result,
+          ];
+        }
+        return Reflect.apply(nativeMap, this, [callback, thisArg]) as Result[];
+      };
+      expect(() => handle.run(statement)).toThrow(/KV406/u);
+      expect(parserMapHits).toBe(0);
+      expect(log).toEqual([]);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+  });
+
   it('write mode requires schema-qualified matches for declared raw-SQL tables on pglite handles', async () => {
     const log: string[] = [];
     const handle = managedDb(

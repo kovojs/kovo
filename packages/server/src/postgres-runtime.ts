@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { types as nodeUtilTypes } from 'node:util';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -102,6 +101,8 @@ import {
 } from './security-witness-intrinsics.js';
 import { extractCompilerBoundKovoRuntimeDbMetadata } from './generated-table-security-registry.js';
 import { ensureRecurringTaskSchema } from './task-cron.js';
+import { assertManagedSqlParserAuthorityReady } from './sql-parser-authority-bootstrap.js';
+import { parseWithIsolatedSqlParser } from './sql-parser-authority.js';
 import {
   createDurableTaskSqlExecutor,
   ensureDurableTaskSchema,
@@ -216,11 +217,6 @@ type CompilerBoundAuthzPolicy =
 
 const POSTGRES_POLICY_DIALECT = new PgDialect();
 const postgresPolicySqlToQuery = capturePostgresPolicySqlToQuery();
-const postgresRuntimeRequire = createRequire(import.meta.url);
-const postgresPolicySqlParser = postgresRuntimeRequire(
-  'pgsql-ast-parser',
-) as typeof import('pgsql-ast-parser');
-const postgresPolicyParse = capturePostgresPolicyParse();
 const postgresHashMethodSource = createHash('sha256');
 const postgresHashUpdate = capturePostgresCallable(
   postgresHashMethodSource,
@@ -277,18 +273,6 @@ function capturePostgresPolicySqlToQuery(): PgDialect['sqlToQuery'] {
     throw new TypeError('Postgres policy SQL renderer must be an own-data method.');
   }
   return descriptor.value as PgDialect['sqlToQuery'];
-}
-
-function capturePostgresPolicyParse(): typeof postgresPolicySqlParser.parse {
-  const descriptor = witnessGetOwnPropertyDescriptor(postgresPolicySqlParser, 'parse');
-  if (
-    descriptor === undefined ||
-    !('value' in descriptor) ||
-    typeof descriptor.value !== 'function'
-  ) {
-    throw new TypeError('Postgres policy AST parser must be an own-data method.');
-  }
-  return descriptor.value as typeof postgresPolicySqlParser.parse;
 }
 
 function capturePostgresCallable(target: object, property: PropertyKey, label: string): Function {
@@ -1423,6 +1407,7 @@ export interface KovoPostgresPostureReport {
 export function createPostgresAppRuntimeDb(
   options: KovoPostgresAppRuntimeOptions,
 ): KovoPostgresAppRuntimeDb {
+  assertManagedSqlParserAuthorityReady();
   const config = resolvePostgresRuntimeConfig(options);
   assertProductionRuntimeDriver(config);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
@@ -1560,6 +1545,7 @@ function createPostgresSystemDb(db: KovoPostgresRuntimeDb): KovoPostgresSystemDb
 export async function provisionPostgresAppDb(
   options: KovoPostgresProvisionOptions,
 ): Promise<KovoPostgresPostureReport> {
+  assertManagedSqlParserAuthorityReady();
   const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
     driver: 'node-postgres',
     postureCheckOnBoot: false,
@@ -1601,6 +1587,7 @@ export async function provisionPostgresAppDb(
 export async function migratePostgresAppDb(
   options: KovoPostgresMigrateOptions,
 ): Promise<KovoPostgresMigrationRunReport> {
+  assertManagedSqlParserAuthorityReady();
   const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
     postureCheckOnBoot: false,
     provisionOnBoot: false,
@@ -1643,6 +1630,7 @@ export async function migratePostgresAppDb(
 export async function planPostgresAppDbMigration(
   options: KovoPostgresMigrationPlanOptions,
 ): Promise<KovoPostgresMigrationPlan> {
+  assertManagedSqlParserAuthorityReady();
   const safeOptions = snapshotPostgresRuntimeConfigInput(options, {
     postureCheckOnBoot: false,
     provisionOnBoot: false,
@@ -1668,6 +1656,7 @@ export async function planPostgresAppDbMigration(
 export async function checkPostgresAppDbPosture(
   options: KovoPostgresAppRuntimeOptions,
 ): Promise<KovoPostgresPostureReport> {
+  assertManagedSqlParserAuthorityReady();
   const optionDriver = postgresOwnDataValue(
     options as unknown as Record<PropertyKey, unknown>,
     'driver',
@@ -2204,11 +2193,7 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
 function canonicalPostgresPolicyExpression(expression: string | null): string | null | undefined {
   if (expression === null) return null;
   try {
-    const statements = witnessReflectApply<ReturnType<typeof postgresPolicyParse>>(
-      postgresPolicyParse,
-      postgresPolicySqlParser,
-      [`SELECT 1 WHERE ${expression}`],
-    );
+    const statements = parseWithIsolatedSqlParser(`SELECT 1 WHERE ${expression}`);
     const statement =
       postgresDenseArrayLength(statements, 'Parsed Postgres policy statements') === 0
         ? undefined

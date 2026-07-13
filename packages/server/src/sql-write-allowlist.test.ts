@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import './sql-parser-authority-bootstrap.js';
+import { parseWithIsolatedSqlParser } from './sql-parser-authority.js';
 import {
   classifyStatement,
   parseSqlWriteTables,
@@ -15,6 +17,45 @@ import {
 const sqlWriteAllowlistModuleUrl = pathToFileURL(
   join(import.meta.dirname, 'sql-write-allowlist.ts'),
 ).href;
+
+describe('isolated managed SQL parser authority', () => {
+  it('does not retain malformed SQL literals in classifier diagnostics', () => {
+    const secret = 'kovo-secret-literal-do-not-retain';
+    const verdict = classifyStatement(`SELECT '${secret}`);
+
+    expect(verdict).toEqual({
+      kind: 'unproven',
+      reason: 'SQL parser could not prove statement safety: parser rejected the statement',
+    });
+    expect(JSON.stringify(verdict)).not.toContain(secret);
+    expect(JSON.stringify(verdict)).not.toMatch(/[\r\n]/u);
+  });
+
+  it('rejects oversized SQL before private-realm parser work', () => {
+    expect(() => parseWithIsolatedSqlParser(' '.repeat(262_145))).toThrow(/parser input limit/u);
+  });
+
+  it('bounds AST depth, list length, and string length', () => {
+    expect(() => parseWithIsolatedSqlParser(`SELECT 1 WHERE ${'NOT '.repeat(100)}TRUE`)).toThrow(
+      /AST exceeds the depth limit/u,
+    );
+
+    expect(() =>
+      parseWithIsolatedSqlParser(`SELECT ${new Array<string>(16_385).fill('1').join(',')}`),
+    ).toThrow(/AST list exceeds the length limit/u);
+
+    expect(() => parseWithIsolatedSqlParser(`SELECT '${'x'.repeat(131_073)}'`)).toThrow(
+      /AST string exceeds the length limit/u,
+    );
+  });
+
+  it('bounds aggregate AST snapshot work', () => {
+    const rows = new Array<string>(11_000).fill('(1,1)').join(',');
+    expect(() => parseWithIsolatedSqlParser(`VALUES ${rows}`)).toThrow(
+      /AST exceeds the (?:key budget|node limit|list-entry budget)/u,
+    );
+  });
+});
 
 describe('parseSqlWriteTables', () => {
   it('binds the SQL parser before late resolver hooks can replace classifier truth', () => {
@@ -34,9 +75,10 @@ describe('parseSqlWriteTables', () => {
           return nextResolve(specifier, context);
         },
       });
-      const classifier = await import(${JSON.stringify(
-        `${sqlWriteAllowlistModuleUrl}?boot-pinned-parser`,
-      )});
+      await import(new URL('./sql-parser-authority-bootstrap.ts', ${JSON.stringify(
+        sqlWriteAllowlistModuleUrl,
+      )}));
+      const classifier = await import(${JSON.stringify(sqlWriteAllowlistModuleUrl)});
       let poisonHits = 0;
       registerHooks({
         resolve(specifier, context, nextResolve) {
@@ -160,6 +202,39 @@ describe('parseSqlWriteTables', () => {
     }
   });
 
+  it('keeps write classification inside the private parser realm after selective Nearley map poisoning', () => {
+    const nativeMap = Array.prototype.map;
+    let parserMapHits = 0;
+    try {
+      Array.prototype.map = function <Value, Result>(
+        callback: (value: Value, index: number, array: Value[]) => Result,
+        thisArg?: unknown,
+      ): Result[] {
+        const state = this[0] as
+          | { data?: { type?: unknown }; rule?: { name?: unknown } }
+          | undefined;
+        if (this.length === 1 && state?.rule?.name === 'main' && state.data?.type === 'update') {
+          parserMapHits += 1;
+          return [
+            {
+              type: 'select',
+              columns: [{ expr: { type: 'integer', value: 1 } }],
+            } as Result,
+          ];
+        }
+        return Reflect.apply(nativeMap, this, [callback, thisArg]) as Result[];
+      };
+      expect(
+        parseSqlWriteTables("UPDATE victim_accounts SET role = 'admin'", {
+          dialect: 'postgres',
+        }),
+      ).toEqual(['victim_accounts']);
+      expect(parserMapHits).toBe(0);
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+  });
+
   it('keeps data-modifying CTE verdicts after selective Array.push replacement', () => {
     const nativePush = Array.prototype.push;
     try {
@@ -198,7 +273,9 @@ describe('parseSqlWriteTables', () => {
           { dialect: 'postgres' },
         ),
       ).toEqual(['allowed', 'victim_accounts']);
-      expect(victimIterations).toBe(3);
+      // The parser now runs in a separate realm, so even the parser's own iterations are no longer
+      // observable or mutable through the application realm.
+      expect(victimIterations).toBe(0);
     } finally {
       Array.prototype[Symbol.iterator] = nativeIterator;
     }

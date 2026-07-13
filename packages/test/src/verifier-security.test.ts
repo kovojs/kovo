@@ -1,7 +1,10 @@
 /* oxlint-disable typescript/unbound-method -- Adversarial tests deliberately replace late realm methods. */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle } from '@kovojs/server/internal/execution';
+import {
+  kovoDeclaredWriteDbHandle,
+  kovoReadonlyDbHandle,
+} from '@kovojs/server/internal/managed-db';
 import { describe, expect, it } from 'vitest';
 
 import { createFakeDb, expectedDiagnostic } from './test-fixtures.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { managedDb } from '@kovojs/server/internal/execution';
+import { managedDb } from '@kovojs/server/internal/managed-db';
 
 import { expectedDiagnostic } from './test-fixtures.js';
 import { createDbVerifier } from './verifier.js';

@@ -3,7 +3,7 @@ import {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   type KovoDeclaredWriteDbCapable,
-} from '@kovojs/server/internal/execution';
+} from '@kovojs/server/internal/managed-db';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { PgliteTestDb } from '../pglite.js';

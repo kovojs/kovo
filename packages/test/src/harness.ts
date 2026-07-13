@@ -6,7 +6,10 @@ import type {
   QueryDefinition,
   Schema,
 } from '@kovojs/server';
-import { kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle } from '@kovojs/server/internal/execution';
+import {
+  kovoDeclaredWriteDbHandle,
+  kovoReadonlyDbHandle,
+} from '@kovojs/server/internal/managed-db';
 import {
   executeHarnessMutation,
   executeHarnessQuery,

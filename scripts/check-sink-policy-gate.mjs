@@ -54,7 +54,8 @@ export const defaultRootedFileServeRawSinkFiles = [
   'packages/core/src/internal/filesystem-intrinsics.ts',
 ];
 
-export const defaultDynamicCodeExecutionSinkFiles = [];
+export const sqlParserAuthorityFile = 'packages/server/src/sql-parser-authority.ts';
+export const defaultDynamicCodeExecutionSinkFiles = [sqlParserAuthorityFile];
 
 export const defaultDeserializationRoots = ['packages/server/src'];
 export const defaultRequestBodyParserChokeFiles = [
@@ -343,6 +344,9 @@ export function checkSinkPolicyGate(options = {}) {
         allowedExecutionSink: dynamicCodeExecutionSinkFileSet.has(filePath),
       }),
     );
+    if (dynamicCodeExecutionSinkFileSet.has(filePath) && filePath === sqlParserAuthorityFile) {
+      findings.push(...sqlParserAuthorityInvariantFindings(filePath, text));
+    }
     findings.push(
       ...rootedFileServeRawSinkFindings(filePath, text, {
         allowedFileServeSink: rootedFileServeRawSinkFileSet.has(filePath),
@@ -1037,6 +1041,74 @@ export function dynamicCodeExecutionSinkFindings(filePath, text, options = {}) {
     );
   }
 
+  return dedupe(findings);
+}
+
+/**
+ * Keep the single runtime VM exception narrower than the generic dynamic-code allowance.
+ * The evaluated bytes are the package-manager-resolved SQL parser and its exact two dependency
+ * modules; request/app/environment/generated text must never become executable input.
+ */
+export function sqlParserAuthorityInvariantFindings(filePath, text) {
+  const findings = [];
+  const generic = dynamicCodeExecutionSinkFindings(filePath, text);
+  const vmFinding = `${filePath}: forbidden dynamic code execution sink node:vm/vm import or require; server source must not execute generated code`;
+  if (!generic.includes(vmFinding)) {
+    findings.push(`${filePath}: isolated SQL parser authority must import node:vm explicitly`);
+  }
+  for (const finding of generic) {
+    if (finding !== vmFinding) findings.push(finding);
+  }
+  if (!/codeGeneration\s*:\s*\{\s*strings\s*:\s*false\s*,\s*wasm\s*:\s*false\s*\}/u.test(text)) {
+    findings.push(
+      `${filePath}: isolated SQL parser VM must disable string and Wasm code generation`,
+    );
+  }
+  for (const moduleName of ['pgsql-ast-parser', 'moo', 'nearley']) {
+    const escaped = escapeRegExp(moduleName);
+    if (!new RegExp(`\\.resolve\\(\\s*['"]${escaped}['"]\\s*\\)`, 'u').test(text)) {
+      findings.push(`${filePath}: isolated SQL parser must resolve exact dependency ${moduleName}`);
+    }
+  }
+  if (!/function\s+isParserModuleId\s*\(/u.test(text)) {
+    findings.push(
+      `${filePath}: isolated SQL parser CommonJS require must use an exact module allowlist`,
+    );
+  }
+  if (!/readFileSync\s*\(\s*fileName\s*,\s*['"]utf8['"]\s*\)/u.test(text)) {
+    findings.push(`${filePath}: isolated SQL parser must read only the resolved dependency file`);
+  }
+  if (!/snapshotParserValue\s*\(\s*foreignAst\s*,/u.test(text)) {
+    findings.push(
+      `${filePath}: isolated SQL parser AST must cross the realm through an own-data snapshot`,
+    );
+  }
+  const requiredBudgets = [
+    'MAX_MANAGED_SQL_INPUT_CHARACTERS',
+    'MAX_PARSER_AST_DEPTH',
+    'MAX_PARSER_AST_NODES',
+    'MAX_PARSER_AST_KEYS',
+    'MAX_PARSER_AST_RECORD_KEYS',
+    'MAX_PARSER_AST_ARRAY_LENGTH',
+    'MAX_PARSER_AST_ARRAY_ENTRIES',
+    'MAX_PARSER_AST_STRING_LENGTH',
+    'MAX_PARSER_AST_STRING_CHARACTERS',
+  ];
+  for (const budgetName of requiredBudgets) {
+    const references = text.match(new RegExp(`\\b${budgetName}\\b`, 'gu')) ?? [];
+    if (references.length < 2) {
+      findings.push(
+        `${filePath}: isolated SQL parser must define and enforce finite budget ${budgetName}`,
+      );
+    }
+  }
+  if (
+    !text.includes("throw new NativeTypeError('Kovo managed SQL parser rejected the statement.');")
+  ) {
+    findings.push(
+      `${filePath}: isolated SQL parser must replace foreign exceptions with a fixed host-owned rejection`,
+    );
+  }
   return dedupe(findings);
 }
 

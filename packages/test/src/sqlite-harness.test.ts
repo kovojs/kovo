@@ -9,7 +9,7 @@ import {
   kovoDeclaredWriteDbHandle,
   managedDb,
   type KovoDeclaredWriteDbCapable,
-} from '@kovojs/server/internal/execution';
+} from '@kovojs/server/internal/managed-db';
 
 import { createKovoTestHarness } from './harness.js';
 import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';

@@ -39,6 +39,7 @@ import * as envApi from '../env.js';
 import * as fileApi from '../file.js';
 import * as keyringApi from '../keyring.js';
 import * as managedDbApi from '../managed-db.js';
+import * as sqlSafeHandleApi from '../sql-safe-handle.js';
 import * as passwordApi from '../password.js';
 import * as postgresRuntimeApi from '../postgres-runtime.js';
 import * as componentRenderApi from '../component-render.js';
@@ -945,32 +946,21 @@ describe('server app-shell public API barrels', () => {
     ]);
     expect(packageInternalEscapeApi).toEqual(internalEscapeApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
-      // SPEC §6.6/§9.4/§10.3 (MARQUEE): the framework-owned managed DB handle error +
-      // composition primitives (`managedDb` stays internal; `readonlyDb` is also public as the
-      // blessed raw-endpoint read helper) are reachable on the internal execution subpath so
-      // adapters/tests can resolve a read-only/read-write handle the same way the shell does.
-      'KovoReadonlyHandleError',
       // The CLI's exact build graph consumes the same pinned access/guard classifiers through the
-      // internal execution subpath (SPEC §6.6/§10.2); keep the barrel census explicit.
+      // platform-neutral internal execution subpath (SPEC §6.6/§10.2). Managed DB composition is
+      // isolated on internal/managed-db so generated registry imports cannot retain Node VM.
       'accessDecisionFor',
       'accessFactsFromApp',
       'appendFrameworkRuntimeArrayValue',
-      'createFrameworkManagedSqlDispatchProxy',
       'createMemoryMutationReplayStore',
       'endpointMatches',
       'explainGuard',
       'extractCompilerBoundKovoRuntimeDbMetadata',
       'frameworkEndpoint',
-      'frameworkManagedDbRawTarget',
       'guardAuditName',
       'installGeneratedTableSecurityManifestForCommand',
       'invalidate',
-      'kovoDeclaredWriteDbHandle',
-      'kovoReadonlyDbHandle',
-      'managedDb',
       'pinEndpointBrowserCredentialDelegation',
-      'readonlyDb',
-      'registerFrameworkManagedDbHooks',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
       'registerGeneratedTableSecurityManifest',
@@ -981,6 +971,15 @@ describe('server app-shell public API barrels', () => {
       'runQuery',
       'runRoutePage',
     ]);
+    expect(packageInternalExecutionApi).not.toHaveProperty('managedDb');
+    expect(packageInternalExecutionApi).not.toHaveProperty(
+      'createFrameworkManagedSqlDispatchProxy',
+    );
+    expect(packageInternalManagedDbApi.managedDb).toBe(managedDbApi.managedDb);
+    expect(packageInternalManagedDbApi.readonlyDb).toBe(managedDbApi.readonlyDb);
+    expect(packageInternalManagedDbApi.createFrameworkManagedSqlDispatchProxy).toBe(
+      sqlSafeHandleApi.createFrameworkManagedSqlDispatchProxy,
+    );
     expect(packageInternalExecutionApi).toEqual(internalExecutionApi);
     expect(moduleValueKeys(packageViteApi)).toEqual(['kovo']);
     expect(packageViteApi.kovo).toBe(viteApi.kovo);

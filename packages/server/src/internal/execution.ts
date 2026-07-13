@@ -39,23 +39,7 @@ export {
 } from '../replay.js';
 export { runQuery } from '../query.js';
 export { runRoutePage } from '../route.js';
-// SPEC §6.6/§9.4/§10.3 (MARQUEE): the framework-owned managed DB handle composition primitives,
-// exposed on the internal subpath so adapters/tests can resolve a read-only/read-write handle the
-// same way the request shell does.
-export {
-  KovoReadonlyHandleError,
-  kovoDeclaredWriteDbHandle,
-  kovoReadonlyDbHandle,
-  managedDb,
-  registerFrameworkManagedDbHooks,
-  readonlyDb,
-  type KovoDeclaredWriteDbCapable,
-  type KovoReadonlyDbCapable,
-  type ManagedDbMode,
-  type Reader,
-} from '../managed-db.js';
-export {
-  createFrameworkManagedSqlDispatchProxy,
-  frameworkManagedDbRawTarget,
-} from '../sql-safe-handle.js';
+// Managed DB composition lives on `@kovojs/server/internal/managed-db`, whose Node bootstrap owns
+// the private SQL-parser authority. Keep this mixed build/runtime entry platform-neutral: generated
+// registry modules import the append helper below even in route-only Cloudflare bundles.
 export { witnessArrayAppend as appendFrameworkRuntimeArrayValue } from '../security-witness-intrinsics.js';

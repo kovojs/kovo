@@ -11,7 +11,7 @@ import {
   kovoReadonlyDbHandle,
   type KovoDeclaredWriteDbCapable,
   type KovoReadonlyDbCapable,
-} from '@kovojs/server/internal/execution';
+} from '@kovojs/server/internal/managed-db';
 
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
 import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';

@@ -4,7 +4,7 @@ import {
   kovoReadonlyDbHandle,
   type KovoDeclaredWriteDbCapable,
   type KovoReadonlyDbCapable,
-} from '@kovojs/server/internal/execution';
+} from '@kovojs/server/internal/managed-db';
 import { snapshotManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
 import {
   createManagedAdapterDispatchProxy,

@@ -6,6 +6,7 @@ import {
   type Reader,
 } from './managed-db.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
+import { assertManagedSqlParserAuthorityReady } from './sql-parser-authority-bootstrap.js';
 import { extractCompilerBoundKovoRuntimeDbMetadata } from './generated-table-security-registry.js';
 import {
   witnessFreeze,
@@ -101,6 +102,7 @@ export function runtimeDbMetadataForSchema(
 export function createSqliteAppRuntimeDb<Db extends object>(
   options: KovoSqliteAppRuntimeOptions<Db>,
 ): KovoSqliteAppRuntimeDb<Db> {
+  assertManagedSqlParserAuthorityReady();
   if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
     throw new TypeError('SQLite runtime options must be a stable own-data record.');
   }

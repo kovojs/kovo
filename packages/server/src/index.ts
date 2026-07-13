@@ -1,5 +1,7 @@
 import './security-bootstrap.js';
 
+import { sealManagedSqlParserAuthorityRegistry } from './sql-write-allowlist.js';
+
 export { createApp, createRequestHandler } from './app.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
@@ -447,6 +449,11 @@ export {
   createMemoryWebhookReplayStore,
   webhook,
 } from './api/routing.js';
+
+// SPEC §6.6 rule 6: all native root dependencies (including retained Node DB parser profiles)
+// evaluate before this body. Close the platform-neutral registry before authored app code runs;
+// route-only/Cloudflare bundles retain this default-deny transition while tree-shaking Node VM.
+sealManagedSqlParserAuthorityRegistry();
 export type {
   AuthenticatedRequest,
   ClientIpRequestLike,

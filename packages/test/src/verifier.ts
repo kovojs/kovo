@@ -10,7 +10,7 @@ import {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   registerFrameworkManagedDbHooks,
-} from '@kovojs/server/internal/execution';
+} from '@kovojs/server/internal/managed-db';
 import { observeSqlEngineSideEffects, tableObservationSnapshots } from './sql-observer.js';
 import {
   assertObservedReadsCovered,

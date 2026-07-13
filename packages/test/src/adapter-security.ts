@@ -1,4 +1,4 @@
-import { createFrameworkManagedSqlDispatchProxy } from '@kovojs/server/internal/execution';
+import { createFrameworkManagedSqlDispatchProxy } from '@kovojs/server/internal/managed-db';
 import {
   verifierArrayJoin,
   verifierArrayPush,

@@ -106,7 +106,8 @@ export type {
 // `Writer<Db>` type mirrors, `readonlyDb(appDb)` for raw endpoint reads, and
 // `declarePublicRead(...)` for audited public raw reads. Framework adapter hooks and audit drains
 // stay on `@kovojs/server/internal/managed-db`.
-export { declarePublicRead, KovoReadonlyHandleError, readonlyDb } from '../managed-db.js';
+export { declarePublicRead, KovoReadonlyHandleError } from '../managed-db.js';
+export { readonlyDb } from '../managed-db-public.js';
 export {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,

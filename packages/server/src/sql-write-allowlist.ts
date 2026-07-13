@@ -1,5 +1,4 @@
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
-import * as pgsqlAstParser from 'pgsql-ast-parser';
 import type {
   DeleteStatement,
   InsertStatement,
@@ -11,6 +10,7 @@ import type {
   WithStatement,
   WithStatementBinding,
 } from 'pgsql-ast-parser';
+import { managedSqlParserAuthorityInstallCapability } from './sql-parser-authority-install-capability.js';
 import {
   createWitnessSet,
   createWitnessWeakSet,
@@ -29,9 +29,36 @@ import {
 } from './security-witness-intrinsics.js';
 
 const nativeArraySort = Array.prototype.sort;
-const pgsqlAstParse = pgsqlAstParser.parse;
-if (typeof pgsqlAstParse !== 'function') {
-  throw new TypeError('Kovo managed SQL parser authority is unavailable.');
+
+type ManagedSqlParserAuthority = (sql: string) => Statement[];
+
+let managedSqlParserAuthority: ManagedSqlParserAuthority | undefined;
+let managedSqlParserAuthorityRegistrySealed = false;
+
+/** @internal Capability-authenticated Node bootstrap hook; absent from package exports. */
+export function installManagedSqlParserAuthority(
+  capability: unknown,
+  authority: ManagedSqlParserAuthority,
+): void {
+  if (capability !== managedSqlParserAuthorityInstallCapability) {
+    throw new TypeError('Kovo managed SQL parser authority install capability is invalid.');
+  }
+  if (typeof authority !== 'function') {
+    throw new TypeError('Kovo managed SQL parser authority must be callable.');
+  }
+  if (managedSqlParserAuthority === authority) return;
+  if (managedSqlParserAuthorityRegistrySealed) {
+    throw new TypeError('Kovo managed SQL parser authority registry is sealed.');
+  }
+  if (managedSqlParserAuthority !== undefined) {
+    throw new TypeError('Kovo managed SQL parser authority is already installed.');
+  }
+  managedSqlParserAuthority = authority;
+}
+
+/** @internal Root/bootstrap close transition before any authored app module evaluates. */
+export function sealManagedSqlParserAuthorityRegistry(): void {
+  managedSqlParserAuthorityRegistrySealed = true;
 }
 
 /** Runtime SQL parser configuration for production write-table enforcement. */
@@ -82,16 +109,29 @@ export const classifyStatement = securityClassifier(
     }
 
     const sql = options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
+    // Reading classifier truth closes the install window even for direct/private-module consumers.
+    // A platform without a boot-installed authority must stay default-deny rather than accepting a
+    // late app-supplied parser.
+    managedSqlParserAuthorityRegistrySealed = true;
+    const parserAuthority = managedSqlParserAuthority;
+    if (parserAuthority === undefined) {
+      return {
+        kind: 'unproven',
+        reason: 'managed SQL parser authority is unavailable on this runtime',
+      };
+    }
     let parsedStatements: Statement[];
     try {
       // SPEC §6.6 rule 6: the parser decides whether raw SQL is a proven read or which exact
-      // tables it can write. Capture that authority with the trusted server graph; a first-use
-      // require after app evaluation would let a resolver hook substitute attacker-selected facts.
-      parsedStatements = witnessReflectApply(pgsqlAstParse, undefined, [sql]) as Statement[];
-    } catch (error) {
+      // tables it can write. Its full CommonJS dependency graph runs in a boot-created private VM
+      // realm, then crosses an own-data snapshot before these classifier walks consume it.
+      parsedStatements = parserAuthority(sql);
+    } catch {
       return {
         kind: 'unproven',
-        reason: `SQL parser could not prove statement safety: ${formatErrorMessage(error)}`,
+        // The parser's foreign error can embed the complete SQL source. Keep classifier reasons
+        // fixed and host-owned so KV406/KV433 diagnostics never retain literals or control text.
+        reason: 'SQL parser could not prove statement safety: parser rejected the statement',
       };
     }
 
@@ -737,10 +777,6 @@ function isStatement(value: object): value is Statement {
 
 function tableName(identifier: QName): string {
   return identifier.schema ? `${identifier.schema}.${identifier.name}` : identifier.name;
-}
-
-function formatErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function compareSqlWriteTargets(left: ParsedSqlWriteTarget, right: ParsedSqlWriteTarget): number {

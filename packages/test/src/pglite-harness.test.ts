@@ -11,7 +11,7 @@ import {
   managedDb,
   type KovoDeclaredWriteDbCapable,
   type KovoReadonlyDbCapable,
-} from '@kovojs/server/internal/execution';
+} from '@kovojs/server/internal/managed-db';
 
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';

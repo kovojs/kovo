@@ -51,6 +51,9 @@ export const defaultAllowedRuntimeFiles = [
   // Stats/Dirent predicate, temp-name source, and numeric-fd control; it never exposes a second
   // application-facing filesystem door.
   filesystemIntrinsicsFile,
+  // Audited parser bootstrap: reads only package-manager-resolved pgsql-ast-parser, Moo, and
+  // Nearley CommonJS sources before app evaluation so they can execute in a private VM realm.
+  'packages/server/src/sql-parser-authority.ts',
   'packages/server/src/file.ts',
   'packages/server/src/output-staging.ts',
   'packages/server/src/static-export-output-targets.ts',

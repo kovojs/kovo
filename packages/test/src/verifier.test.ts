@@ -3,7 +3,7 @@ import {
   kovoDeclaredWriteDbHandle,
   managedDb,
   type KovoDeclaredWriteDbCapable,
-} from '@kovojs/server/internal/execution';
+} from '@kovojs/server/internal/managed-db';
 
 import { createFakeDb, expectedDiagnostic, expectedDiagnosticMessage } from './test-fixtures.js';
 import { createDbVerifier } from './verifier.js';

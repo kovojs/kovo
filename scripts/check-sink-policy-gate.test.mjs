@@ -21,6 +21,7 @@ import {
   sqlBlessedBrandLaunderingFindings,
   sqlBlessedBrandStampFindings,
   sqlGuardDowngradeFindings,
+  sqlParserAuthorityInvariantFindings,
   sqlSafetyInvariantFindings,
 } from './check-sink-policy-gate.mjs';
 
@@ -1093,6 +1094,65 @@ describe('sink-policy gate', () => {
     ).toEqual([
       'packages/server/src/unsafe-import.ts: forbidden dynamic code execution sink node:vm/vm import or require; server source must not execute generated code',
     ]);
+  });
+
+  it('allows only the isolated package-resolved SQL parser VM shape', () => {
+    const source = `
+      import { readFileSync } from 'node:fs';
+      import { createContext, Script } from 'node:vm';
+      const parserRequire = createRequire(import.meta.url);
+      const pgsqlParserPath = parserRequire.resolve('pgsql-ast-parser');
+      const parserDependencyRequire = createRequire(pgsqlParserPath);
+      parserDependencyRequire.resolve('moo');
+      parserDependencyRequire.resolve('nearley');
+      const context = createContext({}, { codeGeneration: { strings: false, wasm: false } });
+      const MAX_MANAGED_SQL_INPUT_CHARACTERS = 1; use(MAX_MANAGED_SQL_INPUT_CHARACTERS);
+      const MAX_PARSER_AST_DEPTH = 1; use(MAX_PARSER_AST_DEPTH);
+      const MAX_PARSER_AST_NODES = 1; use(MAX_PARSER_AST_NODES);
+      const MAX_PARSER_AST_KEYS = 1; use(MAX_PARSER_AST_KEYS);
+      const MAX_PARSER_AST_RECORD_KEYS = 1; use(MAX_PARSER_AST_RECORD_KEYS);
+      const MAX_PARSER_AST_ARRAY_LENGTH = 1; use(MAX_PARSER_AST_ARRAY_LENGTH);
+      const MAX_PARSER_AST_ARRAY_ENTRIES = 1; use(MAX_PARSER_AST_ARRAY_ENTRIES);
+      const MAX_PARSER_AST_STRING_LENGTH = 1; use(MAX_PARSER_AST_STRING_LENGTH);
+      const MAX_PARSER_AST_STRING_CHARACTERS = 1; use(MAX_PARSER_AST_STRING_CHARACTERS);
+      function isParserModuleId(id) { return id === 'moo'; }
+      const source = readFileSync(fileName, 'utf8');
+      new Script(source).runInContext(context);
+      try { parse(); } catch {
+        throw new NativeTypeError('Kovo managed SQL parser rejected the statement.');
+      }
+      return snapshotParserValue(foreignAst, seen);
+    `;
+    expect(
+      sqlParserAuthorityInvariantFindings('packages/server/src/sql-parser-authority.ts', source),
+    ).toEqual([]);
+    expect(
+      sqlParserAuthorityInvariantFindings(
+        'packages/server/src/sql-parser-authority.ts',
+        source.replace('strings: false', 'strings: true'),
+      ),
+    ).toContain(
+      'packages/server/src/sql-parser-authority.ts: isolated SQL parser VM must disable string and Wasm code generation',
+    );
+    expect(
+      sqlParserAuthorityInvariantFindings(
+        'packages/server/src/sql-parser-authority.ts',
+        source.replace('use(MAX_PARSER_AST_DEPTH);', ''),
+      ),
+    ).toContain(
+      'packages/server/src/sql-parser-authority.ts: isolated SQL parser must define and enforce finite budget MAX_PARSER_AST_DEPTH',
+    );
+    expect(
+      sqlParserAuthorityInvariantFindings(
+        'packages/server/src/sql-parser-authority.ts',
+        source.replace(
+          "throw new NativeTypeError('Kovo managed SQL parser rejected the statement.');",
+          'throw error;',
+        ),
+      ),
+    ).toContain(
+      'packages/server/src/sql-parser-authority.ts: isolated SQL parser must replace foreign exceptions with a fixed host-owned rejection',
+    );
   });
 
   it('allows locally shadowed dynamic-code names and explanatory strings/comments', () => {

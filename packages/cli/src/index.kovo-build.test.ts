@@ -85,6 +85,15 @@ describe('kovo build', () => {
       const handlerSource = readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8');
       expect(handlerSource).not.toContain('vite');
       expect(handlerSource).not.toContain('@node-rs/argon2');
+      // SPEC §6.6 rule 6: a non-DB handler keeps the platform-neutral default-deny registry but
+      // must not load the Node-only private parser realm (the same neutral handler is emitted to
+      // Cloudflare, where node:vm is a non-functional compatibility stub).
+      expect(handlerSource).not.toContain('node:vm');
+      // The generic handler already retains unrelated rooted-file/static-output node:fs imports;
+      // specifically exclude the parser authority's synchronous dependency-source loader.
+      expect(handlerSource).not.toContain('readFileSync');
+      expect(handlerSource).not.toContain('pgsql-ast-parser');
+      expect(handlerSource).not.toContain('kovo-managed-sql-parser');
 
       const serverModule = (await import(
         `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
@@ -3170,6 +3179,14 @@ export async function resetFixture() {
       expect(readFileSync(join(outDir, 'cloudflare/worker.mjs'), 'utf8')).toContain(
         "await import('./server/handler.mjs')",
       );
+      const cloudflareHandlerSource = readFileSync(
+        join(outDir, 'cloudflare/server/handler.mjs'),
+        'utf8',
+      );
+      expect(cloudflareHandlerSource).not.toContain('node:vm');
+      expect(cloudflareHandlerSource).not.toContain('readFileSync');
+      expect(cloudflareHandlerSource).not.toContain('pgsql-ast-parser');
+      expect(cloudflareHandlerSource).not.toContain('kovo-managed-sql-parser');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

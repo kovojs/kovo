@@ -149,7 +149,7 @@ export async function bootFixture(
     }
     unregisterSqlSnapshotter = registerFrameworkSqlSnapshotter(snapshotManagedSqlStatement);
     const serverModule = await vite.ssrLoadModule('@kovojs/server');
-    const executionModule = await vite.ssrLoadModule('@kovojs/server/internal/execution');
+    const managedDbModule = await vite.ssrLoadModule('@kovojs/server/internal/managed-db');
     const appShellModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
     const module = await vite.ssrLoadModule(entry);
     const descriptor = (module as { default?: unknown }).default;
@@ -165,7 +165,7 @@ export async function bootFixture(
       );
     }
     const createRequestHandler = fixtureRequestHandlerFactory(serverModule);
-    const prepareApp = fixtureAppPreparer(appShellModule, executionModule);
+    const prepareApp = fixtureAppPreparer(appShellModule, managedDbModule);
     instance = await createFixtureInstance(descriptor, createRequestHandler, prepareApp);
   } catch (error) {
     unregisterSqlSnapshotter();
@@ -218,7 +218,7 @@ function fixtureRequestHandlerFactory(serverModule: unknown): FixtureRequestHand
   return createRequestHandler as FixtureRequestHandlerFactory;
 }
 
-function fixtureAppPreparer(serverModule: unknown, executionModule: unknown): FixtureAppPreparer {
+function fixtureAppPreparer(serverModule: unknown, managedDbModule: unknown): FixtureAppPreparer {
   const deriveClosedKovoApp = (serverModule as { deriveClosedKovoApp?: unknown })
     .deriveClosedKovoApp;
   if (typeof deriveClosedKovoApp !== 'function') {
@@ -227,11 +227,11 @@ function fixtureAppPreparer(serverModule: unknown, executionModule: unknown): Fi
     );
   }
   const createDispatchProxy = (
-    executionModule as { createFrameworkManagedSqlDispatchProxy?: unknown }
+    managedDbModule as { createFrameworkManagedSqlDispatchProxy?: unknown }
   ).createFrameworkManagedSqlDispatchProxy;
-  const managedDb = (executionModule as { managedDb?: unknown }).managedDb;
-  const readonlyHook = (executionModule as { kovoReadonlyDbHandle?: unknown }).kovoReadonlyDbHandle;
-  const declaredWriteHook = (executionModule as { kovoDeclaredWriteDbHandle?: unknown })
+  const managedDb = (managedDbModule as { managedDb?: unknown }).managedDb;
+  const readonlyHook = (managedDbModule as { kovoReadonlyDbHandle?: unknown }).kovoReadonlyDbHandle;
+  const declaredWriteHook = (managedDbModule as { kovoDeclaredWriteDbHandle?: unknown })
     .kovoDeclaredWriteDbHandle;
   if (
     typeof createDispatchProxy !== 'function' ||

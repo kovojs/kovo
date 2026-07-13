@@ -181,7 +181,11 @@ function isKovoServerHandlerModuleSideEffectFree(id: string): boolean {
   // These modules' top-level work only prepares their exported runtime primitives. Let Rollup
   // remove them when an app does not use those primitives, so an unused native Argon2 sink is not
   // loaded by Cloudflare/non-password handlers merely because the server barrel re-exports it.
-  return /(?:^|[/\\])packages[/\\]server[/\\]src[/\\](?:password|postgres-runtime)\.ts$/.test(id);
+  // The Node SQL parser bootstrap is retained through explicit readiness calls in the SQLite and
+  // Postgres constructors; only a bundle that drops those constructors may drop node:fs/node:vm.
+  return /(?:^|[/\\])packages[/\\]server[/\\]src[/\\](?:managed-db-public|password|postgres-runtime|sqlite-runtime|sql-parser-authority|sql-parser-authority-bootstrap)\.ts$/.test(
+    id,
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
