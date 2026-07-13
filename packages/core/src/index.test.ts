@@ -497,6 +497,56 @@ describe('core authoring APIs', () => {
     );
   });
 
+  it('keeps failure HTML escaped after app code poisons string controls', () => {
+    const originalString = globalThis.String;
+    const originalReplaceAll = originalString.prototype.replaceAll;
+    let fieldOutput: unknown;
+    let formOutput: unknown;
+    try {
+      originalString.prototype.replaceAll = function replaceAllPoison() {
+        return this as unknown as string;
+      };
+      globalThis.String = (() => '<script>wrong coercion</script>') as unknown as StringConstructor;
+      fieldOutput = FieldError({
+        class: 'failure\" onclick=\"alert(1)',
+        failure: {
+          code: 'VALIDATION',
+          fieldErrors: { title: '<img src=x onerror=alert(1)>' },
+        },
+        name: 'title',
+      });
+      formOutput = FormError({
+        failure: { code: 'DUPLICATE\" onfocus=\"alert(2)' },
+        message: '<svg onload=alert(3)>',
+      });
+    } finally {
+      globalThis.String = originalString;
+      originalString.prototype.replaceAll = originalReplaceAll;
+    }
+
+    expect(String(fieldOutput)).toBe(
+      '<output role="alert" class="failure&quot; onclick=&quot;alert(1)" data-error-code="VALIDATION">&lt;img src=x onerror=alert(1)&gt;</output>',
+    );
+    expect(String(formOutput)).toBe(
+      '<output role="alert" data-error-code="DUPLICATE&quot; onfocus=&quot;alert(2)">&lt;svg onload=alert(3)&gt;</output>',
+    );
+  });
+
+  it('rejects accessor-backed failure output attributes', () => {
+    let reads = 0;
+    const props = {
+      failure: { code: 'VALIDATION', fieldErrors: { title: 'invalid' } },
+      get id() {
+        reads += 1;
+        return 'title-error';
+      },
+      name: 'title',
+    };
+
+    expect(() => FieldError(props)).toThrow('must be a stable own string data property');
+    expect(reads).toBe(0);
+  });
+
   it('threads typed mutation failure state into component render context', () => {
     const addToCart = form<
       'cart/add',

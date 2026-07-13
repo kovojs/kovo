@@ -11,6 +11,8 @@ import {
   securityIsArray,
   securityObjectKeys,
   securityNullRecord,
+  securityString,
+  securityStringCharCodeAt,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetHas,
@@ -1212,7 +1214,7 @@ function renderFailureOutput<Failure>(
   return mutationFormHelperOperation(
     kind,
     props as Record<string, unknown>,
-    `<output${attrs}>${escapeHtmlText(String(message))}</output>`,
+    `<output${attrs}>${escapeHtmlText(securityString(message))}</output>`,
   ) as unknown as string;
 }
 
@@ -1220,13 +1222,17 @@ function failureOutputAttributes<Failure>(
   props: FieldErrorProps<Failure> | FormErrorProps<Failure>,
   failure: Record<string, unknown>,
 ): string {
-  const attrs: string[] = [`role="${escapeHtmlAttribute(String(props.role ?? 'alert'))}"`];
-  if (props.id !== undefined) securityArrayAppend(attrs, `id="${escapeHtmlAttribute(props.id)}"`);
-  if (props.class !== undefined) {
-    securityArrayAppend(attrs, `class="${escapeHtmlAttribute(props.class)}"`);
+  const role = failureOutputOwnString(props, 'role') ?? 'alert';
+  const id = failureOutputOwnString(props, 'id');
+  const className = failureOutputOwnString(props, 'class');
+  const code = failureOutputOwnString(failure, 'code');
+  const attrs: string[] = [`role="${escapeHtmlAttribute(role)}"`];
+  if (id !== undefined) securityArrayAppend(attrs, `id="${escapeHtmlAttribute(id)}"`);
+  if (className !== undefined) {
+    securityArrayAppend(attrs, `class="${escapeHtmlAttribute(className)}"`);
   }
-  if (typeof failure.code === 'string') {
-    securityArrayAppend(attrs, `data-error-code="${escapeHtmlAttribute(failure.code)}"`);
+  if (code !== undefined) {
+    securityArrayAppend(attrs, `data-error-code="${escapeHtmlAttribute(code)}"`);
   }
   let rendered = '';
   for (let index = 0; index < attrs.length; index += 1) {
@@ -1235,16 +1241,53 @@ function failureOutputAttributes<Failure>(
   return rendered === '' ? '' : ` ${rendered}`;
 }
 
+function failureOutputOwnString(value: object, property: 'class' | 'code' | 'id' | 'role') {
+  const before = securityGetOwnPropertyDescriptor(value, property);
+  const after = securityGetOwnPropertyDescriptor(value, property);
+  if (before === undefined && after === undefined) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    before.value !== after.value ||
+    (before.value !== undefined && typeof before.value !== 'string')
+  ) {
+    throw new TypeError(
+      `Kovo failure output ${property} must be a stable own string data property.`,
+    );
+  }
+  return before.value as string | undefined;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
 function escapeHtmlAttribute(value: string): string {
-  return escapeHtmlText(value).replaceAll('"', '&quot;');
+  return escapeHtml(value, true);
 }
 
 function escapeHtmlText(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  return escapeHtml(value, false);
+}
+
+function escapeHtml(value: string, attribute: boolean): string {
+  let escaped = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    escaped +=
+      code === 0x26
+        ? '&amp;'
+        : code === 0x3c
+          ? '&lt;'
+          : code === 0x3e
+            ? '&gt;'
+            : attribute && code === 0x22
+              ? '&quot;'
+              : value[index] ?? '';
+  }
+  return escaped;
 }
 
 function mutationFormHelperOperation(
