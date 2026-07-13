@@ -1,4 +1,5 @@
 import type { Guard } from './guards.js';
+import { securityStringTrim } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
@@ -117,7 +118,12 @@ export function snapshotAccessDecision(
     if (kind === undefined || !('value' in kind)) return invalidAccessDecision;
     if (kind.value === 'public') {
       const reason = witnessGetOwnPropertyDescriptor(access, 'reason');
-      if (reason === undefined || !('value' in reason) || typeof reason.value !== 'string') {
+      if (
+        reason === undefined ||
+        !('value' in reason) ||
+        typeof reason.value !== 'string' ||
+        securityStringTrim(reason.value) === ''
+      ) {
         return invalidAccessDecision;
       }
       return markStructuredAccessDecision(witnessFreeze({ kind: 'public', reason: reason.value }));
@@ -246,6 +252,9 @@ function ownAccessDescriptor(declaration: object): PropertyDescriptor | undefine
  * Declare that a surface is intentionally public, with the audit reason attached.
  */
 export function publicAccess(reason: string): PublicAccess {
+  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
+    throw new TypeError('publicAccess(reason) requires a non-empty audit reason.');
+  }
   return markStructuredAccessDecision(witnessFreeze({ kind: 'public', reason }));
 }
 

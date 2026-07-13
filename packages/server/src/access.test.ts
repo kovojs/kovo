@@ -98,6 +98,13 @@ describe('structured access metadata', () => {
     expect(explainGuard(requireAdmin)[0]).toEqual({ kind: 'named', name: 'admin-only' });
   });
 
+  it('rejects blank public audit reasons', () => {
+    // SPEC §10.2 requires a human-readable, greppable justification for every public surface.
+    expect(() => publicAccess(' \t\n')).toThrow(
+      'publicAccess(reason) requires a non-empty audit reason.',
+    );
+  });
+
   it('carries access metadata through route, query, mutation, endpoint, and webhook declarations', () => {
     const access = publicAccess('status surface');
     const statusRoute = route('/status', {

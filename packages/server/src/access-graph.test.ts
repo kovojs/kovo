@@ -257,6 +257,24 @@ describe('app access graph extraction', () => {
     ]);
   });
 
+  it('reports structurally forged blank public reasons as KV436-missing', () => {
+    const invalidQuery = query('blank-public-reason', {
+      access: { kind: 'public', reason: ' \t\n' },
+      load: () => ({ secret: true }),
+    });
+    const app = createApp({ queries: [invalidQuery] });
+
+    expect(accessFactsFromApp(app)).toEqual([
+      {
+        decision: 'missing',
+        detail: 'missing access fact',
+        kind: 'query',
+        name: 'blank-public-reason',
+        source: 'access',
+      },
+    ]);
+  });
+
   it('shares one authoritative snapshot for proxied app assembly, audit, and runtime', async () => {
     const deny = guard('proxy-deny', () => ({ kind: 'forbidden' as const }));
     const allow = guard('proxy-allow', () => true);
