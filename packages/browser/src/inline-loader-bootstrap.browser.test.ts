@@ -105,20 +105,18 @@ describe('browser inline loader bootstrap', () => {
 
   it('loads the runtime immediately and replays early enhanced navigation clicks', async () => {
     installRafQueue();
+    const anchor = document.createElement('a');
+    anchor.href = new URL('/next', location.href).href;
     const target = document.createElement('button');
-    const anchor = {
-      hasAttribute: () => false,
-      href: new URL('/next', location.href).href,
-      target: '',
-    };
-    target.closest = ((selector: string) =>
-      selector === 'a[href]' ? anchor : null) as typeof target.closest;
+    anchor.append(target);
+    const nativePreventDefault = Event.prototype.preventDefault;
     let runtimeInstalled = false;
     let replayedClicks = 0;
-    target.addEventListener('click', () => {
+    target.addEventListener('click', (event) => {
+      Reflect.apply(nativePreventDefault, event, []);
       if (runtimeInstalled) replayedClicks += 1;
     });
-    document.body.append(target);
+    document.body.append(anchor);
     const runtimeImport = vi.fn(async () => ({
       installKovoDeferredRuntime() {
         runtimeInstalled = true;
@@ -233,6 +231,178 @@ describe('browser inline loader bootstrap', () => {
     }
   });
 
+  it('pins event facts, DOM traversal, default prevention, and connectivity', async () => {
+    installRafQueue();
+    const anchor = document.createElement('a');
+    anchor.href = new URL('/next', location.href).href;
+    const target = document.createElement('button');
+    anchor.append(target);
+    const nativePreventDefault = Event.prototype.preventDefault;
+    let runtimeInstalled = false;
+    let replayedClicks = 0;
+    target.addEventListener('click', (event) => {
+      Reflect.apply(nativePreventDefault, event, []);
+      if (runtimeInstalled) replayedClicks += 1;
+    });
+    document.body.append(anchor);
+    let resolveRuntime: ((value: { installKovoDeferredRuntime: () => void }) => void) | undefined;
+    const runtimePromise = new Promise<{ installKovoDeferredRuntime: () => void }>((resolve) => {
+      resolveRuntime = resolve;
+    });
+    const runtimeImport = vi.fn(() => runtimePromise);
+    const typeDescriptor = Object.getOwnPropertyDescriptor(Event.prototype, 'type');
+    const targetDescriptor = Object.getOwnPropertyDescriptor(Event.prototype, 'target');
+    const preventDescriptor = Object.getOwnPropertyDescriptor(Event.prototype, 'preventDefault');
+    const buttonDescriptor = Object.getOwnPropertyDescriptor(MouseEvent.prototype, 'button');
+    const closestDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'closest');
+    const getAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'getAttribute',
+    );
+    const hasAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'hasAttribute',
+    );
+    const connectedDescriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'isConnected');
+    const urlHrefDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'href');
+    const urlOriginDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin');
+    if (
+      !typeDescriptor ||
+      !targetDescriptor ||
+      !preventDescriptor ||
+      !buttonDescriptor ||
+      !closestDescriptor ||
+      !getAttributeDescriptor ||
+      !hasAttributeDescriptor ||
+      !connectedDescriptor ||
+      !urlHrefDescriptor ||
+      !urlOriginDescriptor
+    ) {
+      throw new Error('native bootstrap authority controls unavailable');
+    }
+    const poisonedType = vi.fn(() => 'submit');
+    const poisonedTarget = vi.fn(() => document.body);
+    const poisonedPrevent = vi.fn();
+    const poisonedButton = vi.fn(() => 1);
+    const poisonedClosest = vi.fn(() => null);
+    const poisonedGetAttribute = vi.fn(() => 'https://attacker.invalid/redirect');
+    const poisonedHasAttribute = vi.fn(() => true);
+    const poisonedConnected = vi.fn(() => false);
+    const poisonedUrlHref = vi.fn(() => 'https://attacker.invalid/redirect');
+    const poisonedUrlOrigin = vi.fn(() => 'https://attacker.invalid');
+    installInlineKovoBootstrap('/c/__v/runtime/kovo-runtime.client.js', runtimeImport);
+    Object.defineProperty(Event.prototype, 'type', { ...typeDescriptor, get: poisonedType });
+    Object.defineProperty(Event.prototype, 'target', { ...targetDescriptor, get: poisonedTarget });
+    Object.defineProperty(Event.prototype, 'preventDefault', {
+      ...preventDescriptor,
+      value: poisonedPrevent,
+    });
+    Object.defineProperty(MouseEvent.prototype, 'button', {
+      ...buttonDescriptor,
+      get: poisonedButton,
+    });
+    Object.defineProperty(Element.prototype, 'closest', {
+      ...closestDescriptor,
+      value: poisonedClosest,
+    });
+    Object.defineProperty(Element.prototype, 'getAttribute', {
+      ...getAttributeDescriptor,
+      value: poisonedGetAttribute,
+    });
+    Object.defineProperty(Element.prototype, 'hasAttribute', {
+      ...hasAttributeDescriptor,
+      value: poisonedHasAttribute,
+    });
+    Object.defineProperty(Node.prototype, 'isConnected', {
+      ...connectedDescriptor,
+      get: poisonedConnected,
+    });
+    Object.defineProperty(URL.prototype, 'href', {
+      ...urlHrefDescriptor,
+      get: poisonedUrlHref,
+    });
+    Object.defineProperty(URL.prototype, 'origin', {
+      ...urlOriginDescriptor,
+      get: poisonedUrlOrigin,
+    });
+    try {
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+      const dispatchDescriptor = Object.getOwnPropertyDescriptor(
+        EventTarget.prototype,
+        'dispatchEvent',
+      );
+      if (!dispatchDescriptor || !('value' in dispatchDescriptor)) {
+        throw new Error('native dispatch unavailable');
+      }
+      Reflect.apply(dispatchDescriptor.value, target, [event]);
+      resolveRuntime?.({
+        installKovoDeferredRuntime() {
+          runtimeInstalled = true;
+        },
+      });
+      await vi.waitFor(() => expect(runtimeInstalled).toBe(true));
+      await vi.waitFor(() => expect(replayedClicks).toBe(1));
+    } finally {
+      Object.defineProperty(Event.prototype, 'type', typeDescriptor);
+      Object.defineProperty(Event.prototype, 'target', targetDescriptor);
+      Object.defineProperty(Event.prototype, 'preventDefault', preventDescriptor);
+      Object.defineProperty(MouseEvent.prototype, 'button', buttonDescriptor);
+      Object.defineProperty(Element.prototype, 'closest', closestDescriptor);
+      Object.defineProperty(Element.prototype, 'getAttribute', getAttributeDescriptor);
+      Object.defineProperty(Element.prototype, 'hasAttribute', hasAttributeDescriptor);
+      Object.defineProperty(Node.prototype, 'isConnected', connectedDescriptor);
+      Object.defineProperty(URL.prototype, 'href', urlHrefDescriptor);
+      Object.defineProperty(URL.prototype, 'origin', urlOriginDescriptor);
+    }
+    expect(poisonedType).not.toHaveBeenCalled();
+    expect(poisonedTarget).not.toHaveBeenCalled();
+    expect(poisonedPrevent).not.toHaveBeenCalled();
+    expect(poisonedButton).not.toHaveBeenCalled();
+    expect(poisonedClosest).not.toHaveBeenCalled();
+    expect(poisonedGetAttribute).not.toHaveBeenCalled();
+    expect(poisonedHasAttribute).not.toHaveBeenCalled();
+    expect(poisonedConnected).not.toHaveBeenCalled();
+    expect(poisonedUrlHref).not.toHaveBeenCalled();
+    expect(poisonedUrlOrigin).not.toHaveBeenCalled();
+  });
+
+  it('rejects inherited and accessor deferred-runtime installer exports', async () => {
+    for (const inherited of [false, true]) {
+      installRafQueue();
+      const target = document.createElement('button');
+      target.setAttribute('on:click', '/c/client.ts#mark');
+      let dispatchReturned = false;
+      let fallbackReplays = 0;
+      target.addEventListener('click', () => {
+        if (dispatchReturned) fallbackReplays += 1;
+      });
+      document.body.append(target);
+      const installer = vi.fn();
+      const readInstaller = vi.fn(() => installer);
+      const carrier = inherited ? {} : Object.create(null);
+      const owner = inherited ? carrier : Object.create(null);
+      Object.defineProperty(owner, 'installKovoDeferredRuntime', {
+        configurable: true,
+        get: readInstaller,
+      });
+      const module = (inherited ? Object.create(owner) : owner) as {
+        installKovoDeferredRuntime?: () => void;
+      };
+
+      installInlineKovoBootstrap(
+        '/c/__v/runtime/kovo-runtime.client.js',
+        vi.fn(async () => module),
+      );
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      dispatchReturned = true;
+
+      await vi.waitFor(() => expect(fallbackReplays).toBe(1));
+      expect(readInstaller).not.toHaveBeenCalled();
+      expect(installer).not.toHaveBeenCalled();
+      target.remove();
+    }
+  });
+
   it('queues deferred stream apply calls until the runtime installs', async () => {
     const callbacks = installRafQueue();
     const applied: string[] = [];
@@ -332,10 +502,10 @@ describe('browser inline loader bootstrap', () => {
     await expectNativeSubmit(sink, 'runtime-import-rejected');
   });
 
-  it('retains the explicit structural submit fallback when runtime installation rejects', async () => {
-    // C186 control: the successful strict-CSP proof must not erase the bootstrap's availability
-    // fallback for a genuinely rejected runtime installer.
-    installRafQueue();
+  it('rejects a forged structural form target from an own closest replacement', async () => {
+    // SPEC.md §4.4/§6.6: authored prototype/instance replacement cannot redirect a captured
+    // interaction into a structural form-like object and reach its submit capability.
+    const callbacks = installRafQueue();
     const trigger = document.createElement('button');
     const submit = vi.fn();
     const structuralForm = { isConnected: true, submit };
@@ -345,18 +515,21 @@ describe('browser inline loader bootstrap', () => {
         : null) as typeof trigger.closest;
     document.body.append(trigger);
 
-    installInlineKovoBootstrap(
-      '/c/__v/runtime/kovo-runtime.client.js',
-      vi.fn(async () => ({
-        installKovoDeferredRuntime() {
-          throw new TypeError('runtime controls rejected');
-        },
-      })),
+    const runtimeImport = vi.fn(
+      async () =>
+        ({
+          installKovoDeferredRuntime() {
+            throw new TypeError('runtime controls rejected');
+          },
+        }) as const,
     );
+    installInlineKovoBootstrap('/c/__v/runtime/kovo-runtime.client.js', runtimeImport);
 
     trigger.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
-    await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    while (callbacks.length > 0) runNextRaf(callbacks);
+    await vi.waitFor(() => expect(runtimeImport).toHaveBeenCalledTimes(1));
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it('pins native submit before a late prototype replacement during rejected import fallback', async () => {

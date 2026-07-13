@@ -1654,6 +1654,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
       }
     },
     Headers,
+    URL,
     addEventListener(
       type: string,
       listener: InlineEnhancedFormListener,

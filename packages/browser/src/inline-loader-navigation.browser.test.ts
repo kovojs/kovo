@@ -26,20 +26,29 @@ function installNavigationLoader(): void {
   inlineLoaderInstalled = true;
 }
 
-function dispatchAnchorLikeClick(href: string): MouseEvent {
+function dispatchAnchorLikeClick(href: string): Pick<MouseEvent, 'defaultPrevented'> {
+  const anchor = document.createElement('a');
   const target = document.createElement('button');
-  const anchor = {
-    hasAttribute: () => false,
-    href: new URL(href, initialUrl).href,
-    target: '',
-  };
-  target.closest = ((selector: string) =>
-    selector === 'a[href]' ? anchor : null) as typeof target.closest;
-  document.body.append(target);
+  let defaultPreventedByKovo = false;
+  anchor.href = new URL(href, initialUrl).href;
+  anchor.addEventListener(
+    'click',
+    (event) => {
+      // The helper uses a real anchor so the pinned native closest/getAttribute controls see
+      // the same DOM shape as production. Record Kovo's capture-phase decision, then suppress
+      // the browser's own navigation so an intentionally ineligible test click cannot replace
+      // the Vitest runner page.
+      defaultPreventedByKovo = event.defaultPrevented;
+      event.preventDefault();
+    },
+    { once: true },
+  );
+  anchor.append(target);
+  document.body.append(anchor);
   const event = new MouseEvent('click', { bubbles: true, cancelable: true });
   target.dispatchEvent(event);
-  target.remove();
-  return event;
+  anchor.remove();
+  return { defaultPrevented: defaultPreventedByKovo };
 }
 
 function comparableBodyMarkup(source: Document | string): string {

@@ -79,7 +79,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeReflect = Reflect;
   const NativeRegExp = RegExp;
   const NativeString = String;
-  const NativeURL = URL;
+  const NativeURL = scope.URL;
   const NativeHeaders = scope.Headers;
   const NativeResponse = scope.Response;
   const NativeDOMParser = scope.DOMParser;
@@ -90,6 +90,16 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const NativeDocumentFragment = scope.DocumentFragment;
   const NativeHTMLTemplateElement = scope.HTMLTemplateElement;
   const NativeHTMLFormElement = scope.HTMLFormElement;
+  const NativeHTMLDetailsElement = scope.HTMLDetailsElement;
+  const NativeHTMLDialogElement = scope.HTMLDialogElement;
+  const NativeHTMLButtonElement = scope.HTMLButtonElement;
+  const NativeHTMLInputElement = scope.HTMLInputElement;
+  const NativeHTMLMeterElement = scope.HTMLMeterElement;
+  const NativeHTMLOptionElement = scope.HTMLOptionElement;
+  const NativeHTMLOutputElement = scope.HTMLOutputElement;
+  const NativeHTMLProgressElement = scope.HTMLProgressElement;
+  const NativeHTMLSelectElement = scope.HTMLSelectElement;
+  const NativeHTMLTextAreaElement = scope.HTMLTextAreaElement;
   const NativeHTMLCollection = scope.HTMLCollection;
   const NativeNodeList = scope.NodeList;
   const NativeNamedNodeMap = scope.NamedNodeMap;
@@ -126,12 +136,12 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
   const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
   const nativeStringTrim = NativeString.prototype.trim;
-  const urlPrototype = NativeURL.prototype;
-  const urlHref = getter(urlPrototype, 'href');
-  const urlOrigin = getter(urlPrototype, 'origin');
-  const urlPathname = getter(urlPrototype, 'pathname');
-  const urlSearch = getter(urlPrototype, 'search');
-  const urlHash = getter(urlPrototype, 'hash');
+  const urlPrototype = NativeURL?.prototype;
+  const urlHref = urlPrototype ? getter(urlPrototype, 'href') : undefined;
+  const urlOrigin = urlPrototype ? getter(urlPrototype, 'origin') : undefined;
+  const urlPathname = urlPrototype ? getter(urlPrototype, 'pathname') : undefined;
+  const urlSearch = urlPrototype ? getter(urlPrototype, 'search') : undefined;
+  const urlHash = urlPrototype ? getter(urlPrototype, 'hash') : undefined;
   const headersGet = NativeHeaders ? valueMethod(NativeHeaders.prototype, 'get') : undefined;
   const responsePrototype = NativeResponse?.prototype;
   const responseBody = responsePrototype ? getter(responsePrototype, 'body') : undefined;
@@ -202,6 +212,100 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   const nodeChildNodes = NativeNode ? getter(NativeNode.prototype, 'childNodes') : undefined;
   const nodeContains = NativeNode ? valueMethod(NativeNode.prototype, 'contains') : undefined;
   const nodeIsConnected = NativeNode ? getter(NativeNode.prototype, 'isConnected') : undefined;
+  const nodeTextContent = NativeNode ? getter(NativeNode.prototype, 'textContent') : undefined;
+  const nodeTextContentSetter = NativeNode
+    ? setter(NativeNode.prototype, 'textContent')
+    : undefined;
+  const elementScrollLeft = NativeElement
+    ? stableGetter(NativeElement.prototype, 'scrollLeft')
+    : undefined;
+  const elementScrollLeftSetter = NativeElement
+    ? stableSetter(NativeElement.prototype, 'scrollLeft')
+    : undefined;
+  const elementScrollTop = NativeElement
+    ? stableGetter(NativeElement.prototype, 'scrollTop')
+    : undefined;
+  const elementScrollTopSetter = NativeElement
+    ? stableSetter(NativeElement.prototype, 'scrollTop')
+    : undefined;
+  const inputChecked = NativeHTMLInputElement
+    ? stableGetter(NativeHTMLInputElement.prototype, 'checked')
+    : undefined;
+  const inputCheckedSetter = NativeHTMLInputElement
+    ? stableSetter(NativeHTMLInputElement.prototype, 'checked')
+    : undefined;
+  const inputIndeterminate = NativeHTMLInputElement
+    ? stableGetter(NativeHTMLInputElement.prototype, 'indeterminate')
+    : undefined;
+  const inputIndeterminateSetter = NativeHTMLInputElement
+    ? stableSetter(NativeHTMLInputElement.prototype, 'indeterminate')
+    : undefined;
+  const inputValue = NativeHTMLInputElement
+    ? stableGetter(NativeHTMLInputElement.prototype, 'value')
+    : undefined;
+  const inputValueSetter = NativeHTMLInputElement
+    ? stableSetter(NativeHTMLInputElement.prototype, 'value')
+    : undefined;
+  const optionSelected = NativeHTMLOptionElement
+    ? stableGetter(NativeHTMLOptionElement.prototype, 'selected')
+    : undefined;
+  const optionSelectedSetter = NativeHTMLOptionElement
+    ? stableSetter(NativeHTMLOptionElement.prototype, 'selected')
+    : undefined;
+  const detailsOpen = NativeHTMLDetailsElement
+    ? stableGetter(NativeHTMLDetailsElement.prototype, 'open')
+    : undefined;
+  const detailsOpenSetter = NativeHTMLDetailsElement
+    ? stableSetter(NativeHTMLDetailsElement.prototype, 'open')
+    : undefined;
+  const dialogOpen = NativeHTMLDialogElement
+    ? stableGetter(NativeHTMLDialogElement.prototype, 'open')
+    : undefined;
+  const dialogOpenSetter = NativeHTMLDialogElement
+    ? stableSetter(NativeHTMLDialogElement.prototype, 'open')
+    : undefined;
+  const progressValue = NativeHTMLProgressElement
+    ? stableGetter(NativeHTMLProgressElement.prototype, 'value')
+    : undefined;
+  const progressValueSetter = NativeHTMLProgressElement
+    ? stableSetter(NativeHTMLProgressElement.prototype, 'value')
+    : undefined;
+  const selectValue = NativeHTMLSelectElement
+    ? stableGetter(NativeHTMLSelectElement.prototype, 'value')
+    : undefined;
+  const selectValueSetter = NativeHTMLSelectElement
+    ? stableSetter(NativeHTMLSelectElement.prototype, 'value')
+    : undefined;
+  const textAreaValue = NativeHTMLTextAreaElement
+    ? stableGetter(NativeHTMLTextAreaElement.prototype, 'value')
+    : undefined;
+  const textAreaValueSetter = NativeHTMLTextAreaElement
+    ? stableSetter(NativeHTMLTextAreaElement.prototype, 'value')
+    : undefined;
+  const buttonValue = NativeHTMLButtonElement
+    ? stableGetter(NativeHTMLButtonElement.prototype, 'value')
+    : undefined;
+  const buttonValueSetter = NativeHTMLButtonElement
+    ? stableSetter(NativeHTMLButtonElement.prototype, 'value')
+    : undefined;
+  const meterValue = NativeHTMLMeterElement
+    ? stableGetter(NativeHTMLMeterElement.prototype, 'value')
+    : undefined;
+  const meterValueSetter = NativeHTMLMeterElement
+    ? stableSetter(NativeHTMLMeterElement.prototype, 'value')
+    : undefined;
+  const optionValue = NativeHTMLOptionElement
+    ? stableGetter(NativeHTMLOptionElement.prototype, 'value')
+    : undefined;
+  const optionValueSetter = NativeHTMLOptionElement
+    ? stableSetter(NativeHTMLOptionElement.prototype, 'value')
+    : undefined;
+  const outputValue = NativeHTMLOutputElement
+    ? stableGetter(NativeHTMLOutputElement.prototype, 'value')
+    : undefined;
+  const outputValueSetter = NativeHTMLOutputElement
+    ? stableSetter(NativeHTMLOutputElement.prototype, 'value')
+    : undefined;
   const fragmentChildren = NativeDocumentFragment
     ? getter(NativeDocumentFragment.prototype, 'children')
     : undefined;
@@ -786,6 +890,107 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     const method = elementRemoveAttribute ?? stableMethod(element, 'removeAttribute');
     if (!method) throw new TypeError('Kovo DOM remove-attribute control is unavailable.');
     call(method, element, [name]);
+  }
+
+  function setNodeTextContent(node: object, value: string): void {
+    if (nodeTextContentSetter) {
+      try {
+        call(nodeTextContentSetter, node, [value]);
+        return;
+      } catch {}
+    }
+    const own = descriptor(node, 'textContent');
+    if (own && 'value' in own && own.writable === true) {
+      apply(nativeObjectDefineProperty, NativeObject, [node, 'textContent', { ...own, value }]);
+      return;
+    }
+    const custom = stableSetter(node, 'textContent');
+    if (!custom) throw new TypeError('Kovo DOM text-content control is unavailable.');
+    call(custom, node, [value]);
+  }
+
+  function readNodeTextContent(node: object): string | null {
+    const value = readDomProperty(node, 'textContent', [nodeTextContent]);
+    return typeof value === 'string' ? value : null;
+  }
+
+  function elementPropertyControls(property: string):
+    | {
+        getters: readonly (((...args: never[]) => unknown) | undefined)[];
+        setters: readonly (Function | undefined)[];
+      }
+    | undefined {
+    if (property === 'checked') {
+      return { getters: [inputChecked], setters: [inputCheckedSetter] };
+    }
+    if (property === 'indeterminate') {
+      return { getters: [inputIndeterminate], setters: [inputIndeterminateSetter] };
+    }
+    if (property === 'selected') {
+      return { getters: [optionSelected], setters: [optionSelectedSetter] };
+    }
+    if (property === 'open') {
+      return {
+        getters: [dialogOpen, detailsOpen],
+        setters: [dialogOpenSetter, detailsOpenSetter],
+      };
+    }
+    if (property === 'scrollLeft') {
+      return { getters: [elementScrollLeft], setters: [elementScrollLeftSetter] };
+    }
+    if (property === 'scrollTop') {
+      return { getters: [elementScrollTop], setters: [elementScrollTopSetter] };
+    }
+    if (property === 'value') {
+      return {
+        getters: [
+          inputValue,
+          textAreaValue,
+          selectValue,
+          progressValue,
+          buttonValue,
+          optionValue,
+          outputValue,
+          meterValue,
+        ],
+        setters: [
+          inputValueSetter,
+          textAreaValueSetter,
+          selectValueSetter,
+          progressValueSetter,
+          buttonValueSetter,
+          optionValueSetter,
+          outputValueSetter,
+          meterValueSetter,
+        ],
+      };
+    }
+    return undefined;
+  }
+
+  function readElementProperty(element: object, property: string): unknown {
+    const controls = elementPropertyControls(property);
+    if (!controls) return undefined;
+    return readDomProperty(element, property, controls.getters);
+  }
+
+  function setElementProperty(element: object, property: string, value: unknown): void {
+    const controls = elementPropertyControls(property);
+    if (!controls) throw new TypeError('Kovo DOM property control is unavailable.');
+    for (let index = 0; index < controls.setters.length; index += 1) {
+      const write = controls.setters[index];
+      if (!write) continue;
+      try {
+        call(write, element, [value]);
+        return;
+      } catch {}
+    }
+    const own = descriptor(element, property);
+    if (own && 'value' in own && own.writable === true) {
+      apply(nativeObjectDefineProperty, NativeObject, [element, property, { ...own, value }]);
+      return;
+    }
+    throw new TypeError('Kovo DOM property control rejected its receiver.');
   }
 
   function submitForm(form: unknown): boolean {
@@ -1735,7 +1940,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
   }
 
   function parseUrl(value: string, base?: string): NavigationUrlFacts | undefined {
-    if (!controlsSound || typeof value !== 'string') return undefined;
+    if (!controlsSound || !NativeURL || typeof value !== 'string') return undefined;
     try {
       return facts(base === undefined ? new NativeURL(value) : new NativeURL(value, base));
     } catch {
@@ -2236,6 +2441,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
         typeof nativeRegExpExec !== 'function' ||
         typeof nativeRegExpTest !== 'function' ||
         typeof nativeDecodeURIComponent !== 'function' ||
+        typeof NativeURL !== 'function' ||
         typeof browserFetch !== 'function' ||
         !urlHref ||
         !urlOrigin ||
@@ -2629,6 +2835,14 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           !nodeChildNodes ||
           !nodeContains ||
           !nodeIsConnected ||
+          !nodeTextContent ||
+          !nodeTextContentSetter ||
+          !inputChecked ||
+          !inputCheckedSetter ||
+          !inputIndeterminate ||
+          !inputIndeterminateSetter ||
+          !inputValue ||
+          !inputValueSetter ||
           !fragmentChildren ||
           !templateContent ||
           !htmlCollectionLength ||
@@ -2659,6 +2873,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           'strong',
         ]);
         const formSubmitControl = apply<unknown>(documentCreateElement, documentObject, ['form']);
+        const propertyControl = apply<unknown>(documentCreateElement, documentObject, ['input']);
+        const textControl = apply<unknown>(documentCreateElement, documentObject, ['span']);
         if (
           snapshotControl === null ||
           typeof snapshotControl !== 'object' ||
@@ -2675,7 +2891,11 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           templateChildControl === null ||
           typeof templateChildControl !== 'object' ||
           formSubmitControl === null ||
-          typeof formSubmitControl !== 'object'
+          typeof formSubmitControl !== 'object' ||
+          propertyControl === null ||
+          typeof propertyControl !== 'object' ||
+          textControl === null ||
+          typeof textControl !== 'object'
         ) {
           return false;
         }
@@ -2701,6 +2921,17 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           'security-live-target',
         ]);
         apply(elementSetAttribute, templateChildControl, ['data-kovo-template-control', 'yes']);
+        apply(nodeTextContentSetter, textControl, ['kovo-text-content-control']);
+        apply(inputCheckedSetter, propertyControl, [true]);
+        apply(inputIndeterminateSetter, propertyControl, [true]);
+        apply(inputValueSetter, propertyControl, ['kovo-property-control']);
+        if (
+          apply<unknown>(inputChecked, propertyControl, []) !== true ||
+          apply<unknown>(inputIndeterminate, propertyControl, []) !== true ||
+          apply<unknown>(inputValue, propertyControl, []) !== 'kovo-property-control'
+        ) {
+          return false;
+        }
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
         if (
           apply<unknown>(elementClosest, nestedControl, [
@@ -2740,7 +2971,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
           apply<unknown>(elementGetAttribute, templateChild, ['data-kovo-template-control']) !==
             'yes' ||
           apply<unknown>(nodeContains, templateFragment, [templateChild]) !== true ||
-          apply<unknown>(nodeIsConnected, templateChild, []) !== false
+          apply<unknown>(nodeIsConnected, templateChild, []) !== false ||
+          apply<unknown>(nodeTextContent, textControl, []) !== 'kovo-text-content-control'
         ) {
           return false;
         }
@@ -2880,6 +3112,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     readAttribute,
     readDocumentActiveElement,
     readElementOuterHtml,
+    readElementProperty,
     readElementTagName,
     readHeader,
     readPageTransitionPersisted,
@@ -2892,6 +3125,7 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     regExpTest,
     readStreamChunk,
     readNodeIsConnected,
+    readNodeTextContent,
     removeLifecycleEventListener,
     removeElementAttribute,
     reload,
@@ -2902,6 +3136,8 @@ export function createBrowserNavigationSecurityControls(scope: typeof globalThis
     releaseStreamReader,
     safeSameOriginPath,
     setElementAttribute,
+    setElementProperty,
+    setNodeTextContent,
     slice,
     snapshotChildNodes,
     snapshotDelegatedEvent,

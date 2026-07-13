@@ -335,6 +335,48 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'snapshots every inline derive reference before the first authored derive runs through %s',
+    async (_name, installSource) => {
+      // SPEC §6.6: an earlier derive cannot rewrite a later DOM ref and redirect the framework's
+      // next import/callee decision in the same state-commit pass.
+      const host = new FakeStatefulBindingElement({
+        'kovo-state': '{"enabled":false}',
+        'on:click': '/c/theme.js#toggle',
+      });
+      const firstOutput = new FakeStatefulBindingElement(
+        { 'data-bind': '/c/theme.js#first' },
+        { parent: host, textContent: 'old-first' },
+      );
+      const secondOutput = new FakeStatefulBindingElement(
+        { 'data-bind': '/c/theme.js#second' },
+        { parent: host, textContent: 'old-second' },
+      );
+      const second = vi.fn(() => 'safe-second');
+      const privileged = vi.fn(() => 'privileged');
+      const module = {
+        first: {
+          run() {
+            secondOutput.setAttribute('data-bind', '/c/theme.js#privileged');
+            return 'first';
+          },
+        },
+        privileged: { run: privileged },
+        second: { run: second },
+        toggle(_event: unknown, ctx: { state: { enabled: boolean } }) {
+          ctx.state.enabled = true;
+        },
+      };
+
+      await dispatchInlineDelegatedClick(host, async () => module, installSource, ['/c/theme.js']);
+
+      expect(firstOutput.textContent).toBe('first');
+      expect(secondOutput.textContent).toBe('safe-second');
+      expect(second).toHaveBeenCalledTimes(1);
+      expect(privileged).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'reuses inline ctx.signal for the same island through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

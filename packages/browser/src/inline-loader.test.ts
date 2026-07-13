@@ -9,10 +9,12 @@ describe('inline loader source', () => {
     const originals = {
       addEventListener: globalRecord.addEventListener,
       document: globalRecord.document,
+      element: globalRecord.Element,
       htmlFormElement: globalRecord.HTMLFormElement,
       importModule: globalRecord.__kovoInlineImport,
       location: globalRecord.location,
       mouseEvent: globalRecord.MouseEvent,
+      node: globalRecord.Node,
       removeEventListener: globalRecord.removeEventListener,
       requestAnimationFrame: globalRecord.requestAnimationFrame,
       submitEvent: globalRecord.SubmitEvent,
@@ -20,13 +22,77 @@ describe('inline loader source', () => {
     const listeners = new Map<string, unknown>();
     const rafCallbacks: Function[] = [];
     const importModule = vi.fn(async () => ({}));
-    class FakeHTMLFormElement {
+    class FakeElement extends EventTarget {
+      get isConnected(): boolean {
+        return false;
+      }
+
+      closest(selector: string): FakeElement | null {
+        return selector === 'button' ? this : null;
+      }
+
+      getAttribute(): null {
+        return null;
+      }
+
+      hasAttribute(): boolean {
+        return false;
+      }
+    }
+    class FakeHTMLFormElement extends FakeElement {
       submit(): void {
         if (!(this instanceof FakeHTMLFormElement)) throw new TypeError('invalid form receiver');
       }
     }
-    class FakeMouseEvent extends Event {}
-    class FakeSubmitEvent extends Event {}
+    class FakeMouseEvent extends Event {
+      get altKey(): boolean {
+        return false;
+      }
+
+      get button(): number {
+        return 0;
+      }
+
+      get ctrlKey(): boolean {
+        return false;
+      }
+
+      get metaKey(): boolean {
+        return false;
+      }
+
+      get shiftKey(): boolean {
+        return false;
+      }
+    }
+    class FakeSubmitEvent extends Event {
+      get submitter(): null {
+        return null;
+      }
+    }
+    class FakeLocation {
+      #url = new URL('http://app.test/');
+
+      get href(): string {
+        return this.#url.href;
+      }
+
+      get origin(): string {
+        return this.#url.origin;
+      }
+
+      get pathname(): string {
+        return this.#url.pathname;
+      }
+
+      get search(): string {
+        return this.#url.search;
+      }
+
+      assign(url: string): void {
+        this.#url = new URL(url, this.#url);
+      }
+    }
 
     try {
       globalRecord.__kovoInlineImport = importModule;
@@ -38,18 +104,20 @@ describe('inline loader source', () => {
         rafCallbacks.push(callback);
         return rafCallbacks.length;
       };
+      globalRecord.Element = FakeElement;
       globalRecord.HTMLFormElement = FakeHTMLFormElement;
       globalRecord.MouseEvent = FakeMouseEvent;
+      globalRecord.Node = FakeElement;
       globalRecord.SubmitEvent = FakeSubmitEvent;
       globalRecord.document = {
         createElement(name: string) {
-          return name === 'form' ? new FakeHTMLFormElement() : new EventTarget();
+          return name === 'form' ? new FakeHTMLFormElement() : new FakeElement();
         },
         querySelectorAll() {
           return [];
         },
       };
-      globalRecord.location = { href: 'http://app.test/' };
+      globalRecord.location = new FakeLocation();
 
       runInThisContext(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport '));
 
@@ -60,9 +128,11 @@ describe('inline loader source', () => {
       Object.assign(globalRecord, {
         addEventListener: originals.addEventListener,
         document: originals.document,
+        Element: originals.element,
         HTMLFormElement: originals.htmlFormElement,
         location: originals.location,
         MouseEvent: originals.mouseEvent,
+        Node: originals.node,
         removeEventListener: originals.removeEventListener,
         requestAnimationFrame: originals.requestAnimationFrame,
         SubmitEvent: originals.submitEvent,

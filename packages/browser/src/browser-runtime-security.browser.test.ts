@@ -61,6 +61,85 @@ afterEach(() => {
 });
 
 describe('browser-runtime security regressions', () => {
+  it('pins DOM attribute, text, and live-property writes before late sink poisoning', () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const output = document.createElement('span');
+    const input = document.createElement('input');
+    document.body.append(output, input);
+    const setAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'setAttribute',
+    );
+    const removeAttributeDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'removeAttribute',
+    );
+    const textContentDescriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+    const checkedDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'checked',
+    );
+    const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    if (
+      !setAttributeDescriptor ||
+      !removeAttributeDescriptor ||
+      !textContentDescriptor ||
+      !checkedDescriptor ||
+      !valueDescriptor
+    ) {
+      throw new Error('missing browser DOM sink security controls');
+    }
+    const poisonedSetAttribute = vi.fn();
+    const poisonedRemoveAttribute = vi.fn();
+    const poisonedTextContent = vi.fn();
+    const poisonedChecked = vi.fn();
+    const poisonedValue = vi.fn();
+    try {
+      Object.defineProperty(Element.prototype, 'setAttribute', {
+        ...setAttributeDescriptor,
+        value: poisonedSetAttribute,
+      });
+      Object.defineProperty(Element.prototype, 'removeAttribute', {
+        ...removeAttributeDescriptor,
+        value: poisonedRemoveAttribute,
+      });
+      Object.defineProperty(Node.prototype, 'textContent', {
+        ...textContentDescriptor,
+        set: poisonedTextContent,
+      });
+      Object.defineProperty(HTMLInputElement.prototype, 'checked', {
+        ...checkedDescriptor,
+        set: poisonedChecked,
+      });
+      Object.defineProperty(HTMLInputElement.prototype, 'value', {
+        ...valueDescriptor,
+        set: poisonedValue,
+      });
+
+      controls.setElementAttribute(output, 'data-security-output', 'ready');
+      controls.setNodeTextContent(output, 'safe text');
+      controls.setElementProperty(input, 'checked', true);
+      controls.setElementProperty(input, 'value', 'safe value');
+      controls.removeElementAttribute(output, 'data-security-output');
+    } finally {
+      Object.defineProperty(Element.prototype, 'setAttribute', setAttributeDescriptor);
+      Object.defineProperty(Element.prototype, 'removeAttribute', removeAttributeDescriptor);
+      Object.defineProperty(Node.prototype, 'textContent', textContentDescriptor);
+      Object.defineProperty(HTMLInputElement.prototype, 'checked', checkedDescriptor);
+      Object.defineProperty(HTMLInputElement.prototype, 'value', valueDescriptor);
+    }
+
+    expect(output.textContent).toBe('safe text');
+    expect(output.hasAttribute('data-security-output')).toBe(false);
+    expect(input.checked).toBe(true);
+    expect(input.value).toBe('safe value');
+    expect(poisonedSetAttribute).not.toHaveBeenCalled();
+    expect(poisonedRemoveAttribute).not.toHaveBeenCalled();
+    expect(poisonedTextContent).not.toHaveBeenCalled();
+    expect(poisonedChecked).not.toHaveBeenCalled();
+    expect(poisonedValue).not.toHaveBeenCalled();
+  });
+
   it('pins delegated event selection and handler export authority before late DOM poisoning', async () => {
     const safeUrl = '/c/safe-handler.client.js';
     const privilegedUrl = '/c/privileged-handler.client.js';

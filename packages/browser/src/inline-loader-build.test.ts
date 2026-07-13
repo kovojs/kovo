@@ -104,6 +104,15 @@ describe('inline loader build source', () => {
     expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
       "const events = ['click', 'submit'];",
     );
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain('loading = (async () =>');
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
+      "ownValue(mod, 'installKovoDeferredRuntime')",
+    );
+    expect(inlineKovoLoaderStubInstallerReadableSource).not.toContain('.then(');
+    expect(inlineKovoLoaderStubInstallerReadableSource).not.toContain('.catch(');
+    expect(inlineKovoLoaderStubInstallerReadableSource).not.toContain(
+      'mod.installKovoDeferredRuntime',
+    );
   });
 
   it('generates inline fragment-target escaping from the modular helper', () => {

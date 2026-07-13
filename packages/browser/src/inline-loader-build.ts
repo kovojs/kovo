@@ -292,10 +292,17 @@ function installInlineKovoLoader(im) {
   };
   const sh = (el, host) =>
     el === host || bns.closestElement(el, '[kovo-state]') === host;
-  const ba = (el) =>
-    [...(el.attributes || [])].filter(
-      (attr) => attr.name.startsWith('data-bind:') && attr.value,
-    );
+  const bindingAttributes = (el, prefix) => {
+    const attributes = bns.snapshotElementAttributes(el);
+    const bindings = [];
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index];
+      if (!attribute || bns.indexOf(attribute.name, prefix) !== 0 || !attribute.value) continue;
+      bns.appendDenseSecurityValue(bindings, attribute, 'Inline binding attribute snapshot');
+    }
+    return bindings;
+  };
+  const ba = (el) => bindingAttributes(el, 'data-bind:');
   const wa = (el, name, val) => {
     const n = name.toLowerCase();
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
@@ -304,15 +311,15 @@ function installInlineKovoLoader(im) {
     // click), so drive the reactive open/close through the dialog methods that
     // keep top-layer state in sync. Guards keep this idempotent against the
     // native invoker call that opens the dialog on the same activation.
-    if (name === 'open' && el.localName === 'dialog' && typeof el.close === 'function') {
+    if (name === 'open' && bns.lower(bns.readElementTagName(el) || '') === 'dialog' && typeof el.close === 'function') {
       if (val != null && val !== false) {
-        if (!el.open) {
-          if (el.getAttribute?.('aria-modal') === 'true' && typeof el.showModal === 'function') {
+        if (bns.readElementProperty(el, 'open') !== true) {
+          if (bns.readAttribute(el, 'aria-modal') === 'true' && typeof el.showModal === 'function') {
             el.showModal();
           } else if (typeof el.show === 'function') el.show();
-          else el.setAttribute('open', '');
+          else bns.setElementAttribute(el, 'open', '');
         }
-      } else if (el.open) el.close();
+      } else if (bns.readElementProperty(el, 'open') === true) el.close();
       return;
     }
     // SPEC.md §4.6/§4.8: HTML boolean-presence attributes use presence, not
@@ -320,38 +327,50 @@ function installInlineKovoLoader(im) {
     // query/state runtime for the full boolean-presence set.
     if (/^(?:${inlineBooleanPresenceAttributes.join('|')})$/.test(n)) {
       const on = val != null && val !== false;
-      if (on) el.setAttribute?.(name, '');
-      else el.removeAttribute?.(name);
-      if (n === 'checked' && el.checked !== undefined) el.checked = on;
-      if (n === 'indeterminate' && el.indeterminate !== undefined) el.indeterminate = on;
+      if (on) bns.setElementAttribute(el, name, '');
+      else bns.removeElementAttribute(el, name);
+      if (n === 'checked' && bns.readElementProperty(el, 'checked') !== undefined) {
+        bns.setElementProperty(el, 'checked', on);
+      }
+      if (n === 'indeterminate' && bns.readElementProperty(el, 'indeterminate') !== undefined) {
+        bns.setElementProperty(el, 'indeterminate', on);
+      }
       return;
     }
-    if (val == null) el.removeAttribute?.(name);
+    if (val == null) bns.removeElementAttribute(el, name);
     else {
-      if (r(n)) el.removeAttribute?.(name);
+      if (r(n)) bns.removeElementAttribute(el, name);
       else {
         let r = fb(val);
         if (n === 'style' && c(r, bns)) {
-          el.removeAttribute?.(name);
+          bns.removeElementAttribute(el, name);
         } else if (n === 'srcset' || n === 'imagesrcset') {
           const a = s(r);
-          if (a) el.setAttribute?.(name, a);
-          else el.removeAttribute?.(name);
+          if (a) bns.setElementAttribute(el, name, a);
+          else bns.removeElementAttribute(el, name);
         } else {
           if (ia(name) && uu(r)) r = '#';
-          el.setAttribute?.(name, r);
+          bns.setElementAttribute(el, name, r);
         }
       }
     }
-    if (name === 'value' && el.value !== undefined) {
-      if (val != null) el.value = fb(val);
-      else if (el.localName != 'progress') el.value = '';
+    if (name === 'value' && bns.readElementProperty(el, 'value') !== undefined) {
+      if (val != null) bns.setElementProperty(el, 'value', fb(val));
+      else if (bns.lower(bns.readElementTagName(el) || '') !== 'progress') {
+        bns.setElementProperty(el, 'value', '');
+      }
     }
-    if ((name === 'scrollLeft' || name === 'scrollleft') && el.scrollLeft !== undefined) {
-      el.scrollLeft = Number(val) || 0;
+    if (
+      (name === 'scrollLeft' || name === 'scrollleft') &&
+      bns.readElementProperty(el, 'scrollLeft') !== undefined
+    ) {
+      bns.setElementProperty(el, 'scrollLeft', Number(val) || 0);
     }
-    if ((name === 'scrollTop' || name === 'scrolltop') && el.scrollTop !== undefined) {
-      el.scrollTop = Number(val) || 0;
+    if (
+      (name === 'scrollTop' || name === 'scrolltop') &&
+      bns.readElementProperty(el, 'scrollTop') !== undefined
+    ) {
+      bns.setElementProperty(el, 'scrollTop', Number(val) || 0);
     }
   };
   const ws = (el, path, bt, state, root = 'state') => {
@@ -361,19 +380,7 @@ function installInlineKovoLoader(im) {
       wa(el, bt, val);
     } else {
       // SPEC §4.8: data-bind is textContent; form values use data-bind:value.
-      el.textContent = fb(val);
-    }
-  };
-  const wd = async (el, ref, bt, state) => {
-    const hi = ref.lastIndexOf('#');
-    if (hi <= 0 || hi === ref.length - 1) return;
-    const mod = await im(ref.slice(0, hi));
-    const val = dr(mod, ref.slice(hi + 1), state);
-    if (bt) {
-      wa(el, bt, val);
-    } else {
-      // SPEC §4.8: derive text stamps share data-bind's textContent semantics.
-      el.textContent = fb(val);
+      bns.setNodeTextContent(el, fb(val));
     }
   };
   // SPEC.md §4.8 data-bind-prop: exact branches keep the property-authoritative
@@ -388,66 +395,102 @@ function installInlineKovoLoader(im) {
     suffix === 'scrolltop' || suffix === 'scrollTop' ? ['scrollTop', 1] :
     suffix === 'scrollleft' || suffix === 'scrollLeft' ? ['scrollLeft', 1] :
     suffix === 'value' ? ['value', 2] : undefined;
-  const bp = (el) =>
-    [...(el.attributes || [])].filter(
-      (attr) => attr.name.startsWith('data-bind-prop:') && attr.value,
-    );
+  const bp = (el) => bindingAttributes(el, 'data-bind-prop:');
   const wp = (el, suffix, val) => {
     const spec = bpc(suffix);
     if (!spec) return;
     const prop = spec[0];
-    if (el[prop] === undefined) return;
+    if (bns.readElementProperty(el, prop) === undefined) return;
     // <progress>.value is not dirty/user-interactive; null=indeterminate (no attr),
     // so skip the string write (data-bind:value owns progress). Mirrors wa().
-    if (spec[1] === 2 && el.localName == 'progress') return;
-    el[prop] = spec[1] === 0 ? val != null && val !== false : spec[1] === 1 ? Number(val) || 0 : fb(val);
-  };
-  const wpd = async (el, ref, suffix, state) => {
-    if (ref.includes('#')) {
-      const hi = ref.lastIndexOf('#');
-      if (hi <= 0 || hi === ref.length - 1) return;
-      const mod = await im(ref.slice(0, hi));
-      wp(el, suffix, dr(mod, ref.slice(hi + 1), state));
-    } else if (ref.startsWith('state.')) {
-      wp(el, suffix, vp(state, ref.slice(6)));
-    }
+    if (spec[1] === 2 && bns.lower(bns.readElementTagName(el) || '') === 'progress') return;
+    bns.setElementProperty(
+      el,
+      prop,
+      spec[1] === 0 ? val != null && val !== false : spec[1] === 1 ? Number(val) || 0 : fb(val),
+    );
   };
   const as = async (host, state) => {
+    const derives = [];
+    const queueDerive = (el, ref, suffix, property) => {
+      let hi = ref.length - 1;
+      while (hi >= 0 && bns.charCode(ref, hi) !== 35) hi -= 1;
+      if (hi <= 0 || hi === ref.length - 1) return false;
+      bns.appendDenseSecurityValue(
+        derives,
+        {
+          el,
+          exportName: bns.slice(ref, hi + 1),
+          property,
+          suffix,
+          url: bns.slice(ref, 0, hi),
+        },
+        'Inline state derive binding snapshot',
+      );
+      return true;
+    };
     const hb = bns.readAttribute(host, 'data-bind');
-    if (hb?.includes('#')) await wd(host, hb, undefined, state);
-    else ws(host, hb, undefined, state);
-    for (const el of qa(host, '[data-bind]')) {
+    if (!hb || !queueDerive(host, hb, undefined, false)) ws(host, hb, undefined, state);
+    const textElements = qa(host, '[data-bind]');
+    for (let index = 0; index < textElements.length; index += 1) {
+      const el = textElements[index];
+      if (!el) continue;
       if (sh(el, host)) {
         const binding = bns.readAttribute(el, 'data-bind');
-        if (binding?.includes('#')) {
-          await wd(el, binding, undefined, state);
-        } else {
+        if (!binding || !queueDerive(el, binding, undefined, false)) {
           ws(el, binding, undefined, state);
         }
       }
     }
-    for (const el of [host, ...qa(host, '*')]) {
-      if (!sh(el, host)) continue;
-      for (const attr of ba(el)) {
-        if (attr.value.includes('#')) {
-          await wd(
-            el,
-            attr.value,
-            attr.name.slice('data-bind:'.length),
-            state,
-          );
-          continue;
-        }
-        ws(
-          el,
-          attr.value,
-          attr.name.slice('data-bind:'.length),
-          state,
+    const allElements = [host];
+    const descendants = qa(host, '*');
+    for (let index = 0; index < descendants.length; index += 1) {
+      const element = descendants[index];
+      if (element) {
+        bns.appendDenseSecurityValue(
+          allElements,
+          element,
+          'Inline state binding element snapshot',
         );
       }
+    }
+    for (let index = 0; index < allElements.length; index += 1) {
+      const el = allElements[index];
+      if (!el) continue;
+      if (!sh(el, host)) continue;
+      const attributes = ba(el);
+      for (let attrIndex = 0; attrIndex < attributes.length; attrIndex += 1) {
+        const attr = attributes[attrIndex];
+        if (!attr) continue;
+        const suffix = bns.slice(attr.name, 'data-bind:'.length);
+        if (!queueDerive(el, attr.value, suffix, false)) {
+          ws(el, attr.value, suffix, state);
+        }
+      }
       // SPEC.md §4.8 data-bind-prop: live property write after the attribute pass.
-      for (const attr of bp(el)) {
-        await wpd(el, attr.value, attr.name.slice('data-bind-prop:'.length), state);
+      const properties = bp(el);
+      for (let propertyIndex = 0; propertyIndex < properties.length; propertyIndex += 1) {
+        const attr = properties[propertyIndex];
+        if (!attr) continue;
+        const suffix = bns.slice(attr.name, 'data-bind-prop:'.length);
+        if (!queueDerive(el, attr.value, suffix, true) && bns.indexOf(attr.value, 'state.') === 0) {
+          wp(el, suffix, vp(state, bns.slice(attr.value, 6)));
+        }
+      }
+    }
+    // SPEC §6.6: no authored derive module runs until every later import/callee reference in the
+    // same commit has been reduced to framework-owned URL/export data.
+    for (let index = 0; index < derives.length; index += 1) {
+      const binding = derives[index];
+      if (!binding) continue;
+      const mod = await im(binding.url);
+      const value = dr(mod, binding.exportName, state);
+      if (binding.property) {
+        wp(binding.el, binding.suffix, value);
+      } else if (binding.suffix) {
+        wa(binding.el, binding.suffix, value);
+      } else {
+        bns.setNodeTextContent(binding.el, fb(value));
       }
     }
   };
@@ -550,7 +593,7 @@ function installInlineKovoLoader(im) {
       if (!old.isConnected) continue;
       const fresh = doc.createElement('script');
       for (const attr of old.attributes) fresh.setAttribute(attr.name, attr.value);
-      fresh.textContent = old.textContent;
+      bns.setNodeTextContent(fresh, bns.readNodeTextContent(old) ?? '');
       old.replaceWith(fresh);
     }
   };
@@ -558,7 +601,7 @@ function installInlineKovoLoader(im) {
     if (el.nodeType !== 1) return '';
     if (el.tagName === 'STYLE') {
       const criticalHref = el.getAttribute('data-kovo-critical-href');
-      return criticalHref ? ['style', criticalHref, el.textContent || ''].join('|') : '';
+      return criticalHref ? ['style', criticalHref, bns.readNodeTextContent(el) || ''].join('|') : '';
     }
     if (el.tagName === 'SCRIPT') return el.outerHTML ? 'script|' + el.outerHTML : '';
     if (el.tagName !== 'LINK') return '';
@@ -778,10 +821,11 @@ function installInlineKovoLoader(im) {
         continue;
       }
       const text = unescapeHtml(x.text);
-      const source = x.mode === 'checkpoint' ? text : (st[x.target] ?? el.textContent ?? '') + text;
+      const source =
+        x.mode === 'checkpoint' ? text : (st[x.target] ?? bns.readNodeTextContent(el) ?? '') + text;
       st[x.target] = source;
       se[x.target] = el;
-      el.textContent = source;
+      bns.setNodeTextContent(el, source);
       el.setAttribute?.('data-stream-state', 'streaming');
       void (async () => {
         try {
@@ -1214,6 +1258,61 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   // loading gives authored code a chance to replace HTMLFormElement.prototype.submit.
   const rap = Reflect.apply;
   const gopd = Object.getOwnPropertyDescriptor;
+  const gpo = Object.getPrototypeOf;
+  const odp = Object.defineProperty;
+  const ownValue = (carrier, property) => {
+    if ((typeof carrier !== 'object' && typeof carrier !== 'function') || carrier === null) {
+      return undefined;
+    }
+    const descriptor = gopd(carrier, property);
+    return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+  };
+  const findDescriptor = (carrier, property) => {
+    if ((typeof carrier !== 'object' && typeof carrier !== 'function') || carrier === null) {
+      return undefined;
+    }
+    let owner = carrier;
+    for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+      const descriptor = gopd(owner, property);
+      if (descriptor !== undefined) return descriptor;
+      owner = gpo(owner);
+    }
+    return undefined;
+  };
+  const capturedMethod = (carrier, property) => {
+    const descriptor = findDescriptor(carrier, property);
+    return descriptor && 'value' in descriptor && typeof descriptor.value === 'function'
+      ? descriptor.value
+      : undefined;
+  };
+  const capturedGetter = (carrier, property) => {
+    const descriptor = findDescriptor(carrier, property);
+    return descriptor && 'get' in descriptor && typeof descriptor.get === 'function'
+      ? descriptor.get
+      : undefined;
+  };
+  const readCaptured = (carrier, getter, property) => {
+    if (typeof getter === 'function') {
+      try {
+        return rap(getter, carrier, []);
+      } catch {}
+    }
+    return ownValue(carrier, property);
+  };
+  const callCaptured = (carrier, method, property, args) => {
+    if (typeof method === 'function') {
+      try {
+        return { called: true, value: rap(method, carrier, args) };
+      } catch {}
+    }
+    const fallback = ownValue(carrier, property);
+    if (typeof fallback !== 'function') return { called: false, value: undefined };
+    try {
+      return { called: true, value: rap(fallback, carrier, args) };
+    } catch {
+      return { called: false, value: undefined };
+    }
+  };
   const submitControl = doc.createElement('form');
   const replayControl = doc.createElement('button');
   // SPEC.md §4.4/§6.6: bootstrap replay runs before the deferred runtime can protect the realm.
@@ -1222,6 +1321,35 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const NativeEvent = globalThis.Event;
   const NativeSubmitEvent = globalThis.SubmitEvent;
   const NativeMouseEvent = globalThis.MouseEvent;
+  const NativeURL = globalThis.URL;
+  const nativeEventType = capturedGetter(globalThis.Event?.prototype, 'type');
+  const nativeEventTarget = capturedGetter(globalThis.Event?.prototype, 'target');
+  const nativeEventDefaultPrevented = capturedGetter(
+    globalThis.Event?.prototype,
+    'defaultPrevented',
+  );
+  const nativePreventDefault = capturedMethod(globalThis.Event?.prototype, 'preventDefault');
+  const nativeMouseButton = capturedGetter(globalThis.MouseEvent?.prototype, 'button');
+  const nativeMouseMetaKey = capturedGetter(globalThis.MouseEvent?.prototype, 'metaKey');
+  const nativeMouseCtrlKey = capturedGetter(globalThis.MouseEvent?.prototype, 'ctrlKey');
+  const nativeMouseShiftKey = capturedGetter(globalThis.MouseEvent?.prototype, 'shiftKey');
+  const nativeMouseAltKey = capturedGetter(globalThis.MouseEvent?.prototype, 'altKey');
+  const nativeSubmitter = capturedGetter(globalThis.SubmitEvent?.prototype, 'submitter');
+  const nativeClosest = capturedMethod(globalThis.Element?.prototype, 'closest');
+  const nativeGetAttribute = capturedMethod(globalThis.Element?.prototype, 'getAttribute');
+  const nativeHasAttribute = capturedMethod(globalThis.Element?.prototype, 'hasAttribute');
+  const nativeIsConnected = capturedGetter(globalThis.Node?.prototype, 'isConnected');
+  const nativeUrlHref = capturedGetter(globalThis.URL?.prototype, 'href');
+  const nativeUrlOrigin = capturedGetter(globalThis.URL?.prototype, 'origin');
+  const nativeUrlPathname = capturedGetter(globalThis.URL?.prototype, 'pathname');
+  const nativeUrlSearch = capturedGetter(globalThis.URL?.prototype, 'search');
+  const nativeUrlHash = capturedGetter(globalThis.URL?.prototype, 'hash');
+  const browserLocation = globalThis.location;
+  const nativeLocationHref = capturedGetter(browserLocation, 'href');
+  const nativeLocationOrigin = capturedGetter(browserLocation, 'origin');
+  const nativeLocationPathname = capturedGetter(browserLocation, 'pathname');
+  const nativeLocationSearch = capturedGetter(browserLocation, 'search');
+  const nativeLocationAssign = capturedMethod(browserLocation, 'assign');
   let nativeSubmit;
   let submitControlsReady = false;
   try {
@@ -1267,11 +1395,92 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     if (
       typeof NativeEvent !== 'function' ||
       typeof NativeMouseEvent !== 'function' ||
+      typeof NativeURL !== 'function' ||
       typeof nativeAddEventListener !== 'function' ||
       typeof nativeRemoveEventListener !== 'function' ||
-      typeof nativeDispatchEvent !== 'function'
+      typeof nativeDispatchEvent !== 'function' ||
+      typeof nativeEventType !== 'function' ||
+      typeof nativeEventTarget !== 'function' ||
+      typeof nativeEventDefaultPrevented !== 'function' ||
+      typeof nativePreventDefault !== 'function' ||
+      typeof nativeMouseButton !== 'function' ||
+      typeof nativeMouseMetaKey !== 'function' ||
+      typeof nativeMouseCtrlKey !== 'function' ||
+      typeof nativeMouseShiftKey !== 'function' ||
+      typeof nativeMouseAltKey !== 'function' ||
+      (typeof NativeSubmitEvent === 'function' && typeof nativeSubmitter !== 'function') ||
+      typeof nativeClosest !== 'function' ||
+      typeof nativeGetAttribute !== 'function' ||
+      typeof nativeHasAttribute !== 'function' ||
+      typeof nativeIsConnected !== 'function' ||
+      typeof nativeUrlHref !== 'function' ||
+      typeof nativeUrlOrigin !== 'function' ||
+      typeof nativeUrlPathname !== 'function' ||
+      typeof nativeUrlSearch !== 'function' ||
+      typeof nativeUrlHash !== 'function' ||
+      typeof nativeLocationHref !== 'function' ||
+      typeof nativeLocationOrigin !== 'function' ||
+      typeof nativeLocationPathname !== 'function' ||
+      typeof nativeLocationSearch !== 'function' ||
+      typeof nativeLocationAssign !== 'function'
     ) {
       throw new TypeError('Kovo bootstrap replay controls are unavailable.');
+    }
+    const eventControl = new NativeMouseEvent('kovo-security-control:bootstrap-event', {
+      button: 0,
+      cancelable: true,
+    });
+    const propertyControl = {};
+    odp(propertyControl, 'marker', { value: 'kovo-bootstrap-property-control' });
+    const urlControl = new NativeURL('/control?ready=1#ok', 'https://kovo.invalid/root');
+    const closestControl = callCaptured(replayControl, nativeClosest, 'closest', ['button']);
+    const attributeControl = callCaptured(
+      replayControl,
+      nativeGetAttribute,
+      'getAttribute',
+      ['data-kovo-bootstrap-control'],
+    );
+    const hasAttributeControl = callCaptured(
+      replayControl,
+      nativeHasAttribute,
+      'hasAttribute',
+      ['data-kovo-bootstrap-control'],
+    );
+    if (
+      readCaptured(eventControl, nativeEventType, 'type') !==
+        'kovo-security-control:bootstrap-event' ||
+      readCaptured(eventControl, nativeEventTarget, 'target') !== null ||
+      readCaptured(eventControl, nativeEventDefaultPrevented, 'defaultPrevented') !== false ||
+      readCaptured(eventControl, nativeMouseButton, 'button') !== 0 ||
+      readCaptured(eventControl, nativeMouseMetaKey, 'metaKey') !== false ||
+      readCaptured(eventControl, nativeMouseCtrlKey, 'ctrlKey') !== false ||
+      readCaptured(eventControl, nativeMouseShiftKey, 'shiftKey') !== false ||
+      readCaptured(eventControl, nativeMouseAltKey, 'altKey') !== false ||
+      ownValue(propertyControl, 'marker') !== 'kovo-bootstrap-property-control' ||
+      gpo(propertyControl) === null ||
+      closestControl.called !== true ||
+      closestControl.value !== replayControl ||
+      attributeControl.called !== true ||
+      attributeControl.value !== null ||
+      hasAttributeControl.called !== true ||
+      hasAttributeControl.value !== false ||
+      readCaptured(replayControl, nativeIsConnected, 'isConnected') !== false ||
+      readCaptured(urlControl, nativeUrlHref, 'href') !==
+        'https://kovo.invalid/control?ready=1#ok' ||
+      readCaptured(urlControl, nativeUrlOrigin, 'origin') !== 'https://kovo.invalid' ||
+      readCaptured(urlControl, nativeUrlPathname, 'pathname') !== '/control' ||
+      readCaptured(urlControl, nativeUrlSearch, 'search') !== '?ready=1' ||
+      readCaptured(urlControl, nativeUrlHash, 'hash') !== '#ok' ||
+      typeof readCaptured(browserLocation, nativeLocationHref, 'href') !== 'string' ||
+      typeof readCaptured(browserLocation, nativeLocationOrigin, 'origin') !== 'string' ||
+      typeof readCaptured(browserLocation, nativeLocationPathname, 'pathname') !== 'string' ||
+      typeof readCaptured(browserLocation, nativeLocationSearch, 'search') !== 'string'
+    ) {
+      throw new TypeError('Kovo bootstrap event controls are unavailable.');
+    }
+    rap(nativePreventDefault, eventControl, []);
+    if (readCaptured(eventControl, nativeEventDefaultPrevented, 'defaultPrevented') !== true) {
+      throw new TypeError('Kovo bootstrap event controls are unavailable.');
     }
     const replayType = 'kovo-security-control:bootstrap-replay';
     let replayCalls = 0;
@@ -1317,31 +1526,92 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     }
   };
   const callEventTargetMethod = (target, nativeMethod, property, args) => {
-    try {
-      rap(nativeMethod, target, args);
-      return true;
-    } catch {}
-    const ownMethod = gopd(target, property);
-    if (!ownMethod || !('value' in ownMethod) || typeof ownMethod.value !== 'function') {
-      return false;
-    }
-    try {
-      rap(ownMethod.value, target, args);
-      return true;
-    } catch {
-      return false;
-    }
+    return callCaptured(target, nativeMethod, property, args).called;
   };
   const dispatchEvent = (target, event) =>
     callEventTargetMethod(target, nativeDispatchEvent, 'dispatchEvent', [event]);
+  const closestElement = (target, selector) => {
+    const result = callCaptured(target, nativeClosest, 'closest', [selector]);
+    return result.called ? result.value : undefined;
+  };
+  const readAttribute = (element, name) => {
+    const result = callCaptured(element, nativeGetAttribute, 'getAttribute', [name]);
+    if (result.called) return typeof result.value === 'string' ? result.value : null;
+    const value = ownValue(element, name);
+    return typeof value === 'string' ? value : null;
+  };
+  const hasAttribute = (element, name) => {
+    const result = callCaptured(element, nativeHasAttribute, 'hasAttribute', [name]);
+    return result.called && result.value === true;
+  };
+  const isConnected = (target) => readCaptured(target, nativeIsConnected, 'isConnected') === true;
+  const snapshotEvent = (event) => ({
+    altKey: readCaptured(event, nativeMouseAltKey, 'altKey') === true,
+    button: readCaptured(event, nativeMouseButton, 'button'),
+    ctrlKey: readCaptured(event, nativeMouseCtrlKey, 'ctrlKey') === true,
+    defaultPrevented:
+      readCaptured(event, nativeEventDefaultPrevented, 'defaultPrevented') === true,
+    metaKey: readCaptured(event, nativeMouseMetaKey, 'metaKey') === true,
+    shiftKey: readCaptured(event, nativeMouseShiftKey, 'shiftKey') === true,
+    submitter: readCaptured(event, nativeSubmitter, 'submitter'),
+    target: readCaptured(event, nativeEventTarget, 'target'),
+    type: readCaptured(event, nativeEventType, 'type'),
+  });
+  const preventEventDefault = (event) => {
+    const result = callCaptured(event, nativePreventDefault, 'preventDefault', []);
+    return (
+      result.called &&
+      readCaptured(event, nativeEventDefaultPrevented, 'defaultPrevented') === true
+    );
+  };
+  const currentLocation = () => {
+    const href = readCaptured(browserLocation, nativeLocationHref, 'href');
+    const origin = readCaptured(browserLocation, nativeLocationOrigin, 'origin');
+    const pathname = readCaptured(browserLocation, nativeLocationPathname, 'pathname');
+    const search = readCaptured(browserLocation, nativeLocationSearch, 'search');
+    return typeof href === 'string' &&
+      typeof origin === 'string' &&
+      typeof pathname === 'string' &&
+      typeof search === 'string'
+      ? { href, origin, pathname, search }
+      : undefined;
+  };
+  const parseUrl = (input, base) => {
+    try {
+      const value = new NativeURL(input, base);
+      const href = readCaptured(value, nativeUrlHref, 'href');
+      const origin = readCaptured(value, nativeUrlOrigin, 'origin');
+      const pathname = readCaptured(value, nativeUrlPathname, 'pathname');
+      const search = readCaptured(value, nativeUrlSearch, 'search');
+      const hash = readCaptured(value, nativeUrlHash, 'hash');
+      return typeof href === 'string' &&
+        typeof origin === 'string' &&
+        typeof pathname === 'string' &&
+        typeof search === 'string' &&
+        typeof hash === 'string'
+        ? { hash, href, origin, pathname, search }
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const events = ['click', 'submit'];
   const queued = [];
   const streamQueue = [];
   let loading;
-  const previousApply = globalThis.__kovo_a;
-  globalThis.__kovo_a = (body) => {
-    streamQueue.push(body);
+  const previousApply = ownValue(globalThis, '__kovo_a');
+  const queueStream = (body) => {
+    streamQueue[streamQueue.length] = body;
   };
+  odp(globalThis, '__kovo_a', {
+    configurable: true,
+    enumerable: true,
+    value: queueStream,
+    writable: true,
+  });
+  if (ownValue(globalThis, '__kovo_a') !== queueStream) {
+    throw new TypeError('Kovo bootstrap stream queue controls are unavailable.');
+  }
   const qa = (root, selector) =>
     root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
   const ps = () => {
@@ -1364,52 +1634,58 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     if (typeof raf === 'function') raf(() => raf(promote));
     else setTimeout(promote);
   };
-  const enhancedAnchor = (event) => {
+  const enhancedAnchor = (facts) => {
     if (
-      event.defaultPrevented ||
-      event.button ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
+      facts.defaultPrevented ||
+      facts.button ||
+      facts.metaKey ||
+      facts.ctrlKey ||
+      facts.shiftKey ||
+      facts.altKey
     ) {
       return;
     }
-    const target = event.target;
-    const anchor = target?.closest?.('a[href]');
+    const target = facts.target;
+    const anchor = closestElement(target, 'a[href]');
     if (
       !anchor ||
-      target?.closest?.('[on\\:click]') ||
-      anchor.target ||
-      anchor.hasAttribute?.('download')
+      closestElement(target, '[on\\:click]') ||
+      readAttribute(anchor, 'target') ||
+      hasAttribute(anchor, 'download')
     ) {
       return;
     }
-    const url = new URL(anchor.href, location.href);
-    if (url.origin !== location.origin) return;
+    const location = currentLocation();
+    const href = readAttribute(anchor, 'href');
+    if (!location || !href) return;
+    const url = parseUrl(href, location.href);
+    if (!url || url.origin !== location.origin) return;
     if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
     return { href: url.href, target, type: 'click' };
   };
-  const enhancedSubmit = (event) => {
-    const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]');
-    return form ? { submitter: event.submitter, target: form, type: 'submit' } : undefined;
+  const enhancedSubmit = (facts) => {
+    const form = closestElement(
+      facts.target,
+      'form[enhance],form[data-enhance],form[data-mutation]',
+    );
+    return form ? { submitter: facts.submitter, target: form, type: 'submit' } : undefined;
   };
-  const authoredClick = (event) => {
+  const authoredClick = (facts) => {
     if (
-      event.defaultPrevented ||
-      event.button ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
+      facts.defaultPrevented ||
+      facts.button ||
+      facts.metaKey ||
+      facts.ctrlKey ||
+      facts.shiftKey ||
+      facts.altKey
     ) {
       return;
     }
-    const target = event.target;
-    return target?.closest?.('[on\\:click]') ? { target, type: 'click' } : undefined;
+    const target = facts.target;
+    return closestElement(target, '[on\\:click]') ? { target, type: 'click' } : undefined;
   };
   const replay = (item) => {
-    if (!item.target?.isConnected) return;
+    if (!isConnected(item.target)) return;
     if (item.type === 'submit') {
       let event;
       if (typeof NativeSubmitEvent === 'function') {
@@ -1436,16 +1712,17 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     );
   };
   const fallback = (item) => {
-    if (!item.target?.isConnected) return;
+    if (!isConnected(item.target)) return;
     if (item.type === 'submit') {
       if (!submitForm(item.target)) replay(item);
       return;
     }
-    if (item.href) location.assign?.(item.href);
+    if (item.href) rap(nativeLocationAssign, browserLocation, [item.href]);
     else replay(item);
   };
   const cleanup = () => {
-    for (const event of events) {
+    for (let index = 0; index < events.length; index += 1) {
+      const event = events[index];
       callEventTargetMethod(globalThis, nativeRemoveEventListener, 'removeEventListener', [
         event,
         capture,
@@ -1453,30 +1730,56 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       ]);
     }
   };
-  const load = () =>
-    (loading ||= runtimeImport(runtimeUrl)
-      .then((mod) => {
+  const take = (queue) => {
+    const length = queue.length;
+    const values = [];
+    for (let index = 0; index < length; index += 1) values[index] = queue[index];
+    queue.length = 0;
+    return values;
+  };
+  const load = () => {
+    if (loading) return loading;
+    loading = (async () => {
+      try {
+        const mod = await runtimeImport(runtimeUrl);
         cleanup();
-        mod.installKovoDeferredRuntime?.();
-        const apply = globalThis.__kovo_a;
-        if (typeof apply === 'function' && apply !== previousApply) {
-          for (const body of streamQueue.splice(0)) apply(body);
+        const installDeferredRuntime = ownValue(mod, 'installKovoDeferredRuntime');
+        if (typeof installDeferredRuntime !== 'function') {
+          throw new TypeError('Kovo deferred runtime installer export is unavailable.');
         }
-        for (const item of queued.splice(0)) replay(item);
-      })
-      .catch(() => {
+        rap(installDeferredRuntime, undefined, []);
+        const apply = ownValue(globalThis, '__kovo_a');
+        if (typeof apply === 'function' && apply !== previousApply) {
+          const bodies = take(streamQueue);
+          for (let index = 0; index < bodies.length; index += 1) {
+            rap(apply, undefined, [bodies[index]]);
+          }
+        }
+        const items = take(queued);
+        for (let index = 0; index < items.length; index += 1) replay(items[index]);
+      } catch {
         cleanup();
-        for (const item of queued.splice(0)) fallback(item);
-      }));
+        const items = take(queued);
+        for (let index = 0; index < items.length; index += 1) fallback(items[index]);
+      }
+    })();
+    return loading;
+  };
   const capture = (event) => {
+    const facts = snapshotEvent(event);
     const item =
-      event.type === 'submit' ? enhancedSubmit(event) : authoredClick(event) || enhancedAnchor(event);
+      facts.type === 'submit'
+        ? enhancedSubmit(facts)
+        : facts.type === 'click'
+          ? authoredClick(facts) || enhancedAnchor(facts)
+          : undefined;
     if (!item) return;
-    event.preventDefault();
-    queued.push(item);
+    if (!preventEventDefault(event)) return;
+    queued[queued.length] = item;
     void load();
   };
-  for (const event of events) {
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
     if (
       !callEventTargetMethod(globalThis, nativeAddEventListener, 'addEventListener', [
         event,
