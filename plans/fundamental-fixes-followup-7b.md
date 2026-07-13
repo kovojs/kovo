@@ -84,4 +84,4 @@ runtime role), not an in-process capability that cannot be made least-priv; the 
   - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts` passed both no-URL refusal and external least-privilege boot/sign-in/mutation cases.
 - [x] `pnpm run dev` + existing PGlite tests unaffected (default dev path unchanged): `packages/server/src/postgres-runtime.test.ts` passed 97 tests on PGlite.
 - [ ] `pnpm run check` green; followup-7 A2/§6 updated; `claude-bugz-32.md` B4 annotated resolved-by-relocation.
-  - Current gap: every security/census gate passes, but the final `check:vp` reports formatting drift in combined-integration files outside this plan slice; rerun after the final integration-format checkpoint.
+  - Current gap: the plan reconciliation is complete, but an exact current-HEAD rerun remains pending after the additional compiler/browser security checkpoints.
