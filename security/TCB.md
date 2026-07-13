@@ -88,6 +88,24 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "reviewTrigger": "Any bump of pg must re-confirm session/role statement and connection-reset (DISCARD ALL) semantics are unchanged, since they carry the per-request role boundary."
     },
     {
+      "id": "dep.pgsql-ast-parser.sql-boundary-classification",
+      "surface": "runtime SQL target and capability-closure parsing",
+      "dependency": "pgsql-ast-parser",
+      "packageJson": "packages/server/package.json",
+      "pinnedVersion": "12.0.2",
+      "guarantee": "Kovo's managed SQL write allowlist and Postgres capability-closure audit consume the parser's reviewed AST shapes to enumerate statement kinds, target tables, relations, and attached code paths; unsupported or malformed SQL remains a fail-closed parse result rather than being treated as safe.",
+      "reviewTrigger": "Any bump of pgsql-ast-parser must re-run the SQL classifier and Postgres closure corpora, re-confirm the AST shapes for CTEs, UPDATE FROM, DELETE USING, quoted/schema-qualified identifiers, views, triggers, and functions, and verify every unsupported or parse-error path still fails closed."
+    },
+    {
+      "id": "dep.undici.egress-transport-dispatch",
+      "surface": "Undici outbound transport egress enforcement",
+      "dependency": "undici",
+      "packageJson": "packages/server/package.json",
+      "pinnedVersion": "7.28.0",
+      "guarantee": "While Kovo's egress floor is installed, framework-owned and ambient Undici fetch traffic is routed through its dispatcher, whose custom connector resolves and validates destination IPs before dialing the pinned address; the bootstrap integrity check detects a later global-dispatcher replacement according to the configured hardening posture.",
+      "reviewTrigger": "Any bump of undici must re-confirm Agent custom-connect and global-dispatcher semantics, redirect dispatch through the installed policy, DNS/IP validation before socket creation, abort/error propagation, and the egress bootstrap/runtime adversarial suites."
+    },
+    {
       "id": "dep.better-auth.password-hashing",
       "surface": "Better Auth password hashing",
       "dependency": "better-auth",

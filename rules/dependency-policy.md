@@ -14,9 +14,10 @@ Every dependency named in the `trustedDependencySurfaces` section of
 specifier (no `^`, `~`, or range) in its `package.json`. These are the surfaces the
 security guarantees rest on today: `pg` (node-postgres query parameterization and
 SET ROLE / RLS statement delivery), `drizzle-orm` (SQL-generation parameterization),
-`@electric-sql/pglite` (SET LOCAL ROLE / RLS in the embedded engine), `better-auth`
-(password hashing and session/cookie integrity), and `@node-rs/argon2` (argon2id
-password hashing).
+`@electric-sql/pglite` (SET LOCAL ROLE / RLS in the embedded engine), `pgsql-ast-parser`
+(runtime SQL target/closure classification), `undici` (the process-wide outbound transport
+dispatcher used by the egress floor), `better-auth` (password hashing and session/cookie
+integrity), and `@node-rs/argon2` (argon2id password hashing).
 
 - Pin to the version already resolved in `pnpm-lock.yaml`; do not invent versions.
 - After changing a specifier, run `pnpm install --lockfile-only` (or `pnpm install`)
@@ -45,8 +46,10 @@ change, not a routine dependency update. Such a bump MUST:
 - Re-confirm the specific `reviewTrigger` recorded for each affected surface (for
   example: node-pg still binds values out-of-band; drizzle-orm still parameterizes
   interpolated values; PGlite/Postgres still enforce SET (LOCAL) ROLE and FORCE RLS;
-  Better Auth password hashing / cookie signing defaults are unchanged; argon2id
-  defaults and constant-time verify are unchanged).
+  the SQL parser preserves Kovo's reviewed AST shapes and fail-closed parse behavior;
+  Undici still routes through the installed DNS/IP-validating dispatcher; Better Auth
+  password hashing / cookie signing defaults are unchanged; argon2id defaults and
+  constant-time verify are unchanged).
 - Record the review conclusion in the PR / handoff note.
 
 ## What is machine-enforced vs manual

@@ -181,6 +181,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.packageManager).toBe('pnpm@10.12.1');
       expect(packageJson.pnpm).toBeUndefined();
       expect(packageJson.dependencies).not.toHaveProperty('better-sqlite3');
+      expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
       expect(packageJson.devDependencies).toMatchObject({
         '@kovojs/cli': expect.stringMatching(/^\d+\.\d+\.\d+/),
       });
@@ -203,6 +204,7 @@ describe('create-kovo starter (metadata)', () => {
 
       const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
       expect(ciWorkflow).toContain('vp exec pnpm run build:prod');
+      expect(ciWorkflow).toContain('node-version: 24.10.0');
       expect(ciWorkflow).toContain('permissions:\n  contents: read\n  actions: read');
       expect(ciWorkflow).toContain(
         'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5',
@@ -886,6 +888,7 @@ describe('create-kovo starter (metadata)', () => {
     // rules/dependency-policy.md: the experimental native SQLite runtime is still an
     // exact-pinned dependency so a fresh scaffold cannot silently install a new binary.
     expect(packageJson.dependencies?.['better-sqlite3']).toBe('12.11.1');
+    expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
     expect(files.get('package.json')).toContain(
       '"start": "NODE_ENV=production node dist/server/server.mjs"',
     );

@@ -23,7 +23,7 @@
     "better-auth": "1.6.17",
     "better-sqlite3": "12.11.1",
     "drizzle-orm": "1.0.0-rc.4",
-    "pgsql-ast-parser": "^12.0.2"
+    "pgsql-ast-parser": "12.0.2"
   },
   "devDependencies": {
     "@kovojs/cli": "{{kovo_cli_version}}",
