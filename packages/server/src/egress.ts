@@ -69,12 +69,12 @@ import {
  *
  * WHAT THIS IS / IS NOT (label it honestly — SPEC §6.6 rule 3).
  *   - This is a **fail-closed runtime defense-in-depth FLOOR**, sound only at its sink
- *     (the resolved-IP check at `net.Socket.prototype.connect`). It is **NEVER** a
+ *     (the resolved-IP check at the TCP or connected-datagram sink). It is **NEVER** a
  *     by-construction proof: privileged same-process app code can re-patch the prototype,
  *     spawn a worker/child process that doesn't inherit the hook, or open a native socket
  *     the JS layer never sees. Those are documented residual fail-open holes (see
  *     {@link installEgressFloor} doc and the SPEC section).
- *   - Process-global transport hooks allow public egress unless a framework-owned caller
+ *   - Process-global HTTP/TCP transport hooks allow public egress unless a framework-owned caller
  *     asks for the destination allowlist. Kovo runtime egress surfaces such as `ctx.fetch`
  *     use that stricter posture: an exact `egress.allowDestinations` origin is required
  *     before any public/private destination can be reached.
@@ -94,13 +94,15 @@ import {
  *     requires the Azure frame: an AWS/GCP frame cannot cross-open that loopback authority.
  *     A reflected SSRF never calls a factory, so it never enters the frame, so metadata stays
  *     denied at the very same IP.
- *   - Enforcement is **dual-layer**: (a) `net.Socket.prototype.connect` (covers raw
+ *   - HTTP/TCP enforcement is **dual-layer**: (a) `net.Socket.prototype.connect` (covers raw
  *     `node:http`/`node:https` — AWS IMDS via @smithy bypasses undici entirely — *and*
  *     undici/`fetch`, which dials through `net` underneath), pinning the validated IP via
  *     an injected `lookup` so a TOCTOU DNS-rebind can't swap a public answer for a private
  *     one between check and connect; (b) a custom undici dispatcher at the per-request
  *     `dispatch()` level (see `egress-undici.ts`) so pooled-socket reuse — which skips
- *     `beforeConnect`/the `net` dial on the second request — is still gated.
+ *     `beforeConnect`/the `net` dial on the second request — is still gated. `node:dgram` is
+ *     separately floored by validating the kernel-pinned peer of connected sockets and denying
+ *     unconnected sends whose socket-owned resolver cannot be pinned through Node's public API.
  */
 
 /** Stable error name so callers and tests can `instanceof`/name-match a blocked egress. */
@@ -126,7 +128,8 @@ export class EgressBlockedError extends Error {
     | 'private-network'
     | 'destination-allowlist'
     | 'missing-floor'
-    | 'unix-domain-socket';
+    | 'unix-domain-socket'
+    | 'unconnected-datagram';
   /** Suggested HTTP status for adapters that surface this on the wire (SPEC §9.5). */
   readonly status = 502;
 
@@ -140,6 +143,7 @@ export class EgressBlockedError extends Error {
       | 'destination-allowlist'
       | 'missing-floor'
       | 'unix-domain-socket'
+      | 'unconnected-datagram'
       | undefined;
   }) {
     const where =
@@ -155,6 +159,10 @@ export class EgressBlockedError extends Error {
       remediation =
         'Unix-domain sockets are default-denied because they can reach local privileged services; ' +
         'expose an explicitly governed TCP endpoint instead.';
+    } else if (reason === 'unconnected-datagram') {
+      remediation =
+        'Connect the datagram socket before sending so Kovo can validate the kernel-pinned peer; ' +
+        'unconnected per-send DNS cannot be pinned through the public node:dgram API.';
     } else if (reason === 'destination-allowlist') {
       remediation = 'Add the exact origin to createApp({ egress: { allowDestinations: [...] } }).';
     } else if (args.metadata) {
@@ -281,10 +289,11 @@ export interface EgressOptions {
    * Optional same-process tamper hardening for the transport monkeypatches.
    *
    * - `off` (default): only self-probes detect later monkeypatch drift.
-   * - `warn`: installs a warning setter around `net.Socket.prototype.connect`, so ordinary
-   *   late reassignment is reported immediately. Undici global-dispatcher drift is still
-   *   detected by self-probes because its ESM export cannot be frozen reliably here.
-   * - `freeze`: makes the net-connect descriptor non-writable against ordinary reassignment.
+   * - `warn`: installs warning setters around the net and datagram transport methods, so
+   *   ordinary late reassignment is reported immediately. Undici global-dispatcher drift is
+   *   still detected by self-probes because its ESM export cannot be frozen reliably here.
+   * - `freeze`: makes the net-connect and datagram descriptors non-writable against ordinary
+   *   reassignment.
    *
    * SPEC §6.6: this remains a runtime defense-in-depth floor, not sandbox protection.
    * Privileged same-process code can still bypass it with `defineProperty`, workers/children

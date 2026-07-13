@@ -18,7 +18,7 @@ import {
 } from './egress-bootstrap.js';
 import { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
 
-describe('egress bootstrap: dual-layer install + self-probe', () => {
+describe('egress bootstrap: transport-floor install + self-probe', () => {
   let teardown: (() => void) | undefined;
 
   beforeEach(() => {
@@ -36,6 +36,7 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     const warnings: string[] = [];
     const probe = selfProbe((m) => warnings.push(m));
     expect(probe.netConnectInstalled).toBe(false);
+    expect(probe.dgramInstalled).toBe(false);
     expect(probe.undiciInstalled).toBe(false);
     expect(warnings.join('\n')).toContain('NOT installed');
   });
@@ -51,14 +52,16 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     expect(warnings.join('\n')).toContain('NOT installed');
   });
 
-  it('installs both layers and the self-probe goes quiet', async () => {
+  it('installs every transport layer and the self-probe goes quiet', async () => {
     const warnings: string[] = [];
     const install = await installEgressFloor({ allowInternal: [] }, (m) => warnings.push(m));
     teardown = install.uninstall;
     expect(install.netConnectInstalled).toBe(true);
+    expect(install.dgramInstalled).toBe(true);
     expect(install.undiciInstalled).toBe(true);
     const probe = selfProbe((m) => warnings.push(m));
     expect(probe.netConnectInstalled).toBe(true);
+    expect(probe.dgramInstalled).toBe(true);
     expect(probe.undiciInstalled).toBe(true);
     expect(warnings.join('\n')).not.toContain('NOT installed');
     expect(warnings.join('\n')).not.toContain('PARTIALLY');
@@ -87,6 +90,7 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     teardown = undefined;
     expect(selfProbe(() => {})).toEqual({
       netConnectInstalled: false,
+      dgramInstalled: false,
       undiciInstalled: false,
     });
   });
@@ -162,6 +166,7 @@ describe('egress bootstrap: dual-layer install + self-probe', () => {
     const install = await installing;
     teardown = install.uninstall;
     expect(install.netConnectInstalled).toBe(true);
+    expect(install.dgramInstalled).toBe(true);
     expect(install.undiciInstalled).toBe(true);
     expect(resolveHits).toBe(0);
   });

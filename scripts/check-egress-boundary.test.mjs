@@ -4,6 +4,7 @@ import { checkEgressBoundary } from './check-egress-boundary.mjs';
 
 const baseFiles = {
   'packages/server/src/egress.ts': `export const frameworkEgressFetch = (input, init) => globalThis.fetch(input, init);`,
+  'packages/server/src/egress-dgram.ts': '',
   'packages/server/src/egress-undici.ts': '',
   'packages/server/src/egress-undici-runtime.ts': '',
   'packages/server/src/egress-bootstrap.ts': '',
@@ -39,11 +40,11 @@ describe('check-egress-boundary', () => {
 
   it('rejects raw http and socket primitives outside the boundary', () => {
     const result = run({
-      'packages/server/src/raw.ts': `http.request(opts); https.get(url); net.createConnection(80, host);`,
+      'packages/server/src/raw.ts': `http.request(opts); https.get(url); net.createConnection(80, host); dgram.createSocket('udp4');`,
     });
 
     expect(result.ok).toBe(false);
-    expect(result.findings).toHaveLength(3);
+    expect(result.findings).toHaveLength(4);
   });
 
   it('ignores comments, quoted strings, and generated client template fetches', () => {

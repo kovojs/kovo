@@ -10,6 +10,11 @@ import {
   type EgressPolicy,
 } from './egress.js';
 import {
+  dgramFloorTamperStatus,
+  installDgramFloor,
+  isDgramFloorInstalled,
+} from './egress-dgram.js';
+import {
   installUndiciFloor,
   isUndiciFloorInstalled,
   undiciFloorTamperStatus,
@@ -28,8 +33,8 @@ import { securityPromiseResolve } from './response-security-intrinsics.js';
 
 /**
  * Bootstrap for the outbound-egress private-network deny floor (SPEC §6.6;
- * `plans/secure-framework.md` Phase 5). Installs BOTH enforcement layers and runs a LOUD
- * startup self-probe.
+ * `plans/secure-framework.md` Phase 5). Installs every transport layer and runs a LOUD startup
+ * self-probe.
  *
  * WHERE THIS RUNS. The single app-assembly chokepoint is `createApp` (mirroring the env /
  * refuse-to-boot precedent in `env.ts`). `createApp` installs this floor by default: production
@@ -40,12 +45,12 @@ import { securityPromiseResolve } from './response-security-intrinsics.js';
  * logs when a process is serving without it.
  *
  * RESIDUAL FAIL-OPEN (enumerated honestly — this is a FLOOR, never a by-construction proof):
- *   1. Same-process app code can re-patch `net.Socket.prototype.connect` or call
- *      `setGlobalDispatcher` after us, removing either layer. `egress.hardening: "warn" |
- *      "freeze"` adds same-process tamper signals for the net layer, and self-probes detect
- *      both net and undici drift, but this is still not sandbox-level protection.
+ *   1. Same-process app code can re-patch the net/datagram prototypes or call
+ *      `setGlobalDispatcher` after us, removing a layer. `egress.hardening: "warn" | "freeze"`
+ *      adds same-process tamper signals for the net/datagram layers, and self-probes detect all
+ *      transport drift, but this is still not sandbox-level protection.
  *   2. `Worker` threads and `child_process` do not inherit the monkeypatch; each must re-install.
- *   3. Native addons / FFI that open sockets outside `net` are never seen by either layer.
+ *   3. Native addons / FFI that open sockets outside Node's JS transports are never seen.
  *   4. A per-`fetch(url, { dispatcher })` option bypasses the global undici dispatcher (the
  *      net.connect layer still catches its first dial, but not pooled reuse on that dispatcher).
  *   5. Provider-shape drift: a future undici/node internal that changes the `connect`/`dispatch`
@@ -64,7 +69,7 @@ const registeredDatabaseEndpointRefs = createWitnessMap<string, number>();
 
 interface EgressFloorInstallOptions {
   /**
-   * Internal dev-only posture for omitted `createApp({ egress })`: keep the dual floor
+   * Internal dev-only posture for omitted `createApp({ egress })`: keep the transport floor
    * installed, but permit non-metadata private-network destinations.
    */
   allowPrivateNetwork?: boolean;
@@ -79,14 +84,16 @@ export class EgressFloorBootError extends Error {
 export interface EgressFloorInstall {
   /** Whether the synchronous `net.connect` enforcement layer is active. */
   netConnectInstalled: boolean;
+  /** Whether the synchronous connected-datagram enforcement layer is active. */
+  dgramInstalled: boolean;
   /** Whether the undici dispatcher enforcement layer is active. */
   undiciInstalled: boolean;
-  /** Uninstall both layers (tests / teardown). */
+  /** Uninstall every transport layer (tests / teardown). */
   uninstall(): void;
 }
 
 /**
- * Synchronously install both egress floor layers and resolve+validate the policy. A config error
+ * Synchronously install all egress floor layers and resolve+validate the policy. A config error
  * (e.g. a metadata IP in `allowInternal`) throws synchronously here and refuses boot, mirroring
  * the env refuse-to-boot precedent. The public wrapper remains promise-returning for callers that
  * already await worker/child bootstrap installs.
@@ -102,7 +109,7 @@ export function installEgressFloor(
 }
 
 /**
- * Synchronous install used by `createApp` so production boot can verify both layers before
+ * Synchronous install used by `createApp` so production boot can verify all layers before
  * returning an app aggregate. Public `installEgressFloor()` remains promise-returning for the
  * existing worker/child bootstrap surface.
  *
@@ -114,20 +121,22 @@ export function installEgressFloorSync(
   installOptions: EgressFloorInstallOptions = {},
 ): EgressFloorInstall {
   // Resolve + validate synchronously: a bad config (metadata in allowInternal) throws now and
-  // refuses boot. Layer (b) is also installed synchronously so raw node:http is floored before
-  // the undici import resolves.
+  // refuses boot. Raw node:http and node:dgram are floored before app assembly returns.
   const policy = resolveEgressPolicy(options, warn, {
     ...installOptions,
     databaseEndpoints: registeredDatabaseEndpoints(),
   });
   const uninstallNet = installNetConnectFloor(policy, options?.hardening ?? 'off', warn);
+  const uninstallDgram = installDgramFloor(policy, options?.hardening ?? 'off', warn);
   const uninstallUndici = installUndiciFloor(policy);
 
   const result: EgressFloorInstall = {
     netConnectInstalled: isNetConnectFloorInstalled(),
+    dgramInstalled: isDgramFloorInstalled(),
     undiciInstalled: isUndiciFloorInstalled(),
     uninstall() {
       uninstallUndici();
+      uninstallDgram();
       uninstallNet();
       if (bootResult === result) {
         bootResult = undefined;
@@ -138,7 +147,7 @@ export function installEgressFloorSync(
   bootResult = result;
   bootPolicy = policy;
 
-  // LOUD self-probe (SPEC §6.6): if EITHER layer is missing after install, say so
+  // LOUD self-probe (SPEC §6.6): if any layer is missing after install, say so
   // unmissably. A missing floor is a security regression, not a silent fallback.
   selfProbe(warn);
   return result;
@@ -160,34 +169,44 @@ export function selfProbe(
     /** Throw instead of warn when the probe finds a missing/partial/tampered floor. */
     failure?: 'warn' | 'throw';
   } = {},
-): { netConnectInstalled: boolean; undiciInstalled: boolean } {
+): { netConnectInstalled: boolean; dgramInstalled: boolean; undiciInstalled: boolean } {
   const netStatus = netConnectFloorTamperStatus();
+  const dgramStatus = dgramFloorTamperStatus();
   const undiciStatus = undiciFloorTamperStatus();
   const net = netStatus.installed;
+  const dgram = dgramStatus.installed;
   const undici = undiciStatus.installed;
   const boundary = options.boundary ?? 'process';
   const emit = (message: string): void => {
     if (options.failure === 'throw') throw new Error(`[kovo egress] ${message}`);
     warn(message);
   };
-  if (!net && !undici) {
+  if (!net && !dgram && !undici) {
     emit(
       'SELF-PROBE: the outbound-egress private-network deny floor is NOT installed in this ' +
         `${boundary}. SSRF to cloud metadata / internal services is UNGATED here. If this is a ` +
         'Worker/child process, re-run createApp({ egress }) or installEgressFloor() in that ' +
         'bootstrap (SPEC §6.6; the floor does not cross worker boundaries).',
     );
-  } else if (!net || !undici) {
+  } else if (!net || !dgram || !undici) {
     emit(
       `SELF-PROBE: the egress floor is only PARTIALLY installed (net.connect=${net}, ` +
-        `undici=${undici}). One transport path is ungated — a single layer fails open ` +
-        '(undici pooled reuse bypasses net.connect; raw node:http bypasses undici).',
+        `dgram=${dgram}, undici=${undici}). One transport path is ungated — a single layer ` +
+        'fails open (undici pooled reuse bypasses net.connect; raw node:http bypasses undici; ' +
+        'node:dgram bypasses both).',
     );
   }
   if (netStatus.tampered) {
     emit(
       'SELF-PROBE: TAMPER detected: net.Socket.prototype.connect no longer points at the ' +
         'Kovo egress wrapper. Re-install installEgressFloor() before serving requests. ' +
+        'This is a runtime defense-in-depth signal, not sandbox protection (SPEC §6.6).',
+    );
+  }
+  if (dgramStatus.tampered) {
+    emit(
+      'SELF-PROBE: TAMPER detected: dgram.Socket.prototype.connect/send no longer point at ' +
+        'the Kovo egress wrappers. Re-install installEgressFloor() before serving requests. ' +
         'This is a runtime defense-in-depth signal, not sandbox protection (SPEC §6.6).',
     );
   }
@@ -199,7 +218,7 @@ export function selfProbe(
         'signal, not sandbox protection (SPEC §6.6).',
     );
   }
-  return { netConnectInstalled: net, undiciInstalled: undici };
+  return { netConnectInstalled: net, dgramInstalled: dgram, undiciInstalled: undici };
 }
 
 /** The active egress floor install for this process, if any. */

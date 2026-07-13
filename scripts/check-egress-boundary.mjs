@@ -11,6 +11,7 @@ export const repoRoot = findRepoRoot();
 export const defaultSourceRoots = ['packages/server/src'];
 export const egressBoundaryFiles = [
   'packages/server/src/egress.ts',
+  'packages/server/src/egress-dgram.ts',
   'packages/server/src/egress-undici.ts',
   'packages/server/src/egress-undici-runtime.ts',
   'packages/server/src/egress-bootstrap.ts',
@@ -29,6 +30,7 @@ const outboundCallPatterns = [
   { label: 'http.get', pattern: /\bhttps?\.get\s*\(/gu },
   { label: 'net.connect', pattern: /\bnet\.(?:connect|createConnection)\s*\(/gu },
   { label: 'new net.Socket', pattern: /\bnew\s+net\.Socket\s*\(/gu },
+  { label: 'dgram.createSocket', pattern: /\bdgram\.createSocket\s*\(/gu },
   { label: 'undici.request', pattern: /\bundici\.(?:request|fetch|connect)\s*\(/gu },
 ];
 
