@@ -203,6 +203,15 @@ describe('create-kovo starter (metadata)', () => {
 
       const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
       expect(ciWorkflow).toContain('vp exec pnpm run build:prod');
+      expect(ciWorkflow).toContain('permissions:\n  contents: read\n  actions: read');
+      expect(ciWorkflow).toContain(
+        'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5',
+      );
+      expect(ciWorkflow).toContain(
+        'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830',
+      );
+      expect(ciWorkflow).toContain('vp install --frozen-lockfile');
+      expect(ciWorkflow).not.toMatch(/uses: [^\n]+@v\d/u);
       expect(ciWorkflow).not.toContain('run: kovo build');
 
       const readme = readFileSync(join(root, 'README.md'), 'utf8');
@@ -866,10 +875,14 @@ describe('create-kovo starter (metadata)', () => {
     const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
     const packageJson = JSON.parse(files.get('package.json') ?? '{}') as {
+      dependencies?: Record<string, string>;
       pnpm?: { onlyBuiltDependencies?: string[] };
     };
 
     expect(files.get('package.json')).toContain('"better-sqlite3"');
+    // rules/dependency-policy.md: the experimental native SQLite runtime is still an
+    // exact-pinned dependency so a fresh scaffold cannot silently install a new binary.
+    expect(packageJson.dependencies?.['better-sqlite3']).toBe('12.11.1');
     expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
     expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['better-sqlite3']);
     expect(files.get('src/db.ts')).toContain(
