@@ -331,7 +331,7 @@ function descriptorRetainsAuthority(
     }
     return (
       current.configurable === false &&
-      nativeApply(nativeObjectIs, NativeObject, [resolved, expectedValue.value]) &&
+      nativeApply<boolean>(nativeObjectIs, NativeObject, [resolved, expectedValue.value]) &&
       current.enumerable === expected.enumerable
     );
   }
