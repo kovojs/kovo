@@ -8,6 +8,7 @@ import { account, balanceQuery } from './shared';
 export const deposit = mutation('fragment-slot-hoist/deposit', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
     queries: [balanceQuery],
@@ -41,15 +42,6 @@ const app = createApp({
   mutations: [deposit],
   queries: [balanceQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [deposit.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        redirectTo: '/',
-        fragmentRenderers: [{ render: () => renderBalanceShell(db), target: 'balance-shell' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

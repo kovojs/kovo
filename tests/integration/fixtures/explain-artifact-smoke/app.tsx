@@ -20,6 +20,7 @@ async function renderCartSection(db: KovoFixtureRequest['db']): Promise<string> 
 export const addToCart = mutation('cart/add', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ sku: s.string() }),
   registry: { tables: ['cart_items'] },
   handler: async (input: { sku: string }, request: KovoFixtureRequest) => {
@@ -44,15 +45,6 @@ const app = createApp({
       </main>`,
     }),
   ],
-  mutationResponses: {
-    [addToCart.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderCartSection(db), target: 'cart-badge' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

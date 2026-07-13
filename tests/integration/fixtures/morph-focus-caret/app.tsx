@@ -26,6 +26,7 @@ async function renderEditor(db: KovoFixtureRequest['db']): Promise<string> {
 export const saveDraft = mutation('profile/save-draft', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['profile'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -46,15 +47,6 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [saveDraft],
   routes: [homeRoute],
-  mutationResponses: {
-    [saveDraft.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        redirectTo: '/',
-        fragmentRenderers: [{ render: () => renderEditor(db), target: 'profile-editor' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

@@ -17,6 +17,7 @@ export const placeOrder = mutation('redirect-typed-target/place-order', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({ id: s.string() }),
+  redirectTo: (result) => (result.value as Redirect).location,
   handler: (input: { id: string }) =>
     redirect('/orders/:id', {
       params: { id: input.id },
@@ -45,12 +46,5 @@ export default defineFixture({
   app: createApp({
     mutations: [placeOrder],
     routes: [homeRoute, orderRoute],
-    mutationResponses: {
-      [placeOrder.key]: () => {
-        return {
-          redirectTo: (result) => (result.value as Redirect).location,
-        };
-      },
-    },
   }),
 });

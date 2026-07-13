@@ -16,6 +16,7 @@ async function renderTotal(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const deposit = mutation('csrf-required/deposit', {
+  defaultRedirectTo: '/',
   input: s.object({ amount: s.number().int().min(1) }),
   registry: { tables: ['payments'] },
   handler: async (input: { amount: number }, request: KovoFixtureRequest) => {
@@ -42,16 +43,6 @@ const app = createApp({
   csrf,
   mutations: [deposit],
   routes: [homeRoute],
-  mutationResponses: {
-    [deposit.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        failureTarget: 'csrf-total',
-        fragmentRenderers: [{ render: () => renderTotal(db), target: 'csrf-total' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

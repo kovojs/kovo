@@ -5,6 +5,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 export const record = mutation('methods/record', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/done',
   input: s.object({}),
   registry: { tables: ['method_events'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -31,11 +32,6 @@ export default defineFixture({
   app: createApp({
     mutations: [record],
     routes: [homeRoute, doneRoute],
-    mutationResponses: {
-      [record.key]: () => {
-        return { redirectTo: '/done' };
-      },
-    },
   }),
   schema: 'create table method_events (id serial primary key, kind text not null)',
 });

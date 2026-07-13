@@ -9,18 +9,13 @@ interface BalanceShellSlots {
 }
 
 export const BalanceShell = component({
-  disableServerRefresh: true,
   queries: { slotBalance: balanceQuery },
   render: (
     { slotBalance }: { slotBalance: BalanceResult },
     _state,
     { children }: BalanceShellSlots,
   ) => (
-    <section
-      kovo-deps="slotBalance"
-      kovo-fragment-target="balance-shell"
-      data-account={slotBalance.accountId}
-    >
+    <section data-account={slotBalance.accountId}>
       <h1>Account {slotBalance.accountId}</h1>
       <div data-slot="children">{children}</div>
     </section>

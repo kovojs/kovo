@@ -39,6 +39,7 @@ async function renderLastRow(db: KovoFixtureRequest['db']): Promise<string> {
 export const loadMore = mutation('feed/load-more', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['feed'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -69,15 +70,6 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [loadMore],
   routes: [homeRoute],
-  mutationResponses: {
-    [loadMore.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        redirectTo: '/',
-        fragmentRenderers: [{ mode: 'append', render: () => renderLastRow(db), target: 'feed' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

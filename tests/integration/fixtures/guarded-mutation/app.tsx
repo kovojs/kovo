@@ -41,6 +41,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const guardedIncrement = mutation('guarded-mutation/increment', {
+  defaultRedirectTo: '/',
   guard: guards.authed<AuthRequest>(),
   input: s.object({}),
   registry: { tables: ['guarded_counter'] },
@@ -72,22 +73,6 @@ export default defineFixture({
     mutations: [guardedIncrement],
     routes: [homeRoute],
     sessionProvider: (request) => readSessionCookie(request),
-    mutationResponses: {
-      [guardedIncrement.key]: ({ request }) => {
-        return {
-          failureTarget: 'guarded-error',
-          fragmentRenderers: [
-            {
-              render: () => renderStatus((request as unknown as KovoFixtureRequest).db),
-              target: 'guarded-count',
-            },
-          ],
-          redirectTo: '/',
-          renderFailureFragment: (failure) =>
-            `<div kovo-fragment-target="guarded-error" role="alert" data-error-code="${failure.error.code}">Sign in required</div>`,
-        };
-      },
-    },
   }),
   schema: 'create table guarded_counter (id integer primary key, count integer not null default 0)',
   seed: (db) => db.exec(staticSql`insert into guarded_counter (id, count) values (1, 0)`),

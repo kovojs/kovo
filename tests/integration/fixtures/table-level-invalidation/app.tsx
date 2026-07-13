@@ -64,6 +64,7 @@ function renderInitialQueryScript(name: string, key: string, value: unknown): st
 const bulkRestock = mutation('table-level-invalidation/restock', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ category: s.string(), threshold: s.number().int().min(0) }),
   registry: {
     queries: [productQuery],
@@ -104,24 +105,6 @@ const app = createApp({
   mutations: [bulkRestock],
   queries: [productQuery],
   routes: [home],
-  mutationResponses: {
-    [bulkRestock.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          {
-            render: async () => renderPanel(await readProductPanelFromWriter(db, 'p1', 'Pen')),
-            target: 'product-p1',
-          },
-          {
-            render: async () => renderPanel(await readProductPanelFromWriter(db, 'p2', 'Notebook')),
-            target: 'product-p2',
-          },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

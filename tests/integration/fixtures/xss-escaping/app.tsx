@@ -29,6 +29,7 @@ function renderAuthoredTsxCardHtml(payload: PayloadResult): string {
 export const updatePayload = mutation('xss/update', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: {
     queries: [payloadQuery],
@@ -65,13 +66,6 @@ const app = createApp({
   mutations: [updatePayload],
   queries: [payloadQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [updatePayload.key]: () => {
-      return {
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

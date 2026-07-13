@@ -59,14 +59,6 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [swapIsland],
   routes: [homeRoute],
-  mutationResponses: {
-    [swapIsland.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderShell(db), target: 'lifecycle-shell' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

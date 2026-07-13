@@ -8,10 +8,9 @@ import { component } from '@kovojs/core';
 import { countQuery, type CountResult } from './shared';
 
 export const CountBadge = component({
-  disableServerRefresh: true,
   queries: { count: countQuery },
   render: ({ count }: { count: CountResult }) => (
-    <count-badge kovo-fragment-target="count-badge">
+    <count-badge>
       <span>Count:</span> <output>{count.count}</output>
     </count-badge>
   ),

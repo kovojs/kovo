@@ -16,6 +16,7 @@ function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
 export const deposit = mutation('account/deposit', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
     queries: [balanceQuery],
@@ -49,15 +50,6 @@ const app = createApp({
   mutations: [deposit],
   queries: [balanceQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [deposit.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        redirectTo: '/',
-        fragmentRenderers: [{ render: () => renderBadge(db), target: 'balance-badge' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

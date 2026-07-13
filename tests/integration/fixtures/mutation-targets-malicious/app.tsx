@@ -60,18 +60,6 @@ export default defineFixture({
   app: createApp({
     csrf,
     mutations: [refreshTargets],
-    mutationResponses: {
-      [refreshTargets.key]: ({ request }) => {
-        const db = (request as unknown as KovoFixtureRequest).db;
-        const fragmentRenderers = [
-          { render: () => renderPublic(db), target: 'public-status' },
-          ...(userId(request)
-            ? [{ render: () => renderPrivate(request), target: 'private-panel' }]
-            : []),
-        ];
-        return { fragmentRenderers };
-      },
-    },
     routes: [homeRoute],
   }),
   schema: `create table target_refreshes (

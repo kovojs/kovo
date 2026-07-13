@@ -55,6 +55,7 @@ export const boardQuery = query('board', {
 export const reorderBoard = mutation('stamp-list-reorder/reorder', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: {
     queries: [boardQuery],
@@ -90,15 +91,6 @@ const app = createApp({
   mutations: [reorderBoard],
   queries: [boardQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [reorderBoard.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderBoardList(db), target: 'board-list' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

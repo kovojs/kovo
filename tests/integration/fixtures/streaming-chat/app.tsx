@@ -74,6 +74,7 @@ function renderComposer(errorCode = ''): string {
 export const sendMessage = mutation('chat/send', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   errors: {
     MODEL_UNAVAILABLE: s.object({}),
   },
@@ -163,16 +164,6 @@ const app = createApp({
   mutations: [sendMessage],
   queries: [chatQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [sendMessage.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderMessages(db), target: 'messages' }],
-        redirectTo: '/',
-        renderFailureFragment: (failure) => renderComposer(failure.error.code),
-      };
-    },
-  },
 });
 
 export default defineFixture({

@@ -37,6 +37,7 @@ function renderStateIsland(): string {
 export const fillDeal = mutation('nullable-binding/fill', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: {
     queries: [dealQuery],
@@ -53,6 +54,7 @@ export const fillDeal = mutation('nullable-binding/fill', {
 export const clearDeal = mutation('nullable-binding/clear', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: {
     queries: [dealQuery],
@@ -88,22 +90,6 @@ const app = createApp({
   mutations: [fillDeal, clearDeal],
   queries: [dealQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [fillDeal.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderDeal(db), target: 'deal-card' }],
-        redirectTo: '/',
-      };
-    },
-    [clearDeal.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderDeal(db), target: 'deal-card' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

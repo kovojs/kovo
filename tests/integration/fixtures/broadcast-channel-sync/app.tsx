@@ -70,14 +70,6 @@ const app = createApp({
   mutations: [publishPresence],
   queries: [presenceQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [publishPresence.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderPresence(db), target: 'presence-panel' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

@@ -16,6 +16,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const touchHeaders = mutation('mutation-response-headers/touch', {
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['header_events'] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -44,15 +45,6 @@ const app = createApp({
   csrf,
   mutations: [touchHeaders],
   routes: [homeRoute],
-  mutationResponses: {
-    [touchHeaders.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderStatus(db), target: 'header-status' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

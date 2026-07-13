@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 // I3 fixture entry: the click → server-mutation → DOM-morph round trip. This module
 // declares no Kovo components (they live in count-badge.tsx), so the compiler plugin
 // leaves its exports — including `export default defineFixture(...)` — intact. NOTE:
@@ -8,18 +9,13 @@ import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CountBadge } from './count-badge';
-import { counter, readCount } from './shared';
-
-function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
-  return readCount(db).then(
-    (count) => CountBadge.definition.render({ count }) as unknown as string,
-  );
-}
+import { counter } from './shared';
 
 export const increment = mutation('counter/increment', {
   // Fixture: skip the CSRF/session dance (plans/integration-test-suite.md).
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['counter'], touches: [counter] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -30,29 +26,25 @@ export const increment = mutation('counter/increment', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const badge = await renderBadge(request.db);
-    return `<main>
-      <kovo-fragment target="count-badge">${badge}</kovo-fragment>
-      <form method="post" action="/_m/counter/increment" enhance data-mutation="counter/increment" kovo-deps="counter">
+  page: () => (
+    <main>
+      <CountBadge />
+      <form
+        method="post"
+        action="/_m/counter/increment"
+        enhance
+        data-mutation="counter/increment"
+        kovo-deps="counter"
+      >
         <button type="submit">Increment</button>
       </form>
-    </main>`;
-  },
+    </main>
+  ),
 });
 
 const app = createApp({
   mutations: [increment],
   routes: [homeRoute],
-  mutationResponses: {
-    [increment.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        redirectTo: '/',
-        fragmentRenderers: [{ render: () => renderBadge(db), target: 'count-badge' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

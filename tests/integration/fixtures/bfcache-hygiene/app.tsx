@@ -81,14 +81,6 @@ const app = createApp({
   mutations: [increment],
   queries: [counterQuery],
   routes: [homeRoute, awayRoute],
-  mutationResponses: {
-    [increment.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderCounterPanel(db), target: 'counter-panel' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

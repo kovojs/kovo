@@ -40,13 +40,5 @@ export default defineFixture({
   app: createApp({
     mutations: [subscribe],
     routes: [homeRoute],
-    mutationResponses: {
-      [subscribe.key]: () => {
-        return {
-          failureTarget: 'newsletter-form',
-          renderFailureFragment: renderForm,
-        };
-      },
-    },
   }),
 });

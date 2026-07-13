@@ -24,20 +24,5 @@ export default defineFixture({
   app: createApp({
     mutations: [revealRecommendation],
     routes: [homeRoute],
-    mutationResponses: {
-      [revealRecommendation.key]: () => {
-        return {
-          fragmentRenderers: [
-            {
-              mode: 'append',
-              render: () =>
-                '<article class="recommendation-card" data-recommendation>Styled recommendation</article>',
-              stylesheets: ['/assets/fragment.css', '/assets/fragment.css'],
-              target: 'recommendations',
-            },
-          ],
-        };
-      },
-    },
   }),
 });

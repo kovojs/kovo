@@ -7,6 +7,7 @@ const receiptDomain = domain('receipt');
 export const createReceipt = mutation('render-error-fragment/create', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ id: s.string(), secret: s.string() }),
   registry: { tables: ['receipts'] },
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {
@@ -36,22 +37,6 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [createReceipt],
   routes: [homeRoute],
-  mutationResponses: {
-    [createReceipt.key]: () => {
-      return {
-        failureTarget: 'receipt',
-        fragmentRenderers: [
-          {
-            render: () => {
-              throw new Error('receipt renderer leaked details');
-            },
-            target: 'receipt',
-          },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

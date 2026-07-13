@@ -41,6 +41,7 @@ function renderCartCount(count: number): string {
 const addOpaqueCartItem = mutation('manual-touches-raw-write/add', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ productId: s.string() }),
   registry: {
     queries: [cartQuery],
@@ -74,20 +75,6 @@ const app = createApp({
   mutations: [addOpaqueCartItem],
   queries: [cartQuery],
   routes: [home],
-  mutationResponses: {
-    [addOpaqueCartItem.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          {
-            render: async () => renderCartCount((await readCartCountFromWriter(db)).count),
-            target: 'cart-count',
-          },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

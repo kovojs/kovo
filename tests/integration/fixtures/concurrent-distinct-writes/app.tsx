@@ -21,6 +21,7 @@ function bump(key: string, amount: number) {
   return mutation(`concurrent-distinct-writes/${key}`, {
     csrf: false,
     csrfJustification: 'fixture mutation has no ambient browser authority',
+    defaultRedirectTo: '/',
     input: s.object({}),
     registry: { tables: ['counter'], touches: [counterDomain] },
     handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -46,26 +47,6 @@ const home = route('/', {
 const app = createApp({
   mutations: [bumpA, bumpB],
   routes: [home],
-  mutationResponses: {
-    [bumpA.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: async () => renderPanel(await readCount(db)), target: 'counter' },
-        ],
-        redirectTo: '/',
-      };
-    },
-    [bumpB.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: async () => renderPanel(await readCount(db)), target: 'counter' },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

@@ -51,6 +51,7 @@ export const cartQuery = query('cart', {
 export const changeCart = mutation('scale-keyed-list/change', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { queries: [cartQuery], tables: ['cart_item'], touches: [cartDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -80,15 +81,6 @@ const app = createApp({
   mutations: [changeCart],
   queries: [cartQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [changeCart.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderCartList(db), target: 'cart-list' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

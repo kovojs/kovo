@@ -58,6 +58,7 @@ function renderStock(stock: number): string {
 const addBoth = mutation('multi-domain-write/add-both', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['cart_items', 'products'], touches: [cart, product] },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
@@ -80,6 +81,7 @@ const addBoth = mutation('multi-domain-write/add-both', {
 const addPartial = mutation('multi-domain-write/add-partial', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['cart_items', 'products'], touches: [cart] },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
@@ -109,30 +111,6 @@ const home = route('/', {
 const app = createApp({
   mutations: [addBoth, addPartial],
   routes: [home],
-  mutationResponses: {
-    [addBoth.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: async () => renderCart(await cartCountWriter(db)), target: 'cart-count' },
-          {
-            render: async () => renderStock(await productStockWriter(db)),
-            target: 'product-stock',
-          },
-        ],
-        redirectTo: '/',
-      };
-    },
-    [addPartial.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: async () => renderCart(await cartCountWriter(db)), target: 'cart-count' },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

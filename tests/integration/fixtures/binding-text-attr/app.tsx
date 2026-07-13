@@ -30,6 +30,7 @@ function renderStateIsland(): string {
 export const updateCard = mutation('binding-text-attr/update', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: {
     queries: [cardQuery],
@@ -65,13 +66,6 @@ const app = createApp({
   mutations: [updateCard],
   queries: [cardQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [updateCard.key]: () => {
-      return {
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

@@ -30,6 +30,7 @@ function renderCartCount(count: number): string {
 const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ productId: s.string() }),
   registry: { tables: ['cart_items'], touches: [cart] },
   async handler(input, request: KovoFixtureRequest, context) {
@@ -45,6 +46,7 @@ const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
 const smuggleAuditWrite = mutation('touch-graph-runtime-crosscheck/smuggle', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({ productId: s.string() }),
   registry: { tables: ['cart_items'], touches: [cart] },
   async handler(input, request: KovoFixtureRequest, context) {
@@ -72,26 +74,6 @@ const home = route('/', {
 const app = createApp({
   mutations: [addCartItem, smuggleAuditWrite],
   routes: [home],
-  mutationResponses: {
-    [addCartItem.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: async () => renderCartCount(await cartCountWriter(db)), target: 'cart-count' },
-        ],
-        redirectTo: '/',
-      };
-    },
-    [smuggleAuditWrite.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: async () => renderCartCount(await cartCountWriter(db)), target: 'cart-count' },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

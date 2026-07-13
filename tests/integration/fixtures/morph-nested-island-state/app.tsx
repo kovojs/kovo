@@ -47,14 +47,6 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [refreshParent],
   routes: [homeRoute],
-  mutationResponses: {
-    [refreshParent.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderPanel(db), target: 'parent-panel' }],
-      };
-    },
-  },
 });
 
 export default defineFixture({

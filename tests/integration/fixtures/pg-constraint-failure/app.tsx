@@ -96,9 +96,6 @@ const homeRoute = route('/', {
 export default defineFixture({
   app: createApp({
     mutations: [duplicateCharge],
-    mutationResponses: {
-      [duplicateCharge.key]: () => ({ failureTarget: 'charge-status' }),
-    },
     routes: [homeRoute],
   }),
   schema: [

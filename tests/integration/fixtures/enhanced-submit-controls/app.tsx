@@ -71,16 +71,6 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [submitOrder],
   routes: [homeRoute],
-  mutationResponses: {
-    [submitOrder.key]: ({ rawInput }) => {
-      const formData = rawInput as FormData;
-      return {
-        fragmentRenderers: [
-          { render: () => renderSubmittedReport(formData), target: 'submit-controls-report' },
-        ],
-      };
-    },
-  },
 });
 
 export default defineFixture({

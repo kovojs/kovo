@@ -7,6 +7,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 export const checkout = mutation('checkout/submit', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   errors: {
     CARD_DECLINED: s.object({}),
     OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }),
@@ -51,15 +52,6 @@ function renderCheckoutFailure(failure: MutationFail): string {
 const app = createApp({
   mutations: [checkout],
   routes: [homeRoute],
-  mutationResponses: {
-    [checkout.key]: () => {
-      return {
-        failureTarget: 'checkout-error',
-        redirectTo: '/',
-        renderFailureFragment: renderCheckoutFailure,
-      };
-    },
-  },
 });
 
 export default defineFixture({

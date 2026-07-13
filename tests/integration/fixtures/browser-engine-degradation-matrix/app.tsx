@@ -76,18 +76,6 @@ const app = createApp({
   mutations: [submitMatrixForm],
   queries: [engineQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [submitMatrixForm.key]: ({ rawInput }) => {
-      return {
-        fragmentRenderers: [
-          {
-            render: () => renderSubmittedReport(rawInput as FormData),
-            target: 'engine-matrix-report',
-          },
-        ],
-      };
-    },
-  },
 });
 
 export default defineFixture({

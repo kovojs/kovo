@@ -52,14 +52,6 @@ export default defineFixture({
     csrf,
     mutationReplayStore: createMemoryMutationReplayStore(),
     mutations: [slowRecord],
-    mutationResponses: {
-      [slowRecord.key]: ({ request }) => {
-        const db = (request as unknown as KovoFixtureRequest).db;
-        return {
-          fragmentRenderers: [{ render: () => renderStatus(db), target: 'idem-concurrent-status' }],
-        };
-      },
-    },
     routes: [homeRoute],
   }),
   schema: `create table concurrent_entries (

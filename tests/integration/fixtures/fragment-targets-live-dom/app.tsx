@@ -35,6 +35,7 @@ async function renderDynamic(db: KovoFixtureRequest['db']): Promise<string> {
 export const advance = mutation('fragment-targets-live-dom/advance', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['live_dom_state'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -52,18 +53,6 @@ const homeRoute = route('/', {
 const app = createApp({
   mutations: [advance],
   routes: [homeRoute],
-  mutationResponses: {
-    [advance.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: () => renderLauncher(db), target: 'launcher' },
-          { render: () => renderDynamic(db), target: 'dynamic-panel' },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

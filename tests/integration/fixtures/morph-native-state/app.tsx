@@ -24,6 +24,7 @@ function renderPanel(value: number): string {
 export const bump = mutation('morph-native-state/bump', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: { tables: ['panel'], touches: [panelDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -45,15 +46,6 @@ const home = route('/', {
 const app = createApp({
   mutations: [bump],
   routes: [home],
-  mutationResponses: {
-    [bump.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: async () => renderPanel(await count(db)), target: 'panel' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

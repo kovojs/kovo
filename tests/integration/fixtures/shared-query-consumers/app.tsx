@@ -20,6 +20,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 export const publishProfile = mutation('shared-query-consumers/publish', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
+  defaultRedirectTo: '/',
   input: s.object({}),
   registry: {
     queries: [profileQuery],
@@ -55,18 +56,6 @@ const app = createApp({
   mutations: [publishProfile],
   queries: [profileQuery],
   routes: [homeRoute],
-  mutationResponses: {
-    [publishProfile.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [
-          { render: () => renderSummary(db), target: 'profile-summary' },
-          { render: () => renderStatus(db), target: 'profile-status' },
-        ],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({

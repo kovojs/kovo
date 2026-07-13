@@ -62,6 +62,7 @@ export const sessionOnceQuery = query('session-once', {
 });
 
 export const sessionOnceMutation = mutation('session-once/mutate', {
+  defaultRedirectTo: '/route',
   guard: recordingAuthed('mutation'),
   input: s.object({}),
   handler: async (_input: unknown, request: AppRequest) => {
@@ -110,12 +111,6 @@ export default defineFixture({
       // session of its own, which also exercises the endpoint ambient-session boundary.
       appendSessionEvent(caseKey, 'provider', session.user.id);
       return session;
-    },
-    mutationResponses: {
-      [sessionOnceMutation.key]: async ({ request }) => {
-        record(request as unknown as AppRequest, 'response:mutation');
-        return { redirectTo: '/route' };
-      },
     },
   }),
 });

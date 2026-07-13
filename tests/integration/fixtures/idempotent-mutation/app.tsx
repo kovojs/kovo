@@ -23,6 +23,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const recordEntry = mutation('idempotent-mutation/record', {
+  defaultRedirectTo: '/',
   input: s.object({ note: s.string() }),
   registry: { tables: ['ledger_entries'] },
   handler: async (input: { note: string }, request: KovoFixtureRequest) => {
@@ -50,15 +51,6 @@ const app = createApp({
   mutationReplayStore: createMemoryMutationReplayStore(),
   mutations: [recordEntry],
   routes: [homeRoute],
-  mutationResponses: {
-    [recordEntry.key]: ({ request }) => {
-      const db = (request as unknown as KovoFixtureRequest).db;
-      return {
-        fragmentRenderers: [{ render: () => renderStatus(db), target: 'idem-status' }],
-        redirectTo: '/',
-      };
-    },
-  },
 });
 
 export default defineFixture({
