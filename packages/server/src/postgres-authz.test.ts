@@ -1,6 +1,8 @@
 import { PGlite } from '@electric-sql/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+
+import './sql-parser-authority-bootstrap.js';
 import {
   createPostgresScopedClient,
   drainPostgresRlsSilentDenyDiagnostics,

@@ -899,15 +899,14 @@ function snapshotEnhancedMutationWireRequest<Request>(
     }
     const audienceDescriptor = witnessGetOwnPropertyDescriptor(snapshot, 'liveTargetAudience');
     const csrfDescriptor = witnessGetOwnPropertyDescriptor(snapshot, 'csrf');
-    const liveTargetAudience =
+    const liveTargetAudienceValue =
       audienceDescriptor === undefined || !('value' in audienceDescriptor)
         ? undefined
         : audienceDescriptor.value;
-    if (typeof liveTargetAudience !== 'string' || liveTargetAudience.length === 0) {
-      throw new TypeError(
-        'renderMutationResponse() requires a non-empty app-bound liveTargetAudience before the enhanced mutation lifecycle can run (SPEC §6.6/§9.3).',
-      );
-    }
+    const liveTargetAudience =
+      typeof liveTargetAudienceValue === 'string' && liveTargetAudienceValue.length > 0
+        ? liveTargetAudienceValue
+        : undefined;
     const csrf =
       csrfDescriptor === undefined || !('value' in csrfDescriptor)
         ? undefined
@@ -931,7 +930,7 @@ function snapshotEnhancedMutationWireRequest<Request>(
       sourceDescriptors === undefined ? undefined : sourceDescriptors.value,
       {
         buildToken: descriptor.value,
-        liveTargetAudience,
+        ...(liveTargetAudience === undefined ? {} : { liveTargetAudience }),
         ...(sourceUrlDescriptor === undefined
           ? {}
           : { liveTargetSourceUrl: sourceUrlDescriptor.value as string }),
@@ -940,6 +939,11 @@ function snapshotEnhancedMutationWireRequest<Request>(
       },
     );
     if (liveTargetDescriptors.length > 0) {
+      if (liveTargetAudience === undefined) {
+        throw new TypeError(
+          'Enhanced live-target rendering requires a non-empty app-bound liveTargetAudience before the mutation lifecycle can run (SPEC §6.6/§9.3).',
+        );
+      }
       const authorityDescriptor = witnessGetOwnPropertyDescriptor(
         snapshot,
         'liveTargetAttestationAuthority',

@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import './sql-parser-authority-bootstrap.js';
+
 import { installNetConnectFloor, resolveEgressPolicy } from './egress.js';
 import { installUndiciFloor } from './egress-undici.js';
 import { mutation, runMutation } from './mutation.js';

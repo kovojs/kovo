@@ -7,6 +7,8 @@ import {
 import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
 import { describe, expect, it } from 'vitest';
 
+import './sql-parser-authority-bootstrap.js';
+
 import { managedDb } from './managed-db.js';
 
 describe('managed SQL immutable construction recipe (SPEC §6.6/§10.3 C15)', () => {

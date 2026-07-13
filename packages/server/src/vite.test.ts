@@ -284,8 +284,6 @@ export const LoginCard = component({
       const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
       const middlewares: KovoAppShellViteMiddleware[] = [];
       await plugin.configResolved?.({ root });
-      await plugin.transform?.(homeSource, join(root, 'src/components/home-card.tsx'));
-      await plugin.transform?.(loginSource, join(root, 'src/components/login-card.tsx'));
       await plugin.configureServer({
         config: { root },
         middlewares: {
@@ -319,6 +317,12 @@ export const LoginCard = component({
           };
         },
       });
+      // Vite's configureServer hook establishes the dev-state epoch before on-demand transforms
+      // populate it. Exercise that lifecycle order so this fixture cannot rely on retired
+      // cross-configuration compiler caches (SPEC §5.2, §9.5.1).
+      await plugin.transform?.(homeSource, join(root, 'src/components/home-card.tsx'));
+      await plugin.transform?.(loginSource, join(root, 'src/components/login-card.tsx'));
+      await plugin.transform?.(appSource, join(root, 'src/app-shell.tsx'));
 
       const server = createHttpServer((request, response) => {
         runMiddlewareChain(middlewares, request, response, (error) => {

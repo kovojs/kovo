@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
+import './sql-parser-authority-bootstrap.js';
+
 import {
   isManagedSqlStatement,
   stampParameterizedSql,
@@ -1116,6 +1118,7 @@ describe('server guard and session primitives', () => {
 
     await expect(
       renderMutationResponse(guarded, {
+        buildToken: 'guard-build',
         currentUrl: '/cart?from=button',
         rawInput: { productId: 'p1' },
         request: { session: null },
@@ -1231,6 +1234,7 @@ describe('server guard and session primitives', () => {
 
     await expect(
       renderMutationResponse(guarded, {
+        buildToken: 'guard-build',
         currentUrl: '/cart',
         rawInput: { 'kovo-csrf': staleToken, productId: 'p1' },
         request: { session: null },
@@ -1356,6 +1360,7 @@ describe('server guard and session primitives', () => {
 
     await expect(
       renderMutationResponse(guarded, {
+        buildToken: 'guard-build',
         failureTarget: 'refund-form',
         rawInput: { orderId: 'o1' },
         request: { session: { user: { id: 'staff_1', roles: ['staff'] } } },
@@ -1365,6 +1370,7 @@ describe('server guard and session primitives', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'guard-build',
         Vary: 'Cookie',
       },
       status: 403,

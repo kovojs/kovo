@@ -3,6 +3,8 @@ import type { Secret } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
+import './sql-parser-authority-bootstrap.js';
+
 import { invalidate } from './change-record.js';
 import { accessDecisionFor, publicAccess } from './access.js';
 import { csrfToken } from './csrf.js';
@@ -1268,6 +1270,7 @@ describe('server mutation lifecycle', () => {
 
     await expect(
       renderMutationResponse(signIn, {
+        buildToken: 'mutation-test-build',
         rawInput: protectedRequest.rawInput,
         request: protectedRequest.request,
       }),
@@ -1276,6 +1279,7 @@ describe('server mutation lifecycle', () => {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': 'mutation-test-build',
         Vary: 'Cookie',
       },
       status: 422,

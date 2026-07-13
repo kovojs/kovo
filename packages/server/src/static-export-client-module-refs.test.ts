@@ -220,7 +220,7 @@ describe('server static export', () => {
     try {
       const clientModules = {
         buildToken() {
-          return '';
+          return 'static-export-wrong-content-type';
         },
         entries() {
           return [];
@@ -278,7 +278,7 @@ describe('server static export', () => {
       const badHref = '/c/%2Fescape.client.js?v=v1';
       const clientModules = {
         buildToken() {
-          return '';
+          return 'static-export-unsafe-path';
         },
         entries() {
           return [];
