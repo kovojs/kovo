@@ -15,6 +15,9 @@ import {
   securityObjectKeys,
   securitySetForEach,
   securityStringTrim,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
   securityWeakSet,
   securityWeakSetAdd,
   securityWeakSetHas,
@@ -146,15 +149,6 @@ export interface UntrustedValue<T> extends Untrusted<T> {
 const REDACTED = '[secret]';
 const UNTRUSTED_REDACTED = '[untrusted]';
 
-/**
- * Module-private runtime brand. Intentionally `Symbol()` and **not**
- * `Symbol.for(...)`: a global-registry symbol can be reconstructed by any module
- * or transitive dependency and used to forge or detect the brand. This symbol
- * never leaves the module, so {@link isSecret} cannot be spoofed and the box
- * cannot be impersonated.
- */
-const secretBoxBrand: unique symbol = Symbol('kovo.secret');
-
 const inspectCustom = Symbol.for('nodejs.util.inspect.custom');
 
 /** Default poison output for {@link redacted} when no mask is supplied. */
@@ -176,6 +170,7 @@ const maybeMarkAsUncloneable = (() => {
 const structuredCloneSecretGuard = Symbol.for('kovo.secret.structuredCloneGuard');
 
 type PoisonKind = 'secret' | 'redacted' | 'untrusted';
+const poisonBoxKinds = securityWeakMap<object, PoisonKind>();
 
 /**
  * Shared runtime poison box backing both {@link secret} and {@link redacted}. The
@@ -198,9 +193,7 @@ class KovoPoisonBox<T> {
     this.#poison = poison;
     this.#kind = kind;
     maybeMarkAsUncloneable?.(this);
-    // Non-enumerable brand (value = kind) so the marker never appears in
-    // spreads/Object.keys, while remaining detectable by the guards in-module.
-    securityDefineProperty(this, secretBoxBrand, { value: kind, enumerable: false });
+    securityWeakMapSet(poisonBoxKinds, this, kind);
   }
 
   reveal(reason?: SecretRevealReason): T {
@@ -269,8 +262,11 @@ class KovoPoisonBox<T> {
 /** Internal: any poison box (secret or redacted). */
 function isPoisonBox(value: unknown): value is KovoPoisonBox<unknown> {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
-  const brand = (value as Record<symbol, unknown>)[secretBoxBrand];
-  return brand === 'secret' || brand === 'redacted' || brand === 'untrusted';
+  return securityWeakMapGet(poisonBoxKinds, value) !== undefined;
+}
+
+function poisonBoxKind(value: unknown): PoisonKind | undefined {
+  return isPoisonBox(value) ? securityWeakMapGet(poisonBoxKinds, value) : undefined;
 }
 
 /**
@@ -291,9 +287,7 @@ export function secret<T>(value: T): SecretValue<T> {
  * box — use {@link isRedacted} for that.
  */
 export function isSecret(value: unknown): value is SecretValue<unknown> {
-  return (
-    isPoisonBox(value) && (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'secret'
-  );
+  return poisonBoxKind(value) === 'secret';
 }
 
 installStructuredCloneSecretGuard();
@@ -389,10 +383,7 @@ export function untrusted<T>(value: T): UntrustedValue<T> {
 
 /** Runtime guard recognizing an {@link untrusted} box. */
 export function isUntrusted(value: unknown): value is UntrustedValue<unknown> {
-  return (
-    isPoisonBox(value) &&
-    (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'untrusted'
-  );
+  return poisonBoxKind(value) === 'untrusted';
 }
 
 /** Explicitly unboxes an {@link untrusted} value after a validation/escaping reason. */
@@ -474,10 +465,7 @@ export function redacted<T>(value: T, options: RedactedOptions = {}): RedactedVa
  * box. Cannot be forged: the brand is a module-private symbol.
  */
 export function isRedacted(value: unknown): value is RedactedValue<unknown> {
-  return (
-    isPoisonBox(value) &&
-    (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'redacted'
-  );
+  return poisonBoxKind(value) === 'redacted';
 }
 
 function validateRevealReason(reason: SecretRevealReason | undefined): string {

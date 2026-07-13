@@ -244,14 +244,38 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(secret(inner).reveal('test assertion')).toBe('x');
   });
 
-  it('isSecret recognizes a box and cannot be forged via Symbol.for', () => {
+  it('isSecret recognizes only module-registered boxes', () => {
     expect(isSecret(secret('x'))).toBe(true);
     expect(isSecret('x')).toBe(false);
     expect(isSecret(null)).toBe(false);
     expect(isSecret({})).toBe(false);
-    // The brand is a module-private Symbol(), not Symbol.for, so it is unforgeable.
     const forged = { [Symbol.for('kovo.secret')]: true };
     expect(isSecret(forged)).toBe(false);
+  });
+
+  it('rejects a known-symbol forgery after import-order Symbol poisoning', async () => {
+    const NativeSymbol = globalThis.Symbol;
+    const attackerBrand = NativeSymbol.for('attacker-known-secret-brand');
+    const poisonedSymbol = new Proxy(NativeSymbol, {
+      apply(target, receiver, args) {
+        if (args[0] === 'kovo.secret') return attackerBrand;
+        return Reflect.apply(target, receiver, args);
+      },
+    });
+    let isolated: typeof import('./secret.js');
+    try {
+      globalThis.Symbol = poisonedSymbol;
+      isolated = await import('./secret.js?poisoned-secret-symbol');
+    } finally {
+      globalThis.Symbol = NativeSymbol;
+    }
+
+    const forged = {
+      [attackerBrand]: 'secret',
+      reveal: () => 'forged-secret',
+    };
+    expect(isolated.isSecret(forged)).toBe(false);
+    expect(isolated.isSecret(isolated.secret('real-secret'))).toBe(true);
   });
 
   it('revealSecret passes a non-box Secret-typed value through unchanged', () => {
