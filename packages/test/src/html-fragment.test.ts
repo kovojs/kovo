@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -27,6 +29,23 @@ import {
 } from '@kovojs/test/internal/html-wire';
 
 describe('@kovojs/test html fragment seam', () => {
+  it('loads the source-exported wire verifier through Node native TypeScript', () => {
+    const moduleUrl = new URL('./internal/html-wire.ts', import.meta.url).href;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        `await import(${JSON.stringify(moduleUrl)});`,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+  });
+
   it('keeps executable elements visible after tested app code replaces RegExp.exec', () => {
     const originalExec = RegExp.prototype.exec;
     let facts: ReturnType<typeof htmlElementFacts> | undefined;

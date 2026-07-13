@@ -22,7 +22,7 @@ import {
   verifierStringToLowerCase,
   verifierStringTrim,
   verifierTypeError,
-} from './verifier-security-intrinsics.js';
+} from './verifier-security-intrinsics.ts';
 
 /**
  * Extracts the server-rendered HTML for a single fragment target from a page

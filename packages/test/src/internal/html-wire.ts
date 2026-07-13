@@ -14,7 +14,7 @@ import {
   verifierJsonParse,
   verifierNullRecord,
   verifierTypeError,
-} from '../verifier-security-intrinsics.js';
+} from '../verifier-security-intrinsics.ts';
 
 /** @internal */
 export interface HtmlJsonScriptFact {
