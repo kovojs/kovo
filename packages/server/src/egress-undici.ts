@@ -21,6 +21,7 @@ import {
   egressDateNow,
   egressDecodeURIComponent,
   egressCreateMap,
+  egressMapClear,
   egressMapGet,
   egressMapSet,
   egressNumber,
@@ -53,6 +54,7 @@ import {
  */
 
 const ORIGIN_RESOLUTION_CACHE_MS = 30_000;
+const ORIGIN_RESOLUTION_CACHE_MAX_WRITES = 256;
 
 interface PinnedResolution {
   ip: string;
@@ -68,7 +70,10 @@ export class EgressGatingDispatcher extends Agent {
   #policy: EgressPolicy;
   // Short-lived resolved-IP pin per origin so the dispatch-time check and the connect-time
   // dial classify the SAME IP within a request window (DNS-rebind resistance at this layer too).
+  // The write epoch bounds retained hostnames even when an attacker never revisits them after
+  // expiry; clearing wholesale is safer and cheaper than trusting mutable iterator/LRU controls.
   #resolutionCache = egressCreateMap<string, PinnedResolution>();
+  #resolutionCacheWrites = 0;
 
   constructor(policy: EgressPolicy, options?: UndiciAgentOptions) {
     super(options);
@@ -200,10 +205,15 @@ export class EgressGatingDispatcher extends Agent {
       }
     }
     // All addresses passed; pin the first for the short rebind-resistance cache window.
+    if (this.#resolutionCacheWrites >= ORIGIN_RESOLUTION_CACHE_MAX_WRITES) {
+      egressMapClear(this.#resolutionCache);
+      this.#resolutionCacheWrites = 0;
+    }
     egressMapSet(this.#resolutionCache, host, {
       ip: resolved[0]!.address,
       expires: egressDateNow() + ORIGIN_RESOLUTION_CACHE_MS,
     });
+    this.#resolutionCacheWrites += 1;
     super.dispatch(options, handler);
   }
 }

@@ -7,7 +7,11 @@ import {
   installNetConnectFloor,
   resolveEgressPolicy,
 } from './egress.js';
-import { installUndiciFloor, isUndiciFloorInstalled } from './egress-undici.js';
+import {
+  EgressGatingDispatcher,
+  installUndiciFloor,
+  isUndiciFloorInstalled,
+} from './egress-undici.js';
 
 // Mock the resolver the undici layer uses so a hostname can return a fixed multi-A answer.
 // SPEC §6.6 rule 2: the dispatcher resolves with { all: true } and must classify EVERY entry,
@@ -186,5 +190,35 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
     await expect(fetch('http://rebind-loopback.test/')).rejects.toSatisfy(
       (e) => reason(e) === EGRESS_BLOCKED_ERROR_NAME || reason(e) === 'loopback',
     );
+  });
+
+  it('bounds the process-lifetime hostname resolution cache', async () => {
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
+    const dispatcher = new EgressGatingDispatcher(
+      resolveEgressPolicy(undefined, () => {}),
+      {
+        connect(_options, callback) {
+          callback(new Error('synthetic connector stop'), null);
+        },
+      },
+    );
+
+    try {
+      for (let index = 0; index <= 256; index += 1) {
+        await dispatcher
+          .request({ method: 'GET', origin: `http://cache-${index}.example`, path: '/' })
+          .catch(() => undefined);
+      }
+      dnsLookupMock.mockClear();
+
+      await dispatcher
+        .request({ method: 'GET', origin: 'http://cache-0.example', path: '/' })
+        .catch(() => undefined);
+
+      expect(dnsLookupMock).toHaveBeenCalledOnce();
+    } finally {
+      await dispatcher.close();
+    }
   });
 });
