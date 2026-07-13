@@ -271,6 +271,26 @@ export async function provisionRuntimeRoles(client, appHandle) {
     expect(result.findings).toEqual([]);
   });
 
+  it('accepts the framework-owned durable Postgres replay executor', () => {
+    const result = runDefaultFixture({
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/postgres-replay.ts': `
+export async function consumeReplay(executor, replayId) {
+  return executor.execute(
+    'INSERT INTO _kovo_replay (id) VALUES ($1) ON CONFLICT (id) DO NOTHING',
+    [replayId],
+  );
+}
+`,
+    });
+
+    expect(result.findings).toEqual([]);
+  });
+
   it('accepts SQLite runtime managed handle construction as an audited framework composition point', () => {
     const result = runDefaultFixture({
       'packages/server/src/sql-safe-handle.ts': `

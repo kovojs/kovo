@@ -42,6 +42,7 @@ import {
   capabilityEncodeURIComponent,
   capabilityError,
   capabilityFreeze,
+  capabilityIsSafeInteger,
   capabilityOwnDataValue,
   capabilityReflectApply,
   capabilityRequestMethod,
@@ -65,6 +66,11 @@ import {
 } from './endpoint.js';
 import {
   DEFAULT_CAPABILITY_TTL_MS,
+  isDurableCapabilityReplayStore,
+  MAX_CAPABILITY_AUDIENCE_LENGTH,
+  MAX_CAPABILITY_KEY_LENGTH,
+  MAX_CAPABILITY_SCOPE_LENGTH,
+  MAX_CAPABILITY_TTL_MS,
   signCapability,
   snapshotReplayStore,
   verifyCapability,
@@ -72,6 +78,7 @@ import {
   type CapabilityReplayStore,
   type SignedCapability,
 } from './capability-url.js';
+import { resolveBootMode } from './env.js';
 import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 import { respond, serverResponseToWebResponse, type RouteStoredFileOptions } from './response.js';
 
@@ -191,17 +198,28 @@ export function createSignUrl(options: {
   const oneTimeReplayStore = capabilityOwnDataValue(options, 'oneTimeReplayStore');
   const now = capabilityOwnDataValue(options, 'now');
   if (
-    (configuredBasePath !== undefined && typeof configuredBasePath !== 'string') ||
-    (defaultScope !== undefined && typeof defaultScope !== 'string') ||
+    (configuredBasePath !== undefined &&
+      (typeof configuredBasePath !== 'string' ||
+        configuredBasePath.length > MAX_CAPABILITY_AUDIENCE_LENGTH)) ||
+    (defaultScope !== undefined &&
+      (typeof defaultScope !== 'string' || defaultScope.length > MAX_CAPABILITY_SCOPE_LENGTH)) ||
     (oneTimeReplayStore !== undefined && typeof oneTimeReplayStore !== 'boolean') ||
     (now !== undefined && typeof now !== 'function')
   ) {
     throw capabilityTypeError('ctx.signUrl configuration must use stable values.');
   }
+  if (resolveBootMode() === 'production' && now !== undefined) {
+    throw capabilityError(
+      'KV436: createSignUrl() refused an injected clock in production (SPEC §6.6).',
+    );
+  }
   const secret = signingKeyRingFromSecret(configuredSecret as SigningSecret);
   const basePath = normalizeCapabilityBasePath(
     configuredBasePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   );
+  if (capabilityRouteAudience(basePath).length > MAX_CAPABILITY_AUDIENCE_LENGTH) {
+    throw capabilityTypeError('ctx.signUrl basePath exceeds the bounded capability audience.');
+  }
   return capabilityFreeze({
     async signUrl(signOptions: SignUrlOptions): Promise<SignedUrl> {
       const sourceKey = capabilityOwnDataValue(signOptions, 'key');
@@ -211,11 +229,18 @@ export function createSignUrl(options: {
       const configuredOneTime = capabilityOwnDataValue(signOptions, 'oneTime');
       if (
         typeof sourceKey !== 'string' ||
+        sourceKey.length > MAX_CAPABILITY_KEY_LENGTH ||
         (configuredMethod !== undefined &&
           configuredMethod !== 'GET' &&
           configuredMethod !== 'HEAD') ||
-        (configuredScope !== undefined && typeof configuredScope !== 'string') ||
+        (configuredScope !== undefined &&
+          (typeof configuredScope !== 'string' ||
+            configuredScope.length > MAX_CAPABILITY_SCOPE_LENGTH)) ||
         (configuredExpiresIn !== undefined && typeof configuredExpiresIn !== 'number') ||
+        (typeof configuredExpiresIn === 'number' &&
+          (!capabilityIsSafeInteger(configuredExpiresIn) ||
+            configuredExpiresIn <= 0 ||
+            configuredExpiresIn > MAX_CAPABILITY_TTL_MS)) ||
         (configuredOneTime !== undefined && typeof configuredOneTime !== 'boolean')
       ) {
         throw capabilityTypeError('ctx.signUrl options must use stable, typed values.');
@@ -284,9 +309,12 @@ export interface StorageDownloadEndpointOptions {
   basePath?: string;
   /** The scope the sink derives from the request and re-checks against the token's claim. */
   scope?: (request: Request) => string | undefined;
-  /** A one-time replay store; REQUIRED to honor `oneTime` tokens (absent ⇒ one-time tokens fail closed). */
+  /**
+   * A one-time replay store; REQUIRED in production and to honor `oneTime` tokens. Production
+   * accepts only createPostgresAppRuntimeDb().capabilityReplayStore.
+   */
   replayStore?: CapabilityReplayStore;
-  /** Injectable clock (epoch ms) for tests. */
+  /** Development/test-only injectable clock (epoch ms); production refuses it. */
   now?: () => number;
   /** Disposition/filename forwarded to `respond.storedFile` AFTER verification (server-sniffed type). */
   storedFile?: Pick<RouteStoredFileOptions, 'disposition' | 'filename'>;
@@ -414,11 +442,18 @@ export function createStorageDownloadEndpoint(
   const now = capabilityOwnDataValue(options, 'now');
   const configuredStoredFile = capabilityOwnDataValue(options, 'storedFile');
   if (
-    (configuredBasePath !== undefined && typeof configuredBasePath !== 'string') ||
+    (configuredBasePath !== undefined &&
+      (typeof configuredBasePath !== 'string' ||
+        configuredBasePath.length > MAX_CAPABILITY_AUDIENCE_LENGTH)) ||
     (configuredScopeForRequest !== undefined && typeof configuredScopeForRequest !== 'function') ||
     (now !== undefined && typeof now !== 'function')
   ) {
     throw capabilityTypeError('Storage download endpoint configuration must use stable values.');
+  }
+  if (resolveBootMode() === 'production' && now !== undefined) {
+    throw capabilityError(
+      'KV436: createStorageDownloadEndpoint() refused an injected clock in production (SPEC §6.6).',
+    );
   }
   const scopeForRequest = configuredScopeForRequest as
     | ((request: Request) => string | undefined)
@@ -427,9 +462,19 @@ export function createStorageDownloadEndpoint(
   const basePath = normalizeCapabilityBasePath(
     configuredBasePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   );
+  if (capabilityRouteAudience(basePath).length > MAX_CAPABILITY_AUDIENCE_LENGTH) {
+    throw capabilityTypeError(
+      'Storage download endpoint basePath exceeds the bounded capability audience.',
+    );
+  }
   const storage = snapshotStorageReadCapability(sourceStorage);
   const replayStore =
     configuredReplayStore === undefined ? undefined : snapshotReplayStore(configuredReplayStore);
+  if (resolveBootMode() === 'production' && !isDurableCapabilityReplayStore(replayStore)) {
+    throw capabilityError(
+      'KV436: createStorageDownloadEndpoint() refused a missing, custom, or volatile memory replayStore in production; use createPostgresAppRuntimeDb().capabilityReplayStore so one-time token consumption survives restart and replicas (SPEC §6.6/§10.3).',
+    );
+  }
   const storedFile = snapshotStoredFileOptions(configuredStoredFile);
 
   const handler = async (request: Request): Promise<Response> => {
@@ -448,7 +493,9 @@ export function createStorageDownloadEndpoint(
       // Derive the EXPECTED claims FROM THE REQUEST — never from the token. This is the load-bearing
       // step: the route, not the token, says which object/method/scope is being authorized.
       const requestedKey = deriveDownloadKey(capabilityUrlPathname(url), basePath);
-      if (requestedKey === undefined) return downloadRejected(method);
+      if (requestedKey === undefined || requestedKey.length > MAX_CAPABILITY_KEY_LENGTH) {
+        return downloadRejected(method);
+      }
       key = requestedKey;
       const scope =
         scopeForRequest === undefined

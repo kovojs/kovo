@@ -255,7 +255,7 @@ export function createApp<
     !isDurableMutationReplayStore(mutationReplayStore)
   ) {
     throw new Error(
-      'KV436: createApp() refused a missing, custom, or volatile memory mutationReplayStore in production; declared mutations require createPostgresMutationReplayStore() so idempotency truth survives restart and replicas (SPEC §10.3).',
+      'KV436: createApp() refused a missing, custom, or volatile memory mutationReplayStore in production; declared mutations require createPostgresAppRuntimeDb().mutationReplayStore so idempotency truth survives restart and replicas (SPEC §10.3).',
     );
   }
   const tasks = assertUniqueTaskKeys(

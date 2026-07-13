@@ -40,7 +40,6 @@ import * as fileApi from '../file.js';
 import * as keyringApi from '../keyring.js';
 import * as managedDbApi from '../managed-db.js';
 import * as passwordApi from '../password.js';
-import * as postgresReplayApi from '../postgres-replay.js';
 import * as postgresRuntimeApi from '../postgres-runtime.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
@@ -551,9 +550,6 @@ describe('server app-shell public API barrels', () => {
       usePostgresSystemDb: postgresRuntimeApi.usePostgresSystemDb,
       postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
       runtimeDbMetadataForSchema: sqliteRuntimeApi.runtimeDbMetadataForSchema,
-      createPostgresMutationReplayStore: postgresReplayApi.createPostgresMutationReplayStore,
-      createPostgresWebhookReplayStore: postgresReplayApi.createPostgresWebhookReplayStore,
-      releasePostgresPendingReplay: postgresReplayApi.releasePostgresPendingReplay,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
@@ -615,15 +611,11 @@ describe('server app-shell public API barrels', () => {
       internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
     );
     expect(publicApi.createDurableTaskSqlExecutor).toBe(taskQueueApi.createDurableTaskSqlExecutor);
-    expect(publicApi.createPostgresMutationReplayStore).toBe(
-      postgresReplayApi.createPostgresMutationReplayStore,
-    );
-    expect(publicApi.createPostgresWebhookReplayStore).toBe(
-      postgresReplayApi.createPostgresWebhookReplayStore,
-    );
-    expect(publicApi.releasePostgresPendingReplay).toBe(
-      postgresReplayApi.releasePostgresPendingReplay,
-    );
+    // SPEC §10.3: structural SQL executors cannot mint authenticated replay-store authority.
+    expect(publicApi).not.toHaveProperty('createPostgresCapabilityReplayStore');
+    expect(publicApi).not.toHaveProperty('createPostgresMutationReplayStore');
+    expect(publicApi).not.toHaveProperty('createPostgresWebhookReplayStore');
+    expect(publicApi).not.toHaveProperty('releasePostgresPendingReplay');
     expect(publicApi.createDurableTaskStatus).toBe(taskObservabilityApi.createDurableTaskStatus);
     expect(publicApi.encryptAtRest).toBe(confidentialAtRestApi.encryptAtRest);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);

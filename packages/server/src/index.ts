@@ -19,18 +19,12 @@ export {
   provisionPostgresAppDb,
   usePostgresSystemDb,
 } from './postgres-runtime.js';
-// SPEC §10.3: deployed mutation/webhook idempotency truth is reserved and settled through the
-// framework system role. Volatile memory stores remain development/test-only conveniences.
-export {
-  createPostgresMutationReplayStore,
-  createPostgresWebhookReplayStore,
-  releasePostgresPendingReplay,
-} from './postgres-replay.js';
+// SPEC §6.6/§10.3: deployed capability/mutation/webhook replay truth stays on the authenticated
+// createPostgresAppRuntimeDb() store properties; raw SQL-backed constructors remain private.
 export type {
   PostgresPendingReplayReleaseOptions,
   PostgresPendingReplayTarget,
   PostgresReplaySurface,
-  PostgresReplayStoreOptions,
 } from './postgres-replay.js';
 export type {
   KovoPostgresAppRuntimeDb,

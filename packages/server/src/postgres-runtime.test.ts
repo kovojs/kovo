@@ -17,6 +17,7 @@ import {
   managedDb,
 } from './managed-db.js';
 import { actAsNonRequestPrincipal, declareSystemPrincipal } from './auth-principal.js';
+import { isDurableCapabilityReplayStore } from './capability-url.js';
 import { guards } from './guards.js';
 import {
   checkPostgresAppDbPosture,
@@ -32,6 +33,7 @@ import {
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
 import { isDurableMutationReplayStore } from './replay.js';
+import { isDurableWebhookReplayStore } from './webhook.js';
 
 const notes = pgTable(
   'kovo_runtime_notes',
@@ -254,8 +256,17 @@ describe('createPostgresAppRuntimeDb', () => {
     const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
 
     try {
+      expect(isDurableCapabilityReplayStore(runtime.capabilityReplayStore)).toBe(true);
       expect(isDurableMutationReplayStore(runtime.mutationReplayStore)).toBe(true);
+      expect(isDurableWebhookReplayStore(runtime.webhookReplayStore)).toBe(true);
       await runtime.ready;
+      const expiresAt = Date.now() + 60_000;
+      await expect(
+        runtime.capabilityReplayStore.consume('runtime-capability', expiresAt),
+      ).resolves.toBe(true);
+      await expect(
+        runtime.capabilityReplayStore.consume('runtime-capability', expiresAt),
+      ).resolves.toBe(false);
       const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       const u2Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u2') });
 
@@ -272,6 +283,68 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('fails posture on weakened capability replay constraints, column type, and cleanup index', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-shape-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_surface_check;',
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_expires_at_check;',
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_capability_expiry_check;',
+        'DROP INDEX _kovo_replay_capability_expiry_idx;',
+        "ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_surface_check CHECK (surface IN ('capability', 'mutation', 'webhook', 'attacker'));",
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_expires_at_check CHECK (expires_at IS NULL OR expires_at >= 0);',
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_capability_expiry_check CHECK (expires_at IS NULL OR expires_at IS NOT NULL);',
+        "CREATE INDEX _kovo_replay_capability_expiry_idx ON _kovo_replay (created_at) WHERE surface = 'capability';",
+      ].join(' '),
+    );
+    await weakened.close();
+
+    const weakenedReport = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema,
+    });
+    expect(weakenedReport.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'KV433_REPLAY_STORE_SCHEMA' })]),
+    );
+
+    const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await repaired.ready;
+    await repaired.close();
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({ ok: true, issues: [] });
+
+    const wrongType = new PGlite(dataDir);
+    await wrongType.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_expires_at_check;',
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_capability_expiry_check;',
+        'DROP INDEX _kovo_replay_capability_expiry_idx;',
+        'ALTER TABLE _kovo_replay ALTER COLUMN expires_at TYPE text USING expires_at::text;',
+        "ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_expires_at_check CHECK (expires_at IS NULL OR expires_at <> '');",
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_capability_expiry_check CHECK (expires_at IS NULL OR expires_at IS NOT NULL);',
+        "CREATE INDEX _kovo_replay_capability_expiry_idx ON _kovo_replay (expires_at) WHERE surface = 'capability';",
+      ].join(' '),
+    );
+    await wrongType.close();
+
+    const wrongTypeReport = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema,
+    });
+    expect(wrongTypeReport.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'KV433_REPLAY_STORE_SCHEMA' })]),
+    );
   });
 
   it('does not dispatch a one-shot Array.join poison while committing owner RLS', async () => {

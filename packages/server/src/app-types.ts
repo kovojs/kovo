@@ -276,7 +276,7 @@ export interface CreateAppOptions<
   mutations?: AppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>;
   // SPEC §9.1/§10.3: apps inject a replay store so duplicate Kovo-Idem mutation requests
   // replay the stored response without re-executing the handler. Production mutation declarations
-  // require the authenticated durable store returned by createPostgresMutationReplayStore().
+  // require createPostgresAppRuntimeDb().mutationReplayStore.
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
   queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;

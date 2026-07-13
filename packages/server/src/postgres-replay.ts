@@ -3,6 +3,7 @@ import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { mintFrameworkDurableReplayStoreReceipt } from '@kovojs/core/internal/security-markers';
 
 import { snapshotAuditJustification } from './audit-justification.js';
+import type { CapabilityReplayStore } from './capability-url.js';
 import {
   MutationReplayConflictError,
   snapshotMutationReplayResponse,
@@ -19,6 +20,7 @@ import {
   securityJsonStringify,
   securityRandomUuid,
   securitySha256Base64,
+  securityString,
 } from './response-security-intrinsics.js';
 import { requestStateIsSafeInteger, requestStateNow } from './request-state-intrinsics.js';
 import {
@@ -42,8 +44,8 @@ import {
 /** Framework-owned durable replay relation provisioned with the Postgres runtime (SPEC §10.3). */
 export const POSTGRES_REPLAY_TABLE = '_kovo_replay';
 
-/** Durable replay namespace; mutation and webhook keys cannot collide. */
-export type PostgresReplaySurface = 'mutation' | 'webhook';
+/** Durable replay namespace; capability, mutation, and webhook keys cannot collide. */
+export type PostgresReplaySurface = 'capability' | 'mutation' | 'webhook';
 
 interface PostgresReplayRow {
   fingerprint: string | null;
@@ -73,7 +75,7 @@ export interface PostgresPendingReplayTarget {
   generation: string;
   idem: string;
   scope: string;
-  surface: PostgresReplaySurface;
+  surface: Exclude<PostgresReplaySurface, 'capability'>;
 }
 
 /** Audit-readable manual release posture for a confirmed crash-orphaned pending claim. */
@@ -91,7 +93,8 @@ const DEFAULT_POLL_INTERVAL_MS = 25;
  * and a process crash leaves the row pending, so another replica fails closed instead of executing
  * the mutation again across the transaction/response settlement window (SPEC §10.3).
  */
-export function createPostgresMutationReplayStore(
+/** @internal Construct only from a framework-owned system DB capability wrapper. */
+export function createPostgresMutationReplayStoreFromExecutor(
   executor: DurableTaskStatusSqlExecutor,
   options: PostgresReplayStoreOptions = {},
 ): MutationReplayStore {
@@ -123,7 +126,8 @@ export function createPostgresMutationReplayStore(
 }
 
 /** Create a durable webhook replay store over a framework-system Postgres SQL executor. */
-export function createPostgresWebhookReplayStore(
+/** @internal Construct only from a framework-owned system DB capability wrapper. */
+export function createPostgresWebhookReplayStoreFromExecutor(
   executor: DurableTaskStatusSqlExecutor,
   options: PostgresReplayStoreOptions = {},
 ): WebhookReplayStore {
@@ -155,12 +159,74 @@ export function createPostgresWebhookReplayStore(
 }
 
 /**
+ * Create a durable one-time capability replay store over the protected Postgres replay relation.
+ *
+ * `consume()` hashes the signed token id before persistence and atomically inserts one committed
+ * truth row. A conflict means another process or a prior process lifetime already consumed the
+ * token. Expired rows are pruned against the database clock, while an already-expired token can
+ * never be reinserted (SPEC §6.6/§10.3).
+ */
+/** @internal Construct only from a framework-owned system DB capability wrapper. */
+export function createPostgresCapabilityReplayStoreFromExecutor(
+  executor: DurableTaskStatusSqlExecutor,
+): CapabilityReplayStore {
+  const sql = snapshotReplaySqlExecutor(executor);
+  const persistedScope = persistedReplayKeyPart('one-time-capability-url');
+  const store: CapabilityReplayStore = {
+    async consume(id: string, expiresAt: number): Promise<boolean> {
+      if (
+        typeof id !== 'string' ||
+        id === '' ||
+        id.length > 16_384 ||
+        !requestStateIsSafeInteger(expiresAt) ||
+        expiresAt <= 0
+      ) {
+        return false;
+      }
+      await sql.execute<{ generation: string }>({
+        text:
+          'DELETE FROM public._kovo_replay WHERE (surface, scope, idem) IN (' +
+          'SELECT surface, scope, idem FROM public._kovo_replay ' +
+          "WHERE surface = 'capability' " +
+          'AND expires_at <= FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
+          'ORDER BY expires_at LIMIT 1024) ' +
+          'RETURNING generation',
+        values: [],
+      });
+      const persistedId = persistedReplayKeyPart(id);
+      const generation = securityRandomUuid();
+      const result = await sql.execute<{ generation: string }>({
+        text:
+          'INSERT INTO public._kovo_replay ' +
+          '(surface, scope, idem, fingerprint, generation, state, response_body, ' +
+          'response_headers, response_status, expires_at, committed_at) ' +
+          "SELECT 'capability', $1, $2, NULL, $3, 'committed', $4, '{}', 204, $5, CURRENT_TIMESTAMP " +
+          'WHERE $5::bigint > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
+          'ON CONFLICT (surface, scope, idem) DO NOTHING RETURNING generation',
+        values: [persistedScope, persistedId, generation, securityString(expiresAt), expiresAt],
+      });
+      const rows = replayRows(result, 'Postgres capability replay consume result');
+      if (rows.length === 0) return false;
+      const row = rows.length === 1 ? rows[0] : undefined;
+      if (row === undefined || stableReplayRowValue(row, 'generation') !== generation) {
+        throw new Error('Postgres capability replay consume returned invalid ownership truth.');
+      }
+      return true;
+    },
+  };
+  const closedStore = witnessFreeze(store);
+  mintFrameworkDurableReplayStoreReceipt(closedStore, 'capability');
+  return closedStore;
+}
+
+/**
  * Deliberately release one confirmed crash-orphaned pending claim.
  *
  * This is an operator reconciliation escape, not automatic expiry: callers must supply the exact
  * generation and an audit-readable justification. Committed truth is never deleted by this API.
  */
-export async function releasePostgresPendingReplay(
+/** @internal Release only through a framework-owned system DB capability wrapper. */
+export async function releasePostgresPendingReplayFromExecutor(
   executor: DurableTaskStatusSqlExecutor,
   target: PostgresPendingReplayTarget,
   options: PostgresPendingReplayReleaseOptions,
@@ -176,7 +242,7 @@ export async function releasePostgresPendingReplay(
   const generation = stableRequiredString(target, 'generation', 'Postgres replay release target');
   snapshotAuditJustification(
     stableRequiredString(options, 'justification', 'Postgres replay release options'),
-    'releasePostgresPendingReplay() (SPEC §10.3)',
+    'createPostgresAppRuntimeDb().releasePendingReplay() (SPEC §10.3)',
   );
   const result = await sql.execute<{ generation: string }>({
     text:

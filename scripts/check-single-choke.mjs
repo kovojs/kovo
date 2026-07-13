@@ -26,6 +26,9 @@ export const defaultAllowedDriverFiles = [
   // SPEC.md section 6.1: framework-owned Postgres provisioning installs roles,
   // grants, and RLS policies before app code receives managed handles.
   'packages/server/src/postgres-runtime.ts',
+  // SPEC.md sections 5.4 and 8.1: framework-owned durable replay stores execute only
+  // static, parameterized statements against the protected _kovo_replay relation.
+  'packages/server/src/postgres-replay.ts',
   'packages/server/src/secret-read-boundary.ts',
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/sql-write-oracle.ts',

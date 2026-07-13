@@ -3,12 +3,24 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
-import type { MutationReplayStore, WebhookReplayStore } from './index.js';
+import type {
+  CapabilityReplayStore,
+  KovoPostgresAppRuntimeDb,
+  MutationReplayStore,
+  WebhookReplayStore,
+} from './index.js';
 
 const serverPackageRoot = resolve(process.cwd(), 'packages/server');
 const vpBin = resolve(process.cwd(), 'node_modules/.bin/vp');
+const bundleReplayOwners = pgTable(
+  'bundle_replay_owners',
+  { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
+  kovo({ domain: 'bundle-replay', key: 'id', owner: 'ownerId' }),
+);
 
 describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
   it('shares core-authenticated receipts across bundle A and bundle B while rejecting forgeries', async () => {
@@ -16,7 +28,8 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
     const bundleAPath = join(root, 'bundle-a');
     const bundleBPath = join(root, 'bundle-b');
     const previousNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    process.env.NODE_ENV = 'test';
+    let runtimeA: KovoPostgresAppRuntimeDb | undefined;
 
     try {
       packServerBundle(bundleAPath);
@@ -25,16 +38,19 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
       const bundleA = (await import(
         pathToFileURL(join(bundleAPath, 'index.mjs')).href
       )) as typeof import('./index.js');
+      runtimeA = bundleA.createPostgresAppRuntimeDb({
+        dataDir: join(root, 'runtime-a'),
+        driver: 'pglite',
+        schema: bundleA.postgresSchemaModule({ bundleReplayOwners }),
+      });
+      await runtimeA.ready;
+      const mutationStoreFromA = runtimeA.mutationReplayStore;
+      const webhookStoreFromA = runtimeA.webhookReplayStore;
+      const capabilityStoreFromA = runtimeA.capabilityReplayStore;
+      process.env.NODE_ENV = 'production';
       const bundleB = (await import(
         pathToFileURL(join(bundleBPath, 'index.mjs')).href
       )) as typeof import('./index.js');
-      const executor = {
-        async execute() {
-          return { rows: [] };
-        },
-      };
-      const mutationStoreFromA = bundleA.createPostgresMutationReplayStore(executor);
-      const webhookStoreFromA = bundleA.createPostgresWebhookReplayStore(executor);
       const mutationFromB = bundleB.mutation('receipt/cross-bundle', {
         csrf: false,
         handler(input) {
@@ -67,6 +83,25 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
         }),
       ).not.toThrow();
 
+      const storage = {
+        async get() {
+          return undefined;
+        },
+        async stat() {
+          return undefined;
+        },
+        async stream() {
+          return undefined;
+        },
+      };
+      expect(() =>
+        bundleB.createStorageDownloadEndpoint({
+          replayStore: capabilityStoreFromA,
+          secret: 'cross-bundle-capability-secret-at-least-32-bytes',
+          storage,
+        }),
+      ).not.toThrow();
+
       expect(() =>
         bundleB.createApp({
           egress: {
@@ -76,7 +111,7 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
           mutationReplayStore: forgedMutationStore(),
           mutations: [mutationFromB],
         }),
-      ).toThrow(/KV436.*createPostgresMutationReplayStore/);
+      ).toThrow(/KV436.*mutationReplayStore/);
       expect(() =>
         bundleB.webhook('/webhooks/cross-bundle-forged', {
           handler() {},
@@ -87,8 +122,16 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
           verifyJustification: 'cross-bundle production replay posture test',
           writes: [records],
         }),
-      ).toThrow(/KV436.*createPostgresWebhookReplayStore/);
+      ).toThrow(/KV436.*webhookReplayStore/);
+      expect(() =>
+        bundleB.createStorageDownloadEndpoint({
+          replayStore: forgedCapabilityStore(),
+          secret: 'cross-bundle-capability-secret-at-least-32-bytes',
+          storage,
+        }),
+      ).toThrow(/KV436.*capabilityReplayStore/);
     } finally {
+      await runtimeA?.close();
       if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previousNodeEnv;
       rmSync(root, { force: true, recursive: true });
@@ -125,6 +168,15 @@ function forgedWebhookStore(): WebhookReplayStore {
       return { commit() {} };
     },
     set() {},
+    [Symbol.for('kovo.durable-replay-store')]: true,
+  };
+}
+
+function forgedCapabilityStore(): CapabilityReplayStore {
+  return {
+    consume() {
+      return true;
+    },
     [Symbol.for('kovo.durable-replay-store')]: true,
   };
 }

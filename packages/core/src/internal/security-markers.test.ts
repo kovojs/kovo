@@ -28,6 +28,7 @@ describe('durable replay store receipts (SPEC §10.3)', () => {
 
     expect(hasFrameworkDurableReplayStoreReceipt(store, 'mutation')).toBe(true);
     expect(hasFrameworkDurableReplayStoreReceipt(store, 'webhook')).toBe(false);
+    expect(hasFrameworkDurableReplayStoreReceipt(store, 'capability')).toBe(false);
     expect(propagateFrameworkDurableReplayStoreReceipt(store, snapshot, 'mutation')).toBe(true);
     expect(hasFrameworkDurableReplayStoreReceipt(snapshot, 'mutation')).toBe(true);
   });

@@ -1,18 +1,38 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import type { MutationReplayResponse } from './replay.js';
 import type { WebhookWireResponse } from './webhook.js';
 
 const previousNodeEnv = process.env.NODE_ENV;
+process.env.NODE_ENV = 'test';
+const postgresRuntimeApi = await import('./postgres-runtime.js?durable-replay-runtime');
+const runtimeRoot = mkdtempSync(join(tmpdir(), 'kovo-replay-production-'));
+const replayOwners = pgTable(
+  'replay_production_owners',
+  { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
+  kovo({ domain: 'replay-production', key: 'id', owner: 'ownerId' }),
+);
+const postgresRuntime = postgresRuntimeApi.createPostgresAppRuntimeDb({
+  dataDir: runtimeRoot,
+  driver: 'pglite',
+  schema: postgresRuntimeApi.postgresSchemaModule({ replayOwners }),
+});
+await postgresRuntime.ready;
 process.env.NODE_ENV = 'production';
 
-const [{ createApp }, { domain }, { mutation }, postgresReplayApi, replayApi, webhookApi, { s }] =
+const [{ createApp }, { domain }, { mutation }, replayApi, serverPublicApi, webhookApi, { s }] =
   await Promise.all([
     import('./app.js?volatile-replay-production'),
     import('./domain.js?volatile-replay-production'),
     import('./mutation.js?volatile-replay-production'),
-    import('./postgres-replay.js?volatile-replay-production'),
     import('./replay.js'),
+    import('./index.js?volatile-replay-production'),
     import('./webhook.js?volatile-replay-production'),
     import('./schema.js?volatile-replay-production'),
   ]);
@@ -20,12 +40,6 @@ const [{ createApp }, { domain }, { mutation }, postgresReplayApi, replayApi, we
 const egressDisabled = {
   enabled: false as const,
   justification: 'production replay posture test performs no outbound I/O',
-};
-
-const postgresExecutor = {
-  async execute() {
-    return { rows: [] };
-  },
 };
 
 function declaredMutation() {
@@ -80,24 +94,33 @@ function structuralWebhookReplayStore() {
   };
 }
 
-afterAll(() => {
+afterAll(async () => {
+  await postgresRuntime.close();
+  rmSync(runtimeRoot, { force: true, recursive: true });
   if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = previousNodeEnv;
 });
 
 describe('production replay truth posture', () => {
+  it('does not expose structural SQL-executor replay authority', () => {
+    expect(serverPublicApi).not.toHaveProperty('createPostgresCapabilityReplayStore');
+    expect(serverPublicApi).not.toHaveProperty('createPostgresMutationReplayStore');
+    expect(serverPublicApi).not.toHaveProperty('createPostgresWebhookReplayStore');
+    expect(serverPublicApi).not.toHaveProperty('releasePostgresPendingReplay');
+  });
+
   it('refuses the framework memory mutation store at app boot', () => {
     expect(() =>
       createApp({
         egress: egressDisabled,
         mutationReplayStore: replayApi.createMemoryMutationReplayStore(),
       }),
-    ).toThrow(/KV436.*volatile memory mutationReplayStore.*createPostgresMutationReplayStore/);
+    ).toThrow(/KV436.*volatile memory mutationReplayStore.*mutationReplayStore/);
   });
 
   it('refuses to silently disable replay when production declares a mutation', () => {
     expect(() => createApp({ egress: egressDisabled, mutations: [declaredMutation()] })).toThrow(
-      /KV436.*missing.*mutationReplayStore.*createPostgresMutationReplayStore/,
+      /KV436.*missing.*mutationReplayStore.*createPostgresAppRuntimeDb.*mutationReplayStore/,
     );
   });
 
@@ -108,12 +131,11 @@ describe('production replay truth posture', () => {
         mutationReplayStore: structuralMutationReplayStore(),
         mutations: [declaredMutation()],
       }),
-    ).toThrow(/KV436.*custom.*mutationReplayStore.*createPostgresMutationReplayStore/);
+    ).toThrow(/KV436.*custom.*mutationReplayStore.*mutationReplayStore/);
   });
 
   it('accepts the authenticated Postgres mutation store', () => {
-    const mutationReplayStore =
-      postgresReplayApi.createPostgresMutationReplayStore(postgresExecutor);
+    const mutationReplayStore = postgresRuntime.mutationReplayStore;
 
     const app = createApp({
       egress: egressDisabled,
@@ -134,7 +156,7 @@ describe('production replay truth posture', () => {
         verify: 'none',
         verifyJustification: 'production posture test fixture',
       }),
-    ).toThrow(/KV436.*volatile memory replayStore.*createPostgresWebhookReplayStore/);
+    ).toThrow(/KV436.*volatile memory replayStore.*webhookReplayStore/);
   });
 
   it('refuses an idempotent writable webhook with no durable store', () => {
@@ -149,7 +171,7 @@ describe('production replay truth posture', () => {
         verifyJustification: 'production posture test fixture',
         writes: [records],
       }),
-    ).toThrow(/KV436.*missing.*replayStore.*createPostgresWebhookReplayStore/);
+    ).toThrow(/KV436.*missing.*replayStore.*webhookReplayStore/);
   });
 
   it('refuses custom structural and global-symbol webhook store forgeries', () => {
@@ -165,12 +187,12 @@ describe('production replay truth posture', () => {
         verifyJustification: 'production posture test fixture',
         writes: [records],
       }),
-    ).toThrow(/KV436.*custom.*replayStore.*createPostgresWebhookReplayStore/);
+    ).toThrow(/KV436.*custom.*replayStore.*webhookReplayStore/);
   });
 
   it('accepts the authenticated Postgres store for an idempotent writable webhook', () => {
     const records = domain('receipt-records-durable');
-    const replayStore = postgresReplayApi.createPostgresWebhookReplayStore(postgresExecutor);
+    const replayStore = postgresRuntime.webhookReplayStore;
 
     const declaration = webhookApi.webhook('/webhooks/durable', {
       handler() {},

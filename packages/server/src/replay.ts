@@ -74,7 +74,7 @@ export type MutationReplayResponse = ServerResponseBase<
  * response by `(scope, idem)`, reserve a pending slot for an in-flight handler, and
  * record the committed response. Apps may inject a custom store for local development and tests;
  * deployed mutation declarations require the framework-authenticated durable store returned by
- * `createPostgresMutationReplayStore()`. The framework provides
+ * `createPostgresAppRuntimeDb().mutationReplayStore`. The framework provides
  * {@link createMemoryMutationReplayStore} as the default in-memory development implementation.
  */
 export interface MutationReplayStore<

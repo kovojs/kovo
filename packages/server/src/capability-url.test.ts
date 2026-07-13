@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_CAPABILITY_TTL_MS,
   createMemoryCapabilityReplayStore,
+  MAX_CAPABILITY_AUDIENCE_LENGTH,
+  MAX_CAPABILITY_KEY_LENGTH,
+  MAX_CAPABILITY_PAYLOAD_BYTES,
+  MAX_CAPABILITY_SCOPE_LENGTH,
+  MAX_CAPABILITY_TOKEN_LENGTH,
+  MAX_CAPABILITY_TTL_MS,
   signCapability,
   verifyCapability,
 } from './capability-url.js';
@@ -44,6 +50,71 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     const { claims } = await signCapability(SECRET, { key: 'a.pdf' }, now);
     expect(claims.method).toBe('GET');
     expect(claims.expiry).toBe(DEFAULT_CAPABILITY_TTL_MS);
+  });
+
+  it('bounds signed claims, TTL, payload allocation, and untrusted wire tokens', async () => {
+    const key = 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH);
+    const scope = 's'.repeat(MAX_CAPABILITY_SCOPE_LENGTH);
+    const audience = 'a'.repeat(MAX_CAPABILITY_AUDIENCE_LENGTH);
+    const signed = await signCapability(
+      SECRET,
+      { audience, expiresIn: MAX_CAPABILITY_TTL_MS, key, scope },
+      0,
+    );
+    expect(signed.token.length).toBeLessThanOrEqual(MAX_CAPABILITY_TOKEN_LENGTH);
+    await expect(
+      verifyCapability(SECRET, signed.token, { key, method: 'GET', scope }, { audience, now: 1 }),
+    ).resolves.toMatchObject({ ok: true });
+
+    await expect(
+      signCapability(SECRET, { key: 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH + 1) }, 0),
+    ).rejects.toThrow(/bounded claims/);
+    await expect(
+      signCapability(
+        SECRET,
+        { key: 'a.pdf', scope: 's'.repeat(MAX_CAPABILITY_SCOPE_LENGTH + 1) },
+        0,
+      ),
+    ).rejects.toThrow(/bounded claims/);
+    await expect(
+      signCapability(
+        SECRET,
+        {
+          audience: 'a'.repeat(MAX_CAPABILITY_AUDIENCE_LENGTH + 1),
+          key: 'a.pdf',
+        },
+        0,
+      ),
+    ).rejects.toThrow(/bounded claims/);
+    await expect(
+      signCapability(SECRET, { expiresIn: MAX_CAPABILITY_TTL_MS + 1, key: 'a.pdf' }, 0),
+    ).rejects.toThrow(/bounded claims/);
+
+    await expect(
+      verifyCapability(
+        SECRET,
+        'x'.repeat(MAX_CAPABILITY_TOKEN_LENGTH + 1),
+        { key: 'a.pdf', method: 'GET' },
+        { now: 1 },
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    const oversizedPayload = Buffer.alloc(MAX_CAPABILITY_PAYLOAD_BYTES + 1).toString('base64url');
+    await expect(
+      verifyCapability(
+        SECRET,
+        `${oversizedPayload}.${'A'.repeat(43)}`,
+        { key: 'a.pdf', method: 'GET' },
+        { now: 1 },
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    await expect(
+      verifyCapability(
+        SECRET,
+        signed.token,
+        { key: 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH + 1), method: 'GET', scope },
+        { audience, now: 1 },
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
   });
 
   it('REJECTS a token used for a different key (object substitution)', async () => {

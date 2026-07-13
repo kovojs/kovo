@@ -18,6 +18,9 @@ import {
 } from './capability-route.js';
 import {
   createMemoryCapabilityReplayStore,
+  MAX_CAPABILITY_AUDIENCE_LENGTH,
+  MAX_CAPABILITY_KEY_LENGTH,
+  MAX_CAPABILITY_SCOPE_LENGTH,
   signCapability,
   verifyCapability,
 } from './capability-url.js';
@@ -679,6 +682,31 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(facts[1]).toMatchObject({ key: 'b.pdf', method: 'GET', oneTime: false });
     // Draining is destructive.
     expect(drainCapabilityMintFacts()).toHaveLength(0);
+  });
+
+  it('bounds signer configuration and retained capability-mint claim text', async () => {
+    drainCapabilityMintFacts();
+    const key = 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH);
+    const scope = 's'.repeat(MAX_CAPABILITY_SCOPE_LENGTH);
+    const ctx = createSignUrl({ secret: SECRET });
+
+    await ctx.signUrl({ key, scope });
+    expect(drainCapabilityMintFacts()).toEqual([expect.objectContaining({ key, scope })]);
+    await expect(ctx.signUrl({ key: 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH + 1) })).rejects.toThrow(
+      /stable, typed values/,
+    );
+    expect(() =>
+      createSignUrl({
+        defaultScope: 's'.repeat(MAX_CAPABILITY_SCOPE_LENGTH + 1),
+        secret: SECRET,
+      }),
+    ).toThrow(/stable values/);
+    expect(() =>
+      createSignUrl({
+        basePath: `/${'a'.repeat(MAX_CAPABILITY_AUDIENCE_LENGTH)}`,
+        secret: SECRET,
+      }),
+    ).toThrow(/stable values|bounded capability audience/);
   });
 
   it('bounds normal signUrl observations to the newest 256 facts', async () => {

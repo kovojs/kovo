@@ -25,7 +25,7 @@ interface BoundedRuntimeAuditCollector<Fact> {
 }
 
 /** @internal Durable replay surfaces whose restart/replica truth is framework authenticated. */
-export type FrameworkDurableReplaySurface = 'mutation' | 'webhook';
+export type FrameworkDurableReplaySurface = 'capability' | 'mutation' | 'webhook';
 
 interface FrameworkDurableReplayStoreReceipt {
   readonly kind: 'framework-durable-replay-store';
@@ -121,8 +121,8 @@ function assertFrameworkDurableReplayStoreObject(
 function assertFrameworkDurableReplaySurface(
   surface: unknown,
 ): asserts surface is FrameworkDurableReplaySurface {
-  if (surface !== 'mutation' && surface !== 'webhook') {
-    throw new TypeError('Durable replay surface must be "mutation" or "webhook".');
+  if (surface !== 'capability' && surface !== 'mutation' && surface !== 'webhook') {
+    throw new TypeError('Durable replay surface must be "capability", "mutation", or "webhook".');
   }
 }
 

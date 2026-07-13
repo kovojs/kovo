@@ -21,7 +21,12 @@
  * drained for `kovo explain --capabilities`.
  */
 
-import { securityClassifier, wireEmitter } from '@kovojs/core/internal/security-markers';
+import {
+  hasFrameworkDurableReplayStoreReceipt,
+  propagateFrameworkDurableReplayStoreReceipt,
+  securityClassifier,
+  wireEmitter,
+} from '@kovojs/core/internal/security-markers';
 import { isProvenPrincipal } from './auth-principal.js';
 import {
   capabilityBase64Url,
@@ -54,12 +59,25 @@ import {
   capabilityTypeError,
   createCapabilityMap,
 } from './capability-intrinsics.js';
+import { resolveBootMode } from './env.js';
 import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 
 const TOKEN_VERSION = 'v2';
 const CAPABILITY_SIGNING_PURPOSE = 'capability-url';
 const DEFAULT_CAPABILITY_AUDIENCE = 'storage-download';
 const DEFAULT_CAPABILITY_REPLAY_MAX_ENTRIES = 10_000;
+/** @internal Fixed allocation/retention ceilings for capability claims and wire tokens. */
+export const MAX_CAPABILITY_KEY_LENGTH = 4_096;
+/** @internal */
+export const MAX_CAPABILITY_SCOPE_LENGTH = 1_024;
+/** @internal */
+export const MAX_CAPABILITY_AUDIENCE_LENGTH = 1_024;
+/** @internal */
+export const MAX_CAPABILITY_TOKEN_LENGTH = 16_384;
+/** @internal */
+export const MAX_CAPABILITY_PAYLOAD_BYTES = 12_000;
+/** @internal One hour is the hard ceiling for a short-lived bearer capability. */
+export const MAX_CAPABILITY_TTL_MS = 60 * 60 * 1000;
 
 /** HTTP method a capability token authorizes. Downloads are reads; we model GET/HEAD. */
 export type CapabilityMethod = 'GET' | 'HEAD';
@@ -81,7 +99,7 @@ export interface SignCapabilityOptions {
   key: string;
   method?: CapabilityMethod;
   scope?: string;
-  /** Time-to-live in milliseconds. A short default keeps a leaked URL useful only briefly. */
+  /** Time-to-live in milliseconds, capped at one hour. */
   expiresIn?: number;
   /** When true, the token is single-use: the verifier burns it in a replay store on first use. */
   oneTime?: boolean;
@@ -124,9 +142,10 @@ export interface CapabilityReplayStore {
 }
 
 /**
- * Bounded in-memory one-time replay store with signed-expiry eviction. Suitable for single-process
- * apps and tests; a multi-process deployment injects a shared store (Redis &c.) with the same
- * contract. At full active capacity, consume() fails closed instead of evicting an unexpired nonce.
+ * Bounded in-memory one-time replay store with signed-expiry eviction. Suitable only for local
+ * development and tests; production verification requires the framework-authenticated durable
+ * store at `createPostgresAppRuntimeDb().capabilityReplayStore`. At full active capacity, consume()
+ * fails closed instead of evicting an unexpired nonce.
  */
 export function createMemoryCapabilityReplayStore(
   options: { maxEntries?: number; now?: () => number } = {},
@@ -220,15 +239,21 @@ function canonicalizeWithNonce(
  *
  * @param secret - The framework signing secret (NOT app-controlled per request).
  * @param options - `{ key, method?, scope?, expiresIn?, oneTime? }`.
- * @param now - Injectable clock (epoch ms) for tests.
+ * @param configuredNow - Development/test-only clock (epoch ms); production refuses it.
  */
 export const signCapability = wireEmitter(
   'server.wire.capability-url',
   async function (
     secret: SigningSecret,
     options: SignCapabilityOptions,
-    now: number = capabilityNow(),
+    configuredNow?: number,
   ): Promise<SignedCapability> {
+    if (resolveBootMode() === 'production' && configuredNow !== undefined) {
+      throw capabilityTypeError(
+        'KV436: signCapability() refused an injected clock in production (SPEC §6.6).',
+      );
+    }
+    const now = configuredNow ?? capabilityNow();
     const ring = signingKeyRingFromSecret(secret);
     const key = capabilityOwnDataValue(options, 'key');
     const configuredMethod = capabilityOwnDataValue(options, 'method');
@@ -242,14 +267,18 @@ export const signCapability = wireEmitter(
     if (
       typeof key !== 'string' ||
       key.length === 0 ||
+      key.length > MAX_CAPABILITY_KEY_LENGTH ||
       (method !== 'GET' && method !== 'HEAD') ||
-      (scope !== undefined && typeof scope !== 'string') ||
+      (scope !== undefined &&
+        (typeof scope !== 'string' || scope.length > MAX_CAPABILITY_SCOPE_LENGTH)) ||
       typeof expiresIn !== 'number' ||
       !capabilityIsSafeInteger(expiresIn) ||
       expiresIn <= 0 ||
+      expiresIn > MAX_CAPABILITY_TTL_MS ||
       (configuredOneTime !== undefined && typeof configuredOneTime !== 'boolean') ||
       typeof audience !== 'string' ||
       audience.length === 0 ||
+      audience.length > MAX_CAPABILITY_AUDIENCE_LENGTH ||
       !isValidClock(now) ||
       !capabilityIsSafeInteger(now + expiresIn)
     ) {
@@ -281,10 +310,17 @@ export const signCapability = wireEmitter(
     ) {
       throw capabilityTypeError('SigningKeyRing returned an invalid capability signature.');
     }
-    const payloadB64 = capabilityBase64Url(
-      capabilityEncode(serializeCapabilityPayload(signedKeyId, claims, oneTime, nonce)),
+    const payloadBytes = capabilityEncode(
+      serializeCapabilityPayload(signedKeyId, claims, oneTime, nonce),
     );
+    if (payloadBytes.length > MAX_CAPABILITY_PAYLOAD_BYTES) {
+      throw capabilityTypeError('Capability signing options exceed the bounded token payload.');
+    }
+    const payloadB64 = capabilityBase64Url(payloadBytes);
     const token = `${payloadB64}.${signature}`;
+    if (token.length > MAX_CAPABILITY_TOKEN_LENGTH) {
+      throw capabilityTypeError('Capability signing options exceed the bounded wire token.');
+    }
     return { token, claims, oneTime };
   },
 );
@@ -311,7 +347,13 @@ export const verifyCapability = securityClassifier(
     options: { audience?: string; now?: number; replayStore?: CapabilityReplayStore } = {},
   ): Promise<CapabilityVerifyResult> {
     try {
-      if (typeof token !== 'string') return { ok: false, reason: 'malformed' };
+      if (
+        typeof token !== 'string' ||
+        token.length === 0 ||
+        token.length > MAX_CAPABILITY_TOKEN_LENGTH
+      ) {
+        return { ok: false, reason: 'malformed' };
+      }
       const expectedKey = capabilityOwnDataValue(expected, 'key');
       const expectedMethod = capabilityOwnDataValue(expected, 'method');
       const expectedScope = capabilityOwnDataValue(expected, 'scope');
@@ -320,15 +362,22 @@ export const verifyCapability = securityClassifier(
       const configuredReplayStore = capabilityOwnDataValue(options, 'replayStore');
       const now = configuredNow ?? capabilityNow();
       const audience = configuredAudience ?? DEFAULT_CAPABILITY_AUDIENCE;
+      if (resolveBootMode() === 'production' && configuredNow !== undefined) {
+        return { ok: false, reason: 'malformed' };
+      }
       if (
         typeof expectedKey !== 'string' ||
         expectedKey.length === 0 ||
+        expectedKey.length > MAX_CAPABILITY_KEY_LENGTH ||
         (expectedMethod !== 'GET' && expectedMethod !== 'HEAD') ||
-        (expectedScope !== undefined && typeof expectedScope !== 'string') ||
+        (expectedScope !== undefined &&
+          (typeof expectedScope !== 'string' ||
+            expectedScope.length > MAX_CAPABILITY_SCOPE_LENGTH)) ||
         typeof now !== 'number' ||
         !isValidClock(now) ||
         typeof audience !== 'string' ||
-        audience.length === 0
+        audience.length === 0 ||
+        audience.length > MAX_CAPABILITY_AUDIENCE_LENGTH
       ) {
         return { ok: false, reason: 'malformed' };
       }
@@ -339,7 +388,12 @@ export const verifyCapability = securityClassifier(
       }
       const payloadBytes = capabilityFromBase64Url(capabilityStringSlice(token, 0, dot));
       const signature = capabilityStringSlice(token, dot + 1);
-      if (payloadBytes === undefined || !isCanonicalSignature(signature)) {
+      if (
+        payloadBytes === undefined ||
+        payloadBytes.length === 0 ||
+        payloadBytes.length > MAX_CAPABILITY_PAYLOAD_BYTES ||
+        !isCanonicalSignature(signature)
+      ) {
         return { ok: false, reason: 'malformed' };
       }
 
@@ -383,6 +437,12 @@ export const verifyCapability = securityClassifier(
       }
 
       if (payload.oneTime) {
+        if (
+          resolveBootMode() === 'production' &&
+          !isDurableCapabilityReplayStore(configuredReplayStore)
+        ) {
+          return { ok: false, reason: 'replayed' };
+        }
         if (configuredReplayStore === undefined) {
           // A one-time token without a replay store cannot be enforced — fail closed.
           return { ok: false, reason: 'replayed' };
@@ -451,9 +511,11 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
     (method !== 'GET' && method !== 'HEAD') ||
     typeof key !== 'string' ||
     key.length === 0 ||
+    key.length > MAX_CAPABILITY_KEY_LENGTH ||
     typeof expiry !== 'number' ||
     !isValidExpiry(expiry) ||
-    (scope !== undefined && typeof scope !== 'string') ||
+    (scope !== undefined &&
+      (typeof scope !== 'string' || scope.length > MAX_CAPABILITY_SCOPE_LENGTH)) ||
     (oneTimeFlag !== undefined && oneTimeFlag !== 1)
   ) {
     return undefined;
@@ -571,9 +633,16 @@ export function snapshotReplayStore(source: unknown): CapabilityReplayStore {
   if (typeof consume !== 'function') {
     throw capabilityTypeError('Capability replay store must expose a stable consume function.');
   }
-  return capabilityFreeze({
+  const snapshot = capabilityFreeze({
     consume(id: string, expiresAt: number): boolean | Promise<boolean> {
       return capabilityReflectApply(consume, source, [id, expiresAt]);
     },
   });
+  propagateFrameworkDurableReplayStoreReceipt(source, snapshot, 'capability');
+  return snapshot;
+}
+
+/** @internal True only for framework-authenticated durable capability replay stores and snapshots. */
+export function isDurableCapabilityReplayStore(source: unknown): boolean {
+  return hasFrameworkDurableReplayStoreReceipt(source, 'capability');
 }

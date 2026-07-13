@@ -2,10 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { PGlite } from '@electric-sql/pglite';
 import { kovo } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { signCapability, verifyCapability } from './capability-url.js';
 import {
   createPostgresAppRuntimeDb,
   postgresSchemaModule,
@@ -13,9 +15,10 @@ import {
   type KovoPostgresAppRuntimeDb,
 } from './postgres-runtime.js';
 import {
-  createPostgresMutationReplayStore,
-  createPostgresWebhookReplayStore,
-  releasePostgresPendingReplay,
+  createPostgresCapabilityReplayStoreFromExecutor,
+  createPostgresMutationReplayStoreFromExecutor,
+  createPostgresWebhookReplayStoreFromExecutor,
+  releasePostgresPendingReplayFromExecutor,
 } from './postgres-replay.js';
 import { MutationReplayConflictError } from './replay.js';
 import { replayMutationWireBody } from './response.js';
@@ -77,14 +80,135 @@ describe('Postgres durable replay stores', () => {
     return root;
   }
 
+  it('atomically consumes a one-time capability across replicas and process restart', async () => {
+    const dir = dataDir();
+    const firstRuntime = await runtimeAt(dir);
+    const first = createPostgresCapabilityReplayStoreFromExecutor(firstRuntime.executor);
+    const replica = createPostgresCapabilityReplayStoreFromExecutor(firstRuntime.executor);
+    const now = Date.now();
+    const signed = await signCapability(
+      'postgres-capability-replay-test-secret-at-least-32-bytes',
+      { expiresIn: 60_000, key: 'receipts/ord_1.pdf', oneTime: true },
+      now,
+    );
+    const verify = (
+      replayStore: ReturnType<typeof createPostgresCapabilityReplayStoreFromExecutor>,
+    ) =>
+      verifyCapability(
+        'postgres-capability-replay-test-secret-at-least-32-bytes',
+        signed.token,
+        { key: 'receipts/ord_1.pdf', method: 'GET' },
+        { now: now + 1, replayStore },
+      );
+
+    const results = await Promise.all([verify(first), verify(replica)]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([{ ok: false, reason: 'replayed' }]);
+
+    const persisted = await firstRuntime.executor.execute<{ expires_at: string; idem: string }>({
+      text: "SELECT expires_at, idem FROM public._kovo_replay WHERE surface = 'capability'",
+      values: [],
+    });
+    expect(persisted.rows).toHaveLength(1);
+    expect(persisted.rows[0]?.idem).toMatch(/^sha256:/);
+    expect(persisted.rows[0]?.idem).not.toContain('ord_1.pdf');
+    expect(String(persisted.rows[0]?.expires_at)).toBe(String(signed.claims.expiry));
+
+    await firstRuntime.runtime.close();
+    runtimes.splice(runtimes.indexOf(firstRuntime.runtime), 1);
+    const restarted = await runtimeAt(dir);
+    const afterRestart = createPostgresCapabilityReplayStoreFromExecutor(restarted.executor);
+    await expect(verify(afterRestart)).resolves.toEqual({ ok: false, reason: 'replayed' });
+    await expect(
+      afterRestart.consume('v2:receipts/ord_2.pdf:nonce', signed.claims.expiry),
+    ).resolves.toBe(true);
+  });
+
+  it('refuses already-expired capability ids without retaining replay rows', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const store = createPostgresCapabilityReplayStoreFromExecutor(executor);
+
+    await expect(store.consume('v2:expired:nonce', Date.now() - 1)).resolves.toBe(false);
+    const persisted = await executor.execute<{ count: number }>({
+      text: "SELECT COUNT(*)::int AS count FROM public._kovo_replay WHERE surface = 'capability'",
+      values: [],
+    });
+    expect(persisted.rows).toEqual([{ count: 0 }]);
+  });
+
+  it('bounds expired capability cleanup while preserving live replay truth', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    await executor.execute({
+      text:
+        'INSERT INTO public._kovo_replay ' +
+        '(surface, scope, idem, fingerprint, generation, state, response_body, ' +
+        'response_headers, response_status, expires_at, committed_at) ' +
+        "SELECT 'capability', 'cleanup', 'expired-' || value::text, NULL, " +
+        "'generation-' || value::text, 'committed', '1', '{}', 204, 1, CURRENT_TIMESTAMP " +
+        'FROM generate_series(1, 1030) AS value',
+      values: [],
+    });
+    const liveExpiry = Date.now() + 60_000;
+    await executor.execute({
+      text:
+        'INSERT INTO public._kovo_replay ' +
+        '(surface, scope, idem, fingerprint, generation, state, response_body, ' +
+        'response_headers, response_status, expires_at, committed_at) ' +
+        "VALUES ('capability', 'cleanup', 'live', NULL, 'live-generation', " +
+        "'committed', '1', '{}', 204, $1, CURRENT_TIMESTAMP)",
+      values: [liveExpiry],
+    });
+    const store = createPostgresCapabilityReplayStoreFromExecutor(executor);
+
+    await expect(store.consume('cleanup-trigger-1', liveExpiry)).resolves.toBe(true);
+    const afterFirst = await executor.execute<{ expired: number; live: number }>({
+      text:
+        'SELECT COUNT(*) FILTER (WHERE expires_at = 1)::int AS expired, ' +
+        "COUNT(*) FILTER (WHERE idem = 'live')::int AS live " +
+        "FROM public._kovo_replay WHERE surface = 'capability'",
+      values: [],
+    });
+    expect(afterFirst.rows).toEqual([{ expired: 6, live: 1 }]);
+
+    await expect(store.consume('cleanup-trigger-2', liveExpiry)).resolves.toBe(true);
+    const afterSecond = await executor.execute<{ expired: number; live: number }>({
+      text:
+        'SELECT COUNT(*) FILTER (WHERE expires_at = 1)::int AS expired, ' +
+        "COUNT(*) FILTER (WHERE idem = 'live')::int AS live " +
+        "FROM public._kovo_replay WHERE surface = 'capability'",
+      values: [],
+    });
+    expect(afterSecond.rows).toEqual([{ expired: 0, live: 1 }]);
+  });
+
+  it('upgrades the prior replay relation before admitting capability truth', async () => {
+    const dir = dataDir();
+    const legacy = new PGlite(dir);
+    await legacy.exec(
+      [
+        'CREATE TABLE _kovo_replay (',
+        "surface text NOT NULL CHECK (surface IN ('mutation', 'webhook')),",
+        'scope text NOT NULL, idem text NOT NULL, fingerprint text, generation text NOT NULL,',
+        'state text NOT NULL, response_body text, response_headers text, response_status integer,',
+        'created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP, committed_at timestamptz,',
+        'PRIMARY KEY (surface, scope, idem))',
+      ].join(' '),
+    );
+    await legacy.close();
+
+    const { executor } = await runtimeAt(dir);
+    const store = createPostgresCapabilityReplayStoreFromExecutor(executor);
+    await expect(store.consume('v2:migrated:nonce', Date.now() + 60_000)).resolves.toBe(true);
+  });
+
   it('atomically joins duplicate reservations across store instances and persists settlement', async () => {
     const dir = dataDir();
     const firstRuntime = await runtimeAt(dir);
-    const first = createPostgresMutationReplayStore(firstRuntime.executor, {
+    const first = createPostgresMutationReplayStoreFromExecutor(firstRuntime.executor, {
       pendingWaitMs: 500,
       pollIntervalMs: 5,
     });
-    const replica = createPostgresMutationReplayStore(firstRuntime.executor, {
+    const replica = createPostgresMutationReplayStoreFromExecutor(firstRuntime.executor, {
       pendingWaitMs: 500,
       pollIntervalMs: 5,
     });
@@ -104,7 +228,7 @@ describe('Postgres durable replay stores', () => {
     await firstRuntime.runtime.close();
     runtimes.splice(runtimes.indexOf(firstRuntime.runtime), 1);
     const restarted = await runtimeAt(dir);
-    const afterRestart = createPostgresMutationReplayStore(restarted.executor, {
+    const afterRestart = createPostgresMutationReplayStoreFromExecutor(restarted.executor, {
       pendingWaitMs: 0,
     });
     await expect(afterRestart.get('session:mutation', 'idem-1', 'sha256:request')).resolves.toEqual(
@@ -118,7 +242,9 @@ describe('Postgres durable replay stores', () => {
   it('keeps a crash-orphaned pending row fail-closed across restart until exact reconciliation', async () => {
     const dir = dataDir();
     const firstRuntime = await runtimeAt(dir);
-    const first = createPostgresMutationReplayStore(firstRuntime.executor, { pendingWaitMs: 0 });
+    const first = createPostgresMutationReplayStoreFromExecutor(firstRuntime.executor, {
+      pendingWaitMs: 0,
+    });
     await expect(
       first.reserve('session:crash', 'idem-crash', 'sha256:crash'),
     ).resolves.toBeDefined();
@@ -133,7 +259,7 @@ describe('Postgres durable replay stores', () => {
     await firstRuntime.runtime.close();
     runtimes.splice(runtimes.indexOf(firstRuntime.runtime), 1);
     const restarted = await runtimeAt(dir);
-    const afterRestart = createPostgresMutationReplayStore(restarted.executor, {
+    const afterRestart = createPostgresMutationReplayStoreFromExecutor(restarted.executor, {
       pendingWaitMs: 0,
     });
     await expect(
@@ -144,7 +270,7 @@ describe('Postgres durable replay stores', () => {
     ).resolves.toBeUndefined();
 
     await expect(
-      releasePostgresPendingReplay(
+      releasePostgresPendingReplayFromExecutor(
         restarted.executor,
         {
           generation: generation!,
@@ -162,7 +288,7 @@ describe('Postgres durable replay stores', () => {
 
   it('rejects a fingerprint mismatch without changing committed truth', async () => {
     const { executor } = await runtimeAt(dataDir());
-    const store = createPostgresMutationReplayStore(executor, { pendingWaitMs: 0 });
+    const store = createPostgresMutationReplayStoreFromExecutor(executor, { pendingWaitMs: 0 });
     const reservation = await store.reserve('scope', 'idem', 'fingerprint-a\u0000raw');
     await reservation?.commit(mutationResponse());
 
@@ -179,8 +305,12 @@ describe('Postgres durable replay stores', () => {
 
   it('persists webhook response truth independently from mutation keys', async () => {
     const { executor } = await runtimeAt(dataDir());
-    const mutationStore = createPostgresMutationReplayStore(executor, { pendingWaitMs: 0 });
-    const webhookStore = createPostgresWebhookReplayStore(executor, { pendingWaitMs: 0 });
+    const mutationStore = createPostgresMutationReplayStoreFromExecutor(executor, {
+      pendingWaitMs: 0,
+    });
+    const webhookStore = createPostgresWebhookReplayStoreFromExecutor(executor, {
+      pendingWaitMs: 0,
+    });
     const mutation = await mutationStore.reserve('shared', 'idem');
     const webhook = await webhookStore.reserve('shared', 'idem');
     expect(mutation).toBeDefined();
@@ -200,7 +330,7 @@ describe('Postgres durable replay stores', () => {
 
   it('canonicalizes NUL-delimited framework scopes without aliasing literal escape text', async () => {
     const { executor } = await runtimeAt(dataDir());
-    const store = createPostgresMutationReplayStore(executor, { pendingWaitMs: 0 });
+    const store = createPostgresMutationReplayStoreFromExecutor(executor, { pendingWaitMs: 0 });
     const nulScope = 'session\u0000mutation';
     const literalScope = 'session%00mutation';
     const nulReservation = await store.reserve(nulScope, 'idem\u0000one');

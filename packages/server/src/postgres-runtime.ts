@@ -45,7 +45,16 @@ import {
   type Reader,
 } from './managed-db.js';
 import { requestPassedRoleGuard } from './guards.js';
-import { createPostgresMutationReplayStore, POSTGRES_REPLAY_TABLE } from './postgres-replay.js';
+import {
+  createPostgresCapabilityReplayStoreFromExecutor,
+  createPostgresMutationReplayStoreFromExecutor,
+  createPostgresWebhookReplayStoreFromExecutor,
+  POSTGRES_REPLAY_TABLE,
+  releasePostgresPendingReplayFromExecutor,
+  type PostgresPendingReplayReleaseOptions,
+  type PostgresPendingReplayTarget,
+} from './postgres-replay.js';
+import type { CapabilityReplayStore } from './capability-url.js';
 import type { MutationReplayStore } from './replay.js';
 import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import {
@@ -66,6 +75,7 @@ import {
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
+import type { WebhookReplayStore } from './webhook.js';
 import {
   createWitnessMap,
   createWitnessSet,
@@ -1236,17 +1246,26 @@ export interface KovoPostgresMigrationPlan {
 
 /** Created app database runtime used by generated `src/_kovo/app-runtime-db.ts` modules. */
 export interface KovoPostgresAppRuntimeDb {
+  /** Framework-system durable one-time capability replay truth (SPEC §6.6/§10.3). */
+  readonly capabilityReplayStore: CapabilityReplayStore;
   db(request?: unknown): KovoPostgresRuntimeDb;
   /** Framework-system durable mutation idempotency truth (SPEC §10.3). */
   readonly mutationReplayStore: MutationReplayStore;
   readonlyDb: Reader<KovoPostgresRuntimeDb>;
   ready: Promise<void>;
+  /** Operator reconciliation for an exact crash-orphaned pending replay claim (SPEC §10.3). */
+  releasePendingReplay(
+    target: PostgresPendingReplayTarget,
+    options: PostgresPendingReplayReleaseOptions,
+  ): Promise<boolean>;
   /** Framework-owned non-request DB capability for generated auth/seed wiring, still RLS-subject. */
   systemDb(options: {
     operation: 'read' | 'write';
     reason: string;
     surface: string;
   }): KovoPostgresSystemDb;
+  /** Framework-system durable webhook idempotency truth (SPEC §10.3). */
+  readonly webhookReplayStore: WebhookReplayStore;
   close(): Promise<void>;
 }
 
@@ -1366,7 +1385,10 @@ export function createPostgresAppRuntimeDb(
     schemaDdl: ddl,
     schemaTables,
   });
+  let capabilityReplayStore: CapabilityReplayStore | undefined;
   let mutationReplayStore: MutationReplayStore | undefined;
+  let replaySqlExecutor: ReturnType<typeof createDurableTaskSqlExecutor> | undefined;
+  let webhookReplayStore: WebhookReplayStore | undefined;
 
   const dbForRequest = (request?: unknown): KovoPostgresRuntimeDb => {
     const scope = postgresRequestScope(request, config);
@@ -1379,24 +1401,44 @@ export function createPostgresAppRuntimeDb(
       request,
     );
   };
+  const durableReplaySqlExecutor = (): ReturnType<typeof createDurableTaskSqlExecutor> => {
+    replaySqlExecutor ??= createDurableTaskSqlExecutor(
+      dbForRequest({
+        principalPosture: declareSystemPrincipal(
+          'reserve and settle framework-owned durable replay truth',
+          {
+            ingress: 'endpoint',
+            operation: 'write',
+            surface: 'createPostgresAppRuntimeDb().replayStores',
+          },
+        ),
+      }),
+    );
+    return replaySqlExecutor;
+  };
+  const durableCapabilityReplayStore = (): CapabilityReplayStore => {
+    capabilityReplayStore ??= createPostgresCapabilityReplayStoreFromExecutor(
+      durableReplaySqlExecutor(),
+    );
+    return capabilityReplayStore;
+  };
   const durableMutationReplayStore = (): MutationReplayStore => {
-    mutationReplayStore ??= createPostgresMutationReplayStore(
-      createDurableTaskSqlExecutor(
-        dbForRequest({
-          principalPosture: declareSystemPrincipal(
-            'reserve and settle durable mutation idempotency truth',
-            {
-              ingress: 'endpoint',
-              operation: 'write',
-              surface: 'createPostgresAppRuntimeDb().mutationReplayStore',
-            },
-          ),
-        }),
-      ),
+    mutationReplayStore ??= createPostgresMutationReplayStoreFromExecutor(
+      durableReplaySqlExecutor(),
     );
     return mutationReplayStore;
   };
-  const replayStore: MutationReplayStore = witnessFreeze({
+  const durableWebhookReplayStore = (): WebhookReplayStore => {
+    webhookReplayStore ??= createPostgresWebhookReplayStoreFromExecutor(durableReplaySqlExecutor());
+    return webhookReplayStore;
+  };
+  const capabilityStore: CapabilityReplayStore = witnessFreeze({
+    consume(id, expiresAt) {
+      return durableCapabilityReplayStore().consume(id, expiresAt);
+    },
+  });
+  mintFrameworkDurableReplayStoreReceipt(capabilityStore, 'capability');
+  const mutationStore: MutationReplayStore = witnessFreeze({
     get(scope, idem, fingerprint) {
       return durableMutationReplayStore().get(scope, idem, fingerprint);
     },
@@ -1407,13 +1449,33 @@ export function createPostgresAppRuntimeDb(
       return durableMutationReplayStore().set(scope, idem, response, fingerprint);
     },
   });
-  mintFrameworkDurableReplayStoreReceipt(replayStore, 'mutation');
+  mintFrameworkDurableReplayStoreReceipt(mutationStore, 'mutation');
+  const webhookStore: WebhookReplayStore = witnessFreeze({
+    get(scope, idem) {
+      return durableWebhookReplayStore().get(scope, idem);
+    },
+    reserve(scope, idem) {
+      return durableWebhookReplayStore().reserve(scope, idem);
+    },
+    set(scope, idem, response) {
+      return durableWebhookReplayStore().set(scope, idem, response);
+    },
+  });
+  mintFrameworkDurableReplayStoreReceipt(webhookStore, 'webhook');
 
   return {
+    capabilityReplayStore: capabilityStore,
     db: dbForRequest,
-    mutationReplayStore: replayStore,
+    mutationReplayStore: mutationStore,
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
     ready,
+    releasePendingReplay(target, releaseOptions) {
+      return releasePostgresPendingReplayFromExecutor(
+        durableReplaySqlExecutor(),
+        target,
+        releaseOptions,
+      );
+    },
     systemDb(options) {
       return createPostgresSystemDb(
         dbForRequest({
@@ -1425,6 +1487,7 @@ export function createPostgresAppRuntimeDb(
         }),
       );
     },
+    webhookReplayStore: webhookStore,
     close: () => client.close(),
   };
 }
@@ -2701,11 +2764,12 @@ async function provisionPostgresFrameworkReplayStore(
   config: ResolvedPostgresRuntimeConfig,
   runtimeLoginRole: string | undefined,
 ): Promise<void> {
+  const table = quoteQualified('public', POSTGRES_REPLAY_TABLE);
   await client.exec(
     postgresJoin(
       [
         `CREATE TABLE IF NOT EXISTS ${quoteIdent(POSTGRES_REPLAY_TABLE)} (`,
-        "surface text NOT NULL CHECK (surface IN ('mutation', 'webhook')),",
+        'surface text NOT NULL,',
         'scope text NOT NULL CHECK (char_length(scope) BETWEEN 1 AND 4096),',
         'idem text NOT NULL CHECK (char_length(idem) BETWEEN 1 AND 1024),',
         'fingerprint text CHECK (fingerprint IS NULL OR char_length(fingerprint) BETWEEN 1 AND 1024),',
@@ -2714,6 +2778,7 @@ async function provisionPostgresFrameworkReplayStore(
         'response_body text,',
         'response_headers text,',
         'response_status integer,',
+        'expires_at bigint,',
         'created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,',
         'committed_at timestamptz,',
         'PRIMARY KEY (surface, scope, idem),',
@@ -2727,7 +2792,36 @@ async function provisionPostgresFrameworkReplayStore(
       ' ',
     ),
   );
-  const table = quoteQualified('public', POSTGRES_REPLAY_TABLE);
+  await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS expires_at bigint`);
+  const surfaceConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_surface_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${surfaceConstraint}`);
+  await client.exec(
+    `ALTER TABLE ${table} ADD CONSTRAINT ${surfaceConstraint} ` +
+      "CHECK (surface IN ('capability', 'mutation', 'webhook'))",
+  );
+  const expiryConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_expires_at_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${expiryConstraint}`);
+  await client.exec(
+    `ALTER TABLE ${table} ADD CONSTRAINT ${expiryConstraint} ` +
+      'CHECK (expires_at IS NULL OR expires_at > 0)',
+  );
+  const capabilityConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_capability_expiry_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${capabilityConstraint}`);
+  await client.exec(
+    `ALTER TABLE ${table} ADD CONSTRAINT ${capabilityConstraint} CHECK (` +
+      "(surface = 'capability' AND state = 'committed' AND expires_at IS NOT NULL) OR " +
+      "(surface IN ('mutation', 'webhook') AND expires_at IS NULL))",
+  );
+  await client.exec(
+    `DROP INDEX IF EXISTS ${quoteQualified(
+      'public',
+      `${POSTGRES_REPLAY_TABLE}_capability_expiry_idx`,
+    )}`,
+  );
+  await client.exec(
+    `CREATE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_capability_expiry_idx`)} ` +
+      `ON ${table} (expires_at) WHERE surface = 'capability'`,
+  );
   await client.exec(`REVOKE ALL ON TABLE ${table} FROM PUBLIC`);
   const deniedRoles = [config.readerRole, config.writerRole, config.adminRole, config.systemRole];
   if (runtimeLoginRole !== undefined) appendPostgresDenseValue(deniedRoles, runtimeLoginRole);
@@ -2749,6 +2843,21 @@ interface PostgresReplayPrivilegeRow {
   can_select: boolean;
   can_update: boolean;
 }
+
+interface PostgresReplayShapeRow {
+  exact_capability_constraint: boolean;
+  exact_expiry_constraint: boolean;
+  exact_expiry_index: boolean;
+  exact_expiry_column: boolean;
+  exact_surface_constraint: boolean;
+}
+
+const POSTGRES_REPLAY_SURFACE_CONSTRAINT =
+  "CHECK ((surface = ANY (ARRAY['capability'::text, 'mutation'::text, 'webhook'::text])))";
+const POSTGRES_REPLAY_EXPIRY_CONSTRAINT = 'CHECK (((expires_at IS NULL) OR (expires_at > 0)))';
+const POSTGRES_REPLAY_CAPABILITY_CONSTRAINT =
+  "CHECK ((((surface = 'capability'::text) AND (state = 'committed'::text) AND (expires_at IS NOT NULL)) OR ((surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND (expires_at IS NULL))))";
+const POSTGRES_REPLAY_CAPABILITY_INDEX_PREDICATE = "(surface = 'capability'::text)";
 
 async function postgresReplayStorePostureIssues(
   client: RuntimeTransactionClient,
@@ -2775,6 +2884,82 @@ async function postgresReplayStorePostureIssues(
   }
 
   const issues: KovoPostgresPostureIssue[] = [];
+  const shape = await safeQuery<PostgresReplayShapeRow>(
+    client,
+    postgresJoin(
+      [
+        'SELECT EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND column_row.attname = 'expires_at' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_expiry_column,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_surface_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $1) AS exact_surface_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_expires_at_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $2) AS exact_expiry_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_capability_expiry_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $3) AS exact_capability_constraint,',
+        'EXISTS (SELECT 1 FROM pg_index AS index_row',
+        'JOIN pg_class AS index_relation ON index_relation.oid = index_row.indexrelid',
+        'JOIN pg_class AS table_relation ON table_relation.oid = index_row.indrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = table_relation.relnamespace',
+        'JOIN pg_am AS access_method ON access_method.oid = index_relation.relam',
+        'JOIN pg_attribute AS indexed_column ON indexed_column.attrelid = table_relation.oid',
+        'AND indexed_column.attnum = index_row.indkey[0]',
+        "WHERE namespace_row.nspname = 'public' AND table_relation.relname = '_kovo_replay'",
+        "AND index_relation.relname = '_kovo_replay_capability_expiry_idx'",
+        "AND access_method.amname = 'btree' AND indexed_column.attname = 'expires_at'",
+        'AND index_row.indnatts = 1 AND index_row.indnkeyatts = 1',
+        'AND index_row.indexprs IS NULL AND NOT index_row.indisunique',
+        'AND index_row.indisvalid AND index_row.indisready AND index_row.indislive',
+        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $4) AS exact_expiry_index',
+      ],
+      ' ',
+    ),
+    [
+      POSTGRES_REPLAY_SURFACE_CONSTRAINT,
+      POSTGRES_REPLAY_EXPIRY_CONSTRAINT,
+      POSTGRES_REPLAY_CAPABILITY_CONSTRAINT,
+      POSTGRES_REPLAY_CAPABILITY_INDEX_PREDICATE,
+    ],
+  );
+  const shapeRow =
+    shape === undefined || postgresDenseArrayLength(shape.rows, 'Postgres replay shape rows') === 0
+      ? undefined
+      : postgresDenseArrayValue(shape.rows, 0, 'Postgres replay shape rows');
+  if (
+    shapeRow?.exact_expiry_column !== true ||
+    shapeRow.exact_surface_constraint !== true ||
+    shapeRow.exact_expiry_constraint !== true ||
+    shapeRow.exact_capability_constraint !== true ||
+    shapeRow.exact_expiry_index !== true
+  ) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_REPLAY_STORE_SCHEMA',
+      detail:
+        'public._kovo_replay must have the exact bigint expiry column, capability/mutation/webhook surface allowlist, positive-expiry and committed-capability coupling constraints, and bounded-cleanup expiry index; run the current framework provisioner',
+    });
+  }
   const roles: { allow: boolean; role: string }[] = [
     { allow: false, role: config.readerRole },
     { allow: false, role: config.writerRole },

@@ -658,7 +658,7 @@ function snapshotWebhookDefinitionForDeclaration<
     !isDurableWebhookReplayStore(replayStore)
   ) {
     throw new Error(
-      'KV436: webhook() refused a missing, custom, or volatile memory replayStore in production; idempotent or write-capable webhooks require createPostgresWebhookReplayStore() so replay truth survives restart and replicas (SPEC §10.3).',
+      'KV436: webhook() refused a missing, custom, or volatile memory replayStore in production; idempotent or write-capable webhooks require createPostgresAppRuntimeDb().webhookReplayStore so replay truth survives restart and replicas (SPEC §10.3).',
     );
   }
   const access = snapshotAccessDecision(accessSource as AccessDecision | undefined);
