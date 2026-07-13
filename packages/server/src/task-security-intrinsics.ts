@@ -405,6 +405,10 @@ export function taskArrayPush<Value>(values: Value[], value: Value): void {
   commitTaskArrayValue(values, value, 'Durable task array commit');
 }
 
+export function taskArraySet<Value>(values: Value[], index: number, value: Value): void {
+  commitTaskArrayIndex(values, index, value, 'Durable task array replacement');
+}
+
 export function taskArraySlice<Value>(values: readonly Value[], start = 0, end?: number): Value[] {
   assertTaskSecurityIntrinsics();
   return end === undefined

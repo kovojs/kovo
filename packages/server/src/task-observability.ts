@@ -4,6 +4,7 @@ import type { TaskHandle } from './task.js';
 import {
   taskApply,
   taskArrayPush,
+  taskArraySet,
   taskArraySlice,
   taskArraySort,
   taskCreateSet,
@@ -220,7 +221,7 @@ function snapshotStatusFilters(
         'Durable task status filters',
       );
       for (let index = 0; index < values.length; index += 1) {
-        values[index] = observedStatusValue(values[index]);
+        taskArraySet(values, index, observedStatusValue(values[index]));
       }
       status = taskFreeze(values as DurableTaskObservedStatus[]);
     } else {
