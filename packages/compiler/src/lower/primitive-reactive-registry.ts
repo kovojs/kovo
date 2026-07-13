@@ -9,6 +9,8 @@
 // plus the control prop the author passes. The prop name equals the primitive's
 // control field (confirmed by the gallery demos).
 
+import { compilerStringStartsWith } from '../compiler-security-intrinsics.js';
+
 /** @internal How one @kovojs/ui component maps to a reactive primitive entry. */
 export interface PrimitiveReactiveComponent {
   /** Control prop the author passes (e.g. `checked`, `open`, `pressed`, `value`). */
@@ -61,5 +63,5 @@ export const primitiveReactiveComponents: Readonly<Record<string, PrimitiveReact
  * own primitive-derived reactive attributes.
  */
 export function isKovoUiModuleSpecifier(specifier: string): boolean {
-  return specifier === '@kovojs/ui' || specifier.startsWith('@kovojs/ui/');
+  return specifier === '@kovojs/ui' || compilerStringStartsWith(specifier, '@kovojs/ui/');
 }

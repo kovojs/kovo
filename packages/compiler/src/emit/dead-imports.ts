@@ -1,5 +1,14 @@
 import * as ts from 'typescript';
 
+import {
+  compilerArrayAppend,
+  compilerArrayLength,
+  compilerCreateSet,
+  compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerStringCharCodeAt,
+} from '../compiler-security-intrinsics.js';
 import { applySourceReplacements, type SourceReplacement } from '../shared.js';
 
 /**
@@ -17,37 +26,69 @@ export function removeUnreferencedNamedImports(source: string): string {
     true,
     ts.ScriptKind.TSX,
   );
-  const referenced = new Set<string>();
+  const referenced = compilerCreateSet<string>();
 
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) return;
-    if (ts.isIdentifier(node) && isReferenceIdentifier(node)) referenced.add(node.text);
+    if (ts.isIdentifier(node) && isReferenceIdentifier(node)) compilerSetAdd(referenced, node.text);
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(sourceFile, visit);
 
   const replacements: SourceReplacement[] = [];
-  for (const statement of sourceFile.statements) {
+  const statementLength = compilerArrayLength(
+    sourceFile.statements,
+    'Dead-import source statements',
+  );
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Dead-import source statements',
+    ) as ts.Statement;
     if (!ts.isImportDeclaration(statement)) continue;
 
     const importClause = statement.importClause;
     const namedBindings = importClause?.namedBindings;
     if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
 
-    const unused = namedBindings.elements.filter((element) => !referenced.has(element.name.text));
+    const unused: ts.ImportSpecifier[] = [];
+    const elementLength = compilerArrayLength(namedBindings.elements, 'Dead-import named bindings');
+    for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+      const element = compilerOwnDataValue(
+        namedBindings.elements,
+        elementIndex,
+        'Dead-import named bindings',
+      ) as ts.ImportSpecifier;
+      if (!compilerSetHas(referenced, element.name.text)) {
+        compilerArrayAppend(unused, element, 'Dead-import unused bindings');
+      }
+    }
     if (unused.length === 0) continue;
 
-    if (unused.length === namedBindings.elements.length) {
-      replacements.push(
+    if (unused.length === elementLength) {
+      compilerArrayAppend(
+        replacements,
         importClause?.name === undefined
           ? removeStatementReplacement(source, statement, sourceFile)
           : removeNamedBindingsReplacement(importClause.name, namedBindings),
+        'Dead-import replacements',
       );
       continue;
     }
 
-    for (const run of contiguousImportSpecifierRuns(unused, namedBindings.elements)) {
-      replacements.push(removeNamedImportRunReplacement(run, namedBindings.elements, sourceFile));
+    const runs = contiguousImportSpecifierRuns(unused, namedBindings.elements);
+    const runLength = compilerArrayLength(runs, 'Dead-import binding runs');
+    for (let runIndex = 0; runIndex < runLength; runIndex += 1) {
+      compilerArrayAppend(
+        replacements,
+        removeNamedImportRunReplacement(
+          compilerOwnDataValue(runs, runIndex, 'Dead-import binding runs') as ts.ImportSpecifier[],
+          namedBindings.elements,
+          sourceFile,
+        ),
+        'Dead-import replacements',
+      );
     }
   }
 
@@ -82,8 +123,8 @@ function removeStatementReplacement(
   sourceFile: ts.SourceFile,
 ): SourceReplacement {
   let end = statement.getEnd();
-  if (source.charCodeAt(end) === 13) end += 1;
-  if (source.charCodeAt(end) === 10) end += 1;
+  if (compilerStringCharCodeAt(source, end) === 13) end += 1;
+  if (compilerStringCharCodeAt(source, end) === 10) end += 1;
 
   return {
     end,
@@ -111,19 +152,38 @@ function contiguousImportSpecifierRuns(
   let current: ts.ImportSpecifier[] = [];
   let previousIndex = -2;
 
-  for (const element of elements) {
-    const index = allElements.indexOf(element);
+  const elementLength = compilerArrayLength(elements, 'Dead-import unused bindings');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Dead-import unused bindings',
+    ) as ts.ImportSpecifier;
+    const index = indexOfImportSpecifier(allElements, element);
     if (current.length > 0 && index !== previousIndex + 1) {
-      runs.push(current);
+      compilerArrayAppend(runs, current, 'Dead-import binding runs');
       current = [];
     }
-    current.push(element);
+    compilerArrayAppend(current, element, 'Dead-import binding run');
     previousIndex = index;
   }
 
-  if (current.length > 0) runs.push(current);
+  if (current.length > 0) compilerArrayAppend(runs, current, 'Dead-import binding runs');
 
   return runs;
+}
+
+function indexOfImportSpecifier(
+  elements: readonly ts.ImportSpecifier[],
+  expected: ts.ImportSpecifier,
+): number {
+  const length = compilerArrayLength(elements, 'Dead-import named bindings');
+  for (let index = 0; index < length; index += 1) {
+    if (compilerOwnDataValue(elements, index, 'Dead-import named bindings') === expected) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function removeNamedImportRunReplacement(
@@ -131,15 +191,27 @@ function removeNamedImportRunReplacement(
   elements: ts.NodeArray<ts.ImportSpecifier>,
   sourceFile: ts.SourceFile,
 ): SourceReplacement {
-  const first = run[0]!;
-  const last = run[run.length - 1]!;
-  const firstIndex = elements.indexOf(first);
-  const lastIndex = elements.indexOf(last);
+  const runLength = compilerArrayLength(run, 'Dead-import binding run');
+  const first = compilerOwnDataValue(run, 0, 'Dead-import binding run') as ts.ImportSpecifier;
+  const last = compilerOwnDataValue(
+    run,
+    runLength - 1,
+    'Dead-import binding run',
+  ) as ts.ImportSpecifier;
+  const firstIndex = indexOfImportSpecifier(elements, first);
+  const lastIndex = indexOfImportSpecifier(elements, last);
   const start = first.getStart(sourceFile);
 
-  if (lastIndex < elements.length - 1) {
+  const elementLength = compilerArrayLength(elements, 'Dead-import named bindings');
+  if (lastIndex < elementLength - 1) {
     return {
-      end: elements[lastIndex + 1]!.getStart(sourceFile),
+      end: (
+        compilerOwnDataValue(
+          elements,
+          lastIndex + 1,
+          'Dead-import named bindings',
+        ) as ts.ImportSpecifier
+      ).getStart(sourceFile),
       replacement: '',
       start,
     };
@@ -148,6 +220,12 @@ function removeNamedImportRunReplacement(
   return {
     end: last.getEnd(),
     replacement: '',
-    start: elements[firstIndex - 1]!.getEnd(),
+    start: (
+      compilerOwnDataValue(
+        elements,
+        firstIndex - 1,
+        'Dead-import named bindings',
+      ) as ts.ImportSpecifier
+    ).getEnd(),
   };
 }

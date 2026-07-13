@@ -7,6 +7,8 @@ import {
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
+  compilerArrayAppend,
+  compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
@@ -627,14 +629,30 @@ function kv201Diagnostic(
   const handlerRef = formatKovoModuleRef(
     kovoModuleRef(clientModuleUrl(fileName), lowering.exportName, 'handler'),
   );
+  const elementParamNames: string[] = [];
+  const paramLength = compilerArrayLength(lowering.params, 'KV201 element params');
+  for (let index = 0; index < paramLength; index += 1) {
+    const param = compilerOwnDataValue(lowering.params, index, 'KV201 element params') as
+      | ElementParam
+      | undefined;
+    if (!param) compilerFailClosed(`KV201 element params[${index}] must be dense own data.`);
+    compilerArrayAppend(
+      elementParamNames,
+      param.attributeName,
+      'KV201 element-param attribute names',
+    );
+  }
   return {
     ...diagnosticFor(fileName, 'KV201', source, offset, lowering.attributeName.length),
-    help: [
-      `${labels.handlerLowering} ${lowering.attributeName}="${handlerRef}"`,
-      `${labels.blockedExpression} ${lowering.expression}`,
-      `${labels.elementParams} ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
-      definition.help ?? '',
-    ].join('\n'),
+    help: compilerArrayJoin(
+      [
+        `${labels.handlerLowering} ${lowering.attributeName}="${handlerRef}"`,
+        `${labels.blockedExpression} ${lowering.expression}`,
+        `${labels.elementParams} ${compilerArrayJoin(elementParamNames, ', ') || '-'}`,
+        definition.help ?? '',
+      ],
+      '\n',
+    ),
   };
 }
 

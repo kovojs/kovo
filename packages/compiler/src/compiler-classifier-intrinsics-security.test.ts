@@ -771,6 +771,41 @@ export const ProductGrid = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('does not grant Kovo UI primitive authority through String.startsWith', () => {
+    const nativeStartsWith = String.prototype.startsWith;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      String.prototype.startsWith = function poisonedUiSpecifierStartsWith(
+        searchString: string,
+        position?: number,
+      ): boolean {
+        if (`${this}` === './local-switch.js' && searchString === '@kovojs/ui/') {
+          poisonHits += 1;
+          return true;
+        }
+        return nativeApply(nativeStartsWith, this, [searchString, position]);
+      };
+      result = compileComponentModule({
+        fileName: 'local-switch-probe.tsx',
+        source: `
+import { Switch } from './local-switch.js';
+export const LocalSwitchProbe = component({
+  state: () => ({ checked: false }),
+  render: (_queries, state) => <Switch checked={state.checked}>Local</Switch>,
+});
+`,
+      });
+    } finally {
+      String.prototype.startsWith = nativeStartsWith;
+    }
+
+    const emitted = result?.files.map((file) => file.source).join('\n') ?? '';
+    expect(emitted).not.toContain('LocalSwitchProbe$Switch_aria_checked_derive');
+    expect(poisonHits).toBe(0);
+  });
+
   it('cannot forge eager-trigger justification through String.matchAll', () => {
     const nativeMatchAll = String.prototype.matchAll;
     const nativeApply = Reflect.apply;
@@ -1618,6 +1653,47 @@ export const PayButton = component({
     expect(clientSource).not.toContain('../../config/secrets');
   });
 
+  it('does not retain extracted client-only imports through dead-import Array.filter', () => {
+    const nativeFilter = Array.prototype.filter;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.filter = function poisonedDeadImportFilter<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): T[] {
+        if (
+          (this[0] as { name?: { text?: unknown } } | undefined)?.name?.text === 'meterValueState'
+        ) {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeFilter, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'meter-probe.tsx',
+        source: `
+import { meterValueState } from '@kovojs/headless-ui/meter';
+export const MeterProbe = component({
+  state: () => ({ value: 72 }),
+  render: (_queries, state) => (
+    <button onClick={() => { state.value = meterValueState({ value: state.value }).value; }}>
+      Optimize
+    </button>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.filter = nativeFilter;
+    }
+
+    const server = result?.files.find((file) => file.kind === 'server')?.source ?? '';
+    expect(server).not.toContain('meterValueState');
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not hide an unknown carrier escape through Array.some replacement', () => {
     const nativeSome = Array.prototype.some;
     const nativeApply = Reflect.apply;
@@ -1708,6 +1784,51 @@ export const UserCard = component({
       Array.prototype.some = nativeSome;
     }
     expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV201')).toHaveLength(1);
+  });
+
+  it('does not forge KV201 element-param guidance through Array map/join', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeJoin = Array.prototype.join;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedKv201ParamMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        if ((this[0] as { attributeName?: unknown } | undefined)?.attributeName === 'data-p-id') {
+          poisonHits += 1;
+          return ['data-p-attacker'] as U[];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      Array.prototype.join = function poisonedKv201HelpJoin(separator?: string): string {
+        if (separator === '\n' && `${this[0] ?? ''}`.startsWith('Would lower to:')) {
+          poisonHits += 1;
+          return 'KOVO_KV201_GUIDANCE_INJECTION';
+        }
+        return nativeApply(nativeJoin, this, [separator]);
+      };
+      result = compileComponentModule({
+        fileName: 'handler-guidance-probe.tsx',
+        source: `
+export const HandlerGuidanceProbe = component({
+  render: () => (
+    <button data-p-id={item.id} onClick={() => window.alert(item.id)}>Unsafe</button>
+  ),
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+      Array.prototype.join = nativeJoin;
+    }
+
+    const diagnostic = result?.diagnostics.find((candidate) => candidate.code === 'KV201');
+    expect(diagnostic?.help).toContain('Element params: data-p-id');
+    expect(diagnostic?.help).not.toContain('KOVO_KV201_GUIDANCE_INJECTION');
+    expect(poisonHits).toBe(0);
   });
 
   it('does not accept an empty publishToClient reason through String.trim replacement', () => {
@@ -2870,5 +2991,60 @@ export const CartList = component({
     expect(lowered).not.toContain('KOVO_TEMPLATE_STAMP_INJECTION');
     expect(lowered).toContain('kovoEscapeHtml(read(["name"]))');
     expect(poisonHits).toBe(0);
+  });
+
+  it('does not erase mutation invalidation registry authority through Array.map', () => {
+    const nativeMap = Array.prototype.map;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      Array.prototype.map = function poisonedInvalidationQueryMap<T, U>(
+        callback: (value: T, index: number, array: T[]) => U,
+        thisArg?: unknown,
+      ): U[] {
+        if (this.length === 2 && this[0] === 'account' && this[1] === 'audit') {
+          poisonHits += 1;
+          return [];
+        }
+        return nativeApply(nativeMap, this, [callback, thisArg]);
+      };
+      result = compileComponentModule({
+        fileName: 'registry-probe.tsx',
+        registryFacts: {
+          invalidations: { 'account/save': ['account', 'audit'] },
+        },
+        source: `
+export const RegistryProbe = component({
+  render: () => <registry-probe>Safe</registry-probe>,
+});
+`,
+      });
+    } finally {
+      Array.prototype.map = nativeMap;
+    }
+
+    const registry = result?.files.find((file) => file.kind === 'registry')?.source ?? '';
+    expect(registry).toContain(`  'account/save': 'account' | 'audit';`);
+    expect(poisonHits).toBe(0);
+  });
+
+  it('quotes registry route facts instead of admitting declaration-source injection', () => {
+    const route = `/safe';\ndeclare global { interface Window { KOVO_REGISTRY_INJECTION: true } }`;
+    const result = compileComponentModule({
+      fileName: 'registry-route-probe.tsx',
+      registryFacts: { routes: [route] },
+      source: `
+export const RegistryRouteProbe = component({
+  render: () => <registry-route-probe>Safe</registry-route-probe>,
+});
+`,
+    });
+
+    const registry = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+    expect(registry).toContain(JSON.stringify(route));
+    expect(registry).not.toContain(
+      `\ndeclare global { interface Window { KOVO_REGISTRY_INJECTION: true } }`,
+    );
   });
 });
