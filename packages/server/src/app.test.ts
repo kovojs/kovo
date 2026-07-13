@@ -55,6 +55,7 @@ function attestedLiveTargetHeader(
   props: Record<string, unknown> = {},
   csrf?: { secret: string; sessionId: (request: unknown) => string | undefined },
   sourceUrl?: string,
+  principal?: string,
 ): string {
   // SPEC §9.3: the live-target attestation is bound to the CSRF secret + session principal, so an
   // app configured with `csrf` must mint the test attestation under the same keyring/principal.
@@ -63,7 +64,7 @@ function attestedLiveTargetHeader(
     {
       buildToken,
       ...(csrf === undefined ? {} : { csrf }),
-      request: {},
+      request: principal === undefined ? {} : { session: { user: { id: principal } } },
       ...(sourceUrl === undefined ? {} : { sourceUrl }),
     },
   );
@@ -2968,7 +2969,7 @@ describe('server createApp request shell', () => {
         headers: {
           'Kovo-Current-Url': 'https://example.test/cart',
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, csrf, 'https://example.test/cart')}`,
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, csrf, 'https://example.test/cart', 'u1')}`,
           'Kovo-Targets': 'cart=cart',
           origin: 'https://example.test',
         },
