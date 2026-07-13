@@ -15,17 +15,22 @@ import {
   compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
+  compilerCreateNullRecord,
   compilerCreateSet,
   compilerDefineOwnDataProperty,
   compilerJsonStringify,
   compilerMapForEach,
   compilerMapGet,
   compilerMapSet,
+  compilerNumberValue,
   compilerOwnDataValue,
+  compilerRegExpExec,
+  compilerRegExpReplace,
   compilerRegExpTest,
   compilerSetOwnDataProperty,
   compilerSetAdd,
   compilerSetDelete,
+  compilerSetForEach,
   compilerSetHas,
   compilerSha256Hex,
   compilerSnapshotDenseArray,
@@ -36,6 +41,7 @@ import {
   compilerStringSplit,
   compilerStringStartsWith,
   compilerStringToLowerCase,
+  compilerStringToUpperCase,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
@@ -652,7 +658,10 @@ function isExportedRenderSourceFunction(node: ts.Node): node is ts.FunctionDecla
 }
 
 export function firstComponentModel(model: ComponentModuleModel): ComponentModel | null {
-  return model.components[0] ?? null;
+  return (
+    (compilerOwnDataValue(model.components, 0, 'Component models') as ComponentModel | undefined) ??
+    null
+  );
 }
 
 export function componentOptionStaticValueFor(
@@ -666,16 +675,30 @@ export function inferComponentName(fileName: string, model: ComponentModuleModel
   const component = firstComponentModel(model);
   if (component?.localName) return component.localName;
 
-  const baseName =
-    fileName
-      .replace(/\.[^.]+$/, '')
-      .split('/')
-      .at(-1) ?? 'Component';
-  return baseName
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
-    .join('');
+  let basenameStart = 0;
+  let extensionStart = fileName.length;
+  for (let index = 0; index < fileName.length; index += 1) {
+    const char = fileName[index];
+    if (char === '/') {
+      basenameStart = index + 1;
+      extensionStart = fileName.length;
+    } else if (char === '.') {
+      extensionStart = index;
+    }
+  }
+  const baseName = compilerStringSlice(fileName, basenameStart, extensionStart) || 'Component';
+  let result = '';
+  let partStart = 0;
+  for (let index = 0; index <= baseName.length; index += 1) {
+    const char = baseName[index];
+    if (index !== baseName.length && char !== '-' && char !== '_') continue;
+    if (index > partStart) {
+      result += compilerStringToUpperCase(baseName[partStart] ?? '');
+      result += compilerStringSlice(baseName, partStart + 1, index);
+    }
+    partStart = index + 1;
+  }
+  return result;
 }
 
 export function componentOptionStaticValue(
@@ -1145,7 +1168,13 @@ function mutationHandlerSourceFingerprint(
       break;
     }
   }
-  const declaration = statement?.declarationList.declarations[0];
+  const declaration = statement
+    ? (compilerOwnDataValue(
+        statement.declarationList.declarations,
+        0,
+        'Canonical handler declarations',
+      ) as ts.VariableDeclaration | undefined)
+    : undefined;
   const initializer = declaration?.initializer;
   if (!initializer) return undefined;
   let handler: ts.Expression | ts.MethodDeclaration | undefined = initializer;
@@ -1211,11 +1240,29 @@ function canonicalHandlerAst(node: ts.Node, sourceFile: ts.SourceFile): string {
 }
 
 function mutationHandlerAuthorityIsStaticallyInspectable(call: ts.CallExpression): boolean {
-  const options = [...call.arguments].find(ts.isObjectLiteralExpression);
+  let options: ts.ObjectLiteralExpression | undefined;
+  const argumentLength = compilerArrayLength(call.arguments, 'Mutation arguments');
+  for (let index = 0; index < argumentLength; index += 1) {
+    const argument = compilerOwnDataValue(call.arguments, index, 'Mutation arguments') as
+      | ts.Expression
+      | undefined;
+    if (!argument) throw new TypeError(`Mutation arguments[${index}] must be own data.`);
+    if (ts.isObjectLiteralExpression(argument)) {
+      options = argument;
+      break;
+    }
+  }
   if (!options) return false;
 
   let handlerCount = 0;
-  for (const property of options.properties) {
+  const propertyLength = compilerArrayLength(options.properties, 'Mutation option properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      options.properties,
+      index,
+      'Mutation option properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) throw new TypeError(`Mutation option properties[${index}] must be own data.`);
     if (ts.isSpreadAssignment(property) || propertyNameText(property.name) === null) return false;
     if (propertyNameText(property.name) !== 'handler') continue;
     handlerCount += 1;
@@ -1487,7 +1534,7 @@ function documentGetElementByIdTarget(
     return null;
   }
 
-  const target = call.arguments[0];
+  const target = callArgument(call, 0);
   if (!target) return null;
   return ts.isStringLiteralLike(target) ? target.text : null;
 }
@@ -1558,8 +1605,14 @@ function scopeDeclaresIdentifierNamed(
       if (bindingName !== excluded && bindingName.text === name) found = true;
       return;
     }
-    for (const element of bindingName.elements) {
-      if (ts.isBindingElement(element)) visitBindingName(element.name);
+    const elementLength = compilerArrayLength(bindingName.elements, 'Scope binding elements');
+    for (let index = 0; index < elementLength; index += 1) {
+      const element = compilerOwnDataValue(
+        bindingName.elements,
+        index,
+        'Scope binding elements',
+      ) as ts.ArrayBindingElement | undefined;
+      if (element && ts.isBindingElement(element)) visitBindingName(element.name);
     }
   };
 
@@ -1856,12 +1909,21 @@ function stringRenderReturnsFromFunctionBody(
   body: ts.Block | undefined,
 ): StringRenderModel[] {
   if (!body) return [];
-
-  return body.statements.flatMap((statement) =>
-    ts.isReturnStatement(statement) && statement.expression
-      ? stringRenderModel(sourceFile, source, statement.expression)
-      : [],
-  );
+  const result: StringRenderModel[] = [];
+  const statementLength = compilerArrayLength(body.statements, 'String-render statements');
+  for (let index = 0; index < statementLength; index += 1) {
+    const statement = compilerOwnDataValue(body.statements, index, 'String-render statements') as
+      | ts.Statement
+      | undefined;
+    if (!statement) throw new TypeError(`String-render statements[${index}] must be own data.`);
+    if (!ts.isReturnStatement(statement) || !statement.expression) continue;
+    appendDenseValues(
+      result,
+      stringRenderModel(sourceFile, source, statement.expression),
+      'String-render models',
+    );
+  }
+  return result;
 }
 
 function stringRenderModel(
@@ -1882,7 +1944,7 @@ function stringRenderModel(
     {
       end: unwrapped.getEnd(),
       ...optionalFirstHtmlTagName(unwrapped),
-      source: source.slice(unwrapped.getStart(sourceFile), unwrapped.getEnd()),
+      source: compilerStringSlice(source, unwrapped.getStart(sourceFile), unwrapped.getEnd()),
       start: unwrapped.getStart(sourceFile),
     },
   ];
@@ -1899,17 +1961,25 @@ function stringRenderLiteralText(
   expression: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | ts.TemplateExpression,
 ): string {
   if (ts.isTemplateExpression(expression)) {
-    return [
-      expression.head.text,
-      ...expression.templateSpans.map((span) => span.literal.text),
-    ].join('{}');
+    let result = expression.head.text;
+    const spanLength = compilerArrayLength(expression.templateSpans, 'Template spans');
+    for (let index = 0; index < spanLength; index += 1) {
+      const span = compilerOwnDataValue(expression.templateSpans, index, 'Template spans') as
+        | ts.TemplateSpan
+        | undefined;
+      if (!span) throw new TypeError(`Template spans[${index}] must be own data.`);
+      result += `{}` + span.literal.text;
+    }
+    return result;
   }
 
   return expression.text;
 }
 
 function firstHtmlTagNameFromLiteralText(source: string): string | null {
-  return /<\s*([A-Za-z][\w:-]*)(?:\s|>|\/)/.exec(source)?.[1] ?? null;
+  const match = compilerRegExpExec(/<\s*([A-Za-z][\w:-]*)(?:\s|>|\/)/, source);
+  const tagName = match ? compilerOwnDataValue(match, 1, 'First HTML tag-name match') : undefined;
+  return typeof tagName === 'string' ? tagName : null;
 }
 
 function unwrapParentheses(expression: ts.Expression): ts.Expression {
@@ -2034,7 +2104,7 @@ function handlerReadsAmbientCookie(
       const callee = unwrapExpression(node.expression);
       const receiver = headerMethodReceiver(callee, requestNames, headersNames);
       if (receiver && (receiver.method === 'get' || receiver.method === 'has')) {
-        const header = staticHeaderName(node.arguments[0], staticStrings);
+        const header = staticHeaderName(callArgument(node, 0), staticStrings);
         if (header === undefined || !isProvablyNonAmbientMutationHeader(header)) {
           readsCookie = true;
           return;
@@ -2436,7 +2506,7 @@ function isRuntimeIdentifierReference(node: ts.Identifier, root: ts.Node): boole
       ts.isJsxSelfClosingElement(parent)) &&
     parent.tagName === node
   ) {
-    return !/^[a-z]/.test(node.text);
+    return !compilerRegExpTest(/^[a-z]/, node.text);
   }
   return true;
 }
@@ -3788,9 +3858,13 @@ function unresolvedHandlerWriteSinkFact(
   }
 
   if (ts.isElementAccessExpression(callee)) {
-    const receiver = source
-      .slice(callee.expression.getStart(sourceFile), callee.expression.getEnd())
-      .trim();
+    const receiver = compilerStringTrim(
+      compilerStringSlice(
+        source,
+        callee.expression.getStart(sourceFile),
+        callee.expression.getEnd(),
+      ),
+    );
     if (compilerSetHas(TASK_CONTEXT_COMPOSITION_METHODS, receiver)) return null;
     return {
       canonicalTarget: { identity: 'UNRESOLVED', provenance: 'computed-member' },
@@ -3827,24 +3901,46 @@ function taskCompositionEdges(
   ctxParam: string | undefined,
   method: 'runMutation' | 'runQuery' | 'schedule',
 ): string[] {
-  const edges = new Set<string>();
+  const edges = compilerCreateSet<string>();
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const receiver = node.expression.expression;
-      const receiverText = source.slice(receiver.getStart(sourceFile), receiver.getEnd()).trim();
+      const receiverText = compilerStringTrim(
+        compilerStringSlice(source, receiver.getStart(sourceFile), receiver.getEnd()),
+      );
       if (
         node.expression.name.text === method &&
         (ctxParam === undefined || receiverText === ctxParam)
       ) {
-        edges.add(taskCompositionTarget(sourceFile, source, node.arguments[0]) ?? `${method}:?`);
+        compilerSetAdd(
+          edges,
+          taskCompositionTarget(sourceFile, source, callArgument(node, 0)) ?? `${method}:?`,
+        );
       }
     }
     ts.forEachChild(node, visit);
   };
 
   visit(body);
-  return [...edges].sort();
+  const result: string[] = [];
+  compilerSetForEach(edges, (edge) => insertSortedString(result, edge));
+  return result;
+}
+
+function insertSortedString(values: string[], value: string): void {
+  let insertionIndex = compilerArrayLength(values, 'Sorted strings');
+  compilerArrayAppend(values, value, 'Sorted strings');
+  while (insertionIndex > 0) {
+    const previous = compilerOwnDataValue(values, insertionIndex - 1, 'Sorted strings');
+    if (typeof previous !== 'string') {
+      throw new TypeError(`Sorted strings[${insertionIndex - 1}] must be own data.`);
+    }
+    if (previous <= value) break;
+    compilerSetOwnDataProperty(values, insertionIndex, previous);
+    insertionIndex -= 1;
+  }
+  compilerSetOwnDataProperty(values, insertionIndex, value);
 }
 
 function taskCompositionTarget(
@@ -3854,16 +3950,21 @@ function taskCompositionTarget(
 ): string | undefined {
   if (!expression) return undefined;
   if (ts.isStringLiteralLike(expression)) return expression.text;
-  return source
-    .slice(expression.getStart(sourceFile), expression.getEnd())
-    .replace(/\s+/g, ' ')
-    .trim();
+  return compilerStringTrim(
+    compilerRegExpReplace(
+      /\s+/g,
+      compilerStringSlice(source, expression.getStart(sourceFile), expression.getEnd()),
+      ' ',
+    ),
+  );
 }
 
 function parameterName(name: ts.BindingName): string | undefined {
   if (ts.isIdentifier(name)) return name.text;
   if (!ts.isObjectBindingPattern(name)) return undefined;
-  const element = name.elements[0];
+  const element = compilerOwnDataValue(name.elements, 0, 'Parameter binding elements') as
+    | ts.BindingElement
+    | undefined;
   if (
     element &&
     name.elements.length === 1 &&
@@ -4066,7 +4167,7 @@ function isBooleanLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
 }
 
 function isNumericLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
-  return /^-?\d(?:\d|\.)*$/.test(node.getText(sourceFile));
+  return compilerRegExpTest(/^-?\d(?:\d|\.)*$/, node.getText(sourceFile));
 }
 
 function staticConstructorTypeEntry(
@@ -4408,8 +4509,14 @@ function jsxChildBody(
 ): JsxElementChildBody | null {
   if (selfClosing) return null;
 
-  const leadingWhitespace = /^\s*/.exec(childSource)?.[0].length ?? 0;
-  const body = childSource.trim();
+  let leadingWhitespace = 0;
+  while (
+    leadingWhitespace < childSource.length &&
+    compilerRegExpTest(/^\s$/u, childSource[leadingWhitespace] ?? '')
+  ) {
+    leadingWhitespace += 1;
+  }
+  const body = compilerStringTrim(childSource);
   if (!body) return null;
 
   return {
@@ -4425,7 +4532,7 @@ function selfClosingSlashHasLeadingWhitespace(
 ): boolean {
   if (ts.isJsxElement(node)) return false;
 
-  return /\s/.test(source[openingElement.getEnd() - 3] ?? '');
+  return compilerRegExpTest(/\s/u, source[openingElement.getEnd() - 3] ?? '');
 }
 
 function jsxChildFacts(
@@ -4442,7 +4549,12 @@ function jsxChildFacts(
   const childExpressionContainers: SourceSpan[] = [];
   let childNonWhitespaceCount = 0;
 
-  for (const child of node.children) {
+  const childLength = compilerArrayLength(node.children, 'JSX children');
+  for (let index = 0; index < childLength; index += 1) {
+    const child = compilerOwnDataValue(node.children, index, 'JSX children') as
+      | ts.JsxChild
+      | undefined;
+    if (!child) throw new TypeError(`JSX children[${index}] must be own data.`);
     if (ts.isJsxText(child)) {
       if (!child.containsOnlyTriviaWhiteSpaces) childNonWhitespaceCount += 1;
       continue;
@@ -4451,10 +4563,14 @@ function jsxChildFacts(
     if (ts.isJsxExpression(child)) {
       if (child.expression) {
         childNonWhitespaceCount += 1;
-        childExpressionContainers.push({
-          end: child.getEnd(),
-          start: child.getStart(sourceFile),
-        });
+        compilerArrayAppend(
+          childExpressionContainers,
+          {
+            end: child.getEnd(),
+            start: child.getStart(sourceFile),
+          },
+          'JSX child expression containers',
+        );
       }
       continue;
     }
@@ -4470,7 +4586,7 @@ function jsxChildFacts(
 
 function attributeLeadingStart(source: string, start: number): number {
   let leadingStart = start;
-  while (leadingStart > 0 && /\s/.test(source[leadingStart - 1] ?? '')) {
+  while (leadingStart > 0 && compilerRegExpTest(/\s/u, source[leadingStart - 1] ?? '')) {
     leadingStart -= 1;
   }
   return leadingStart;
@@ -4482,7 +4598,11 @@ function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
 
   while (current) {
     if (ts.isJsxElement(current)) {
-      tags.push(current.openingElement.tagName.getText(sourceFile));
+      compilerArrayAppend(
+        tags,
+        current.openingElement.tagName.getText(sourceFile),
+        'JSX ancestor tags',
+      );
     }
     current = current.parent;
   }
@@ -4508,12 +4628,12 @@ function isInsideStaticRepeatCallback(node: ts.Node): boolean {
 }
 
 function isStaticRepeatCallback(call: ts.CallExpression, callback: ts.Expression): boolean {
-  if (call.arguments[0] === callback && ts.isPropertyAccessExpression(call.expression)) {
+  if (callArgument(call, 0) === callback && ts.isPropertyAccessExpression(call.expression)) {
     // `.map` / `.flatMap` are structural array-iteration recognizers for JSX repeatability.
     return call.expression.name.text === 'map' || call.expression.name.text === 'flatMap';
   }
 
-  if (call.arguments[1] !== callback || !ts.isPropertyAccessExpression(call.expression)) {
+  if (callArgument(call, 1) !== callback || !ts.isPropertyAccessExpression(call.expression)) {
     return false;
   }
 
@@ -4634,14 +4754,17 @@ function jsxExpressionModel(
     ts.isCallExpression(unwrapped) && ts.isIdentifier(unwrapped.expression)
       ? unwrapped.expression.text
       : undefined;
+  const localNames: string[] = [];
+  appendUniqueStrings(localNames, localIdentifierNames(expression), 'JSX expression local names');
+  appendUniqueStrings(localNames, enclosingLocalNames(node), 'JSX expression local names');
   return {
     ...(callName === undefined ? {} : { callName }),
     containerEnd: node.getEnd(),
     containerStart: node.getStart(sourceFile),
     end,
-    expression: source.slice(start, end).trim(),
+    expression: compilerStringTrim(compilerStringSlice(source, start, end)),
     localConstAliases: localConstAliasModels(sourceFile, source, expression, start),
-    localNames: [...new Set([...localIdentifierNames(expression), ...enclosingLocalNames(node)])],
+    localNames,
     propertyAccesses: propertyAccessPathModels(sourceFile, expression),
     references: referenceIdentifiers(expression),
     ...(solePath ? { solePropertyAccessPath: solePath } : {}),
@@ -4650,38 +4773,55 @@ function jsxExpressionModel(
   };
 }
 
+function appendUniqueStrings(target: string[], values: readonly string[], label: string): void {
+  const source = snapshotCompilerModelArray(values, label);
+  for (let index = 0; index < source.length; index += 1) {
+    if (!denseStringArrayIncludes(target, source[index]!, label)) {
+      compilerArrayAppend(target, source[index]!, label);
+    }
+  }
+}
+
 function localConstAliasModels(
   sourceFile: ts.SourceFile,
   source: string,
   expression: ts.Expression,
   expressionStart: number,
 ): readonly LocalConstAliasModel[] {
-  const references = new Set(referenceIdentifiers(expression));
-  if (references.size === 0) return [];
+  const references = compilerCreateSet<string>();
+  const referenceNames = referenceIdentifiers(expression);
+  for (let index = 0; index < referenceNames.length; index += 1) {
+    compilerSetAdd(references, referenceNames[index]!);
+  }
+  if (referenceNames.length === 0) return [];
 
   const body = smallestFunctionBlockContaining(sourceFile, expressionStart);
   if (!body) return [];
 
   const aliases: LocalConstAliasModel[] = [];
-  const seen = new Set<string>();
+  const seen = compilerCreateSet<string>();
   const visit = (node: ts.Node): void => {
     if (node.getStart(sourceFile) >= expressionStart) return;
     if (node !== body && isFunctionOrClassLike(node)) return;
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const name = node.name.text;
-      if (references.has(name) && isConstVariableDeclaration(node)) {
+      if (compilerSetHas(references, name) && isConstVariableDeclaration(node)) {
         const accesses = propertyAccessPathModels(sourceFile, node.initializer);
-        if (accesses.length > 0 && !seen.has(name)) {
+        if (accesses.length > 0 && !compilerSetHas(seen, name)) {
           const start = node.initializer.getStart(sourceFile);
           const end = node.initializer.getEnd();
-          seen.add(name);
-          aliases.push({
-            accesses,
-            expression: source.slice(start, end).trim(),
-            name,
-            references: referenceIdentifiers(node.initializer),
-            start: node.getStart(sourceFile),
-          });
+          compilerSetAdd(seen, name);
+          compilerArrayAppend(
+            aliases,
+            {
+              accesses,
+              expression: compilerStringTrim(compilerStringSlice(source, start, end)),
+              name,
+              references: referenceIdentifiers(node.initializer),
+              start: node.getStart(sourceFile),
+            },
+            'Local const aliases',
+          );
         }
       }
     }
@@ -4745,8 +4885,8 @@ function jsxCommentModel(
 ): JsxCommentModel | null {
   const start = node.getStart(sourceFile);
   const end = node.getEnd();
-  const text = source.slice(start, end);
-  if (!/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(text)) return null;
+  const text = compilerStringSlice(source, start, end);
+  if (!compilerRegExpTest(/^\{\s*\/\*[\s\S]*\*\/\s*\}$/, text)) return null;
 
   // SPEC §5.2: the parser is the source-text boundary, so the KV codes a comment justifies are
   // extracted here into a typed fact (`justifiedDiagnostics`). Post-parse validators consume that
@@ -4763,9 +4903,21 @@ function jsxCommentModel(
 }
 
 function parseJustifiedDiagnostics(commentText: string): string[] {
-  const codes = new Set<string>();
-  for (const match of commentText.matchAll(/KV\d{3}/g)) codes.add(match[0]);
-  return [...codes];
+  const seen = compilerCreateSet<string>();
+  const codes: string[] = [];
+  const pattern = /KV\d{3}/g;
+  while (true) {
+    const match = compilerRegExpExec(pattern, commentText);
+    if (!match) break;
+    const code = compilerOwnDataValue(match, 0, 'Justified diagnostic match');
+    if (typeof code !== 'string') {
+      throw new TypeError('Justified diagnostic match must contain an own string.');
+    }
+    if (compilerSetHas(seen, code)) continue;
+    compilerSetAdd(seen, code);
+    compilerArrayAppend(codes, code, 'Justified diagnostic codes');
+  }
+  return codes;
 }
 
 function directlyFollowingJsxElementAttributeStart(
@@ -4775,14 +4927,29 @@ function directlyFollowingJsxElementAttributeStart(
   const parent = node.parent;
   if (!ts.isJsxElement(parent)) return {};
 
-  const childIndex = parent.children.findIndex((child) => child === node);
+  const childLength = compilerArrayLength(parent.children, 'JSX sibling children');
+  let childIndex = -1;
+  for (let index = 0; index < childLength; index += 1) {
+    if (compilerOwnDataValue(parent.children, index, 'JSX sibling children') === node) {
+      childIndex = index;
+      break;
+    }
+  }
   if (childIndex === -1) return {};
 
-  for (const sibling of parent.children.slice(childIndex + 1)) {
+  for (let index = childIndex + 1; index < childLength; index += 1) {
+    const sibling = compilerOwnDataValue(parent.children, index, 'JSX sibling children') as
+      | ts.JsxChild
+      | undefined;
+    if (!sibling) throw new TypeError(`JSX sibling children[${index}] must be own data.`);
     if (ts.isJsxText(sibling) && sibling.containsOnlyTriviaWhiteSpaces) continue;
     if (ts.isJsxElement(sibling) || ts.isJsxSelfClosingElement(sibling)) {
       const openingElement = ts.isJsxElement(sibling) ? sibling.openingElement : sibling;
-      const [attribute] = openingElement.attributes.properties;
+      const attribute = compilerOwnDataValue(
+        openingElement.attributes.properties,
+        0,
+        'Following JSX element attributes',
+      ) as ts.JsxAttribute | ts.JsxSpreadAttribute | undefined;
       return attribute && ts.isJsxAttribute(attribute)
         ? { attachedAttributeStart: attribute.getStart(sourceFile) }
         : {};
@@ -4822,7 +4989,7 @@ function jsxAttributeExpression(
   const unwrapped = unwrapExpression(initializer.expression);
   const bareIdentifierName = ts.isIdentifier(unwrapped) ? unwrapped.text : undefined;
   return {
-    expression: source.slice(expressionStart, expressionEnd).trim(),
+    expression: compilerStringTrim(compilerStringSlice(source, expressionStart, expressionEnd)),
     expressionEnd,
     expressionIsBareIdentifier: bareIdentifierName !== undefined,
     ...(bareIdentifierName === undefined
@@ -4862,14 +5029,18 @@ function conditionalExpressionModels(
     if (ts.isConditionalExpression(current)) {
       const conditionStart = current.condition.getStart(sourceFile);
       const conditionEnd = current.condition.getEnd();
-      facts.push({
-        condition: source.slice(conditionStart, conditionEnd).trim(),
-        conditionEnd,
-        conditionPropertyAccesses: propertyAccessPathModels(sourceFile, current.condition),
-        conditionStart,
-        end: current.getEnd(),
-        start: current.getStart(sourceFile),
-      });
+      compilerArrayAppend(
+        facts,
+        {
+          condition: compilerStringTrim(compilerStringSlice(source, conditionStart, conditionEnd)),
+          conditionEnd,
+          conditionPropertyAccesses: propertyAccessPathModels(sourceFile, current.condition),
+          conditionStart,
+          end: current.getEnd(),
+          start: current.getStart(sourceFile),
+        },
+        'Conditional expression facts',
+      );
     }
     ts.forEachChild(current, visit);
   };
@@ -4888,17 +5059,25 @@ function temporalReadModels(sourceFile: ts.SourceFile, node: ts.Node): TemporalR
 
   const visit = (current: ts.Node): void => {
     if (isDateNowCall(sourceFile, current)) {
-      reads.push({
-        end: current.getEnd(),
-        kind: 'Date.now',
-        start: current.getStart(sourceFile),
-      });
+      compilerArrayAppend(
+        reads,
+        {
+          end: current.getEnd(),
+          kind: 'Date.now',
+          start: current.getStart(sourceFile),
+        },
+        'Temporal read facts',
+      );
     } else if (isZeroArgNewDate(sourceFile, current)) {
-      reads.push({
-        end: current.getEnd(),
-        kind: 'new Date',
-        start: current.getStart(sourceFile),
-      });
+      compilerArrayAppend(
+        reads,
+        {
+          end: current.getEnd(),
+          kind: 'new Date',
+          start: current.getStart(sourceFile),
+        },
+        'Temporal read facts',
+      );
     }
 
     ts.forEachChild(current, visit);
@@ -4939,31 +5118,63 @@ function zeroArgArrowModel(
   const body = expression.body;
   const bodyStart = ts.isBlock(body) ? body.getStart(sourceFile) + 1 : body.getStart(sourceFile);
   const bodyEnd = ts.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
-  const rawBodySource = source.slice(bodyStart, bodyEnd);
-  const bodySource = rawBodySource.trim();
-  const bodySourceStart = bodyStart + rawBodySource.length - rawBodySource.trimStart().length;
-  const callArguments =
-    !ts.isBlock(body) && ts.isCallExpression(body)
-      ? body.arguments.map((argument) =>
-          source.slice(argument.getStart(sourceFile), argument.getEnd()),
-        )
-      : undefined;
-  const callArgumentPropertyAccesses =
-    !ts.isBlock(body) && ts.isCallExpression(body)
-      ? body.arguments.map((argument) => propertyAccessPathModels(sourceFile, argument))
-      : undefined;
-  const callArgumentReferences =
-    !ts.isBlock(body) && ts.isCallExpression(body)
-      ? body.arguments.map((argument) => referenceIdentifierModels(sourceFile, argument))
-      : undefined;
-  const callArgumentStaticValues =
-    !ts.isBlock(body) && ts.isCallExpression(body)
-      ? body.arguments.map((argument) => staticLiteralValue(argument))
-      : undefined;
-  const callArgumentKinds =
-    !ts.isBlock(body) && ts.isCallExpression(body)
-      ? body.arguments.map((argument) => zeroArgArrowCallArgumentKind(argument))
-      : undefined;
+  const rawBodySource = compilerStringSlice(source, bodyStart, bodyEnd);
+  const bodySource = compilerStringTrim(rawBodySource);
+  let leadingWhitespace = 0;
+  while (
+    leadingWhitespace < rawBodySource.length &&
+    compilerRegExpTest(/^\s$/u, rawBodySource[leadingWhitespace] ?? '')
+  ) {
+    leadingWhitespace += 1;
+  }
+  const bodySourceStart = bodyStart + leadingWhitespace;
+  let callArguments: string[] | undefined;
+  let callArgumentPropertyAccesses: PropertyAccessPathModel[][] | undefined;
+  let callArgumentReferences: IdentifierReferenceModel[][] | undefined;
+  let callArgumentStaticValues: (StaticLiteralValue | undefined)[] | undefined;
+  let callArgumentKinds: ZeroArgArrowCallArgumentKind[] | undefined;
+  if (!ts.isBlock(body) && ts.isCallExpression(body)) {
+    callArguments = [];
+    callArgumentPropertyAccesses = [];
+    callArgumentReferences = [];
+    callArgumentStaticValues = [];
+    callArgumentKinds = [];
+    const argumentLength = compilerArrayLength(body.arguments, 'Zero-arg arrow call arguments');
+    for (let index = 0; index < argumentLength; index += 1) {
+      const argument = compilerOwnDataValue(
+        body.arguments,
+        index,
+        'Zero-arg arrow call arguments',
+      ) as ts.Expression | undefined;
+      if (!argument)
+        throw new TypeError(`Zero-arg arrow call arguments[${index}] must be own data.`);
+      compilerArrayAppend(
+        callArguments,
+        compilerStringSlice(source, argument.getStart(sourceFile), argument.getEnd()),
+        'Zero-arg arrow call argument sources',
+      );
+      compilerArrayAppend(
+        callArgumentPropertyAccesses,
+        propertyAccessPathModels(sourceFile, argument),
+        'Zero-arg arrow call property accesses',
+      );
+      compilerArrayAppend(
+        callArgumentReferences,
+        referenceIdentifierModels(sourceFile, argument),
+        'Zero-arg arrow call references',
+      );
+      compilerArrayAppend(
+        callArgumentStaticValues,
+        staticLiteralValue(argument),
+        'Zero-arg arrow call static values',
+      );
+      compilerArrayAppend(
+        callArgumentKinds,
+        zeroArgArrowCallArgumentKind(argument),
+        'Zero-arg arrow call argument kinds',
+      );
+    }
+  }
 
   return {
     zeroArgArrow: {
@@ -5011,24 +5222,30 @@ function localDeclarationNames(node: ts.Node): string[] {
       (ts.isFunctionDeclaration(child) || ts.isClassDeclaration(child)) &&
       child.name !== undefined
     ) {
-      names.push(child.name.text);
+      compilerArrayAppend(names, child.name.text, 'Local declaration names');
     }
 
     ts.forEachChild(child, visit);
   };
 
   ts.forEachChild(node, visit);
-  return [...new Set(names)];
+  const unique: string[] = [];
+  appendUniqueStrings(unique, names, 'Local declaration names');
+  return unique;
 }
 
 function collectBindingNames(name: ts.BindingName, names: string[]): void {
   if (ts.isIdentifier(name)) {
-    names.push(name.text);
+    compilerArrayAppend(names, name.text, 'Binding names');
     return;
   }
 
-  for (const element of name.elements) {
-    if (ts.isBindingElement(element)) collectBindingNames(element.name, names);
+  const elementLength = compilerArrayLength(name.elements, 'Binding elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(name.elements, index, 'Binding elements') as
+      | ts.ArrayBindingElement
+      | undefined;
+    if (element && ts.isBindingElement(element)) collectBindingNames(element.name, names);
   }
 }
 
@@ -5043,25 +5260,34 @@ function documentElementActionModel(
 }
 
 function referenceIdentifiers(root: ts.Node): string[] {
-  return referenceIdentifierModels(root.getSourceFile(), root).map((reference) => reference.name);
+  const references = referenceIdentifierModels(root.getSourceFile(), root);
+  const result: string[] = [];
+  for (let index = 0; index < references.length; index += 1) {
+    compilerArrayAppend(result, references[index]!.name, 'Reference identifier names');
+  }
+  return result;
 }
 
 function referenceIdentifierModels(
   sourceFile: ts.SourceFile,
   root: ts.Node,
 ): IdentifierReferenceModel[] {
-  const declared = new Set<string>();
+  const declared = compilerCreateSet<string>();
   const referenced: IdentifierReferenceModel[] = [];
 
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node)) {
-      if (isDeclaredIdentifier(node)) declared.add(node.text);
+      if (isDeclaredIdentifier(node)) compilerSetAdd(declared, node.text);
       if (isReferenceIdentifier(node)) {
-        referenced.push({
-          end: node.getEnd(),
-          name: node.text,
-          start: node.getStart(sourceFile),
-        });
+        compilerArrayAppend(
+          referenced,
+          {
+            end: node.getEnd(),
+            name: node.text,
+            start: node.getStart(sourceFile),
+          },
+          'Reference identifier models',
+        );
       }
     }
 
@@ -5069,7 +5295,14 @@ function referenceIdentifierModels(
   };
 
   visit(root);
-  return referenced.filter((reference) => !declared.has(reference.name));
+  const result: IdentifierReferenceModel[] = [];
+  for (let index = 0; index < referenced.length; index += 1) {
+    const reference = referenced[index]!;
+    if (!compilerSetHas(declared, reference.name)) {
+      compilerArrayAppend(result, reference, 'Undeclared reference identifier models');
+    }
+  }
+  return result;
 }
 
 function arrowObjectPatternKeys(
@@ -5078,21 +5311,32 @@ function arrowObjectPatternKeys(
 ): RenderInputModel[] {
   if (!ts.isArrowFunction(expression)) return [];
 
-  const firstParam = expression.parameters[0];
+  const firstParam = compilerOwnDataValue(expression.parameters, 0, 'Render parameters') as
+    | ts.ParameterDeclaration
+    | undefined;
   if (!firstParam || !ts.isObjectBindingPattern(firstParam.name)) return [];
-
-  return firstParam.name.elements.flatMap((element) => {
-    if (!ts.isIdentifier(element.name)) return [];
-
-    return [
+  const result: RenderInputModel[] = [];
+  const elementLength = compilerArrayLength(firstParam.name.elements, 'Render input elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(
+      firstParam.name.elements,
+      index,
+      'Render input elements',
+    ) as ts.BindingElement | undefined;
+    if (!element) throw new TypeError(`Render input elements[${index}] must be own data.`);
+    if (!ts.isIdentifier(element.name)) continue;
+    compilerArrayAppend(
+      result,
       {
         end: element.name.getEnd(),
         name: element.name.text,
         start: element.name.getStart(sourceFile),
         ...bindingElementSourceKey(element),
       },
-    ];
-  });
+      'Render input models',
+    );
+  }
+  return result;
 }
 
 function bindingElementSourceKey(element: ts.BindingElement): { sourceKey: string } | {} {
@@ -5113,12 +5357,16 @@ function localIdentifierNames(node: ts.Node): string[] {
   const names: string[] = [];
 
   const visit = (child: ts.Node): void => {
-    if (ts.isIdentifier(child) && isDeclaredIdentifier(child)) names.push(child.text);
+    if (ts.isIdentifier(child) && isDeclaredIdentifier(child)) {
+      compilerArrayAppend(names, child.text, 'Local identifier names');
+    }
     ts.forEachChild(child, visit);
   };
 
   ts.forEachChild(node, visit);
-  return [...new Set(names)];
+  const unique: string[] = [];
+  appendUniqueStrings(unique, names, 'Local identifier names');
+  return unique;
 }
 
 function enclosingLocalNames(node: ts.Node): string[] {
@@ -5130,13 +5378,22 @@ function enclosingLocalNames(node: ts.Node): string[] {
       (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
       !isRenderPropertyInitializer(current)
     ) {
-      for (const param of current.parameters) collectBindingNames(param.name, names);
+      const parameterLength = compilerArrayLength(current.parameters, 'Enclosing parameters');
+      for (let index = 0; index < parameterLength; index += 1) {
+        const param = compilerOwnDataValue(current.parameters, index, 'Enclosing parameters') as
+          | ts.ParameterDeclaration
+          | undefined;
+        if (!param) throw new TypeError(`Enclosing parameters[${index}] must be own data.`);
+        collectBindingNames(param.name, names);
+      }
     }
 
     current = current.parent;
   }
 
-  return [...new Set(names)];
+  const unique: string[] = [];
+  appendUniqueStrings(unique, names, 'Enclosing local names');
+  return unique;
 }
 
 function isRenderPropertyInitializer(node: ts.Node): boolean {
@@ -5155,7 +5412,9 @@ function renderSlotsParam(
 ): { renderSlotsParam: RenderInputModel } | {} {
   if (!ts.isArrowFunction(expression)) return {};
 
-  const thirdParam = expression.parameters[2];
+  const thirdParam = compilerOwnDataValue(expression.parameters, 2, 'Render parameters') as
+    | ts.ParameterDeclaration
+    | undefined;
   if (!thirdParam || !ts.isIdentifier(thirdParam.name)) return {};
 
   return {
@@ -5177,16 +5436,28 @@ function renderSlots(
 ): { renderSlots: RenderSlotsModel } | {} {
   if (!ts.isArrowFunction(expression)) return {};
 
-  const thirdParam = expression.parameters[2];
+  const thirdParam = compilerOwnDataValue(expression.parameters, 2, 'Render parameters') as
+    | ts.ParameterDeclaration
+    | undefined;
   if (!thirdParam) return {};
 
-  const names = ts.isObjectBindingPattern(thirdParam.name)
-    ? thirdParam.name.elements.flatMap((element) =>
-        ts.isIdentifier(element.name) ? [element.name.text] : [],
-      )
-    : ts.isIdentifier(thirdParam.name)
-      ? [thirdParam.name.text]
-      : [];
+  const names: string[] = [];
+  if (ts.isObjectBindingPattern(thirdParam.name)) {
+    const elementLength = compilerArrayLength(thirdParam.name.elements, 'Render slot elements');
+    for (let index = 0; index < elementLength; index += 1) {
+      const element = compilerOwnDataValue(
+        thirdParam.name.elements,
+        index,
+        'Render slot elements',
+      ) as ts.BindingElement | undefined;
+      if (!element) throw new TypeError(`Render slot elements[${index}] must be own data.`);
+      if (ts.isIdentifier(element.name)) {
+        compilerArrayAppend(names, element.name.text, 'Render slot names');
+      }
+    }
+  } else if (ts.isIdentifier(thirdParam.name)) {
+    compilerArrayAppend(names, thirdParam.name.text, 'Render slot names');
+  }
 
   return {
     renderSlots: {
@@ -5230,7 +5501,12 @@ function renderHostModel(
 
 function renderReturnExpression(body: ts.ConciseBody): ts.Expression | null {
   if (ts.isBlock(body)) {
-    for (const statement of body.statements) {
+    const statementLength = compilerArrayLength(body.statements, 'Render body statements');
+    for (let index = 0; index < statementLength; index += 1) {
+      const statement = compilerOwnDataValue(body.statements, index, 'Render body statements') as
+        | ts.Statement
+        | undefined;
+      if (!statement) throw new TypeError(`Render body statements[${index}] must be own data.`);
       if (ts.isReturnStatement(statement) && statement.expression) return statement.expression;
     }
     return null;
@@ -5299,9 +5575,20 @@ function stateReturnStaticValue(
 function staticObjectLiteralValue(
   expression: ts.ObjectLiteralExpression,
 ): Record<string, StaticLiteralValue> | undefined {
-  const value: Record<string, StaticLiteralValue> = {};
-
-  for (const property of expression.properties) {
+  const value = compilerCreateNullRecord<StaticLiteralValue>();
+  const propertyLength = compilerArrayLength(
+    expression.properties,
+    'Static object-literal properties',
+  );
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      expression.properties,
+      index,
+      'Static object-literal properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) {
+      throw new TypeError(`Static object-literal properties[${index}] must be own data.`);
+    }
     if (!ts.isPropertyAssignment(property)) return undefined;
 
     const key = propertyNameText(property.name);
@@ -5309,7 +5596,7 @@ function staticObjectLiteralValue(
 
     const literal = staticLiteralValue(property.initializer);
     if (literal === undefined) return undefined;
-    value[key] = literal;
+    compilerSetOwnDataProperty(value, key, literal);
   }
 
   return value;
@@ -5322,13 +5609,13 @@ function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | und
     return unwrapped.text;
   }
 
-  if (ts.isNumericLiteral(unwrapped)) return Number(unwrapped.text);
+  if (ts.isNumericLiteral(unwrapped)) return compilerNumberValue(unwrapped.text);
   if (
     ts.isPrefixUnaryExpression(unwrapped) &&
     unwrapped.operator === ts.SyntaxKind.MinusToken &&
     ts.isNumericLiteral(unwrapped.operand)
   ) {
-    return -Number(unwrapped.operand.text);
+    return -compilerNumberValue(unwrapped.operand.text);
   }
 
   if (unwrapped.kind === ts.SyntaxKind.TrueKeyword) return true;
@@ -5337,11 +5624,18 @@ function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | und
 
   if (ts.isArrayLiteralExpression(unwrapped)) {
     const values: StaticLiteralValue[] = [];
-    for (const element of unwrapped.elements) {
+    const elementLength = compilerArrayLength(unwrapped.elements, 'Static array elements');
+    for (let index = 0; index < elementLength; index += 1) {
+      const element = compilerOwnDataValue(unwrapped.elements, index, 'Static array elements') as
+        | ts.Expression
+        | ts.SpreadElement
+        | ts.OmittedExpression
+        | undefined;
+      if (!element) throw new TypeError(`Static array elements[${index}] must be own data.`);
       if (ts.isSpreadElement(element) || ts.isOmittedExpression(element)) return undefined;
       const value = staticLiteralValue(element);
       if (value === undefined) return undefined;
-      values.push(value);
+      compilerArrayAppend(values, value, 'Static array values');
     }
     return values;
   }

@@ -771,6 +771,47 @@ export const ProductGrid = component({
     expect(poisonHits).toBe(0);
   });
 
+  it('cannot forge eager-trigger justification through String.matchAll', () => {
+    const nativeMatchAll = String.prototype.matchAll;
+    const nativeApply = Reflect.apply;
+    let poisonHits = 0;
+    let result: ReturnType<typeof compileComponentModule> | undefined;
+    try {
+      String.prototype.matchAll = function poisonedJustificationMatchAll(regexp: RegExp) {
+        if (
+          `${this}`.includes('ordinary comment') &&
+          new Error().stack?.includes('parseJustifiedDiagnostics')
+        ) {
+          poisonHits += 1;
+          const forged = Object.assign(['KV211'], {
+            groups: undefined,
+            index: 0,
+            input: `${this}`,
+          }) as RegExpMatchArray;
+          return [forged][Symbol.iterator]();
+        }
+        return nativeApply(nativeMatchAll, this, [regexp]);
+      };
+      result = compileComponentModule({
+        fileName: 'eager-trigger.tsx',
+        source: `
+export const EagerTrigger = component({
+  render: () => (
+    <section>
+      {/* ordinary comment */}
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+    </section>
+  ),
+});
+`,
+      });
+    } finally {
+      String.prototype.matchAll = nativeMatchAll;
+    }
+    expect(result?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV211')).toHaveLength(1);
+    expect(poisonHits).toBe(0);
+  });
+
   it('does not publish a captured server secret through stateful Array.filter replacement', () => {
     const nativeFilter = Array.prototype.filter;
     const nativeApply = Reflect.apply;
