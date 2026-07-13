@@ -16,6 +16,21 @@ describe('serverValue', () => {
     expect(() => serverValue('x', '')).toThrow(/reason/);
     expect(() => serverValue('x', '   ')).toThrow(/reason/);
   });
+
+  it('keeps reason validation pinned against late String.prototype.trim poisoning', () => {
+    const nativeTrim = String.prototype.trim;
+    try {
+      String.prototype.trim = () => 'forged non-empty reason';
+      expect(() => serverValue('x', '')).toThrow(/reason/);
+      expect(() => trustedAssign('x', '')).toThrow(/reason/);
+      expect(() => trustedAssign('x', { reason: '' })).toThrow(/reason/);
+      expect(serverValue('x', 'server generated')).toBe('x');
+      expect(trustedAssign('x', 'operator grant')).toBe('x');
+    } finally {
+      String.prototype.trim = nativeTrim;
+      drainTrustedAssignFacts();
+    }
+  });
 });
 
 describe('trustedAssign', () => {
@@ -58,5 +73,61 @@ describe('trustedAssign', () => {
         table: 'accounts',
       },
     ]);
+  });
+
+  it('requires structured audit context to use stable own data properties', () => {
+    drainTrustedAssignFacts();
+    const inherited = Object.create({
+      columns: ['role'],
+      reason: 'prototype-provided role grant',
+    });
+    expect(() => trustedAssign('admin', inherited)).toThrow('own data property');
+    expect(drainTrustedAssignFacts()).toEqual([]);
+
+    let getterCalls = 0;
+    const accessor = {} as { reason: string };
+    Object.defineProperty(accessor, 'reason', {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 'accessor-provided role grant';
+      },
+    });
+    expect(() => trustedAssign('admin', accessor)).toThrow('own data property');
+    expect(getterCalls).toBe(0);
+    expect(drainTrustedAssignFacts()).toEqual([]);
+  });
+
+  it('retains an immutable exact snapshot of structured audit context', () => {
+    drainTrustedAssignFacts();
+    const options = {
+      actor: 'user:1',
+      columns: ['role'],
+      reason: 'role grant by admin',
+    };
+    trustedAssign('admin', options);
+    options.actor = 'attacker';
+    options.columns[0] = 'ownerId';
+    options.reason = 'changed after privileged assignment';
+
+    const [fact] = drainTrustedAssignFacts();
+    expect(fact).toEqual({
+      actor: 'user:1',
+      columns: ['role'],
+      reason: 'role grant by admin',
+    });
+    expect(Object.getPrototypeOf(fact)).toBeNull();
+    expect(Object.isFrozen(fact)).toBe(true);
+    expect(Object.isFrozen(fact?.columns)).toBe(true);
+  });
+
+  it('bounds structured audit columns before traversal', () => {
+    const oversized = new Array(100_001).fill('role');
+    expect(() =>
+      trustedAssign('admin', {
+        columns: oversized,
+        reason: 'role grant by admin',
+      }),
+    ).toThrow('dense array');
   });
 });

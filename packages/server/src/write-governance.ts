@@ -17,6 +17,15 @@
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
 import { markPrivilegedRequestInputAssignment } from './request-input-provenance.js';
+import { securityNumberIsInteger, securityStringTrim } from './response-security-intrinsics.js';
+import {
+  witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessObjectIs,
+} from './security-witness-intrinsics.js';
 
 /** A recorded `trustedAssign` audit fact for `kovo explain --writes` (SPEC §6.6, audit-grade). */
 export interface TrustedAssignFact {
@@ -57,7 +66,7 @@ const trustedAssignFacts = createBoundedRuntimeAuditCollector<TrustedAssignFact>
  * await db.insert(orders).values({ id: serverValue(generatedId, 'server-generated key'), ... });
  */
 export function serverValue<T>(value: T, reason: string): T {
-  if (typeof reason !== 'string' || reason.trim() === '') {
+  if (typeof reason !== 'string' || securityStringTrim(reason) === '') {
     throw new Error('serverValue requires a non-empty reason (KV438).');
   }
   return value;
@@ -76,16 +85,103 @@ export function serverValue<T>(value: T, reason: string): T {
  * await db.update(users).set({ role: trustedAssign(input.role, 'admin role grant') })...;
  */
 export function trustedAssign<T>(value: T, reason: string | TrustedAssignOptions): T {
-  const fact = typeof reason === 'string' ? { reason } : reason;
-  if (typeof fact.reason !== 'string' || fact.reason.trim() === '') {
-    throw new Error('trustedAssign requires a non-empty reason (KV438).');
-  }
+  const fact = snapshotTrustedAssignFact(reason);
   markPrivilegedRequestInputAssignment(value);
-  trustedAssignFacts.record({
-    ...fact,
-    ...(fact.columns ? { columns: [...fact.columns] } : {}),
-  });
+  trustedAssignFacts.record(fact);
   return value;
+}
+
+const TRUSTED_ASSIGN_STRING_KEYS = [
+  'actor',
+  'callsite',
+  'producer',
+  'reason',
+  'session',
+  'sourceProvenance',
+  'table',
+] as const satisfies readonly (keyof TrustedAssignOptions)[];
+
+function snapshotTrustedAssignFact(source: string | TrustedAssignOptions): TrustedAssignFact {
+  if (typeof source === 'string') {
+    if (securityStringTrim(source) === '') {
+      throw new Error('trustedAssign requires a non-empty reason (KV438).');
+    }
+    const fact = witnessCreateNullRecord<unknown>();
+    fact.reason = source;
+    return witnessFreeze(fact) as unknown as TrustedAssignFact;
+  }
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('trustedAssign options must be a stable own-data record (KV438).');
+  }
+
+  const fact = witnessCreateNullRecord<unknown>();
+  for (let index = 0; index < TRUSTED_ASSIGN_STRING_KEYS.length; index += 1) {
+    const key = TRUSTED_ASSIGN_STRING_KEYS[index]!;
+    const descriptor = stableTrustedAssignDescriptor(source, key);
+    if (descriptor === undefined) {
+      if (key === 'reason') {
+        throw new TypeError('trustedAssign reason must be an own data property (KV438).');
+      }
+      continue;
+    }
+    if (typeof descriptor.value !== 'string') {
+      throw new TypeError(`trustedAssign ${key} must be a string (KV438).`);
+    }
+    if (key === 'reason' && securityStringTrim(descriptor.value) === '') {
+      throw new Error('trustedAssign requires a non-empty reason (KV438).');
+    }
+    fact[key] = descriptor.value;
+  }
+
+  const columns = stableTrustedAssignDescriptor(source, 'columns');
+  if (columns !== undefined) {
+    fact.columns = snapshotTrustedAssignColumns(columns.value);
+  }
+  return witnessFreeze(fact) as unknown as TrustedAssignFact;
+}
+
+function snapshotTrustedAssignColumns(source: unknown): readonly string[] {
+  if (!witnessIsArray(source)) {
+    throw new TypeError('trustedAssign columns must be an array of strings (KV438).');
+  }
+  const length = stableTrustedAssignDescriptor(source, 'length');
+  if (
+    length === undefined ||
+    typeof length.value !== 'number' ||
+    !securityNumberIsInteger(length.value) ||
+    length.value < 0 ||
+    length.value > 100_000
+  ) {
+    throw new TypeError('trustedAssign columns must be a dense array of strings (KV438).');
+  }
+  const columns: string[] = [];
+  for (let index = 0; index < length.value; index += 1) {
+    const entry = stableTrustedAssignDescriptor(source, index);
+    if (entry === undefined || typeof entry.value !== 'string') {
+      throw new TypeError('trustedAssign columns must be a dense array of strings (KV438).');
+    }
+    witnessArrayAppend(columns, entry.value, 'trustedAssign audit columns');
+  }
+  return witnessFreeze(columns);
+}
+
+function stableTrustedAssignDescriptor(
+  source: object,
+  property: PropertyKey,
+): { value: unknown } | undefined {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if ((before === undefined) !== (after === undefined)) {
+    throw new TypeError(`trustedAssign ${String(property)} must be stable (KV438).`);
+  }
+  if (before === undefined) return undefined;
+  if (!('value' in before) || after === undefined || !('value' in after)) {
+    throw new TypeError(`trustedAssign ${String(property)} must be an own data property (KV438).`);
+  }
+  if (!witnessObjectIs(before.value, after.value)) {
+    throw new TypeError(`trustedAssign ${String(property)} changed during validation (KV438).`);
+  }
+  return { value: before.value };
 }
 
 /**
