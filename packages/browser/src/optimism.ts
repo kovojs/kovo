@@ -3,6 +3,20 @@ import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { queryIdentityFromStoreKey, queryStoreKey, queryWireKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
+import {
+  securityArrayAppend,
+  securityMap,
+  securityMapDelete,
+  securityMapForEach,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityObjectKeys,
+  securityOwnArrayEntry,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+} from './security-witness-intrinsics.js';
 
 /** A pure optimistic predictor: mutate the cloned query draft for the mutation input. */
 export type OptimisticTransform<Input = unknown, Value = unknown> = (
@@ -154,8 +168,8 @@ export interface OptimisticRebaserOptions {
 
 /** @internal Tracks pending optimistic transforms and rebases them against server truth (SPEC §10.5). */
 export class OptimisticRebaser {
-  #pendingByQuery = new Map<string, PendingTransform[]>();
-  #serverTruthByQuery = new Map<string, unknown>();
+  #pendingByQuery = securityMap<string, PendingTransform[]>();
+  #serverTruthByQuery = securityMap<string, unknown>();
   #store: QueryStore;
   #onError: RuntimeErrorReporter | undefined;
 
@@ -184,8 +198,16 @@ export class OptimisticRebaser {
       transform: OptimisticTransform;
     }> = [];
 
-    for (const [queryName, transform] of Object.entries(plan.transforms)) {
+    const queryNames = securityObjectKeys(plan.transforms);
+    for (let queryIndex = 0; queryIndex < queryNames.length; queryIndex += 1) {
+      const queryEntry = securityOwnArrayEntry(queryNames, queryIndex);
+      if (!queryEntry.ok) throw new TypeError('Kovo optimistic query plan must be dense.');
+      const queryName = queryEntry.value;
+      const transform = plan.transforms[queryName];
       if (transform === 'await-fragment') continue;
+      if (typeof transform !== 'function') {
+        throw new TypeError('Kovo optimistic query plan entries must be transforms or await-fragment.');
+      }
 
       const key = optimisticQueryKey(plan, queryName, change);
       const storeKey = queryStoreKey(queryName, key);
@@ -200,51 +222,76 @@ export class OptimisticRebaser {
         return;
       }
 
-      staged.push({
-        ...(key === undefined ? {} : { key }),
-        predicted,
-        previous,
-        queryName,
-        storeKey,
-        transform: transform as OptimisticTransform,
-      });
+      securityArrayAppend(
+        staged,
+        {
+          ...(key === undefined ? {} : { key }),
+          predicted,
+          previous,
+          queryName,
+          storeKey,
+          transform: transform as OptimisticTransform,
+        },
+        'Browser optimistic staged transforms',
+      );
     }
 
     // Phase 2: all transforms predicted cleanly — commit pending + store writes.
-    for (const entry of staged) {
-      const pending = this.#pendingByQuery.get(entry.storeKey) ?? [];
+    for (let stagedIndex = 0; stagedIndex < staged.length; stagedIndex += 1) {
+      const stagedEntry = securityOwnArrayEntry(staged, stagedIndex);
+      if (!stagedEntry.ok) throw new TypeError('Kovo optimistic staged transforms must be dense.');
+      const entry = stagedEntry.value;
+      const pending = securityMapGet(this.#pendingByQuery, entry.storeKey) ?? [];
       if (pending.length === 0) {
-        this.#serverTruthByQuery.set(entry.storeKey, entry.previous);
+        securityMapSet(this.#serverTruthByQuery, entry.storeKey, entry.previous);
       }
-      pending.push({ change, id, transform: entry.transform });
-      this.#pendingByQuery.set(entry.storeKey, pending);
+      securityArrayAppend(
+        pending,
+        { change, id, transform: entry.transform },
+        'Browser optimistic pending transforms',
+      );
+      securityMapSet(this.#pendingByQuery, entry.storeKey, pending);
 
       this.#store.set(entry.queryName, entry.predicted, entry.key);
     }
   }
 
   settle(id: string): void {
-    for (const [queryName, pending] of this.#pendingByQuery) {
-      const next = pending.filter((item) => item.id !== id);
+    const entries: Array<{ pending: PendingTransform[]; queryName: string }> = [];
+    securityMapForEach(this.#pendingByQuery, (pending, queryName) => {
+      securityArrayAppend(
+        entries,
+        { pending, queryName },
+        'Browser optimistic settlement snapshot',
+      );
+    });
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = securityOwnArrayEntry(entries, index);
+      if (!entry.ok) throw new TypeError('Kovo optimistic settlement snapshot must be dense.');
+      const { pending, queryName } = entry.value;
+      const next = pendingWithoutIds(pending, securitySetFromDenseStrings([id]));
       if (next.length === 0) {
-        this.#pendingByQuery.delete(queryName);
-        this.#serverTruthByQuery.delete(queryName);
+        securityMapDelete(this.#pendingByQuery, queryName);
+        securityMapDelete(this.#serverTruthByQuery, queryName);
       } else {
-        this.#pendingByQuery.set(queryName, next);
+        securityMapSet(this.#pendingByQuery, queryName, next);
       }
     }
   }
 
   settleWithoutServerTruth(id: string, queryName: string, key?: string): void {
     const storeKey = queryStoreKey(queryName, key);
-    const pending = this.#pendingByQuery.get(storeKey);
+    const pending = securityMapGet(this.#pendingByQuery, storeKey);
     if (!pending) return;
 
-    const nextPending = pending.filter((item) => item.id !== id);
-    let next = this.#serverTruthByQuery.get(storeKey);
+    const nextPending = pendingWithoutIds(pending, securitySetFromDenseStrings([id]));
+    let next = securityMapGet(this.#serverTruthByQuery, storeKey);
     const survivors: PendingTransform[] = [];
 
-    for (const pendingTransform of nextPending) {
+    for (let index = 0; index < nextPending.length; index += 1) {
+      const pendingEntry = securityOwnArrayEntry(nextPending, index);
+      if (!pendingEntry.ok) throw new TypeError('Kovo optimistic pending transforms must be dense.');
+      const pendingTransform = pendingEntry.value;
       try {
         next = applyOptimisticTransform(
           next,
@@ -255,16 +302,20 @@ export class OptimisticRebaser {
         reportRuntimeError(this.#onError, error);
         continue;
       }
-      survivors.push(pendingTransform);
+      securityArrayAppend(
+        survivors,
+        pendingTransform,
+        'Browser optimistic surviving transforms',
+      );
     }
 
     this.#store.set(queryName, next, key);
 
     if (survivors.length === 0) {
-      this.#pendingByQuery.delete(storeKey);
-      this.#serverTruthByQuery.delete(storeKey);
+      securityMapDelete(this.#pendingByQuery, storeKey);
+      securityMapDelete(this.#serverTruthByQuery, storeKey);
     } else {
-      this.#pendingByQuery.set(storeKey, survivors);
+      securityMapSet(this.#pendingByQuery, storeKey, survivors);
     }
   }
 
@@ -281,22 +332,22 @@ export class OptimisticRebaser {
     // transform whose mutation idem is in the arriving truth's settlement set BEFORE re-applying
     // the remainder, so a transform already folded into this truth is never re-applied
     // (double-counted). Concurrent distinct same-query commits each settle in their own chunk.
-    let pendingTransforms = this.#pendingByQuery.get(storeKey) ?? [];
+    let pendingTransforms = securityMapGet(this.#pendingByQuery, storeKey) ?? [];
     if (settles && settles.length > 0 && pendingTransforms.length > 0) {
-      const settled = new Set(settles);
-      const survivors = pendingTransforms.filter((pending) => !settled.has(pending.id));
+      const settled = securitySetFromDenseStrings(settles);
+      const survivors = pendingWithoutIds(pendingTransforms, settled);
       if (survivors.length === 0) {
-        this.#pendingByQuery.delete(storeKey);
+        securityMapDelete(this.#pendingByQuery, storeKey);
       } else {
-        this.#pendingByQuery.set(storeKey, survivors);
+        securityMapSet(this.#pendingByQuery, storeKey, survivors);
       }
       pendingTransforms = survivors;
     }
 
     if (pendingTransforms.length > 0) {
-      this.#serverTruthByQuery.set(storeKey, value);
+      securityMapSet(this.#serverTruthByQuery, storeKey, value);
     } else {
-      this.#serverTruthByQuery.delete(storeKey);
+      securityMapDelete(this.#serverTruthByQuery, storeKey);
     }
 
     // SPEC §10.4 line 1129 / KV313 (F2): be fault-atomic. Re-apply each survivor over the SETTLED
@@ -307,24 +358,27 @@ export class OptimisticRebaser {
     // transform on the next reconcile. `applyOptimisticTransform` clones before mutating, so a throw
     // leaves `next` at the last successfully-rebased value.
     const survivors: PendingTransform[] = [];
-    for (const pending of pendingTransforms) {
+    for (let index = 0; index < pendingTransforms.length; index += 1) {
+      const pendingEntry = securityOwnArrayEntry(pendingTransforms, index);
+      if (!pendingEntry.ok) throw new TypeError('Kovo optimistic pending transforms must be dense.');
+      const pending = pendingEntry.value;
       try {
         next = applyOptimisticTransform(next, pending.change.input, pending.transform);
       } catch (error) {
         reportRuntimeError(this.#onError, error);
         continue;
       }
-      survivors.push(pending);
+      securityArrayAppend(survivors, pending, 'Browser optimistic surviving transforms');
     }
 
     // The store always lands on settled truth + surviving predictions, never the old prediction.
     this.#store.set(queryName, next, key);
 
     if (survivors.length === 0) {
-      this.#pendingByQuery.delete(storeKey);
-      this.#serverTruthByQuery.delete(storeKey);
+      securityMapDelete(this.#pendingByQuery, storeKey);
+      securityMapDelete(this.#serverTruthByQuery, storeKey);
     } else if (survivors.length !== pendingTransforms.length) {
-      this.#pendingByQuery.set(storeKey, survivors);
+      securityMapSet(this.#pendingByQuery, storeKey, survivors);
     }
   }
 
@@ -334,24 +388,75 @@ export class OptimisticRebaser {
   ): string[] {
     const discarded: string[] = [];
 
-    for (const storeKey of queryNames?.map((queryName) =>
-      queryStoreKey(queryName, keys[queryName]),
-    ) ?? [...this.#pendingByQuery.keys()]) {
-      if (!this.#pendingByQuery.has(storeKey)) continue;
+    const storeKeys: string[] = [];
+    if (queryNames) {
+      for (let index = 0; index < queryNames.length; index += 1) {
+        const queryEntry = securityOwnArrayEntry(queryNames, index);
+        if (!queryEntry.ok || typeof queryEntry.value !== 'string') {
+          throw new TypeError('Kovo optimistic discard query names must be dense strings.');
+        }
+        securityArrayAppend(
+          storeKeys,
+          queryStoreKey(queryEntry.value, keys[queryEntry.value]),
+          'Browser optimistic discard keys',
+        );
+      }
+    } else {
+      securityMapForEach(this.#pendingByQuery, (_pending, storeKey) => {
+        securityArrayAppend(storeKeys, storeKey, 'Browser optimistic discard keys');
+      });
+    }
+    for (let index = 0; index < storeKeys.length; index += 1) {
+      const storeKeyEntry = securityOwnArrayEntry(storeKeys, index);
+      if (!storeKeyEntry.ok) throw new TypeError('Kovo optimistic discard keys must be dense.');
+      const storeKey = storeKeyEntry.value;
+      if (!securityMapHas(this.#pendingByQuery, storeKey)) continue;
 
       const identity = queryIdentityFromStoreKey(storeKey);
-      this.#store.set(identity.name, this.#serverTruthByQuery.get(storeKey), identity.key);
-      this.#pendingByQuery.delete(storeKey);
-      this.#serverTruthByQuery.delete(storeKey);
-      discarded.push(identity.name);
+      this.#store.set(
+        identity.name,
+        securityMapGet(this.#serverTruthByQuery, storeKey),
+        identity.key,
+      );
+      securityMapDelete(this.#pendingByQuery, storeKey);
+      securityMapDelete(this.#serverTruthByQuery, storeKey);
+      securityArrayAppend(discarded, identity.name, 'Browser optimistic discarded queries');
     }
 
     return discarded;
   }
 
   pendingCount(queryName: string, key?: string): number {
-    return this.#pendingByQuery.get(queryStoreKey(queryName, key))?.length ?? 0;
+    return securityMapGet(this.#pendingByQuery, queryStoreKey(queryName, key))?.length ?? 0;
   }
+}
+
+function securitySetFromDenseStrings(values: readonly string[]): Set<string> {
+  if (values.length > 100_000) throw new TypeError('Kovo optimistic settlement set is too large.');
+  const snapshot = securitySet<string>();
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok || typeof entry.value !== 'string') {
+      throw new TypeError('Kovo optimistic settlement set must be a dense string array.');
+    }
+    securitySetAdd(snapshot, entry.value);
+  }
+  return snapshot;
+}
+
+function pendingWithoutIds(
+  pending: readonly PendingTransform[],
+  settled: Set<string>,
+): PendingTransform[] {
+  const survivors: PendingTransform[] = [];
+  for (let index = 0; index < pending.length; index += 1) {
+    const entry = securityOwnArrayEntry(pending, index);
+    if (!entry.ok) throw new TypeError('Kovo optimistic pending transforms must be dense.');
+    if (!securitySetHas(settled, entry.value.id)) {
+      securityArrayAppend(survivors, entry.value, 'Browser optimistic surviving transforms');
+    }
+  }
+  return survivors;
 }
 
 /** @internal Install a bfcache-safe pagehide listener that discards pending optimism (SPEC §10.4). */
