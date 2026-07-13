@@ -285,11 +285,23 @@ export function snapshotLiveTargetRenderers(
   context: AppDeclarationSnapshotContext,
 ): readonly LiveTargetRenderer<any>[] {
   return snapshotAppRegistry(renderers, 'app.liveTargetRenderers', (source, index) => {
-    const record = snapshotOwnDataRecord(source, `liveTargetRenderer[${index}]`);
+    const label = `liveTargetRenderer[${index}]`;
+    const object = requireDeclarationObject(source, label);
+    const queryBindings = stableOwnDataValue(object, 'queryBindings', `${label}.queryBindings`);
+    const errorBoundary = stableOwnDataValue(object, 'errorBoundary', `${label}.errorBoundary`);
+    const record = snapshotOwnDataRecord(
+      object,
+      label,
+      omittedProperties('errorBoundary', 'queryBindings'),
+    );
     if (record.queries !== undefined) {
-      record.queries = witnessFreeze(
-        denseArrayValues(record.queries, 'liveTargetRenderer.queries'),
-      );
+      const values = denseArrayValues(record.queries, 'liveTargetRenderer.queries');
+      for (let queryIndex = 0; queryIndex < values.length; queryIndex += 1) {
+        if (typeof values[queryIndex] !== 'string') {
+          throw new TypeError('liveTargetRenderer.queries must contain stable strings.');
+        }
+      }
+      record.queries = witnessFreeze(values);
     }
     if (record.queryDefinitions !== undefined) {
       record.queryDefinitions = snapshotAppRegistry(
@@ -302,8 +314,58 @@ export function snapshotLiveTargetRenderers(
           ) as RegisteredQueryDefinition,
       );
     }
+    if (queryBindings !== undefined) {
+      record.queryBindings = snapshotLiveTargetQueryBindings(queryBindings, context);
+    }
+    if (errorBoundary !== undefined) {
+      record.errorBoundary = snapshotLiveTargetErrorBoundary(errorBoundary);
+    }
     snapshotStylesheetArrayProperty(record, 'stylesheets', 'liveTargetRenderer.stylesheets');
     return witnessFreeze(record) as unknown as LiveTargetRenderer<any>;
+  });
+}
+
+function snapshotLiveTargetQueryBindings(
+  source: unknown,
+  context: AppDeclarationSnapshotContext,
+): readonly Readonly<Record<string, unknown>>[] {
+  return snapshotAppRegistry(
+    source as readonly unknown[],
+    'liveTargetRenderer.queryBindings',
+    (binding, index) => {
+      const label = `liveTargetRenderer.queryBindings[${index}]`;
+      const object = requireDeclarationObject(binding, label);
+      const query = stableOwnDataValue(object, 'query', `${label}.query`);
+      const args = stableOwnDataValue(object, 'args', `${label}.args`);
+      const name = stableOwnDataValue(object, 'name', `${label}.name`);
+      if (query === undefined || (args !== undefined && typeof args !== 'function')) {
+        throw new TypeError(`${label} must expose stable query and optional args data.`);
+      }
+      if (name !== undefined && typeof name !== 'string') {
+        throw new TypeError(`${label}.name must be a stable string when present.`);
+      }
+      return witnessFreeze({
+        ...(args === undefined ? {} : { args }),
+        ...(name === undefined ? {} : { name }),
+        query: snapshotAppQuery(query as AppQueryDeclaration, context),
+      });
+    },
+  );
+}
+
+function snapshotLiveTargetErrorBoundary(source: unknown): Readonly<Record<string, unknown>> {
+  const object = requireDeclarationObject(source, 'liveTargetRenderer.errorBoundary');
+  const render = stableOwnDataValue(object, 'render', 'liveTargetRenderer.errorBoundary.render');
+  const target = stableOwnDataValue(object, 'target', 'liveTargetRenderer.errorBoundary.target');
+  if (typeof render !== 'function') {
+    throw new TypeError('liveTargetRenderer.errorBoundary.render must be a stable function.');
+  }
+  if (target !== undefined && typeof target !== 'string') {
+    throw new TypeError('liveTargetRenderer.errorBoundary.target must be a stable string.');
+  }
+  return witnessFreeze({
+    render,
+    ...(target === undefined ? {} : { target }),
   });
 }
 

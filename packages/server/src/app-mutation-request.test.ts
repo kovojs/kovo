@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { component } from '@kovojs/core';
 
 import { createApp, createRequestHandler } from './app.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
@@ -8,6 +9,8 @@ import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { guards } from './guards.js';
 import { stylesheet } from './hints.js';
+import { renderedHtml } from './html.js';
+import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { route } from './route.js';
@@ -24,6 +27,70 @@ function attestedLiveTargetHeader(
 }
 
 describe('server app mutation request boundary', () => {
+  it('pins generated live-target query authority before post-assembly mutation', async () => {
+    const privateData = domain('private-data');
+    const reviewedQuery = query('private-record', {
+      guard: () => true,
+      load: () => ({ secret: 'SAFE' }),
+      reads: [privateData],
+    });
+    const forgedQuery = query('private-record', {
+      load: () => ({ secret: 'LEAKED' }),
+      reads: [privateData],
+    });
+    const PrivateRegion = component({
+      render: ({ record }) =>
+        renderedHtml(`<private-region>${(record as { secret: string }).secret}</private-region>`),
+    });
+    const renderer = componentLiveTargetRenderer({
+      component: PrivateRegion,
+      componentId: 'components/private/region',
+      queries: [{ name: 'record', query: reviewedQuery }],
+    });
+    const update = mutation('private/update', {
+      csrf: false,
+      handler: () => ({}),
+      input: s.object({}),
+      registry: { queries: [reviewedQuery], touches: [privateData] },
+    });
+    const app = createApp({ liveTargetRenderers: [renderer], mutations: [update] });
+
+    const appBinding = (
+      app.liveTargetRenderers[0] as typeof renderer & {
+        queryBindings: Array<{ query: typeof reviewedQuery }>;
+      }
+    ).queryBindings[0]!;
+    expect(() => {
+      appBinding.query = forgedQuery;
+    }).toThrow();
+    reviewedQuery.load = forgedQuery.load;
+
+    const request = new Request('https://shop.example.test/_m/private/update', {
+      body: new FormData(),
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': attestedLiveTargetHeader(
+          'private-region',
+          'components/private/region',
+        ),
+        'Kovo-Targets': 'private-region=private-record',
+      },
+      method: 'POST',
+    });
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'private/update',
+    );
+    const body = await response.text();
+
+    expect(response.status, body).toBe(200);
+    expect(body).toContain('<kovo-query name="private-record">{"secret":"SAFE"}</kovo-query>');
+    expect(body).toContain('<private-region>SAFE</private-region>');
+    expect(body).not.toContain('LEAKED');
+  });
+
   it('uses the pinned request method classifier after app prototype poisoning', async () => {
     const handler = vi.fn(() => ({ ok: true }));
     const app = createApp({
@@ -598,10 +665,7 @@ describe('server app mutation request boundary', () => {
         body: new FormData(),
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': attestedLiveTargetHeader(
-            'cart-badge',
-            'components/cart/map-poison',
-          ),
+          'Kovo-Live-Targets': attestedLiveTargetHeader('cart-badge', 'components/cart/map-poison'),
           'Kovo-Targets': 'cart-badge=cart-map-poison',
         },
         method: 'POST',
@@ -655,9 +719,7 @@ describe('server app mutation request boundary', () => {
           ],
         }),
       ],
-      stylesheets: [
-        stylesheet({ criticalCss: '.app-safe{color:red}', href: './app.css' }),
-      ],
+      stylesheets: [stylesheet({ criticalCss: '.app-safe{color:red}', href: './app.css' })],
     });
 
     const originalFilter = Array.prototype.filter;
@@ -677,7 +739,7 @@ describe('server app mutation request boundary', () => {
     Array.prototype[Symbol.iterator] = function () {
       if (this === app.stylesheets || this === app.routes[0]?.stylesheets) calls.iterator += 1;
       return originalIterator.call(this);
-    } as typeof Array.prototype[Symbol.iterator];
+    } as (typeof Array.prototype)[Symbol.iterator];
     Array.prototype.some = function (callback, thisArg) {
       if (this[0] === '.app-safe{color:red}') calls.some += 1;
       return originalSome.call(this, callback, thisArg);

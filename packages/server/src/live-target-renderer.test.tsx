@@ -9,6 +9,78 @@ import { query, queryRuntimeWarningsFromRequest } from './query.js';
 import { s } from './schema.js';
 
 describe('generated component live target renderers', () => {
+  it('closes over immutable query and error-boundary construction facts', async () => {
+    const records = domain('records');
+    const reviewedQuery = query('reviewed-record', {
+      load: () => ({ label: 'SAFE' }),
+      reads: [records],
+    });
+    const binding = { name: 'record', query: reviewedQuery };
+    const boundary = { fallback: () => <output>SAFE BOUNDARY</output> };
+    const RecordRegion = component({
+      errorBoundary: boundary,
+      render: ({ record }: { record: { label: string } }) => <section>{record.label}</section>,
+    });
+    const renderer = componentLiveTargetRenderer({
+      component: RecordRegion,
+      componentId: 'components/record/region',
+      queries: [binding],
+    }) as ReturnType<typeof componentLiveTargetRenderer> & {
+      queryBindings: readonly Readonly<{ query: typeof reviewedQuery }>[];
+    };
+
+    expect(Object.isFrozen(renderer)).toBe(true);
+    expect(Object.isFrozen(renderer.queries)).toBe(true);
+    expect(Object.isFrozen(renderer.queryDefinitions)).toBe(true);
+    expect(Object.isFrozen(renderer.queryBindings)).toBe(true);
+    expect(Object.isFrozen(renderer.queryBindings[0])).toBe(true);
+    expect(Object.isFrozen(renderer.queryBindings[0]!.query)).toBe(true);
+    expect(Object.isFrozen(renderer.errorBoundary)).toBe(true);
+
+    binding.query = query('reviewed-record', {
+      load: () => ({ label: 'LEAKED' }),
+      reads: [records],
+    });
+    reviewedQuery.load = () => ({ label: 'LEAKED' });
+    boundary.fallback = () => <output>LEAKED BOUNDARY</output>;
+
+    const html = await renderer.render({ input: {}, props: {}, request: {}, target: 'record' });
+    expect(html).toContain('>SAFE</section>');
+    expect(html).not.toContain('LEAKED');
+    expect(String(renderer.errorBoundary?.render(new Error('boom'), {}))).toContain(
+      'SAFE BOUNDARY',
+    );
+    expect(String(renderer.errorBoundary?.render(new Error('boom'), {}))).not.toContain('LEAKED');
+  });
+
+  it('rejects accessor-backed compiler renderer options and query bindings', () => {
+    const stableQuery = query('accessor-record', { load: () => ({ ok: true }), reads: [] });
+    const Region = component({ render: () => <section /> });
+    const optionsWithAccessor = {
+      component: Region,
+      get componentId() {
+        return 'components/accessor/region';
+      },
+    };
+    expect(() => componentLiveTargetRenderer(optionsWithAccessor)).toThrow(
+      'componentId must be a stable own data property',
+    );
+
+    const bindingWithAccessor = {
+      name: 'record',
+      get query() {
+        return stableQuery;
+      },
+    };
+    expect(() =>
+      componentLiveTargetRenderer({
+        component: Region,
+        componentId: 'components/accessor/region',
+        queries: [bindingWithAccessor],
+      }),
+    ).toThrow('query must be a stable own data property');
+  });
+
   it('loads declared queries from serialized props and renders the component', async () => {
     const product = domain('product');
     const productQuery = query('product', {
