@@ -754,7 +754,7 @@ export const guards = {
         // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
         // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
         const keyedRequest = request as unknown as KeyedRequest;
-        return (await ownsRow(keyedRequest, keyOf(keyedRequest)))
+        return (await ownsRow(keyedRequest, keyOf(keyedRequest))) === true
           ? true
           : unauthorizedGuardFailure();
       },

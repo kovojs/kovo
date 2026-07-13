@@ -1344,6 +1344,17 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
     ).resolves.toEqual({ kind: 'forbidden', payload: {} });
   });
 
+  it('requires exact boolean true from an ownership predicate', async () => {
+    const guard = guards.owns<Req, Req, string>(
+      (req) => req.args.id,
+      (() => 'truthy-forgery') as unknown as (request: Req, key: string) => boolean,
+    );
+
+    await expect(
+      guard({ session: { user: { id: 'intruder' } }, args: { id: 'r1' } }),
+    ).resolves.toEqual({ kind: 'forbidden', payload: {} });
+  });
+
   it('rejects an unauthenticated caller before consulting the ownership check', async () => {
     const consulted: string[] = [];
     const guard = guards.owns<Req, Req, string>(
