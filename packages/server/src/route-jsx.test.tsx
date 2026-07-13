@@ -2,15 +2,32 @@
 import { component, ErrorBoundary, FieldError, form, FormError } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createApp } from './app.js';
 import { validateCsrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { assignDerivedComponentName } from './internal/wire.js';
+import { appLiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { defineCompiledRoutePage } from './route-ir.js';
 import { jsx } from './jsx-runtime.js';
 import { layout, notFound, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
+
+function closedAppLiveTargetOptions() {
+  const app = createApp({
+    egress: {
+      enabled: false,
+      justification: 'route JSX authority fixtures perform no outbound I/O',
+    },
+  });
+
+  // SPEC §9.1/§9.5: even direct JSX tests mint live-target stamps through authority issued by a
+  // fully closed app and bound to that app's snapshotted build context.
+  return {
+    attestationAuthority: appLiveTargetAttestationAuthority(app, app.clientModules.buildToken()),
+  };
+}
 
 describe('route JSX pages', () => {
   it('renders typed GET form sugar as native form controls', async () => {
@@ -94,7 +111,13 @@ describe('route JSX pages', () => {
       page: () => <LadderRegion />,
     });
 
-    const response = await renderRoutePageResponse(ladderRoute, {}, {});
+    const response = await renderRoutePageResponse(
+      ladderRoute,
+      {},
+      {},
+      undefined,
+      closedAppLiveTargetOptions(),
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toContain('kovo-c="ladder-region"');
@@ -199,7 +222,13 @@ describe('route JSX pages', () => {
       page: ({ params }) => <ProductDetail productId={params.id} />,
     });
 
-    const response = await renderRoutePageResponse(productRoute, { params: { id: 'p1' } }, {});
+    const response = await renderRoutePageResponse(
+      productRoute,
+      { params: { id: 'p1' } },
+      {},
+      undefined,
+      closedAppLiveTargetOptions(),
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toContain(
@@ -239,7 +268,13 @@ describe('route JSX pages', () => {
       ),
     });
 
-    const response = await renderRoutePageResponse(productRoute, {}, {});
+    const response = await renderRoutePageResponse(
+      productRoute,
+      {},
+      {},
+      undefined,
+      closedAppLiveTargetOptions(),
+    );
     expect(typeof response.body).toBe('string');
     const headers = collectLiveTargetHeaders(response.body as string);
 
@@ -531,7 +566,13 @@ describe('route JSX pages', () => {
       page: () => <h1>Admin</h1>,
     });
 
-    const response = await renderRoutePageResponse(adminRoute, {}, { userId: 'u1' });
+    const response = await renderRoutePageResponse(
+      adminRoute,
+      {},
+      { userId: 'u1' },
+      undefined,
+      closedAppLiveTargetOptions(),
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toContain('data-viewer="u1"');
@@ -600,7 +641,13 @@ describe('route JSX pages', () => {
       ),
     });
 
-    const response = await renderRoutePageResponse(adminRoute, {}, { userId: 'u1' });
+    const response = await renderRoutePageResponse(
+      adminRoute,
+      {},
+      { userId: 'u1' },
+      undefined,
+      closedAppLiveTargetOptions(),
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toContain(

@@ -38,10 +38,12 @@ describe('live-target app authority isolation', () => {
     });
     const firstRenderer: LiveTargetRenderer = {
       component: 'shared/card',
+      mutationKeys: [],
       render: () => '<card>APP_A</card>',
     };
     const secondRenderer: LiveTargetRenderer = {
       component: 'shared/card',
+      mutationKeys: [],
       render: () => '<card>APP_B</card>',
     };
 
@@ -64,10 +66,12 @@ describe('live-target app authority isolation', () => {
   it('hands one generated registry to exactly one app and seals late registration', () => {
     const firstRenderer: LiveTargetRenderer = {
       component: 'shared/one-shot',
+      mutationKeys: [],
       render: () => '<card>FIRST</card>',
     };
     const lateRenderer: LiveTargetRenderer = {
       component: 'shared/late',
+      mutationKeys: [],
       render: () => '<card>LATE</card>',
     };
 
@@ -87,14 +91,22 @@ describe('live-target app authority isolation', () => {
   it('rejects same-component descriptor replay between explicit app identities', () => {
     const rendererA: LiveTargetRenderer = {
       component: 'shared/card',
+      mutationKeys: [],
       render: () => '<card>APP_A</card>',
     };
     const rendererB: LiveTargetRenderer = {
       component: 'shared/card',
+      mutationKeys: [],
       render: () => '<card>APP_B</card>',
     };
-    const appA = createApp({ appId: appIds.tenantA, liveTargetRenderers: [rendererA] });
-    const appB = createApp({ appId: appIds.tenantB, liveTargetRenderers: [rendererB] });
+    const appA = runWithGeneratedLiveTargetRegistry(() => {
+      registerGeneratedLiveTargetRenderer(rendererA);
+      return createApp({ appId: appIds.tenantA });
+    });
+    const appB = runWithGeneratedLiveTargetRegistry(() => {
+      registerGeneratedLiveTargetRenderer(rendererB);
+      return createApp({ appId: appIds.tenantB });
+    });
     const descriptor = { component: 'shared/card', props: {}, target: 'shared' };
     expect(() =>
       (createAppLiveTargetAttestation as unknown as (...args: unknown[]) => string)(descriptor, {
@@ -125,31 +137,41 @@ describe('live-target app authority isolation', () => {
     ).toHaveLength(1);
   });
 
-  it('rejects duplicate explicit renderer component authority while closing the app', () => {
+  it('rejects duplicate generated renderer component authority before closing the app', () => {
     const first: LiveTargetRenderer = {
       component: 'shared/collision',
+      mutationKeys: [],
       render: () => '<sensitive />',
     };
     const second: LiveTargetRenderer = {
       component: 'shared/collision',
+      mutationKeys: [],
       render: () => '<public />',
     };
 
     expect(() =>
-      createApp({
-        appId: '4889d1ef-435d-4398-9301-20217e1417a8',
-        liveTargetRenderers: [first, second],
+      runWithGeneratedLiveTargetRegistry(() => {
+        registerGeneratedLiveTargetRenderer(first);
+        registerGeneratedLiveTargetRenderer(second);
+        return createApp({ appId: '4889d1ef-435d-4398-9301-20217e1417a8' });
       }),
-    ).toThrow(/Duplicate live-target renderer component "shared\/collision"/u);
+    ).toThrow(/Duplicate generated live target renderer for component "shared\/collision"/u);
   });
 
   it('isolates same-build development apps even when appId is omitted', () => {
     const renderer: LiveTargetRenderer = {
       component: 'shared/default-card',
+      mutationKeys: [],
       render: () => '<card />',
     };
-    const appA = createApp({ liveTargetRenderers: [renderer] });
-    const appB = createApp({ liveTargetRenderers: [renderer] });
+    const appA = runWithGeneratedLiveTargetRegistry(() => {
+      registerGeneratedLiveTargetRenderer(renderer);
+      return createApp();
+    });
+    const appB = runWithGeneratedLiveTargetRegistry(() => {
+      registerGeneratedLiveTargetRenderer(renderer);
+      return createApp();
+    });
 
     expect(appA.clientModules.buildToken()).toBe(appB.clientModules.buildToken());
     expect(appLiveTargetAttestationAudience(appA)).not.toBe(appLiveTargetAttestationAudience(appB));
@@ -158,12 +180,13 @@ describe('live-target app authority isolation', () => {
   it('never shares a live-target audience with a same-build rendererless app', () => {
     const renderer: LiveTargetRenderer = {
       component: 'shared/renderer-owned',
+      mutationKeys: [],
       render: () => '<card />',
     };
     const rendererless = createApp({ appId: appIds.rendererless });
-    const rendererOwner = createApp({
-      appId: appIds.rendererOwner,
-      liveTargetRenderers: [renderer],
+    const rendererOwner = runWithGeneratedLiveTargetRegistry(() => {
+      registerGeneratedLiveTargetRenderer(renderer);
+      return createApp({ appId: appIds.rendererOwner });
     });
 
     expect(appLiveTargetAttestationAudience(rendererless)).not.toBe(
@@ -180,6 +203,7 @@ describe('live-target app authority isolation', () => {
     const render = vi.fn(() => '<owner-a>secret</owner-a>');
     const renderer: LiveTargetRenderer = {
       component: 'owner/a',
+      mutationKeys: [],
       queries: ['registry-owner-query'],
       queryDefinitions: [recordsQuery],
       render,
