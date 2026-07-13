@@ -254,7 +254,59 @@ describe('committed-secret lint (audit-grade, SPEC §6.6)', () => {
 describe('helpers', () => {
   it('estimateEntropyBits is ~0 for a repeated char and high for random', () => {
     expect(estimateEntropyBits('a'.repeat(64))).toBeLessThan(1);
+    expect(estimateEntropyBits('🔐'.repeat(64))).toBeLessThan(1);
     expect(estimateEntropyBits(STRONG_SECRET)).toBeGreaterThan(64);
+  });
+
+  it('keeps entropy evidence under late collection, iteration, and math replacement', () => {
+    const originalGet = Map.prototype.get;
+    const originalSet = Map.prototype.set;
+    const originalForEach = Map.prototype.forEach;
+    const originalValues = Map.prototype.values;
+    const originalIterator = String.prototype[Symbol.iterator];
+    const originalLog2 = Math.log2;
+    let poisonedCalls = 0;
+    let weak = Number.NaN;
+    let strong = Number.NaN;
+    try {
+      Map.prototype.get = function () {
+        poisonedCalls += 1;
+        return undefined;
+      } as typeof Map.prototype.get;
+      Map.prototype.set = function () {
+        poisonedCalls += 1;
+        return this;
+      } as typeof Map.prototype.set;
+      Map.prototype.forEach = function () {
+        poisonedCalls += 1;
+      } as typeof Map.prototype.forEach;
+      Map.prototype.values = function () {
+        poisonedCalls += 1;
+        return [1_000_000][Symbol.iterator]();
+      } as typeof Map.prototype.values;
+      String.prototype[Symbol.iterator] = function () {
+        poisonedCalls += 1;
+        return ['forged-random-alphabet'][Symbol.iterator]();
+      };
+      Math.log2 = () => {
+        poisonedCalls += 1;
+        return 128;
+      };
+
+      weak = estimateEntropyBits('a'.repeat(64));
+      strong = estimateEntropyBits(STRONG_SECRET);
+    } finally {
+      Map.prototype.get = originalGet;
+      Map.prototype.set = originalSet;
+      Map.prototype.forEach = originalForEach;
+      Map.prototype.values = originalValues;
+      String.prototype[Symbol.iterator] = originalIterator;
+      Math.log2 = originalLog2;
+    }
+
+    expect(poisonedCalls).toBe(0);
+    expect(weak).toBeLessThan(1);
+    expect(strong).toBeGreaterThan(64);
   });
 
   it('resolveBootMode honors explicit mode and falls back to NODE_ENV', () => {

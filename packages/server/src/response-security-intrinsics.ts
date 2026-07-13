@@ -64,6 +64,7 @@ const nativeMapDelete = NativeMap.prototype.delete;
 const nativeMapSet = NativeMap.prototype.set;
 const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeMathFloor = NativeMath.floor;
+const nativeMathLog2 = NativeMath.log2;
 const nativeNumberIsFinite = NativeNumber.isFinite;
 const nativeNumberIsInteger = NativeNumber.isInteger;
 const nativeNumberParseInt = NativeNumber.parseInt;
@@ -352,6 +353,7 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeNumberIsNaN, NativeNumber, [0]) !== false) return false;
     if (apply(NativeNumber, undefined, ['42']) !== 42) return false;
     if (apply(nativeMathFloor, NativeMath, [2.9]) !== 2) return false;
+    if (apply(nativeMathLog2, NativeMath, [8]) !== 3) return false;
     if (apply(nativeEncodeURIComponent, undefined, ['a;b']) !== 'a%3Bb') return false;
     if (apply(nativeEncodeUri, undefined, ['/a b,<']) !== '/a%20b,%3C') return false;
     if (apply(nativeJsonStringify, NativeJSON, [{ safe: true }]) !== '{"safe":true}') return false;
@@ -890,6 +892,11 @@ export function securityNumber(value: unknown): number {
 export function securityMathFloor(value: number): number {
   assertResponseSecurityIntrinsics();
   return apply(nativeMathFloor, NativeMath, [value]);
+}
+
+export function securityMathLog2(value: number): number {
+  assertResponseSecurityIntrinsics();
+  return apply(nativeMathLog2, NativeMath, [value]);
 }
 
 export function securityEncodeURIComponent(value: string): string {

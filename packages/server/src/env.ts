@@ -5,11 +5,17 @@ import {
   runtimeEnvironmentValue,
 } from './runtime-environment-authority.js';
 import { isSchemaValidationError } from './schema.js';
+import { securityMathLog2, securityStringCharCodeAt } from './response-security-intrinsics.js';
 import {
+  createWitnessMap,
   createWitnessSet,
   witnessArrayAppend,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessMapSize,
   witnessObjectIs,
   witnessSetAdd,
   witnessSetHas,
@@ -381,20 +387,47 @@ function isWaived(value: string): boolean {
  */
 export function estimateEntropyBits(value: string): number {
   if (value.length === 0) return 0;
-  const counts = new Map<string, number>();
-  for (const char of value) counts.set(char, (counts.get(char) ?? 0) + 1);
+  const histogram = characterCodePointHistogram(value);
   let perChar = 0;
-  for (const count of counts.values()) {
-    const probability = count / value.length;
-    perChar -= probability * Math.log2(probability);
-  }
-  return perChar * value.length;
+  witnessMapForEach(histogram.counts, (count) => {
+    const probability = count / histogram.length;
+    perChar -= probability * securityMathLog2(probability);
+  });
+  return perChar * histogram.length;
 }
 
 /** Fraction of distinct characters — a repetitive secret has a low ratio. */
 function distinctRatio(value: string): number {
   if (value.length === 0) return 0;
-  return new Set(value).size / value.length;
+  const histogram = characterCodePointHistogram(value);
+  return witnessMapSize(histogram.counts) / histogram.length;
+}
+
+function characterCodePointHistogram(value: string): {
+  readonly counts: Map<number, number>;
+  readonly length: number;
+} {
+  const counts = createWitnessMap<number, number>();
+  // SPEC §6.6: entropy is audit evidence produced after authored modules may have run. Iterate
+  // primitive code points and update the histogram only through boot-pinned controls; live String
+  // iteration, Map methods, or Math.log2 must not forge a strong/weak-secret verdict. Combining
+  // surrogate pairs ourselves preserves the prior per-character contract without trusting the
+  // mutable String iterator or falsely counting one repeated astral character as two symbols.
+  let length = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const first = securityStringCharCodeAt(value, index);
+    let codePoint = first;
+    if (first >= 0xd800 && first <= 0xdbff && index + 1 < value.length) {
+      const second = securityStringCharCodeAt(value, index + 1);
+      if (second >= 0xdc00 && second <= 0xdfff) {
+        codePoint = (first - 0xd800) * 0x400 + (second - 0xdc00) + 0x10000;
+        index += 1;
+      }
+    }
+    witnessMapSet(counts, codePoint, (witnessMapGet(counts, codePoint) ?? 0) + 1);
+    length += 1;
+  }
+  return { counts, length };
 }
 
 function readProcessEnv(): Record<string, unknown> {
