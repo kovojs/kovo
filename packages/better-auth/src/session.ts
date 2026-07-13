@@ -29,6 +29,7 @@ const NativeError = Error;
 const betterAuthSessionBoundaryFailureMessage =
   'Better Auth session provider failed inside the trusted plaintext boundary.';
 const betterAuthSanitizationInProgress = {};
+const betterAuthMaximumSanitizedDepth = 128;
 
 /**
  * The `{ session, user }` pair Better Auth returns for an authenticated request. The
@@ -284,7 +285,11 @@ function sanitizeBetterAuthValue<Value>(
   source: Value,
   label: string,
   copies: Map<object, unknown>,
+  depth = 0,
 ): BetterAuthSanitizedValue<Value> {
+  if (depth > betterAuthMaximumSanitizedDepth) {
+    throw new TypeError(`${label} exceeds the Better Auth session value depth limit.`);
+  }
   if (source === null) return source as BetterAuthSanitizedValue<Value>;
   const sourceType = typeof source;
   if (
@@ -320,7 +325,7 @@ function sanitizeBetterAuthValue<Value>(
     for (let index = 0; index < values.length; index += 1) {
       betterAuthArrayAppend(
         snapshot,
-        sanitizeBetterAuthValue(values[index], `${label}[${index}]`, copies),
+        sanitizeBetterAuthValue(values[index], `${label}[${index}]`, copies, depth + 1),
         label,
       );
     }
@@ -341,6 +346,7 @@ function sanitizeBetterAuthValue<Value>(
         betterAuthOwnDataValue(objectSource, field, label),
         `${label}.${field}`,
         copies,
+        depth + 1,
       ),
       label,
     );

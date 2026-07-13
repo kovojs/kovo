@@ -260,6 +260,24 @@ describe('betterAuthSession', () => {
     );
   });
 
+  it('bounds hostile session JSON depth before recursive projection exhausts the stack', async () => {
+    let profile: Record<string, unknown> = { displayName: 'Ada' };
+    for (let depth = 0; depth < 256; depth += 1) profile = { child: profile };
+    const auth = {
+      api: {
+        getSession: () => ({
+          session: { id: 'session-1' },
+          user: { id: 'user-1', profile },
+        }),
+      },
+    };
+    const provider = betterAuthSession(auth, (value) => value);
+
+    await expect(provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) })).rejects.toThrow(
+      'Better Auth session provider failed inside the trusted plaintext boundary.',
+    );
+  });
+
   it('does not let deferred session-header failures carry secrets out of the boundary', async () => {
     const secret = 'LIVE_REFRESH_COOKIE_MUST_NOT_ESCAPE';
     const auth = {
