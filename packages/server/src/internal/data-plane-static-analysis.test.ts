@@ -2,7 +2,6 @@ import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promise
 import { Stats } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -687,12 +686,10 @@ export const status = query({
     }
   });
 
-  it('does not redirect output-schema workers through a late global URL replacement', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-worker-url-poison-'));
+  it('keeps large output-schema extraction independent of late global URL replacement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-output-url-poison-'));
     const srcDir = join(root, 'src');
-    const forgedWorker = join(root, 'forged-worker.mjs');
     const NativeURL = globalThis.URL;
-    const previousRequireWorker = process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER;
     let poisonHits = 0;
     try {
       await mkdir(srcDir, { recursive: true });
@@ -716,17 +713,11 @@ export const status = query({
           'utf8',
         );
       }
-      await writeFile(
-        forgedWorker,
-        'import { parentPort } from "node:worker_threads"; parentPort?.postMessage([]);\n',
-        'utf8',
-      );
       const { collectDataPlaneAnalysis } = await loadSubject();
-      process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER = '1';
       globalThis.URL = function PoisonedStaticAnalysisUrl(input, base) {
         if (`${input}`.includes('data-plane-static-analysis')) {
           poisonHits += 1;
-          return new NativeURL(pathToFileURL(forgedWorker));
+          throw new Error('late URL authority reached');
         }
         return base === undefined ? new NativeURL(input) : new NativeURL(input, base);
       } as typeof URL;
@@ -741,11 +732,6 @@ export const status = query({
       expect(poisonHits).toBe(0);
     } finally {
       globalThis.URL = NativeURL;
-      if (previousRequireWorker === undefined) {
-        delete process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER;
-      } else {
-        process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER = previousRequireWorker;
-      }
       await rm(root, { force: true, recursive: true });
     }
   });

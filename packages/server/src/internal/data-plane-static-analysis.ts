@@ -1,21 +1,11 @@
 import { existsSync as builtinExistsSync } from 'node:fs';
-import {
-  createRequire as builtinCreateRequire,
-  registerHooks as builtinRegisterHooks,
-} from 'node:module';
-import { availableParallelism as builtinAvailableParallelism } from 'node:os';
+import { extractStaticBuildAnalysisFactsFromProject } from '@kovojs/drizzle/internal/static';
+import * as TypeScript from 'typescript';
 import {
   dirname as builtinDirname,
   relative as builtinRelative,
   resolve as builtinResolve,
 } from 'node:path';
-import {
-  isMainThread as builtinIsMainThread,
-  parentPort as builtinParentPort,
-  Worker as BuiltinWorker,
-  workerData as builtinWorkerData,
-} from 'node:worker_threads';
-import { fileURLToPath as builtinFileURLToPath } from 'node:url';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import {
@@ -42,20 +32,16 @@ import {
   staticAnalysisArrayLength,
   staticAnalysisArraySet,
   staticAnalysisCanonicalJson,
-  staticAnalysisCreateUrl,
-  staticAnalysisCreatePromise,
   staticAnalysisDefineDataProperty,
   staticAnalysisJsonParse,
   staticAnalysisMapGet,
   staticAnalysisMapSet,
-  staticAnalysisMathMax,
   staticAnalysisMathMin,
   staticAnalysisNumberIsFinite,
   staticAnalysisNumberParseInt,
   staticAnalysisNullRecord,
   staticAnalysisObjectKeys,
   staticAnalysisOwnDataValue,
-  staticAnalysisPromiseAll,
   staticAnalysisRegExpTest,
   staticAnalysisStringEndsWith,
   staticAnalysisStringIndexOf,
@@ -63,7 +49,6 @@ import {
   staticAnalysisStringSlice,
   staticAnalysisStringStartsWith,
   staticAnalysisStringToLowerCase,
-  staticAnalysisUrlHref,
 } from './data-plane-static-analysis-intrinsics.ts';
 import type { RuntimeRegistryWireFacts } from './runtime-registry-wire.js';
 
@@ -155,48 +140,14 @@ interface StaticBuildAnalysisFactsLike {
   touchGraph: unknown;
 }
 
-const DRIZZLE_STATIC_ANALYZER_MODULE = '@kovojs/drizzle/internal/static';
 const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-02.authz-census.v1';
-const OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND = 'kovo.output-schema-query-shape';
-const OUTPUT_SCHEMA_WORKER_MIN_FILES = 8;
-const OUTPUT_SCHEMA_WORKER_MAX_COUNT = 4;
 const existsSync = builtinExistsSync;
-const createRequire = builtinCreateRequire;
-const registerHooks = builtinRegisterHooks;
-const availableParallelism = builtinAvailableParallelism;
 const dirname = builtinDirname;
 const relative = builtinRelative;
 const resolve = builtinResolve;
-const isMainThread = builtinIsMainThread;
-const parentPort = builtinParentPort;
-const Worker = BuiltinWorker;
-const workerData = builtinWorkerData;
-const fileURLToPath = builtinFileURLToPath;
-
-// This import is dynamic only to support the monorepo's native TypeScript source graph. It is
-// deliberately eager top-level authority: supported CLI/Vite runners evaluate this dependency
-// before authored config can install resolver hooks (SPEC §2 / §6.6 / §11.4).
-registerCompilerSourceResolutionHooks();
-const drizzleStaticModule = (await import(DRIZZLE_STATIC_ANALYZER_MODULE)) as Record<
-  string,
-  unknown
->;
-const extractStaticBuildAnalysisFactsFromProject =
-  'extractStaticBuildAnalysisFactsFromProject' in drizzleStaticModule
-    ? drizzleStaticModule.extractStaticBuildAnalysisFactsFromProject
-    : undefined;
-
-interface OutputSchemaQueryShapeWorkerData {
-  files: readonly DataPlaneSourceFile[];
-  kind: typeof OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND;
-  projectFiles?: readonly DataPlaneSourceFile[];
-}
-
 type TypeScriptModule = typeof import('typescript');
 
-// Load TypeScript while the trusted server Vite/CLI graph is being established. Authored config
-// can install resolver hooks later, so lazy require() cannot own output-schema security facts.
-const loadedTypeScript = createRequire(import.meta.url)('typescript') as TypeScriptModule;
+const loadedTypeScript: TypeScriptModule = TypeScript;
 let dataPlaneAnalysisCacheEntry:
   | {
       identity: string;
@@ -218,15 +169,6 @@ class DataPlaneStaticAnalysisError extends Error {
     this.name = 'DataPlaneStaticAnalysisError';
     this.cause = cause;
   }
-}
-
-if (!isMainThread && isOutputSchemaQueryShapeWorkerData(workerData)) {
-  parentPort?.postMessage(
-    outputSchemaQueryShapeFactsSerial(
-      workerData.files,
-      workerData.projectFiles ?? workerData.files,
-    ),
-  );
 }
 
 /** @internal Build the analyzer SourceFileInput[] for a Vite app source tree. */
@@ -934,53 +876,7 @@ function outputSchemaQueryShapeFacts(
 async function outputSchemaQueryShapeFactsAsync(
   files: readonly DataPlaneSourceFile[],
 ): Promise<readonly QueryShapeFact[]> {
-  if (!isMainThread || files.length < OUTPUT_SCHEMA_WORKER_MIN_FILES)
-    return outputSchemaQueryShapeFactsSerial(files);
-  const workerCount = staticAnalysisMathMin(
-    files.length,
-    OUTPUT_SCHEMA_WORKER_MAX_COUNT,
-    staticAnalysisMathMax(1, availableParallelism() - 1),
-  );
-  if (workerCount <= 1) return outputSchemaQueryShapeFactsSerial(files);
-  const chunks: DataPlaneSourceFile[][] = [];
-  for (let index = 0; index < workerCount; index += 1) {
-    staticAnalysisArrayAppend(chunks, [], 'Static-analysis worker chunks');
-  }
-  for (let index = 0; index < files.length; index += 1) {
-    const chunk = chunks[index % workerCount]!;
-    staticAnalysisArrayAppend(chunk, files[index]!, 'Static-analysis worker chunk');
-  }
-  const tasks: Promise<readonly QueryShapeFact[]>[] = [];
-  for (let index = 0; index < chunks.length; index += 1) {
-    const chunk = chunks[index]!;
-    if (chunk.length === 0) continue;
-    staticAnalysisArrayAppend(
-      tasks,
-      outputSchemaQueryShapeFactsWithWorkerFallback(chunk, files),
-      'Static-analysis worker tasks',
-    );
-  }
-  const facts = await staticAnalysisPromiseAll(tasks);
-  const result: QueryShapeFact[] = [];
-  for (let index = 0; index < facts.length; index += 1) {
-    const chunkFacts = facts[index]!;
-    for (let factIndex = 0; factIndex < chunkFacts.length; factIndex += 1) {
-      staticAnalysisArrayAppend(result, chunkFacts[factIndex]!, 'Static-analysis worker facts');
-    }
-  }
-  return result;
-}
-
-async function outputSchemaQueryShapeFactsWithWorkerFallback(
-  chunk: readonly DataPlaneSourceFile[],
-  files: readonly DataPlaneSourceFile[],
-): Promise<readonly QueryShapeFact[]> {
-  try {
-    return await outputSchemaQueryShapeFactsInWorker(chunk, files);
-  } catch (error) {
-    if (process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER === '1') throw error;
-    return outputSchemaQueryShapeFactsSerial(chunk, files);
-  }
+  return outputSchemaQueryShapeFactsSerial(files);
 }
 
 function outputSchemaQueryShapeFactsSerial(
@@ -988,36 +884,6 @@ function outputSchemaQueryShapeFactsSerial(
   projectFiles: readonly DataPlaneSourceFile[] = files,
 ): readonly QueryShapeFact[] {
   return outputSchemaQueryShapeFactsFromProject(typeScript(), projectFiles, files);
-}
-
-function outputSchemaQueryShapeFactsInWorker(
-  files: readonly DataPlaneSourceFile[],
-  projectFiles: readonly DataPlaneSourceFile[],
-): Promise<readonly QueryShapeFact[]> {
-  return staticAnalysisCreatePromise((resolve, reject) => {
-    let settled = false;
-    const workerModule = staticAnalysisCreateUrl(import.meta.url);
-    const worker = new Worker(fileURLToPath(staticAnalysisUrlHref(workerModule)), {
-      workerData: {
-        files,
-        kind: OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND,
-        projectFiles,
-      } satisfies OutputSchemaQueryShapeWorkerData,
-    });
-    worker.once('message', (message: unknown) => {
-      settled = true;
-      if (isCompilerQueryShapeFactArray(message)) resolve(message);
-      else reject(new Error('Kovo output-schema worker returned malformed query-shape facts.'));
-    });
-    worker.once('error', (error) => {
-      settled = true;
-      reject(error);
-    });
-    worker.once('exit', (code) => {
-      if (!settled)
-        reject(new Error(`Kovo output-schema worker exited before returning facts, code ${code}.`));
-    });
-  });
 }
 
 function isCompilerQueryShape(shape: unknown): shape is QueryShapeFact['shape'] {
@@ -1099,56 +965,6 @@ function isPlainCompilerShapeObject(
     isRecord(shape) &&
     staticAnalysisOwnDataValue(shape, 'kind', 'Compiler query shape') === undefined
   );
-}
-
-function isOutputSchemaQueryShapeWorkerData(
-  value: unknown,
-): value is OutputSchemaQueryShapeWorkerData {
-  if (!isRecord(value)) return false;
-  const kind = staticAnalysisOwnDataValue(value, 'kind', 'Output-schema worker data');
-  const files = staticAnalysisOwnDataValue(value, 'files', 'Output-schema worker data');
-  const projectFiles = staticAnalysisOwnDataValue(
-    value,
-    'projectFiles',
-    'Output-schema worker data',
-  );
-  if (kind !== OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND || !staticAnalysisArrayIsArray(files)) {
-    return false;
-  }
-  if (!sourceFileArrayIsValid(files)) return false;
-  return (
-    projectFiles === undefined ||
-    (staticAnalysisArrayIsArray(projectFiles) && sourceFileArrayIsValid(projectFiles))
-  );
-}
-
-function sourceFileArrayIsValid(value: unknown[]): boolean {
-  const length = staticAnalysisArrayLength(value, 'Output-schema worker files');
-  for (let index = 0; index < length; index += 1) {
-    if (!isOutputSchemaWorkerSourceFile(staticAnalysisOwnDataValue(value, index, 'Worker files'))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function isOutputSchemaWorkerSourceFile(value: unknown): value is DataPlaneSourceFile {
-  return (
-    isRecord(value) &&
-    typeof staticAnalysisOwnDataValue(value, 'fileName', 'Worker source file') === 'string' &&
-    typeof staticAnalysisOwnDataValue(value, 'source', 'Worker source file') === 'string'
-  );
-}
-
-function isCompilerQueryShapeFactArray(value: unknown): value is readonly QueryShapeFact[] {
-  if (!staticAnalysisArrayIsArray(value)) return false;
-  const length = staticAnalysisArrayLength(value, 'Worker query-shape facts');
-  for (let index = 0; index < length; index += 1) {
-    if (!isCompilerQueryShapeFact(staticAnalysisOwnDataValue(value, index, 'Worker query facts'))) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function isCompilerQueryShapeFact(value: unknown): value is QueryShapeFact {
@@ -1562,26 +1378,6 @@ function sortStrings(values: string[]): void {
     }
     staticAnalysisArraySet(values, insertAt, value, 'Static-analysis sorted strings');
   }
-}
-
-function registerCompilerSourceResolutionHooks(): void {
-  registerHooks({
-    resolve(specifier, context, nextResolve) {
-      if (
-        staticAnalysisStringStartsWith(specifier, '.') &&
-        staticAnalysisStringEndsWith(specifier, '.js') &&
-        context.parentURL
-      ) {
-        const tsUrl = staticAnalysisCreateUrl(
-          `${staticAnalysisStringSlice(specifier, 0, specifier.length - 3)}.ts`,
-          context.parentURL,
-        );
-        const tsHref = staticAnalysisUrlHref(tsUrl);
-        if (existsSync(fileURLToPath(tsHref))) return nextResolve(tsHref, context);
-      }
-      return nextResolve(specifier, context);
-    },
-  });
 }
 
 function typeScript(): TypeScriptModule {
