@@ -59,13 +59,24 @@ export function mergeQueryUpdatePlans(
   for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
     const [query, queryPlans] = entries[entryIndex]!;
     const paths = stableSort(
-      dedupeBy(flattenPlanFacts(queryPlans, 'paths'), (path) => path),
+      dedupeBy(
+        flattenPlanFacts(queryPlans, 'paths', (plan) => plan.paths),
+        (path) => path,
+      ),
       (left, right) => (left < right ? -1 : left > right ? 1 : 0),
     );
-    const outputContexts = flattenPlanFacts(queryPlans, 'outputContexts');
-    const derives = flattenPlanFacts(queryPlans, 'derives');
-    const stamps = flattenPlanFacts(queryPlans, 'stamps');
-    const templateStamps = flattenPlanFacts(queryPlans, 'templateStamps');
+    const outputContexts = flattenPlanFacts(
+      queryPlans,
+      'outputContexts',
+      (plan) => plan.outputContexts,
+    );
+    const derives = flattenPlanFacts(queryPlans, 'derives', (plan) => plan.derives);
+    const stamps = flattenPlanFacts(queryPlans, 'stamps', (plan) => plan.stamps);
+    const templateStamps = flattenPlanFacts(
+      queryPlans,
+      'templateStamps',
+      (plan) => plan.templateStamps,
+    );
     const result: QueryUpdatePlanFact = {
       componentName: queryPlans[0]?.componentName ?? 'Component',
       query,
@@ -126,9 +137,18 @@ export function mergeStyleUpdateCoverage(
   styleCoverage: readonly QueryUpdateCoverageFact[],
   handledSpans: readonly SourceSpan[],
 ): QueryUpdateCoverageFact[] {
-  const coverageSnapshot = compilerSnapshotJsonValue(coverage, 'Query update coverage');
-  const styleSnapshot = compilerSnapshotJsonValue(styleCoverage, 'Style update coverage');
-  const spanSnapshot = compilerSnapshotJsonValue(handledSpans, 'Handled source spans');
+  const coverageSnapshot = compilerSnapshotDenseArray(
+    compilerSnapshotJsonValue(coverage, 'Query update coverage'),
+    'Query update coverage',
+  );
+  const styleSnapshot = compilerSnapshotDenseArray(
+    compilerSnapshotJsonValue(styleCoverage, 'Style update coverage'),
+    'Style update coverage',
+  );
+  const spanSnapshot = compilerSnapshotDenseArray(
+    compilerSnapshotJsonValue(handledSpans, 'Handled source spans'),
+    'Handled source spans',
+  );
   if (styleSnapshot.length === 0) return coverageSnapshot;
 
   const merged: QueryUpdateCoverageFact[] = [];
@@ -174,17 +194,17 @@ export function dedupeByKey<Value>(
   return dedupeBy(values, keyFor);
 }
 
-function flattenPlanFacts<
-  Key extends 'derives' | 'outputContexts' | 'paths' | 'stamps' | 'templateStamps',
->(
+function flattenPlanFacts<Value>(
   plans: readonly QueryUpdatePlanFact[],
-  key: Key,
-): NonNullable<QueryUpdatePlanFact[Key]>[number][] {
-  const flattened: NonNullable<QueryUpdatePlanFact[Key]>[number][] = [];
-  for (let planIndex = 0; planIndex < plans.length; planIndex += 1) {
-    const values = plans[planIndex]![key];
+  label: string,
+  valuesFor: (plan: QueryUpdatePlanFact) => readonly Value[] | undefined,
+): Value[] {
+  const flattened: Value[] = [];
+  const planSnapshot = compilerSnapshotDenseArray(plans, 'Query update plans');
+  for (let planIndex = 0; planIndex < planSnapshot.length; planIndex += 1) {
+    const values = valuesFor(planSnapshot[planIndex]!);
     if (values === undefined) continue;
-    const snapshot = compilerSnapshotDenseArray(values, `Query update plan.${key}`);
+    const snapshot = compilerSnapshotDenseArray(values, `Query update plan.${label}`);
     for (let valueIndex = 0; valueIndex < snapshot.length; valueIndex += 1) {
       compilerArrayAppend(
         flattened,
@@ -206,8 +226,73 @@ function snapshotQueryUpdatePlan(plan: QueryUpdatePlanFact, index: number): Quer
   }
   return {
     ...snapshot,
-    outputContexts: compilerSnapshotJsonValue(outputContexts, `${label}.outputContexts`),
+    outputContexts: snapshotOutputContextFacts(outputContexts, `${label}.outputContexts`),
   };
+}
+
+function snapshotOutputContextFacts(value: unknown[], label: string): GeneratedOutputWriteFact[] {
+  const source = compilerSnapshotDenseArray(value, label);
+  const result: GeneratedOutputWriteFact[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const fact = source[index];
+    if (typeof fact !== 'object' || fact === null) {
+      throw new TypeError(`${label}[${index}] must be an object.`);
+    }
+    const factLabel = `${label}[${index}]`;
+    const context = compilerOwnDataValue(fact, 'context', factLabel);
+    const expression = compilerOwnDataValue(fact, 'expression', factLabel);
+    const sink = compilerOwnDataValue(fact, 'sink', factLabel);
+    const sourceKind = compilerOwnDataValue(fact, 'source', factLabel);
+    const writer = compilerOwnDataValue(fact, 'writer', factLabel);
+    if (!isOutputContext(context)) {
+      throw new TypeError(`${factLabel}.context is invalid.`);
+    }
+    if (expression !== undefined && typeof expression !== 'string') {
+      throw new TypeError(`${factLabel}.expression must be a string when present.`);
+    }
+    if (typeof sink !== 'string' || typeof writer !== 'string') {
+      throw new TypeError(`${factLabel} must contain string sink and writer facts.`);
+    }
+    if (!isOutputContextSource(sourceKind)) {
+      throw new TypeError(`${factLabel}.source is invalid.`);
+    }
+    compilerArrayAppend(
+      result,
+      {
+        context,
+        ...(expression === undefined ? {} : { expression }),
+        sink,
+        source: sourceKind,
+        writer,
+      },
+      label,
+    );
+  }
+  return result;
+}
+
+function isOutputContext(value: unknown): value is GeneratedOutputWriteFact['context'] {
+  return (
+    value === 'text' ||
+    value === 'attribute' ||
+    value === 'boolean-attribute' ||
+    value === 'url-attribute' ||
+    value === 'style-property' ||
+    value === 'css-text' ||
+    value === 'html-fragment' ||
+    value === 'script-text' ||
+    value === 'trusted-html'
+  );
+}
+
+function isOutputContextSource(value: unknown): value is GeneratedOutputWriteFact['source'] {
+  return (
+    value === 'client-query' ||
+    value === 'client-state' ||
+    value === 'server-render' ||
+    value === 'style-extraction' ||
+    value === 'template-stamp'
+  );
 }
 
 function stableSort<Value>(

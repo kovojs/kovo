@@ -3096,7 +3096,7 @@ function collectBindingIdentifiers(name: ts.BindingName, targets: Set<string>): 
     const element = compilerOwnDataValue(name.elements, index, 'Array binding elements') as
       | ts.ArrayBindingElement
       | undefined;
-    if (ts.isBindingElement(element)) collectBindingIdentifiers(element.name, targets);
+    if (element && ts.isBindingElement(element)) collectBindingIdentifiers(element.name, targets);
   }
 }
 
@@ -3937,7 +3937,7 @@ function isNumericLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
 function staticConstructorTypeEntry(
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
-): { staticConstructorType: ObjectLiteralEntry['staticConstructorType'] } | {} {
+): { staticConstructorType: NonNullable<ObjectLiteralEntry['staticConstructorType']> } | {} {
   if (!ts.isIdentifier(expression)) return {};
   // Component prop constructor shorthand uses platform globals. Local aliases named String/Number/
   // Boolean are app values and must not become static prop schema facts.

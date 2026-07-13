@@ -553,11 +553,7 @@ function clientModuleAllowlistAttribute(refValues: readonly string[]): string {
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index]!;
     const ref = parseKovoModuleRef(value, 'handler');
-    if (
-      ref !== null &&
-      compilerStringStartsWith(ref.url, '/c/') &&
-      !compilerSetHas(urls, ref.url)
-    ) {
+    if (ref && compilerStringStartsWith(ref.url, '/c/') && !compilerSetHas(urls, ref.url)) {
       compilerSetAdd(urls, ref.url);
       compilerArrayAppend(
         orderedUrls,

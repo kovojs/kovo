@@ -758,7 +758,7 @@ export function componentGraphFact(
   const clocks = component
     ? componentClockExplainFacts(component)
     : componentClockExplainFactsForModule(model);
-  const styleRules: ComponentGraphFact['styleRules'] = [];
+  const styleRules: { className: string; source: string; styleRef: string }[] = [];
   const styleRuleSnapshot = compilerSnapshotDenseArray(styleRuleUsages, 'Component style rules');
   for (let index = 0; index < styleRuleSnapshot.length; index += 1) {
     const { className, source, styleRef } = styleRuleSnapshot[index]!;

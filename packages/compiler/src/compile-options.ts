@@ -108,7 +108,20 @@ export function snapshotCompileComponentOptions(
     );
   }
 
-  return compilerFreeze(snapshot) as CompileOptionsWithProjectFiles;
+  const frozen = compilerFreeze(snapshot);
+  if (!isCompleteCompileOptionsSnapshot(frozen)) {
+    throw new TypeError('Compiler options snapshot is missing required own-data fields.');
+  }
+  return frozen;
+}
+
+function isCompleteCompileOptionsSnapshot(
+  value: Readonly<Record<string, unknown>>,
+): value is Readonly<Record<string, unknown>> & CompileOptionsWithProjectFiles {
+  return (
+    typeof compilerOwnDataValue(value, 'fileName', 'Compiler options snapshot') === 'string' &&
+    typeof compilerOwnDataValue(value, 'source', 'Compiler options snapshot') === 'string'
+  );
 }
 
 function requiredCompileOptionString(

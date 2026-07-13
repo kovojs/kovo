@@ -6,6 +6,7 @@ import { parseBindingPath } from './query-shapes.js';
 import { withOutputContext } from './query-internal.js';
 import {
   compilerArrayAppend,
+  compilerArrayIsArray,
   compilerCreateMap,
   compilerMapGet,
   compilerMapSet,
@@ -14,7 +15,12 @@ import {
   compilerStringSlice,
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
-import { callExpressions, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
+import {
+  callExpressions,
+  jsxElements,
+  type ArrowFunctionPartsModel,
+  type ComponentModuleModel,
+} from '../scan/parse.js';
 import { outputContextForAttribute } from '../output-context-facts.js';
 import type { QueryDeriveFact, QueryStampFact } from '../types.js';
 
@@ -29,16 +35,18 @@ export function exportedDerives(
     if (call.name !== 'derive' || !call.exportedConstName) continue;
 
     const inputs = deriveInputNames(
-      compilerOwnDataValue(
-        call.argumentStringLiteralArrayValues,
-        0,
+      ownStringArray(
+        compilerOwnDataValue(
+          call.argumentStringLiteralArrayValues,
+          0,
+          'Compiler derive input argument',
+        ),
         'Compiler derive input argument',
-      ) as readonly string[] | null | undefined,
+      ),
     );
-    const derive = compilerOwnDataValue(
-      call.argumentArrowFunctionParts,
-      1,
-      'Compiler derive arrow arguments',
+    const derive = ownArrowFunctionParts(
+      compilerOwnDataValue(call.argumentArrowFunctionParts, 1, 'Compiler derive arrow arguments'),
+      'Compiler derive arrow argument',
     );
     if (inputs.length === 0 || !derive || derive.params.length !== inputs.length) continue;
     const input = inputs[0];
@@ -57,6 +65,37 @@ export function exportedDerives(
   }
 
   return derives;
+}
+
+function ownStringArray(value: unknown, label: string): string[] | null {
+  if (value === null || value === undefined) return null;
+  if (!compilerArrayIsArray(value)) throw new TypeError(`${label} must be an array or null.`);
+
+  const source = compilerSnapshotDenseArray(value, label);
+  const result: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const entry = source[index];
+    if (typeof entry !== 'string') throw new TypeError(`${label}[${index}] must be a string.`);
+    compilerArrayAppend(result, entry, label);
+  }
+  return result;
+}
+
+function ownArrowFunctionParts(value: unknown, label: string): ArrowFunctionPartsModel | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'object') throw new TypeError(`${label} must be an object or null.`);
+
+  const expression = compilerOwnDataValue(value, 'expression', label);
+  const param = compilerOwnDataValue(value, 'param', label);
+  const rawParams = compilerOwnDataValue(value, 'params', label);
+  if (typeof expression !== 'string' || typeof param !== 'string') {
+    throw new TypeError(`${label} must contain string expression and param facts.`);
+  }
+  if (!compilerArrayIsArray(rawParams)) throw new TypeError(`${label}.params must be an array.`);
+
+  const params = ownStringArray(rawParams, `${label}.params`);
+  if (params === null) throw new TypeError(`${label}.params must be an array.`);
+  return { expression, param, params };
 }
 
 function deriveInputNames(values: readonly string[] | null | undefined): string[] {
