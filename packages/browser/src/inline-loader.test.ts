@@ -9,12 +9,14 @@ describe('inline loader source', () => {
     const originals = {
       addEventListener: globalRecord.addEventListener,
       document: globalRecord.document,
+      documentConstructor: globalRecord.Document,
       element: globalRecord.Element,
       htmlFormElement: globalRecord.HTMLFormElement,
       importModule: globalRecord.__kovoInlineImport,
       location: globalRecord.location,
       mouseEvent: globalRecord.MouseEvent,
       node: globalRecord.Node,
+      nodeList: globalRecord.NodeList,
       removeEventListener: globalRecord.removeEventListener,
       requestAnimationFrame: globalRecord.requestAnimationFrame,
       submitEvent: globalRecord.SubmitEvent,
@@ -37,6 +39,31 @@ describe('inline loader source', () => {
 
       hasAttribute(): boolean {
         return false;
+      }
+
+      remove(): void {}
+
+      removeAttribute(): void {}
+
+      setAttribute(): void {}
+    }
+
+    class FakeNodeList {
+      get length(): number {
+        return 0;
+      }
+
+      item(): null {
+        return null;
+      }
+    }
+    class FakeDocument {
+      createElement(name: string): FakeElement {
+        return name === 'form' ? new FakeHTMLFormElement() : new FakeElement();
+      }
+
+      querySelectorAll(): FakeNodeList {
+        return new FakeNodeList();
       }
     }
     class FakeHTMLFormElement extends FakeElement {
@@ -105,18 +132,13 @@ describe('inline loader source', () => {
         return rafCallbacks.length;
       };
       globalRecord.Element = FakeElement;
+      globalRecord.Document = FakeDocument;
       globalRecord.HTMLFormElement = FakeHTMLFormElement;
       globalRecord.MouseEvent = FakeMouseEvent;
       globalRecord.Node = FakeElement;
+      globalRecord.NodeList = FakeNodeList;
       globalRecord.SubmitEvent = FakeSubmitEvent;
-      globalRecord.document = {
-        createElement(name: string) {
-          return name === 'form' ? new FakeHTMLFormElement() : new FakeElement();
-        },
-        querySelectorAll() {
-          return [];
-        },
-      };
+      globalRecord.document = new FakeDocument();
       globalRecord.location = new FakeLocation();
 
       runInThisContext(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport '));
@@ -128,11 +150,13 @@ describe('inline loader source', () => {
       Object.assign(globalRecord, {
         addEventListener: originals.addEventListener,
         document: originals.document,
+        Document: originals.documentConstructor,
         Element: originals.element,
         HTMLFormElement: originals.htmlFormElement,
         location: originals.location,
         MouseEvent: originals.mouseEvent,
         Node: originals.node,
+        NodeList: originals.nodeList,
         removeEventListener: originals.removeEventListener,
         requestAnimationFrame: originals.requestAnimationFrame,
         SubmitEvent: originals.submitEvent,
