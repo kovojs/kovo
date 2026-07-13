@@ -3167,10 +3167,9 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
   );
 
   const starterProofPath = join(root, 'src/starter-mutation-db-scope-proof.ts');
-  let starterProof = readFileSync(starterProofPath, 'utf8');
-  starterProof = replaceRequired(
+  const starterProof = readFileSync(starterProofPath, 'utf8');
+  assertRequiredScaffoldAnchor(
     starterProof,
-    "import type { AppRequest } from './auth.js';",
     "import { appCsrf, type AppRequest } from './auth.js';",
     'phase 5.1 protected starter DB-scope CSRF import',
   );
@@ -3179,14 +3178,12 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
     'starterAuthUserTableWriteProof',
     'starterRawAuthTableWriteProof',
   ]) {
-    starterProof = replaceRequired(
+    assertRequiredScaffoldAnchor(
       starterProof,
-      `export const ${mutationName} = mutation({\n  access: publicProof,\n  csrf: false,`,
       `export const ${mutationName} = mutation({\n  access: publicProof,\n  csrf: appCsrf,`,
       `phase 5.1 protected ${mutationName} CSRF posture`,
     );
   }
-  writeFileSync(starterProofPath, starterProof, 'utf8');
 
   writeFileSync(
     join(root, 'src/paranoid-phase5-write-proof-forms.tsx'),
@@ -4309,6 +4306,10 @@ function replaceRequired(
 ): string {
   if (!source.includes(search)) throw new Error(`Expected scaffold anchor for ${label}.`);
   return source.replace(search, replacement);
+}
+
+function assertRequiredScaffoldAnchor(source: string, search: string, label: string): void {
+  if (!source.includes(search)) throw new Error(`Expected scaffold anchor for ${label}.`);
 }
 
 function escapeRegExp(value: string): string {
