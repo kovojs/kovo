@@ -4,10 +4,13 @@ import { isGeneratedOnlySemanticAttribute } from '@kovojs/core/internal/semantic
 
 import {
   compilerArrayAppend,
+  compilerCreateMap,
   compilerCreateNullRecord,
   compilerCreateSet,
   compilerDefineOwnDataProperty,
   compilerJsonStringify,
+  compilerMapGet,
+  compilerMapSet,
   compilerObjectKeys,
   compilerOwnDataValue,
   compilerRegExpExec,
@@ -326,7 +329,19 @@ interface SemanticRenderContext {
   registryFacts?: RegistryFacts;
 }
 
-interface SemanticElementOptions extends SemanticRenderContext {
+type SemanticExpressionModel = ComponentModuleModel['jsxExpressions'][number];
+
+interface SemanticRenderIndex {
+  readonly directChildren: Map<JsxElementModel, readonly JsxElementModel[]>;
+  readonly elements: readonly JsxElementModel[];
+  readonly expressionsByStart: Map<number, Map<number, SemanticExpressionModel>>;
+}
+
+interface SemanticRenderState extends SemanticRenderContext {
+  readonly index: SemanticRenderIndex;
+}
+
+interface SemanticElementOptions extends SemanticRenderState {
   forcedAttributes?: string;
 }
 
@@ -337,18 +352,74 @@ function semanticRenderModel(
   const host = componentRenderHostElement(model);
   if (!host) return '';
 
-  return renderSemanticElement(model, host, options);
+  return renderSemanticElement(model, host, {
+    ...options,
+    index: createSemanticRenderIndex(model),
+  });
+}
+
+/**
+ * Snapshot and index the scanner-owned render model once for the complete differential pass.
+ * SPEC.md §5.2 keeps those typed facts authoritative; rebuilding a descriptor-checked copy of the
+ * full JSX model for every recursively rendered element made a nested component superlinear.
+ */
+function createSemanticRenderIndex(model: ComponentModuleModel): SemanticRenderIndex {
+  const elements = compilerSnapshotDenseArray(
+    model.jsxElements,
+    'Semantic render indexed elements',
+  );
+  const directChildren = compilerCreateMap<JsxElementModel, JsxElementModel[]>();
+  for (let childIndex = 0; childIndex < elements.length; childIndex += 1) {
+    const child = elements[childIndex]!;
+    let directParent: JsxElementModel | undefined;
+    let directParentSpan = Infinity;
+    for (let parentIndex = 0; parentIndex < elements.length; parentIndex += 1) {
+      const candidate = elements[parentIndex]!;
+      if (
+        candidate === child ||
+        child.start < candidate.openingEnd ||
+        child.end > candidate.closingStart
+      ) {
+        continue;
+      }
+      const candidateSpan = candidate.end - candidate.start;
+      if (candidateSpan < directParentSpan) {
+        directParent = candidate;
+        directParentSpan = candidateSpan;
+      }
+    }
+    if (directParent === undefined) continue;
+    const siblings = compilerMapGet(directChildren, directParent) ?? [];
+    appendSemanticValue(siblings, child);
+    compilerMapSet(directChildren, directParent, siblings);
+  }
+
+  const expressions = compilerSnapshotDenseArray(
+    model.jsxExpressions,
+    'Semantic render indexed expressions',
+  );
+  const expressionsByStart = compilerCreateMap<number, Map<number, SemanticExpressionModel>>();
+  for (let index = 0; index < expressions.length; index += 1) {
+    const expression = expressions[index]!;
+    const byEnd =
+      compilerMapGet(expressionsByStart, expression.containerStart) ??
+      compilerCreateMap<number, SemanticExpressionModel>();
+    compilerMapSet(byEnd, expression.containerEnd, expression);
+    compilerMapSet(expressionsByStart, expression.containerStart, byEnd);
+  }
+
+  return { directChildren, elements, expressionsByStart };
 }
 
 function renderSemanticElement(
   model: ComponentModuleModel,
   element: JsxElementModel,
-  options: SemanticElementOptions = {},
+  options: SemanticElementOptions,
 ): string {
   const formError = semanticMutationFormErrorExpression(model, element);
   if (formError) return formError;
 
-  const primitiveChild = semanticPrimitiveChild(model, element);
+  const primitiveChild = semanticPrimitiveChild(model, element, options.index);
   if (primitiveChild) {
     return renderSemanticElement(model, primitiveChild.child, { ...options, ...primitiveChild });
   }
@@ -368,7 +439,7 @@ function semanticElementTag(element: JsxElementModel): string {
 function renderSemanticAttributes(
   model: ComponentModuleModel,
   element: JsxElementModel,
-  options: SemanticRenderContext = {},
+  options: SemanticRenderState,
 ): string {
   if (element.tag === 'Link') {
     const rendered: string[] = [];
@@ -392,7 +463,11 @@ function renderSemanticAttributes(
     mutationFormOptions.registryFacts = options.registryFacts;
   const formMutation = enhancedMutationFormLowering(model, element, mutationFormOptions);
   const viewTransitionStyle = semanticViewTransitionStyle(element);
-  const fieldErrorDescribedBy = semanticFieldErrorDescribedByAttribute(model, element);
+  const fieldErrorDescribedBy = semanticFieldErrorDescribedByAttribute(
+    model,
+    element,
+    options.index,
+  );
   const semanticAttributes: string[] = [];
   const attributes = compilerSnapshotDenseArray(element.attributes, 'Semantic render attributes');
   for (let index = 0; index < attributes.length; index += 1) {
@@ -459,13 +534,14 @@ function semanticMutationFormErrorExpression(
 function semanticFieldErrorDescribedByAttribute(
   model: ComponentModuleModel,
   control: JsxElementModel,
+  index: SemanticRenderIndex,
 ): string | null {
   if (control.tag !== 'input' && control.tag !== 'select' && control.tag !== 'textarea')
     return null;
   const name = staticStringAttributeValue(semanticAttribute(control, 'name'));
   if (!name) return null;
 
-  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Semantic form-error elements');
+  const elements = index.elements;
   let form: JsxElementModel | undefined;
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
@@ -536,13 +612,14 @@ function isQueryExpressionAttribute(
 function semanticPrimitiveChild(
   model: ComponentModuleModel,
   element: JsxElementModel,
+  index: SemanticRenderIndex,
 ): { child: JsxElementModel; forcedAttributes: string } | null {
   if (semanticAttribute(element, 'asChild') === undefined) return null;
   const attrs = semanticAttribute(element, 'attrs')?.expressionObjectEntries;
   if (!attrs) return null;
   const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
   if (!primitiveAttributes) return null;
-  const child = directChildElements(model, element)[0];
+  const child = directChildElements(index, element)[0];
   if (!child) return null;
   const merge = mergePrimitiveAndAuthorAttributes(
     primitiveAttributes,
@@ -657,14 +734,14 @@ function renderStaticAttributeValue(
 function renderSemanticChildren(
   model: ComponentModuleModel,
   element: JsxElementModel,
-  options: SemanticRenderContext = {},
+  options: SemanticRenderState,
 ): string {
   const body = element.childBody;
   if (!body) return '';
 
   const bodyEnd = body.offset + body.source.length;
   const tokens: { end: number; render: () => string; start: number }[] = [];
-  const children = directChildElements(model, element);
+  const children = directChildElements(options.index, element);
   for (let index = 0; index < children.length; index += 1) {
     const child = children[index]!;
     appendSemanticValue(tokens, {
@@ -681,7 +758,7 @@ function renderSemanticChildren(
     const container = containers[index]!;
     appendSemanticValue(tokens, {
       end: container.end,
-      render: () => renderSemanticExpression(model, container),
+      render: () => renderSemanticExpression(options.index, container),
       start: container.start,
     });
   }
@@ -707,52 +784,15 @@ function renderSemanticChildren(
 }
 
 function directChildElements(
-  model: ComponentModuleModel,
+  index: SemanticRenderIndex,
   parent: JsxElementModel,
-): JsxElementModel[] {
-  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Semantic direct child elements');
-  const candidates: JsxElementModel[] = [];
-  for (let index = 0; index < elements.length; index += 1) {
-    const element = elements[index]!;
-    if (
-      element !== parent &&
-      element.start >= parent.openingEnd &&
-      element.end <= parent.closingStart
-    ) {
-      appendSemanticValue(candidates, element);
-    }
-  }
-
-  const direct: JsxElementModel[] = [];
-  for (let index = 0; index < candidates.length; index += 1) {
-    const candidate = candidates[index]!;
-    let nested = false;
-    for (let otherIndex = 0; otherIndex < candidates.length; otherIndex += 1) {
-      const other = candidates[otherIndex]!;
-      if (
-        other !== candidate &&
-        candidate.start >= other.openingEnd &&
-        candidate.end <= other.end
-      ) {
-        nested = true;
-        break;
-      }
-    }
-    if (!nested) appendSemanticValue(direct, candidate);
-  }
-  return direct;
+): readonly JsxElementModel[] {
+  return compilerMapGet(index.directChildren, parent) ?? [];
 }
 
-function renderSemanticExpression(model: ComponentModuleModel, container: SourceSpan): string {
-  const expressions = compilerSnapshotDenseArray(model.jsxExpressions, 'Semantic JSX expressions');
-  let expression: (typeof expressions)[number] | undefined;
-  for (let index = 0; index < expressions.length; index += 1) {
-    const candidate = expressions[index]!;
-    if (candidate.containerStart === container.start && candidate.containerEnd === container.end) {
-      expression = candidate;
-      break;
-    }
-  }
+function renderSemanticExpression(index: SemanticRenderIndex, container: SourceSpan): string {
+  const byEnd = compilerMapGet(index.expressionsByStart, container.start);
+  const expression = byEnd === undefined ? undefined : compilerMapGet(byEnd, container.end);
   if (!expression) return '';
   const normalized = normalizeGeneratedSemanticExpression(expression.expression);
   return normalized === '' ? '' : `{${normalized}}`;
