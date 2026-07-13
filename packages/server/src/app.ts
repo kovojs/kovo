@@ -46,7 +46,7 @@ import {
 } from './document-structured.js';
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
-import { isMemoryMutationReplayStore } from './replay.js';
+import { isDurableMutationReplayStore } from './replay.js';
 export type {
   AppEgressOptions,
   AppEgressOptOut,
@@ -133,11 +133,6 @@ export function createApp<
     options,
     'mutationReplayStore',
   ) as KovoApp['mutationReplayStore'];
-  if (resolveBootMode() === 'production' && isMemoryMutationReplayStore(mutationReplayStore)) {
-    throw new Error(
-      'KV436: createApp() refused a volatile memory mutationReplayStore in production; use createPostgresMutationReplayStore() so idempotency truth survives restart and replicas (SPEC §10.3).',
-    );
-  }
   const configuredClientModules = appOptionOwnDataValue(options, 'clientModules') as
     | KovoApp['clientModules']
     | undefined;
@@ -253,6 +248,15 @@ export function createApp<
   const mutations = snapshotAppRegistry(runtimeFacts.mutations, 'app.mutations', (declaration) =>
     snapshotAppMutation(declaration, snapshotContext),
   );
+  if (
+    resolveBootMode() === 'production' &&
+    (mutationReplayStore !== undefined || mutations.length > 0) &&
+    !isDurableMutationReplayStore(mutationReplayStore)
+  ) {
+    throw new Error(
+      'KV436: createApp() refused a missing, custom, or volatile memory mutationReplayStore in production; declared mutations require createPostgresMutationReplayStore() so idempotency truth survives restart and replicas (SPEC §10.3).',
+    );
+  }
   const tasks = assertUniqueTaskKeys(
     resolveAppAuthoringDeclarations<AppTaskDeclaration<AppRequest>, AppRequest>(
       tasksSource,

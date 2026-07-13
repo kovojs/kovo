@@ -8,13 +8,66 @@ import { diagnosticDefinitions } from '../diagnostics.js';
 import {
   AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES,
   createBoundedRuntimeAuditCollector,
+  hasFrameworkDurableReplayStoreReceipt,
+  mintFrameworkDurableReplayStoreReceipt,
   PARANOID_SECURITY_ADVISORY_CODES,
+  propagateFrameworkDurableReplayStoreReceipt,
   SECURITY_CODE_REGISTRY,
   type SecurityBoundaryProof,
   securityClassifier,
   securityDecisionMetadata,
   wireEmitter,
 } from './security-markers.js';
+
+describe('durable replay store receipts (SPEC §10.3)', () => {
+  it('authenticates the exact surface and carries the opaque receipt through snapshots', () => {
+    const store = {};
+    const snapshot = {};
+
+    mintFrameworkDurableReplayStoreReceipt(store, 'mutation');
+
+    expect(hasFrameworkDurableReplayStoreReceipt(store, 'mutation')).toBe(true);
+    expect(hasFrameworkDurableReplayStoreReceipt(store, 'webhook')).toBe(false);
+    expect(propagateFrameworkDurableReplayStoreReceipt(store, snapshot, 'mutation')).toBe(true);
+    expect(hasFrameworkDurableReplayStoreReceipt(snapshot, 'mutation')).toBe(true);
+  });
+
+  it('rejects structural and global-symbol lookalikes', () => {
+    const forged = {
+      kind: 'framework-durable-replay-store',
+      [Symbol.for('kovo.durable-replay-store')]: true,
+    };
+
+    expect(hasFrameworkDurableReplayStoreReceipt(forged, 'mutation')).toBe(false);
+    expect(propagateFrameworkDurableReplayStoreReceipt(forged, {}, 'mutation')).toBe(false);
+  });
+
+  it('uses pinned WeakMap controls after ambient prototype poisoning', () => {
+    const store = {};
+    const snapshot = {};
+    const originalGet = WeakMap.prototype.get;
+    const originalSet = WeakMap.prototype.set;
+    let propagated = false;
+    let authenticated = false;
+    try {
+      WeakMap.prototype.get = () => {
+        throw new Error('poisoned WeakMap.get');
+      };
+      WeakMap.prototype.set = () => {
+        throw new Error('poisoned WeakMap.set');
+      };
+
+      mintFrameworkDurableReplayStoreReceipt(store, 'webhook');
+      propagated = propagateFrameworkDurableReplayStoreReceipt(store, snapshot, 'webhook');
+      authenticated = hasFrameworkDurableReplayStoreReceipt(snapshot, 'webhook');
+    } finally {
+      WeakMap.prototype.get = originalGet;
+      WeakMap.prototype.set = originalSet;
+    }
+    expect(propagated).toBe(true);
+    expect(authenticated).toBe(true);
+  });
+});
 
 describe('bounded runtime audit collectors (SPEC §9.5)', () => {
   it('retains the newest fixed window, drains in order, and is reusable', () => {

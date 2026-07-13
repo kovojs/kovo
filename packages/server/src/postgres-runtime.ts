@@ -3,7 +3,10 @@ import { createRequire } from 'node:module';
 import { types as nodeUtilTypes } from 'node:util';
 
 import { PGlite } from '@electric-sql/pglite';
-import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
+import {
+  createBoundedRuntimeAuditCollector,
+  mintFrameworkDurableReplayStoreReceipt,
+} from '@kovojs/core/internal/security-markers';
 import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
@@ -1399,6 +1402,7 @@ export function createPostgresAppRuntimeDb(
       return durableMutationReplayStore().set(scope, idem, response, fingerprint);
     },
   });
+  mintFrameworkDurableReplayStoreReceipt(replayStore, 'mutation');
 
   return {
     db: dbForRequest,

@@ -31,6 +31,7 @@ import {
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
+import { isDurableMutationReplayStore } from './replay.js';
 
 const notes = pgTable(
   'kovo_runtime_notes',
@@ -253,6 +254,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
 
     try {
+      expect(isDurableMutationReplayStore(runtime.mutationReplayStore)).toBe(true);
       await runtime.ready;
       const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       const u2Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u2') });

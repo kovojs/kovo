@@ -1,5 +1,7 @@
 import { setTimeout as nodeSetTimeout } from 'node:timers';
 
+import { mintFrameworkDurableReplayStoreReceipt } from '@kovojs/core/internal/security-markers';
+
 import {
   MutationReplayConflictError,
   snapshotMutationReplayResponse,
@@ -115,7 +117,9 @@ export function createPostgresMutationReplayStore(
       );
     },
   };
-  return witnessFreeze(store);
+  const closedStore = witnessFreeze(store);
+  mintFrameworkDurableReplayStoreReceipt(closedStore, 'mutation');
+  return closedStore;
 }
 
 /** Create a durable webhook replay store over a framework-system Postgres SQL executor. */
@@ -145,7 +149,9 @@ export function createPostgresWebhookReplayStore(
       );
     },
   };
-  return witnessFreeze(store);
+  const closedStore = witnessFreeze(store);
+  mintFrameworkDurableReplayStoreReceipt(closedStore, 'webhook');
+  return closedStore;
 }
 
 /**

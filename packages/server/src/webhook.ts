@@ -3,6 +3,10 @@ import type {
   WebhookVerificationRequest,
   WebhookVerifier,
 } from '@kovojs/core';
+import {
+  hasFrameworkDurableReplayStoreReceipt,
+  propagateFrameworkDurableReplayStoreReceipt,
+} from '@kovojs/core/internal/security-markers';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { requestVerifierInput } from './app-load-shed.js';
 import { resolveBootMode } from './env.js';
@@ -472,6 +476,11 @@ export function isMemoryWebhookReplayStore(source: unknown): boolean {
   );
 }
 
+/** @internal True only for framework-authenticated durable webhook replay stores and snapshots. */
+export function isDurableWebhookReplayStore(source: unknown): boolean {
+  return hasFrameworkDurableReplayStoreReceipt(source, 'webhook');
+}
+
 function webhookReplayNumberOption(
   source: { maxEntries?: number; maxPending?: number; ttlMs?: number },
   property: 'maxEntries' | 'maxPending' | 'ttlMs',
@@ -640,15 +649,21 @@ function snapshotWebhookDefinitionForDeclaration<
     replayStoreSource === undefined
       ? undefined
       : snapshotWebhookReplayStore(replayStoreSource, 'webhook().replayStore');
-  if (resolveBootMode() === 'production' && isMemoryWebhookReplayStore(replayStoreSource)) {
-    throw new Error(
-      'KV436: webhook() refused a volatile memory replayStore in production; use createPostgresWebhookReplayStore() so idempotency truth survives restart and replicas (SPEC §10.3).',
-    );
-  }
   const writes =
     writesSource === undefined
       ? undefined
       : snapshotWebhookWrites(writesSource, 'webhook().writes');
+  const needsReplayTruth =
+    idempotency !== undefined || transaction !== undefined || (writes?.length ?? 0) > 0;
+  if (
+    resolveBootMode() === 'production' &&
+    (replayStore !== undefined || needsReplayTruth) &&
+    !isDurableWebhookReplayStore(replayStore)
+  ) {
+    throw new Error(
+      'KV436: webhook() refused a missing, custom, or volatile memory replayStore in production; idempotent or write-capable webhooks require createPostgresWebhookReplayStore() so replay truth survives restart and replicas (SPEC §10.3).',
+    );
+  }
   const access = snapshotAccessDecision(accessSource as AccessDecision | undefined);
 
   if (verify === 'none') {
@@ -921,6 +936,7 @@ function snapshotWebhookReplayStore(source: unknown, label: string): WebhookRepl
   if (witnessWeakSetHas(memoryWebhookReplayStores, source)) {
     witnessWeakSetAdd(memoryWebhookReplayStores, snapshot);
   }
+  propagateFrameworkDurableReplayStoreReceipt(source, snapshot, 'webhook');
   return snapshot;
 }
 

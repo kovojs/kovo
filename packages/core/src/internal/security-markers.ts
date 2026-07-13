@@ -24,6 +24,108 @@ interface BoundedRuntimeAuditCollector<Fact> {
   record(fact: Fact): void;
 }
 
+/** @internal Durable replay surfaces whose restart/replica truth is framework authenticated. */
+export type FrameworkDurableReplaySurface = 'mutation' | 'webhook';
+
+interface FrameworkDurableReplayStoreReceipt {
+  readonly kind: 'framework-durable-replay-store';
+}
+
+const durableReplayReceiptByStore = securityWeakMap<object, FrameworkDurableReplayStoreReceipt>();
+const durableReplaySurfaceByReceipt = securityWeakMap<
+  FrameworkDurableReplayStoreReceipt,
+  FrameworkDurableReplaySurface
+>();
+
+/**
+ * Mint framework-only durable replay provenance for a store constructor (SPEC §10.3).
+ *
+ * The receipt is retained only in module-private WeakMaps. No structural property, global symbol,
+ * or caller-supplied value can satisfy the corresponding production boot gate.
+ *
+ * @internal
+ */
+export function mintFrameworkDurableReplayStoreReceipt(
+  store: object,
+  surface: FrameworkDurableReplaySurface,
+): void {
+  assertFrameworkDurableReplayStoreObject(store, 'Durable replay store');
+  assertFrameworkDurableReplaySurface(surface);
+
+  const existingReceipt = securityWeakMapGet(durableReplayReceiptByStore, store);
+  if (existingReceipt !== undefined) {
+    if (securityWeakMapGet(durableReplaySurfaceByReceipt, existingReceipt) !== surface) {
+      throw new TypeError('A durable replay store cannot be authenticated for multiple surfaces.');
+    }
+    return;
+  }
+
+  const receipt = freezeSecurityValue({
+    kind: 'framework-durable-replay-store' as const,
+  });
+  securityWeakMapSet(durableReplaySurfaceByReceipt, receipt, surface);
+  securityWeakMapSet(durableReplayReceiptByStore, store, receipt);
+}
+
+/**
+ * Carry an authenticated durable replay receipt through a framework-owned store snapshot.
+ *
+ * @internal
+ */
+export function propagateFrameworkDurableReplayStoreReceipt(
+  source: object,
+  target: object,
+  surface: FrameworkDurableReplaySurface,
+): boolean {
+  assertFrameworkDurableReplayStoreObject(source, 'Durable replay store receipt source');
+  assertFrameworkDurableReplayStoreObject(target, 'Durable replay store receipt target');
+  assertFrameworkDurableReplaySurface(surface);
+
+  const receipt = securityWeakMapGet(durableReplayReceiptByStore, source);
+  if (
+    receipt === undefined ||
+    securityWeakMapGet(durableReplaySurfaceByReceipt, receipt) !== surface
+  ) {
+    return false;
+  }
+  const targetReceipt = securityWeakMapGet(durableReplayReceiptByStore, target);
+  if (targetReceipt !== undefined && targetReceipt !== receipt) {
+    throw new TypeError('Durable replay store snapshot already has different provenance.');
+  }
+  securityWeakMapSet(durableReplayReceiptByStore, target, receipt);
+  return true;
+}
+
+/** @internal Verify module-private durable replay provenance for one exact surface. */
+export function hasFrameworkDurableReplayStoreReceipt(
+  store: unknown,
+  surface: FrameworkDurableReplaySurface,
+): boolean {
+  if ((typeof store !== 'object' && typeof store !== 'function') || store === null) return false;
+  assertFrameworkDurableReplaySurface(surface);
+  const receipt = securityWeakMapGet(durableReplayReceiptByStore, store);
+  return (
+    receipt !== undefined && securityWeakMapGet(durableReplaySurfaceByReceipt, receipt) === surface
+  );
+}
+
+function assertFrameworkDurableReplayStoreObject(
+  value: unknown,
+  label: string,
+): asserts value is object {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
+    throw new TypeError(`${label} must be an object.`);
+  }
+}
+
+function assertFrameworkDurableReplaySurface(
+  surface: unknown,
+): asserts surface is FrameworkDurableReplaySurface {
+  if (surface !== 'mutation' && surface !== 'webhook') {
+    throw new TypeError('Durable replay surface must be "mutation" or "webhook".');
+  }
+}
+
 /**
  * Build a fixed-capacity process-local audit collector (SPEC §9.5 bounded availability).
  *

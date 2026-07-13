@@ -1,4 +1,8 @@
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
+import {
+  hasFrameworkDurableReplayStoreReceipt,
+  propagateFrameworkDurableReplayStoreReceipt,
+} from '@kovojs/core/internal/security-markers';
 
 import {
   blessRedirectResponse,
@@ -68,9 +72,10 @@ export type MutationReplayResponse = ServerResponseBase<
 /**
  * Idempotent mutation/webhook replay store contract (SPEC §9.1): look up a prior
  * response by `(scope, idem)`, reserve a pending slot for an in-flight handler, and
- * record the committed response. Apps inject a custom store via the public webhook
- * replay lifecycle (e.g. conformance/webhook-spike) and the framework provides
- * {@link createMemoryMutationReplayStore} as the default in-memory implementation.
+ * record the committed response. Apps may inject a custom store for local development and tests;
+ * deployed mutation declarations require the framework-authenticated durable store returned by
+ * `createPostgresMutationReplayStore()`. The framework provides
+ * {@link createMemoryMutationReplayStore} as the default in-memory development implementation.
  */
 export interface MutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
@@ -127,6 +132,7 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
   if (witnessWeakSetHas(memoryMutationReplayStores, source)) {
     witnessWeakSetAdd(memoryMutationReplayStores, snapshot);
   }
+  propagateFrameworkDurableReplayStoreReceipt(source, snapshot, 'mutation');
   return snapshot;
 }
 
@@ -137,6 +143,11 @@ export function isMemoryMutationReplayStore(source: unknown): boolean {
     source !== null &&
     witnessWeakSetHas(memoryMutationReplayStores, source)
   );
+}
+
+/** @internal True only for framework-authenticated durable mutation replay stores and snapshots. */
+export function isDurableMutationReplayStore(source: unknown): boolean {
+  return hasFrameworkDurableReplayStoreReceipt(source, 'mutation');
 }
 
 function snapshotMutationReplayReservation<Response extends MutationReplayResponse>(
