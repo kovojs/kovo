@@ -253,6 +253,7 @@ describe('@kovojs/drizzle runtime surface', () => {
       // @kovojs/core/internal/derivation types, so it cannot be public.
       './internal/derive': './src/derive.ts',
       './internal/derive-codegen': './src/derive-codegen.ts',
+      './internal/runtime-metadata': './src/runtime-metadata-internal.ts',
       './internal/static': './src/static.ts',
     });
     expect(drizzleDeriveSource()).not.toContain('ts-morph');

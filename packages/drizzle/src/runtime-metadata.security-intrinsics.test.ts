@@ -172,4 +172,97 @@ describe('runtime metadata security intrinsics', () => {
     expect(metadata.authorizationClassificationsByTable.get('accounts_frozen')).toEqual(['owned']);
     expect(metadata.schemaTableNames.has('attacker_public_table')).toBe(false);
   });
+
+  it('does not expose the live table to re-entrant annotation selectors', () => {
+    const accounts = pgTable(
+      'accounts_selector_reentry',
+      {
+        id: text('id').primaryKey(),
+        ownerId: text('owner_id').notNull(),
+        secret: text('secret').notNull(),
+      },
+      kovo({
+        domain: 'account',
+        key: 'id',
+        owner(table) {
+          // A selector is app code. It must not be able to rewrite the table object that later
+          // secret/governed extraction reads in the same security decision.
+          (table as typeof table & { secret: unknown }).secret = table.ownerId;
+          return table.ownerId;
+        },
+        secret: ['secret'],
+      }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([accounts]);
+    expect([...(metadata.secretColumnNamesByTable.get('accounts_selector_reentry') ?? [])]).toEqual(
+      ['secret'],
+    );
+    expect(metadata.columnSources.get(accounts.secret)?.secret).toBe(true);
+  });
+
+  it('snapshots every table before an earlier selector mutates a later secret table by closure', () => {
+    const createVault = () =>
+      pgTable(
+        'selector_vault',
+        {
+          id: text('id').primaryKey(),
+          publicValue: text('public_value').notNull(),
+          secret: text('secret').notNull(),
+        },
+        kovo({ domain: 'vault', key: 'id', secret: ['secret'] }),
+      );
+    let vault!: ReturnType<typeof createVault>;
+    const trigger = pgTable(
+      'selector_trigger',
+      { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
+      kovo({
+        domain: 'trigger',
+        key: 'id',
+        owner(table) {
+          (vault.secret as typeof vault.secret & { name: string }).name = 'public_value';
+          (vault as typeof vault & { secret: unknown }).secret = vault.publicValue;
+          return table.ownerId;
+        },
+      }),
+    );
+    vault = createVault();
+    const originalSecretColumn = vault.secret;
+
+    const metadata = extractKovoRuntimeDbMetadata([trigger, vault]);
+    expect([...(metadata.secretColumnNamesByTable.get('selector_vault') ?? [])]).toEqual([
+      'secret',
+    ]);
+    expect(metadata.columnSources.get(originalSecretColumn)?.secret).toBe(true);
+    expect(metadata.columnSources.get(originalSecretColumn)?.column).toBe('secret');
+  });
+
+  it('rejects ownerVia selectors that return a column identity from another table', () => {
+    const parent = pgTable(
+      'selector_parent',
+      { id: text('id').primaryKey() },
+      kovo({ domain: 'parent', key: 'id', reference: true }),
+    );
+    const foreign = pgTable(
+      'selector_foreign',
+      { id: text('id').primaryKey() },
+      kovo({ domain: 'foreign', key: 'id', reference: true }),
+    );
+    const child = pgTable(
+      'selector_child',
+      { id: text('id').primaryKey(), parentId: text('parent_id').notNull() },
+      kovo({
+        domain: 'child',
+        key: 'id',
+        ownerVia: {
+          fk: () => foreign.id,
+          parent,
+          parentKey: () => foreign.id,
+        },
+      }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([parent, foreign, child]);
+    expect(metadata.ownerViaSourcesByTable.has('selector_child')).toBe(false);
+  });
 });

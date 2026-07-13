@@ -17,8 +17,10 @@ const intrinsicMapKeys = NativeMap.prototype.keys;
 const intrinsicMapSet = NativeMap.prototype.set;
 const intrinsicMapValues = NativeMap.prototype.values;
 const intrinsicObjectDefineProperty = NativeObject.defineProperty;
+const intrinsicObjectCreate = NativeObject.create;
 const intrinsicObjectFreeze = NativeObject.freeze;
 const intrinsicObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const intrinsicObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const intrinsicObjectGetOwnPropertySymbols = NativeObject.getOwnPropertySymbols;
 const intrinsicObjectIsFrozen = NativeObject.isFrozen;
 const intrinsicObjectKeys = NativeObject.keys;
@@ -56,6 +58,7 @@ const controlsSound = (() => {
       symbolObject,
     ]);
     const defined: Record<string, unknown> = {};
+    const nullRecord = apply<Record<string, unknown>>(intrinsicObjectCreate, NativeObject, [null]);
     apply(intrinsicObjectDefineProperty, NativeObject, [
       defined,
       'defined',
@@ -91,6 +94,7 @@ const controlsSound = (() => {
       symbols.length === 1 &&
       symbols[0] === symbol &&
       defined.defined === 'define-control' &&
+      apply(intrinsicObjectGetPrototypeOf, NativeObject, [nullRecord]) === null &&
       apply<string | undefined>(intrinsicMapGet, map, ['key']) === 'map-control' &&
       apply<boolean>(intrinsicMapHas, map, ['key']) === true &&
       mapForEachControl === 'key:map-control' &&
@@ -215,6 +219,15 @@ export function runtimeObjectSymbols(value: object): readonly symbol[] {
     apply<symbol[]>(intrinsicObjectGetOwnPropertySymbols, NativeObject, [value]),
     'Kovo Drizzle object symbols',
   );
+}
+
+export function runtimeNullRecord(): Record<string, unknown> {
+  assertControls();
+  const record = apply<Record<string, unknown>>(intrinsicObjectCreate, NativeObject, [null]);
+  if (apply(intrinsicObjectGetPrototypeOf, NativeObject, [record]) !== null) {
+    throw new TypeError('Kovo Drizzle runtime null-record construction failed.');
+  }
+  return record;
 }
 
 export function runtimeFreeze<T extends object>(value: T): T {
