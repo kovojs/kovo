@@ -36,6 +36,7 @@ import {
   type Reader,
 } from './managed-db.js';
 import { requestPassedRoleGuard } from './guards.js';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import {
   securityArrayIsArray,
   securityArrayJoin,
@@ -3755,9 +3756,10 @@ function resolvePostgresRuntimeConfigSnapshot(
   options: PostgresRuntimeConfigInput,
 ): ResolvedPostgresRuntimeConfig {
   const driver = resolveDriver(options);
-  const databaseUrl = options.databaseUrl ?? process.env.KOVO_DATABASE_URL;
-  const adminDatabaseUrl = options.adminDatabaseUrl ?? process.env.KOVO_DB_ADMIN_URL;
-  const systemDatabaseUrl = options.systemDatabaseUrl ?? process.env.KOVO_DB_SYSTEM_URL;
+  const databaseUrl = options.databaseUrl ?? runtimeEnvironmentValue('KOVO_DATABASE_URL');
+  const adminDatabaseUrl = options.adminDatabaseUrl ?? runtimeEnvironmentValue('KOVO_DB_ADMIN_URL');
+  const systemDatabaseUrl =
+    options.systemDatabaseUrl ?? runtimeEnvironmentValue('KOVO_DB_SYSTEM_URL');
   const envAdminRole = nonEmptyEnv('KOVO_DB_ADMIN_ROLE');
   const envReaderRole = nonEmptyEnv('KOVO_DB_READER_ROLE');
   const envSystemRole = nonEmptyEnv('KOVO_DB_SYSTEM_ROLE');
@@ -3786,7 +3788,7 @@ function resolvePostgresRuntimeConfigSnapshot(
     adminRole,
     ...(adminDatabaseUrl === undefined ? {} : { adminDatabaseUrl }),
     crossOwnerReadTables,
-    dataDir: options.dataDir ?? process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR,
+    dataDir: options.dataDir ?? runtimeEnvironmentValue('KOVO_DATA_DIR') ?? DEFAULT_DATA_DIR,
     driver,
     postureCheckOnBoot: postureCheck.onBoot,
     ...(postureCheck.optOut === undefined ? {} : { postureCheckOptOut: postureCheck.optOut }),
@@ -3853,7 +3855,7 @@ function resolvePostgresPostureCheck(
 }
 
 function nonEmptyEnv(name: string): string | undefined {
-  const value = process.env[name];
+  const value = runtimeEnvironmentValue(name);
   return value === undefined || value === '' ? undefined : value;
 }
 
@@ -3993,13 +3995,13 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 }
 
 function resolveDriver(options: KovoPostgresAppRuntimeOptions): KovoPostgresResolvedRuntimeDriver {
-  const rawDriver = options.driver ?? process.env.KOVO_DB_DRIVER;
+  const rawDriver = options.driver ?? runtimeEnvironmentValue('KOVO_DB_DRIVER');
   if (rawDriver === 'pglite') return 'pglite';
   if (rawDriver === 'node-postgres' || rawDriver === 'pg') return 'node-postgres';
   if (rawDriver !== undefined && rawDriver !== '') {
     throw new Error(`KV433: unsupported Kovo Postgres driver ${rawDriver}.`);
   }
-  return options.databaseUrl !== undefined || process.env.KOVO_DATABASE_URL
+  return options.databaseUrl !== undefined || runtimeEnvironmentValue('KOVO_DATABASE_URL')
     ? 'node-postgres'
     : 'pglite';
 }

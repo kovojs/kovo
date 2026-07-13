@@ -42,6 +42,7 @@ import {
   witnessObjectIs,
   witnessReflectApply,
 } from './security-witness-intrinsics.js';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
@@ -446,7 +447,7 @@ export const DOCUMENT_HSTS_VALUE = 'max-age=63072000; includeSubDomains';
 
 /**
  * Decide whether `Strict-Transport-Security` may be attached to a document response.
- * Gated on BOTH production (existing `NODE_ENV` prod detection, matching
+ * Gated on BOTH production (bootstrap-pinned operator `NODE_ENV` detection, matching
  * `guards.ts`) AND an HTTPS request/response, so a non-HTTPS deploy or any
  * `localhost`/dev request never receives an HSTS header that would otherwise pin the
  * browser to https for two years and brick plain-http local development.
@@ -455,7 +456,7 @@ export const DOCUMENT_HSTS_VALUE = 'max-age=63072000; includeSubDomains';
  * @internal
  */
 export function shouldEmitDocumentHsts(secureRequest: boolean): boolean {
-  return secureRequest && process.env.NODE_ENV === 'production';
+  return secureRequest && runtimeEnvironmentValue('NODE_ENV') === 'production';
 }
 
 // SF-WIRE (SPEC §6.6, Cross-Origin-Resource-Policy): immutable client-module asset

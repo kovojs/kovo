@@ -7,6 +7,7 @@ import type {
 } from './task-observability.js';
 import { scrubSecretLifecycleValue } from './logging.js';
 import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import {
   taskApply,
   taskArrayPush,
@@ -167,10 +168,12 @@ export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskStatus
       async execute<Row = Record<string, unknown>>(
         statement: DurableTaskStatusSqlStatement,
       ): Promise<DurableTaskStatusSqlResult<Row>> {
-        const result = await taskApply<Promise<unknown>>(execute, client, [{
-          text: statement.text,
-          values: taskArraySlice(statement.values),
-        }]);
+        const result = await taskApply<Promise<unknown>>(execute, client, [
+          {
+            text: statement.text,
+            values: taskArraySlice(statement.values),
+          },
+        ]);
         return normalizeSqlResult<Row>(result);
       },
     };
@@ -254,7 +257,7 @@ const DURABLE_TASK_WRITER_TABLES = ['_kovo_jobs', '_kovo_task_cron_occurrences']
 
 export async function grantDurableTaskWriterRole(
   executor: DurableTaskSqlExecutor,
-  role = process.env.KOVO_DB_WRITER_ROLE ?? 'kovo_writer',
+  role = runtimeEnvironmentValue('KOVO_DB_WRITER_ROLE') ?? 'kovo_writer',
 ): Promise<void> {
   const writerRole = taskStringTrim(role);
   if (writerRole === '') return;

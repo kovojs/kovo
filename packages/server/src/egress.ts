@@ -3,6 +3,7 @@ import dns from 'node:dns';
 import http from 'node:http';
 import net from 'node:net';
 import type { LookupAddress } from 'node:dns';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 import {
   egressApply,
@@ -286,10 +287,11 @@ interface ResolveEgressPolicyOptions {
   databaseEndpoints?: readonly string[];
   /**
    * Runtime database URLs whose exact host:port should be reachable even when the
-   * production/private-network floor is otherwise empty. Defaults to `KOVO_DATABASE_URL`.
+   * production/private-network floor is otherwise empty. Defaults to boot-pinned
+   * `KOVO_DATABASE_URL`.
    */
   databaseUrls?: readonly (string | undefined)[];
-  /** Test/bootstrap override; production defaults to the platform `IDENTITY_ENDPOINT` variable. */
+  /** Test/bootstrap override; production defaults to boot-pinned platform `IDENTITY_ENDPOINT`. */
   identityEndpoint?: string | undefined;
 }
 
@@ -305,7 +307,7 @@ export function resolveEgressPolicy(
   policyOptions: ResolveEgressPolicyOptions = {},
 ): EgressPolicy {
   const azureIdentityEndpoint = resolveAzureIdentityEndpoint(
-    policyOptions.identityEndpoint ?? process.env.IDENTITY_ENDPOINT,
+    policyOptions.identityEndpoint ?? runtimeEnvironmentValue('IDENTITY_ENDPOINT'),
   );
   const allowInternal = new Set<string>();
   const allowDatabaseEndpoints = new Set<string>();
@@ -413,7 +415,7 @@ export function removeDatabaseEgressEndpoints(
 function resolveDatabaseEgressEndpoints(
   databaseUrls: readonly (string | undefined)[] | undefined,
 ): readonly string[] {
-  const urls = databaseUrls ?? [process.env.KOVO_DATABASE_URL];
+  const urls = databaseUrls ?? [runtimeEnvironmentValue('KOVO_DATABASE_URL')];
   const endpoints = new Set<string>();
   const result: string[] = [];
   for (let index = 0; index < urls.length; index += 1) {

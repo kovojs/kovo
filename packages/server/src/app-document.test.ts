@@ -81,9 +81,7 @@ describe('route search carrier integrity', () => {
     Object.defineProperty(URL.prototype, 'searchParams', {
       configurable: true,
       get() {
-        return this === url
-          ? victim
-          : Reflect.apply(originalSearchParams.get!, this, []);
+        return this === url ? victim : Reflect.apply(originalSearchParams.get!, this, []);
       },
     });
 
@@ -109,17 +107,34 @@ describe('route search carrier integrity', () => {
 });
 
 describe('trusted request scheme provenance', () => {
+  async function productionDocumentRuntime() {
+    vi.resetModules();
+    process.env.NODE_ENV = 'production';
+    await import('./security-bootstrap.ts?app-document-production');
+    return Promise.all([
+      import('@kovojs/browser'),
+      import('./app.ts?app-document-production'),
+      import('./app-document.ts?app-document-production'),
+      import('./route.ts?app-document-production'),
+    ]);
+  }
+
   it('does not attach HSTS from a spoofed x-forwarded-proto header on an http Request', async () => {
     const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
     try {
-      const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+      const [browserApi, appApi, appDocumentApi, routeApi] = await productionDocumentRuntime();
+      const homeRoute = routeApi.route('/', {
+        page: () => browserApi.trustedHtml('<main>Home</main>'),
+      });
       const request = new Request('http://shop.example.test/', {
         headers: { 'x-forwarded-proto': 'https' },
       });
 
-      const response = await renderAppRouteDocumentResponse({
-        app: createApp({ routes: [homeRoute] }),
+      const response = await appDocumentApi.renderAppRouteDocumentResponse({
+        app: appApi.createApp({
+          egress: { enabled: false, justification: 'isolated HSTS regression' },
+          routes: [homeRoute],
+        }),
         params: {},
         request,
         route: homeRoute,
@@ -130,6 +145,7 @@ describe('trusted request scheme provenance', () => {
     } finally {
       if (previous === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previous;
+      vi.resetModules();
     }
   });
 
@@ -141,42 +157,50 @@ describe('trusted request scheme provenance', () => {
         super('https://attacker-substituted.invalid/');
       }
     }
-    process.env.NODE_ENV = 'production';
-    const homeRoute = route('/', {
-      page: () => {
-        globalThis.URL = PoisonedURL;
-        return trustedHtml('<main>Home</main>');
-      },
-    });
-    const request = new Request('http://shop.example.test/');
-
-    let response: Awaited<ReturnType<typeof renderAppRouteDocumentResponse>>;
     try {
-      response = await renderAppRouteDocumentResponse({
-        app: createApp({ routes: [homeRoute] }),
+      const [browserApi, appApi, appDocumentApi, routeApi] = await productionDocumentRuntime();
+      const homeRoute = routeApi.route('/', {
+        page: () => {
+          globalThis.URL = PoisonedURL;
+          return browserApi.trustedHtml('<main>Home</main>');
+        },
+      });
+      const request = new Request('http://shop.example.test/');
+
+      const response = await appDocumentApi.renderAppRouteDocumentResponse({
+        app: appApi.createApp({
+          egress: { enabled: false, justification: 'isolated HSTS regression' },
+          routes: [homeRoute],
+        }),
         params: {},
         request,
         route: homeRoute,
         url: new NativeURL(request.url),
       });
+
+      expect(headerValue(response.headers, 'strict-transport-security')).toBeUndefined();
     } finally {
       globalThis.URL = NativeURL;
       if (previous === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previous;
+      vi.resetModules();
     }
-
-    expect(headerValue(response.headers, 'strict-transport-security')).toBeUndefined();
   });
 
   it('attaches HSTS when the adapter-proven request URL scheme is https', async () => {
     const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
     try {
-      const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+      const [browserApi, appApi, appDocumentApi, routeApi] = await productionDocumentRuntime();
+      const homeRoute = routeApi.route('/', {
+        page: () => browserApi.trustedHtml('<main>Home</main>'),
+      });
       const request = new Request('https://shop.example.test/');
 
-      const response = await renderAppRouteDocumentResponse({
-        app: createApp({ routes: [homeRoute] }),
+      const response = await appDocumentApi.renderAppRouteDocumentResponse({
+        app: appApi.createApp({
+          egress: { enabled: false, justification: 'isolated HSTS regression' },
+          routes: [homeRoute],
+        }),
         params: {},
         request,
         route: homeRoute,
@@ -189,6 +213,7 @@ describe('trusted request scheme provenance', () => {
     } finally {
       if (previous === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previous;
+      vi.resetModules();
     }
   });
 });
@@ -1251,9 +1276,9 @@ describe('server app document boundary', () => {
         boundaries: {
           [kind]: ({ request }) =>
             trustedHtml(
-              `<main data-private-boundary>${(
-                request as { session: { user: { id: string } } }
-              ).session.user.id}</main>`,
+              `<main data-private-boundary>${
+                (request as { session: { user: { id: string } } }).session.user.id
+              }</main>`,
             ),
         },
         page() {

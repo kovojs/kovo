@@ -1,5 +1,9 @@
 import type { Schema } from './schema.js';
 import { isSigningKeyRing, SIGNING_SECRET_MIN_BYTES } from './keyring.js';
+import {
+  runtimeEnvironmentSnapshot,
+  runtimeEnvironmentValue,
+} from './runtime-environment-authority.js';
 import { isSchemaValidationError } from './schema.js';
 import {
   createWitnessSet,
@@ -94,7 +98,8 @@ interface FrameworkSecrets {
 /**
  * Options threaded into env validation. `mode` selects refuse-to-boot (production) vs
  * lenient-warn (development); `env` is an optional app-declared `s.object` schema validated
- * at boot; `envSource` is the record validated against it (defaults to `process.env`).
+ * at boot; `envSource` is the record validated against it (defaults to the bootstrap-pinned
+ * operator `process.env` snapshot).
  */
 export interface ValidateAppEnvOptions {
   mode?: 'production' | 'development';
@@ -105,7 +110,8 @@ export interface ValidateAppEnvOptions {
 }
 
 /**
- * Resolve the boot mode. Mirrors the existing `NODE_ENV === 'production'` detection used
+ * Resolve the boot mode from the bootstrap-pinned operator environment. Mirrors the existing
+ * `NODE_ENV === 'production'` detection used
  * by `cookies.ts`/`response.ts` so the env floor activates in exactly the same deployments
  * the cookie `Secure` floor does. An explicit `mode` overrides (test seam + adapters that
  * know their posture out-of-band).
@@ -114,7 +120,7 @@ export function resolveBootMode(
   explicit?: 'production' | 'development',
 ): 'production' | 'development' {
   if (explicit !== undefined) return explicit;
-  const nodeEnv = typeof process !== 'undefined' ? process.env?.NODE_ENV : undefined;
+  const nodeEnv = runtimeEnvironmentValue('NODE_ENV');
   return nodeEnv === 'production' ? 'production' : 'development';
 }
 
@@ -181,7 +187,8 @@ function validateFrameworkSecret(value: unknown, path: string, issues: EnvValida
     if (witnessIsArray(value.keys)) {
       for (let index = 0; index < value.keys.length; index += 1) {
         const descriptor = witnessGetOwnPropertyDescriptor(value.keys, index);
-        const key = descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+        const key =
+          descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
         if (isRecord(key)) {
           validateFrameworkSecretValue(key.secret, `${path}.keys.${index}.secret`, issues);
         } else {
@@ -371,8 +378,7 @@ function distinctRatio(value: string): number {
 }
 
 function readProcessEnv(): Record<string, unknown> {
-  if (typeof process === 'undefined' || process.env == null) return {};
-  return { ...process.env };
+  return runtimeEnvironmentSnapshot();
 }
 
 function defaultWarn(message: string): void {

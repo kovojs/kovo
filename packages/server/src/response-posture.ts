@@ -28,6 +28,7 @@ import {
 import { assertNoSecretEgressValue } from './secret-egress.js';
 import { endpointBrowserStateAuthExecuted } from './endpoint-auth-proof.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import type {
   EndpointDeclaration,
   EndpointMethod,
@@ -304,15 +305,12 @@ export const emitToWire = wireEmitter(
       }
       const headers = readNativeResponseHeaders(value);
       const status = readNativeResponseStatus(value);
-      const finalizedHeaders = finalizeRawResponseHeaders(
-        value,
-        {
-          ...(provenance.redirectAllowlist === undefined
-            ? {}
-            : { redirectAllowlist: provenance.redirectAllowlist }),
-          ...(provenance.secure === true ? { secure: true as const } : {}),
-        },
-      );
+      const finalizedHeaders = finalizeRawResponseHeaders(value, {
+        ...(provenance.redirectAllowlist === undefined
+          ? {}
+          : { redirectAllowlist: provenance.redirectAllowlist }),
+        ...(provenance.secure === true ? { secure: true as const } : {}),
+      });
       const suppressBody = provenance.method === 'HEAD' || status === 304;
       if (!suppressBody && finalizedHeaders === headers) return value;
 
@@ -591,10 +589,7 @@ export function assertEndpointResponsePosture(
     bodyPosture[0] === 'redirect' &&
     (status < 300 || status >= 400)
   ) {
-    appendResponsePostureValue(
-      failures,
-      'declared body=redirect but response status is not 3xx',
-    );
+    appendResponsePostureValue(failures, 'declared body=redirect but response status is not 3xx');
   }
   const contentType = nativeHeaderGet(headers, 'content-type') ?? '';
   if (!endpointResponseBodyMatchesContentType(bodyPosture, contentType)) {
@@ -631,8 +626,9 @@ function assertEndpointBrowserStateResponsePosture(
 }
 
 function shouldVerifyEndpointResponsePosture(): boolean {
-  if (process.env.KOVO_VERIFY_ENDPOINT_POSTURE === '1') return true;
-  return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production';
+  if (runtimeEnvironmentValue('KOVO_VERIFY_ENDPOINT_POSTURE') === '1') return true;
+  const nodeEnvironment = runtimeEnvironmentValue('NODE_ENV');
+  return nodeEnvironment === 'development' || nodeEnvironment === 'production';
 }
 
 function finalizeResponseHeaders(

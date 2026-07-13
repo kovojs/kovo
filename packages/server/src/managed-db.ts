@@ -60,6 +60,7 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 declare const readerDbBrand: unique symbol;
 declare const writerDbBrand: unique symbol;
@@ -2850,7 +2851,7 @@ async function maybeReportPostgresRlsSilentDeny(
   if (
     diagnostics === undefined ||
     diagnostics.enabled === false ||
-    process.env.NODE_ENV === 'production' ||
+    runtimeEnvironmentValue('NODE_ENV') === 'production' ||
     options.readOnly !== true ||
     resultRowCount(result) !== 0
   ) {

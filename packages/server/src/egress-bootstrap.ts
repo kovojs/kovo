@@ -23,6 +23,7 @@ import {
   witnessMapGet,
   witnessMapSet,
 } from './security-witness-intrinsics.js';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 /**
  * Bootstrap for the outbound-egress private-network deny floor (SPEC §6.6;
@@ -238,7 +239,9 @@ export function registerEgressDatabaseUrl(databaseUrl: string | undefined): () =
         continue;
       }
       witnessMapDelete(registeredDatabaseEndpointRefs, endpoint);
-      const envDatabaseEndpoints = databaseEgressEndpointsFromUrls([process.env.KOVO_DATABASE_URL]);
+      const envDatabaseEndpoints = databaseEgressEndpointsFromUrls([
+        runtimeEnvironmentValue('KOVO_DATABASE_URL'),
+      ]);
       if (!databaseEndpointListHas(envDatabaseEndpoints, endpoint)) {
         witnessArrayAppend(removable, endpoint, 'Removable database egress endpoints');
       }

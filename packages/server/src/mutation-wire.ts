@@ -11,6 +11,7 @@ import type { TaskScheduler } from './mutation/definition.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 import {
   readHeader,
   type FrameworkWireBody,
@@ -713,9 +714,9 @@ function verifyLiveTargetDescriptor<Request>(
 }
 
 function liveTargetAttestationSecret(): string {
-  const configured = process.env.KOVO_LIVE_TARGET_SECRET;
+  const configured = runtimeEnvironmentValue('KOVO_LIVE_TARGET_SECRET');
   if (configured !== undefined && configured !== '') return configured;
-  if (process.env.NODE_ENV === 'production') {
+  if (runtimeEnvironmentValue('NODE_ENV') === 'production') {
     throw new Error(
       'KOVO_LIVE_TARGET_SECRET is required for live-target attestation when CSRF is not configured.',
     );

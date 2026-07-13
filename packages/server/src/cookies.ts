@@ -1,5 +1,6 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
+import { runtimeEnvironmentValue } from './runtime-environment-authority.js';
 
 import {
   createSecurityMap,
@@ -90,9 +91,10 @@ export interface CookieOptions {
    * reports a dev request URL. `false` requests suppression of the floor; on a `session`/`auth`
    * cookie that is an insecure downgrade routed through the SAME KV432 gate as `secure: false`
    * (bugz-3 M1), so it is rejected unless recorded via {@link unsafeCookie} — an un-audited insecure
-   * credential cookie is inexpressible. When omitted, `Secure` is engaged by a production runtime
-   * (`process.env.NODE_ENV === 'production'`) or by an HTTPS-request signal (`secure: true`), so the
-   * floor never depends solely on the env string (bugz-3 L1) while localhost-http dev still works.
+   * credential cookie is inexpressible. When omitted, `Secure` is engaged by the bootstrap-pinned
+   * operator production posture (`NODE_ENV === 'production'`) or by an HTTPS-request signal
+   * (`secure: true`), so the floor never depends solely on the env string (bugz-3 L1) while
+   * localhost-http dev still works.
    */
   productionSecure?: boolean;
   sameSite?: 'lax' | 'none' | 'strict';
@@ -191,13 +193,14 @@ export interface ForwardSetCookiePosture {
 }
 
 /**
- * Whether the runtime reports a production environment via `NODE_ENV`. This is one — but no longer
+ * Whether the bootstrap-pinned operator environment reports production via `NODE_ENV`. This is
+ * one — but no longer
  * the SOLE — trigger for the credential `Secure` floor (SPEC §6.6/§9.1): an explicit force
  * (`productionSecure: true`) or an HTTPS-request signal (`secure: true`) also engages it, so the
  * floor never depends solely on a free-form env string (bugz-3 L1).
  */
 function isProductionRuntime(): boolean {
-  return typeof process !== 'undefined' && process.env?.NODE_ENV === 'production';
+  return runtimeEnvironmentValue('NODE_ENV') === 'production';
 }
 
 function isCredentialClass(cookieClass: CookieClass): boolean {

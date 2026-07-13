@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
 
@@ -592,31 +592,46 @@ describe('server app shell document assembly', () => {
       afterEach(() => {
         if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
         else process.env.NODE_ENV = originalNodeEnv;
+        vi.resetModules();
       });
 
-      it('is present only under prod + HTTPS', () => {
-        process.env.NODE_ENV = 'production';
-        const secure = renderRouteDocumentResponse(htmlResponse(), { secure: true });
+      async function renderWithBootEnvironment(
+        nodeEnvironment: 'development' | 'production',
+        secure: boolean | undefined,
+      ) {
+        vi.resetModules();
+        process.env.NODE_ENV = nodeEnvironment;
+        const documentCore =
+          nodeEnvironment === 'production'
+            ? (await import('./security-bootstrap.ts?hsts-production'),
+              await import('./document-core.ts?hsts-production'))
+            : (await import('./security-bootstrap.ts?hsts-development'),
+              await import('./document-core.ts?hsts-development'));
+        return documentCore.renderRouteDocumentResponse(
+          htmlResponse(),
+          secure === undefined ? undefined : { secure },
+        );
+      }
+
+      it('is present only under prod + HTTPS', async () => {
+        const secure = await renderWithBootEnvironment('production', true);
         expect(secure.headers['Strict-Transport-Security']).toBe(
           'max-age=63072000; includeSubDomains',
         );
       });
 
-      it('is absent in production over plain HTTP (non-HTTPS request)', () => {
-        process.env.NODE_ENV = 'production';
-        const insecure = renderRouteDocumentResponse(htmlResponse(), { secure: false });
+      it('is absent in production over plain HTTP (non-HTTPS request)', async () => {
+        const insecure = await renderWithBootEnvironment('production', false);
         expect(insecure.headers['Strict-Transport-Security']).toBeUndefined();
       });
 
-      it('is absent in dev even over HTTPS (would brick localhost http)', () => {
-        process.env.NODE_ENV = 'development';
-        const dev = renderRouteDocumentResponse(htmlResponse(), { secure: true });
+      it('is absent in dev even over HTTPS (would brick localhost http)', async () => {
+        const dev = await renderWithBootEnvironment('development', true);
         expect(dev.headers['Strict-Transport-Security']).toBeUndefined();
       });
 
-      it('is absent when the call site never wired the secure flag', () => {
-        process.env.NODE_ENV = 'production';
-        const unwired = renderRouteDocumentResponse(htmlResponse());
+      it('is absent when the call site never wired the secure flag', async () => {
+        const unwired = await renderWithBootEnvironment('production', undefined);
         expect(unwired.headers['Strict-Transport-Security']).toBeUndefined();
       });
     });
