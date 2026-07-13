@@ -10,11 +10,14 @@ import {
   taskDateGetTime,
   taskDateIsDate,
   taskFloor,
+  taskFreeze,
   taskIsArray,
   taskIsRecord,
   taskMax,
   taskNewDate,
+  taskNumberIsSafeInteger,
   taskOwnDataValue,
+  taskOptionalOwnDataValue,
   taskSetAdd,
   taskSetForEach,
   taskSetHas,
@@ -127,20 +130,112 @@ export function createDurableTaskStatus(
   const readJobs = createStatusReader(source);
   return {
     async get(handle, options) {
-      const id = typeof handle === 'string' ? handle : handle.id;
-      const jobs = await readJobs({ ids: [id], limit: 1 });
+      const filters = snapshotStatusFilters({
+        ids: [statusHandleId(handle)],
+        includeArgs: snapshotIncludeArgs(options),
+        limit: 1,
+      });
+      const jobs = await readJobs(filters);
       const job = jobs[0];
-      return job === undefined ? undefined : statusRecord(job, options);
+      return job === undefined ? undefined : statusRecord(job, filters.includeArgs === true);
     },
     async list(filters = {}) {
-      const jobs = await readJobs(filters);
-      return mapStatusRecords(jobs, filters);
+      const snapshot = snapshotStatusFilters(filters);
+      const jobs = await readJobs(snapshot);
+      return mapStatusRecords(jobs, snapshot.includeArgs === true);
     },
     async listFailures(filters = {}) {
-      const jobs = await readJobs({ ...filters, status: ['failed', 'dead'] });
-      return mapStatusRecords(jobs, filters);
+      const snapshot = snapshotStatusFilters(filters, ['failed', 'dead']);
+      const jobs = await readJobs(snapshot);
+      return mapStatusRecords(jobs, snapshot.includeArgs === true);
     },
   };
+}
+
+function statusHandleId(handle: TaskHandle | string): string {
+  const id = typeof handle === 'string' ? handle : taskOwnDataValue(handle, 'id');
+  if (typeof id !== 'string') {
+    throw new TypeError('Durable task status handles require an own string id.');
+  }
+  return id;
+}
+
+function snapshotIncludeArgs(
+  options: Pick<DurableTaskStatusFilters, 'includeArgs'> | undefined,
+): boolean {
+  if (options === undefined) return false;
+  if (!taskIsRecord(options)) {
+    throw new TypeError('Durable task status options must be a stable own-data record.');
+  }
+  const includeArgs = taskOptionalOwnDataValue(options, 'includeArgs');
+  if (includeArgs !== undefined && typeof includeArgs !== 'boolean') {
+    throw new TypeError('Durable task status includeArgs must be a boolean.');
+  }
+  return includeArgs === true;
+}
+
+function snapshotStatusFilters(
+  filters: DurableTaskStatusFilters,
+  statusOverride?: readonly DurableTaskObservedStatus[],
+): DurableTaskStatusFilters {
+  if (!taskIsRecord(filters)) {
+    throw new TypeError('Durable task status filters must be a stable own-data record.');
+  }
+  const idsSource = taskOptionalOwnDataValue(filters, 'ids');
+  const task = taskOptionalOwnDataValue(filters, 'task');
+  const statusSource = statusOverride ?? taskOptionalOwnDataValue(filters, 'status');
+  const limit = taskOptionalOwnDataValue(filters, 'limit');
+  const offset = taskOptionalOwnDataValue(filters, 'offset');
+  const includeArgs = snapshotIncludeArgs(filters);
+
+  let ids: readonly string[] | undefined;
+  if (idsSource !== undefined) {
+    if (!taskIsArray(idsSource)) {
+      throw new TypeError('Durable task status ids must be a dense own-data string array.');
+    }
+    const values = taskSnapshotCollection<unknown>(idsSource, 'Durable task status ids');
+    for (let index = 0; index < values.length; index += 1) {
+      if (typeof values[index] !== 'string') {
+        throw new TypeError('Durable task status ids must be a dense own-data string array.');
+      }
+    }
+    ids = taskFreeze(values as string[]);
+  }
+
+  if (task !== undefined && typeof task !== 'string') {
+    throw new TypeError('Durable task status task must be a string.');
+  }
+  if (limit !== undefined && !taskNumberIsSafeInteger(limit)) {
+    throw new TypeError('Durable task status limit must be a safe integer.');
+  }
+  if (offset !== undefined && !taskNumberIsSafeInteger(offset)) {
+    throw new TypeError('Durable task status offset must be a safe integer.');
+  }
+
+  let status: DurableTaskObservedStatus | readonly DurableTaskObservedStatus[] | undefined;
+  if (statusSource !== undefined) {
+    if (taskIsArray(statusSource)) {
+      const values = taskSnapshotCollection<unknown>(
+        statusSource,
+        'Durable task status filters',
+      );
+      for (let index = 0; index < values.length; index += 1) {
+        values[index] = observedStatusValue(values[index]);
+      }
+      status = taskFreeze(values as DurableTaskObservedStatus[]);
+    } else {
+      status = observedStatusValue(statusSource);
+    }
+  }
+
+  return taskFreeze({
+    ...(ids === undefined ? {} : { ids }),
+    ...(task === undefined ? {} : { task }),
+    ...(status === undefined ? {} : { status }),
+    ...(limit === undefined ? {} : { limit }),
+    ...(offset === undefined ? {} : { offset }),
+    ...(includeArgs ? { includeArgs: true } : {}),
+  });
 }
 
 function createStatusReader(
@@ -167,7 +262,7 @@ function createStatusReader(
       );
       const jobs: DurableTaskStatusJob[] = [];
       for (let index = 0; index < rows.length; index += 1) {
-        taskArrayPush(jobs, jobFromRow(rows[index]!));
+        taskArrayPush(jobs, jobFromRow(rows[index]!, filters.includeArgs === true));
       }
       return jobs;
     };
@@ -188,6 +283,20 @@ function listSnapshotJobs(
   jobs: readonly DurableTaskStatusJob[],
   filters: DurableTaskStatusFilters,
 ): DurableTaskStatusJob[] {
+  if (!taskIsArray(jobs)) {
+    throw new TypeError('Durable task status snapshots must return a dense own-data array.');
+  }
+  const rawJobs = taskSnapshotCollection<DurableTaskStatusJob>(
+    jobs as DurableTaskStatusJob[],
+    'Durable task status snapshot jobs',
+  );
+  const snapshotJobs: DurableTaskStatusJob[] = [];
+  for (let index = 0; index < rawJobs.length; index += 1) {
+    taskArrayPush(
+      snapshotJobs,
+      snapshotStatusJob(rawJobs[index]!, filters.includeArgs === true),
+    );
+  }
   const ids = taskCreateSet<string>();
   const filterIds = filters.ids ?? [];
   for (let index = 0; index < filterIds.length; index += 1) taskSetAdd(ids, filterIds[index]!);
@@ -195,8 +304,8 @@ function listSnapshotJobs(
   const offset = taskMax(0, taskFloor(filters.offset ?? 0));
   const limit = taskMax(0, taskFloor(filters.limit ?? 100));
   const selected: DurableTaskStatusJob[] = [];
-  for (let index = 0; index < jobs.length; index += 1) {
-    const job = jobs[index]!;
+  for (let index = 0; index < snapshotJobs.length; index += 1) {
+    const job = snapshotJobs[index]!;
     if (taskSetSize(ids) > 0 && !taskSetHas(ids, job.id)) continue;
     if (filters.task !== undefined && job.task !== filters.task) continue;
     if (statuses !== undefined && !taskSetHas(statuses, job.status)) continue;
@@ -208,10 +317,7 @@ function listSnapshotJobs(
       taskDateGetTime(b.updatedAt) - taskDateGetTime(a.updatedAt) ||
       taskDateGetTime(b.createdAt) - taskDateGetTime(a.createdAt),
   );
-  const page = taskArraySlice(selected, offset, offset + limit);
-  const copied: DurableTaskStatusJob[] = [];
-  for (let index = 0; index < page.length; index += 1) taskArrayPush(copied, copyJob(page[index]!));
-  return copied;
+  return taskArraySlice(selected, offset, offset + limit);
 }
 
 function sqlListJobsStatement(filters: DurableTaskStatusFilters): {
@@ -255,7 +361,7 @@ limit ${limitPlaceholder} offset ${offsetPlaceholder}`,
 
 function statusRecord(
   job: DurableTaskStatusJob,
-  options: Pick<DurableTaskStatusFilters, 'includeArgs'> | undefined,
+  includeArgs: boolean,
 ): DurableTaskStatusRecord {
   return {
     id: job.id,
@@ -265,7 +371,7 @@ function statusRecord(
     runAt: copyDate(job.runAt),
     createdAt: copyDate(job.createdAt),
     updatedAt: copyDate(job.updatedAt),
-    ...(options?.includeArgs === true
+    ...(includeArgs
       ? {
           args: assertAndCloneJsonValue(scrubSecretLifecycleValue(job.args), {
             root: 'args',
@@ -273,7 +379,7 @@ function statusRecord(
         }
       : {}),
     ...(job.key === undefined ? {} : { key: job.key }),
-    ...(options?.includeArgs === true && job.lastError !== undefined
+    ...(includeArgs && job.lastError !== undefined
       ? { lastError: taskString(scrubSecretLifecycleValue(job.lastError)) }
       : {}),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
@@ -296,10 +402,9 @@ interface DurableTaskJobRow {
   last_error: string | null;
 }
 
-function jobFromRow(row: DurableTaskJobRow): DurableTaskStatusJob {
+function jobFromRow(row: DurableTaskJobRow, includeArgs: boolean): DurableTaskStatusJob {
   const id = statusJobRowValue(row, 'id');
   const task = statusJobRowValue(row, 'task_key');
-  const args = statusJobRowValue(row, 'args');
   const runAt = statusJobRowValue(row, 'run_at');
   const status = statusJobRowValue(row, 'status');
   const attempts = statusJobRowValue(row, 'attempts');
@@ -308,8 +413,9 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskStatusJob {
   const logicalKey = statusJobRowValue(row, 'logical_key');
   const leasedUntil = statusJobRowValue(row, 'leased_until');
   const leaseOwner = statusJobRowValue(row, 'lease_owner');
-  const lastError = statusJobRowValue(row, 'last_error');
-  return {
+  const args = includeArgs ? statusJobRowValue(row, 'args') : undefined;
+  const lastError = includeArgs ? statusJobRowValue(row, 'last_error') : null;
+  return snapshotStatusJob({
     id,
     task,
     args,
@@ -322,7 +428,7 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskStatusJob {
     ...(leasedUntil === null ? {} : { leasedUntil: dateFrom(leasedUntil) }),
     ...(leaseOwner === null ? {} : { leaseOwner }),
     ...(lastError === null ? {} : { lastError }),
-  };
+  } as DurableTaskStatusJob, includeArgs);
 }
 
 function statusJobRowValue<Key extends keyof DurableTaskJobRow>(
@@ -332,23 +438,61 @@ function statusJobRowValue<Key extends keyof DurableTaskJobRow>(
   return taskOwnDataValue(row, property) as DurableTaskJobRow[Key];
 }
 
-function copyJob(job: DurableTaskStatusJob): DurableTaskStatusJob {
-  return {
-    id: job.id,
-    task: job.task,
-    args: assertAndCloneJsonValue(scrubSecretLifecycleValue(job.args), { root: 'args' }),
-    runAt: copyDate(job.runAt),
-    status: job.status,
-    attempts: job.attempts,
-    createdAt: copyDate(job.createdAt),
-    updatedAt: copyDate(job.updatedAt),
-    ...(job.key === undefined ? {} : { key: job.key }),
-    ...(job.lastError === undefined
+function snapshotStatusJob(job: DurableTaskStatusJob, includeArgs: boolean): DurableTaskStatusJob {
+  if (!taskIsRecord(job)) {
+    throw new TypeError('Durable task status snapshot jobs must be stable own-data records.');
+  }
+  const id = taskOwnDataValue(job, 'id');
+  const task = taskOwnDataValue(job, 'task');
+  const runAt = taskOwnDataValue(job, 'runAt');
+  const status = taskOwnDataValue(job, 'status');
+  const attempts = taskOwnDataValue(job, 'attempts');
+  const createdAt = taskOwnDataValue(job, 'createdAt');
+  const updatedAt = taskOwnDataValue(job, 'updatedAt');
+  const key = taskOptionalOwnDataValue(job, 'key');
+  const leasedUntil = taskOptionalOwnDataValue(job, 'leasedUntil');
+  const leaseOwner = taskOptionalOwnDataValue(job, 'leaseOwner');
+  const args = includeArgs ? taskOwnDataValue(job, 'args') : undefined;
+  const lastError = includeArgs ? taskOptionalOwnDataValue(job, 'lastError') : undefined;
+
+  if (typeof id !== 'string' || typeof task !== 'string') {
+    throw new TypeError('Durable task status snapshot job id and task must be strings.');
+  }
+  if (!taskNumberIsSafeInteger(attempts) || attempts < 0) {
+    throw new TypeError('Durable task status snapshot job attempts must be a non-negative integer.');
+  }
+  if (!taskDateIsDate(runAt) || !taskDateIsDate(createdAt) || !taskDateIsDate(updatedAt)) {
+    throw new TypeError('Durable task status snapshot job timestamps must be Date values.');
+  }
+  if (key !== undefined && typeof key !== 'string') {
+    throw new TypeError('Durable task status snapshot job key must be a string.');
+  }
+  if (leasedUntil !== undefined && !taskDateIsDate(leasedUntil)) {
+    throw new TypeError('Durable task status snapshot job lease timestamp must be a Date value.');
+  }
+  if (leaseOwner !== undefined && typeof leaseOwner !== 'string') {
+    throw new TypeError('Durable task status snapshot job lease owner must be a string.');
+  }
+
+  return taskFreeze({
+    id,
+    task,
+    args:
+      includeArgs
+        ? assertAndCloneJsonValue(scrubSecretLifecycleValue(args), { root: 'args' })
+        : undefined,
+    runAt: copyDate(runAt),
+    status: observedStatusValue(status),
+    attempts,
+    createdAt: copyDate(createdAt),
+    updatedAt: copyDate(updatedAt),
+    ...(key === undefined ? {} : { key }),
+    ...(lastError === undefined
       ? {}
-      : { lastError: taskString(scrubSecretLifecycleValue(job.lastError)) }),
-    ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
-    ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
-  };
+      : { lastError: taskString(scrubSecretLifecycleValue(lastError)) }),
+    ...(leasedUntil === undefined ? {} : { leasedUntil: copyDate(leasedUntil) }),
+    ...(leaseOwner === undefined ? {} : { leaseOwner }),
+  });
 }
 
 function statusFilter(
@@ -367,6 +511,10 @@ function statusFilter(
 }
 
 function observedStatus(status: string): DurableTaskObservedStatus {
+  return observedStatusValue(status);
+}
+
+function observedStatusValue(status: unknown): DurableTaskObservedStatus {
   if (
     status === 'ready' ||
     status === 'running' ||
@@ -377,13 +525,16 @@ function observedStatus(status: string): DurableTaskObservedStatus {
   ) {
     return status;
   }
-  throw new TypeError(`Unknown durable task status "${status}" in _kovo_jobs.`);
+  throw new TypeError('Unknown durable task status in _kovo_jobs.');
 }
 
 function isSqlExecutor(
   value: DurableTaskStatusSnapshotSource | DurableTaskStatusSqlExecutor,
 ): value is DurableTaskStatusSqlExecutor {
-  return 'execute' in value;
+  if (!taskIsRecord(value)) {
+    throw new TypeError('Durable task status sources must be stable records.');
+  }
+  return taskOptionalOwnDataValue(value, 'execute') !== undefined;
 }
 
 function dateFrom(value: Date | string): Date {
@@ -396,11 +547,11 @@ function copyDate(value: Date): Date {
 
 function mapStatusRecords(
   jobs: readonly DurableTaskStatusJob[],
-  filters: Pick<DurableTaskStatusFilters, 'includeArgs'>,
+  includeArgs: boolean,
 ): DurableTaskStatusRecord[] {
   const records: DurableTaskStatusRecord[] = [];
   for (let index = 0; index < jobs.length; index += 1) {
-    taskArrayPush(records, statusRecord(jobs[index]!, filters));
+    taskArrayPush(records, statusRecord(jobs[index]!, includeArgs));
   }
   return records;
 }

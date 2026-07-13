@@ -247,4 +247,180 @@ describe('durable task observability (SPEC §9.6)', () => {
     await expect(status.list()).rejects.toThrow(/rows.*own data/u);
     expect(rowReads).toBe(0);
   });
+
+  it('does not touch redacted SQL args or error accessors', async () => {
+    let secretReads = 0;
+    const row = {
+      attempts: 1,
+      created_at: '2026-06-30T10:00:00.000Z',
+      id: 'job_sql_redacted_accessors',
+      lease_owner: null,
+      leased_until: null,
+      logical_key: null,
+      run_at: '2026-06-30T10:00:00.000Z',
+      status: 'dead',
+      task_key: 'email.send',
+      updated_at: '2026-06-30T10:01:00.000Z',
+    } as Record<string, unknown>;
+    for (const property of ['args', 'last_error']) {
+      Object.defineProperty(row, property, {
+        get() {
+          secretReads += 1;
+          return property === 'args' ? { token: 'customer-secret' } : 'provider-secret';
+        },
+      });
+    }
+    const status = createDurableTaskStatus({
+      async execute() {
+        return { rows: [row as never] };
+      },
+    });
+
+    await expect(status.list()).resolves.toEqual([
+      expect.objectContaining({ id: 'job_sql_redacted_accessors', status: 'dead' }),
+    ]);
+    expect(secretReads).toBe(0);
+  });
+
+  it('pins redaction filters before awaiting an app-owned SQL executor', async () => {
+    const filters = { includeArgs: false };
+    const status = createDurableTaskStatus({
+      async execute() {
+        filters.includeArgs = true;
+        return {
+          rows: [
+            {
+              attempts: 1,
+              args: { token: 'customer-secret' },
+              created_at: '2026-06-30T10:00:00.000Z',
+              id: 'job_filter_race',
+              last_error: 'provider-secret',
+              lease_owner: null,
+              leased_until: null,
+              logical_key: null,
+              run_at: '2026-06-30T10:00:00.000Z',
+              status: 'dead',
+              task_key: 'email.send',
+              updated_at: '2026-06-30T10:01:00.000Z',
+            },
+          ],
+        };
+      },
+    });
+
+    const [record] = await status.list(filters);
+
+    expect(record).not.toHaveProperty('args');
+    expect(record).not.toHaveProperty('lastError');
+  });
+
+  it('rejects accessor-backed snapshot job authority without invoking it', async () => {
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    let taskReads = 0;
+    const job = {
+      args: {},
+      attempts: 1,
+      createdAt: now,
+      id: 'job_accessor',
+      runAt: now,
+      status: 'ready' as const,
+      updatedAt: now,
+    } as Record<string, unknown>;
+    Object.defineProperty(job, 'task', {
+      get() {
+        taskReads += 1;
+        return taskReads === 1 ? 'public.task' : 'private.task';
+      },
+    });
+    const status = createDurableTaskStatus({ snapshot: () => [job as never] });
+
+    await expect(status.list({ task: 'public.task' })).rejects.toThrow(/task.*own data/u);
+    expect(taskReads).toBe(0);
+  });
+
+  it('does not read redacted snapshot args or errors', async () => {
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    let secretReads = 0;
+    const job = {
+      attempts: 1,
+      createdAt: now,
+      id: 'job_redacted_accessors',
+      runAt: now,
+      status: 'dead' as const,
+      task: 'email.send',
+      updatedAt: now,
+    } as Record<string, unknown>;
+    for (const property of ['args', 'lastError']) {
+      Object.defineProperty(job, property, {
+        get() {
+          secretReads += 1;
+          return property === 'args' ? { token: 'customer-secret' } : 'provider-secret';
+        },
+      });
+    }
+    const status = createDurableTaskStatus({ snapshot: () => [job as never] });
+
+    await expect(status.list()).resolves.toEqual([
+      expect.objectContaining({ id: 'job_redacted_accessors', status: 'dead' }),
+    ]);
+    expect(secretReads).toBe(0);
+  });
+
+  it('rejects includeArgs accessors without invoking or granting disclosure', async () => {
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    const status = createDurableTaskStatus({
+      snapshot: () => [
+        {
+          args: { token: 'customer-secret' },
+          attempts: 1,
+          createdAt: now,
+          id: 'job_include_accessor',
+          lastError: 'provider-secret',
+          runAt: now,
+          status: 'dead',
+          task: 'email.send',
+          updatedAt: now,
+        },
+      ],
+    });
+    let includeReads = 0;
+    const filters = {} as { includeArgs?: boolean };
+    Object.defineProperty(filters, 'includeArgs', {
+      get() {
+        includeReads += 1;
+        return true;
+      },
+    });
+
+    await expect(status.list(filters)).rejects.toThrow(/includeArgs.*own data/u);
+    expect(includeReads).toBe(0);
+  });
+
+  it('does not let inherited execute authority override an own snapshot source', async () => {
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    let executeCalls = 0;
+    const source = Object.create({
+      async execute() {
+        executeCalls += 1;
+        return { rows: [] };
+      },
+    }) as { snapshot(): readonly never[] };
+    source.snapshot = () => [
+      {
+        args: {},
+        attempts: 1,
+        createdAt: now,
+        id: 'job_snapshot_authority',
+        runAt: now,
+        status: 'ready' as const,
+        task: 'ordinary.task',
+        updatedAt: now,
+      } as never,
+    ];
+
+    await expect(createDurableTaskStatus(source).list()).resolves.toEqual([
+      expect.objectContaining({ id: 'job_snapshot_authority' }),
+    ]);
+    expect(executeCalls).toBe(0);
+  });
 });
